@@ -6,8 +6,8 @@ from unittest.mock import MagicMock, patch
 
 from botocore.exceptions import ClientError
 
+from integrations.eks.tools import get_eks_nodegroup_health
 from tests.tools.conftest import BaseToolContract, mock_agent_state
-from tools.eks_tools import get_eks_nodegroup_health
 
 
 class TestEKSNodegroupHealthToolContract(BaseToolContract):
@@ -42,7 +42,7 @@ def test_run_happy_path() -> None:
         "labels": {},
         "taints": [],
     }
-    with patch("tools.eks_tools.EKSClient", return_value=mock_client):
+    with patch("integrations.eks.tools.EKSClient", return_value=mock_client):
         result = get_eks_nodegroup_health(cluster_name="c1", role_arn="arn:aws:iam::123:role/r")
     assert result["available"] is True
     assert len(result["nodegroups"]) == 1
@@ -61,7 +61,7 @@ def test_run_specific_nodegroup() -> None:
         "labels": {},
         "taints": [],
     }
-    with patch("tools.eks_tools.EKSClient", return_value=mock_client):
+    with patch("integrations.eks.tools.EKSClient", return_value=mock_client):
         result = get_eks_nodegroup_health(
             cluster_name="c1", role_arn="arn:aws:iam::123:role/r", nodegroup_name="ng-specific"
         )
@@ -73,6 +73,6 @@ def test_run_handles_client_error() -> None:
     mock_client = MagicMock()
     error = ClientError({"Error": {"Code": "AccessDenied", "Message": "Denied"}}, "ListNodegroups")
     mock_client.list_nodegroups.side_effect = error
-    with patch("tools.eks_tools.EKSClient", return_value=mock_client):
+    with patch("integrations.eks.tools.EKSClient", return_value=mock_client):
         result = get_eks_nodegroup_health(cluster_name="c1", role_arn="arn:aws:iam::123:role/r")
     assert result["available"] is False

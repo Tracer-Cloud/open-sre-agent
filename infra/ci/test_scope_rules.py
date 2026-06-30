@@ -36,6 +36,46 @@ RULES: tuple[PathRule, ...] = (
     PathRule("integrations/hermes/", ("tests/hermes/",)),
     PathRule("integrations/alertmanager/", ("tests/integrations/alertmanager/",)),
     PathRule(
+        "integrations/dagster/",
+        ("tests/integrations/dagster/", "tests/synthetic/test_dagster_scenario.py"),
+    ),
+    PathRule(
+        "integrations/eks/",
+        (
+            "tests/integrations/eks/",
+            "tests/tools/test_eks_deployment_status_tool.py",
+            "tests/tools/test_eks_describe_addon_tool.py",
+            "tests/tools/test_eks_describe_cluster_tool.py",
+            "tests/tools/test_eks_events_tool.py",
+            "tests/tools/test_eks_list_clusters_tool.py",
+            "tests/tools/test_eks_list_deployments_tool.py",
+            "tests/tools/test_eks_list_namespaces_tool.py",
+            "tests/tools/test_eks_list_pods_tool.py",
+            "tests/tools/test_eks_node_health_tool.py",
+            "tests/tools/test_eks_nodegroup_health_tool.py",
+            "tests/tools/test_eks_pod_logs_tool.py",
+        ),
+    ),
+    PathRule(
+        "integrations/elasticsearch/",
+        (
+            "tests/integrations/elasticsearch/",
+            "tests/tools/test_elasticsearch_logs_tool.py",
+        ),
+    ),
+    PathRule(
+        "integrations/google_docs/",
+        (
+            "tests/integrations/google_docs/",
+            "tests/test_google_docs.py",
+            "tests/tools/test_google_docs_create_report_tool.py",
+        ),
+    ),
+    PathRule(
+        "integrations/groundcover/",
+        ("tests/integrations/groundcover/", "tests/tools/test_groundcover_tools.py"),
+    ),
+    PathRule(
         "integrations/argocd/",
         (
             "tests/integrations/argocd/",

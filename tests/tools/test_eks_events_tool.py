@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+from integrations.eks.tools import get_eks_events
 from tests.tools.conftest import BaseToolContract, mock_agent_state
-from tools.eks_tools import get_eks_events
 
 
 class TestEKSEventsToolContract(BaseToolContract):
@@ -50,7 +50,9 @@ def test_run_happy_path() -> None:
             _make_event("Pulled", "Image pulled", event_type="Normal"),
         ]
     )
-    with patch("tools.eks_tools.build_k8s_clients", return_value=(mock_core_v1, MagicMock())):
+    with patch(
+        "integrations.eks.tools.build_k8s_clients", return_value=(mock_core_v1, MagicMock())
+    ):
         result = get_eks_events(
             cluster_name="c1", namespace="default", role_arn="arn:aws:iam::123:role/r"
         )
@@ -63,7 +65,9 @@ def test_run_happy_path() -> None:
 def test_run_all_namespaces() -> None:
     mock_core_v1 = MagicMock()
     mock_core_v1.list_event_for_all_namespaces.return_value = MagicMock(items=[])
-    with patch("tools.eks_tools.build_k8s_clients", return_value=(mock_core_v1, MagicMock())):
+    with patch(
+        "integrations.eks.tools.build_k8s_clients", return_value=(mock_core_v1, MagicMock())
+    ):
         result = get_eks_events(
             cluster_name="c1", namespace="all", role_arn="arn:aws:iam::123:role/r"
         )
@@ -72,7 +76,7 @@ def test_run_all_namespaces() -> None:
 
 
 def test_run_handles_exception() -> None:
-    with patch("tools.eks_tools.build_k8s_clients", side_effect=Exception("api error")):
+    with patch("integrations.eks.tools.build_k8s_clients", side_effect=Exception("api error")):
         result = get_eks_events(
             cluster_name="c1", namespace="default", role_arn="arn:aws:iam::123:role/r"
         )

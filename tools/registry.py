@@ -29,8 +29,13 @@ _INTEGRATION_TOOL_PACKAGES: tuple[str, ...] = (
     "integrations.alertmanager.tools",
     "integrations.argocd.tools",
     "integrations.coralogix.tools",
+    "integrations.dagster.tools",
     "integrations.datadog.tools",
+    "integrations.eks.tools",
+    "integrations.elasticsearch.tools",
+    "integrations.google_docs.tools",
     "integrations.grafana.tools",
+    "integrations.groundcover.tools",
     "integrations.honeycomb.tools",
     "integrations.jenkins.tools",
 )

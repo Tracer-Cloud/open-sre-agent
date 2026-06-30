@@ -140,7 +140,7 @@ def test_report_run_error_supports_warning_severity(
             err,
             tool_name="describe_eks_cluster",
             source="eks",
-            component="tools.eks_tools",
+            component="integrations.eks.tools",
             severity="warning",
         )
 
@@ -162,7 +162,7 @@ def test_report_run_error_uses_provided_logger(
         err,
         tool_name="list_eks_pods",
         source="eks",
-        component="tools.eks_tools",
+        component="integrations.eks.tools",
         logger=custom_logger,
     )
 
@@ -289,7 +289,7 @@ def _cloudwatch_batch_case() -> ToolFailureCase:
 
 def _google_docs_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        import tools.google_docs_tools as mod
+        import integrations.google_docs.tools as mod
 
         mp.setattr(
             mod,
@@ -298,7 +298,7 @@ def _google_docs_case() -> ToolFailureCase:
         )
 
     def invoke() -> dict[str, Any]:
-        import tools.google_docs_tools as mod
+        import integrations.google_docs.tools as mod
 
         return mod.create_google_docs_incident_report(
             title="t",
@@ -345,12 +345,12 @@ def _github_repository_case() -> ToolFailureCase:
 
 def _eks_list_clusters_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        import tools.eks_tools as mod
+        import integrations.eks.tools as mod
 
         mp.setattr(mod, "EKSClient", MagicMock(side_effect=RuntimeError("eks")))
 
     def invoke() -> dict[str, Any]:
-        import tools.eks_tools as mod
+        import integrations.eks.tools as mod
 
         return mod.list_eks_clusters(role_arn="arn:aws:iam::123:role/x")
 
@@ -359,12 +359,12 @@ def _eks_list_clusters_case() -> ToolFailureCase:
 
 def _eks_describe_cluster_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        import tools.eks_tools as mod
+        import integrations.eks.tools as mod
 
         mp.setattr(mod, "EKSClient", MagicMock(side_effect=RuntimeError("eks")))
 
     def invoke() -> dict[str, Any]:
-        import tools.eks_tools as mod
+        import integrations.eks.tools as mod
 
         return mod.describe_eks_cluster(cluster_name="c", role_arn="arn:aws:iam::123:role/x")
 
@@ -373,12 +373,12 @@ def _eks_describe_cluster_case() -> ToolFailureCase:
 
 def _eks_nodegroup_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        import tools.eks_tools as mod
+        import integrations.eks.tools as mod
 
         mp.setattr(mod, "EKSClient", MagicMock(side_effect=RuntimeError("eks")))
 
     def invoke() -> dict[str, Any]:
-        import tools.eks_tools as mod
+        import integrations.eks.tools as mod
 
         return mod.get_eks_nodegroup_health(
             cluster_name="c",
@@ -390,12 +390,12 @@ def _eks_nodegroup_case() -> ToolFailureCase:
 
 def _eks_addon_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        import tools.eks_tools as mod
+        import integrations.eks.tools as mod
 
         mp.setattr(mod, "EKSClient", MagicMock(side_effect=RuntimeError("eks")))
 
     def invoke() -> dict[str, Any]:
-        import tools.eks_tools as mod
+        import integrations.eks.tools as mod
 
         return mod.describe_eks_addon(
             cluster_name="c",
@@ -408,12 +408,12 @@ def _eks_addon_case() -> ToolFailureCase:
 
 def _eks_events_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        import tools.eks_tools as mod
+        import integrations.eks.tools as mod
 
         mp.setattr(mod, "build_k8s_clients", MagicMock(side_effect=RuntimeError("k8s")))
 
     def invoke() -> dict[str, Any]:
-        import tools.eks_tools as mod
+        import integrations.eks.tools as mod
 
         return mod.get_eks_events(
             cluster_name="c",
@@ -426,12 +426,12 @@ def _eks_events_case() -> ToolFailureCase:
 
 def _eks_node_health_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        import tools.eks_tools as mod
+        import integrations.eks.tools as mod
 
         mp.setattr(mod, "build_k8s_clients", MagicMock(side_effect=RuntimeError("k8s")))
 
     def invoke() -> dict[str, Any]:
-        import tools.eks_tools as mod
+        import integrations.eks.tools as mod
 
         return mod.get_eks_node_health(
             cluster_name="c",
@@ -443,12 +443,12 @@ def _eks_node_health_case() -> ToolFailureCase:
 
 def _eks_list_namespaces_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        import tools.eks_tools as mod
+        import integrations.eks.tools as mod
 
         mp.setattr(mod, "build_k8s_clients", MagicMock(side_effect=RuntimeError("k8s")))
 
     def invoke() -> dict[str, Any]:
-        import tools.eks_tools as mod
+        import integrations.eks.tools as mod
 
         return mod.list_eks_namespaces(
             cluster_name="c",
@@ -460,12 +460,12 @@ def _eks_list_namespaces_case() -> ToolFailureCase:
 
 def _eks_list_deployments_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        import tools.eks_tools as mod
+        import integrations.eks.tools as mod
 
         mp.setattr(mod, "build_k8s_clients", MagicMock(side_effect=RuntimeError("k8s")))
 
     def invoke() -> dict[str, Any]:
-        import tools.eks_tools as mod
+        import integrations.eks.tools as mod
 
         return mod.list_eks_deployments(
             cluster_name="c",
@@ -478,12 +478,12 @@ def _eks_list_deployments_case() -> ToolFailureCase:
 
 def _eks_list_pods_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        import tools.eks_tools as mod
+        import integrations.eks.tools as mod
 
         mp.setattr(mod, "build_k8s_clients", MagicMock(side_effect=RuntimeError("k8s")))
 
     def invoke() -> dict[str, Any]:
-        import tools.eks_tools as mod
+        import integrations.eks.tools as mod
 
         return mod.list_eks_pods(
             cluster_name="c",
@@ -496,12 +496,12 @@ def _eks_list_pods_case() -> ToolFailureCase:
 
 def _eks_pod_logs_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        import tools.eks_tools as mod
+        import integrations.eks.tools as mod
 
         mp.setattr(mod, "build_k8s_clients", MagicMock(side_effect=RuntimeError("k8s")))
 
     def invoke() -> dict[str, Any]:
-        import tools.eks_tools as mod
+        import integrations.eks.tools as mod
 
         return mod.get_eks_pod_logs(
             cluster_name="c",
@@ -837,7 +837,7 @@ def test_eks_client_error_path_uses_warning_severity(
     """
     from botocore.exceptions import ClientError
 
-    import tools.eks_tools as mod
+    import integrations.eks.tools as mod
 
     client_error = ClientError(
         error_response={
@@ -887,7 +887,7 @@ def test_eks_nodegroup_health_tags_failing_nodegroup_during_iteration(
     failure on the second nodegroup should reach Sentry tagged with
     ``ng-broken``, not ``None`` or the first nodegroup.
     """
-    import tools.eks_tools as mod
+    import integrations.eks.tools as mod
 
     def _describe(_cluster: str, ng: str) -> dict[str, Any]:
         if ng == "ng-broken":

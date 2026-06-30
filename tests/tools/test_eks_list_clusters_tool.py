@@ -6,8 +6,8 @@ from unittest.mock import MagicMock, patch
 
 from botocore.exceptions import ClientError
 
+from integrations.eks.tools import list_eks_clusters
 from tests.tools.conftest import BaseToolContract, mock_agent_state
-from tools.eks_tools import list_eks_clusters
 
 
 class TestEKSListClustersToolContract(BaseToolContract):
@@ -32,7 +32,7 @@ def test_extract_params_maps_fields() -> None:
 def test_run_happy_path() -> None:
     mock_client = MagicMock()
     mock_client.list_clusters.return_value = ["cluster-1", "cluster-2"]
-    with patch("tools.eks_tools.EKSClient", return_value=mock_client):
+    with patch("integrations.eks.tools.EKSClient", return_value=mock_client):
         result = list_eks_clusters(role_arn="arn:aws:iam::123:role/r")
     assert result["available"] is True
     assert result["clusters"] == ["cluster-1", "cluster-2"]
@@ -41,7 +41,7 @@ def test_run_happy_path() -> None:
 def test_run_with_cluster_filter() -> None:
     mock_client = MagicMock()
     mock_client.list_clusters.return_value = ["cluster-1", "cluster-2", "cluster-3"]
-    with patch("tools.eks_tools.EKSClient", return_value=mock_client):
+    with patch("integrations.eks.tools.EKSClient", return_value=mock_client):
         result = list_eks_clusters(role_arn="arn:aws:iam::123:role/r", cluster_names=["cluster-1"])
     assert result["clusters"] == ["cluster-1"]
 
@@ -50,7 +50,7 @@ def test_run_handles_client_error() -> None:
     mock_client = MagicMock()
     error = ClientError({"Error": {"Code": "AccessDenied", "Message": "Denied"}}, "ListClusters")
     mock_client.list_clusters.side_effect = error
-    with patch("tools.eks_tools.EKSClient", return_value=mock_client):
+    with patch("integrations.eks.tools.EKSClient", return_value=mock_client):
         result = list_eks_clusters(role_arn="arn:aws:iam::123:role/r")
     assert result["available"] is False
     assert result["clusters"] == []
@@ -70,7 +70,7 @@ def test_run_forwards_credentials_to_eks_client() -> None:
         "secret_access_key": "SECRET",
         "session_token": "",
     }
-    with patch("tools.eks_tools.EKSClient", return_value=mock_client) as cls:
+    with patch("integrations.eks.tools.EKSClient", return_value=mock_client) as cls:
         list_eks_clusters(role_arn="", credentials=creds)
     cls.assert_called_once()
     assert cls.call_args.kwargs["credentials"] == creds
@@ -81,6 +81,6 @@ def test_run_credentials_none_by_default() -> None:
     """Existing role-based callers must keep working — credentials defaults to None."""
     mock_client = MagicMock()
     mock_client.list_clusters.return_value = []
-    with patch("tools.eks_tools.EKSClient", return_value=mock_client) as cls:
+    with patch("integrations.eks.tools.EKSClient", return_value=mock_client) as cls:
         list_eks_clusters(role_arn="arn:aws:iam::123:role/r")
     assert cls.call_args.kwargs["credentials"] is None
