@@ -14,10 +14,6 @@ from core.agent_harness.headless import SimpleRunRecord, SimpleRunRecordFactory
 from core.agent_harness.ports import ConfirmFn, ToolEventObserver
 from core.agent_harness.prompts import build_environment_block
 from core.agent_harness.session import SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST, ReplSession
-from core.agent_harness.session.integrations_cache import (
-    has_only_runtime_metadata,
-    has_resolved_integrations,
-)
 from gateway.agent.gateway_action_tools import (
     GATEWAY_RESOURCE_KEY,
     GatewayToolContext,
@@ -196,18 +192,6 @@ class GatewayToolProvider:
         if self._tool_context is None:
             return {}
         return {GATEWAY_RESOURCE_KEY: self._tool_context}
-
-    def _resolved_integrations(self) -> dict[str, Any]:
-        cached = getattr(self._session, "resolved_integrations_cache", None)
-        if cached is not None and (
-            has_resolved_integrations(cached) or not has_only_runtime_metadata(cached)
-        ):
-            return dict(cached)
-        warmer = getattr(self._session, "warm_resolved_integrations", None)
-        if callable(warmer):
-            warmer()
-        cached = getattr(self._session, "resolved_integrations_cache", None)
-        return dict(cached or {})
 
     def observer(self, *, message: str) -> ToolEventObserver:
         _ = message

@@ -10,7 +10,6 @@ from core.agent_harness.headless_agent import dispatch_message_to_headless_agent
 from core.agent_harness.session import ReplSession
 from core.agent_harness.turn_results import ShellTurnResult
 from core.execution import ToolExecutionHooks
-from gateway.approvals.telegram import TelegramApprovalService, inject_gateway_chat_context
 from gateway.agent.error_handling import (
     EMPTY_RESPONSE_MESSAGE,
     USER_ERROR_MESSAGE,
@@ -25,6 +24,7 @@ from gateway.agent.gateway_agent_adapters import (
     GatewayToolProvider,
 )
 from gateway.agent.gateway_output_sink import GatewayOutputSink
+from gateway.approvals.telegram import TelegramApprovalService, inject_gateway_chat_context
 
 
 def _gateway_reasoning_provider(logger: logging.Logger) -> StaticReasoningClientProvider:

@@ -32,10 +32,6 @@ CREATE TABLE IF NOT EXISTS gateway_approval_requests (
 """
 
 
-def gateway_db_path() -> Path:
-    return _DEFAULT_DB_PATH
-
-
 def connect_gateway_db(path: Path | None = None) -> sqlite3.Connection:
     db_path = path or _DEFAULT_DB_PATH
     db_path.parent.mkdir(parents=True, exist_ok=True)

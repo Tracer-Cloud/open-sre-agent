@@ -49,10 +49,3 @@ class ApprovalStore:
         )
         self._conn.commit()
         return cast(sqlite3.Row | None, row)
-
-    def get(self, approval_id: str) -> sqlite3.Row | None:
-        row = self._conn.execute(
-            "SELECT * FROM gateway_approval_requests WHERE approval_id = ?",
-            (approval_id,),
-        ).fetchone()
-        return cast(sqlite3.Row | None, row)

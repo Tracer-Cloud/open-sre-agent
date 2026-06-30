@@ -113,9 +113,3 @@ class TelegramPoller:
             return
         self._last_warning_monotonic = now
         logger.warning(message, *args)
-
-    def run_forever(self, handler: Any) -> None:
-        logger.info("[telegram-gateway] starting long-poll loop")
-        while True:
-            for event in self.poll_once():
-                handler(event)

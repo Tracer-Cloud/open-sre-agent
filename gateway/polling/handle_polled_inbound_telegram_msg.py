@@ -6,10 +6,10 @@ import asyncio
 import logging
 from concurrent.futures import ThreadPoolExecutor
 
-from gateway.approvals.telegram import TelegramApprovalService
-from gateway.config.get_gateway_settings import GatewaySettings, TelegramInboundMessage
 from gateway.agent.dispatch_gateway_msg_to_agent import dispatch_gateway_msg_to_agent
 from gateway.agent.gateway_output_sink import GatewayOutputSink
+from gateway.approvals.telegram import TelegramApprovalService
+from gateway.config.get_gateway_settings import GatewaySettings, TelegramInboundMessage
 from gateway.polling.telegram_poller.client import TelegramBotClient
 from gateway.session.enforce_inbound_telegram_message_security import (
     enforce_inbound_telegram_message_security,

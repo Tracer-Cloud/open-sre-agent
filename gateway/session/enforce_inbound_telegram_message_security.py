@@ -22,7 +22,6 @@ class InboundDecision:
 
     allowed: bool
     reply_text: str = ""
-    is_pairing_attempt: bool = False
     persist_policy: bool = False
     updated_policy: MessagingIdentityPolicy | None = None
 
