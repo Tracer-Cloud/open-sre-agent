@@ -7,8 +7,8 @@ from datetime import UTC, datetime, timedelta
 from rich.console import Console
 
 from core.domain.alerts.inbox import AlertInbox, IncomingAlert
-from interactive_shell.runtime import ReplSession
-from interactive_shell.ui.alerts import (
+from surfaces.interactive_shell.runtime import ReplSession
+from surfaces.interactive_shell.ui.alerts import (
     drain_and_render_incoming,
     format_incoming_alert,
     time_ago,

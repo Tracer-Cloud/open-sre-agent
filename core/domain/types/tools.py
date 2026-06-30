@@ -4,4 +4,4 @@ from __future__ import annotations
 
 from typing import Literal
 
-ToolSurface = Literal["investigation", "chat"]
+ToolSurface = Literal["investigation", "chat", "action"]

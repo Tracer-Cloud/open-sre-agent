@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import click
 
-from cli.runtime_flags import sync_runtime_flags_from_click
 from platform.common.runtime_flags import (
     configure_runtime_flags,
     is_debug,
@@ -11,6 +10,7 @@ from platform.common.runtime_flags import (
     is_yes,
     reset_runtime_flags,
 )
+from surfaces.cli.runtime_flags import sync_runtime_flags_from_click
 
 
 def test_is_json_output_true() -> None:

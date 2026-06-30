@@ -3,8 +3,8 @@
 Guards the refactor that collapsed six near-identical ``elif provider == ...``
 branches in ``_create_llm_client`` into ``_OPENAI_COMPATIBLE_PROVIDERS``. The
 registry is pure data, so these assert both the data and that ``_create_llm_client``
-wires each provider into ``OpenAILLMClient`` with the right base URL, API-key env
-var, temperature, and model.
+wires each provider into the right transport with the right base URL, API-key env
+var, temperature, feature-flag behavior, and model.
 """
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ from types import SimpleNamespace
 import pytest
 
 import core.llm.llm_client as llm_client
+from core.llm.litellm.clients import LiteLLMLLMClient
 
 _OPENAI_COMPATIBLE_PROVIDERS = llm_client._OPENAI_COMPATIBLE_PROVIDERS
 OpenAILLMClient = llm_client.OpenAILLMClient
@@ -28,9 +29,13 @@ def test_registry_entries_are_well_formed() -> None:
         "nvidia",
         "minimax",
         "groq",
+        "ollama",
     }
     for name, spec in _OPENAI_COMPATIBLE_PROVIDERS.items():
-        assert spec.base_url.startswith("http"), name
+        if name == "ollama":
+            assert spec.base_url is None
+        else:
+            assert spec.base_url is not None and spec.base_url.startswith("http"), name
         assert spec.api_key_env.endswith("_API_KEY"), name
     # MiniMax is the only registry provider that pins a non-default temperature.
     assert _OPENAI_COMPATIBLE_PROVIDERS["minimax"].temperature == 1.0
@@ -42,20 +47,61 @@ def test_create_llm_client_dispatches_registry_provider(
     provider: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     spec = _OPENAI_COMPATIBLE_PROVIDERS[provider]
-    # model_type="toolcall" makes _fallback_model() short-circuit to None, so the
-    # stub only needs the provider name and the toolcall model attribute.
-    settings = SimpleNamespace(provider=provider, **{f"{provider}_toolcall_model": "stub-model"})
+    settings = SimpleNamespace(
+        provider=provider,
+        ollama_model="stub-model",
+        ollama_host="http://localhost:11434",
+        **{f"{provider}_toolcall_model": "stub-model"},
+    )
     monkeypatch.setattr(llm_client, "resolve_llm_settings", lambda: settings)
     monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env_var: "test-key")
 
     client = _create_llm_client("toolcall")
 
-    # OpenAILLMClient exposes no public getters for these construction params, so
-    # we deliberately read the private attributes to pin that the registry wired
-    # each provider correctly. A rename surfaces loudly as an AttributeError here.
     assert isinstance(client, OpenAILLMClient)
-    assert client._base_url == spec.base_url
+    expected_base_url = "http://localhost:11434/v1" if provider == "ollama" else spec.base_url
+    assert client._base_url == expected_base_url
     assert client._api_key_env == spec.api_key_env
     assert client._model == "stub-model"
     assert client._temperature == spec.temperature
     assert client._max_tokens == spec.config.max_tokens
+
+
+@pytest.mark.parametrize("provider", sorted(_OPENAI_COMPATIBLE_PROVIDERS))
+def test_create_llm_client_dispatches_registry_provider_to_litellm_when_transport_enabled(
+    provider: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    spec = _OPENAI_COMPATIBLE_PROVIDERS[provider]
+    settings = SimpleNamespace(
+        provider=provider,
+        ollama_model="stub-model",
+        ollama_host="http://localhost:11434",
+        **{f"{provider}_toolcall_model": "stub-model"},
+    )
+    monkeypatch.setattr(llm_client, "resolve_llm_settings", lambda: settings)
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env_var: "test-key")
+    monkeypatch.setenv("OPENSRE_LLM_TRANSPORT", "litellm")
+
+    client = _create_llm_client("toolcall")
+
+    assert isinstance(client, LiteLLMLLMClient)
+    expected_base_url = "http://localhost:11434/v1" if provider == "ollama" else spec.base_url
+    assert client._api_base == expected_base_url
+    assert client._api_key_env == spec.api_key_env
+    # LiteLLM model is prefixed with "openai/" for compat providers
+    assert client._litellm_model == "openai/stub-model"
+    assert client._temperature == spec.temperature
+    assert client._max_tokens == spec.config.max_tokens
+
+
+def test_create_llm_client_uses_sdk_without_transport_flag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = SimpleNamespace(provider="deepseek", deepseek_toolcall_model="deepseek-v4-flash")
+    monkeypatch.setattr(llm_client, "resolve_llm_settings", lambda: settings)
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env_var: "test-key")
+    monkeypatch.delenv("OPENSRE_LLM_TRANSPORT", raising=False)
+
+    client = _create_llm_client("toolcall")
+
+    assert isinstance(client, OpenAILLMClient)

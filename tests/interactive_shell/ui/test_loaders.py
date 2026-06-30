@@ -7,8 +7,8 @@ from typing import Any
 
 from rich.console import Console
 
-from interactive_shell.ui.components import loaders
-from interactive_shell.ui.components.loaders import llm_loader
+from surfaces.interactive_shell.ui.components import loaders
+from surfaces.interactive_shell.ui.components.loaders import llm_loader
 
 
 def _terminal_console() -> tuple[Console, io.StringIO]:

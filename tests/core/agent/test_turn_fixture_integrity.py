@@ -24,11 +24,8 @@ from tests.core.agent.scenario_loader import (
     select_representative,
     validate_action_shape,
 )
-from tools.interactive_shell.registry import (
-    REGISTRY,
-    TOOL_KIND_TO_NAME,
-    ToolKind,
-)
+from tools.interactive_shell.action_names import TOOL_KIND_TO_NAME, ToolKind
+from tools.registry import get_registered_tool_map
 
 TESTS_DIR = Path(__file__).resolve().parent
 TURN_SCENARIOS_TEST = TESTS_DIR / "test_turn_scenarios.py"
@@ -128,6 +125,7 @@ def test_planned_and_executed_action_shapes() -> None:
 
 def test_scenario_action_kinds_have_registered_tools() -> None:
     missing: list[str] = []
+    action_tools = get_registered_tool_map("action")
     for case in load_all_scenarios():
         actions = [*case.answer.planned_actions, *case.answer.executed_actions]
         for action in actions:
@@ -140,7 +138,7 @@ def test_scenario_action_kinds_have_registered_tools() -> None:
             if tool_name is None:
                 missing.append(f"{case.scenario.id}: kind {kind!r} has no tool mapping")
                 continue
-            if REGISTRY.get(tool_name) is None:
+            if tool_name not in action_tools:
                 missing.append(
                     f"{case.scenario.id}: kind {kind!r} mapped to missing tool {tool_name!r}"
                 )

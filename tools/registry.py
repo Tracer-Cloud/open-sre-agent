@@ -7,12 +7,28 @@ import inspect
 import logging
 import pkgutil
 import threading
+from dataclasses import replace
 from functools import lru_cache
+from pathlib import Path
 from types import ModuleType
 
 import tools as tools_package
 from tools.base import BaseTool
 from tools.registered_tool import REGISTERED_TOOL_ATTR, RegisteredTool, ToolSurface
+from tools.skill_guidance import format_tool_skill_guidance, load_tool_skill_guidance
+
+# Per-vendor tool packages — when a vendor consolidates its tool code under
+# ``integrations/<vendor>/tools/``, list the dotted package path here so the
+# registry walks it alongside the canonical ``tools/`` package. New vendors get
+# one entry each as they migrate.
+#
+# The external extension point (:func:`register_external_tool_package`) is
+# separate; it's for plugin-style callers that ship tool packages outside of
+# opensre's own codebase.
+_INTEGRATION_TOOL_PACKAGES: tuple[str, ...] = (
+    "integrations.datadog.tools",
+    "integrations.grafana.tools",
+)
 
 logger = logging.getLogger(__name__)
 
@@ -21,11 +37,14 @@ _SKIP_MODULE_NAMES = {
     "base",
     "registry",
     "registered_tool",
+    "skill_guidance",
     "tool_decorator",
     "investigation_registry",
     "utils",
 }
 _TOOL_MODULES_ATTR = "TOOL_MODULES"
+_MAX_TOOL_SKILL_GUIDANCE_CHARS = 2400
+_SKILL_GUIDANCE_FILES = (Path(__file__).resolve().parent / "github" / "workflow" / "SKILL.md",)
 
 # Extension point: callers outside ``tools.*`` can register additional
 # tool packages by calling :func:`register_external_tool_package`.
@@ -155,6 +174,8 @@ def _iter_discovered_tool_modules(package: ModuleType) -> list[ModuleType]:
 
 
 def _candidate_belongs_to_module(candidate: object, module_name: str) -> bool:
+    if isinstance(candidate, RegisteredTool):
+        return (candidate.origin_module or getattr(candidate.run, "__module__", "")) == module_name
     if isinstance(candidate, BaseTool):
         return candidate.__class__.__module__ == module_name
     return getattr(candidate, "__module__", None) == module_name
@@ -165,6 +186,15 @@ def _default_surfaces_for_tool(_tool_name: str) -> tuple[ToolSurface, ...]:
 
 
 def _registered_tool_from_candidate(candidate: object) -> RegisteredTool | None:
+    if isinstance(candidate, RegisteredTool):
+        if not candidate.origin_module or not candidate.origin_name:
+            return replace(
+                candidate,
+                origin_module=candidate.origin_module or getattr(candidate.run, "__module__", ""),
+                origin_name=candidate.origin_name or getattr(candidate.run, "__name__", ""),
+            )
+        return candidate
+
     registered = getattr(candidate, REGISTERED_TOOL_ATTR, None)
     if isinstance(registered, RegisteredTool):
         return registered
@@ -209,16 +239,76 @@ def _collect_registered_tools_from_module(module: ModuleType) -> list[Registered
     return sorted(tools_by_name.values(), key=lambda tool: tool.name)
 
 
+def _truncate_skill_guidance(text: str) -> str:
+    if len(text) <= _MAX_TOOL_SKILL_GUIDANCE_CHARS:
+        return text
+    return text[: _MAX_TOOL_SKILL_GUIDANCE_CHARS - 3].rstrip() + "..."
+
+
+def _with_skill_guidance(tool: RegisteredTool, guidance: str) -> RegisteredTool:
+    if not guidance:
+        return tool
+    return replace(
+        tool,
+        description=f"{tool.description}\n\nWorkflow guidance:\n{guidance}",
+        skill_guidance=guidance,
+    )
+
+
+def _apply_skill_guidance(tools_by_name: dict[str, RegisteredTool]) -> None:
+    known_tool_names = frozenset(tools_by_name)
+    for skill_path in _SKILL_GUIDANCE_FILES:
+        result = load_tool_skill_guidance(skill_path, known_tool_names=known_tool_names)
+        for diagnostic in result.diagnostics:
+            logger.warning(
+                "[tools] Skill guidance %s (%s): %s",
+                diagnostic.path,
+                diagnostic.code,
+                diagnostic.message,
+            )
+        skill = result.skill
+        if skill is None or skill.disable_model_invocation:
+            continue
+        guidance = _truncate_skill_guidance(format_tool_skill_guidance(skill))
+        for tool_name in skill.tool_names:
+            tool_def = tools_by_name.get(tool_name)
+            if tool_def is None:
+                continue
+            tools_by_name[tool_name] = _with_skill_guidance(tool_def, guidance)
+
+
 @lru_cache(maxsize=1)
 def _load_registry_snapshot() -> tuple[RegisteredTool, ...]:
     tools_by_name: dict[str, RegisteredTool] = {}
 
-    # Walk the canonical tools package, then any externally-registered packages
-    # in registration order.
+    # Walk the canonical tools package, then any per-vendor integration tool
+    # packages, then any externally-registered packages in registration order.
     # First definition of a given tool name wins; duplicates are logged and skipped.
-    packages: list[ModuleType] = [tools_package, *_external_tool_packages]
+    integration_packages: list[ModuleType] = []
+    for dotted in _INTEGRATION_TOOL_PACKAGES:
+        try:
+            integration_packages.append(importlib.import_module(dotted))
+        except ImportError as exc:
+            logger.warning(
+                "[tools] Integration tool package %r failed to import: %s",
+                dotted,
+                exc,
+            )
+    packages: list[ModuleType] = [
+        tools_package,
+        *integration_packages,
+        *_external_tool_packages,
+    ]
+    # Integration packages put their tools directly in ``__init__.py`` (one
+    # file per vendor), so their own module is a tool source alongside any
+    # submodules they may also expose.
+    integration_module_ids = {id(pkg) for pkg in integration_packages}
     for package in packages:
-        for module in _iter_discovered_tool_modules(package):
+        modules_to_scan: list[ModuleType] = []
+        if id(package) in integration_module_ids:
+            modules_to_scan.append(package)
+        modules_to_scan.extend(_iter_discovered_tool_modules(package))
+        for module in modules_to_scan:
             for tool in _collect_registered_tools_from_module(module):
                 if tool.name in tools_by_name:
                     logger.warning(
@@ -228,6 +318,7 @@ def _load_registry_snapshot() -> tuple[RegisteredTool, ...]:
                     continue
                 tools_by_name[tool.name] = tool
 
+    _apply_skill_guidance(tools_by_name)
     return tuple(sorted(tools_by_name.values(), key=lambda tool: tool.name))
 
 

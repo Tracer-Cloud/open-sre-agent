@@ -6,10 +6,11 @@ from typing import Any
 
 from tools.interactive_shell.contracts import (
     ToolContext,
-    ToolEntry,
+    execute_with_repl_context,
     object_schema,
     string_property,
 )
+from tools.registered_tool import RegisteredTool
 
 
 def execute_assistant_handoff_tool(args: dict[str, Any], ctx: ToolContext) -> bool:
@@ -20,7 +21,15 @@ def execute_assistant_handoff_tool(args: dict[str, Any], ctx: ToolContext) -> bo
     return True
 
 
-TOOL_ENTRY = ToolEntry(
+def run_assistant_handoff(*, content: str, context: Any) -> dict[str, Any]:
+    return execute_with_repl_context(
+        {"content": content},
+        context,
+        execute_assistant_handoff_tool,
+    )
+
+
+assistant_handoff_tool = RegisteredTool(
     name="assistant_handoff",
     description=(
         "Mark a request as non-executable and hand off to assistant response generation. "
@@ -41,8 +50,12 @@ TOOL_ENTRY = ToolEntry(
         },
         required=("content",),
     ),
-    execute=execute_assistant_handoff_tool,
+    source="interactive_shell",
+    surfaces=("action",),
+    parallel_safe=False,
+    accepts_runtime_context=True,
+    run=run_assistant_handoff,
 )
 
 
-__all__ = ["TOOL_ENTRY", "execute_assistant_handoff_tool"]
+__all__ = ["assistant_handoff_tool", "execute_assistant_handoff_tool"]

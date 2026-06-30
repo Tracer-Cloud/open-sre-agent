@@ -36,6 +36,10 @@ class TestNormalizeUrl:
     def test_hostname_without_port(self) -> None:
         assert normalize_url("http://agent.local") == f"http://agent.local:{DEFAULT_PORT}"
 
+    def test_https_without_port_is_left_unchanged(self) -> None:
+        # An explicit https:// URL implies port 443; do not append the agent default port.
+        assert normalize_url("https://opensre.example.com") == "https://opensre.example.com"
+
 
 class TestRemoteAgentClientInit:
     def test_base_url_normalized(self) -> None:

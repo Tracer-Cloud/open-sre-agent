@@ -318,6 +318,31 @@ def _google_docs_case() -> ToolFailureCase:
     )
 
 
+def _github_repository_case() -> ToolFailureCase:
+    def patch(mp: pytest.MonkeyPatch) -> None:
+        from integrations.github.client import GitHubApiError
+
+        mp.setattr(
+            "tools.github.repository.GitHubRestClient.request",
+            MagicMock(
+                side_effect=GitHubApiError("not found", status_code=404, path="/repos/o/r"),
+            ),
+        )
+
+    def invoke() -> dict[str, Any]:
+        from tools.github.repository import get_github_repository
+
+        return get_github_repository(owner="o", repo="r", github_token="tok")
+
+    return ToolFailureCase(
+        "github_repository",
+        patch,
+        invoke,
+        "get_github_repository",
+        "github",
+    )
+
+
 def _eks_list_clusters_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
         import tools.eks_tools as mod
@@ -732,6 +757,7 @@ _TOOL_FAILURE_CASES: list[ToolFailureCase] = [
     _cloudwatch_logs_case(),
     _cloudwatch_batch_case(),
     _google_docs_case(),
+    _github_repository_case(),
     _eks_list_clusters_case(),
     _eks_describe_cluster_case(),
     _eks_nodegroup_case(),
@@ -921,6 +947,7 @@ _MIGRATED_TOOL_NAMES: frozenset[str] = frozenset(
         "get_cloudwatch_logs",
         "get_cloudwatch_batch_metrics",
         "create_google_docs_incident_report",
+        "get_github_repository",
         # EKS — enumerated in #1463
         "list_eks_clusters",
         "describe_eks_cluster",
@@ -962,16 +989,22 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         # there as an external registry package and are only loaded when the
         # bench is actively imported, so they don't appear in the production
         # registry that this test enumerates.
+        "alert_sample",
         "alertmanager_alerts",
         "alertmanager_silences",
+        "assistant_handoff",
         "argocd_application_diff",
         "argocd_application_status",
         "check_s3_marker",
+        "cli_exec",
+        "code_implement",
         "describe_rds_events",
         "describe_rds_instance",
         "ec2_instances_by_tag",
         "execute_aws_operation",
+        "execute_github_issue_mutation",
         "fetch_failed_run",
+        "generate_work_status_report",
         "get_airflow_dag_runs",
         "get_airflow_metrics",
         "get_airflow_task_instances",
@@ -1076,6 +1109,7 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "incident_io_incidents",
         "inspect_lambda_function",
         "inspect_s3_object",
+        "investigation_start",
         "jira_add_comment",
         "jira_create_issue",
         "jira_issue_detail",
@@ -1093,11 +1127,14 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "list_github_actions_active_runs",
         "list_github_actions_run_jobs",
         "list_github_actions_workflow_runs",
+        "list_github_security_alerts",
+        "list_github_work_items",
         "list_jenkins_builds",
         "list_jenkins_jobs",
         "list_jenkins_running_builds",
         "list_s3_objects",
         "list_sentry_issue_events",
+        "llm_set_provider",
         "lookup_cloudtrail_events",
         "opsgenie_alert_detail",
         "opsgenie_alerts",
@@ -1105,8 +1142,10 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "pagerduty_incidents",
         "pagerduty_oncall",
         "pagerduty_services",
+        "pi_coding_task",
         "prefect_flow_runs",
         "prefect_worker_health",
+        "propose_github_issue_mutation_from_slack",
         "query_betterstack_logs",
         "query_coralogix_logs",
         "query_datadog_all",
@@ -1137,6 +1176,12 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "search_github_code",
         "search_github_issues",
         "search_sentry_issues",
+        "shell_run",
+        "slash_invoke",
+        "summarize_community_followups",
+        "summarize_github_pr_status",
+        "synthetic_run",
+        "task_cancel",
         # Temporal tools use try/finally only (to close the client); the client
         # returns structured error dicts for handled HTTP failures, and any
         # unexpected exception escapes to the #1476 global wrapper.
@@ -1144,6 +1189,7 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "temporal_task_queue",
         "temporal_workflow_history",
         "temporal_workflows",
+        "telegram_send_message",
         "twilio_notify",
         "vercel_deployment_logs",
         "vercel_deployment_status",
@@ -1160,18 +1206,22 @@ def test_every_registered_tool_is_migrated_or_allowlisted() -> None:
     lets them escape and relies on #1476's global wrapper (allowlist it in
     ``_TOOLS_WITHOUT_DELIBERATE_CATCH``).
     """
-    from tools.registry import get_registered_tool_map
+    from tools.registry import _INTEGRATION_TOOL_PACKAGES, get_registered_tool_map
 
-    # Limit the audit to PRODUCTION tools (those defined in ``tools.*``).
-    # External packages registered via
-    # ``register_external_tool_package`` (e.g. bench-only tools that live
-    # under ``tests/benchmarks/``) have their own classification expectations
-    # and aren't part of this production-telemetry contract. Filtering by
-    # ``origin_module`` keeps this test stable regardless of test order.
+    # Limit the audit to PRODUCTION tools — those defined in ``tools.*`` or in
+    # the exact per-vendor packages the registry walks via
+    # ``_INTEGRATION_TOOL_PACKAGES``. External packages registered via
+    # ``register_external_tool_package`` (e.g. bench-only tools that live under
+    # ``tests/benchmarks/``) have their own classification expectations and
+    # aren't part of this production-telemetry contract. Pinning the prefix
+    # to the registry's own integration list (instead of a broad
+    # ``"integrations."``) keeps the audit from sweeping in any future
+    # caller that ships tools under an ``integrations.*`` namespace.
+    _PRODUCTION_TOOL_PREFIXES = ("tools.", *_INTEGRATION_TOOL_PACKAGES)
     registered = {
         name
         for name, tool in get_registered_tool_map().items()
-        if tool.origin_module.startswith("tools.")
+        if tool.origin_module.startswith(_PRODUCTION_TOOL_PREFIXES)
     }
     classified = _MIGRATED_TOOL_NAMES | _TOOLS_WITHOUT_DELIBERATE_CATCH
 

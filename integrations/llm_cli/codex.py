@@ -137,11 +137,7 @@ class CodexAdapter:
         auth_detail: str
         if not _should_probe_codex_login_status():
             logged_in = None
-            auth_detail = (
-                "Codex CLI installed; login status was not checked to avoid launching "
-                "browser OAuth. Run `codex login` in an interactive terminal if needed, "
-                f"or set {_AUTH_STATUS_PROBE_ENV}=1 to opt in to `codex login status`."
-            )
+            auth_detail = "Codex CLI installed."
         else:
             try:
                 auth_proc = subprocess.run(

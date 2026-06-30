@@ -13,14 +13,19 @@ from check_direct_imports import find_direct_violations
 
 
 def test_find_direct_violations_flags_new_edge() -> None:
+    # Both edges below are forbidden by ``_FORBIDDEN_DIRECT``:
+    # - ``integrations`` cannot import from ``tools``
+    # - ``platform`` cannot import from ``surfaces``
     graph = {
-        "integrations.opensre.seed_evidence": {"tools.GrafanaLogsTool"},
+        "integrations.grafana.tools": {"tools.tool_decorator"},
         "integrations.hermes.sinks": {"tools.watch_dog.alarms"},
+        "platform.analytics.provider": {"surfaces.cli.wizard.store"},
     }
     violations = find_direct_violations(graph, baseline_ignores=frozenset())
     edges = {v.edge for v in violations}
-    assert "integrations.opensre.seed_evidence -> tools.GrafanaLogsTool" in edges
+    assert "integrations.grafana.tools -> tools.tool_decorator" in edges
     assert "integrations.hermes.sinks -> tools.watch_dog.alarms" in edges
+    assert "platform.analytics.provider -> surfaces.cli.wizard.store" in edges
 
 
 def test_find_direct_violations_respects_baseline() -> None:

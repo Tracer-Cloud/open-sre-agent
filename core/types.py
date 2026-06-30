@@ -89,6 +89,10 @@ class AgentTool:
     source: str = "agent"
     parallel_safe: bool = True
     execution_mode: ToolExecutionMode | None = None
+    requires_approval: bool = False
+    approval_reason: str = ""
+    approval_expiry_seconds: int = 300
+    approval_scope: str = "one_shot"
 
     @property
     def effective_execution_mode(self) -> ToolExecutionMode:

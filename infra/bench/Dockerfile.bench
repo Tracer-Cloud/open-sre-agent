@@ -56,7 +56,7 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 
 # Source - only what the bench needs.
-COPY cli/ ./cli/
+COPY surfaces/ ./surfaces/
 COPY config/ ./config/
 COPY core/ ./core/
 COPY infra/__init__.py ./infra/__init__.py

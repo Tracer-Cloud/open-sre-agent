@@ -7,15 +7,16 @@ from typing import Any
 
 from rich.console import Console
 
-from interactive_shell.runtime import ReplSession
 from platform.common.task_types import TaskRecord
+from surfaces.interactive_shell.runtime import ReplSession
 from tools.interactive_shell.contracts import (
     ToolContext,
-    ToolEntry,
+    execute_with_repl_context,
     object_schema,
     string_property,
 )
 from tools.interactive_shell.shared.investigation_launch import launch_investigation
+from tools.registered_tool import RegisteredTool
 
 _SAMPLE_ALERT_TEMPLATES = ("generic",)
 
@@ -30,7 +31,7 @@ def run_sample_alert(
     action_already_listed: bool = False,
 ) -> None:
     def _run(task: TaskRecord) -> dict[str, object]:
-        from cli.investigation import run_sample_alert_for_session
+        from surfaces.cli.investigation import run_sample_alert_for_session
 
         return run_sample_alert_for_session(
             template_name=template_name,
@@ -39,7 +40,7 @@ def run_sample_alert(
         )
 
     def _start_background() -> None:
-        from interactive_shell.runtime.background.runner import (
+        from surfaces.interactive_shell.runtime.background.runner import (
             start_background_template_investigation,
         )
 
@@ -59,7 +60,7 @@ def run_sample_alert(
         announce_value=template_name,
         record_value=f"sample:{template_name}",
         foreground_task_command=f"sample alert:{template_name}",
-        exception_context="interactive_shell.sample_alert",
+        exception_context="surfaces.interactive_shell.sample_alert",
         run=_run,
         start_background=_start_background,
         confirm_fn=confirm_fn,
@@ -83,7 +84,15 @@ def execute_sample_alert_tool(args: dict[str, Any], ctx: ToolContext) -> bool:
     return True
 
 
-TOOL_ENTRY = ToolEntry(
+def run_sample_alert_action(*, template: str, context: Any) -> dict[str, Any]:
+    return execute_with_repl_context(
+        {"template": template},
+        context,
+        execute_sample_alert_tool,
+    )
+
+
+alert_sample_tool = RegisteredTool(
     name="alert_sample",
     description=(
         "Run the built-in synthetic sample alert end-to-end (read alert → "
@@ -104,8 +113,12 @@ TOOL_ENTRY = ToolEntry(
         },
         required=("template",),
     ),
-    execute=execute_sample_alert_tool,
+    source="interactive_shell",
+    surfaces=("action",),
+    parallel_safe=False,
+    accepts_runtime_context=True,
+    run=run_sample_alert_action,
 )
 
 
-__all__ = ["TOOL_ENTRY", "execute_sample_alert_tool", "run_sample_alert"]
+__all__ = ["alert_sample_tool", "execute_sample_alert_tool", "run_sample_alert"]

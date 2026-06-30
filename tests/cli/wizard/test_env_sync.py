@@ -6,16 +6,16 @@ import stat
 import keyring
 import pytest
 
-from cli.wizard.config import PROVIDER_BY_VALUE
-from cli.wizard.env_sync import (
+from config.llm_credentials import resolve_env_credential
+from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
+from surfaces.cli.wizard.env_sync import (
     _is_sensitive_env_key,
     sync_env_secret,
     sync_env_values,
     sync_provider_env,
     sync_reasoning_model_env,
 )
-from cli.wizard.store import load_local_config
-from config.llm_credentials import resolve_env_credential
+from surfaces.cli.wizard.store import load_local_config
 from tests.shared.keyring_backend import MemoryKeyring
 
 _SKIP_AS_ROOT = not hasattr(os, "getuid") or os.getuid() == 0
@@ -25,7 +25,7 @@ _SKIP_AS_ROOT = not hasattr(os, "getuid") or os.getuid() == 0
 def _redirect_wizard_store(tmp_path, monkeypatch) -> None:
     """Keep sync_provider_env store updates off the developer's ~/.opensre."""
     monkeypatch.setattr(
-        "cli.wizard.store.get_store_path",
+        "surfaces.cli.wizard.store.get_store_path",
         lambda: tmp_path / "opensre.json",
     )
 
@@ -101,6 +101,27 @@ def test_sync_provider_env_updates_provider_specific_keys(tmp_path, monkeypatch)
     assert "ANTHROPIC_API_KEY=" not in content
     assert "OPENAI_REASONING_MODEL=gpt-5-mini\n" in content
     assert "OPENAI_MODEL=gpt-5-mini\n" in content
+
+
+def test_sync_provider_env_strips_integration_fallback_secrets(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("OPENAI_REASONING_MODEL", raising=False)
+    monkeypatch.delenv("OPENAI_MODEL", raising=False)
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "TELEGRAM_BOT_TOKEN=manual-fallback-token\nLLM_PROVIDER=anthropic\n",
+        encoding="utf-8",
+    )
+
+    sync_provider_env(
+        provider=PROVIDER_BY_VALUE["openai"],
+        model="gpt-5-mini",
+        env_path=env_path,
+    )
+
+    content = env_path.read_text(encoding="utf-8")
+    assert "TELEGRAM_BOT_TOKEN=" not in content
+    assert "LLM_PROVIDER=openai\n" in content
 
 
 def test_sync_provider_env_updates_wizard_store(tmp_path, monkeypatch) -> None:
@@ -182,6 +203,36 @@ def test_sync_provider_env_codex_writes_codex_model(tmp_path, monkeypatch) -> No
     content = env_path.read_text(encoding="utf-8")
     assert "LLM_PROVIDER=codex\n" in content
     assert "CODEX_MODEL=\n" in content
+
+
+def test_sync_provider_env_openai_oauth_writes_auth_method_and_codex_model(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("LLM_AUTH_METHOD", raising=False)
+    monkeypatch.delenv("CODEX_MODEL", raising=False)
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "LLM_PROVIDER=anthropic\nANTHROPIC_REASONING_MODEL=claude-opus-4-7\n",
+        encoding="utf-8",
+    )
+
+    sync_provider_env(
+        provider=PROVIDER_BY_VALUE["openai"],
+        model="",
+        model_provider=PROVIDER_BY_VALUE["codex"],
+        auth_method="oauth",
+        env_path=env_path,
+    )
+
+    content = env_path.read_text(encoding="utf-8")
+    assert "LLM_PROVIDER=openai\n" in content
+    assert "LLM_AUTH_METHOD=oauth\n" in content
+    assert "CODEX_MODEL=\n" in content
+    assert "ANTHROPIC_REASONING_MODEL=" not in content
+    assert os.environ["LLM_PROVIDER"] == "openai"
+    assert os.environ["LLM_AUTH_METHOD"] == "oauth"
+    assert os.environ["CODEX_MODEL"] == ""
 
 
 def test_sync_provider_env_gemini_cli_writes_model(tmp_path, monkeypatch) -> None:
@@ -441,3 +492,56 @@ def test_sync_env_values_permission_error(tmp_path) -> None:
             sync_env_values({"FOO": "baz"}, env_path=env_path)
     finally:
         env_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+
+
+def test_strip_keyring_backed_secret_lines_removes_all_sensitive_lines() -> None:
+    from surfaces.cli.wizard.env_sync import _strip_keyring_backed_secret_lines
+
+    lines = [
+        "TELEGRAM_BOT_TOKEN=fallback\n",
+        "DD_API_KEY=in-keyring\n",
+        "DD_SITE=old\n",
+    ]
+
+    kept = _strip_keyring_backed_secret_lines(lines)
+
+    assert kept == ["DD_SITE=old\n"]
+
+
+def test_sync_env_values_strips_telegram_bot_token_fallback(tmp_path) -> None:
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "TELEGRAM_BOT_TOKEN=manual-fallback-token\nDD_SITE=old\n",
+        encoding="utf-8",
+    )
+
+    sync_env_values({"DD_SITE": "datadoghq.eu"}, env_path=env_path)
+
+    content = env_path.read_text(encoding="utf-8")
+    assert "TELEGRAM_BOT_TOKEN=" not in content
+    assert "DD_SITE=datadoghq.eu" in content
+
+
+def test_sync_env_values_strips_multiple_fallback_secrets(tmp_path) -> None:
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "DD_API_KEY=datadog-api\nDD_APP_KEY=datadog-app\n",
+        encoding="utf-8",
+    )
+
+    sync_env_values({"DD_SITE": "datadoghq.com"}, env_path=env_path)
+
+    content = env_path.read_text(encoding="utf-8")
+    assert "DD_API_KEY=" not in content
+    assert "DD_APP_KEY=" not in content
+    assert "DD_SITE=datadoghq.com" in content
+
+
+def test_sync_env_values_empty_update_strips_fallback_secrets(tmp_path) -> None:
+    """Wizard paths call ``sync_env_values({})`` after integration setup."""
+    env_path = tmp_path / ".env"
+    env_path.write_text("TELEGRAM_BOT_TOKEN=manual-fallback-token\n", encoding="utf-8")
+
+    sync_env_values({}, env_path=env_path)
+
+    assert env_path.read_text(encoding="utf-8") == ""

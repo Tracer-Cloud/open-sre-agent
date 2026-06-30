@@ -14,15 +14,14 @@ import pytest
 from rich.console import Console
 
 import config.constants.platform as platform_module
-import interactive_shell.runtime.shell_turn_execution as shell_turn_execution
-import interactive_shell.runtime.subprocess_runner as subprocess_runner
+import surfaces.interactive_shell.runtime.shell_turn_execution as shell_turn_execution
+import surfaces.interactive_shell.runtime.subprocess_runner as subprocess_runner
 import tools.interactive_shell.actions.implementation as implementation_tool
 import tools.interactive_shell.actions.llm_provider as llm_provider_tool
 import tools.interactive_shell.actions.slash as slash_tool
 import tools.interactive_shell.shell.execution as shell_execution
 from core.agent_harness.session import ReplSession
 from core.llm.types import AgentLLMResponse, ToolCall
-from interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 from platform.common.task_types import TaskKind, TaskStatus
 from tests.core.agent._planned_action import (
     PlannedAction,
@@ -31,12 +30,15 @@ from tests.core.agent._planned_action import (
 from tests.core.agent.orchestration.action_execution_test_harness import (
     FakeActionLLM,
 )
-from tools.interactive_shell.registry import (
+from tools.interactive_shell.action_names import (
     TOOL_KIND_TO_NAME,
     ToolKind,
 )
 
-_ACTION_LLM_FACTORY_PATCH = "interactive_shell.runtime.shell_turn_execution._default_llm_factory"
+_ACTION_LLM_FACTORY_PATCH = (
+    "surfaces.interactive_shell.runtime.shell_turn_execution._default_llm_factory"
+)
+execute_shell_turn = shell_turn_execution.execute_shell_turn
 
 
 def _capture() -> tuple[Console, io.StringIO]:
@@ -299,9 +301,9 @@ def test_execute_cli_actions_dispatches_planned_commands(monkeypatch: object) ->
         {"type": "slash", "text": "/integrations list", "ok": True},
     ]
     output = buf.getvalue()
-    assert output.index("Requested actions") < output.index("$ /health")
-    assert output.index("1.") < output.index("$ /health")
-    assert output.index("2.") < output.index("$ /health")
+    assert "Requested actions" not in output
+    assert "1. command" not in output
+    assert "2. command" not in output
     assert "ran /health" in output
     assert "ran /integrations list" in output
 
@@ -525,7 +527,7 @@ def test_execute_cli_actions_runs_implementation_action(monkeypatch: object) -> 
         {"type": "implementation", "text": "/history search", "ok": True},
     ]
     output = buf.getvalue()
-    assert "implementation" in output
+    assert "Requested actions" not in output
     assert "implemented /history search" in output
 
 
@@ -653,7 +655,7 @@ def test_nitro_prompt_executes_remote_then_investigation(monkeypatch: object) ->
         return {"root_cause": "hello world handled"}
 
     monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
-    import cli.investigation as investigation_module
+    import surfaces.cli.investigation as investigation_module
 
     monkeypatch.setattr(
         investigation_module,
@@ -726,7 +728,7 @@ def test_execute_cli_actions_runs_sample_alert(monkeypatch: object) -> None:
             "is_noise": False,
         }
 
-    import cli.investigation as investigation_module
+    import surfaces.cli.investigation as investigation_module
 
     monkeypatch.setattr(
         investigation_module,
@@ -764,7 +766,7 @@ def test_execute_cli_actions_runs_sample_alert(monkeypatch: object) -> None:
 def test_execute_cli_actions_sample_alert_opensre_error_marks_task_failed(
     monkeypatch: object,
 ) -> None:
-    from interactive_shell.utils.error_handling.errors import OpenSREError
+    from surfaces.interactive_shell.utils.error_handling.errors import OpenSREError
 
     def _raise(
         *,
@@ -774,7 +776,7 @@ def test_execute_cli_actions_sample_alert_opensre_error_marks_task_failed(
     ) -> dict[str, object]:
         raise OpenSREError("sample pipeline blocked")
 
-    import cli.investigation as investigation_module
+    import surfaces.cli.investigation as investigation_module
 
     monkeypatch.setattr(investigation_module, "run_sample_alert_for_session", _raise)
 
@@ -868,11 +870,10 @@ def test_execute_cli_actions_lists_all_actions_before_synthetic_rds(monkeypatch:
     assert "task:" in synthetic_entry["text"]
 
     output = buf.getvalue()
-    assert output.index("1.") < output.index("$ /integrations list")
-    assert output.index("2.") < output.index("$ /integrations list")
-    assert "synthetic test rds_postgres:001-replication-lag" in output
-    assert output.index("synthetic test") < output.index("$ opensre tests synthetic")
+    assert "Requested actions" not in output
+    assert "synthetic test started" in output
     assert output.index("$ /integrations list") < output.index("$ opensre tests synthetic")
+    assert output.index("$ opensre tests synthetic") < output.index("synthetic test started")
 
 
 def test_execute_cli_actions_runs_requested_synthetic_scenario(monkeypatch: object) -> None:
@@ -917,16 +918,23 @@ def test_execute_cli_actions_cancels_single_running_synthetic_task() -> None:
     assert handled.handled is True
     assert task.cancel_requested.is_set()
     proc.terminate.assert_called_once()
-    assert session.history == [
-        {
-            "type": "cli_agent",
-            "text": "kill the syntehtic_test because it is runnign way too long",
-            "ok": True,
-        },
-        {"type": "slash", "text": f"/cancel {task.task_id}", "ok": True},
-    ]
+    assert session.history[0] == {
+        "type": "cli_agent",
+        "text": "kill the syntehtic_test because it is runnign way too long",
+        "ok": True,
+    }
+    slash_entry = session.history[1]
+    assert slash_entry == {
+        "type": "slash",
+        "text": f"/cancel {task.task_id}",
+        "ok": True,
+        "response_text": (
+            f"slash /cancel {task.task_id} (succeeded)\n"
+            f"stop requested for synthetic_test {task.task_id}. use /tasks to confirm status."
+        ),
+    }
     output = buf.getvalue()
-    assert "cancel task" in output
+    assert "Requested actions" not in output
     assert f"$ /cancel {task.task_id}" in output
     assert "stop requested" in output
 

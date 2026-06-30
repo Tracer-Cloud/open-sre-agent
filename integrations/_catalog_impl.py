@@ -382,21 +382,25 @@ def load_env_integrations() -> list[dict[str, Any]]:
         grafana_endpoint = os.getenv("GRAFANA_INSTANCE_URL", "").strip()
         grafana_api_key = os.getenv("GRAFANA_READ_TOKEN", "").strip()
     if grafana_endpoint and grafana_api_key:
-        grafana_config = GrafanaIntegrationConfig.model_validate(
-            {
-                "endpoint": grafana_endpoint,
-                "api_key": grafana_api_key,
-            }
-        )
-        integrations.append(
-            _active_env_record(
-                "grafana",
+        try:
+            grafana_config = GrafanaIntegrationConfig.model_validate(
                 {
-                    "endpoint": grafana_config.endpoint,
-                    "api_key": grafana_config.api_key,
-                },
+                    "endpoint": grafana_endpoint,
+                    "api_key": grafana_api_key,
+                }
             )
-        )
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="grafana")
+        else:
+            integrations.append(
+                _active_env_record(
+                    "grafana",
+                    {
+                        "endpoint": grafana_config.endpoint,
+                        "api_key": grafana_config.api_key,
+                    },
+                )
+            )
 
     datadog_multi = _parse_instances_env("DD_INSTANCES", "datadog")
     if datadog_multi is not None:
@@ -409,19 +413,23 @@ def load_env_integrations() -> list[dict[str, Any]]:
         datadog_app_key = os.getenv("DD_APP_KEY", "").strip()
         datadog_site = os.getenv("DD_SITE", "datadoghq.com").strip() or "datadoghq.com"
     if datadog_api_key and datadog_app_key:
-        datadog_config = DatadogIntegrationConfig.model_validate(
-            {
-                "api_key": datadog_api_key,
-                "app_key": datadog_app_key,
-                "site": datadog_site,
-            }
-        )
-        integrations.append(
-            _active_env_record(
-                "datadog",
-                datadog_config.model_dump(exclude={"integration_id"}),
+        try:
+            datadog_config = DatadogIntegrationConfig.model_validate(
+                {
+                    "api_key": datadog_api_key,
+                    "app_key": datadog_app_key,
+                    "site": datadog_site,
+                }
             )
-        )
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="datadog")
+        else:
+            integrations.append(
+                _active_env_record(
+                    "datadog",
+                    datadog_config.model_dump(exclude={"integration_id"}),
+                )
+            )
 
     groundcover_multi = _parse_instances_env("GROUNDCOVER_INSTANCES", "groundcover")
     if groundcover_multi is not None:
@@ -463,19 +471,23 @@ def load_env_integrations() -> list[dict[str, Any]]:
     else:
         honeycomb_api_key = os.getenv("HONEYCOMB_API_KEY", "").strip()
     if honeycomb_api_key:
-        honeycomb_config = HoneycombIntegrationConfig.model_validate(
-            {
-                "api_key": honeycomb_api_key,
-                "dataset": os.getenv("HONEYCOMB_DATASET", "").strip(),
-                "base_url": os.getenv("HONEYCOMB_API_URL", "").strip(),
-            }
-        )
-        integrations.append(
-            _active_env_record(
-                "honeycomb",
-                honeycomb_config.model_dump(exclude={"integration_id"}),
+        try:
+            honeycomb_config = HoneycombIntegrationConfig.model_validate(
+                {
+                    "api_key": honeycomb_api_key,
+                    "dataset": os.getenv("HONEYCOMB_DATASET", "").strip(),
+                    "base_url": os.getenv("HONEYCOMB_API_URL", "").strip(),
+                }
             )
-        )
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="honeycomb")
+        else:
+            integrations.append(
+                _active_env_record(
+                    "honeycomb",
+                    honeycomb_config.model_dump(exclude={"integration_id"}),
+                )
+            )
 
     coralogix_multi = _parse_instances_env("CORALOGIX_INSTANCES", "coralogix")
     if coralogix_multi is not None:
@@ -484,20 +496,24 @@ def load_env_integrations() -> list[dict[str, Any]]:
     else:
         coralogix_api_key = os.getenv("CORALOGIX_API_KEY", "").strip()
     if coralogix_api_key:
-        coralogix_config = CoralogixIntegrationConfig.model_validate(
-            {
-                "api_key": coralogix_api_key,
-                "base_url": os.getenv("CORALOGIX_API_URL", "").strip(),
-                "application_name": os.getenv("CORALOGIX_APPLICATION_NAME", "").strip(),
-                "subsystem_name": os.getenv("CORALOGIX_SUBSYSTEM_NAME", "").strip(),
-            }
-        )
-        integrations.append(
-            _active_env_record(
-                "coralogix",
-                coralogix_config.model_dump(exclude={"integration_id"}),
+        try:
+            coralogix_config = CoralogixIntegrationConfig.model_validate(
+                {
+                    "api_key": coralogix_api_key,
+                    "base_url": os.getenv("CORALOGIX_API_URL", "").strip(),
+                    "application_name": os.getenv("CORALOGIX_APPLICATION_NAME", "").strip(),
+                    "subsystem_name": os.getenv("CORALOGIX_SUBSYSTEM_NAME", "").strip(),
+                }
             )
-        )
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="coralogix")
+        else:
+            integrations.append(
+                _active_env_record(
+                    "coralogix",
+                    coralogix_config.model_dump(exclude={"integration_id"}),
+                )
+            )
 
     aws_multi = _parse_instances_env("AWS_INSTANCES", "aws")
     if aws_multi is not None:
@@ -516,45 +532,53 @@ def load_env_integrations() -> list[dict[str, Any]]:
         aws_secret_access_key = os.getenv("AWS_SECRET_ACCESS_KEY", "").strip()
         aws_session_token = os.getenv("AWS_SESSION_TOKEN", "").strip()
     if aws_role_arn:
-        aws_config = AWSIntegrationConfig.model_validate(
-            {
-                "role_arn": aws_role_arn,
-                "external_id": aws_external_id,
-                "region": aws_region,
-            }
-        )
-        integrations.append(
-            _active_env_record(
-                "aws",
-                {"region": aws_config.region},
-                role_arn=aws_config.role_arn,
-                external_id=aws_config.external_id,
+        try:
+            aws_config = AWSIntegrationConfig.model_validate(
+                {
+                    "role_arn": aws_role_arn,
+                    "external_id": aws_external_id,
+                    "region": aws_region,
+                }
             )
-        )
-    elif aws_access_key_id and aws_secret_access_key:
-        aws_config = AWSIntegrationConfig.model_validate(
-            {
-                "region": aws_region,
-                "credentials": {
-                    "access_key_id": aws_access_key_id,
-                    "secret_access_key": aws_secret_access_key,
-                    "session_token": aws_session_token,
-                },
-            }
-        )
-        aws_credentials = aws_config.credentials
-        if aws_credentials is not None:
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="aws")
+        else:
             integrations.append(
                 _active_env_record(
                     "aws",
-                    {
-                        "access_key_id": aws_credentials.access_key_id,
-                        "secret_access_key": aws_credentials.secret_access_key,
-                        "session_token": aws_credentials.session_token,
-                        "region": aws_config.region,
-                    },
+                    {"region": aws_config.region},
+                    role_arn=aws_config.role_arn,
+                    external_id=aws_config.external_id,
                 )
             )
+    elif aws_access_key_id and aws_secret_access_key:
+        try:
+            aws_config = AWSIntegrationConfig.model_validate(
+                {
+                    "region": aws_region,
+                    "credentials": {
+                        "access_key_id": aws_access_key_id,
+                        "secret_access_key": aws_secret_access_key,
+                        "session_token": aws_session_token,
+                    },
+                }
+            )
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="aws")
+        else:
+            aws_credentials = aws_config.credentials
+            if aws_credentials is not None:
+                integrations.append(
+                    _active_env_record(
+                        "aws",
+                        {
+                            "access_key_id": aws_credentials.access_key_id,
+                            "secret_access_key": aws_credentials.secret_access_key,
+                            "session_token": aws_credentials.session_token,
+                            "region": aws_config.region,
+                        },
+                    )
+                )
 
     github_mode = os.getenv("GITHUB_MCP_MODE", "streamable-http").strip() or "streamable-http"
     github_url = os.getenv("GITHUB_MCP_URL", "").strip()
@@ -880,15 +904,19 @@ def load_env_integrations() -> list[dict[str, Any]]:
 
     whatsapp_from_number = os.getenv("TWILIO_WHATSAPP_FROM", "").strip()
     if twilio_account_sid and twilio_auth_token and whatsapp_from_number:
-        wa_config = WhatsAppConfig.model_validate(
-            {
-                "account_sid": twilio_account_sid,
-                "auth_token": twilio_auth_token,
-                "from_number": whatsapp_from_number,
-                "default_to": os.getenv("WHATSAPP_DEFAULT_TO", "").strip() or None,
-            }
-        )
-        integrations.append(_active_env_record("whatsapp", wa_config.model_dump()))
+        try:
+            wa_config = WhatsAppConfig.model_validate(
+                {
+                    "account_sid": twilio_account_sid,
+                    "auth_token": twilio_auth_token,
+                    "from_number": whatsapp_from_number,
+                    "default_to": os.getenv("WHATSAPP_DEFAULT_TO", "").strip() or None,
+                }
+            )
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="whatsapp")
+        else:
+            integrations.append(_active_env_record("whatsapp", wa_config.model_dump()))
 
     # Twilio SMS integration — independent of the legacy WhatsApp record.
     # Hydrated when account+token are present AND an SMS sender is set
@@ -912,9 +940,9 @@ def load_env_integrations() -> list[dict[str, Any]]:
         }
         try:
             twilio_config = TwilioIntegrationConfig.model_validate(twilio_payload)
-        except Exception:
-            twilio_config = None
-        if twilio_config is not None:
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="twilio")
+        else:
             integrations.append(
                 _active_env_record(
                     "twilio",
@@ -1346,21 +1374,26 @@ def load_env_integrations() -> list[dict[str, Any]]:
         splunk_url = os.getenv("SPLUNK_URL", "").strip()
         splunk_token = os.getenv("SPLUNK_TOKEN", "").strip()
         if splunk_url and splunk_token:
-            splunk_config = SplunkIntegrationConfig.model_validate(
-                {
-                    "base_url": splunk_url,
-                    "token": splunk_token,
-                    "index": os.getenv("SPLUNK_INDEX", "main").strip(),
-                    "verify_ssl": os.getenv("SPLUNK_VERIFY_SSL", "true").strip().lower() != "false",
-                    "ca_bundle": os.getenv("SPLUNK_CA_BUNDLE", "").strip(),
-                }
-            )
-            integrations.append(
-                _active_env_record(
-                    "splunk",
-                    splunk_config.model_dump(exclude={"integration_id"}),
+            try:
+                splunk_config = SplunkIntegrationConfig.model_validate(
+                    {
+                        "base_url": splunk_url,
+                        "token": splunk_token,
+                        "index": os.getenv("SPLUNK_INDEX", "main").strip(),
+                        "verify_ssl": os.getenv("SPLUNK_VERIFY_SSL", "true").strip().lower()
+                        != "false",
+                        "ca_bundle": os.getenv("SPLUNK_CA_BUNDLE", "").strip(),
+                    }
                 )
-            )
+            except Exception as exc:
+                _report_env_loader_failure(exc, integration="splunk")
+            else:
+                integrations.append(
+                    _active_env_record(
+                        "splunk",
+                        splunk_config.model_dump(exclude={"integration_id"}),
+                    )
+                )
 
     supabase_url = os.getenv("SUPABASE_URL", "").strip()
     supabase_service_key = os.getenv("SUPABASE_SERVICE_KEY", "").strip()
@@ -1387,8 +1420,8 @@ def load_env_integrations() -> list[dict[str, Any]]:
                     signoz_config.model_dump(exclude={"integration_id"}),
                 )
             )
-    except Exception:
-        logger.debug("Failed to load SigNoz config from env", exc_info=True)
+    except Exception as exc:
+        _report_env_loader_failure(exc, integration="signoz")
 
     try:
         jenkins_config = jenkins_config_from_env()
@@ -1399,8 +1432,8 @@ def load_env_integrations() -> list[dict[str, Any]]:
                     jenkins_config.model_dump(exclude={"integration_id"}),
                 )
             )
-    except Exception:
-        logger.debug("Failed to load Jenkins config from env", exc_info=True)
+    except Exception as exc:
+        _report_env_loader_failure(exc, integration="jenkins")
 
     try:
         tempo_config = tempo_config_from_env()
@@ -1411,8 +1444,8 @@ def load_env_integrations() -> list[dict[str, Any]]:
                     tempo_config.model_dump(exclude={"integration_id"}),
                 )
             )
-    except Exception:
-        logger.debug("Failed to load Tempo config from env", exc_info=True)
+    except Exception as exc:
+        _report_env_loader_failure(exc, integration="tempo")
 
     temporal_url = os.getenv("TEMPORAL_API_URL", "").strip()
     temporal_namespace = os.getenv("TEMPORAL_NAMESPACE", "default").strip()

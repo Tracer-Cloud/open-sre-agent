@@ -40,6 +40,12 @@ def tool(
     extract_params: Callable[[dict[str, dict]], dict[str, Any]] | None = None,
     tags: tuple[str, ...] | None = None,
     cost_tier: CostTier | None = None,
+    requires_approval: bool | None = None,
+    approval_reason: str | None = None,
+    approval_scope: str | None = None,
+    approval_expiry_seconds: int | None = None,
+    parallel_safe: bool | None = None,
+    accepts_runtime_context: bool | None = None,
 ) -> BaseTool:
     pass
 
@@ -71,6 +77,12 @@ def tool[F: Callable[..., Any]](
     extract_params: Callable[[dict[str, dict]], dict[str, Any]] | None = None,
     tags: tuple[str, ...] | None = None,
     cost_tier: CostTier | None = None,
+    requires_approval: bool | None = None,
+    approval_reason: str | None = None,
+    approval_scope: str | None = None,
+    approval_expiry_seconds: int | None = None,
+    parallel_safe: bool | None = None,
+    accepts_runtime_context: bool | None = None,
 ) -> F:
     pass
 
@@ -102,6 +114,12 @@ def tool[F: Callable[..., Any]](
     extract_params: Callable[[dict[str, dict]], dict[str, Any]] | None = None,
     tags: tuple[str, ...] | None = None,
     cost_tier: CostTier | None = None,
+    requires_approval: bool | None = None,
+    approval_reason: str | None = None,
+    approval_scope: str | None = None,
+    approval_expiry_seconds: int | None = None,
+    parallel_safe: bool | None = None,
+    accepts_runtime_context: bool | None = None,
 ) -> Callable[[F], F]:
     pass
 
@@ -132,6 +150,12 @@ def tool[F: Callable[..., Any]](
     extract_params: Callable[[dict[str, dict]], dict[str, Any]] | None = None,
     tags: tuple[str, ...] | None = None,
     cost_tier: CostTier | None = None,
+    requires_approval: bool | None = None,
+    approval_reason: str | None = None,
+    approval_scope: str | None = None,
+    approval_expiry_seconds: int | None = None,
+    parallel_safe: bool | None = None,
+    accepts_runtime_context: bool | None = None,
 ) -> Any:
     """Register a lightweight function tool or annotate an existing BaseTool.
 
@@ -165,6 +189,12 @@ def tool[F: Callable[..., Any]](
                 extract_params is not None,
                 bool(tags),
                 cost_tier is not None,
+                requires_approval is not None,
+                approval_reason is not None,
+                approval_scope is not None,
+                approval_expiry_seconds is not None,
+                parallel_safe is not None,
+                accepts_runtime_context is not None,
             ]
         )
 
@@ -175,6 +205,12 @@ def tool[F: Callable[..., Any]](
                 or retrieval_controls is not None
                 or tags is not None
                 or cost_tier is not None
+                or requires_approval is not None
+                or approval_reason is not None
+                or approval_scope is not None
+                or approval_expiry_seconds is not None
+                or parallel_safe is not None
+                or accepts_runtime_context is not None
             ):
                 setattr(
                     target,
@@ -185,6 +221,12 @@ def tool[F: Callable[..., Any]](
                         retrieval_controls=retrieval_controls,
                         tags=tags,
                         cost_tier=cost_tier,
+                        requires_approval=requires_approval,
+                        approval_reason=approval_reason,
+                        approval_scope=approval_scope,
+                        approval_expiry_seconds=approval_expiry_seconds,
+                        parallel_safe=parallel_safe,
+                        accepts_runtime_context=accepts_runtime_context,
                     ),
                 )
             return target
@@ -218,6 +260,12 @@ def tool[F: Callable[..., Any]](
                     extract_params=extract_params,
                     tags=tags,
                     cost_tier=cost_tier,
+                    requires_approval=requires_approval,
+                    approval_reason=approval_reason,
+                    approval_scope=approval_scope,
+                    approval_expiry_seconds=approval_expiry_seconds,
+                    parallel_safe=parallel_safe,
+                    accepts_runtime_context=accepts_runtime_context,
                 ),
             )
         return target

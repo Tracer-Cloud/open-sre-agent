@@ -14,8 +14,8 @@ from typing import Any
 from rich.console import Console
 from rich.markup import escape
 
-from interactive_shell.runtime import ReplSession, TaskKind, TaskRecord
-from interactive_shell.runtime.subprocess_runner.task_streaming import (
+from surfaces.interactive_shell.runtime import ReplSession, TaskKind, TaskRecord
+from surfaces.interactive_shell.runtime.subprocess_runner.task_streaming import (
     _SYNTHETIC_DIAG_CHARS,
     _SYNTHETIC_POLL_SECONDS,
     SYNTHETIC_TEST_TIMEOUT_SECONDS,
@@ -25,9 +25,9 @@ from interactive_shell.runtime.subprocess_runner.task_streaming import (
     read_diag,
     terminate_child_process,
 )
-from interactive_shell.ui import DIM, ERROR, HIGHLIGHT
-from interactive_shell.ui.execution_confirm import execution_allowed
-from interactive_shell.utils.error_handling.exception_reporting import report_exception
+from surfaces.interactive_shell.ui import DIM, ERROR, HIGHLIGHT
+from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
+from surfaces.interactive_shell.utils.error_handling.exception_reporting import report_exception
 from tools.interactive_shell.shared import allow_tool
 
 DEFAULT_SYNTHETIC_SCENARIO = "001-replication-lag"
@@ -119,7 +119,7 @@ def watch_synthetic_subprocess(
                 suggest_follow_up = True
         except Exception as exc:  # noqa: BLE001
             task.mark_failed(str(exc))
-            report_exception(exc, context="interactive_shell.synthetic_test.watch")
+            report_exception(exc, context="surfaces.interactive_shell.synthetic_test.watch")
             _record_synthetic_if_current_session(ok=False)
             suggest_follow_up = True
             if console is not None:
@@ -230,7 +230,7 @@ def run_synthetic_test(
     except Exception as exc:
         stderr_buf.close()
         task.mark_failed(str(exc))
-        report_exception(exc, context="interactive_shell.synthetic_test.start")
+        report_exception(exc, context="surfaces.interactive_shell.synthetic_test.start")
         console.print(f"[{ERROR}]synthetic test failed to start:[/] {escape(str(exc))}")
         session.record("synthetic_test", suite_name, ok=False)
         return

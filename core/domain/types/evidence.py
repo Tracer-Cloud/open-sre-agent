@@ -62,6 +62,8 @@ EvidenceSource = Literal[
     "ec2",
     "hermes",
     "twilio",
+    "telegram",
     "redis",
     "temporal",
+    "interactive_shell",
 ]

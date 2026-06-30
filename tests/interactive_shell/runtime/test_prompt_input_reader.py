@@ -12,14 +12,14 @@ import pytest
 from rich.console import Console
 
 from core.agent_harness.session import ReplSession
-from interactive_shell.runtime.core.state import ReplState
-from interactive_shell.runtime.input import (
+from surfaces.interactive_shell.runtime.core.state import ReplState
+from surfaces.interactive_shell.runtime.input import (
     InputCancelled,
     InputClosed,
     InputSubmitted,
     PromptInputReader,
 )
-from interactive_shell.runtime.input import prompt_input_reader as reader_module
+from surfaces.interactive_shell.runtime.input import prompt_input_reader as reader_module
 
 
 class FakePrompt:
@@ -105,6 +105,7 @@ async def test_prompt_input_reader_eof_without_dispatch_renders_resume_hint() ->
     assert event == InputClosed()
     assert "Resume this session with:" in output.getvalue()
     assert "/resume session-123" in output.getvalue()
+    assert "--resume session-123" in output.getvalue()
     assert "Goodbye!" in output.getvalue()
 
 

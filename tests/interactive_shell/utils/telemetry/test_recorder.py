@@ -3,8 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from core.agent_harness.session import ReplSession
-from interactive_shell.utils.telemetry.config import PromptLogConfig
-from interactive_shell.utils.telemetry.recorder import LlmRunInfo, PromptRecorder
+from surfaces.interactive_shell.utils.telemetry.config import PromptLogConfig
+from surfaces.interactive_shell.utils.telemetry.recorder import LlmRunInfo, PromptRecorder
 
 
 def test_prompt_recorder_start_respects_supported_turns(monkeypatch, tmp_path: Path) -> None:
@@ -17,7 +17,7 @@ def test_prompt_recorder_start_respects_supported_turns(monkeypatch, tmp_path: P
         log_path=tmp_path / "prompt_log.jsonl",
     )
     monkeypatch.setattr(
-        "interactive_shell.utils.telemetry.recorder.PromptLogConfig.load", lambda: cfg
+        "surfaces.interactive_shell.utils.telemetry.recorder.PromptLogConfig.load", lambda: cfg
     )
     session = ReplSession()
     assert PromptRecorder.start(session=session, text="hello", turn_kind="slash") is None
@@ -37,10 +37,10 @@ def test_prompt_recorder_for_background_task_uses_task_id_as_trace(
         log_path=tmp_path / "prompt_log.jsonl",
     )
     monkeypatch.setattr(
-        "interactive_shell.utils.telemetry.recorder.PromptLogConfig.load", lambda: cfg
+        "surfaces.interactive_shell.utils.telemetry.recorder.PromptLogConfig.load", lambda: cfg
     )
     monkeypatch.setattr(
-        "interactive_shell.utils.telemetry.recorder.capture_ai_generation",
+        "surfaces.interactive_shell.utils.telemetry.recorder.capture_ai_generation",
         lambda payload: captured.append(payload),
     )
     session = ReplSession()
@@ -60,7 +60,7 @@ def test_prompt_recorder_for_background_task_uses_task_id_as_trace(
 def test_prompt_recorder_for_background_task_disabled_returns_none(monkeypatch) -> None:
     cfg = PromptLogConfig(enabled=False)
     monkeypatch.setattr(
-        "interactive_shell.utils.telemetry.recorder.PromptLogConfig.load", lambda: cfg
+        "surfaces.interactive_shell.utils.telemetry.recorder.PromptLogConfig.load", lambda: cfg
     )
     session = ReplSession()
     assert PromptRecorder.for_background_task(session=session, command="x", task_id="t") is None
@@ -77,7 +77,7 @@ def test_prompt_recorder_flush_writes_and_redacts(monkeypatch, tmp_path: Path) -
         log_path=log_path,
     )
     monkeypatch.setattr(
-        "interactive_shell.utils.telemetry.recorder.PromptLogConfig.load", lambda: cfg
+        "surfaces.interactive_shell.utils.telemetry.recorder.PromptLogConfig.load", lambda: cfg
     )
     session = ReplSession()
     recorder = PromptRecorder.start(
@@ -107,10 +107,10 @@ def test_prompt_recorder_sends_ai_generation(monkeypatch, tmp_path: Path) -> Non
         log_path=tmp_path / "prompt_log.jsonl",
     )
     monkeypatch.setattr(
-        "interactive_shell.utils.telemetry.recorder.PromptLogConfig.load", lambda: cfg
+        "surfaces.interactive_shell.utils.telemetry.recorder.PromptLogConfig.load", lambda: cfg
     )
     monkeypatch.setattr(
-        "interactive_shell.utils.telemetry.recorder.build_turn_integration_snapshot",
+        "surfaces.interactive_shell.utils.telemetry.recorder.build_turn_integration_snapshot",
         lambda _session: {
             "connected_integrations": [],
             "connected_integrations_count": 0,
@@ -119,7 +119,7 @@ def test_prompt_recorder_sends_ai_generation(monkeypatch, tmp_path: Path) -> Non
         },
     )
     monkeypatch.setattr(
-        "interactive_shell.utils.telemetry.recorder.capture_ai_generation",
+        "surfaces.interactive_shell.utils.telemetry.recorder.capture_ai_generation",
         lambda payload: captured.append(payload),
     )
     session = ReplSession()
@@ -151,14 +151,14 @@ def test_prompt_recorder_sends_connected_integrations(monkeypatch, tmp_path: Pat
         log_path=tmp_path / "prompt_log.jsonl",
     )
     monkeypatch.setattr(
-        "interactive_shell.utils.telemetry.recorder.PromptLogConfig.load", lambda: cfg
+        "surfaces.interactive_shell.utils.telemetry.recorder.PromptLogConfig.load", lambda: cfg
     )
     monkeypatch.setattr(
-        "interactive_shell.utils.telemetry.recorder.capture_ai_generation",
+        "surfaces.interactive_shell.utils.telemetry.recorder.capture_ai_generation",
         lambda payload: captured.append(payload),
     )
     monkeypatch.setattr(
-        "interactive_shell.utils.telemetry.recorder.build_turn_integration_snapshot",
+        "surfaces.interactive_shell.utils.telemetry.recorder.build_turn_integration_snapshot",
         lambda _session: {
             "connected_integrations": ["github"],
             "connected_integrations_count": 1,
@@ -192,10 +192,10 @@ def test_prompt_recorder_still_captures_when_tool_resolution_fails(
         log_path=tmp_path / "prompt_log.jsonl",
     )
     monkeypatch.setattr(
-        "interactive_shell.utils.telemetry.recorder.PromptLogConfig.load", lambda: cfg
+        "surfaces.interactive_shell.utils.telemetry.recorder.PromptLogConfig.load", lambda: cfg
     )
     monkeypatch.setattr(
-        "interactive_shell.utils.telemetry.recorder.capture_ai_generation",
+        "surfaces.interactive_shell.utils.telemetry.recorder.capture_ai_generation",
         lambda payload: captured.append(payload),
     )
 
@@ -203,7 +203,7 @@ def test_prompt_recorder_still_captures_when_tool_resolution_fails(
         raise RuntimeError("tool registry blew up")
 
     monkeypatch.setattr(
-        "interactive_shell.utils.telemetry.integration_snapshot.get_available_tools",
+        "surfaces.interactive_shell.utils.telemetry.integration_snapshot.get_available_tools",
         _boom,
     )
 
@@ -223,3 +223,80 @@ def test_prompt_recorder_still_captures_when_tool_resolution_fails(
     assert captured[0]["$ai_model"] == "gpt-test"
     assert captured[0]["configured_integrations"] == ["datadog"]
     assert captured[0]["connected_integrations"] == []
+
+
+def test_prompt_recorder_uses_no_conversational_agent_without_llm_run(
+    monkeypatch, tmp_path: Path
+) -> None:
+    captured: list[dict[str, object]] = []
+    cfg = PromptLogConfig(
+        enabled=True,
+        local_enabled=False,
+        posthog_enabled=True,
+        redact=False,
+        max_chars=1000,
+        log_path=tmp_path / "prompt_log.jsonl",
+    )
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.utils.telemetry.recorder.PromptLogConfig.load", lambda: cfg
+    )
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.utils.telemetry.recorder.build_turn_integration_snapshot",
+        lambda _session: {},
+    )
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.utils.telemetry.recorder.capture_ai_generation",
+        lambda payload: captured.append(payload),
+    )
+    session = ReplSession()
+    recorder = PromptRecorder.start(
+        session=session,
+        text="/help",
+        turn_kind="agent",
+    )
+    assert recorder is not None
+    recorder.set_response("slash /help (succeeded)")
+    recorder.flush()
+    assert captured[0]["$ai_model"] == "no_conversational_agent"
+    assert captured[0]["$ai_provider"] == "no_conversational_agent"
+
+
+def test_prompt_recorder_uses_only_latest_slash_outcome(monkeypatch, tmp_path: Path) -> None:
+    captured: list[dict[str, object]] = []
+    cfg = PromptLogConfig(
+        enabled=True,
+        local_enabled=False,
+        posthog_enabled=True,
+        redact=False,
+        max_chars=1000,
+        log_path=tmp_path / "prompt_log.jsonl",
+    )
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.utils.telemetry.recorder.PromptLogConfig.load", lambda: cfg
+    )
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.utils.telemetry.recorder.build_turn_integration_snapshot",
+        lambda _session: {},
+    )
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.utils.telemetry.recorder.capture_ai_generation",
+        lambda payload: captured.append(payload),
+    )
+    session = ReplSession()
+    session.record(
+        "slash",
+        "/modle",
+        ok=False,
+        response_text="Unknown command: /modle.",
+        slash_outcome="unknown_command",
+    )
+    session.record("slash", "/help", ok=True, response_text="slash /help (succeeded)")
+    recorder = PromptRecorder.start(
+        session=session,
+        text="what integrations are configured?",
+        turn_kind="agent",
+    )
+    assert recorder is not None
+    recorder.set_response("github and datadog")
+    recorder.flush()
+    assert "slash_outcome" not in captured[0]

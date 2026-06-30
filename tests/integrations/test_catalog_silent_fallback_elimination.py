@@ -291,6 +291,79 @@ _ENV_LOADER_CASES: list[tuple[str, dict[str, str], str]] = [
         },
         "build_mongodb_atlas_config",
     ),
+    # Early env-loader blocks that #1468 never guarded — a malformed cred here
+    # aborted discovery of every later integration (the #2036 class of bug).
+    (
+        "grafana",
+        {"GRAFANA_INSTANCE_URL": "https://g.example", "GRAFANA_READ_TOKEN": "t"},
+        "GrafanaIntegrationConfig",
+    ),
+    (
+        "datadog",
+        {"DD_API_KEY": "k", "DD_APP_KEY": "a"},
+        "DatadogIntegrationConfig",
+    ),
+    (
+        "honeycomb",
+        {"HONEYCOMB_API_KEY": "k"},
+        "HoneycombIntegrationConfig",
+    ),
+    (
+        "coralogix",
+        {"CORALOGIX_API_KEY": "k"},
+        "CoralogixIntegrationConfig",
+    ),
+    (
+        "aws",
+        {"AWS_ROLE_ARN": "arn:aws:iam::123456789012:role/x"},
+        "AWSIntegrationConfig",
+    ),
+    (
+        # The access-key path is a separate elif branch with its own guard.
+        "aws",
+        {"AWS_ACCESS_KEY_ID": "key", "AWS_SECRET_ACCESS_KEY": "secret"},
+        "AWSIntegrationConfig",
+    ),
+    (
+        "whatsapp",
+        {
+            "TWILIO_ACCOUNT_SID": "sid",
+            "TWILIO_AUTH_TOKEN": "tok",
+            "TWILIO_WHATSAPP_FROM": "+15551234567",
+        },
+        "WhatsAppConfig",
+    ),
+    (
+        "splunk",
+        {"SPLUNK_URL": "https://s.example", "SPLUNK_TOKEN": "t"},
+        "SplunkIntegrationConfig",
+    ),
+    # Stragglers still on the pre-#1468 swallow pattern: signoz/jenkins/tempo
+    # logged only at debug (exc_info=True); twilio dropped to None silently.
+    (
+        "signoz",
+        {},
+        "signoz_config_from_env",
+    ),
+    (
+        "jenkins",
+        {},
+        "jenkins_config_from_env",
+    ),
+    (
+        "tempo",
+        {},
+        "tempo_config_from_env",
+    ),
+    (
+        "twilio",
+        {
+            "TWILIO_ACCOUNT_SID": "sid",
+            "TWILIO_AUTH_TOKEN": "tok",
+            "TWILIO_SMS_FROM": "+15551234567",
+        },
+        "TwilioIntegrationConfig",
+    ),
 ]
 
 

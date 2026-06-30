@@ -142,7 +142,7 @@ def _resolve_live_llm_configuration(
 def _repl_execution_policy_auto_yes(monkeypatch: pytest.MonkeyPatch) -> None:
     """Elevated REPL actions prompt for confirmation; stdin is non-TTY under pytest."""
     monkeypatch.setattr(
-        "interactive_shell.ui.execution_confirm.DEFAULT_CONFIRM_FN",
+        "surfaces.interactive_shell.ui.execution_confirm.DEFAULT_CONFIRM_FN",
         lambda _prompt: "y",
     )
     monkeypatch.setattr(sys.stdin, "isatty", lambda: True)

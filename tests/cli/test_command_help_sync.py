@@ -7,9 +7,9 @@ that derived help command list (and vice versa).
 
 from __future__ import annotations
 
-from cli.__main__ import cli
-from cli.commands import _COMMANDS
-from interactive_shell.ui.layout import _commands_from_group
+from surfaces.cli.__main__ import cli
+from surfaces.cli.commands import _COMMANDS
+from surfaces.interactive_shell.ui.layout import _commands_from_group
 
 
 def test_registered_commands_match_help_table() -> None:

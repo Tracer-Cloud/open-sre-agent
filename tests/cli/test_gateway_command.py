@@ -6,7 +6,7 @@ from unittest.mock import patch
 import pytest
 from click.testing import CliRunner
 
-from cli.__main__ import cli
+from surfaces.cli.__main__ import cli
 
 
 @pytest.fixture

@@ -6,14 +6,15 @@ from typing import Any
 
 from tools.interactive_shell.contracts import (
     ToolContext,
-    ToolEntry,
-    capability_not_explicitly_disabled,
+    capability_available_from_sources,
+    execute_with_repl_context,
     object_schema,
     string_property,
 )
 from tools.interactive_shell.implementation.claude_code_executor import (
     run_claude_code_implementation,
 )
+from tools.registered_tool import RegisteredTool
 
 
 def execute_implementation_tool(args: dict[str, Any], ctx: ToolContext) -> bool:
@@ -31,7 +32,11 @@ def execute_implementation_tool(args: dict[str, Any], ctx: ToolContext) -> bool:
     return True
 
 
-TOOL_ENTRY = ToolEntry(
+def run_implementation(*, task: str, context: Any) -> dict[str, Any]:
+    return execute_with_repl_context({"task": task}, context, execute_implementation_tool)
+
+
+code_implement_tool = RegisteredTool(
     name="code_implement",
     description="Run code implementation workflow using Claude Code.",
     input_schema=object_schema(
@@ -43,9 +48,13 @@ TOOL_ENTRY = ToolEntry(
         },
         required=("task",),
     ),
-    execute=execute_implementation_tool,
-    is_available=lambda session: capability_not_explicitly_disabled(session, "implementation"),
+    source="interactive_shell",
+    surfaces=("action",),
+    parallel_safe=False,
+    accepts_runtime_context=True,
+    run=run_implementation,
+    is_available=lambda sources: capability_available_from_sources(sources, "implementation"),
 )
 
 
-__all__ = ["TOOL_ENTRY", "execute_implementation_tool"]
+__all__ = ["code_implement_tool", "execute_implementation_tool"]

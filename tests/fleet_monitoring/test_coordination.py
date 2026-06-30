@@ -10,7 +10,7 @@ from types import SimpleNamespace
 import pytest
 from rich.console import Console
 
-import interactive_shell.command_registry.agents.core as agents_shell
+import surfaces.interactive_shell.command_registry.agents.core as agents_shell
 from tools.fleet_monitoring.coordination import BranchClaim, BranchClaims
 from tools.fleet_monitoring.registry import AgentRecord, AgentRegistry
 

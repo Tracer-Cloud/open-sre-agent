@@ -7,9 +7,9 @@ from unittest.mock import patch
 import pytest
 from click.testing import CliRunner
 
-from cli.__main__ import cli
 from integrations.cli import _setup_github, cmd_setup
 from integrations.github_mcp import GitHubMCPValidationResult
+from surfaces.cli.__main__ import cli
 
 
 def _upsert_should_not_run(*_a: object, **_k: object) -> None:
@@ -261,9 +261,9 @@ def test_cmd_setup_github_prints_saved_after_success(
 def test_integrations_setup_github_cli_invokes_cmd_setup() -> None:
     runner = CliRunner()
     with (
-        patch("cli.commands.integrations.capture_integration_setup_started"),
-        patch("cli.commands.integrations.capture_integration_setup_completed"),
-        patch("cli.commands.integrations.capture_integration_verified"),
+        patch("surfaces.cli.commands.integrations.capture_integration_setup_started"),
+        patch("surfaces.cli.commands.integrations.capture_integration_setup_completed"),
+        patch("surfaces.cli.commands.integrations.capture_integration_verified"),
         patch("integrations.cli.cmd_setup") as mock_cmd,
         patch("integrations.cli.cmd_verify", return_value=0),
     ):

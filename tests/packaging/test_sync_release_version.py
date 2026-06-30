@@ -14,6 +14,7 @@ assert _SPEC is not None and _SPEC.loader is not None
 _MODULE = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(_MODULE)
 _normalize_release_version = _MODULE._normalize_release_version
+_normalize_explicit_version = _MODULE._normalize_explicit_version
 
 
 def test_release_paths_resolve_from_moved_infra_location() -> None:
@@ -44,3 +45,33 @@ def test_normalize_release_version_accepts_calendar_and_semver(
 def test_normalize_release_version_rejects_unknown_shapes(raw_value: str) -> None:
     with pytest.raises(ValueError, match="Release tag must look like"):
         _normalize_release_version(raw_value)
+
+
+@pytest.mark.parametrize(
+    ("raw_value", "expected"),
+    [
+        ("0.1.2026.6.28+main.3c1879d", "0.1.2026.6.28+main.3c1879d"),
+        (" 0.1.2026.12.31+main.abcdef123456 ", "0.1.2026.12.31+main.abcdef123456"),
+        ("v0.1.2026.6.28", "0.1.2026.6.28"),
+    ],
+)
+def test_normalize_explicit_version_accepts_main_build_versions(
+    raw_value: str,
+    expected: str,
+) -> None:
+    assert _normalize_explicit_version(raw_value) == expected
+
+
+@pytest.mark.parametrize(
+    "raw_value",
+    [
+        "main-build",
+        "0.1.2026.6.28+main",
+        "0.1.2026.6.28+main.zzzzzzz",
+    ],
+)
+def test_normalize_explicit_version_rejects_invalid_main_build_versions(
+    raw_value: str,
+) -> None:
+    with pytest.raises(ValueError, match="Version must look like"):
+        _normalize_explicit_version(raw_value)

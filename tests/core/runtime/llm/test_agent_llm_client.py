@@ -151,7 +151,7 @@ def test_internal_server_error_without_model_data_is_retried(
 ) -> None:
     fake_anthropic = _install_fake_anthropic(monkeypatch)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-    monkeypatch.setattr("core.llm.agent_llm_client.time.sleep", lambda _: None)
+    monkeypatch.setattr("core.llm.sdk.agent_clients.time.sleep", lambda _: None)
 
     call_count = 0
 
@@ -177,11 +177,11 @@ def test_anthropic_rate_limit_error_is_retried_then_raises(
     """Rate-limit is transient by design — retry with backoff like 500s do.
     Without retry, a single 429 mid-investigation kills the whole case.
     """
-    from core.llm.agent_llm_client import _RETRY_MAX_ATTEMPTS
+    from core.llm.openai_chat_completions import _RETRY_MAX_ATTEMPTS
 
     fake_anthropic = _install_fake_anthropic(monkeypatch)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-    monkeypatch.setattr("core.llm.agent_llm_client.time.sleep", lambda _: None)
+    monkeypatch.setattr("core.llm.sdk.agent_clients.time.sleep", lambda _: None)
 
     call_count = 0
 
@@ -286,7 +286,7 @@ def test_anthropic_rate_limit_honors_retry_after_header(
 
     sleeps: list[float] = []
     monkeypatch.setattr(
-        "core.llm.agent_llm_client.time.sleep",
+        "core.llm.sdk.agent_clients.time.sleep",
         sleeps.append,
     )
 
@@ -321,11 +321,11 @@ def test_bedrock_rate_limit_error_is_retried_then_raises(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Bedrock shares the Anthropic invoke path; 429 retry applies the same way."""
-    from core.llm.agent_llm_client import _RETRY_MAX_ATTEMPTS
+    from core.llm.openai_chat_completions import _RETRY_MAX_ATTEMPTS
 
     fake_anthropic = _install_fake_anthropic(monkeypatch)
     monkeypatch.setenv("AWS_REGION", "us-west-2")
-    monkeypatch.setattr("core.llm.agent_llm_client.time.sleep", lambda _: None)
+    monkeypatch.setattr("core.llm.sdk.agent_clients.time.sleep", lambda _: None)
 
     call_count = 0
 
@@ -618,10 +618,10 @@ def test_openai_rate_limit_error_is_retried_then_raises(
     Without retry, a single 429 mid-investigation kills the whole case (matters
     especially on tight OpenAI tiers like gpt-4o's 30k TPM).
     """
-    from core.llm.agent_llm_client import _RETRY_MAX_ATTEMPTS
+    from core.llm.openai_chat_completions import _RETRY_MAX_ATTEMPTS
 
     fake_openai = _install_fake_openai(monkeypatch)
-    monkeypatch.setattr("core.llm.agent_llm_client.time.sleep", lambda _: None)
+    monkeypatch.setattr("core.llm.sdk.agent_clients.time.sleep", lambda _: None)
 
     call_count = 0
 
@@ -655,7 +655,7 @@ def test_openai_rate_limit_honors_body_text_hint(
 
     sleeps: list[float] = []
     monkeypatch.setattr(
-        "core.llm.agent_llm_client.time.sleep",
+        "core.llm.sdk.agent_clients.time.sleep",
         sleeps.append,
     )
 
@@ -689,7 +689,7 @@ def test_openai_permission_denied_error_is_not_retried(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     fake_openai = _install_fake_openai(monkeypatch)
-    monkeypatch.setattr("core.llm.agent_llm_client.time.sleep", lambda _: None)
+    monkeypatch.setattr("core.llm.sdk.agent_clients.time.sleep", lambda _: None)
 
     call_count = 0
 
@@ -749,7 +749,7 @@ def test_unrelated_type_error_is_retried_and_wrapped(
 ) -> None:
     _install_fake_anthropic(monkeypatch)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-    monkeypatch.setattr("core.llm.agent_llm_client.time.sleep", lambda _: None)
+    monkeypatch.setattr("core.llm.sdk.agent_clients.time.sleep", lambda _: None)
 
     call_count = 0
 
@@ -855,6 +855,42 @@ def test_get_agent_llm_routes_deepseek_to_openai_compatible_client(
     assert captured["api_key_env"] == "DEEPSEEK_API_KEY"
 
 
+def test_get_agent_llm_routes_deepseek_to_litellm_when_transport_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from core.llm import agent_llm_client as alc
+    from core.llm.litellm.clients import LiteLLMAgentClient
+
+    monkeypatch.setenv("LLM_PROVIDER", "deepseek")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "ds-test")
+    monkeypatch.setenv("DEEPSEEK_REASONING_MODEL", "deepseek-v4-pro")
+    monkeypatch.setenv("OPENSRE_LLM_TRANSPORT", "litellm")
+
+    alc.reset_agent_client()
+    client = alc.get_agent_llm()
+
+    assert isinstance(client, LiteLLMAgentClient)
+    assert client._litellm_model == "openai/deepseek-v4-pro"
+    assert client._api_base == "https://api.deepseek.com"
+    assert client._api_key_env == "DEEPSEEK_API_KEY"
+
+
+def test_get_agent_llm_uses_sdk_without_transport_flag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from core.llm import agent_llm_client as alc
+
+    monkeypatch.setenv("LLM_PROVIDER", "deepseek")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "ds-test")
+    monkeypatch.setenv("DEEPSEEK_REASONING_MODEL", "deepseek-v4-pro")
+    monkeypatch.delenv("OPENSRE_LLM_TRANSPORT", raising=False)
+
+    alc.reset_agent_client()
+    client = alc.get_agent_llm()
+
+    assert isinstance(client, OpenAIAgentClient)
+
+
 @pytest.mark.parametrize(
     "provider",
     [
@@ -883,6 +919,48 @@ def test_get_agent_llm_returns_cli_backed_client_for_cli_providers(
     assert isinstance(client, CLIBackedAgentClient), (
         f"Expected CLIBackedAgentClient for provider={provider!r}, got {type(client).__name__}"
     )
+
+
+def test_get_agent_llm_openai_oauth_routes_to_codex_cli(monkeypatch: pytest.MonkeyPatch) -> None:
+    from core.llm.agent_llm_client import (
+        CLIBackedAgentClient,
+        get_agent_llm,
+        reset_agent_client,
+    )
+
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setenv("LLM_AUTH_METHOD", "oauth")
+    monkeypatch.setenv("CODEX_MODEL", "gpt-5.5")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    reset_agent_client()
+    client = get_agent_llm()
+
+    assert isinstance(client, CLIBackedAgentClient)
+    assert client._adapter.name == "codex"
+    assert client._model == "gpt-5.5"
+
+
+def test_get_agent_llm_anthropic_oauth_routes_to_claude_code_cli(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from core.llm.agent_llm_client import (
+        CLIBackedAgentClient,
+        get_agent_llm,
+        reset_agent_client,
+    )
+
+    monkeypatch.setenv("LLM_PROVIDER", "anthropic")
+    monkeypatch.setenv("LLM_AUTH_METHOD", "oauth")
+    monkeypatch.setenv("CLAUDE_CODE_MODEL", "claude-opus-4-7")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+    reset_agent_client()
+    client = get_agent_llm()
+
+    assert isinstance(client, CLIBackedAgentClient)
+    assert client._adapter.name == "claude-code"
+    assert client._model == "claude-opus-4-7"
 
 
 def test_cli_backed_agent_client_tool_call_parsing() -> None:

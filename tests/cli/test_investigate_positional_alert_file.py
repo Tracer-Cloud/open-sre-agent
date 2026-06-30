@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-from cli.commands.general import investigate_command
+from surfaces.cli.commands.general import investigate_command
 
 
 def _write_minimal_alert(tmp_path: Path) -> Path:
@@ -36,18 +36,18 @@ def test_positional_alert_file_is_accepted(monkeypatch: pytest.MonkeyPatch, tmp_
         return {"alert_name": "test"}
 
     monkeypatch.setattr(
-        "cli.investigation.payload.load_payload",
+        "surfaces.cli.investigation.payload.load_payload",
         _capture_load_payload,
     )
     monkeypatch.setattr(
-        "cli.investigation.run_investigation_cli",
+        "surfaces.cli.investigation.run_investigation_cli",
         lambda **_kwargs: {"report": "ok", "root_cause": "ok"},
     )
     monkeypatch.setattr(
-        "cli.investigation.run_investigation_cli_streaming",
+        "surfaces.cli.investigation.run_investigation_cli_streaming",
         lambda **_kwargs: {"report": "ok", "root_cause": "ok"},
     )
-    monkeypatch.setattr("cli.write_json", lambda *_args, **_kw: None)
+    monkeypatch.setattr("surfaces.cli.write_json", lambda *_args, **_kw: None)
 
     alert = _write_minimal_alert(tmp_path)
     result = CliRunner().invoke(investigate_command, [str(alert)])
@@ -67,18 +67,18 @@ def test_explicit_input_flag_wins_when_both_provided(
         return {"alert_name": "test"}
 
     monkeypatch.setattr(
-        "cli.investigation.payload.load_payload",
+        "surfaces.cli.investigation.payload.load_payload",
         _capture_load_payload,
     )
     monkeypatch.setattr(
-        "cli.investigation.run_investigation_cli",
+        "surfaces.cli.investigation.run_investigation_cli",
         lambda **_kwargs: {"report": "ok", "root_cause": "ok"},
     )
     monkeypatch.setattr(
-        "cli.investigation.run_investigation_cli_streaming",
+        "surfaces.cli.investigation.run_investigation_cli_streaming",
         lambda **_kwargs: {"report": "ok", "root_cause": "ok"},
     )
-    monkeypatch.setattr("cli.write_json", lambda *_args, **_kw: None)
+    monkeypatch.setattr("surfaces.cli.write_json", lambda *_args, **_kw: None)
 
     positional = _write_minimal_alert(tmp_path)
     explicit = tmp_path / "explicit.json"

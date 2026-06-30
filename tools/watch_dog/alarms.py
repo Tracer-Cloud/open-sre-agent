@@ -168,16 +168,8 @@ class AlarmDispatcher:
         if ok:
             return True
 
-        # Roll back the reservation only if it's still ours, so a transient
-        # failure does not silently swallow the next real alarm. Compare-and-
-        # delete prevents stomping on a parallel successful dispatch that
-        # may have updated the slot in the meantime.
-        with self._lock:
-            if self._last_dispatched.get(threshold_name) == now:
-                del self._last_dispatched[threshold_name]
-
         logger.warning(
-            "[watchdog] alarm delivery failed: name=%s error=%s",
+            "[watchdog] alarm delivery failed and cooldown remains armed: name=%s error=%s",
             threshold_name,
             error,
         )

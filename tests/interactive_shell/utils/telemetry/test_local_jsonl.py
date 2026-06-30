@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from interactive_shell.utils.telemetry.sinks.local_jsonl import append_prompt_log_record
+from surfaces.interactive_shell.utils.telemetry.sinks.local_jsonl import append_prompt_log_record
 
 
 def test_append_prompt_log_record_writes_jsonl(tmp_path) -> None:

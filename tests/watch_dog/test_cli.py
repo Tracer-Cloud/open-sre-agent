@@ -5,8 +5,8 @@ from __future__ import annotations
 import pytest
 from click.testing import CliRunner
 
-from cli.__main__ import cli
-from cli.commands.watchdog import watchdog_command
+from surfaces.cli.__main__ import cli
+from surfaces.cli.commands.watchdog import watchdog_command
 from tools.watch_dog.config import WatchdogConfig
 
 
@@ -38,7 +38,7 @@ def test_watchdog_cli_maps_flags_to_config(monkeypatch: pytest.MonkeyPatch) -> N
         captured["config"] = config
         return 0
 
-    monkeypatch.setattr("cli.commands.watchdog.run_watchdog", _fake_run)
+    monkeypatch.setattr("surfaces.cli.commands.watchdog.run_watchdog", _fake_run)
 
     result = CliRunner().invoke(
         watchdog_command,

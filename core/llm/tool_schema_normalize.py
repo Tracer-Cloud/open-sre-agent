@@ -54,7 +54,7 @@ def _merge_all_of_subschemas(variants: list[Any]) -> dict[str, Any]:
                 if isinstance(props, dict):
                     props.update(value)
                 else:
-                    merged["properties"] = dict(value)
+                    merged["properties"] = dict[Any, Any](value)
             elif key == "required" and isinstance(value, list):
                 required = merged.setdefault("required", [])
                 if isinstance(required, list):
@@ -181,3 +181,19 @@ def normalize_openai_tool_input_schema(schema: dict[str, Any] | None) -> dict[st
     return normalize_object_tool_input_schema(
         schema, unsupported_keys=COMMON_UNSUPPORTED_SCHEMA_KEYS
     )
+
+
+def _openai_tool_schema(tool: Any) -> dict[str, Any]:
+    return {
+        "type": "function",
+        "function": {
+            "name": tool.name,
+            "description": tool.description,
+            "parameters": normalize_openai_tool_input_schema(tool.public_input_schema),
+        },
+    }
+
+
+def build_openai_tool_specs(tools: list[Any]) -> list[dict[str, Any]]:
+    """Build OpenAI chat ``tools`` entries from registered tool objects."""
+    return [_openai_tool_schema(t) for t in tools]

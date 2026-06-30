@@ -252,6 +252,8 @@ def test_auto_discovery_populates_investigation_and_chat_surfaces(
     monkeypatch.setattr(
         registry_module, "_iter_tool_module_names", lambda _pkg: ["fake_discovered_tool"]
     )
+    monkeypatch.setattr(registry_module, "_external_tool_packages", [])
+    monkeypatch.setattr(registry_module, "_INTEGRATION_TOOL_PACKAGES", ())
     monkeypatch.setattr(registry_module, "_import_tool_module", lambda _pkg, _name: module)
 
     assert [
@@ -263,6 +265,93 @@ def test_auto_discovery_populates_investigation_and_chat_surfaces(
     assert registry_module.get_registered_tool_map("chat")["get_incident_metadata"].run(
         "inc-1"
     ) == {"incident_id": "inc-1"}
+
+
+def test_action_surface_is_filtered_separately(monkeypatch: pytest.MonkeyPatch) -> None:
+    module: Any = ModuleType("tools.fake_action_tool")
+
+    @tool(
+        name="perform_action",
+        description="Perform a test action.",
+        source="knowledge",
+        surfaces=("action",),
+    )
+    def perform_action(value: str) -> dict[str, str]:
+        return {"value": value}
+
+    perform_action.__module__ = module.__name__
+    module.perform_action = perform_action
+
+    monkeypatch.setattr(
+        registry_module, "_iter_tool_module_names", lambda _pkg: ["fake_action_tool"]
+    )
+    monkeypatch.setattr(registry_module, "_external_tool_packages", [])
+    monkeypatch.setattr(registry_module, "_INTEGRATION_TOOL_PACKAGES", ())
+    monkeypatch.setattr(registry_module, "_import_tool_module", lambda _pkg, _name: module)
+
+    assert [tool_def.name for tool_def in registry_module.get_registered_tools("action")] == [
+        "perform_action"
+    ]
+    assert registry_module.get_registered_tools("investigation") == []
+    assert registry_module.get_registered_tools("chat") == []
+
+
+def test_github_workflow_skill_guidance_is_attached_to_chat_and_investigation_tools() -> None:
+    marker = "Use this workflow when the user asks about GitHub engineering status"
+    shared_guided_tool_names = {
+        "list_github_work_items",
+        "summarize_github_pr_status",
+        "list_github_security_alerts",
+        "generate_work_status_report",
+        "summarize_community_followups",
+    }
+
+    for surface in ("chat", "investigation"):
+        tools_by_name = {
+            tool_def.name: tool_def for tool_def in registry_module.get_registered_tools(surface)
+        }
+        for tool_name in shared_guided_tool_names:
+            tool_def = tools_by_name[tool_name]
+            assert marker in tool_def.description
+            assert "Workflow guidance:" in tool_def.description
+            assert marker in tool_def.skill_guidance
+
+    chat_tools_by_name = {
+        tool_def.name: tool_def for tool_def in registry_module.get_registered_tools("chat")
+    }
+    for tool_name in {
+        "propose_github_issue_mutation_from_slack",
+        "execute_github_issue_mutation",
+    }:
+        tool_def = chat_tools_by_name[tool_name]
+        assert marker in tool_def.description
+        assert "Workflow guidance:" in tool_def.description
+        assert marker in tool_def.skill_guidance
+
+
+def test_github_workflow_skill_guidance_does_not_attach_to_unrelated_github_tools() -> None:
+    tools_by_name = {tool_def.name: tool_def for tool_def in registry_module.get_registered_tools()}
+
+    tool_def = tools_by_name["get_github_file_contents"]
+
+    assert "Workflow guidance:" not in tool_def.description
+    assert tool_def.skill_guidance == ""
+
+
+def test_github_issue_mutation_execution_remains_chat_only() -> None:
+    chat_tools = {
+        tool_def.name: tool_def for tool_def in registry_module.get_registered_tools("chat")
+    }
+    investigation_tools = {
+        tool_def.name for tool_def in registry_module.get_registered_tools("investigation")
+    }
+
+    tool_def = chat_tools["execute_github_issue_mutation"]
+
+    assert "execute_github_issue_mutation" not in investigation_tools
+    assert tool_def.surfaces == ("chat",)
+    assert tool_def.requires_approval is False
+    assert "never an investigation action" in tool_def.description
 
 
 def test_manifest_discovery_imports_nested_tool_modules(
@@ -285,6 +374,7 @@ def test_manifest_discovery_imports_nested_tool_modules(
     nested_module.lookup_nested_incident = lookup_nested_incident
 
     monkeypatch.setattr(registry_module, "_external_tool_packages", [])
+    monkeypatch.setattr(registry_module, "_INTEGRATION_TOOL_PACKAGES", ())
     monkeypatch.setattr(
         registry_module,
         "_iter_tool_module_names",
@@ -329,6 +419,7 @@ def test_manifest_discovery_logs_nested_import_failure_with_full_module_path(
     valid_module.valid_nested_tool = valid_nested_tool
 
     monkeypatch.setattr(registry_module, "_external_tool_packages", [])
+    monkeypatch.setattr(registry_module, "_INTEGRATION_TOOL_PACKAGES", ())
     monkeypatch.setattr(
         registry_module,
         "_iter_tool_module_names",
@@ -388,6 +479,7 @@ def test_manifest_discovery_preserves_duplicate_name_first_wins(
     nested_module.nested_tool = nested_tool
 
     monkeypatch.setattr(registry_module, "_external_tool_packages", [])
+    monkeypatch.setattr(registry_module, "_INTEGRATION_TOOL_PACKAGES", ())
     monkeypatch.setattr(
         registry_module,
         "_iter_tool_module_names",
@@ -432,6 +524,7 @@ def test_top_level_discovery_unchanged_without_manifest(
     import_calls: list[tuple[str, str]] = []
 
     monkeypatch.setattr(registry_module, "_external_tool_packages", [])
+    monkeypatch.setattr(registry_module, "_INTEGRATION_TOOL_PACKAGES", ())
     monkeypatch.setattr(
         registry_module,
         "_iter_tool_module_names",

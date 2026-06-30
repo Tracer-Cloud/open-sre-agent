@@ -18,6 +18,10 @@ PREFIXED_CALENDAR_VERSION_PATTERN = re.compile(
 )
 CALENDAR_VERSION_PATTERN = re.compile(r"v?(?P<version>\d{4}\.\d{1,2}\.\d{1,2})")
 SEMVER_VERSION_PATTERN = re.compile(r"v?(?P<version>\d+\.\d+(?:\.\d+)?)")
+MAIN_BUILD_VERSION_PATTERN = re.compile(
+    r"(?P<version>\d+\.\d+\.\d{4}\.(?:1[0-2]|[1-9])\.(?:3[01]|[12]\d|[1-9])"
+    r"\+main\.[a-f0-9]{7,40})"
+)
 
 
 def _normalize_release_version(raw_value: str) -> str:
@@ -36,6 +40,21 @@ def _normalize_release_version(raw_value: str) -> str:
         f"'v0.1', or '0.1.0'; got {raw_value!r}."
     )
     raise ValueError(msg)
+
+
+def _normalize_explicit_version(raw_value: str) -> str:
+    value = raw_value.strip()
+    if MAIN_BUILD_VERSION_PATTERN.fullmatch(value):
+        return value
+
+    try:
+        return _normalize_release_version(value)
+    except ValueError as exc:
+        msg = (
+            "Version must look like a release version or a rolling main build "
+            f"version such as '0.1.2026.6.26+main.3c1879d'; got {raw_value!r}."
+        )
+        raise ValueError(msg) from exc
 
 
 def _replace_project_version(version: str, text: str) -> str:
@@ -92,17 +111,27 @@ def _sync_file(path: Path, updater: Callable[[str, str], str], version: str) -> 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument(
         "--tag",
-        required=True,
         help="Release tag to sync from, e.g. v0.1.2026.6.26 or v0.1.",
+    )
+    source.add_argument(
+        "--version",
+        help=(
+            "Explicit version to sync, e.g. 0.1.2026.6.26+main.3c1879d for a rolling main build."
+        ),
     )
     args = parser.parse_args()
 
-    version = _normalize_release_version(args.tag)
+    version = (
+        _normalize_explicit_version(args.version)
+        if args.version is not None
+        else _normalize_release_version(args.tag)
+    )
     _sync_file(PYPROJECT_PATH, _replace_project_version, version)
     _sync_file(APP_CONSTANTS_OPENSRE_PATH, _replace_default_release_version, version)
-    print(f"Synchronized release version to {version}")
+    print(f"Synchronized OpenSRE version to {version}")
 
 
 if __name__ == "__main__":

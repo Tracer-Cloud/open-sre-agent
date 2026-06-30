@@ -88,10 +88,12 @@ Steps:
 
 1. Pick the simplest shape that fits the tool. Use a `BaseTool` subclass for richer behavior; use `@tool(...)` from `tools.tool_decorator` for a lightweight function tool.
 2. Declare clear metadata: `name`, `description`, `source`, `input_schema`, and any `use_cases`, `requires`, `outputs`, or `retrieval_controls` you need.
-3. Keep the tool self-contained. Put reusable transport or integration-specific parsing code in `integrations/<name>/` or shared tool glue in `tools/utils/` rather than copying it into the tool body.
-4. If the tool should appear in both investigation and chat surfaces, set `surfaces=("investigation", "chat")`.
-5. Add tests that cover schema shape, availability, extraction, and the runtime behavior that the planner depends on.
-6. Before opening or approving the PR, follow [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md) for tool/integration-specific wiring, payload, docs, and regression checks.
+3. Treat tool packages as production code, not registry placeholders. A tool package may not be an empty or nearly-empty `__init__.py` whose only purpose is discovery. Directionally, non-trivial tools should use focused sibling modules such as `tool.py`, `client.py`/`delivery.py`, `validation.py`, `models.py`, or `results.py`; `__init__.py` should usually be a small registry entrypoint that imports the public tool object.
+4. Keep separation of concerns. Put reusable transport or integration-specific parsing code in `integrations/<name>/` or shared tool glue in `tools/utils/` rather than copying it into the tool body. Split validation, credential/parameter resolution, dispatch/client calls, result normalization, and error handling into focused helpers or sibling files instead of tangling them inside `run()`.
+5. Return stable, planner-friendly results. Expected failures should produce a structured error shape; external side effects must declare `side_effect_level`, require approval when appropriate, and avoid leaking secrets through `extract_params`, return values, logs, or traceable tool-call kwargs.
+6. If the tool should appear in both investigation and chat surfaces, set `surfaces=("investigation", "chat")`.
+7. Add tests that cover schema shape, availability, extraction, success, failure, and the runtime behavior that the planner depends on.
+8. Before opening or approving the PR, follow [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md) for tool/integration-specific wiring, payload, docs, and regression checks.
 
 ### Changing the investigation pipeline
 
@@ -131,7 +133,8 @@ Files to touch:
 - `integrations/<name>/verifier.py` when the integration needs local verification logic.
 - `integrations/catalog.py` when the new integration must be resolved into the shared runtime config.
 - `integrations/verify.py` when the integration needs a local verification path.
-- `tools/<Name>Tool/` or `tools/<tool_file>.py` for the user-facing tool layer.
+- `tools/<Name>Tool/` or `tools/<tool_file>.py` for the user-facing tool layer, or
+  `integrations/<name>/tools/` when consolidating a vendor's tools under its integration package.
 - `docs/<name>.mdx` for user-facing setup, usage, and verification docs.
 - `docs/docs.json` — add the page path (without `.mdx`) to the appropriate `pages` array so Mintlify navigation includes it.
 - `tests/integrations/test_<name>.py` for config, verification, and store coverage.
@@ -141,9 +144,9 @@ Treat `integrations/` as the canonical user/config and external-client boundary,
 
 Examples from the repo:
 
-- Datadog: `integrations/datadog/client.py`, `integrations/datadog/verifier.py`, `integrations/catalog.py`, `tools/datadog_tools/`, and Datadog-related tests under `tests/integrations/` and `tests/tools/`.
-- Grafana: `integrations/grafana/`, `integrations/catalog.py`, `tools/grafana_tools/`, `cli/wizard/local_grafana_stack/`, and the Grafana-related tests under `tests/integrations/`.
-- Hermes: `integrations/hermes/`, `tools/HermesLogsTool/`, `tools/HermesSessionEvidenceTool/`, `cli/commands/hermes.py`, `tests/hermes/`, and `tests/synthetic/hermes/`.
+- Datadog: `integrations/datadog/` (including `integrations/datadog/tools/` for query tools), `integrations/catalog.py`, and Datadog-related tests under `tests/integrations/datadog/` and `tests/tools/test_datadog_*.py`.
+- Grafana: `integrations/grafana/` (including `integrations/grafana/tools/` for query tools), `integrations/catalog.py`, `surfaces/cli/wizard/local_grafana_stack/`, and Grafana-related tests under `tests/integrations/grafana/` and `tests/tools/test_grafana_*.py`.
+- Hermes: `integrations/hermes/`, `tools/HermesLogsTool/`, `tools/HermesSessionEvidenceTool/`, `surfaces/cli/commands/hermes.py`, `tests/hermes/`, and `tests/synthetic/hermes/`.
 
 Basic steps:
 
@@ -165,7 +168,7 @@ Basic steps:
 - If adding or materially changing a tool/integration -> follow [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md) in the same PR.
 - If an integration changes -> update `tests/integrations/` and verify with `make verify-integrations`.
 - If adding a new integration -> follow [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md) before opening the PR for review.
-- If adding new tests -> always place them in `tests/`, never inside the source packages (no inline tests).
+- If adding new tests -> place them in `tests/`, never inside the source packages (no inline tests), except gateway tests which intentionally live in `gateway/tests/` per `gateway/AGENTS.md`.
 - If CI-only tests are added -> mark them with the right pytest marker or place them in the appropriate e2e/synthetic/chaos folder so they do not run in the default local suite.
 - If investigation branching or loop behavior changes -> update `tools/investigation/lifecycle.py` and the tests for that path.
 - If adding or changing interactive REPL behavior (slash commands, session management, display output) -> use `ReplDriver` from `tests/utils/repl_driver.py` for live verification alongside unit tests; see [TESTING.md](TESTING.md).
@@ -188,6 +191,13 @@ Test commands, turn-handling rules, CI-only paths: **[CI.md](CI.md)**. Live REPL
 - External-system code: `integrations/` owns config, clients, verifiers, and integration-local helpers; `tools/` owns every `@tool(...)` function and `BaseTool` class. Do not reintroduce top-level `vendors/` or `services/` packages.
 - Compatibility shims: Do not leave modules whose only job is to re-export symbols from a new
   location. Update callers to the canonical module and delete the old path.
+- Empty or monolithic tool packages: Do not add a `tools/<name>/__init__.py`
+  that exists only to make discovery pass, and do not hide a non-trivial tool
+  implementation entirely in `__init__.py`. Use sibling modules for validation,
+  models, delivery/client calls, result shaping, and error handling whenever the
+  tool is more than a small function. Every tool must meet the implementation
+  and quality standards in the Adding a Tool section and
+  [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md).
 - Interactive-shell action selection: do not implement regex/keyword/fuzzy
   intent routing, literal slash-command shortcuts, or deterministic action
   bypasses around the action-agent AgentTool path. Engineers have been fired

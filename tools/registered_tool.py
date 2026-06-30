@@ -217,8 +217,11 @@ class RegisteredTool:
     approval_reason: str = ""
     approval_expiry_seconds: int = 300
     approval_scope: str = "one_shot"
+    parallel_safe: bool = True
+    accepts_runtime_context: bool = False
     origin_module: str = ""
     origin_name: str = ""
+    skill_guidance: str = ""
 
     def __post_init__(self) -> None:
         metadata = ToolMetadata.model_validate(
@@ -350,6 +353,12 @@ class RegisteredTool:
         retrieval_controls: RetrievalControls | None = None,
         tags: tuple[str, ...] | None = None,
         cost_tier: CostTier | None = None,
+        requires_approval: bool | None = None,
+        approval_reason: str | None = None,
+        approval_scope: str | None = None,
+        approval_expiry_seconds: int | None = None,
+        parallel_safe: bool | None = None,
+        accepts_runtime_context: bool | None = None,
     ) -> RegisteredTool:
         metadata = tool.metadata()
         input_model = cast(type[BaseModel] | None, getattr(tool, "input_model", None))
@@ -398,10 +407,36 @@ class RegisteredTool:
             extract_params=tool.extract_params,
             tags=resolved_tags,
             cost_tier=resolved_cost_tier,
-            requires_approval=getattr(tool.__class__, "requires_approval", False),
-            approval_reason=getattr(tool.__class__, "approval_reason", ""),
-            approval_expiry_seconds=getattr(tool.__class__, "approval_expiry_seconds", 300),
-            approval_scope=getattr(tool.__class__, "approval_scope", "one_shot"),
+            requires_approval=bool(
+                requires_approval
+                if requires_approval is not None
+                else getattr(tool.__class__, "requires_approval", False)
+            ),
+            approval_reason=str(
+                approval_reason
+                if approval_reason is not None
+                else getattr(tool.__class__, "approval_reason", "")
+            ),
+            approval_expiry_seconds=int(
+                approval_expiry_seconds
+                if approval_expiry_seconds is not None
+                else getattr(tool.__class__, "approval_expiry_seconds", 300)
+            ),
+            approval_scope=str(
+                approval_scope
+                if approval_scope is not None
+                else getattr(tool.__class__, "approval_scope", "one_shot")
+            ),
+            parallel_safe=bool(
+                parallel_safe
+                if parallel_safe is not None
+                else getattr(tool.__class__, "parallel_safe", True)
+            ),
+            accepts_runtime_context=bool(
+                accepts_runtime_context
+                if accepts_runtime_context is not None
+                else getattr(tool.__class__, "accepts_runtime_context", False)
+            ),
             origin_module=tool.__class__.__module__,
             origin_name=tool.__class__.__name__,
         )
@@ -434,6 +469,12 @@ class RegisteredTool:
         extract_params: Callable[[dict[str, dict]], dict[str, Any]] | None = None,
         tags: tuple[str, ...] | None = None,
         cost_tier: CostTier | None = None,
+        requires_approval: bool | None = None,
+        approval_reason: str | None = None,
+        approval_scope: str | None = None,
+        approval_expiry_seconds: int | None = None,
+        parallel_safe: bool | None = None,
+        accepts_runtime_context: bool | None = None,
     ) -> RegisteredTool:
         if source is None:
             raise ValueError("Function tools must declare a source.")
@@ -470,6 +511,12 @@ class RegisteredTool:
             extract_params=extract_params or _extract_no_params,
             tags=tags or (),
             cost_tier=cost_tier,
+            requires_approval=bool(requires_approval),
+            approval_reason=approval_reason or "",
+            approval_scope=approval_scope or "one_shot",
+            approval_expiry_seconds=approval_expiry_seconds or 300,
+            parallel_safe=True if parallel_safe is None else bool(parallel_safe),
+            accepts_runtime_context=bool(accepts_runtime_context),
             origin_module=func.__module__,
             origin_name=func.__name__,
         )

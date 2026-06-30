@@ -8,14 +8,15 @@ from typing import Any
 
 from tools.interactive_shell.contracts import (
     ToolContext,
-    ToolEntry,
-    capability_not_explicitly_disabled,
+    capability_available_from_sources,
+    execute_with_repl_context,
     object_schema,
     string_property,
 )
 from tools.interactive_shell.synthetic.runner import (
     run_synthetic_test,
 )
+from tools.registered_tool import RegisteredTool
 
 
 def _repo_root() -> Path:
@@ -61,7 +62,15 @@ def execute_synthetic_tool(args: dict[str, Any], ctx: ToolContext) -> bool:
     return True
 
 
-TOOL_ENTRY = ToolEntry(
+def run_synthetic(*, suite: str, scenario: str, context: Any) -> dict[str, Any]:
+    return execute_with_repl_context(
+        {"suite": suite, "scenario": scenario},
+        context,
+        execute_synthetic_tool,
+    )
+
+
+synthetic_run_tool = RegisteredTool(
     name="synthetic_run",
     description=(
         "Run a synthetic scenario in a suite. Match the scenario id exactly from "
@@ -87,9 +96,13 @@ TOOL_ENTRY = ToolEntry(
         },
         required=("suite", "scenario"),
     ),
-    execute=execute_synthetic_tool,
-    is_available=lambda session: capability_not_explicitly_disabled(session, "synthetic_suites"),
+    source="interactive_shell",
+    surfaces=("action",),
+    parallel_safe=False,
+    accepts_runtime_context=True,
+    run=run_synthetic,
+    is_available=lambda sources: capability_available_from_sources(sources, "synthetic_suites"),
 )
 
 
-__all__ = ["TOOL_ENTRY", "execute_synthetic_tool", "list_rds_postgres_scenarios"]
+__all__ = ["execute_synthetic_tool", "list_rds_postgres_scenarios", "synthetic_run_tool"]

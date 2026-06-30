@@ -348,8 +348,8 @@ def test_cooldown_is_per_threshold_name(monkeypatch: pytest.MonkeyPatch) -> None
 def test_dispatch_returns_false_on_transport_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # A failed Telegram call must NOT arm the cooldown, otherwise a transient
-    # outage would silently swallow the next real alarm.
+    # A failed Telegram call still arms cooldown; otherwise a bad token, bad
+    # chat id, or network outage can retry on every watchdog sample.
     calls: list[dict[str, Any]] = []
     _stub_telegram(monkeypatch, ok=False, error="network down", captured=calls)
     _patch_clock(monkeypatch, [100.0, 105.0])
@@ -361,7 +361,26 @@ def test_dispatch_returns_false_on_transport_failure(
 
     assert dispatcher.dispatch("max_cpu", "first") is False
     assert dispatcher.dispatch("max_cpu", "second") is False
-    assert len(calls) == 2
+    assert len(calls) == 1
+    assert calls[0]["text"] == "first"
+
+
+def test_failed_dispatch_retries_after_cooldown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[dict[str, Any]] = []
+    _stub_telegram(monkeypatch, ok=False, error="network down", captured=calls)
+    _patch_clock(monkeypatch, [100.0, 105.0, 450.0])
+
+    dispatcher = AlarmDispatcher(
+        AlarmCredentials(bot_token="tok", chat_id="chat-1"),
+        cooldown_seconds=300.0,
+    )
+
+    assert dispatcher.dispatch("max_cpu", "first") is False
+    assert dispatcher.dispatch("max_cpu", "suppressed") is False
+    assert dispatcher.dispatch("max_cpu", "retry") is False
+    assert [call["text"] for call in calls] == ["first", "retry"]
 
 
 def test_dispatch_uses_credentials_from_constructor(

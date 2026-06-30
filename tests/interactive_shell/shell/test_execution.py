@@ -11,6 +11,7 @@ from tools.interactive_shell.shell.execution import (
     ShellExecutionResult,
     execute_shell_command,
 )
+from tools.interactive_shell.shell.parsing import parse_shell_command
 
 
 def test_execute_shell_command_reports_timeout_argv_mode(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -79,3 +80,23 @@ def test_execute_shell_command_reports_timeout_shell_mode(monkeypatch: pytest.Mo
         truncated=False,
         executed_with_shell=True,
     )
+
+
+def test_execute_quoted_heredoc_through_shell() -> None:
+    command = """python3 - <<'PY'
+print("hello-heredoc")
+PY"""
+    parsed = parse_shell_command(command, is_windows=False)
+    assert parsed.use_shell is True
+
+    result = execute_shell_command(
+        command=parsed.command,
+        argv=parsed.argv,
+        use_shell=parsed.use_shell,
+        timeout_seconds=10,
+        max_output_chars=10_000,
+    )
+
+    assert result.timed_out is False
+    assert result.exit_code == 0
+    assert "hello-heredoc" in result.stdout

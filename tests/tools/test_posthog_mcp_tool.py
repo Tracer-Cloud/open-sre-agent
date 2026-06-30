@@ -27,6 +27,8 @@ _CONNECTION_PARAMS = frozenset(
         "posthog_token",
         "posthog_command",
         "posthog_args",
+        "posthog_organization_id",
+        "posthog_project_id",
     }
 )
 
@@ -81,6 +83,8 @@ def test_tools_available_when_connection_verified() -> None:
                 "url": "https://mcp.posthog.com/mcp",
                 "mode": "streamable-http",
                 "auth_token": "phx_secret",
+                "organization_id": "org_123",
+                "project_id": "proj_456",
             }
         }
     )
@@ -102,12 +106,16 @@ def test_extract_params_maps_source_fields() -> None:
                 "url": "https://mcp.posthog.com/mcp",
                 "mode": "streamable-http",
                 "auth_token": "phx_secret",
+                "organization_id": "org_123",
+                "project_id": "proj_456",
             }
         }
     )
     assert params["posthog_url"] == "https://mcp.posthog.com/mcp"
     assert params["posthog_mode"] == "streamable-http"
     assert params["posthog_token"] == "phx_secret"
+    assert params["posthog_organization_id"] == "org_123"
+    assert params["posthog_project_id"] == "proj_456"
 
 
 def test_call_tool_requires_tool_name() -> None:
@@ -191,6 +199,22 @@ def test_resolve_config_recovers_from_guessed_mode(guessed_mode: str) -> None:
     assert config is not None
     assert config.mode == "streamable-http"
     assert config.url == "https://mcp.posthog.com/mcp"
+
+
+def test_resolve_config_preserves_project_scope_from_injected_params() -> None:
+    config = _resolve_config(
+        posthog_url="https://mcp.posthog.com/mcp",
+        posthog_mode="streamable-http",
+        posthog_token="phx_secret",
+        posthog_organization_id="org_123",
+        posthog_project_id="proj_456",
+    )
+
+    assert config is not None
+    assert config.organization_id == "org_123"
+    assert config.project_id == "proj_456"
+    assert config.request_headers["x-posthog-organization-id"] == "org_123"
+    assert config.request_headers["x-posthog-project-id"] == "proj_456"
 
 
 def test_resolve_config_stdio_without_command_falls_back_to_http() -> None:

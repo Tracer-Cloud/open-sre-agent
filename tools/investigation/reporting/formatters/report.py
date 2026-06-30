@@ -554,7 +554,7 @@ def format_telegram_message(ctx: ReportContext) -> str:
     elif baseline_noise and top_log:
         parts.append("<code>" + html.escape(top_log) + "</code>")
     else:
-        rc = _to_telegram_html_body(root_cause_sentence)
+        rc = _to_telegram_html_body(_sanitize_for_slack(root_cause_sentence))
         if top_log:
             rc += "\n<code>" + html.escape(top_log) + "</code>"
         parts.append(rc)

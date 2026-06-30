@@ -31,6 +31,7 @@ from core.agent_harness.prompts import build_action_system_prompt, build_action_
 from core.agent_harness.turn_context import TurnContext
 from core.agent_harness.turn_results import ToolCallingTurnResult
 from core.events import RuntimeEvent, legacy_callback_payload
+from core.execution import ToolExecutionHooks
 from core.llm.types import AgentLLMResponse, ToolCall
 from integrations.llm_cli.failure_explain import is_context_length_overflow
 
@@ -48,6 +49,17 @@ _EXECUTED_HISTORY_TYPES = {
     "synthetic_test",
     "implementation",
     "cli_command",
+}
+_LEGACY_HISTORY_TOOL_NAMES = {
+    "alert_sample",
+    "cli_exec",
+    "code_implement",
+    "investigation_start",
+    "llm_set_provider",
+    "shell_run",
+    "slash_invoke",
+    "synthetic_run",
+    "task_cancel",
 }
 
 
@@ -115,7 +127,76 @@ def _response_text_from_history_entries(entries: list[dict[str, Any]]) -> str:
         response_text = item.get("response_text")
         if isinstance(response_text, str) and response_text.strip():
             chunks.append(response_text.strip())
+            continue
+        chunks.append(_history_entry_fallback(item))
     return "\n".join(chunks)
+
+
+def _history_entry_fallback(item: dict[str, Any]) -> str:
+    kind = str(item.get("type", "action"))
+    text = str(item.get("text", "")).strip()
+    ok = bool(item.get("ok", True))
+    status = "succeeded" if ok else "failed"
+    if text:
+        return f"{kind} {text} ({status})"
+    return f"{kind} ({status})"
+
+
+def _pop_turn_outcome_hint(session: SessionStore) -> str:
+    pop_hint = getattr(session, "pop_turn_outcome_hint", None)
+    if not callable(pop_hint):
+        return ""
+    hint = pop_hint()
+    return hint.strip() if isinstance(hint, str) else ""
+
+
+def _content_to_text(content: Any) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return json.dumps(content, default=str)
+    return str(content)
+
+
+def _generic_tool_results(result: Any) -> list[tuple[ToolCall, Any]]:
+    return [
+        (tool_call, tool_result)
+        for tool_call, tool_result in getattr(result, "tool_results", [])
+        if tool_call.name not in _LEGACY_HISTORY_TOOL_NAMES
+        and tool_call.name != "assistant_handoff"
+    ]
+
+
+def _response_text_from_generic_results(result: Any) -> str:
+    chunks: list[str] = []
+    for _tool_call, tool_result in _generic_tool_results(result):
+        if getattr(tool_result, "is_error", False):
+            continue
+        content = _content_to_text(getattr(tool_result, "content", ""))
+        if content.strip():
+            chunks.append(content.strip())
+    return "\n".join(chunks)
+
+
+def _generic_tool_result_counts(result: Any) -> tuple[int, int]:
+    generic_results = _generic_tool_results(result)
+    executed_count = len(generic_results)
+    success_count = sum(
+        1
+        for _tool_call, tool_result in generic_results
+        if not getattr(tool_result, "is_error", False)
+    )
+    return executed_count, success_count
+
+
+def _resolved_integrations_for_turn(
+    session: SessionStore,
+    turn_ctx: TurnContext | None,
+) -> dict[str, Any]:
+    if turn_ctx is not None and turn_ctx.resolved_integrations:
+        return dict(turn_ctx.resolved_integrations)
+    cached = getattr(session, "resolved_integrations_cache", None)
+    return dict(cached or {})
 
 
 def _persist_tool_calling_error(session: SessionStore, user_text: str, error_text: str) -> None:
@@ -192,6 +273,7 @@ def run_agent_turn(
     deps: ToolCallingDeps | None = None,
     turn_ctx: TurnContext | None = None,
     error_reporter: ErrorReporter | None = None,
+    tool_hooks: ToolExecutionHooks | None = None,
 ) -> ToolCallingTurnResult:
     """Run one action tool-calling turn through the shared agent harness.
 
@@ -202,6 +284,8 @@ def run_agent_turn(
     """
     history_start = len(session.history)
     agent_tools = tools.action_tools(confirm_fn=confirm_fn, is_tty=is_tty)
+    tool_resources_provider = getattr(tools, "tool_resources", None)
+    tool_resources = tool_resources_provider() if callable(tool_resources_provider) else {}
     observer = tools.observer(message=message)
 
     bang_command = _bang_shell_command(message)
@@ -250,9 +334,11 @@ def run_agent_turn(
             llm=llm_factory(),
             system=system_prompt,
             tools=agent_tools,
-            resolved_integrations={},
+            resolved_integrations=_resolved_integrations_for_turn(session, turn_ctx),
             max_iterations=_MAX_TOOL_CALLING_ITERATIONS,
             on_runtime_event=on_runtime_event,
+            tool_resources=tool_resources,
+            tool_hooks=tool_hooks,
         ).run([{"role": "user", "content": user_message}])
     except Exception as exc:
         if is_context_length_overflow(str(exc)):
@@ -276,9 +362,21 @@ def run_agent_turn(
     ]
     executed_count = len(executed_entries)
     executed_success_count = sum(1 for item in executed_entries if item.get("ok", True))
+    generic_executed_count, generic_success_count = _generic_tool_result_counts(result)
+    executed_count += generic_executed_count
+    executed_success_count += generic_success_count
     planned_count = sum(1 for tc, _output in result.executed if tc.name != "assistant_handoff")
     handled = planned_count > 0
-    response_text = _response_text_from_history_entries(executed_entries)
+    response_chunks = [
+        chunk
+        for chunk in (
+            _response_text_from_history_entries(executed_entries),
+            _response_text_from_generic_results(result),
+            _pop_turn_outcome_hint(session),
+        )
+        if chunk
+    ]
+    response_text = "\n".join(response_chunks)
     if handled:
         output.print()
 

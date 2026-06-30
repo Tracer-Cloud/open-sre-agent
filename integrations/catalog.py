@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from integrations import _catalog_impl
@@ -49,6 +50,104 @@ def resolve_effective_integrations(
     )
 
 
+def _env_is_set(name: str) -> bool:
+    return bool(os.getenv(name, "").strip())
+
+
+def _any_env(*names: str) -> bool:
+    return any(_env_is_set(name) for name in names)
+
+
+def _all_env(*names: str) -> bool:
+    return all(_env_is_set(name) for name in names)
+
+
+def load_env_integration_services() -> list[str]:
+    """Return integration services visible from plain env vars only.
+
+    This is the startup-safe companion to :func:`load_env_integrations`: it must
+    not resolve secrets from the OS keyring or build validated runtime configs.
+    It exists for surfaces that only need to display configured service names
+    before the first prompt.
+    """
+    services: list[str] = []
+
+    def add(service: str, configured: bool) -> None:
+        if configured:
+            services.append(service)
+
+    add(
+        "grafana",
+        _all_env("GRAFANA_INSTANCE_URL", "GRAFANA_READ_TOKEN") or _env_is_set("GRAFANA_INSTANCES"),
+    )
+    add("datadog", _all_env("DD_API_KEY", "DD_APP_KEY") or _env_is_set("DD_INSTANCES"))
+    add(
+        "groundcover",
+        _any_env("GROUNDCOVER_API_KEY", "GROUNDCOVER_MCP_TOKEN", "GROUNDCOVER_INSTANCES"),
+    )
+    add("honeycomb", _any_env("HONEYCOMB_API_KEY", "HONEYCOMB_INSTANCES"))
+    add("coralogix", _any_env("CORALOGIX_API_KEY", "CORALOGIX_INSTANCES"))
+    add(
+        "aws",
+        _any_env("AWS_INSTANCES", "AWS_ROLE_ARN")
+        or _all_env("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"),
+    )
+    add(
+        "github",
+        (_env_is_set("GITHUB_MCP_COMMAND") and os.getenv("GITHUB_MCP_MODE", "").strip() == "stdio")
+        or _env_is_set("GITHUB_MCP_URL"),
+    )
+    add("sentry", _all_env("SENTRY_ORG_SLUG", "SENTRY_AUTH_TOKEN"))
+    add("gitlab", _env_is_set("GITLAB_ACCESS_TOKEN"))
+    add("mongodb", _env_is_set("MONGODB_CONNECTION_STRING"))
+    add(
+        "argocd",
+        _env_is_set("ARGOCD_INSTANCES")
+        or (
+            _env_is_set("ARGOCD_BASE_URL")
+            and (
+                _any_env("ARGOCD_AUTH_TOKEN", "ARGOCD_TOKEN")
+                or _all_env("ARGOCD_USERNAME", "ARGOCD_PASSWORD")
+            )
+        ),
+    )
+    add("helm", os.getenv("OSRE_HELM_INTEGRATION", "").strip().lower() in {"1", "true", "yes"})
+    add("vercel", _env_is_set("VERCEL_API_TOKEN"))
+    add("opsgenie", _env_is_set("OPSGENIE_API_KEY"))
+    add("pagerduty", _env_is_set("PAGERDUTY_API_KEY"))
+    add("incident_io", _env_is_set("INCIDENT_IO_API_KEY"))
+    add("jira", _all_env("JIRA_BASE_URL", "JIRA_EMAIL", "JIRA_API_TOKEN"))
+    add("discord", _env_is_set("DISCORD_BOT_TOKEN"))
+    add("telegram", _env_is_set("TELEGRAM_BOT_TOKEN"))
+    add("smtp", _env_is_set("SMTP_HOST"))
+    add("whatsapp", _all_env("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_WHATSAPP_FROM"))
+    add(
+        "twilio",
+        _all_env("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN")
+        and _any_env("TWILIO_SMS_FROM", "TWILIO_SMS_MESSAGING_SERVICE_SID"),
+    )
+    add(
+        "mongodb_atlas",
+        _all_env(
+            "MONGODB_ATLAS_PUBLIC_KEY", "MONGODB_ATLAS_PRIVATE_KEY", "MONGODB_ATLAS_PROJECT_ID"
+        ),
+    )
+    add(
+        "openclaw",
+        (
+            _env_is_set("OPENCLAW_MCP_COMMAND")
+            and os.getenv("OPENCLAW_MCP_MODE", "").strip().lower() == "stdio"
+        )
+        or _env_is_set("OPENCLAW_MCP_URL"),
+    )
+    add("posthog_mcp", _any_env("POSTHOG_MCP_COMMAND", "POSTHOG_MCP_URL", "POSTHOG_MCP_AUTH_TOKEN"))
+    add("sentry_mcp", _any_env("SENTRY_MCP_COMMAND", "SENTRY_MCP_URL", "SENTRY_MCP_AUTH_TOKEN"))
+    add("mariadb", _all_env("MARIADB_HOST", "MARIADB_DATABASE"))
+    add("opensearch", _env_is_set("OPENSEARCH_URL"))
+
+    return list(dict.fromkeys(services))
+
+
 def configured_integration_services() -> list[str]:
     """Return lowercase service keys for integrations configured via env or the local store.
 
@@ -62,11 +161,11 @@ def configured_integration_services() -> list[str]:
     services: list[str] = []
 
     try:
-        env_records = load_env_integrations()
+        env_services = load_env_integration_services()
     except Exception:
-        env_records = []
-    for record in env_records:
-        service = str(record.get("service", "")).strip().lower()
+        env_services = []
+    for service in env_services:
+        service = str(service).strip().lower()
         if service:
             services.append(service)
 
@@ -121,22 +220,45 @@ def configured_integration_health() -> list[tuple[str, str]]:
     if not services:
         return []
 
+    store_config_by_service: dict[str, dict[str, Any]] = {}
     try:
-        effective = resolve_effective_integrations()
+        store_records = load_integrations()
     except Exception:
-        # Health can't be determined offline; list everything without alarming.
-        return [(service, "ok") for service in services]
+        store_records = []
+    for record in store_records:
+        if str(record.get("status", "active")).strip().lower() != "active":
+            continue
+        service = str(record.get("service", "")).strip().lower()
+        if not service:
+            continue
+        credentials = record.get("credentials")
+        if isinstance(credentials, dict):
+            store_config_by_service.setdefault(service, credentials)
+            continue
+        instances = record.get("instances")
+        if isinstance(instances, list):
+            for instance in instances:
+                if not isinstance(instance, dict):
+                    continue
+                instance_credentials = instance.get("credentials")
+                if isinstance(instance_credentials, dict):
+                    store_config_by_service.setdefault(service, instance_credentials)
+                    break
 
     health: list[tuple[str, str]] = []
     for service in services:
-        entry = effective.get(service)
-        if entry is None:
-            # Present in the store/env but its credentials did not classify into
-            # a usable config (a required secret is missing).
-            health.append((service, "incomplete"))
-            continue
-        config = entry.get("config") if isinstance(entry, dict) else None
-        if isinstance(config, dict) and _hosted_mcp_missing_token(service, config):
+        config = store_config_by_service.get(service, {})
+        if service == "posthog_mcp" and not config:
+            config = {
+                "mode": os.getenv("POSTHOG_MCP_MODE", "streamable-http").strip().lower(),
+                "auth_token": os.getenv("POSTHOG_MCP_AUTH_TOKEN", "").strip(),
+            }
+        elif service == "sentry_mcp" and not config:
+            config = {
+                "mode": os.getenv("SENTRY_MCP_MODE", "streamable-http").strip().lower(),
+                "auth_token": os.getenv("SENTRY_MCP_AUTH_TOKEN", "").strip(),
+            }
+        if _hosted_mcp_missing_token(service, config):
             health.append((service, "incomplete"))
             continue
         health.append((service, "ok"))
@@ -147,6 +269,7 @@ __all__ = [
     "classify_integrations",
     "configured_integration_health",
     "configured_integration_services",
+    "load_env_integration_services",
     "load_env_integrations",
     "load_integrations",
     "merge_integrations_by_service",

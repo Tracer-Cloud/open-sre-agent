@@ -23,7 +23,7 @@ from pathlib import Path
 import pytest
 from rich.console import Console
 
-from interactive_shell.ui.agents.agents_view import _build_agents_table
+from surfaces.interactive_shell.ui.agents.agents_view import _build_agents_table
 from tools.fleet_monitoring import sampler as sampler_mod
 from tools.fleet_monitoring.probe import ProcessSnapshot
 from tools.fleet_monitoring.registry import AgentRecord

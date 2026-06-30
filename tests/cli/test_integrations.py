@@ -4,9 +4,9 @@ from unittest.mock import patch
 
 from click.testing import CliRunner
 
-from cli.__main__ import cli
-from cli.constants import SETUP_SERVICES, VERIFY_SERVICES
 from integrations.cli import _HANDLERS, _setup_openclaw, _setup_smtp, _setup_vercel
+from surfaces.cli.__main__ import cli
+from surfaces.cli.constants import SETUP_SERVICES, VERIFY_SERVICES
 
 
 def test_integrations_show_redacts_api_token() -> None:
@@ -35,9 +35,9 @@ def test_integrations_setup_accepts_github() -> None:
     runner = CliRunner()
 
     with (
-        patch("cli.commands.integrations.capture_integration_setup_started"),
-        patch("cli.commands.integrations.capture_integration_setup_completed"),
-        patch("cli.commands.integrations.capture_integration_verified"),
+        patch("surfaces.cli.commands.integrations.capture_integration_setup_started"),
+        patch("surfaces.cli.commands.integrations.capture_integration_setup_completed"),
+        patch("surfaces.cli.commands.integrations.capture_integration_verified"),
         patch("integrations.cli.cmd_setup") as mock_setup,
         patch("integrations.cli.cmd_verify", return_value=0) as mock_verify,
     ):
@@ -53,9 +53,9 @@ def test_integrations_setup_accepts_vercel() -> None:
     runner = CliRunner()
 
     with (
-        patch("cli.commands.integrations.capture_integration_setup_started"),
-        patch("cli.commands.integrations.capture_integration_setup_completed"),
-        patch("cli.commands.integrations.capture_integration_verified") as mock_capture,
+        patch("surfaces.cli.commands.integrations.capture_integration_setup_started"),
+        patch("surfaces.cli.commands.integrations.capture_integration_setup_completed"),
+        patch("surfaces.cli.commands.integrations.capture_integration_verified") as mock_capture,
         patch("integrations.cli.cmd_setup") as mock_setup,
         patch("integrations.cli.cmd_verify", return_value=1) as mock_verify,
     ):
@@ -72,9 +72,9 @@ def test_integrations_setup_accepts_openclaw() -> None:
     runner = CliRunner()
 
     with (
-        patch("cli.commands.integrations.capture_integration_setup_started"),
-        patch("cli.commands.integrations.capture_integration_setup_completed"),
-        patch("cli.commands.integrations.capture_integration_verified") as mock_capture,
+        patch("surfaces.cli.commands.integrations.capture_integration_setup_started"),
+        patch("surfaces.cli.commands.integrations.capture_integration_setup_completed"),
+        patch("surfaces.cli.commands.integrations.capture_integration_verified") as mock_capture,
         patch("integrations.cli.cmd_setup") as mock_setup,
         patch("integrations.cli.cmd_verify", return_value=1) as mock_verify,
     ):
@@ -151,9 +151,9 @@ def test_integrations_setup_accepts_telegram() -> None:
     runner = CliRunner()
 
     with (
-        patch("cli.commands.integrations.capture_integration_setup_started"),
-        patch("cli.commands.integrations.capture_integration_setup_completed"),
-        patch("cli.commands.integrations.capture_integration_verified"),
+        patch("surfaces.cli.commands.integrations.capture_integration_setup_started"),
+        patch("surfaces.cli.commands.integrations.capture_integration_setup_completed"),
+        patch("surfaces.cli.commands.integrations.capture_integration_verified"),
         patch("integrations.cli.cmd_setup") as mock_setup,
         patch("integrations.cli.cmd_verify", return_value=0) as mock_verify,
     ):
@@ -169,9 +169,9 @@ def test_integrations_setup_accepts_whatsapp() -> None:
     runner = CliRunner()
 
     with (
-        patch("cli.commands.integrations.capture_integration_setup_started"),
-        patch("cli.commands.integrations.capture_integration_setup_completed"),
-        patch("cli.commands.integrations.capture_integration_verified"),
+        patch("surfaces.cli.commands.integrations.capture_integration_setup_started"),
+        patch("surfaces.cli.commands.integrations.capture_integration_setup_completed"),
+        patch("surfaces.cli.commands.integrations.capture_integration_verified"),
         patch("integrations.cli.cmd_setup") as mock_setup,
         patch("integrations.cli.cmd_verify", return_value=0) as mock_verify,
     ):
@@ -187,9 +187,9 @@ def test_integrations_setup_accepts_twilio() -> None:
     runner = CliRunner()
 
     with (
-        patch("cli.commands.integrations.capture_integration_setup_started"),
-        patch("cli.commands.integrations.capture_integration_setup_completed"),
-        patch("cli.commands.integrations.capture_integration_verified"),
+        patch("surfaces.cli.commands.integrations.capture_integration_setup_started"),
+        patch("surfaces.cli.commands.integrations.capture_integration_setup_completed"),
+        patch("surfaces.cli.commands.integrations.capture_integration_verified"),
         patch("integrations.cli.cmd_setup") as mock_setup,
         patch("integrations.cli.cmd_verify", return_value=0) as mock_verify,
     ):
@@ -205,9 +205,9 @@ def test_integrations_setup_accepts_smtp() -> None:
     runner = CliRunner()
 
     with (
-        patch("cli.commands.integrations.capture_integration_setup_started"),
-        patch("cli.commands.integrations.capture_integration_setup_completed"),
-        patch("cli.commands.integrations.capture_integration_verified"),
+        patch("surfaces.cli.commands.integrations.capture_integration_setup_started"),
+        patch("surfaces.cli.commands.integrations.capture_integration_setup_completed"),
+        patch("surfaces.cli.commands.integrations.capture_integration_verified"),
         patch("integrations.cli.cmd_setup") as mock_setup,
         patch("integrations.cli.cmd_verify", return_value=0) as mock_verify,
     ):
@@ -267,9 +267,9 @@ def test_integrations_setup_skips_auto_verify_for_unverifiable_service() -> None
     runner = CliRunner()
 
     with (
-        patch("cli.commands.integrations.capture_integration_setup_started"),
-        patch("cli.commands.integrations.capture_integration_setup_completed"),
-        patch("cli.commands.integrations.capture_integration_verified"),
+        patch("surfaces.cli.commands.integrations.capture_integration_setup_started"),
+        patch("surfaces.cli.commands.integrations.capture_integration_setup_completed"),
+        patch("surfaces.cli.commands.integrations.capture_integration_verified"),
         patch("integrations.cli.cmd_setup") as mock_setup,
         patch("integrations.cli.cmd_verify") as mock_verify,
     ):
@@ -289,7 +289,7 @@ def test_integrations_verify_accepts_github() -> None:
     runner = CliRunner()
 
     with (
-        patch("cli.commands.integrations.capture_integration_verified") as mock_capture,
+        patch("surfaces.cli.commands.integrations.capture_integration_verified") as mock_capture,
         patch("integrations.cli.cmd_verify", return_value=0) as mock_verify,
     ):
         result = runner.invoke(cli, ["integrations", "verify", "github"])
@@ -306,7 +306,7 @@ def test_integrations_verify_accepts_openclaw() -> None:
     runner = CliRunner()
 
     with (
-        patch("cli.commands.integrations.capture_integration_verified") as mock_capture,
+        patch("surfaces.cli.commands.integrations.capture_integration_verified") as mock_capture,
         patch("integrations.cli.cmd_verify", return_value=1) as mock_verify,
     ):
         result = runner.invoke(cli, ["integrations", "verify", "openclaw"])
@@ -323,7 +323,7 @@ def test_integrations_verify_accepts_argocd() -> None:
     runner = CliRunner()
 
     with (
-        patch("cli.commands.integrations.capture_integration_verified") as mock_capture,
+        patch("surfaces.cli.commands.integrations.capture_integration_verified") as mock_capture,
         patch("integrations.cli.cmd_verify", return_value=0) as mock_verify,
     ):
         result = runner.invoke(cli, ["integrations", "verify", "argocd"])
@@ -342,9 +342,9 @@ def test_integrations_setup_accepts_helm() -> None:
     runner = CliRunner()
 
     with (
-        patch("cli.commands.integrations.capture_integration_setup_started"),
-        patch("cli.commands.integrations.capture_integration_setup_completed"),
-        patch("cli.commands.integrations.capture_integration_verified") as mock_capture,
+        patch("surfaces.cli.commands.integrations.capture_integration_setup_started"),
+        patch("surfaces.cli.commands.integrations.capture_integration_setup_completed"),
+        patch("surfaces.cli.commands.integrations.capture_integration_verified") as mock_capture,
         patch("integrations.cli.cmd_setup") as mock_setup,
         patch("integrations.cli.cmd_verify", return_value=0) as mock_verify,
     ):
@@ -364,7 +364,7 @@ def test_integrations_verify_accepts_helm() -> None:
     runner = CliRunner()
 
     with (
-        patch("cli.commands.integrations.capture_integration_verified") as mock_capture,
+        patch("surfaces.cli.commands.integrations.capture_integration_verified") as mock_capture,
         patch("integrations.cli.cmd_verify", return_value=0) as mock_verify,
     ):
         result = runner.invoke(cli, ["integrations", "verify", "helm"])

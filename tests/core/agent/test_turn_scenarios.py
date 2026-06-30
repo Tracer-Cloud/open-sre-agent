@@ -18,7 +18,7 @@ from core.agent_harness.prompts import (
 )
 from core.llm.llm_retry import LLMCreditExhaustedError
 from core.llm.types import ToolCall
-from interactive_shell.command_registry import SLASH_COMMANDS
+from surfaces.interactive_shell.command_registry import SLASH_COMMANDS
 from tests.core.agent._ci_gates import (
     skip_or_fail,
 )
@@ -42,12 +42,10 @@ from tests.core.agent.scenario_loader import (
     select_cases,
     select_representative,
 )
+from tools.interactive_shell.action_names import TOOL_KIND_TO_NAME, ToolKind
+from tools.interactive_shell.action_tools import action_tools_for_context
+from tools.interactive_shell.actions.investigation import normalize_investigation_alert_text
 from tools.interactive_shell.contracts import ToolContext
-from tools.interactive_shell.registry import (
-    REGISTRY,
-    TOOL_KIND_TO_NAME,
-    ToolKind,
-)
 
 
 class ExpectedAction(TypedDict):
@@ -171,7 +169,7 @@ def _planning_probe_tool(tool: AgentTool) -> AgentTool:
             )
             content = _slash_content(command, parsed_args)
         elif tool.name == "investigation_start":
-            content = str(args.get("alert_text", "")).strip()
+            content = normalize_investigation_alert_text(str(args.get("alert_text", "")))
         elif tool.name == "synthetic_run":
             suite = str(args.get("suite", "")).strip()
             scenario = str(args.get("scenario", "")).strip()
@@ -203,7 +201,7 @@ def _content_from_tool_call(kind: ToolKind, args: dict[str, object]) -> str:
     if kind == "sample_alert":
         return str(args.get("template", "")).strip()
     if kind == "investigation":
-        return str(args.get("alert_text", "")).strip()
+        return normalize_investigation_alert_text(str(args.get("alert_text", "")))
     if kind == "synthetic_test":
         suite = str(args.get("suite", "")).strip()
         scenario = str(args.get("scenario", "")).strip()
@@ -416,7 +414,7 @@ def _assert_live_action_planning_once(case: ScenarioCase) -> None:
     answer = case.answer
 
     ctx = ToolContext(session=session, console=Console(file=io.StringIO(), force_terminal=False))
-    tools = REGISTRY.agent_tools_for_context(ctx)
+    tools = action_tools_for_context(ctx, resolved_integrations=resolved_override)
     from core.llm import agent_llm_client
 
     llm = agent_llm_client.get_agent_llm()

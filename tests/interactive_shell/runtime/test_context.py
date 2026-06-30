@@ -12,13 +12,17 @@ from pydantic import ValidationError
 
 from core.agent_harness.session import ReplSession
 from core.agent_harness.session.tasks import TaskRegistry
-from interactive_shell.controller import InteractiveShellController
-from interactive_shell.runtime.context import (
+from surfaces.interactive_shell.controller import InteractiveShellController
+from surfaces.interactive_shell.runtime.context import (
     ReplRuntimeContext,
     ReplSessionBootstrapSpec,
     create_repl_runtime_context,
 )
-from interactive_shell.runtime.core.state import ReplState, SpinnerState, create_repl_mutable_state
+from surfaces.interactive_shell.runtime.core.state import (
+    ReplState,
+    SpinnerState,
+    create_repl_mutable_state,
+)
 
 
 def _prompt_session() -> PromptSession[str]:

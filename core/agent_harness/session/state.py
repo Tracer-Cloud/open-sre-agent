@@ -26,6 +26,10 @@ from core.agent_harness.session.background import (
     BackgroundInvestigationRecord,
     BackgroundNotificationPreferences,
 )
+from core.agent_harness.session.integrations_cache import (
+    has_only_runtime_metadata,
+    merge_resolved_integrations,
+)
 from core.agent_harness.session.storage.jsonl import JsonlSessionStorage
 from core.agent_harness.session.tasks import TaskRegistry
 from core.agent_harness.session.types import SessionStorage
@@ -146,6 +150,9 @@ class ReplSession:
     _integration_warm_task: Any = field(default=None, repr=False, compare=False)
     available_capabilities: dict[str, tuple[str, ...]] = field(default_factory=dict)
     """Optional planning-time capability constraints (slash/cli/synthetic)."""
+
+    _turn_outcome_hint: str | None = field(default=None, repr=False, compare=False)
+    """Optional structured outcome set by a terminal handler for analytics."""
 
     accumulated_context: dict[str, Any] = field(default_factory=dict)
     """Reusable infra context — service names, clusters, regions — learned from
@@ -277,6 +284,18 @@ class ReplSession:
     exclusive-stdin dispatch path — the only place an interactive child process
     gets clean stdin."""
 
+    exclusive_stdin_active: bool = False
+    """True while a turn is running with exclusive stdin reserved (no live prompt).
+
+    Inline picker/wizard slash commands must dispatch immediately during these
+    turns instead of re-queueing via ``queue_auto_command``, which would loop."""
+
+    agent_turn_executed_slashes: set[str] = field(default_factory=set, repr=False)
+    """Slash command lines already executed during the current action-agent turn.
+
+    Prevents the tool-calling loop from re-dispatching the same literal slash
+    command when the model emits a duplicate ``slash_invoke`` on a later iteration."""
+
     prompt_refresh_fn: Callable[[], None] | None = field(default=None, repr=False)
     """Loop-owned hook to apply pending prefill and redraw the active prompt."""
 
@@ -354,7 +373,7 @@ class ReplSession:
             self.last_synthetic_observation_path = None
             return
         try:
-            from cli.tests.discover import SYNTHETIC_SCENARIOS_DIR
+            from surfaces.cli.tests.discover import SYNTHETIC_SCENARIOS_DIR
         except Exception:
             self.last_synthetic_observation_path = None
             return
@@ -397,15 +416,22 @@ class ReplSession:
         *,
         ok: bool = True,
         response_text: str | None = None,
+        slash_outcome: str | None = None,
     ) -> None:
         """Append an entry to the session history.
 
         Supports kinds: "shell", "slash", "alert", "chat", "incoming_alert", etc.
         For "incoming_alert", use record_incoming_alert() instead to preserve metadata.
+
+        ``slash_outcome`` tags typo-style slash failures (for example
+        ``unknown_command`` or ``invalid_subcommand``) so analytics can
+        distinguish them from handler failures.
         """
         entry: dict[str, Any] = {"type": kind, "text": text, "ok": ok}
         if response_text:
             entry["response_text"] = response_text
+        if slash_outcome:
+            entry["slash_outcome"] = slash_outcome
 
         self.history.append(entry)
 
@@ -437,6 +463,36 @@ class ReplSession:
             latest["ok"] = ok
             return
 
+    def set_turn_outcome_hint(self, hint: str | None) -> None:
+        """Attach a structured outcome for the current terminal handler."""
+        self._turn_outcome_hint = hint.strip() if isinstance(hint, str) and hint.strip() else None
+
+    def pop_turn_outcome_hint(self) -> str | None:
+        """Return and clear any structured outcome hint for this turn."""
+        hint = self._turn_outcome_hint
+        self._turn_outcome_hint = None
+        return hint
+
+    def complete_latest_record(
+        self,
+        kind: str,
+        *,
+        response_text: str | None = None,
+        ok: bool | None = None,
+        slash_outcome: str | None = None,
+    ) -> None:
+        """Update the newest history row of ``kind`` with analytics outcome text."""
+        for latest in reversed(self.history):
+            if latest.get("type") != kind:
+                continue
+            if ok is not None:
+                latest["ok"] = ok
+            if slash_outcome:
+                latest["slash_outcome"] = slash_outcome
+            if response_text and response_text.strip():
+                latest["response_text"] = response_text.strip()
+            return
+
     def accumulate_from_state(self, state: dict[str, Any] | None) -> None:
         """Extract reusable infra hints from a completed investigation state.
 
@@ -453,20 +509,19 @@ class ReplSession:
                 self.accumulated_context[key] = value
 
     def hydrate_configured_integrations(self) -> None:
-        """Resolve configured integrations (env + local store) onto the session.
+        """Load configured integration names (env + local store) onto the session.
 
         Run at REPL boot and again whenever an integration is added or removed
         so capability checks and the tool-gathering pass reflect the current
-        store state instead of a stale boot-time snapshot. Resolution covers
-        both environment variables and the local ``~/.opensre`` store, so an
-        integration configured via ``/integrations setup`` (which writes to the
-        store) is seen here. Best-effort: any failure leaves the previously
-        known state untouched.
+        store state instead of a stale boot-time snapshot. This startup path is
+        intentionally metadata-only: it must not resolve keyring-backed secrets.
+        Full integration configs are resolved on demand when a turn needs tools
+        or an investigation starts.
         """
         try:
-            from integrations.verify import resolve_effective_integrations
+            from integrations.catalog import configured_integration_services
 
-            self.configured_integrations = tuple(sorted(resolve_effective_integrations()))
+            self.configured_integrations = tuple(sorted(configured_integration_services()))
             self.configured_integrations_known = True
         except Exception:
             # Best-effort: keep whatever state we already had (default unknown).
@@ -484,7 +539,8 @@ class ReplSession:
         resolution raced store/env hydration. Failures leave the cache unset for
         the same reason.
         """
-        if self.resolved_integrations_cache is not None:
+        cached = self.resolved_integrations_cache
+        if cached is not None and not has_only_runtime_metadata(cached):
             return
         if generation is None:
             with self._integration_warm_lock:
@@ -506,9 +562,14 @@ class ReplSession:
         with self._integration_warm_lock:
             if generation != self._integration_warm_generation:
                 return
-            if self.resolved_integrations_cache is not None:
+            if self.resolved_integrations_cache is not None and not has_only_runtime_metadata(
+                self.resolved_integrations_cache
+            ):
                 return
-            self.resolved_integrations_cache = dict(resolved)
+            self.resolved_integrations_cache = merge_resolved_integrations(
+                self.resolved_integrations_cache,
+                resolved,
+            )
 
     def schedule_warm_resolved_integrations(self) -> None:
         """Warm integration configs off the interactive prompt critical path."""
@@ -618,6 +679,9 @@ class ReplSession:
         self.correction_intervention_count = 0
         self.pending_prompt_default = None
         self.pending_prompt_autosubmit = False
+        self.exclusive_stdin_active = False
+        if hasattr(self, "agent_turn_executed_slashes"):
+            self.agent_turn_executed_slashes.clear()
         self.last_synthetic_observation_path = None
         self.background_mode_enabled = False
         self.background_investigations.clear()

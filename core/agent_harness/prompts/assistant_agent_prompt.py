@@ -21,6 +21,16 @@ _SOURCE_SCOPED_INVESTIGATION_RULE = (
     "but lead by engaging the named sources rather than deflecting."
 )
 
+_PRIOR_INVESTIGATION_FOLLOW_UP_RULE = (
+    "Prior investigation follow-up: when the session includes a prior "
+    "investigation (shown in the '--- Prior investigation in this session ---' "
+    "section below) and the user asks a retrospective question — such as "
+    "'what happened?', 'what was the root cause?', 'summarize what you found', "
+    "or similar — answer directly from that prior investigation data. Do NOT "
+    "ask for more alert context or redirect to `opensre investigate` when prior "
+    "investigation results are already available."
+)
+
 _SETUP_GUIDANCE_RULE = (
     "Configuring or connecting an integration: when the user asks to configure, "
     "connect, set up, add, or enable a specific integration they already named, "
@@ -31,30 +41,58 @@ _SETUP_GUIDANCE_RULE = (
 )
 
 
-def build_environment_block(*, integrations: tuple[str, ...], known: bool) -> str:
-    """Render configured-integration facts so the assistant can answer directly.
+def build_environment_block(
+    *,
+    integrations: tuple[str, ...],
+    known: bool,
+    llm_provider: str | None = None,
+    reasoning_model: str | None = None,
+    toolcall_model: str | None = None,
+    llm_settings_available: bool | None = None,
+) -> str:
+    """Render shell-state facts so the assistant can answer directly.
 
     Decoupled from any session type: the caller (a ``PromptContextProvider``
-    adapter) supplies the integration names and whether they are known.
+    adapter) supplies integration names and optional LLM settings.
     """
-    if not known:
-        return ""
+    facts: list[str] = []
     if integrations:
         connected = ", ".join(integrations)
-        body = (
+        facts.append(
             f"Configured integrations in this session: {connected}. "
             "Any integration not in that list is NOT configured. When the user asks "
             "whether a specific integration is installed/configured/connected, answer "
             "directly and definitively from this list instead of telling them to run "
             "a command."
         )
-    else:
-        body = (
+    elif known:
+        facts.append(
             "No integrations are configured in this session. If the user asks whether "
             "a specific integration is installed/configured, answer that none are "
             "configured rather than deflecting."
         )
-    return f"--- Environment (configured integrations) ---\n{body}\n\n"
+
+    if llm_settings_available is True:
+        provider = (llm_provider or "unknown").strip() or "unknown"
+        reasoning = (reasoning_model or "default").strip() or "default"
+        toolcall = (toolcall_model or reasoning).strip() or reasoning
+        facts.append(
+            "Active LLM settings in this session: "
+            f"provider {provider}; reasoning model {reasoning}; tool-call model {toolcall}. "
+            "When the user asks which model/provider is being used, answer directly "
+            "from these values instead of telling them to run `/model`, `/status`, "
+            "or `opensre config show`."
+        )
+    elif llm_settings_available is False:
+        facts.append(
+            "Active LLM settings are unavailable in this session. If the user asks "
+            "which model/provider is being used, say the settings could not be read "
+            "instead of guessing or telling them to run another command."
+        )
+
+    if not facts:
+        return ""
+    return "--- Environment (current shell state) ---\n" + "\n".join(facts) + "\n\n"
 
 
 def _build_system_prompt(
@@ -100,6 +138,7 @@ def _build_system_prompt(
         "For vague operational questions (for example why a database is slow) "
         "with no pasted alert, restate the user's question in your reply and "
         "ask for the target system, service, or alert context.\n\n"
+        f"{_PRIOR_INVESTIGATION_FOLLOW_UP_RULE}\n\n"
         f"{_SETUP_GUIDANCE_RULE}\n\n"
         f"{_SOURCE_SCOPED_INVESTIGATION_RULE}\n\n"
         f"{_TERMINOLOGY_RULE}\n{_MARKDOWN_RULE}\n\n"

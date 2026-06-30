@@ -43,7 +43,7 @@ on:
       - "infra/bench/Dockerfile.bench.dockerignore"
       - "pyproject.toml"
       - "uv.lock"
-      - "cli/**"
+      - "surfaces/**"
       - "config/**"
       - "core/**"
       - "infra/deployment/**"

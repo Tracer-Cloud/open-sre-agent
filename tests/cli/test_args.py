@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from cli.args import parse_args, write_json
-from cli.constants import ALERT_TEMPLATE_CHOICES
+from surfaces.cli.args import parse_args, write_json
+from surfaces.cli.constants import ALERT_TEMPLATE_CHOICES
 
 
 def test_write_json_prints_to_stdout(capsys: pytest.CaptureFixture[str]) -> None:

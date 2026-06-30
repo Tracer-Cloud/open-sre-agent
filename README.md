@@ -88,15 +88,15 @@ Our mission is to build AI SRE agents on top of this, scale it to thousands of r
 
 ## Install
 
-The root installer URL auto-detects Unix shell vs PowerShell. Add `--main` when you want the latest rolling build from `main` instead of the latest stable release.
+The root installer URL auto-detects Unix shell vs PowerShell and installs the latest build from `main`. OpenSRE moves quickly, so `main` is the latest stable version for normal installs.
 
-Latest stable release:
+macOS / Linux:
 
 ```bash
 curl -fsSL https://install.opensre.com | bash
 ```
 
-Latest build from `main`:
+Equivalent explicit main-channel form:
 
 ```bash
 curl -fsSL https://install.opensre.com | bash -s -- --main

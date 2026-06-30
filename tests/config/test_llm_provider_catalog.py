@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from cli.wizard.config import SUPPORTED_PROVIDERS
 from config.llm_auth.provider_catalog import (
     API_KEY_PROVIDER_ENVS,
     PROVIDER_BY_VALUE,
     PROVIDER_SPECS,
 )
 from integrations.llm_cli.registry import CLI_PROVIDER_REGISTRY
+from surfaces.cli.wizard.config import SUPPORTED_PROVIDERS
 
 
 def test_provider_catalog_values_are_unique() -> None:

@@ -9,10 +9,10 @@ from typing import Any
 from rich.console import Console
 
 from core.agent_harness.session import ReplSession
-from interactive_shell.runtime.core.turn_accounting import (
+from surfaces.interactive_shell.runtime.core.turn_accounting import (
     ToolCallingTurnResult,
 )
-from interactive_shell.runtime.shell_turn_execution import execute_shell_turn
+from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 
 
 def _console() -> Console:

@@ -13,11 +13,11 @@ import io
 from rich.console import Console
 
 from core.agent_harness.session import ReplSession
-from interactive_shell.runtime.core.turn_accounting import (
+from surfaces.interactive_shell.runtime.core.turn_accounting import (
     ToolCallingTurnResult,
 )
-from interactive_shell.runtime.shell_turn_execution import execute_shell_turn
-from interactive_shell.utils.telemetry.recorder import LlmRunInfo
+from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
+from surfaces.interactive_shell.utils.telemetry.recorder import LlmRunInfo
 
 _OBSERVATION = "Integration status from `/integrations`:\n- sentry: missing (Not configured.)"
 
@@ -93,6 +93,43 @@ def test_no_observation_keeps_silent_handled_turn() -> None:
     session = ReplSession()
     execute_shell_turn(
         "deploy the remote instance",
+        session,
+        _console(),
+        recorder=None,
+        execute_actions=fake_execute,
+        answer_agent=fake_answer,
+    )
+
+    assert answer_calls == []
+    assert session.last_assistant_intent == "cli_agent_handled"
+
+
+def test_literal_slash_command_skips_observation_summary() -> None:
+    """Explicit slash commands already show output; do not summarize or re-run."""
+    answer_calls: list[str] = []
+
+    def fake_execute(
+        text: str,
+        session: ReplSession,
+        console: Console,
+        **kwargs: object,
+    ) -> ToolCallingTurnResult:
+        session.last_command_observation = _OBSERVATION
+        return ToolCallingTurnResult(
+            planned_count=1,
+            executed_count=1,
+            executed_success_count=1,
+            has_unhandled_clause=False,
+            handled=True,
+        )
+
+    def fake_answer(text: str, *args: object, **kwargs: object) -> None:
+        answer_calls.append(text)
+        return None
+
+    session = ReplSession()
+    execute_shell_turn(
+        "/integrations list",
         session,
         _console(),
         recorder=None,

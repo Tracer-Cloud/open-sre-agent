@@ -8,8 +8,8 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-from cli.__main__ import cli
 from core.domain.feedback import MissTaxonomy, record_miss
+from surfaces.cli.__main__ import cli
 
 
 @pytest.fixture

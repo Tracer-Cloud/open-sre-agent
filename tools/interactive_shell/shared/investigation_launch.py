@@ -14,10 +14,10 @@ from collections.abc import Callable
 from rich.console import Console
 from rich.markup import escape
 
-from interactive_shell.runtime import ReplSession
-from interactive_shell.ui.execution_confirm import execution_allowed
-from interactive_shell.ui.foreground_investigation import run_foreground_investigation
 from platform.common.task_types import TaskRecord
+from surfaces.interactive_shell.runtime import ReplSession
+from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
+from surfaces.interactive_shell.ui.foreground_investigation import run_foreground_investigation
 from tools.interactive_shell.shared.execution_policy import plan_foreground_tool
 
 

@@ -6,14 +6,15 @@ from typing import Any
 
 from tools.interactive_shell.contracts import (
     ToolContext,
-    ToolEntry,
-    capability_not_explicitly_disabled,
+    capability_available_from_sources,
+    execute_with_repl_context,
     object_schema,
     string_property,
 )
 from tools.interactive_shell.shell.runner import (
     run_shell_command,
 )
+from tools.registered_tool import RegisteredTool
 
 
 def execute_shell_tool(args: dict[str, Any], ctx: ToolContext) -> bool:
@@ -31,7 +32,11 @@ def execute_shell_tool(args: dict[str, Any], ctx: ToolContext) -> bool:
     return True
 
 
-TOOL_ENTRY = ToolEntry(
+def run_shell(*, command: str, context: Any) -> dict[str, Any]:
+    return execute_with_repl_context({"command": command}, context, execute_shell_tool)
+
+
+shell_run_tool = RegisteredTool(
     name="shell_run",
     description=(
         "Run a narrowly scoped local diagnostic shell command. Use for read-only inspection "
@@ -51,9 +56,13 @@ TOOL_ENTRY = ToolEntry(
         },
         required=("command",),
     ),
-    execute=execute_shell_tool,
-    is_available=lambda session: capability_not_explicitly_disabled(session, "shell_commands"),
+    source="interactive_shell",
+    surfaces=("action",),
+    parallel_safe=False,
+    accepts_runtime_context=True,
+    run=run_shell,
+    is_available=lambda sources: capability_available_from_sources(sources, "shell_commands"),
 )
 
 
-__all__ = ["TOOL_ENTRY", "execute_shell_tool"]
+__all__ = ["execute_shell_tool", "shell_run_tool"]

@@ -45,7 +45,6 @@ from nacl.signing import VerifyKey
 from pydantic import BaseModel
 from starlette.responses import JSONResponse, StreamingResponse
 
-from cli.error_mapping import reraise_cli_runtime_error
 from config.version import get_version
 from infra.deployment.remote.error_reporting import report_remote_exception
 from infra.deployment.remote.vercel_poller import (
@@ -54,11 +53,12 @@ from infra.deployment.remote.vercel_poller import (
     VercelResolutionError,
     enrich_remote_alert_from_vercel,
 )
-from interactive_shell.ui.output.boundary import install_product_adapters
-from interactive_shell.utils.error_handling.errors import OpenSREError
 from platform.analytics.cli import capture_investigation_failed, track_investigation
 from platform.analytics.source import EntrypointSource, TriggerMode
 from platform.observability.sentry_sdk import capture_exception, init_sentry
+from surfaces.cli.error_mapping import reraise_cli_runtime_error
+from surfaces.interactive_shell.ui.output.boundary import install_product_adapters
+from surfaces.interactive_shell.utils.error_handling.errors import OpenSREError
 
 load_dotenv(override=False)
 init_sentry(entrypoint="remote")
@@ -885,7 +885,7 @@ def _execute_investigation(
     severity: str | None,
 ) -> tuple[dict[str, Any], str, str, str]:
     """Run the RCA pipeline and return both the result and resolved metadata."""
-    from cli.investigation import run_investigation_cli
+    from surfaces.cli.investigation import run_investigation_cli
     from tools.investigation.capability import resolve_investigation_context
 
     investigation_metadata = resolve_investigation_context(

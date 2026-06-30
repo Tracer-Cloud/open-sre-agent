@@ -6,7 +6,7 @@ from typing import Any
 def test_model_switch_resets_runtime_llm_caches(monkeypatch: Any) -> None:
     import core.llm.agent_llm_client as agent_llm_client
     import core.llm.llm_client as llm_client
-    import interactive_shell.command_registry.model.switching as model_module
+    import surfaces.interactive_shell.command_registry.model.switching as model_module
 
     calls: list[str] = []
 

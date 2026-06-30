@@ -62,6 +62,27 @@ def test_install_ps1_preserves_retry_contract_source() -> None:
     assert "$statusCode -ge 400 -and $statusCode -lt 500" in source
 
 
+def test_install_ps1_defaults_to_main_build_channel() -> None:
+    source = INSTALL_PS1.read_text()
+
+    assert 'else { "main" }' in source
+    assert 'else { "main-build" }' in source
+    assert "releases/tags/$mainReleaseTag" in source
+    assert "$script:OpenSreChannelExplicit" in source
+    assert '$resolvedChannel = "release"' in source
+    assert "releases/tags/nightly" not in source
+
+
+def test_install_ps1_contains_auto_onboarding_launch_hook() -> None:
+    source = INSTALL_PS1.read_text()
+
+    assert "function Test-OpenSreAutoLaunchEnabled" in source
+    assert "function Start-OpenSreOnboardingAfterInstall" in source
+    assert "OPENSRE_AUTO_LAUNCH" in source
+    assert "& $BinaryPath onboard" in source
+    assert "Start-OpenSreOnboardingAfterInstall -BinaryPath $installedBinaryPath" in source
+
+
 def test_install_ps1_keeps_download_urls_verbose_only() -> None:
     source = INSTALL_PS1.read_text()
 

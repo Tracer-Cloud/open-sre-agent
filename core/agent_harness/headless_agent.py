@@ -8,14 +8,14 @@ override any of them.
 
 Example::
 
-    from core.agent_harness.headless_agent import run_agent_turn
+    from core.agent_harness.headless_agent import dispatch_message_to_headless_agent
     from core.agent_harness.headless import InMemorySessionStore, StaticReasoningClientProvider
 
     class _Echo:
         def invoke_stream(self, prompt):
             yield "hello"
 
-    result = run_agent_turn(
+    result = dispatch_message_to_headless_agent(
         "hi there",
         reasoning=StaticReasoningClientProvider(client=_Echo()),
     )
@@ -50,9 +50,10 @@ from core.agent_harness.ports import (
 from core.agent_harness.turn_context import TurnContext
 from core.agent_harness.turn_orchestrator import answer_cli_agent, run_turn
 from core.agent_harness.turn_results import ShellTurnResult, ToolCallingTurnResult
+from core.execution import ToolExecutionHooks
 
 
-def run_agent_turn(
+def dispatch_message_to_headless_agent(
     message: str,
     *,
     session: SessionStore | None = None,
@@ -66,6 +67,7 @@ def run_agent_turn(
     gather_enabled: bool = False,
     confirm_fn: ConfirmFn | None = None,
     is_tty: bool | None = None,
+    tool_hooks: ToolExecutionHooks | None = None,
 ) -> ShellTurnResult:
     """Run one full turn headlessly and return the :class:`ShellTurnResult`.
 
@@ -101,6 +103,7 @@ def run_agent_turn(
             is_tty=is_tty,
             turn_ctx=turn_ctx,
             error_reporter=error_reporter,
+            tool_hooks=tool_hooks,
         )
 
     def answer(text: str, **kwargs: object) -> object:
@@ -137,4 +140,4 @@ def run_agent_turn(
     )
 
 
-__all__ = ["run_agent_turn"]
+__all__ = ["dispatch_message_to_headless_agent"]

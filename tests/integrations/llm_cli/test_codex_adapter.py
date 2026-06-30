@@ -124,8 +124,7 @@ def test_detect_skips_login_status_probe_by_default(
     probe = CodexAdapter().detect()
     assert probe.installed is True
     assert probe.logged_in is None
-    assert "login status was not checked" in probe.detail
-    assert _AUTH_STATUS_PROBE_ENV in probe.detail
+    assert probe.detail == "Codex CLI installed."
     assert mock_run.call_count == 1
 
 
