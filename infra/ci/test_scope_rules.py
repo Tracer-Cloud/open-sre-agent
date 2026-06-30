@@ -112,6 +112,58 @@ RULES: tuple[PathRule, ...] = (
         ),
     ),
     PathRule(
+        "integrations/prefect/",
+        (
+            "tests/integrations/prefect/",
+            "tests/tools/test_prefect_flow_runs_tool.py",
+            "tests/tools/test_prefect_worker_health_tool.py",
+        ),
+    ),
+    PathRule(
+        "integrations/signoz/",
+        (
+            "tests/integrations/signoz/",
+            "tests/tools/test_signoz_tools.py",
+            "tests/synthetic/test_signoz_scenario.py",
+        ),
+    ),
+    PathRule(
+        "integrations/splunk/",
+        ("tests/integrations/splunk/", "tests/tools/test_splunk_search_tool.py"),
+    ),
+    PathRule(
+        "integrations/tempo/",
+        (
+            "tests/integrations/tempo/",
+            "tests/tools/test_tempo_tools.py",
+            "tests/synthetic/test_tempo_scenario.py",
+        ),
+    ),
+    PathRule(
+        "integrations/temporal/",
+        (
+            "tests/integrations/temporal/",
+            "tests/integrations/test_temporal_catalog.py",
+            "tests/synthetic/test_temporal_scenario.py",
+            "tests/tools/test_temporal_namespace_info_tool.py",
+            "tests/tools/test_temporal_task_queue_tool.py",
+            "tests/tools/test_temporal_workflow_history_tool.py",
+            "tests/tools/test_temporal_workflows_tool.py",
+        ),
+    ),
+    PathRule(
+        "integrations/vercel/",
+        (
+            "tests/integrations/vercel/",
+            "tests/tools/test_vercel_deployment_status_tool.py",
+            "tests/tools/test_vercel_logs_tool.py",
+        ),
+    ),
+    PathRule(
+        "integrations/victoria_logs/",
+        ("tests/integrations/victoria_logs/", "tests/tools/test_victoria_logs_tool.py"),
+    ),
+    PathRule(
         "integrations/argocd/",
         (
             "tests/integrations/argocd/",

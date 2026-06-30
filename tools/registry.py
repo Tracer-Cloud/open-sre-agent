@@ -43,6 +43,13 @@ _INTEGRATION_TOOL_PACKAGES: tuple[str, ...] = (
     "integrations.jira.tools",
     "integrations.opsgenie.tools",
     "integrations.pagerduty.tools",
+    "integrations.prefect.tools",
+    "integrations.signoz.tools",
+    "integrations.splunk.tools",
+    "integrations.tempo.tools",
+    "integrations.temporal.tools",
+    "integrations.vercel.tools",
+    "integrations.victoria_logs.tools",
 )
 
 logger = logging.getLogger(__name__)

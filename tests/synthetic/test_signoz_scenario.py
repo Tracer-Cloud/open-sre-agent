@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.domain.alerts.alert_source import ALERT_SOURCE_TO_SEED_TOOL_SOURCES
-from tools.signoz_tools import query_signoz_logs, query_signoz_metrics, query_signoz_traces
+from integrations.signoz.tools import query_signoz_logs, query_signoz_metrics, query_signoz_traces
 
 
 class _FixtureSigNozBackend:

@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tools.vercel_tools import VercelDeploymentStatusTool
+from integrations.vercel.tools import VercelDeploymentStatusTool
 
 
 @pytest.fixture()
@@ -50,7 +50,7 @@ def test_run_returns_failed_deployments_for_error_state(tool: VercelDeploymentSt
         "deployments": deployments,
         "total": 3,
     }
-    with patch("tools.vercel_tools.make_vercel_client", return_value=mock_client):
+    with patch("integrations.vercel.tools.make_vercel_client", return_value=mock_client):
         result = tool.run(api_token="tok_test")
 
     assert result["available"] is True
@@ -65,7 +65,7 @@ def test_run_returns_failed_deployments_for_error_state(tool: VercelDeploymentSt
 def test_run_empty_deployments_list(tool: VercelDeploymentStatusTool) -> None:
     mock_client = MagicMock()
     mock_client.list_deployments.return_value = {"success": True, "deployments": [], "total": 0}
-    with patch("tools.vercel_tools.make_vercel_client", return_value=mock_client):
+    with patch("integrations.vercel.tools.make_vercel_client", return_value=mock_client):
         result = tool.run(api_token="tok_test")
 
     assert result["available"] is True
@@ -79,7 +79,7 @@ def test_run_returns_unavailable_on_api_failure(tool: VercelDeploymentStatusTool
         "success": False,
         "error": "HTTP 401: unauthorized",
     }
-    with patch("tools.vercel_tools.make_vercel_client", return_value=mock_client):
+    with patch("integrations.vercel.tools.make_vercel_client", return_value=mock_client):
         result = tool.run(api_token="tok_test")
 
     assert result["available"] is False
@@ -105,7 +105,7 @@ def test_run_returns_unavailable_for_whitespace_only_token(
 def test_run_passes_project_id_and_state_to_client(tool: VercelDeploymentStatusTool) -> None:
     mock_client = MagicMock()
     mock_client.list_deployments.return_value = {"success": True, "deployments": [], "total": 0}
-    with patch("tools.vercel_tools.make_vercel_client", return_value=mock_client):
+    with patch("integrations.vercel.tools.make_vercel_client", return_value=mock_client):
         tool.run(api_token="tok_test", project_id="proj_1", state="ERROR", limit=5)
 
     mock_client.list_deployments.assert_called_once_with(
