@@ -58,7 +58,7 @@ def _resolve_session_integrations(session: SessionStore) -> dict[str, Any]:
     ):
         return cached
 
-    from platform.integrations.resolution import resolve_integrations
+    from core.agent_harness.integrations.resolution import resolve_integrations
 
     resolved = resolve_integrations()
     if resolved:

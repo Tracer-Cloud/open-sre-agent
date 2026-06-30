@@ -17,7 +17,7 @@ from core.domain.alerts.inbox import IncomingAlert
 
 if TYPE_CHECKING:
     from core.agent_harness.grounding.context import GroundingContext
-    from platform.integrations.resolution import IntegrationResolutionResult
+    from core.agent_harness.integrations.resolution import IntegrationResolutionResult
 else:
     GroundingContext = Any
 
@@ -549,7 +549,7 @@ class ReplSession:
                 generation = self._integration_warm_generation
 
         try:
-            from platform.integrations.resolution import resolve_integrations
+            from core.agent_harness.integrations.resolution import resolve_integrations
 
             resolved = resolve_integrations()
         except Exception:
@@ -580,7 +580,7 @@ class ReplSession:
         known state, metadata-only caches trigger one quiet warmup attempt, and
         warmup results are merged through the same generation guard as startup.
         """
-        from platform.integrations.resolution import IntegrationResolutionResult
+        from core.agent_harness.integrations.resolution import IntegrationResolutionResult
 
         cached = self.resolved_integrations_cache
         if cached is not None and (

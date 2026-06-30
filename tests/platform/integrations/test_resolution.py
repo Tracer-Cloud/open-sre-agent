@@ -6,8 +6,8 @@ import base64
 import json
 from typing import Any
 
-import platform.integrations.resolution as resolution
-from platform.integrations.resolution import IntegrationResolutionResult
+import core.agent_harness.integrations.resolution as resolution
+from core.agent_harness.integrations.resolution import IntegrationResolutionResult
 
 
 def _jwt(payload: dict[str, Any]) -> str:

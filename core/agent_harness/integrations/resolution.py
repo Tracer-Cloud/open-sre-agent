@@ -1,4 +1,4 @@
-"""Shared integration resolution for runtime consumers."""
+"""Shared integration resolution for agent-harness runtime consumers."""
 
 from __future__ import annotations
 

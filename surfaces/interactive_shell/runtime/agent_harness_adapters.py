@@ -14,6 +14,7 @@ from typing import Any
 from rich.console import Console
 from rich.markup import escape
 
+from core.agent_harness.action_tools import get_action_tools_from_integrations_context
 from core.agent_harness.grounding.investigation_flow_reference import (
     build_investigation_flow_reference_text,
 )
@@ -30,7 +31,6 @@ from surfaces.interactive_shell.ui.action_rendering import ActionRenderObserver
 from surfaces.interactive_shell.ui.streaming import render_response_header
 from surfaces.interactive_shell.ui.tables.provider import resolve_provider_models
 from surfaces.interactive_shell.utils.error_handling.exception_reporting import report_exception
-from tools.interactive_shell.action_tools import action_tools_for_context
 from tools.interactive_shell.contracts import REPL_RESOURCE_KEY, ToolContext
 
 
@@ -92,7 +92,7 @@ class ShellToolProvider:
             action_already_listed=True,
         )
         self._tool_context = ctx
-        return action_tools_for_context(ctx, resolved_integrations=resolved_integrations)
+        return get_action_tools_from_integrations_context(ctx, resolved_integrations=resolved_integrations)
 
     def tool_resources(self) -> dict[str, Any]:
         if self._tool_context is None:

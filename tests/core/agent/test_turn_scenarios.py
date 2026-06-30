@@ -13,6 +13,7 @@ from rich.console import Console
 
 from core import Agent, AgentTool, AgentToolContext
 from core.agent_harness.action_agent import _MAX_TOOL_CALLING_ITERATIONS
+from core.agent_harness.action_tools import get_action_tools_from_integrations_context
 from core.agent_harness.prompts import (
     build_action_system_prompt,
     build_action_user_message,
@@ -44,7 +45,6 @@ from tests.core.agent.scenario_loader import (
     select_representative,
 )
 from tools.interactive_shell.action_names import TOOL_KIND_TO_NAME, ToolKind
-from tools.interactive_shell.action_tools import action_tools_for_context
 from tools.interactive_shell.actions.investigation import normalize_investigation_alert_text
 from tools.interactive_shell.contracts import ToolContext
 
@@ -418,7 +418,7 @@ def _assert_live_action_planning_once(case: ScenarioCase) -> None:
     answer = case.answer
 
     ctx = ToolContext(session=session, console=Console(file=io.StringIO(), force_terminal=False))
-    tools = action_tools_for_context(ctx, resolved_integrations=resolved_override)
+    tools = get_action_tools_from_integrations_context(ctx, resolved_integrations=resolved_override)
     from core.llm import agent_llm_client
 
     llm = agent_llm_client.get_agent_llm()

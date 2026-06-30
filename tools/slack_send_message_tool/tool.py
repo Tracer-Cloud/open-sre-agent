@@ -55,6 +55,7 @@ class SlackSendMessageTool(BaseTool):
             },
         },
         "required": ["message"],
+        "additionalProperties": False,
     }
     outputs = {
         "status": "delivery dispatch status - 'sent' or 'failed'",

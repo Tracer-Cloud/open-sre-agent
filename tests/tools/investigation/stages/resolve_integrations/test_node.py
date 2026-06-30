@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from platform.integrations.resolution import IntegrationResolutionResult
+from core.agent_harness.integrations.resolution import IntegrationResolutionResult
 from tools.investigation.stages.resolve_integrations import node
 
 

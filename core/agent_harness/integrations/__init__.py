@@ -1,6 +1,6 @@
-"""Shared platform integration runtime helpers."""
+"""Agent-harness integration resolution helpers."""
 
-from platform.integrations.resolution import (
+from core.agent_harness.integrations.resolution import (
     IntegrationResolutionRequest,
     IntegrationResolutionResult,
     resolve_integrations,

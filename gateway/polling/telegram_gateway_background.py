@@ -5,7 +5,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
+from typing import Callable
 
+from core.agent import Agent
+from core.agent_harness.session import ReplSession
+from core.tool_framework.registered_tool import RegisteredTool
+from gateway.agent.gateway_output_sink import GatewayOutputSink
 from gateway.config.get_gateway_settings import GatewaySettings
 from gateway.polling.handle_polled_inbound_telegram_msg import (
     handle_polled_inbound_telegram_message,
@@ -48,12 +53,13 @@ def start_telegram_gateway_background(
     logger: logging.Logger,
     initialize_runtime: InitializeTelegramPollingRuntime,
     shutdown_runtime: ShutdownTelegramPollingRuntime,
+    handle_callback_to_gateway_agent: Callable[[str, ReplSession, str, GatewayOutputSink, logging.Logger], None],
 ) -> TelegramGatewayBackground:
     """Start Telegram polling in a background thread."""
     stop_event = threading.Event()
 
     thread = threading.Thread(
-        target=_run_telegram_gateway_thread,
+        target=_run_telegram_gateway_thread(handle_callback_to_gateway_agent=handle_callback_to_gateway_agent),
         kwargs={
             "settings": settings,
             "stop_event": stop_event,
@@ -77,7 +83,8 @@ def _run_telegram_gateway_thread(
     logger: logging.Logger,
     initialize_runtime: InitializeTelegramPollingRuntime,
     shutdown_runtime: ShutdownTelegramPollingRuntime,
-) -> None:
+    handle_callback_to_gateway_agent: Callable[[str, ReplSession, str, GatewayOutputSink, logging.Logger], None],
+ ) -> None:
     """Own Telegram polling resources for the lifetime of the thread."""
     # Consideration: We could initialize a broader set of resources here that could be used by the gateway (i.e. the agent itself)
     resources = initialize_runtime(settings)
@@ -89,6 +96,7 @@ def _run_telegram_gateway_thread(
                 stop_event=stop_event,
                 logger=logger,
                 resources=resources,
+                handle_callback_to_gateway_agent=handle_callback_to_gateway_agent,
             )
         )
     except Exception:
@@ -103,6 +111,7 @@ async def _poll_telegram_until_stopped(
     stop_event: threading.Event,
     logger: logging.Logger,
     resources: TelegramPollingRuntime,
+    handle_callback_to_gateway_agent: Callable[[str, ReplSession, str, GatewayOutputSink, logging.Logger], None],
 ) -> None:
     """Poll Telegram updates and dispatch them until shutdown is requested."""
     poller = TelegramPoller(settings.bot_token)
@@ -125,6 +134,7 @@ async def _poll_telegram_until_stopped(
                     chat_locks=resources.chat_locks,
                     turn_semaphore=turn_semaphore,
                     loop=loop,
+                    handle_callback_to_gateway_agent=handle_callback_to_gateway_agent,
                 )
 
         except Exception:
