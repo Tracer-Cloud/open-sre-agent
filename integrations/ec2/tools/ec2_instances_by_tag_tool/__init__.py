@@ -11,12 +11,12 @@ import logging
 from typing import Any, cast
 
 from core.tool_framework.tool_decorator import tool
+from integrations.aws.availability import ec2_available_or_backend
 from integrations.aws.aws_sdk_client import execute_aws_sdk_call
 from integrations.aws.topology_helper import (
     build_ec2_summary,
     extract_ec2_instances_params,
 )
-from integrations.ec2.availability import ec2_available_or_backend
 
 logger = logging.getLogger(__name__)
 

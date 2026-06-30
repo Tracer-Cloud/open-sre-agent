@@ -71,12 +71,28 @@ class AlarmDispatcher:
         else:
             text = truncate(message, _TELEGRAM_MESSAGE_LIMIT, suffix="…")
 
-        ok, error, _ = post_telegram_message(
-            chat_id=self._creds.chat_id,
-            text=text,
-            bot_token=self._creds.bot_token,
-            parse_mode=self._parse_mode,
-        )
+        # The cooldown slot was reserved before this network call (see lock
+        # block above). If ``post_telegram_message`` returns ``ok=False`` OR
+        # raises, the slot stays armed for the cooldown window and the next
+        # caller for the same key is silently suppressed — emit the same
+        # warning in both paths so operators see the original failure
+        # instead of only the suppression debug line.
+        try:
+            ok, error, _ = post_telegram_message(
+                chat_id=self._creds.chat_id,
+                text=text,
+                bot_token=self._creds.bot_token,
+                parse_mode=self._parse_mode,
+            )
+        except Exception as exc:
+            logger.warning(
+                "alarm delivery raised and cooldown remains armed: name=%s error=%s",
+                threshold_name,
+                exc,
+                exc_info=True,
+            )
+            return False
+
         if ok:
             return True
 
