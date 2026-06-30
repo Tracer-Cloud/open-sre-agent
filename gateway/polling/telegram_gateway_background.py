@@ -109,23 +109,42 @@ async def _poll_telegram_until_stopped(
 
     resources.client.delete_webhook()
 
-    while not stop_event.is_set():
-        try:
-            events = await asyncio.to_thread(poller.poll_once)
-            loop = asyncio.get_running_loop()
+    # Dispatch each update as a concurrent task (matching the webhook path):
+    # an approval-gated turn blocks until the inbound callback that approves
+    # it is processed, so awaiting each event sequentially would deadlock the
+    # poll loop against itself. The set keeps task references alive
+    # (create_task alone lets them be garbage-collected mid-flight).
+    pending: set[asyncio.Task[None]] = set()
+    loop = asyncio.get_running_loop()
 
-            for event in events:
-                await handle_polled_inbound_telegram_message(
-                    event,
-                    client=resources.client,
-                    session_resolver=resources.session_resolver,
-                    settings=settings,
-                    executor=resources.executor,
-                    chat_locks=resources.chat_locks,
-                    turn_semaphore=turn_semaphore,
-                    loop=loop,
-                )
+    try:
+        while not stop_event.is_set():
+            try:
+                events = await asyncio.to_thread(poller.poll_once)
 
-        except Exception:
-            logger.error("Error while polling Telegram updates", exc_info=True)
-            await asyncio.to_thread(stop_event.wait, 2)
+                for event in events:
+                    task = asyncio.create_task(
+                        handle_polled_inbound_telegram_message(
+                            event,
+                            client=resources.client,
+                            session_resolver=resources.session_resolver,
+                            settings=settings,
+                            executor=resources.executor,
+                            chat_locks=resources.chat_locks,
+                            turn_semaphore=turn_semaphore,
+                            loop=loop,
+                        )
+                    )
+                    pending.add(task)
+                    task.add_done_callback(pending.discard)
+
+            except Exception:
+                logger.error("Error while polling Telegram updates", exc_info=True)
+                await asyncio.to_thread(stop_event.wait, 2)
+    finally:
+        # Drain in-flight turns before the loop stops. Cancelling lets each
+        # task unwind on this still-running loop before resources are torn down.
+        for task in list(pending):
+            task.cancel()
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
