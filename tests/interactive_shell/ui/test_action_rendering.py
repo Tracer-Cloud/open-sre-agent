@@ -124,7 +124,5 @@ def test_chat_turn_records_single_cli_agent_history_entry() -> None:
         answer_agent=_answer,
     )
 
-    assert session.history == [
-        {"type": "cli_agent", "text": "what broke in prod?", "ok": True}
-    ]
+    assert session.history == [{"type": "cli_agent", "text": "what broke in prod?", "ok": True}]
     assert _prompt_turn_number(session) == 2

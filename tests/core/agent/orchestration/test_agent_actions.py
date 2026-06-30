@@ -292,11 +292,6 @@ def test_execute_cli_actions_dispatches_planned_commands(monkeypatch: object) ->
     assert handled.handled is True
     assert dispatched == ["/health", "/integrations list"]
     assert session.history == [
-        {
-            "type": "cli_agent",
-            "text": "check the health of my opensre and then show me all connected services",
-            "ok": True,
-        },
         {"type": "slash", "text": "/health", "ok": True},
         {"type": "slash", "text": "/integrations list", "ok": True},
     ]
@@ -423,11 +418,6 @@ def test_execute_cli_actions_switches_llm_provider(monkeypatch: object) -> None:
     assert handled.handled is True
     assert switches == ["anthropic"]
     assert session.history == [
-        {
-            "type": "cli_agent",
-            "text": "switch from the current ollama model to setting the model to anthropic",
-            "ok": True,
-        },
         {"type": "slash", "text": "/model set anthropic", "ok": True},
     ]
     output = buf.getvalue()
@@ -523,7 +513,6 @@ def test_execute_cli_actions_runs_implementation_action(monkeypatch: object) -> 
     assert handled.handled is True
     assert calls == ["/history search"]
     assert session.history == [
-        {"type": "cli_agent", "text": "please implement /history search", "ok": True},
         {"type": "implementation", "text": "/history search", "ok": True},
     ]
     output = buf.getvalue()
@@ -565,14 +554,6 @@ def test_execute_cli_actions_answers_discord_then_dispatches_datadog(
     assert handled.handled is True
     assert dispatched == ["/integrations show datadog"]
     assert session.history == [
-        {
-            "type": "cli_agent",
-            "text": (
-                "tell me about what the discord integration can do and then tell me what "
-                "datadog services I have connections to"
-            ),
-            "ok": True,
-        },
         {"type": "slash", "text": "/integrations show datadog", "ok": True},
     ]
     output = buf.getvalue()
@@ -612,14 +593,6 @@ def test_compound_prompt_executes_all_supported_tasks(monkeypatch: object) -> No
     assert handled.handled is True
     assert dispatched == ["/integrations list", "/remote"]
     assert session.history == [
-        {
-            "type": "cli_agent",
-            "text": (
-                "tell me how you are doing AND show me all the services we are connected to "
-                "AND then deploy OpenSRE to EC2"
-            ),
-            "ok": True,
-        },
         {"type": "slash", "text": "/integrations list", "ok": True},
         {"type": "slash", "text": "/remote", "ok": True},
     ]
@@ -843,17 +816,11 @@ def test_execute_cli_actions_lists_all_actions_before_synthetic_rds(monkeypatch:
         "001-replication-lag",
     ]
 
-    assert session.history[:2] == [
-        {
-            "type": "cli_agent",
-            "text": (
-                "show me which services are connected and after that run a synthetic test "
-                "RDS database"
-            ),
-            "ok": True,
-        },
-        {"type": "slash", "text": "/integrations list", "ok": True},
-    ]
+    assert session.history[0] == {
+        "type": "slash",
+        "text": "/integrations list",
+        "ok": True,
+    }
 
     for _ in range(100):
         recent = session.task_registry.list_recent(1)
@@ -918,12 +885,7 @@ def test_execute_cli_actions_cancels_single_running_synthetic_task() -> None:
     assert handled.handled is True
     assert task.cancel_requested.is_set()
     proc.terminate.assert_called_once()
-    assert session.history[0] == {
-        "type": "cli_agent",
-        "text": "kill the syntehtic_test because it is runnign way too long",
-        "ok": True,
-    }
-    slash_entry = session.history[1]
+    slash_entry = session.history[0]
     assert slash_entry == {
         "type": "slash",
         "text": f"/cancel {task.task_id}",
@@ -992,7 +954,6 @@ def test_execute_cli_actions_runs_shell_command(monkeypatch: object) -> None:
 
     assert shell_turn_execution.run_action_tool_turn("run `pwd`", session, console).handled is True
     assert session.history == [
-        {"type": "cli_agent", "text": "run `pwd`", "ok": True},
         {"type": "shell", "text": "pwd", "ok": True},
     ]
     output = buf.getvalue()
@@ -1016,7 +977,6 @@ def test_execute_cli_actions_cd_preserves_windows_paths(monkeypatch: object) -> 
     assert shell_turn_execution.run_action_tool_turn(message, session, console).handled is True
     assert changed_directories == [Path(r"C:\Users\Alice")]
     assert session.history == [
-        {"type": "cli_agent", "text": message, "ok": True},
         {"type": "shell", "text": r"cd C:\Users\Alice", "ok": True},
     ]
 
@@ -1041,7 +1001,6 @@ def test_execute_cli_actions_cd_dispatches_case_insensitively(monkeypatch: objec
     assert shell_turn_execution.run_action_tool_turn(message, session, console).handled is True
     assert changed_directories == [Path(r"C:\Users\Alice")]
     assert session.history == [
-        {"type": "cli_agent", "text": message, "ok": True},
         {"type": "shell", "text": r"CD C:\Users\Alice", "ok": True},
     ]
 
@@ -1062,7 +1021,6 @@ def test_execute_cli_actions_cd_handles_trailing_backslash_on_windows(monkeypatc
     assert shell_turn_execution.run_action_tool_turn(message, session, console).handled is True
     assert changed_directories == [Path("C:\\")]
     assert session.history == [
-        {"type": "cli_agent", "text": message, "ok": True},
         {"type": "shell", "text": "cd C:\\", "ok": True},
     ]
 
@@ -1083,7 +1041,6 @@ def test_execute_cli_actions_cd_strips_quotes_on_windows(monkeypatch: object) ->
     assert shell_turn_execution.run_action_tool_turn(message, session, console).handled is True
     assert changed_directories == [Path(r"C:\Users\Alice")]
     assert session.history == [
-        {"type": "cli_agent", "text": message, "ok": True},
         {"type": "shell", "text": r'cd "C:\Users\Alice"', "ok": True},
     ]
 
