@@ -13,8 +13,8 @@ This file is the detailed definition of done for tool and integration work. Use 
 
 ### Files usually involved
 
-- `tools/<ToolName>/__init__.py` or `tools/<tool_file>.py`
-- `tools/utils/` for shared helpers
+- `integrations/<vendor>/tools/<tool_name>_tool/__init__.py` for vendor-scoped tools (most common path), or `tools/<ToolName>/__init__.py` for cross-cutting tools that aren't vendor-specific
+- `core/tool_framework/utils/` for shared helpers
 - `integrations/<name>/client.py` if transport/parsing should live in the integration implementation
 - `docs/<tool_name>.mdx`
 - `docs/docs.json`
@@ -46,7 +46,7 @@ should be a small registry entrypoint that imports the public tool object.
 - [ ] Failure responses have a stable, investigation-friendly shape
 - [ ] Expected external failures (missing config, auth failure, rate limit, upstream 4xx/5xx) return structured errors; unexpected exceptions either use the global `BaseTool` wrapper intentionally or are migrated with telemetry coverage
 - [ ] Tool output is normalized enough for the planner/LLM to consume reliably
-- [ ] Reusable transport or integration-specific parsing logic lives in `integrations/<name>/` or `tools/utils/` rather than being copied into the tool body
+- [ ] Reusable transport or integration-specific parsing logic lives in `integrations/<name>/` or `core/tool_framework/utils/` rather than being copied into the tool body
 - [ ] External side effects declare `side_effect_level`, `requires_approval`, `approval_reason`, and `approval_scope` where appropriate
 - [ ] If the tool should appear in both investigation and chat, set `surfaces=("investigation", "chat")`
 - [ ] Output that may contain secrets, tokens, or PII is run through `platform/masking/` before being returned
