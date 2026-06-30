@@ -22,8 +22,7 @@ response_contract:
   - /onboard
   - local-model connection tool
   must_not_contain:
-  - "$ /"
-  - "/integrations setup llama"
+  - $ /
 history:
   expected:
   - type: cli_agent

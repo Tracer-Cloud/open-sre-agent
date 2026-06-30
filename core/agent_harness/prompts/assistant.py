@@ -187,12 +187,6 @@ def _build_integration_guard(ctx: TurnContext) -> str:
         "`/mcp connect <server>` for MCP servers. Do not claim any integration is "
         "already connected, and for show/verify/remove requests against unconfigured "
         "integrations, answer with guidance only.\n\n"
-        "LLM providers (local llama / ollama, local LLM, GPT, Claude, etc.) are NOT "
-        "integrations. For requests like `connect to local llama` or `switch model`, "
-        "suggest `/onboard` (the onboarding wizard walks through local-model "
-        "connection) instead of `/integrations setup`. Never suggest "
-        "`/integrations setup llama`, `/integrations setup gpt`, or any LLM-provider "
-        "name as an integrations target — those targets do not exist.\n\n"
     )
 
 
