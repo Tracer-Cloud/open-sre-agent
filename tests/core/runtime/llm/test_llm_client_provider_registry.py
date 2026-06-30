@@ -15,8 +15,9 @@ import pytest
 
 import core.llm.llm_client as llm_client
 from core.llm.litellm.clients import LiteLLMLLMClient
+from core.llm.openai_compat_providers import OPENAI_COMPATIBLE_PROVIDERS
 
-_OPENAI_COMPATIBLE_PROVIDERS = llm_client._OPENAI_COMPATIBLE_PROVIDERS
+_OPENAI_COMPATIBLE_PROVIDERS = OPENAI_COMPATIBLE_PROVIDERS
 OpenAILLMClient = llm_client.OpenAILLMClient
 _create_llm_client = llm_client._create_llm_client
 

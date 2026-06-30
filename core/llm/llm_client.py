@@ -11,11 +11,11 @@ from typing import TYPE_CHECKING, Any, Protocol
 if TYPE_CHECKING:
     from integrations.llm_cli.registry import CLIProviderRegistration
 
-from anthropic import BadRequestError as AnthropicBadRequestError  # noqa: F401
-from anthropic import NotFoundError  # noqa: F401
-from openai import APITimeoutError as OpenAITimeoutError  # noqa: F401
-from openai import BadRequestError as OpenAIBadRequestError  # noqa: F401
-from openai import RateLimitError as OpenAIRateLimitError  # noqa: F401
+from anthropic import BadRequestError as AnthropicBadRequestError
+from anthropic import NotFoundError
+from openai import APITimeoutError as OpenAITimeoutError
+from openai import BadRequestError as OpenAIBadRequestError
+from openai import RateLimitError as OpenAIRateLimitError
 from pydantic import BaseModel, ValidationError
 
 from config.config import (
@@ -25,25 +25,19 @@ from config.config import (
 )
 from config.llm_auth.auth_method import effective_llm_provider, get_configured_llm_auth_method
 from core.domain.types.root_cause_categories import VALID_ROOT_CAUSE_CATEGORIES
-from core.llm.openai_chat_completions import _RETRY_MAX_ATTEMPTS  # noqa: F401
+from core.llm.openai_chat_completions import _RETRY_MAX_ATTEMPTS
 from core.llm.openai_compat_providers import (
-    OPENAI_COMPATIBLE_PROVIDERS,
     ModelType,
     is_openai_compat_provider,
     resolve_openai_compat_provider,
 )
-from core.llm.sdk.llm_clients import (
-    BedrockLLMClient,
-    LLMClient,
-    OpenAILLMClient,
-    _format_anthropic_retry_error,  # noqa: F401
-    _format_openai_connection_error,  # noqa: F401
-    _is_anthropic_bedrock_model,  # noqa: F401
-)
+from core.llm.provider_credentials import resolve_llm_api_key
 from core.llm.transport_mode import current_llm_transport, use_litellm_transport
 from core.llm.types import LLMResponse
 from core.llm.usage import UsageHook, emit_usage, set_usage_hook
-from core.llm.usage import coerce_usage_tokens as _coerce_usage_tokens  # noqa: F401
+
+if TYPE_CHECKING:
+    from core.llm.sdk.llm_clients import BedrockLLMClient, LLMClient, OpenAILLMClient
 
 __all__ = [
     "LLMClient",
@@ -65,11 +59,35 @@ __all__ = [
     "resolve_llm_api_key",
 ]
 
-from core.llm.provider_credentials import resolve_llm_api_key
+_SDK_EXPORTS = frozenset(
+    {
+        "LLMClient",
+        "OpenAILLMClient",
+        "BedrockLLMClient",
+        "_format_anthropic_retry_error",
+        "_format_openai_connection_error",
+        "_is_anthropic_bedrock_model",
+    }
+)
 
-_emit_usage = emit_usage
+# Re-exported for tests (``tests/core/runtime/llm/test_llm_client.py``).
+_ = (
+    AnthropicBadRequestError,
+    NotFoundError,
+    _RETRY_MAX_ATTEMPTS,
+)
 
-_OPENAI_COMPATIBLE_PROVIDERS = OPENAI_COMPATIBLE_PROVIDERS
+
+def _sdk_llm_clients_module() -> Any:
+    from core.llm.sdk import llm_clients as module
+
+    return module
+
+
+def __getattr__(name: str) -> Any:
+    if name in _SDK_EXPORTS:
+        return getattr(_sdk_llm_clients_module(), name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 class SupportsLLMInvoke(Protocol):
@@ -99,30 +117,41 @@ class RootCauseResult:
     remediation_steps: list[str]
 
 
-_LLMClientType = LLMClient | OpenAILLMClient | BedrockLLMClient | SupportsLLMInvoke
-_llm: _LLMClientType | None = None
-_llm_for_classification: _LLMClientType | None = None
-_llm_for_tools: _LLMClientType | None = None
-_llm_transport: str | None = None
+_LLMClientType = Any
+
+
+class _LLMSingletonState:
+    """Mutable holder for cached non-agent LLM clients and transport mode.
+
+    Wrapped in a class so transport/client fields are read/written via attribute
+    access on a stable container, avoiding the ``global`` keyword (which CodeQL's
+    ``py/unused-global-variable`` rule misreports despite the in-function reads).
+    """
+
+    llm: _LLMClientType | None = None
+    llm_for_classification: _LLMClientType | None = None
+    llm_for_tools: _LLMClientType | None = None
+    transport: str | None = None
+
+
+_llm_state = _LLMSingletonState()
 
 
 def reset_llm_singletons() -> None:
     """Clear cached LLM clients (tests, benchmarks, alternate configs)."""
-    global _llm, _llm_for_classification, _llm_for_tools, _llm_transport
-    _llm = None
-    _llm_for_classification = None
-    _llm_for_tools = None
-    _llm_transport = None
+    _llm_state.llm = None
+    _llm_state.llm_for_classification = None
+    _llm_state.llm_for_tools = None
+    _llm_state.transport = None
 
 
 def _ensure_llm_transport_current() -> None:
-    global _llm, _llm_for_classification, _llm_for_tools, _llm_transport
     transport = current_llm_transport()
-    if _llm_transport != transport:
-        _llm = None
-        _llm_for_classification = None
-        _llm_for_tools = None
-        _llm_transport = transport
+    if _llm_state.transport != transport:
+        _llm_state.llm = None
+        _llm_state.llm_for_classification = None
+        _llm_state.llm_for_tools = None
+        _llm_state.transport = transport
 
 
 def _get_cli_provider_registration(provider: str) -> CLIProviderRegistration | None:
@@ -179,7 +208,8 @@ def _create_llm_client(model_type: ModelType) -> _LLMClientType:
 
     if runtime_provider == "openai":
         config = OPENAI_LLM_CONFIG
-        return OpenAILLMClient(
+        sdk = _sdk_llm_clients_module()
+        return sdk.OpenAILLMClient(
             model=_select_model(settings, "openai", model_type),
             model_fallback=_fallback_model("openai"),
             max_tokens=config.max_tokens,
@@ -187,7 +217,8 @@ def _create_llm_client(model_type: ModelType) -> _LLMClientType:
     elif is_openai_compat_provider(runtime_provider):
         compat = resolve_openai_compat_provider(settings, runtime_provider, model_type)
         fallback = _fallback_model(runtime_provider)
-        return OpenAILLMClient(
+        sdk = _sdk_llm_clients_module()
+        return sdk.OpenAILLMClient(
             model=compat.model,
             model_fallback=fallback,
             max_tokens=compat.config.max_tokens,
@@ -199,13 +230,15 @@ def _create_llm_client(model_type: ModelType) -> _LLMClientType:
     elif runtime_provider == "bedrock":
         from config.config import BEDROCK_LLM_CONFIG
 
-        return BedrockLLMClient(
+        sdk = _sdk_llm_clients_module()
+        return sdk.BedrockLLMClient(
             model=_select_model(settings, "bedrock", model_type),
             max_tokens=BEDROCK_LLM_CONFIG.max_tokens,
         )
     else:
         config = ANTHROPIC_LLM_CONFIG
-        return LLMClient(
+        sdk = _sdk_llm_clients_module()
+        return sdk.LLMClient(
             model=_select_model(settings, "anthropic", model_type),
             max_tokens=config.max_tokens,
         )
@@ -213,29 +246,26 @@ def _create_llm_client(model_type: ModelType) -> _LLMClientType:
 
 def get_llm_for_reasoning() -> _LLMClientType:
     """Return the singleton LLM client for complex reasoning tasks."""
-    global _llm
     _ensure_llm_transport_current()
-    if _llm is None:
-        _llm = _create_llm_client(model_type="reasoning")
-    return _llm
+    if _llm_state.llm is None:
+        _llm_state.llm = _create_llm_client(model_type="reasoning")
+    return _llm_state.llm
 
 
 def get_llm_for_classification() -> _LLMClientType:
     """Return the singleton LLM client for the mid-tier classification tier."""
-    global _llm_for_classification
     _ensure_llm_transport_current()
-    if _llm_for_classification is None:
-        _llm_for_classification = _create_llm_client(model_type="classification")
-    return _llm_for_classification
+    if _llm_state.llm_for_classification is None:
+        _llm_state.llm_for_classification = _create_llm_client(model_type="classification")
+    return _llm_state.llm_for_classification
 
 
 def get_llm_for_tools() -> _LLMClientType:
     """Return the singleton lightweight LLM client for tool selection / action planning."""
-    global _llm_for_tools
     _ensure_llm_transport_current()
-    if _llm_for_tools is None:
-        _llm_for_tools = _create_llm_client(model_type="toolcall")
-    return _llm_for_tools
+    if _llm_state.llm_for_tools is None:
+        _llm_state.llm_for_tools = _create_llm_client(model_type="toolcall")
+    return _llm_state.llm_for_tools
 
 
 def parse_root_cause(response: str) -> RootCauseResult:

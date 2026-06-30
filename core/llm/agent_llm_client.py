@@ -39,18 +39,30 @@ _AgentClientType = (
     | BedrockConverseAgentClient
     | Any
 )
-_agent_client: _AgentClientType | None = None
-_agent_transport: str | None = None
+
+
+class _AgentClientState:
+    """Mutable holder for the cached investigation agent LLM client.
+
+    Wrapped in a class so transport/client fields are read/written via attribute
+    access on a stable container, avoiding the ``global`` keyword (which CodeQL's
+    ``py/unused-global-variable`` rule misreports despite the in-function reads).
+    """
+
+    client: _AgentClientType | None = None
+    transport: str | None = None
+
+
+_agent_state = _AgentClientState()
 
 
 def get_agent_llm() -> _AgentClientType:
     """Return a singleton tool-calling LLM client for the investigation agent."""
-    global _agent_client, _agent_transport
     transport = current_llm_transport()
-    if _agent_client is not None and _agent_transport != transport:
-        _agent_client = None
-    if _agent_client is not None:
-        return _agent_client
+    if _agent_state.client is not None and _agent_state.transport != transport:
+        _agent_state.client = None
+    if _agent_state.client is not None:
+        return _agent_state.client
 
     from pydantic import ValidationError
 
@@ -68,51 +80,51 @@ def get_agent_llm() -> _AgentClientType:
 
     if (cli_reg := _get_cli_provider_registration(runtime_provider)) is not None:
         model_name = os.getenv(cli_reg.model_env_key, "").strip() or None
-        _agent_client = CLIBackedAgentClient(cli_reg.adapter_factory(), model=model_name)
-        _agent_transport = transport
-        return _agent_client
+        _agent_state.client = CLIBackedAgentClient(cli_reg.adapter_factory(), model=model_name)
+        _agent_state.transport = transport
+        return _agent_state.client
 
     if use_litellm_transport():
         from core.llm.litellm.routing import build_litellm_agent_client
 
-        _agent_client = build_litellm_agent_client(settings, runtime_provider)
-        _agent_transport = transport
-        return _agent_client
+        _agent_state.client = build_litellm_agent_client(settings, runtime_provider)
+        _agent_state.transport = transport
+        return _agent_state.client
 
     if runtime_provider == "openai":
         from config.config import OPENAI_LLM_CONFIG
 
-        _agent_client = OpenAIAgentClient(
+        _agent_state.client = OpenAIAgentClient(
             model=settings.openai_reasoning_model,
             max_tokens=OPENAI_LLM_CONFIG.max_tokens,
         )
     elif is_openai_compat_provider(runtime_provider):
-        _agent_client = _create_sdk_openai_compat_client(settings, runtime_provider)
+        _agent_state.client = _create_sdk_openai_compat_client(settings, runtime_provider)
     elif runtime_provider == "bedrock":
         from config.config import BEDROCK_LLM_CONFIG
         from core.llm.bedrock_model_ids import is_anthropic_bedrock_model
 
         model = settings.bedrock_reasoning_model
         if is_anthropic_bedrock_model(model):
-            _agent_client = BedrockAgentClient(
+            _agent_state.client = BedrockAgentClient(
                 model=model,
                 max_tokens=BEDROCK_LLM_CONFIG.max_tokens,
             )
         else:
-            _agent_client = BedrockConverseAgentClient(
+            _agent_state.client = BedrockConverseAgentClient(
                 model=model,
                 max_tokens=BEDROCK_LLM_CONFIG.max_tokens,
             )
     else:
         from config.config import ANTHROPIC_LLM_CONFIG
 
-        _agent_client = AnthropicAgentClient(
+        _agent_state.client = AnthropicAgentClient(
             model=settings.anthropic_reasoning_model,
             max_tokens=ANTHROPIC_LLM_CONFIG.max_tokens,
         )
 
-    _agent_transport = transport
-    return _agent_client
+    _agent_state.transport = transport
+    return _agent_state.client
 
 
 def _create_sdk_openai_compat_client(settings: Any, provider: str) -> Any:
@@ -136,6 +148,5 @@ def _get_cli_provider_registration(provider: str) -> Any:
 
 def reset_agent_client() -> None:
     """Reset the singleton (for tests / config changes)."""
-    global _agent_client, _agent_transport
-    _agent_client = None
-    _agent_transport = None
+    _agent_state.client = None
+    _agent_state.transport = None
