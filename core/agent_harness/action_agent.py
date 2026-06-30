@@ -50,17 +50,22 @@ _EXECUTED_HISTORY_TYPES = {
     "implementation",
     "cli_command",
 }
-_LEGACY_HISTORY_TOOL_NAMES = {
-    "alert_sample",
-    "cli_exec",
-    "code_implement",
-    "investigation_start",
-    "llm_set_provider",
-    "shell_run",
-    "slash_invoke",
-    "synthetic_run",
-    "task_cancel",
-}
+# Action tools that append their own ``session.history`` row when executed.
+# Keep this as the single catalogue: the shell observer and generic tool-result
+# accounting both key off it so new tools cannot silently double-record turns.
+SELF_RECORDING_ACTION_TOOL_NAMES: frozenset[str] = frozenset(
+    {
+        "alert_sample",
+        "cli_exec",
+        "code_implement",
+        "investigation_start",
+        "llm_set_provider",
+        "shell_run",
+        "slash_invoke",
+        "synthetic_run",
+        "task_cancel",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -162,7 +167,7 @@ def _generic_tool_results(result: Any) -> list[tuple[ToolCall, Any]]:
     return [
         (tool_call, tool_result)
         for tool_call, tool_result in getattr(result, "tool_results", [])
-        if tool_call.name not in _LEGACY_HISTORY_TOOL_NAMES
+        if tool_call.name not in SELF_RECORDING_ACTION_TOOL_NAMES
         and tool_call.name != "assistant_handoff"
     ]
 
@@ -391,6 +396,7 @@ def run_agent_turn(
 
 
 __all__ = [
+    "SELF_RECORDING_ACTION_TOOL_NAMES",
     "ToolCallingDeps",
     "run_agent_turn",
 ]

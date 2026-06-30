@@ -18,6 +18,7 @@ from typing import Any
 
 from rich.console import Console
 
+from core.agent_harness.action_agent import SELF_RECORDING_ACTION_TOOL_NAMES
 from surfaces.interactive_shell.runtime import ReplSession
 
 # Tools whose preview is just ``(label, single-arg)``. The display content is the
@@ -33,23 +34,6 @@ _SIMPLE_TOOL_LABELS: dict[str, tuple[str, str]] = {
     "code_implement": ("implementation", "task"),
     "shell_run": ("shell", "command"),
 }
-
-# Action tools that write their own ``session.history`` row on execution. The
-# observer must not also record a duplicate ``cli_agent`` turn for these.
-_SELF_RECORDING_ACTION_TOOLS: frozenset[str] = frozenset(
-    {
-        "alert_sample",
-        "cli_exec",
-        "code_implement",
-        "investigation_start",
-        "llm_set_provider",
-        "shell_run",
-        "slash_invoke",
-        "synthetic_run",
-        "task_cancel",
-    }
-)
-
 
 def tool_call_display(tool_name: str, args: dict[str, Any]) -> tuple[str, str]:
     """Return a ``(label, content)`` pair describing a planned tool call."""
@@ -82,7 +66,6 @@ class ActionRenderObserver:
         self.console = console
         self.message = message
         self.planned_count = 0
-        self._recorded_cli_agent = False
 
     def __call__(self, kind: str, data: dict[str, Any]) -> None:
         if kind == "tool_update":
@@ -99,9 +82,8 @@ class ActionRenderObserver:
         name = str(data.get("name", "")).strip()
         if not name or name == "assistant_handoff":
             return
-        if self.planned_count == 0 and name not in _SELF_RECORDING_ACTION_TOOLS:
+        if self.planned_count == 0 and name not in SELF_RECORDING_ACTION_TOOL_NAMES:
             self.session.record("cli_agent", self.message)
-            self._recorded_cli_agent = True
         self.planned_count += 1
 
 
