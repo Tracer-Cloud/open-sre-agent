@@ -8,7 +8,6 @@ from gateway.config.configure_gateway_logging import (
     _GatewayLogFormatter,
     _GatewayProcessLogFilter,
     _quiet_noisy_loggers,
-    configure_gateway_logging,
 )
 
 
@@ -67,13 +66,3 @@ def test_quiet_noisy_loggers_sets_warning_level() -> None:
     assert logging.getLogger("httpcore").level == logging.WARNING
     assert logging.getLogger("openai").level == logging.WARNING
 
-
-def test_co_located_gateway_logging_does_not_propagate_to_root(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    caplog.set_level(logging.WARNING)
-    configure_gateway_logging(co_located=True)
-    logging.getLogger("gateway.polling.telegram_poller.poller").warning(
-        "[telegram-gateway] getUpdates not ok: {}",
-    )
-    assert not any("getUpdates not ok" in record.message for record in caplog.records)

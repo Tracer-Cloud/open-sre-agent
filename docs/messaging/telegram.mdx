@@ -204,9 +204,7 @@ opensre messaging pair -p telegram
 
 ### Long polling (local and production)
 
-No public HTTPS URL required. When `TELEGRAM_BOT_TOKEN` is set, **`opensre` auto-starts the gateway in long-poll mode** alongside the interactive shell (disable with `TELEGRAM_GATEWAY_AUTO_START=false`).
-
-You can also run it as a dedicated process:
+No public HTTPS URL required. Run the gateway as a dedicated process:
 
 ```bash
 export TELEGRAM_BOT_TOKEN=<your-bot-token>

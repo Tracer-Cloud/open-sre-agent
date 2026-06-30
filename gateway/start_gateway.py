@@ -19,7 +19,7 @@ from gateway.polling.telegram_polling_runtime import (
 def start_gateway() -> None:
     """Start the Telegram gateway in long-poll mode."""
     load_dotenv(override=False)
-    logger = configure_gateway_logging(co_located=False)
+    logger = configure_gateway_logging()
 
     try:
         settings = load_gateway_settings()

@@ -42,19 +42,9 @@ def _quiet_noisy_loggers() -> None:
         logging.getLogger(name).setLevel(logging.WARNING)
 
 
-def configure_gateway_logging(*, co_located: bool = False) -> logging.Logger:
-    """Configure the shared ``gateway`` logger for this process.
-
-    Dedicated gateway processes configure root logging and emit INFO lines to
-    the terminal. Co-located REPL runs attach a ``NullHandler`` so gateway
-    diagnostics stay off the interactive shell output.
-    """
+def configure_gateway_logging() -> logging.Logger:
+    """Configure root logging for the dedicated Telegram gateway process."""
     gateway_logger = logging.getLogger("gateway")
-    if co_located:
-        if not gateway_logger.handlers:
-            gateway_logger.addHandler(logging.NullHandler())
-            gateway_logger.propagate = False
-        return gateway_logger
 
     if not logging.getLogger().handlers:
         handler = logging.StreamHandler()
