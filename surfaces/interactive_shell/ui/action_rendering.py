@@ -35,6 +35,7 @@ _SIMPLE_TOOL_LABELS: dict[str, tuple[str, str]] = {
     "shell_run": ("shell", "command"),
 }
 
+
 def tool_call_display(tool_name: str, args: dict[str, Any]) -> tuple[str, str]:
     """Return a ``(label, content)`` pair describing a planned tool call."""
     if tool_name == "slash_invoke":
