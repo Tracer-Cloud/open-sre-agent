@@ -7,9 +7,11 @@ import json
 import logging
 import os
 from collections.abc import Mapping
-from dataclasses import dataclass
 from typing import Any
 
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from config.strict_config import StrictConfigModel
 from integrations.catalog import (
     classify_integrations as _classify_integrations,
 )
@@ -26,17 +28,35 @@ from integrations.catalog import (
 logger = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True)
-class IntegrationResolutionResult:
+class IntegrationResolutionRequest(BaseModel):
+    """Typed resolver input extracted from a larger runtime state mapping."""
+
+    model_config = ConfigDict(extra="ignore", frozen=True, populate_by_name=True)
+
+    resolved_integrations: dict[str, Any] | None = None
+    auth_token: str = Field(default="", alias="_auth_token")
+    org_id: str = ""
+
+    @field_validator("auth_token", "org_id", mode="before")
+    @classmethod
+    def _coerce_optional_string(cls, value: Any) -> str:
+        return str(value or "").strip()
+
+
+class IntegrationResolutionResult(StrictConfigModel):
     """Resolved integration configs plus optional user-visible progress text."""
 
-    resolved_integrations: dict[str, Any]
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    resolved_integrations: dict[str, Any] = Field(default_factory=dict)
     progress_message: str | None = None
 
     @property
     def services(self) -> tuple[str, ...]:
-        """Resolved service names, excluding internal aggregate keys."""
-        return tuple(service for service in self.resolved_integrations if service != "_all")
+        """Resolved service names, excluding internal runtime keys."""
+        return tuple(
+            service for service in self.resolved_integrations if not service.startswith("_")
+        )
 
 
 def resolve_integrations(state: Mapping[str, Any] | None = None) -> dict[str, Any]:
@@ -54,29 +74,32 @@ def resolve_integrations_with_metadata(
     intentionally independent of investigation state models so shell, SDK,
     gateway, and investigation consumers can share the same behavior.
     """
-    state_map = state or {}
-    existing = state_map.get("resolved_integrations")
+    request = IntegrationResolutionRequest.model_validate(state or {})
+    existing = request.resolved_integrations
     if existing:
-        return IntegrationResolutionResult(dict(existing))
+        return IntegrationResolutionResult(resolved_integrations=dict(existing))
 
-    org_id = str(state_map.get("org_id") or "")
-    auth_token = _strip_bearer(str(state_map.get("_auth_token") or "").strip())
+    org_id = request.org_id
+    auth_token = _strip_bearer(request.auth_token)
 
     if auth_token:
         if not org_id:
             org_id = _decode_org_id_from_token(auth_token)
         if not org_id:
             logger.warning("_auth_token present but could not decode org_id")
-            return IntegrationResolutionResult({})
+            return IntegrationResolutionResult()
         try:
             from integrations.port import fetch_remote_integrations
 
             all_integrations = fetch_remote_integrations(org_id=org_id, auth_token=auth_token)
         except Exception as exc:
             logger.warning("Remote integrations fetch failed: %s", exc)
-            return IntegrationResolutionResult({})
+            return IntegrationResolutionResult()
         resolved = _classify_integrations(all_integrations)
-        return IntegrationResolutionResult(resolved, _resolved_message(resolved))
+        return IntegrationResolutionResult(
+            resolved_integrations=resolved,
+            progress_message=_resolved_message(resolved),
+        )
 
     env_token = _strip_bearer(os.getenv("JWT_TOKEN", "").strip())
     if env_token:
@@ -101,7 +124,7 @@ def resolve_integrations_with_metadata(
 
 
 def _resolved_message(resolved: dict[str, Any]) -> str:
-    services = [service for service in resolved if service != "_all"]
+    services = [service for service in resolved if not service.startswith("_")]
     return f"Resolved integrations: {services}" if services else "No active integrations found"
 
 
@@ -113,23 +136,23 @@ def _resolve_from_local_sources() -> IntegrationResolutionResult:
     integrations = _merge_local_integrations(store_integrations, env_integrations)
     if not integrations:
         return IntegrationResolutionResult(
-            {},
-            (
+            resolved_integrations={},
+            progress_message=(
                 f"No auth context and no local integrations found "
                 f"(store: {STORE_PATH}, env fallback checked)"
             ),
         )
 
     resolved = _classify_integrations(integrations)
-    services = [service for service in resolved if service != "_all"]
+    services = [service for service in resolved if not service.startswith("_")]
     source_labels: list[str] = []
     if store_integrations:
         source_labels.append("store")
     if env_integrations:
         source_labels.append("env")
     return IntegrationResolutionResult(
-        resolved,
-        (
+        resolved_integrations=resolved,
+        progress_message=(
             f"Resolved local integrations from {', '.join(source_labels)}: {services}"
             if source_labels
             else f"Resolved local integrations: {services}"
@@ -150,7 +173,7 @@ def _resolve_remote_with_local_fallback(
         remote_integrations,
     )
     resolved = _classify_integrations(integrations)
-    services = [service for service in resolved if service != "_all"]
+    services = [service for service in resolved if not service.startswith("_")]
 
     source_labels = ["remote"]
     if store_integrations:
@@ -159,8 +182,8 @@ def _resolve_remote_with_local_fallback(
         source_labels.append("env")
 
     return IntegrationResolutionResult(
-        resolved,
-        (
+        resolved_integrations=resolved,
+        progress_message=(
             f"Resolved integrations from {', '.join(source_labels)}: {services}"
             if services
             else "No active integrations found"
@@ -186,6 +209,7 @@ def _strip_bearer(token: str) -> str:
 
 
 __all__ = [
+    "IntegrationResolutionRequest",
     "IntegrationResolutionResult",
     "resolve_integrations",
     "resolve_integrations_with_metadata",

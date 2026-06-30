@@ -35,15 +35,31 @@ def test_registered_tool_is_available_on_chat_investigation_and_action_surfaces(
     assert registered.requires_approval is True
 
 
-def test_is_available_true_when_webhook_configured(slack_source: dict[str, Any]) -> None:
+def test_is_available_true_when_webhook_configured(
+    slack_source: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("SLACK_WEBHOOK_URL", raising=False)
     assert slack_send_message.is_available(slack_source) is True
 
 
-def test_is_available_false_when_no_slack() -> None:
+def test_is_available_true_when_env_webhook_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SLACK_WEBHOOK_URL", "https://hooks.slack.com/services/T00/B00/env")
+    assert slack_send_message.is_available({}) is True
+
+
+def test_is_available_false_when_no_slack(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("SLACK_WEBHOOK_URL", raising=False)
     assert slack_send_message.is_available({}) is False
 
 
-def test_is_available_false_when_webhook_missing(slack_source: dict[str, Any]) -> None:
+def test_is_available_false_when_webhook_missing(
+    slack_source: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("SLACK_WEBHOOK_URL", raising=False)
     slack_source["slack"]["webhook_url"] = ""
     assert slack_send_message.is_available(slack_source) is False
 

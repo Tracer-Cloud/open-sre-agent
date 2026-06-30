@@ -27,8 +27,8 @@ def test_resolve_integrations_wraps_platform_result_with_progress(monkeypatch: A
         node,
         "resolve_integrations_with_metadata",
         lambda _state: IntegrationResolutionResult(
-            {"datadog": {"site": "datadoghq.com"}},
-            "Resolved local integrations from store: ['datadog']",
+            resolved_integrations={"datadog": {"site": "datadoghq.com"}},
+            progress_message="Resolved local integrations from store: ['datadog']",
         ),
     )
 
@@ -53,7 +53,10 @@ def test_resolve_integrations_quiet_skips_progress(monkeypatch: Any) -> None:
     monkeypatch.setattr(
         node,
         "resolve_integrations_with_metadata",
-        lambda _state: IntegrationResolutionResult({"sentry": {}}, "Resolved integrations"),
+        lambda _state: IntegrationResolutionResult(
+            resolved_integrations={"sentry": {}},
+            progress_message="Resolved integrations",
+        ),
     )
 
     resolved = node.resolve_integrations_quiet({})  # type: ignore[arg-type]

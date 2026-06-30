@@ -19,10 +19,6 @@ from core.agent_harness.grounding.investigation_flow_reference import (
 )
 from core.agent_harness.prompts import build_environment_block
 from core.agent_harness.session import SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
-from core.agent_harness.session.integrations_cache import (
-    has_only_runtime_metadata,
-    has_resolved_integrations,
-)
 from surfaces.interactive_shell.command_registry.repl_data import load_llm_settings
 from surfaces.interactive_shell.runtime import ReplSession
 from surfaces.interactive_shell.runtime.core.token_accounting import build_llm_run_info
@@ -104,16 +100,7 @@ class ShellToolProvider:
         return {REPL_RESOURCE_KEY: self._tool_context}
 
     def _resolved_integrations(self) -> dict[str, Any]:
-        cached = getattr(self._session, "resolved_integrations_cache", None)
-        if cached is not None and (
-            has_resolved_integrations(cached) or not has_only_runtime_metadata(cached)
-        ):
-            return dict(cached)
-        warmer = getattr(self._session, "warm_resolved_integrations", None)
-        if callable(warmer):
-            warmer()
-        cached = getattr(self._session, "resolved_integrations_cache", None)
-        return dict(cached or {})
+        return self._session.get_integrations().resolved_integrations
 
     def observer(self, *, message: str) -> Callable[[str, dict[str, Any]], None]:
         return ActionRenderObserver(session=self._session, console=self._console, message=message)

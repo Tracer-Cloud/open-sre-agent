@@ -15,6 +15,7 @@ from rich.console import Console
 
 import surfaces.interactive_shell.main as main_entrypoint
 from core.agent_harness.session import ReplSession
+from platform.integrations.resolution import IntegrationResolutionResult
 from surfaces.interactive_shell.runtime.startup import first_launch_github as flg
 
 
@@ -110,6 +111,57 @@ def test_warm_resolved_integrations_uses_quiet_resolve(monkeypatch: Any) -> None
     assert quiet_calls == ["quiet"]
     assert progress_calls == []
     assert session.resolved_integrations_cache == {"datadog": {}}
+
+
+def test_get_integrations_returns_pydantic_cached_result(monkeypatch: Any) -> None:
+    def _unexpected_resolve() -> dict[str, Any]:
+        raise AssertionError("cached integrations should not re-resolve")
+
+    monkeypatch.setattr(
+        "platform.integrations.resolution.resolve_integrations",
+        _unexpected_resolve,
+    )
+    session = ReplSession()
+    session.resolved_integrations_cache = {"datadog": {"site": "datadoghq.com"}}
+
+    result = session.get_integrations()
+
+    assert isinstance(result, IntegrationResolutionResult)
+    assert result.resolved_integrations == {"datadog": {"site": "datadoghq.com"}}
+    assert result.services == ("datadog",)
+
+
+def test_get_integrations_respects_explicit_empty_cache(monkeypatch: Any) -> None:
+    calls: list[str] = []
+    monkeypatch.setattr(
+        "platform.integrations.resolution.resolve_integrations",
+        lambda: calls.append("resolve") or {"datadog": {}},
+    )
+    session = ReplSession()
+    session.resolved_integrations_cache = {}
+
+    result = session.get_integrations()
+
+    assert result.resolved_integrations == {}
+    assert calls == []
+
+
+def test_get_integrations_warms_metadata_only_cache(monkeypatch: Any) -> None:
+    calls: list[str] = []
+    monkeypatch.setattr(
+        "platform.integrations.resolution.resolve_integrations",
+        lambda: calls.append("resolve") or {"datadog": {"site": "datadoghq.com"}},
+    )
+    session = ReplSession()
+    session.resolved_integrations_cache = {"_gateway_chat_id": "chat-1"}
+
+    result = session.get_integrations()
+
+    assert calls == ["resolve"]
+    assert result.resolved_integrations == {
+        "_gateway_chat_id": "chat-1",
+        "datadog": {"site": "datadoghq.com"},
+    }
 
 
 def test_stale_background_warm_does_not_overwrite_refreshed_cache() -> None:

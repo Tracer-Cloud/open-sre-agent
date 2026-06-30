@@ -7,6 +7,7 @@ import json
 from typing import Any
 
 import platform.integrations.resolution as resolution
+from platform.integrations.resolution import IntegrationResolutionResult
 
 
 def _jwt(payload: dict[str, Any]) -> str:
@@ -26,6 +27,33 @@ def test_resolve_integrations_returns_existing_state_without_lookup(monkeypatch:
     )
 
     assert resolved == {"datadog": {"site": "datadoghq.com"}}
+
+
+def test_resolution_request_ignores_unrelated_runtime_state() -> None:
+    request = resolution.IntegrationResolutionRequest.model_validate(
+        {
+            "_auth_token": " Bearer token ",
+            "org_id": " org-123 ",
+            "alert_name": "checkout failed",
+            "agent_messages": [{"role": "user", "content": "hello"}],
+        }
+    )
+
+    assert request.auth_token == "Bearer token"
+    assert request.org_id == "org-123"
+    assert not hasattr(request, "alert_name")
+
+
+def test_resolution_result_rejects_unknown_fields() -> None:
+    import pytest
+
+    with pytest.raises(ValueError):
+        resolution.IntegrationResolutionResult.model_validate(
+            {
+                "resolved_integrations": {},
+                "unexpected": True,
+            }
+        )
 
 
 def test_resolve_local_store_sources_returns_progress_metadata(monkeypatch: Any) -> None:
@@ -49,6 +77,27 @@ def test_resolve_local_store_sources_returns_progress_metadata(monkeypatch: Any)
     assert result.resolved_integrations == {"datadog": {"site": "datadoghq.com"}}
     assert result.services == ("datadog",)
     assert result.progress_message == "Resolved local integrations from store: ['datadog']"
+
+
+def test_resolution_result_is_strict_pydantic_model() -> None:
+    result = IntegrationResolutionResult(
+        resolved_integrations={
+            "datadog": {"site": "datadoghq.com"},
+            "_gateway_chat_id": "chat-1",
+            "_all": [],
+        },
+        progress_message="Resolved",
+    )
+
+    assert result.model_dump() == {
+        "resolved_integrations": {
+            "datadog": {"site": "datadoghq.com"},
+            "_gateway_chat_id": "chat-1",
+            "_all": [],
+        },
+        "progress_message": "Resolved",
+    }
+    assert result.services == ("datadog",)
 
 
 def test_resolve_env_token_merges_remote_store_and_env(monkeypatch: Any) -> None:

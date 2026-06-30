@@ -5,12 +5,12 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from tools.base import BaseTool
+from core.tool_framework.base import BaseTool
+from core.tool_framework.tool_decorator import tool
 from tools.slack_send_message_tool.constants import SOURCE
 from tools.slack_send_message_tool.delivery import dispatch_message, resolve_webhook_url
 from tools.slack_send_message_tool.results import failed_result, sent_result
 from tools.slack_send_message_tool.validation import validate_message
-from tools.tool_decorator import tool
 
 
 class SlackSendMessageTool(BaseTool):
