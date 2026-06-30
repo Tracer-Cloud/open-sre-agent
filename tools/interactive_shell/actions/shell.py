@@ -4,24 +4,24 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.tool_framework.registered_tool import RegisteredTool
-from tools.interactive_shell.contracts import (
-    ToolContext,
+from core.agent_harness.tools.tool_context import (
+    ActionToolContext,
     capability_available_from_sources,
-    execute_with_repl_context,
+    execute_with_action_context,
     object_schema,
     string_property,
 )
+from core.tool_framework.registered_tool import RegisteredTool
 from tools.interactive_shell.shell.runner import (
     run_shell_command,
 )
 
 
-def execute_shell_tool(args: dict[str, Any], ctx: ToolContext) -> bool:
+def execute_shell_tool(args: dict[str, Any], ctx: ActionToolContext) -> dict[str, Any]:
     command = str(args.get("command", "")).strip()
     if not command:
-        return False
-    run_shell_command(
+        return {"ok": False, "command": "", "response_text": "missing shell command"}
+    return run_shell_command(
         command,
         ctx.session,
         ctx.console,
@@ -29,11 +29,10 @@ def execute_shell_tool(args: dict[str, Any], ctx: ToolContext) -> bool:
         is_tty=ctx.is_tty,
         action_already_listed=ctx.action_already_listed,
     )
-    return True
 
 
 def run_shell(*, command: str, context: Any) -> dict[str, Any]:
-    return execute_with_repl_context({"command": command}, context, execute_shell_tool)
+    return execute_with_action_context({"command": command}, context, execute_shell_tool)
 
 
 shell_run_tool = RegisteredTool(

@@ -1,4 +1,4 @@
-'''
+"""
 Description:
 --------------------------------
 The problem that I concretely need to solve now with this test
@@ -11,7 +11,7 @@ The approach to do that is:
 - the agent is being passed down the gateway to the event handler to execute the event loops
 
 --------------------------------
-'''
+"""
 
 from __future__ import annotations
 
@@ -20,27 +20,27 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from core.agent import Agent
-from core.agent_harness.action_tools import get_action_tool
+from core.agent_harness.models.turn_results import ShellTurnResult, ToolCallingTurnResult
+from core.agent_harness.providers.default_prompt_context import DefaultPromptContextProvider
+from core.agent_harness.providers.default_providers import (
+    DefaultErrorReporter,
+    DefaultReasoningClientProvider,
+    DefaultRunRecordFactory,
+    DefaultToolProvider,
+    DefaultTurnAccounting,
+)
 from core.agent_harness.session import ReplSession
 from core.agent_harness.session.storage.memory import InMemorySessionStorage
-from gateway.agent.gateway_agent_adapters import (
-    GatewayErrorReporter,
-    GatewayPromptContextProvider,
-    GatewayRunRecordFactory,
-)
+from core.agent_harness.tools.action_tools import get_action_tool
 from gateway.config.get_gateway_settings import GatewaySettings, TelegramInboundMessage
 from gateway.polling.handle_polled_inbound_telegram_msg import (
     handle_polled_inbound_telegram_message,
 )
 from gateway.session.enforce_inbound_telegram_message_security import InboundDecision
 from gateway.start_gateway import GatewayManager, start_gateway
-from surfaces.interactive_shell.runtime.agent_harness_adapters import (
-    ShellReasoningClientProvider,
-    ShellToolProvider,
-)
 
 
 def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
@@ -71,13 +71,19 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
         lambda signum, handler: signal_calls.append((signum, handler)),
     )
     monkeypatch.setattr("gateway.start_gateway.ReplSession", FakeReplSession)
-    def _get_action_tools_from_integrations_context(
-        _tool_context: Any,
-        *,
-        resolved_integrations: dict[str, Any],
-    ) -> list[MagicMock]:
-        assert resolved_integrations is integrations
-        return tools
+
+    class FakeDefaultToolProvider(DefaultToolProvider):
+        def action_tools(
+            self,
+            *,
+            confirm_fn: Any,
+            is_tty: bool | None,
+        ) -> list[MagicMock]:
+            _ = (confirm_fn, is_tty)
+            if self._precomputed_action_tools is not None:
+                return list(self._precomputed_action_tools)
+            assert self._resolved_integrations() is integrations
+            return tools
 
     def _build_gateway_agent(
         resolved_integrations: dict[str, Any],
@@ -87,10 +93,7 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
         assert discovered_tools is tools
         return agent
 
-    monkeypatch.setattr(
-        "gateway.start_gateway.get_action_tools_from_integrations_context",
-        _get_action_tools_from_integrations_context,
-    )
+    monkeypatch.setattr("gateway.start_gateway.DefaultToolProvider", FakeDefaultToolProvider)
     monkeypatch.setattr("gateway.start_gateway.build_gateway_agent", _build_gateway_agent)
 
     def _start_telegram_gateway_background(**kwargs: Any) -> MagicMock:
@@ -117,20 +120,45 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
 
     sink = MagicMock()
     session = MagicMock()
+    agent.dispatch_message_to_headless_agent.return_value = ShellTurnResult(
+        final_intent="cli_agent_handled",
+        action_result=ToolCallingTurnResult(
+            planned_count=1,
+            executed_count=1,
+            executed_success_count=1,
+            has_unhandled_clause=False,
+            handled=True,
+            response_text="Hawaii: +25C",
+        ),
+        assistant_response_text="Hawaii: +25C",
+        llm_run=None,
+    )
     callback = background_kwargs["handle_callback_to_gateway_agent"]
     callback("hello", session, sink, logger)
     agent.dispatch_message_to_headless_agent.assert_called_once()
+    sink.finalize.assert_called_once_with("Hawaii: +25C")
     dispatch_args = agent.dispatch_message_to_headless_agent.call_args
     assert dispatch_args.args == ("hello",)
     assert dispatch_args.kwargs["session"] is session
     assert dispatch_args.kwargs["output"] is sink
     tool_provider = dispatch_args.kwargs["tools"]
-    assert isinstance(tool_provider, ShellToolProvider)
+    assert isinstance(tool_provider, DefaultToolProvider)
     assert tool_provider.action_tools(confirm_fn=None, is_tty=False) == tools
-    assert isinstance(dispatch_args.kwargs["prompts"], GatewayPromptContextProvider)
-    assert isinstance(dispatch_args.kwargs["reasoning"], ShellReasoningClientProvider)
-    assert isinstance(dispatch_args.kwargs["run_factory"], GatewayRunRecordFactory)
-    assert isinstance(dispatch_args.kwargs["error_reporter"], GatewayErrorReporter)
+    with patch.object(logger, "info") as mock_info:
+        tool_provider.observer(message="hello")(
+            "tool_start",
+            {"name": "shell_run", "input": {"command": "pwd"}},
+        )
+    mock_info.assert_called_once_with(
+        "tool action name=%s input=%s",
+        "shell_run",
+        "{'command': 'pwd'}",
+    )
+    assert isinstance(dispatch_args.kwargs["prompts"], DefaultPromptContextProvider)
+    assert isinstance(dispatch_args.kwargs["reasoning"], DefaultReasoningClientProvider)
+    assert isinstance(dispatch_args.kwargs["run_factory"], DefaultRunRecordFactory)
+    assert isinstance(dispatch_args.kwargs["accounting"], DefaultTurnAccounting)
+    assert isinstance(dispatch_args.kwargs["error_reporter"], DefaultErrorReporter)
     assert dispatch_args.kwargs["gather_enabled"] is True
 
 
@@ -175,10 +203,20 @@ def test_polled_telegram_message_reaches_start_gateway_agent_callback(monkeypatc
     monkeypatch.setattr("gateway.start_gateway.load_gateway_settings", lambda: settings)
     monkeypatch.setattr("gateway.start_gateway.signal.signal", lambda *_args: None)
     monkeypatch.setattr("gateway.start_gateway.ReplSession", FakeBootReplSession)
-    monkeypatch.setattr(
-        "gateway.start_gateway.get_action_tools_from_integrations_context",
-        lambda *_args, **_kwargs: tools,
-    )
+
+    class FakeDefaultToolProvider(DefaultToolProvider):
+        def action_tools(
+            self,
+            *,
+            confirm_fn: Any,
+            is_tty: bool | None,
+        ) -> list[Any]:
+            _ = (confirm_fn, is_tty)
+            if self._precomputed_action_tools is not None:
+                return list(self._precomputed_action_tools)
+            return tools
+
+    monkeypatch.setattr("gateway.start_gateway.DefaultToolProvider", FakeDefaultToolProvider)
     monkeypatch.setattr(
         "gateway.start_gateway.build_gateway_agent",
         lambda *_args, **_kwargs: Agent(
@@ -253,5 +291,3 @@ def test_start_gateway_wrapper_delegates_to_gateway_instance(monkeypatch) -> Non
 
     assert start_gateway(wait=False) is expected
     assert calls == [False]
-
-

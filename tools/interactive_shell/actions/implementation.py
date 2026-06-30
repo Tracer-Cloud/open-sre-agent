@@ -4,20 +4,20 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.tool_framework.registered_tool import RegisteredTool
-from tools.interactive_shell.contracts import (
-    ToolContext,
+from core.agent_harness.tools.tool_context import (
+    ActionToolContext,
     capability_available_from_sources,
-    execute_with_repl_context,
+    execute_with_action_context,
     object_schema,
     string_property,
 )
+from core.tool_framework.registered_tool import RegisteredTool
 from tools.interactive_shell.implementation.claude_code_executor import (
     run_claude_code_implementation,
 )
 
 
-def execute_implementation_tool(args: dict[str, Any], ctx: ToolContext) -> bool:
+def execute_implementation_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
     task = str(args.get("task", "")).strip()
     if not task:
         return False
@@ -33,7 +33,7 @@ def execute_implementation_tool(args: dict[str, Any], ctx: ToolContext) -> bool:
 
 
 def run_implementation(*, task: str, context: Any) -> dict[str, Any]:
-    return execute_with_repl_context({"task": task}, context, execute_implementation_tool)
+    return execute_with_action_context({"task": task}, context, execute_implementation_tool)
 
 
 code_implement_tool = RegisteredTool(

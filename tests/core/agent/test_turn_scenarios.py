@@ -12,12 +12,13 @@ import pytest
 from rich.console import Console
 
 from core import Agent, AgentTool, AgentToolContext
-from core.agent_harness.action_agent import _MAX_TOOL_CALLING_ITERATIONS
-from core.agent_harness.action_tools import get_action_tools_from_integrations_context
+from core.agent_harness.agents.action_agent import _MAX_TOOL_CALLING_ITERATIONS
 from core.agent_harness.prompts import (
     build_action_system_prompt,
     build_action_user_message,
 )
+from core.agent_harness.tools.action_tools import get_action_tools_from_integrations_context
+from core.agent_harness.tools.tool_context import ActionToolContext
 from core.llm.llm_retry import LLMCreditExhaustedError
 from core.llm.types import ToolCall
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS
@@ -46,7 +47,6 @@ from tests.core.agent.scenario_loader import (
 )
 from tools.interactive_shell.action_names import TOOL_KIND_TO_NAME, ToolKind
 from tools.interactive_shell.actions.investigation import normalize_investigation_alert_text
-from tools.interactive_shell.contracts import ToolContext
 
 
 class ExpectedAction(TypedDict):
@@ -417,12 +417,14 @@ def _assert_live_action_planning_once(case: ScenarioCase) -> None:
     prompt = case.scenario.input.prompt
     answer = case.answer
 
-    ctx = ToolContext(session=session, console=Console(file=io.StringIO(), force_terminal=False))
+    ctx = ActionToolContext(
+        session=session, console=Console(file=io.StringIO(), force_terminal=False)
+    )
     tools = get_action_tools_from_integrations_context(ctx, resolved_integrations=resolved_override)
     from core.llm import agent_llm_client
 
     llm = agent_llm_client.get_agent_llm()
-    from core.agent_harness.turn_context import TurnContext
+    from core.agent_harness.models.turn_context import TurnContext
 
     result = Agent(
         llm=llm,

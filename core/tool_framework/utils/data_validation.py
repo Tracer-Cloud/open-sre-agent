@@ -21,16 +21,6 @@ class MetricsValidator:
 
     issues: list[ValidationIssue]
 
-    # Define reasonable bounds for metrics
-    METRIC_BOUNDS = {
-        "memory_percent": (0, 100),
-        "cpu_percent": (0, 100),
-        "disk_percent": (0, 100),
-    }
-
-    # Common unit conversion patterns
-    LIKELY_BYTE_TO_PERCENT_THRESHOLD = 1000  # If "percent" > 1000, probably bytes
-
     def __init__(self) -> None:
         self.issues = []
 

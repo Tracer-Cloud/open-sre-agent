@@ -21,9 +21,9 @@ Pytest discovers these tests through `pytest.ini`; scoped CI maps changes under
 - The Telegram polling layer calls the gateway callback with exactly four
   arguments: text, session, sink, and logger. Do not reintroduce `chat_id` into
   this callback contract; the sink already owns the chat transport details.
-- Reuse `ShellToolProvider` for action tools in the gateway callback. If the
+- Reuse `DefaultToolProvider` for action tools in the gateway callback. If the
   gateway has already built the action-tool list for its agent, pass it through
-  `ShellToolProvider(precomputed_action_tools=...)` rather than adding another
+  `DefaultToolProvider(precomputed_action_tools=...)` rather than adding another
   gateway-specific tool-provider adapter.
 - Gateway E2E regression tests should drive a normalized polled Telegram message
   into `handle_polled_inbound_telegram_message(...)` and let it invoke the

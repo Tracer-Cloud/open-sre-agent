@@ -19,7 +19,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
-from core.agent_harness.conversation_memory import MAX_CONVERSATION_MESSAGES
+from core.agent_harness.prompts.conversation_memory import MAX_CONVERSATION_MESSAGES
 
 if TYPE_CHECKING:
     from config.llm_reasoning_effort import ReasoningEffortChoice

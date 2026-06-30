@@ -15,16 +15,16 @@ from rich.console import Console
 
 import tools.interactive_shell.actions.slash as slash_tool
 from core.agent_harness.session import ReplSession
-from tools.interactive_shell.contracts import (
-    ToolContext,
+from core.agent_harness.tools.tool_context import (
+    ActionToolContext,
 )
 
 
-def _ctx() -> tuple[ToolContext, io.StringIO, ReplSession]:
+def _ctx() -> tuple[ActionToolContext, io.StringIO, ReplSession]:
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False, highlight=False)
     session = ReplSession()
-    return ToolContext(session=session, console=console), buf, session
+    return ActionToolContext(session=session, console=console), buf, session
 
 
 def _record_dispatch(monkeypatch: pytest.MonkeyPatch) -> list[str]:
@@ -165,7 +165,7 @@ def test_exit_slash_requests_runtime_exit(monkeypatch: pytest.MonkeyPatch) -> No
 
     requested_exit: list[bool] = []
     ctx, _buf, _session = _ctx()
-    ctx = ToolContext(
+    ctx = ActionToolContext(
         session=ctx.session,
         console=ctx.console,
         request_exit=lambda: requested_exit.append(True),

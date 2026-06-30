@@ -4,7 +4,7 @@ Runs one turn through the shared :class:`core.agent.Agent` tool-calling
 loop: it assembles the available agent tools (via a :class:`~core.agent_harness.ports.ToolProvider`),
 drives the loop while a tool-event observer streams each tool call to the
 surface, and summarizes the executed tool calls into a facts-only
-:class:`~core.agent_harness.turn_results.ToolCallingTurnResult`.
+:class:`~core.agent_harness.models.turn_results.ToolCallingTurnResult`.
 
 Accounting/analytics for the turn are the caller's concern (see
 :class:`core.agent_harness.ports.TurnAccounting`); this module emits none itself.
@@ -19,7 +19,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from core.agent import Agent
-from core.agent_harness.conversation_memory import MAX_CONVERSATION_MESSAGES
+from core.agent_harness.models.turn_context import TurnContext
+from core.agent_harness.models.turn_results import ToolCallingTurnResult
 from core.agent_harness.ports import (
     ConfirmFn,
     ErrorReporter,
@@ -28,10 +29,9 @@ from core.agent_harness.ports import (
     ToolProvider,
 )
 from core.agent_harness.prompts import build_action_system_prompt, build_action_user_message
-from core.agent_harness.turn_context import TurnContext
-from core.agent_harness.turn_results import ToolCallingTurnResult
+from core.agent_harness.prompts.conversation_memory import MAX_CONVERSATION_MESSAGES
 from core.events import RuntimeEvent, legacy_callback_payload
-from core.execution import ToolExecutionHooks
+from core.execution import ToolExecutionHooks, public_tool_input
 from core.llm.types import AgentLLMResponse, ToolCall
 from integrations.llm_cli.failure_explain import is_context_length_overflow
 
@@ -178,12 +178,19 @@ def _generic_tool_results(result: Any) -> list[tuple[ToolCall, Any]]:
 
 def _response_text_from_generic_results(result: Any) -> str:
     chunks: list[str] = []
-    for _tool_call, tool_result in _generic_tool_results(result):
+    for tool_call, tool_result in _generic_tool_results(result):
         if getattr(tool_result, "is_error", False):
             continue
         content = _content_to_text(getattr(tool_result, "content", ""))
         if content.strip():
-            chunks.append(content.strip())
+            args = public_tool_input(tool_call.input)
+            if args:
+                chunks.append(
+                    f"{tool_call.name} input: {json.dumps(args, ensure_ascii=False, default=str)}"
+                    f"\n{tool_call.name} result: {content.strip()}"
+                )
+            else:
+                chunks.append(f"{tool_call.name} result: {content.strip()}")
     return "\n".join(chunks)
 
 

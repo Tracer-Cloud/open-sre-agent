@@ -138,11 +138,11 @@ def test_agent_exposes_headless_dispatch_entrypoint(monkeypatch: pytest.MonkeyPa
             yield "hello from headless"
 
     monkeypatch.setattr(
-        "core.agent_harness.action_agent._default_llm_factory",
+        "core.agent_harness.agents.action_agent._default_llm_factory",
         lambda: FakeLLM(iter([AgentLLMResponse(content="", tool_calls=[], raw_content=None)])),
     )
 
-    from core.agent_harness.headless import StaticReasoningClientProvider
+    from core.agent_harness.agents.headless_agent import StaticReasoningClientProvider
 
     result = Agent.dispatch_message_to_headless_agent(
         "hello",

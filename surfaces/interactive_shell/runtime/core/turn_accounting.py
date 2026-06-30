@@ -1,26 +1,23 @@
 """Turn-result data model and the single owner of shell-turn accounting.
 
-Co-located with ``token_accounting.py`` since both are per-turn runtime
-concerns. This module holds the "facts only" action-execution result, the
-final shell-turn result, and ``ShellTurnAccounting`` — the consolidated owner
-of a turn's accounting side effects (action-agent analytics, terminal-turn
+This module holds the shell's accounting side effects around the core
+"facts only" turn-result models: action-agent analytics, terminal-turn
 aggregate telemetry, prompt-recorder flushing, conversational-turn
-persistence, and the final assistant-intent stamp).
+persistence, and the final assistant-intent stamp.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-from core.agent_harness.session import ReplSession
-
 # The neutral "facts only" turn-result models live in the decoupled agent
 # package; this module owns only the shell's accounting side effects over them.
-from core.agent_harness.turn_results import (
+from core.agent_harness.models.turn_results import (
     ShellTurnResult,
     ToolCallingAccountingStatus,
     ToolCallingTurnResult,
 )
+from core.agent_harness.session import ReplSession
 from platform.analytics.cli import capture_terminal_turn_summarized
 from surfaces.interactive_shell.utils.telemetry import PromptRecorder
 

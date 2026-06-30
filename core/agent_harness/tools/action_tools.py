@@ -10,7 +10,7 @@ from core.tool_framework.utils.integration_sources import availability_view
 from platform.observability.tool_trace import redact_sensitive
 from tools.registry import get_registered_tool_map, get_registered_tools
 
-_REPL_SESSION_SOURCE = "_repl_session"
+_ACTION_SESSION_SOURCE = "_action_session"
 
 
 class _IntegrationContextSession(Protocol):
@@ -35,7 +35,7 @@ def _sources_for_context(
 ) -> dict[str, dict[str, Any]]:
     raw_sources = availability_view(resolved_integrations or {})
     sources = dict(raw_sources)
-    sources[_REPL_SESSION_SOURCE] = {
+    sources[_ACTION_SESSION_SOURCE] = {
         "session": ctx.session,
         "configured_integrations": tuple(ctx.session.configured_integrations),
         "configured_integrations_known": ctx.session.configured_integrations_known,

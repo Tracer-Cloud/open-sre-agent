@@ -6,9 +6,9 @@ from typing import Any
 import pytest
 
 from core.agent import Agent
-from core.agent_harness.conversation_memory import MAX_CONVERSATION_MESSAGES
+from core.agent_harness.models.turn_context import TurnContext
 from core.agent_harness.prompts import PromptEnvelope
-from core.agent_harness.turn_context import TurnContext
+from core.agent_harness.prompts.conversation_memory import MAX_CONVERSATION_MESSAGES
 from core.llm.types import AgentLLMResponse
 from core.messages import UserRuntimeMessage
 from core.types import AgentTool

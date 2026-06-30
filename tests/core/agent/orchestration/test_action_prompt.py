@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-from core.agent_harness.conversation_memory import NO_HISTORY_PLACEHOLDER
+from core.agent_harness.models.turn_context import TurnContext
 from core.agent_harness.prompts import (
     _SYSTEM_PROMPT_BASE,
     build_action_system_prompt,
     connected_integrations_block,
+    prior_action_facts_block,
     recent_conversation_block,
 )
-from core.agent_harness.turn_context import TurnContext
+from core.agent_harness.prompts.conversation_memory import NO_HISTORY_PLACEHOLDER
 
 
 def _ctx(
@@ -44,6 +45,30 @@ def test_recent_conversation_block_contains_history_lines() -> None:
 
 def test_recent_conversation_block_placeholder_without_history() -> None:
     assert NO_HISTORY_PLACEHOLDER in recent_conversation_block(_ctx())
+
+
+def test_prior_action_facts_block_surfaces_telegram_followup_values() -> None:
+    ctx = _ctx(
+        messages=[
+            ("user", "Can you send the weather of both hawaii and antartica to slack?"),
+            (
+                "assistant",
+                "Hawaii: +28C\n"
+                "Antarctica: -24C\n"
+                'slack_send_message input: {"message": "Hawaii: +28C\\nAntarctica: -24C"}\n'
+                'slack_send_message result: {"sent": true}',
+            ),
+            ("user", "Write it in a nicer message and compare to London"),
+            ("assistant", "London: +22C"),
+        ]
+    )
+
+    block = prior_action_facts_block(ctx)
+    assert "PRIOR ACTION FACTS" in block
+    assert "Hawaii: +28C" in block
+    assert "Antarctica: -24C" in block
+    assert "London: +22C" in block
+    assert "slack_send_message input" in block
 
 
 def test_system_prompt_documents_followup_resolution() -> None:

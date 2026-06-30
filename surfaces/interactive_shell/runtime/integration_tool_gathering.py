@@ -1,7 +1,7 @@
 """Gather integration evidence for a conversational shell answer.
 
 The bounded think -> call-tools -> observe loop lives in the decoupled
-:func:`core.agent_harness.evidence_agent.gather_tool_evidence`. This module is the terminal adapter:
+:func:`core.agent_harness.agents.evidence_agent.gather_tool_evidence`. This module is the terminal adapter:
 it renders each gathering step to the console and persists the gathered tool
 calls into the shell's session storage, then hands the collected observation back
 to :func:`interactive_shell.runtime.shell_turn_execution.answer_shell_question`.
@@ -16,7 +16,7 @@ from typing import Any
 from rich.console import Console
 from rich.markup import escape
 
-from core.agent_harness import evidence_agent
+from core.agent_harness.agents import evidence_agent
 from core.agent_harness.session import ReplSession
 from surfaces.interactive_shell.ui import DIM
 from surfaces.interactive_shell.ui.output.tool_details import (

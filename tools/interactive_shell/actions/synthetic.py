@@ -6,14 +6,14 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from core.tool_framework.registered_tool import RegisteredTool
-from tools.interactive_shell.contracts import (
-    ToolContext,
+from core.agent_harness.tools.tool_context import (
+    ActionToolContext,
     capability_available_from_sources,
-    execute_with_repl_context,
+    execute_with_action_context,
     object_schema,
     string_property,
 )
+from core.tool_framework.registered_tool import RegisteredTool
 from tools.interactive_shell.synthetic.runner import (
     run_synthetic_test,
 )
@@ -46,7 +46,7 @@ def list_rds_postgres_scenarios() -> tuple[str, ...]:
     )
 
 
-def execute_synthetic_tool(args: dict[str, Any], ctx: ToolContext) -> bool:
+def execute_synthetic_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
     suite = str(args.get("suite", "")).strip()
     scenario = str(args.get("scenario", "")).strip()
     if not suite or not scenario:
@@ -63,7 +63,7 @@ def execute_synthetic_tool(args: dict[str, Any], ctx: ToolContext) -> bool:
 
 
 def run_synthetic(*, suite: str, scenario: str, context: Any) -> dict[str, Any]:
-    return execute_with_repl_context(
+    return execute_with_action_context(
         {"suite": suite, "scenario": scenario},
         context,
         execute_synthetic_tool,

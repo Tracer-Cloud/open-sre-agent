@@ -5,9 +5,8 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
-from core.agent_harness.conversation_memory import format_recent_conversation
 from core.agent_harness.grounding.investigation_flow_reference import (
     build_investigation_flow_reference_text,
 )
@@ -16,9 +15,15 @@ from core.agent_harness.prompts.assistant_agent_prompt import (
     _build_system_prompt,
     build_environment_block,
 )
+from core.agent_harness.prompts.conversation_memory import (
+    format_prior_action_facts,
+    format_recent_conversation,
+)
 from core.agent_harness.prompts.envelope import PromptEnvelope
+
+if TYPE_CHECKING:
+    from core.agent_harness.models.turn_context import TurnContext
 from core.agent_harness.session import SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
-from core.agent_harness.turn_context import TurnContext
 
 _logger = logging.getLogger(__name__)
 
@@ -74,6 +79,7 @@ def build_assistant_system_prompt(
     agents_md: str = "",
     investigation_flow: str = "",
     prior_investigation: str = "",
+    prior_action_facts: str = "",
     environment: str = "",
 ) -> str:
     """Build the system prompt for one assistant turn."""
@@ -83,6 +89,7 @@ def build_assistant_system_prompt(
         agents_md=agents_md,
         investigation_flow=investigation_flow,
         prior_investigation=prior_investigation,
+        prior_action_facts=prior_action_facts,
         environment=environment,
     )
 
@@ -238,6 +245,7 @@ def build_cli_agent_prompt_envelope(
         prior_investigation=(
             _summarize_last_state(turn_ctx.last_state) if turn_ctx.last_state is not None else ""
         ),
+        prior_action_facts=format_prior_action_facts(list(turn_ctx.conversation_messages)),
         environment=build_shell_environment_block(session),
     )
 
@@ -274,6 +282,7 @@ def build_cli_agent_prompt_from_provider(
         prior_investigation=(
             _summarize_last_state(turn_ctx.last_state) if turn_ctx.last_state is not None else ""
         ),
+        prior_action_facts=format_prior_action_facts(list(turn_ctx.conversation_messages)),
         environment=prompts.environment_block(),
     )
     return (

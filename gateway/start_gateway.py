@@ -10,17 +10,19 @@ from typing import Any
 from dotenv import load_dotenv
 from rich.console import Console
 
+from config.gateway_output_sink import GatewayOutputSink
 from core.agent import Agent
-from core.agent_harness.action_tools import get_action_tools_from_integrations_context
 from core.agent_harness.prompts.action_agent_system_prompt import _SYSTEM_PROMPT_BASE
+from core.agent_harness.providers.default_prompt_context import DefaultPromptContextProvider
+from core.agent_harness.providers.default_providers import (
+    DefaultErrorReporter,
+    DefaultReasoningClientProvider,
+    DefaultRunRecordFactory,
+    DefaultToolProvider,
+    DefaultTurnAccounting,
+)
 from core.agent_harness.session import ReplSession
 from core.tool_framework.registered_tool import RegisteredTool
-from gateway.agent.gateway_agent_adapters import (
-    GatewayErrorReporter,
-    GatewayPromptContextProvider,
-    GatewayRunRecordFactory,
-)
-from gateway.agent.gateway_output_sink import GatewayOutputSink
 from gateway.config.configure_gateway_logging import configure_gateway_logging
 from gateway.config.get_gateway_settings import (
     GatewayConfigurationError,
@@ -35,11 +37,6 @@ from gateway.polling.telegram_polling_runtime import (
     initialize_telegram_polling_runtime,
     shutdown_telegram_polling_runtime,
 )
-from surfaces.interactive_shell.runtime.agent_harness_adapters import (
-    ShellReasoningClientProvider,
-    ShellToolProvider,
-)
-from tools.interactive_shell.contracts import ToolContext
 
 
 # Initializing the gateway agent
@@ -47,7 +44,9 @@ def build_gateway_agent(
     resolved_integrations: dict[str, Any],
     tools: list[RegisteredTool],
 ) -> Agent[RegisteredTool]:
-    agent = Agent[RegisteredTool](
+    agent = Agent[
+        RegisteredTool
+    ](
         system=_SYSTEM_PROMPT_BASE,  # @todo for the future: we will need to pre-pend or modify this system prompt with the gateway specific prompt
         tools=tools,
         resolved_integrations=resolved_integrations,
@@ -77,14 +76,9 @@ class GatewayManager:
 
         # Getting the integrations, tools and building the gateway agent
         integrations = repl_session.get_integrations().resolved_integrations
-        tool_context = ToolContext(
-            session=repl_session,
-            console=console,
-            action_already_listed=True,
-        )
-        tools = get_action_tools_from_integrations_context(
-            tool_context,
-            resolved_integrations=integrations,
+        tools = DefaultToolProvider(repl_session, console).action_tools(
+            confirm_fn=None,
+            is_tty=False,
         )
         gateway_agent = build_gateway_agent(integrations, tools)
 
@@ -103,22 +97,34 @@ class GatewayManager:
             sink: GatewayOutputSink,
             logger: logging.Logger,
         ) -> None:
+            _ = logger
+            error_reporter = DefaultErrorReporter(logger)
             # This must dispatch through the gateway agent created by this manager.
-            gateway_agent.dispatch_message_to_headless_agent(
+            turn_result = gateway_agent.dispatch_message_to_headless_agent(
                 text,
                 session=session,
                 output=sink,
-                tools=ShellToolProvider(
+                tools=DefaultToolProvider(
                     session,
                     console,
                     precomputed_action_tools=tools,
+                    tool_action_logger=logger,
                 ),
-                prompts=GatewayPromptContextProvider(session),
-                reasoning=ShellReasoningClientProvider(console),
-                run_factory=GatewayRunRecordFactory(session),
-                error_reporter=GatewayErrorReporter(logger),
+                prompts=DefaultPromptContextProvider(session),
+                reasoning=DefaultReasoningClientProvider(
+                    output=sink,
+                    error_reporter=error_reporter,
+                ),
+                run_factory=DefaultRunRecordFactory(session),
+                accounting=DefaultTurnAccounting(session, text),
+                error_reporter=error_reporter,
                 gather_enabled=True,
             )
+            outbound_text = (
+                turn_result.assistant_response_text or turn_result.action_result.response_text
+            ).strip()
+            if not turn_result.answered and outbound_text:
+                sink.finalize(outbound_text)
 
         telegram_background_worker = start_telegram_gateway_background(
             settings=settings,

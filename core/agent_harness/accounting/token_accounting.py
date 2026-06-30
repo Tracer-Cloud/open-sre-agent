@@ -1,20 +1,31 @@
-"""Session-scoped token accounting and LLM run metadata for the interactive shell."""
+"""Session-scoped token accounting and LLM run metadata for the agent harness."""
 
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING
-
-from surfaces.interactive_shell.ui.streaming import _CHARS_PER_TOKEN
-from surfaces.interactive_shell.utils.telemetry import LlmRunInfo
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from core.agent_harness.session import ReplSession
     from core.llm.llm_client import LLMResponse
+
+_CHARS_PER_TOKEN = 4
+
+
+@dataclass(frozen=True, slots=True)
+class LlmRunInfo:
+    """Best-effort metadata from one visible LLM response."""
+
+    model: str | None = None
+    provider: str | None = None
+    latency_ms: int | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    response_text: str | None = None
 
 
 def estimate_tokens(text: str) -> int:
-    """Approximate token count from character length (matches streaming UI)."""
+    """Approximate token count from character length."""
     return len(text) // _CHARS_PER_TOKEN
 
 
@@ -40,30 +51,28 @@ def resolve_provider_name(client: object) -> str | None:
 
 
 def record_llm_turn(
-    session: ReplSession,
+    session: Any,
     *,
     prompt: str,
     response: str,
     input_tokens: int | None = None,
     output_tokens: int | None = None,
 ) -> tuple[int, int, bool]:
-    """Accumulate one LLM call on ``session.token_usage``.
-
-    Returns ``(input_tokens, output_tokens, estimated)``. Provider counts are
-    used when both are supplied; otherwise chars÷4 estimates are recorded.
-    """
+    """Accumulate one LLM call on any session exposing ``record_token_usage``."""
     if input_tokens is not None and output_tokens is not None:
         inp, out, estimated = input_tokens, output_tokens, False
     else:
         inp = estimate_tokens(prompt)
         out = estimate_tokens(response)
         estimated = True
-    session.record_token_usage(input_tokens=inp, output_tokens=out, estimated=estimated)
+    record_token_usage = getattr(session, "record_token_usage", None)
+    if callable(record_token_usage):
+        record_token_usage(input_tokens=inp, output_tokens=out, estimated=estimated)
     return inp, out, estimated
 
 
 def record_invoke_response(
-    session: ReplSession | None,
+    session: Any | None,
     *,
     prompt: str,
     response: LLMResponse,
@@ -83,7 +92,7 @@ def record_invoke_response(
 
 def build_llm_run_info(
     *,
-    session: ReplSession,
+    session: Any,
     prompt: str,
     response_text: str,
     started: float | None = None,
@@ -104,7 +113,7 @@ def build_llm_run_info(
     )
 
 
-def format_token_total(session: ReplSession, *, direction: str) -> tuple[str, str]:
+def format_token_total(session: Any, *, direction: str) -> tuple[str, str]:
     """Return ``(row_label, formatted_value)`` for input or output tokens."""
     usage = session.token_usage
     measured = usage.get(f"{direction}_measured", 0)
@@ -122,6 +131,7 @@ def format_token_total(session: ReplSession, *, direction: str) -> tuple[str, st
 
 
 __all__ = [
+    "LlmRunInfo",
     "build_llm_run_info",
     "estimate_tokens",
     "format_token_total",

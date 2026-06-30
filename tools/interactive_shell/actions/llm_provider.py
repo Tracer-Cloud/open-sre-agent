@@ -6,18 +6,18 @@ from typing import Any
 
 from rich.markup import escape
 
+from core.agent_harness.tools.tool_context import (
+    ActionToolContext,
+    capability_available_from_sources,
+    execute_with_action_context,
+    object_schema,
+)
 from core.tool_framework.registered_tool import RegisteredTool
 from surfaces.interactive_shell.command_registry import (
     switch_llm_provider,
     switch_reasoning_model,
 )
 from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
-from tools.interactive_shell.contracts import (
-    ToolContext,
-    capability_available_from_sources,
-    execute_with_repl_context,
-    object_schema,
-)
 from tools.interactive_shell.shared import allow_tool
 
 
@@ -43,7 +43,7 @@ def _target_property_schema() -> dict[str, Any]:
     }
 
 
-def _apply_model_set_target(target: str, ctx: ToolContext) -> bool:
+def _apply_model_set_target(target: str, ctx: ActionToolContext) -> bool:
     from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
 
     candidate = target.strip()
@@ -52,7 +52,7 @@ def _apply_model_set_target(target: str, ctx: ToolContext) -> bool:
     return switch_reasoning_model(candidate, ctx.console)
 
 
-def execute_llm_provider_tool(args: dict[str, Any], ctx: ToolContext) -> bool:
+def execute_llm_provider_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
     target = str(args.get("target", args.get("provider", ""))).strip()
     if not target:
         return False
@@ -74,7 +74,7 @@ def execute_llm_provider_tool(args: dict[str, Any], ctx: ToolContext) -> bool:
 
 
 def run_llm_provider(*, target: str, context: Any) -> dict[str, Any]:
-    return execute_with_repl_context({"target": target}, context, execute_llm_provider_tool)
+    return execute_with_action_context({"target": target}, context, execute_llm_provider_tool)
 
 
 llm_set_provider_tool = RegisteredTool(

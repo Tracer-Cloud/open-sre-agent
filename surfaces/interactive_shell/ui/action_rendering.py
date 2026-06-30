@@ -18,7 +18,7 @@ from typing import Any
 
 from rich.console import Console
 
-from core.agent_harness.action_agent import SELF_RECORDING_ACTION_TOOL_NAMES
+from core.agent_harness.agents.action_agent import SELF_RECORDING_ACTION_TOOL_NAMES
 from surfaces.interactive_shell.runtime import ReplSession
 
 # Tools whose preview is just ``(label, single-arg)``. The display content is the

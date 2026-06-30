@@ -4,7 +4,7 @@
 `core.agent.Agent` loop: action tool-calling turns, three-path routing,
 conversational answers, evidence gather, and headless execution. It was
 extracted out of `interactive_shell` so the same harness can run the interactive
-terminal and be invoked headlessly via `agent_harness.headless_agent`.
+terminal and be invoked headlessly via `agent_harness.agents.headless_agent`.
 
 ## Hard boundary (enforced by tests)
 
@@ -21,26 +21,37 @@ terminal and be invoked headlessly via `agent_harness.headless_agent`.
 
 ## Layout
 
+Top level holds only the package's public surface: `__init__.py` (the curated
+re-exports) and `ports.py`. Everything else lives in a responsibility-scoped
+subpackage.
+
 - `ports.py` — Protocols the engine talks to (output, confirmation, session
   store, tool provider, prompt-context provider, telemetry, error reporter,
-  evidence gatherer).
-- `turn_context.py` — `TurnContext`, the immutable per-turn snapshot (built from any
-  object satisfying `TurnContextSource`, not `ReplSession` directly).
-- `conversation_memory.py` — recent-conversation rendering shared by prompts.
+  evidence gatherer). Kept top-level as the central seam imported everywhere.
+- `agents/` — the turn drivers that orchestrate `core.agent.Agent`:
+  - `action_agent.py` — `run_agent_turn`: one action tool-calling turn over the ports.
+  - `turn_orchestrator.py` — `run_turn`: the three-path routing (summarize-observation /
+    handled / gather+answer) and the conversational answer.
+  - `evidence_agent.py` — bounded evidence-gather loop over the `core` investigation tools.
+  - `headless_agent.py` — headless programmatic entry point
+    (`dispatch_message_to_headless_agent`) plus in-memory port adapters for API / test runs.
+- `models/` — neutral, surface-agnostic data shapes:
+  - `turn_context.py` — `TurnContext`, the immutable per-turn snapshot (built from any
+    object satisfying `TurnContextSource`, not `ReplSession` directly).
+  - `turn_results.py` — neutral turn-result models.
+- `providers/` — core-owned default port implementations and provider resolution
+  (`default_providers.py`, `default_prompt_context.py`, `provider_models.py`).
+- `tools/` — action-tool wiring over the canonical registry (`action_tools.py`,
+  `tool_context.py`).
+- `accounting/` — session-scoped token accounting and LLM run metadata.
 - `prompts/` — action-agent and conversational-assistant prompt builders (pure
   string assembly; grounding text is supplied via `PromptContextProvider`).
+  `conversation_memory.py` (recent-conversation rendering shared by prompts) lives here.
 - `grounding/` — reusable grounding cache and rendering contracts; surfaces
   inject surface-owned command registries instead of being imported here.
 - `session/` — reusable agent session state, JSONL storage, prompt history,
   task registry, and session-scoped background records.
-- `turn_results.py` — neutral turn-result models.
-- `action_agent.py` — `run_agent_turn`: one action tool-calling turn over the ports,
-  wrapping `core.agent.Agent`.
-- `turn_orchestrator.py` — `run_turn`: the three-path routing (summarize-observation /
-  handled / gather+answer) and the conversational answer.
-- `evidence_agent.py` — bounded evidence-gather loop over the `core` investigation tools.
-- `headless/` — minimal in-memory port adapters for API / test execution.
-- `headless_agent.py` — the headless programmatic entry point.
+- `integrations/` — integration resolution helpers for the harness.
 
 ## Keep the loop primitive in core
 

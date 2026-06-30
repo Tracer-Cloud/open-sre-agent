@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from core.agent_harness.prompts.action_agent_prompt import (
     build_action_system_prompt,
@@ -13,7 +14,9 @@ from core.agent_harness.prompts.action_agent_prompt import (
     sanitize_action_text,
 )
 from core.agent_harness.prompts.envelope import PromptEnvelope
-from core.agent_harness.turn_context import TurnContext
+
+if TYPE_CHECKING:
+    from core.agent_harness.models.turn_context import TurnContext
 
 
 @dataclass(frozen=True)

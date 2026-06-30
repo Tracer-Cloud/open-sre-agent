@@ -6,6 +6,7 @@ import os
 import shlex
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from rich.console import Console
 from rich.markup import escape
@@ -29,6 +30,36 @@ from tools.interactive_shell.shell.parsing import (
 from tools.interactive_shell.shell.policy import plan_shell_execution
 
 
+def _shell_payload(
+    *,
+    command: str,
+    ok: bool,
+    response_text: str | None = None,
+    stdout: str = "",
+    stderr: str = "",
+    exit_code: int | None = None,
+    timed_out: bool = False,
+    truncated: bool = False,
+    executed_with_shell: bool | None = None,
+    cancelled: bool = False,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "ok": ok,
+        "command": command,
+        "stdout": stdout.strip(),
+        "stderr": stderr.strip(),
+        "exit_code": exit_code,
+        "timed_out": timed_out,
+        "truncated": truncated,
+        "cancelled": cancelled,
+    }
+    if executed_with_shell is not None:
+        payload["executed_with_shell"] = executed_with_shell
+    if response_text:
+        payload["response_text"] = response_text.strip()
+    return payload
+
+
 def run_shell_command(
     command: str,
     session: ReplSession,
@@ -38,7 +69,7 @@ def run_shell_command(
     confirm_fn: Callable[[str], str] | None = None,
     is_tty: bool | None = None,
     action_already_listed: bool = False,
-) -> None:
+) -> dict[str, Any]:
     parsed = parse_shell_command(command, is_windows=_platform.IS_WINDOWS)
     plan = plan_shell_execution(parsed)
     display_command = format_shell_command_for_display(command)
@@ -52,18 +83,21 @@ def run_shell_command(
         action_already_listed=action_already_listed,
     ):
         session.record("shell", command, ok=False)
-        return
+        return _shell_payload(
+            command=command,
+            ok=False,
+            response_text=plan.policy.reason or "shell command blocked",
+            cancelled=plan.policy.verdict != "deny",
+        )
 
     console.print(f"[bold]$ {escape(display_command)}[/bold]")
 
     argv_builtin = argv_for_repl_builtin_detection(parsed=parsed, is_windows=_platform.IS_WINDOWS)
 
     if argv_builtin is not None and argv_builtin[0].lower() == "cd":
-        run_cd_command(parsed.command, session, console)
-        return
+        return run_cd_command(parsed.command, session, console)
     if argv_builtin is not None and argv_builtin[0].lower() == "pwd":
-        run_pwd_command(parsed.command, session, console)
-        return
+        return run_pwd_command(parsed.command, session, console)
 
     use_shell = parsed.use_shell
     if parsed.passthrough:
@@ -90,7 +124,13 @@ def run_shell_command(
 
         console.print(f"[{ERROR}]command failed to start:[/] {escape(str(exc))}")
         session.record("shell", command, ok=False, response_text=response_text)
-        return
+        return _shell_payload(
+            command=command,
+            ok=False,
+            response_text=response_text,
+            stderr=str(exc),
+            executed_with_shell=use_shell,
+        )
 
     print_command_output(console, result.stdout)
     print_command_output(console, result.stderr, style=ERROR)
@@ -101,12 +141,26 @@ def run_shell_command(
             f"[{ERROR}]command timed out after {SHELL_COMMAND_TIMEOUT_SECONDS} seconds[/]"
         )
         session.record("shell", command, ok=False, response_text=response_text)
-        return
+        return _shell_payload(
+            command=command,
+            ok=False,
+            response_text=response_text,
+            stdout=result.stdout,
+            stderr=result.stderr,
+            exit_code=result.exit_code,
+            timed_out=True,
+            truncated=result.truncated,
+            executed_with_shell=result.executed_with_shell,
+        )
     ok = result.exit_code == 0
     had_stdout = bool((result.stdout or "").strip())
     had_stderr = bool((result.stderr or "").strip())
     if ok:
-        if not had_stdout and not had_stderr:
+        if had_stdout:
+            response_text = (result.stdout or "").strip()
+        elif had_stderr:
+            response_text = (result.stderr or "").strip()
+        else:
             console.print(f"[{HIGHLIGHT}]✓[/]")
     else:
         code = result.exit_code if result.exit_code is not None else "?"
@@ -122,9 +176,21 @@ def run_shell_command(
         response_text = "\n".join(response_parts)
 
     session.record("shell", command, ok=ok, response_text=response_text)
+    stderr_for_result = "" if ok and had_stdout else result.stderr
+    return _shell_payload(
+        command=command,
+        ok=ok,
+        response_text=response_text,
+        stdout=result.stdout,
+        stderr=stderr_for_result,
+        exit_code=result.exit_code,
+        timed_out=False,
+        truncated=result.truncated,
+        executed_with_shell=result.executed_with_shell,
+    )
 
 
-def run_cd_command(command: str, session: ReplSession, console: Console) -> None:
+def run_cd_command(command: str, session: ReplSession, console: Console) -> dict[str, Any]:
     def _strip_outer_quotes(value: str) -> str:
         if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
             return value[1:-1]
@@ -139,14 +205,14 @@ def run_cd_command(command: str, session: ReplSession, console: Console) -> None
 
         console.print(f"[{ERROR}]cd failed:[/] {escape(str(exc))}")
         session.record("shell", command, ok=False, response_text=response_text)
-        return
+        return _shell_payload(command=command, ok=False, response_text=response_text)
 
     if len(tokens) > 2:
         response_text = "cd failed: too many arguments"
 
         console.print(f"[{ERROR}]cd failed:[/] too many arguments")
         session.record("shell", command, ok=False, response_text=response_text)
-        return
+        return _shell_payload(command=command, ok=False, response_text=response_text)
 
     target = Path(tokens[1]).expanduser() if len(tokens) == 2 else Path.home()
     try:
@@ -158,13 +224,14 @@ def run_cd_command(command: str, session: ReplSession, console: Console) -> None
 
         console.print(f"[{ERROR}]cd failed:[/] {escape(str(exc))}")
         session.record("shell", command, ok=False, response_text=response_text)
-        return
+        return _shell_payload(command=command, ok=False, response_text=response_text)
 
     console.print(Text(str(Path.cwd())))
     session.record("shell", command)
+    return _shell_payload(command=command, ok=True, response_text=str(Path.cwd()))
 
 
-def run_pwd_command(command: str, session: ReplSession, console: Console) -> None:
+def run_pwd_command(command: str, session: ReplSession, console: Console) -> dict[str, Any]:
     try:
         tokens = shlex.split(command, posix=not _platform.IS_WINDOWS)
     except ValueError as exc:
@@ -172,17 +239,19 @@ def run_pwd_command(command: str, session: ReplSession, console: Console) -> Non
 
         console.print(f"[{ERROR}]pwd failed:[/] {escape(str(exc))}")
         session.record("shell", command, ok=False, response_text=response_text)
-        return
+        return _shell_payload(command=command, ok=False, response_text=response_text)
 
     if len(tokens) != 1:
         response_text = "pwd failed: too many arguments"
 
         console.print(f"[{ERROR}]pwd failed:[/] too many arguments")
         session.record("shell", command, ok=False, response_text=response_text)
-        return
+        return _shell_payload(command=command, ok=False, response_text=response_text)
 
-    console.print(Text(str(Path.cwd())))
+    cwd = str(Path.cwd())
+    console.print(Text(cwd))
     session.record("shell", command)
+    return _shell_payload(command=command, ok=True, response_text=cwd, stdout=cwd)
 
 
 __all__ = ["run_cd_command", "run_pwd_command", "run_shell_command"]

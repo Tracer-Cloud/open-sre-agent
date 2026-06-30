@@ -12,7 +12,6 @@ from core.context_budget import (
     context_budget_ceiling_for_model,
     enforce_context_budget,
 )
-from core.llm import agent_llm_client
 from core.events import (
     AgentEndEvent,
     AgentStartEvent,
@@ -38,6 +37,7 @@ from core.execution import (
     execute_tool_calls,
     public_tool_input,
 )
+from core.llm import agent_llm_client
 from core.llm.types import ToolCall
 from core.messages import (
     RuntimeMessage,
@@ -55,6 +55,8 @@ from platform.observability.tool_trace import redact_sensitive
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
+    from core.agent_harness.models.turn_context import AgentRuntimeRequest
+    from core.agent_harness.models.turn_results import ShellTurnResult
     from core.agent_harness.ports import (
         ConfirmFn,
         ErrorReporter,
@@ -66,8 +68,6 @@ if TYPE_CHECKING:
         ToolProvider,
         TurnAccounting,
     )
-    from core.agent_harness.turn_context import AgentRuntimeRequest
-    from core.agent_harness.turn_results import ShellTurnResult
 
 # Backward-compatible callback type: called with ``(event_kind, data_dict)``.
 LoopEventCallback = LegacyLoopEventCallback
@@ -92,6 +92,7 @@ class AgentRunResult:
 
 # Backward-compat alias — callers that still reference ToolLoopResult compile unchanged.
 ToolLoopResult = AgentRunResult
+
 
 class Agent[RuntimeToolT: RuntimeTool]:
     """Stateful, configurable ReAct agent.
@@ -119,7 +120,7 @@ class Agent[RuntimeToolT: RuntimeTool]:
         tool_hooks: ToolExecutionHooks | None = None,
     ) -> ShellTurnResult:
         """Run a full headless turn through the shared agent harness."""
-        from core.agent_harness.headless_agent import (
+        from core.agent_harness.agents.headless_agent import (
             dispatch_message_to_headless_agent,
         )
 

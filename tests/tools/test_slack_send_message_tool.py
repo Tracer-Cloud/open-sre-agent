@@ -86,7 +86,9 @@ def test_run_resolves_webhook_internally_and_dispatches(
         captured["webhook_url_arg"] = webhook_url
         from tools.slack_send_message_tool.models import SlackDeliveryTarget
 
-        return SlackDeliveryTarget(webhook_url="https://hooks.slack.com/services/T00/B00/secret"), ""
+        return SlackDeliveryTarget(
+            webhook_url="https://hooks.slack.com/services/T00/B00/secret"
+        ), ""
 
     def _fake_dispatch(message: str, target: Any) -> tuple[bool, str]:
         captured["message"] = message

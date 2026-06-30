@@ -25,8 +25,9 @@ from core.agent_harness.prompts.assistant_agent_prompt import (
     _build_system_prompt,
     build_environment_block,
 )
+from core.agent_harness.providers import default_prompt_context
+from core.agent_harness.providers.default_prompt_context import DefaultPromptContextProvider
 from core.agent_harness.session import ReplSession
-from surfaces.interactive_shell.runtime import agent_harness_adapters as shell_adapters
 from surfaces.interactive_shell.runtime import shell_turn_execution as cli_agent
 from surfaces.interactive_shell.runtime.shell_turn_execution import answer_shell_question
 
@@ -97,11 +98,11 @@ def _patch_grounding(
     """Pin the shell grounding caches the prompt provider reads from.
 
     The conversational assistant now sources grounding text through
-    ``ShellPromptContextProvider`` (over ``session.grounding`` + the
+    ``DefaultPromptContextProvider`` (over ``session.grounding`` + the
     investigation-flow reference), so tests patch the provider methods rather
     than module-level builders.
     """
-    provider = shell_adapters.ShellPromptContextProvider
+    provider = DefaultPromptContextProvider
     monkeypatch.setattr(provider, "cli_reference", lambda _self: cli_reference)
     monkeypatch.setattr(provider, "agents_md", lambda _self: agents_md)
     monkeypatch.setattr(provider, "investigation_flow", lambda _self: investigation_flow)
@@ -273,9 +274,9 @@ class TestEnvironmentIntegrationGrounding:
         class _Settings:
             provider = "openai"
 
-        monkeypatch.setattr(shell_adapters, "load_llm_settings", lambda: _Settings())
+        monkeypatch.setattr(default_prompt_context, "load_llm_settings", lambda: _Settings())
         monkeypatch.setattr(
-            shell_adapters,
+            default_prompt_context,
             "resolve_provider_models",
             lambda _settings, _provider: ("gpt-5.5", "gpt-5.4-mini"),
         )
@@ -405,7 +406,7 @@ class TestAssistantOutputRendering:
 
         monkeypatch.setattr(llm_module, "get_llm_for_reasoning", lambda: _Boom())
         monkeypatch.setattr(
-            "surfaces.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
+            "core.agent_harness.providers.default_providers.capture_exception",
             lambda exc, **_kwargs: captured_errors.append(exc),
         )
         session = ReplSession()

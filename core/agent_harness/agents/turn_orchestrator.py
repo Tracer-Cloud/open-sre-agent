@@ -21,7 +21,8 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from config.llm_reasoning_effort import apply_reasoning_effort
-from core.agent_harness.conversation_memory import MAX_CONVERSATION_MESSAGES
+from core.agent_harness.models.turn_context import TurnContext
+from core.agent_harness.models.turn_results import ShellTurnResult, ToolCallingTurnResult
 from core.agent_harness.ports import (
     AnswerAgent,
     ConfirmFn,
@@ -36,8 +37,7 @@ from core.agent_harness.ports import (
     TurnAccounting,
 )
 from core.agent_harness.prompts import build_cli_agent_prompt_from_provider
-from core.agent_harness.turn_context import TurnContext
-from core.agent_harness.turn_results import ShellTurnResult, ToolCallingTurnResult
+from core.agent_harness.prompts.conversation_memory import MAX_CONVERSATION_MESSAGES
 from integrations.llm_cli.errors import CLITimeoutError
 
 _ASSISTANT_LABEL = "assistant"
@@ -69,7 +69,7 @@ def _stream_cli_agent_response(
         if error_reporter is not None:
             error_reporter.report(
                 exc,
-                context="core.agent_harness.turn_orchestrator.stream",
+                context="core.agent_harness.agents.turn_orchestrator.stream",
                 expected=isinstance(exc, CLITimeoutError),
             )
         output.render_error(f"assistant failed: {exc}")
@@ -82,6 +82,16 @@ def _record_cli_agent_turn(session: SessionStore, message: str, assistant_text: 
     session.cli_agent_messages.append(("assistant", assistant_text))
     if len(session.cli_agent_messages) > MAX_CONVERSATION_MESSAGES:
         session.cli_agent_messages[:] = session.cli_agent_messages[-MAX_CONVERSATION_MESSAGES:]
+
+
+def _record_action_only_turn(session: SessionStore, message: str, assistant_text: str) -> None:
+    text = assistant_text.strip()
+    if not text:
+        return
+    latest = session.cli_agent_messages[-2:]
+    if latest == [("user", message), ("assistant", text)]:
+        return
+    _record_cli_agent_turn(session, message, text)
 
 
 def answer_cli_agent(
@@ -279,6 +289,7 @@ def run_turn(
             llm_run=run,
         )
     elif route.intent == "handled_without_llm":
+        _record_action_only_turn(session, text, action_result.response_text)
         result = ShellTurnResult(
             final_intent="cli_agent_handled",
             action_result=action_result,

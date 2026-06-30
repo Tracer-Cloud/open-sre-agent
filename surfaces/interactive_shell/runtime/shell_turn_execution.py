@@ -7,28 +7,31 @@ from typing import Any
 
 from rich.console import Console
 
-from core.agent_harness.action_agent import ToolCallingDeps, run_agent_turn
+from core.agent_harness.agents.action_agent import ToolCallingDeps, run_agent_turn
+from core.agent_harness.agents.turn_orchestrator import (
+    answer_cli_agent as run_core_answer_cli_agent,
+)
+from core.agent_harness.agents.turn_orchestrator import run_turn
+from core.agent_harness.models.turn_context import TurnContext
+from core.agent_harness.models.turn_results import ShellTurnResult, ToolCallingTurnResult
 from core.agent_harness.ports import OutputSink
+from core.agent_harness.providers.default_prompt_context import DefaultPromptContextProvider
+from core.agent_harness.providers.default_providers import (
+    DefaultErrorReporter,
+    DefaultReasoningClientProvider,
+    DefaultRunRecordFactory,
+    DefaultToolProvider,
+)
 from core.agent_harness.session import ReplSession
-from core.agent_harness.turn_context import TurnContext
-from core.agent_harness.turn_orchestrator import answer_cli_agent as run_core_answer_cli_agent
-from core.agent_harness.turn_orchestrator import run_turn
-from core.agent_harness.turn_results import ShellTurnResult, ToolCallingTurnResult
 from core.execution import ToolExecutionHooks
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS
 from surfaces.interactive_shell.command_registry.suggestions import resolve_literal_slash_typo
-from surfaces.interactive_shell.runtime.agent_harness_adapters import (
-    ShellErrorReporter,
-    ShellOutputSink,
-    ShellPromptContextProvider,
-    ShellReasoningClientProvider,
-    ShellRunRecordFactory,
-    ShellToolProvider,
-)
+from surfaces.interactive_shell.runtime.agent_harness_adapters import ShellOutputSink
 from surfaces.interactive_shell.runtime.core.turn_accounting import ShellTurnAccounting
 from surfaces.interactive_shell.runtime.integration_tool_gathering import (
     gather_integration_tool_evidence,
 )
+from surfaces.interactive_shell.ui.action_rendering import ActionRenderObserver
 from surfaces.interactive_shell.utils.telemetry import LlmRunInfo, PromptRecorder
 
 # Dependency seams used by the harness turn-routing tests.
@@ -47,6 +50,14 @@ def _resolve_output_sink(console: Console, output: OutputSink | None) -> OutputS
     if output is not None:
         return output
     return ShellOutputSink(console)
+
+
+def _action_observer_factory(
+    session: ReplSession,
+    console: Console,
+    message: str,
+) -> ActionRenderObserver:
+    return ActionRenderObserver(session=session, console=console, message=message)
 
 
 def _complete_literal_slash_typo_turn(
@@ -104,12 +115,17 @@ def run_action_tool_turn(
         message,
         session,
         output=resolved_output,
-        tools=ShellToolProvider(session, console, request_exit=request_exit),
+        tools=DefaultToolProvider(
+            session,
+            console,
+            request_exit=request_exit,
+            observer_factory=_action_observer_factory,
+        ),
         confirm_fn=confirm_fn,
         is_tty=is_tty,
         deps=effective_deps,
         turn_ctx=turn_ctx,
-        error_reporter=ShellErrorReporter(),
+        error_reporter=DefaultErrorReporter(),
         tool_hooks=tool_hooks,
     )
 
@@ -128,17 +144,20 @@ def answer_shell_question(
 ) -> LlmRunInfo | None:
     """Answer one shell question through the grounded conversational assistant.
 
-    Delegates to :func:`core.agent_harness.turn_orchestrator.answer_cli_agent`, supplying the shell
+    Delegates to :func:`core.agent_harness.agents.turn_orchestrator.answer_cli_agent`, supplying the shell
     adapters for Rich output, grounding caches, reasoning client, and telemetry.
     """
     return run_core_answer_cli_agent(
         message,
         session,
         _resolve_output_sink(console, output),
-        prompts=ShellPromptContextProvider(session),
-        reasoning=ShellReasoningClientProvider(console),
-        run_factory=ShellRunRecordFactory(session),
-        error_reporter=ShellErrorReporter(),
+        prompts=DefaultPromptContextProvider(session),
+        reasoning=DefaultReasoningClientProvider(
+            output=_resolve_output_sink(console, output),
+            error_reporter=DefaultErrorReporter(),
+        ),
+        run_factory=DefaultRunRecordFactory(session),
+        error_reporter=DefaultErrorReporter(),
         confirm_fn=confirm_fn,
         is_tty=is_tty,
         tool_observation=tool_observation,
@@ -167,7 +186,7 @@ def execute_shell_turn(
     The action driver, gather pass, and conversational assistant are bound to the
     live ``session``/``console`` here (so injected test doubles keep their
     ``(text, session, console, ...)`` shape) and handed to
-    :func:`core.agent_harness.turn_orchestrator.run_turn`, which performs the pure path routing.
+    :func:`core.agent_harness.agents.turn_orchestrator.run_turn`, which performs the pure path routing.
     """
     from core.agent_harness.session.compaction import auto_compact_if_needed
 

@@ -7,7 +7,7 @@ from collections.abc import Iterable
 from rich.console import Console
 
 import tools.interactive_shell.actions.slash as slash_tool
-from core.agent_harness.action_agent import ToolCallingDeps, run_agent_turn
+from core.agent_harness.agents.action_agent import ToolCallingDeps, run_agent_turn
 from core.agent_harness.session import ReplSession
 from core.tool_framework.registered_tool import RegisteredTool
 from surfaces.interactive_shell.runtime.shell_turn_execution import run_action_tool_turn
@@ -121,6 +121,7 @@ def test_generic_registered_action_tool_result_marks_turn_handled() -> None:
     assert result.planned_count == 1
     assert result.executed_count == 1
     assert result.executed_success_count == 1
+    assert 'fake_send_message input: {"message": "hello"}' in result.response_text
     assert '"status": "sent"' in result.response_text
     assert "fake_send_message" in harness.llm.tool_schema_names
 

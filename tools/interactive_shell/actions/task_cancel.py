@@ -7,19 +7,19 @@ from typing import Any
 
 from rich.markup import escape
 
+from core.agent_harness.tools.tool_context import (
+    ActionToolContext,
+    execute_with_action_context,
+    object_schema,
+)
 from core.tool_framework.registered_tool import RegisteredTool
 from surfaces.interactive_shell.command_registry import dispatch_slash
 from surfaces.interactive_shell.runtime import TaskKind, TaskStatus
 from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
-from tools.interactive_shell.contracts import (
-    ToolContext,
-    execute_with_repl_context,
-    object_schema,
-)
 from tools.interactive_shell.shared import plan_foreground_tool
 
 
-def _running_task_matches(ctx: ToolContext, target: str) -> Sequence[object]:
+def _running_task_matches(ctx: ActionToolContext, target: str) -> Sequence[object]:
     running = [
         task
         for task in ctx.session.task_registry.list_recent(n=50)
@@ -32,7 +32,7 @@ def _running_task_matches(ctx: ToolContext, target: str) -> Sequence[object]:
     return []
 
 
-def _resolve_task_cancel_target(ctx: ToolContext, target: str) -> str | None:
+def _resolve_task_cancel_target(ctx: ActionToolContext, target: str) -> str | None:
     if target in {"synthetic_test", "task"}:
         matches = _running_task_matches(ctx, target)
         if not matches:
@@ -66,7 +66,7 @@ def _resolve_task_cancel_target(ctx: ToolContext, target: str) -> str | None:
     return str(candidates[0].task_id)
 
 
-def execute_task_cancel_tool(args: dict[str, Any], ctx: ToolContext) -> bool:
+def execute_task_cancel_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
     target = str(args.get("target", "")).strip()
     if not target:
         return False
@@ -99,7 +99,7 @@ def execute_task_cancel_tool(args: dict[str, Any], ctx: ToolContext) -> bool:
 
 
 def run_task_cancel(*, target: str, context: Any) -> dict[str, Any]:
-    return execute_with_repl_context({"target": target}, context, execute_task_cancel_tool)
+    return execute_with_action_context({"target": target}, context, execute_task_cancel_tool)
 
 
 task_cancel_tool = RegisteredTool(

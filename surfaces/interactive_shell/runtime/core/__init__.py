@@ -3,7 +3,7 @@
 Reusable session state lives in ``core.agent_harness.session`` and terminal runtime
 context lives in ``interactive_shell.runtime.context``. This package owns the
 remaining runtime engine concerns (mutable runtime state, prompt manager,
-token accounting, turn detection).
+turn detection).
 """
 
 from __future__ import annotations

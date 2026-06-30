@@ -4,16 +4,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.tool_framework.registered_tool import RegisteredTool
-from tools.interactive_shell.contracts import (
-    ToolContext,
-    execute_with_repl_context,
+from core.agent_harness.tools.tool_context import (
+    ActionToolContext,
+    execute_with_action_context,
     object_schema,
     string_property,
 )
+from core.tool_framework.registered_tool import RegisteredTool
 
 
-def execute_assistant_handoff_tool(args: dict[str, Any], ctx: ToolContext) -> bool:
+def execute_assistant_handoff_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
     _ = args
     _ = ctx
     # Handoffs are informational planning outputs and intentionally
@@ -22,7 +22,7 @@ def execute_assistant_handoff_tool(args: dict[str, Any], ctx: ToolContext) -> bo
 
 
 def run_assistant_handoff(*, content: str, context: Any) -> dict[str, Any]:
-    return execute_with_repl_context(
+    return execute_with_action_context(
         {"content": content},
         context,
         execute_assistant_handoff_tool,

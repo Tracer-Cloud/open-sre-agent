@@ -25,7 +25,6 @@ In simple terms:
   completion notification delivery.
 - `core/` holds the core runtime engine:
   - `state.py` — shared runtime state (`ReplState`, `SpinnerState`)
-  - `token_accounting.py` — LLM token usage and run metadata
   - `turn_detection.py` — pure text classifiers for cancel, confirm, and correction detection
 - `core.agent_harness.session.tasks` owns the cross-session task registry surfaced via
   `/tasks` and `/cancel`.
@@ -63,7 +62,7 @@ The runtime package is intentionally split into focused concerns:
 - `startup/initial_input.py` — scripted initial-input replay only.
 - `startup/first_launch_github.py` — first-launch GitHub sign-in gate only.
 - `core.agent_harness.session.tasks` — task registry + persistence only.
-- `core/token_accounting.py` — session-scoped LLM token accounting and run metadata only.
+- `core.agent_harness.accounting.token_accounting` — session-scoped LLM token accounting and run metadata only.
 
 Keep these boundaries strict. If a change crosses concerns, move code to the
 owner module instead of broadening module responsibilities.
@@ -84,7 +83,7 @@ The interactive runtime must keep this shape:
    (`session`, `state`, `spinner`, `invalidate_prompt`), presentation setup,
    prompt-mediated confirmation, dispatch state, and per-turn task execution.
 6. `interactive_shell.runtime.shell_turn_execution.execute_shell_turn` binds shell adapters
-   around `core.agent_harness.turn_orchestrator.run_turn`.
+   around `core.agent_harness.agents.turn_orchestrator.run_turn`.
 7. `core.agent_harness` owns one prompt's action/answer mechanics and accounting
    finalization. The terminal presentation for `AgentEvent` emissions lives in
    `runtime/agent_presentation.py`.
@@ -99,7 +98,7 @@ flowchart TD
   replMain --> controller["interactive_shell.controller.InteractiveShellController"]
   controller --> turnHost["runtime.turn_host.AgentTurnRunner.run_agent_turn"]
   turnHost --> turnEntry["interactive_shell.runtime.shell_turn_execution.execute_shell_turn"]
-  turnEntry --> coreHarness["core.agent_harness.turn_orchestrator.run_turn"]
+  turnEntry --> coreHarness["core.agent_harness.agents.turn_orchestrator.run_turn"]
   coreHarness --> sideEffects["slash/help/agent/follow-up/investigation side effects"]
   controller --> replState["core.state.ReplState"]
   controller --> spinnerState["core.state.SpinnerState"]
@@ -141,7 +140,7 @@ flowchart TD
   progress scope), construct a `ConsoleAgentEventSink`, own dispatch state, and
   call `interactive_shell.runtime.shell_turn_execution.execute_shell_turn`.
 - The shell adapter entry lives in `runtime/shell_turn_execution.py`: it binds shell
-  adapters and accounting around `core.agent_harness.turn_orchestrator.run_turn`.
+  adapters and accounting around `core.agent_harness.agents.turn_orchestrator.run_turn`.
 - The reusable per-prompt loop lives in `core.agent_harness`: turn snapshots,
   observation reset, action/response routing, and core result construction stay
   surface-agnostic.

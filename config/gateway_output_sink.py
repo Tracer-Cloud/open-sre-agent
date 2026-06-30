@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from collections.abc import Iterable
@@ -10,6 +11,15 @@ from gateway.polling.telegram_poller.client import TelegramBotClient
 from platform.common.truncation import truncate
 
 _MESSAGE_LIMIT = 4096
+_LOG_PREVIEW_LIMIT = 500
+logger = logging.getLogger("gateway")
+
+
+def _log_preview(text: str) -> str:
+    preview = text.replace("\n", " ").strip()
+    if len(preview) > _LOG_PREVIEW_LIMIT:
+        return f"{preview[: _LOG_PREVIEW_LIMIT - 3]}..."
+    return preview
 
 
 class GatewayOutputSink:
@@ -86,5 +96,8 @@ class GatewayOutputSink:
         if self._message_id:
             ok, _ = self._client.edit_message_text(self._chat_id, self._message_id, final)
             if ok:
+                logger.info("outbound chat=%s text=%r", self._chat_id, _log_preview(final))
                 return
-        self._client.send_message(self._chat_id, final)
+        ok, _, _ = self._client.send_message(self._chat_id, final)
+        if ok:
+            logger.info("outbound chat=%s text=%r", self._chat_id, _log_preview(final))

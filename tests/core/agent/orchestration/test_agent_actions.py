@@ -1153,7 +1153,12 @@ def test_execute_cli_actions_runs_passthrough_with_shell_true(monkeypatch: objec
             },
         )
     ]
-    assert session.history[-1] == {"type": "shell", "text": "!echo hello", "ok": True}
+    assert session.history[-1] == {
+        "type": "shell",
+        "text": "!echo hello",
+        "ok": True,
+        "response_text": "ok",
+    }
     output = buf.getvalue()
     assert "explicit shell passthrough enabled" in output
     assert "ok" in output
@@ -1391,7 +1396,12 @@ def test_execute_cli_actions_bang_prefix_uses_only_explicit_shell_escape(
 
     assert handled.handled is True
     assert llm_called == []
-    assert session.history[-1] == {"type": "shell", "text": "!curl wttr.in/London", "ok": True}
+    assert session.history[-1] == {
+        "type": "shell",
+        "text": "!curl wttr.in/London",
+        "ok": True,
+        "response_text": "ok",
+    }
     # The executor strips `!` and invokes the user's shell as argv with shell=False.
     assert calls[0][0] == _expected_shell_argv("curl wttr.in/London")
     assert calls[0][1]["shell"] is False
@@ -1425,7 +1435,12 @@ def test_execute_cli_actions_bang_prefix_single_line_dispatches_to_shell(
 
     assert handled.handled is True
     assert llm_called == []
-    assert session.history[-1] == {"type": "shell", "text": "!echo hello world", "ok": True}
+    assert session.history[-1] == {
+        "type": "shell",
+        "text": "!echo hello world",
+        "ok": True,
+        "response_text": "out",
+    }
     assert calls[0][0] == _expected_shell_argv("echo hello world")
     assert calls[0][1]["shell"] is False
 

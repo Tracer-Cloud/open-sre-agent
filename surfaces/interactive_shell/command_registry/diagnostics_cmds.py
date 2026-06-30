@@ -6,9 +6,9 @@ from rich.console import Console
 from rich.markup import escape
 
 from config.llm_reasoning_effort import display_reasoning_effort
+from core.agent_harness.accounting.token_accounting import format_token_total
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.runtime import ReplSession
-from surfaces.interactive_shell.runtime.core.token_accounting import format_token_total
 from surfaces.interactive_shell.ui import (
     BOLD_BRAND,
     DIM,

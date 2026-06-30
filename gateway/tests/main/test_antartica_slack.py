@@ -1,4 +1,4 @@
-'''
+"""
 Description:
 --------------------------------
 We want to have a very specific tests that validates wether the agent is working or not.
@@ -6,53 +6,53 @@ The test goes like this:
 - We start the gateway and get the agent
 - We send a message to the agent: "send a message to slack with the temperature in antartica, compute the temperature first and then send the message"
 - We expect the agent to produce two or three turns (1: create temperature, 2: send message via slack that includes the temperature)
-'''
+"""
 
 from __future__ import annotations
 
 import json
-import logging
+import re
 from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+from rich.console import Console
 
-from core.agent_harness.action_agent import ToolCallingDeps, run_agent_turn
+from core.agent_harness.agents.action_agent import ToolCallingDeps, run_agent_turn
+from core.agent_harness.providers.default_providers import DefaultToolProvider
 from core.agent_harness.session import ReplSession
 from core.agent_harness.session.storage.memory import InMemorySessionStorage
+from core.agent_harness.tools.action_tools import action_tool_names
 from core.llm.types import AgentLLMResponse, ToolCall
-from gateway.agent.gateway_agent_adapters import GatewayToolProvider
-from gateway.agent.gateway_output_sink import GatewayOutputSink
 from tools.registry import clear_tool_registry_cache
 
 _USER_MESSAGE = (
     "send a message to slack with the temperature in antartica, "
     "compute the temperature first and then send the message"
 )
-# Genuinely computed by the first (shell) turn rather than hardcoded into the
-# Slack call, so the test proves the second turn consumes the first turn's output.
-_FREEZING_C = -20
-_WIND_CHILL_C = -40
-_EXPECTED_TEMPERATURE = f"Antarctica: {_FREEZING_C + _WIND_CHILL_C}C"
-_COMPUTE_COMMAND = f"echo 'Antarctica:' $(({_FREEZING_C} + {_WIND_CHILL_C}))'C'"
+# Genuinely computed by the first (shell) turn.
+_COMPUTED_C = -20 + -20
+_COMPUTE_COMMAND = f"python3 -c \"print('Antarctica:', {-20} + {-20}, 'C')\""
 _SLACK_WEBHOOK = "https://hooks.slack.test/abc"
 
 
 class _ComputeThenSlackLLM:
-    """Scripted LLM that computes a value, observes it, then sends it to Slack.
+    """Scripted LLM that runs a compute step, then sends the result to Slack.
 
-    This mirrors a real model handling a data-dependent compound request
-    sequentially over multiple turns:
+    This mirrors a real model handling the compound request as a short sequence
+    of turns:
 
-    * Turn 1 emits ``shell_run`` to compute the temperature.
-    * Turn 2 fires only once the shell output is in the transcript; it extracts
-      that real output and embeds it in the ``slack_send_message`` call.
+    * Turn 1 emits ``shell_run`` to compute the Antarctica temperature.
+    * Turn 2 (once the compute step has run) emits ``slack_send_message`` with the
+      temperature embedded in the message body.
     * Turn 3 concludes with a plain reply and no tool call.
+
+    The turn counter lets the test assert the "two or three turns" expectation.
     """
 
     def __init__(self) -> None:
         self.turns = 0
-        self.slack_message: str | None = None
+        self.sent_slack_message: str | None = None
 
     def tool_schemas(self, _tools: list[Any]) -> list[dict[str, Any]]:
         return []
@@ -67,7 +67,7 @@ class _ComputeThenSlackLLM:
         _ = (system, tools)
         self.turns += 1
         shell_output = self._shell_output(messages)
-        if shell_output is None:
+        if not shell_output:
             return AgentLLMResponse(
                 content="",
                 tool_calls=[
@@ -78,23 +78,26 @@ class _ComputeThenSlackLLM:
                     )
                 ],
             )
-        if self.slack_message is None:
-            self.slack_message = shell_output
+        if self.sent_slack_message is None:
+            match = re.search(r"Antarctica:\s*(-?\d+)\s*C", shell_output)
+            assert match is not None, shell_output
+            message = f"Antarctica temperature: {match.group(1)}C"
+            self.sent_slack_message = message
             return AgentLLMResponse(
                 content="",
                 tool_calls=[
                     ToolCall(
                         id="call_slack",
                         name="slack_send_message",
-                        input={"message": f"Current temperature — {shell_output}"},
+                        input={"message": message},
                     )
                 ],
             )
         return AgentLLMResponse(content="Done — sent the Antarctica temperature to Slack.")
 
     @staticmethod
-    def _shell_output(messages: list[dict[str, Any]]) -> str | None:
-        """Pull the ``shell_run`` output back out of the tool-result transcript."""
+    def _shell_output(messages: list[dict[str, Any]]) -> str:
+        """Return stdout from the ``shell_run`` provider result, if present."""
         for message in messages:
             if message.get("role") != "tool":
                 continue
@@ -107,13 +110,17 @@ class _ComputeThenSlackLLM:
                 if not isinstance(entry, dict) or entry.get("name") != "shell_run":
                     continue
                 result = entry.get("result")
-                try:
-                    payload = json.loads(result) if isinstance(result, str) else result
-                except (TypeError, ValueError):
-                    continue
-                if isinstance(payload, dict) and payload.get("output"):
-                    return str(payload["output"]).strip()
-        return None
+                if isinstance(result, str):
+                    try:
+                        result = json.loads(result)
+                    except (TypeError, ValueError):
+                        return result.strip()
+                if isinstance(result, dict):
+                    for key in ("response_text", "stdout"):
+                        value = result.get(key)
+                        if isinstance(value, str) and value.strip():
+                            return value.strip()
+        return ""
 
     @staticmethod
     def build_assistant_message(content: str, tool_calls: list[ToolCall]) -> dict[str, Any]:
@@ -145,6 +152,7 @@ class _ComputeThenSlackLLM:
 def test_agent_computes_temperature_then_sends_it_to_slack(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """The gateway agent computes a value then sends it to Slack across turns."""
     clear_tool_registry_cache()
     monkeypatch.setenv("SLACK_WEBHOOK_URL", _SLACK_WEBHOOK)
 
@@ -160,23 +168,28 @@ def test_agent_computes_temperature_then_sends_it_to_slack(
         _capture_send,
     )
 
-    # Start a gateway-style session and the gateway's own agent tool surface.
+    # Build the gateway agent's action surface exactly as ``start_gateway`` does:
+    # shared action tools wrapped in the core-owned default provider.
     session = ReplSession(storage=InMemorySessionStorage())
-    session.resolved_integrations_cache = {"slack": {"webhook_url": _SLACK_WEBHOOK}}
-    sink = MagicMock(spec=GatewayOutputSink)
-    provider = GatewayToolProvider(
-        session=session,
-        sink=sink,
-        chat_id="42",
-        logger=logging.getLogger("gateway.tests.antartica"),
-    )
+    integrations: dict[str, Any] = {"slack": {"webhook_url": _SLACK_WEBHOOK}}
+    session.resolved_integrations_cache = integrations
+    console = Console(force_terminal=False)
+    provider = DefaultToolProvider(session, console)
+    action_tools = provider.action_tools(confirm_fn=None, is_tty=True)
+    tool_names = action_tool_names(action_tools)
+    assert "shell_run" in tool_names
+    assert "slack_send_message" in tool_names
+
+    provider = DefaultToolProvider(session, console, precomputed_action_tools=action_tools)
     llm = _ComputeThenSlackLLM()
 
     result = run_agent_turn(
         _USER_MESSAGE,
         session,
-        output=MagicMock(spec=GatewayOutputSink),
+        output=MagicMock(),
         tools=provider,
+        confirm_fn=lambda _prompt: "y",
+        is_tty=True,
         deps=ToolCallingDeps(llm_factory=lambda: llm),
     )
 
@@ -184,12 +197,12 @@ def test_agent_computes_temperature_then_sends_it_to_slack(
     # finalize. "Two or three turns" — the final no-tool reply is the third.
     assert llm.turns == 3
 
-    # Turn 1 computed the temperature; turn 2 read that real value (not a
-    # placeholder) and used it to compose the Slack message.
-    assert llm.slack_message == _EXPECTED_TEMPERATURE
+    # Turn 1 actually executed a shell command to compute the temperature.
+    shell_entries = [entry for entry in session.history if entry.get("type") == "shell"]
+    assert shell_entries, "expected the compute turn to run a shell command"
 
-    # The Slack tool actually delivered the computed temperature.
-    assert _EXPECTED_TEMPERATURE in delivered.get("message", "")
+    # Turn 2 sent the computed temperature to Slack via the real Slack tool.
+    assert str(_COMPUTED_C) in delivered.get("message", "")
     assert delivered["webhook_url"] == _SLACK_WEBHOOK
 
     # Both tool calls (shell_run + slack_send_message) were planned and succeeded.

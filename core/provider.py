@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -67,9 +67,6 @@ class ProviderHooks:
             return response
         updated = self.after_provider_response(request, response)
         return response if updated is None else updated
-
-    def with_metadata(self, request: ProviderRequest, **metadata: Any) -> ProviderRequest:
-        return replace(request, metadata={**request.metadata, **metadata})
 
 
 def resolve_llm_api_key(env_name: str) -> str:

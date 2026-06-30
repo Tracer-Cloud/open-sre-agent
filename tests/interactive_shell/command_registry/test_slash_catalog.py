@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from core.agent_harness.action_tools import get_action_tool
+from core.agent_harness.tools.action_tools import get_action_tool
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS
 from surfaces.interactive_shell.command_registry.slash_catalog import (
     _MCP_BY_COMMAND,
