@@ -18,13 +18,13 @@ import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
+from core.tool_framework.tool_decorator import tool
 from integrations.aws.aws_sdk_client import execute_aws_sdk_call
 from integrations.cloudtrail import (
     DEFAULT_CLOUDTRAIL_REGION,
     cloudtrail_extract_params,
     cloudtrail_is_available,
 )
-from tools.tool_decorator import tool
 
 logger = logging.getLogger(__name__)
 

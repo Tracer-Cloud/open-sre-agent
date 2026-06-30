@@ -2,14 +2,14 @@
 
 from typing import Any
 
+from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.sql_wrapper import call_db_tool_with_default_db_warning
 from integrations.mariadb import (
     MariaDBConfig,
     get_global_status,
     mariadb_extract_params,
     mariadb_is_available,
 )
-from tools.tool_decorator import tool
-from tools.utils.sql_wrapper import call_db_tool_with_default_db_warning
 
 
 @tool(

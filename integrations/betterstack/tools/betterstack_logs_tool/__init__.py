@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.tool_framework.tool_decorator import tool
 from integrations.betterstack import (
     BetterStackConfig,
     betterstack_extract_params,
     betterstack_is_available,
     query_logs,
 )
-from tools.tool_decorator import tool
 
 
 @tool(

@@ -8,8 +8,8 @@ from typing import Any
 
 import httpx
 
-from tools._telemetry import report_run_error
-from tools.tool_decorator import tool
+from core.tool_framework.telemetry import report_run_error
+from core.tool_framework.tool_decorator import tool
 
 _DEFAULT_MAX_RESULTS = 100
 _MAX_HARD_LIMIT = 200

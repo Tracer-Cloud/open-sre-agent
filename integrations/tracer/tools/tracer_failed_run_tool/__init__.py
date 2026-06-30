@@ -6,11 +6,11 @@ from collections.abc import Iterable
 from typing import Any
 
 from config.config import get_tracer_base_url
+from core.tool_framework.tool_decorator import tool
 from integrations.tracer import (
     PipelineRunSummary,
     get_tracer_web_client,
 )
-from tools.tool_decorator import tool
 
 FAILED_STATUSES = ("failed", "error")
 

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.tool_framework.tool_decorator import tool
 from platform.sandbox.runner import DEFAULT_TIMEOUT, MAX_TIMEOUT, run_python_sandbox
-from tools.tool_decorator import tool
 
 
 @tool(

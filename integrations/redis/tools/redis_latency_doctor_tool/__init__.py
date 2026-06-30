@@ -2,13 +2,13 @@
 
 from typing import Any
 
+from core.tool_framework.tool_decorator import tool
 from integrations.redis import (
     RedisConfig,
     get_latency_doctor,
     redis_extract_params,
     redis_is_available,
 )
-from tools.tool_decorator import tool
 
 
 @tool(

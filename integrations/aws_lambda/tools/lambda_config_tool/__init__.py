@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+from core.tool_framework.tool_decorator import tool
 from integrations.aws.lambda_client import get_function_configuration
 from integrations.aws_lambda.tools.lambda_invocation_logs_tool import (
     _lambda_available,
     _lambda_name,
 )
-from tools.tool_decorator import tool
 
 
 def _extract_lambda_config_params(sources: dict[str, dict]) -> dict:

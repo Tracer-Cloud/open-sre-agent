@@ -2,13 +2,13 @@
 
 from typing import Any
 
+from core.tool_framework.tool_decorator import tool
 from integrations.mongodb_atlas import (
     MongoDBAtlasConfig,
     atlas_extract_params,
     atlas_is_available,
     get_performance_advisor,
 )
-from tools.tool_decorator import tool
 
 
 @tool(

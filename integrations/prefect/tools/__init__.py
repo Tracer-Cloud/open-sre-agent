@@ -6,8 +6,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.tool_framework.base import BaseTool
 from integrations.prefect.client import make_prefect_client
-from tools.base import BaseTool
 
 _ERROR_KEYWORDS = ("error", "failed", "exception", "fatal", "crash", "traceback", "exitcode")
 _FAILED_STATES = {"FAILED", "CRASHED", "CANCELLED", "CANCELLING"}
@@ -208,7 +208,7 @@ prefect_flow_runs = PrefectFlowRunsTool()
 """Prefect worker and work pool health investigation tool."""
 
 
-from tools.base import BaseTool
+from core.tool_framework.base import BaseTool
 
 _UNHEALTHY_WORKER_STATUSES = {"OFFLINE", "UNHEALTHY"}
 _UNHEALTHY_POOL_STATUSES = {"NOT_READY", "PAUSED"}

@@ -6,11 +6,11 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.availability import signoz_available_or_backend
+from core.tool_framework.utils.compaction import compact_logs, summarize_counts
 from integrations.signoz import SigNozConfig, signoz_extract_params
 from integrations.signoz.client import SigNozClient
-from tools.tool_decorator import tool
-from tools.utils.availability import signoz_available_or_backend
-from tools.utils.compaction import compact_logs, summarize_counts
 
 
 def _logs_is_available(sources: dict[str, dict]) -> bool:
@@ -136,7 +136,7 @@ def query_signoz_logs(
 """SigNoz metrics query tool."""
 
 
-from tools.tool_decorator import tool
+from core.tool_framework.tool_decorator import tool
 
 
 def _metrics_is_available(sources: dict[str, dict]) -> bool:
@@ -242,7 +242,7 @@ def query_signoz_metrics(
 """SigNoz traces query tool."""
 
 
-from tools.tool_decorator import tool
+from core.tool_framework.tool_decorator import tool
 
 
 def _traces_is_available(sources: dict[str, dict]) -> bool:

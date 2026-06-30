@@ -13,9 +13,9 @@ from pathlib import Path
 from types import ModuleType
 
 import tools as tools_package
-from tools.base import BaseTool
-from tools.registered_tool import REGISTERED_TOOL_ATTR, RegisteredTool, ToolSurface
-from tools.skill_guidance import format_tool_skill_guidance, load_tool_skill_guidance
+from core.tool_framework.base import BaseTool
+from core.tool_framework.registered_tool import REGISTERED_TOOL_ATTR, RegisteredTool, ToolSurface
+from core.tool_framework.skill_guidance import format_tool_skill_guidance, load_tool_skill_guidance
 
 # Per-vendor tool packages — when a vendor consolidates its tool code under
 # ``integrations/<vendor>/tools/``, list the dotted package path here so the
@@ -91,13 +91,8 @@ logger = logging.getLogger(__name__)
 
 _SKIP_MODULE_NAMES = {
     "__pycache__",
-    "base",
-    "registry",
-    "registered_tool",
-    "skill_guidance",
-    "tool_decorator",
     "investigation_registry",
-    "utils",
+    "registry",
 }
 _TOOL_MODULES_ATTR = "TOOL_MODULES"
 _MAX_TOOL_SKILL_GUIDANCE_CHARS = 2400

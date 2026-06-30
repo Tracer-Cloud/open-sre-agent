@@ -5,6 +5,8 @@ from __future__ import annotations
 import base64
 from typing import Any
 
+from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.code_host_unavailable import code_host_unavailable_payload
 from integrations.gitlab import (
     get_gitlab_file,
 )
@@ -13,8 +15,6 @@ from integrations.gitlab.tools.gitlab_commits_tool import (
     _gl_creds,
     _resolve_config,
 )
-from tools.tool_decorator import tool
-from tools.utils.code_host_unavailable import code_host_unavailable_payload
 
 
 def _get_gitlab_file_extract_params(sources: dict[str, dict]) -> dict[str, Any]:

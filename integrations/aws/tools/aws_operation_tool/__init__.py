@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.tool_framework.tool_decorator import tool
 from integrations.aws.aws_sdk_client import execute_aws_sdk_call
-from tools.tool_decorator import tool
 
 
 def _aws_operation_never_auto_available(_sources: dict[str, dict]) -> bool:

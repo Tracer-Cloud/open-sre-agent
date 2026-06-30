@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from core.domain.types.evidence import EvidenceSource
 from core.domain.types.retrieval import RetrievalControls
 from core.domain.types.tools import ToolSurface
-from tools.base import BaseTool, EvidenceType, SideEffectLevel, ToolMetadata
+from core.tool_framework.base import BaseTool, EvidenceType, SideEffectLevel, ToolMetadata
 
 REGISTERED_TOOL_ATTR = "__opensre_registered_tool__"
 

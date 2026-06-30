@@ -23,14 +23,14 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from core.domain.types.incident_window import IncidentWindow
-from integrations.github_mcp import call_github_mcp_tool
-from tools.tool_decorator import tool
-from tools.utils.github_helpers import (
+from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.github_helpers import (
     github_creds,
     github_source_available,
     normalize_github_tool_result,
     resolve_github_mcp_config,
 )
+from integrations.github_mcp import call_github_mcp_tool
 
 DEFAULT_WINDOW_MINUTES = 120
 MAX_WINDOW_MINUTES = 7 * 24 * 60  # 7 days

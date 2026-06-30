@@ -2,13 +2,13 @@
 
 from typing import Any
 
+from core.tool_framework.tool_decorator import tool
 from integrations.clickhouse import (
     ClickHouseConfig,
     clickhouse_extract_params,
     clickhouse_is_available,
     get_query_activity,
 )
-from tools.tool_decorator import tool
 
 
 @tool(

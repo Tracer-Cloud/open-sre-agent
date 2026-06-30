@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from core.tool_framework.tool_decorator import tool
 from integrations.tracer import TracerRunResult, get_tracer_client
-from tools.tool_decorator import tool
 
 
 @tool(

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from tools.tool_decorator import tool
+from core.tool_framework.tool_decorator import tool
 
 
 def _extract_params(sources: dict[str, dict]) -> dict[str, Any]:

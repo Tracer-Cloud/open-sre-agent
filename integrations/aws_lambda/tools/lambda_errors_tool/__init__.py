@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+from core.tool_framework.tool_decorator import tool
 from integrations.aws_lambda.tools.lambda_invocation_logs_tool import (
     _lambda_available,
     _lambda_name,
     get_lambda_invocation_logs,
 )
-from tools.tool_decorator import tool
 
 
 def _extract_lambda_errors_params(sources: dict[str, dict]) -> dict:

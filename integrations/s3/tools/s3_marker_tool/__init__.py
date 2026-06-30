@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+from core.tool_framework.tool_decorator import tool
 from integrations.aws.s3_client import (
     check_s3_marker_presence,
     compare_versions,
     head_object,
     list_object_versions,
 )
-from tools.tool_decorator import tool
 
 
 def _check_s3_marker_available(sources: dict[str, dict]) -> bool:

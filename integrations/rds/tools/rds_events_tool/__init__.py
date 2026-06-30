@@ -5,13 +5,13 @@ from __future__ import annotations
 import logging
 from typing import Any, cast
 
+from core.tool_framework.tool_decorator import tool
 from integrations.aws.aws_sdk_client import execute_aws_sdk_call
 from integrations.rds import (
     DEFAULT_RDS_REGION,
     rds_extract_params,
     rds_is_available,
 )
-from tools.tool_decorator import tool
 
 logger = logging.getLogger(__name__)
 

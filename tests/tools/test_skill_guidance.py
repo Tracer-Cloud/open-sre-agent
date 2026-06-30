@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tools.skill_guidance import (
+from core.tool_framework.skill_guidance import (
     format_tool_skill_guidance,
     load_tool_skill_guidance,
 )

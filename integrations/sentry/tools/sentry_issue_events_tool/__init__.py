@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.tool_framework.tool_decorator import tool
 from integrations.sentry import list_sentry_issue_events as sentry_list_issue_events
 from integrations.sentry.tools.sentry_search_issues_tool import (
     _resolve_config,
     _sentry_available,
     _sentry_creds,
 )
-from tools.tool_decorator import tool
 
 
 def _issue_events_available(sources: dict[str, dict]) -> bool:

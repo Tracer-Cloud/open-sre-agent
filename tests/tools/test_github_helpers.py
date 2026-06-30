@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+from core.tool_framework.utils.github_helpers import github_creds, resolve_github_mcp_config
 from integrations.github_mcp import DEFAULT_GITHUB_MCP_MODE
-from tools.utils.github_helpers import github_creds, resolve_github_mcp_config
 
 
 def test_github_creds_maps_classified_integration_fields() -> None:
@@ -50,7 +50,10 @@ def test_github_creds_omits_empty_defaults() -> None:
 
 def test_resolve_github_mcp_config_uses_env_when_no_overrides() -> None:
     env_config = MagicMock()
-    with patch("tools.utils.github_helpers.github_mcp_config_from_env", return_value=env_config):
+    with patch(
+        "core.tool_framework.utils.github_helpers.github_mcp_config_from_env",
+        return_value=env_config,
+    ):
         assert resolve_github_mcp_config(None, None, None) is env_config
 
 
@@ -58,8 +61,13 @@ def test_resolve_github_mcp_config_builds_when_token_present() -> None:
     env_config = MagicMock()
     built = MagicMock()
     with (
-        patch("tools.utils.github_helpers.github_mcp_config_from_env", return_value=env_config),
-        patch("tools.utils.github_helpers.build_github_mcp_config", return_value=built) as builder,
+        patch(
+            "core.tool_framework.utils.github_helpers.github_mcp_config_from_env",
+            return_value=env_config,
+        ),
+        patch(
+            "core.tool_framework.utils.github_helpers.build_github_mcp_config", return_value=built
+        ) as builder,
     ):
         result = resolve_github_mcp_config(None, None, "ghp_test")
     assert result is built
@@ -71,5 +79,8 @@ def test_resolve_github_mcp_config_builds_when_token_present() -> None:
 
 def test_resolve_github_mcp_config_does_not_treat_default_mode_as_override() -> None:
     env_config = MagicMock()
-    with patch("tools.utils.github_helpers.github_mcp_config_from_env", return_value=env_config):
+    with patch(
+        "core.tool_framework.utils.github_helpers.github_mcp_config_from_env",
+        return_value=env_config,
+    ):
         assert resolve_github_mcp_config(None, DEFAULT_GITHUB_MCP_MODE, None) is env_config

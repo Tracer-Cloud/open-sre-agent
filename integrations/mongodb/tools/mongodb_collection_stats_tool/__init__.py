@@ -2,13 +2,13 @@
 
 from typing import Any
 
+from core.tool_framework.tool_decorator import tool
 from integrations.mongodb import (
     MongoDBConfig,
     get_collection_stats,
     mongodb_database_is_available,
     mongodb_extract_params,
 )
-from tools.tool_decorator import tool
 
 
 @tool(

@@ -9,6 +9,7 @@ from rich.console import Console
 import tools.interactive_shell.actions.slash as slash_tool
 from core.agent_harness.action_agent import ToolCallingDeps, run_agent_turn
 from core.agent_harness.session import ReplSession
+from core.tool_framework.registered_tool import RegisteredTool
 from surfaces.interactive_shell.runtime.shell_turn_execution import run_action_tool_turn
 from tests.core.agent.orchestration.action_execution_test_harness import (
     ActionExecutionHarness,
@@ -16,7 +17,6 @@ from tests.core.agent.orchestration.action_execution_test_harness import (
     no_tool_response,
     tool_response,
 )
-from tools.registered_tool import RegisteredTool
 
 
 class _GenericActionToolProvider:

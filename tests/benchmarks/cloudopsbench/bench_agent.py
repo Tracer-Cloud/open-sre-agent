@@ -30,8 +30,8 @@ import logging
 import os
 from typing import Any, ClassVar
 
+from core.tool_framework.registered_tool import RegisteredTool
 from tools.investigation.stages.gather_evidence import ConnectedInvestigationAgent
-from tools.registered_tool import RegisteredTool
 
 logger = logging.getLogger(__name__)
 

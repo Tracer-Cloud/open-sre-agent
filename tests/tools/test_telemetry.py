@@ -28,7 +28,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from tools._telemetry import report_run_error
+from core.tool_framework.telemetry import report_run_error
 
 
 @dataclass

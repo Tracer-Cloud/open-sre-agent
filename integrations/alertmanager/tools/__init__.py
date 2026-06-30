@@ -11,8 +11,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.tool_framework.base import BaseTool
 from integrations.alertmanager.client import make_alertmanager_client
-from tools.base import BaseTool
 
 _FIRING_STATES = {"active", "unprocessed"}
 
@@ -180,7 +180,7 @@ Useful for understanding whether an alert was intentionally suppressed
 """
 
 
-from tools.base import BaseTool
+from core.tool_framework.base import BaseTool
 
 
 class AlertmanagerSilencesTool(BaseTool):

@@ -7,14 +7,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from integrations.github_mcp import GitHubMCPConfig
-from tools.utils.github_repo_scope import (
+from core.tool_framework.utils.github_repo_scope import (
     apply_github_repo_scope,
     detect_git_remote_repo_scope,
     infer_github_repo_scope,
     parse_github_repository_reference,
     split_repo_full_name,
 )
+from integrations.github_mcp import GitHubMCPConfig
 
 
 @pytest.mark.parametrize(
@@ -90,14 +90,14 @@ def test_infer_github_repo_scope_uses_github_repository_env() -> None:
 
 
 def test_detect_git_remote_repo_scope_parses_https_remote() -> None:
-    with patch("tools.utils.github_repo_scope.subprocess.run") as run:
+    with patch("core.tool_framework.utils.github_repo_scope.subprocess.run") as run:
         run.return_value = MagicMock(returncode=0, stdout="https://github.com/org/repo.git\n")
         assert detect_git_remote_repo_scope("/tmp/repo") == ("org", "repo")
     run.assert_called_once()
 
 
 def test_detect_git_remote_repo_scope_parses_ssh_remote() -> None:
-    with patch("tools.utils.github_repo_scope.subprocess.run") as run:
+    with patch("core.tool_framework.utils.github_repo_scope.subprocess.run") as run:
         run.return_value = MagicMock(returncode=0, stdout="git@github.com:org/repo.git\n")
         assert detect_git_remote_repo_scope() == ("org", "repo")
 

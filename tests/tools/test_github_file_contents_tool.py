@@ -43,7 +43,9 @@ def test_extract_params_maps_fields() -> None:
 
 
 def test_run_returns_unavailable_when_no_config() -> None:
-    with patch("tools.utils.github_helpers.github_mcp_config_from_env", return_value=None):
+    with patch(
+        "core.tool_framework.utils.github_helpers.github_mcp_config_from_env", return_value=None
+    ):
         result = get_github_file_contents(owner="org", repo="repo", path="README.md")
     assert result == {
         "source": "github",
@@ -64,8 +66,13 @@ def test_run_happy_path() -> None:
     }
     mock_config = MagicMock()
     with (
-        patch("tools.utils.github_helpers.github_mcp_config_from_env", return_value=None),
-        patch("tools.utils.github_helpers.build_github_mcp_config", return_value=mock_config),
+        patch(
+            "core.tool_framework.utils.github_helpers.github_mcp_config_from_env", return_value=None
+        ),
+        patch(
+            "core.tool_framework.utils.github_helpers.build_github_mcp_config",
+            return_value=mock_config,
+        ),
         patch(
             "integrations.github.tools.file_contents.call_github_mcp_tool", return_value=fake_result
         ),

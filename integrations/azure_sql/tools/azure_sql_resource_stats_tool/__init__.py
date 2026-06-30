@@ -2,13 +2,13 @@
 
 from typing import Any
 
+from core.tool_framework.tool_decorator import tool
 from integrations.azure_sql import (
     azure_sql_extract_params,
     azure_sql_is_available,
     get_resource_stats,
     resolve_azure_sql_config,
 )
-from tools.tool_decorator import tool
 
 
 @tool(

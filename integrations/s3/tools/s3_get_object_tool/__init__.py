@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from core.tool_framework.tool_decorator import tool
 from integrations.aws.s3_client import get_full_object
-from tools.tool_decorator import tool
 
 
 def _get_s3_object_available(sources: dict[str, dict]) -> bool:

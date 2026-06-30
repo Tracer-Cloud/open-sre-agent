@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any, Literal, cast
 
+from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.github_helpers import github_creds, github_source_available
 from integrations.github.client import GitHubApiError, GitHubRestClient, resolve_github_token
 from integrations.github.tools.workflow import (
     GitHubIssueMutationProposal,
@@ -12,8 +14,6 @@ from integrations.github.tools.workflow import (
     WorkItem,
     build_issue_mutation_proposal,
 )
-from tools.tool_decorator import tool
-from tools.utils.github_helpers import github_creds, github_source_available
 
 _HELP_WANTED_LABELS = {"help wanted", "good first issue", "up for grabs", "agent-ready"}
 _BLOCKING_MERGEABLE_STATES = {"blocked", "dirty", "behind", "unstable"}

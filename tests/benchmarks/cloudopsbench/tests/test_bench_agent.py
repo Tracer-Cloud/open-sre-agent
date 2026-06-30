@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from core.tool_framework.registered_tool import RegisteredTool
 from tests.benchmarks.cloudopsbench.bench_agent import (
     _DEFAULT_MIN_TOOL_CALLS,
     _ENV_MIN_TOOL_CALLS,
@@ -11,7 +12,6 @@ from tests.benchmarks.cloudopsbench.bench_agent import (
     _resolve_min_tool_calls,
 )
 from tools.investigation.stages.gather_evidence import ConnectedInvestigationAgent
-from tools.registered_tool import RegisteredTool
 
 
 def _make_registered_tool(name: str, origin_module: str) -> RegisteredTool:

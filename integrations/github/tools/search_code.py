@@ -4,17 +4,17 @@ from __future__ import annotations
 
 from typing import Any
 
-from integrations.github_mcp import (
-    build_github_code_search_query,
-    call_github_mcp_tool,
-)
-from tools.tool_decorator import tool
-from tools.utils.code_host_unavailable import code_host_unavailable_payload
-from tools.utils.github_helpers import (
+from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.code_host_unavailable import code_host_unavailable_payload
+from core.tool_framework.utils.github_helpers import (
     github_creds,
     github_source_available,
     normalize_github_tool_result,
     resolve_github_mcp_config,
+)
+from integrations.github_mcp import (
+    build_github_code_search_query,
+    call_github_mcp_tool,
 )
 
 

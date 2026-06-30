@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.tool_framework.tool_decorator import tool
 from integrations.tracer import (
     AWSBatchJobResult,
     get_tracer_client,
     get_tracer_web_client,
 )
-from tools.tool_decorator import tool
 
 
 def _tracer_available(sources: dict[str, dict]) -> bool:

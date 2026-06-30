@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tools.utils.availability import (
+from core.tool_framework.utils.availability import (
     cloudwatch_is_available,
     datadog_available_or_backend,
     eks_available_or_backend,

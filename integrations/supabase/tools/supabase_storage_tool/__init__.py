@@ -2,13 +2,13 @@
 
 from typing import Any
 
+from core.tool_framework.tool_decorator import tool
 from integrations.supabase import (
     get_storage_buckets,
     resolve_supabase_config,
     supabase_extract_params,
     supabase_is_available,
 )
-from tools.tool_decorator import tool
 
 
 @tool(

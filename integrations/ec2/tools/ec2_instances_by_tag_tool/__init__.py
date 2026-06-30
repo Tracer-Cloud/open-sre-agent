@@ -10,13 +10,13 @@ from __future__ import annotations
 import logging
 from typing import Any, cast
 
-from integrations.aws.aws_sdk_client import execute_aws_sdk_call
-from tools.tool_decorator import tool
-from tools.utils.availability import ec2_available_or_backend
-from tools.utils.aws_topology_helper import (
+from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.availability import ec2_available_or_backend
+from core.tool_framework.utils.aws_topology_helper import (
     build_ec2_summary,
     extract_ec2_instances_params,
 )
+from integrations.aws.aws_sdk_client import execute_aws_sdk_call
 
 logger = logging.getLogger(__name__)
 

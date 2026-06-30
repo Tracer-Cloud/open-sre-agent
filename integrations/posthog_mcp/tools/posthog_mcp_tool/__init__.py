@@ -9,6 +9,9 @@ or renames individual MCP-side tools.
 
 from __future__ import annotations
 
+from core.tool_framework.telemetry import report_run_error
+from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.mcp_tool_listing import build_mcp_tool_listing
 from integrations.posthog_mcp import (
     PostHogMCPConfig,
     PostHogMCPToolCallResult,
@@ -23,9 +26,6 @@ from integrations.posthog_mcp import (
 from integrations.posthog_mcp import (
     list_posthog_mcp_tools as list_posthog_mcp_server_tools,
 )
-from tools._telemetry import report_run_error
-from tools.tool_decorator import tool
-from tools.utils.mcp_tool_listing import build_mcp_tool_listing
 
 PostHogMCPParams = dict[str, object]
 PostHogMCPResponse = dict[str, object]

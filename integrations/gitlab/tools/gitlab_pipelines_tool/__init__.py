@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.tool_framework.tool_decorator import tool
 from integrations.gitlab import (
     get_gitlab_pipelines,
 )
@@ -12,7 +13,6 @@ from integrations.gitlab.tools.gitlab_commits_tool import (
     _gl_creds,
     _resolve_config,
 )
-from tools.tool_decorator import tool
 
 
 def _list_gitlab_pipelines_extract_params(sources: dict[str, dict]) -> dict[str, Any]:

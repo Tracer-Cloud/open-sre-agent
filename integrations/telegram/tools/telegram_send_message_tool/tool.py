@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.tool_framework.base import BaseTool
+from core.tool_framework.tool_decorator import tool
 from integrations.telegram.tools.telegram_send_message_tool.constants import SOURCE
 from integrations.telegram.tools.telegram_send_message_tool.delivery import (
     dispatch_message,
@@ -17,8 +19,6 @@ from integrations.telegram.tools.telegram_send_message_tool.validation import (
     normalize_optional_text,
     validate_message,
 )
-from tools.base import BaseTool
-from tools.tool_decorator import tool
 
 
 class TelegramSendMessageTool(BaseTool):

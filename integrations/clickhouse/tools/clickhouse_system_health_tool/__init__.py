@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from core.tool_framework.tool_decorator import tool
 from integrations.clickhouse import (
     ClickHouseConfig,
     clickhouse_extract_params,
@@ -9,7 +10,6 @@ from integrations.clickhouse import (
     get_system_health,
     get_table_stats,
 )
-from tools.tool_decorator import tool
 
 
 @tool(

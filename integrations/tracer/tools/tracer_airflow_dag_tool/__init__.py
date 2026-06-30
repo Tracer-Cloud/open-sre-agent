@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
+from core.tool_framework.tool_decorator import tool
 from integrations.airflow import (
     AirflowConfig,
     build_airflow_config,
@@ -18,7 +19,6 @@ from integrations.airflow import (
 from integrations.airflow import (
     get_recent_airflow_failures as fetch_recent_airflow_failures,
 )
-from tools.tool_decorator import tool
 
 
 def _airflow_available(sources: dict[str, Any]) -> bool:

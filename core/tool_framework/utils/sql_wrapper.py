@@ -12,7 +12,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from tools.utils.db_warnings import default_db_warning
+from core.tool_framework.utils.db_warnings import default_db_warning
 
 
 def call_db_tool_with_default_db_warning[T](

@@ -2,14 +2,14 @@
 
 from typing import Any
 
+from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.sql_wrapper import call_db_tool_with_default_db_warning
 from integrations.azure_sql import (
     azure_sql_extract_params,
     azure_sql_is_available,
     get_current_queries,
     resolve_azure_sql_config,
 )
-from tools.tool_decorator import tool
-from tools.utils.sql_wrapper import call_db_tool_with_default_db_warning
 
 
 @tool(

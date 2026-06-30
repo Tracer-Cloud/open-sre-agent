@@ -9,6 +9,9 @@ individual MCP-side tools.
 
 from __future__ import annotations
 
+from core.tool_framework.telemetry import report_run_error
+from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.mcp_tool_listing import build_mcp_tool_listing
 from integrations.sentry_mcp import (
     SentryMCPConfig,
     SentryMCPToolCallResult,
@@ -23,9 +26,6 @@ from integrations.sentry_mcp import (
 from integrations.sentry_mcp import (
     list_sentry_mcp_tools as list_sentry_mcp_server_tools,
 )
-from tools._telemetry import report_run_error
-from tools.tool_decorator import tool
-from tools.utils.mcp_tool_listing import build_mcp_tool_listing
 
 SentryMCPParams = dict[str, object]
 SentryMCPResponse = dict[str, object]

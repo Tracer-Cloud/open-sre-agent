@@ -44,11 +44,11 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
+from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.availability import hermes_available_or_backend
 from integrations.hermes.classifier import IncidentClassifier
 from integrations.hermes.incident import HermesIncident, LogLevel, LogRecord
 from integrations.hermes.poller import HermesLogCursor, HermesLogPoll, poll_hermes_logs
-from tools.tool_decorator import tool
-from tools.utils.availability import hermes_available_or_backend
 
 # Default location of Hermes' own error log. The agent tool resolves
 # this lazily so a non-default ``$HERMES_HOME`` is respected without

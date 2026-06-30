@@ -9,9 +9,9 @@ import concurrent.futures
 import re
 from typing import Any
 
+from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.compaction import compact_logs, summarize_counts
 from integrations.datadog._client import make_async_client
-from tools.tool_decorator import tool
-from tools.utils.compaction import compact_logs, summarize_counts
 
 
 def _run_in_thread(coro: Any) -> Any:
@@ -290,8 +290,8 @@ def fetch_datadog_context(
 """Datadog events query tool."""
 
 
+from core.tool_framework.tool_decorator import tool
 from integrations.datadog._client import make_client, unavailable
-from tools.tool_decorator import tool
 
 
 def _events_is_available(sources: dict[str, dict]) -> bool:
@@ -365,8 +365,8 @@ def query_datadog_events(
 
 from typing import cast
 
-from tools.tool_decorator import tool
-from tools.utils.availability import datadog_available_or_backend
+from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.availability import datadog_available_or_backend
 
 _ERROR_KEYWORDS = (
     "error",
@@ -491,7 +491,7 @@ def query_datadog_logs(
 
 from pydantic import BaseModel, Field
 
-from tools.tool_decorator import tool
+from core.tool_framework.tool_decorator import tool
 
 
 class QueryDatadogMetricsInput(BaseModel):
@@ -586,7 +586,7 @@ def query_datadog_metrics(
 """Datadog monitor listing tool."""
 
 
-from tools.tool_decorator import tool
+from core.tool_framework.tool_decorator import tool
 
 
 def _monitors_is_available(sources: dict[str, dict]) -> bool:
@@ -668,7 +668,7 @@ def query_datadog_monitors(
 """Datadog tool: resolve a node IP to the pods running on that node."""
 
 
-from tools.tool_decorator import tool
+from core.tool_framework.tool_decorator import tool
 
 
 def _node_pods_is_available(sources: dict[str, dict]) -> bool:

@@ -15,8 +15,8 @@ from core.execution import (
 )
 from core.llm.types import AgentLLMResponse, ToolCall
 from core.provider import ProviderHooks, ProviderRequest
+from core.tool_framework.registered_tool import RegisteredTool
 from core.types import AgentTool, AgentToolContext
-from tools.registered_tool import RegisteredTool
 
 
 def _schema(required: list[str] | None = None) -> dict[str, Any]:

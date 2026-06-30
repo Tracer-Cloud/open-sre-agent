@@ -2,13 +2,13 @@
 
 from typing import Any
 
+from core.tool_framework.tool_decorator import tool
 from integrations.rabbitmq import (
     RabbitMQConfig,
     get_connection_stats,
     rabbitmq_extract_params,
     rabbitmq_is_available,
 )
-from tools.tool_decorator import tool
 
 
 @tool(

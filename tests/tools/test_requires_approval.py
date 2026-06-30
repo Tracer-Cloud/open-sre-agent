@@ -5,9 +5,9 @@ from __future__ import annotations
 from typing import Any
 
 from core.domain.types.evidence import EvidenceSource
-from tools.base import BaseTool
-from tools.registered_tool import RegisteredTool
-from tools.tool_decorator import tool
+from core.tool_framework.base import BaseTool
+from core.tool_framework.registered_tool import RegisteredTool
+from core.tool_framework.tool_decorator import tool
 
 
 class _ReadOnlyTool(BaseTool):

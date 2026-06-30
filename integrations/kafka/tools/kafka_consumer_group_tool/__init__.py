@@ -2,13 +2,13 @@
 
 from typing import Any
 
+from core.tool_framework.tool_decorator import tool
 from integrations.kafka import (
     KafkaConfig,
     get_consumer_group_lag,
     kafka_extract_params,
     kafka_is_available,
 )
-from tools.tool_decorator import tool
 
 
 @tool(

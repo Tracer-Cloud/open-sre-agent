@@ -7,8 +7,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from core.tool_framework.tool_decorator import tool
 from integrations.eks.eks_k8s_client import build_k8s_clients
-from tools.tool_decorator import tool
 
 logger = logging.getLogger(__name__)
 
@@ -115,9 +115,9 @@ def get_eks_deployment_status(
 
 from botocore.exceptions import ClientError
 
+from core.tool_framework.telemetry import report_run_error
+from core.tool_framework.tool_decorator import tool
 from integrations.eks.eks_client import EKSClient
-from tools._telemetry import report_run_error
-from tools.tool_decorator import tool
 
 
 def _addon_is_available(sources: dict[str, dict]) -> bool:
@@ -232,7 +232,7 @@ def describe_eks_addon(
 """EKS cluster-level investigation tools — boto3 backed."""
 
 
-from tools.tool_decorator import tool
+from core.tool_framework.tool_decorator import tool
 
 logger = logging.getLogger(__name__)
 
@@ -332,8 +332,8 @@ def describe_eks_cluster(
 
 from typing import cast
 
-from tools.tool_decorator import tool
-from tools.utils.availability import eks_available_or_backend
+from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.availability import eks_available_or_backend
 
 logger = logging.getLogger(__name__)
 
@@ -452,8 +452,8 @@ def get_eks_events(
 """EKS cluster-level investigation tools — boto3 backed."""
 
 
-from tools.tool_decorator import tool
-from tools.utils.eks_workload_helper import extract_cluster_params
+from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.eks_workload_helper import extract_cluster_params
 
 logger = logging.getLogger(__name__)
 
@@ -544,8 +544,8 @@ def list_eks_clusters(
 """EKS workload investigation tools — Kubernetes Python SDK backed."""
 
 
-from tools.tool_decorator import tool
-from tools.utils.eks_workload_helper import extract_workload_params
+from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.eks_workload_helper import extract_workload_params
 
 logger = logging.getLogger(__name__)
 
@@ -655,7 +655,7 @@ def list_eks_deployments(
 """EKS workload investigation tools — Kubernetes Python SDK backed."""
 
 
-from tools.tool_decorator import tool
+from core.tool_framework.tool_decorator import tool
 
 logger = logging.getLogger(__name__)
 
@@ -747,9 +747,9 @@ def list_eks_namespaces(
 
 from pydantic import BaseModel, Field
 
-from tools.tool_decorator import tool
-from tools.utils.availability import eks_available_or_backend
-from tools.utils.eks_workload_helper import extract_workload_params
+from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.availability import eks_available_or_backend
+from core.tool_framework.utils.eks_workload_helper import extract_workload_params
 
 logger = logging.getLogger(__name__)
 
@@ -916,8 +916,8 @@ def list_eks_pods(
 """EKS workload investigation tools — Kubernetes Python SDK backed."""
 
 
-from tools.tool_decorator import tool
-from tools.utils.availability import eks_available_or_backend
+from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.availability import eks_available_or_backend
 
 logger = logging.getLogger(__name__)
 
@@ -1039,7 +1039,7 @@ def get_eks_node_health(
 """EKS cluster-level investigation tools — boto3 backed."""
 
 
-from tools.tool_decorator import tool
+from core.tool_framework.tool_decorator import tool
 
 
 def _nodegroup_is_available(sources: dict[str, dict]) -> bool:
@@ -1160,8 +1160,8 @@ def get_eks_nodegroup_health(
 """EKS workload investigation tools — Kubernetes Python SDK backed."""
 
 
-from tools.tool_decorator import tool
-from tools.utils.availability import eks_available_or_backend
+from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.availability import eks_available_or_backend
 
 logger = logging.getLogger(__name__)
 

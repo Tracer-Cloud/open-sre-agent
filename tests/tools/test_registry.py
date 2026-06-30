@@ -9,11 +9,11 @@ from typing import Any
 import pytest
 
 from core.domain.types.retrieval import RetrievalControls
+from core.tool_framework.base import BaseTool
+from core.tool_framework.registered_tool import REGISTERED_TOOL_ATTR, RegisteredTool
+from core.tool_framework.tool_decorator import tool
 from tools import registry as registry_module
-from tools.base import BaseTool
 from tools.investigation_registry.actions import get_available_actions
-from tools.registered_tool import REGISTERED_TOOL_ATTR, RegisteredTool
-from tools.tool_decorator import tool
 
 _V2_TOOL_CONTRACT_NAMES = frozenset(
     {

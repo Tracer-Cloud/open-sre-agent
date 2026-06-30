@@ -5,15 +5,15 @@ from __future__ import annotations
 import json
 from typing import Any, cast
 
-from integrations.github_mcp import call_github_mcp_tool
-from tools.tool_decorator import tool
-from tools.utils.code_host_unavailable import code_host_unavailable_payload
-from tools.utils.github_helpers import (
+from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.code_host_unavailable import code_host_unavailable_payload
+from core.tool_framework.utils.github_helpers import (
     github_creds,
     github_source_available,
     normalize_github_tool_result,
     resolve_github_mcp_config,
 )
+from integrations.github_mcp import call_github_mcp_tool
 
 
 def _extract_json_text(result: dict[str, Any]) -> dict[str, Any] | str | None:

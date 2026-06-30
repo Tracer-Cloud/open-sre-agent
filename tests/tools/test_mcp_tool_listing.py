@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tools.utils.mcp_tool_listing import (
+from core.tool_framework.utils.mcp_tool_listing import (
     MAX_DESCRIPTION_CHARS,
     MAX_SCHEMAS_RETURNED,
     MAX_TOOLS_RETURNED,

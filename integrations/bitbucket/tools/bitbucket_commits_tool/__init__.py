@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.tool_framework.tool_decorator import tool
 from integrations.bitbucket import list_commits
 from integrations.bitbucket.tools.bitbucket_search_code_tool import (
     _bb_available,
     _bb_creds,
     _resolve_config,
 )
-from tools.tool_decorator import tool
 
 
 def _list_bitbucket_commits_extract_params(sources: dict[str, dict]) -> dict[str, Any]:

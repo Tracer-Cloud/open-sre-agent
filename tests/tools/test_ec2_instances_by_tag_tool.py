@@ -6,8 +6,8 @@ from typing import Any
 
 import pytest
 
+from core.tool_framework.utils.aws_topology_helper import extract_ec2_instances_params
 from integrations.ec2.tools.ec2_instances_by_tag_tool import _is_available, ec2_instances_by_tag
-from tools.utils.aws_topology_helper import extract_ec2_instances_params
 
 
 class _FakeAWSBackend:

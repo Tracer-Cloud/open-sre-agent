@@ -6,6 +6,8 @@ from typing import Any
 
 import httpx
 
+from core.tool_framework.telemetry import report_run_error
+from core.tool_framework.tool_decorator import tool
 from integrations.sentry import (
     DEFAULT_SENTRY_ISSUE_LIMIT,
     SentryConfig,
@@ -14,8 +16,6 @@ from integrations.sentry import (
     list_sentry_issues,
     sentry_config_from_env,
 )
-from tools._telemetry import report_run_error
-from tools.tool_decorator import tool
 
 
 def _resolve_config(

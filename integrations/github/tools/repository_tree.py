@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from integrations.github_mcp import call_github_mcp_tool
-from tools.tool_decorator import tool
-from tools.utils.github_helpers import (
+from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.github_helpers import (
     github_creds,
     github_source_available,
     normalize_github_tool_result,
     resolve_github_mcp_config,
 )
+from integrations.github_mcp import call_github_mcp_tool
 
 
 def _get_github_repository_tree_extract_params(sources: dict[str, dict]) -> dict[str, Any]:

@@ -6,14 +6,14 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.sql_wrapper import call_db_tool_with_default_db_warning
 from integrations.postgresql import (
     get_slow_queries,
     postgresql_extract_params,
     postgresql_is_available,
     resolve_postgresql_config,
 )
-from tools.tool_decorator import tool
-from tools.utils.sql_wrapper import call_db_tool_with_default_db_warning
 
 
 class PostgreSQLSlowQueriesInput(BaseModel):

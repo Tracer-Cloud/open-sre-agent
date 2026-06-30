@@ -6,8 +6,8 @@ from typing import Any
 
 import pytest
 
+from core.tool_framework.utils.aws_topology_helper import extract_target_health_params
 from integrations.elb.tools.elb_target_health_tool import _is_available, get_elb_target_health
-from tools.utils.aws_topology_helper import extract_target_health_params
 
 
 class _FakeAWSBackend:

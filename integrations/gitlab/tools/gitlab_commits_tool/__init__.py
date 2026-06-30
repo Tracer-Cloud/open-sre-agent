@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.tool_framework.tool_decorator import tool
 from integrations.gitlab import (
     GitlabConfig,
     build_gitlab_config,
     get_gitlab_commits,
     gitlab_config_from_env,
 )
-from tools.tool_decorator import tool
 
 
 def _gl_creds(gl: dict) -> dict:
