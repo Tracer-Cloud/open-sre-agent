@@ -100,6 +100,49 @@ RULES: tuple[PathRule, ...] = (
         ),
     ),
     PathRule(
+        "integrations/clickhouse/",
+        (
+            "tests/integrations/clickhouse/",
+            "tests/tools/test_clickhouse_query_activity_tool.py",
+            "tests/tools/test_clickhouse_system_health_tool.py",
+        ),
+    ),
+    PathRule(
+        "integrations/mariadb/",
+        (
+            "tests/integrations/mariadb/",
+            "tests/tools/test_mariadb_innodb_status_tool.py",
+            "tests/tools/test_mariadb_process_list_tool.py",
+            "tests/tools/test_mariadb_replication_tool.py",
+            "tests/tools/test_mariadb_slow_queries_tool.py",
+            "tests/tools/test_mariadb_status_tool.py",
+            "tests/e2e/mariadb/",
+        ),
+    ),
+    PathRule(
+        "integrations/mongodb_atlas/",
+        (
+            "tests/integrations/mongodb_atlas/",
+            "tests/tools/test_mongodb_atlas_alerts_tool.py",
+            "tests/tools/test_mongodb_atlas_clusters_tool.py",
+            "tests/tools/test_mongodb_atlas_events_tool.py",
+            "tests/tools/test_mongodb_atlas_metrics_tool.py",
+            "tests/tools/test_mongodb_atlas_performance_advisor_tool.py",
+        ),
+    ),
+    PathRule(
+        "integrations/mongodb/",
+        (
+            "tests/integrations/mongodb/",
+            "tests/tools/test_mongodb_collection_stats_tool.py",
+            "tests/tools/test_mongodb_current_ops_tool.py",
+            "tests/tools/test_mongodb_profiler_tool.py",
+            "tests/tools/test_mongodb_replica_status_tool.py",
+            "tests/tools/test_mongodb_server_status_tool.py",
+            "tests/e2e/mongodb/",
+        ),
+    ),
+    PathRule(
         "integrations/mysql/",
         (
             "tests/integrations/mysql/",
@@ -109,6 +152,41 @@ RULES: tuple[PathRule, ...] = (
             "tests/tools/test_mysql_slow_queries_tool.py",
             "tests/tools/test_mysql_table_stats_tool.py",
             "tests/e2e/mysql/",
+        ),
+    ),
+    PathRule(
+        "integrations/postgresql/",
+        (
+            "tests/integrations/postgresql/",
+            "tests/tools/test_postgresql_current_queries_tool.py",
+            "tests/tools/test_postgresql_locks_tool.py",
+            "tests/tools/test_postgresql_replication_status_tool.py",
+            "tests/tools/test_postgresql_server_status_tool.py",
+            "tests/tools/test_postgresql_slow_queries_tool.py",
+            "tests/tools/test_postgresql_table_stats_tool.py",
+            "tests/e2e/postgresql/",
+        ),
+    ),
+    PathRule(
+        "integrations/redis/",
+        (
+            "tests/integrations/redis/",
+            "tests/tools/test_redis_client_list_tool.py",
+            "tests/tools/test_redis_key_scan_tool.py",
+            "tests/tools/test_redis_latency_doctor_tool.py",
+            "tests/tools/test_redis_list_depth_tool.py",
+            "tests/tools/test_redis_replication_tool.py",
+            "tests/tools/test_redis_server_info_tool.py",
+            "tests/tools/test_redis_slowlog_tool.py",
+            "tests/e2e/redis/",
+        ),
+    ),
+    PathRule(
+        "integrations/snowflake/",
+        (
+            "tests/integrations/snowflake/",
+            "tests/tools/test_snowflake_query_history_tool.py",
+            "tests/tools/test_telemetry.py",
         ),
     ),
     PathRule(

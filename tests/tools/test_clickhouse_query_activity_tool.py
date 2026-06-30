@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+from integrations.clickhouse.tools.clickhouse_query_activity_tool import (
+    get_clickhouse_query_activity,
+)
 from tests.tools.conftest import BaseToolContract
-from tools.clickhouse_query_activity_tool import get_clickhouse_query_activity
 
 
 class TestClickHouseQueryActivityToolContract(BaseToolContract):
@@ -73,7 +75,10 @@ def test_run_happy_path() -> None:
             {"query_id": "q2", "query": "SELECT sleep(1)", "duration_ms": 1000},
         ],
     }
-    with patch("tools.clickhouse_query_activity_tool.get_query_activity", return_value=mock_result):
+    with patch(
+        "integrations.clickhouse.tools.clickhouse_query_activity_tool.get_query_activity",
+        return_value=mock_result,
+    ):
         result = get_clickhouse_query_activity(host="ch.example.com", limit=20)
     assert result["available"] is True
     assert result["total_returned"] == 2
@@ -87,7 +92,8 @@ def test_run_error_path() -> None:
         "error": "connection refused",
     }
     with patch(
-        "tools.clickhouse_query_activity_tool.get_query_activity", return_value=error_result
+        "integrations.clickhouse.tools.clickhouse_query_activity_tool.get_query_activity",
+        return_value=error_result,
     ):
         result = get_clickhouse_query_activity(host="ch.example.com")
     assert result["available"] is False

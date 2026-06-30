@@ -227,12 +227,14 @@ def _openobserve_case() -> ToolFailureCase:
 
 def _snowflake_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        from tools import snowflake_query_history_tool as mod
+        from integrations.snowflake.tools import snowflake_query_history_tool as mod
 
         mp.setattr(mod, "httpx", SimpleNamespace(post=MagicMock(side_effect=RuntimeError("net"))))
 
     def invoke() -> dict[str, Any]:
-        from tools.snowflake_query_history_tool import query_snowflake_history
+        from integrations.snowflake.tools.snowflake_query_history_tool import (
+            query_snowflake_history,
+        )
 
         return query_snowflake_history(
             account_identifier="acc",

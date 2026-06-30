@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from integrations.snowflake.tools.snowflake_query_history_tool import query_snowflake_history
 from tools.azure_monitor_logs_tool import query_azure_monitor_logs
 from tools.bitbucket_search_code_tool import _resolve_config
 from tools.openobserve_logs_tool import query_openobserve_logs
 from tools.opensearch_analytics_tool import query_opensearch_analytics
-from tools.snowflake_query_history_tool import query_snowflake_history
 
 
 class _MockResponse:
@@ -50,7 +50,9 @@ def test_snowflake_tool_enforces_bounded_limit(monkeypatch: Any) -> None:
         captured["timeout"] = timeout
         return _MockResponse({"data": [{"id": idx} for idx in range(20)]})
 
-    monkeypatch.setattr("tools.snowflake_query_history_tool.httpx.post", _fake_post)
+    monkeypatch.setattr(
+        "integrations.snowflake.tools.snowflake_query_history_tool.httpx.post", _fake_post
+    )
 
     result = query_snowflake_history(
         account_identifier="xy12345.us-east-1",

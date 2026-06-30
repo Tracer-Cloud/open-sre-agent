@@ -185,7 +185,7 @@ def query_snowflake_history(
             err,
             tool_name="query_snowflake_history",
             source="snowflake",
-            component="tools.snowflake_query_history_tool",
+            component="integrations.snowflake.tools.snowflake_query_history_tool",
             method="httpx.post",
             extras={"account_identifier": account, "integration_id": integration_id},
         )
