@@ -196,7 +196,7 @@ def test_investigate_maps_runtime_failure_to_service_unavailable(
         raise expected_error
 
     def fake_reraise(_exc: BaseException) -> None:
-        from interactive_shell.utils.error_handling.errors import OpenSREError
+        from surfaces.interactive_shell.utils.error_handling.errors import OpenSREError
 
         raise OpenSREError(
             "LLM invocation failed.",
@@ -246,7 +246,7 @@ def test_execute_investigation_tracks_remote_http_source(
         return {"root_cause": "ok"}
 
     monkeypatch.setattr(
-        "cli.investigation.run_investigation_cli",
+        "surfaces.cli.investigation.run_investigation_cli",
         fake_run_investigation_cli,
     )
 

@@ -1,6 +1,6 @@
 """Unit tests for the data_validation utilities."""
 
-from tools.utils.data_validation import MetricsValidator, validate_host_metrics
+from core.tool_framework.utils.data_validation import MetricsValidator, validate_host_metrics
 
 
 def test_impossible_percentages():

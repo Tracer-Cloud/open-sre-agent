@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+from integrations.mariadb.tools.mariadb_status_tool import get_mariadb_global_status
 from tests.tools.conftest import BaseToolContract
-from tools.mariadb_status_tool import get_mariadb_global_status
 
 
 class TestMariaDBStatusToolContract(BaseToolContract):
@@ -25,7 +25,9 @@ def test_run_happy_path() -> None:
         "available": True,
         "metrics": {"Threads_connected": "10", "Uptime": "86400"},
     }
-    with patch("tools.mariadb_status_tool.get_global_status", return_value=fake_result):
+    with patch(
+        "integrations.mariadb.tools.mariadb_status_tool.get_global_status", return_value=fake_result
+    ):
         result = get_mariadb_global_status(host="localhost", database="test", username="user")
     assert result["available"] is True
     assert "Threads_connected" in result["metrics"]
@@ -33,7 +35,7 @@ def test_run_happy_path() -> None:
 
 def test_run_error_propagated() -> None:
     with patch(
-        "tools.mariadb_status_tool.get_global_status",
+        "integrations.mariadb.tools.mariadb_status_tool.get_global_status",
         return_value={"source": "mariadb", "available": False, "error": "connection timeout"},
     ):
         result = get_mariadb_global_status(host="invalid", database="test", username="user")

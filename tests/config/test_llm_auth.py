@@ -5,18 +5,18 @@ from pathlib import Path
 import keyring
 import pytest
 
-from cli.llm_auth.providers import ProviderAuthProfile, resolve_auth_profile
-from cli.llm_auth.service import (
-    AuthSetupError,
-    configure_api_key_provider,
-    configure_cli_subscription_provider,
-)
-from cli.wizard.config import ModelOption, ProviderOption
-from cli.wizard.validation import ValidationResult
 from config.llm_auth.records import resolve_provider_auth_record, save_provider_auth_record
 from config.llm_credentials import resolve_llm_api_key
 from integrations.llm_cli.base import CLIProbe
 from integrations.llm_cli.codex_oauth import CodexOAuthResult
+from surfaces.cli.llm_auth.providers import ProviderAuthProfile, resolve_auth_profile
+from surfaces.cli.llm_auth.service import (
+    AuthSetupError,
+    configure_api_key_provider,
+    configure_cli_subscription_provider,
+)
+from surfaces.cli.wizard.config import ModelOption, ProviderOption
+from surfaces.cli.wizard.validation import ValidationResult
 from tests.shared.keyring_backend import MemoryKeyring
 
 
@@ -34,11 +34,11 @@ def test_configure_deepseek_api_key_stores_keyring_and_nonsecret_env(
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
     monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
     monkeypatch.setattr(
-        "cli.wizard.store.get_store_path",
+        "surfaces.cli.wizard.store.get_store_path",
         lambda: tmp_path / "opensre.json",
     )
     monkeypatch.setattr(
-        "cli.llm_auth.service.validate_provider_credentials",
+        "surfaces.cli.llm_auth.service.validate_provider_credentials",
         lambda **_kwargs: ValidationResult(ok=True, detail="ok"),
     )
 
@@ -72,7 +72,7 @@ def test_configure_api_key_does_not_store_when_validation_fails(
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
     monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
     monkeypatch.setattr(
-        "cli.llm_auth.service.validate_provider_credentials",
+        "surfaces.cli.llm_auth.service.validate_provider_credentials",
         lambda **_kwargs: ValidationResult(ok=False, detail="rejected"),
     )
 
@@ -131,7 +131,7 @@ def test_configure_cli_subscription_syncs_provider(
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
     monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
     monkeypatch.setattr(
-        "cli.wizard.store.get_store_path",
+        "surfaces.cli.wizard.store.get_store_path",
         lambda: tmp_path / "opensre.json",
     )
     fake_provider = ProviderOption(
@@ -146,7 +146,9 @@ def test_configure_cli_subscription_syncs_provider(
         adapter_factory=_FakeAdapter,
         allow_custom_models=True,
     )
-    monkeypatch.setattr("cli.llm_auth.service.provider_for_profile", lambda _profile: fake_provider)
+    monkeypatch.setattr(
+        "surfaces.cli.llm_auth.service.provider_for_profile", lambda _profile: fake_provider
+    )
 
     previous_backend = keyring.get_keyring()
     keyring.set_keyring(MemoryKeyring())
@@ -178,7 +180,7 @@ def test_configure_cli_subscription_uses_managed_codex_oauth_when_status_probe_u
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
     monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
     monkeypatch.setattr(
-        "cli.wizard.store.get_store_path",
+        "surfaces.cli.wizard.store.get_store_path",
         lambda: tmp_path / "opensre.json",
     )
     fake_provider = ProviderOption(
@@ -193,7 +195,9 @@ def test_configure_cli_subscription_uses_managed_codex_oauth_when_status_probe_u
         adapter_factory=_InconclusiveCodexAdapter,
         allow_custom_models=True,
     )
-    monkeypatch.setattr("cli.llm_auth.service.provider_for_profile", lambda _profile: fake_provider)
+    monkeypatch.setattr(
+        "surfaces.cli.llm_auth.service.provider_for_profile", lambda _profile: fake_provider
+    )
     oauth_calls: list[object] = []
 
     def _fake_codex_oauth_login() -> CodexOAuthResult:
@@ -204,7 +208,9 @@ def test_configure_cli_subscription_uses_managed_codex_oauth_when_status_probe_u
             detail="OpenAI OAuth tokens stored for Codex.",
         )
 
-    monkeypatch.setattr("cli.llm_auth.service.run_codex_oauth_login", _fake_codex_oauth_login)
+    monkeypatch.setattr(
+        "surfaces.cli.llm_auth.service.run_codex_oauth_login", _fake_codex_oauth_login
+    )
 
     previous_backend = keyring.get_keyring()
     keyring.set_keyring(MemoryKeyring())

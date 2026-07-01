@@ -9,12 +9,13 @@ import pytest
 from prompt_toolkit.completion import Completion
 
 from core.agent_harness.session import ReplSession
-from interactive_shell.runtime.core import state as loop_state
-from interactive_shell.ui.input_prompt import completion as prompt_completion
-from interactive_shell.ui.input_prompt import rendering as prompt_rendering
-from interactive_shell.ui.input_prompt.completion import completion_preview_hint_ansi
-from interactive_shell.ui.input_prompt.refresh import wire_prompt_refresh
-from interactive_shell.ui.input_prompt.rendering import (
+from platform.common.task_types import TaskKind
+from surfaces.interactive_shell.runtime.core import state as loop_state
+from surfaces.interactive_shell.ui.input_prompt import completion as prompt_completion
+from surfaces.interactive_shell.ui.input_prompt import rendering as prompt_rendering
+from surfaces.interactive_shell.ui.input_prompt.completion import completion_preview_hint_ansi
+from surfaces.interactive_shell.ui.input_prompt.refresh import wire_prompt_refresh
+from surfaces.interactive_shell.ui.input_prompt.rendering import (
     _DEFAULT_PLACEHOLDER_TEXT,
     _prompt_counter_text,
     _prompt_turn_number,
@@ -22,7 +23,6 @@ from interactive_shell.ui.input_prompt.rendering import (
     resolve_prompt_placeholder,
     resolve_prompt_prefix_ansi,
 )
-from platform.common.task_types import TaskKind
 
 
 def _strip_ansi(text: str) -> str:

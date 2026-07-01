@@ -1,11 +1,11 @@
-"""Coverage for the ``python -m cli.wizard`` entrypoint."""
+"""Coverage for the ``python -m surfaces.cli.wizard`` entrypoint."""
 
 from __future__ import annotations
 
 import click
 import pytest
 
-from cli.wizard import __main__ as wizard_main
+from surfaces.cli.wizard import __main__ as wizard_main
 
 
 def test_main_initialises_sentry_and_emits_cli_invoked(
@@ -36,8 +36,8 @@ def test_main_initialises_sentry_and_emits_cli_invoked(
     install_marker, properties = captured
     assert install_marker == {"_marker": "install"}
     assert properties is not None
-    assert properties["entrypoint"] == "python -m cli.wizard"
-    assert properties["command_path"] == "python -m cli.wizard wizard"
+    assert properties["entrypoint"] == "python -m surfaces.cli.wizard"
+    assert properties["command_path"] == "python -m surfaces.cli.wizard wizard"
     assert properties["command_family"] == "wizard"
 
 

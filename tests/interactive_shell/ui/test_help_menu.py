@@ -6,9 +6,9 @@ import io
 import re
 import sys
 
-from interactive_shell.command_registry.types import SlashCommand
-from interactive_shell.ui.help import help_menu
 from platform.terminal import theme as ui_theme
+from surfaces.interactive_shell.command_registry.types import SlashCommand
+from surfaces.interactive_shell.ui.help import help_menu
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;:]*[A-Za-z]")
 

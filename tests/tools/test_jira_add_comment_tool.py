@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from tools.jira_tools import JiraAddCommentTool
+from integrations.jira.tools import JiraAddCommentTool
 
 
 def _tool() -> JiraAddCommentTool:
@@ -18,7 +18,7 @@ def test_is_available_false_without_connection_verified() -> None:
     assert _tool().is_available({}) is False
 
 
-@patch("tools.jira_tools.make_jira_client")
+@patch("integrations.jira.tools.make_jira_client")
 def test_run_adds_comment(mock_make: MagicMock) -> None:
     mock_client = MagicMock()
     mock_client.add_comment.return_value = {"success": True, "comment_id": "comment-55"}
@@ -36,7 +36,7 @@ def test_run_adds_comment(mock_make: MagicMock) -> None:
     assert result["issue_key"] == "OPS-42"
 
 
-@patch("tools.jira_tools.make_jira_client")
+@patch("integrations.jira.tools.make_jira_client")
 def test_run_returns_error_on_api_failure(mock_make: MagicMock) -> None:
     mock_client = MagicMock()
     mock_client.add_comment.return_value = {"success": False, "error": "HTTP 403"}
@@ -77,7 +77,7 @@ def test_run_returns_error_without_body() -> None:
     assert "body" in result["error"]
 
 
-@patch("tools.jira_tools.make_jira_client")
+@patch("integrations.jira.tools.make_jira_client")
 def test_run_returns_unavailable_without_credentials(mock_make: MagicMock) -> None:
     mock_make.return_value = None
     result = _tool().run(base_url="", email="", api_token="", issue_key="OPS-1", body="test")

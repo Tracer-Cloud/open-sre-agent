@@ -7,16 +7,16 @@ from typing import Any
 
 from rich.console import Console
 
-from interactive_shell.runtime import ReplSession
-from platform.common.task_types import TaskRecord
-from tools.interactive_shell.contracts import (
-    ToolContext,
-    execute_with_repl_context,
+from core.agent_harness.tools.tool_context import (
+    ActionToolContext,
+    execute_with_action_context,
     object_schema,
     string_property,
 )
+from core.tool_framework.registered_tool import RegisteredTool
+from platform.common.task_types import TaskRecord
+from surfaces.interactive_shell.runtime import ReplSession
 from tools.interactive_shell.shared.investigation_launch import launch_investigation
-from tools.registered_tool import RegisteredTool
 
 _SAMPLE_ALERT_TEMPLATES = ("generic",)
 
@@ -31,7 +31,7 @@ def run_sample_alert(
     action_already_listed: bool = False,
 ) -> None:
     def _run(task: TaskRecord) -> dict[str, object]:
-        from cli.investigation import run_sample_alert_for_session
+        from surfaces.cli.investigation import run_sample_alert_for_session
 
         return run_sample_alert_for_session(
             template_name=template_name,
@@ -40,7 +40,7 @@ def run_sample_alert(
         )
 
     def _start_background() -> None:
-        from interactive_shell.runtime.background.runner import (
+        from surfaces.interactive_shell.runtime.background.runner import (
             start_background_template_investigation,
         )
 
@@ -60,7 +60,7 @@ def run_sample_alert(
         announce_value=template_name,
         record_value=f"sample:{template_name}",
         foreground_task_command=f"sample alert:{template_name}",
-        exception_context="interactive_shell.sample_alert",
+        exception_context="surfaces.interactive_shell.sample_alert",
         run=_run,
         start_background=_start_background,
         confirm_fn=confirm_fn,
@@ -69,7 +69,7 @@ def run_sample_alert(
     )
 
 
-def execute_sample_alert_tool(args: dict[str, Any], ctx: ToolContext) -> bool:
+def execute_sample_alert_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
     template = str(args.get("template", "")).strip()
     if not template:
         return False
@@ -85,7 +85,7 @@ def execute_sample_alert_tool(args: dict[str, Any], ctx: ToolContext) -> bool:
 
 
 def run_sample_alert_action(*, template: str, context: Any) -> dict[str, Any]:
-    return execute_with_repl_context(
+    return execute_with_action_context(
         {"template": template},
         context,
         execute_sample_alert_tool,

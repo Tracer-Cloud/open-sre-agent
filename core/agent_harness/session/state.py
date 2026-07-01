@@ -17,6 +17,7 @@ from core.domain.alerts.inbox import IncomingAlert
 
 if TYPE_CHECKING:
     from core.agent_harness.grounding.context import GroundingContext
+    from core.agent_harness.integrations.resolution import IntegrationResolutionResult
 else:
     GroundingContext = Any
 
@@ -28,6 +29,7 @@ from core.agent_harness.session.background import (
 )
 from core.agent_harness.session.integrations_cache import (
     has_only_runtime_metadata,
+    has_resolved_integrations,
     merge_resolved_integrations,
 )
 from core.agent_harness.session.storage.jsonl import JsonlSessionStorage
@@ -373,7 +375,7 @@ class ReplSession:
             self.last_synthetic_observation_path = None
             return
         try:
-            from cli.tests.discover import SYNTHETIC_SCENARIOS_DIR
+            from surfaces.cli.tests.discover import SYNTHETIC_SCENARIOS_DIR
         except Exception:
             self.last_synthetic_observation_path = None
             return
@@ -416,15 +418,22 @@ class ReplSession:
         *,
         ok: bool = True,
         response_text: str | None = None,
+        slash_outcome: str | None = None,
     ) -> None:
         """Append an entry to the session history.
 
         Supports kinds: "shell", "slash", "alert", "chat", "incoming_alert", etc.
         For "incoming_alert", use record_incoming_alert() instead to preserve metadata.
+
+        ``slash_outcome`` tags typo-style slash failures (for example
+        ``unknown_command`` or ``invalid_subcommand``) so analytics can
+        distinguish them from handler failures.
         """
         entry: dict[str, Any] = {"type": kind, "text": text, "ok": ok}
         if response_text:
             entry["response_text"] = response_text
+        if slash_outcome:
+            entry["slash_outcome"] = slash_outcome
 
         self.history.append(entry)
 
@@ -472,6 +481,7 @@ class ReplSession:
         *,
         response_text: str | None = None,
         ok: bool | None = None,
+        slash_outcome: str | None = None,
     ) -> None:
         """Update the newest history row of ``kind`` with analytics outcome text."""
         for latest in reversed(self.history):
@@ -479,6 +489,8 @@ class ReplSession:
                 continue
             if ok is not None:
                 latest["ok"] = ok
+            if slash_outcome:
+                latest["slash_outcome"] = slash_outcome
             if response_text and response_text.strip():
                 latest["response_text"] = response_text.strip()
             return
@@ -537,9 +549,9 @@ class ReplSession:
                 generation = self._integration_warm_generation
 
         try:
-            from tools.investigation.stages.resolve_integrations import resolve_integrations_quiet
+            from core.agent_harness.integrations.resolution import resolve_integrations
 
-            resolved = resolve_integrations_quiet({})  # type: ignore[arg-type]
+            resolved = resolve_integrations()
         except Exception:
             # Best-effort warmup: leave cache unset so later turns can retry.
             return
@@ -560,6 +572,26 @@ class ReplSession:
                 self.resolved_integrations_cache,
                 resolved,
             )
+
+    def get_integrations(self) -> IntegrationResolutionResult:
+        """Return this REPL session's integration configs as a typed snapshot.
+
+        The accessor is cache-aware: an explicit empty cache is treated as
+        known state, metadata-only caches trigger one quiet warmup attempt, and
+        warmup results are merged through the same generation guard as startup.
+        """
+        from core.agent_harness.integrations.resolution import IntegrationResolutionResult
+
+        cached = self.resolved_integrations_cache
+        if cached is not None and (
+            has_resolved_integrations(cached) or not has_only_runtime_metadata(cached)
+        ):
+            return IntegrationResolutionResult(resolved_integrations=dict(cached))
+
+        self.warm_resolved_integrations()
+        return IntegrationResolutionResult(
+            resolved_integrations=dict(self.resolved_integrations_cache or {})
+        )
 
     def schedule_warm_resolved_integrations(self) -> None:
         """Warm integration configs off the interactive prompt critical path."""

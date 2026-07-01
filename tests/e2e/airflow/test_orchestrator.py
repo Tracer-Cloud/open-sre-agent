@@ -170,7 +170,7 @@ def test_airflow_investigation_e2e():
     """
     _require_env()
 
-    from cli.investigation import run_investigation_cli
+    from surfaces.cli.investigation import run_investigation_cli
 
     fixture_path = FIXTURES_DIR / "airflow_task_failure_alert.json"
     raw_alert = json.loads(fixture_path.read_text())

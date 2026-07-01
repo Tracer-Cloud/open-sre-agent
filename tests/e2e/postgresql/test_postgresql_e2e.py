@@ -182,11 +182,11 @@ class TestPostgreSQLToolsAvailability:
     def test_postgresql_tools_exist_as_modules(self):
         """PostgreSQL tools modules exist and are properly structured."""
         try:
-            import tools.postgresql_current_queries_tool as PostgreSQLCurrentQueriesTool
-            import tools.postgresql_replication_status_tool as PostgreSQLReplicationStatusTool
-            import tools.postgresql_server_status_tool as PostgreSQLServerStatusTool
-            import tools.postgresql_slow_queries_tool as PostgreSQLSlowQueriesTool
-            import tools.postgresql_table_stats_tool as PostgreSQLTableStatsTool
+            import integrations.postgresql.tools.postgresql_current_queries_tool as PostgreSQLCurrentQueriesTool
+            import integrations.postgresql.tools.postgresql_replication_status_tool as PostgreSQLReplicationStatusTool
+            import integrations.postgresql.tools.postgresql_server_status_tool as PostgreSQLServerStatusTool
+            import integrations.postgresql.tools.postgresql_slow_queries_tool as PostgreSQLSlowQueriesTool
+            import integrations.postgresql.tools.postgresql_table_stats_tool as PostgreSQLTableStatsTool
 
             # All 5 tool modules should be importable
             assert PostgreSQLServerStatusTool is not None

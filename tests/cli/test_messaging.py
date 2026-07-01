@@ -8,8 +8,8 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-from cli.commands.messaging import messaging
 from integrations.messaging_security import verify_pairing_code
+from surfaces.cli.commands.messaging import messaging
 
 
 @pytest.fixture()

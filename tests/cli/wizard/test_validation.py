@@ -5,8 +5,8 @@ import pytest
 from anthropic import AuthenticationError as AnthropicAuthError
 from openai import AuthenticationError as OpenAIAuthError
 
-from cli.wizard.config import PROVIDER_BY_VALUE
-from cli.wizard.validation import _get_provider_base_url, validate_provider_credentials
+from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
+from surfaces.cli.wizard.validation import _get_provider_base_url, validate_provider_credentials
 
 
 @pytest.fixture(autouse=True)
@@ -25,8 +25,8 @@ def _preload_sdk_error_classes(monkeypatch) -> None:
     imported at the top of this file), we short-circuit the loader's import
     branch and make monkeypatches of ``Anthropic`` / ``OpenAI`` reliable.
     """
-    monkeypatch.setattr("cli.wizard.validation.AnthropicAuthError", AnthropicAuthError)
-    monkeypatch.setattr("cli.wizard.validation.OpenAIAuthError", OpenAIAuthError)
+    monkeypatch.setattr("surfaces.cli.wizard.validation.AnthropicAuthError", AnthropicAuthError)
+    monkeypatch.setattr("surfaces.cli.wizard.validation.OpenAIAuthError", OpenAIAuthError)
 
 
 class _FakeAnthropicTextBlock:
@@ -102,7 +102,7 @@ def test_validate_provider_credentials_returns_failure_for_bad_anthropic_key(mon
         body=None,
     )
     monkeypatch.setattr(
-        "cli.wizard.validation.Anthropic",
+        "surfaces.cli.wizard.validation.Anthropic",
         lambda **_kwargs: _FakeAnthropicClient(auth_error),
     )
 
@@ -118,7 +118,7 @@ def test_validate_provider_credentials_returns_failure_for_bad_anthropic_key(mon
 
 def test_validate_provider_credentials_returns_success_for_valid_anthropic_key(monkeypatch) -> None:
     monkeypatch.setattr(
-        "cli.wizard.validation.Anthropic",
+        "surfaces.cli.wizard.validation.Anthropic",
         lambda **_kwargs: _FakeAnthropicClient(_FakeAnthropicResponse("OpenSRE ready")),
     )
 
@@ -142,7 +142,7 @@ def test_validate_provider_credentials_returns_failure_for_bad_openai_key(monkey
         body=None,
     )
     monkeypatch.setattr(
-        "cli.wizard.validation.OpenAI",
+        "surfaces.cli.wizard.validation.OpenAI",
         lambda **_kwargs: _FakeOpenAIClient(auth_error),
     )
 
@@ -158,7 +158,7 @@ def test_validate_provider_credentials_returns_failure_for_bad_openai_key(monkey
 
 def test_validate_provider_credentials_returns_success_for_valid_openai_key(monkeypatch) -> None:
     monkeypatch.setattr(
-        "cli.wizard.validation.OpenAI",
+        "surfaces.cli.wizard.validation.OpenAI",
         lambda **_kwargs: _FakeOpenAIClient(_FakeOpenAIResponse("OpenSRE ready")),
     )
 

@@ -18,6 +18,11 @@ from core.messages.runtime_message_types import (
 )
 
 
+def _is_litellm_agent_client(llm: Any) -> bool:
+    cls = type(llm)
+    return cls.__module__ == "core.llm.litellm.clients" and cls.__name__ == "LiteLLMAgentClient"
+
+
 def convert_to_llm_messages(llm: Any, messages: Sequence[RuntimeMessage]) -> list[ProviderMessage]:
     """Render runtime messages into provider-compatible message dictionaries."""
 
@@ -49,7 +54,7 @@ def _provider_messages_for_runtime_message(
 
 
 def _provider_content_for_app_message(llm: Any, message: AppRuntimeMessage) -> RuntimeContent:
-    from core.llm.agent_llm_client import BedrockConverseAgentClient
+    from core.llm.sdk.agent_clients import BedrockConverseAgentClient
 
     if isinstance(llm, BedrockConverseAgentClient):
         return _to_converse_text_blocks(message.content)
@@ -78,7 +83,7 @@ def build_synthetic_assistant_tool_call_message(
     This lets us inject pre-seeded tool results into the conversation in a format
     the LLM client already understands, without adding special-case handling.
     """
-    from core.llm.agent_llm_client import (
+    from core.llm.sdk.agent_clients import (
         AnthropicAgentClient,
         BedrockConverseAgentClient,
         CLIBackedAgentClient,
@@ -86,7 +91,7 @@ def build_synthetic_assistant_tool_call_message(
     )
 
     if isinstance(llm, BedrockConverseAgentClient):
-        from core.llm.bedrock_converse import build_assistant_tool_use_message
+        from core.llm.sdk.bedrock_converse import build_assistant_tool_use_message
 
         return cast("ProviderMessage", build_assistant_tool_use_message(tool_calls))
 
@@ -102,7 +107,7 @@ def build_synthetic_assistant_tool_call_message(
         ]
         return {"role": "assistant", "content": content}
 
-    if isinstance(llm, OpenAIAgentClient):
+    if isinstance(llm, OpenAIAgentClient) or _is_litellm_agent_client(llm):
         return {
             "role": "assistant",
             "content": None,
@@ -125,7 +130,7 @@ def build_synthetic_assistant_tool_call_message(
 
 
 def build_assistant_message(llm: Any, response: Any) -> ProviderMessage:
-    from core.llm.agent_llm_client import AnthropicAgentClient, BedrockConverseAgentClient
+    from core.llm.sdk.agent_clients import AnthropicAgentClient, BedrockConverseAgentClient
 
     if isinstance(llm, (AnthropicAgentClient, BedrockConverseAgentClient)):
         return cast("ProviderMessage", llm.build_assistant_message(response.raw_content))
@@ -142,10 +147,10 @@ def build_tool_result_messages(
     tool_calls: list[ToolCall],
     results: list[Any],
 ) -> list[ProviderMessage]:
-    from core.llm.agent_llm_client import AnthropicAgentClient, OpenAIAgentClient
+    from core.llm.sdk.agent_clients import AnthropicAgentClient, OpenAIAgentClient
 
     if isinstance(llm, AnthropicAgentClient):
         return [cast("ProviderMessage", llm.build_tool_result_message(tool_calls, results))]
-    if isinstance(llm, OpenAIAgentClient):
+    if isinstance(llm, OpenAIAgentClient) or _is_litellm_agent_client(llm):
         return cast("list[ProviderMessage]", llm.build_tool_result_messages(tool_calls, results))
     return [cast("ProviderMessage", llm.build_tool_result_message(tool_calls, results))]

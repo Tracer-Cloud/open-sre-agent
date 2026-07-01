@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.tool_framework.tool_decorator import tool
 from integrations.github.client import GitHubApiError, GitHubRestClient, resolve_github_token
-from tools.github.workflow import summarize_community_followups_from_comments
-from tools.tool_decorator import tool
-from tools.utils.github_helpers import github_creds, github_source_available
+from integrations.github.helpers import github_creds, github_source_available
+from integrations.github.tools.workflow import summarize_community_followups_from_comments
 
 
 def _community_available(sources: dict[str, dict]) -> bool:

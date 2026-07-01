@@ -7,8 +7,8 @@ from unittest.mock import patch
 
 import pytest
 
+from integrations.bitbucket.tools.bitbucket_commits_tool import list_bitbucket_commits
 from tests.tools.conftest import BaseToolContract
-from tools.bitbucket_commits_tool import list_bitbucket_commits
 
 
 def _registered_tool() -> Any:
@@ -100,7 +100,7 @@ def test_run_happy_path() -> None:
     }
 
     with patch(
-        "tools.bitbucket_commits_tool.list_commits", return_value=mock_result
+        "integrations.bitbucket.tools.bitbucket_commits_tool.list_commits", return_value=mock_result
     ) as mocked_list_commits:
         result = list_bitbucket_commits(
             repo_slug="backend-service",
@@ -126,7 +126,10 @@ def test_run_happy_path() -> None:
 
 def test_run_returns_unavailable_without_credentials() -> None:
     # Ensure env-based config doesn't make this test flaky
-    with patch("tools.bitbucket_search_code_tool.bitbucket_config_from_env", return_value=None):
+    with patch(
+        "integrations.bitbucket.tools.bitbucket_search_code_tool.bitbucket_config_from_env",
+        return_value=None,
+    ):
         result = list_bitbucket_commits(repo_slug="backend-service")
 
     assert result["available"] is False

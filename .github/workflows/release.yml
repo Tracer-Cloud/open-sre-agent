@@ -264,15 +264,15 @@ jobs:
 
       - name: Build binary
         run: >-
-          uv run pyinstaller cli/__main__.py
+          uv run pyinstaller surfaces/cli/__main__.py
           --name opensre
           --onefile
           --clean
           --noconfirm
-          --collect-data cli
+          --collect-data surfaces.cli
           --collect-data config
           --collect-submodules integrations
-          --collect-submodules interactive_shell
+          --collect-submodules surfaces.interactive_shell
           --collect-submodules tools
           --add-data "platform:platform"
           --add-data ".stdlib_vendor:_opensre_stdlib_platform"

@@ -4,8 +4,13 @@ from __future__ import annotations
 
 import pytest
 
-from interactive_shell.runtime.input import InputCancelled, InputClosed, InputEvent, InputSubmitted
-from interactive_shell.runtime.input.actions import (
+from surfaces.interactive_shell.runtime.input import (
+    InputCancelled,
+    InputClosed,
+    InputEvent,
+    InputSubmitted,
+)
+from surfaces.interactive_shell.runtime.input.actions import (
     QUEUE_DURING_CONFIRMATION_WARNING,
     CancelTurn,
     CloseShell,

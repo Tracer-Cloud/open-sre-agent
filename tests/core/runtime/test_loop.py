@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 import logging
 from collections.abc import Iterator
 from typing import Any, cast
@@ -25,8 +26,8 @@ from core.messages import (
     ensure_runtime_messages,
     user_runtime_message,
 )
+from core.tool_framework.registered_tool import RegisteredTool
 from core.types import AgentTool, AgentToolContext
-from tools.registered_tool import RegisteredTool
 
 
 class FakeLLM:
@@ -131,6 +132,55 @@ def _agent(
     )
 
 
+def test_agent_exposes_headless_dispatch_entrypoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    class EchoReasoningClient:
+        def invoke_stream(self, _prompt: str) -> Iterator[str]:
+            yield "hello from headless"
+
+    monkeypatch.setattr(
+        "core.agent_harness.agents.action_agent._default_llm_factory",
+        lambda: FakeLLM(iter([AgentLLMResponse(content="", tool_calls=[], raw_content=None)])),
+    )
+
+    from core.agent_harness.agents.headless_agent import StaticReasoningClientProvider
+
+    result = Agent.dispatch_message_to_headless_agent(
+        "hello",
+        reasoning=StaticReasoningClientProvider(client=EchoReasoningClient()),
+    )
+
+    assert result.assistant_response_text == "hello from headless"
+
+
+def test_agent_defaults_to_agent_llm_without_tools(monkeypatch: pytest.MonkeyPatch) -> None:
+    llm = FakeLLM(iter([_text_response("reasoned answer")]))
+    monkeypatch.setattr("core.llm.agent_llm_client.get_agent_llm", lambda: llm)
+
+    agent = Agent(system="sys", tools=[], resolved_integrations={}, max_iterations=1)
+    result = agent.run([{"role": "user", "content": "hello"}])
+
+    assert result.final_text == "reasoned answer"
+    assert result.executed == []
+    assert llm.schema_tool_names == [[]]
+
+
+def test_agent_default_agent_llm_receives_tools(monkeypatch: pytest.MonkeyPatch) -> None:
+    llm = FakeLLM(iter([_text_response("unused")]))
+    monkeypatch.setattr("core.llm.agent_llm_client.get_agent_llm", lambda: llm)
+
+    agent = Agent(
+        system="sys",
+        tools=_tools(FakeTool("query_logs")),
+        resolved_integrations={},
+        max_iterations=1,
+    )
+
+    result = agent.run([{"role": "user", "content": "hello"}])
+
+    assert result.final_text == "unused"
+    assert llm.schema_tool_names == [["query_logs"]]
+
+
 def test_immediate_final_answer_executes_no_tools() -> None:
     llm = FakeLLM(iter([_text_response("done immediately")]))
 
@@ -169,6 +219,30 @@ def test_one_tool_round_then_final() -> None:
     assert result.messages[0].content == initial[0]["content"]
     assert isinstance(result.messages[2], ToolResultRuntimeMessage)
     assert llm.seen_messages[0] == initial
+
+
+def test_generic_tool_result_conversion_does_not_import_litellm(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Generic/static clients should not pay LiteLLM's cold import cost."""
+    real_import = builtins.__import__
+
+    def guarded_import(name: str, *args: Any, **kwargs: Any) -> Any:
+        if name == "core.llm.litellm.clients" or name.startswith("litellm"):
+            raise AssertionError(f"unexpected LiteLLM import: {name}")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", guarded_import)
+    llm = FakeLLM(iter(()))
+    call = ToolCall(id="c1", name="query_logs", input={})
+    message = ToolResultRuntimeMessage(tool_calls=(call,), results=({"ok": True},))
+
+    assert convert_to_llm_messages(llm, [message]) == [
+        {
+            "role": "tool",
+            "results": [{"id": "c1", "output": {"ok": True}}],
+        }
+    ]
 
 
 def test_agent_transcript_can_keep_app_messages_out_of_provider_context() -> None:

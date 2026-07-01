@@ -27,7 +27,9 @@ investigate/agent.py  →  get_agent_llm()  →  *AgentClient.tool_schemas / inv
 
 | Concern | Location |
 | -------- | -------- |
-| Provider routing | `core/llm/agent_llm_client.py` (`get_agent_llm`, client classes) |
+| Provider routing | `core/llm/agent_llm_client.py` (`get_agent_llm`) and `core/llm/llm_client.py` |
+| Native SDK clients | `core/llm/sdk/agent_clients.py`, `core/llm/sdk/llm_clients.py` |
+| LiteLLM transport | `core/llm/litellm/clients.py`, `core/llm/litellm/routing.py` (when `OPENSRE_LLM_TRANSPORT=litellm`) |
 | Chat / non-agent LLM | `core/llm/llm_client.py` (separate path—changes here do not fix investigation) |
 | Investigation loop & message dispatch | `tools/investigation/stages/gather_evidence/` and `core/` |
 | Provider-specific schema/message helpers | Next to the client implementing `tool_schemas()` (strict normalizers live beside that client) |
@@ -72,13 +74,13 @@ Run tool unit tests under `tests/tools/`. After schema changes, run the registry
 contract (uses the strictest normalizer currently wired in the repo):
 
 ```bash
-uv run python -m pytest tests/core/llm/test_investigation_tool_schemas.py -q
+uv run python -m pytest tests/core/runtime/llm/test_investigation_tool_schemas.py -q
 ```
 
-Shared assertions live in `tests/core/llm/investigation_tool_schema_contract.py`. When you add a
+Shared assertions live in `tests/core/runtime/llm/investigation_tool_schema_contract.py`. When you add a
 stricter provider adapter, point `test_investigation_tool_schemas.py` at its normalizer and extend
 the contract module if the API rejects new patterns. Bedrock-specific unit tests stay in
-`tests/core/llm/test_bedrock_converse.py` (no duplicate registry test there).
+`tests/core/runtime/llm/test_bedrock_converse.py` (no duplicate registry test there).
 
 ## Provider adapters (`agent_llm_client.py`)
 
@@ -101,6 +103,27 @@ Checklist when adding or changing a client:
 Provider-specific modules (e.g. strict JSON Schema helpers) stay beside the client; keep investigation
 logic in `investigation.py` as dispatch only.
 
+### LiteLLM transport
+
+Route all API providers through LiteLLM with a global transport switch (no change to
+`LLM_PROVIDER`):
+
+```bash
+export OPENSRE_LLM_TRANSPORT=litellm
+```
+
+When set to `litellm`, both investigation (`get_agent_llm()`) and non-agent LLM calls
+(`get_llm_for_reasoning`, `get_llm_for_classification`, `get_llm_for_tools`) use
+`core/llm/litellm/clients.py` via `litellm.completion`. Leave unset or set to `sdk` to use
+native vendor SDK clients under `core/llm/sdk/`.
+
+Supported providers: `anthropic`, `openai`, `bedrock`, and OpenAI-compatible providers
+(`deepseek`, `groq`, `openrouter`, `gemini`, `nvidia`, `minimax`, `ollama`). Set the matching
+API key and model env vars from `.env.example` as usual.
+
+CLI-backed providers (`codex`, `claude-code`, `opencode`, `kimi`, `copilot`, etc.) always use
+their subprocess path regardless of this setting.
+
 ## Investigation messages (`investigation.py`)
 
 - [ ] **Same `ToolCall.id`** across synthetic seed assistant message, tool results, and evidence keys.
@@ -117,8 +140,8 @@ Extend `tests/agent/test_investigation.py` when you add a client branch for synt
 Minimum before merging schema or client changes:
 
 ```bash
-uv run python -m pytest tests/core/llm/test_investigation_tool_schemas.py -q
-uv run python -m pytest tests/core/llm/test_agent_llm_client.py tests/agent/test_investigation.py -q
+uv run python -m pytest tests/core/runtime/llm/test_investigation_tool_schemas.py -q
+uv run python -m pytest tests/core/runtime/llm/test_agent_llm_client.py tests/agent/test_investigation.py -q
 ```
 
 When touching a specific provider, also verify end-to-end with that provider configured:

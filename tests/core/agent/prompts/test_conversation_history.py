@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from core.agent_harness.conversation_memory import (
+from core.agent_harness.prompts.conversation_memory import (
     MAX_CONVERSATION_MESSAGES,
     MAX_CONVERSATION_TURNS,
     NO_HISTORY_PLACEHOLDER,
+    format_prior_action_facts,
     format_recent_conversation,
 )
 
@@ -66,3 +67,27 @@ def test_skips_malformed_entries() -> None:
     malformed.insert(1, ("only-one-element",))
     rendered = format_recent_conversation(malformed)  # type: ignore[arg-type]
     assert rendered == "User: hi\nAssistant: hello"
+
+
+def test_prior_action_facts_extracts_tool_outputs_and_values() -> None:
+    rendered = format_prior_action_facts(
+        [
+            ("user", "Can you send the weather of both hawaii and antartica to slack?"),
+            (
+                "assistant",
+                "Hawaii: +28C\n"
+                "Antarctica: -24C\n"
+                'slack_send_message input: {"message": "Hawaii: +28C\\nAntarctica: -24C"}\n'
+                'slack_send_message result: {"sent": true}',
+            ),
+            ("user", "Write it in a more nice message and compare to london"),
+            ("assistant", "London: +22C"),
+            ("assistant", "Sure, paste the original message and values."),
+        ]
+    )
+
+    assert "Hawaii" in rendered
+    assert "Antarctica" in rendered
+    assert "slack_send_message input" in rendered
+    assert "London" in rendered
+    assert "paste the original message" not in rendered

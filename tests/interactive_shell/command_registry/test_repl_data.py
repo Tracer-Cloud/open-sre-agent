@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from interactive_shell.command_registry import repl_data
+from surfaces.interactive_shell.command_registry import repl_data
 
 
 def test_configured_integration_names_reads_catalog_without_verify(monkeypatch) -> None:

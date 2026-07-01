@@ -1,0 +1,50 @@
+"""Interactive-shell output adapter implementing :mod:`core.agent_harness.ports`.
+
+This module owns terminal rendering only. Shared action-tool, reasoning-client,
+run-record, and error-reporting providers live in :mod:`core.agent_harness`.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Iterable
+
+from rich.console import Console
+from rich.markup import escape
+
+from surfaces.interactive_shell.ui import (
+    stream_to_console,
+)
+from surfaces.interactive_shell.ui.streaming import render_response_header
+
+
+class ShellOutputSink:
+    """:class:`core.agent_harness.ports.OutputSink` over a Rich console."""
+
+    def __init__(self, console: Console) -> None:
+        self._console = console
+
+    def print(self, message: str = "") -> None:
+        self._console.print(message)
+
+    def render_response_header(self, label: str) -> None:
+        render_response_header(self._console, label)
+
+    def render_error(self, message: str) -> None:
+        self._console.print(f"[yellow]{escape(message)}[/]")
+
+    def stream(
+        self,
+        *,
+        label: str,
+        chunks: Iterable[str],
+        suppress_if_starts_with: str | None = None,
+    ) -> str:
+        return stream_to_console(
+            self._console,
+            label=label,
+            chunks=iter(chunks),
+            suppress_if_starts_with=suppress_if_starts_with,
+        )
+
+
+__all__ = ["ShellOutputSink"]

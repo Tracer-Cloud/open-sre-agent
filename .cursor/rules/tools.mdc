@@ -2,15 +2,28 @@
 description: Tool development patterns for investigation and chat tools
 globs:
   - tools/**
+  - integrations/**/tools/**
 ---
 
 # Tool Development
 
+## Where tools live
+
+After the V0.2 Phase 1 refactor there are two locations:
+
+- `integrations/<vendor>/tools/` — vendor-specific tools (one folder per vendor)
+  Example: `integrations/grafana/tools/`
+- `tools/` — non-vendor tools only (fleet monitoring, SRE guidance, investigation
+  helpers, etc.)
+
+Do NOT create new vendor tool directories directly under `tools/`.
+
 ## Two Registration Patterns
 
-### 1. Function + `@tool` decorator (preferred for simple tools)
+### 1. Function + `@tool` decorator (preferred for simple tools, required for vendor tools)
 
-Single file under `tools/` with a decorated function. The registry auto-discovers it.
+- Vendor tools: add `@tool`-decorated functions in `integrations/<vendor>/tools/__init__.py`
+- Non-vendor tools: single file under `tools/`
 
 ```python
 from tools.tool_decorator import tool
@@ -30,9 +43,9 @@ def my_tool_name(param: str) -> dict:
     ...
 ```
 
-### 2. `BaseTool` subclass (for complex tools with helpers)
+### 2. `BaseTool` subclass (for complex non-vendor tools with helpers)
 
-PascalCase directory: `tools/MyToolName/__init__.py`. Instantiate at module level.
+Package directory: `tools/<tool_name>/__init__.py`. Instantiate at module level.
 
 ```python
 from tools.base import BaseTool
@@ -59,9 +72,10 @@ my_tool_name = MyToolName()
 
 ## Rules
 
-- `source` is **required** — must be a valid `EvidenceSource` literal from `core/domain/types/evidence.py`
-- Tool directories use **PascalCase + `Tool`** suffix (`GrafanaLogsTool/`, `S3ListTool/`)
-- The registry in `tools/registry.py` auto-discovers via `pkgutil.iter_modules`
+- `source` is **required** — must be a valid `EvidenceSource` literal from
+  `core/domain/types/evidence.py`
+- Tool packages under `tools/` use **snake_case** directory names — no PascalCase, no `Tool` suffix in the dir name
+- The registry auto-discovers tools via `pkgutil.iter_modules`
 - Do NOT add your module to `_SKIP_MODULE_NAMES` in `registry.py`
 - Module names ending in `_test` are auto-skipped by the registry
 - `surfaces` defaults to `("investigation",)` — add `"chat"` explicitly if needed
@@ -70,4 +84,6 @@ my_tool_name = MyToolName()
 
 ## Valid `EvidenceSource` Values
 
-`storage`, `batch`, `tracer_web`, `cloudwatch`, `aws_sdk`, `knowledge`, `grafana`, `datadog`, `honeycomb`, `coralogix`, `eks`, `github`, `sentry`, `google_docs`, `vercel`, `opsgenie`, `elasticsearch`
+`storage`, `batch`, `tracer_web`, `cloudwatch`, `aws_sdk`, `knowledge`, `grafana`,
+`datadog`, `honeycomb`, `coralogix`, `eks`, `github`, `sentry`, `google_docs`,
+`vercel`, `opsgenie`, `elasticsearch`

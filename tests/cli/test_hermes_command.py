@@ -17,7 +17,7 @@ from unittest.mock import patch
 import pytest
 from click.testing import CliRunner
 
-from cli.commands.hermes import hermes_command
+from surfaces.cli.commands.hermes import hermes_command
 
 
 @pytest.fixture
@@ -39,7 +39,7 @@ def _patch_agent_to_capture_sink():
     def _capture(self, *, sink, log_path, from_start):  # type: ignore[no-untyped-def]
         raise _AgentBuildAbort(sink)
 
-    return patch("cli.commands.hermes.HermesAgent.__init__", _capture)
+    return patch("surfaces.cli.commands.hermes.HermesAgent.__init__", _capture)
 
 
 def test_bare_hermes_prints_help_and_exits_zero() -> None:

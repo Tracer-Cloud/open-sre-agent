@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+from integrations.tracer.tools.tracer_run_tool import get_tracer_run
 from tests.tools.conftest import BaseToolContract
-from tools.tracer_run_tool import get_tracer_run
 
 
 class TestTracerRunToolContract(BaseToolContract):
@@ -29,7 +29,9 @@ def test_run_returns_run_result() -> None:
     mock_client = MagicMock()
     mock_result = MagicMock()
     mock_client.get_latest_run.return_value = mock_result
-    with patch("tools.tracer_run_tool.get_tracer_client", return_value=mock_client):
+    with patch(
+        "integrations.tracer.tools.tracer_run_tool.get_tracer_client", return_value=mock_client
+    ):
         result = get_tracer_run()
     assert result is mock_result
 
@@ -38,6 +40,8 @@ def test_run_with_pipeline_name() -> None:
     mock_client = MagicMock()
     mock_result = MagicMock()
     mock_client.get_latest_run.return_value = mock_result
-    with patch("tools.tracer_run_tool.get_tracer_client", return_value=mock_client):
+    with patch(
+        "integrations.tracer.tools.tracer_run_tool.get_tracer_client", return_value=mock_client
+    ):
         get_tracer_run(pipeline_name="my-pipeline")
     mock_client.get_latest_run.assert_called_once_with("my-pipeline")

@@ -9,11 +9,11 @@ from typing import Any
 import pytest
 
 from core.domain.types.retrieval import RetrievalControls
+from core.tool_framework.base import BaseTool
+from core.tool_framework.registered_tool import REGISTERED_TOOL_ATTR, RegisteredTool
+from core.tool_framework.tool_decorator import tool
 from tools import registry as registry_module
-from tools.base import BaseTool
 from tools.investigation_registry.actions import get_available_actions
-from tools.registered_tool import REGISTERED_TOOL_ATTR, RegisteredTool
-from tools.tool_decorator import tool
 
 _V2_TOOL_CONTRACT_NAMES = frozenset(
     {
@@ -252,6 +252,8 @@ def test_auto_discovery_populates_investigation_and_chat_surfaces(
     monkeypatch.setattr(
         registry_module, "_iter_tool_module_names", lambda _pkg: ["fake_discovered_tool"]
     )
+    monkeypatch.setattr(registry_module, "_external_tool_packages", [])
+    monkeypatch.setattr(registry_module, "_INTEGRATION_TOOL_PACKAGES", ())
     monkeypatch.setattr(registry_module, "_import_tool_module", lambda _pkg, _name: module)
 
     assert [
@@ -283,6 +285,8 @@ def test_action_surface_is_filtered_separately(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr(
         registry_module, "_iter_tool_module_names", lambda _pkg: ["fake_action_tool"]
     )
+    monkeypatch.setattr(registry_module, "_external_tool_packages", [])
+    monkeypatch.setattr(registry_module, "_INTEGRATION_TOOL_PACKAGES", ())
     monkeypatch.setattr(registry_module, "_import_tool_module", lambda _pkg, _name: module)
 
     assert [tool_def.name for tool_def in registry_module.get_registered_tools("action")] == [
@@ -334,6 +338,14 @@ def test_github_workflow_skill_guidance_does_not_attach_to_unrelated_github_tool
     assert tool_def.skill_guidance == ""
 
 
+def test_python_execution_skill_guidance_does_not_attach_to_unrelated_tools() -> None:
+    tools_by_name = {tool_def.name: tool_def for tool_def in registry_module.get_registered_tools()}
+
+    tool_def = tools_by_name["get_github_file_contents"]
+
+    assert "github-star-velocity" not in tool_def.skill_guidance
+
+
 def test_github_issue_mutation_execution_remains_chat_only() -> None:
     chat_tools = {
         tool_def.name: tool_def for tool_def in registry_module.get_registered_tools("chat")
@@ -370,6 +382,7 @@ def test_manifest_discovery_imports_nested_tool_modules(
     nested_module.lookup_nested_incident = lookup_nested_incident
 
     monkeypatch.setattr(registry_module, "_external_tool_packages", [])
+    monkeypatch.setattr(registry_module, "_INTEGRATION_TOOL_PACKAGES", ())
     monkeypatch.setattr(
         registry_module,
         "_iter_tool_module_names",
@@ -414,6 +427,7 @@ def test_manifest_discovery_logs_nested_import_failure_with_full_module_path(
     valid_module.valid_nested_tool = valid_nested_tool
 
     monkeypatch.setattr(registry_module, "_external_tool_packages", [])
+    monkeypatch.setattr(registry_module, "_INTEGRATION_TOOL_PACKAGES", ())
     monkeypatch.setattr(
         registry_module,
         "_iter_tool_module_names",
@@ -473,6 +487,7 @@ def test_manifest_discovery_preserves_duplicate_name_first_wins(
     nested_module.nested_tool = nested_tool
 
     monkeypatch.setattr(registry_module, "_external_tool_packages", [])
+    monkeypatch.setattr(registry_module, "_INTEGRATION_TOOL_PACKAGES", ())
     monkeypatch.setattr(
         registry_module,
         "_iter_tool_module_names",
@@ -517,6 +532,7 @@ def test_top_level_discovery_unchanged_without_manifest(
     import_calls: list[tuple[str, str]] = []
 
     monkeypatch.setattr(registry_module, "_external_tool_packages", [])
+    monkeypatch.setattr(registry_module, "_INTEGRATION_TOOL_PACKAGES", ())
     monkeypatch.setattr(
         registry_module,
         "_iter_tool_module_names",

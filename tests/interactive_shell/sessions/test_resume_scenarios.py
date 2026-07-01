@@ -19,7 +19,7 @@ from config.config import (
 )
 from config.llm_auth.credentials import status as credential_status
 from core.agent_harness.session import JsonlSessionStorage, ReplSession
-from interactive_shell.command_registry import dispatch_slash
+from surfaces.interactive_shell.command_registry import dispatch_slash
 
 SessionStore = JsonlSessionStorage()
 
@@ -268,7 +268,9 @@ class TestResumeScenarioMatrix:
         self,
         isolated_sessions: Path,
     ) -> None:
-        from interactive_shell.command_registry.session_cmds.resume import resume_session_by_prefix
+        from surfaces.interactive_shell.command_registry.session_cmds.resume import (
+            resume_session_by_prefix,
+        )
 
         target_id = "eeee5555-6666-7777-8888-999900001111"
         _write_finalized_session(isolated_sessions, target_id, chat_text="investigate OOM killer")

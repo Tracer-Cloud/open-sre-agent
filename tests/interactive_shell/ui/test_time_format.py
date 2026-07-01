@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from interactive_shell.ui.components.time_format import format_repl_duration, format_repl_timestamp
+from surfaces.interactive_shell.ui.components.time_format import (
+    format_repl_duration,
+    format_repl_timestamp,
+)
 
 
 def test_format_repl_duration() -> None:

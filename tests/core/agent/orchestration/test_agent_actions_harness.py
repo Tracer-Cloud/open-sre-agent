@@ -7,16 +7,16 @@ from collections.abc import Iterable
 from rich.console import Console
 
 import tools.interactive_shell.actions.slash as slash_tool
-from core.agent_harness.action_agent import ToolCallingDeps, run_agent_turn
+from core.agent_harness.agents.action_agent import ToolCallingDeps, run_agent_turn
 from core.agent_harness.session import ReplSession
-from interactive_shell.runtime.shell_turn_execution import run_action_tool_turn
+from core.tool_framework.registered_tool import RegisteredTool
+from surfaces.interactive_shell.runtime.shell_turn_execution import run_action_tool_turn
 from tests.core.agent.orchestration.action_execution_test_harness import (
     ActionExecutionHarness,
     FakeActionLLM,
     no_tool_response,
     tool_response,
 )
-from tools.registered_tool import RegisteredTool
 
 
 class _GenericActionToolProvider:
@@ -121,6 +121,7 @@ def test_generic_registered_action_tool_result_marks_turn_handled() -> None:
     assert result.planned_count == 1
     assert result.executed_count == 1
     assert result.executed_success_count == 1
+    assert 'fake_send_message input: {"message": "hello"}' in result.response_text
     assert '"status": "sent"' in result.response_text
     assert "fake_send_message" in harness.llm.tool_schema_names
 
@@ -145,10 +146,11 @@ def test_literal_slash_command_dispatches_deterministically_without_llm(
 
     monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
     harness = ActionExecutionHarness(llm=FakeActionLLM([no_tool_response()]))
+    session = ReplSession()
 
     result = run_action_tool_turn(
         "/sessions",
-        ReplSession(),
+        session,
         harness.console,
         deps=harness.deps,
     )
@@ -156,6 +158,7 @@ def test_literal_slash_command_dispatches_deterministically_without_llm(
     assert result.handled is True
     assert result.planned_count == 1
     assert dispatched == ["/sessions"]
+    assert session.history == [{"type": "slash", "text": "/sessions", "ok": True}]
     # The deterministic path must not consult the action-agent LLM.
     assert harness.llm.invocations == 0
 

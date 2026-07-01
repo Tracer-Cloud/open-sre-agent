@@ -10,9 +10,9 @@ from dataclasses import dataclass, field, replace
 from typing import Any
 
 from core.llm.types import ToolCall
+from core.tool_framework.utils.integration_sources import availability_view
 from core.types import AgentTool, AgentToolContext, RuntimeTool
 from platform.observability.tool_trace import redact_sensitive
-from tools.utils.integration_sources import availability_view
 
 logger = logging.getLogger(__name__)
 

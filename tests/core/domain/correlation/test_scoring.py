@@ -4,7 +4,6 @@ from core.domain.correlation.scoring import (
     TimeSeries,
     TopologyNode,
     rank_upstream_candidates,
-    score_operator_hint,
     score_time_window_correlation,
     score_topology_adjacency,
 )
@@ -34,14 +33,6 @@ def test_score_topology_adjacency_requires_target_relationship() -> None:
     )
 
     assert score.adjacency_score == 1.0
-
-
-def test_score_operator_hint_matches_metric_tokens() -> None:
-    score = score_operator_hint(
-        metric_name="orders api latency",
-        operator_hints=("orders api slow",),
-    )
-    assert score.score == 1.0
 
 
 def test_rank_upstream_candidates_orders_by_confidence_then_name() -> None:

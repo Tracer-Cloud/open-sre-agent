@@ -9,7 +9,7 @@ import pytest
 
 from core.agent_harness.session import ReplSession
 from core.agent_harness.session.prompt_history import load_command_history_entries
-from interactive_shell.command_registry import dispatch_slash
+from surfaces.interactive_shell.command_registry import dispatch_slash
 
 
 def _capture() -> tuple[object, object]:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from interactive_shell.ui.components.cpr_stdin import (
+from surfaces.interactive_shell.ui.components.cpr_stdin import (
     contains_cpr_sequence,
     strip_cpr_sequences,
 )

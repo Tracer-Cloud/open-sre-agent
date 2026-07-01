@@ -13,25 +13,100 @@ from pathlib import Path
 from types import ModuleType
 
 import tools as tools_package
-from tools.base import BaseTool
-from tools.registered_tool import REGISTERED_TOOL_ATTR, RegisteredTool, ToolSurface
-from tools.skill_guidance import format_tool_skill_guidance, load_tool_skill_guidance
+from core.tool_framework.base import BaseTool
+from core.tool_framework.registered_tool import REGISTERED_TOOL_ATTR, RegisteredTool, ToolSurface
+from core.tool_framework.skill_guidance import format_tool_skill_guidance, load_tool_skill_guidance
+
+# Per-vendor tool packages — when a vendor consolidates its tool code under
+# ``integrations/<vendor>/tools/``, list the dotted package path here so the
+# registry walks it alongside the canonical ``tools/`` package. New vendors get
+# one entry each as they migrate.
+#
+# The external extension point (:func:`register_external_tool_package`) is
+# separate; it's for plugin-style callers that ship tool packages outside of
+# opensre's own codebase.
+_INTEGRATION_TOOL_PACKAGES: tuple[str, ...] = (
+    "integrations.alertmanager.tools",
+    "integrations.argocd.tools",
+    "integrations.aws.tools",
+    "integrations.aws_lambda.tools",
+    "integrations.azure.tools",
+    "integrations.azure_sql.tools",
+    "integrations.betterstack.tools",
+    "integrations.bitbucket.tools",
+    "integrations.clickhouse.tools",
+    "integrations.cloudtrail.tools",
+    "integrations.cloudwatch.tools",
+    "integrations.coralogix.tools",
+    "integrations.dagster.tools",
+    "integrations.datadog.tools",
+    "integrations.ec2.tools",
+    "integrations.eks.tools",
+    "integrations.elasticsearch.tools",
+    "integrations.elb.tools",
+    "integrations.github.tools",
+    "integrations.gitlab.tools",
+    "integrations.google_docs.tools",
+    "integrations.grafana.tools",
+    "integrations.groundcover.tools",
+    "integrations.helm.tools",
+    "integrations.hermes.tools",
+    "integrations.honeycomb.tools",
+    "integrations.incident_io.tools",
+    "integrations.jenkins.tools",
+    "integrations.jira.tools",
+    "integrations.kafka.tools",
+    "integrations.mariadb.tools",
+    "integrations.mongodb.tools",
+    "integrations.mongodb_atlas.tools",
+    "integrations.mysql.tools",
+    "integrations.openclaw.tools",
+    "integrations.openobserve.tools",
+    "integrations.opensearch.tools",
+    "integrations.opsgenie.tools",
+    "integrations.pagerduty.tools",
+    "integrations.posthog_mcp.tools",
+    "integrations.postgresql.tools",
+    "integrations.prefect.tools",
+    "integrations.rabbitmq.tools",
+    "integrations.rds.tools",
+    "integrations.redis.tools",
+    "integrations.s3.tools",
+    "integrations.sentry.tools",
+    "integrations.sentry_mcp.tools",
+    "integrations.signoz.tools",
+    "integrations.snowflake.tools",
+    "integrations.splunk.tools",
+    "integrations.supabase.tools",
+    "integrations.telegram.tools",
+    "integrations.tempo.tools",
+    "integrations.temporal.tools",
+    "integrations.tracer.tools",
+    "integrations.twilio.tools",
+    "integrations.vercel.tools",
+    "integrations.victoria_logs.tools",
+)
 
 logger = logging.getLogger(__name__)
 
 _SKIP_MODULE_NAMES = {
     "__pycache__",
-    "base",
-    "registry",
-    "registered_tool",
-    "skill_guidance",
-    "tool_decorator",
     "investigation_registry",
-    "utils",
+    "registry",
 }
 _TOOL_MODULES_ATTR = "TOOL_MODULES"
 _MAX_TOOL_SKILL_GUIDANCE_CHARS = 2400
-_SKILL_GUIDANCE_FILES = (Path(__file__).resolve().parent / "github" / "workflow" / "SKILL.md",)
+_TOOLS_PACKAGE_DIR = Path(__file__).resolve().parent
+_REPO_ROOT = _TOOLS_PACKAGE_DIR.parent
+
+
+def _skill_guidance_files() -> tuple[Path, ...]:
+    """Return explicit and package-local SKILL.md files attached at registry load."""
+
+    explicit = (_REPO_ROOT / "integrations" / "github" / "tools" / "workflow" / "SKILL.md",)
+    discovered = sorted(_TOOLS_PACKAGE_DIR.glob("python_execution_tool/skills/*/SKILL.md"))
+    return (*explicit, *discovered)
+
 
 # Extension point: callers outside ``tools.*`` can register additional
 # tool packages by calling :func:`register_external_tool_package`.
@@ -244,7 +319,9 @@ def _with_skill_guidance(tool: RegisteredTool, guidance: str) -> RegisteredTool:
 
 def _apply_skill_guidance(tools_by_name: dict[str, RegisteredTool]) -> None:
     known_tool_names = frozenset(tools_by_name)
-    for skill_path in _SKILL_GUIDANCE_FILES:
+    guidance_by_tool: dict[str, list[str]] = {}
+
+    for skill_path in _skill_guidance_files():
         result = load_tool_skill_guidance(skill_path, known_tool_names=known_tool_names)
         for diagnostic in result.diagnostics:
             logger.warning(
@@ -256,24 +333,49 @@ def _apply_skill_guidance(tools_by_name: dict[str, RegisteredTool]) -> None:
         skill = result.skill
         if skill is None or skill.disable_model_invocation:
             continue
-        guidance = _truncate_skill_guidance(format_tool_skill_guidance(skill))
+        guidance = format_tool_skill_guidance(skill)
         for tool_name in skill.tool_names:
-            tool_def = tools_by_name.get(tool_name)
-            if tool_def is None:
+            if tool_name not in tools_by_name:
                 continue
-            tools_by_name[tool_name] = _with_skill_guidance(tool_def, guidance)
+            guidance_by_tool.setdefault(tool_name, []).append(guidance)
+
+    for tool_name, guidances in guidance_by_tool.items():
+        combined = _truncate_skill_guidance("\n\n".join(guidances))
+        tools_by_name[tool_name] = _with_skill_guidance(tools_by_name[tool_name], combined)
 
 
 @lru_cache(maxsize=1)
 def _load_registry_snapshot() -> tuple[RegisteredTool, ...]:
     tools_by_name: dict[str, RegisteredTool] = {}
 
-    # Walk the canonical tools package, then any externally-registered packages
-    # in registration order.
+    # Walk the canonical tools package, then any per-vendor integration tool
+    # packages, then any externally-registered packages in registration order.
     # First definition of a given tool name wins; duplicates are logged and skipped.
-    packages: list[ModuleType] = [tools_package, *_external_tool_packages]
+    integration_packages: list[ModuleType] = []
+    for dotted in _INTEGRATION_TOOL_PACKAGES:
+        try:
+            integration_packages.append(importlib.import_module(dotted))
+        except ImportError as exc:
+            logger.warning(
+                "[tools] Integration tool package %r failed to import: %s",
+                dotted,
+                exc,
+            )
+    packages: list[ModuleType] = [
+        tools_package,
+        *integration_packages,
+        *_external_tool_packages,
+    ]
+    # Integration packages put their tools directly in ``__init__.py`` (one
+    # file per vendor), so their own module is a tool source alongside any
+    # submodules they may also expose.
+    integration_module_ids = {id(pkg) for pkg in integration_packages}
     for package in packages:
-        for module in _iter_discovered_tool_modules(package):
+        modules_to_scan: list[ModuleType] = []
+        if id(package) in integration_module_ids:
+            modules_to_scan.append(package)
+        modules_to_scan.extend(_iter_discovered_tool_modules(package))
+        for module in modules_to_scan:
             for tool in _collect_registered_tools_from_module(module):
                 if tool.name in tools_by_name:
                     logger.warning(

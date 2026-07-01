@@ -9,15 +9,15 @@ from typing import Any
 
 from rich.console import Console
 
-from core.agent_harness.session import ReplSession
-from interactive_shell.runtime.core.token_accounting import (
+from core.agent_harness.accounting.token_accounting import (
     build_llm_run_info,
     estimate_tokens,
     format_token_total,
     record_llm_turn,
 )
-from interactive_shell.runtime.shell_turn_execution import answer_shell_question
-from interactive_shell.ui.streaming import _CHARS_PER_TOKEN
+from core.agent_harness.session import ReplSession
+from surfaces.interactive_shell.runtime.shell_turn_execution import answer_shell_question
+from surfaces.interactive_shell.ui.streaming import _CHARS_PER_TOKEN
 
 
 def test_estimate_tokens_uses_chars_per_token_ratio() -> None:
@@ -108,9 +108,9 @@ def test_build_llm_run_info_records_tokens_and_metadata() -> None:
 
 
 def test_coerce_usage_tokens_accepts_float_counts() -> None:
-    from core.llm.llm_client import _coerce_usage_tokens
+    from core.llm.usage import coerce_usage_tokens
 
-    assert _coerce_usage_tokens(
+    assert coerce_usage_tokens(
         {"input_tokens": 512.0, "output_tokens": 64.0},
         input_key="input_tokens",
         output_key="output_tokens",

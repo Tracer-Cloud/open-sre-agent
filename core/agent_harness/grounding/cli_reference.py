@@ -42,8 +42,8 @@ def _current_cli_signature(provider: SlashCommandProvider | None = None) -> str:
     Bumps cache when subcommands change, slash-command metadata changes, or the
     installed package version changes.
     """
-    from cli.__main__ import cli
     from config.version import get_version
+    from surfaces.cli.__main__ import cli
 
     cmd_names = ",".join(sorted(cli.commands.keys()))
     slash_names = ",".join(_slash_command_names(provider))
@@ -124,7 +124,7 @@ def _format_command_reference(
 
 def _build_cli_reference_text_uncached(provider: SlashCommandProvider | None = None) -> str:
     """Build a side-effect-free CLI reference without invoking Click commands."""
-    from cli.__main__ import cli
+    from surfaces.cli.__main__ import cli
 
     parts: list[str] = []
 

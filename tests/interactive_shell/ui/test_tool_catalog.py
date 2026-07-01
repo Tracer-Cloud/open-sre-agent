@@ -13,16 +13,16 @@ import pytest
 from rich.console import Console
 
 from core.agent_harness.session import ReplSession
-from interactive_shell.command_registry import dispatch_slash
-from interactive_shell.command_registry.tools_cmds import _TOOLS_FIRST_ARGS, _cmd_tools
-from interactive_shell.ui.tables import tool_catalog
-from interactive_shell.ui.tables.tool_catalog import (
+from core.tool_framework.registered_tool import RegisteredTool
+from surfaces.interactive_shell.command_registry import dispatch_slash
+from surfaces.interactive_shell.command_registry.tools_cmds import _TOOLS_FIRST_ARGS, _cmd_tools
+from surfaces.interactive_shell.ui.tables import tool_catalog
+from surfaces.interactive_shell.ui.tables.tool_catalog import (
     ToolCatalogEntry,
     _summarize_input_schema,
     build_tool_catalog,
     format_tool_catalog_text,
 )
-from tools.registered_tool import RegisteredTool
 
 
 def _make_tool(
@@ -252,7 +252,7 @@ class TestListToolsSlashCommand:
             )
         ]
         with patch(
-            "interactive_shell.command_registry.tools_cmds.build_tool_catalog",
+            "surfaces.interactive_shell.command_registry.tools_cmds.build_tool_catalog",
             return_value=fake,
         ):
             assert _cmd_tools(session, console, ["list"]) is True
@@ -275,7 +275,7 @@ class TestListToolsSlashCommand:
             )
         ]
         with patch(
-            "interactive_shell.command_registry.tools_cmds.build_tool_catalog",
+            "surfaces.interactive_shell.command_registry.tools_cmds.build_tool_catalog",
             return_value=fake,
         ) as catalog:
             assert dispatch_slash("/tools", session, console) is True
@@ -302,7 +302,7 @@ class TestListToolsSlashCommand:
             )
         ]
         with patch(
-            "interactive_shell.command_registry.tools_cmds.build_tool_catalog",
+            "surfaces.interactive_shell.command_registry.tools_cmds.build_tool_catalog",
             return_value=fake,
         ):
             assert _cmd_tools(session, console, ["list"]) is True
@@ -313,7 +313,7 @@ class TestListToolsSlashCommand:
         console, buf = self._capture()
         session = ReplSession()
         with patch(
-            "interactive_shell.command_registry.tools_cmds.build_tool_catalog",
+            "surfaces.interactive_shell.command_registry.tools_cmds.build_tool_catalog",
             return_value=[],
         ):
             assert _cmd_tools(session, console, ["list"]) is True

@@ -167,14 +167,14 @@ def test_capture_exception_attaches_context(monkeypatch) -> None:
 
     sentry_mod.capture_exception(
         ValueError("boom"),
-        context="interactive_shell.cli_agent.stream",
+        context="surfaces.interactive_shell.cli_agent.stream",
         extra={"turn": 3},
         tags={"surface": "interactive_shell"},
     )
 
     capture_mock.assert_called_once()
     assert tags == {
-        "opensre.context": "interactive_shell.cli_agent.stream",
+        "opensre.context": "surfaces.interactive_shell.cli_agent.stream",
         "surface": "interactive_shell",
     }
     assert extras == {"turn": 3}

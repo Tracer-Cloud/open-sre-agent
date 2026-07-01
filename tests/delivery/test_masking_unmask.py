@@ -55,10 +55,8 @@ def test_slack_message_is_unmasked_before_delivery() -> None:
             "create_investigation_and_attach_url",
             return_value=("inv-123", "https://test/inv-123"),
         ),
-        patch(
-            "platform.notifications.slack_delivery.send_slack_report", return_value=(False, None)
-        ),
-        patch("platform.notifications.slack_delivery.build_action_blocks", return_value=[]),
+        patch("integrations.slack.delivery.send_slack_report", return_value=(False, None)),
+        patch("integrations.slack.delivery.build_action_blocks", return_value=[]),
     ):
         result = pub_node.generate_report(_state_with_masking())  # type: ignore[arg-type]
 
@@ -90,10 +88,8 @@ def test_empty_masking_map_is_passthrough() -> None:
             "create_investigation_and_attach_url",
             return_value=("inv-123", "https://test/inv-123"),
         ),
-        patch(
-            "platform.notifications.slack_delivery.send_slack_report", return_value=(False, None)
-        ),
-        patch("platform.notifications.slack_delivery.build_action_blocks", return_value=[]),
+        patch("integrations.slack.delivery.send_slack_report", return_value=(False, None)),
+        patch("integrations.slack.delivery.build_action_blocks", return_value=[]),
     ):
         result = pub_node.generate_report(state)  # type: ignore[arg-type]
 

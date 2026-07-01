@@ -47,64 +47,74 @@ def test_slugify_handles_whitespace_only() -> None:
 def test_make_id_generates_timestamp_with_slug() -> None:
     """Test that _make_id combines timestamp with slugified alert name."""
     result = _make_id("Database Connection Failed")
-    # Format: YYYYMMDD_HHMMSS_slug_suffix - verify the timestamp structure
-    parts = result.split("_")
-    assert len(parts) >= 3  # date, time, slug (slug may itself contain _)
+    # Format: YYYYMMDD_HHMMSS-<suffix>_<slug>
+    parts = result.split("_", maxsplit=2)
+    assert len(parts) == 3
     assert len(parts[0]) == 8  # YYYYMMDD
     assert parts[0].isdigit()
-    assert len(parts[1]) == 6  # HHMMSS
-    assert parts[1].isdigit()
-    assert "_database-connection-failed" in result
+    time_part, suffix = parts[1].split("-", maxsplit=1)
+    assert len(time_part) == 6  # HHMMSS
+    assert time_part.isdigit()
+    assert len(suffix) == 8
+    int(suffix, 16)
+    assert parts[2] == "database-connection-failed"
 
 
 def test_make_id_uses_investigation_fallback_for_empty_alert_name() -> None:
     """Test that empty alert name uses 'investigation' as fallback slug."""
     result = _make_id("")
-    # Format: YYYYMMDD_HHMMSS_investigation_<suffix>
-    assert "_investigation_" in result
-    parts = result.split("_")
-    assert len(parts) >= 3
+    # Format: YYYYMMDD_HHMMSS-<suffix>_investigation
+    parts = result.split("_", maxsplit=2)
+    assert len(parts) == 3
     assert len(parts[0]) == 8 and parts[0].isdigit()
-    assert len(parts[1]) == 6 and parts[1].isdigit()
+    time_part, suffix = parts[1].split("-", maxsplit=1)
+    assert len(time_part) == 6 and time_part.isdigit()
+    assert len(suffix) == 8
+    int(suffix, 16)
+    assert parts[2] == "investigation"
 
 
 def test_make_id_uses_investigation_fallback_for_whitespace_only() -> None:
     """Test that whitespace-only alert name uses 'investigation' as fallback."""
     result = _make_id("   ")
-    assert "_investigation_" in result
-    parts = result.split("_")
-    assert len(parts) >= 3
+    parts = result.split("_", maxsplit=2)
+    assert len(parts) == 3
     assert len(parts[0]) == 8 and parts[0].isdigit()
-    assert len(parts[1]) == 6 and parts[1].isdigit()
+    time_part, suffix = parts[1].split("-", maxsplit=1)
+    assert len(time_part) == 6 and time_part.isdigit()
+    assert len(suffix) == 8
+    int(suffix, 16)
+    assert parts[2] == "investigation"
 
 
 def test_make_id_handles_special_characters_in_alert_name() -> None:
     """Test that special characters in alert name are properly slugified."""
     result = _make_id("API!!! Latency---High")
-    parts = result.split("_")
-    assert len(parts) >= 3
+    parts = result.split("_", maxsplit=2)
+    assert len(parts) == 3
     assert len(parts[0]) == 8 and parts[0].isdigit()
-    assert len(parts[1]) == 6 and parts[1].isdigit()
-    assert "_api-latency-high" in result
+    time_part, suffix = parts[1].split("-", maxsplit=1)
+    assert len(time_part) == 6 and time_part.isdigit()
+    assert len(suffix) == 8
+    int(suffix, 16)
+    assert parts[2] == "api-latency-high"
 
 
 def test_make_id_truncates_long_slugs() -> None:
     """Test that very long alert names are truncated to 60 characters in slug."""
     long_name = "Error " * 50  # Creates a very long string
     result = _make_id(long_name)
-    # Format is YYYYMMDD_HHMMSS_<slug>_<8-hex-suffix>; the slug is the middle.
-    parts = result.split("_", 2)  # date, time, "<slug>_<suffix>"
-    slug_with_suffix = parts[2]
-    # Drop the trailing "_<8 hex>" uniqueness suffix to measure the slug cap.
-    assert slug_with_suffix[-9] == "_"
-    slug = slug_with_suffix[:-9]
+    # Format is YYYYMMDD_HHMMSS-<suffix>_<slug>; the slug is last.
+    parts = result.split("_", 2)
+    slug = parts[2]
     assert len(slug) <= 60
 
 
 def test_make_id_appends_uniqueness_suffix() -> None:
-    """The id ends with 8 hex chars so same-second writes never collide."""
+    """The timestamp segment includes 8 hex chars so same-second writes never collide."""
     result = _make_id("High CPU")
-    suffix = result.split("_")[-1]
+    timestamp_segment = result.split("_", maxsplit=2)[1]
+    _time_part, suffix = timestamp_segment.split("-", maxsplit=1)
     assert len(suffix) == 8
     int(suffix, 16)  # raises if not hex
 
@@ -118,6 +128,30 @@ def test_make_id_is_unique_across_same_second_calls() -> None:
     """
     ids = {_make_id("High CPU") for _ in range(1000)}
     assert len(ids) == 1000
+
+
+def test_list_investigations_uses_clean_slug_when_id_has_uniqueness_suffix(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: object
+) -> None:
+    from pathlib import Path
+
+    from infra.deployment.remote import server as remote_server
+
+    monkeypatch.setattr(remote_server, "INVESTIGATIONS_DIR", Path(str(tmp_path)))
+
+    inv_id = "20260628_123456-ab12cd34_cpu-spike-deploy"
+    _save_investigation(
+        inv_id=inv_id,
+        alert_name="CPU Spike Deploy",
+        pipeline_name="checkout",
+        severity="critical",
+        result=_result("root cause"),
+    )
+
+    item = remote_server.list_investigations()[0]
+
+    assert item.id == inv_id
+    assert item.alert_name == "cpu spike deploy"
 
 
 def test_safe_investigation_path_accepts_valid_id() -> None:

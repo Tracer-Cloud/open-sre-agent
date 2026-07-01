@@ -8,7 +8,7 @@ import os
 import pytest
 from rich.console import Console
 
-from interactive_shell.ui.feedback import (
+from surfaces.interactive_shell.ui.feedback import (
     _CHOICES,
     _format_root_cause_lines,
     _print_context,
@@ -120,12 +120,12 @@ def test_run_select_returns_highlighted_choice_on_enter(
         return "enter" if calls["n"] > 1 else "down"
 
     monkeypatch.setattr(
-        "interactive_shell.ui.feedback.read_key_unix",
+        "surfaces.interactive_shell.ui.feedback.read_key_unix",
         read_then_enter,
     )
-    monkeypatch.setattr("interactive_shell.ui.feedback.flush_stdin_unix", lambda: None)
+    monkeypatch.setattr("surfaces.interactive_shell.ui.feedback.flush_stdin_unix", lambda: None)
     monkeypatch.setattr(
-        "interactive_shell.ui.feedback.restore_stdin_terminal",
+        "surfaces.interactive_shell.ui.feedback.restore_stdin_terminal",
         lambda: None,
     )
 

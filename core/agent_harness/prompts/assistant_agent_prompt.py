@@ -101,6 +101,7 @@ def _build_system_prompt(
     agents_md: str = "",
     investigation_flow: str = "",
     prior_investigation: str = "",
+    prior_action_facts: str = "",
     environment: str = "",
 ) -> str:
     """Build the system prompt for one assistant turn."""
@@ -113,6 +114,14 @@ def _build_system_prompt(
     prior_investigation_block = (
         f"--- Prior investigation in this session ---\n{prior_investigation}\n\n"
         if prior_investigation
+        else ""
+    )
+    prior_action_facts_block = (
+        "--- Prior action facts in this session ---\n"
+        "These are extracted from earlier persisted assistant/tool outputs. Use "
+        "them for follow-up questions and comparisons; do not ask the user to "
+        f"paste values that are already listed here.\n{prior_action_facts}\n\n"
+        if prior_action_facts
         else ""
     )
     return (
@@ -138,6 +147,10 @@ def _build_system_prompt(
         "For vague operational questions (for example why a database is slow) "
         "with no pasted alert, restate the user's question in your reply and "
         "ask for the target system, service, or alert context.\n\n"
+        "The Recent CLI conversation may include outputs from earlier action tools "
+        "(shell stdout, computed values, and sent-message inputs/results). Treat "
+        "those as available thread context for follow-up questions; do not ask the "
+        "user to paste values that are already present there.\n\n"
         f"{_PRIOR_INVESTIGATION_FOLLOW_UP_RULE}\n\n"
         f"{_SETUP_GUIDANCE_RULE}\n\n"
         f"{_SOURCE_SCOPED_INVESTIGATION_RULE}\n\n"
@@ -146,6 +159,7 @@ def _build_system_prompt(
         f"--- CLI reference ---\n{reference}\n\n"
         f"{investigation_flow_block}"
         f"{prior_investigation_block}"
+        f"{prior_action_facts_block}"
         f"{repo_map_block}"
         f"--- Recent CLI conversation ---\n{history}\n"
     )

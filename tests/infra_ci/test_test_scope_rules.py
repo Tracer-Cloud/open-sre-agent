@@ -33,18 +33,51 @@ def test_hermes_rule_routes_to_tests_hermes_not_integrations() -> None:
     assert targets == ["tests/hermes/"]
 
 
-def test_interactive_shell_routes_to_its_own_tests() -> None:
+def test_grafana_rule_includes_integration_and_tool_tests() -> None:
     rules = _rules_module()
-    escalate, targets, _ = rules.classify(["interactive_shell/runtime/session.py"])
+    escalate, targets, _ = rules.classify(["integrations/grafana/tools/__init__.py"])
+    assert not escalate
+    assert "tests/integrations/grafana/" in targets
+    assert "tests/tools/test_grafana_logs_tool.py" in targets
+    assert "tests/e2e/grafana_validation/" in targets
+    assert len(targets) == 8
+
+
+def test_datadog_rule_includes_integration_and_tool_tests() -> None:
+    rules = _rules_module()
+    escalate, targets, _ = rules.classify(["integrations/datadog/tools/__init__.py"])
+    assert not escalate
+    assert "tests/integrations/datadog/" in targets
+    assert "tests/tools/test_datadog_logs_tool.py" in targets
+    assert len(targets) == 7
+
+
+def test_interactive_shell_surface_routes_to_its_own_tests() -> None:
+    rules = _rules_module()
+    escalate, targets, _ = rules.classify(["surfaces/interactive_shell/controller.py"])
     assert not escalate
     assert targets == ["tests/interactive_shell/"]
+
+
+def test_surfaces_cli_routes_to_cli_tests() -> None:
+    rules = _rules_module()
+    escalate, targets, _ = rules.classify(["surfaces/cli/wizard/flow.py"])
+    assert not escalate
+    assert targets == ["tests/cli/"]
+
+
+def test_gateway_routes_to_package_local_tests() -> None:
+    rules = _rules_module()
+    escalate, targets, _ = rules.classify(["gateway/start_gateway.py"])
+    assert not escalate
+    assert targets == ["gateway/tests/"]
 
 
 def test_three_areas_escalates() -> None:
     rules = _rules_module()
     changed = [
         "tools/a.py",
-        "cli/b.py",
+        "surfaces/cli/b.py",
         "integrations/hermes/c.py",
     ]
     escalate, _, areas = rules.classify(changed)

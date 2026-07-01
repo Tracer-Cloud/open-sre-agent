@@ -8,6 +8,7 @@ from core.agent_harness.prompts.action_agent_prompt import (
     build_action_system_prompt_envelope,
     build_action_user_message,
     connected_integrations_block,
+    prior_action_facts_block,
     recent_conversation_block,
     sanitize_action_text,
 )
@@ -50,6 +51,7 @@ __all__ = [
     "build_observation_block",
     "build_shell_environment_block",
     "connected_integrations_block",
+    "prior_action_facts_block",
     "recent_conversation_block",
     "sanitize_action_text",
 ]

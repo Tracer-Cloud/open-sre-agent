@@ -10,12 +10,12 @@ from rich.console import Console
 
 from core.agent_harness.session import ReplSession
 from core.llm.types import AgentLLMResponse, ToolCall
-from interactive_shell.runtime.core.turn_accounting import (
+from surfaces.interactive_shell.runtime.core.turn_accounting import (
     ToolCallingTurnResult,
 )
-from interactive_shell.runtime.shell_turn_execution import execute_shell_turn
-from interactive_shell.runtime.turn_host import run_agent_turn_queue
-from interactive_shell.runtime.utils import input_policy as loop_input_policy
+from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
+from surfaces.interactive_shell.runtime.turn_host import run_agent_turn_queue
+from surfaces.interactive_shell.runtime.utils import input_policy as loop_input_policy
 from tests.core.agent.orchestration.action_execution_test_harness import (
     FakeActionLLM,
 )
@@ -159,7 +159,7 @@ def test_turn_needs_exclusive_stdin_for_config(
 
 def test_queued_literal_quit_requests_runtime_exit() -> None:
     async def _scenario() -> None:
-        from interactive_shell.runtime.core.state import ReplState
+        from surfaces.interactive_shell.runtime.core.state import ReplState
 
         state = ReplState()
         session = ReplSession()
@@ -266,7 +266,7 @@ def test_execute_shell_turn_nitro_prompt_executes_remote_then_investigation(
         call_order.append(f"investigation:{alert_text}")
 
     monkeypatch.setattr(
-        "interactive_shell.runtime.shell_turn_execution._default_llm_factory",
+        "surfaces.interactive_shell.runtime.shell_turn_execution._default_llm_factory",
         lambda: FakeActionLLM(
             [
                 AgentLLMResponse(

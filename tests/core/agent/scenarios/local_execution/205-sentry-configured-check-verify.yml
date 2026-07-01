@@ -33,8 +33,6 @@ response_contract:
   must_not_contain: []
 history:
   expected:
-  - type: cli_agent
-    ok: true
   - type: slash
     ok: true
 runs: 1

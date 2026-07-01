@@ -26,7 +26,7 @@ from core.domain.alerts.alert_source import (
 )
 from integrations import dagster as dagster_integration
 from integrations.dagster.client import DagsterClient
-from tools.dagster_tools import (
+from integrations.dagster.tools import (
     get_dagster_run_logs,
     list_dagster_assets,
     list_dagster_runs,

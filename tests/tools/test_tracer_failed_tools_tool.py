@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+from integrations.tracer.tools.tracer_failed_tools_tool import get_failed_tools
 from tests.tools.conftest import BaseToolContract, mock_agent_state
-from tools.tracer_failed_tools_tool import get_failed_tools
 
 
 class TestTracerFailedToolsToolContract(BaseToolContract):
@@ -45,7 +45,10 @@ def test_run_happy_path() -> None:
             {"tool_name": "tool-B", "exit_code": "0", "reason": None, "explanation": None},
         ]
     }
-    with patch("tools.tracer_failed_tools_tool.get_tracer_web_client", return_value=mock_client):
+    with patch(
+        "integrations.tracer.tools.tracer_failed_tools_tool.get_tracer_web_client",
+        return_value=mock_client,
+    ):
         result = get_failed_tools(trace_id="trace-123")
     assert result["failed_count"] == 1
     assert result["total_tools"] == 2

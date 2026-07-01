@@ -1,6 +1,6 @@
 [importlinter]
 root_packages =
-    cli
+    surfaces
     config
     core
     infra

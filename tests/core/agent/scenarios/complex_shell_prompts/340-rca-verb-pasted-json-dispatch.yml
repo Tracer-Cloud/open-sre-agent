@@ -50,8 +50,6 @@ response_contract:
   - shell
 history:
   expected:
-  - type: cli_agent
-    ok: true
   - type: alert
     ok: true
 runs: 5

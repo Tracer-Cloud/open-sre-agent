@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+from integrations.cloudwatch.tools.cloudwatch_batch_metrics_tool import get_cloudwatch_batch_metrics
 from tests.tools.conftest import BaseToolContract
-from tools.cloudwatch_batch_metrics_tool import get_cloudwatch_batch_metrics
 
 
 class TestCloudWatchBatchMetricsToolContract(BaseToolContract):
@@ -40,7 +40,8 @@ def test_run_returns_error_for_invalid_metric_type() -> None:
 def test_run_cpu_metrics_happy_path() -> None:
     fake_metrics = [{"Timestamp": "2024-01-01", "Average": 50.0}]
     with patch(
-        "tools.cloudwatch_batch_metrics_tool.get_metric_statistics", return_value=fake_metrics
+        "integrations.cloudwatch.tools.cloudwatch_batch_metrics_tool.get_metric_statistics",
+        return_value=fake_metrics,
     ):
         result = get_cloudwatch_batch_metrics(job_queue="my-queue", metric_type="cpu")
     assert result["metrics"] == fake_metrics
@@ -51,7 +52,8 @@ def test_run_cpu_metrics_happy_path() -> None:
 def test_run_memory_metrics_happy_path() -> None:
     fake_metrics = [{"Timestamp": "2024-01-01", "Average": 80.0}]
     with patch(
-        "tools.cloudwatch_batch_metrics_tool.get_metric_statistics", return_value=fake_metrics
+        "integrations.cloudwatch.tools.cloudwatch_batch_metrics_tool.get_metric_statistics",
+        return_value=fake_metrics,
     ):
         result = get_cloudwatch_batch_metrics(job_queue="my-queue", metric_type="memory")
     assert result["metric_type"] == "memory"
@@ -59,7 +61,7 @@ def test_run_memory_metrics_happy_path() -> None:
 
 def test_run_handles_exception() -> None:
     with patch(
-        "tools.cloudwatch_batch_metrics_tool.get_metric_statistics",
+        "integrations.cloudwatch.tools.cloudwatch_batch_metrics_tool.get_metric_statistics",
         side_effect=Exception("AWS error"),
     ):
         result = get_cloudwatch_batch_metrics(job_queue="my-queue")

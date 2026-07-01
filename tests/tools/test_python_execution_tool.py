@@ -1,0 +1,141 @@
+"""Tests for the Python execution tool."""
+
+from __future__ import annotations
+
+from unittest.mock import patch
+
+from platform.sandbox.runner import SandboxResult
+from tests.tools.conftest import BaseToolContract
+from tools.python_execution_tool import execute_python_code
+from tools.registry import clear_tool_registry_cache, get_registered_tool_map
+
+
+class TestPythonExecutionToolContract(BaseToolContract):
+    def get_tool_under_test(self) -> object:
+        return execute_python_code
+
+
+class TestPythonExecutionToolMetadata:
+    def test_tool_name(self) -> None:
+        assert execute_python_code.name == "execute_python_code"
+
+    def test_registered_on_interactive_surfaces(self) -> None:
+        clear_tool_registry_cache()
+        registered = get_registered_tool_map("chat")["execute_python_code"]
+        assert "investigation" in registered.surfaces
+        assert "chat" in registered.surfaces
+
+    def test_github_token_hidden_from_public_schema(self) -> None:
+        clear_tool_registry_cache()
+        registered = get_registered_tool_map("chat")["execute_python_code"]
+        props = registered.public_input_schema["properties"]
+        assert "github_token" not in props
+        assert "github_token" in registered.injected_params
+
+    def test_github_star_velocity_skill_guidance_is_attached(self) -> None:
+        clear_tool_registry_cache()
+        registered = get_registered_tool_map("chat")["execute_python_code"]
+        marker = "Stargazers are returned **oldest first**"
+        assert "Workflow guidance:" in registered.description
+        assert '<skill name="github-star-velocity"' in registered.skill_guidance
+        assert marker in registered.skill_guidance
+        assert marker in registered.description
+
+
+class TestPythonExecutionToolExecution:
+    def test_successful_execution_returns_stdout(self) -> None:
+        result = execute_python_code.run(code="print('hello world')")
+        assert result["success"] is True
+        assert "hello world" in result["stdout"]
+        assert result["stderr"] == ""
+        assert result["exit_code"] == 0
+
+    def test_inputs_are_injected(self) -> None:
+        result = execute_python_code.run(
+            code="print(inputs['owner'] + '/' + inputs['repo'])",
+            inputs={"owner": "Tracer-Cloud", "repo": "opensre"},
+        )
+        assert result["success"] is True
+        assert "Tracer-Cloud/opensre" in result["stdout"]
+        assert result["inputs"] == {"owner": "Tracer-Cloud", "repo": "opensre"}
+
+    def test_failure_returns_non_zero_exit_code(self) -> None:
+        result = execute_python_code.run(code="raise RuntimeError('boom')")
+        assert result["success"] is False
+        assert result["exit_code"] != 0
+        assert "RuntimeError" in result["stderr"]
+
+    def test_timeout_produces_timed_out_true(self) -> None:
+        result = execute_python_code.run(code="import time; time.sleep(10)", timeout=1)
+        assert result["success"] is False
+        assert result["timed_out"] is True
+        assert "error" in result
+
+    def test_timeout_capped_at_max(self) -> None:
+        with patch("tools.python_execution_tool.runner.run_python_sandbox") as mock_run:
+            mock_run.return_value = SandboxResult(
+                code="pass",
+                inputs={},
+                stdout="",
+                stderr="",
+                exit_code=0,
+                timed_out=False,
+            )
+            execute_python_code.run(code="pass", timeout=9999)
+            _, kwargs = mock_run.call_args
+            assert kwargs["timeout"] <= 60
+
+
+class TestPythonExecutionToolRestrictions:
+    def test_network_access_blocked_by_default(self) -> None:
+        result = execute_python_code.run(code="import socket; socket.socket()")
+        assert result["success"] is False
+        assert "PermissionError" in result["stderr"] or "PermissionError" in result["stdout"]
+
+    def test_network_access_can_be_enabled(self) -> None:
+        result = execute_python_code.run(
+            code="import socket; s = socket.socket(); s.close(); print('socket ok')",
+            allow_network=True,
+        )
+        assert result["success"] is True
+        assert "socket ok" in result["stdout"]
+
+    def test_subprocess_execution_still_blocked_when_network_enabled(self) -> None:
+        result = execute_python_code.run(
+            code="import subprocess; subprocess.run(['echo', 'nope'])",
+            allow_network=True,
+        )
+        assert result["success"] is False
+        assert "PermissionError" in result["stderr"] or "PermissionError" in result["stdout"]
+
+    def test_filesystem_write_outside_tmp_blocked_when_network_enabled(self) -> None:
+        result = execute_python_code.run(
+            code="open('/etc/python_execution_tool_test', 'w').write('x')",
+            allow_network=True,
+        )
+        assert result["success"] is False
+        assert "PermissionError" in result["stderr"] or "PermissionError" in result["stdout"]
+
+
+class TestPythonExecutionToolCredentials:
+    def test_github_token_from_env_is_available_and_redacted(self, monkeypatch) -> None:
+        monkeypatch.setenv("GITHUB_TOKEN", "ghp_secret_token")
+        result = execute_python_code.run(
+            code=("import os\nprint('token=' + str(os.environ.get('GITHUB_TOKEN')))\n")
+        )
+        assert result["success"] is True
+        assert result["credentials_available"] == ["github"]
+        assert "ghp_secret_token" not in result["stdout"]
+        assert "[redacted]" in result["stdout"]
+
+    def test_explicit_github_token_is_available_and_redacted(self, monkeypatch) -> None:
+        monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+        monkeypatch.delenv("GH_TOKEN", raising=False)
+        result = execute_python_code.run(
+            code="import os; print(os.environ.get('GITHUB_TOKEN'))",
+            github_token="ghp_explicit_secret",
+        )
+        assert result["success"] is True
+        assert result["credentials_available"] == ["github"]
+        assert "ghp_explicit_secret" not in result["stdout"]
+        assert "[redacted]" in result["stdout"]

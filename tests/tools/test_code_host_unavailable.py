@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tools.utils.code_host_unavailable import code_host_unavailable_payload
+from core.tool_framework.utils.code_host_unavailable import code_host_unavailable_payload
 
 
 def test_code_host_unavailable_payload_shape() -> None:

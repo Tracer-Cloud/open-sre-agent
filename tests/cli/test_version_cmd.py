@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import platform
-from cli.__main__ import main
 from config.version import get_version
+from surfaces.cli.__main__ import main
 
 
 def test_version_subcommand(monkeypatch, capsys) -> None:
-    monkeypatch.setattr("cli.__main__.capture_first_run_if_needed", lambda: None)
-    monkeypatch.setattr("cli.__main__.capture_cli_invoked", lambda *_args: None)
-    monkeypatch.setattr("cli.__main__.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("surfaces.cli.__main__.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("surfaces.cli.__main__.capture_cli_invoked", lambda *_args: None)
+    monkeypatch.setattr("surfaces.cli.__main__.shutdown_analytics", lambda **_kw: None)
 
     rc = main(["version"])
     assert rc == 0
@@ -25,8 +25,8 @@ def test_version_flag_uses_fast_path(monkeypatch, capsys) -> None:
     def fail_bootstrap(*_args, **_kwargs) -> None:
         raise AssertionError("--version should not bootstrap the full CLI")
 
-    monkeypatch.setattr("cli.__main__.init_sentry", fail_bootstrap)
-    monkeypatch.setattr("cli.__main__._sentry_entrypoint_for_invocation", fail_bootstrap)
+    monkeypatch.setattr("surfaces.cli.__main__.init_sentry", fail_bootstrap)
+    monkeypatch.setattr("surfaces.cli.__main__._sentry_entrypoint_for_invocation", fail_bootstrap)
 
     rc = main(["--version"])
 

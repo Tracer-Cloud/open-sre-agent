@@ -42,8 +42,6 @@ response_contract:
   - $ /
 history:
   expected:
-  - type: cli_agent
-    ok: true
   - type: alert
     ok: true
 runs: 3

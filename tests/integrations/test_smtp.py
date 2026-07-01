@@ -37,7 +37,7 @@ def test_config_rejects_partial_auth() -> None:
 
 def test_verify_smtp_reports_success(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "platform.notifications.smtp_delivery.verify_smtp_connection",
+        "integrations.smtp.delivery.verify_smtp_connection",
         lambda _config: (True, "Connected to SMTP server successfully."),
     )
 

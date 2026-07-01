@@ -379,7 +379,7 @@ def test_unavailable_response_shape() -> None:
 
 
 def test_tool_name_and_source() -> None:
-    from tools.elasticsearch_tools import ElasticsearchLogsTool
+    from integrations.elasticsearch.tools import ElasticsearchLogsTool
 
     t = ElasticsearchLogsTool()
     assert t.name == "query_elasticsearch_logs"
@@ -387,7 +387,7 @@ def test_tool_name_and_source() -> None:
 
 
 def test_tool_is_available_when_connection_verified() -> None:
-    from tools.elasticsearch_tools import ElasticsearchLogsTool
+    from integrations.elasticsearch.tools import ElasticsearchLogsTool
 
     t = ElasticsearchLogsTool()
     sources = {"elasticsearch": {"connection_verified": True, "url": "http://localhost:9200"}}
@@ -395,14 +395,14 @@ def test_tool_is_available_when_connection_verified() -> None:
 
 
 def test_tool_is_not_available_without_source() -> None:
-    from tools.elasticsearch_tools import ElasticsearchLogsTool
+    from integrations.elasticsearch.tools import ElasticsearchLogsTool
 
     t = ElasticsearchLogsTool()
     assert t.is_available({}) is False
 
 
 def test_tool_run_returns_unavailable_without_url() -> None:
-    from tools.elasticsearch_tools import ElasticsearchLogsTool
+    from integrations.elasticsearch.tools import ElasticsearchLogsTool
 
     t = ElasticsearchLogsTool()
     result = t.run(query="error", url=None)
@@ -411,7 +411,7 @@ def test_tool_run_returns_unavailable_without_url() -> None:
 
 
 def test_tool_run_returns_logs_on_success() -> None:
-    from tools.elasticsearch_tools import ElasticsearchLogsTool
+    from integrations.elasticsearch.tools import ElasticsearchLogsTool
 
     t = ElasticsearchLogsTool()
     mock_client = MagicMock()
@@ -422,7 +422,7 @@ def test_tool_run_returns_logs_on_success() -> None:
         "query": "error",
     }
 
-    with patch("tools.elasticsearch_tools.make_client", return_value=mock_client):
+    with patch("integrations.elasticsearch.tools.make_client", return_value=mock_client):
         result = t.run(query="error", url="http://localhost:9200")
 
     assert result["available"] is True

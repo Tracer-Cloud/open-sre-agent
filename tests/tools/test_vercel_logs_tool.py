@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tools.vercel_tools import VercelLogsTool
+from integrations.vercel.tools import VercelLogsTool
 
 
 @pytest.fixture()
@@ -57,7 +57,7 @@ def test_run_returns_events_and_filters_error_events(tool: VercelLogsTool) -> No
     mock_client.get_deployment_events.return_value = {"success": True, "events": events}
     mock_client.get_runtime_logs.return_value = {"success": True, "logs": []}
 
-    with patch("tools.vercel_tools.make_vercel_client", return_value=mock_client):
+    with patch("integrations.vercel.tools.make_vercel_client", return_value=mock_client):
         result = tool.run(api_token="tok_test", deployment_id="dpl_xyz")
 
     assert result["available"] is True
@@ -73,7 +73,7 @@ def test_run_skips_runtime_logs_when_disabled(tool: VercelLogsTool) -> None:
     mock_client.get_deployment.return_value = {"success": True, "deployment": {}}
     mock_client.get_deployment_events.return_value = {"success": True, "events": []}
 
-    with patch("tools.vercel_tools.make_vercel_client", return_value=mock_client):
+    with patch("integrations.vercel.tools.make_vercel_client", return_value=mock_client):
         tool.run(api_token="tok_test", deployment_id="dpl_xyz", include_runtime_logs=False)
 
     mock_client.get_runtime_logs.assert_not_called()
@@ -88,7 +88,7 @@ def test_run_includes_runtime_logs_by_default(tool: VercelLogsTool) -> None:
         "logs": [{"id": "l1"}, {"id": "l2"}],
     }
 
-    with patch("tools.vercel_tools.make_vercel_client", return_value=mock_client):
+    with patch("integrations.vercel.tools.make_vercel_client", return_value=mock_client):
         result = tool.run(api_token="tok_test", deployment_id="dpl_xyz", project_id="prj_9")
 
     mock_client.get_runtime_logs.assert_called_once()
@@ -103,7 +103,7 @@ def test_run_gracefully_handles_deployment_fetch_failure(tool: VercelLogsTool) -
     mock_client.get_deployment_events.return_value = {"success": True, "events": []}
     mock_client.get_runtime_logs.return_value = {"success": True, "logs": []}
 
-    with patch("tools.vercel_tools.make_vercel_client", return_value=mock_client):
+    with patch("integrations.vercel.tools.make_vercel_client", return_value=mock_client):
         result = tool.run(api_token="tok_test", deployment_id="dpl_xyz")
 
     assert result["available"] is True
@@ -116,7 +116,7 @@ def test_run_gracefully_handles_events_fetch_failure(tool: VercelLogsTool) -> No
     mock_client.get_deployment_events.return_value = {"success": False, "error": "rate limited"}
     mock_client.get_runtime_logs.return_value = {"success": True, "logs": []}
 
-    with patch("tools.vercel_tools.make_vercel_client", return_value=mock_client):
+    with patch("integrations.vercel.tools.make_vercel_client", return_value=mock_client):
         result = tool.run(api_token="tok_test", deployment_id="dpl_xyz")
 
     assert result["available"] is True

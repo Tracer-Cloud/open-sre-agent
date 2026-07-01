@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tools.utils.db_warnings import default_db_warning
+from core.tool_framework.utils.db_warnings import default_db_warning
 
 
 def test_contains_db_name() -> None:

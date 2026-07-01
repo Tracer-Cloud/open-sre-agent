@@ -868,7 +868,7 @@ class TestBrokerSelfElection:
 
 class TestSlashCommandFormatter:
     def test_format_includes_agent_and_summary(self) -> None:
-        from interactive_shell.command_registry.agents.core import _format_bus_message
+        from surfaces.interactive_shell.command_registry.agents.core import _format_bus_message
 
         msg = BusMessage(agent="claude-code:8421", topic="finding", summary="hi")
         out = _format_bus_message(msg)
@@ -876,7 +876,7 @@ class TestSlashCommandFormatter:
         assert "hi" in out
 
     def test_format_includes_path_when_present(self) -> None:
-        from interactive_shell.command_registry.agents.core import _format_bus_message
+        from surfaces.interactive_shell.command_registry.agents.core import _format_bus_message
 
         msg = BusMessage(agent="a:1", topic="finding", summary="x", path="services/auth.py:42")
         out = _format_bus_message(msg)
@@ -884,7 +884,7 @@ class TestSlashCommandFormatter:
         assert "—" in out
 
     def test_format_omits_separator_when_no_path(self) -> None:
-        from interactive_shell.command_registry.agents.core import _format_bus_message
+        from surfaces.interactive_shell.command_registry.agents.core import _format_bus_message
 
         msg = BusMessage(agent="a:1", topic="finding", summary="x")
         out = _format_bus_message(msg)

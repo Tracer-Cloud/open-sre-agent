@@ -32,6 +32,18 @@ LEGACY_INTEGRATIONS_STORE_PATH: Path = LEGACY_TRACER_HOME_DIR / "integrations.js
 OPENSRE_TMP_DIR: Path = Path(tempfile.gettempdir()) / "opensre"
 
 
+def get_store_path() -> Path:
+    """Default path to the wizard config file (``~/.opensre/opensre.json``).
+
+    Lives in ``config.constants`` (rather than ``surfaces/cli/wizard/store.py``)
+    so layers below ``surfaces/`` — notably ``platform/`` — can read the
+    store path without importing from a surface. The wizard's
+    ``surfaces.cli.wizard.store`` module re-exports this name for the
+    callers that already import it from there.
+    """
+    return OPENSRE_HOME_DIR / "opensre.json"
+
+
 def ensure_opensre_tmp_dir() -> Path:
     """Create the OpenSRE temp directory with owner-only permissions when possible."""
     OPENSRE_TMP_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)

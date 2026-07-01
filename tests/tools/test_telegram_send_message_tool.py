@@ -8,7 +8,10 @@ from typing import Any
 
 import pytest
 
-from tools.telegram_send_message_tool import TelegramSendMessageTool, telegram_send_message
+from integrations.telegram.tools.telegram_send_message_tool import (
+    TelegramSendMessageTool,
+    telegram_send_message,
+)
 
 
 @pytest.fixture
@@ -56,9 +59,9 @@ def test_extract_params_returns_no_credentials(telegram_source: dict[str, Any]) 
 
 
 def test_init_is_only_registry_entrypoint() -> None:
-    package = importlib.import_module("tools.telegram_send_message_tool")
+    package = importlib.import_module("integrations.telegram.tools.telegram_send_message_tool")
     source = inspect.getsource(package)
-    assert "from tools.telegram_send_message_tool.tool import" in source
+    assert "from integrations.telegram.tools.telegram_send_message_tool.tool import" in source
     assert "class TelegramSendMessageTool" not in source
 
 
@@ -89,10 +92,12 @@ def test_run_resolves_credentials_internally_and_dispatches(
         return True, ""
 
     monkeypatch.setattr(
-        "tools.telegram_send_message_tool.delivery.load_credentials_from_env", _fake_load
+        "integrations.telegram.tools.telegram_send_message_tool.delivery.load_credentials_from_env",
+        _fake_load,
     )
     monkeypatch.setattr(
-        "tools.telegram_send_message_tool.delivery.send_telegram_report", _fake_send
+        "integrations.telegram.tools.telegram_send_message_tool.delivery.send_telegram_report",
+        _fake_send,
     )
 
     result = telegram_send_message.run(
@@ -124,7 +129,7 @@ def test_run_sends_user_requested_action_message(monkeypatch: pytest.MonkeyPatch
         chat_id = "-100default"
 
     monkeypatch.setattr(
-        "tools.telegram_send_message_tool.delivery.load_credentials_from_env",
+        "integrations.telegram.tools.telegram_send_message_tool.delivery.load_credentials_from_env",
         lambda **_kwargs: _Creds(),
     )
 
@@ -134,7 +139,8 @@ def test_run_sends_user_requested_action_message(monkeypatch: pytest.MonkeyPatch
         return True, ""
 
     monkeypatch.setattr(
-        "tools.telegram_send_message_tool.delivery.send_telegram_report", _fake_send
+        "integrations.telegram.tools.telegram_send_message_tool.delivery.send_telegram_report",
+        _fake_send,
     )
 
     result = telegram_send_message.run(message="Tell the team the database failover is complete.")
@@ -156,10 +162,11 @@ def test_run_falls_back_to_default_chat(monkeypatch: pytest.MonkeyPatch) -> None
         return _Creds()
 
     monkeypatch.setattr(
-        "tools.telegram_send_message_tool.delivery.load_credentials_from_env", _fake_load
+        "integrations.telegram.tools.telegram_send_message_tool.delivery.load_credentials_from_env",
+        _fake_load,
     )
     monkeypatch.setattr(
-        "tools.telegram_send_message_tool.delivery.send_telegram_report",
+        "integrations.telegram.tools.telegram_send_message_tool.delivery.send_telegram_report",
         lambda _report, _ctx, **_kwargs: (True, ""),
     )
 
@@ -183,7 +190,7 @@ def test_run_failed_when_message_is_empty() -> None:
 
 def test_run_failed_when_telegram_not_configured(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "tools.telegram_send_message_tool.delivery.load_credentials_from_env",
+        "integrations.telegram.tools.telegram_send_message_tool.delivery.load_credentials_from_env",
         lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("Telegram is not configured.")),
     )
 
@@ -202,11 +209,11 @@ def test_run_propagates_send_error(monkeypatch: pytest.MonkeyPatch) -> None:
         chat_id = "-100123"
 
     monkeypatch.setattr(
-        "tools.telegram_send_message_tool.delivery.load_credentials_from_env",
+        "integrations.telegram.tools.telegram_send_message_tool.delivery.load_credentials_from_env",
         lambda **_kwargs: _Creds(),
     )
     monkeypatch.setattr(
-        "tools.telegram_send_message_tool.delivery.send_telegram_report",
+        "integrations.telegram.tools.telegram_send_message_tool.delivery.send_telegram_report",
         lambda _r, _c, **_kwargs: (False, "telegram rejected"),
     )
 

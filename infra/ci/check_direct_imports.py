@@ -24,21 +24,68 @@ from check_import_cycles import _build_graph, discover_first_party_roots  # noqa
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # ``source_prefix -> forbidden destination roots`` for direct imports only.
-# Enforce the edges fixed in this PR first; expand to core/config once the
-# registry port lands (see opensre-architecture-guide § tool placement).
+# Enforces the layering contract documented in ``surfaces/__init__.py``:
+# "Nothing first-party may import from surfaces/". Adds an explicit bound
+# on ``platform``, ``infra``, ``core``, ``gateway`` so the surfaces ban
+# is CI-enforced, not just doc-described.
+#
+# Note: ``infra`` is excluded from the import-graph's first-party roots
+# (see ``check_import_cycles._SKIP_ROOT_DIRS``), so its rule here is
+# defensive — it activates the moment ``infra/`` is brought into the
+# graph. Keep it documented so the intent is not lost.
 _FORBIDDEN_DIRECT: dict[str, frozenset[str]] = {
-    "integrations": frozenset({"tools", "cli"}),
-    "tools": frozenset({"cli"}),
+    "platform": frozenset({"surfaces"}),
+    "infra": frozenset({"surfaces"}),
+    "core": frozenset({"surfaces"}),
+    "gateway": frozenset({"surfaces"}),
+    "integrations": frozenset({"tools", "surfaces"}),
+    "tools": frozenset({"surfaces"}),
 }
 
 # Known direct violations being burned down — remove entries as fixes land.
 # Format: ``"source.module -> dest.module"`` (exact modules from the graph).
 _BASELINE_IGNORES: frozenset[str] = frozenset(
     {
-        # Hermes Telegram sink reuses watch-dog alarm dispatch (#1500 refactor).
-        "integrations.hermes.sinks -> tools.watch_dog.alarms",
-        # Integration setup UX still reaches into the CLI wizard.
-        "integrations.cli -> cli.wizard.integration_health",
+        # Gateway hosts the interactive_shell runtime — pre-existing reuse
+        # to be burned down by extracting shared runtime primitives out of
+        # ``surfaces/interactive_shell/`` and into a layer below ``surfaces``.
+        "gateway.storage.session.resolver -> surfaces.interactive_shell.runtime.context",
+        # tools/interactive_shell action tools reach UP into surfaces/interactive_shell
+        # for runtime / command_registry / UI primitives. Clears when the action
+        # tools themselves are refactored to be UI-agnostic (e.g. return
+        # "approval-required" sentinels instead of calling execution_confirm
+        # directly) so the surface owns its own confirmation UX.
+        "tools.interactive_shell.actions.cli_command -> surfaces.interactive_shell.runtime.subprocess_runner",
+        "tools.interactive_shell.actions.investigation -> surfaces.interactive_shell.runtime",
+        "tools.interactive_shell.actions.llm_provider -> surfaces.interactive_shell.command_registry",
+        "tools.interactive_shell.actions.llm_provider -> surfaces.interactive_shell.ui.execution_confirm",
+        "tools.interactive_shell.actions.sample_alert -> surfaces.interactive_shell.runtime",
+        "tools.interactive_shell.actions.slash -> surfaces.interactive_shell.command_registry",
+        "tools.interactive_shell.actions.slash -> surfaces.interactive_shell.command_registry.slash_catalog",
+        "tools.interactive_shell.actions.slash -> surfaces.interactive_shell.ui",
+        "tools.interactive_shell.actions.slash -> surfaces.interactive_shell.ui.execution_confirm",
+        "tools.interactive_shell.actions.slash -> surfaces.interactive_shell.utils.telemetry.turn_outcome",
+        "tools.interactive_shell.actions.task_cancel -> surfaces.interactive_shell.command_registry",
+        "tools.interactive_shell.actions.task_cancel -> surfaces.interactive_shell.runtime",
+        "tools.interactive_shell.actions.task_cancel -> surfaces.interactive_shell.ui.execution_confirm",
+        "tools.interactive_shell.implementation.claude_code_executor -> surfaces.interactive_shell.runtime",
+        "tools.interactive_shell.implementation.claude_code_executor -> surfaces.interactive_shell.runtime.subprocess_runner.task_streaming",
+        "tools.interactive_shell.implementation.claude_code_executor -> surfaces.interactive_shell.ui",
+        "tools.interactive_shell.implementation.claude_code_executor -> surfaces.interactive_shell.ui.execution_confirm",
+        "tools.interactive_shell.implementation.claude_code_executor -> surfaces.interactive_shell.utils.error_handling.exception_reporting",
+        "tools.interactive_shell.shared.investigation_launch -> surfaces.interactive_shell.runtime",
+        "tools.interactive_shell.shared.investigation_launch -> surfaces.interactive_shell.ui.execution_confirm",
+        "tools.interactive_shell.shared.investigation_launch -> surfaces.interactive_shell.ui.foreground_investigation",
+        "tools.interactive_shell.shell.runner -> surfaces.interactive_shell.runtime",
+        "tools.interactive_shell.shell.runner -> surfaces.interactive_shell.runtime.subprocess_runner.task_streaming",
+        "tools.interactive_shell.shell.runner -> surfaces.interactive_shell.ui",
+        "tools.interactive_shell.shell.runner -> surfaces.interactive_shell.ui.execution_confirm",
+        "tools.interactive_shell.shell.runner -> surfaces.interactive_shell.utils.error_handling.exception_reporting",
+        "tools.interactive_shell.synthetic.runner -> surfaces.interactive_shell.runtime",
+        "tools.interactive_shell.synthetic.runner -> surfaces.interactive_shell.runtime.subprocess_runner.task_streaming",
+        "tools.interactive_shell.synthetic.runner -> surfaces.interactive_shell.ui",
+        "tools.interactive_shell.synthetic.runner -> surfaces.interactive_shell.ui.execution_confirm",
+        "tools.interactive_shell.synthetic.runner -> surfaces.interactive_shell.utils.error_handling.exception_reporting",
     }
 )
 

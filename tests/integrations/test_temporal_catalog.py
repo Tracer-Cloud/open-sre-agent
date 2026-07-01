@@ -12,8 +12,8 @@ from __future__ import annotations
 from integrations.catalog import classify_integrations
 from integrations.temporal import classify
 from integrations.temporal.client import TemporalConfig
+from integrations.temporal.tools import TemporalWorkflowsTool
 from tools.investigation.stages.gather_evidence.tools import availability_view
-from tools.temporal_tools import TemporalWorkflowsTool
 
 
 class TestClassify:

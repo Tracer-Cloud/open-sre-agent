@@ -171,13 +171,27 @@ class TestRedisToolsAvailability:
         try:
             import importlib
 
-            redis_client_list_tool = importlib.import_module("tools.redis_client_list_tool")
-            redis_key_scan_tool = importlib.import_module("tools.redis_key_scan_tool")
-            redis_latency_doctor_tool = importlib.import_module("tools.redis_latency_doctor_tool")
-            redis_list_depth_tool = importlib.import_module("tools.redis_list_depth_tool")
-            redis_replication_tool = importlib.import_module("tools.redis_replication_tool")
-            redis_server_info_tool = importlib.import_module("tools.redis_server_info_tool")
-            redis_slowlog_tool = importlib.import_module("tools.redis_slowlog_tool")
+            redis_client_list_tool = importlib.import_module(
+                "integrations.redis.tools.redis_client_list_tool"
+            )
+            redis_key_scan_tool = importlib.import_module(
+                "integrations.redis.tools.redis_key_scan_tool"
+            )
+            redis_latency_doctor_tool = importlib.import_module(
+                "integrations.redis.tools.redis_latency_doctor_tool"
+            )
+            redis_list_depth_tool = importlib.import_module(
+                "integrations.redis.tools.redis_list_depth_tool"
+            )
+            redis_replication_tool = importlib.import_module(
+                "integrations.redis.tools.redis_replication_tool"
+            )
+            redis_server_info_tool = importlib.import_module(
+                "integrations.redis.tools.redis_server_info_tool"
+            )
+            redis_slowlog_tool = importlib.import_module(
+                "integrations.redis.tools.redis_slowlog_tool"
+            )
 
             # All 7 tool modules should be importable (4 baseline + 3 P1)
             assert redis_server_info_tool is not None
@@ -238,7 +252,7 @@ class TestRedisP1ToolPaths:
 
     @patch("integrations.redis._get_client")
     def test_client_list_tool_path(self, mock_get_client):
-        from tools.redis_client_list_tool import get_redis_client_list
+        from integrations.redis.tools.redis_client_list_tool import get_redis_client_list
 
         mock_client = MagicMock()
         mock_client.client_list.return_value = [
@@ -256,7 +270,7 @@ class TestRedisP1ToolPaths:
 
     @patch("integrations.redis._get_client")
     def test_list_depth_tool_path(self, mock_get_client):
-        from tools.redis_list_depth_tool import get_redis_list_depth
+        from integrations.redis.tools.redis_list_depth_tool import get_redis_list_depth
 
         mock_client = MagicMock()
         mock_client.type.return_value = "list"
@@ -277,7 +291,7 @@ class TestRedisP1ToolPaths:
 
     @patch("integrations.redis._get_client")
     def test_latency_doctor_tool_path(self, mock_get_client):
-        from tools.redis_latency_doctor_tool import get_redis_latency_doctor
+        from integrations.redis.tools.redis_latency_doctor_tool import get_redis_latency_doctor
 
         mock_client = MagicMock()
         mock_client.execute_command.return_value = "I detected spikes caused by fork."

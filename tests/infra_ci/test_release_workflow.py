@@ -53,5 +53,5 @@ def test_binary_build_bundles_registry_discovered_tool_modules() -> None:
     source = _RELEASE_WORKFLOW.read_text()
 
     assert "--collect-submodules tools" in source
-    assert "--collect-submodules interactive_shell" in source
+    assert "--collect-submodules surfaces.interactive_shell" in source
     assert "--collect-submodules integrations" in source

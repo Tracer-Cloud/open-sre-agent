@@ -37,6 +37,7 @@ from core.execution import (
     execute_tool_calls,
     public_tool_input,
 )
+from core.llm import agent_llm_client
 from core.llm.types import ToolCall
 from core.messages import (
     RuntimeMessage,
@@ -54,7 +55,19 @@ from platform.observability.tool_trace import redact_sensitive
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from core.agent_harness.turn_context import AgentRuntimeRequest
+    from core.agent_harness.models.turn_context import AgentRuntimeRequest
+    from core.agent_harness.models.turn_results import ShellTurnResult
+    from core.agent_harness.ports import (
+        ConfirmFn,
+        ErrorReporter,
+        OutputSink,
+        PromptContextProvider,
+        ReasoningClientProvider,
+        RunRecordFactory,
+        SessionStore,
+        ToolProvider,
+        TurnAccounting,
+    )
 
 # Backward-compatible callback type: called with ``(event_kind, data_dict)``.
 LoopEventCallback = LegacyLoopEventCallback
@@ -89,10 +102,48 @@ class Agent[RuntimeToolT: RuntimeTool]:
     re-implementing the loop.
     """
 
+    @staticmethod
+    def dispatch_message_to_headless_agent(
+        message: str,
+        *,
+        session: SessionStore | None = None,
+        output: OutputSink | None = None,
+        tools: ToolProvider | None = None,
+        prompts: PromptContextProvider | None = None,
+        reasoning: ReasoningClientProvider | None = None,
+        run_factory: RunRecordFactory | None = None,
+        accounting: TurnAccounting | None = None,
+        error_reporter: ErrorReporter | None = None,
+        gather_enabled: bool = False,
+        confirm_fn: ConfirmFn | None = None,
+        is_tty: bool | None = None,
+        tool_hooks: ToolExecutionHooks | None = None,
+    ) -> ShellTurnResult:
+        """Run a full headless turn through the shared agent harness."""
+        from core.agent_harness.agents.headless_agent import (
+            dispatch_message_to_headless_agent,
+        )
+
+        return dispatch_message_to_headless_agent(
+            message,
+            session=session,
+            output=output,
+            tools=tools,
+            prompts=prompts,
+            reasoning=reasoning,
+            run_factory=run_factory,
+            accounting=accounting,
+            error_reporter=error_reporter,
+            gather_enabled=gather_enabled,
+            confirm_fn=confirm_fn,
+            is_tty=is_tty,
+            tool_hooks=tool_hooks,
+        )
+
     def __init__(
         self,
         *,
-        llm: Any,
+        llm: Any | None = None,
         system: str,
         tools: Sequence[RuntimeToolT],
         resolved_integrations: dict[str, Any],
@@ -155,9 +206,10 @@ class Agent[RuntimeToolT: RuntimeTool]:
         else:
             raise ValueError("Agent.run requires initial_messages or agent_context.")
 
+        llm = self._ensure_llm()
         runtime_tools = list(self._filter_tools(tools))
-        tool_schemas = self._llm.tool_schemas(runtime_tools)
-        ceiling = context_budget_ceiling_for_model(getattr(self._llm, "_model", None))
+        tool_schemas = llm.tool_schemas(runtime_tools)
+        ceiling = context_budget_ceiling_for_model(getattr(llm, "_model", None))
         executed: list[tuple[ToolCall, Any]] = []
         tool_results: list[tuple[ToolCall, ToolExecutionResult]] = []
         final_text = ""
@@ -197,7 +249,7 @@ class Agent[RuntimeToolT: RuntimeTool]:
                     message_count=len(provider_request.messages),
                 )
             )
-            response = self._llm.invoke(
+            response = llm.invoke(
                 provider_request.messages,
                 system=provider_request.system,
                 tools=provider_request.tools,
@@ -209,7 +261,7 @@ class Agent[RuntimeToolT: RuntimeTool]:
                     has_tool_calls=response.has_tool_calls,
                 )
             )
-            assistant_message = runtime_assistant_message(self._llm, response)
+            assistant_message = runtime_assistant_message(llm, response)
             self._emit_runtime(MessageStartEvent(message=assistant_message, iteration=iteration))
             if response.content:
                 self._emit_runtime(
@@ -296,7 +348,7 @@ class Agent[RuntimeToolT: RuntimeTool]:
             )
             provider_results = [result.provider_content() for result in results]
             tool_result_message = runtime_tool_result_message(
-                self._llm, response.tool_calls, provider_results
+                llm, response.tool_calls, provider_results
             )
             messages.append(tool_result_message)
 
@@ -455,9 +507,15 @@ class Agent[RuntimeToolT: RuntimeTool]:
             )
             return list(messages)
 
+    def _ensure_llm(self) -> Any:
+        if self._llm is None:
+            self._llm = agent_llm_client.get_agent_llm()
+        return self._llm
+
     def _convert_to_llm(self, messages: list[RuntimeMessage]) -> list[dict[str, Any]]:
+        llm = self._ensure_llm()
         try:
-            return self._provider_hooks.apply_convert_to_llm(self._llm, messages)
+            return self._provider_hooks.apply_convert_to_llm(llm, messages)
         except Exception:  # noqa: BLE001 - fall back to the standard provider conversion
             logger.debug("[runtime] convert_to_llm raised; using default conversion", exc_info=True)
-            return convert_to_llm_messages(self._llm, messages)
+            return convert_to_llm_messages(llm, messages)

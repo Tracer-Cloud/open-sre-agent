@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tools.skill_guidance import (
+from core.tool_framework.skill_guidance import (
     format_tool_skill_guidance,
     load_tool_skill_guidance,
 )
@@ -41,6 +41,7 @@ tools:
 
     formatted = format_tool_skill_guidance(result.skill)
     assert '<skill name="github-workflow"' in formatted
+    assert 'description="Guide GitHub workflow tools."' in formatted
     assert f"References are relative to {tmp_path}" in formatted
 
 

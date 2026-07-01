@@ -6,20 +6,23 @@ from typing import Any
 
 from rich.markup import escape
 
-from interactive_shell.command_registry import switch_llm_provider, switch_reasoning_model
-from interactive_shell.ui.execution_confirm import execution_allowed
-from tools.interactive_shell.contracts import (
-    ToolContext,
+from core.agent_harness.tools.tool_context import (
+    ActionToolContext,
     capability_available_from_sources,
-    execute_with_repl_context,
+    execute_with_action_context,
     object_schema,
 )
+from core.tool_framework.registered_tool import RegisteredTool
+from surfaces.interactive_shell.command_registry import (
+    switch_llm_provider,
+    switch_reasoning_model,
+)
+from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
 from tools.interactive_shell.shared import allow_tool
-from tools.registered_tool import RegisteredTool
 
 
 def _provider_values() -> tuple[str, ...]:
-    from cli.wizard.config import PROVIDER_BY_VALUE
+    from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
 
     return tuple(sorted(PROVIDER_BY_VALUE.keys()))
 
@@ -40,8 +43,8 @@ def _target_property_schema() -> dict[str, Any]:
     }
 
 
-def _apply_model_set_target(target: str, ctx: ToolContext) -> bool:
-    from cli.wizard.config import PROVIDER_BY_VALUE
+def _apply_model_set_target(target: str, ctx: ActionToolContext) -> bool:
+    from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
 
     candidate = target.strip()
     if candidate.lower() in PROVIDER_BY_VALUE:
@@ -49,7 +52,7 @@ def _apply_model_set_target(target: str, ctx: ToolContext) -> bool:
     return switch_reasoning_model(candidate, ctx.console)
 
 
-def execute_llm_provider_tool(args: dict[str, Any], ctx: ToolContext) -> bool:
+def execute_llm_provider_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
     target = str(args.get("target", args.get("provider", ""))).strip()
     if not target:
         return False
@@ -71,7 +74,7 @@ def execute_llm_provider_tool(args: dict[str, Any], ctx: ToolContext) -> bool:
 
 
 def run_llm_provider(*, target: str, context: Any) -> dict[str, Any]:
-    return execute_with_repl_context({"target": target}, context, execute_llm_provider_tool)
+    return execute_with_action_context({"target": target}, context, execute_llm_provider_tool)
 
 
 llm_set_provider_tool = RegisteredTool(

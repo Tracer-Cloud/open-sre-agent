@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from core.agent_harness.session.background import BackgroundInvestigationRecord
-from interactive_shell.runtime.background.notifications import (
+from surfaces.interactive_shell.runtime.background.notifications import (
     deliver_background_notifications,
 )
 
@@ -36,7 +36,7 @@ def test_deliver_background_notifications_sends_email_when_smtp_is_configured(
         return True, ""
 
     monkeypatch.setattr(
-        "interactive_shell.runtime.background.notifications.send_smtp_report",
+        "surfaces.interactive_shell.runtime.background.notifications.send_smtp_report",
         _fake_send_smtp_report,
     )
 

@@ -42,8 +42,6 @@ response_contract:
   - I cannot help
 history:
   expected:
-  - type: cli_agent
-    ok: true
   - type: slash
     ok: true
 runs: 3

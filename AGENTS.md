@@ -19,11 +19,11 @@ Before any push or PR creation follow **[CI.md](CI.md)** — lint, format, typec
 
 | Path                  | What it does                                                                                       |
 | --------------------- | -------------------------------------------------------------------------------------------------- |
-| `core/`               | Investigation orchestration, context assembly, the shared runtime tool-calling loop, and domain logic (state, types, correlation rules). |
+| `core/`               | Investigation orchestration, context assembly, the shared runtime tool-calling loop, and domain logic (state, types, correlation rules). Includes `core/tool_framework/` — the `BaseTool` base class, `@tool` decorator, registered-tool primitives, error telemetry, skill-guidance helpers, and shared payload utilities (`utils/`). |
 | `cli/`                | Command-line interface, onboarding wizard, local LLM helpers, and CLI tests support.               |
 | `interactive_shell/`  | Interactive terminal (REPL) loop, slash commands, chat/help surfaces, action-planning harness, and terminal UI. |
-| `integrations/`       | Per-integration config normalization, verification, clients, helpers, store/catalog logic, and the Hermes log pipeline. |
-| `tools/`              | Tool registry, decorator, base classes, per-tool packages, and shared tool utilities.              |
+| `integrations/`       | Per-integration config normalization, verification, clients, helpers, store/catalog logic, the Hermes log pipeline, and per-vendor tool packages under `integrations/<vendor>/tools/`. |
+| `tools/`              | Tool registry, per-tool packages for cross-cutting tools that aren't vendor-specific (e.g. `tools/fleet_monitoring/`, `tools/watch_dog/`, `tools/sre_guidance_tool/`), and the interactive-shell action tools. Framework primitives (decorator, base class, utils) live in `core/tool_framework/`. |
 | `platform/`           | Cross-cutting platform services: guardrails, masking, sandbox, analytics, auth, notifications, observability. |
 | `config/`             | Shared constants, prompts, UI theme, and the web app entrypoint (`config/webapp.py`).              |
 | `infra/deployment/`         | Deployment operations, remote-hosted runtime code, and external runtime entrypoints.               |
@@ -77,8 +77,9 @@ The tool registry auto-discovers modules under `tools/`, so the normal path is t
 
 Files to touch:
 
-- `tools/<ToolName>/__init__.py` for the tool implementation, or `tools/<tool_file>.py` for a lighter-weight function tool.
-- `tools/utils/` if the tool needs shared helper code.
+- `integrations/<vendor>/tools/<tool_name>_tool/__init__.py` when the tool belongs to an existing vendor integration (most common path).
+- `tools/<ToolName>/__init__.py` only when the tool is not vendor-specific (e.g. cross-cutting helpers such as `tools/sre_guidance_tool/`).
+- `core/tool_framework/utils/` if the tool needs shared helper code reused across vendors.
 - `integrations/<name>/client.py` if the tool should reuse a dedicated integration API client instead of inlining requests.
 - `docs/<tool_name>.mdx` for user-facing usage, parameters, and examples.
 - `docs/docs.json` — add the page path (without `.mdx`) to the appropriate `pages` array so Mintlify navigation includes it.
@@ -86,10 +87,10 @@ Files to touch:
 
 Steps:
 
-1. Pick the simplest shape that fits the tool. Use a `BaseTool` subclass for richer behavior; use `@tool(...)` from `tools.tool_decorator` for a lightweight function tool.
+1. Pick the simplest shape that fits the tool. Use a `BaseTool` subclass (from `core.tool_framework.base`) for richer behavior; use `@tool(...)` from `core.tool_framework.tool_decorator` for a lightweight function tool.
 2. Declare clear metadata: `name`, `description`, `source`, `input_schema`, and any `use_cases`, `requires`, `outputs`, or `retrieval_controls` you need.
 3. Treat tool packages as production code, not registry placeholders. A tool package may not be an empty or nearly-empty `__init__.py` whose only purpose is discovery. Directionally, non-trivial tools should use focused sibling modules such as `tool.py`, `client.py`/`delivery.py`, `validation.py`, `models.py`, or `results.py`; `__init__.py` should usually be a small registry entrypoint that imports the public tool object.
-4. Keep separation of concerns. Put reusable transport or integration-specific parsing code in `integrations/<name>/` or shared tool glue in `tools/utils/` rather than copying it into the tool body. Split validation, credential/parameter resolution, dispatch/client calls, result normalization, and error handling into focused helpers or sibling files instead of tangling them inside `run()`.
+4. Keep separation of concerns. Put reusable transport or integration-specific parsing code in `integrations/<name>/` or shared tool glue in `core/tool_framework/utils/` rather than copying it into the tool body. Split validation, credential/parameter resolution, dispatch/client calls, result normalization, and error handling into focused helpers or sibling files instead of tangling them inside `run()`.
 5. Return stable, planner-friendly results. Expected failures should produce a structured error shape; external side effects must declare `side_effect_level`, require approval when appropriate, and avoid leaking secrets through `extract_params`, return values, logs, or traceable tool-call kwargs.
 6. If the tool should appear in both investigation and chat surfaces, set `surfaces=("investigation", "chat")`.
 7. Add tests that cover schema shape, availability, extraction, success, failure, and the runtime behavior that the planner depends on.
@@ -133,7 +134,8 @@ Files to touch:
 - `integrations/<name>/verifier.py` when the integration needs local verification logic.
 - `integrations/catalog.py` when the new integration must be resolved into the shared runtime config.
 - `integrations/verify.py` when the integration needs a local verification path.
-- `tools/<Name>Tool/` or `tools/<tool_file>.py` for the user-facing tool layer.
+- `tools/<Name>Tool/` or `tools/<tool_file>.py` for the user-facing tool layer, or
+  `integrations/<name>/tools/` when consolidating a vendor's tools under its integration package.
 - `docs/<name>.mdx` for user-facing setup, usage, and verification docs.
 - `docs/docs.json` — add the page path (without `.mdx`) to the appropriate `pages` array so Mintlify navigation includes it.
 - `tests/integrations/test_<name>.py` for config, verification, and store coverage.
@@ -143,9 +145,9 @@ Treat `integrations/` as the canonical user/config and external-client boundary,
 
 Examples from the repo:
 
-- Datadog: `integrations/datadog/client.py`, `integrations/datadog/verifier.py`, `integrations/catalog.py`, `tools/datadog_tools/`, and Datadog-related tests under `tests/integrations/` and `tests/tools/`.
-- Grafana: `integrations/grafana/`, `integrations/catalog.py`, `tools/grafana_tools/`, `cli/wizard/local_grafana_stack/`, and the Grafana-related tests under `tests/integrations/`.
-- Hermes: `integrations/hermes/`, `tools/HermesLogsTool/`, `tools/HermesSessionEvidenceTool/`, `cli/commands/hermes.py`, `tests/hermes/`, and `tests/synthetic/hermes/`.
+- Datadog: `integrations/datadog/` (including `integrations/datadog/tools/` for query tools), `integrations/catalog.py`, and Datadog-related tests under `tests/integrations/datadog/` and `tests/tools/test_datadog_*.py`.
+- Grafana: `integrations/grafana/` (including `integrations/grafana/tools/` for query tools), `integrations/catalog.py`, `surfaces/cli/wizard/local_grafana_stack/`, and Grafana-related tests under `tests/integrations/grafana/` and `tests/tools/test_grafana_*.py`.
+- Hermes: `integrations/hermes/`, `tools/HermesLogsTool/`, `tools/HermesSessionEvidenceTool/`, `surfaces/cli/commands/hermes.py`, `tests/hermes/`, and `tests/synthetic/hermes/`.
 
 Basic steps:
 
@@ -167,7 +169,7 @@ Basic steps:
 - If adding or materially changing a tool/integration -> follow [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md) in the same PR.
 - If an integration changes -> update `tests/integrations/` and verify with `make verify-integrations`.
 - If adding a new integration -> follow [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md) before opening the PR for review.
-- If adding new tests -> always place them in `tests/`, never inside the source packages (no inline tests).
+- If adding new tests -> place them in `tests/`, never inside the source packages (no inline tests), except gateway tests which intentionally live in `gateway/tests/` per `gateway/AGENTS.md`.
 - If CI-only tests are added -> mark them with the right pytest marker or place them in the appropriate e2e/synthetic/chaos folder so they do not run in the default local suite.
 - If investigation branching or loop behavior changes -> update `tools/investigation/lifecycle.py` and the tests for that path.
 - If adding or changing interactive REPL behavior (slash commands, session management, display output) -> use `ReplDriver` from `tests/utils/repl_driver.py` for live verification alongside unit tests; see [TESTING.md](TESTING.md).

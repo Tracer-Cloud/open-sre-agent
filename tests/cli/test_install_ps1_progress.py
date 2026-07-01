@@ -81,6 +81,10 @@ def test_install_ps1_contains_auto_onboarding_launch_hook() -> None:
     assert "OPENSRE_AUTO_LAUNCH" in source
     assert "& $BinaryPath onboard" in source
     assert "Start-OpenSreOnboardingAfterInstall -BinaryPath $installedBinaryPath" in source
+    # A redirected/piped host must be treated as non-interactive so the
+    # full-screen prompt is not launched into a terminal it cannot control
+    # (issue #3273).
+    assert "[System.Console]::IsInputRedirected" in source
 
 
 def test_install_ps1_keeps_download_urls_verbose_only() -> None:

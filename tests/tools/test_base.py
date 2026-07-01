@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from tools.base import BaseTool
+from core.tool_framework.base import BaseTool
 
 
 def test_base_tool_rejects_blank_name() -> None:

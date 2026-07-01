@@ -300,7 +300,7 @@ class TestAlertmanagerToolsAvailability:
 
     def test_alertmanager_alerts_tool_importable(self):
         """AlertmanagerAlertsTool can be imported and is correctly typed."""
-        from tools.alertmanager_tools import AlertmanagerAlertsTool, alertmanager_alerts
+        from integrations.alertmanager.tools import AlertmanagerAlertsTool, alertmanager_alerts
 
         assert alertmanager_alerts is not None
         assert isinstance(alertmanager_alerts, AlertmanagerAlertsTool)
@@ -309,7 +309,7 @@ class TestAlertmanagerToolsAvailability:
 
     def test_alertmanager_silences_tool_importable(self):
         """AlertmanagerSilencesTool can be imported and is correctly typed."""
-        from tools.alertmanager_tools import (
+        from integrations.alertmanager.tools import (
             AlertmanagerSilencesTool,
             alertmanager_silences,
         )
@@ -321,7 +321,7 @@ class TestAlertmanagerToolsAvailability:
 
     def test_alertmanager_alerts_tool_not_available_without_source(self):
         """AlertmanagerAlertsTool reports unavailable when source has no connection_verified."""
-        from tools.alertmanager_tools import alertmanager_alerts
+        from integrations.alertmanager.tools import alertmanager_alerts
 
         assert not alertmanager_alerts.is_available({})
         assert not alertmanager_alerts.is_available({"alertmanager": {}})
@@ -331,14 +331,14 @@ class TestAlertmanagerToolsAvailability:
 
     def test_alertmanager_alerts_tool_available_with_verified_source(self):
         """AlertmanagerAlertsTool is available when alertmanager source is connection_verified."""
-        from tools.alertmanager_tools import alertmanager_alerts
+        from integrations.alertmanager.tools import alertmanager_alerts
 
         sources = {"alertmanager": {"connection_verified": True, "base_url": "http://am:9093"}}
         assert alertmanager_alerts.is_available(sources)
 
     def test_alertmanager_alerts_tool_extract_params(self):
         """AlertmanagerAlertsTool.extract_params returns correct fields from source."""
-        from tools.alertmanager_tools import alertmanager_alerts
+        from integrations.alertmanager.tools import alertmanager_alerts
 
         sources = {
             "alertmanager": {
@@ -359,7 +359,7 @@ class TestAlertmanagerToolsAvailability:
     @patch("integrations.alertmanager.client.AlertmanagerClient.list_alerts")
     def test_alertmanager_alerts_tool_run_success(self, mock_list_alerts):
         """AlertmanagerAlertsTool.run returns structured result on success."""
-        from tools.alertmanager_tools import alertmanager_alerts
+        from integrations.alertmanager.tools import alertmanager_alerts
 
         mock_list_alerts.return_value = {
             "success": True,
@@ -389,7 +389,7 @@ class TestAlertmanagerToolsAvailability:
 
     def test_alertmanager_alerts_tool_run_missing_base_url(self):
         """AlertmanagerAlertsTool.run returns unavailable when base_url is empty."""
-        from tools.alertmanager_tools import alertmanager_alerts
+        from integrations.alertmanager.tools import alertmanager_alerts
 
         result = alertmanager_alerts.run(base_url="")
 
@@ -399,7 +399,7 @@ class TestAlertmanagerToolsAvailability:
     @patch("integrations.alertmanager.client.AlertmanagerClient.list_silences")
     def test_alertmanager_silences_tool_run_success(self, mock_list_silences):
         """AlertmanagerSilencesTool.run returns structured result on success."""
-        from tools.alertmanager_tools import alertmanager_silences
+        from integrations.alertmanager.tools import alertmanager_silences
 
         mock_list_silences.return_value = {
             "success": True,

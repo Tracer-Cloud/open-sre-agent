@@ -12,11 +12,11 @@ from core.domain.alerts.alert_source import (
 from core.domain.alerts.tool_planning import FALLBACK_TOOL_NAMES, score_tools
 from core.domain.types.planning import PlannedInvestigationAction
 from core.domain.types.retrieval import RetrievalControlsMap, RetrievalIntent, TimeBounds
+from core.tool_framework.registered_tool import RegisteredTool
 from tools.investigation.stages.gather_evidence.tools import (
     availability_view,
     build_connected_tool_context,
 )
-from tools.registered_tool import RegisteredTool
 from tools.registry import get_registered_tools
 
 DEFAULT_RETRIEVAL_LIMIT = 100

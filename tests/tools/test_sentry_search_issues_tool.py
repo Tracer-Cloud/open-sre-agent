@@ -17,8 +17,8 @@ from integrations.sentry import (
     describe_sentry_api_error,
     list_sentry_issues,
 )
+from integrations.sentry.tools.sentry_search_issues_tool import search_sentry_issues
 from tests.tools.conftest import BaseToolContract, mock_agent_state
-from tools.sentry_search_issues_tool import search_sentry_issues
 
 
 class TestSentrySearchIssuesToolContract(BaseToolContract):
@@ -47,7 +47,7 @@ def test_extract_params_maps_resolved_config_dump_shape() -> None:
     ``sentry_url``. Hard-indexing ``sentry['sentry_token']`` raised a KeyError
     that aborted every Sentry query in the gather/investigation loop."""
     from integrations.sentry import SentryConfig
-    from tools.sentry_search_issues_tool import _search_issues_extract_params
+    from integrations.sentry.tools.sentry_search_issues_tool import _search_issues_extract_params
 
     sources = {
         "sentry": SentryConfig(
@@ -69,7 +69,10 @@ def test_run_returns_unavailable_when_no_config() -> None:
     # Stub env resolution so the test is hermetic: without this, a local .env
     # carrying real SENTRY_* creds makes _resolve_config fall back to them and
     # the tool reports available=True.
-    with patch("tools.sentry_search_issues_tool.sentry_config_from_env", return_value=None):
+    with patch(
+        "integrations.sentry.tools.sentry_search_issues_tool.sentry_config_from_env",
+        return_value=None,
+    ):
         result = search_sentry_issues(organization_slug="", sentry_token="")
     assert result["available"] is False
     assert result["issues"] == []
@@ -78,8 +81,14 @@ def test_run_returns_unavailable_when_no_config() -> None:
 def test_run_happy_path() -> None:
     fake_issues = [{"id": "1", "title": "TypeError", "status": "unresolved"}]
     with (
-        patch("tools.sentry_search_issues_tool.list_sentry_issues", return_value=fake_issues),
-        patch("tools.sentry_search_issues_tool.sentry_config_from_env", return_value=None),
+        patch(
+            "integrations.sentry.tools.sentry_search_issues_tool.list_sentry_issues",
+            return_value=fake_issues,
+        ),
+        patch(
+            "integrations.sentry.tools.sentry_search_issues_tool.sentry_config_from_env",
+            return_value=None,
+        ),
     ):
         result = search_sentry_issues(
             organization_slug="my-org",
@@ -93,8 +102,14 @@ def test_run_happy_path() -> None:
 
 def test_run_empty_issues() -> None:
     with (
-        patch("tools.sentry_search_issues_tool.list_sentry_issues", return_value=[]),
-        patch("tools.sentry_search_issues_tool.sentry_config_from_env", return_value=None),
+        patch(
+            "integrations.sentry.tools.sentry_search_issues_tool.list_sentry_issues",
+            return_value=[],
+        ),
+        patch(
+            "integrations.sentry.tools.sentry_search_issues_tool.sentry_config_from_env",
+            return_value=None,
+        ),
     ):
         result = search_sentry_issues(organization_slug="my-org", sentry_token="tok_test")
     assert result["available"] is True
@@ -171,8 +186,14 @@ def test_run_returns_structured_error_on_http_400() -> None:
     err = httpx.HTTPStatusError("bad request", request=request, response=response)
 
     with (
-        patch("tools.sentry_search_issues_tool.list_sentry_issues", side_effect=err),
-        patch("tools.sentry_search_issues_tool.sentry_config_from_env", return_value=None),
+        patch(
+            "integrations.sentry.tools.sentry_search_issues_tool.list_sentry_issues",
+            side_effect=err,
+        ),
+        patch(
+            "integrations.sentry.tools.sentry_search_issues_tool.sentry_config_from_env",
+            return_value=None,
+        ),
     ):
         result = search_sentry_issues(
             organization_slug="my-org",
@@ -358,7 +379,7 @@ def test_validate_sentry_config_saturated_count_uses_plus() -> None:
 
 def test_search_tool_default_limit_is_full_page() -> None:
     from integrations.sentry import DEFAULT_SENTRY_ISSUE_LIMIT
-    from tools.sentry_search_issues_tool import _search_issues_extract_params
+    from integrations.sentry.tools.sentry_search_issues_tool import _search_issues_extract_params
 
     sources = {
         "sentry": {
@@ -378,8 +399,14 @@ def test_search_tool_forwards_limit_and_period_to_client() -> None:
         return []
 
     with (
-        patch("tools.sentry_search_issues_tool.list_sentry_issues", side_effect=_fake_list),
-        patch("tools.sentry_search_issues_tool.sentry_config_from_env", return_value=None),
+        patch(
+            "integrations.sentry.tools.sentry_search_issues_tool.list_sentry_issues",
+            side_effect=_fake_list,
+        ),
+        patch(
+            "integrations.sentry.tools.sentry_search_issues_tool.sentry_config_from_env",
+            return_value=None,
+        ),
     ):
         search_sentry_issues(
             organization_slug="my-org",

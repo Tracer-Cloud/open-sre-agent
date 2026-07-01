@@ -21,13 +21,17 @@ def test_core_agent_harness_does_not_import_interactive_shell() -> None:
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
-                    if alias.name == "interactive_shell" or alias.name.startswith(
-                        "interactive_shell."
-                    ):
+                    if alias.name in {
+                        "interactive_shell",
+                        "surfaces.interactive_shell",
+                    } or alias.name.startswith("surfaces.interactive_shell."):
                         offenders.append(str(path.relative_to(root)))
             elif isinstance(node, ast.ImportFrom):
                 module = node.module or ""
-                if module == "interactive_shell" or module.startswith("interactive_shell."):
+                if module in {
+                    "interactive_shell",
+                    "surfaces.interactive_shell",
+                } or module.startswith("surfaces.interactive_shell."):
                     offenders.append(str(path.relative_to(root)))
 
     assert not offenders, "\n".join(offenders)

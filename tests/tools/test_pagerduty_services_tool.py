@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from tools.pagerduty_tools import PagerDutyServicesTool
+from integrations.pagerduty.tools import PagerDutyServicesTool
 
 
 def _tool() -> PagerDutyServicesTool:
@@ -32,7 +32,7 @@ def test_extract_params_maps_source_fields() -> None:
     assert params["service_id"] == ""
 
 
-@patch("tools.pagerduty_tools.make_pagerduty_client")
+@patch("integrations.pagerduty.tools.make_pagerduty_client")
 def test_run_lists_services(mock_make: MagicMock) -> None:
     mock_client = MagicMock()
     mock_client.list_services.return_value = {
@@ -60,7 +60,7 @@ def test_run_lists_services(mock_make: MagicMock) -> None:
     assert result["service"] == {}
 
 
-@patch("tools.pagerduty_tools.make_pagerduty_client")
+@patch("integrations.pagerduty.tools.make_pagerduty_client")
 def test_run_gets_service_detail_when_id_provided(mock_make: MagicMock) -> None:
     mock_client = MagicMock()
     mock_client.get_service.return_value = {
@@ -88,7 +88,7 @@ def test_run_gets_service_detail_when_id_provided(mock_make: MagicMock) -> None:
     assert result["total"] == 1
 
 
-@patch("tools.pagerduty_tools.make_pagerduty_client")
+@patch("integrations.pagerduty.tools.make_pagerduty_client")
 def test_run_empty_services_list(mock_make: MagicMock) -> None:
     mock_client = MagicMock()
     mock_client.list_services.return_value = {"success": True, "services": [], "total": 0}
@@ -100,7 +100,7 @@ def test_run_empty_services_list(mock_make: MagicMock) -> None:
     assert result["total"] == 0
 
 
-@patch("tools.pagerduty_tools.make_pagerduty_client")
+@patch("integrations.pagerduty.tools.make_pagerduty_client")
 def test_run_returns_unavailable_on_list_failure(mock_make: MagicMock) -> None:
     mock_client = MagicMock()
     mock_client.list_services.return_value = {"success": False, "error": "HTTP 401: Unauthorized"}
@@ -111,7 +111,7 @@ def test_run_returns_unavailable_on_list_failure(mock_make: MagicMock) -> None:
     assert "401" in result["error"]
 
 
-@patch("tools.pagerduty_tools.make_pagerduty_client")
+@patch("integrations.pagerduty.tools.make_pagerduty_client")
 def test_run_returns_unavailable_on_detail_failure(mock_make: MagicMock) -> None:
     mock_client = MagicMock()
     mock_client.get_service.return_value = {"success": False, "error": "HTTP 404: Not Found"}
@@ -122,7 +122,7 @@ def test_run_returns_unavailable_on_detail_failure(mock_make: MagicMock) -> None
     assert "404" in result["error"]
 
 
-@patch("tools.pagerduty_tools.make_pagerduty_client")
+@patch("integrations.pagerduty.tools.make_pagerduty_client")
 def test_run_returns_unavailable_without_key(mock_make: MagicMock) -> None:
     mock_make.return_value = None
     result = _tool().run(api_key="")

@@ -14,8 +14,8 @@ import pytest
 from rich.console import Console
 
 import config.constants.platform as platform_module
-import interactive_shell.runtime.shell_turn_execution as shell_turn_execution
-import interactive_shell.runtime.subprocess_runner as subprocess_runner
+import surfaces.interactive_shell.runtime.shell_turn_execution as shell_turn_execution
+import surfaces.interactive_shell.runtime.subprocess_runner as subprocess_runner
 import tools.interactive_shell.actions.implementation as implementation_tool
 import tools.interactive_shell.actions.llm_provider as llm_provider_tool
 import tools.interactive_shell.actions.slash as slash_tool
@@ -35,7 +35,9 @@ from tools.interactive_shell.action_names import (
     ToolKind,
 )
 
-_ACTION_LLM_FACTORY_PATCH = "interactive_shell.runtime.shell_turn_execution._default_llm_factory"
+_ACTION_LLM_FACTORY_PATCH = (
+    "surfaces.interactive_shell.runtime.shell_turn_execution._default_llm_factory"
+)
 execute_shell_turn = shell_turn_execution.execute_shell_turn
 
 
@@ -290,11 +292,6 @@ def test_execute_cli_actions_dispatches_planned_commands(monkeypatch: object) ->
     assert handled.handled is True
     assert dispatched == ["/health", "/integrations list"]
     assert session.history == [
-        {
-            "type": "cli_agent",
-            "text": "check the health of my opensre and then show me all connected services",
-            "ok": True,
-        },
         {"type": "slash", "text": "/health", "ok": True},
         {"type": "slash", "text": "/integrations list", "ok": True},
     ]
@@ -421,11 +418,6 @@ def test_execute_cli_actions_switches_llm_provider(monkeypatch: object) -> None:
     assert handled.handled is True
     assert switches == ["anthropic"]
     assert session.history == [
-        {
-            "type": "cli_agent",
-            "text": "switch from the current ollama model to setting the model to anthropic",
-            "ok": True,
-        },
         {"type": "slash", "text": "/model set anthropic", "ok": True},
     ]
     output = buf.getvalue()
@@ -521,7 +513,6 @@ def test_execute_cli_actions_runs_implementation_action(monkeypatch: object) -> 
     assert handled.handled is True
     assert calls == ["/history search"]
     assert session.history == [
-        {"type": "cli_agent", "text": "please implement /history search", "ok": True},
         {"type": "implementation", "text": "/history search", "ok": True},
     ]
     output = buf.getvalue()
@@ -563,14 +554,6 @@ def test_execute_cli_actions_answers_discord_then_dispatches_datadog(
     assert handled.handled is True
     assert dispatched == ["/integrations show datadog"]
     assert session.history == [
-        {
-            "type": "cli_agent",
-            "text": (
-                "tell me about what the discord integration can do and then tell me what "
-                "datadog services I have connections to"
-            ),
-            "ok": True,
-        },
         {"type": "slash", "text": "/integrations show datadog", "ok": True},
     ]
     output = buf.getvalue()
@@ -610,14 +593,6 @@ def test_compound_prompt_executes_all_supported_tasks(monkeypatch: object) -> No
     assert handled.handled is True
     assert dispatched == ["/integrations list", "/remote"]
     assert session.history == [
-        {
-            "type": "cli_agent",
-            "text": (
-                "tell me how you are doing AND show me all the services we are connected to "
-                "AND then deploy OpenSRE to EC2"
-            ),
-            "ok": True,
-        },
         {"type": "slash", "text": "/integrations list", "ok": True},
         {"type": "slash", "text": "/remote", "ok": True},
     ]
@@ -653,7 +628,7 @@ def test_nitro_prompt_executes_remote_then_investigation(monkeypatch: object) ->
         return {"root_cause": "hello world handled"}
 
     monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
-    import cli.investigation as investigation_module
+    import surfaces.cli.investigation as investigation_module
 
     monkeypatch.setattr(
         investigation_module,
@@ -726,7 +701,7 @@ def test_execute_cli_actions_runs_sample_alert(monkeypatch: object) -> None:
             "is_noise": False,
         }
 
-    import cli.investigation as investigation_module
+    import surfaces.cli.investigation as investigation_module
 
     monkeypatch.setattr(
         investigation_module,
@@ -764,7 +739,7 @@ def test_execute_cli_actions_runs_sample_alert(monkeypatch: object) -> None:
 def test_execute_cli_actions_sample_alert_opensre_error_marks_task_failed(
     monkeypatch: object,
 ) -> None:
-    from interactive_shell.utils.error_handling.errors import OpenSREError
+    from surfaces.interactive_shell.utils.error_handling.errors import OpenSREError
 
     def _raise(
         *,
@@ -774,7 +749,7 @@ def test_execute_cli_actions_sample_alert_opensre_error_marks_task_failed(
     ) -> dict[str, object]:
         raise OpenSREError("sample pipeline blocked")
 
-    import cli.investigation as investigation_module
+    import surfaces.cli.investigation as investigation_module
 
     monkeypatch.setattr(investigation_module, "run_sample_alert_for_session", _raise)
 
@@ -841,17 +816,11 @@ def test_execute_cli_actions_lists_all_actions_before_synthetic_rds(monkeypatch:
         "001-replication-lag",
     ]
 
-    assert session.history[:2] == [
-        {
-            "type": "cli_agent",
-            "text": (
-                "show me which services are connected and after that run a synthetic test "
-                "RDS database"
-            ),
-            "ok": True,
-        },
-        {"type": "slash", "text": "/integrations list", "ok": True},
-    ]
+    assert session.history[0] == {
+        "type": "slash",
+        "text": "/integrations list",
+        "ok": True,
+    }
 
     for _ in range(100):
         recent = session.task_registry.list_recent(1)
@@ -916,12 +885,7 @@ def test_execute_cli_actions_cancels_single_running_synthetic_task() -> None:
     assert handled.handled is True
     assert task.cancel_requested.is_set()
     proc.terminate.assert_called_once()
-    assert session.history[0] == {
-        "type": "cli_agent",
-        "text": "kill the syntehtic_test because it is runnign way too long",
-        "ok": True,
-    }
-    slash_entry = session.history[1]
+    slash_entry = session.history[0]
     assert slash_entry == {
         "type": "slash",
         "text": f"/cancel {task.task_id}",
@@ -990,7 +954,6 @@ def test_execute_cli_actions_runs_shell_command(monkeypatch: object) -> None:
 
     assert shell_turn_execution.run_action_tool_turn("run `pwd`", session, console).handled is True
     assert session.history == [
-        {"type": "cli_agent", "text": "run `pwd`", "ok": True},
         {"type": "shell", "text": "pwd", "ok": True},
     ]
     output = buf.getvalue()
@@ -1014,7 +977,6 @@ def test_execute_cli_actions_cd_preserves_windows_paths(monkeypatch: object) -> 
     assert shell_turn_execution.run_action_tool_turn(message, session, console).handled is True
     assert changed_directories == [Path(r"C:\Users\Alice")]
     assert session.history == [
-        {"type": "cli_agent", "text": message, "ok": True},
         {"type": "shell", "text": r"cd C:\Users\Alice", "ok": True},
     ]
 
@@ -1039,7 +1001,6 @@ def test_execute_cli_actions_cd_dispatches_case_insensitively(monkeypatch: objec
     assert shell_turn_execution.run_action_tool_turn(message, session, console).handled is True
     assert changed_directories == [Path(r"C:\Users\Alice")]
     assert session.history == [
-        {"type": "cli_agent", "text": message, "ok": True},
         {"type": "shell", "text": r"CD C:\Users\Alice", "ok": True},
     ]
 
@@ -1060,7 +1021,6 @@ def test_execute_cli_actions_cd_handles_trailing_backslash_on_windows(monkeypatc
     assert shell_turn_execution.run_action_tool_turn(message, session, console).handled is True
     assert changed_directories == [Path("C:\\")]
     assert session.history == [
-        {"type": "cli_agent", "text": message, "ok": True},
         {"type": "shell", "text": "cd C:\\", "ok": True},
     ]
 
@@ -1081,7 +1041,6 @@ def test_execute_cli_actions_cd_strips_quotes_on_windows(monkeypatch: object) ->
     assert shell_turn_execution.run_action_tool_turn(message, session, console).handled is True
     assert changed_directories == [Path(r"C:\Users\Alice")]
     assert session.history == [
-        {"type": "cli_agent", "text": message, "ok": True},
         {"type": "shell", "text": r'cd "C:\Users\Alice"', "ok": True},
     ]
 
@@ -1194,7 +1153,12 @@ def test_execute_cli_actions_runs_passthrough_with_shell_true(monkeypatch: objec
             },
         )
     ]
-    assert session.history[-1] == {"type": "shell", "text": "!echo hello", "ok": True}
+    assert session.history[-1] == {
+        "type": "shell",
+        "text": "!echo hello",
+        "ok": True,
+        "response_text": "ok",
+    }
     output = buf.getvalue()
     assert "explicit shell passthrough enabled" in output
     assert "ok" in output
@@ -1432,7 +1396,12 @@ def test_execute_cli_actions_bang_prefix_uses_only_explicit_shell_escape(
 
     assert handled.handled is True
     assert llm_called == []
-    assert session.history[-1] == {"type": "shell", "text": "!curl wttr.in/London", "ok": True}
+    assert session.history[-1] == {
+        "type": "shell",
+        "text": "!curl wttr.in/London",
+        "ok": True,
+        "response_text": "ok",
+    }
     # The executor strips `!` and invokes the user's shell as argv with shell=False.
     assert calls[0][0] == _expected_shell_argv("curl wttr.in/London")
     assert calls[0][1]["shell"] is False
@@ -1466,7 +1435,12 @@ def test_execute_cli_actions_bang_prefix_single_line_dispatches_to_shell(
 
     assert handled.handled is True
     assert llm_called == []
-    assert session.history[-1] == {"type": "shell", "text": "!echo hello world", "ok": True}
+    assert session.history[-1] == {
+        "type": "shell",
+        "text": "!echo hello world",
+        "ok": True,
+        "response_text": "out",
+    }
     assert calls[0][0] == _expected_shell_argv("echo hello world")
     assert calls[0][1]["shell"] is False
 

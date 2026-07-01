@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
-from core.agent_harness.conversation_memory import format_recent_conversation
 from core.agent_harness.prompts.action_agent_system_prompt import _SYSTEM_PROMPT_BASE
+from core.agent_harness.prompts.conversation_memory import (
+    format_prior_action_facts,
+    format_recent_conversation,
+)
 from core.agent_harness.prompts.envelope import PromptBlock, PromptEnvelope
-from core.agent_harness.turn_context import TurnContext
+
+if TYPE_CHECKING:
+    from core.agent_harness.models.turn_context import TurnContext
 
 _MAX_TEXT_LEN = 512
 _USER_TEMPLATE = "USER MESSAGE (literal): <<<{text}>>>"
@@ -18,27 +24,38 @@ def build_action_system_prompt(turn_ctx: TurnContext) -> str:
 
 
 def build_action_system_prompt_envelope(turn_ctx: TurnContext) -> PromptEnvelope:
-    return PromptEnvelope.from_blocks(
-        (
-            PromptBlock(
-                id="action-agent-system-base",
-                kind="system",
-                content=_SYSTEM_PROMPT_BASE + "\n\n",
-                provenance="core.agent_harness.prompts.action_agent_system_prompt",
-            ),
-            PromptBlock(
-                id="connected-integrations",
-                kind="context",
-                content=connected_integrations_block(turn_ctx),
-                provenance="core.agent_harness.turn_context",
-            ),
-            PromptBlock(
-                id="recent-conversation",
-                kind="conversation",
-                content=recent_conversation_block(turn_ctx),
-                provenance="core.agent_harness.turn_context",
-            ),
+    blocks = [
+        PromptBlock(
+            id="action-agent-system-base",
+            kind="system",
+            content=_SYSTEM_PROMPT_BASE + "\n\n",
+            provenance="core.agent_harness.prompts.action_agent_system_prompt",
         ),
+        PromptBlock(
+            id="connected-integrations",
+            kind="context",
+            content=connected_integrations_block(turn_ctx),
+            provenance="core.agent_harness.models.turn_context",
+        ),
+        PromptBlock(
+            id="recent-conversation",
+            kind="conversation",
+            content=recent_conversation_block(turn_ctx),
+            provenance="core.agent_harness.models.turn_context",
+        ),
+    ]
+    action_facts = prior_action_facts_block(turn_ctx)
+    if action_facts:
+        blocks.append(
+            PromptBlock(
+                id="prior-action-facts",
+                kind="context",
+                content=action_facts,
+                provenance="core.agent_harness.models.turn_context",
+            )
+        )
+    return PromptEnvelope.from_blocks(
+        blocks,
         separator="",
         metadata={"prompt": "action_agent_system"},
     )
@@ -67,9 +84,23 @@ def connected_integrations_block(turn_ctx: TurnContext) -> str:
 def recent_conversation_block(turn_ctx: TurnContext) -> str:
     history = format_recent_conversation(list(turn_ctx.conversation_messages))
     return (
-        "RECENT CONVERSATION (context only, oldest first; use it ONLY to resolve "
-        "follow-up references in the USER MESSAGE below — do NOT re-run turns that "
-        f"already completed):\n{history}\n\n"
+        "RECENT CONVERSATION (context only, oldest first; previous assistant messages "
+        "may contain shell stdout, computed values, and prior tool inputs/results. Use "
+        "these as facts when resolving follow-up references in the USER MESSAGE below "
+        "and when composing later tool inputs. Do NOT re-run turns that already "
+        f"completed):\n{history}\n\n"
+    )
+
+
+def prior_action_facts_block(turn_ctx: TurnContext) -> str:
+    facts = format_prior_action_facts(list(turn_ctx.conversation_messages))
+    if not facts:
+        return ""
+    return (
+        "PRIOR ACTION FACTS (extracted from earlier persisted assistant/tool "
+        "outputs; use these values when the USER MESSAGE refers to previous "
+        "results, sent messages, comparisons, or 'both/that/them'. Do NOT ask "
+        f"the user to paste values already listed here):\n{facts}\n\n"
     )
 
 
@@ -88,6 +119,7 @@ __all__ = [
     "build_action_system_prompt",
     "build_action_user_message",
     "connected_integrations_block",
+    "prior_action_facts_block",
     "recent_conversation_block",
     "sanitize_action_text",
 ]

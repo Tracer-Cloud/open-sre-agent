@@ -32,7 +32,7 @@ brew install tracer-cloud/tap/opensre
 curl -fsSL https://install.opensre.com | bash
 ```
 
-The install script launches onboarding automatically in an interactive terminal. To install only the binary:
+When you run the installer directly from an interactive terminal, it launches onboarding automatically once the install finishes. When the installer is piped (the `curl … | bash` form above), it skips the auto-launch and prints a "Next steps" hint instead — run `opensre onboard` yourself to start setup. To opt out of the auto-launch entirely:
 
 ```bash
 curl -fsSL https://install.opensre.com | OPENSRE_AUTO_LAUNCH=0 bash

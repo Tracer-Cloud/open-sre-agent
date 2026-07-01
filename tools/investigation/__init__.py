@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.tool_framework.tool_decorator import tool
 from tools.investigation.capability import (
     astream_investigation,
     build_investigation_payload,
@@ -11,7 +12,6 @@ from tools.investigation.capability import (
     run_investigation,
     run_investigation_payload,
 )
-from tools.tool_decorator import tool
 
 
 @tool(

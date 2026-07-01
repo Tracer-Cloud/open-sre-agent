@@ -52,11 +52,6 @@ class PeriodicityScore:
     rationale: str
 
 
-@dataclass(frozen=True)
-class OperatorHintScore:
-    score: float
-
-
 class HintEvidenceScore(Protocol):
     @property
     def score(self) -> float:
@@ -199,19 +194,6 @@ def score_periodic_spikes(
         score=round(score, 4),
         rationale=rationale,
     )
-
-
-def score_operator_hint(
-    *,
-    metric_name: str,
-    operator_hints: tuple[str, ...],
-) -> OperatorHintScore:
-    normalized_metric_name = (
-        metric_name.lower().replace("{", " ").replace("}", " ").replace(":", " ").replace(",", " ")
-    )
-    tokens = tuple(token for token in normalized_metric_name.split() if len(token) > 2)
-    matched = any(token in hint.lower() for hint in operator_hints for token in tokens)
-    return OperatorHintScore(score=1.0 if matched else 0.0)
 
 
 def score_candidate_correlation(

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+from integrations.gitlab.tools.gitlab_mrs_tool import list_gitlab_mrs
 from tests.tools.conftest import BaseToolContract, mock_agent_state
-from tools.gitlab_mrs_tool import list_gitlab_mrs
 
 
 class TestGitLabMRsToolContract(BaseToolContract):
@@ -74,7 +74,7 @@ def test_extract_params_defaults_updated_after_to_empty_string() -> None:
 
 
 def test_run_returns_unavailable_when_config_missing() -> None:
-    with patch("tools.gitlab_mrs_tool._resolve_config", return_value=None):
+    with patch("integrations.gitlab.tools.gitlab_mrs_tool._resolve_config", return_value=None):
         result = list_gitlab_mrs(project_id="42")
     assert result["available"] is False
     assert "not configured" in result["error"]
@@ -87,8 +87,12 @@ def test_run_happy_path_returns_mrs() -> None:
         {"iid": 2, "title": "feat: new endpoint"},
     ]
     with (
-        patch("tools.gitlab_mrs_tool._resolve_config", return_value=MagicMock()),
-        patch("tools.gitlab_mrs_tool.get_gitlab_mrs", return_value=fake_mrs) as mock_fn,
+        patch(
+            "integrations.gitlab.tools.gitlab_mrs_tool._resolve_config", return_value=MagicMock()
+        ),
+        patch(
+            "integrations.gitlab.tools.gitlab_mrs_tool.get_gitlab_mrs", return_value=fake_mrs
+        ) as mock_fn,
     ):
         result = list_gitlab_mrs(
             project_id="42",
@@ -104,8 +108,10 @@ def test_run_happy_path_returns_mrs() -> None:
 
 def test_run_error_path_returns_empty_mrs_when_integration_returns_empty() -> None:
     with (
-        patch("tools.gitlab_mrs_tool._resolve_config", return_value=MagicMock()),
-        patch("tools.gitlab_mrs_tool.get_gitlab_mrs", return_value=[]),
+        patch(
+            "integrations.gitlab.tools.gitlab_mrs_tool._resolve_config", return_value=MagicMock()
+        ),
+        patch("integrations.gitlab.tools.gitlab_mrs_tool.get_gitlab_mrs", return_value=[]),
     ):
         result = list_gitlab_mrs(project_id="42")
     assert result["available"] is True

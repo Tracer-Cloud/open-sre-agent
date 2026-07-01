@@ -12,9 +12,9 @@ from typing import Any
 import pytest
 from click.testing import CliRunner
 
-from cli.__main__ import cli
-from cli.wizard.store import load_remote_url
 from infra.deployment.remote.client import RemoteAgentClient, normalize_url
+from surfaces.cli.__main__ import cli
+from surfaces.cli.wizard.store import load_remote_url
 
 logger = logging.getLogger(__name__)
 

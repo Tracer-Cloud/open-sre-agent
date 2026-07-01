@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from platform.common.errors import OpenSREError
-
 
 @dataclass(frozen=True)
 class LLMInvokeFailure:
@@ -208,18 +206,3 @@ def classify_llm_invoke_failure(exc: BaseException) -> LLMInvokeFailure | None:
         )
 
     return None
-
-
-def classify_investigation_failure(exc: BaseException) -> OpenSREError | None:
-    """Map a known operational LLM failure to a structured :class:`OpenSREError`.
-
-    Frontend-agnostic: returns the platform base error (carrying a suggestion)
-    so any surface — CLI, MCP, HTTP — can present it without depending on the
-    CLI error-mapping layer. Returns ``None`` when *exc* is not a recognized
-    operational failure, signalling the caller to re-raise or handle generically.
-    """
-    failure = classify_llm_invoke_failure(exc)
-    if failure is None:
-        return None
-    suggestion = "\n".join(failure.remediation_steps) if failure.remediation_steps else None
-    return OpenSREError(failure.user_message, suggestion=suggestion)

@@ -85,6 +85,25 @@ Findings should appear in the configured channel.
 
 ---
 
+## On-demand Slack messages
+
+The `slack_send_message` tool lets the agent post a plain-text notification to your configured incoming webhook at any time — not only when an investigation publishes an RCA report.
+
+| Surface | Available when |
+|---|---|
+| Interactive shell / chat | Slack webhook configured (`SLACK_WEBHOOK_URL` or `opensre integrations setup slack`) |
+| Investigation gather pass | Same |
+| Gateway / action agent | Same |
+
+Example prompts:
+
+- "Post to Slack: deploy to staging completed successfully."
+- "Send a Slack message that the checkout 502 spike is resolved."
+
+The tool requires approval before sending (same as other external messaging actions). It resolves the webhook URL internally and never exposes it in tool traces.
+
+---
+
 ## Environment variables
 
 | Variable | Description |

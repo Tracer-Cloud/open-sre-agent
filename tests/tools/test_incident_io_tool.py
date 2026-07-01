@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from tools.incident_io_tools import IncidentIoIncidentsTool
+from integrations.incident_io.tools import IncidentIoIncidentsTool
 
 
 def test_incident_io_tool_extracts_credentials_from_sources() -> None:
@@ -36,7 +36,7 @@ def test_incident_io_tool_runs_context(monkeypatch) -> None:
     }
 
     monkeypatch.setattr(
-        "tools.incident_io_tools.make_incident_io_client",
+        "integrations.incident_io.tools.make_incident_io_client",
         lambda *_args, **_kwargs: client,
     )
 
@@ -55,7 +55,7 @@ def test_incident_io_tool_runs_append_summary(monkeypatch) -> None:
     client.append_summary_update.return_value = {"success": True}
 
     monkeypatch.setattr(
-        "tools.incident_io_tools.make_incident_io_client",
+        "integrations.incident_io.tools.make_incident_io_client",
         lambda *_args, **_kwargs: client,
     )
 
@@ -84,7 +84,7 @@ def test_incident_io_tool_requires_incident_id_for_context(monkeypatch) -> None:
     client.__exit__.return_value = None
 
     monkeypatch.setattr(
-        "tools.incident_io_tools.make_incident_io_client",
+        "integrations.incident_io.tools.make_incident_io_client",
         lambda *_args, **_kwargs: client,
     )
 

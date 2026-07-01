@@ -28,7 +28,7 @@ USER_BASE := $(shell $(PYTHON) -m site --user-base)
 USER_BIN := $(if $(filter Windows_NT,$(OS)),$(USER_BASE)/Scripts,$(USER_BASE)/bin)
 export PATH := $(if $(wildcard .venv/bin),$(CURDIR)/.venv/bin:,$(if $(wildcard .venv/Scripts),$(CURDIR)/.venv/Scripts:))$(USER_BIN):$(PATH)
 
-PYTHON_SOURCE_PATHS := cli config core infra/deployment integrations interactive_shell platform tools
+PYTHON_SOURCE_PATHS := config core infra/deployment integrations platform surfaces tools
 
 # Create venv and install dependencies (requires https://docs.astral.sh/uv/)
 install:
@@ -97,13 +97,13 @@ check-docker:
 	@docker info >/dev/null 2>&1 || { echo "Docker is installed, but the Docker daemon is not running. Start Docker Desktop, OrbStack, or Colima, then rerun this target."; exit 1; }
 
 grafana-local-up: check-docker
-	docker compose -f cli/wizard/local_grafana_stack/docker-compose.yml up -d
+	docker compose -f surfaces/cli/wizard/local_grafana_stack/docker-compose.yml up -d
 
 grafana-local-down: check-docker
-	docker compose -f cli/wizard/local_grafana_stack/docker-compose.yml down
+	docker compose -f surfaces/cli/wizard/local_grafana_stack/docker-compose.yml down
 
 grafana-local-seed:
-	$(PYTHON) -m cli.wizard.grafana_seed
+	$(PYTHON) -m surfaces.cli.wizard.grafana_seed
 
 # Run CloudWatch demo
 cloudwatch-demo:
@@ -344,7 +344,7 @@ test-bedrock:
 
 # Run fast tests + Prefect cloud E2E
 test:
-	$(PYTHON) -m pytest -v cli tests/utils
+	$(PYTHON) -m pytest -v surfaces/cli tests/utils
 	$(PYTHON) -m tests.e2e.upstream_prefect_ecs_fargate.test_agent_e2e
 
 # Run full test suite (CI/CD)

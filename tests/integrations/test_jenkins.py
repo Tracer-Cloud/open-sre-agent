@@ -536,14 +536,14 @@ class _FakeToolClient:
 
 class TestTools:
     def test_availability_requires_verified_connection(self) -> None:
-        import tools.jenkins_tools as jenkins_tool
+        import integrations.jenkins.tools as jenkins_tool
 
         assert not jenkins_tool._jenkins_available({"jenkins": {}})
         assert not jenkins_tool._jenkins_available({"jenkins": {"connection_verified": False}})
         assert jenkins_tool._jenkins_available({"jenkins": {"connection_verified": True}})
 
     def test_build_tool_extract_params_soft_defaults_job_name(self) -> None:
-        import tools.jenkins_tools as jenkins_tool
+        import integrations.jenkins.tools as jenkins_tool
 
         # job_name absent from sources -> empty default (LLM supplies it as a tool arg)
         params = jenkins_tool._list_jenkins_builds_extract_params(
@@ -552,7 +552,7 @@ class TestTools:
         assert params["job_name"] == ""
 
     def test_creds_mapping_from_source_dict(self) -> None:
-        import tools.jenkins_tools as jenkins_tool
+        import integrations.jenkins.tools as jenkins_tool
 
         creds = jenkins_tool._jenkins_creds(
             {"base_url": "http://x", "username": "u", "api_token": "t"}
@@ -562,7 +562,7 @@ class TestTools:
     def test_resolve_client_needs_both_url_and_token_explicitly(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        import tools.jenkins_tools as jenkins_tool
+        import integrations.jenkins.tools as jenkins_tool
 
         seen: list[tuple] = []
         monkeypatch.setattr(jenkins_tool, "jenkins_config_from_env", lambda: None)
@@ -581,7 +581,7 @@ class TestTools:
     def test_resolve_client_env_path_requires_complete_config(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        import tools.jenkins_tools as jenkins_tool
+        import integrations.jenkins.tools as jenkins_tool
 
         # env has url+token but no username -> jenkins_config_from_env returns a
         # config, but it is not is_configured, so no client is built.
@@ -598,7 +598,7 @@ class TestTools:
     def test_resolve_client_explicit_path_without_username_returns_none(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        import tools.jenkins_tools as jenkins_tool
+        import integrations.jenkins.tools as jenkins_tool
 
         # url + token explicitly present but no username (and no env) -> the
         # factory refuses to build an empty-username client -> None.
@@ -606,7 +606,7 @@ class TestTools:
         assert jenkins_tool._resolve_client("http://x", None, "t") is None
 
     def test_not_configured_when_no_client(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        import tools.jenkins_tools as jenkins_tool
+        import integrations.jenkins.tools as jenkins_tool
 
         monkeypatch.setattr(jenkins_tool, "_resolve_client", lambda *_a, **_k: None)
         result = jenkins_tool.list_jenkins_builds("demo")
@@ -614,7 +614,7 @@ class TestTools:
         assert "not configured" in result["error"]
 
     def test_list_builds_tool_shapes_result(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        import tools.jenkins_tools as jenkins_tool
+        import integrations.jenkins.tools as jenkins_tool
 
         fake = _FakeToolClient(
             list_builds={
