@@ -2,17 +2,12 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from botocore.exceptions import ClientError
-
-from tests.deployment.ec2.infrastructure_sdk import instance as instance_module
-
-
-def _client_error(code: str, operation_name: str) -> ClientError:
-    return ClientError({"Error": {"Code": code, "Message": code}}, operation_name)
+from platform.deployment import instance as instance_module
+from platform.deployment.aws import ec2 as ec2_module
 
 
-@patch("tests.deployment.ec2.infrastructure_sdk.instance.time.sleep", return_value=None)
-@patch("tests.deployment.ec2.infrastructure_sdk.instance.get_boto3_client")
+@patch("platform.deployment.aws.ec2.time.sleep", return_value=None)
+@patch("platform.deployment.aws.ec2.get_boto3_client")
 def test_create_instance_profile_returns_profile_details(
     mock_get_boto3_client: MagicMock,
     _mock_sleep: MagicMock,
@@ -24,7 +19,7 @@ def test_create_instance_profile_returns_profile_details(
     }
     mock_get_boto3_client.return_value = iam
 
-    result = instance_module.create_instance_profile(
+    result = ec2_module.create_instance_profile(
         role_name="test-role",
         profile_name="test-profile",
         stack_name="test-stack",
@@ -37,7 +32,9 @@ def test_create_instance_profile_returns_profile_details(
 
 def test_generate_user_data_includes_docker_pull() -> None:
     user_data = instance_module.generate_user_data(
-        env_vars={"OPENAI_API_KEY": "sk-123"},
+        image_uri="123456789012.dkr.ecr.us-east-1.amazonaws.com/opensre:latest",
+        log_path="/var/log/opensre-deploy.log",
+        web_env_vars={"OPENAI_API_KEY": "sk-123"},
     )
 
     assert "docker pull" in user_data
