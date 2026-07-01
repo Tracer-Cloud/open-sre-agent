@@ -104,9 +104,9 @@ class Agent[RuntimeToolT: RuntimeTool]:
     def dispatch_message_to_headless_agent(
         message: str,
         *,
+        tools: ToolProvider,
         session: SessionStore | None = None,
         output: OutputSink | None = None,
-        tools: ToolProvider | None = None,
         prompts: PromptContextProvider | None = None,
         reasoning: ReasoningClientProvider | None = None,
         run_factory: RunRecordFactory | None = None,
@@ -117,16 +117,21 @@ class Agent[RuntimeToolT: RuntimeTool]:
         is_tty: bool | None = None,
         tool_hooks: ToolExecutionHooks | None = None,
     ) -> ShellTurnResult:
-        """Run a full headless turn through the shared agent harness."""
+        """Run a full headless turn through the shared agent harness.
+
+        ``tools`` is required — surfaces must decide explicitly whether to
+        expose any. Callers that genuinely want a text-only turn pass
+        :class:`~core.agent_harness.agents.headless_agent.NullToolProvider`.
+        """
         # Resolved dynamically so this module keeps the layering one-way
         # (agent_harness -> core): a static import of the harness here would form a
         # core.agent <-> agent_harness.agents cycle (CodeQL py/cyclic-import).
         headless = importlib.import_module("core.agent_harness.agents.headless_agent")
         result: ShellTurnResult = headless.dispatch_message_to_headless_agent(
             message,
+            tools=tools,
             session=session,
             output=output,
-            tools=tools,
             prompts=prompts,
             reasoning=reasoning,
             run_factory=run_factory,
@@ -166,85 +171,6 @@ class Agent[RuntimeToolT: RuntimeTool]:
         self._steering_messages: deque[str] = deque()
         self._follow_up_messages: deque[str] = deque()
 
-    # ─── Per-surface initialization hooks ────────────────────────────────
-    # Subclasses override these instead of passing all five args to __init__.
-    # Callers that pass args explicitly get backward-compat: the default hook
-    # implementations return whatever was stored. Hooks are resolved lazily at
-    # ``run()`` start via ``_resolve_run_config``.
-
-    def build_llm(self) -> Any:
-        """Return the LLM client for this run. Override in subclasses.
-
-        Default: return the stored client if set at ``__init__``, otherwise
-        lazily fetch the process-wide client via ``get_agent_llm()``.
-        """
-        if self._llm is None:
-            self._llm = agent_llm_client.get_agent_llm()
-        return self._llm
-
-    def build_system_prompt(self) -> str:
-        """Return the system prompt for this run. Override in subclasses."""
-        if self._system is None:
-            raise NotImplementedError(
-                f"{type(self).__name__} must pass system= to __init__ "
-                "or override build_system_prompt()"
-            )
-        return self._system
-
-    def build_tools(self) -> list[RuntimeToolT]:
-        """Return the runtime tools list for this run. Override in subclasses."""
-        return list(self._tools) if self._tools is not None else []
-
-    def resolved_integrations(self) -> dict[str, Any]:
-        """Return the resolved-integrations dict for this run. Override in subclasses.
-
-        Named as a getter (not ``build_*``) to leave ``resolve_integrations()``
-        free for #3358 to add the shared cache/import/merge helper.
-        """
-        return dict(self._resolved) if self._resolved is not None else {}
-
-    def max_iterations(self) -> int:
-        """Return the tool-loop iteration cap for this run. Override in subclasses."""
-        if self._max_iterations is None:
-            raise NotImplementedError(
-                f"{type(self).__name__} must pass max_iterations= to __init__ "
-                "or override max_iterations()"
-            )
-        return self._max_iterations
-
-    def _resolve_run_config(
-        self,
-    ) -> tuple[str, list[RuntimeToolT], dict[str, Any], int]:
-        """Populate stored config from hooks if not already set, and return it.
-
-        Called at ``run()`` start. If the caller passed llm/system/tools/etc.
-        to ``__init__``, fields are already set and hooks are not called —
-        full backward compat. If a subclass skipped those args and overrode
-        the hooks, this resolves them once so per-turn methods that read
-        ``self._llm`` etc. see the resolved value.
-
-        The tuple return lets ``run()`` bind non-None locals for system /
-        tools / resolved / max_iterations without narrowing assertions. The
-        LLM is populated on ``self._llm`` and read directly below via a
-        single ``assert`` narrower before the loop.
-        """
-        if self._llm is None:
-            self._llm = self.build_llm()
-        if self._system is None:
-            self._system = self.build_system_prompt()
-        if self._tools is None:
-            self._tools = list(self.build_tools())
-        if self._resolved is None:
-            self._resolved = self.resolved_integrations()
-        if self._max_iterations is None:
-            self._max_iterations = self.max_iterations()
-        return (
-            self._system,
-            self._tools,
-            self._resolved,
-            self._max_iterations,
-        )
-
     def steer(self, message: str) -> None:
         """Inject a user message into the active run before the next LLM turn."""
         if message.strip():
@@ -274,19 +200,24 @@ class Agent[RuntimeToolT: RuntimeTool]:
             resolved = agent_context.resolved_integrations
             tool_resources = dict(getattr(agent_context, "tool_resources", {}) or {})
             max_iterations = agent_context.max_iterations
-            # A hook-only subclass (no llm= at __init__) still needs LLM resolution;
-            # the initial_messages branch below runs the full _resolve_run_config.
             if self._llm is None:
-                self._llm = self.build_llm()
+                self._llm = agent_llm_client.get_agent_llm()
         elif initial_messages is not None:
-            system, tools_seq, resolved, max_iterations = self._resolve_run_config()
+            if self._system is None:
+                raise ValueError("Agent.run: system= must be set at construction.")
+            if self._max_iterations is None:
+                raise ValueError("Agent.run: max_iterations= must be set at construction.")
+            if self._llm is None:
+                self._llm = agent_llm_client.get_agent_llm()
+            system = self._system
+            tools = list(self._tools) if self._tools is not None else []
+            resolved = dict(self._resolved) if self._resolved is not None else {}
+            max_iterations = self._max_iterations
             messages = MessageFormatter.normalize(initial_messages)
-            tools = list(tools_seq)
             tool_resources = dict(self._tool_resources)
         else:
             raise ValueError("Agent.run requires initial_messages or agent_context.")
 
-        # Both branches leave ``self._llm`` non-None by here; assert narrows for mypy.
         assert self._llm is not None, "Agent.run: llm must be set before the loop"
         llm = self._llm
         msg_formatter = MessageFormatter(llm)

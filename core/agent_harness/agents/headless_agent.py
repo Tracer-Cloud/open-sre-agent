@@ -10,6 +10,7 @@ Example::
     from core.agent_harness.agents.headless_agent import (
         dispatch_message_to_headless_agent,
         InMemorySessionStore,
+        NullToolProvider,
         StaticReasoningClientProvider,
     )
 
@@ -19,6 +20,7 @@ Example::
 
     result = dispatch_message_to_headless_agent(
         "hi there",
+        tools=NullToolProvider(),
         reasoning=StaticReasoningClientProvider(client=_Echo()),
     )
     print(result.assistant_response_text)  # -> "hello"
@@ -199,9 +201,9 @@ class StaticReasoningClientProvider:
 def dispatch_message_to_headless_agent(
     message: str,
     *,
+    tools: ToolProvider,
     session: SessionStore | None = None,
     output: OutputSink | None = None,
-    tools: ToolProvider | None = None,
     prompts: PromptContextProvider | None = None,
     reasoning: ReasoningClientProvider | None = None,
     run_factory: RunRecordFactory | None = None,
@@ -214,16 +216,16 @@ def dispatch_message_to_headless_agent(
 ) -> ShellTurnResult:
     """Run one full turn headlessly and return the :class:`ShellTurnResult`.
 
-    Every port defaults to an in-memory headless adapter; pass concrete
-    implementations to drive a real surface. ``reasoning`` defaults to "no
-    client" (the conversational assistant is skipped) so a turn runs with zero
+    ``tools`` is required. A surface that genuinely wants a text-only turn
+    passes :class:`NullToolProvider` explicitly. Every other port defaults to
+    an in-memory headless adapter. ``reasoning`` defaults to "no client" (the
+    conversational assistant is skipped) so a turn runs with zero
     configuration; inject a client to get an actual answer. ``gather_enabled``
-    turns on the live evidence-gather pass (off by default, since it reaches out
-    to integrations).
+    turns on the live evidence-gather pass (off by default, since it reaches
+    out to integrations).
     """
     store: SessionStore = session if session is not None else InMemorySessionStore()
     output = output if output is not None else BufferOutputSink()
-    tools = tools if tools is not None else NullToolProvider()
     prompts = (
         prompts
         if prompts is not None
