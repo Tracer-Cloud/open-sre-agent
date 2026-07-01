@@ -16,7 +16,6 @@ from core.context_budget import (
 from core.events import (
     AgentEndEvent,
     AgentStartEvent,
-    LegacyLoopEventCallback,
     MessageStartEvent,
     MessageUpdateEvent,
     ProviderRequestEndEvent,
@@ -26,10 +25,11 @@ from core.events import (
     ToolExecutionEndEvent,
     ToolExecutionStartEvent,
     ToolExecutionUpdateEvent,
+    TupleEventCallback,
     TurnEndEvent,
     TurnStartEvent,
-    legacy_callback_payload,
-    runtime_event_from_legacy,
+    runtime_event_from_tuple,
+    tuple_payload_from_event,
 )
 from core.execution import (
     ToolExecutionHooks,
@@ -67,8 +67,8 @@ if TYPE_CHECKING:
         TurnAccounting,
     )
 
-# Backward-compatible callback type: called with ``(event_kind, data_dict)``.
-LoopEventCallback = LegacyLoopEventCallback
+# Public alias for the ``(kind, data)`` tuple callback surfaces provide.
+LoopEventCallback = TupleEventCallback
 
 
 @dataclass
@@ -158,7 +158,7 @@ class Agent[RuntimeToolT: RuntimeTool]:
         self._tools: list[RuntimeToolT] | None = list(tools) if tools is not None else None
         self._resolved = resolved_integrations
         self._max_iterations = max_iterations
-        self._on_legacy_event = on_event
+        self._on_tuple_event = on_event
         self._on_runtime_event = on_runtime_event
         self._tool_hooks = tool_hooks or ToolExecutionHooks()
         self._tool_resources = dict(tool_resources or {})
@@ -214,7 +214,7 @@ class Agent[RuntimeToolT: RuntimeTool]:
 
     def _resolve_run_config(
         self,
-    ) -> tuple[Any, str, list[RuntimeToolT], dict[str, Any], int]:
+    ) -> tuple[str, list[RuntimeToolT], dict[str, Any], int]:
         """Populate stored config from hooks if not already set, and return it.
 
         Called at ``run()`` start. If the caller passed llm/system/tools/etc.
@@ -223,8 +223,10 @@ class Agent[RuntimeToolT: RuntimeTool]:
         the hooks, this resolves them once so per-turn methods that read
         ``self._llm`` etc. see the resolved value.
 
-        The tuple return lets ``run()`` bind non-None locals without repeated
-        narrowing assertions.
+        The tuple return lets ``run()`` bind non-None locals for system /
+        tools / resolved / max_iterations without narrowing assertions. The
+        LLM is populated on ``self._llm`` and read directly below via a
+        single ``assert`` narrower before the loop.
         """
         if self._llm is None:
             self._llm = self.build_llm()
@@ -237,7 +239,6 @@ class Agent[RuntimeToolT: RuntimeTool]:
         if self._max_iterations is None:
             self._max_iterations = self.max_iterations()
         return (
-            self._llm,
             self._system,
             self._tools,
             self._resolved,
@@ -278,7 +279,7 @@ class Agent[RuntimeToolT: RuntimeTool]:
             if self._llm is None:
                 self._llm = self.build_llm()
         elif initial_messages is not None:
-            _llm_resolved, system, tools_seq, resolved, max_iterations = self._resolve_run_config()
+            system, tools_seq, resolved, max_iterations = self._resolve_run_config()
             messages = MessageFormatter.normalize(initial_messages)
             tools = list(tools_seq)
             tool_resources = dict(self._tool_resources)
@@ -511,11 +512,11 @@ class Agent[RuntimeToolT: RuntimeTool]:
         return self._follow_up_messages.popleft()
 
     def _emit(self, kind: str, data: dict[str, Any]) -> None:
-        event = runtime_event_from_legacy(kind, data)
+        event = runtime_event_from_tuple(kind, data)
         if event is not None:
             self._emit_runtime(event)
             return
-        self._emit_legacy(kind, data)
+        self._emit_tuple(kind, data)
 
     def _emit_runtime(self, event: RuntimeEvent) -> None:
         if self._on_runtime_event is not None:
@@ -527,14 +528,14 @@ class Agent[RuntimeToolT: RuntimeTool]:
                     event.type,
                     exc_info=True,
                 )
-        legacy = legacy_callback_payload(event)
-        if legacy is not None:
-            self._emit_legacy(*legacy)
+        payload = tuple_payload_from_event(event)
+        if payload is not None:
+            self._emit_tuple(*payload)
 
-    def _emit_legacy(self, kind: str, data: dict[str, Any]) -> None:
-        if self._on_legacy_event is not None:
+    def _emit_tuple(self, kind: str, data: dict[str, Any]) -> None:
+        if self._on_tuple_event is not None:
             try:
-                self._on_legacy_event(kind, data)
+                self._on_tuple_event(kind, data)
             except Exception:  # noqa: BLE001 - event rendering must never break the loop
                 logger.debug("[runtime] on_event(%s) raised; ignoring", kind, exc_info=True)
 
@@ -588,10 +589,12 @@ class Agent[RuntimeToolT: RuntimeTool]:
             return list(messages)
 
     def _convert_to_llm(self, messages: list[RuntimeMessage]) -> list[dict[str, Any]]:
-        # ``run()`` populated ``self._llm`` via build_llm before entering the loop;
-        # calling the hook again here would re-invoke user overrides.
-        if self._llm is None:
-            self._llm = self.build_llm()
+        # ``run()`` populates ``self._llm`` via build_llm before entering the loop;
+        # this method is a per-iteration helper and never called before then.
+        assert self._llm is not None, (
+            "_convert_to_llm called before run() populated self._llm — "
+            "hook subclasses must go through run(), not private helpers"
+        )
         llm = self._llm
         try:
             return self._provider_hooks.apply_convert_to_llm(llm, messages)

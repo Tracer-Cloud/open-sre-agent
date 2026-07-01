@@ -39,23 +39,33 @@ class _DummyTool:
 
 
 def _patch_agent_run(monkeypatch: Any, run: Any) -> None:
-    """Stub ``EvidenceAgent.run`` so gathering returns controlled results.
+    """Stub ``_build_evidence_agent`` so gathering returns controlled results.
 
-    Gathering instantiates the ``EvidenceAgent`` subclass, so patching the base
-    ``core.agent.Agent`` no longer intercepts (Python captures the parent class
-    at class-definition time). Patch ``run()`` on the subclass instead — this
-    leaves the real ``has_usable_tools`` / ``load_llm_or_none`` / ``user_message``
-    / ``resolved_integrations`` hooks running (tests below rely on the real
-    tool-discovery + GitHub-scope paths). The runtime-event callback the real
-    ``__init__`` built from ``on_progress`` is surfaced via a ``kwargs`` dict so
-    existing ``_fake_run(kwargs, initial_messages)`` bodies keep working.
+    Gathering now constructs a plain :class:`core.agent.Agent` via the
+    ``_build_evidence_agent`` factory. Patching ``core.agent.Agent`` globally
+    would intercept every agent in the process, so we swap the factory instead:
+    the real tool-discovery, integration-resolution, and GitHub-scope paths run
+    (tests below depend on those), and the returned stub only replaces
+    ``.run()``. The tuple-event observer wired into the real Agent is surfaced
+    via a ``kwargs`` dict so existing ``_fake_run(kwargs, initial_messages)``
+    bodies keep working.
     """
 
-    def _run(self: Any, initial_messages: list[dict[str, Any]]) -> runtime_module.ToolLoopResult:
-        kwargs = {"on_runtime_event": getattr(self, "_on_runtime_event", None)}
-        return run(kwargs, initial_messages)
+    class _StubAgent:
+        def __init__(self, on_runtime_event: Any) -> None:
+            self._on_runtime_event = on_runtime_event
 
-    monkeypatch.setattr(evidence_agent_module.EvidenceAgent, "run", _run)
+        def run(self, initial_messages: list[dict[str, Any]]) -> runtime_module.ToolLoopResult:
+            kwargs = {"on_runtime_event": self._on_runtime_event}
+            return run(kwargs, initial_messages)
+
+    def _build(*, llm: Any, on_progress: Any, **_ignored: Any) -> Any:
+        _ = llm
+        from core.events import runtime_event_callback_from_observer
+
+        return _StubAgent(runtime_event_callback_from_observer(on_progress))
+
+    monkeypatch.setattr(evidence_agent_module, "_build_evidence_agent", _build)
 
 
 def test_no_tools_available_returns_none(monkeypatch: Any) -> None:

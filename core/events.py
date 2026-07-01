@@ -135,16 +135,18 @@ RuntimeEvent: TypeAlias = (
     | AgentEndEvent
 )
 RuntimeEventCallback: TypeAlias = Callable[[RuntimeEvent], None]
-LegacyLoopEventCallback: TypeAlias = Callable[[str, dict[str, Any]], None]
-LegacyRuntimeEventCallback: TypeAlias = LegacyLoopEventCallback
+# Callback shape used by surfaces to receive events as ``(kind, data)`` tuples.
+# The typed :data:`RuntimeEventCallback` is the internal shape ``Agent`` calls;
+# ``TupleEventCallback`` is what surfaces provide from their observer hooks.
+TupleEventCallback: TypeAlias = Callable[[str, dict[str, Any]], None]
 
 
 def tool_result_is_error(result: Any) -> bool:
     return isinstance(result, dict) and "error" in result
 
 
-def runtime_event_from_legacy(kind: str, data: dict[str, Any]) -> RuntimeEvent | None:
-    """Convert a pre-event-contract callback payload to a typed event when possible."""
+def runtime_event_from_tuple(kind: str, data: dict[str, Any]) -> RuntimeEvent | None:
+    """Convert a ``(kind, data)`` tuple payload to a typed :class:`RuntimeEvent` when possible."""
     payload = dict(data)
     if kind == "agent_start":
         return AgentStartEvent(data=payload)
@@ -198,8 +200,8 @@ def runtime_event_from_legacy(kind: str, data: dict[str, Any]) -> RuntimeEvent |
     return None
 
 
-def legacy_callback_payload(event: RuntimeEvent) -> tuple[str, dict[str, Any]] | None:
-    """Map a typed runtime event onto the old ``(kind, data)`` callback shape."""
+def tuple_payload_from_event(event: RuntimeEvent) -> tuple[str, dict[str, Any]] | None:
+    """Map a typed :class:`RuntimeEvent` onto the ``(kind, data)`` tuple callback shape."""
     if isinstance(event, AgentStartEvent):
         return "agent_start", dict(event.data)
     if isinstance(event, TurnStartEvent):
@@ -241,11 +243,28 @@ def legacy_callback_payload(event: RuntimeEvent) -> tuple[str, dict[str, Any]] |
     return None
 
 
+def runtime_event_callback_from_observer(
+    observer: Callable[..., None] | None,
+) -> RuntimeEventCallback | None:
+    """Adapt a ``(kind, data)``-tuple observer to a :class:`RuntimeEventCallback`.
+
+    Returns ``None`` when ``observer`` is omitted so callers can pass the result
+    straight to ``Agent(on_runtime_event=...)``.
+    """
+    if observer is None:
+        return None
+
+    def on_runtime_event(event: RuntimeEvent) -> None:
+        payload = tuple_payload_from_event(event)
+        if payload is not None:
+            observer(*payload)
+
+    return on_runtime_event
+
+
 __all__ = [
     "AgentEndEvent",
     "AgentStartEvent",
-    "LegacyLoopEventCallback",
-    "LegacyRuntimeEventCallback",
     "MessageStartEvent",
     "MessageUpdateEvent",
     "ProviderRequestEndEvent",
@@ -257,9 +276,11 @@ __all__ = [
     "ToolExecutionEndEvent",
     "ToolExecutionStartEvent",
     "ToolExecutionUpdateEvent",
+    "TupleEventCallback",
     "TurnEndEvent",
     "TurnStartEvent",
-    "legacy_callback_payload",
-    "runtime_event_from_legacy",
+    "runtime_event_callback_from_observer",
+    "runtime_event_from_tuple",
     "tool_result_is_error",
+    "tuple_payload_from_event",
 ]

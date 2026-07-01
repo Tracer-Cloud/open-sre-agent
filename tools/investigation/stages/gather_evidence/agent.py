@@ -171,7 +171,7 @@ class ConnectedInvestigationAgent(Agent[RegisteredTool]):
         self._available_cache = None
         self._tool_context = {}
 
-        self._on_legacy_event = on_event
+        self._on_tuple_event = on_event
         self._on_runtime_event = on_runtime_event
         self._tracker = get_tracker()
         self._tracker.start("investigation_agent", "Running investigation agent loop")
