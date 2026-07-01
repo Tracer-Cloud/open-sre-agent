@@ -540,27 +540,6 @@ def test_readds_export_when_marker_present_but_line_removed(tmp_path: Path) -> N
 # ---------------------------------------------------------------------------
 
 
-def _find_post_install_start_line() -> int:
-    """Return the line number where the post-install output block starts in install.sh.
-
-    We look for the first line of the version-print block that immediately
-    follows the ``install_binary`` call — i.e. the ``if [ "$INSTALL_CHANNEL"``
-    line that opens the "Installed opensre ..." log statement.  Everything from
-    that line to EOF is the post-install output block that we want to run in
-    tests.
-    """
-    marker = 'if [ "$INSTALL_CHANNEL" = "main" ]; then'
-    lines = INSTALL_SH.read_text().splitlines()
-    # Walk backwards from EOF so we pick up the last (main-script-level)
-    # occurrence, not any occurrence inside a function body.
-    for i in range(len(lines) - 1, -1, -1):
-        if lines[i].strip() == marker:
-            return i + 1  # 1-indexed for tail / awk
-    raise RuntimeError(
-        f"Could not locate post-install block in {INSTALL_SH}. Did the script structure change?"
-    )
-
-
 def _run_post_install(
     tmp_path: Path,
     shell: str,
@@ -569,20 +548,18 @@ def _run_post_install(
     installed_version: str = "2026.4.1",
     dir_already_on_path: bool = False,
 ) -> subprocess.CompletedProcess[str]:
-    """Run the real post-install output block of install.sh with side-effects stubbed.
+    """Run the real post-install function from install.sh with side-effects stubbed.
 
     Unlike ``_run()``, which only calls ``configure_path()`` in isolation, this
-    helper sources *the actual lines* that sit at the bottom of install.sh
-    (version print + configure_path + onboarding hint) rather than copying
-    them into the test.  That means if the hint is removed from install.sh
-    the assertions will correctly fail — there is no tautology.
+    helper calls ``finish_install()`` from install.sh (version print +
+    configure_path + onboarding hint) rather than copying those lines into the
+    test.  That means if the hint is removed from install.sh the assertions will
+    correctly fail — there is no tautology.
 
     The approach:
       1. Load all function definitions from install.sh via awk.
-      2. Stub the four side-effect functions so no network/binary calls occur.
-      3. Set every shell variable the output block needs.
-      4. Use ``tail -n +N`` to feed the real post-install lines from install.sh
-         to bash, so the test drives install.sh source directly.
+      2. Set every shell variable the post-install function needs.
+      3. Call the real post-install function.
     """
     fake_home = tmp_path / "home"
     fake_home.mkdir(exist_ok=True)
@@ -592,7 +569,6 @@ def _run_post_install(
     # and prints nothing.  The onboarding hint must still appear.
     path_value = f"{idir}:/usr/bin:/bin" if dir_already_on_path else "/usr/bin:/bin"
 
-    start_line = _find_post_install_start_line()
     install_sh = _INSTALL_SH_SHELL
     idir_shell = shlex.quote(idir)
     home_shell = shlex.quote(str(fake_home))
@@ -605,12 +581,7 @@ def _run_post_install(
             in_fn && /^\\}}$/ {{ in_fn=0 }}
         ' {install_sh})"
 
-        # 2. Stub side-effect functions — no binary or network calls
-        install_binary()               {{ :; }}
-        get_binary_path_from_archive() {{ printf '/tmp/fake-opensre\\n'; }}
-        verify_binary_version()        {{ printf '%s\\n' "${{2:-{installed_version}}}"; }}
-
-        # 3. Set every variable the output block reads
+        # 2. Set every variable the post-install function reads
         BIN_NAME="opensre"
         INSTALL_DIR={idir_shell}
         INSTALL_CHANNEL="{install_channel}"
@@ -621,11 +592,8 @@ def _run_post_install(
         PATH="{path_value}"
         export HOME SHELL PATH
 
-        # 4. Execute the real post-install lines sourced directly from install.sh.
-        #    tail -n +{start_line} feeds everything from the version-print block
-        #    to EOF, so any change to those lines in install.sh is immediately
-        #    reflected here — no copy-paste tautology.
-        eval "$(tail -n +{start_line} {install_sh})"
+        # 3. Execute the real post-install function from install.sh.
+        finish_install
     """)
     return subprocess.run(["bash", "-c", script], capture_output=True, text=True)
 

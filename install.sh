@@ -481,17 +481,17 @@ parse_args() {
   fi
 }
 
-parse_args "$@"
-
 need_cmd() {
   command -v "$1" >/dev/null 2>&1 || die "'$1' is required but was not found in PATH."
 }
 
-need_cmd curl
-need_cmd grep
-need_cmd sed
-need_cmd tr
-need_cmd uname
+require_prerequisites() {
+  need_cmd curl
+  need_cmd grep
+  need_cmd sed
+  need_cmd tr
+  need_cmd uname
+}
 
 CURL_FLAGS=(
   --fail
@@ -1064,156 +1064,206 @@ launch_onboarding_after_install() {
     warn "Onboarding exited before completion. Run '${BIN_NAME} onboard' to retry."
 }
 
-os="$(uname -s)"
-arch="$(uname -m)"
-
-case "$os" in
-  Linux)
-    platform="linux"
-    ;;
-  Darwin)
-    platform="darwin"
-    ;;
-  MINGW*|MSYS*|CYGWIN*)
-    platform="windows"
-    BIN_NAME="opensre.exe"
-    log "Detected Windows environment (${os})."
-    ;;
-  *)
-    die "Unsupported operating system: $os"
-    ;;
-esac
-
-case "$arch" in
-  x86_64|amd64)
-    target_arch="x64"
-    ;;
-  arm64|aarch64)
-    target_arch="arm64"
-    ;;
-  *)
-    die "Unsupported architecture: $arch"
-    ;;
-esac
-
-resolve_install_dir
-
-print_installer_header
-
-version="$requested_version"
-release_tag=""
-
-if [ "$INSTALL_CHANNEL" = "main" ]; then
-  metadata_step="[1/6] Fetching latest main build metadata"
-elif [ -n "$version" ]; then
-  metadata_step="[1/6] Fetching release metadata for v${version}"
-else
-  metadata_step="[1/6] Fetching latest release version"
-fi
-
-capture_with_progress release_json "$metadata_step" fetch_release_json "$version" || {
-  if [ "$INSTALL_CHANNEL" = "main" ]; then
-    die "Failed to query main build metadata from GitHub."
-  fi
-
-  die "Failed to query release metadata from GitHub."
-}
-
-if [ "$INSTALL_CHANNEL" = "main" ]; then
-  release_tag="$(extract_tag_name "$release_json")"
-else
-  if [ -z "$version" ]; then
-    version="$(extract_tag_name "$release_json")"
-  fi
-  release_tag="v${version}"
-fi
-
-if [ "$INSTALL_CHANNEL" = "main" ]; then
-  [ -n "$release_tag" ] || die "Failed to determine the main build tag."
-else
-  [ -n "$version" ] || die "Failed to determine the release version."
-fi
-
-asset_arch="$target_arch"
-archive="$(build_archive_name "$version" "$asset_arch")"
-
-if [ "$platform" = "windows" ] && [ "$target_arch" = "arm64" ] && ! release_has_asset "$release_json" "$archive"; then
-  fallback_archive="$(build_archive_name "$version" "x64")"
-
-  if release_has_asset "$release_json" "$fallback_archive"; then
-    asset_arch="x64"
-    archive="$fallback_archive"
-    warn "Windows ARM64 artifact is not published for v${version}; falling back to the x64 build."
-  fi
-fi
-
-if ! release_has_asset "$release_json" "$archive"; then
-  if [ "$INSTALL_CHANNEL" = "main" ]; then
-    die "Main build release does not include asset '${archive}'."
-  fi
-
-  die "Release v${version} does not include asset '${archive}'."
-fi
-
-download_url="https://github.com/${REPO}/releases/download/${release_tag}/${archive}"
-checksum_asset="${archive}.sha256"
-checksum_url="${download_url}.sha256"
-
-if [ "$INSTALL_CHANNEL" = "main" ]; then
-  step "[2/6] Preparing opensre main build (${platform}/${target_arch})"
-else
-  step "[2/6] Preparing opensre v${version} (${platform}/${target_arch})"
-fi
-if [ "$asset_arch" != "$target_arch" ]; then
-  log "Using release asset built for ${platform}/${asset_arch}."
-fi
-if install_verbose; then
-  log "  ${download_url}"
-fi
-
-need_cmd mktemp
-tmp_dir="$(mktemp -d)"
-
 cleanup() {
   if [ -n "${tmp_dir:-}" ] && [ -d "$tmp_dir" ]; then
     rm -rf "$tmp_dir"
   fi
 }
 
-trap cleanup EXIT
+detect_platform() {
+  local os
+  local arch
 
-archive_path="${tmp_dir}/${archive}"
-run_with_progress "[3/6] Downloading release archive (${archive})" download_to "$download_url" "$archive_path" \
-  || die "Failed to download '${archive}'."
+  os="$(uname -s)"
+  arch="$(uname -m)"
 
-if release_has_asset "$release_json" "$checksum_asset"; then
-  checksum_path="${tmp_dir}/${checksum_asset}"
-  run_with_progress "[4/6] Downloading and verifying checksum (${checksum_asset})" \
-    download_and_verify_checksum "$checksum_url" "$checksum_path" "$archive_path" \
-    || die "Failed to download or verify checksum '${checksum_asset}'."
-else
+  case "$os" in
+    Linux)
+      platform="linux"
+      ;;
+    Darwin)
+      platform="darwin"
+      ;;
+    MINGW*|MSYS*|CYGWIN*)
+      platform="windows"
+      BIN_NAME="opensre.exe"
+      log "Detected Windows environment (${os})."
+      ;;
+    *)
+      die "Unsupported operating system: $os"
+      ;;
+  esac
+
+  case "$arch" in
+    x86_64|amd64)
+      target_arch="x64"
+      ;;
+    arm64|aarch64)
+      target_arch="arm64"
+      ;;
+    *)
+      die "Unsupported architecture: $arch"
+      ;;
+  esac
+}
+
+resolve_release_metadata() {
+  version="$requested_version"
+  release_tag=""
+
+  if [ "$INSTALL_CHANNEL" = "main" ]; then
+    metadata_step="[1/6] Fetching latest main build metadata"
+  elif [ -n "$version" ]; then
+    metadata_step="[1/6] Fetching release metadata for v${version}"
+  else
+    metadata_step="[1/6] Fetching latest release version"
+  fi
+
+  capture_with_progress release_json "$metadata_step" fetch_release_json "$version" || {
+    if [ "$INSTALL_CHANNEL" = "main" ]; then
+      die "Failed to query main build metadata from GitHub."
+    fi
+
+    die "Failed to query release metadata from GitHub."
+  }
+
+  if [ "$INSTALL_CHANNEL" = "main" ]; then
+    release_tag="$(extract_tag_name "$release_json")"
+  else
+    if [ -z "$version" ]; then
+      version="$(extract_tag_name "$release_json")"
+    fi
+    release_tag="v${version}"
+  fi
+
+  if [ "$INSTALL_CHANNEL" = "main" ]; then
+    [ -n "$release_tag" ] || die "Failed to determine the main build tag."
+  else
+    [ -n "$version" ] || die "Failed to determine the release version."
+  fi
+}
+
+select_archive_asset() {
+  local fallback_archive
+
+  asset_arch="$target_arch"
+  archive="$(build_archive_name "$version" "$asset_arch")"
+
+  if [ "$platform" = "windows" ] && [ "$target_arch" = "arm64" ] && ! release_has_asset "$release_json" "$archive"; then
+    fallback_archive="$(build_archive_name "$version" "x64")"
+
+    if release_has_asset "$release_json" "$fallback_archive"; then
+      asset_arch="x64"
+      archive="$fallback_archive"
+      warn "Windows ARM64 artifact is not published for v${version}; falling back to the x64 build."
+    fi
+  fi
+
+  if release_has_asset "$release_json" "$archive"; then
+    return
+  fi
+
+  if [ "$INSTALL_CHANNEL" = "main" ]; then
+    die "Main build release does not include asset '${archive}'."
+  fi
+
+  die "Release v${version} does not include asset '${archive}'."
+}
+
+prepare_download() {
+  download_url="https://github.com/${REPO}/releases/download/${release_tag}/${archive}"
+  checksum_asset="${archive}.sha256"
+  checksum_url="${download_url}.sha256"
+
+  if [ "$INSTALL_CHANNEL" = "main" ]; then
+    step "[2/6] Preparing opensre main build (${platform}/${target_arch})"
+  else
+    step "[2/6] Preparing opensre v${version} (${platform}/${target_arch})"
+  fi
+  if [ "$asset_arch" != "$target_arch" ]; then
+    log "Using release asset built for ${platform}/${asset_arch}."
+  fi
+  if install_verbose; then
+    log "  ${download_url}"
+  fi
+}
+
+create_temp_workspace() {
+  need_cmd mktemp
+  tmp_dir="$(mktemp -d)"
+  trap cleanup EXIT
+}
+
+download_release_archive() {
+  archive_path="${tmp_dir}/${archive}"
+  run_with_progress "[3/6] Downloading release archive (${archive})" download_to "$download_url" "$archive_path" \
+    || die "Failed to download '${archive}'."
+}
+
+verify_release_checksum() {
+  local checksum_path
+
+  if release_has_asset "$release_json" "$checksum_asset"; then
+    checksum_path="${tmp_dir}/${checksum_asset}"
+    run_with_progress "[4/6] Downloading and verifying checksum (${checksum_asset})" \
+      download_and_verify_checksum "$checksum_url" "$checksum_path" "$archive_path" \
+      || die "Failed to download or verify checksum '${checksum_asset}'."
+    return
+  fi
+
   if [ "$INSTALL_CHANNEL" = "main" ]; then
     warn "Main build release is missing checksum asset '${checksum_asset}'."
   else
     warn "Release v${version} is missing checksum asset '${checksum_asset}'."
   fi
-fi
+}
 
-capture_with_progress verified_binary "[5/6] Extracting and verifying binary" extract_and_verify_binary "$archive_path" "$tmp_dir"
-binary_path="${verified_binary%%$'\n'*}"
-installed_version="${verified_binary#*$'\n'}"
-run_with_progress "[6/6] Installing ${BIN_NAME} to ${INSTALL_DIR}" install_verified_binary "$binary_path" "${INSTALL_DIR}/${BIN_NAME}"
+extract_release_binary() {
+  local verified_binary
 
-if [ "$INSTALL_CHANNEL" = "main" ]; then
-  if [ "$installed_version" = "main" ]; then
-    success "Installed ${BIN_NAME} main build to ${INSTALL_DIR}/${BIN_NAME}"
+  capture_with_progress verified_binary "[5/6] Extracting and verifying binary" extract_and_verify_binary "$archive_path" "$tmp_dir"
+  binary_path="${verified_binary%%$'\n'*}"
+  installed_version="${verified_binary#*$'\n'}"
+}
+
+install_release_binary() {
+  run_with_progress "[6/6] Installing ${BIN_NAME} to ${INSTALL_DIR}" install_verified_binary "$binary_path" "${INSTALL_DIR}/${BIN_NAME}"
+}
+
+print_install_confirmation() {
+  if [ "$INSTALL_CHANNEL" = "main" ]; then
+    if [ "$installed_version" = "main" ]; then
+      success "Installed ${BIN_NAME} main build to ${INSTALL_DIR}/${BIN_NAME}"
+    else
+      success "Installed ${BIN_NAME} main build (${installed_version}) to ${INSTALL_DIR}/${BIN_NAME}"
+    fi
   else
-    success "Installed ${BIN_NAME} main build (${installed_version}) to ${INSTALL_DIR}/${BIN_NAME}"
+    success "Installed ${BIN_NAME} v${installed_version} to ${INSTALL_DIR}/${BIN_NAME}"
   fi
-else
-  success "Installed ${BIN_NAME} v${installed_version} to ${INSTALL_DIR}/${BIN_NAME}"
-fi
+}
 
-configure_path
-print_success_screen "$installed_version"
-launch_onboarding_after_install
+finish_install() {
+  print_install_confirmation
+  configure_path
+  print_success_screen "$installed_version"
+  launch_onboarding_after_install
+}
+
+main() {
+  parse_args "$@"
+  require_prerequisites
+  detect_platform
+  resolve_install_dir
+  print_installer_header
+  resolve_release_metadata
+  select_archive_asset
+  prepare_download
+  create_temp_workspace
+  download_release_archive
+  verify_release_checksum
+  extract_release_binary
+  install_release_binary
+  finish_install
+}
+
+main "$@"
