@@ -20,7 +20,11 @@ response_contract:
   must_contain_any:
   - root cause
   - investigation
+  - investigate
   - happened
+  - disk full
+  - orders-api
+  - incident
   must_not_contain:
   - $ /
 history:
