@@ -38,6 +38,7 @@ from core.agent_harness.ports import (
 )
 from core.agent_harness.prompts import build_cli_agent_prompt_from_provider
 from core.agent_harness.prompts.conversation_memory import MAX_CONVERSATION_MESSAGES
+from core.agent_harness.session.compaction import auto_compact_if_needed
 from integrations.llm_cli.errors import CLITimeoutError
 
 _ASSISTANT_LABEL = "assistant"
@@ -252,6 +253,12 @@ def run_turn(
     chosen path's effects. ``execute_actions``, ``answer``, and ``gather`` are
     already bound to the surface (session/output/tools) by the caller.
     """
+    # Compact the session's conversation history before the turn if it has
+    # grown past the threshold. Runs unconditionally: `auto_compact_if_needed`
+    # is a no-op when compaction isn't required. Belongs at the harness layer
+    # so every surface (shell, headless, gateway) benefits without re-implementing.
+    auto_compact_if_needed(session)
+
     # Snapshot session state before any turn mutations. Both the action agent
     # and the conversational assistant read from this frozen context so their
     # prompts reflect a consistent turn-start view rather than live session state.
