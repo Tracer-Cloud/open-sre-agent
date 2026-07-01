@@ -82,8 +82,7 @@ curl http://<PublicIpAddress>:8000/health
 - EC2 instance (from outputs file)
 - Security group
 - IAM instance profile and role
-
-Does **not** delete the ECR repository or images. Re-deploying reuses the existing repo.
+- ECR repository `opensre` (and pushed images)
 
 ### E2E test infrastructure (separate from `make deploy`)
 

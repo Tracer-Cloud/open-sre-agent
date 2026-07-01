@@ -34,7 +34,11 @@ from platform.deployment.aws.vpc import (
     get_default_vpc,
     get_public_subnets,
 )
-from platform.deployment.instance import generate_user_data, wait_for_deployment_ready
+from platform.deployment.instance import (
+    generate_user_data,
+    start_deployment_containers,
+    wait_for_deployment_ready,
+)
 from platform.deployment.prep import validate_deploy_env
 from platform.deployment.stack import (
     delete_outputs,
@@ -179,14 +183,9 @@ def deploy() -> dict[str, str]:
     ami_id = get_latest_al2023_ami(REGION)
     print(f"  - AMI: {ami_id}")
 
-    web_env_vars = _collect_env_vars(_WEB_ENV_KEYS)
-    gateway_env_vars = _collect_env_vars(_GATEWAY_ENV_KEYS)
-
     user_data = generate_user_data(
         image_uri=image_uri,
         log_path=stack.log_path,
-        web_env_vars=web_env_vars,
-        gateway_env_vars=gateway_env_vars,
     )
 
     print("Launching EC2 instance...")
@@ -210,6 +209,19 @@ def deploy() -> dict[str, str]:
     print("Waiting for SSM agent to register...")
     wait_for_ssm_registration(instance["InstanceId"], REGION)
     print("  - SSM: Online")
+
+    web_env_vars = _collect_env_vars(_WEB_ENV_KEYS)
+    gateway_env_vars = _collect_env_vars(_GATEWAY_ENV_KEYS)
+
+    print("Starting web and gateway containers via SSM...")
+    start_deployment_containers(
+        instance["InstanceId"],
+        image_uri=image_uri,
+        web_env_vars=web_env_vars,
+        gateway_env_vars=gateway_env_vars,
+        region=REGION,
+    )
+    print("  - Containers: started")
 
     print("Waiting for web and gateway containers (may take several minutes)...")
     wait_for_deployment_ready(
@@ -299,6 +311,16 @@ def destroy() -> dict[str, list[str]]:
         print("  - Profile and role deleted")
     except ClientError as e:
         msg = f"iam:{profile_name}/{role_name} - {e}"
+        results["failed"].append(msg)
+        print(f"  - Failed: {e}")
+
+    print(f"Deleting ECR repository {stack.ecr_repo_name}...")
+    try:
+        ecr.delete_repository(stack.ecr_repo_name, DEFAULT_REGION)
+        results["deleted"].append(f"ecr-repository:{stack.ecr_repo_name}")
+        print("  - ECR repository deleted")
+    except ClientError as e:
+        msg = f"ecr-repository:{stack.ecr_repo_name} - {e}"
         results["failed"].append(msg)
         print(f"  - Failed: {e}")
 

@@ -117,3 +117,14 @@ def build_and_push(
     subprocess.run(["docker", "push", full_uri], check=True)
 
     return full_uri
+
+
+def delete_repository(name: str, region: str = DEFAULT_REGION) -> None:
+    """Delete an ECR repository and all images inside it."""
+    ecr_client = get_boto3_client("ecr", region)
+    try:
+        ecr_client.delete_repository(repositoryName=name, force=True)
+    except ClientError as e:
+        if e.response["Error"]["Code"] == "RepositoryNotFoundException":
+            return
+        raise

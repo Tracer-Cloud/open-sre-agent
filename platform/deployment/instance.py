@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import base64
 import logging
+import shlex
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -24,12 +26,15 @@ from platform.deployment.stack import GATEWAY_CONTAINER_NAME, WEB_CONTAINER_NAME
 
 logger = logging.getLogger(__name__)
 
+_ENV_DIR = "/etc/opensre"
+
 __all__ = [
     "GATEWAY_CONTAINER_NAME",
     "HealthPollStatus",
     "WEB_CONTAINER_NAME",
     "generate_user_data",
     "poll_deployment_health",
+    "start_deployment_containers",
     "wait_for_deployment_ready",
 ]
 
@@ -103,23 +108,84 @@ def poll_deployment_health(
     )
 
 
-def _format_env_flags(env_vars: dict[str, str]) -> str:
-    if not env_vars:
-        return ""
-    return " " + " ".join(f"-e {k}='{v}'" for k, v in env_vars.items())
+def _env_file_content(env_vars: dict[str, str]) -> str:
+    """Return Docker ``--env-file`` content for the given variables."""
+    lines: list[str] = []
+    for key in sorted(env_vars):
+        value = env_vars[key]
+        if "\n" in value or "\r" in value:
+            raise ValueError(f"Environment variable {key} must not contain newlines")
+        lines.append(f"{key}={value}")
+    return "\n".join(lines) + "\n"
+
+
+def _write_env_file_commands(path: str, content: str) -> list[str]:
+    """Return shell commands that write ``content`` to ``path`` via base64."""
+    encoded = base64.b64encode(content.encode()).decode("ascii")
+    quoted_path = shlex.quote(path)
+    return [
+        f"echo {shlex.quote(encoded)} | base64 -d > {quoted_path}",
+        f"chmod 600 {quoted_path}",
+    ]
+
+
+def start_deployment_containers(
+    instance_id: str,
+    *,
+    image_uri: str,
+    web_env_vars: dict[str, str] | None = None,
+    gateway_env_vars: dict[str, str] | None = None,
+    region: str = DEFAULT_REGION,
+) -> None:
+    """Write container env files over SSM and start web + gateway containers.
+
+    Secrets are delivered after the instance registers with SSM so they are not
+    persisted in EC2 user data.
+    """
+    web_env = {"MODE": "web", **(web_env_vars or {})}
+    gateway_env = {"MODE": "gateway", **(gateway_env_vars or {})}
+    web_env_path = f"{_ENV_DIR}/web.env"
+    gateway_env_path = f"{_ENV_DIR}/gateway.env"
+    quoted_image = shlex.quote(image_uri)
+
+    commands = [
+        f"mkdir -p {shlex.quote(_ENV_DIR)}",
+        *_write_env_file_commands(web_env_path, _env_file_content(web_env)),
+        *_write_env_file_commands(gateway_env_path, _env_file_content(gateway_env)),
+        (
+            f"docker run -d --name {WEB_CONTAINER_NAME} --restart=unless-stopped "
+            f"-p 8000:8000 --env-file {shlex.quote(web_env_path)} {quoted_image}"
+        ),
+        (
+            f"docker run -d --name {GATEWAY_CONTAINER_NAME} --restart=unless-stopped "
+            f"--env-file {shlex.quote(gateway_env_path)} {quoted_image}"
+        ),
+    ]
+
+    result = run_ssm_shell_command(
+        instance_id=instance_id,
+        commands=commands,
+        region=region,
+    )
+    status = str(result.get("status", ""))
+    if status != "Success":
+        stderr = str(result.get("stderr", "")).strip()
+        raise RuntimeError(
+            f"Failed to start deployment containers on {instance_id}: "
+            f"status={status}, stderr={stderr or 'none'}"
+        )
 
 
 def generate_user_data(
     *,
     image_uri: str,
     log_path: str,
-    web_env_vars: dict[str, str] | None = None,
-    gateway_env_vars: dict[str, str] | None = None,
 ) -> str:
-    """Generate cloud-init user data that starts web and gateway containers."""
-    web_flags = f"-e MODE=web -p 8000:8000{_format_env_flags(web_env_vars or {})}"
-    gateway_flags = f"-e MODE=gateway{_format_env_flags(gateway_env_vars or {})}"
+    """Generate cloud-init user data that installs Docker and pulls the image.
 
+    Container startup and secret injection happen later via SSM so credentials
+    are not embedded in user data.
+    """
     ecr_registry = image_uri.split("/")[0]
     ecr_region = DEFAULT_REGION
 
@@ -149,13 +215,7 @@ done
 echo "=== Pulling image ==="
 docker pull {image_uri}
 
-echo "=== Starting web container ==="
-docker run -d --name {WEB_CONTAINER_NAME} --restart=unless-stopped {web_flags} {image_uri}
-
-echo "=== Starting gateway container ==="
-docker run -d --name {GATEWAY_CONTAINER_NAME} --restart=unless-stopped {gateway_flags} {image_uri}
-
-echo "=== Deployment complete ==="
+echo "=== Bootstrap complete (containers start via SSM) ==="
 """
 
 

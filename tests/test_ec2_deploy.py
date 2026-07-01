@@ -65,6 +65,7 @@ def test_deploy_returns_all_required_keys(
     monkeypatch.setattr(deploy_module, "launch_instance", fake_launch_instance)
     monkeypatch.setattr(deploy_module, "wait_for_running", fake_wait_for_running)
     monkeypatch.setattr(deploy_module, "wait_for_ssm_registration", lambda *_a, **_kw: None)
+    monkeypatch.setattr(deploy_module, "start_deployment_containers", lambda *_a, **_kw: None)
     monkeypatch.setattr(deploy_module, "wait_for_deployment_ready", lambda **_kw: None)
     monkeypatch.setattr(deploy_module, "save_outputs", fake_save_outputs)
 
