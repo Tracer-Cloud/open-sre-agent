@@ -49,7 +49,7 @@ Main packages one level deeper:
 - `interactive_shell/` — Interactive terminal (TTY) loop, slash-command surface, chat/help handoff, session runtime, and terminal UI. REPL watchdog slash commands (`/watch`, `/watches`, `/unwatch`): PR demo steps live under **Interactive shell: REPL watchdog demo** in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#interactive-shell-repl-watchdog-demo).
 - `config/constants/` — Shared prompt and other static constants.
 - `core/context/` — Context assembly boundary for building, trimming, ranking, and packaging incident evidence before agent/runtime consumption.
-- `infra/deployment/` — Health polling, local persisted EC2 outputs, and provider config validation for dry runs (`infra/deployment/operations/`).
+- `infra/deployment/` — Health polling and local persisted EC2 outputs (`infra/deployment/operations/`).
 - `platform/guardrails/` — Guardrail rules, evaluation engine, audit helpers, and CLI bindings.
 - `integrations/` — Integration config normalization, verification, selectors, clients, integration-local helpers, store, and catalog logic.
 - `integrations/hermes/` — Hermes log tailing, incident classification, correlator, sinks, and investigation bridge.

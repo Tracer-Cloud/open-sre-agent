@@ -1,7 +1,7 @@
 -include .env
 export
 
-.PHONY: install onboard benchmark benchmark-update-readme test test-full demo alert-template investigate-alert verify-integrations check-docker grafana-local-up grafana-local-down grafana-local-seed clean lint format deploy deploy-lambda deploy-prefect deploy-flink destroy destroy-lambda destroy-prefect destroy-flink prefect-local-test simulate-k8s-alert test-k8s-local test-k8s test-k8s-datadog chaos-mesh-up chaos-mesh-down chaos-engineering-apply chaos-engineering-delete chaos-lab-up chaos-lab-down chaos-experiment-list chaos-experiment-up chaos-experiment-down deploy-dd-monitors cleanup-dd-monitors deploy-eks destroy-eks test-k8s-eks datadog-demo crashloop-demo regen-trigger-config test-rca test-rca-grafana test-synthetic test-rds-synthetic test-cli-smoke test-turn-live deploy-vercel destroy-vercel test-vercel deploy-ec2 destroy-ec2 test-ec2 deploy-ec2-hello destroy-ec2-hello deploy-bedrock destroy-bedrock test-bedrock download-cloudopsbench-hf mirror-cloudopsbench-s3 validate-cloudopsbench test-openclaw test-openclaw-synthetic test-hermes test-hermes-synthetic test-hermes-synthetic-only refresh-hermes-tuples
+.PHONY: install onboard benchmark benchmark-update-readme test test-full demo alert-template investigate-alert verify-integrations check-docker grafana-local-up grafana-local-down grafana-local-seed clean lint format deploy deploy-lambda deploy-prefect deploy-flink destroy destroy-lambda destroy-prefect destroy-flink prefect-local-test simulate-k8s-alert test-k8s-local test-k8s test-k8s-datadog chaos-mesh-up chaos-mesh-down chaos-engineering-apply chaos-engineering-delete chaos-lab-up chaos-lab-down chaos-experiment-list chaos-experiment-up chaos-experiment-down deploy-dd-monitors cleanup-dd-monitors deploy-eks destroy-eks test-k8s-eks datadog-demo crashloop-demo regen-trigger-config test-rca test-rca-grafana test-synthetic test-rds-synthetic test-cli-smoke test-turn-live deploy-ec2 destroy-ec2 test-ec2 deploy-ec2-hello destroy-ec2-hello download-cloudopsbench-hf mirror-cloudopsbench-s3 validate-cloudopsbench test-openclaw test-openclaw-synthetic test-hermes test-hermes-synthetic test-hermes-synthetic-only refresh-hermes-tuples
 
 
 ifneq ($(wildcard .venv/bin/python),)
@@ -308,18 +308,6 @@ destroy-flink:
 	@echo "Destroying Flink ECS stack..."
 	$(PYTHON) -m tests.e2e.upstream_apache_flink_ecs.infrastructure_sdk.destroy
 
-# Deploy Bedrock Agent test case
-deploy-bedrock:
-	$(PYTHON) -m tests.deployment.bedrock.infrastructure_sdk.deploy
-
-# Destroy Bedrock Agent test case
-destroy-bedrock:
-	$(PYTHON) -m tests.deployment.bedrock.infrastructure_sdk.destroy
-
-# Run Bedrock Agent deployment tests
-test-bedrock:
-	$(PYTHON) -m pytest tests/deployment/bedrock/ -v -s
-
 # Run fast tests + Prefect cloud E2E
 test:
 	$(PYTHON) -m pytest -v surfaces/cli tests/utils
@@ -455,16 +443,6 @@ check-layers-strict: check-imports-strict
 # Run all checks (lint + format read-only check + types + imports + full tests; mirrors CI quality gates)
 check: lint format-check typecheck check-imports test-full
 
-# ─── Deployment Tests (Vercel) ───────────────────────────────────────────────
-deploy-vercel:
-	$(PYTHON) -m tests.deployment.vercel.infrastructure_sdk.deploy
-
-destroy-vercel:
-	$(PYTHON) -m tests.deployment.vercel.infrastructure_sdk.destroy
-
-test-vercel:
-	$(PYTHON) -m pytest tests/deployment/vercel/ -v -s
-
 # ─── Deployment Tests (EC2) ──────────────────────────────────────────────────
 deploy-ec2:
 	$(PYTHON) -m tests.deployment.ec2.infrastructure_sdk.deploy
@@ -482,22 +460,29 @@ deploy-ec2-hello:
 destroy-ec2-hello:
 	$(PYTHON) -m tests.deployment.ec2.infrastructure_sdk.destroy_hello
 
+# ─── EC2 Telegram Gateway ─────────────────────────────────────────────────────
+deploy-gateway-ec2:
+	$(PYTHON) -m infra.deploy_gateway.deploy
+
+destroy-gateway-ec2:
+	$(PYTHON) -m infra.deploy_gateway.destroy
+
+test-gateway-ec2:
+	$(PYTHON) -m pytest tests/deployment/ec2/test_gateway_e2e.py -v -s
+
 # Show help
 help:
 	@echo "Available commands:"
 	@echo ""
 	@echo "  DEPLOYMENT TESTS"
-	@echo "  make deploy-bedrock    - Deploy Bedrock Agent stack"
-	@echo "  make destroy-bedrock   - Destroy Bedrock Agent stack"
-	@echo "  make test-bedrock      - Run Bedrock Agent deployment tests"
-	@echo "  make deploy-vercel     - Deploy health-check function to Vercel"
-	@echo "  make destroy-vercel    - Destroy Vercel deployment"
-	@echo "  make test-vercel       - Run Vercel deployment tests"
 	@echo "  make deploy-ec2        - Deploy OpenSRE on EC2 with Docker"
 	@echo "  make destroy-ec2       - Terminate EC2 instance and clean up"
 	@echo "  make test-ec2          - Run EC2 deployment tests"
 	@echo "  make deploy-ec2-hello  - Deploy hello-world on EC2 (<60s)"
 	@echo "  make destroy-ec2-hello - Terminate hello-world EC2 instance"
+	@echo "  make deploy-gateway-ec2  - Build gateway image, deploy on EC2"
+	@echo "  make destroy-gateway-ec2 - Terminate gateway EC2 instance and clean up"
+	@echo "  make test-gateway-ec2    - Run Telegram Gateway e2e tests"
 	@echo ""
 	@echo "  DEPLOYMENT (AWS SDK - fast!)"
 	@echo "  make deploy          - Deploy all test case infrastructure"
