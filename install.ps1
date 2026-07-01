@@ -14,11 +14,6 @@ function Test-OpenSreVerboseInstall {
     return ($value -eq "1" -or $value -eq "true" -or $value -eq "TRUE" -or $value -eq "yes" -or $value -eq "YES")
 }
 
-function Test-OpenSreIntroDisabled {
-    $value = [string]$env:OPENSRE_INSTALL_NO_INTRO
-    return ($value -eq "1" -or $value -eq "true" -or $value -eq "TRUE" -or $value -eq "yes" -or $value -eq "YES")
-}
-
 function Test-OpenSreInteractiveHost {
     try {
         if ([System.Console]::IsOutputRedirected) {
@@ -189,86 +184,6 @@ function New-OpenSreProgressBar {
     }
 
     return $builder.ToString()
-}
-
-function Write-OpenSreCenteredLine {
-    param(
-        [AllowEmptyString()]
-        [string]$Message,
-        [string]$Color = ""
-    )
-
-    $width = Get-OpenSreConsoleWidth
-    $text = Limit-OpenSreText -Text $Message -MaxWidth ([Math]::Max(1, $width - 2))
-    [int]$pad = [Math]::Floor(($width - $text.Length) / 2)
-    if ($pad -lt 0) {
-        $pad = 0
-    }
-
-    Write-OpenSreLine -Message ((" " * $pad) + $text) -Color $Color
-}
-
-function Show-OpenSreIntro {
-    if (-not (Test-OpenSreInteractiveHost) -or (Test-OpenSreVerboseInstall) -or (Test-OpenSreIntroDisabled)) {
-        return
-    }
-
-    $oldCursorVisible = $true
-    try {
-        $oldCursorVisible = [System.Console]::CursorVisible
-    }
-    catch {
-        $oldCursorVisible = $true
-    }
-
-    try {
-        try {
-            [System.Console]::CursorVisible = $false
-        }
-        catch {
-        }
-
-        for ($frame = 0; $frame -lt 10; $frame += 1) {
-            Clear-Host
-            Write-Host ""
-            Write-Host ""
-            Write-OpenSreCenteredLine -Message "OpenSRE" -Color "Cyan"
-            Write-Host ""
-
-            $width = Get-OpenSreConsoleWidth
-            [int]$barWidth = $width - 12
-            if ($barWidth -gt 32) {
-                $barWidth = 32
-            }
-            if ($barWidth -lt 12) {
-                $barWidth = 12
-            }
-
-            $bar = New-OpenSreProgressBar -Step $frame -Width $barWidth
-            Write-OpenSreCenteredLine -Message $bar -Color "Yellow"
-            Write-Host ""
-            Write-OpenSreCenteredLine -Message "Installing the OpenSRE CLI"
-
-            $status = "preparing installer"
-            switch ($frame % 5) {
-                0 { $status = "preparing installer" }
-                1 { $status = "checking platform" }
-                2 { $status = "resolving release" }
-                3 { $status = "staging binary" }
-                default { $status = "ready" }
-            }
-            Write-OpenSreCenteredLine -Message $status -Color "DarkGray"
-            Start-Sleep -Milliseconds 65
-        }
-    }
-    finally {
-        try {
-            [System.Console]::CursorVisible = $oldCursorVisible
-        }
-        catch {
-        }
-        Clear-Host
-    }
 }
 
 function Write-OpenSreLine {
@@ -1072,7 +987,6 @@ function Install-OpenSre {
         $resolvedChannel = "release"
     }
 
-    Show-OpenSreIntro
     Write-OpenSreHeader -Channel $resolvedChannel -RequestedVersion $requestedVersion -InstallDir $installDir -Repo $repo
     Enable-OpenSreTls
 

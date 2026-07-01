@@ -196,26 +196,31 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: ubuntu-latest
+          - runner: ubuntu-22.04
             target: linux-x64
             binary_name: opensre
             archive_ext: tar.gz
+            pyinstaller_mode: onedir
           - runner: ubuntu-24.04-arm
             target: linux-arm64
             binary_name: opensre
             archive_ext: tar.gz
+            pyinstaller_mode: onedir
           - runner: macos-15-intel
             target: darwin-x64
             binary_name: opensre
             archive_ext: tar.gz
+            pyinstaller_mode: onedir
           - runner: macos-latest
             target: darwin-arm64
             binary_name: opensre
             archive_ext: tar.gz
+            pyinstaller_mode: onedir
           - runner: windows-latest
             target: windows-x64
             binary_name: opensre.exe
             archive_ext: zip
+            pyinstaller_mode: onefile
           # windows-arm64 is currently excluded from the default release matrix:
           # cryptography does not publish win_arm64 wheels, so dependency install
           # falls back to a source build that requires an OpenSSL toolchain on the
@@ -266,7 +271,7 @@ jobs:
         run: >-
           uv run pyinstaller surfaces/cli/__main__.py
           --name opensre
-          --onefile
+          --${{ matrix.pyinstaller_mode }}
           --clean
           --noconfirm
           --collect-data surfaces.cli
@@ -285,8 +290,13 @@ jobs:
           # Capture the exit status explicitly so a crashing binary still prints
           # its stdout/stderr (under `set -e` the failed substitution aborted the
           # step before the output was ever shown, hiding the real error).
+          if [ -x "./dist/${{ matrix.binary_name }}" ]; then
+            BINARY_PATH="./dist/${{ matrix.binary_name }}"
+          else
+            BINARY_PATH="./dist/opensre/${{ matrix.binary_name }}"
+          fi
           set +e
-          VERSION_OUTPUT="$(./dist/${{ matrix.binary_name }} --version 2>&1)"
+          VERSION_OUTPUT="$("$BINARY_PATH" --version 2>&1)"
           VERSION_STATUS=$?
           set -e
           printf '%s\n' "$VERSION_OUTPUT"
@@ -301,7 +311,7 @@ jobs:
               exit 1
               ;;
           esac
-          ./dist/${{ matrix.binary_name }} -h >/dev/null
+          "$BINARY_PATH" -h >/dev/null
 
       - name: Smoke test binary (Windows)
         if: runner.os == 'Windows'

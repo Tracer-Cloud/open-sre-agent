@@ -38,7 +38,6 @@ INSTALL_CHANNEL_EXPLICIT=0
 [ -n "${OPENSRE_INSTALL_CHANNEL:-}" ] && INSTALL_CHANNEL_EXPLICIT=1
 MAIN_RELEASE_TAG="${OPENSRE_MAIN_RELEASE_TAG:-main-build}"
 BIN_NAME="opensre"
-INSTALL_WITH_SUDO=0
 PROGRESS_PID=""
 requested_version="${OPENSRE_VERSION:-}"
 
@@ -79,17 +78,6 @@ install_verbose() {
 
 is_interactive_terminal() {
   [ -t 1 ] && [ "${TERM:-}" != "dumb" ] && ! install_verbose
-}
-
-intro_disabled() {
-  case "${OPENSRE_INSTALL_NO_INTRO:-}" in
-    1|true|TRUE|yes|YES)
-      return 0
-      ;;
-    *)
-      return 1
-      ;;
-  esac
 }
 
 terminal_supports_unicode() {
@@ -181,109 +169,6 @@ friendly_progress_label() {
       printf '%s' "$label"
       ;;
   esac
-}
-
-center_intro_text() {
-  local text="$1"
-  local color="${2:-}"
-  local columns
-  local pad
-
-  columns="$(terminal_columns)"
-  text="$(truncate_text "$text" "$((columns - 2))")"
-  pad=$(((columns - ${#text}) / 2))
-  [ "$pad" -lt 0 ] && pad=0
-
-  printf '%*s%s%s%s\n' "$pad" "" "$color" "$text" "${COLOR_RESET:-}"
-}
-
-draw_intro_bar() {
-  local step_count="$1"
-  local columns
-  local width
-  local pad
-  local trail=8
-  local head
-  local i=0
-  local full="#"
-  local empty="-"
-
-  if terminal_supports_unicode; then
-    full="█"
-    empty="░"
-  fi
-
-  columns="$(terminal_columns)"
-  width=$((columns - 12))
-  if [ "$width" -gt 32 ]; then
-    width=32
-  fi
-  if [ "$width" -lt 12 ]; then
-    width=12
-  fi
-
-  pad=$(((columns - width) / 2))
-  [ "$pad" -lt 0 ] && pad=0
-  head=$((step_count % (width + trail)))
-
-  printf '%*s' "$pad" ""
-  while [ "$i" -lt "$width" ]; do
-    local age=$((head - i))
-    if [ "$age" -ge 0 ] && [ "$age" -lt "$trail" ]; then
-      case "$age" in
-        0|1) printf '%s%s%s' "${COLOR_GREEN:-}" "$full" "${COLOR_RESET:-}" ;;
-        2|3) printf '%s%s%s' "${COLOR_CYAN:-}" "$full" "${COLOR_RESET:-}" ;;
-        4|5) printf '%s%s%s' "${COLOR_RED:-}" "$full" "${COLOR_RESET:-}" ;;
-        *) printf '%s%s%s' "${COLOR_YELLOW:-}" "$full" "${COLOR_RESET:-}" ;;
-      esac
-    else
-      printf '%s%s%s' "${COLOR_DIM:-}" "$empty" "${COLOR_RESET:-}"
-    fi
-    i=$((i + 1))
-  done
-  printf '\n'
-}
-
-draw_intro_frame() {
-  local step_count="$1"
-  local status
-
-  case $((step_count % 6)) in
-    0) status="preparing installer" ;;
-    1) status="checking platform" ;;
-    2) status="resolving release" ;;
-    3) status="warming runtime" ;;
-    4) status="staging binary" ;;
-    *) status="ready" ;;
-  esac
-
-  printf '\033[2J\033[H'
-  printf '\n\n'
-  center_intro_text "OpenSRE" "${COLOR_BOLD:-}${COLOR_CYAN:-}"
-  printf '\n'
-  draw_intro_bar "$step_count"
-  printf '\n'
-  center_intro_text "Installing the OpenSRE CLI" "${COLOR_BOLD:-}"
-  center_intro_text "$status" "${COLOR_DIM:-}"
-}
-
-show_installer_intro() {
-  if ! is_interactive_terminal || intro_disabled; then
-    return
-  fi
-
-  printf '\033[?25l'
-  trap 'printf "\033[0m\033[?25h\033[2J\033[H"; exit 130' INT TERM
-
-  local frame=0
-  while [ "$frame" -lt 13 ]; do
-    draw_intro_frame "$frame"
-    frame=$((frame + 1))
-    sleep 0.055
-  done
-
-  printf '\033[0m\033[?25h\033[2J\033[H'
-  trap - INT TERM
 }
 
 progress_frame() {
@@ -522,7 +407,6 @@ print_installer_header() {
     return
   fi
 
-  show_installer_intro
   log "${COLOR_BOLD:-}${COLOR_CYAN:-}OpenSRE Installer${COLOR_RESET:-}"
   log "${COLOR_BOLD:-}Installing the OpenSRE CLI${COLOR_RESET:-}"
   log ""
@@ -725,29 +609,6 @@ select_writable_path_candidate_from_list() {
   return 1
 }
 
-select_path_candidate_for_sudo() {
-  local candidate_list="$1"
-  local old_ifs="$IFS"
-  local dir
-
-  command -v sudo >/dev/null 2>&1 || return 1
-  [ "${EUID:-0}" -ne 0 ] || return 1
-  [ "$INSTALL_DIR_OVERRIDE" -eq 0 ] || return 1
-
-  IFS=':'
-  for dir in $candidate_list; do
-    [ -n "$dir" ] || continue
-    if path_has_dir "$dir"; then
-      printf '%s\n' "$dir"
-      IFS="$old_ifs"
-      return 0
-    fi
-  done
-  IFS="$old_ifs"
-
-  return 1
-}
-
 resolve_install_dir() {
   local existing_bin=""
   local existing_dir=""
@@ -776,17 +637,6 @@ resolve_install_dir() {
   fi
 
   if INSTALL_DIR="$(select_writable_path_candidate_from_list "$SYSTEM_INSTALL_DIR_CANDIDATES")"; then
-    return
-  fi
-
-  if [ -n "$existing_dir" ] && path_has_dir "$existing_dir" && command -v sudo >/dev/null 2>&1 && [ "${EUID:-0}" -ne 0 ] && [ "$INSTALL_DIR_OVERRIDE" -eq 0 ]; then
-    INSTALL_DIR="$existing_dir"
-    INSTALL_WITH_SUDO=1
-    return
-  fi
-
-  if INSTALL_DIR="$(select_path_candidate_for_sudo "$SYSTEM_INSTALL_DIR_CANDIDATES")"; then
-    INSTALL_WITH_SUDO=1
     return
   fi
 
@@ -893,13 +743,17 @@ verify_checksum() {
   warn "No checksum verifier found (sha256sum, shasum, or openssl). Skipping checksum verification."
 }
 
-run_with_privilege() {
-  if [ "$INSTALL_WITH_SUDO" -eq 1 ]; then
-    sudo "$@"
-    return
+binary_app_root() {
+  local binary_path="$1"
+  local binary_dir
+
+  binary_dir="${binary_path%/*}"
+  if [ -d "${binary_dir}/_internal" ]; then
+    printf '%s\n' "$binary_dir"
+    return 0
   fi
 
-  "$@"
+  return 1
 }
 
 install_binary() {
@@ -907,30 +761,46 @@ install_binary() {
   local destination_path="$2"
 
   if command -v install >/dev/null 2>&1; then
-    run_with_privilege install -m 0755 "$source_path" "$destination_path"
+    install -m 0755 "$source_path" "$destination_path"
     return
   fi
 
-  run_with_privilege cp "$source_path" "$destination_path"
-  run_with_privilege chmod 0755 "$destination_path" 2>/dev/null || true
+  cp "$source_path" "$destination_path"
+  chmod 0755 "$destination_path" 2>/dev/null || true
 }
 
-prepare_privileged_install() {
-  if [ "$INSTALL_WITH_SUDO" -ne 1 ]; then
-    return
-  fi
+install_binary_app() {
+  local app_root="$1"
+  local destination_path="$2"
+  local app_destination_dir="${INSTALL_DIR}/.${BIN_NAME}-app"
+  local app_tmp_dir="${app_destination_dir}.new.$$"
+  local app_old_dir="${app_destination_dir}.old.$$"
 
-  log "Installing into ${INSTALL_DIR} with sudo so '${BIN_NAME}' is available immediately in this shell."
-  if is_interactive_terminal; then
-    sudo -v || die "Could not authorize sudo for install into '${INSTALL_DIR}'."
+  rm -rf "$app_tmp_dir" "$app_old_dir"
+  cp -R "$app_root" "$app_tmp_dir"
+  chmod -R u+rwX,go+rX "$app_tmp_dir" 2>/dev/null || true
+
+  if [ -e "$app_destination_dir" ]; then
+    mv "$app_destination_dir" "$app_old_dir"
   fi
+  mv "$app_tmp_dir" "$app_destination_dir"
+  rm -rf "$app_old_dir"
+
+  rm -f "$destination_path"
+  ln -s "$app_destination_dir/${BIN_NAME}" "$destination_path"
 }
 
 install_verified_binary() {
   local source_path="$1"
   local destination_path="$2"
+  local app_root=""
 
-  run_with_privilege mkdir -p "$INSTALL_DIR"
+  mkdir -p "$INSTALL_DIR"
+  if [ "$platform" != "windows" ] && app_root="$(binary_app_root "$source_path")"; then
+    install_binary_app "$app_root" "$destination_path"
+    return
+  fi
+
   install_binary "$source_path" "$destination_path"
 }
 
@@ -998,10 +868,23 @@ verify_binary_version() {
   local binary_path="$1"
   local expected_version="${2:-}"
   local version_output
+  local version_status
   local actual_version
 
-  if ! version_output="$("$binary_path" --version 2>&1)"; then
-    die "Failed to execute '${binary_path##*/} --version': ${version_output}"
+  set +e
+  version_output="$("$binary_path" --version 2>&1)"
+  version_status=$?
+  set -e
+
+  if [ "$version_status" -ne 0 ]; then
+    printf 'Failed to execute %s --version (exit %s).\n' "${binary_path##*/}" "$version_status" >&2
+    if [ -n "$version_output" ]; then
+      printf 'Command output:\n%s\n' "$version_output" >&2
+    else
+      printf 'Command output: <empty>\n' >&2
+    fi
+    print_binary_diagnostics "$binary_path"
+    return 1
   fi
 
   actual_version="$(printf '%s\n' "$version_output" | sed -n 's/.*\([0-9][0-9][0-9][0-9]\.[0-9][0-9]*\.[0-9][0-9]*\).*/\1/p' | head -n 1)"
@@ -1030,6 +913,25 @@ verify_binary_version() {
   esac
 }
 
+print_binary_diagnostics() {
+  local binary_path="$1"
+
+  printf 'Binary diagnostics:\n' >&2
+  printf '  path: %s\n' "$binary_path" >&2
+  if command -v uname >/dev/null 2>&1; then
+    printf '  system: %s\n' "$(uname -a 2>/dev/null || true)" >&2
+  fi
+  if command -v ls >/dev/null 2>&1; then
+    ls -l "$binary_path" >&2 2>/dev/null || true
+  fi
+  if command -v file >/dev/null 2>&1; then
+    file "$binary_path" >&2 2>/dev/null || true
+  fi
+  if [ "$platform" = "linux" ] && command -v ldd >/dev/null 2>&1; then
+    ldd "$binary_path" >&2 2>/dev/null || true
+  fi
+}
+
 configure_path() {
   case ":$PATH:" in
     *":${INSTALL_DIR}:"*)
@@ -1050,7 +952,7 @@ configure_path() {
   case "$shell_name" in
     zsh)
       rc_file="${HOME}/.zshrc"
-      path_line="export PATH=\"\$PATH:${INSTALL_DIR}\""
+      path_line="export PATH=\"${INSTALL_DIR}:\$PATH\""
       ;;
     bash)
       if [ "$platform" = "darwin" ]; then
@@ -1058,7 +960,7 @@ configure_path() {
       else
         rc_file="${HOME}/.bashrc"
       fi
-      path_line="export PATH=\"\$PATH:${INSTALL_DIR}\""
+      path_line="export PATH=\"${INSTALL_DIR}:\$PATH\""
       ;;
     fish)
       rc_file="${HOME}/.config/fish/config.fish"
@@ -1066,7 +968,7 @@ configure_path() {
       ;;
     *)
       log "Add the following line to your shell profile to use ${BIN_NAME:-opensre}:"
-      log "  export PATH=\"\$PATH:${INSTALL_DIR}\""
+      log "  export PATH=\"${INSTALL_DIR}:\$PATH\""
       return
       ;;
   esac
@@ -1296,8 +1198,6 @@ else
     warn "Release v${version} is missing checksum asset '${checksum_asset}'."
   fi
 fi
-
-prepare_privileged_install
 
 capture_with_progress verified_binary "[5/6] Extracting and verifying binary" extract_and_verify_binary "$archive_path" "$tmp_dir"
 binary_path="${verified_binary%%$'\n'*}"

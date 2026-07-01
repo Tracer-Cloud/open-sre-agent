@@ -136,7 +136,7 @@ def test_main_non_update_still_raises_when_sentry_sdk_missing(monkeypatch) -> No
     monkeypatch.setattr("surfaces.cli.__main__.init_sentry", _raise_missing_sentry)
 
     with pytest.raises(ModuleNotFoundError):
-        main(["version"])
+        main(["health"])
 
 
 def test_main_does_not_capture_analytics_for_help(monkeypatch, capsys) -> None:
@@ -212,17 +212,21 @@ def test_main_captures_analytics_once_for_accepted_command(monkeypatch, capsys) 
         "surfaces.cli.__main__.capture_cli_invoked", lambda *_args: captured.append("cli")
     )
     monkeypatch.setattr("surfaces.cli.__main__.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("integrations.verify.verify_integrations", lambda: [])
 
-    exit_code = main(["version"])
+    exit_code = main(["health"])
 
     assert exit_code == 0
-    assert "opensre" in capsys.readouterr().out
+    assert "OpenSRE Health" in capsys.readouterr().out
     assert captured == ["install", "cli"]
 
 
-def test_main_captures_command_metadata_for_version(monkeypatch, capsys) -> None:
+def test_main_fast_version_command_skips_runtime_bootstrap(monkeypatch, capsys) -> None:
     captured: list[dict[str, object] | None] = []
-    monkeypatch.setattr("surfaces.cli.__main__.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr(
+        "surfaces.cli.__main__.capture_first_run_if_needed",
+        lambda: captured.append({"unexpected": "install"}),
+    )
     monkeypatch.setattr(
         "surfaces.cli.__main__.capture_cli_invoked",
         lambda properties=None: captured.append(properties),
@@ -233,19 +237,7 @@ def test_main_captures_command_metadata_for_version(monkeypatch, capsys) -> None
 
     assert exit_code == 0
     assert "opensre" in capsys.readouterr().out
-    assert captured == [
-        {
-            "entrypoint": "opensre",
-            "command_path": "opensre version",
-            "command_family": "version",
-            "json_output": False,
-            "verbose": False,
-            "debug": False,
-            "yes": False,
-            "interactive": True,
-            "command_leaf": "version",
-        }
-    ]
+    assert captured == []
 
 
 def test_main_captures_command_metadata_for_remote_health(monkeypatch) -> None:
@@ -428,10 +420,12 @@ def test_main_emits_first_run_install_before_cli_invoked(
     monkeypatch.setattr(provider.atexit, "register", lambda _func: None)
     posted_payloads = _stub_analytics_httpx(monkeypatch)
 
-    exit_code = main(["version"])
+    monkeypatch.setattr("surfaces.cli.__main__.render_landing", lambda _group: None)
+
+    exit_code = main(["--no-interactive"])
 
     assert exit_code == 0
-    assert "opensre" in capsys.readouterr().out
+    assert "OpenSRE is in Public Beta" in capsys.readouterr().err
     assert [payload["json"]["event"] for payload in posted_payloads] == [
         Event.INSTALL_DETECTED.value,
         Event.CLI_INVOKED.value,

@@ -35,6 +35,18 @@ def test_remove_path_nonexistent_returns_ok(tmp_path: Path) -> None:
     assert err is None
 
 
+def test_remove_path_removes_broken_symlink(tmp_path: Path) -> None:
+    link = tmp_path / "broken"
+    link.symlink_to(tmp_path / "missing")
+
+    ok, err = _remove_path(link)
+
+    assert ok is True
+    assert err is None
+    assert not link.exists()
+    assert not link.is_symlink()
+
+
 def test_remove_path_returns_error_on_permission_denied(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -178,6 +190,34 @@ def test_run_uninstall_binary_removes_executable(
     assert rc == 0
     assert not fake_exe.exists()
     assert "binary" in capsys.readouterr().out
+
+
+def test_run_uninstall_onedir_binary_removes_launcher_and_app_dir(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    install_dir = tmp_path / "bin"
+    app_dir = install_dir / ".opensre-app"
+    internal = app_dir / "_internal"
+    internal.mkdir(parents=True)
+    fake_exe = app_dir / "opensre"
+    fake_exe.write_bytes(b"\x7fELF")
+    launcher = install_dir / "opensre"
+    launcher.symlink_to(fake_exe)
+
+    monkeypatch.setattr("surfaces.cli.lifecycle.uninstall._data_dirs", lambda: [])
+    monkeypatch.setattr("surfaces.cli.lifecycle.uninstall._is_binary_install", lambda: True)
+    monkeypatch.setattr("surfaces.cli.lifecycle.uninstall.sys.executable", str(fake_exe))
+    monkeypatch.setattr("shutil.which", lambda _name: str(launcher))
+
+    rc = run_uninstall(yes=True)
+
+    assert rc == 0
+    assert not launcher.exists()
+    assert not launcher.is_symlink()
+    assert not app_dir.exists()
+    out = capsys.readouterr().out
+    assert str(launcher) in out
+    assert str(app_dir) in out
 
 
 def test_run_uninstall_dir_removal_error_sets_exit_1(

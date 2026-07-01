@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import subprocess
 import sys
 import textwrap
@@ -21,13 +20,6 @@ pytestmark = pytest.mark.skipif(
         "tests cannot run there. See issue #1099."
     ),
 )
-
-# ``os.geteuid`` does not exist on Windows. The skipif decorator below is
-# evaluated at decorator-application time (i.e. module import), so a bare
-# ``os.geteuid() == 0`` check would raise ``AttributeError`` on Windows
-# *before* ``pytestmark`` ever takes effect. ``hasattr`` short-circuits the
-# ``and`` so the ``os.geteuid()`` call only runs on platforms that have it.
-_RUNNING_AS_ROOT = hasattr(os, "geteuid") and os.geteuid() == 0
 
 INSTALL_SH = Path(__file__).parents[2] / "install.sh"
 
@@ -54,13 +46,11 @@ def _run_resolution(
         SYSTEM_INSTALL_DIR_CANDIDATES="{system_candidates}"
         INSTALL_DIR=""
         INSTALL_DIR_OVERRIDE=0
-        INSTALL_WITH_SUDO=0
         HOME="{fake_home}"
         PATH="{path_value}"
         platform="linux"
         resolve_install_dir
         printf 'INSTALL_DIR=%s\\n' "$INSTALL_DIR"
-        printf 'INSTALL_WITH_SUDO=%s\\n' "$INSTALL_WITH_SUDO"
     """)
     return subprocess.run(["bash", "-c", script], capture_output=True, text=True)
 
@@ -79,20 +69,18 @@ def test_prefers_writable_user_path_dir(tmp_path: Path) -> None:
 
     assert result.returncode == 0, result.stderr
     assert f"INSTALL_DIR={user_bin}" in result.stdout
-    assert "INSTALL_WITH_SUDO=0" in result.stdout
 
 
-@pytest.mark.skipif(_RUNNING_AS_ROOT, reason="sudo fallback is only meaningful for non-root users")
-def test_uses_sudo_for_non_writable_system_path_dir(tmp_path: Path) -> None:
-    system_bin = tmp_path / "system-bin"
-    system_bin.mkdir()
-    system_bin.chmod(0o555)
+def test_uses_default_user_dir_for_unusable_system_path_dir(tmp_path: Path) -> None:
+    fake_home = tmp_path / "home"
+    default_dir = fake_home / ".local" / "bin"
+
+    system_parent = tmp_path / "system-parent"
+    system_parent.write_text("", encoding="utf-8")
+    system_bin = system_parent / "bin"
 
     tools_dir = tmp_path / "tools"
     tools_dir.mkdir()
-    fake_sudo = tools_dir / "sudo"
-    fake_sudo.write_text("#!/usr/bin/env sh\nexit 0\n", encoding="utf-8")
-    fake_sudo.chmod(0o755)
 
     result = _run_resolution(
         tmp_path=tmp_path,
@@ -102,8 +90,7 @@ def test_uses_sudo_for_non_writable_system_path_dir(tmp_path: Path) -> None:
     )
 
     assert result.returncode == 0, result.stderr
-    assert f"INSTALL_DIR={system_bin}" in result.stdout
-    assert "INSTALL_WITH_SUDO=1" in result.stdout
+    assert f"INSTALL_DIR={default_dir}" in result.stdout
 
 
 def test_falls_back_to_default_when_no_candidate_is_on_path(tmp_path: Path) -> None:
@@ -122,4 +109,11 @@ def test_falls_back_to_default_when_no_candidate_is_on_path(tmp_path: Path) -> N
 
     assert result.returncode == 0, result.stderr
     assert f"INSTALL_DIR={default_dir}" in result.stdout
-    assert "INSTALL_WITH_SUDO=0" in result.stdout
+
+
+def test_install_sh_has_no_sudo_install_path() -> None:
+    source = INSTALL_SH.read_text()
+
+    assert "command -v sudo" not in source
+    assert "sudo -v" not in source
+    assert 'sudo "$@"' not in source

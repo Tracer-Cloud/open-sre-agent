@@ -55,3 +55,13 @@ def test_binary_build_bundles_registry_discovered_tool_modules() -> None:
     assert "--collect-submodules tools" in source
     assert "--collect-submodules surfaces.interactive_shell" in source
     assert "--collect-submodules integrations" in source
+
+
+def test_unix_binary_build_uses_onedir_and_pinned_linux_x64_runner() -> None:
+    source = _RELEASE_WORKFLOW.read_text()
+
+    assert "runner: ubuntu-22.04" in source
+    assert "target: linux-x64" in source
+    assert "pyinstaller_mode: onedir" in source
+    assert "--${{ matrix.pyinstaller_mode }}" in source
+    assert 'BINARY_PATH="./dist/opensre/${{ matrix.binary_name }}"' in source

@@ -1,7 +1,7 @@
 """Regression tests for the frozen-binary stdlib ``platform`` loader.
 
 The first-party ``platform`` package shadows the stdlib ``platform`` module and
-re-exports its API. In a PyInstaller onefile build the stdlib is not laid out as
+re-exports its API. In a PyInstaller frozen build the stdlib is not laid out as
 loose ``.py`` files, so the release workflow bundles a copy of ``platform.py``
 that ``platform/__init__.py`` loads from ``sys._MEIPASS``. These tests guard that
 contract so the binary smoke test cannot silently regress again.

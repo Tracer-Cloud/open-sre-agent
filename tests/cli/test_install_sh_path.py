@@ -219,26 +219,27 @@ def test_install_sh_defines_progress_helpers() -> None:
 
     for helper in (
         "is_interactive_terminal()",
-        "intro_disabled()",
         "terminal_supports_unicode()",
         "terminal_columns()",
         "truncate_text()",
         "friendly_progress_label()",
-        "draw_intro_frame()",
-        "show_installer_intro()",
+        "print_installer_header()",
         "progress_frame()",
         "draw_progress()",
         "finish_progress()",
         "run_with_progress()",
         "capture_with_progress()",
+        "binary_app_root()",
+        "install_binary_app()",
+        "print_binary_diagnostics()",
     ):
         assert helper in source
 
     assert "OPENSRE_INSTALL_VERBOSE" in source
-    assert "OPENSRE_INSTALL_NO_INTRO" in source
     assert "\\033[?25h" in source
     assert 'trap \'kill "$command_pid"' in source
-    assert "trap 'printf \"\\033[0m\\033[?25h\\033[2J\\033[H\"; exit 130'" in source
+    assert "\\033[2J" not in source
+    assert "preparing installer" not in source
 
 
 def test_install_sh_draw_progress_fits_terminal_width_with_long_labels() -> None:
@@ -289,11 +290,10 @@ def test_install_sh_animated_repaints_do_not_wrap_or_leave_long_label_residue() 
     assert all("opensre_main_darwin-arm64" not in segment for segment in animated_segments)
 
 
-def test_install_sh_no_intro_disables_intro_only() -> None:
+def test_install_sh_header_is_stable_without_intro_animation() -> None:
     result = _run_logging_snippet(
         """
         is_interactive_terminal() { return 0; }
-        OPENSRE_INSTALL_NO_INTRO=1
         print_installer_header
         """
     )
@@ -302,6 +302,7 @@ def test_install_sh_no_intro_disables_intro_only() -> None:
     assert result.returncode == 0, result.stderr
     assert "OpenSRE Installer" in output
     assert "Installing the OpenSRE CLI" in output
+    assert "preparing installer" not in output
     assert "\x1b[2J" not in output
 
 
@@ -375,6 +376,55 @@ def test_install_sh_run_with_progress_prints_captured_logs_on_failure() -> None:
     assert "hidden-err" in output
 
 
+def test_install_sh_verify_binary_failure_includes_diagnostics(tmp_path: Path) -> None:
+    fake_binary = tmp_path / "opensre"
+    fake_binary.write_text("#!/usr/bin/env sh\nexit 42\n", encoding="utf-8")
+    fake_binary.chmod(0o755)
+
+    result = _run_logging_snippet(
+        f"""
+        platform="linux"
+        verify_binary_version {shlex.quote(str(fake_binary))}
+        """
+    )
+    output = result.stdout + result.stderr
+
+    assert result.returncode == 1
+    assert "Failed to execute opensre --version (exit 42)." in output
+    assert "Command output: <empty>" in output
+    assert "Binary diagnostics:" in output
+    assert str(fake_binary) in output
+
+
+def test_install_sh_installs_pyinstaller_onedir_app(tmp_path: Path) -> None:
+    app_root = tmp_path / "opensre-app"
+    app_root.mkdir()
+    app_binary = app_root / "opensre"
+    app_binary.write_text("#!/usr/bin/env sh\nprintf 'opensre test\\n'\n", encoding="utf-8")
+    app_binary.chmod(0o755)
+    internal = app_root / "_internal"
+    internal.mkdir()
+    (internal / "payload.txt").write_text("bundled", encoding="utf-8")
+    install_dir = tmp_path / "bin"
+    destination = install_dir / "opensre"
+
+    result = _run_logging_snippet(
+        f"""
+        platform="linux"
+        BIN_NAME="opensre"
+        INSTALL_DIR={shlex.quote(str(install_dir))}
+        install_verified_binary {shlex.quote(str(app_binary))} {shlex.quote(str(destination))}
+        test -L {shlex.quote(str(destination))}
+        test -x {shlex.quote(str(destination))}
+        test -f {shlex.quote(str(install_dir / ".opensre-app" / "_internal" / "payload.txt"))}
+        {shlex.quote(str(destination))}
+        """
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "opensre test" in result.stdout
+
+
 def test_install_sh_uses_six_step_extract_verify_install_labels() -> None:
     source = INSTALL_SH.read_text()
 
@@ -390,7 +440,7 @@ def test_zsh_writes_export_to_zshrc(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
     zshrc = tmp_path / "home" / ".zshrc"
     assert zshrc.exists()
-    assert _LOCAL_BIN in zshrc.read_text()
+    assert f'export PATH="{tmp_path / "home" / _LOCAL_BIN}:$PATH"' in zshrc.read_text()
 
 
 def test_bash_linux_writes_to_bashrc(tmp_path: Path) -> None:
@@ -559,7 +609,6 @@ def _run_post_install(
         install_binary()               {{ :; }}
         get_binary_path_from_archive() {{ printf '/tmp/fake-opensre\\n'; }}
         verify_binary_version()        {{ printf '%s\\n' "${{2:-{installed_version}}}"; }}
-        run_with_privilege()           {{ "$@"; }}
 
         # 3. Set every variable the output block reads
         BIN_NAME="opensre"
