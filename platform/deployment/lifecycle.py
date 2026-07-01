@@ -28,12 +28,6 @@ from platform.deployment.aws.ec2 import (
     wait_for_running,
 )
 from platform.deployment.aws.ssm import wait_for_ssm_registration
-from platform.deployment.aws.vpc import (
-    create_security_group,
-    delete_security_group,
-    get_default_vpc,
-    get_public_subnets,
-)
 from platform.deployment.instance import (
     provision_instance_via_ssm,
     wait_for_deployment_ready,
@@ -113,7 +107,7 @@ def cleanup_existing_deployment(*, region: str = DEFAULT_REGION) -> bool:
     if has_outputs:
         destroy()
     elif instance_ids:
-        print("No outputs file — skipped security group and IAM cleanup.")
+        print("No outputs file — skipped IAM cleanup.")
 
     print()
     return True
@@ -144,24 +138,6 @@ def deploy() -> dict[str, str]:
     )
     print(f"  - Image: {image_uri}")
 
-    print("Getting VPC and subnet...")
-    vpc = get_default_vpc(REGION)
-    subnets = get_public_subnets(vpc["vpc_id"], REGION)
-    subnet_id = subnets[0]
-    print(f"  - VPC: {vpc['vpc_id']}")
-    print(f"  - Subnet: {subnet_id}")
-
-    print("Creating security group...")
-    sg = create_security_group(
-        name=f"{stack.stack_name}-sg",
-        vpc_id=vpc["vpc_id"],
-        description=stack.security_group_description,
-        ingress_rules=stack.ingress_rules,
-        stack_name=stack.stack_name,
-        region=REGION,
-    )
-    print(f"  - Security group: {sg['group_id']}")
-
     print("Creating IAM instance profile...")
     profile_info = create_instance_profile(
         role_name=f"{stack.stack_name}-role",
@@ -179,8 +155,6 @@ def deploy() -> dict[str, str]:
     print("Launching EC2 instance...")
     instance = launch_instance(
         ami_id=ami_id,
-        subnet_id=subnet_id,
-        security_group_id=sg["group_id"],
         instance_profile_arn=profile_info["ProfileArn"],
         stack_name=stack.stack_name,
         instance_type=INSTANCE_TYPE,
@@ -209,7 +183,6 @@ def deploy() -> dict[str, str]:
     print("Waiting for web and gateway containers (may take several minutes)...")
     wait_for_deployment_ready(
         instance_id=instance["InstanceId"],
-        public_ip=public_ip,
         region=REGION,
     )
 
@@ -217,12 +190,9 @@ def deploy() -> dict[str, str]:
         "StackName": stack.stack_name,
         "InstanceId": instance["InstanceId"],
         "PublicIpAddress": public_ip,
-        "SecurityGroupId": sg["group_id"],
         "ProfileName": profile_info["ProfileName"],
         "RoleName": profile_info["RoleName"],
         "AmiId": ami_id,
-        "SubnetId": subnet_id,
-        "VpcId": vpc["vpc_id"],
         "ImageUri": image_uri,
         "WebContainer": stack.web_container_name,
         "GatewayContainer": stack.gateway_container_name,
@@ -260,7 +230,6 @@ def destroy() -> dict[str, list[str]]:
         outputs = {}
 
     instance_id = outputs.get("InstanceId", "")
-    sg_id = outputs.get("SecurityGroupId", "")
     profile_name = outputs.get("ProfileName", f"{stack.stack_name}-profile")
     role_name = outputs.get("RoleName", f"{stack.stack_name}-role")
 
@@ -272,17 +241,6 @@ def destroy() -> dict[str, list[str]]:
             print("  - Instance terminated")
         except ClientError as e:
             msg = f"ec2-instance:{instance_id} - {e}"
-            results["failed"].append(msg)
-            print(f"  - Failed: {e}")
-
-    if sg_id:
-        print(f"Deleting security group {sg_id}...")
-        try:
-            delete_security_group(sg_id, DEFAULT_REGION)
-            results["deleted"].append(f"security-group:{sg_id}")
-            print("  - Security group deleted")
-        except ClientError as e:
-            msg = f"security-group:{sg_id} - {e}"
             results["failed"].append(msg)
             print(f"  - Failed: {e}")
 

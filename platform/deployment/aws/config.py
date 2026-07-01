@@ -33,11 +33,6 @@ SSM_MANAGED_POLICY_ARN = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 # ─── IAM propagation ──────────────────────────────────────────────────────────
 IAM_PROFILE_PROPAGATION_SECONDS = 10
 
-# ─── Security groups ──────────────────────────────────────────────────────────
-SG_DELETE_MAX_ATTEMPTS = 12
-SG_DELETE_RETRY_DELAY_SECONDS = 10
-DEFAULT_INGRESS_CIDR = "0.0.0.0/0"
-
 # ─── SSM ──────────────────────────────────────────────────────────────────────
 SSM_REGISTRATION_POLL_INTERVAL_SECONDS = 10
 SSM_REGISTRATION_MAX_ATTEMPTS = 30

@@ -182,8 +182,6 @@ def find_stack_instance_ids(
 
 def launch_instance(
     ami_id: str,
-    subnet_id: str,
-    security_group_id: str,
     instance_profile_arn: str,
     stack_name: str,
     *,
@@ -191,7 +189,12 @@ def launch_instance(
     instance_type: str = INSTANCE_TYPE,
     region: str = DEFAULT_REGION,
 ) -> dict[str, str]:
-    """Launch an EC2 instance and return its InstanceId."""
+    """Launch an EC2 instance in the default VPC and return its InstanceId.
+
+    No subnet or security group is specified; AWS assigns the default VPC subnet
+    and default security group. SSM access is outbound-only and works without any
+    inbound rules.
+    """
     ec2 = get_boto3_client("ec2", region)
     tags = get_standard_tags(stack_name)
     tags.append({"Key": "Name", "Value": f"{stack_name}-instance"})
@@ -201,8 +204,6 @@ def launch_instance(
         "InstanceType": instance_type,
         "MinCount": 1,
         "MaxCount": 1,
-        "SubnetId": subnet_id,
-        "SecurityGroupIds": [security_group_id],
         "IamInstanceProfile": {"Arn": instance_profile_arn},
         "TagSpecifications": [{"ResourceType": "instance", "Tags": tags}],
         "BlockDeviceMappings": [

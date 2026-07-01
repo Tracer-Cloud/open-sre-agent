@@ -38,6 +38,7 @@ __all__ = [
     "poll_deployment_health",
     "provision_instance_via_ssm",
     "wait_for_deployment_ready",
+    "wait_for_web_process",
 ]
 
 
@@ -260,15 +261,74 @@ def wait_for_gateway_process(
     )
 
 
+def wait_for_web_process(
+    instance_id: str,
+    *,
+    container_name: str = WEB_CONTAINER_NAME,
+    region: str = DEFAULT_REGION,
+    poll_interval: int = GATEWAY_HEALTH_POLL_INTERVAL_SECONDS,
+    max_attempts: int = GATEWAY_HEALTH_MAX_ATTEMPTS,
+) -> bool:
+    """Wait until the web container is running and responding on localhost:8000 via SSM.
+
+    Uses SSM Run Command to curl the health endpoint inside the instance, so no
+    inbound security group rule is required.
+    """
+    docker = shlex.quote(DOCKER_BIN)
+    for attempt in range(max_attempts):
+        try:
+            result = run_ssm_shell_command(
+                instance_id=instance_id,
+                commands=[
+                    f"{docker} ps --filter name={container_name} --filter status=running -q",
+                    (
+                        "curl -sf http://localhost:8000/health 2>/dev/null "
+                        "|| curl -sf http://localhost:8000/ok 2>/dev/null "
+                        "|| true"
+                    ),
+                ],
+                region=region,
+            )
+            stdout = result["stdout"]
+            lines = [line.strip() for line in stdout.strip().splitlines() if line.strip()]
+            container_running = bool(lines[0]) if lines else False
+            health_ok = bool(lines[1]) if len(lines) > 1 else False
+
+            if container_running and health_ok:
+                logger.info(
+                    "Web process ready on %s after %d attempts",
+                    instance_id,
+                    attempt + 1,
+                )
+                return True
+
+            logger.debug(
+                "Web not ready yet (attempt %d/%d): running=%s health=%s",
+                attempt + 1,
+                max_attempts,
+                container_running,
+                health_ok,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("SSM web check attempt %d failed: %s", attempt + 1, exc)
+
+        if attempt < max_attempts - 1:
+            time.sleep(poll_interval)
+
+    raise TimeoutError(
+        f"Web container on {instance_id} did not become ready "
+        f"after {max_attempts * poll_interval}s"
+    )
+
+
 def wait_for_deployment_ready(
     *,
     instance_id: str,
-    public_ip: str,
     region: str = DEFAULT_REGION,
 ) -> None:
-    """Wait until web (HTTP) and gateway (SSM log sentinel) are healthy."""
-    print("Waiting for web health endpoint...")
-    poll_deployment_health(f"http://{public_ip}:8000")
+    """Wait until web (SSM localhost curl) and gateway (SSM log sentinel) are healthy."""
+    print("Waiting for web process...")
+    wait_for_web_process(instance_id, region=region)
     print("  - Web: OK")
 
     print("Waiting for gateway process...")
