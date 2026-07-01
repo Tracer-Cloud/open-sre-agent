@@ -22,6 +22,7 @@ from core.provider import ProviderHooks, ProviderRequest
 
 if TYPE_CHECKING:
     from core.agent_harness.turn_context import TurnContext
+    from core.events import RuntimeEventCallback
     from core.execution import ToolExecutionHooks
 
 
@@ -50,12 +51,17 @@ def run_turn_via_hooks(
     resolved_integrations: dict[str, Any] | None = None,
     max_iterations: int = 10,
     tool_hooks: ToolExecutionHooks | None = None,
+    tool_resources: dict[str, Any] | None = None,
+    on_runtime_event: RuntimeEventCallback | None = None,
+    initial_messages: list[dict[str, Any]] | None = None,
 ) -> AgentRunResult:
     """Drive one ``Agent`` turn from a ``SurfaceHooks`` bundle.
 
-    ``message`` is the user text; the runner wraps it as a single ``user``
-    runtime message. ``llm`` is passed straight to ``Agent`` — the hook
-    contract does not cover LLM selection today (surfaces still pick it).
+    ``message`` becomes the sole user runtime message when ``initial_messages``
+    is not supplied; callers with a pre-built history (e.g. transformed
+    action-agent user text) pass ``initial_messages`` directly. ``llm`` is
+    forwarded to ``Agent`` — the hook contract doesn't cover LLM selection
+    today. ``tool_resources`` and ``on_runtime_event`` reach ``Agent`` as-is.
     Returns the full :class:`AgentRunResult`.
     """
     assert_hooks_complete(hooks)
@@ -71,9 +77,12 @@ def run_turn_via_hooks(
         resolved_integrations=dict(resolved_integrations or {}),
         max_iterations=max_iterations,
         tool_hooks=tool_hooks,
+        tool_resources=dict(tool_resources or {}),
+        on_runtime_event=on_runtime_event,
         provider_hooks=provider_hooks,
     )
-    result = agent.run(initial_messages=[{"role": "user", "content": message}])
+    initial = initial_messages or [{"role": "user", "content": message}]
+    result = agent.run(initial_messages=initial)
 
     hooks.route_response(ctx, result.final_text)  # type: ignore[arg-type]
     return result

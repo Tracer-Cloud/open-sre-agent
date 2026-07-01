@@ -416,8 +416,27 @@ def run_action_agent_turn(
         tool_hooks=tool_hooks,
     )
 
+    # Drive the loop through the SurfaceHooks contract. ``ActionAgent`` still
+    # owns branch detection (bang/slash), the LLM factory, and the transformed
+    # user message; the runner projects its subclass hooks into the shared
+    # composition contract so every agent site (interactive shell, headless,
+    # gateway) exercises the same loop.
+    from core.agent_harness.action_hooks import action_agent_to_hooks
+    from core.agent_harness.hook_runner import run_turn_via_hooks
+
     try:
-        result = agent.run([{"role": "user", "content": agent.user_message()}])
+        result = run_turn_via_hooks(
+            message="",  # ignored — initial_messages carries the user text
+            hooks=action_agent_to_hooks(agent),
+            llm=agent.build_llm(),
+            ctx=turn_ctx,
+            resolved_integrations=_resolved_integrations_for_turn(session, turn_ctx),
+            max_iterations=_MAX_TOOL_CALLING_ITERATIONS,
+            tool_hooks=tool_hooks,
+            tool_resources=dict(agent._tool_resources),  # noqa: SLF001
+            on_runtime_event=agent._on_runtime_event,  # noqa: SLF001
+            initial_messages=[{"role": "user", "content": agent.user_message()}],
+        )
     except Exception as exc:
         if is_context_length_overflow(str(exc)):
             log.debug("shell action prompt overflow; falling through to assistant", exc_info=True)
