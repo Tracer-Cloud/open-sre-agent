@@ -44,7 +44,9 @@ def _data_dirs() -> list[Path]:
 
 
 def _is_onedir_binary(exe_path: Path) -> bool:
-    return exe_path.parent.name == f".{PACKAGE_NAME}-app" and (exe_path.parent / "_internal").is_dir()
+    return (
+        exe_path.parent.name == f".{PACKAGE_NAME}-app" and (exe_path.parent / "_internal").is_dir()
+    )
 
 
 def _launcher_for_binary(exe_path: Path) -> Path | None:

@@ -5,9 +5,6 @@ Comment Vincent: Again 5 functions that are largely overlapping in functionality
 Comment Vincent: This file is trying to mimic the functions in the core agent_harness package. It shouldn't do that.
 """
 
-
-
-
 from __future__ import annotations
 
 from collections.abc import Callable
