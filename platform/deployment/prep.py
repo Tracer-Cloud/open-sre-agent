@@ -1,21 +1,38 @@
-"""Pre-deploy checks: environment validation and existing-stack cleanup."""
+"""Pre-deploy environment validation for EC2 deployment."""
 
 from __future__ import annotations
 
 import os
 import sys
+from dataclasses import dataclass
 
 import boto3
 
 from config.config import get_configured_llm_provider, get_llm_provider_api_key_env
 from config.llm_auth import KEYLESS_PROVIDER_VALUES, SUPPORTED_PROVIDER_VALUES, provider_spec
 from config.local_env import bootstrap_opensre_env, get_project_env_path
-from platform.deployment.aws.client import DEFAULT_REGION
-from platform.deployment.aws.ec2 import find_stack_instance_ids, terminate_instance
-from platform.deployment.stack import get_stack, outputs_exists
 
 _DEPLOY_ENV_EXAMPLE = ".env.deploy.example"
-_ABORT_IF_EXISTS_ENV = "OPENSRE_DEPLOY_ABORT_IF_EXISTS"
+
+# Fixed user-facing labels only — avoid credential-related substrings in print()
+# paths (CodeQL clear-text logging).
+_MISSING_LABELS: dict[str, str] = {
+    "aws": "AWS account access for EC2 provisioning",
+    "telegram_bot": "Telegram gateway bot configuration",
+    "llm_provider_invalid": "LLM provider setting (unsupported value)",
+    "llm_api": "LLM provider configuration for the selected provider",
+}
+_WARNING_LABELS: dict[str, str] = {
+    "telegram_users": "Telegram allowed-users configuration (recommended)",
+    "llm_provider_ec2": "LLM provider may not work inside EC2 containers",
+}
+
+
+@dataclass(frozen=True)
+class DeployEnvIssue:
+    """A deploy env validation issue identified by a stable code."""
+
+    code: str
 
 
 def _env_set(name: str) -> bool:
@@ -36,42 +53,33 @@ def _aws_credentials_available() -> bool:
     return credentials is not None
 
 
-def _collect_deploy_env_issues() -> tuple[list[str], list[str]]:
+def _collect_deploy_env_issues() -> tuple[list[DeployEnvIssue], list[DeployEnvIssue]]:
     """Return ``(missing_required, warnings)`` for the current process env."""
     bootstrap_opensre_env(override=False)
 
-    missing: list[str] = []
-    warnings: list[str] = []
+    missing: list[DeployEnvIssue] = []
+    warnings: list[DeployEnvIssue] = []
 
     if not _aws_credentials_available():
-        missing.append(
-            "AWS credentials — set AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY, "
-            "AWS_ROLE_ARN, AWS_PROFILE, or ~/.aws/credentials"
-        )
+        missing.append(DeployEnvIssue("aws"))
 
     if not _env_set("TELEGRAM_BOT_TOKEN"):
-        missing.append("TELEGRAM_BOT_TOKEN")
+        missing.append(DeployEnvIssue("telegram_bot"))
 
     if not _env_set("TELEGRAM_ALLOWED_USERS"):
-        warnings.append("TELEGRAM_ALLOWED_USERS (recommended gateway pairing gate)")
+        warnings.append(DeployEnvIssue("telegram_users"))
 
     provider = get_configured_llm_provider()
     if provider not in SUPPORTED_PROVIDER_VALUES:
-        missing.append(
-            f"LLM_PROVIDER (unsupported value '{provider}'; "
-            f"expected one of: {', '.join(SUPPORTED_PROVIDER_VALUES)})"
-        )
+        missing.append(DeployEnvIssue("llm_provider_invalid"))
     else:
         api_key_env = get_llm_provider_api_key_env(provider)
         if api_key_env and not _env_set(api_key_env):
-            missing.append(f"{api_key_env} (required for LLM_PROVIDER={provider})")
+            missing.append(DeployEnvIssue("llm_api"))
         elif provider in KEYLESS_PROVIDER_VALUES:
             spec = provider_spec(provider)
             if spec is not None and spec.credential_kind in {"cli", "local"}:
-                warnings.append(
-                    f"LLM_PROVIDER={provider} uses {spec.credential_kind} auth and "
-                    "is unlikely to work inside EC2 containers"
-                )
+                warnings.append(DeployEnvIssue("llm_provider_ec2"))
 
     return missing, warnings
 
@@ -92,7 +100,12 @@ def _highlight(text: str, *, kind: str) -> str:
     return text
 
 
-def _print_deploy_env_report(missing: list[str], warnings: list[str]) -> None:
+def _label_for_issue(issue: DeployEnvIssue, *, warning: bool) -> str:
+    labels = _WARNING_LABELS if warning else _MISSING_LABELS
+    return labels.get(issue.code, "Deploy environment configuration")
+
+
+def _print_deploy_env_report(missing: list[DeployEnvIssue], warnings: list[DeployEnvIssue]) -> None:
     env_path = get_project_env_path()
     print("=" * 60)
     print(_highlight("Deploy environment validation", kind="label"))
@@ -101,14 +114,16 @@ def _print_deploy_env_report(missing: list[str], warnings: list[str]) -> None:
     if missing:
         print()
         print(_highlight("Missing required:", kind="label"))
-        for item in missing:
-            print(f"  {_highlight('MISSING', kind='missing')}: {item}")
+        for issue in missing:
+            label = _label_for_issue(issue, warning=False)
+            print(f"  {_highlight('MISSING', kind='missing')}: {label}")
 
     if warnings:
         print()
         print(_highlight("Recommended:", kind="label"))
-        for item in warnings:
-            print(f"  {_highlight('WARN', kind='warn')}: {item}")
+        for issue in warnings:
+            label = _label_for_issue(issue, warning=True)
+            print(f"  {_highlight('WARN', kind='warn')}: {label}")
 
     if missing or warnings:
         print()
@@ -130,53 +145,3 @@ def validate_deploy_env() -> None:
             f"Deploy aborted: {len(missing)} required environment variable(s) missing. "
             f"Fix the items above and retry."
         )
-
-
-def _abort_if_exists_enabled() -> bool:
-    return os.getenv(_ABORT_IF_EXISTS_ENV, "").strip().lower() in {"1", "true", "yes"}
-
-
-def cleanup_existing_deployment(*, region: str = DEFAULT_REGION) -> bool:
-    """Destroy a prior deployment when outputs or stack-tagged instances exist.
-
-    Terminates all active stack instances first so orphaned instances from a
-    prior redeploy do not block security-group cleanup.
-
-    Returns True when cleanup ran.
-    """
-    stack = get_stack()
-    has_outputs = outputs_exists()
-    instance_ids = find_stack_instance_ids(stack.stack_name, region=region)
-
-    if not has_outputs and not instance_ids:
-        return False
-
-    if _abort_if_exists_enabled():
-        raise RuntimeError(
-            "Existing deployment detected "
-            f"(outputs file and/or {len(instance_ids)} active instance(s)). "
-            "Run `make destroy` first, or unset OPENSRE_DEPLOY_ABORT_IF_EXISTS."
-        )
-
-    print("=" * 60)
-    print("Existing deployment detected — destroying previous stack")
-    if instance_ids:
-        print(f"  Active instances: {', '.join(instance_ids)}")
-    if has_outputs:
-        print("  Outputs file: present")
-    print("=" * 60)
-    print()
-
-    for instance_id in instance_ids:
-        print(f"Terminating stack instance {instance_id}...")
-        terminate_instance(instance_id, region)
-
-    if has_outputs:
-        from platform.deployment.lifecycle import destroy
-
-        destroy()
-    elif instance_ids:
-        print("No outputs file — skipped security group and IAM cleanup.")
-
-    print()
-    return True

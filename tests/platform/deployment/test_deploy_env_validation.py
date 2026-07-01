@@ -40,10 +40,10 @@ def test_validate_deploy_env_lists_missing_required_vars(
         prep.validate_deploy_env()
 
     output = capsys.readouterr().out
-    assert "MISSING: AWS credentials" in output
-    assert "MISSING: TELEGRAM_BOT_TOKEN" in output
-    assert "MISSING: OPENAI_API_KEY" in output
-    assert "WARN: TELEGRAM_ALLOWED_USERS" in output
+    assert "MISSING: AWS account access for EC2 provisioning" in output
+    assert "MISSING: Telegram gateway bot configuration" in output
+    assert "MISSING: LLM provider configuration for the selected provider" in output
+    assert "WARN: Telegram allowed-users configuration (recommended)" in output
 
 
 def test_validate_deploy_env_allows_bedrock_without_api_key(

@@ -21,6 +21,7 @@ from platform.deployment.aws.config import (
 from platform.deployment.aws.ec2 import (
     create_instance_profile,
     delete_instance_profile,
+    find_stack_instance_ids,
     get_latest_al2023_ami,
     launch_instance,
     terminate_instance,
@@ -34,12 +35,19 @@ from platform.deployment.aws.vpc import (
     get_public_subnets,
 )
 from platform.deployment.instance import generate_user_data, wait_for_deployment_ready
-from platform.deployment.prep import cleanup_existing_deployment, validate_deploy_env
-from platform.deployment.stack import delete_outputs, get_stack, load_outputs, save_outputs
+from platform.deployment.prep import validate_deploy_env
+from platform.deployment.stack import (
+    delete_outputs,
+    get_stack,
+    load_outputs,
+    outputs_exists,
+    save_outputs,
+)
 
 REGION = DEFAULT_REGION
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DOCKERFILE = REPO_ROOT / "Dockerfile"
+_ABORT_IF_EXISTS_ENV = "OPENSRE_DEPLOY_ABORT_IF_EXISTS"
 
 _LLM_ENV_KEYS = (
     "LLM_PROVIDER",
@@ -64,6 +72,54 @@ def _collect_env_vars(keys: tuple[str, ...]) -> dict[str, str]:
         if val:
             env_vars[key] = val
     return env_vars
+
+
+def _abort_if_exists_enabled() -> bool:
+    return os.getenv(_ABORT_IF_EXISTS_ENV, "").strip().lower() in {"1", "true", "yes"}
+
+
+def cleanup_existing_deployment(*, region: str = DEFAULT_REGION) -> bool:
+    """Destroy a prior deployment when outputs or stack-tagged instances exist.
+
+    Terminates all active stack instances first so orphaned instances from a
+    prior redeploy do not block security-group cleanup.
+
+    Returns True when cleanup ran.
+    """
+    stack = get_stack()
+    has_outputs = outputs_exists()
+    instance_ids = find_stack_instance_ids(stack.stack_name, region=region)
+
+    if not has_outputs and not instance_ids:
+        return False
+
+    if _abort_if_exists_enabled():
+        raise RuntimeError(
+            "Existing deployment detected "
+            f"(outputs file and/or {len(instance_ids)} active instance(s)). "
+            "Run `make destroy` first, or unset OPENSRE_DEPLOY_ABORT_IF_EXISTS."
+        )
+
+    print("=" * 60)
+    print("Existing deployment detected — destroying previous stack")
+    if instance_ids:
+        print(f"  Active instances: {', '.join(instance_ids)}")
+    if has_outputs:
+        print("  Outputs file: present")
+    print("=" * 60)
+    print()
+
+    for instance_id in instance_ids:
+        print(f"Terminating stack instance {instance_id}...")
+        terminate_instance(instance_id, region)
+
+    if has_outputs:
+        destroy()
+    elif instance_ids:
+        print("No outputs file — skipped security group and IAM cleanup.")
+
+    print()
+    return True
 
 
 def deploy() -> dict[str, str]:
