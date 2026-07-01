@@ -18,7 +18,7 @@ from unittest.mock import MagicMock
 import pytest
 from rich.console import Console
 
-from core.agent_harness.agents.action_agent import ToolCallingDeps, run_agent_turn
+from core.agent_harness.agents.action_agent import ToolCallingDeps, run_action_agent_turn
 from core.agent_harness.providers.default_providers import DefaultToolProvider
 from core.agent_harness.session import ReplSession
 from core.agent_harness.session.storage.memory import InMemorySessionStorage
@@ -183,7 +183,7 @@ def test_agent_computes_temperature_then_sends_it_to_slack(
     provider = DefaultToolProvider(session, console, precomputed_action_tools=action_tools)
     llm = _ComputeThenSlackLLM()
 
-    result = run_agent_turn(
+    result = run_action_agent_turn(
         _USER_MESSAGE,
         session,
         output=MagicMock(),

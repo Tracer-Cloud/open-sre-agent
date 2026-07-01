@@ -15,7 +15,7 @@ from typing import Any
 from rich.console import Console
 
 import core as runtime_module
-import core.agent as runtime_agent_module
+import core.agent_harness.agents.evidence_agent as evidence_agent_module
 import core.llm.agent_llm_client as agent_llm_client
 import tools.investigation.stages.gather_evidence.tools as investigate_tools
 from core.agent_harness.session import ReplSession
@@ -39,14 +39,23 @@ class _DummyTool:
 
 
 def _patch_agent_run(monkeypatch: Any, run: Any) -> None:
-    class _FakeAgent:
-        def __init__(self, **kwargs: Any) -> None:
-            self.kwargs = kwargs
+    """Stub ``EvidenceAgent.run`` so gathering returns controlled results.
 
-        def run(self, initial_messages: list[dict[str, Any]]) -> runtime_module.ToolLoopResult:
-            return run(self.kwargs, initial_messages)
+    Gathering instantiates the ``EvidenceAgent`` subclass, so patching the base
+    ``core.agent.Agent`` no longer intercepts (Python captures the parent class
+    at class-definition time). Patch ``run()`` on the subclass instead — this
+    leaves the real ``has_usable_tools`` / ``load_llm_or_none`` / ``user_message``
+    / ``resolved_integrations`` hooks running (tests below rely on the real
+    tool-discovery + GitHub-scope paths). The runtime-event callback the real
+    ``__init__`` built from ``on_progress`` is surfaced via a ``kwargs`` dict so
+    existing ``_fake_run(kwargs, initial_messages)`` bodies keep working.
+    """
 
-    monkeypatch.setattr(runtime_agent_module, "Agent", _FakeAgent)
+    def _run(self: Any, initial_messages: list[dict[str, Any]]) -> runtime_module.ToolLoopResult:
+        kwargs = {"on_runtime_event": getattr(self, "_on_runtime_event", None)}
+        return run(kwargs, initial_messages)
+
+    monkeypatch.setattr(evidence_agent_module.EvidenceAgent, "run", _run)
 
 
 def test_no_tools_available_returns_none(monkeypatch: Any) -> None:

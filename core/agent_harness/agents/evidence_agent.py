@@ -19,6 +19,7 @@ import os
 from collections.abc import Callable
 from typing import Any
 
+from core.agent import Agent
 from core.agent_harness.ports import ErrorReporter, SessionStore, ToolEventObserver
 from core.agent_harness.prompts.conversation_memory import (
     NO_HISTORY_PLACEHOLDER,
@@ -30,6 +31,7 @@ from core.agent_harness.session.integrations_cache import (
     merge_resolved_integrations,
 )
 from core.domain.alerts.alert_source import SECONDARY_TOOL_SOURCES
+from core.events import RuntimeEvent, RuntimeEventCallback, legacy_callback_payload
 from integrations.github.repo_scope import (
     apply_github_repo_scope,
     infer_github_repo_scope,
@@ -138,6 +140,104 @@ def _build_gather_user_message(session: SessionStore, message: str) -> str:
     return f"Recent conversation:\n{history}\n\nCurrent question:\n{message}"
 
 
+def _forward_runtime_events_to(
+    on_progress: ToolEventObserver | None,
+) -> RuntimeEventCallback | None:
+    """Adapt a legacy ``(event_kind, data)`` observer to the runtime-event callback."""
+    if on_progress is None:
+        return None
+
+    def on_runtime_event(event: RuntimeEvent) -> None:
+        legacy = legacy_callback_payload(event)
+        if legacy is not None:
+            on_progress(*legacy)
+
+    return on_runtime_event
+
+
+class EvidenceAgent(Agent[Any]):
+    """Bounded tool-calling turn for the conversational assistant's evidence sweep.
+
+    Overrides Agent's per-surface init hooks so the LLM, system prompt, tools,
+    and resolved integrations are computed lazily from ``session`` + ``message``
+    at run() start, rather than being assembled inline at each callsite.
+
+    Instantiate the class, check ``has_usable_tools()`` for the early-abort
+    fast path (empty toolset or secondary-source only), then call ``.run()``.
+    """
+
+    def __init__(
+        self,
+        *,
+        session: SessionStore,
+        message: str,
+        on_progress: ToolEventObserver | None = None,
+    ) -> None:
+        super().__init__(
+            max_iterations=_MAX_GATHER_ITERATIONS,
+            on_runtime_event=_forward_runtime_events_to(on_progress),
+        )
+        self._session = session
+        self._message = message
+        self._resolved_cache: dict[str, Any] | None = None
+        self._tools_cache: list[Any] | None = None
+
+    def build_llm(self) -> Any:
+        from core.llm.agent_llm_client import get_agent_llm
+
+        return get_agent_llm()
+
+    def build_system_prompt(self) -> str:
+        return _build_gather_system_prompt(self._session)
+
+    def resolved_integrations(self) -> dict[str, Any]:
+        if self._resolved_cache is None:
+            self._resolved_cache = _resolve_gather_integrations(self._session, self._message)
+        return dict(self._resolved_cache)
+
+    def build_tools(self) -> list[Any]:
+        from tools.investigation.stages.gather_evidence.tools import get_available_tools
+
+        if self._tools_cache is None:
+            self._tools_cache = list(get_available_tools(self.resolved_integrations()))
+        return list(self._tools_cache)
+
+    def user_message(self) -> str:
+        return _build_gather_user_message(self._session, self._message)
+
+    def has_usable_tools(self) -> bool:
+        """Return True iff at least one non-secondary-source tool is available.
+
+        Lets callers early-abort before paying for the LLM client + Agent.run
+        set-up costs.
+        """
+        tools = self.build_tools()
+        if not tools:
+            return False
+        return any(str(t.source) not in SECONDARY_TOOL_SOURCES for t in tools)
+
+    def load_llm_or_none(self, error_reporter: ErrorReporter | None = None) -> Any | None:
+        """Load the LLM eagerly; return None (with expected=True) if unavailable.
+
+        The evidence turn must never break the conversation: if the tool-calling
+        client isn't available (unsupported provider, misconfig), the caller
+        surfaces a controlled fallback rather than a hard error. Cached on
+        ``self._llm`` so ``Agent.run``'s ``_resolve_run_config`` skips the hook.
+        """
+        try:
+            llm = self.build_llm()
+        except Exception as exc:  # noqa: BLE001 — deliberate wide catch for fall-back
+            if error_reporter is not None:
+                error_reporter.report(
+                    exc,
+                    context="core.agent_harness.agents.evidence_agent.client",
+                    expected=True,
+                )
+            return None
+        self._llm = llm
+        return llm
+
+
 def gather_tool_evidence(
     message: str,
     session: SessionStore,
@@ -154,50 +254,20 @@ def gather_tool_evidence(
     Any failure is reported and swallowed (returns ``None``) — gathering must
     never break the conversational turn.
     """
+    agent = EvidenceAgent(session=session, message=message, on_progress=on_progress)
+
+    if not agent.has_usable_tools():
+        return None
+    if agent.load_llm_or_none(error_reporter) is None:
+        return None
+
     try:
-        from core.agent import Agent
-        from core.events import RuntimeEvent, legacy_callback_payload
-        from core.llm.agent_llm_client import get_agent_llm
-        from tools.investigation.stages.gather_evidence.tools import get_available_tools
-
-        resolved = _resolve_gather_integrations(session, message)
-        tools = get_available_tools(resolved)
-        if not tools:
-            return None
-        if not any(str(tool.source) not in SECONDARY_TOOL_SOURCES for tool in tools):
-            return None
-
-        try:
-            llm = get_agent_llm()
-        except Exception as exc:
-            # Tool-calling client unavailable (e.g. unsupported provider): fall
-            # back to the text-only assistant rather than failing the turn.
-            if error_reporter is not None:
-                error_reporter.report(
-                    exc, context="core.agent_harness.agents.evidence_agent.client", expected=True
-                )
-            return None
-
-        def on_runtime_event(event: RuntimeEvent) -> None:
-            if on_progress is None:
-                return
-            legacy = legacy_callback_payload(event)
-            if legacy is not None:
-                on_progress(*legacy)
-
-        result = Agent(
-            llm=llm,
-            system=_build_gather_system_prompt(session),
-            tools=tools,
-            resolved_integrations=resolved,
-            max_iterations=_MAX_GATHER_ITERATIONS,
-            on_runtime_event=on_runtime_event,
-        ).run([{"role": "user", "content": _build_gather_user_message(session, message)}])
+        result = agent.run([{"role": "user", "content": agent.user_message()}])
     except KeyboardInterrupt:
         if on_progress is not None:
             on_progress("gather_cancelled", {})
         return None
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — gathering must not break the turn
         if error_reporter is not None:
             error_reporter.report(exc, context="core.agent_harness.agents.evidence_agent")
         return None
@@ -209,4 +279,4 @@ def gather_tool_evidence(
     return _format_observation(result.executed)
 
 
-__all__ = ["PersistToolCalls", "gather_tool_evidence"]
+__all__ = ["EvidenceAgent", "PersistToolCalls", "gather_tool_evidence"]

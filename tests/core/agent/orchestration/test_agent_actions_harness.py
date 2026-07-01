@@ -7,7 +7,7 @@ from collections.abc import Iterable
 from rich.console import Console
 
 import tools.interactive_shell.actions.slash as slash_tool
-from core.agent_harness.agents.action_agent import ToolCallingDeps, run_agent_turn
+from core.agent_harness.agents.action_agent import ToolCallingDeps, run_action_agent_turn
 from core.agent_harness.session import ReplSession
 from core.tool_framework.registered_tool import RegisteredTool
 from surfaces.interactive_shell.runtime.shell_turn_execution import run_action_tool_turn
@@ -108,7 +108,7 @@ def test_generic_registered_action_tool_result_marks_turn_handled() -> None:
         llm=FakeActionLLM([tool_response("fake_send_message", {"message": "hello"})])
     )
 
-    result = run_agent_turn(
+    result = run_action_agent_turn(
         "send a fake message",
         ReplSession(),
         output=_OutputSink(harness.console),

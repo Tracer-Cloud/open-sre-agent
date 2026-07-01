@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from tools.investigation.stages.gather_evidence.prompt import (
     _relevant_sources,
-    build_system_prompt,
+    build_investigation_system_prompt,
     format_alert_context,
 )
 
 
-def test_build_system_prompt_non_hermes_uses_generic_category_instruction() -> None:
-    prompt = build_system_prompt({"alert_source": "grafana"})
+def test_build_investigation_system_prompt_non_hermes_uses_generic_category_instruction() -> None:
+    prompt = build_investigation_system_prompt({"alert_source": "grafana"})
 
     assert "Root cause category taxonomy" in prompt
     assert "connection_exhaustion" in prompt
@@ -17,16 +17,16 @@ def test_build_system_prompt_non_hermes_uses_generic_category_instruction() -> N
     assert "agent_hang" not in prompt
 
 
-def test_build_system_prompt_includes_dependency_traversal_rule() -> None:
-    prompt = build_system_prompt({"alert_source": "grafana"})
+def test_build_investigation_system_prompt_includes_dependency_traversal_rule() -> None:
+    prompt = build_investigation_system_prompt({"alert_source": "grafana"})
 
     assert "Dependency traversal (connection failures only)" in prompt
     assert "connection refused" in prompt
     assert "does not bias localization" in prompt
 
 
-def test_build_system_prompt_hermes_includes_hermes_taxonomy_only() -> None:
-    prompt = build_system_prompt({"alert_source": "hermes"})
+def test_build_investigation_system_prompt_hermes_includes_hermes_taxonomy_only() -> None:
+    prompt = build_investigation_system_prompt({"alert_source": "hermes"})
 
     assert "Hermes root cause category taxonomy" in prompt
     assert "agent_hang" in prompt

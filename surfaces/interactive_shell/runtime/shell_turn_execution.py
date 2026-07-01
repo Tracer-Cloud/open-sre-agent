@@ -12,7 +12,7 @@ from typing import Any
 
 from rich.console import Console
 
-from core.agent_harness.agents.action_agent import ToolCallingDeps, run_agent_turn
+from core.agent_harness.agents.action_agent import ToolCallingDeps, run_action_agent_turn
 from core.agent_harness.agents.turn_orchestrator import (
     answer_cli_agent as run_core_answer_cli_agent,
 )
@@ -116,7 +116,7 @@ def run_action_tool_turn(
         if deps is not None and deps.llm_factory is not None
         else ToolCallingDeps(llm_factory=_default_llm_factory)
     )
-    return run_agent_turn(
+    return run_action_agent_turn(
         message,
         session,
         output=resolved_output,
