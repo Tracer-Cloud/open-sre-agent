@@ -46,8 +46,10 @@ htmlcov/
 # ---- Repo-level dirs not needed in the bench image --------------------- #
 infra/*
 !infra/__init__.py
-!infra/deployment/
-!infra/deployment/**
+!infra/aws/
+!infra/aws/**
+!infra/deploy/
+!infra/deploy/**
 docs/
 .github/
 .claude/

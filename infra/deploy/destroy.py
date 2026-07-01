@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Destroy EC2 deployment test resources."""
+"""Destroy an OpenSRE EC2 deployment and clean up resources."""
 
 from __future__ import annotations
 
@@ -7,44 +7,37 @@ import time
 
 from botocore.exceptions import ClientError
 
-from tests.deployment.ec2.infrastructure_sdk.instance import (
-    delete_instance_profile,
-    terminate_instance,
-)
-from tests.shared.infrastructure_sdk.config import delete_outputs, load_outputs
-from tests.shared.infrastructure_sdk.deployer import DEFAULT_REGION
-from tests.shared.infrastructure_sdk.resources.vpc import delete_security_group
+from infra.aws.client import DEFAULT_REGION
+from infra.aws.ec2 import delete_instance_profile, terminate_instance
+from infra.aws.vpc import delete_security_group
+from infra.deploy.modes import get_profile, resolve_deploy_mode
+from infra.deploy.outputs import delete_outputs, load_outputs
 
-STACK_NAME = "opensre-ec2"
 REGION = DEFAULT_REGION
 
 
 def destroy() -> dict[str, list[str]]:
-    """Terminate the EC2 instance and clean up all resources.
-
-    Returns:
-        Dict with deleted/failed resource lists.
-    """
+    """Terminate the EC2 instance and clean up all associated resources."""
+    profile = get_profile()
     start_time = time.time()
     print("=" * 60)
-    print(f"Destroying {STACK_NAME} infrastructure")
+    print(f"Destroying {profile.stack_name} infrastructure ({profile.mode} mode)")
     print("=" * 60)
     print()
 
     results: dict[str, list[str]] = {"deleted": [], "failed": []}
 
     try:
-        outputs = load_outputs(STACK_NAME)
+        outputs = load_outputs(mode=profile.mode)
     except FileNotFoundError:
         print("No outputs file found — attempting cleanup by known names.")
         outputs = {}
 
     instance_id = outputs.get("InstanceId", "")
     sg_id = outputs.get("SecurityGroupId", "")
-    profile_name = outputs.get("ProfileName", f"{STACK_NAME}-profile")
-    role_name = outputs.get("RoleName", f"{STACK_NAME}-role")
+    profile_name = outputs.get("ProfileName", f"{profile.stack_name}-profile")
+    role_name = outputs.get("RoleName", f"{profile.stack_name}-role")
 
-    # 1. Terminate instance
     if instance_id:
         print(f"Terminating EC2 instance {instance_id}...")
         try:
@@ -56,11 +49,9 @@ def destroy() -> dict[str, list[str]]:
             results["failed"].append(msg)
             print(f"  - Failed: {e}")
 
-    # 2. Delete security group (wait for instance ENIs to detach)
     if sg_id:
         print(f"Deleting security group {sg_id}...")
         try:
-            time.sleep(10)
             delete_security_group(sg_id, REGION)
             results["deleted"].append(f"security-group:{sg_id}")
             print("  - Security group deleted")
@@ -69,7 +60,6 @@ def destroy() -> dict[str, list[str]]:
             results["failed"].append(msg)
             print(f"  - Failed: {e}")
 
-    # 3. Delete IAM instance profile and role
     print(f"Deleting IAM profile {profile_name} and role {role_name}...")
     try:
         delete_instance_profile(profile_name, role_name, REGION)
@@ -81,7 +71,7 @@ def destroy() -> dict[str, list[str]]:
         results["failed"].append(msg)
         print(f"  - Failed: {e}")
 
-    delete_outputs(STACK_NAME)
+    delete_outputs(mode=profile.mode)
 
     elapsed = time.time() - start_time
     print()
@@ -103,4 +93,5 @@ def destroy() -> dict[str, list[str]]:
 
 
 if __name__ == "__main__":
+    resolve_deploy_mode()
     destroy()

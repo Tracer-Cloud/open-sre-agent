@@ -1,4 +1,4 @@
-"""Shared deployment health polling helpers."""
+"""HTTP health polling for EC2 web-mode deployments."""
 
 from __future__ import annotations
 

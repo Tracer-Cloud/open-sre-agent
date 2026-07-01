@@ -6,8 +6,8 @@ Infrastructure code for opensre local development and deployment.
 
 | Path | Purpose |
 | --- | --- |
-| [`deployment/`](deployment/) | Deployment operations and external runtime entrypoints. |
-| [`deploy_gateway/`](deploy_gateway/) | EC2 provisioning for the Telegram Gateway (`make deploy-gateway-ec2`). |
+| [`aws/`](aws/) | Shared AWS SDK primitives (`client`, `config`, VPC/SG, EC2/IAM, ECR, SSM). |
+| [`deploy/`](deploy/) | EC2 provisioning for web or gateway mode (`make deploy MODE=web|gateway`). |
 | `docker-compose.*.yml` | Local development environments (database, RabbitMQ, testing). |
 | `install-proxy/` | Install proxy utility. |
 

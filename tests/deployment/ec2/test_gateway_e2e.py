@@ -1,6 +1,6 @@
 """End-to-end test: deploy the Telegram Gateway on EC2 and verify it is alive.
 
-Requires deployed infrastructure (see conftest.py / infra/deploy_gateway/deploy.py).
+Requires deployed infrastructure (see conftest.py / infra/deploy/deploy.py).
 Run with: pytest tests/deployment/ec2/test_gateway_e2e.py -v -s
 
 Prerequisites (local environment):
@@ -19,10 +19,8 @@ from typing import Any
 import pytest
 import requests
 
-from infra.deploy_gateway.instance import (
-    GATEWAY_CONTAINER_NAME,
-    run_ssm_shell_command,
-)
+from infra.aws.ssm import run_ssm_shell_command
+from infra.deploy.instance import GATEWAY_CONTAINER_NAME
 
 logger = logging.getLogger(__name__)
 

@@ -1,4 +1,4 @@
-"""ECR repository and image build/push for the gateway deployment."""
+"""ECR repository management and Docker image build/push for OpenSRE deployments."""
 
 from __future__ import annotations
 
@@ -9,10 +9,12 @@ from typing import Any
 
 from botocore.exceptions import ClientError
 
-from infra.deploy_gateway.aws_client import (
-    DEFAULT_REGION,
-    get_boto3_client,
-    get_standard_tags,
+from infra.aws.client import DEFAULT_REGION, get_boto3_client, get_standard_tags
+from infra.aws.config import (
+    ECR_DEFAULT_IMAGE_TAG,
+    ECR_DOCKER_PLATFORM,
+    ECR_IMAGE_TAG_MUTABILITY,
+    ECR_SCAN_ON_PUSH,
 )
 
 
@@ -23,8 +25,8 @@ def create_repository(name: str, stack_name: str, region: str = DEFAULT_REGION) 
     try:
         response = ecr_client.create_repository(
             repositoryName=name,
-            imageScanningConfiguration={"scanOnPush": True},
-            imageTagMutability="MUTABLE",
+            imageScanningConfiguration={"scanOnPush": ECR_SCAN_ON_PUSH},
+            imageTagMutability=ECR_IMAGE_TAG_MUTABILITY,
             tags=get_standard_tags(stack_name),
         )
         repo = response["repository"]
@@ -43,7 +45,7 @@ def create_repository(name: str, stack_name: str, region: str = DEFAULT_REGION) 
 
 
 def get_login_password(region: str = DEFAULT_REGION) -> str:
-    """Get ECR login password for docker."""
+    """Get an ECR login password for Docker authentication."""
     ecr_client = get_boto3_client("ecr", region)
     response = ecr_client.get_authorization_token()
     auth_data = response["authorizationData"][0]
@@ -52,7 +54,7 @@ def get_login_password(region: str = DEFAULT_REGION) -> str:
 
 
 def get_registry_url(region: str = DEFAULT_REGION) -> str:
-    """Get ECR registry URL without https:// prefix."""
+    """Get the ECR registry URL (without https:// prefix)."""
     ecr_client = get_boto3_client("ecr", region)
     response = ecr_client.get_authorization_token()
     proxy_endpoint = response["authorizationData"][0]["proxyEndpoint"]
@@ -60,7 +62,7 @@ def get_registry_url(region: str = DEFAULT_REGION) -> str:
 
 
 def docker_login(region: str = DEFAULT_REGION) -> None:
-    """Perform docker login to ECR."""
+    """Authenticate Docker with ECR."""
     password = get_login_password(region)
     registry = get_registry_url(region)
     subprocess.run(
@@ -74,13 +76,13 @@ def docker_login(region: str = DEFAULT_REGION) -> None:
 def build_and_push(
     dockerfile_path: Path,
     repository_uri: str,
-    tag: str = "latest",
-    platform: str = "linux/amd64",
+    tag: str = ECR_DEFAULT_IMAGE_TAG,
+    platform: str = ECR_DOCKER_PLATFORM,
     build_args: dict[str, str] | None = None,
     region: str = DEFAULT_REGION,
     context_dir: Path | None = None,
 ) -> str:
-    """Build and push a Docker image to ECR."""
+    """Build a Docker image and push it to ECR. Returns the full image URI."""
     docker_login(region)
 
     if dockerfile_path.is_file():
@@ -111,7 +113,7 @@ def build_and_push(
 
     cmd.append(str(context_dir))
 
-    subprocess.run(cmd, check=True, capture_output=True)
-    subprocess.run(["docker", "push", full_uri], check=True, capture_output=True)
+    subprocess.run(cmd, check=True)
+    subprocess.run(["docker", "push", full_uri], check=True)
 
     return full_uri

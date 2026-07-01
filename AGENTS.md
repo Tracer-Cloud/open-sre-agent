@@ -26,7 +26,8 @@ Before any push or PR creation follow **[CI.md](CI.md)** — lint, format, typec
 | `tools/`              | Tool registry, per-tool packages for cross-cutting tools that aren't vendor-specific (e.g. `tools/fleet_monitoring/`, `tools/watch_dog/`, `tools/sre_guidance_tool/`), and the interactive-shell action tools. Framework primitives (decorator, base class, utils) live in `core/tool_framework/`. |
 | `platform/`           | Cross-cutting platform services: guardrails, masking, sandbox, analytics, auth, notifications, observability. |
 | `config/`             | Shared constants, prompts, UI theme, and the web app entrypoint (`config/webapp.py`).              |
-| `infra/deployment/`         | Deployment operations, remote-hosted runtime code, and external runtime entrypoints.               |
+| `infra/aws/`                | Shared AWS SDK primitives (boto3 client, VPC/SG, EC2/IAM, ECR, SSM) used by all infra deployments. |
+| `infra/deploy/`               | EC2 provisioning for web or gateway mode (`make deploy MODE=web|gateway`).                     |
 | `tests/`              | Unit, integration, synthetic, deployment, e2e, chaos engineering, and support tests.               |
 | `docs/`               | User-facing documentation, integration guides, and docs-site assets.                               |
 | `.github/`            | CI workflows, issue templates, pull request template, and repository automation.                   |
@@ -49,7 +50,8 @@ Main packages one level deeper:
 - `interactive_shell/` — Interactive terminal (TTY) loop, slash-command surface, chat/help handoff, session runtime, and terminal UI. REPL watchdog slash commands (`/watch`, `/watches`, `/unwatch`): PR demo steps live under **Interactive shell: REPL watchdog demo** in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#interactive-shell-repl-watchdog-demo).
 - `config/constants/` — Shared prompt and other static constants.
 - `core/context/` — Context assembly boundary for building, trimming, ranking, and packaging incident evidence before agent/runtime consumption.
-- `infra/deployment/` — Health polling and local persisted EC2 outputs (`infra/deployment/operations/`).
+- `infra/aws/` — Shared boto3 client factory, deployment constants (`config.py`), VPC/subnet/SG helpers, EC2/IAM provisioning, ECR build/push, and SSM run-command primitives. Import from here in any new infra script instead of duplicating.
+- `infra/deploy/` — EC2 deploy/destroy for `MODE=web` (HTTP health API) or `MODE=gateway` (Telegram). Makefile: `make deploy MODE=web|gateway`.
 - `platform/guardrails/` — Guardrail rules, evaluation engine, audit helpers, and CLI bindings.
 - `integrations/` — Integration config normalization, verification, selectors, clients, integration-local helpers, store, and catalog logic.
 - `integrations/hermes/` — Hermes log tailing, incident classification, correlator, sinks, and investigation bridge.

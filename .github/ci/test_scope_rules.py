@@ -540,7 +540,7 @@ RULES: tuple[PathRule, ...] = (
     PathRule("platform/masking/", ("tests/masking/",)),
     PathRule("platform/packaging/", ("tests/packaging/",)),
     PathRule("platform/sandbox/", ("tests/sandbox/",)),
-    PathRule("infra/deployment/", ("tests/deployment/",)),
+    PathRule("infra/deploy/", ("tests/deployment/", "tests/test_deployment_health.py")),
     PathRule("platform/auth/", ("tests/platform/auth/",)),
     PathRule("config/webapp.py", ("tests/test_webapp.py",)),
     # Repo-wide config

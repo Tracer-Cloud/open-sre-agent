@@ -1,23 +1,25 @@
-"""VPC lookup and security group management for gateway deployment."""
+"""VPC lookup and security group management for OpenSRE deployments."""
 
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
 from botocore.exceptions import ClientError
 
-from infra.deploy_gateway.aws_client import (
-    DEFAULT_REGION,
-    get_boto3_client,
-    get_standard_tags,
+from infra.aws.client import DEFAULT_REGION, get_boto3_client, get_standard_tags
+from infra.aws.config import (
+    DEFAULT_INGRESS_CIDR,
+    SG_DELETE_MAX_ATTEMPTS,
+    SG_DELETE_RETRY_DELAY_SECONDS,
 )
 
 logger = logging.getLogger(__name__)
 
 
 def get_default_vpc(region: str = DEFAULT_REGION) -> dict[str, Any]:
-    """Get default VPC."""
+    """Get the default VPC for the region."""
     ec2_client = get_boto3_client("ec2", region)
     response = ec2_client.describe_vpcs(Filters=[{"Name": "is-default", "Values": ["true"]}])
 
@@ -25,14 +27,11 @@ def get_default_vpc(region: str = DEFAULT_REGION) -> dict[str, Any]:
         raise ValueError(f"No default VPC found in region {region}")
 
     vpc = response["Vpcs"][0]
-    return {
-        "vpc_id": vpc["VpcId"],
-        "cidr": vpc["CidrBlock"],
-    }
+    return {"vpc_id": vpc["VpcId"], "cidr": vpc["CidrBlock"]}
 
 
 def get_public_subnets(vpc_id: str, region: str = DEFAULT_REGION) -> list[str]:
-    """Get public subnet IDs in VPC."""
+    """Get public subnet IDs in the given VPC."""
     ec2_client = get_boto3_client("ec2", region)
     response = ec2_client.describe_subnets(Filters=[{"Name": "vpc-id", "Values": [vpc_id]}])
 
@@ -50,7 +49,7 @@ def get_public_subnets(vpc_id: str, region: str = DEFAULT_REGION) -> list[str]:
 
 
 def _has_internet_gateway_route(subnet_id: str, ec2_client: Any) -> bool:
-    """Check if subnet has route to internet gateway."""
+    """Return True if the subnet has a route to an internet gateway."""
     response = ec2_client.describe_route_tables(
         Filters=[{"Name": "association.subnet-id", "Values": [subnet_id]}]
     )
@@ -76,7 +75,7 @@ def create_security_group(
     stack_name: str | None = None,
     region: str = DEFAULT_REGION,
 ) -> dict[str, Any]:
-    """Create security group."""
+    """Create a security group, returning it if it already exists."""
     ec2_client = get_boto3_client("ec2", region)
 
     try:
@@ -110,12 +109,10 @@ def create_security_group(
         VpcId=vpc_id,
         TagSpecifications=tag_specs if tag_specs else None,
     )
-
     group_id = response["GroupId"]
 
-    if ingress_rules:
-        for rule in ingress_rules:
-            _add_ingress_rule(ec2_client, group_id, rule)
+    for rule in ingress_rules or []:
+        _add_ingress_rule(ec2_client, group_id, rule)
 
     sg_response = ec2_client.describe_security_groups(GroupIds=[group_id])
     owner_id = sg_response["SecurityGroups"][0]["OwnerId"]
@@ -127,9 +124,9 @@ def create_security_group(
 
 
 def _add_ingress_rule(ec2_client: Any, group_id: str, rule: dict[str, Any]) -> None:
-    """Add an ingress rule to security group."""
+    """Add a single ingress rule to a security group."""
     port = rule.get("port")
-    cidr = rule.get("cidr", "0.0.0.0/0")
+    cidr = rule.get("cidr", DEFAULT_INGRESS_CIDR)
     protocol = rule.get("protocol", "tcp")
     from_port = rule.get("from_port", port)
     to_port = rule.get("to_port", port)
@@ -157,12 +154,31 @@ def _add_ingress_rule(ec2_client: Any, group_id: str, rule: dict[str, Any]) -> N
             raise
 
 
-def delete_security_group(group_id: str, region: str = DEFAULT_REGION) -> None:
-    """Delete security group."""
+def delete_security_group(
+    group_id: str,
+    region: str = DEFAULT_REGION,
+    *,
+    max_attempts: int = SG_DELETE_MAX_ATTEMPTS,
+    retry_delay: int = SG_DELETE_RETRY_DELAY_SECONDS,
+) -> None:
+    """Delete a security group, retrying while AWS releases ENI dependencies."""
     ec2_client = get_boto3_client("ec2", region)
-
-    try:
-        ec2_client.delete_security_group(GroupId=group_id)
-    except ClientError as e:
-        if e.response["Error"]["Code"] not in ["InvalidGroup.NotFound"]:
+    for attempt in range(max_attempts):
+        try:
+            ec2_client.delete_security_group(GroupId=group_id)
+            return
+        except ClientError as e:
+            code = e.response["Error"]["Code"]
+            if code == "InvalidGroup.NotFound":
+                return
+            if code == "DependencyViolation" and attempt < max_attempts - 1:
+                logger.info(
+                    "Security group %s still has dependencies, retrying in %ds (%d/%d)",
+                    group_id,
+                    retry_delay,
+                    attempt + 1,
+                    max_attempts,
+                )
+                time.sleep(retry_delay)
+                continue
             raise

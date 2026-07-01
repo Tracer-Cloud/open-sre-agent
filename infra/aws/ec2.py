@@ -1,4 +1,4 @@
-"""EC2 instance provisioning for the Telegram Gateway deployment."""
+"""EC2 instance provisioning for OpenSRE deployments."""
 
 from __future__ import annotations
 
@@ -10,23 +10,28 @@ import time
 
 from botocore.exceptions import ClientError
 
-from infra.deploy_gateway.aws_client import (
-    DEFAULT_REGION,
-    get_boto3_client,
-    get_standard_tags,
+from infra.aws.client import DEFAULT_REGION, get_boto3_client, get_standard_tags
+from infra.aws.config import (
+    AL2023_AMI_SSM_PARAMETER,
+    BEDROCK_POLICY_ARN,
+    EC2_INSTANCE_ROLE_DESCRIPTION,
+    EC2_ROOT_DEVICE_NAME,
+    EC2_VOLUME_SIZE_GB,
+    EC2_VOLUME_TYPE,
+    EC2_WAITER_DELAY_SECONDS,
+    EC2_WAITER_MAX_ATTEMPTS,
+    ECR_READ_POLICY_ARN,
+    IAM_PROFILE_PROPAGATION_SECONDS,
+    INSTANCE_TYPE,
 )
 
 logger = logging.getLogger(__name__)
 
-INSTANCE_TYPE = "t3.medium"
-
 
 def get_latest_al2023_ami(region: str = DEFAULT_REGION) -> str:
-    """Find the latest Amazon Linux 2023 x86_64 AMI."""
+    """Find the latest Amazon Linux 2023 x86_64 AMI via SSM parameter."""
     ssm = get_boto3_client("ssm", region)
-    resp = ssm.get_parameter(
-        Name="/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
-    )
+    resp = ssm.get_parameter(Name=AL2023_AMI_SSM_PARAMETER)
     return str(resp["Parameter"]["Value"])
 
 
@@ -37,7 +42,11 @@ def create_instance_profile(
     region: str = DEFAULT_REGION,
     extra_policy_arns: list[str] | None = None,
 ) -> dict[str, str]:
-    """Create an IAM instance profile and attach the role."""
+    """Create an IAM instance profile with EC2 trust, ECR read, and Bedrock policies.
+
+    Passes ``extra_policy_arns`` for additional managed policies (e.g. SSM access).
+    Returns a dict with ProfileName, ProfileArn, and RoleName.
+    """
     iam = get_boto3_client("iam", region)
     tags = get_standard_tags(stack_name)
 
@@ -56,7 +65,7 @@ def create_instance_profile(
         resp = iam.create_role(
             RoleName=role_name,
             AssumeRolePolicyDocument=json.dumps(ec2_trust_policy),
-            Description="EC2 instance role for Telegram Gateway deployment",
+            Description=EC2_INSTANCE_ROLE_DESCRIPTION,
             Tags=tags,
         )
         role_arn = resp["Role"]["Arn"]
@@ -82,22 +91,16 @@ def create_instance_profile(
             raise
 
     with contextlib.suppress(ClientError):
-        iam.attach_role_policy(
-            RoleName=role_name,
-            PolicyArn="arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
-        )
+        iam.attach_role_policy(RoleName=role_name, PolicyArn=ECR_READ_POLICY_ARN)
 
     with contextlib.suppress(ClientError):
-        iam.attach_role_policy(
-            RoleName=role_name,
-            PolicyArn="arn:aws:iam::aws:policy/AmazonBedrockFullAccess",
-        )
+        iam.attach_role_policy(RoleName=role_name, PolicyArn=BEDROCK_POLICY_ARN)
 
     for arn in extra_policy_arns or []:
         with contextlib.suppress(ClientError):
             iam.attach_role_policy(RoleName=role_name, PolicyArn=arn)
 
-    time.sleep(10)
+    time.sleep(IAM_PROFILE_PROPAGATION_SECONDS)
 
     resp = iam.get_instance_profile(InstanceProfileName=profile_name)
     return {
@@ -112,7 +115,7 @@ def delete_instance_profile(
     role_name: str,
     region: str = DEFAULT_REGION,
 ) -> None:
-    """Delete instance profile and associated role."""
+    """Delete an IAM instance profile and its associated role."""
     iam = get_boto3_client("iam", region)
 
     try:
@@ -160,7 +163,7 @@ def launch_instance(
     instance_type: str = INSTANCE_TYPE,
     region: str = DEFAULT_REGION,
 ) -> dict[str, str]:
-    """Launch an EC2 instance."""
+    """Launch an EC2 instance and return its InstanceId."""
     ec2 = get_boto3_client("ec2", region)
     tags = get_standard_tags(stack_name)
     tags.append({"Key": "Name", "Value": f"{stack_name}-instance"})
@@ -177,8 +180,8 @@ def launch_instance(
         "TagSpecifications": [{"ResourceType": "instance", "Tags": tags}],
         "BlockDeviceMappings": [
             {
-                "DeviceName": "/dev/xvda",
-                "Ebs": {"VolumeSize": 30, "VolumeType": "gp3"},
+                "DeviceName": EC2_ROOT_DEVICE_NAME,
+                "Ebs": {"VolumeSize": EC2_VOLUME_SIZE_GB, "VolumeType": EC2_VOLUME_TYPE},
             }
         ],
     }
@@ -193,10 +196,13 @@ def launch_instance(
 
 
 def wait_for_running(instance_id: str, region: str = DEFAULT_REGION) -> dict[str, str]:
-    """Wait for an EC2 instance to enter the running state."""
+    """Wait for an EC2 instance to reach the running state and return its public IP."""
     ec2 = get_boto3_client("ec2", region)
     waiter = ec2.get_waiter("instance_running")
-    waiter.wait(InstanceIds=[instance_id], WaiterConfig={"Delay": 10, "MaxAttempts": 30})
+    waiter.wait(
+        InstanceIds=[instance_id],
+        WaiterConfig={"Delay": EC2_WAITER_DELAY_SECONDS, "MaxAttempts": EC2_WAITER_MAX_ATTEMPTS},
+    )
 
     resp = ec2.describe_instances(InstanceIds=[instance_id])
     instance = resp["Reservations"][0]["Instances"][0]
@@ -209,11 +215,16 @@ def wait_for_running(instance_id: str, region: str = DEFAULT_REGION) -> dict[str
 def terminate_instance(instance_id: str, region: str = DEFAULT_REGION) -> None:
     """Terminate an EC2 instance and wait for termination."""
     ec2 = get_boto3_client("ec2", region)
-
     try:
         ec2.terminate_instances(InstanceIds=[instance_id])
         waiter = ec2.get_waiter("instance_terminated")
-        waiter.wait(InstanceIds=[instance_id], WaiterConfig={"Delay": 10, "MaxAttempts": 30})
+        waiter.wait(
+            InstanceIds=[instance_id],
+            WaiterConfig={
+                "Delay": EC2_WAITER_DELAY_SECONDS,
+                "MaxAttempts": EC2_WAITER_MAX_ATTEMPTS,
+            },
+        )
         logger.info("Instance %s terminated", instance_id)
     except ClientError as e:
         if "InvalidInstanceID.NotFound" not in str(e):
