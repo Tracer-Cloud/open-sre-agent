@@ -258,6 +258,7 @@ class _FakeLLM:
     def __init__(self, responses: Iterator[AgentLLMResponse]) -> None:
         self._responses = responses
         self.seen_messages: list[list[dict[str, Any]]] = []
+        self.model_id: str | None = None
 
     def tool_schemas(self, tools: list[Any]) -> list[dict[str, Any]]:
         return [{"name": tool.name} for tool in tools]

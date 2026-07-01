@@ -17,6 +17,7 @@ class FakeActionLLM:
     responses: list[AgentLLMResponse]
     invocations: int = 0
     tool_schema_names: list[str] = field(default_factory=list)
+    model_id: str | None = None
 
     def tool_schemas(self, tools: list[Any]) -> list[dict[str, Any]]:
         self.tool_schema_names = [str(tool.name) for tool in tools]

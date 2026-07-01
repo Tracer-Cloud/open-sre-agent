@@ -7,7 +7,7 @@ from typing import Any
 
 from rich.console import Console
 
-from core.agent_harness.action_agent import ToolCallingDeps, run_agent_turn
+from core.agent_harness.action_agent import ToolCallingDeps, run_action_agent_turn
 from core.agent_harness.ports import OutputSink
 from core.agent_harness.session import ReplSession
 from core.agent_harness.turn_context import TurnContext
@@ -100,7 +100,7 @@ def run_action_tool_turn(
         if deps is not None and deps.llm_factory is not None
         else ToolCallingDeps(llm_factory=_default_llm_factory)
     )
-    return run_agent_turn(
+    return run_action_agent_turn(
         message,
         session,
         output=resolved_output,

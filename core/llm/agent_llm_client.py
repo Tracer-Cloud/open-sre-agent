@@ -19,6 +19,7 @@ from core.llm.sdk.agent_clients import (
 )
 from core.llm.tool_schema_normalize import build_openai_tool_specs
 from core.llm.transport_mode import current_llm_transport, use_litellm_transport
+from core.llm.types import AgentLLMClient
 
 __all__ = [
     "AnthropicAgentClient",
@@ -32,13 +33,10 @@ __all__ = [
     "reset_agent_client",
 ]
 
-_AgentClientType = (
-    AnthropicAgentClient
-    | OpenAIAgentClient
-    | CLIBackedAgentClient
-    | BedrockConverseAgentClient
-    | Any
-)
+# The tool-calling clients (Anthropic / OpenAI / Bedrock-Converse / CLI-backed /
+# LiteLLM) all satisfy this structural contract; callers only use the shared
+# ``tool_schemas`` / ``invoke`` surface, never provider-specific attributes.
+_AgentClientType = AgentLLMClient
 
 
 class _AgentClientState:

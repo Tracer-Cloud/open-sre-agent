@@ -75,7 +75,7 @@ _ALERT_SOURCE_TO_TOOL_SOURCES = {
 _SECONDARY_SOURCES = SECONDARY_TOOL_SOURCES
 
 
-def build_system_prompt(state: dict[str, Any]) -> str:
+def build_investigation_system_prompt(state: dict[str, Any]) -> str:
     alert_source = resolve_alert_source(state)
     root_cause_category_instruction = root_cause_category_instruction_for_source(alert_source)
 

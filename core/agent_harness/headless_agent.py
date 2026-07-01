@@ -24,7 +24,7 @@ Example::
 
 from __future__ import annotations
 
-from core.agent_harness.action_agent import run_agent_turn as run_action_agent_turn
+from core.agent_harness.action_agent import run_action_agent_turn
 from core.agent_harness.evidence_agent import gather_tool_evidence
 from core.agent_harness.headless import (
     BufferOutputSink,

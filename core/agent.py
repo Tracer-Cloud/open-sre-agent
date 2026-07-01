@@ -37,7 +37,7 @@ from core.execution import (
     execute_tool_calls,
     public_tool_input,
 )
-from core.llm.types import ToolCall
+from core.llm.types import AgentLLMClient, ToolCall
 from core.messages import (
     RuntimeMessage,
     RuntimeMessageLike,
@@ -77,10 +77,6 @@ class AgentRunResult:
     hit_iteration_cap: bool = False
 
 
-# Backward-compat alias — callers that still reference ToolLoopResult compile unchanged.
-ToolLoopResult = AgentRunResult
-
-
 class Agent[RuntimeToolT: RuntimeTool]:
     """Stateful, configurable ReAct agent.
 
@@ -92,11 +88,11 @@ class Agent[RuntimeToolT: RuntimeTool]:
     def __init__(
         self,
         *,
-        llm: Any,
-        system: str,
-        tools: Sequence[RuntimeToolT],
-        resolved_integrations: dict[str, Any],
-        max_iterations: int,
+        llm: AgentLLMClient | None = None,
+        system: str | None = None,
+        tools: Sequence[RuntimeToolT] | None = None,
+        resolved_integrations: dict[str, Any] | None = None,
+        max_iterations: int | None = None,
         on_event: LoopEventCallback | None = None,
         on_runtime_event: RuntimeEventCallback | None = None,
         tool_hooks: ToolExecutionHooks | None = None,
@@ -105,7 +101,7 @@ class Agent[RuntimeToolT: RuntimeTool]:
     ) -> None:
         self._llm = llm
         self._system = system
-        self._tools = list(tools)
+        self._tools: list[RuntimeToolT] | None = list(tools) if tools is not None else None
         self._resolved = resolved_integrations
         self._max_iterations = max_iterations
         self._on_legacy_event = on_event
@@ -115,6 +111,83 @@ class Agent[RuntimeToolT: RuntimeTool]:
         self._provider_hooks = provider_hooks or ProviderHooks()
         self._steering_messages: deque[str] = deque()
         self._follow_up_messages: deque[str] = deque()
+
+    # ─── Per-surface initialization hooks ────────────────────────────────
+    # Subclasses override these instead of passing all five args to __init__.
+    # Callers that pass args explicitly get backward-compat: the default hook
+    # implementations return whatever was stored. Hooks are resolved lazily at
+    # ``run()`` start via ``_resolve_run_config``.
+
+    def build_llm(self) -> AgentLLMClient:
+        """Return the LLM client for this run. Override in subclasses."""
+        if self._llm is None:
+            raise NotImplementedError(
+                f"{type(self).__name__} must pass llm= to __init__ or override build_llm()"
+            )
+        return self._llm
+
+    def build_system_prompt(self) -> str:
+        """Return the system prompt for this run. Override in subclasses."""
+        if self._system is None:
+            raise NotImplementedError(
+                f"{type(self).__name__} must pass system= to __init__ "
+                "or override build_system_prompt()"
+            )
+        return self._system
+
+    def build_tools(self) -> list[RuntimeToolT]:
+        """Return the runtime tools list for this run. Override in subclasses."""
+        return list(self._tools) if self._tools is not None else []
+
+    def resolved_integrations(self) -> dict[str, Any]:
+        """Return the resolved-integrations dict for this run. Override in subclasses.
+
+        Named as a getter (not ``build_*``) to leave ``resolve_integrations()``
+        free for #3358 to add the shared cache/import/merge helper.
+        """
+        return dict(self._resolved) if self._resolved is not None else {}
+
+    def max_iterations(self) -> int:
+        """Return the tool-loop iteration cap for this run. Override in subclasses."""
+        if self._max_iterations is None:
+            raise NotImplementedError(
+                f"{type(self).__name__} must pass max_iterations= to __init__ "
+                "or override max_iterations()"
+            )
+        return self._max_iterations
+
+    def _resolve_run_config(
+        self,
+    ) -> tuple[AgentLLMClient, str, list[RuntimeToolT], dict[str, Any], int]:
+        """Populate stored config from hooks if not already set, and return it.
+
+        Called once at ``run()`` start when the caller passed ``initial_messages``
+        (i.e., not an ``AgentRuntimeRequest``). If the caller passed llm/system/
+        tools/etc. to ``__init__`` (the pre-hook pattern), fields are already set
+        and hooks are not called — full backward compat. If a subclass skipped
+        those args and overrode the hooks, this resolves them once so per-turn
+        methods that read ``self._llm`` etc. see the resolved value.
+
+        The tuple return lets ``run()`` bind non-None locals without repeated
+        narrowing assertions.
+        """
+        if self._llm is None:
+            self._llm = self.build_llm()
+        if self._system is None:
+            self._system = self.build_system_prompt()
+        if self._tools is None:
+            self._tools = list(self.build_tools())
+        if self._resolved is None:
+            self._resolved = self.resolved_integrations()
+        if self._max_iterations is None:
+            self._max_iterations = self.max_iterations()
+        return (
+            self._llm,
+            self._system,
+            self._tools,
+            self._resolved,
+            self._max_iterations,
+        )
 
     def steer(self, message: str) -> None:
         """Inject a user message into the active run before the next LLM turn."""
@@ -136,28 +209,39 @@ class Agent[RuntimeToolT: RuntimeTool]:
         if agent_context is not None:
             agent_context.validate_runtime_request()
             messages = agent_context.runtime_messages()
-            render_system_prompt = getattr(agent_context, "render_system_prompt", None)
-            if callable(render_system_prompt):
-                system = render_system_prompt()
-            else:
-                system = str(agent_context.system_prompt)
+            system = agent_context.render_system_prompt()
             tools = list(agent_context.active_tools)
             resolved = agent_context.resolved_integrations
-            tool_resources = dict(getattr(agent_context, "tool_resources", {}) or {})
+            tool_resources = dict(agent_context.tool_resources or {})
             max_iterations = agent_context.max_iterations
+            # The context supplies system/tools/resolved but not the LLM client;
+            # resolve it from ``__init__`` or the ``build_llm`` hook so hook-pattern
+            # subclasses work through this path too (matching the initial_messages
+            # branch, which resolves everything via ``_resolve_run_config``).
+            if self._llm is None:
+                self._llm = self.build_llm()
         elif initial_messages is not None:
+            llm, system, tools_seq, resolved, max_iterations = self._resolve_run_config()
             messages = ensure_runtime_messages(initial_messages)
-            system = self._system
-            tools = list(self._tools)
-            resolved = self._resolved
+            tools = list(tools_seq)
             tool_resources = dict(self._tool_resources)
-            max_iterations = self._max_iterations
         else:
             raise ValueError("Agent.run requires initial_messages or agent_context.")
 
+        # Both branches leave ``self._llm`` non-None (or ``build_llm`` raised an
+        # actionable NotImplementedError above). This guard narrows it for mypy
+        # and defends against a subclass ``build_llm`` that returns None.
+        if self._llm is None:
+            raise ValueError(
+                "Agent.run: no LLM client. Pass llm= to __init__ or override build_llm()."
+            )
+
         runtime_tools = list(self._filter_tools(tools))
         tool_schemas = self._llm.tool_schemas(runtime_tools)
-        ceiling = context_budget_ceiling_for_model(getattr(self._llm, "_model", None))
+        # ``model_id`` is not part of the narrow AgentLLMClient contract; the
+        # canned _StaticToolCallLLM (bang/slash paths) and test fakes omit it.
+        # Fall back to None -> conservative ceiling, which never risks overflow.
+        ceiling = context_budget_ceiling_for_model(getattr(self._llm, "model_id", None))
         executed: list[tuple[ToolCall, Any]] = []
         tool_results: list[tuple[ToolCall, ToolExecutionResult]] = []
         final_text = ""
@@ -222,108 +306,30 @@ class Agent[RuntimeToolT: RuntimeTool]:
             messages.append(assistant_message)
 
             if not response.has_tool_calls:
-                accept, nudge = self._should_accept_conclusion(
-                    evidence_count=len(executed), iteration=iteration
+                should_break, conclusion_text = self._handle_conclusion(
+                    response,
+                    assistant_message,
+                    messages,
+                    executed_count=len(executed),
+                    iteration=iteration,
                 )
-                if accept:
-                    follow_up = self._pop_follow_up_message()
-                    if follow_up is not None:
-                        messages.append(user_runtime_message(follow_up, queued_kind="follow_up"))
-                        self._emit_runtime(
-                            TurnEndEvent(
-                                iteration=iteration,
-                                message=assistant_message,
-                                data={"accepted": False, "queued_follow_up": True},
-                            )
-                        )
-                        continue
-                    final_text = response.content or ""
+                if should_break:
+                    final_text = conclusion_text
                     hit_cap = False
-                    self._emit_runtime(
-                        TurnEndEvent(
-                            iteration=iteration,
-                            message=assistant_message,
-                            data={"accepted": True},
-                        )
-                    )
                     break
-                if nudge is None:
-                    raise ValueError(
-                        f"{type(self).__name__}._should_accept_conclusion returned "
-                        "(False, None) — a nudge string is required when rejecting "
-                        "the conclusion, otherwise the LLM will loop on an unchanged "
-                        "message history until max_iterations."
-                    )
-                messages.append(user_runtime_message(nudge))
-                self._emit_runtime(
-                    TurnEndEvent(
-                        iteration=iteration,
-                        message=assistant_message,
-                        data={"accepted": False, "nudge": True},
-                    )
-                )
                 continue
 
-            for tc in response.tool_calls:
-                self._emit_runtime(
-                    ToolExecutionStartEvent(
-                        tool_call_id=tc.id,
-                        tool_name=tc.name,
-                        args=public_tool_input(tc.input),
-                        iteration=iteration,
-                    )
-                )
-
-            def on_tool_update(
-                request: ToolExecutionRequest,
-                update: Any,
-                *,
-                event_iteration: int = iteration,
-            ) -> None:
-                self._emit_tool_update(request, update, event_iteration=event_iteration)
-
-            hooks = ToolExecutionHooks(
-                before_tool_call=self._tool_hooks.before_tool_call,
-                after_tool_call=self._tool_hooks.after_tool_call,
-                on_tool_update=on_tool_update,
-            )
-            results = execute_tool_calls(
-                response.tool_calls,
-                runtime_tools,
-                resolved,
-                hooks=hooks,
+            if self._execute_tool_calls_and_record(
+                response,
+                runtime_tools=runtime_tools,
+                resolved=resolved,
                 tool_resources=tool_resources,
-            )
-            provider_results = [result.provider_content() for result in results]
-            tool_result_message = runtime_tool_result_message(
-                self._llm, response.tool_calls, provider_results
-            )
-            messages.append(tool_result_message)
-
-            for tc, result in zip(response.tool_calls, results):
-                compat_payload = result.compat_payload()
-                executed.append((tc, compat_payload))
-                tool_results.append((tc, result))
-                self._emit_runtime(
-                    ToolExecutionEndEvent(
-                        tool_call_id=tc.id,
-                        tool_name=tc.name,
-                        args=public_tool_input(tc.input),
-                        result=redact_sensitive(compat_payload),
-                        is_error=result.is_error,
-                        iteration=iteration,
-                        data={"terminate": result.terminate},
-                    )
-                )
-            self._emit_runtime(
-                TurnEndEvent(
-                    iteration=iteration,
-                    message=assistant_message,
-                    tool_results=tuple(result.compat_payload() for result in results),
-                    data={"accepted": False},
-                )
-            )
-            if any(result.terminate for result in results):
+                messages=messages,
+                executed=executed,
+                tool_results=tool_results,
+                assistant_message=assistant_message,
+                iteration=iteration,
+            ):
                 terminated_by_tool = True
                 hit_cap = False
                 break
@@ -349,6 +355,140 @@ class Agent[RuntimeToolT: RuntimeTool]:
             )
         )
         return run_result
+
+    def _handle_conclusion(
+        self,
+        response: Any,
+        assistant_message: RuntimeMessage,
+        messages: list[RuntimeMessage],
+        *,
+        executed_count: int,
+        iteration: int,
+    ) -> tuple[bool, str]:
+        """Handle a no-tool-call assistant turn.
+
+        Returns ``(should_break, final_text)``: ``(True, text)`` accepts the
+        conclusion and ends the loop; ``(False, "")`` means the loop should
+        ``continue`` (a follow-up or nudge was appended to ``messages``). Raises
+        when a subclass rejects the conclusion without supplying a nudge.
+        """
+        accept, nudge = self._should_accept_conclusion(
+            evidence_count=executed_count, iteration=iteration
+        )
+        if accept:
+            follow_up = self._pop_follow_up_message()
+            if follow_up is not None:
+                messages.append(user_runtime_message(follow_up, queued_kind="follow_up"))
+                self._emit_runtime(
+                    TurnEndEvent(
+                        iteration=iteration,
+                        message=assistant_message,
+                        data={"accepted": False, "queued_follow_up": True},
+                    )
+                )
+                return False, ""
+            self._emit_runtime(
+                TurnEndEvent(
+                    iteration=iteration,
+                    message=assistant_message,
+                    data={"accepted": True},
+                )
+            )
+            return True, response.content or ""
+        if nudge is None:
+            raise ValueError(
+                f"{type(self).__name__}._should_accept_conclusion returned "
+                "(False, None) — a nudge string is required when rejecting "
+                "the conclusion, otherwise the LLM will loop on an unchanged "
+                "message history until max_iterations."
+            )
+        messages.append(user_runtime_message(nudge))
+        self._emit_runtime(
+            TurnEndEvent(
+                iteration=iteration,
+                message=assistant_message,
+                data={"accepted": False, "nudge": True},
+            )
+        )
+        return False, ""
+
+    def _execute_tool_calls_and_record(
+        self,
+        response: Any,
+        *,
+        runtime_tools: list[RuntimeToolT],
+        resolved: dict[str, Any],
+        tool_resources: dict[str, Any],
+        messages: list[RuntimeMessage],
+        executed: list[tuple[ToolCall, Any]],
+        tool_results: list[tuple[ToolCall, ToolExecutionResult]],
+        assistant_message: RuntimeMessage,
+        iteration: int,
+    ) -> bool:
+        """Execute this turn's tool calls, append their results to the transcript
+        and the ``executed``/``tool_results`` accumulators, emit lifecycle events,
+        and return whether any tool requested termination.
+        """
+        for tc in response.tool_calls:
+            self._emit_runtime(
+                ToolExecutionStartEvent(
+                    tool_call_id=tc.id,
+                    tool_name=tc.name,
+                    args=public_tool_input(tc.input),
+                    iteration=iteration,
+                )
+            )
+
+        def on_tool_update(
+            request: ToolExecutionRequest,
+            update: Any,
+            *,
+            event_iteration: int = iteration,
+        ) -> None:
+            self._emit_tool_update(request, update, event_iteration=event_iteration)
+
+        hooks = ToolExecutionHooks(
+            before_tool_call=self._tool_hooks.before_tool_call,
+            after_tool_call=self._tool_hooks.after_tool_call,
+            on_tool_update=on_tool_update,
+        )
+        results = execute_tool_calls(
+            response.tool_calls,
+            runtime_tools,
+            resolved,
+            hooks=hooks,
+            tool_resources=tool_resources,
+        )
+        provider_results = [result.provider_content() for result in results]
+        tool_result_message = runtime_tool_result_message(
+            self._llm, response.tool_calls, provider_results
+        )
+        messages.append(tool_result_message)
+
+        for tc, result in zip(response.tool_calls, results):
+            compat_payload = result.compat_payload()
+            executed.append((tc, compat_payload))
+            tool_results.append((tc, result))
+            self._emit_runtime(
+                ToolExecutionEndEvent(
+                    tool_call_id=tc.id,
+                    tool_name=tc.name,
+                    args=public_tool_input(tc.input),
+                    result=redact_sensitive(compat_payload),
+                    is_error=result.is_error,
+                    iteration=iteration,
+                    data={"terminate": result.terminate},
+                )
+            )
+        self._emit_runtime(
+            TurnEndEvent(
+                iteration=iteration,
+                message=assistant_message,
+                tool_results=tuple(result.compat_payload() for result in results),
+                data={"accepted": False},
+            )
+        )
+        return any(result.terminate for result in results)
 
     def _should_accept_conclusion(
         self,

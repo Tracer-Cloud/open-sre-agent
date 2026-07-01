@@ -18,6 +18,7 @@ class _NoToolLLM:
     def __init__(self) -> None:
         self.seen_system: str | None = None
         self.seen_messages: list[dict[str, object]] | None = None
+        self.model_id: str | None = None
 
     def tool_schemas(self, _tools: list[AgentTool]) -> list[dict[str, object]]:
         return []
@@ -93,6 +94,39 @@ def test_turn_context_can_drive_agent_runtime_request() -> None:
     assert result.messages[0].content == "investigate"
     assert llm.seen_system == "runtime system"
     assert llm.seen_messages == [{"role": "user", "content": "investigate"}]
+
+
+def test_agent_context_resolves_llm_via_build_llm_hook() -> None:
+    """A hook-pattern subclass (no llm= to __init__) works through agent_context.
+
+    Regression guard: the agent_context branch used to skip LLM resolution and
+    require llm= at construction, so a subclass that only overrode build_llm hit
+    the no-LLM guard. It must now resolve the client from the hook, matching the
+    initial_messages path.
+    """
+    tool = _tool()
+    built = _NoToolLLM()
+    calls: list[int] = []
+
+    class _HookAgent(Agent[Any]):
+        def build_llm(self) -> Any:
+            calls.append(1)
+            return built
+
+    ctx = _turn_context(
+        system_prompt=PromptEnvelope.from_text("runtime system"),
+        available_tools=(tool,),
+        active_tools=(tool,),
+        resolved_integrations={"github": {"configured": True}},
+        max_iterations=2,
+    )
+
+    # No llm= passed to __init__ — the hook must supply it.
+    result = _HookAgent(max_iterations=1).run(agent_context=ctx)
+
+    assert calls == [1]
+    assert result.final_text == "done"
+    assert built.seen_system == "runtime system"
 
 
 def test_turn_context_runtime_validation_requires_runtime_fields() -> None:

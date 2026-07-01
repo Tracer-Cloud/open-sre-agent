@@ -43,6 +43,7 @@ class FakeLLM:
         self.invocations = 0
         self.schema_tool_names: list[list[str]] = []
         self.seen_messages: list[list[dict[str, Any]]] = []
+        self.model_id: str | None = None
 
     def tool_schemas(self, tools: list[Any]) -> list[dict[str, Any]]:
         self.schema_tool_names.append([t.name for t in tools])

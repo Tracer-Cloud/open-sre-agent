@@ -60,6 +60,10 @@ class LiteLLMAgentClient:
         self._credential_resolver = credential_resolver
         self._completion_func = completion_func
 
+    @property
+    def model_id(self) -> str | None:
+        return self._litellm_model
+
     def tool_schemas(self, tools: list[Any]) -> list[dict[str, Any]]:
         return build_openai_tool_specs(tools)
 

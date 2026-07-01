@@ -71,6 +71,9 @@ class AgentRuntimeRequest(Protocol):
     tool_resources: dict[str, Any]
     max_iterations: int
 
+    def render_system_prompt(self) -> str:
+        raise NotImplementedError
+
     def runtime_messages(self) -> list[RuntimeMessage]:
         raise NotImplementedError
 
