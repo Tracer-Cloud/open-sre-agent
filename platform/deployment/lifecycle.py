@@ -35,8 +35,7 @@ from platform.deployment.aws.vpc import (
     get_public_subnets,
 )
 from platform.deployment.instance import (
-    generate_user_data,
-    start_deployment_containers,
+    provision_instance_via_ssm,
     wait_for_deployment_ready,
 )
 from platform.deployment.prep import validate_deploy_env
@@ -53,25 +52,19 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DOCKERFILE = REPO_ROOT / "Dockerfile"
 _ABORT_IF_EXISTS_ENV = "OPENSRE_DEPLOY_ABORT_IF_EXISTS"
 
-_LLM_ENV_KEYS = (
+_CONTAINER_ENV_KEYS = (
+    "TELEGRAM_BOT_TOKEN",
+    "TELEGRAM_ALLOWED_USERS",
     "LLM_PROVIDER",
     "OPENAI_API_KEY",
     "ANTHROPIC_API_KEY",
     "ANTHROPIC_MODEL",
 )
 
-_GATEWAY_ENV_KEYS = (
-    "TELEGRAM_BOT_TOKEN",
-    "TELEGRAM_ALLOWED_USERS",
-    *_LLM_ENV_KEYS,
-)
 
-_WEB_ENV_KEYS = _LLM_ENV_KEYS
-
-
-def _collect_env_vars(keys: tuple[str, ...]) -> dict[str, str]:
+def _collect_deploy_env_vars() -> dict[str, str]:
     env_vars: dict[str, str] = {}
-    for key in keys:
+    for key in _CONTAINER_ENV_KEYS:
         val = os.getenv(key)
         if val:
             env_vars[key] = val
@@ -183,18 +176,12 @@ def deploy() -> dict[str, str]:
     ami_id = get_latest_al2023_ami(REGION)
     print(f"  - AMI: {ami_id}")
 
-    user_data = generate_user_data(
-        image_uri=image_uri,
-        log_path=stack.log_path,
-    )
-
     print("Launching EC2 instance...")
     instance = launch_instance(
         ami_id=ami_id,
         subnet_id=subnet_id,
         security_group_id=sg["group_id"],
         instance_profile_arn=profile_info["ProfileArn"],
-        user_data=user_data,
         stack_name=stack.stack_name,
         instance_type=INSTANCE_TYPE,
         region=REGION,
@@ -210,18 +197,14 @@ def deploy() -> dict[str, str]:
     wait_for_ssm_registration(instance["InstanceId"], REGION)
     print("  - SSM: Online")
 
-    web_env_vars = _collect_env_vars(_WEB_ENV_KEYS)
-    gateway_env_vars = _collect_env_vars(_GATEWAY_ENV_KEYS)
-
-    print("Starting web and gateway containers via SSM...")
-    start_deployment_containers(
+    print("Provisioning instance via SSM (Docker install, image pull, containers)...")
+    provision_instance_via_ssm(
         instance["InstanceId"],
         image_uri=image_uri,
-        web_env_vars=web_env_vars,
-        gateway_env_vars=gateway_env_vars,
+        container_env_vars=_collect_deploy_env_vars(),
         region=REGION,
     )
-    print("  - Containers: started")
+    print("  - Provision: OK")
 
     print("Waiting for web and gateway containers (may take several minutes)...")
     wait_for_deployment_ready(

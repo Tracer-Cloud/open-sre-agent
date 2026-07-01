@@ -31,7 +31,7 @@ BEDROCK_POLICY_ARN = "arn:aws:iam::aws:policy/AmazonBedrockFullAccess"
 SSM_MANAGED_POLICY_ARN = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 
 # ─── IAM propagation ──────────────────────────────────────────────────────────
-IAM_PROFILE_PROPAGATION_SECONDS = 10
+IAM_PROFILE_PROPAGATION_SECONDS = 0
 
 # ─── Security groups ──────────────────────────────────────────────────────────
 SG_DELETE_MAX_ATTEMPTS = 12
@@ -43,6 +43,8 @@ SSM_REGISTRATION_POLL_INTERVAL_SECONDS = 10
 SSM_REGISTRATION_MAX_ATTEMPTS = 30
 SSM_CMD_POLL_INTERVAL_SECONDS = 5
 SSM_CMD_POLL_ATTEMPTS = 24
+SSM_PROVISION_CMD_POLL_INTERVAL_SECONDS = 10
+SSM_PROVISION_CMD_POLL_ATTEMPTS = 60
 SSM_SHELL_DOCUMENT = "AWS-RunShellScript"
 SSM_TERMINAL_STATUSES = ("Success", "Failed", "Cancelled", "TimedOut", "Undeliverable")
 
@@ -52,10 +54,10 @@ ECR_DOCKER_PLATFORM = "linux/amd64"
 ECR_SCAN_ON_PUSH = True
 ECR_IMAGE_TAG_MUTABILITY = "MUTABLE"
 
-# ─── EC2 user-data bootstrap ─────────────────────────────────────────────────
-USER_DATA_IAM_PROPAGATION_SECONDS = 15
-USER_DATA_ECR_AUTH_MAX_ATTEMPTS = 5
-USER_DATA_ECR_AUTH_RETRY_SECONDS = 10
+# ─── EC2 instance provisioning (via SSM) ──────────────────────────────────────
+PROVISION_ECR_AUTH_MAX_ATTEMPTS = 5
+PROVISION_ECR_AUTH_RETRY_SECONDS = 10
+DOCKER_BIN = "/usr/bin/docker"
 
 # ─── Gateway health checks (via SSM) ──────────────────────────────────────────
 GATEWAY_HEALTH_POLL_INTERVAL_SECONDS = 15

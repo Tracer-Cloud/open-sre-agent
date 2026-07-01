@@ -35,9 +35,6 @@ def test_deploy_returns_all_required_keys(
     def fake_build_and_push(*_args: object, **_kwargs: object) -> str:
         return "123456789012.dkr.ecr.us-east-1.amazonaws.com/opensre:latest"
 
-    def fake_generate_user_data(*_args: object, **_kwargs: object) -> str:
-        return "#!/bin/bash"
-
     def fake_launch_instance(*_args: object, **_kwargs: object) -> dict[str, str]:
         return {"InstanceId": "i-123"}
 
@@ -61,11 +58,10 @@ def test_deploy_returns_all_required_keys(
     monkeypatch.setattr(deploy_module, "create_security_group", fake_create_security_group)
     monkeypatch.setattr(deploy_module, "create_instance_profile", fake_create_instance_profile)
     monkeypatch.setattr(deploy_module, "get_latest_al2023_ami", fake_get_latest_ami)
-    monkeypatch.setattr(deploy_module, "generate_user_data", fake_generate_user_data)
     monkeypatch.setattr(deploy_module, "launch_instance", fake_launch_instance)
     monkeypatch.setattr(deploy_module, "wait_for_running", fake_wait_for_running)
     monkeypatch.setattr(deploy_module, "wait_for_ssm_registration", lambda *_a, **_kw: None)
-    monkeypatch.setattr(deploy_module, "start_deployment_containers", lambda *_a, **_kw: None)
+    monkeypatch.setattr(deploy_module, "provision_instance_via_ssm", lambda *_a, **_kw: None)
     monkeypatch.setattr(deploy_module, "wait_for_deployment_ready", lambda **_kw: None)
     monkeypatch.setattr(deploy_module, "save_outputs", fake_save_outputs)
 

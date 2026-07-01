@@ -28,36 +28,44 @@ def test_create_instance_profile_returns_profile_details(
     assert result["ProfileName"] == "test-profile"
     assert result["ProfileArn"] == "arn:aws:iam::123:instance-profile/test-profile"
     assert result["RoleName"] == "test-role"
+    _mock_sleep.assert_not_called()
 
 
-def test_generate_user_data_installs_docker_and_pulls_image() -> None:
-    user_data = instance_module.generate_user_data(
-        image_uri="123456789012.dkr.ecr.us-east-1.amazonaws.com/opensre:latest",
-        log_path="/var/log/opensre-deploy.log",
+def test_split_container_env_vars_excludes_telegram_from_web() -> None:
+    web_env, gateway_env = instance_module._split_container_env_vars(
+        {
+            "LLM_PROVIDER": "openai",
+            "OPENAI_API_KEY": "sk-test",
+            "TELEGRAM_BOT_TOKEN": "tg-token",
+            "TELEGRAM_ALLOWED_USERS": "123",
+        }
     )
 
-    assert "docker pull" in user_data
-    assert "docker run" not in user_data
-    assert "OPENAI_API_KEY" not in user_data
-    assert "containers start via SSM" in user_data
+    assert web_env == {"MODE": "web", "LLM_PROVIDER": "openai", "OPENAI_API_KEY": "sk-test"}
+    assert gateway_env["MODE"] == "gateway"
+    assert gateway_env["TELEGRAM_BOT_TOKEN"] == "tg-token"
 
 
 @patch("platform.deployment.instance.run_ssm_shell_command")
-def test_start_deployment_containers_writes_env_files_with_special_chars(
+def test_provision_instance_via_ssm_installs_pulls_and_starts_containers(
     mock_run_ssm: MagicMock,
 ) -> None:
     mock_run_ssm.return_value = {"status": "Success", "stderr": ""}
+    image_uri = "123456789012.dkr.ecr.us-east-1.amazonaws.com/opensre:latest"
 
-    instance_module.start_deployment_containers(
+    instance_module.provision_instance_via_ssm(
         "i-123",
-        image_uri="123456789012.dkr.ecr.us-east-1.amazonaws.com/opensre:latest",
-        web_env_vars={"OPENAI_API_KEY": "sk-with'quote"},
-        gateway_env_vars={"TELEGRAM_BOT_TOKEN": "tg-token"},
+        image_uri=image_uri,
+        container_env_vars={"OPENAI_API_KEY": "sk-with'quote", "TELEGRAM_BOT_TOKEN": "tg-token"},
     )
 
+    assert mock_run_ssm.call_count == 1
     commands = mock_run_ssm.call_args.kwargs["commands"]
     joined = "\n".join(commands)
+    assert "dnf install -y docker aws-cli" in joined
+    assert "/usr/bin/docker pull" in joined
     assert "base64 -d" in joined
     assert "sk-with'quote" not in joined
     assert "--env-file" in joined
-    assert "docker run" in joined
+    assert "/usr/bin/docker run" in joined
+    assert mock_run_ssm.call_args.kwargs["max_poll_attempts"] == 60

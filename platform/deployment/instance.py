@@ -1,4 +1,4 @@
-"""User-data generation, health polling, and post-launch readiness checks."""
+"""SSM provisioning, health polling, and post-launch readiness checks."""
 
 from __future__ import annotations
 
@@ -13,13 +13,15 @@ import requests
 
 from platform.deployment.aws.client import DEFAULT_REGION
 from platform.deployment.aws.config import (
+    DOCKER_BIN,
     GATEWAY_HEALTH_MAX_ATTEMPTS,
     GATEWAY_HEALTH_POLL_INTERVAL_SECONDS,
     GATEWAY_LOG_TAIL_LINES,
     GATEWAY_READY_LOG_SENTINEL,
-    USER_DATA_ECR_AUTH_MAX_ATTEMPTS,
-    USER_DATA_ECR_AUTH_RETRY_SECONDS,
-    USER_DATA_IAM_PROPAGATION_SECONDS,
+    PROVISION_ECR_AUTH_MAX_ATTEMPTS,
+    PROVISION_ECR_AUTH_RETRY_SECONDS,
+    SSM_PROVISION_CMD_POLL_ATTEMPTS,
+    SSM_PROVISION_CMD_POLL_INTERVAL_SECONDS,
 )
 from platform.deployment.aws.ssm import run_ssm_shell_command
 from platform.deployment.stack import GATEWAY_CONTAINER_NAME, WEB_CONTAINER_NAME
@@ -27,14 +29,14 @@ from platform.deployment.stack import GATEWAY_CONTAINER_NAME, WEB_CONTAINER_NAME
 logger = logging.getLogger(__name__)
 
 _ENV_DIR = "/etc/opensre"
+_GATEWAY_ONLY_ENV_KEYS = frozenset({"TELEGRAM_BOT_TOKEN", "TELEGRAM_ALLOWED_USERS"})
 
 __all__ = [
     "GATEWAY_CONTAINER_NAME",
     "HealthPollStatus",
     "WEB_CONTAINER_NAME",
-    "generate_user_data",
     "poll_deployment_health",
-    "start_deployment_containers",
+    "provision_instance_via_ssm",
     "wait_for_deployment_ready",
 ]
 
@@ -108,6 +110,16 @@ def poll_deployment_health(
     )
 
 
+def _require_ssm_success(result: dict[str, str], *, instance_id: str, action: str) -> None:
+    status = str(result.get("status", ""))
+    if status == "Success":
+        return
+    stderr = str(result.get("stderr", "")).strip()
+    raise RuntimeError(
+        f"Failed to {action} on {instance_id}: status={status}, stderr={stderr or 'none'}"
+    )
+
+
 def _env_file_content(env_vars: dict[str, str]) -> str:
     """Return Docker ``--env-file`` content for the given variables."""
     lines: list[str] = []
@@ -129,35 +141,59 @@ def _write_env_file_commands(path: str, content: str) -> list[str]:
     ]
 
 
-def start_deployment_containers(
+def _split_container_env_vars(env_vars: dict[str, str]) -> tuple[dict[str, str], dict[str, str]]:
+    """Return web and gateway env files from one collected deploy-env mapping."""
+    web_env = {
+        "MODE": "web",
+        **{key: value for key, value in env_vars.items() if key not in _GATEWAY_ONLY_ENV_KEYS},
+    }
+    gateway_env = {"MODE": "gateway", **env_vars}
+    return web_env, gateway_env
+
+
+def provision_instance_via_ssm(
     instance_id: str,
     *,
     image_uri: str,
-    web_env_vars: dict[str, str] | None = None,
-    gateway_env_vars: dict[str, str] | None = None,
+    container_env_vars: dict[str, str] | None = None,
     region: str = DEFAULT_REGION,
 ) -> None:
-    """Write container env files over SSM and start web + gateway containers.
-
-    Secrets are delivered after the instance registers with SSM so they are not
-    persisted in EC2 user data.
-    """
-    web_env = {"MODE": "web", **(web_env_vars or {})}
-    gateway_env = {"MODE": "gateway", **(gateway_env_vars or {})}
+    """Install Docker, pull the image, and start web + gateway containers via SSM."""
+    ecr_registry = image_uri.split("/")[0]
+    ecr_region = DEFAULT_REGION
+    docker = shlex.quote(DOCKER_BIN)
+    quoted_image = shlex.quote(image_uri)
+    quoted_registry = shlex.quote(ecr_registry)
+    web_env, gateway_env = _split_container_env_vars(container_env_vars or {})
     web_env_path = f"{_ENV_DIR}/web.env"
     gateway_env_path = f"{_ENV_DIR}/gateway.env"
-    quoted_image = shlex.quote(image_uri)
 
     commands = [
+        "set -euo pipefail",
+        "dnf install -y docker aws-cli",
+        "systemctl enable docker",
+        "systemctl start docker",
+        (
+            f"for i in $(seq 1 {PROVISION_ECR_AUTH_MAX_ATTEMPTS}); do "
+            f"if aws ecr get-login-password --region {ecr_region} | "
+            f"{docker} login --username AWS --password-stdin {quoted_registry}; then "
+            "break; "
+            "fi; "
+            f"echo \"ECR auth attempt $i failed, retrying in "
+            f"{PROVISION_ECR_AUTH_RETRY_SECONDS}s...\"; "
+            f"sleep {PROVISION_ECR_AUTH_RETRY_SECONDS}; "
+            "done"
+        ),
+        f"{docker} pull {quoted_image}",
         f"mkdir -p {shlex.quote(_ENV_DIR)}",
         *_write_env_file_commands(web_env_path, _env_file_content(web_env)),
         *_write_env_file_commands(gateway_env_path, _env_file_content(gateway_env)),
         (
-            f"docker run -d --name {WEB_CONTAINER_NAME} --restart=unless-stopped "
+            f"{docker} run -d --name {WEB_CONTAINER_NAME} --restart=unless-stopped "
             f"-p 8000:8000 --env-file {shlex.quote(web_env_path)} {quoted_image}"
         ),
         (
-            f"docker run -d --name {GATEWAY_CONTAINER_NAME} --restart=unless-stopped "
+            f"{docker} run -d --name {GATEWAY_CONTAINER_NAME} --restart=unless-stopped "
             f"--env-file {shlex.quote(gateway_env_path)} {quoted_image}"
         ),
     ]
@@ -166,57 +202,10 @@ def start_deployment_containers(
         instance_id=instance_id,
         commands=commands,
         region=region,
+        poll_interval=SSM_PROVISION_CMD_POLL_INTERVAL_SECONDS,
+        max_poll_attempts=SSM_PROVISION_CMD_POLL_ATTEMPTS,
     )
-    status = str(result.get("status", ""))
-    if status != "Success":
-        stderr = str(result.get("stderr", "")).strip()
-        raise RuntimeError(
-            f"Failed to start deployment containers on {instance_id}: "
-            f"status={status}, stderr={stderr or 'none'}"
-        )
-
-
-def generate_user_data(
-    *,
-    image_uri: str,
-    log_path: str,
-) -> str:
-    """Generate cloud-init user data that installs Docker and pulls the image.
-
-    Container startup and secret injection happen later via SSM so credentials
-    are not embedded in user data.
-    """
-    ecr_registry = image_uri.split("/")[0]
-    ecr_region = DEFAULT_REGION
-
-    return f"""\
-#!/bin/bash
-exec > {log_path} 2>&1
-set -euo pipefail
-
-echo "=== Installing Docker ==="
-dnf install -y docker aws-cli
-systemctl enable docker
-systemctl start docker
-
-echo "=== Waiting for IAM role to propagate ==="
-sleep {USER_DATA_IAM_PROPAGATION_SECONDS}
-
-echo "=== Authenticating with ECR ==="
-for i in $(seq 1 {USER_DATA_ECR_AUTH_MAX_ATTEMPTS}); do
-  if aws ecr get-login-password --region {ecr_region} | \
-     docker login --username AWS --password-stdin {ecr_registry}; then
-    break
-  fi
-  echo "ECR auth attempt $i failed, retrying in {USER_DATA_ECR_AUTH_RETRY_SECONDS}s..."
-  sleep {USER_DATA_ECR_AUTH_RETRY_SECONDS}
-done
-
-echo "=== Pulling image ==="
-docker pull {image_uri}
-
-echo "=== Bootstrap complete (containers start via SSM) ==="
-"""
+    _require_ssm_success(result, instance_id=instance_id, action="provision instance")
 
 
 def wait_for_gateway_process(
@@ -228,13 +217,14 @@ def wait_for_gateway_process(
     max_attempts: int = GATEWAY_HEALTH_MAX_ATTEMPTS,
 ) -> bool:
     """Wait until the gateway container is running and has logged the ready sentinel."""
+    docker = shlex.quote(DOCKER_BIN)
     for attempt in range(max_attempts):
         try:
             result = run_ssm_shell_command(
                 instance_id=instance_id,
                 commands=[
-                    f"docker ps --filter name={container_name} --filter status=running -q",
-                    f"docker logs --tail {GATEWAY_LOG_TAIL_LINES} {container_name} 2>&1 || true",
+                    f"{docker} ps --filter name={container_name} --filter status=running -q",
+                    f"{docker} logs --tail {GATEWAY_LOG_TAIL_LINES} {container_name} 2>&1 || true",
                 ],
                 region=region,
             )

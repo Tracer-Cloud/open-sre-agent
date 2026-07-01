@@ -103,7 +103,8 @@ def create_instance_profile(
         with contextlib.suppress(ClientError):
             iam.attach_role_policy(RoleName=role_name, PolicyArn=arn)
 
-    time.sleep(IAM_PROFILE_PROPAGATION_SECONDS)
+    if IAM_PROFILE_PROPAGATION_SECONDS > 0:
+        time.sleep(IAM_PROFILE_PROPAGATION_SECONDS)
 
     resp = iam.get_instance_profile(InstanceProfileName=profile_name)
     return {
@@ -184,8 +185,9 @@ def launch_instance(
     subnet_id: str,
     security_group_id: str,
     instance_profile_arn: str,
-    user_data: str,
     stack_name: str,
+    *,
+    user_data: str | None = None,
     instance_type: str = INSTANCE_TYPE,
     region: str = DEFAULT_REGION,
 ) -> dict[str, str]:
@@ -202,7 +204,6 @@ def launch_instance(
         "SubnetId": subnet_id,
         "SecurityGroupIds": [security_group_id],
         "IamInstanceProfile": {"Arn": instance_profile_arn},
-        "UserData": user_data,
         "TagSpecifications": [{"ResourceType": "instance", "Tags": tags}],
         "BlockDeviceMappings": [
             {
@@ -211,6 +212,8 @@ def launch_instance(
             }
         ],
     }
+    if user_data:
+        launch_kwargs["UserData"] = user_data
     key_name = os.getenv("EC2_KEY_NAME")
     if key_name:
         launch_kwargs["KeyName"] = key_name
