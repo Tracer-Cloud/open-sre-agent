@@ -7,6 +7,11 @@ from rich.markup import escape
 
 import surfaces.interactive_shell.command_registry.repl_data as repl_data
 from surfaces.interactive_shell.command_registry.cli_parity import run_cli_command
+from surfaces.interactive_shell.command_registry.errors import (
+    no_output_guard,
+    print_command_usage,
+    unknown_subcommand_handler,
+)
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.runtime import ReplSession
 from surfaces.interactive_shell.ui import (
@@ -94,7 +99,7 @@ def _handle_remove(session: ReplSession, console: Console, service: str | None) 
     svc = resolve_management_service(service) if service else service
     if not svc:
         if not repl_tty_interactive():
-            repl_print(console, f"[{DIM}]usage:[/] /integrations remove <service>")
+            print_command_usage(console, _ROOT_INTEGRATIONS, _INTEGRATIONS_FIRST_ARGS)
             session.mark_latest(ok=False, kind="slash")
             return True
         choices = _configured_service_choices()
@@ -251,6 +256,9 @@ def _render_integration_show(session: ReplSession, console: Console, service: st
     return True
 
 
+@no_output_guard(
+    _ROOT_INTEGRATIONS, "Try [bold]/integrations list[/bold] to see configured services."
+)
 def _cmd_integrations(session: ReplSession, console: Console, args: list[str]) -> bool:
     if not args and repl_tty_interactive():
         return _interactive_integrations_menu(session, console)
@@ -267,11 +275,7 @@ def _cmd_integrations(session: ReplSession, console: Console, args: list[str]) -
 
     if sub == "verify":
         if len(args) > 2:
-            repl_print(
-                console,
-                f"[{DIM}]usage:[/] /integrations verify [service]  "
-                f"(or [bold]/verify [service][/bold])",
-            )
+            print_command_usage(console, _ROOT_INTEGRATIONS, _INTEGRATIONS_FIRST_ARGS)
             session.mark_latest(ok=False, kind="slash")
             return True
         return _run_verify(session, console, args[1] if len(args) == 2 else None)
@@ -286,21 +290,15 @@ def _cmd_integrations(session: ReplSession, console: Console, args: list[str]) -
 
     if sub == "show":
         if len(args) < 2:
-            repl_print(console, f"[{DIM}]usage:[/] /integrations show <service>")
+            print_command_usage(console, _ROOT_INTEGRATIONS, _INTEGRATIONS_FIRST_ARGS)
             session.mark_latest(ok=False, kind="slash")
             return True
         if not _render_integration_show(session, console, args[1]):
             session.mark_latest(ok=False, kind="slash")
         return True
 
-    repl_print(
-        console,
-        f"[{ERROR}]unknown subcommand:[/] {escape(sub)}  "
-        "(try [bold]/integrations list[/bold], [bold]/integrations verify[/bold], "
-        "or [bold]/integrations show <service>[/bold])",
-    )
-    session.mark_latest(ok=False, kind="slash")
-    return True
+    fallback = unknown_subcommand_handler(_ROOT_INTEGRATIONS, _INTEGRATIONS_FIRST_ARGS)
+    return fallback(session, console, sub)
 
 
 def _interactive_integrations_menu(session: ReplSession, console: Console) -> bool:
@@ -350,6 +348,7 @@ def _interactive_integrations_menu(session: ReplSession, console: Console) -> bo
             repl_section_break(console)
 
 
+@no_output_guard(_ROOT_MCP, "Try [bold]/mcp list[/bold] to see configured MCP servers.")
 def _cmd_mcp(session: ReplSession, console: Console, args: list[str]) -> bool:
     if not args and repl_tty_interactive():
         return _interactive_mcp_menu(session, console)
@@ -368,11 +367,8 @@ def _cmd_mcp(session: ReplSession, console: Console, args: list[str]) -> bool:
     if sub == "disconnect":
         return _handle_remove(session, console, args[1] if len(args) > 1 else None)
 
-    console.print(
-        f"[{ERROR}]unknown subcommand:[/] {escape(sub)}  "
-        "(try [bold]/mcp list[/bold], [bold]/mcp connect[/bold], or [bold]/mcp disconnect[/bold])"
-    )
-    return True
+    fallback = unknown_subcommand_handler(_ROOT_MCP, _MCP_FIRST_ARGS)
+    return fallback(session, console, sub)
 
 
 def _interactive_mcp_menu(session: ReplSession, console: Console) -> bool:

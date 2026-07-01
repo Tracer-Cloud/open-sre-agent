@@ -8,6 +8,11 @@ from rich.console import Console
 from rich.markup import escape
 
 import surfaces.interactive_shell.command_registry.repl_data as repl_data
+from surfaces.interactive_shell.command_registry.errors import (
+    no_output_guard,
+    print_command_usage,
+    unknown_subcommand_handler,
+)
 from surfaces.interactive_shell.command_registry.model.switching import (
     _provider_allows_custom_models,
     restore_default_model,
@@ -287,6 +292,7 @@ def parse_model_set_args(args: list[str]) -> tuple[str, str | None, str | None]:
     return provider, reasoning_model, toolcall_model
 
 
+@no_output_guard("/model", "Try [bold]/model show[/bold] to see current settings.")
 def _cmd_model(session: ReplSession, console: Console, args: list[str]) -> bool:
     if not args and repl_tty_interactive():
         return _interactive_model_menu(session, console)
@@ -303,19 +309,16 @@ def _cmd_model(session: ReplSession, console: Console, args: list[str]) -> bool:
             return True
         if len(args) >= 2 and args[1].lower() in ("set", "use", "switch"):
             if len(args) < 3:
-                console.print(f"[{DIM}]usage:[/] /model toolcall set <model>")
+                print_command_usage(console, "/model", _MODEL_FIRST_ARGS)
                 return True
             switch_toolcall_model(args[2], console)
             return True
-        console.print(
-            f"[{DIM}]usage:[/] /model toolcall set <model> "
-            f"[{DIM}](sets the toolcall model for the active provider)[/]"
-        )
+        print_command_usage(console, "/model", _MODEL_FIRST_ARGS)
         return True
 
     if sub in ("restore", "default", "reset"):
         if len(args) > 2:
-            console.print(f"[{DIM}]usage:[/] /model restore [provider]")
+            print_command_usage(console, "/model", _MODEL_FIRST_ARGS)
             session.mark_latest(ok=False, kind="slash")
             return True
         provider_name = args[1] if len(args) == 2 else os.getenv("LLM_PROVIDER", "anthropic")
@@ -331,9 +334,7 @@ def _cmd_model(session: ReplSession, console: Console, args: list[str]) -> bool:
             console.print()
             console.print(f"[{ERROR}]{escape(str(exc))}[/]")
             console.print()
-            console.print(
-                f"[{DIM}]usage:[/] /model set <provider> [model] [--toolcall-model <model>]"
-            )
+            print_command_usage(console, "/model", _MODEL_FIRST_ARGS)
             session.mark_latest(ok=False, kind="slash")
             return True
         from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
@@ -343,9 +344,7 @@ def _cmd_model(session: ReplSession, console: Console, args: list[str]) -> bool:
                 console.print()
                 console.print(f"[{ERROR}]--toolcall-model requires an explicit provider[/]")
                 console.print()
-                console.print(
-                    f"[{DIM}]usage:[/] /model set <provider> [model] [--toolcall-model <model>]"
-                )
+                print_command_usage(console, "/model", _MODEL_FIRST_ARGS)
                 session.mark_latest(ok=False, kind="slash")
                 return True
             model_value = (
@@ -365,14 +364,8 @@ def _cmd_model(session: ReplSession, console: Console, args: list[str]) -> bool:
             session.mark_latest(ok=False, kind="slash")
         return True
 
-    console.print(
-        f"[{ERROR}]unknown subcommand:[/] {escape(sub)}  "
-        "(try [bold]/model show[/bold], "
-        "[bold]/model set <provider> [model] [--toolcall-model <m>][/bold], "
-        "[bold]/model restore [provider][/bold], "
-        "or [bold]/model toolcall set <model>[/bold])"
-    )
-    return True
+    fallback = unknown_subcommand_handler("/model", _MODEL_FIRST_ARGS)
+    return fallback(session, console, sub)
 
 
 _MODEL_FIRST_ARGS: tuple[tuple[str, str], ...] = (

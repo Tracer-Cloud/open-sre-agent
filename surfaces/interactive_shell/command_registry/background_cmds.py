@@ -5,6 +5,10 @@ from __future__ import annotations
 from rich.console import Console
 from rich.markup import escape
 
+from surfaces.interactive_shell.command_registry.errors import (
+    no_output_guard,
+    unknown_subcommand_handler,
+)
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.runtime import ReplSession
 from surfaces.interactive_shell.ui import (
@@ -41,6 +45,7 @@ def _render_background_status(session: ReplSession, console: Console) -> None:
     print_repl_table(console, table)
 
 
+@no_output_guard("/background", "Try [bold]/background status[/bold] to see background mode state.")
 def _cmd_background(session: ReplSession, console: Console, args: list[str]) -> bool:
     sub = (args[0].lower() if args else "status").strip()
 
@@ -169,13 +174,8 @@ def _cmd_background(session: ReplSession, console: Console, args: list[str]) -> 
         session.mark_latest(ok=False, kind="slash")
         return True
 
-    console.print(
-        f"[{ERROR}]unknown subcommand:[/] {escape(sub)}  "
-        "(try [bold]/background status[/bold], [bold]/background list[/bold], "
-        "[bold]/background show <task_id>[/bold], or [bold]/background notify list[/bold])"
-    )
-    session.mark_latest(ok=False, kind="slash")
-    return True
+    fallback = unknown_subcommand_handler("/background", _BACKGROUND_FIRST_ARGS)
+    return fallback(session, console, sub)
 
 
 COMMANDS: list[SlashCommand] = [

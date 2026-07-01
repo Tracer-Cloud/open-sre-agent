@@ -20,6 +20,10 @@ from rich.tree import Tree
 from surfaces.interactive_shell.command_registry.agents.conflicts_view import render_conflicts
 from surfaces.interactive_shell.command_registry.agents.kill import _cmd_agents_kill
 from surfaces.interactive_shell.command_registry.agents.trace import _cmd_agents_trace
+from surfaces.interactive_shell.command_registry.errors import (
+    no_output_guard,
+    unknown_subcommand_handler,
+)
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.runtime import ReplSession
 from surfaces.interactive_shell.ui import (
@@ -404,6 +408,7 @@ def _cmd_agents_graph(console: Console) -> bool:
     return True
 
 
+@no_output_guard("/fleet", "Try [bold]/fleet budget[/bold] to configure per-agent budgets.")
 def _cmd_agents(session: ReplSession, console: Console, args: list[str]) -> bool:
     if not args:
         return _cmd_agents_list(console)
@@ -434,16 +439,8 @@ def _cmd_agents(session: ReplSession, console: Console, args: list[str]) -> bool
     if sub == "graph":
         return _cmd_agents_graph(console)
 
-    console.print(
-        f"[{ERROR}]unknown subcommand:[/] {escape(sub)}  "
-        "(try [bold]/fleet[/bold], [bold]/fleet budget[/bold], "
-        "[bold]/fleet bus[/bold], [bold]/fleet claim[/bold], "
-        "[bold]/fleet conflicts[/bold], [bold]/fleet kill[/bold], "
-        "[bold]/fleet release[/bold], [bold]/fleet trace[/bold], "
-        "[bold]/fleet wait[/bold] or [bold]/fleet graph[/bold])"
-    )
-    session.mark_latest(ok=False, kind="slash")
-    return True
+    fallback = unknown_subcommand_handler("/fleet", _AGENTS_FIRST_ARGS)
+    return fallback(session, console, sub)
 
 
 COMMANDS: list[SlashCommand] = [

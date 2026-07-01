@@ -46,34 +46,46 @@ def format_unknown_slash_message(
     *,
     command_names: tuple[str, ...],
 ) -> str:
-    """Plain-text guidance for an unknown slash command root."""
+    """Rich-text guidance for an unknown slash command root."""
+    from rich.markup import escape as _rich_escape
+
+    from platform.terminal.theme import ERROR
+
     stripped = command_line.strip()
     name = stripped.split()[0] if stripped else stripped
     suggestion = closest_choice(name, command_names)
+
+    error_str = f"[{ERROR}]❌ Unknown command:[/] '{_rich_escape(name)}'."
     if suggestion:
         return (
-            f"Unknown command: {name}. "
-            f"Did you mean {suggestion}? "
-            "Type /help for the full command list."
+            f"{error_str} "
+            f"Did you mean [bold]{_rich_escape(suggestion)}[/]?\n"
+            f"Type [bold]/help[/bold] for the full command list."
         )
-    return f"Unknown command: {name}. Type /help for the full command list."
+    return f"{error_str}\nType [bold]/help[/bold] for the full command list."
 
 
 def format_invalid_subcommand_message(
     cmd: SlashCommand,
     args: list[str],
 ) -> str:
-    """Plain-text guidance for an invalid subcommand on a known slash command."""
+    """Rich-text guidance for an invalid subcommand on a known slash command."""
+    from rich.markup import escape as _rich_escape
+
+    from platform.terminal.theme import DIM, ERROR
+
     subcommand = args[0] if args else ""
-    hints = subcommand_hints(cmd)
+    hints = cmd.first_arg_completions
+    error_str = f"[{ERROR}]❌ Unknown subcommand:[/] '{_rich_escape(subcommand)}'"
+
     if hints:
-        choices_text = ", ".join(f"{cmd.name} {hint}" for hint in hints)
-        return (
-            f"Invalid subcommand: {subcommand}. "
-            f"Try one of: {choices_text}. "
-            f"Type /help for the full command list."
-        )
-    return f"Invalid subcommand: {subcommand}. Type /help for the full command list."
+        lines = [error_str, f"[{DIM}]Usage:[/]\n"]
+        for hint_sub, desc in hints:
+            cmd_full = f"{cmd.name} {hint_sub}"
+            lines.append(f"  {cmd_full:<26} — {desc}")
+        return "\n".join(lines)
+
+    return f"{error_str}\nType [bold]/help[/bold] for the full command list."
 
 
 def resolve_literal_slash_typo(

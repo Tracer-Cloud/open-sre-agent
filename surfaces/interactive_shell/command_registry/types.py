@@ -7,9 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from rich.console import Console
-from rich.markup import escape as _rich_escape
 
-from platform.terminal.theme import ERROR
 from surfaces.interactive_shell.runtime import ReplSession
 
 
@@ -51,13 +49,14 @@ def make_list_root_handler(
     aliases = frozenset(list_aliases)
 
     def _root(session: ReplSession, console: Console, args: list[str]) -> bool:
+        from surfaces.interactive_shell.command_registry.errors import print_unknown_subcommand
+
         sub = (args[0].lower() if args else "list").strip()
         if sub in aliases:
             return list_handler(session, console, args[1:])
 
-        console.print(
-            f"[{ERROR}]unknown subcommand:[/] {_rich_escape(sub)}  "
-            f"(try [bold]{command_name} list[/bold])"
+        print_unknown_subcommand(
+            console, command_name, sub, (("list", f"alias for {command_name} list"),)
         )
         session.mark_latest(ok=False, kind="slash")
         return True

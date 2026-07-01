@@ -9,6 +9,11 @@ from rich.console import Console
 from rich.markup import escape
 
 from core.agent_harness.session import default_session_repo
+from surfaces.interactive_shell.command_registry.errors import (
+    no_output_guard,
+    print_command_usage,
+    unknown_subcommand_handler,
+)
 from surfaces.interactive_shell.command_registry.investigation import (
     render_investigation_report,
     write_investigation_export,
@@ -423,6 +428,9 @@ def _cmd_rca_save(
     return _save_rca_record(console, record, dest_path)
 
 
+@no_output_guard(
+    "/rca", "Try [bold]/investigate[/bold] to run an investigation and generate RCA reports."
+)
 def _cmd_rca(_session: ReplSession, console: Console, args: list[str]) -> bool:
     prepare_repl_output_line()
     if not args:
@@ -439,28 +447,21 @@ def _cmd_rca(_session: ReplSession, console: Console, args: list[str]) -> bool:
         if len(args) < 2:
             if repl_tty_interactive():
                 return _interactive_rca_root_menu(_session, console)
-            console.print(f"[{DIM}]usage:[/] /rca show <investigation-id-prefix>")
+            print_command_usage(console, "/rca", _RCA_FIRST_ARGS)
             return True
         return _cmd_rca_show(_session, console, args[1])
     if sub == "save":
         if len(args) == 1:
             if repl_tty_interactive():
                 return _interactive_rca_save_menu(_session, console)
-            console.print(
-                f"[{DIM}]usage:[/] /rca save <path>  "
-                f"[{DIM}]or[/] /rca save <investigation-id> <path>"
-            )
+            print_command_usage(console, "/rca", _RCA_FIRST_ARGS)
             return True
         if len(args) == 2:
             return _cmd_rca_save(_session, console, investigation_id=None, dest_path=args[1])
         return _cmd_rca_save(_session, console, investigation_id=args[1], dest_path=args[2])
 
-    console.print(
-        f"[{ERROR}]unknown subcommand:[/] {escape(sub)}  "
-        f"(try [bold]/rca history[/bold], [bold]/rca show <id>[/bold], "
-        f"or [bold]/rca save <path>[/bold])"
-    )
-    return True
+    fallback = unknown_subcommand_handler("/rca", _RCA_FIRST_ARGS)
+    return fallback(_session, console, sub)
 
 
 _RCA_FIRST_ARGS: tuple[tuple[str, str], ...] = (

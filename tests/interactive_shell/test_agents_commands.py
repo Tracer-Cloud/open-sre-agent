@@ -498,7 +498,7 @@ class TestAgentsTrace:
         console, buf = _capture()
         assert dispatch_slash("/fleet trace", sess_obj, console) is True
         out = buf.getvalue().lower()
-        assert "usage" in out
+        assert "usage" in out.lower()
         assert "<pid>" in out
         assert sess_obj.history[-1]["ok"] is False
 

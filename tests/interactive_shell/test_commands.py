@@ -106,7 +106,7 @@ class TestDispatchSlash:
         assert "Slash commands" in output
         assert "/help" in output
         assert "/tools" in output
-        assert "unknown command" not in output
+        assert "Unknown command" not in output
 
     def test_trust_toggle(self) -> None:
         session = ReplSession()
@@ -615,13 +615,13 @@ class TestIntegrationsCommand:
         self._patch(monkeypatch)
         console, buf = _capture()
         dispatch_slash("/integrations show", ReplSession(), console)
-        assert "usage" in buf.getvalue()
+        assert "usage" in buf.getvalue().lower()
 
     def test_unknown_subcommand_prints_hint(self, monkeypatch: object) -> None:
         self._patch(monkeypatch)
         console, buf = _capture()
         dispatch_slash("/integrations bogus", ReplSession(), console)
-        assert "unknown subcommand" in buf.getvalue()
+        assert "Unknown subcommand" in buf.getvalue()
 
     def test_setup_delegates_to_cli(self, monkeypatch: object) -> None:
         from surfaces.interactive_shell.command_registry import integrations as m
@@ -706,7 +706,7 @@ class TestMcpCommand:
         self._patch(monkeypatch)
         console, buf = _capture()
         dispatch_slash("/mcp bogus", ReplSession(), console)
-        assert "unknown subcommand" in buf.getvalue()
+        assert "Unknown subcommand" in buf.getvalue()
 
 
 class TestModelCommand:
@@ -879,7 +879,7 @@ class TestModelCommand:
     def test_set_missing_provider_prints_usage(self) -> None:
         console, buf = _capture()
         dispatch_slash("/model set", ReplSession(), console)
-        assert "usage" in buf.getvalue()
+        assert "usage" in buf.getvalue().lower()
 
     def test_set_unknown_reasoning_model_is_rejected(
         self,
@@ -1095,7 +1095,7 @@ class TestModelCommand:
         output = buf.getvalue()
         assert "unknown flag" in output
         assert "--made-up-flag" in output
-        assert "usage" in output
+        assert "usage" in output.lower()
 
     def test_set_toolcall_flag_without_value_prints_specific_error(
         self,
@@ -1149,7 +1149,7 @@ class TestModelCommand:
     def test_toolcall_set_missing_arg_prints_usage(self) -> None:
         console, buf = _capture()
         dispatch_slash("/model toolcall set", ReplSession(), console)
-        assert "usage" in buf.getvalue()
+        assert "usage" in buf.getvalue().lower()
 
     def test_toolcall_set_for_codex_provider_is_rejected(
         self,
@@ -1185,7 +1185,7 @@ class TestModelCommand:
         self._patch_llm(monkeypatch)
         console, buf = _capture()
         dispatch_slash("/model bogus", ReplSession(), console)
-        assert "unknown subcommand" in buf.getvalue()
+        assert "Unknown subcommand" in buf.getvalue()
 
 
 class TestVersionCommand:
@@ -1212,14 +1212,14 @@ class TestTemplateCommand:
     def test_missing_arg_prints_usage(self) -> None:
         console, buf = _capture()
         dispatch_slash("/template", ReplSession(), console)
-        assert "usage" in buf.getvalue()
+        assert "usage" in buf.getvalue().lower()
 
 
 class TestInvestigateFileCommand:
     def test_missing_arg_prints_usage(self) -> None:
         console, buf = _capture()
         dispatch_slash("/investigate", ReplSession(), console)
-        assert "usage" in buf.getvalue()
+        assert "usage" in buf.getvalue().lower()
         assert "/investigate <file|template>" in buf.getvalue()
 
     def test_missing_file_prints_error(self) -> None:
@@ -1236,7 +1236,7 @@ class TestInvestigateFileCommand:
         session = ReplSession()
         console, buf = _capture()
         dispatch_slash("/investigate", session, console)
-        assert "usage" in buf.getvalue()
+        assert "usage" in buf.getvalue().lower()
         latest = session.history[-1]
         assert latest["type"] == "slash"
         assert latest["ok"] is False
@@ -1942,7 +1942,7 @@ class TestSaveCommand:
         session.last_state = {"root_cause": "x"}
         console, buf = _capture()
         dispatch_slash("/save", session, console)
-        assert "usage" in buf.getvalue()
+        assert "usage" in buf.getvalue().lower()
 
     def test_saves_markdown(self, tmp_path: object) -> None:
         session = ReplSession()

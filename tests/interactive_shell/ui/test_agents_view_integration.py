@@ -137,7 +137,7 @@ def test_claude_code_end_to_end_renders_real_tokens_and_cost(
     with session.open("a", encoding="utf-8") as fh:
         fh.write(
             '{"type":"assistant","message":{"model":"claude-sonnet-4-5",'
-            '"usage":{"input_tokens":200,"output_tokens":50}}}\n'
+            '"Usage":{"input_tokens":200,"output_tokens":50}}}\n'
         )
     # Brief wait so mtime > started_at - 5s on every filesystem
     # (APFS sub-second mtime quirks rarely matter, but cheap).
