@@ -9,9 +9,6 @@ from config.constants.investigation import MAX_INVESTIGATION_LOOPS
 from core import (
     LoopEventCallback,
     RuntimeEventCallback,
-    build_assistant_message,
-    build_synthetic_assistant_tool_call_message,
-    build_tool_result_messages,
     context_budget_ceiling_for_model,
     enforce_context_budget,
     estimate_message_tokens,
@@ -25,6 +22,7 @@ from core.context.state.evidence import EvidenceEntry
 from core.llm.agent_llm_client import get_agent_llm
 from core.llm.types import ToolCall
 from core.llm_invoke_errors import classify_llm_invoke_failure
+from core.messages import MessageFormatter
 from core.tool_framework.registered_tool import RegisteredTool
 from platform.observability import debug_print
 from platform.observability import get_progress_tracker as get_tracker
@@ -61,29 +59,17 @@ def _mark_messages(messages: list[dict[str, Any]], key: str) -> None:
 class ConnectedInvestigationAgent(Agent[RegisteredTool]):
     """ReAct loop scoped to the tools enabled by connected integrations.
 
-    Subclasses :class:`~core.agent.Agent` to inherit the shared hook
-    interface. The investigation loop is more specialised than the generic
-    :meth:`Agent.run` (seed calls, evidence collection, duplicate detection,
-    stagnation handling), so it overrides ``run()`` entirely; only the
-    per-surface init hooks (``build_llm`` / ``build_tools`` /
-    ``build_system_prompt`` / ``resolved_integrations``) share the base
-    contract. Per-run state is set on ``self._state`` at the top of
-    ``run()`` so the hooks can read it lazily.
+    Extends :class:`~core.agent.Agent` to reuse the shared event-emission and
+    tool-filtering infrastructure. The investigation loop is more specialised
+    than the generic :meth:`Agent.run` (seed calls, evidence collection,
+    duplicate detection, stagnation handling), so it overrides ``run()``
+    entirely — config plumbing (LLM, tools, prompt, resolved integrations) is
+    assembled inline in ``run()`` from ``state`` rather than through subclass
+    init hooks.
     """
 
     def __init__(self) -> None:
         super().__init__(max_iterations=MAX_INVESTIGATION_LOOPS)
-        # Per-run state — populated at the top of run() before any hook runs.
-        # Kept as attributes rather than passed as args so hooks match the
-        # no-argument contract on Agent.
-        self._state: InvestigationState | None = None
-        self._state_dict: dict[str, Any] = {}
-        self._resolved_cache: dict[str, Any] | None = None
-        self._tools_cache: list[RegisteredTool] | None = None
-        self._available_cache: list[RegisteredTool] | None = None
-        # tool_context depends on ``self._tools_cache``; run() sets it after
-        # tools are computed so ``build_system_prompt`` can read it.
-        self._tool_context: dict[str, Any] = {}
 
     def _should_accept_conclusion(
         self,
@@ -91,54 +77,18 @@ class ConnectedInvestigationAgent(Agent[RegisteredTool]):
         evidence_count: int,  # noqa: ARG002 — used by overrides
         iteration: int,  # noqa: ARG002 — used by overrides
     ) -> tuple[bool, str | None]:
-        """Hook: decide what to do when the LLM stops requesting tools."""
+        """Decide what to do when the LLM stops requesting tools.
+
+        Override in subclasses (e.g. :class:`CLIBackedInvestigationAgent`) to
+        nudge the model back into tool calls before accepting a conclusion.
+        """
         return True, None
 
-    # ─── Per-surface initialization hooks (override Agent's contract) ────
-
-    def build_llm(self) -> Any:
-        return get_agent_llm()
-
-    def resolved_integrations(self) -> dict[str, Any]:
-        if self._state is None:
-            return {}
-        if self._resolved_cache is None:
-            self._resolved_cache = dict(self._state.get("resolved_integrations") or {})
-        return dict(self._resolved_cache)
-
-    def _compute_investigation_tools(self) -> tuple[list[RegisteredTool], list[RegisteredTool]]:
-        """Return ``(available, selected)`` tools for this investigation, memoized.
-
-        ``available`` is the full filtered set (used only for the token-budget
-        log line); ``selected`` is what's actually offered to the LLM this run.
-        """
-        if self._available_cache is None or self._tools_cache is None:
-            available = list(self._filter_tools(get_available_tools(self.resolved_integrations())))
-            selected = list(select_investigation_tools(available, self._state_dict))
-            self._available_cache = available
-            self._tools_cache = selected
-        return list(self._available_cache), list(self._tools_cache)
-
-    def build_tools(self) -> list[RegisteredTool]:
-        return self._compute_investigation_tools()[1]
-
-    def build_system_prompt(self) -> str:
-        """Assemble the augmented prompt state and delegate to ``_build_system_prompt``.
-
-        The specialised prompt-state merge (``state_dict`` + ``tool_context``)
-        happens here so subclasses that only need to customise the prompt body
-        can override the legacy ``_build_system_prompt(state)`` method without
-        recomputing the merge.
-        """
-        prompt_state = {**self._state_dict, **self._tool_context}
-        return self._build_system_prompt(prompt_state)
-
     def _build_system_prompt(self, state: dict[str, Any]) -> str:
-        """Legacy hook: produce the LLM system prompt from an augmented state dict.
+        """Produce the LLM system prompt from an augmented state dict.
 
-        Called by ``build_system_prompt`` after merging ``state_dict`` with
-        ``tool_context``. Kept as a state-taking method for backward compat
-        with subclasses that override it (e.g. bench harnesses).
+        Extension point for bench harnesses that need to swap the prompt body
+        without reimplementing the state/tool_context merge.
         """
         return build_investigation_system_prompt(state)
 
@@ -162,40 +112,26 @@ class ConnectedInvestigationAgent(Agent[RegisteredTool]):
         on_runtime_event: RuntimeEventCallback | None = None,
     ) -> dict[str, Any]:
         """Run the full investigation. Returns a dict of state updates."""
-        # Bind per-run state on self BEFORE any hook fires. Hooks (build_llm,
-        # resolved_integrations, build_tools, build_system_prompt) read from
-        # self._state / self._state_dict, so this assignment must precede them.
-        # Reset per-run caches so a reused instance doesn't leak previous state.
-        self._state = state
-        self._state_dict = cast(dict[str, Any], state)
-        self._resolved_cache = None
-        self._tools_cache = None
-        self._available_cache = None
-        self._tool_context = {}
-
-        self._on_legacy_event = on_event
+        self._on_tuple_event = on_event
         self._on_runtime_event = on_runtime_event
         self._tracker = get_tracker()
         self._tracker.start("investigation_agent", "Running investigation agent loop")
 
-        state_dict = self._state_dict
-        resolved = self.resolved_integrations()
-        available_tools, tools = self._compute_investigation_tools()
+        state_dict = cast(dict[str, Any], state)
+        resolved = dict(state.get("resolved_integrations") or {})
+        available_tools = list(self._filter_tools(get_available_tools(resolved)))
+        tools = list(select_investigation_tools(available_tools, state_dict))
         tool_context = build_connected_tool_context(resolved, tools)
-        # Cache on self so build_system_prompt can read it.
-        self._tool_context = tool_context
 
         if not tools:
             logger.warning("No tools available for investigation")
 
-        llm = self.build_llm()
+        llm = get_agent_llm()
+        msg_formatter = MessageFormatter(llm)
         tool_schemas = llm.tool_schemas(tools)
 
-        # Merge tool_context into a local view so the system prompt and the alert
-        # context read the SAME narrowed tool set the model receives as schemas —
-        # never naming tools that aren't actually callable this turn.
         prompt_state = {**state_dict, **tool_context}
-        system = self.build_system_prompt()
+        system = self._build_system_prompt(prompt_state)
         alert_text = format_alert_context(prompt_state, tools)
         messages: list[dict[str, Any]] = [{"role": "user", "content": alert_text}]
 
@@ -234,9 +170,9 @@ class ConnectedInvestigationAgent(Agent[RegisteredTool]):
                 }
             )
             seed_results = execute_tools(seed_calls, tools, resolved)
-            seed_msgs = build_tool_result_messages(llm, seed_calls, seed_results)
+            seed_msgs = msg_formatter.tool_results_from_execution(seed_calls, seed_results)
 
-            seed_assistant_msg = build_synthetic_assistant_tool_call_message(llm, seed_calls)
+            seed_assistant_msg = msg_formatter.synthetic_assistant_tool_call(seed_calls)
             _mark_messages([seed_assistant_msg, *seed_msgs], "_opensre_seed")
             messages.append(seed_assistant_msg)
             messages.extend(seed_msgs)
@@ -300,7 +236,7 @@ class ConnectedInvestigationAgent(Agent[RegisteredTool]):
                     tool_context=tool_context,
                 )
 
-            messages.append(build_assistant_message(llm, response))
+            messages.append(msg_formatter.assistant_from_response(response))
 
             if not response.has_tool_calls:
                 accept, nudge = self._should_accept_conclusion(
@@ -350,7 +286,9 @@ class ConnectedInvestigationAgent(Agent[RegisteredTool]):
                 tool_call_cache.store(tool_call_signature(tc), output, loop_iteration=iteration)
                 results.append(output)
 
-            tool_result_messages = build_tool_result_messages(llm, response.tool_calls, results)
+            tool_result_messages = msg_formatter.tool_results_from_execution(
+                response.tool_calls, results
+            )
             if duplicate_flags and all(duplicate_flags):
                 _mark_messages([messages[-1], *tool_result_messages], "_opensre_duplicate_result")
             messages.extend(tool_result_messages)

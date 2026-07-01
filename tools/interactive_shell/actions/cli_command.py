@@ -4,20 +4,20 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.agent_harness.tools.tool_context import (
+    ActionToolContext,
+    capability_available_from_sources,
+    execute_with_action_context,
+    object_schema,
+    string_property,
+)
 from core.tool_framework.registered_tool import RegisteredTool
 from surfaces.interactive_shell.runtime.subprocess_runner import (
     run_opensre_cli_command,
 )
-from tools.interactive_shell.contracts import (
-    ToolContext,
-    capability_available_from_sources,
-    execute_with_repl_context,
-    object_schema,
-    string_property,
-)
 
 
-def execute_cli_command_tool(args: dict[str, Any], ctx: ToolContext) -> bool:
+def execute_cli_command_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
     payload = str(args.get("payload", "")).strip()
     if not payload:
         return False
@@ -32,7 +32,7 @@ def execute_cli_command_tool(args: dict[str, Any], ctx: ToolContext) -> bool:
 
 
 def run_cli_command(*, payload: str, context: Any) -> dict[str, Any]:
-    return execute_with_repl_context({"payload": payload}, context, execute_cli_command_tool)
+    return execute_with_action_context({"payload": payload}, context, execute_cli_command_tool)
 
 
 cli_exec_tool = RegisteredTool(

@@ -8,7 +8,7 @@ import pytest
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _SPEC = importlib.util.spec_from_file_location(
     "opensre_sync_release_version",
-    _REPO_ROOT / "infra" / "deployment" / "packaging" / "sync_release_version.py",
+    _REPO_ROOT / "platform" / "packaging" / "sync_release_version.py",
 )
 assert _SPEC is not None and _SPEC.loader is not None
 _MODULE = importlib.util.module_from_spec(_SPEC)
@@ -17,7 +17,7 @@ _normalize_release_version = _MODULE._normalize_release_version
 _normalize_explicit_version = _MODULE._normalize_explicit_version
 
 
-def test_release_paths_resolve_from_moved_infra_location() -> None:
+def test_release_paths_resolve_from_platform_location() -> None:
     assert _MODULE.ROOT == _REPO_ROOT
     assert _MODULE.PYPROJECT_PATH == _REPO_ROOT / "pyproject.toml"
     assert _MODULE.APP_CONSTANTS_OPENSRE_PATH == _REPO_ROOT / "config" / "constants" / "opensre.py"

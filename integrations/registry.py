@@ -437,6 +437,21 @@ def family_key(service_key: str) -> str:
     return SERVICE_FAMILY_MAP.get(service_key, service_key)
 
 
+# Wire the concrete resolver into the platform-level seam so callers in
+# ``tools/`` can normalize service keys without importing from
+# ``integrations/`` directly (T-4 layering audit, issue #3352, item 27).
+# Kept at import time so any consumer that has already imported the
+# ``integrations`` package (every CLI entry point does so during startup)
+# sees the real mapping instead of the identity fallback.
+def _install_family_key_resolver() -> None:
+    from platform.common.service_families import register_family_key_resolver
+
+    register_family_key_resolver(family_key)
+
+
+_install_family_key_resolver()
+
+
 def service_key(service_name: str) -> str:
     """Normalize an incoming service label to its canonical registry key."""
     lowered = service_name.strip().lower()

@@ -1,4 +1,4 @@
-"""Regression tests for ``core.agent_harness.evidence_agent.gather_tool_evidence``.
+"""Regression tests for ``core.agent_harness.agents.evidence_agent.gather_tool_evidence``.
 
 The public contract (docstring) is: *any* failure is reported and swallowed
 (returns ``None``) so the conversational turn never breaks. After the Agent
@@ -12,9 +12,9 @@ from __future__ import annotations
 
 from typing import Any
 
-import core.agent_harness.evidence_agent as evidence_agent
+import core.agent_harness.agents.evidence_agent as evidence_agent
 import tools.investigation.stages.gather_evidence.tools as gather_tools
-from core.agent_harness.evidence_agent import gather_tool_evidence
+from core.agent_harness.agents.evidence_agent import gather_tool_evidence
 from core.agent_harness.session import ReplSession
 
 
@@ -35,12 +35,7 @@ def _session() -> ReplSession:
 
 
 def test_tool_discovery_raise_is_swallowed(monkeypatch: Any) -> None:
-    """A raise from ``get_available_tools`` must not break the turn.
-
-    This is the refactor regression: ``has_usable_tools()`` (which reaches
-    ``get_available_tools``) now runs before the try block unless it is guarded,
-    so before the fix this raise propagated out of ``gather_tool_evidence``.
-    """
+    """A raise from ``get_available_tools`` must not break the turn."""
     monkeypatch.setattr(
         evidence_agent, "_resolve_gather_integrations", lambda _session, _message: {}
     )

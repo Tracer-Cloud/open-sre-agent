@@ -5,12 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from surfaces.interactive_shell.command_registry.types import SlashCommand
-from tools.interactive_shell.contracts import (
+from core.agent_harness.tools.tool_context import (
     object_schema,
     string_array_property,
     string_property,
 )
+from surfaces.interactive_shell.command_registry.types import SlashCommand
 
 _MAX_COMPACT_DESC_CHARS = 120
 

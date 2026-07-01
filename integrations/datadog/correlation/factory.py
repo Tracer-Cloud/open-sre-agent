@@ -43,7 +43,7 @@ def datadog_avg_query(metric_name: str) -> str:
 
 def build_datadog_provider(
     *,
-    datadog_config: Mapping[str, Any] | None,
+    integration_config: Mapping[str, Any] | None,
     target_resource: str = "unknown-rds",
     candidate_services: tuple[str, ...] = (),
 ) -> UpstreamEvidenceProvider | None:
@@ -55,11 +55,11 @@ def build_datadog_provider(
     from integrations.config_models import DatadogIntegrationConfig
     from integrations.datadog.client import DatadogClient
 
-    if not datadog_config:
+    if not integration_config:
         return None
 
     try:
-        datadog_cfg = DatadogIntegrationConfig.model_validate(datadog_config)
+        datadog_cfg = DatadogIntegrationConfig.model_validate(integration_config)
     except ValidationError:
         return None
 

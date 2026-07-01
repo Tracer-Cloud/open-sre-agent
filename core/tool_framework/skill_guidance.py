@@ -113,7 +113,9 @@ def format_tool_skill_guidance(skill: SkillGuidance) -> str:
 
     skill_dir = str(Path(skill.file_path).parent)
     return (
-        f'<skill name="{skill.name}" location="{skill.file_path}">\n'
+        f'<skill name="{skill.name}" description="{skill.description}" '
+        f'location="{skill.file_path}">\n'
+        f"Use this skill when the request matches the description above.\n"
         f"References are relative to {skill_dir}.\n\n"
         f"{skill.content.strip()}\n"
         "</skill>"

@@ -9,24 +9,45 @@ _SYSTEM_PROMPT_BASE = """You plan actions for the OpenSRE interactive shell.
 ══════════════════════════════════════════════════════════
 COMPOUND TURN RULE — HIGHEST PRIORITY, NO EXCEPTIONS:
 ══════════════════════════════════════════════════════════
-When the user says "[action A] and then [action B]" — emit BOTH as
-separate tool calls in a SINGLE response, in order. NEVER emit only the
-first and stop. NEVER let any integration gate, investigation rule, or
-other instruction below override this requirement for the second action.
+When the user says "[action A] and then [action B]" you MUST emit a tool call
+for EVERY mapped clause — NEVER emit only the first and stop. NEVER let any
+integration gate, investigation rule, or other instruction below override this
+requirement for the second action. HOW you emit them depends on whether the
+later action consumes the earlier action's output:
 
-Tested examples (these exact patterns appear in CI — you MUST emit both):
-  "run /remote and then investigate 'hello world'"
-      → slash_invoke(command="/remote")
-        + investigation_start(alert_text="hello world")
-  "run /health and then trigger a sample alert investigation"
-      → slash_invoke(command="/health")
-        + alert_sample(template="generic")
-  "connect with /remote and then investigate 'hello world'"
-      → slash_invoke(command="/remote")
-        + investigation_start(alert_text="hello world")
-  "run /health and then kick off a sample alert investigation"
-      → slash_invoke(command="/health")
-        + alert_sample(template="generic")
+(1) INDEPENDENT actions (B does NOT need A's result) — emit BOTH as separate
+    tool calls in a SINGLE response, in order. The tested examples below are all
+    independent, so you MUST emit both in one response:
+      "run /remote and then investigate 'hello world'"
+          → slash_invoke(command="/remote")
+            + investigation_start(alert_text="hello world")
+      "run /health and then trigger a sample alert investigation"
+          → slash_invoke(command="/health")
+            + alert_sample(template="generic")
+      "connect with /remote and then investigate 'hello world'"
+          → slash_invoke(command="/remote")
+            + investigation_start(alert_text="hello world")
+      "run /health and then kick off a sample alert investigation"
+          → slash_invoke(command="/health")
+            + alert_sample(template="generic")
+
+(2) DATA-DEPENDENT chains (B must include or act on A's RESULT) — emit ONLY
+    action A this response, WAIT for its tool result, then on the NEXT response
+    emit action B populated with the real value from A's output. Do NOT emit B
+    in the same response as A: you do not have A's result yet, so B would carry
+    placeholder or empty content. Do NOT stop after A either — once A's result
+    arrives you MUST continue and emit B. The loop has budget for these steps.
+    Examples (emit ONE tool now, the consumer next turn):
+      "check the weather in Antarctica and then send it to slack"
+          → shell_run(command="curl 'wttr.in/Antarctica?format=3'")   [this turn]
+          → (observe the temperature in the tool result)
+          → slack_send_message(message="<the actual temperature text>")  [next turn]
+      "get the latest error count and post it to slack"
+          → run the lookup first, THEN slack_send_message with the real count.
+    Recognize the dependency from words like "send it", "post that", "report the
+    result", "share the output" — the pronoun/result reference means B needs A's
+    output. Never fabricate the value and never send a "checking…" placeholder in
+    place of the real result; if A succeeded, B carries A's actual output.
 
 The CONNECTED INTEGRATIONS value (none/unknown/list) NEVER blocks a second
 action that the user explicitly named in a compound turn. Do not read any
@@ -249,6 +270,18 @@ Other tools:
   and the user explicitly asks to send, post, notify, or message Telegram. Use the
   user's requested message body as `message`; do NOT use this for generic alerts
   or investigations unless the user specifically asks to send the result to Telegram.
+- slack_send_message — send a Slack message/notification when the user explicitly
+  asks to send, post, notify, share, or message Slack (e.g. "send X to slack",
+  "post this to slack", "notify the team on slack"). Put the exact text the user
+  wants delivered in `message`. The Slack webhook is bound to a single preconfigured
+  channel, so you CANNOT choose a channel — do NOT ask which channel/thread to use
+  and do NOT refuse for lack of a channel; just send. If the user asks to send the
+  RESULT of something they also requested this turn (e.g. "check the weather and
+  send it to slack"), this is a DATA-DEPENDENT chain (see the COMPOUND TURN RULE
+  box): emit the lookup tool ALONE first, WAIT for its result, then on the next
+  response call slack_send_message with the real value from that result. Do NOT
+  emit slack_send_message in the same response as the lookup, and do NOT send a
+  "checking…" placeholder — wait for the actual content and send that.
 - shell_run — narrowly scoped local diagnostic shell commands
 - code_implement — code implementation workflow, only for a direct user request
   to change code. Do NOT use it for assistant-style offers or pasted suggested

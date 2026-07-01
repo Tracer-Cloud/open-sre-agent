@@ -3,7 +3,7 @@ remote integration configuration without depending on a specific
 SaaS backend.
 
 Today the only port is :func:`fetch_remote_integrations`, called by
-:mod:`tools.investigation.stages.resolve_integrations.node` to pull the user's
+:mod:`core.agent_harness.integrations.resolution` to pull the user's
 org-wide integrations from a remote source. The default returns an
 empty list; the CLI/SDK boundary registers a Tracer-Cloud-backed
 fetcher via :func:`set_remote_integrations_fetcher`. Headless

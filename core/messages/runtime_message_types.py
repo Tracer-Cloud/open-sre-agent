@@ -64,8 +64,3 @@ type RuntimeMessage = (
     UserRuntimeMessage | AssistantRuntimeMessage | ToolResultRuntimeMessage | AppRuntimeMessage
 )
 type RuntimeMessageLike = RuntimeMessage | ProviderMessage
-
-BRANCH_SUMMARY_PREFIX = "<branch_summary>\n"
-BRANCH_SUMMARY_SUFFIX = "\n</branch_summary>"
-COMPACTION_SUMMARY_PREFIX = "<compaction_summary>\n"
-COMPACTION_SUMMARY_SUFFIX = "\n</compaction_summary>"

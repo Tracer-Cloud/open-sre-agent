@@ -9,7 +9,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from core import (
-    build_synthetic_assistant_tool_call_message,
     context_budget_ceiling_for_model,
     enforce_context_budget,
     estimate_message_tokens,
@@ -18,6 +17,7 @@ from core import (
 )
 from core.llm.agent_llm_client import CLIBackedAgentClient
 from core.llm.types import ToolCall
+from core.messages import MessageFormatter
 from core.tool_framework.registered_tool import RegisteredTool
 from integrations.llm_cli.errors import CLITimeoutError
 from tools.investigation.stages.gather_evidence import (
@@ -158,9 +158,8 @@ def test_build_synthetic_assistant_json_for_cli_backed_client() -> None:
         explain_failure=lambda **_kw: "",
     )
     llm = CLIBackedAgentClient(fake_adapter, model=None)
-    msg = build_synthetic_assistant_tool_call_message(
-        llm,
-        [ToolCall(id="seed_t", name="query_eks", input={"cluster": "c"})],
+    msg = MessageFormatter(llm).synthetic_assistant_tool_call(
+        [ToolCall(id="seed_t", name="query_eks", input={"cluster": "c"})]
     )
     assert msg["role"] == "assistant"
     assert '"tool_calls"' in msg["content"]
@@ -471,7 +470,7 @@ def test_build_synthetic_assistant_msg_for_bedrock_converse(
     calls = [
         ToolCall(id="abc12def3", name="query_logs", input={"query": "error"}),
     ]
-    msg = build_synthetic_assistant_tool_call_message(llm, calls)
+    msg = MessageFormatter(llm).synthetic_assistant_tool_call(calls)
 
     assert msg["role"] == "assistant"
     assert msg["content"][0]["toolUse"]["toolUseId"] == "abc12def3"

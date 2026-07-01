@@ -14,6 +14,7 @@ from typing import Any
 from rich.console import Console
 
 import surfaces.interactive_shell.main as main_entrypoint
+from core.agent_harness.integrations.resolution import IntegrationResolutionResult
 from core.agent_harness.session import ReplSession
 from surfaces.interactive_shell.runtime.startup import first_launch_github as flg
 
@@ -48,8 +49,8 @@ def test_hydrate_marks_known_even_when_none_configured(monkeypatch: Any) -> None
 def test_warm_resolved_integrations_populates_cache(monkeypatch: Any) -> None:
     resolved = {"datadog": {"site": "datadoghq.com"}, "grafana": {"url": "http://localhost"}}
     monkeypatch.setattr(
-        "tools.investigation.stages.resolve_integrations.resolve_integrations_quiet",
-        lambda _state: resolved,
+        "core.agent_harness.integrations.resolution.resolve_integrations",
+        lambda: resolved,
     )
     session = ReplSession()
     session.warm_resolved_integrations()
@@ -59,12 +60,12 @@ def test_warm_resolved_integrations_populates_cache(monkeypatch: Any) -> None:
 def test_warm_resolved_integrations_is_idempotent(monkeypatch: Any) -> None:
     calls: list[str] = []
 
-    def _resolve(_state: dict[str, Any]) -> dict[str, Any]:
+    def _resolve() -> dict[str, Any]:
         calls.append("resolve")
         return {"github": {}}
 
     monkeypatch.setattr(
-        "tools.investigation.stages.resolve_integrations.resolve_integrations_quiet",
+        "core.agent_harness.integrations.resolution.resolve_integrations",
         _resolve,
     )
     session = ReplSession()
@@ -76,12 +77,12 @@ def test_warm_resolved_integrations_is_idempotent(monkeypatch: Any) -> None:
 def test_warm_resolved_integrations_skips_empty_cache(monkeypatch: Any) -> None:
     calls: list[str] = []
 
-    def _resolve(_state: dict[str, Any]) -> dict[str, Any]:
+    def _resolve() -> dict[str, Any]:
         calls.append("resolve")
         return {}
 
     monkeypatch.setattr(
-        "tools.investigation.stages.resolve_integrations.resolve_integrations_quiet",
+        "core.agent_harness.integrations.resolution.resolve_integrations",
         _resolve,
     )
     session = ReplSession()
@@ -100,8 +101,8 @@ def test_warm_resolved_integrations_uses_quiet_resolve(monkeypatch: Any) -> None
         lambda _state: progress_calls.append("progress") or {"resolved_integrations": {}},
     )
     monkeypatch.setattr(
-        "tools.investigation.stages.resolve_integrations.resolve_integrations_quiet",
-        lambda _state: quiet_calls.append("quiet") or {"datadog": {}},
+        "core.agent_harness.integrations.resolution.resolve_integrations",
+        lambda: quiet_calls.append("quiet") or {"datadog": {}},
     )
 
     session = ReplSession()
@@ -110,6 +111,57 @@ def test_warm_resolved_integrations_uses_quiet_resolve(monkeypatch: Any) -> None
     assert quiet_calls == ["quiet"]
     assert progress_calls == []
     assert session.resolved_integrations_cache == {"datadog": {}}
+
+
+def test_get_integrations_returns_pydantic_cached_result(monkeypatch: Any) -> None:
+    def _unexpected_resolve() -> dict[str, Any]:
+        raise AssertionError("cached integrations should not re-resolve")
+
+    monkeypatch.setattr(
+        "core.agent_harness.integrations.resolution.resolve_integrations",
+        _unexpected_resolve,
+    )
+    session = ReplSession()
+    session.resolved_integrations_cache = {"datadog": {"site": "datadoghq.com"}}
+
+    result = session.get_integrations()
+
+    assert isinstance(result, IntegrationResolutionResult)
+    assert result.resolved_integrations == {"datadog": {"site": "datadoghq.com"}}
+    assert result.services == ("datadog",)
+
+
+def test_get_integrations_respects_explicit_empty_cache(monkeypatch: Any) -> None:
+    calls: list[str] = []
+    monkeypatch.setattr(
+        "core.agent_harness.integrations.resolution.resolve_integrations",
+        lambda: calls.append("resolve") or {"datadog": {}},
+    )
+    session = ReplSession()
+    session.resolved_integrations_cache = {}
+
+    result = session.get_integrations()
+
+    assert result.resolved_integrations == {}
+    assert calls == []
+
+
+def test_get_integrations_warms_metadata_only_cache(monkeypatch: Any) -> None:
+    calls: list[str] = []
+    monkeypatch.setattr(
+        "core.agent_harness.integrations.resolution.resolve_integrations",
+        lambda: calls.append("resolve") or {"datadog": {"site": "datadoghq.com"}},
+    )
+    session = ReplSession()
+    session.resolved_integrations_cache = {"_gateway_chat_id": "chat-1"}
+
+    result = session.get_integrations()
+
+    assert calls == ["resolve"]
+    assert result.resolved_integrations == {
+        "_gateway_chat_id": "chat-1",
+        "datadog": {"site": "datadoghq.com"},
+    }
 
 
 def test_stale_background_warm_does_not_overwrite_refreshed_cache() -> None:
@@ -130,12 +182,12 @@ def test_hydrate_entrypoint_does_not_warm_before_prompt(monkeypatch: Any) -> Non
     )
     resolve_calls: list[str] = []
 
-    def _resolve(_state: dict[str, Any]) -> dict[str, Any]:
+    def _resolve() -> dict[str, Any]:
         resolve_calls.append("resolve")
         return {"datadog": {"site": "datadoghq.com"}}
 
     monkeypatch.setattr(
-        "tools.investigation.stages.resolve_integrations.resolve_integrations_quiet",
+        "core.agent_harness.integrations.resolution.resolve_integrations",
         _resolve,
     )
     session = ReplSession()

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from typing import Any, Literal
 
 type PromptBlockKind = Literal["system", "rule", "context", "conversation", "tool", "user"]
@@ -73,10 +73,6 @@ class PromptEnvelope:
             separator=separator,
             metadata=dict(metadata or {}),
         )
-
-    def with_block(self, block: PromptBlock) -> PromptEnvelope:
-        """Return a copy with ``block`` appended."""
-        return replace(self, blocks=(*self.blocks, block))
 
     def block(self, block_id: str) -> PromptBlock | None:
         """Return the block with ``block_id`` if present."""

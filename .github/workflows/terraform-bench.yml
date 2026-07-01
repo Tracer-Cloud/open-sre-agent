@@ -1,17 +1,17 @@
 name: terraform-bench (plan)
 
-# Runs terraform fmt + init + validate + plan against infra/bench/ on every PR
+# Runs terraform fmt + init + validate + plan against tests/benchmarks/cloudopsbench/infra/ on every PR
 # that touches the bench infra. Posts the plan output as a sticky PR comment so
 # reviewers can see what would change before approving.
 #
-# Never applies — apply is developer-local in v1 (see infra/bench/README.md).
+# Never applies — apply is developer-local in v1 (see tests/benchmarks/cloudopsbench/infra/README.md).
 # When apply-from-CI is desirable later, add a separate workflow that runs on
 # merge-to-main with a different (higher-privileged) AWS role.
 
 on:
   pull_request:
     paths:
-      - "infra/bench/**"
+      - "tests/benchmarks/cloudopsbench/infra/**"
       - ".github/workflows/terraform-bench.yml"
   workflow_dispatch:
 
@@ -32,7 +32,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: infra/bench
+        working-directory: tests/benchmarks/cloudopsbench/infra
 
     env:
       AWS_REGION: us-east-1
@@ -57,7 +57,7 @@ jobs:
           # PR for details.
 
       - name: Configure AWS credentials (OIDC role assumption)
-        # No long-lived AWS keys. The role is provisioned by infra/bench/
+        # No long-lived AWS keys. The role is provisioned by tests/benchmarks/cloudopsbench/infra/
         # Terraform; ARN is hardcoded here because Terraform outputs aren't
         # available before the workflow can run. Account ID is the
         # tracer-cloud account.
@@ -135,7 +135,7 @@ jobs:
               `| validate | ${icon(validate)} \`${validate}\` |`,
               `| plan | ${icon(plan)} \`${plan}\` |`,
               '',
-              fmt !== 'success' ? '> Run `terraform fmt -recursive` in `infra/bench/` to fix formatting.' : '',
+              fmt !== 'success' ? '> Run `terraform fmt -recursive` in `tests/benchmarks/cloudopsbench/infra/` to fix formatting.' : '',
               '',
               plan === 'success'
                 ? `<details><summary>Plan output${truncated ? ' (truncated — see <a href="' + url + '">workflow logs</a> for full output)' : ''}</summary>\n\n\`\`\`hcl\n${planBody}\n\`\`\`\n\n</details>`
@@ -182,9 +182,9 @@ jobs:
   # Security + lint scanners — run in parallel with plan.                   #
   #                                                                          #
   # Suppression policy (intentional skips) is defined per-tool:              #
-  #   - checkov: infra/bench/.checkov.yaml                                   #
-  #   - tfsec:   infra/bench/.tfsec/config.yml                               #
-  #   - tflint:  infra/bench/.tflint.hcl                                     #
+  #   - checkov: tests/benchmarks/cloudopsbench/infra/.checkov.yaml                                   #
+  #   - tfsec:   tests/benchmarks/cloudopsbench/infra/.tfsec/config.yml                               #
+  #   - tflint:  tests/benchmarks/cloudopsbench/infra/.tflint.hcl                                     #
   # Each suppression includes a justification at the source. Day-one         #
   # findings should be REAL findings — change configs, not the workflow,    #
   # if a rule needs to be skipped.                                           #
@@ -199,7 +199,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: infra/bench
+        working-directory: tests/benchmarks/cloudopsbench/infra
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -241,14 +241,14 @@ jobs:
       # in Trivy. Replace with `aquasec/trivy:latest config /src` when
       # ready — same .tfsec/config.yml is recognized.
       #
-      # Suppressions: infra/bench/.tfsec/config.yml. tfsec exits 1 on any
+      # Suppressions: tests/benchmarks/cloudopsbench/infra/.tfsec/config.yml. tfsec exits 1 on any
       # finding by default, which fails the step — exactly the hard-fail
       # behavior we want. Add a justified exclude to the config rather
       # than disabling the step.
       - name: tfsec scan (via Docker)
         run: |
           docker run --rm \
-            -v "${{ github.workspace }}/infra/bench:/src" \
+            -v "${{ github.workspace }}/tests/benchmarks/cloudopsbench/infra:/src" \
             aquasec/tfsec:latest \
             /src \
             --config-file=/src/.tfsec/config.yml \
@@ -266,15 +266,15 @@ jobs:
         with:
           python-version: "3.12"
 
-      # Suppressions live in infra/bench/.checkov.yaml. soft_fail is
+      # Suppressions live in tests/benchmarks/cloudopsbench/infra/.checkov.yaml. soft_fail is
       # FALSE — real findings block the PR. Add a justified skip-check
       # to the config rather than disabling here.
       - name: checkov scan
         uses: bridgecrewio/checkov-action@v12
         with:
-          directory: infra/bench
+          directory: tests/benchmarks/cloudopsbench/infra
           framework: terraform
-          config_file: infra/bench/.checkov.yaml
+          config_file: tests/benchmarks/cloudopsbench/infra/.checkov.yaml
           quiet: true
           soft_fail: false
           # Re-enable SARIF upload when CodeQL alerts are wanted:

@@ -13,7 +13,11 @@ from dataclasses import dataclass, field
 from core.agent_harness.grounding.agents_md_reference import (
     AgentsMdReference,
 )
-from core.agent_harness.grounding.cli_reference import CliReference, SlashCommandProvider
+from core.agent_harness.grounding.cli_reference import (
+    CliReference,
+    CommandGroupProvider,
+    SlashCommandProvider,
+)
 from core.agent_harness.grounding.diagnostics import (
     GroundingSource,
     log_grounding_cache_diagnostics,
@@ -50,6 +54,15 @@ class GroundingContext:
     def set_slash_commands_provider(self, provider: SlashCommandProvider | None) -> None:
         """Bind a surface-owned slash command registry for CLI reference grounding."""
         self.cli.set_slash_commands_provider(provider)
+
+    def set_command_group_provider(self, provider: CommandGroupProvider | None) -> None:
+        """Bind a surface-owned callable that returns the root Click command group.
+
+        The interactive shell wires ``surfaces.cli.__main__.cli`` in here at startup;
+        the headless adapter can leave the provider unset (grounding degrades to a
+        short placeholder). This keeps ``core/`` free of ``surfaces/`` imports.
+        """
+        self.cli.set_command_group_provider(provider)
 
 
 __all__ = ["GroundingContext"]

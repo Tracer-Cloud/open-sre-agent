@@ -2,14 +2,12 @@
 
 ``StreamEvent`` is the inter-layer event shape produced by the
 orchestration pipeline (node updates + fine-grained chain/tool/LLM
-callbacks) and consumed by the CLI renderer, the remote runner, and
-any future surface that observes pipeline progress.
+callbacks) and consumed by the CLI renderer and any future surface that
+observes pipeline progress.
 
-It deliberately lives in ``core.domain`` so that the orchestration
-core does not need to import from ``infra.deployment.remote`` (a transport-layer
-package). The SSE parser that materializes ``StreamEvent``s from a
-remote HTTP response stays in ``infra.deployment.remote.stream``; the event shape
-itself is domain.
+It deliberately lives in ``core.domain`` so the orchestration core stays
+free of transport-layer imports; surface-specific parsers live outside
+``core.domain``.
 """
 
 from __future__ import annotations

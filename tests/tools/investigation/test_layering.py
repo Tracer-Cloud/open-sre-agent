@@ -26,11 +26,8 @@ _ORCHESTRATION_PIPELINE_FILES: tuple[Path, ...] = (
     Path("tools/investigation/state_factory.py"),
     Path("tools/investigation/streaming.py"),
 )
-# ``infra.deployment.remote`` is a transport-layer package (HTTP client, SSE parser). The
-# orchestration core must not depend on it — domain types it shares with
-# the remote runner live in ``core.domain`` (see ``StreamEvent``).
 # ``cli`` is the presentation layer; same rule.
-_FORBIDDEN_PREFIXES: tuple[str, ...] = ("infra.deployment.remote", "cli")
+_FORBIDDEN_PREFIXES: tuple[str, ...] = ("cli",)
 
 
 def _orchestration_pipeline_modules() -> list[Path]:

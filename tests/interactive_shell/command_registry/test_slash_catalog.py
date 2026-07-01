@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from core.agent_harness.tools.action_tools import get_action_tool
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS
 from surfaces.interactive_shell.command_registry.slash_catalog import (
     _MCP_BY_COMMAND,
@@ -10,7 +11,6 @@ from surfaces.interactive_shell.command_registry.slash_catalog import (
     slash_invoke_input_schema,
     slash_invoke_tool_description,
 )
-from tools.interactive_shell.action_tools import get_action_tool
 
 _MIN_LLM_DESCRIPTION_LEN = 20
 

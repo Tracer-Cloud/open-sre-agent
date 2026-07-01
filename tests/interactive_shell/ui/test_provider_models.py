@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from surfaces.interactive_shell.ui.tables.provider import resolve_provider_models
+from core.agent_harness.providers.provider_models import resolve_provider_models
+from surfaces.interactive_shell.ui.tables import provider as ui_provider
+
+
+def test_ui_provider_reexports_core_resolver() -> None:
+    assert ui_provider.resolve_provider_models is resolve_provider_models
 
 
 def test_antigravity_cli_reads_model_env(monkeypatch: object) -> None:

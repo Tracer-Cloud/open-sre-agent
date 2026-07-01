@@ -24,7 +24,6 @@ from surfaces.cli.commands.integrations import integrations
 from surfaces.cli.commands.messaging import messaging
 from surfaces.cli.commands.misses import misses_command
 from surfaces.cli.commands.onboard import onboard
-from surfaces.cli.commands.remote import remote
 from surfaces.cli.commands.tests import tests
 from surfaces.cli.commands.watchdog import watchdog_command
 
@@ -33,7 +32,6 @@ _COMMANDS: tuple[click.Command, ...] = (
     onboard,
     auth_command,
     config_command,
-    remote,
     tests,
     integrations,
     guardrails,

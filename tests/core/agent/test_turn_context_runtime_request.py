@@ -6,9 +6,9 @@ from typing import Any
 import pytest
 
 from core.agent import Agent
-from core.agent_harness.conversation_memory import MAX_CONVERSATION_MESSAGES
+from core.agent_harness.models.turn_context import TurnContext
 from core.agent_harness.prompts import PromptEnvelope
-from core.agent_harness.turn_context import TurnContext
+from core.agent_harness.prompts.conversation_memory import MAX_CONVERSATION_MESSAGES
 from core.llm.types import AgentLLMResponse
 from core.messages import UserRuntimeMessage
 from core.types import AgentTool
@@ -18,7 +18,6 @@ class _NoToolLLM:
     def __init__(self) -> None:
         self.seen_system: str | None = None
         self.seen_messages: list[dict[str, object]] | None = None
-        self.model_id: str | None = None
 
     def tool_schemas(self, _tools: list[AgentTool]) -> list[dict[str, object]]:
         return []
@@ -96,22 +95,12 @@ def test_turn_context_can_drive_agent_runtime_request() -> None:
     assert llm.seen_messages == [{"role": "user", "content": "investigate"}]
 
 
-def test_agent_context_resolves_llm_via_build_llm_hook() -> None:
-    """A hook-pattern subclass (no llm= to __init__) works through agent_context.
-
-    Regression guard: the agent_context branch used to skip LLM resolution and
-    require llm= at construction, so a subclass that only overrode build_llm hit
-    the no-LLM guard. It must now resolve the client from the hook, matching the
-    initial_messages path.
-    """
+def test_agent_context_falls_back_to_process_wide_llm(monkeypatch: pytest.MonkeyPatch) -> None:
+    """When ``llm=`` is omitted at construction, ``run(agent_context=...)`` resolves
+    the process-wide client via :func:`agent_llm_client.get_agent_llm`."""
     tool = _tool()
     built = _NoToolLLM()
-    calls: list[int] = []
-
-    class _HookAgent(Agent[Any]):
-        def build_llm(self) -> Any:
-            calls.append(1)
-            return built
+    monkeypatch.setattr("core.llm.agent_llm_client.get_agent_llm", lambda: built)
 
     ctx = _turn_context(
         system_prompt=PromptEnvelope.from_text("runtime system"),
@@ -121,10 +110,8 @@ def test_agent_context_resolves_llm_via_build_llm_hook() -> None:
         max_iterations=2,
     )
 
-    # No llm= passed to __init__ — the hook must supply it.
-    result = _HookAgent(max_iterations=1).run(agent_context=ctx)
+    result = Agent[Any](max_iterations=1).run(agent_context=ctx)
 
-    assert calls == [1]
     assert result.final_text == "done"
     assert built.seen_system == "runtime system"
 

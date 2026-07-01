@@ -357,6 +357,44 @@ def test_run_shell_command_silent_success_prints_checkmark(monkeypatch: pytest.M
     assert session.history[-1] == {"type": "shell", "text": "true", "ok": True}
 
 
+def test_run_shell_command_success_records_stdout_without_stderr_noise(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _fake_execute(**_kwargs: object) -> ShellExecutionResult:
+        return ShellExecutionResult(
+            command="curl wttr.in/Hawaii?format=3",
+            argv=["curl", "wttr.in/Hawaii?format=3"],
+            stdout="Hawaii: +25C\n",
+            stderr="curl progress\n",
+            exit_code=0,
+            timed_out=False,
+            truncated=False,
+            executed_with_shell=False,
+        )
+
+    monkeypatch.setattr(
+        "tools.interactive_shell.shell.execution.execute_shell_command",
+        _fake_execute,
+    )
+
+    session = ReplSession()
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    result = run_shell_command("curl wttr.in/Hawaii?format=3", session, console)
+
+    assert session.history[-1] == {
+        "type": "shell",
+        "text": "curl wttr.in/Hawaii?format=3",
+        "ok": True,
+        "response_text": "Hawaii: +25C",
+    }
+    assert result["ok"] is True
+    assert result["stdout"] == "Hawaii: +25C"
+    assert result["stderr"] == ""
+    assert result["response_text"] == "Hawaii: +25C"
+
+
 def test_run_shell_command_failure_prints_exit_line(monkeypatch: pytest.MonkeyPatch) -> None:
     def _fake_execute(**_kwargs: object) -> ShellExecutionResult:
         return ShellExecutionResult(

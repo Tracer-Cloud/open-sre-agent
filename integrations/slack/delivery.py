@@ -188,6 +188,38 @@ def _configured_webhook_url() -> str:
         return ""
 
 
+def send_slack_webhook_message(
+    text: str,
+    *,
+    webhook_url: str | None = None,
+    blocks: list[dict[str, Any]] | None = None,
+    **extra: Any,
+) -> tuple[bool, str]:
+    """Post a standalone message to a Slack incoming webhook.
+
+    General-purpose entry point that is **not** tied to the investigation/RCA
+    flow: it posts ``text`` (and optional Block Kit ``blocks``) to a Slack
+    incoming webhook so any surface can send a Slack notification on demand.
+
+    Args:
+        text: Plain-text message body.
+        webhook_url: Optional webhook URL. When omitted, resolves from
+            ``SLACK_WEBHOOK_URL`` or the local Slack integration store.
+        blocks: Optional Slack Block Kit blocks.
+        **extra: Any additional Slack payload params merged into the body.
+
+    Returns:
+        ``(success, error_detail)``. ``error_detail`` is ``"no_webhook"`` when
+        no webhook is configured and ``"webhook=failed"`` when delivery failed.
+    """
+    url = (webhook_url or _configured_webhook_url()).strip()
+    if not url:
+        return False, "no_webhook"
+    if _post_via_incoming_webhook(text, url, blocks=blocks, **extra):
+        return True, ""
+    return False, "webhook=failed"
+
+
 def send_slack_report(
     slack_message: str,
     channel: str | None = None,

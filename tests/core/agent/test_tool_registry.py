@@ -7,16 +7,16 @@ import re
 from rich.console import Console
 
 from core.agent_harness.session import ReplSession
+from core.agent_harness.tools.action_tools import (
+    get_action_tool,
+    get_action_tools_from_integrations_context,
+)
+from core.agent_harness.tools.tool_context import (
+    ActionToolContext,
+)
 from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS
 from tools.interactive_shell.action_names import TOOL_KIND_TO_NAME
-from tools.interactive_shell.action_tools import (
-    action_tools_for_context,
-    get_action_tool,
-)
-from tools.interactive_shell.contracts import (
-    ToolContext,
-)
 
 
 def _action_tools(
@@ -24,8 +24,10 @@ def _action_tools(
     *,
     resolved_integrations: dict[str, dict[str, str]] | None = None,
 ) -> list[object]:
-    ctx = ToolContext(session=session, console=Console(force_terminal=False))
-    return action_tools_for_context(ctx, resolved_integrations=resolved_integrations)
+    ctx = ActionToolContext(session=session, console=Console(force_terminal=False))
+    return get_action_tools_from_integrations_context(
+        ctx, resolved_integrations=resolved_integrations
+    )
 
 
 def _tool_specs(
@@ -180,8 +182,8 @@ def test_llm_set_provider_offered_by_default() -> None:
 
 def test_registry_agent_tools_exclude_unavailable_tool() -> None:
     session = ReplSession(available_capabilities={"slash_commands": ()})
-    ctx = ToolContext(session=session, console=Console(force_terminal=False))
-    names = {tool.name for tool in action_tools_for_context(ctx)}
+    ctx = ActionToolContext(session=session, console=Console(force_terminal=False))
+    names = {tool.name for tool in get_action_tools_from_integrations_context(ctx)}
     assert "slash_invoke" not in names
 
 

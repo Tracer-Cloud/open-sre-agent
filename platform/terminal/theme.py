@@ -158,7 +158,7 @@ THEME_REGISTRY: dict[str, CliTheme] = {
     ),
 }
 
-DEFAULT_THEME_NAME = "green"
+DEFAULT_THEME_NAME = "blue"
 
 
 def _fg(rgb: tuple[int, int, int]) -> str:

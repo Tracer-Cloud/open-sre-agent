@@ -3,7 +3,7 @@
 These are the seams that keep ``agent/`` decoupled from any concrete surface.
 The interactive shell implements them as adapters over its ``ReplSession``,
 Rich console, tool registry, and grounding caches; the headless adapters in
-:mod:`core.agent_harness.headless` implement minimal in-memory versions for API / test runs.
+:mod:`core.agent_harness.agents.headless_agent` implement minimal in-memory versions for API / test runs.
 
 Nothing here imports ``interactive_shell``.
 """
@@ -13,7 +13,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Sequence
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
-from core.agent_harness.turn_results import ShellTurnResult, ToolCallingTurnResult
+from core.agent_harness.models.turn_results import ShellTurnResult, ToolCallingTurnResult
 
 if TYPE_CHECKING:
     pass
@@ -56,7 +56,7 @@ class SessionStore(Protocol):
     action driver, the three-path engine, and the gather loop touch.
     """
 
-    # --- turn-context snapshot fields (see core.agent_harness.turn_context.TurnContextSource) ---
+    # --- turn-context snapshot fields (see core.agent_harness.models.turn_context.TurnContextSource) ---
     cli_agent_messages: list[tuple[str, str]]
     configured_integrations_known: bool
 

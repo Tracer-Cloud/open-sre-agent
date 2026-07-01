@@ -41,6 +41,7 @@ tools:
 
     formatted = format_tool_skill_guidance(result.skill)
     assert '<skill name="github-workflow"' in formatted
+    assert 'description="Guide GitHub workflow tools."' in formatted
     assert f"References are relative to {tmp_path}" in formatted
 
 

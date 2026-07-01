@@ -36,13 +36,16 @@ from core.llm.transport_mode import current_llm_transport, use_litellm_transport
 from core.llm.types import LLMResponse
 from core.llm.usage import UsageHook, emit_usage, set_usage_hook
 
-if TYPE_CHECKING:
-    from core.llm.sdk.llm_clients import BedrockLLMClient, LLMClient, OpenAILLMClient
+# NOTE: The SDK client classes (``LLMClient``/``OpenAILLMClient``/``BedrockLLMClient``)
+# are re-exported lazily via ``__getattr__`` below rather than statically imported from
+# ``core.llm.sdk.llm_clients``. ``llm_clients`` imports back into this module (for
+# ``resolve_llm_api_key``), so a static import here — even under ``TYPE_CHECKING`` —
+# would form a ``llm_client`` <-> ``sdk.llm_clients`` cycle (CodeQL ``py/cyclic-import``).
 
+# ``LLMClient``/``OpenAILLMClient``/``BedrockLLMClient`` are intentionally omitted here:
+# they are re-exported lazily through ``__getattr__`` (see ``_SDK_EXPORTS``) to avoid a
+# static import of ``core.llm.sdk.llm_clients``, which would reintroduce an import cycle.
 __all__ = [
-    "LLMClient",
-    "OpenAILLMClient",
-    "BedrockLLMClient",
     "OpenAIRateLimitError",
     "OpenAIBadRequestError",
     "OpenAITimeoutError",

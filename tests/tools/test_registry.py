@@ -338,6 +338,14 @@ def test_github_workflow_skill_guidance_does_not_attach_to_unrelated_github_tool
     assert tool_def.skill_guidance == ""
 
 
+def test_python_execution_skill_guidance_does_not_attach_to_unrelated_tools() -> None:
+    tools_by_name = {tool_def.name: tool_def for tool_def in registry_module.get_registered_tools()}
+
+    tool_def = tools_by_name["get_github_file_contents"]
+
+    assert "github-star-velocity" not in tool_def.skill_guidance
+
+
 def test_github_issue_mutation_execution_remains_chat_only() -> None:
     chat_tools = {
         tool_def.name: tool_def for tool_def in registry_module.get_registered_tools("chat")

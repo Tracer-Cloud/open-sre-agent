@@ -7,15 +7,15 @@ from typing import Any
 
 from rich.console import Console
 
-from core.tool_framework.registered_tool import RegisteredTool
-from platform.common.task_types import TaskRecord
-from surfaces.interactive_shell.runtime import ReplSession
-from tools.interactive_shell.contracts import (
-    ToolContext,
-    execute_with_repl_context,
+from core.agent_harness.tools.tool_context import (
+    ActionToolContext,
+    execute_with_action_context,
     object_schema,
     string_property,
 )
+from core.tool_framework.registered_tool import RegisteredTool
+from platform.common.task_types import TaskRecord
+from surfaces.interactive_shell.runtime import ReplSession
 from tools.interactive_shell.shared.investigation_launch import launch_investigation
 
 
@@ -75,7 +75,7 @@ def run_text_investigation(
     )
 
 
-def execute_investigation_tool(args: dict[str, Any], ctx: ToolContext) -> bool:
+def execute_investigation_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
     alert_text = normalize_investigation_alert_text(str(args.get("alert_text", "")))
     if not alert_text:
         return False
@@ -91,7 +91,7 @@ def execute_investigation_tool(args: dict[str, Any], ctx: ToolContext) -> bool:
 
 
 def run_investigation(*, alert_text: str, context: Any) -> dict[str, Any]:
-    return execute_with_repl_context(
+    return execute_with_action_context(
         {"alert_text": alert_text},
         context,
         execute_investigation_tool,

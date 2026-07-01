@@ -90,7 +90,7 @@ Each `*AgentClient` should own:
 | ---------------- | ----- |
 | `tool_schemas(tools)` | Map `RegisteredTool` / `public_input_schema` → API payload. Never pass raw schemas if the API is strict. |
 | `invoke(..., tools=...)` | Attach schemas the API expects; handle retries and map errors to `RuntimeError` with actionable text. |
-| Message compatibility | Investigation builds history via `build_synthetic_assistant_tool_call_message`, `build_assistant_message`, `build_tool_result_messages` in `core/`—each must match your invoke parser. |
+| Message compatibility | Investigation builds history via `MessageFormatter` (`core.messages`) — `assistant_from_response`, `tool_results_from_execution`, and `synthetic_assistant_tool_call` — each must match your invoke parser. |
 
 Checklist when adding or changing a client:
 

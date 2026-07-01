@@ -7,7 +7,10 @@ from typing import Any
 
 from rich.console import Console
 
+from core.agent_harness.agents.turn_orchestrator import run_turn
+from core.agent_harness.providers.default_providers import DefaultTurnAccounting
 from core.agent_harness.session import ReplSession
+from core.agent_harness.session.storage.memory import InMemorySessionStorage
 from surfaces.interactive_shell.runtime.core.state import ReplState, SpinnerState
 from surfaces.interactive_shell.runtime.core.turn_accounting import (
     ToolCallingTurnResult,
@@ -68,6 +71,7 @@ def test_recorder_flushes_once_for_chat_fallback() -> None:
 
 def test_recorder_flushes_once_for_silent_handled_turn() -> None:
     recorder = _Recorder()
+    session = ReplSession()
 
     def _handled(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
         return ToolCallingTurnResult(
@@ -81,7 +85,7 @@ def test_recorder_flushes_once_for_silent_handled_turn() -> None:
 
     result = execute_shell_turn(
         "run something",
-        ReplSession(),
+        session,
         _console(),
         recorder=recorder,  # type: ignore[arg-type]
         execute_actions=_handled,
@@ -93,6 +97,51 @@ def test_recorder_flushes_once_for_silent_handled_turn() -> None:
     assert result.final_intent == "cli_agent_handled"
     assert recorder.responses == [("command output", None)]
     assert recorder.flush_count == 1
+    assert session.cli_agent_messages[-2:] == [
+        ("user", "run something"),
+        ("assistant", "command output"),
+    ]
+
+
+def test_default_turn_accounting_persists_action_only_context() -> None:
+    storage = InMemorySessionStorage()
+    session = ReplSession(storage=storage)
+    storage.open_session(session)
+
+    def _handled(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
+        return ToolCallingTurnResult(
+            planned_count=1,
+            executed_count=1,
+            executed_success_count=1,
+            has_unhandled_clause=False,
+            handled=True,
+            response_text="Hawaii: +28C",
+        )
+
+    result = run_turn(
+        "weather in Hawaii",
+        session,
+        execute_actions=_handled,
+        gather=lambda *_args, **_kwargs: None,
+        answer=lambda *_args, **_kwargs: None,
+        accounting=DefaultTurnAccounting(session, "weather in Hawaii"),
+    )
+
+    records = storage.read(session.session_id)
+    messages = [record for record in records if record.get("type") == "message"]
+
+    assert result.final_intent == "cli_agent_handled"
+    assert session.cli_agent_messages[-2:] == [
+        ("user", "weather in Hawaii"),
+        ("assistant", "Hawaii: +28C"),
+    ]
+    assert [
+        (message.get("role"), message.get("content"), message.get("metadata"))
+        for message in messages[-2:]
+    ] == [
+        ("user", "weather in Hawaii", {"kind": "chat"}),
+        ("assistant", "Hawaii: +28C", {"kind": "chat"}),
+    ]
 
 
 def test_agent_turn_runner_exposes_pi_style_queue_methods() -> None:

@@ -32,6 +32,8 @@ brew install tracer-cloud/tap/opensre
 curl -fsSL https://install.opensre.com | bash
 ```
 
+The macOS/Linux installer does not require `sudo`. It uses a writable bin directory already on your `PATH` when possible; otherwise it installs to `~/.local/bin` and prints the command to apply the PATH update in your shell.
+
 When you run the installer directly from an interactive terminal, it launches onboarding automatically once the install finishes. When the installer is piped (the `curl … | bash` form above), it skips the auto-launch and prints a "Next steps" hint instead — run `opensre onboard` yourself to start setup. To opt out of the auto-launch entirely:
 
 ```bash

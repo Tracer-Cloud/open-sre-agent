@@ -17,6 +17,7 @@ from core.domain.alerts.inbox import IncomingAlert
 
 if TYPE_CHECKING:
     from core.agent_harness.grounding.context import GroundingContext
+    from core.agent_harness.integrations.resolution import IntegrationResolutionResult
 else:
     GroundingContext = Any
 
@@ -28,6 +29,7 @@ from core.agent_harness.session.background import (
 )
 from core.agent_harness.session.integrations_cache import (
     has_only_runtime_metadata,
+    has_resolved_integrations,
     merge_resolved_integrations,
 )
 from core.agent_harness.session.storage.jsonl import JsonlSessionStorage
@@ -372,8 +374,11 @@ class ReplSession:
         if not scenario_id:
             self.last_synthetic_observation_path = None
             return
+        # ``config`` is the shared layer both ``core`` and ``surfaces`` can
+        # depend on; the constant used to live in ``surfaces.cli.tests.discover``
+        # but that direct edge is a T-4 layering violation (issue #3352).
         try:
-            from surfaces.cli.tests.discover import SYNTHETIC_SCENARIOS_DIR
+            from config.synthetic_paths import SYNTHETIC_SCENARIOS_DIR
         except Exception:
             self.last_synthetic_observation_path = None
             return
@@ -547,9 +552,9 @@ class ReplSession:
                 generation = self._integration_warm_generation
 
         try:
-            from tools.investigation.stages.resolve_integrations import resolve_integrations_quiet
+            from core.agent_harness.integrations.resolution import resolve_integrations
 
-            resolved = resolve_integrations_quiet({})  # type: ignore[arg-type]
+            resolved = resolve_integrations()
         except Exception:
             # Best-effort warmup: leave cache unset so later turns can retry.
             return
@@ -570,6 +575,26 @@ class ReplSession:
                 self.resolved_integrations_cache,
                 resolved,
             )
+
+    def get_integrations(self) -> IntegrationResolutionResult:
+        """Return this REPL session's integration configs as a typed snapshot.
+
+        The accessor is cache-aware: an explicit empty cache is treated as
+        known state, metadata-only caches trigger one quiet warmup attempt, and
+        warmup results are merged through the same generation guard as startup.
+        """
+        from core.agent_harness.integrations.resolution import IntegrationResolutionResult
+
+        cached = self.resolved_integrations_cache
+        if cached is not None and (
+            has_resolved_integrations(cached) or not has_only_runtime_metadata(cached)
+        ):
+            return IntegrationResolutionResult(resolved_integrations=dict(cached))
+
+        self.warm_resolved_integrations()
+        return IntegrationResolutionResult(
+            resolved_integrations=dict(self.resolved_integrations_cache or {})
+        )
 
     def schedule_warm_resolved_integrations(self) -> None:
         """Warm integration configs off the interactive prompt critical path."""

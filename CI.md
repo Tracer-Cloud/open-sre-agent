@@ -79,7 +79,7 @@ make test-scope
 ```
 
 `make test-scope` reads `git diff` against `main`, maps each changed path to
-its test target(s) using [`infra/ci/test_scope_rules.py`](infra/ci/test_scope_rules.py),
+its test target(s) using [`.github/ci/test_scope_rules.py`](.github/ci/test_scope_rules.py),
 and runs the minimal `pytest` invocation. It escalates automatically to
 `make test-cov` when shared/core code is touched or 3+ app areas change.
 Pass `ARGS=--dry-run` to preview without running.
@@ -87,7 +87,7 @@ Pass `ARGS=--dry-run` to preview without running.
 ### Manual lookup (reference only)
 
 If you prefer to pick the command yourself, or need a focused `-k` filter,
-see the `PathRule` entries in [`infra/ci/test_scope_rules.py`](infra/ci/test_scope_rules.py).
+see the `PathRule` entries in [`.github/ci/test_scope_rules.py`](.github/ci/test_scope_rules.py).
 Rules with `always_escalate=True` map to `make test-cov`; all others list their
 `test_targets` tuple. Changed files under `tests/` with no app rule run as-is.
 

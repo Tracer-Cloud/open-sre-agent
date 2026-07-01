@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Self
 
+import click
 from prompt_toolkit import PromptSession
 from pydantic import BaseModel, ConfigDict, Field, InstanceOf, field_validator, model_validator
 
@@ -103,7 +104,13 @@ def _bind_shell_grounding(session: ReplSession) -> None:
 
         return SLASH_COMMANDS
 
+    def _cli_command_group() -> click.Command | None:
+        from surfaces.cli.__main__ import cli
+
+        return cli
+
     session.grounding.set_slash_commands_provider(_slash_commands)
+    session.grounding.set_command_group_provider(_cli_command_group)
 
 
 def prepare_repl_session(

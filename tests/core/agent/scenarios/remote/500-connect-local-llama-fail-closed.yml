@@ -21,6 +21,10 @@ response_contract:
   - /model
   - /onboard
   - local-model connection tool
+  - /integrations setup llama
+  - /integrations setup
+  - setup llama
+  - /integrations
   must_not_contain:
   - $ /
 history:

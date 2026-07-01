@@ -21,6 +21,10 @@ _MAX_REFERENCE_CHARS = 28_000
 _MIN_CACHEABLE_CLI_REFERENCE_CHARS = 80
 _CLI_REFERENCE_SENTINEL = "=== opensre --help ==="
 SlashCommandProvider = Callable[[], Mapping[str, Any]]
+# Surface-owned supplier for the root Click command group inspected by this
+# grounding cache. Kept as an injected callable so ``core/`` never imports
+# ``surfaces.cli`` directly (a hard layering boundary).
+CommandGroupProvider = Callable[[], click.Command | None]
 
 
 def _is_cacheable_cli_reference(text: str) -> bool:
@@ -36,17 +40,22 @@ def _slash_command_names(provider: SlashCommandProvider | None) -> list[str]:
     return sorted(provider().keys())
 
 
-def _current_cli_signature(provider: SlashCommandProvider | None = None) -> str:
+def _current_cli_signature(
+    cli_group: click.Command | None,
+    slash_provider: SlashCommandProvider | None = None,
+) -> str:
     """Stable signature of the CLI command surface and interactive slash commands.
 
     Bumps cache when subcommands change, slash-command metadata changes, or the
     installed package version changes.
     """
     from config.version import get_version
-    from surfaces.cli.__main__ import cli
 
-    cmd_names = ",".join(sorted(cli.commands.keys()))
-    slash_names = ",".join(_slash_command_names(provider))
+    if isinstance(cli_group, click.Group):
+        cmd_names = ",".join(sorted(cli_group.commands.keys()))
+    else:
+        cmd_names = ""
+    slash_names = ",".join(_slash_command_names(slash_provider))
     return f"opensre={get_version()}|commands={cmd_names}|slash={slash_names}"
 
 
@@ -122,25 +131,34 @@ def _format_command_reference(
     return "\n".join(lines).rstrip() + "\n"
 
 
-def _build_cli_reference_text_uncached(provider: SlashCommandProvider | None = None) -> str:
+def _build_cli_reference_text_uncached(
+    cli_group: click.Command | None,
+    slash_provider: SlashCommandProvider | None = None,
+) -> str:
     """Build a side-effect-free CLI reference without invoking Click commands."""
-    from surfaces.cli.__main__ import cli
-
     parts: list[str] = []
 
-    parts.append("=== opensre --help ===\n")
-    parts.append(_format_command_reference(cli, path="opensre"))
+    if cli_group is None:
+        parts.append("=== opensre --help ===\n")
+        parts.append(
+            "The CLI command surface is not available in this runtime.\n"
+            "Launch the OpenSRE CLI (`opensre`) for command-level help.\n"
+        )
+    else:
+        parts.append("=== opensre --help ===\n")
+        parts.append(_format_command_reference(cli_group, path="opensre"))
 
-    with click.Context(cli, info_name="opensre") as ctx:
-        for name in sorted(cli.commands.keys()):
-            command = cli.get_command(ctx, name)
-            if command is None or command.hidden:
-                continue
-            parts.append(f"\n=== opensre {name} --help ===\n")
-            parts.append(_format_command_reference(command, path=f"opensre {name}"))
+        if isinstance(cli_group, click.Group):
+            with click.Context(cli_group, info_name="opensre") as ctx:
+                for name in sorted(cli_group.commands.keys()):
+                    command = cli_group.get_command(ctx, name)
+                    if command is None or command.hidden:
+                        continue
+                    parts.append(f"\n=== opensre {name} --help ===\n")
+                    parts.append(_format_command_reference(command, path=f"opensre {name}"))
 
     parts.append("\n=== Interactive-shell slash commands ===\n")
-    parts.append(_interactive_shell_slash_hints(provider))
+    parts.append(_interactive_shell_slash_hints(slash_provider))
 
     text = "".join(parts)
     if len(text) > _MAX_REFERENCE_CHARS:
@@ -194,30 +212,52 @@ class CliReference:
         self._hits: int = 0
         self._misses: int = 0
         self._slash_commands_provider: SlashCommandProvider | None = None
+        self._command_group_provider: CommandGroupProvider | None = None
 
     def set_slash_commands_provider(self, provider: SlashCommandProvider | None) -> None:
         """Set the shell-owned slash command source used for grounding text."""
         self._slash_commands_provider = provider
         self.invalidate()
 
+    def set_command_group_provider(self, provider: CommandGroupProvider | None) -> None:
+        """Bind a surface-owned callable that returns the root Click command group.
+
+        Injected so this grounding cache can inspect the CLI without importing
+        ``surfaces.cli`` directly (``core/`` must not depend on ``surfaces/``).
+        """
+        self._command_group_provider = provider
+        self.invalidate()
+
+    def _resolve_command_group(self) -> click.Command | None:
+        provider = self._command_group_provider
+        if provider is None:
+            return None
+        try:
+            return provider()
+        except Exception:
+            _logger.debug("Command group provider raised; skipping CLI reference", exc_info=True)
+            return None
+
     def build_text(self) -> str:
         """Assemble ``opensre`` and subcommand ``--help`` output for LLM grounding.
 
         Cached on this instance while the command registry signature matches.
         """
-        provider = self._slash_commands_provider
-        sig = _current_cli_signature() if provider is None else _current_cli_signature(provider)
+        slash_provider = self._slash_commands_provider
+        cli_group = self._resolve_command_group()
+        sig = _current_cli_signature(cli_group, slash_provider)
         if self._text is not None and self._signature == sig:
             self._hits += 1
             return self._text
 
         self._misses += 1
-        text = (
-            _build_cli_reference_text_uncached()
-            if provider is None
-            else _build_cli_reference_text_uncached(provider)
-        )
-        if _is_cacheable_cli_reference(text):
+        text = _build_cli_reference_text_uncached(cli_group, slash_provider)
+        # A missing command group means we could only produce the "runtime
+        # doesn't expose the CLI" placeholder. That text is intentionally
+        # short-lived — once a real provider binds (typically inside the
+        # interactive shell startup), the cache must rebuild instead of
+        # serving the placeholder for the process lifetime.
+        if cli_group is not None and _is_cacheable_cli_reference(text):
             self._signature = sig
             self._text = text
             self._created_at_monotonic = time.monotonic()

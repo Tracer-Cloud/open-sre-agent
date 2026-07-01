@@ -8,12 +8,12 @@ OpenSRE uses `POST /api/v5/query_range` for `query_signoz_logs`, `query_signoz_m
 ## Quick Start
 
 If you already run SigNoz, skip to env setup below.
-If you want a local stack, use the official SigNoz Docker setup (or the thin wrappers in `infra/scripts/signoz/`):
+If you want a local stack, use the [official SigNoz Docker setup](https://signoz.io/docs/install/docker/).
 
 ```bash
-bash infra/scripts/signoz/start-local.sh
+docker compose -f signoz/docker/docker-compose.yaml up -d
 # ... later
-bash infra/scripts/signoz/stop-local.sh
+docker compose -f signoz/docker/docker-compose.yaml down
 ```
 
 Local Docker serves the UI and API on **http://localhost:8080** (not 3301).
@@ -30,30 +30,15 @@ export SIGNOZ_URL="http://localhost:8080"
 export SIGNOZ_API_KEY="<service-account-api-key>"
 ```
 
-Or source the helper:
-
-```bash
-source infra/scripts/signoz/env.sh
-export SIGNOZ_API_KEY="<your-key>"
-```
-
 ### 3. Verify connectivity
 
 ```bash
-bash infra/scripts/signoz/verify.sh
-# or: uv run opensre integrations verify signoz
+uv run opensre integrations verify signoz
 ```
 
 Expected output mentions the SigNoz Query API (`/api/v2/metrics`, `/api/v5/query_range`).
 
-### 4. Live smoke test (optional)
-
-```bash
-export SIGNOZ_API_KEY="<your-key>"
-bash infra/scripts/signoz/test-query-api.sh
-```
-
-### 5. Use the tools
+### 4. Use the tools
 
 When `alert_source` is `signoz`, the agent auto-seeds three tools before the ReAct loop:
 

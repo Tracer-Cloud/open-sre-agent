@@ -65,4 +65,3 @@ def test_quiet_noisy_loggers_sets_warning_level() -> None:
     assert logging.getLogger("httpx").level == logging.WARNING
     assert logging.getLogger("httpcore").level == logging.WARNING
     assert logging.getLogger("openai").level == logging.WARNING
-

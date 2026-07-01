@@ -18,7 +18,7 @@ def _is_binary_install() -> bool:
 
 
 def _remove_path(p: Path) -> tuple[bool, str | None]:
-    if not p.exists():
+    if not p.exists() and not p.is_symlink():
         return True, None
     try:
         if p.is_dir():
@@ -43,10 +43,50 @@ def _data_dirs() -> list[Path]:
     return [OPENSRE_HOME_DIR, LEGACY_TRACER_HOME_DIR, Path.home() / ".config" / "opensre"]
 
 
+def _is_onedir_binary(exe_path: Path) -> bool:
+    return (
+        exe_path.parent.name == f".{PACKAGE_NAME}-app" and (exe_path.parent / "_internal").is_dir()
+    )
+
+
+def _launcher_for_binary(exe_path: Path) -> Path | None:
+    launcher = shutil.which(PACKAGE_NAME)
+    if not launcher:
+        return None
+    launcher_path = Path(launcher)
+    try:
+        if launcher_path.resolve() == exe_path.resolve():
+            return launcher_path
+    except OSError:
+        return None
+    return None
+
+
+def _binary_install_paths(exe_path: Path | None = None) -> list[Path]:
+    exe = exe_path or Path(sys.executable)
+    paths: list[Path] = []
+    if launcher := _launcher_for_binary(exe):
+        paths.append(launcher)
+    if _is_onedir_binary(exe):
+        paths.append(exe.parent)
+    else:
+        paths.append(exe)
+
+    deduped: list[Path] = []
+    seen: set[str] = set()
+    for path in paths:
+        key = str(path)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(path)
+    return deduped
+
+
 def run_uninstall(*, yes: bool = False) -> int:
     dirs = _data_dirs()
     binary = _is_binary_install()
-    exe_path = Path(sys.executable)
+    binary_paths = _binary_install_paths() if binary else []
 
     print()
     print("  The following will be permanently deleted:")
@@ -55,7 +95,8 @@ def run_uninstall(*, yes: bool = False) -> int:
         tag = "found" if d.exists() else "not found"
         print(f"    {d}  ({tag})")
     if binary:
-        print(f"    {exe_path}  (binary)")
+        for path in binary_paths:
+            print(f"    {path}  (binary)")
     else:
         print(f"    pip package: {PACKAGE_NAME}")
     print()
@@ -90,12 +131,13 @@ def run_uninstall(*, yes: bool = False) -> int:
             any_error = True
 
     if binary:
-        ok, err = _remove_path(exe_path)
-        if ok:
-            print(f"  deleted  {exe_path}")
-        else:
-            print(f"  error    {exe_path}: {err}", file=sys.stderr)
-            any_error = True
+        for path in binary_paths:
+            ok, err = _remove_path(path)
+            if ok:
+                print(f"  deleted  {path}")
+            else:
+                print(f"  error    {path}: {err}", file=sys.stderr)
+                any_error = True
     else:
         print(f"  running  pip uninstall {PACKAGE_NAME}")
         rc = _pip_uninstall()

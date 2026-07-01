@@ -77,7 +77,7 @@ class ReplConfig:
 
     enabled: bool = True
     layout: str = "classic"
-    theme: str = "green"
+    theme: str = "blue"
     alert_listener_enabled: bool = False
     alert_listener_host: str = "127.0.0.1"
     alert_listener_port: int = 0
@@ -106,7 +106,7 @@ class ReplConfig:
             1. CLI flag   — ``cli_enabled`` / ``cli_layout`` / ``cli_theme`` params
             2. Env var    — ``OPENSRE_INTERACTIVE`` / ``OPENSRE_LAYOUT`` / ``OPENSRE_THEME``
             3. Config file — ``~/.opensre/config.yml`` ``interactive`` section
-            4. Built-in defaults (enabled=True, layout="classic", theme="green")
+            4. Built-in defaults (enabled=True, layout="classic", theme="blue")
 
         When ``apply_active_theme`` is False, resolve the theme string without
         calling :func:`set_active_theme` (for passive config reads during a live

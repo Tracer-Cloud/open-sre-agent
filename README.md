@@ -96,6 +96,8 @@ macOS / Linux:
 curl -fsSL https://install.opensre.com | bash
 ```
 
+The macOS/Linux installer does not require sudo. If no writable bin directory is already on `PATH`, it installs to `~/.local/bin` and prints the shell command to apply the PATH update.
+
 Equivalent explicit main-channel form:
 
 ```bash

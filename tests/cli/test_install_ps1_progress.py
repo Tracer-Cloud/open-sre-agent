@@ -22,22 +22,21 @@ def test_install_ps1_defines_branded_progress_helpers() -> None:
     for helper in (
         "function Write-OpenSreHeader",
         "function Test-OpenSreInteractiveHost",
-        "function Test-OpenSreIntroDisabled",
         "function Get-OpenSreConsoleWidth",
         "function Limit-OpenSreText",
         "function Get-OpenSreFriendlyProgressLabel",
         "function Get-OpenSreProgressFrame",
         "function New-OpenSreProgressBar",
-        "function Show-OpenSreIntro",
         "function Invoke-OpenSreStep",
         "function Invoke-OpenSreDownloadFileWithProgress",
     ):
         assert helper in source
 
     assert "OPENSRE_INSTALL_VERBOSE" in source
-    assert "OPENSRE_INSTALL_NO_INTRO" in source
     assert '$ProgressPreference = "SilentlyContinue"' in source
     assert "$ProgressPreference = $previousProgressPreference" in source
+    assert "Clear-Host" not in source
+    assert "preparing installer" not in source
 
 
 def test_install_ps1_avoids_ps7_only_syntax_and_write_progress() -> None:
@@ -115,9 +114,7 @@ def test_install_ps1_dot_sources_when_powershell_available() -> None:
 
     script = textwrap.dedent(
         f"""
-        $env:OPENSRE_INSTALL_NO_INTRO = '1'
         . '{INSTALL_PS1}' -SkipMain
-        Show-OpenSreIntro
         Write-OpenSreHeader -Channel release -RequestedVersion '' -InstallDir 'C:\\opensre' -Repo 'Tracer-Cloud/opensre'
         Invoke-OpenSreStep -Name 'Unit progress step' -Operation {{ 'result-value' }}
         Write-OpenSreProgressLine -Label 'opensre_main_windows-arm64.zip.sha256' -DownloadedBytes 10 -TotalBytes 100

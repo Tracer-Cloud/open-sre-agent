@@ -438,11 +438,35 @@ def _should_capture_cli_exception(exc: click.ClickException) -> bool:
 
 def _is_fast_version_invocation(argv: list[str]) -> bool:
     """Return whether argv can be answered before bootstrapping the full CLI."""
-    return argv == ["--version"]
+    return (
+        argv == ["--version"]
+        or argv == ["version"]
+        or argv in (["--json", "version"], ["-j", "version"])
+    )
 
 
-def _print_fast_version() -> None:
-    click.echo(f"opensre, version {get_version()}")
+def _print_fast_version(argv: list[str]) -> None:
+    if argv == ["--version"]:
+        click.echo(f"opensre, version {get_version()}")
+        return
+
+    import json
+
+    import platform
+
+    json_output = argv[0] in {"--json", "-j"}
+    payload = {
+        "opensre": get_version(),
+        "python": platform.python_version(),
+        "os": platform.system().lower(),
+        "arch": platform.machine(),
+    }
+    if json_output:
+        click.echo(json.dumps(payload))
+        return
+    click.echo(f"opensre {payload['opensre']}")
+    click.echo(f"Python  {payload['python']}")
+    click.echo(f"OS      {payload['os']} ({payload['arch']})")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -450,7 +474,7 @@ def main(argv: list[str] | None = None) -> int:
     _ensure_utf8_stdio()
     cli_argv = list(sys.argv[1:] if argv is None else argv)
     if _is_fast_version_invocation(cli_argv):
-        _print_fast_version()
+        _print_fast_version(cli_argv)
         return 0
 
     from config.local_env import bootstrap_opensre_env_once

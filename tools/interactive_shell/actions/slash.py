@@ -6,6 +6,11 @@ from typing import Any
 
 from rich.markup import escape
 
+from core.agent_harness.tools.tool_context import (
+    ActionToolContext,
+    capability_available_from_sources,
+    execute_with_action_context,
+)
 from core.tool_framework.registered_tool import RegisteredTool
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
 from surfaces.interactive_shell.command_registry.slash_catalog import (
@@ -15,11 +20,6 @@ from surfaces.interactive_shell.command_registry.slash_catalog import (
 from surfaces.interactive_shell.ui import BOLD_BRAND, DIM, repl_tty_interactive
 from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
 from surfaces.interactive_shell.utils.telemetry.turn_outcome import format_terminal_turn_outcome
-from tools.interactive_shell.contracts import (
-    ToolContext,
-    capability_available_from_sources,
-    execute_with_repl_context,
-)
 from tools.interactive_shell.shared import plan_foreground_tool
 
 # Slash commands that drive a raw-stdin inline picker or wizard (questionary /
@@ -58,7 +58,7 @@ def _slash_drives_interactive_picker(name: str, slash_args: list[str]) -> bool:
     return (name, slash_args[0].lower()) in _INTERACTIVE_PICKER_SUBCOMMANDS
 
 
-def _dispatch_and_translate_exit(command: str, ctx: ToolContext, **kwargs: Any) -> bool:
+def _dispatch_and_translate_exit(command: str, ctx: ActionToolContext, **kwargs: Any) -> bool:
     should_continue = dispatch_slash(
         command,
         ctx.session,
@@ -72,7 +72,7 @@ def _dispatch_and_translate_exit(command: str, ctx: ToolContext, **kwargs: Any) 
     return True
 
 
-def execute_slash_tool(args: dict[str, Any], ctx: ToolContext) -> bool:
+def execute_slash_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
     command = str(args.get("command", "")).strip()
     raw_args = args.get("args")
     parsed_args = [str(item).strip() for item in raw_args] if isinstance(raw_args, list) else []
@@ -140,7 +140,7 @@ def execute_slash_tool(args: dict[str, Any], ctx: ToolContext) -> bool:
 
 
 def run_slash(*, command: str, args: list[str] | None = None, context: Any) -> dict[str, Any]:
-    return execute_with_repl_context(
+    return execute_with_action_context(
         {"command": command, "args": args or []},
         context,
         execute_slash_tool,

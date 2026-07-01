@@ -43,9 +43,9 @@ def _resolved_integrations(session: _IntegrationSession | None) -> dict[str, Any
     if session is not None and session.resolved_integrations_cache is not None:
         return session.resolved_integrations_cache
     try:
-        from tools.investigation.stages.resolve_integrations import resolve_integrations_quiet
+        from core.agent_harness.integrations.resolution import resolve_integrations
 
-        return resolve_integrations_quiet({})  # type: ignore[arg-type]
+        return resolve_integrations()
     except Exception:
         return {}
 

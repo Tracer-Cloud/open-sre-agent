@@ -404,11 +404,6 @@ class DocsReference:
         candidates = pages if pages is not None else self.discover()
         return find_relevant_docs(query, candidates, top_n=top_n)
 
-    def build_index(self, pages: list[DocPage] | None = None, *, max_entries: int = 80) -> str:
-        """Return a compact ``slug — title`` index of available pages."""
-        candidates = pages if pages is not None else self.discover()
-        return build_docs_index(candidates, max_entries=max_entries)
-
     def build_text(
         self,
         query: str | None,

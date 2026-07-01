@@ -34,8 +34,8 @@ def test_refresh_integration_state_rehydrates_and_clears_cache(monkeypatch: Any)
     )
     refreshed = {"gitlab": {"token": "x"}, "sentry": {"dsn": "y"}}
     monkeypatch.setattr(
-        "tools.investigation.stages.resolve_integrations.resolve_integrations_quiet",
-        lambda _state: refreshed,
+        "core.agent_harness.integrations.resolution.resolve_integrations",
+        lambda: refreshed,
     )
     session = ReplSession()
     # Stale boot-time snapshot + a cached resolution from an earlier turn.
@@ -61,8 +61,8 @@ def test_setup_subcommand_refreshes_configured_integrations(monkeypatch: Any) ->
         lambda: list(store),
     )
     monkeypatch.setattr(
-        "tools.investigation.stages.resolve_integrations.resolve_integrations_quiet",
-        lambda _state: dict(store),
+        "core.agent_harness.integrations.resolution.resolve_integrations",
+        lambda: dict(store),
     )
 
     session = ReplSession()
@@ -86,8 +86,8 @@ def test_remove_subcommand_refreshes_configured_integrations(monkeypatch: Any) -
         lambda: list(store),
     )
     monkeypatch.setattr(
-        "tools.investigation.stages.resolve_integrations.resolve_integrations_quiet",
-        lambda _state: dict(store),
+        "core.agent_harness.integrations.resolution.resolve_integrations",
+        lambda: dict(store),
     )
 
     session = ReplSession()
@@ -110,8 +110,8 @@ def test_mcp_connect_refreshes_configured_integrations(monkeypatch: Any) -> None
         lambda: list(store),
     )
     monkeypatch.setattr(
-        "tools.investigation.stages.resolve_integrations.resolve_integrations_quiet",
-        lambda _state: dict(store),
+        "core.agent_harness.integrations.resolution.resolve_integrations",
+        lambda: dict(store),
     )
 
     session = ReplSession()

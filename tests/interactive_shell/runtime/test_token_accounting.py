@@ -9,13 +9,13 @@ from typing import Any
 
 from rich.console import Console
 
-from core.agent_harness.session import ReplSession
-from surfaces.interactive_shell.runtime.core.token_accounting import (
+from core.agent_harness.accounting.token_accounting import (
     build_llm_run_info,
     estimate_tokens,
     format_token_total,
     record_llm_turn,
 )
+from core.agent_harness.session import ReplSession
 from surfaces.interactive_shell.runtime.shell_turn_execution import answer_shell_question
 from surfaces.interactive_shell.ui.streaming import _CHARS_PER_TOKEN
 

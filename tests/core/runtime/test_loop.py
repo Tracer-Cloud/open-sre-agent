@@ -15,16 +15,10 @@ from core.events import (
 )
 from core.llm.types import AgentLLMResponse, ToolCall
 from core.messages import (
-    BRANCH_SUMMARY_PREFIX,
-    BRANCH_SUMMARY_SUFFIX,
-    COMPACTION_SUMMARY_PREFIX,
-    COMPACTION_SUMMARY_SUFFIX,
+    AppRuntimeMessage,
+    MessageFormatter,
     ToolResultRuntimeMessage,
     UserRuntimeMessage,
-    app_runtime_message,
-    convert_to_llm_messages,
-    ensure_runtime_messages,
-    user_runtime_message,
 )
 from core.tool_framework.registered_tool import RegisteredTool
 from core.types import AgentTool, AgentToolContext
@@ -133,6 +127,59 @@ def _agent(
     )
 
 
+def test_agent_exposes_headless_dispatch_entrypoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    class EchoReasoningClient:
+        def invoke_stream(self, _prompt: str) -> Iterator[str]:
+            yield "hello from headless"
+
+    monkeypatch.setattr(
+        "core.agent_harness.agents.action_agent._default_llm_factory",
+        lambda: FakeLLM(iter([AgentLLMResponse(content="", tool_calls=[], raw_content=None)])),
+    )
+
+    from core.agent_harness.agents.headless_agent import (
+        NullToolProvider,
+        StaticReasoningClientProvider,
+    )
+
+    result = Agent.dispatch_message_to_headless_agent(
+        "hello",
+        tools=NullToolProvider(),
+        reasoning=StaticReasoningClientProvider(client=EchoReasoningClient()),
+    )
+
+    assert result.assistant_response_text == "hello from headless"
+
+
+def test_agent_defaults_to_agent_llm_without_tools(monkeypatch: pytest.MonkeyPatch) -> None:
+    llm = FakeLLM(iter([_text_response("reasoned answer")]))
+    monkeypatch.setattr("core.llm.agent_llm_client.get_agent_llm", lambda: llm)
+
+    agent = Agent(system="sys", tools=[], resolved_integrations={}, max_iterations=1)
+    result = agent.run([{"role": "user", "content": "hello"}])
+
+    assert result.final_text == "reasoned answer"
+    assert result.executed == []
+    assert llm.schema_tool_names == [[]]
+
+
+def test_agent_default_agent_llm_receives_tools(monkeypatch: pytest.MonkeyPatch) -> None:
+    llm = FakeLLM(iter([_text_response("unused")]))
+    monkeypatch.setattr("core.llm.agent_llm_client.get_agent_llm", lambda: llm)
+
+    agent = Agent(
+        system="sys",
+        tools=_tools(FakeTool("query_logs")),
+        resolved_integrations={},
+        max_iterations=1,
+    )
+
+    result = agent.run([{"role": "user", "content": "hello"}])
+
+    assert result.final_text == "unused"
+    assert llm.schema_tool_names == [["query_logs"]]
+
+
 def test_immediate_final_answer_executes_no_tools() -> None:
     llm = FakeLLM(iter([_text_response("done immediately")]))
 
@@ -189,7 +236,7 @@ def test_generic_tool_result_conversion_does_not_import_litellm(
     call = ToolCall(id="c1", name="query_logs", input={})
     message = ToolResultRuntimeMessage(tool_calls=(call,), results=({"ok": True},))
 
-    assert convert_to_llm_messages(llm, [message]) == [
+    assert MessageFormatter(llm).to_provider_messages([message]) == [
         {
             "role": "tool",
             "results": [{"id": "c1", "output": {"ok": True}}],
@@ -202,9 +249,9 @@ def test_agent_transcript_can_keep_app_messages_out_of_provider_context() -> Non
 
     result = _agent(llm, _tools(FakeTool("query_logs"))).run(
         [
-            user_runtime_message("hello"),
-            app_runtime_message("ui-note", "render only", include_in_context=False),
-            app_runtime_message("runtime-context", "visible context"),
+            UserRuntimeMessage(content="hello"),
+            AppRuntimeMessage("ui-note", "render only", include_in_context=False),
+            AppRuntimeMessage("runtime-context", "visible context"),
         ]
     )
 
@@ -216,76 +263,27 @@ def test_agent_transcript_can_keep_app_messages_out_of_provider_context() -> Non
     assert len(result.messages) == 4
 
 
-def test_agent_converts_legacy_agent_message_roles_for_llm_context() -> None:
+def test_agent_excludes_unrecognized_provider_dict_roles_from_llm_context() -> None:
     llm = FakeLLM(iter([_text_response("done")]))
 
     result = _agent(llm, _tools(FakeTool("query_logs"))).run(
         [
-            {
-                "role": "bashExecution",
-                "command": "pytest",
-                "exitCode": 1,
-                "stdout": "1 failed",
-            },
-            {
-                "role": "bashExecution",
-                "content": "render only",
-                "excludeFromContext": True,
-            },
-            {"role": "custom", "content": "custom note"},
-            {
-                "role": "custom",
-                "content": [{"type": "text", "text": "structured note"}],
-            },
-            {"role": "branchSummary", "summary": "branch state"},
-            {"role": "compactionSummary", "summary": "older turns"},
             {"role": "unknown", "content": "skip"},
             {"role": "user", "content": "hello"},
         ]
     )
 
     assert result.final_text == "done"
-    assert llm.seen_messages[0] == [
-        {
-            "role": "user",
-            "content": [
-                {
-                    "type": "text",
-                    "text": "$ pytest\n\nexit code: 1\n\nstdout:\n1 failed",
-                }
-            ],
-        },
-        {"role": "user", "content": [{"type": "text", "text": "custom note"}]},
-        {"role": "user", "content": [{"type": "text", "text": "structured note"}]},
-        {
-            "role": "user",
-            "content": [
-                {
-                    "type": "text",
-                    "text": f"{BRANCH_SUMMARY_PREFIX}branch state{BRANCH_SUMMARY_SUFFIX}",
-                }
-            ],
-        },
-        {
-            "role": "user",
-            "content": [
-                {
-                    "type": "text",
-                    "text": f"{COMPACTION_SUMMARY_PREFIX}older turns{COMPACTION_SUMMARY_SUFFIX}",
-                }
-            ],
-        },
-        {"role": "user", "content": "hello"},
-    ]
+    assert llm.seen_messages[0] == [{"role": "user", "content": "hello"}]
 
 
 def test_legacy_text_blocks_convert_to_bedrock_converse_content() -> None:
     from core.llm.agent_llm_client import BedrockConverseAgentClient
 
     llm = BedrockConverseAgentClient.__new__(BedrockConverseAgentClient)
-    messages = ensure_runtime_messages([{"role": "custom", "content": "custom note"}])
+    messages = [AppRuntimeMessage("custom", [{"type": "text", "text": "custom note"}])]
 
-    assert convert_to_llm_messages(llm, messages) == [
+    assert MessageFormatter(llm).to_provider_messages(messages) == [
         {"role": "user", "content": [{"text": "custom note"}]}
     ]
 

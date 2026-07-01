@@ -10,7 +10,6 @@ from rich.console import Console
 from rich.text import Text
 
 from core.domain.stream import StreamEvent
-from infra.deployment.remote.reasoning import reasoning_text
 from platform.analytics.events import Event
 from platform.analytics.provider import get_analytics
 from platform.observability.tool_trace import format_json_preview
@@ -27,6 +26,7 @@ from surfaces.cli.ui.renderer.formatting import (
     _validity_score_percent,
     investigation_llm_progress_hint,
 )
+from surfaces.cli.ui.renderer.reasoning import reasoning_text
 from surfaces.cli.ui.renderer.terminal import _print_connection_banner, _print_info
 from surfaces.cli.ui.renderer.tools import (
     _tool_event_key,

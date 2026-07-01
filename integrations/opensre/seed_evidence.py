@@ -1,6 +1,6 @@
 """Pre-load Hugging Face CSV telemetry into investigation evidence.
 
-Uses the same stack as ``infra/opensre-dataset/query_opensre_telemetry.py``: ``OpenSRECsvGrafanaBackend``
+Uses the same stack as ``integrations/opensre/`` CSV Grafana backend: ``OpenSRECsvGrafanaBackend``
 plus ``query_grafana_*`` tool functions so evidence matches normal tool output shapes.
 """
 

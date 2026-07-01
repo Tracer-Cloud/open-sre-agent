@@ -2,14 +2,29 @@
 
 from __future__ import annotations
 
+import click
 import pytest
 
 from core.agent_harness.grounding import cli_reference as cli_reference_module
 from core.agent_harness.grounding.cli_reference import CliReference
 
 
-def test_second_build_is_cache_hit() -> None:
+def _reference_with_cli() -> CliReference:
+    """Return a :class:`CliReference` wired to the shell's CLI command group.
+
+    ``core/`` no longer imports ``surfaces.cli`` directly (T-4 boundary
+    fix — see issue #3352), so tests must inject the group the same way
+    the interactive shell does at startup.
+    """
+    from surfaces.cli.__main__ import cli
+
     ref = CliReference()
+    ref.set_command_group_provider(lambda: cli)
+    return ref
+
+
+def test_second_build_is_cache_hit() -> None:
+    ref = _reference_with_cli()
     ref.build_text()
     s1 = ref.stats()
     ref.build_text()
@@ -21,7 +36,7 @@ def test_second_build_is_cache_hit() -> None:
 def test_cold_build_is_silent(capsys: pytest.CaptureFixture[str]) -> None:
     from surfaces.cli.__main__ import cli
 
-    text = CliReference().build_text()
+    text = _reference_with_cli().build_text()
     captured = capsys.readouterr()
     first_command = sorted(cli.commands.keys())[0]
 
@@ -33,7 +48,7 @@ def test_cold_build_is_silent(capsys: pytest.CaptureFixture[str]) -> None:
 
 
 def test_invalidate_forces_rebuild_miss() -> None:
-    ref = CliReference()
+    ref = _reference_with_cli()
     ref.build_text()
     s1 = ref.stats()
     assert s1.misses == 1
@@ -46,10 +61,18 @@ def test_invalidate_forces_rebuild_miss() -> None:
 
 
 def test_signature_change_busts_cli_cache(monkeypatch: pytest.MonkeyPatch) -> None:
-    ref = CliReference()
-    monkeypatch.setattr(cli_reference_module, "_current_cli_signature", lambda: "sig-a")
+    ref = _reference_with_cli()
+    monkeypatch.setattr(
+        cli_reference_module,
+        "_current_cli_signature",
+        lambda *_args, **_kwargs: "sig-a",
+    )
     ref.build_text()
-    monkeypatch.setattr(cli_reference_module, "_current_cli_signature", lambda: "sig-b")
+    monkeypatch.setattr(
+        cli_reference_module,
+        "_current_cli_signature",
+        lambda *_args, **_kwargs: "sig-b",
+    )
     ref.build_text()
     stats = ref.stats()
     assert stats.misses >= 2
@@ -57,7 +80,7 @@ def test_signature_change_busts_cli_cache(monkeypatch: pytest.MonkeyPatch) -> No
 
 
 def test_invalidate_resets_hit_miss_counters() -> None:
-    ref = CliReference()
+    ref = _reference_with_cli()
     ref.build_text()
     ref.build_text()
     assert ref.stats().hits >= 1
@@ -71,9 +94,9 @@ def test_non_cacheable_short_output_skips_store(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr(
         cli_reference_module,
         "_build_cli_reference_text_uncached",
-        lambda: "too short",
+        lambda *_args, **_kwargs: "too short",
     )
-    ref = CliReference()
+    ref = _reference_with_cli()
     ref.build_text()
     ref.build_text()
     stats = ref.stats()
@@ -88,8 +111,35 @@ def test_non_cacheable_long_without_sentinel_skips_store(
     monkeypatch.setattr(
         cli_reference_module,
         "_build_cli_reference_text_uncached",
-        lambda: filler,
+        lambda *_args, **_kwargs: filler,
     )
-    ref = CliReference()
+    ref = _reference_with_cli()
     ref.build_text()
     assert ref.stats().cached is False
+
+
+def test_reference_without_provider_returns_placeholder() -> None:
+    """Without a command-group provider the cache emits a placeholder — no surface imports."""
+    ref = CliReference()
+    text = ref.build_text()
+    assert "=== opensre --help ===" in text
+    assert "not available in this runtime" in text
+    # Placeholder is intentionally short-lived: it must not populate the cache.
+    assert ref.stats().cached is False
+
+
+def test_command_group_provider_is_bound_lazily() -> None:
+    """The provider is invoked only when :meth:`build_text` runs, not at bind time."""
+    calls: list[int] = []
+
+    def _provider() -> click.Command:
+        calls.append(1)
+        group = click.Group("opensre")
+        group.add_command(click.Command("noop"))
+        return group
+
+    ref = CliReference()
+    ref.set_command_group_provider(_provider)
+    assert not calls
+    ref.build_text()
+    assert calls == [1]

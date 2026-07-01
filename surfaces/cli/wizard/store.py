@@ -136,9 +136,8 @@ def save_remote_url(url: str, path: Path | None = None) -> None:
     store_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 
-# Re-exported from ``config.remote_store`` so layers below ``surfaces/`` (e.g.
-# ``infra/deployment/remote/runtime_alert``) can read this without crossing the
-# surfaces boundary. Existing callers + test mocks that target
+# Re-exported from ``config.remote_store`` so layers below ``surfaces/`` can read this
+# without crossing the surfaces boundary. Existing callers + test mocks that target
 # ``surfaces.cli.wizard.store.load_named_remotes`` keep working unchanged.
 load_named_remotes = _load_named_remotes_from_config
 

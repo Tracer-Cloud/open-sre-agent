@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 
-from gateway.agent.dispatch_gateway_msg_to_agent import dispatch_gateway_msg_to_agent
-from gateway.agent.gateway_output_sink import GatewayOutputSink
+from config.gateway_output_sink import GatewayOutputSink
+from core.agent_harness.session import ReplSession
 from gateway.config.get_gateway_settings import GatewaySettings, TelegramInboundMessage
 from gateway.polling.telegram_poller.client import TelegramBotClient
 from gateway.session.enforce_inbound_telegram_message_security import (
@@ -17,6 +18,7 @@ from gateway.session.resolve_or_rotate_session import resolve_or_rotate_session
 from gateway.storage import SessionResolver
 
 logger = logging.getLogger(__name__)
+GatewayAgentCallback = Callable[[str, ReplSession, GatewayOutputSink, logging.Logger], None]
 
 
 async def handle_polled_inbound_telegram_message(
@@ -29,6 +31,7 @@ async def handle_polled_inbound_telegram_message(
     chat_locks: dict[str, asyncio.Lock],
     turn_semaphore: asyncio.Semaphore,
     loop: asyncio.AbstractEventLoop | None = None,
+    handle_callback_to_gateway_agent: GatewayAgentCallback,
 ) -> None:
     """Process one long-polled inbound Telegram update."""
     user_lock = chat_locks.setdefault(event.user_id, asyncio.Lock())
@@ -68,11 +71,10 @@ async def handle_polled_inbound_telegram_message(
         event_loop = loop or asyncio.get_running_loop()
         await event_loop.run_in_executor(
             executor,
-            lambda: dispatch_gateway_msg_to_agent(
-                text=event.text,
-                session=session,
-                chat_id=event.chat_id,
-                sink=sink,
-                logger=logger,
+            lambda: handle_callback_to_gateway_agent(
+                event.text,
+                session,
+                sink,
+                logger,
             ),
         )

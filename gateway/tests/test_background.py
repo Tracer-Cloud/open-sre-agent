@@ -20,6 +20,7 @@ def test_start_starts_poll_thread(mock_poller_cls: MagicMock) -> None:
         logger=logger,
         initialize_runtime=initialize_telegram_polling_runtime,
         shutdown_runtime=shutdown_telegram_polling_runtime,
+        handle_callback_to_gateway_agent=lambda *_args: None,
     )
     assert handle is not None
     handle.stop(timeout=1.0)

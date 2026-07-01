@@ -170,6 +170,8 @@ class InteractiveShellController:
             self._start_runtime_services()
             try:
                 with patch_stdout(raw=True):
+                    # Comment Vincent: This is is horrible name for the most important function in the interactive shell.
+                    # It should be clear that it is the start of the agentic flow.
                     await run_input_loop(
                         state=self.state,
                         session=self.session,

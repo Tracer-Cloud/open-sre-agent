@@ -5,11 +5,11 @@ from __future__ import annotations
 import contextlib
 import time
 import uuid
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
 from config.version import get_version
+from core.agent_harness.accounting.token_accounting import LlmRunInfo
 from core.agent_harness.session.prompt_history.policy import redact_text
 from platform.analytics.provider import JsonValue
 from surfaces.interactive_shell.utils.telemetry.config import PromptLogConfig
@@ -34,18 +34,6 @@ _TURN_TO_SESSION_KIND: dict[str, str] = {
     "new_alert": "alert",
     "background_task": "cli_command",
 }
-
-
-@dataclass(frozen=True, slots=True)
-class LlmRunInfo:
-    """Best-effort metadata from one visible LLM response."""
-
-    model: str | None = None
-    provider: str | None = None
-    latency_ms: int | None = None
-    input_tokens: int | None = None
-    output_tokens: int | None = None
-    response_text: str | None = None
 
 
 def _latest_slash_outcome(session: Any) -> str | None:

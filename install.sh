@@ -38,7 +38,6 @@ INSTALL_CHANNEL_EXPLICIT=0
 [ -n "${OPENSRE_INSTALL_CHANNEL:-}" ] && INSTALL_CHANNEL_EXPLICIT=1
 MAIN_RELEASE_TAG="${OPENSRE_MAIN_RELEASE_TAG:-main-build}"
 BIN_NAME="opensre"
-INSTALL_WITH_SUDO=0
 PROGRESS_PID=""
 requested_version="${OPENSRE_VERSION:-}"
 
@@ -79,17 +78,6 @@ install_verbose() {
 
 is_interactive_terminal() {
   [ -t 1 ] && [ "${TERM:-}" != "dumb" ] && ! install_verbose
-}
-
-intro_disabled() {
-  case "${OPENSRE_INSTALL_NO_INTRO:-}" in
-    1|true|TRUE|yes|YES)
-      return 0
-      ;;
-    *)
-      return 1
-      ;;
-  esac
 }
 
 terminal_supports_unicode() {
@@ -181,109 +169,6 @@ friendly_progress_label() {
       printf '%s' "$label"
       ;;
   esac
-}
-
-center_intro_text() {
-  local text="$1"
-  local color="${2:-}"
-  local columns
-  local pad
-
-  columns="$(terminal_columns)"
-  text="$(truncate_text "$text" "$((columns - 2))")"
-  pad=$(((columns - ${#text}) / 2))
-  [ "$pad" -lt 0 ] && pad=0
-
-  printf '%*s%s%s%s\n' "$pad" "" "$color" "$text" "${COLOR_RESET:-}"
-}
-
-draw_intro_bar() {
-  local step_count="$1"
-  local columns
-  local width
-  local pad
-  local trail=8
-  local head
-  local i=0
-  local full="#"
-  local empty="-"
-
-  if terminal_supports_unicode; then
-    full="█"
-    empty="░"
-  fi
-
-  columns="$(terminal_columns)"
-  width=$((columns - 12))
-  if [ "$width" -gt 32 ]; then
-    width=32
-  fi
-  if [ "$width" -lt 12 ]; then
-    width=12
-  fi
-
-  pad=$(((columns - width) / 2))
-  [ "$pad" -lt 0 ] && pad=0
-  head=$((step_count % (width + trail)))
-
-  printf '%*s' "$pad" ""
-  while [ "$i" -lt "$width" ]; do
-    local age=$((head - i))
-    if [ "$age" -ge 0 ] && [ "$age" -lt "$trail" ]; then
-      case "$age" in
-        0|1) printf '%s%s%s' "${COLOR_GREEN:-}" "$full" "${COLOR_RESET:-}" ;;
-        2|3) printf '%s%s%s' "${COLOR_CYAN:-}" "$full" "${COLOR_RESET:-}" ;;
-        4|5) printf '%s%s%s' "${COLOR_RED:-}" "$full" "${COLOR_RESET:-}" ;;
-        *) printf '%s%s%s' "${COLOR_YELLOW:-}" "$full" "${COLOR_RESET:-}" ;;
-      esac
-    else
-      printf '%s%s%s' "${COLOR_DIM:-}" "$empty" "${COLOR_RESET:-}"
-    fi
-    i=$((i + 1))
-  done
-  printf '\n'
-}
-
-draw_intro_frame() {
-  local step_count="$1"
-  local status
-
-  case $((step_count % 6)) in
-    0) status="preparing installer" ;;
-    1) status="checking platform" ;;
-    2) status="resolving release" ;;
-    3) status="warming runtime" ;;
-    4) status="staging binary" ;;
-    *) status="ready" ;;
-  esac
-
-  printf '\033[2J\033[H'
-  printf '\n\n'
-  center_intro_text "OpenSRE" "${COLOR_BOLD:-}${COLOR_CYAN:-}"
-  printf '\n'
-  draw_intro_bar "$step_count"
-  printf '\n'
-  center_intro_text "Installing the OpenSRE CLI" "${COLOR_BOLD:-}"
-  center_intro_text "$status" "${COLOR_DIM:-}"
-}
-
-show_installer_intro() {
-  if ! is_interactive_terminal || intro_disabled; then
-    return
-  fi
-
-  printf '\033[?25l'
-  trap 'printf "\033[0m\033[?25h\033[2J\033[H"; exit 130' INT TERM
-
-  local frame=0
-  while [ "$frame" -lt 13 ]; do
-    draw_intro_frame "$frame"
-    frame=$((frame + 1))
-    sleep 0.055
-  done
-
-  printf '\033[0m\033[?25h\033[2J\033[H'
-  trap - INT TERM
 }
 
 progress_frame() {
@@ -447,8 +332,15 @@ run_with_progress() {
   trap - INT TERM
 
   if [ "$status" -ne 0 ]; then
-    printf '%sError:%s %s failed.%s\n' "${COLOR_RED:-}" "${COLOR_RESET:-}" "$label" "${COLOR_RESET:-}" >&2
-    cat "$log_file" >&2
+    printf '%sError:%s %s failed (exit %s).%s\n' "${COLOR_RED:-}" "${COLOR_RESET:-}" "$label" "$status" "${COLOR_RESET:-}" >&2
+    if [ "$status" -gt 128 ]; then
+      printf 'Process was terminated by signal %s (e.g. killed by the OS, possibly out-of-memory).\n' "$((status - 128))" >&2
+    fi
+    if [ -s "$log_file" ]; then
+      cat "$log_file" >&2
+    else
+      printf '(no output was captured before the process ended)\n' >&2
+    fi
     rm -f "$log_file"
     return "$status"
   fi
@@ -505,9 +397,16 @@ capture_with_progress() {
   trap - INT TERM
 
   if [ "$status" -ne 0 ]; then
-    printf '%sError:%s %s failed.%s\n' "${COLOR_RED:-}" "${COLOR_RESET:-}" "$label" "${COLOR_RESET:-}" >&2
-    cat "$stdout_file" >&2
-    cat "$stderr_file" >&2
+    printf '%sError:%s %s failed (exit %s).%s\n' "${COLOR_RED:-}" "${COLOR_RESET:-}" "$label" "$status" "${COLOR_RESET:-}" >&2
+    if [ "$status" -gt 128 ]; then
+      printf 'Process was terminated by signal %s (e.g. killed by the OS, possibly out-of-memory).\n' "$((status - 128))" >&2
+    fi
+    if [ ! -s "$stdout_file" ] && [ ! -s "$stderr_file" ]; then
+      printf '(no output was captured before the process ended)\n' >&2
+    else
+      cat "$stdout_file" >&2
+      cat "$stderr_file" >&2
+    fi
     rm -f "$stdout_file" "$stderr_file"
     return "$status"
   fi
@@ -522,7 +421,6 @@ print_installer_header() {
     return
   fi
 
-  show_installer_intro
   log "${COLOR_BOLD:-}${COLOR_CYAN:-}OpenSRE Installer${COLOR_RESET:-}"
   log "${COLOR_BOLD:-}Installing the OpenSRE CLI${COLOR_RESET:-}"
   log ""
@@ -597,17 +495,17 @@ parse_args() {
   fi
 }
 
-parse_args "$@"
-
 need_cmd() {
   command -v "$1" >/dev/null 2>&1 || die "'$1' is required but was not found in PATH."
 }
 
-need_cmd curl
-need_cmd grep
-need_cmd sed
-need_cmd tr
-need_cmd uname
+require_prerequisites() {
+  need_cmd curl
+  need_cmd grep
+  need_cmd sed
+  need_cmd tr
+  need_cmd uname
+}
 
 CURL_FLAGS=(
   --fail
@@ -725,29 +623,6 @@ select_writable_path_candidate_from_list() {
   return 1
 }
 
-select_path_candidate_for_sudo() {
-  local candidate_list="$1"
-  local old_ifs="$IFS"
-  local dir
-
-  command -v sudo >/dev/null 2>&1 || return 1
-  [ "${EUID:-0}" -ne 0 ] || return 1
-  [ "$INSTALL_DIR_OVERRIDE" -eq 0 ] || return 1
-
-  IFS=':'
-  for dir in $candidate_list; do
-    [ -n "$dir" ] || continue
-    if path_has_dir "$dir"; then
-      printf '%s\n' "$dir"
-      IFS="$old_ifs"
-      return 0
-    fi
-  done
-  IFS="$old_ifs"
-
-  return 1
-}
-
 resolve_install_dir() {
   local existing_bin=""
   local existing_dir=""
@@ -776,17 +651,6 @@ resolve_install_dir() {
   fi
 
   if INSTALL_DIR="$(select_writable_path_candidate_from_list "$SYSTEM_INSTALL_DIR_CANDIDATES")"; then
-    return
-  fi
-
-  if [ -n "$existing_dir" ] && path_has_dir "$existing_dir" && command -v sudo >/dev/null 2>&1 && [ "${EUID:-0}" -ne 0 ] && [ "$INSTALL_DIR_OVERRIDE" -eq 0 ]; then
-    INSTALL_DIR="$existing_dir"
-    INSTALL_WITH_SUDO=1
-    return
-  fi
-
-  if INSTALL_DIR="$(select_path_candidate_for_sudo "$SYSTEM_INSTALL_DIR_CANDIDATES")"; then
-    INSTALL_WITH_SUDO=1
     return
   fi
 
@@ -893,13 +757,17 @@ verify_checksum() {
   warn "No checksum verifier found (sha256sum, shasum, or openssl). Skipping checksum verification."
 }
 
-run_with_privilege() {
-  if [ "$INSTALL_WITH_SUDO" -eq 1 ]; then
-    sudo "$@"
-    return
+binary_app_root() {
+  local binary_path="$1"
+  local binary_dir
+
+  binary_dir="${binary_path%/*}"
+  if [ -d "${binary_dir}/_internal" ]; then
+    printf '%s\n' "$binary_dir"
+    return 0
   fi
 
-  "$@"
+  return 1
 }
 
 install_binary() {
@@ -907,30 +775,46 @@ install_binary() {
   local destination_path="$2"
 
   if command -v install >/dev/null 2>&1; then
-    run_with_privilege install -m 0755 "$source_path" "$destination_path"
+    install -m 0755 "$source_path" "$destination_path"
     return
   fi
 
-  run_with_privilege cp "$source_path" "$destination_path"
-  run_with_privilege chmod 0755 "$destination_path" 2>/dev/null || true
+  cp "$source_path" "$destination_path"
+  chmod 0755 "$destination_path" 2>/dev/null || true
 }
 
-prepare_privileged_install() {
-  if [ "$INSTALL_WITH_SUDO" -ne 1 ]; then
-    return
-  fi
+install_binary_app() {
+  local app_root="$1"
+  local destination_path="$2"
+  local app_destination_dir="${INSTALL_DIR}/.${BIN_NAME}-app"
+  local app_tmp_dir="${app_destination_dir}.new.$$"
+  local app_old_dir="${app_destination_dir}.old.$$"
 
-  log "Installing into ${INSTALL_DIR} with sudo so '${BIN_NAME}' is available immediately in this shell."
-  if is_interactive_terminal; then
-    sudo -v || die "Could not authorize sudo for install into '${INSTALL_DIR}'."
+  rm -rf "$app_tmp_dir" "$app_old_dir"
+  cp -R "$app_root" "$app_tmp_dir"
+  chmod -R u+rwX,go+rX "$app_tmp_dir" 2>/dev/null || true
+
+  if [ -e "$app_destination_dir" ]; then
+    mv "$app_destination_dir" "$app_old_dir"
   fi
+  mv "$app_tmp_dir" "$app_destination_dir"
+  rm -rf "$app_old_dir"
+
+  rm -f "$destination_path"
+  ln -s "$app_destination_dir/${BIN_NAME}" "$destination_path"
 }
 
 install_verified_binary() {
   local source_path="$1"
   local destination_path="$2"
+  local app_root=""
 
-  run_with_privilege mkdir -p "$INSTALL_DIR"
+  mkdir -p "$INSTALL_DIR"
+  if [ "$platform" != "windows" ] && app_root="$(binary_app_root "$source_path")"; then
+    install_binary_app "$app_root" "$destination_path"
+    return
+  fi
+
   install_binary "$source_path" "$destination_path"
 }
 
@@ -948,13 +832,26 @@ extract_and_verify_binary() {
   local extraction_dir="$2"
   local extracted_binary_path
   local extracted_version
+  local extract_status
 
+  printf 'Extracting %s into %s...\n' "$archive_path" "$extraction_dir" >&2
+  set +e
   extract_archive "$archive_path" "$extraction_dir"
+  extract_status=$?
+  set -e
+  if [ "$extract_status" -ne 0 ]; then
+    printf 'Archive extraction failed (exit %s).\n' "$extract_status" >&2
+    return "$extract_status"
+  fi
+  printf 'Extraction finished, locating %s binary...\n' "$BIN_NAME" >&2
+
   extracted_binary_path="$(get_binary_path_from_archive "$extraction_dir" "$BIN_NAME")"
+  printf 'Found binary at %s, verifying it runs...\n' "$extracted_binary_path" >&2
+
   if [ "$INSTALL_CHANNEL" = "main" ]; then
-    extracted_version="$(verify_binary_version "$extracted_binary_path")"
+    extracted_version="$(verify_binary_version "$extracted_binary_path")" || return "$?"
   else
-    extracted_version="$(verify_binary_version "$extracted_binary_path" "$version")"
+    extracted_version="$(verify_binary_version "$extracted_binary_path" "$version")" || return "$?"
   fi
 
   printf '%s\n%s\n' "$extracted_binary_path" "$extracted_version"
@@ -984,7 +881,7 @@ get_binary_path_from_archive() {
       printf '%s\n' "${binary_candidates[0]}"
       ;;
     0)
-      die "Archive '${archive}' did not contain '${binary_name}'."
+      die "Archive did not contain '${binary_name}'."
       ;;
     *)
       binary_locations="$(printf '%s, ' "${binary_candidates[@]}")"
@@ -998,10 +895,23 @@ verify_binary_version() {
   local binary_path="$1"
   local expected_version="${2:-}"
   local version_output
+  local version_status
   local actual_version
 
-  if ! version_output="$("$binary_path" --version 2>&1)"; then
-    die "Failed to execute '${binary_path##*/} --version': ${version_output}"
+  set +e
+  version_output="$("$binary_path" --version 2>&1)"
+  version_status=$?
+  set -e
+
+  if [ "$version_status" -ne 0 ]; then
+    printf 'Failed to execute %s --version (exit %s).\n' "${binary_path##*/}" "$version_status" >&2
+    if [ -n "$version_output" ]; then
+      printf 'Command output:\n%s\n' "$version_output" >&2
+    else
+      printf 'Command output: <empty>\n' >&2
+    fi
+    print_binary_diagnostics "$binary_path"
+    return 1
   fi
 
   actual_version="$(printf '%s\n' "$version_output" | sed -n 's/.*\([0-9][0-9][0-9][0-9]\.[0-9][0-9]*\.[0-9][0-9]*\).*/\1/p' | head -n 1)"
@@ -1030,6 +940,25 @@ verify_binary_version() {
   esac
 }
 
+print_binary_diagnostics() {
+  local binary_path="$1"
+
+  printf 'Binary diagnostics:\n' >&2
+  printf '  path: %s\n' "$binary_path" >&2
+  if command -v uname >/dev/null 2>&1; then
+    printf '  system: %s\n' "$(uname -a 2>/dev/null || true)" >&2
+  fi
+  if command -v ls >/dev/null 2>&1; then
+    ls -l "$binary_path" >&2 2>/dev/null || true
+  fi
+  if command -v file >/dev/null 2>&1; then
+    file "$binary_path" >&2 2>/dev/null || true
+  fi
+  if [ "$platform" = "linux" ] && command -v ldd >/dev/null 2>&1; then
+    ldd "$binary_path" >&2 2>/dev/null || true
+  fi
+}
+
 configure_path() {
   case ":$PATH:" in
     *":${INSTALL_DIR}:"*)
@@ -1050,7 +979,7 @@ configure_path() {
   case "$shell_name" in
     zsh)
       rc_file="${HOME}/.zshrc"
-      path_line="export PATH=\"\$PATH:${INSTALL_DIR}\""
+      path_line="export PATH=\"${INSTALL_DIR}:\$PATH\""
       ;;
     bash)
       if [ "$platform" = "darwin" ]; then
@@ -1058,7 +987,7 @@ configure_path() {
       else
         rc_file="${HOME}/.bashrc"
       fi
-      path_line="export PATH=\"\$PATH:${INSTALL_DIR}\""
+      path_line="export PATH=\"${INSTALL_DIR}:\$PATH\""
       ;;
     fish)
       rc_file="${HOME}/.config/fish/config.fish"
@@ -1066,7 +995,7 @@ configure_path() {
       ;;
     *)
       log "Add the following line to your shell profile to use ${BIN_NAME:-opensre}:"
-      log "  export PATH=\"\$PATH:${INSTALL_DIR}\""
+      log "  export PATH=\"${INSTALL_DIR}:\$PATH\""
       return
       ;;
   esac
@@ -1162,158 +1091,246 @@ launch_onboarding_after_install() {
     warn "Onboarding exited before completion. Run '${BIN_NAME} onboard' to retry."
 }
 
-os="$(uname -s)"
-arch="$(uname -m)"
-
-case "$os" in
-  Linux)
-    platform="linux"
-    ;;
-  Darwin)
-    platform="darwin"
-    ;;
-  MINGW*|MSYS*|CYGWIN*)
-    platform="windows"
-    BIN_NAME="opensre.exe"
-    log "Detected Windows environment (${os})."
-    ;;
-  *)
-    die "Unsupported operating system: $os"
-    ;;
-esac
-
-case "$arch" in
-  x86_64|amd64)
-    target_arch="x64"
-    ;;
-  arm64|aarch64)
-    target_arch="arm64"
-    ;;
-  *)
-    die "Unsupported architecture: $arch"
-    ;;
-esac
-
-resolve_install_dir
-
-print_installer_header
-
-version="$requested_version"
-release_tag=""
-
-if [ "$INSTALL_CHANNEL" = "main" ]; then
-  metadata_step="[1/6] Fetching latest main build metadata"
-elif [ -n "$version" ]; then
-  metadata_step="[1/6] Fetching release metadata for v${version}"
-else
-  metadata_step="[1/6] Fetching latest release version"
-fi
-
-capture_with_progress release_json "$metadata_step" fetch_release_json "$version" || {
-  if [ "$INSTALL_CHANNEL" = "main" ]; then
-    die "Failed to query main build metadata from GitHub."
-  fi
-
-  die "Failed to query release metadata from GitHub."
-}
-
-if [ "$INSTALL_CHANNEL" = "main" ]; then
-  release_tag="$(extract_tag_name "$release_json")"
-else
-  if [ -z "$version" ]; then
-    version="$(extract_tag_name "$release_json")"
-  fi
-  release_tag="v${version}"
-fi
-
-if [ "$INSTALL_CHANNEL" = "main" ]; then
-  [ -n "$release_tag" ] || die "Failed to determine the main build tag."
-else
-  [ -n "$version" ] || die "Failed to determine the release version."
-fi
-
-asset_arch="$target_arch"
-archive="$(build_archive_name "$version" "$asset_arch")"
-
-if [ "$platform" = "windows" ] && [ "$target_arch" = "arm64" ] && ! release_has_asset "$release_json" "$archive"; then
-  fallback_archive="$(build_archive_name "$version" "x64")"
-
-  if release_has_asset "$release_json" "$fallback_archive"; then
-    asset_arch="x64"
-    archive="$fallback_archive"
-    warn "Windows ARM64 artifact is not published for v${version}; falling back to the x64 build."
-  fi
-fi
-
-if ! release_has_asset "$release_json" "$archive"; then
-  if [ "$INSTALL_CHANNEL" = "main" ]; then
-    die "Main build release does not include asset '${archive}'."
-  fi
-
-  die "Release v${version} does not include asset '${archive}'."
-fi
-
-download_url="https://github.com/${REPO}/releases/download/${release_tag}/${archive}"
-checksum_asset="${archive}.sha256"
-checksum_url="${download_url}.sha256"
-
-if [ "$INSTALL_CHANNEL" = "main" ]; then
-  step "[2/6] Preparing opensre main build (${platform}/${target_arch})"
-else
-  step "[2/6] Preparing opensre v${version} (${platform}/${target_arch})"
-fi
-if [ "$asset_arch" != "$target_arch" ]; then
-  log "Using release asset built for ${platform}/${asset_arch}."
-fi
-if install_verbose; then
-  log "  ${download_url}"
-fi
-
-need_cmd mktemp
-tmp_dir="$(mktemp -d)"
-
 cleanup() {
   if [ -n "${tmp_dir:-}" ] && [ -d "$tmp_dir" ]; then
     rm -rf "$tmp_dir"
   fi
 }
 
-trap cleanup EXIT
+detect_platform() {
+  local os
+  local arch
 
-archive_path="${tmp_dir}/${archive}"
-run_with_progress "[3/6] Downloading release archive (${archive})" download_to "$download_url" "$archive_path" \
-  || die "Failed to download '${archive}'."
+  os="$(uname -s)"
+  arch="$(uname -m)"
 
-if release_has_asset "$release_json" "$checksum_asset"; then
-  checksum_path="${tmp_dir}/${checksum_asset}"
-  run_with_progress "[4/6] Downloading and verifying checksum (${checksum_asset})" \
-    download_and_verify_checksum "$checksum_url" "$checksum_path" "$archive_path" \
-    || die "Failed to download or verify checksum '${checksum_asset}'."
-else
+  case "$os" in
+    Linux)
+      platform="linux"
+      ;;
+    Darwin)
+      platform="darwin"
+      ;;
+    MINGW*|MSYS*|CYGWIN*)
+      platform="windows"
+      BIN_NAME="opensre.exe"
+      log "Detected Windows environment (${os})."
+      ;;
+    *)
+      die "Unsupported operating system: $os"
+      ;;
+  esac
+
+  case "$arch" in
+    x86_64|amd64)
+      target_arch="x64"
+      ;;
+    arm64|aarch64)
+      target_arch="arm64"
+      ;;
+    *)
+      die "Unsupported architecture: $arch"
+      ;;
+  esac
+}
+
+resolve_release_metadata() {
+  version="$requested_version"
+  release_tag=""
+
+  if [ "$INSTALL_CHANNEL" = "main" ]; then
+    metadata_step="[1/6] Fetching latest main build metadata"
+  elif [ -n "$version" ]; then
+    metadata_step="[1/6] Fetching release metadata for v${version}"
+  else
+    metadata_step="[1/6] Fetching latest release version"
+  fi
+
+  capture_with_progress release_json "$metadata_step" fetch_release_json "$version" || {
+    if [ "$INSTALL_CHANNEL" = "main" ]; then
+      die "Failed to query main build metadata from GitHub."
+    fi
+
+    die "Failed to query release metadata from GitHub."
+  }
+
+  if [ "$INSTALL_CHANNEL" = "main" ]; then
+    release_tag="$(extract_tag_name "$release_json")"
+  else
+    if [ -z "$version" ]; then
+      version="$(extract_tag_name "$release_json")"
+    fi
+    release_tag="v${version}"
+  fi
+
+  if [ "$INSTALL_CHANNEL" = "main" ]; then
+    [ -n "$release_tag" ] || die "Failed to determine the main build tag."
+  else
+    [ -n "$version" ] || die "Failed to determine the release version."
+  fi
+}
+
+select_archive_asset() {
+  local fallback_archive
+
+  asset_arch="$target_arch"
+  archive="$(build_archive_name "$version" "$asset_arch")"
+
+  if [ "$platform" = "windows" ] && [ "$target_arch" = "arm64" ] && ! release_has_asset "$release_json" "$archive"; then
+    fallback_archive="$(build_archive_name "$version" "x64")"
+
+    if release_has_asset "$release_json" "$fallback_archive"; then
+      asset_arch="x64"
+      archive="$fallback_archive"
+      warn "Windows ARM64 artifact is not published for v${version}; falling back to the x64 build."
+    fi
+  fi
+
+  if release_has_asset "$release_json" "$archive"; then
+    return
+  fi
+
+  if [ "$INSTALL_CHANNEL" = "main" ]; then
+    die "Main build release does not include asset '${archive}'."
+  fi
+
+  die "Release v${version} does not include asset '${archive}'."
+}
+
+prepare_download() {
+  download_url="https://github.com/${REPO}/releases/download/${release_tag}/${archive}"
+  checksum_asset="${archive}.sha256"
+  checksum_url="${download_url}.sha256"
+
+  if [ "$INSTALL_CHANNEL" = "main" ]; then
+    step "[2/6] Preparing opensre main build (${platform}/${target_arch})"
+  else
+    step "[2/6] Preparing opensre v${version} (${platform}/${target_arch})"
+  fi
+  if [ "$asset_arch" != "$target_arch" ]; then
+    log "Using release asset built for ${platform}/${asset_arch}."
+  fi
+  if install_verbose; then
+    log "  ${download_url}"
+  fi
+}
+
+dir_available_kib() {
+  local dir="$1"
+  local avail
+
+  command -v df >/dev/null 2>&1 || return 1
+  avail="$(df -Pk "$dir" 2>/dev/null | awk 'NR==2 { print $4 }')"
+  [ -n "$avail" ] || return 1
+  printf '%s\n' "$avail"
+}
+
+select_temp_base_dir() {
+  local min_kib="$1"
+  local candidate
+  local avail
+
+  for candidate in "${TMPDIR:-}" "${HOME:-}/.cache" /var/tmp /tmp; do
+    [ -n "$candidate" ] || continue
+    [ -d "$candidate" ] || continue
+    is_candidate_dir_writable "$candidate" || continue
+
+    avail="$(dir_available_kib "$candidate")" || continue
+    if [ "$avail" -ge "$min_kib" ]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+create_temp_workspace() {
+  local temp_base_dir
+  local min_kib=524288
+
+  need_cmd mktemp
+
+  if temp_base_dir="$(select_temp_base_dir "$min_kib")"; then
+    tmp_dir="$(mktemp -d "${temp_base_dir%/}/opensre-install.XXXXXX")"
+  else
+    warn "Could not find a temp directory with at least 512MB free; falling back to the system default and hoping for the best."
+    tmp_dir="$(mktemp -d)"
+  fi
+
+  trap cleanup EXIT
+}
+
+download_release_archive() {
+  archive_path="${tmp_dir}/${archive}"
+  run_with_progress "[3/6] Downloading release archive (${archive})" download_to "$download_url" "$archive_path" \
+    || die "Failed to download '${archive}'."
+}
+
+verify_release_checksum() {
+  local checksum_path
+
+  if release_has_asset "$release_json" "$checksum_asset"; then
+    checksum_path="${tmp_dir}/${checksum_asset}"
+    run_with_progress "[4/6] Downloading and verifying checksum (${checksum_asset})" \
+      download_and_verify_checksum "$checksum_url" "$checksum_path" "$archive_path" \
+      || die "Failed to download or verify checksum '${checksum_asset}'."
+    return
+  fi
+
   if [ "$INSTALL_CHANNEL" = "main" ]; then
     warn "Main build release is missing checksum asset '${checksum_asset}'."
   else
     warn "Release v${version} is missing checksum asset '${checksum_asset}'."
   fi
-fi
+}
 
-prepare_privileged_install
+extract_release_binary() {
+  local verified_binary
 
-capture_with_progress verified_binary "[5/6] Extracting and verifying binary" extract_and_verify_binary "$archive_path" "$tmp_dir"
-binary_path="${verified_binary%%$'\n'*}"
-installed_version="${verified_binary#*$'\n'}"
-run_with_progress "[6/6] Installing ${BIN_NAME} to ${INSTALL_DIR}" install_verified_binary "$binary_path" "${INSTALL_DIR}/${BIN_NAME}"
+  capture_with_progress verified_binary "[5/6] Extracting and verifying binary" extract_and_verify_binary "$archive_path" "$tmp_dir"
+  binary_path="${verified_binary%%$'\n'*}"
+  installed_version="${verified_binary#*$'\n'}"
+}
 
-if [ "$INSTALL_CHANNEL" = "main" ]; then
-  if [ "$installed_version" = "main" ]; then
-    success "Installed ${BIN_NAME} main build to ${INSTALL_DIR}/${BIN_NAME}"
+install_release_binary() {
+  run_with_progress "[6/6] Installing ${BIN_NAME} to ${INSTALL_DIR}" install_verified_binary "$binary_path" "${INSTALL_DIR}/${BIN_NAME}"
+}
+
+print_install_confirmation() {
+  if [ "$INSTALL_CHANNEL" = "main" ]; then
+    if [ "$installed_version" = "main" ]; then
+      success "Installed ${BIN_NAME} main build to ${INSTALL_DIR}/${BIN_NAME}"
+    else
+      success "Installed ${BIN_NAME} main build (${installed_version}) to ${INSTALL_DIR}/${BIN_NAME}"
+    fi
   else
-    success "Installed ${BIN_NAME} main build (${installed_version}) to ${INSTALL_DIR}/${BIN_NAME}"
+    success "Installed ${BIN_NAME} v${installed_version} to ${INSTALL_DIR}/${BIN_NAME}"
   fi
-else
-  success "Installed ${BIN_NAME} v${installed_version} to ${INSTALL_DIR}/${BIN_NAME}"
-fi
+}
 
-configure_path
-print_success_screen "$installed_version"
-launch_onboarding_after_install
+finish_install() {
+  print_install_confirmation
+  configure_path
+  print_success_screen "$installed_version"
+  launch_onboarding_after_install
+}
+
+main() {
+  parse_args "$@"
+  require_prerequisites
+  detect_platform
+  resolve_install_dir
+  print_installer_header
+  resolve_release_metadata
+  select_archive_asset
+  prepare_download
+  create_temp_workspace
+  download_release_archive
+  verify_release_checksum
+  extract_release_binary
+  install_release_binary
+  finish_install
+}
+
+main "$@"
