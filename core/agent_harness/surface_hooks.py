@@ -1,31 +1,13 @@
-"""Explicit per-surface initialization hooks for the agentic turn engine.
+"""Per-surface initialization hooks for the agent turn loop.
 
-Every surface (interactive shell, headless CLI, Telegram gateway, Slack, …)
-runs the same core loop in :mod:`core.agent`. What differs is *how* each
-surface answers four questions the loop asks per turn:
+Every surface (interactive shell, headless, gateway, …) runs the same
+core loop but answers four questions differently per turn: which tools
+the turn sees, what system prompt the LLM sees, whether the provider
+request needs extra fields, and where the assistant's text goes.
 
-1. **Resolve tools** — Which tools does this turn see?
-2. **Construct prompt** — What system prompt does the LLM see?
-3. **Inject context** — What extra fields ride on the provider request?
-4. **Route response** — Where does the assistant's text go, and how are
-   tool events reported?
-
-Today each surface answers these inline in its entry function
-(``interactive_shell/controller``, ``dispatch_message_to_headless_agent``,
-``gateway/agent/dispatch_gateway_msg_to_agent``, and the four sites in
-``core/agent_harness`` that call ``Agent(...)`` directly). Because the
-answers live inside four unrelated call sites, new surfaces silently drop
-fields — the reproducer is: connect Telegram to ``headless_agent`` and
-tools never make it through.
-
-:class:`SurfaceHooks` collects those four answers behind one named
-Protocol so a surface either supplies all four or fails loud, and the
-core loop calls the hooks in the order the four questions appear.
-
-This module defines the contract only. Concrete adapter factories that
-build a :class:`SurfaceHooks` from the existing
-:mod:`core.agent_harness.ports` protocols live below; existing surfaces
-migrate one hook at a time in the T-2b refactor.
+Today those four answers are inlined at each surface entry, so a new
+surface can silently drop fields. This module collects the four answers
+behind one Protocol so a surface either supplies all four or fails loud.
 """
 
 from __future__ import annotations
@@ -45,37 +27,21 @@ if TYPE_CHECKING:
 
 
 ResolveToolsFn = Callable[["TurnContext"], list[Any]]
-"""Return the concrete tools the agent may call this turn."""
+"""Return the tools the agent may call this turn."""
 
 ConstructPromptFn = Callable[["TurnContext"], str]
-"""Return the system prompt for this turn.
-
-Kept as ``str`` today to match the current ``Agent.__init__(system=...)``
-call site; can widen to a ``PromptEnvelope`` in a later increment
-without breaking the hook contract.
-"""
+"""Return the system prompt for this turn."""
 
 InjectContextFn = Callable[["TurnContext", "ProviderRequest"], "ProviderRequest"]
-"""Return a possibly-modified ``ProviderRequest`` before it reaches the LLM."""
+"""Return a possibly-modified provider request before it reaches the LLM."""
 
 RouteResponseFn = Callable[["TurnContext", str], None]
-"""Deliver the assistant's final text to the surface.
-
-Called once per turn *after* the core loop settles on ``final_text``.
-Tool-call events are reported through
-:class:`~core.execution.ToolExecutionHooks`, which surfaces continue to
-implement per today's pattern.
-"""
+"""Deliver the assistant's final text to the surface, once per turn."""
 
 
 @runtime_checkable
 class SurfaceHooks(Protocol):
-    """The four explicit hooks every agent surface must supply.
-
-    Each attribute is a callable. Protocols with callable attributes let
-    surfaces implement the contract as either a dataclass of functions or
-    a class with methods — both satisfy ``runtime_checkable``.
-    """
+    """The four hooks every agent surface must supply."""
 
     resolve_tools: ResolveToolsFn
     construct_prompt: ConstructPromptFn
@@ -84,22 +50,12 @@ class SurfaceHooks(Protocol):
 
 
 class MissingHooksError(TypeError):
-    """Raised when a surface passes a ``SurfaceHooks`` value that lacks one
-    of the four required hooks.
-
-    Kept as ``TypeError`` so callers that already handle "wrong shape"
-    inputs catch it uniformly.
-    """
+    """Raised when a surface hooks value is missing one of the four hooks."""
 
 
 def assert_hooks_complete(hooks: object) -> SurfaceHooks:
-    """Validate ``hooks`` implements the full :class:`SurfaceHooks` contract.
-
-    Returns ``hooks`` narrowed to :class:`SurfaceHooks` when complete;
-    raises :class:`MissingHooksError` otherwise, listing the missing
-    attributes so the caller (typically a surface entry function) sees
-    which hook it forgot to wire.
-    """
+    """Return ``hooks`` if all four hooks are callable, else raise
+    :class:`MissingHooksError` naming the missing ones."""
     required = ("resolve_tools", "construct_prompt", "inject_context", "route_response")
     missing = [name for name in required if not callable(getattr(hooks, name, None))]
     if missing:
@@ -114,20 +70,13 @@ def assert_hooks_complete(hooks: object) -> SurfaceHooks:
 def _default_inject_context(_ctx: TurnContext, request: ProviderRequest) -> ProviderRequest:
     """No-op ``inject_context``.
 
-    Kept as an explicit function (rather than an inline lambda) so tests
-    and stack traces name it, and so future extension has one place to
-    change without touching every call site.
+    A named function (not a lambda) so tests and stack traces name it.
     """
     return request
 
 
 def _default_route_response(_ctx: TurnContext, _text: str) -> None:
-    """No-op ``route_response`` — silently drops the assistant text.
-
-    Suitable for headless / test surfaces that don't need the extra
-    output channel. Real surfaces override this hook to print, stream,
-    or forward the text to their end user.
-    """
+    """Drops the assistant text — headless surfaces have no channel."""
     return None
 
 
@@ -143,29 +92,11 @@ def hooks_from_ports(
 ) -> SurfaceHooks:
     """Build a :class:`SurfaceHooks` from the existing port objects.
 
-    Bridges the T-1 ``ToolProvider``/``OutputSink`` protocols to the new
-    hook contract so a surface can migrate incrementally: keep passing
-    its existing ports, wrap them with this factory, and hand the
-    resulting hooks to the loop.
-
-    Args:
-        tool_provider: The surface's existing tool provider port. Its
-            ``action_tools(confirm_fn=..., is_tty=...)`` is called to
-            answer ``resolve_tools``.
-        output_sink: Optional output sink. When present,
-            ``route_response`` prints the assistant text via
-            ``output_sink.print``. Omit for headless surfaces that don't
-            surface a channel.
-        system_prompt: The system prompt this surface uses. Passed
-            verbatim from ``construct_prompt``.
-        confirm_fn, is_tty: Forwarded to ``tool_provider.action_tools``
-            so the returned tools carry the surface's confirmation
-            behaviour.
-        inject_context: Optional override for the ``inject_context``
-            hook. Defaults to the no-op.
-        observer: Reserved for future use — surfaces observe tool events
-            through ``ToolExecutionHooks``; kept as a parameter so
-            callers can pre-thread one without an API change later.
+    ``resolve_tools`` calls ``tool_provider.action_tools(...)``.
+    ``construct_prompt`` returns ``system_prompt`` verbatim.
+    ``inject_context`` defaults to the identity; pass an override to enrich the request.
+    ``route_response`` prints via ``output_sink`` when one is supplied.
+    ``observer`` is reserved for a later increment and currently unused.
     """
 
     def _resolve_tools(_ctx: TurnContext) -> list[Any]:
@@ -188,11 +119,9 @@ def hooks_from_ports(
         inject_context: InjectContextFn
         route_response: RouteResponseFn
 
-    _ = observer  # parameter reserved for future use; keeps the API stable
-    # A frozen dataclass whose fields are the four callables satisfies the
-    # ``runtime_checkable`` Protocol structurally, but mypy's variance check
-    # can't prove it because the field descriptors are ``property``-shaped at
-    # runtime. Cast explicitly rather than widening the return annotation.
+    _ = observer  # reserved for a later increment
+    # The dataclass satisfies the Protocol structurally but mypy can't prove
+    # variance on callable-typed fields; cast at the boundary.
     bundle = _HooksBundle(
         resolve_tools=_resolve_tools,
         construct_prompt=_construct_prompt,

@@ -1,12 +1,4 @@
-"""Tests for the T-2b ``SurfaceHooks`` contract and factory.
-
-These are contract-level tests: they lock in the shape every agent surface
-must satisfy (four callable hooks) and prove the ``hooks_from_ports``
-factory correctly bridges the existing ``ToolProvider`` / ``OutputSink``
-protocols to the new hook interface. Behavioral integration with
-``core/agent`` is covered by later increments once the loop is refactored
-to call the hooks.
-"""
+"""Tests for the ``SurfaceHooks`` contract and factory."""
 
 from __future__ import annotations
 
@@ -63,12 +55,10 @@ class _RecordingOutputSink:
 
 
 class _StubTurnContext:
-    """Test double for TurnContext — hooks don't use it in this contract test."""
+    """Test double for TurnContext."""
 
 
-# -----------------------------------------------------------------------------
-# assert_hooks_complete — the validator surfaces call at entry
-# -----------------------------------------------------------------------------
+# ---- assert_hooks_complete ----
 
 
 def test_assert_hooks_complete_accepts_a_fully_wired_hook_bundle() -> None:
@@ -83,23 +73,16 @@ def test_assert_hooks_complete_accepts_a_fully_wired_hook_bundle() -> None:
 
     hooks = _FullHooks()
     assert assert_hooks_complete(hooks) is hooks
-    # ``runtime_checkable`` isinstance check must pass too.
     assert isinstance(hooks, SurfaceHooks)
-    # Sanity: hooks are callable.
     assert hooks.resolve_tools(ctx) == []
     assert hooks.construct_prompt(ctx) == ""
 
 
 def test_assert_hooks_complete_raises_with_the_specific_missing_hook_named() -> None:
-    """The whole point of the validator: fail loud, name the missing hook.
-
-    This is the mechanism that catches the Telegram-drops-tools class of bug at
-    surface-entry time instead of silently running with defaults.
-    """
+    """The validator names the missing hook so the surface fails loud."""
 
     @dataclass(frozen=True)
     class _PartialHooks:
-        # resolve_tools missing entirely.
         construct_prompt: Any = lambda _c: ""
         inject_context: Any = lambda _c, req: req
         route_response: Any = lambda _c, _t: None
@@ -109,11 +92,7 @@ def test_assert_hooks_complete_raises_with_the_specific_missing_hook_named() -> 
 
 
 def test_assert_hooks_complete_lists_multiple_missing_hooks() -> None:
-    """A surface that forgets more than one hook sees the full list.
-
-    Guards against a common mistake: a surface stubs only one of the four and
-    thinks it's done.
-    """
+    """All missing hooks are reported at once, not just the first."""
 
     @dataclass(frozen=True)
     class _BarelyPresent:
@@ -128,7 +107,7 @@ def test_assert_hooks_complete_lists_multiple_missing_hooks() -> None:
 
 
 def test_assert_hooks_complete_rejects_non_callable_hooks() -> None:
-    """A caller that types a hook as a plain value (not a function) fails validation."""
+    """A hook typed as a plain value (not a function) fails validation."""
 
     @dataclass(frozen=True)
     class _NonCallable:
@@ -149,17 +128,12 @@ def test_assert_hooks_complete_rejects_non_callable_hooks() -> None:
 def test_hooks_from_ports_returns_a_complete_hook_bundle() -> None:
     provider = _RecordingToolProvider()
     hooks = hooks_from_ports(tool_provider=provider)
-    # Must satisfy the validator without any callers doing extra work.
     assert assert_hooks_complete(hooks) is hooks
     assert isinstance(hooks, SurfaceHooks)
 
 
 def test_hooks_from_ports_resolve_tools_forwards_confirm_and_tty_to_the_provider() -> None:
-    """The confirm_fn / is_tty inputs the surface passes must reach the provider.
-
-    Regression guard: if a future refactor drops these, tools would be built
-    with the wrong confirmation UX.
-    """
+    """confirm_fn and is_tty must reach the provider so tools carry the right UX."""
     provider = _RecordingToolProvider(tools_to_return=[{"name": "tool_a"}])
     sentinel_confirm = object()
     hooks = hooks_from_ports(tool_provider=provider, confirm_fn=sentinel_confirm, is_tty=True)
@@ -179,22 +153,20 @@ def test_hooks_from_ports_construct_prompt_returns_the_passed_system_prompt() ->
 
 
 def test_hooks_from_ports_construct_prompt_defaults_to_empty_string() -> None:
-    """The factory has no opinion on prompt content — the surface owns it."""
+    """The factory has no default prompt — the surface owns it."""
     hooks = hooks_from_ports(tool_provider=_RecordingToolProvider())
     assert hooks.construct_prompt(_StubTurnContext()) == ""
 
 
 def test_hooks_from_ports_inject_context_defaults_to_identity() -> None:
-    """The default hook returns the request unchanged so wiring surfaces don't
-    accidentally strip fields off the provider request just by opting into hooks."""
+    """The default hook returns the request unchanged."""
     hooks = hooks_from_ports(tool_provider=_RecordingToolProvider())
-    request = object()  # opaque — the default is a no-op, so any object survives
+    request = object()
     assert hooks.inject_context(_StubTurnContext(), request) is request  # type: ignore[arg-type]
 
 
 def test_hooks_from_ports_inject_context_uses_override_when_provided() -> None:
-    """Surfaces that DO want to enrich the request register a callable and
-    the factory honours it."""
+    """An override callable is honoured."""
 
     calls: list[tuple[Any, Any]] = []
 
@@ -226,15 +198,13 @@ def test_hooks_from_ports_route_response_writes_to_the_output_sink() -> None:
 
 
 def test_hooks_from_ports_route_response_is_noop_when_no_output_sink() -> None:
-    """Headless surfaces intentionally have nowhere to route the response;
-    the hook must not crash when the sink is omitted."""
+    """Headless surfaces have no channel; the hook must not raise."""
     hooks = hooks_from_ports(tool_provider=_RecordingToolProvider())
-    hooks.route_response(_StubTurnContext(), "silent")  # must not raise
+    hooks.route_response(_StubTurnContext(), "silent")
 
 
 def test_hooks_from_ports_route_response_skips_empty_text() -> None:
-    """Empty strings don't produce console noise — matches how surfaces
-    currently guard their ``sink.print`` calls."""
+    """Empty text doesn't reach the sink."""
     sink = _RecordingOutputSink()
     hooks = hooks_from_ports(
         tool_provider=_RecordingToolProvider(),
