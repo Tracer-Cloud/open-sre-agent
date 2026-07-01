@@ -28,7 +28,7 @@ USER_BASE := $(shell $(PYTHON) -m site --user-base)
 USER_BIN := $(if $(filter Windows_NT,$(OS)),$(USER_BASE)/Scripts,$(USER_BASE)/bin)
 export PATH := $(if $(wildcard .venv/bin),$(CURDIR)/.venv/bin:,$(if $(wildcard .venv/Scripts),$(CURDIR)/.venv/Scripts:))$(USER_BIN):$(PATH)
 
-PYTHON_SOURCE_PATHS := config core infra/aws infra/deploy integrations platform surfaces tools
+PYTHON_SOURCE_PATHS := config core integrations platform surfaces tools
 
 # Create venv and install dependencies (requires https://docs.astral.sh/uv/)
 install:
@@ -261,17 +261,15 @@ docs-dev:
 
 
 # Deploy all test case infrastructure in parallel (SDK - fast!)
-# EC2 deploy (MODE=web|gateway, default gateway)
-MODE ?= gateway
-
+# EC2 deploy (web + gateway containers on one instance)
 deploy:
-	OPENSRE_DEPLOY_MODE=$(MODE) $(PYTHON) -m infra.deploy.deploy
+	$(PYTHON) -m platform.deployment.deploy
 
 destroy:
-	OPENSRE_DEPLOY_MODE=$(MODE) $(PYTHON) -m infra.deploy.destroy
+	$(PYTHON) -m platform.deployment.destroy
 
 test-deploy:
-	OPENSRE_DEPLOY_MODE=$(MODE) $(PYTHON) -m pytest tests/deployment/ec2/ -v -s
+	$(PYTHON) -m pytest tests/deployment/ec2/ -v -s
 
 # Deploy Lambda test case
 deploy-lambda:
@@ -442,8 +440,8 @@ check: lint format-check typecheck check-imports test-full
 help:
 	@echo "Available commands:"
 	@echo ""
-	@echo "  EC2 DEPLOY (MODE=web|gateway, default gateway)"
-	@echo "  make deploy            - Build image and deploy on EC2 (MODE=web|gateway)"
+	@echo "  EC2 DEPLOY"
+	@echo "  make deploy            - Build image and deploy web + gateway on EC2"
 	@echo "  make destroy           - Terminate EC2 instance and clean up"
 	@echo "  make test-deploy       - Run EC2 deployment e2e tests"
 	@echo ""

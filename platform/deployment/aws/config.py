@@ -17,9 +17,7 @@ MANAGED_TAG_VALUE = "sdk"
 
 # ─── EC2 instance ─────────────────────────────────────────────────────────────
 INSTANCE_TYPE = "t2.micro"
-AL2023_AMI_SSM_PARAMETER = (
-    "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
-)
+AL2023_AMI_SSM_PARAMETER = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
 EC2_ROOT_DEVICE_NAME = "/dev/xvda"
 EC2_VOLUME_SIZE_GB = 30
 EC2_VOLUME_TYPE = "gp3"

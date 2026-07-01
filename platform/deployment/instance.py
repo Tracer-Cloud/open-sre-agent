@@ -5,8 +5,8 @@ from __future__ import annotations
 import logging
 import time
 
-from infra.aws.client import DEFAULT_REGION
-from infra.aws.config import (
+from platform.deployment.aws.client import DEFAULT_REGION
+from platform.deployment.aws.config import (
     GATEWAY_HEALTH_MAX_ATTEMPTS,
     GATEWAY_HEALTH_POLL_INTERVAL_SECONDS,
     GATEWAY_LOG_TAIL_LINES,
@@ -15,34 +15,43 @@ from infra.aws.config import (
     USER_DATA_ECR_AUTH_RETRY_SECONDS,
     USER_DATA_IAM_PROPAGATION_SECONDS,
 )
-from infra.aws.ssm import run_ssm_shell_command
-from infra.deploy.health import poll_deployment_health
-from infra.deploy.modes import GATEWAY_CONTAINER_NAME, DeployProfile
+from platform.deployment.aws.ssm import run_ssm_shell_command
+from platform.deployment.health import poll_deployment_health
+from platform.deployment.modes import GATEWAY_CONTAINER_NAME, WEB_CONTAINER_NAME
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["GATEWAY_CONTAINER_NAME", "generate_user_data", "wait_for_deployment_ready"]
+__all__ = [
+    "GATEWAY_CONTAINER_NAME",
+    "WEB_CONTAINER_NAME",
+    "generate_user_data",
+    "wait_for_deployment_ready",
+]
+
+
+def _format_env_flags(env_vars: dict[str, str]) -> str:
+    if not env_vars:
+        return ""
+    return " " + " ".join(f"-e {k}='{v}'" for k, v in env_vars.items())
 
 
 def generate_user_data(
     *,
-    profile: DeployProfile,
     image_uri: str,
-    env_vars: dict[str, str] | None = None,
+    log_path: str,
+    web_env_vars: dict[str, str] | None = None,
+    gateway_env_vars: dict[str, str] | None = None,
 ) -> str:
-    """Generate cloud-init user data that pulls the image and starts the container."""
-    env_flags = f"-e MODE={profile.mode}"
-    if profile.mode == "web":
-        env_flags += " -p 8000:8000"
-    if env_vars:
-        env_flags += " " + " ".join(f"-e {k}='{v}'" for k, v in env_vars.items())
+    """Generate cloud-init user data that starts web and gateway containers."""
+    web_flags = f"-e MODE=web -p 8000:8000{_format_env_flags(web_env_vars or {})}"
+    gateway_flags = f"-e MODE=gateway{_format_env_flags(gateway_env_vars or {})}"
 
     ecr_registry = image_uri.split("/")[0]
     ecr_region = DEFAULT_REGION
 
     return f"""\
 #!/bin/bash
-exec > {profile.log_path} 2>&1
+exec > {log_path} 2>&1
 set -euo pipefail
 
 echo "=== Installing Docker ==="
@@ -66,8 +75,11 @@ done
 echo "=== Pulling image ==="
 docker pull {image_uri}
 
-echo "=== Starting container ({profile.mode} mode) ==="
-docker run -d --name {profile.container_name} --restart=unless-stopped {env_flags} {image_uri}
+echo "=== Starting web container ==="
+docker run -d --name {WEB_CONTAINER_NAME} --restart=unless-stopped {web_flags} {image_uri}
+
+echo "=== Starting gateway container ==="
+docker run -d --name {GATEWAY_CONTAINER_NAME} --restart=unless-stopped {gateway_flags} {image_uri}
 
 echo "=== Deployment complete ==="
 """
@@ -76,7 +88,7 @@ echo "=== Deployment complete ==="
 def wait_for_gateway_process(
     instance_id: str,
     *,
-    container_name: str,
+    container_name: str = GATEWAY_CONTAINER_NAME,
     region: str = DEFAULT_REGION,
     poll_interval: int = GATEWAY_HEALTH_POLL_INTERVAL_SECONDS,
     max_attempts: int = GATEWAY_HEALTH_MAX_ATTEMPTS,
@@ -126,18 +138,15 @@ def wait_for_gateway_process(
 
 def wait_for_deployment_ready(
     *,
-    profile: DeployProfile,
     instance_id: str,
     public_ip: str,
     region: str = DEFAULT_REGION,
 ) -> None:
-    """Wait until the deployed container is healthy for the selected mode."""
-    if profile.use_ssm_health_check:
-        wait_for_gateway_process(
-            instance_id,
-            container_name=profile.container_name,
-            region=region,
-        )
-        return
-
+    """Wait until web (HTTP) and gateway (SSM log sentinel) are healthy."""
+    print("Waiting for web health endpoint...")
     poll_deployment_health(f"http://{public_ip}:8000")
+    print("  - Web: OK")
+
+    print("Waiting for gateway process...")
+    wait_for_gateway_process(instance_id, region=region)
+    print("  - Gateway: OK")

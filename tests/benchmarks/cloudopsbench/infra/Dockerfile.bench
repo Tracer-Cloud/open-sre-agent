@@ -59,9 +59,6 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY surfaces/ ./surfaces/
 COPY config/ ./config/
 COPY core/ ./core/
-COPY infra/__init__.py ./infra/__init__.py
-COPY infra/aws/ ./infra/aws/
-COPY infra/deploy/ ./infra/deploy/
 COPY integrations/ ./integrations/
 COPY platform/ ./platform/
 COPY tools/ ./tools/

@@ -6,7 +6,7 @@ on:
     paths-ignore:
       - "docs/**"
       - "tests/benchmarks/cloudopsbench/infra/**"
-      - "infra/install-proxy/**"
+      - "platform/deployment/install-proxy/**"
       - "tests/e2e/kubernetes/helm/scripts/**"
       - "tests/**"
       - "**/*.md"

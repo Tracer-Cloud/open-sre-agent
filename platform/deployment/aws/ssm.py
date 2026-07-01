@@ -5,8 +5,8 @@ from __future__ import annotations
 import logging
 import time
 
-from infra.aws.client import DEFAULT_REGION, get_boto3_client
-from infra.aws.config import (
+from platform.deployment.aws.client import DEFAULT_REGION, get_boto3_client
+from platform.deployment.aws.config import (
     SSM_CMD_POLL_ATTEMPTS,
     SSM_CMD_POLL_INTERVAL_SECONDS,
     SSM_REGISTRATION_MAX_ATTEMPTS,

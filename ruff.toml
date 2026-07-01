@@ -64,7 +64,6 @@ ignore = [
 known-first-party = [
     "config",
     "core",
-    "infra",
     "integrations",
     "platform",
     "surfaces",

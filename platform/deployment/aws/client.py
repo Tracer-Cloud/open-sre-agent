@@ -7,7 +7,7 @@ from typing import Any
 import boto3
 from botocore.config import Config
 
-from infra.aws.config import (
+from platform.deployment.aws.config import (
     BOTO3_CONNECT_TIMEOUT_SECONDS,
     BOTO3_READ_TIMEOUT_SECONDS,
     BOTO3_RETRY_MAX_ATTEMPTS,

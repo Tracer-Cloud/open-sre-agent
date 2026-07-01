@@ -2,7 +2,7 @@
 
 Cloudflare Worker for the installer domain `install.opensre.com`.
 
-Deploy from `infra/install-proxy`:
+Deploy from `platform/deployment/install-proxy`:
 
 1. Authenticate with Cloudflare:
    `npx wrangler login`

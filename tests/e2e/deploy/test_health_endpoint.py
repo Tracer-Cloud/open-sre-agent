@@ -8,7 +8,7 @@ import uuid
 
 import requests
 
-from infra.deploy.health import poll_deployment_health
+from platform.deployment.health import poll_deployment_health
 
 
 def _find_free_port() -> int:

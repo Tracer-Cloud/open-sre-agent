@@ -1,4 +1,4 @@
-"""Fixtures for EC2 gateway deployment tests.
+"""Fixtures for EC2 deployment tests (web + gateway on one instance).
 
 These tests require AWS credentials and TELEGRAM_BOT_TOKEN and should be skipped in CI.
 Run manually with: pytest tests/deployment/ec2/ -v -s
@@ -17,7 +17,7 @@ from tests.shared.infra import infrastructure_available
 
 @pytest.fixture(scope="session")
 def gateway_deployment() -> Generator[dict[str, Any]]:
-    """Deploy the Telegram Gateway on EC2, yield outputs, then terminate.
+    """Deploy OpenSRE on EC2 (web + gateway), yield outputs, then terminate.
 
     Skips when:
     - Running in CI or SKIP_INFRA_TESTS is set (infrastructure gate), or
@@ -31,10 +31,8 @@ def gateway_deployment() -> Generator[dict[str, Any]]:
             "TELEGRAM_BOT_TOKEN is not set — export it before running gateway deployment tests"
         )
 
-    os.environ.setdefault("OPENSRE_DEPLOY_MODE", "gateway")
-
-    from infra.deploy.deploy import deploy
-    from infra.deploy.destroy import destroy
+    from platform.deployment.deploy import deploy
+    from platform.deployment.destroy import destroy
 
     outputs = deploy()
     try:

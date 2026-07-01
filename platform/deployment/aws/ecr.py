@@ -9,8 +9,8 @@ from typing import Any
 
 from botocore.exceptions import ClientError
 
-from infra.aws.client import DEFAULT_REGION, get_boto3_client, get_standard_tags
-from infra.aws.config import (
+from platform.deployment.aws.client import DEFAULT_REGION, get_boto3_client, get_standard_tags
+from platform.deployment.aws.config import (
     ECR_DEFAULT_IMAGE_TAG,
     ECR_DOCKER_PLATFORM,
     ECR_IMAGE_TAG_MUTABILITY,

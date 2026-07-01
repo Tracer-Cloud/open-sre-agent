@@ -7,41 +7,39 @@ import time
 
 from botocore.exceptions import ClientError
 
-from infra.aws.client import DEFAULT_REGION
-from infra.aws.ec2 import delete_instance_profile, terminate_instance
-from infra.aws.vpc import delete_security_group
-from infra.deploy.modes import get_profile, resolve_deploy_mode
-from infra.deploy.outputs import delete_outputs, load_outputs
-
-REGION = DEFAULT_REGION
+from platform.deployment.aws.client import DEFAULT_REGION
+from platform.deployment.aws.ec2 import delete_instance_profile, terminate_instance
+from platform.deployment.aws.vpc import delete_security_group
+from platform.deployment.modes import get_stack
+from platform.deployment.outputs import delete_outputs, load_outputs
 
 
 def destroy() -> dict[str, list[str]]:
     """Terminate the EC2 instance and clean up all associated resources."""
-    profile = get_profile()
+    stack = get_stack()
     start_time = time.time()
     print("=" * 60)
-    print(f"Destroying {profile.stack_name} infrastructure ({profile.mode} mode)")
+    print(f"Destroying {stack.stack_name} infrastructure")
     print("=" * 60)
     print()
 
     results: dict[str, list[str]] = {"deleted": [], "failed": []}
 
     try:
-        outputs = load_outputs(mode=profile.mode)
+        outputs = load_outputs()
     except FileNotFoundError:
         print("No outputs file found — attempting cleanup by known names.")
         outputs = {}
 
     instance_id = outputs.get("InstanceId", "")
     sg_id = outputs.get("SecurityGroupId", "")
-    profile_name = outputs.get("ProfileName", f"{profile.stack_name}-profile")
-    role_name = outputs.get("RoleName", f"{profile.stack_name}-role")
+    profile_name = outputs.get("ProfileName", f"{stack.stack_name}-profile")
+    role_name = outputs.get("RoleName", f"{stack.stack_name}-role")
 
     if instance_id:
         print(f"Terminating EC2 instance {instance_id}...")
         try:
-            terminate_instance(instance_id, REGION)
+            terminate_instance(instance_id, DEFAULT_REGION)
             results["deleted"].append(f"ec2-instance:{instance_id}")
             print("  - Instance terminated")
         except ClientError as e:
@@ -52,7 +50,7 @@ def destroy() -> dict[str, list[str]]:
     if sg_id:
         print(f"Deleting security group {sg_id}...")
         try:
-            delete_security_group(sg_id, REGION)
+            delete_security_group(sg_id, DEFAULT_REGION)
             results["deleted"].append(f"security-group:{sg_id}")
             print("  - Security group deleted")
         except ClientError as e:
@@ -62,7 +60,7 @@ def destroy() -> dict[str, list[str]]:
 
     print(f"Deleting IAM profile {profile_name} and role {role_name}...")
     try:
-        delete_instance_profile(profile_name, role_name, REGION)
+        delete_instance_profile(profile_name, role_name, DEFAULT_REGION)
         results["deleted"].append(f"instance-profile:{profile_name}")
         results["deleted"].append(f"iam-role:{role_name}")
         print("  - Profile and role deleted")
@@ -71,7 +69,7 @@ def destroy() -> dict[str, list[str]]:
         results["failed"].append(msg)
         print(f"  - Failed: {e}")
 
-    delete_outputs(mode=profile.mode)
+    delete_outputs()
 
     elapsed = time.time() - start_time
     print()
@@ -93,5 +91,4 @@ def destroy() -> dict[str, list[str]]:
 
 
 if __name__ == "__main__":
-    resolve_deploy_mode()
     destroy()

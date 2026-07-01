@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Deploy OpenSRE on EC2 in web or gateway mode.
+"""Deploy OpenSRE on EC2 with web and gateway as separate containers on one instance.
 
 Creates:
 - 1 ECR repository and builds/pushes the root Dockerfile
 - 1 IAM role + instance profile for EC2 (with SSM managed-instance policy)
-- 1 Security group (web: inbound 8000; gateway: outbound-only)
-- 1 EC2 instance running the Docker container
+- 1 Security group (inbound 8000 for web; gateway uses outbound-only polling)
+- 1 EC2 instance running opensre-web and opensre-gateway Docker containers
 """
 
 from __future__ import annotations
@@ -14,50 +14,49 @@ import os
 import time
 from pathlib import Path
 
-from infra.aws import ecr
-from infra.aws.client import DEFAULT_REGION
-from infra.aws.config import (
+from platform.deployment.aws import ecr
+from platform.deployment.aws.client import DEFAULT_REGION
+from platform.deployment.aws.config import (
     ECR_DEFAULT_IMAGE_TAG,
     ECR_DOCKER_PLATFORM,
     INSTANCE_TYPE,
     SSM_MANAGED_POLICY_ARN,
 )
-from infra.aws.ec2 import (
+from platform.deployment.aws.ec2 import (
     create_instance_profile,
     get_latest_al2023_ami,
     launch_instance,
     wait_for_running,
 )
-from infra.aws.ssm import wait_for_ssm_registration
-from infra.aws.vpc import create_security_group, get_default_vpc, get_public_subnets
-from infra.deploy.instance import generate_user_data, wait_for_deployment_ready
-from infra.deploy.modes import get_profile, resolve_deploy_mode
-from infra.deploy.outputs import save_outputs
+from platform.deployment.aws.ssm import wait_for_ssm_registration
+from platform.deployment.aws.vpc import create_security_group, get_default_vpc, get_public_subnets
+from platform.deployment.instance import generate_user_data, wait_for_deployment_ready
+from platform.deployment.modes import get_stack
+from platform.deployment.outputs import save_outputs
 
 REGION = DEFAULT_REGION
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DOCKERFILE = REPO_ROOT / "Dockerfile"
 
+_LLM_ENV_KEYS = (
+    "LLM_PROVIDER",
+    "OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "ANTHROPIC_MODEL",
+)
+
 _GATEWAY_ENV_KEYS = (
     "TELEGRAM_BOT_TOKEN",
     "TELEGRAM_ALLOWED_USERS",
-    "LLM_PROVIDER",
-    "OPENAI_API_KEY",
-    "ANTHROPIC_API_KEY",
-    "ANTHROPIC_MODEL",
+    *_LLM_ENV_KEYS,
 )
 
-_WEB_ENV_KEYS = (
-    "LLM_PROVIDER",
-    "OPENAI_API_KEY",
-    "ANTHROPIC_API_KEY",
-    "ANTHROPIC_MODEL",
-)
+_WEB_ENV_KEYS = _LLM_ENV_KEYS
 
 
-def _collect_env_vars(profile_keys: tuple[str, ...]) -> dict[str, str]:
+def _collect_env_vars(keys: tuple[str, ...]) -> dict[str, str]:
     env_vars: dict[str, str] = {}
-    for key in profile_keys:
+    for key in keys:
         val = os.getenv(key)
         if val:
             env_vars[key] = val
@@ -65,16 +64,16 @@ def _collect_env_vars(profile_keys: tuple[str, ...]) -> dict[str, str]:
 
 
 def deploy() -> dict[str, str]:
-    """Build the image, push to ECR, launch EC2, and wait for the process to become healthy."""
-    profile = get_profile()
+    """Build the image, push to ECR, launch EC2, and wait for web + gateway to become healthy."""
+    stack = get_stack()
     start_time = time.time()
     print("=" * 60)
-    print(f"Deploying {profile.stack_name} infrastructure ({profile.mode} mode)")
+    print(f"Deploying {stack.stack_name} (web + gateway containers on one EC2 instance)")
     print("=" * 60)
     print()
 
-    print(f"Building and pushing {profile.mode} image to ECR...")
-    repo = ecr.create_repository(profile.ecr_repo_name, profile.stack_name, REGION)
+    print("Building and pushing image to ECR...")
+    repo = ecr.create_repository(stack.ecr_repo_name, stack.stack_name, REGION)
     image_uri = ecr.build_and_push(
         dockerfile_path=DOCKERFILE,
         repository_uri=repo["uri"],
@@ -94,20 +93,20 @@ def deploy() -> dict[str, str]:
 
     print("Creating security group...")
     sg = create_security_group(
-        name=f"{profile.stack_name}-sg",
+        name=f"{stack.stack_name}-sg",
         vpc_id=vpc["vpc_id"],
-        description=profile.security_group_description,
-        ingress_rules=profile.ingress_rules,
-        stack_name=profile.stack_name,
+        description=stack.security_group_description,
+        ingress_rules=stack.ingress_rules,
+        stack_name=stack.stack_name,
         region=REGION,
     )
     print(f"  - Security group: {sg['group_id']}")
 
     print("Creating IAM instance profile...")
     profile_info = create_instance_profile(
-        role_name=f"{profile.stack_name}-role",
-        profile_name=f"{profile.stack_name}-profile",
-        stack_name=profile.stack_name,
+        role_name=f"{stack.stack_name}-role",
+        profile_name=f"{stack.stack_name}-profile",
+        stack_name=stack.stack_name,
         region=REGION,
         extra_policy_arns=[SSM_MANAGED_POLICY_ARN],
     )
@@ -117,15 +116,18 @@ def deploy() -> dict[str, str]:
     ami_id = get_latest_al2023_ami(REGION)
     print(f"  - AMI: {ami_id}")
 
-    env_keys = _GATEWAY_ENV_KEYS if profile.mode == "gateway" else _WEB_ENV_KEYS
-    env_vars = _collect_env_vars(env_keys)
+    web_env_vars = _collect_env_vars(_WEB_ENV_KEYS)
+    gateway_env_vars = _collect_env_vars(_GATEWAY_ENV_KEYS)
 
-    if profile.require_telegram_token and not env_vars.get("TELEGRAM_BOT_TOKEN"):
-        raise RuntimeError(
-            "TELEGRAM_BOT_TOKEN is not set. Export it before running gateway deployment."
-        )
+    if not gateway_env_vars.get("TELEGRAM_BOT_TOKEN"):
+        raise RuntimeError("TELEGRAM_BOT_TOKEN is not set. Export it before running deployment.")
 
-    user_data = generate_user_data(profile=profile, image_uri=image_uri, env_vars=env_vars)
+    user_data = generate_user_data(
+        image_uri=image_uri,
+        log_path=stack.log_path,
+        web_env_vars=web_env_vars,
+        gateway_env_vars=gateway_env_vars,
+    )
 
     print("Launching EC2 instance...")
     instance = launch_instance(
@@ -134,7 +136,7 @@ def deploy() -> dict[str, str]:
         security_group_id=sg["group_id"],
         instance_profile_arn=profile_info["ProfileArn"],
         user_data=user_data,
-        stack_name=profile.stack_name,
+        stack_name=stack.stack_name,
         instance_type=INSTANCE_TYPE,
         region=REGION,
     )
@@ -145,24 +147,19 @@ def deploy() -> dict[str, str]:
     public_ip = running["PublicIpAddress"]
     print(f"  - Public IP: {public_ip}")
 
-    if profile.use_ssm_health_check:
-        print("Waiting for SSM agent to register...")
-        wait_for_ssm_registration(instance["InstanceId"], REGION)
-        print("  - SSM: Online")
+    print("Waiting for SSM agent to register...")
+    wait_for_ssm_registration(instance["InstanceId"], REGION)
+    print("  - SSM: Online")
 
-    readiness_label = "gateway process" if profile.mode == "gateway" else "health endpoint"
-    print(f"Waiting for {readiness_label} (may take several minutes)...")
+    print("Waiting for web and gateway containers (may take several minutes)...")
     wait_for_deployment_ready(
-        profile=profile,
         instance_id=instance["InstanceId"],
         public_ip=public_ip,
         region=REGION,
     )
-    print(f"  - {profile.mode.title()}: OK")
 
     outputs = {
-        "DeployMode": profile.mode,
-        "StackName": profile.stack_name,
+        "StackName": stack.stack_name,
         "InstanceId": instance["InstanceId"],
         "PublicIpAddress": public_ip,
         "SecurityGroupId": sg["group_id"],
@@ -172,9 +169,11 @@ def deploy() -> dict[str, str]:
         "SubnetId": subnet_id,
         "VpcId": vpc["vpc_id"],
         "ImageUri": image_uri,
+        "WebContainer": stack.web_container_name,
+        "GatewayContainer": stack.gateway_container_name,
     }
 
-    save_outputs(outputs, mode=profile.mode)
+    save_outputs(outputs)
 
     elapsed = time.time() - start_time
     print()
@@ -189,5 +188,4 @@ def deploy() -> dict[str, str]:
 
 
 if __name__ == "__main__":
-    resolve_deploy_mode()
     deploy()

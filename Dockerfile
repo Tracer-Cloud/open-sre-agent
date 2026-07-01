@@ -3,6 +3,8 @@
 #   MODE=web      - FastAPI health application (default)
 #   MODE=gateway  - Telegram two-way messaging gateway
 #
+# EC2 deploy (make deploy) runs both as separate containers on one instance.
+#
 # Web mode usage:
 #   docker build -t opensre:latest .
 #   docker run -p 8000:8000 --env-file .env opensre:latest

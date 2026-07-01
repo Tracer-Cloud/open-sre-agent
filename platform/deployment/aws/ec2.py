@@ -10,8 +10,8 @@ import time
 
 from botocore.exceptions import ClientError
 
-from infra.aws.client import DEFAULT_REGION, get_boto3_client, get_standard_tags
-from infra.aws.config import (
+from platform.deployment.aws.client import DEFAULT_REGION, get_boto3_client, get_standard_tags
+from platform.deployment.aws.config import (
     AL2023_AMI_SSM_PARAMETER,
     BEDROCK_POLICY_ARN,
     EC2_INSTANCE_ROLE_DESCRIPTION,
