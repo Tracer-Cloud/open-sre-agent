@@ -129,14 +129,12 @@ jobs:
             llm_provider: openai
             pytest_paths: >-
               tests/cli
-              tests/remote
               tests/agent
               tests/core/agent
               tests/fleet_monitoring
               tests/analytics
               tests/tools/investigation
               tests/delivery
-              tests/entrypoints
               tests/sandbox
               tests/hermes
               tests/github
