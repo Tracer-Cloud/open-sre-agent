@@ -61,11 +61,9 @@ class AgentLLMClient(Protocol):
     @property
     def model_id(self) -> str | None:
         """The provider model identifier, used for context-budget sizing (may be None)."""
-        ...
 
     def tool_schemas(self, tools: list[Any]) -> list[dict[str, Any]]:
         """Translate runtime tools into the provider's tool-schema payloads."""
-        ...
 
     def invoke(
         self,
@@ -75,7 +73,6 @@ class AgentLLMClient(Protocol):
         tools: list[dict[str, Any]] | None = None,
     ) -> AgentLLMResponse:
         """Run one provider request and return the assistant response."""
-        ...
 
 
 @runtime_checkable
@@ -84,7 +81,6 @@ class StreamingReasoningClient(Protocol):
 
     def invoke_stream(self, prompt_or_messages: Any) -> Iterator[str]:
         """Stream the assistant reply as text chunks."""
-        ...
 
 
 __all__ = [

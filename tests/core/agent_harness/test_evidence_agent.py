@@ -13,7 +13,6 @@ from typing import Any
 
 import core.agent_harness.agents.evidence_agent as evidence_agent
 import tools.investigation.stages.gather_evidence.tools as gather_tools
-from core.agent_harness.agents.evidence_agent import gather_tool_evidence
 from core.agent_harness.session import ReplSession
 
 
@@ -45,7 +44,9 @@ def test_tool_discovery_raise_is_swallowed(monkeypatch: Any) -> None:
     monkeypatch.setattr(gather_tools, "get_available_tools", _boom)
 
     reporter = _RecordingReporter()
-    result = gather_tool_evidence("why did it fail?", _session(), error_reporter=reporter)
+    result = evidence_agent.gather_tool_evidence(
+        "why did it fail?", _session(), error_reporter=reporter
+    )
 
     assert result is None
     assert len(reporter.calls) == 1
@@ -61,7 +62,9 @@ def test_integration_resolution_raise_is_swallowed(monkeypatch: Any) -> None:
     monkeypatch.setattr(evidence_agent, "_resolve_gather_integrations", _boom)
 
     reporter = _RecordingReporter()
-    result = gather_tool_evidence("any open issues?", _session(), error_reporter=reporter)
+    result = evidence_agent.gather_tool_evidence(
+        "any open issues?", _session(), error_reporter=reporter
+    )
 
     assert result is None
     assert len(reporter.calls) == 1
@@ -79,7 +82,7 @@ def test_no_error_reporter_still_swallows(monkeypatch: Any) -> None:
 
     monkeypatch.setattr(gather_tools, "get_available_tools", _boom)
 
-    assert gather_tool_evidence("q", _session()) is None
+    assert evidence_agent.gather_tool_evidence("q", _session()) is None
 
 
 def test_no_usable_tools_returns_none(monkeypatch: Any) -> None:
@@ -89,4 +92,4 @@ def test_no_usable_tools_returns_none(monkeypatch: Any) -> None:
     )
     monkeypatch.setattr(gather_tools, "get_available_tools", lambda _resolved: [])
 
-    assert gather_tool_evidence("q", _session()) is None
+    assert evidence_agent.gather_tool_evidence("q", _session()) is None
