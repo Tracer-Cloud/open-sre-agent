@@ -31,7 +31,7 @@ BEDROCK_POLICY_ARN = "arn:aws:iam::aws:policy/AmazonBedrockFullAccess"
 SSM_MANAGED_POLICY_ARN = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 
 # ─── IAM propagation ──────────────────────────────────────────────────────────
-IAM_PROFILE_PROPAGATION_SECONDS = 0
+IAM_PROFILE_PROPAGATION_SECONDS = 10
 
 # ─── Security groups ──────────────────────────────────────────────────────────
 SG_DELETE_MAX_ATTEMPTS = 12

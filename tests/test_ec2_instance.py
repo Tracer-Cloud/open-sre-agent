@@ -28,7 +28,7 @@ def test_create_instance_profile_returns_profile_details(
     assert result["ProfileName"] == "test-profile"
     assert result["ProfileArn"] == "arn:aws:iam::123:instance-profile/test-profile"
     assert result["RoleName"] == "test-role"
-    _mock_sleep.assert_not_called()
+    _mock_sleep.assert_called_once_with(10)
 
 
 def test_split_container_env_vars_excludes_telegram_from_web() -> None:
