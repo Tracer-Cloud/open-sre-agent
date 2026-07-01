@@ -61,6 +61,10 @@ When `alert_source` is `signoz`, the agent auto-seeds three tools before the ReA
 - **`query_signoz_metrics`** — Query CPU, memory, and request-rate signals.
 - **`query_signoz_traces`** — Query error spans, latency percentiles, and dependencies.
 
+<Info>
+`query_signoz_traces` bounds high-volume results to the most relevant traces so investigations stay high-signal. When traces are trimmed, the response includes a `truncation_note` (e.g. `Showing 20 of 50 traces`); the aggregate `summary` (error rate, p99, call count) is always preserved.
+</Info>
+
 ## Webhook Configuration
 
 SigNoz emits Prometheus-style webhook payloads. To trigger OpenSRE investigations automatically:

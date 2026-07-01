@@ -7,7 +7,12 @@ from __future__ import annotations
 from typing import Any, cast
 
 from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.compaction import compact_logs, summarize_counts
+from core.tool_framework.utils.compaction import (
+    DEFAULT_TRACE_LIMIT,
+    compact_logs,
+    compact_traces,
+    summarize_counts,
+)
 from integrations.signoz import SigNozConfig, signoz_extract_params
 from integrations.signoz.availability import signoz_available_or_backend
 from integrations.signoz.client import SigNozClient
@@ -263,6 +268,44 @@ def _traces_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     }
 
 
+def _normalize_traces_payload(
+    result: dict[str, Any],
+    *,
+    summary: dict[str, Any],
+) -> dict[str, Any]:
+    """Bound the trace list so a noisy trace query stays high-signal for the
+    agent, mirroring ``_normalize_logs_payload`` and ``GrafanaTracesTool``.
+
+    SigNoz returns flat per-span rows, so compaction caps the number of rows at
+    ``DEFAULT_TRACE_LIMIT`` (independent of the larger server-side fetch ``limit``)
+    and records a ``truncation_note`` when rows are dropped. ``compact_traces`` is
+    used for parity with the Grafana traces tool; its per-trace span cap only
+    applies to payloads that nest spans (e.g. Grafana Tempo), so it is a no-op for
+    SigNoz's flat rows. The aggregate trace ``summary`` (error rate, p99, call
+    count) and every other field are passed through untouched.
+    """
+    if not result.get("available"):
+        return {**result, "summary": summary}
+
+    traces = result.get("traces", [])
+    compacted_traces = compact_traces(traces, limit=DEFAULT_TRACE_LIMIT)
+    # Base the truncation note on the server-reported total (falling back to the
+    # fetched count), mirroring _normalize_logs_payload, and reuse that same value
+    # for the returned ``total`` field so the two never disagree — e.g. if the
+    # backend matched 1000 traces but returned 50, both read 1000, not 50.
+    total = result.get("total", len(traces))
+    normalized = {
+        **result,
+        "traces": compacted_traces,
+        "total": total,
+        "summary": summary,
+    }
+    truncation_note = summarize_counts(total, len(compacted_traces), "traces")
+    if truncation_note:
+        normalized["truncation_note"] = truncation_note
+    return normalized
+
+
 @tool(
     name="query_signoz_traces",
     display_name="SigNoz traces",
@@ -309,10 +352,7 @@ def query_signoz_traces(
             service=service,
             time_range_minutes=time_range_minutes,
         )
-        return {
-            **traces_result,
-            "summary": summary,
-        }
+        return _normalize_traces_payload(traces_result, summary=summary)
 
     config = SigNozConfig.model_validate(_kwargs)
     if not config.is_configured:
@@ -334,7 +374,4 @@ def query_signoz_traces(
         service=service,
         time_range_minutes=time_range_minutes,
     )
-    return {
-        **traces_result,
-        "summary": summary,
-    }
+    return _normalize_traces_payload(traces_result, summary=summary)

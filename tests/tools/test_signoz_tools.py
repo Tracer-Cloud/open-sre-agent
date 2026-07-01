@@ -97,6 +97,45 @@ class _FakeSigNozBackend:
         }
 
 
+class _NoisyTracesBackend:
+    """Backend returning a high-volume trace payload to exercise list compaction.
+
+    Mirrors the real SigNoz client shape: one flat per-span row per entry
+    (trace_id/span_id/name/duration_ms/has_error/...), with no nested ``spans``
+    list — so the assertions exercise the trace-list cap the SigNoz path actually
+    hits, not a fabricated span-nesting shape the client never emits.
+    """
+
+    def __init__(self, n_traces: int = 50) -> None:
+        self._n_traces = n_traces
+
+    def query_traces(self, **_kwargs: Any) -> dict[str, Any]:
+        return {
+            "source": "signoz_traces",
+            "available": True,
+            "total": self._n_traces,
+            "traces": [
+                {
+                    "trace_id": f"t{i}",
+                    "span_id": f"s{i}",
+                    "name": "GET /api/health",
+                    "duration_ms": 12.3,
+                    "has_error": True,
+                    "service_name": "api",
+                }
+                for i in range(self._n_traces)
+            ],
+        }
+
+    def query_trace_summary(self, **_kwargs: Any) -> dict[str, Any]:
+        return {
+            "source": "signoz_traces",
+            "available": True,
+            "error_rate": 0.1,
+            "p99_ms": 300.0,
+        }
+
+
 class TestQuerySignozLogs:
     def test_available_with_query_api_credentials_only(self) -> None:
         from integrations.signoz.tools import _logs_is_available
@@ -210,3 +249,76 @@ class TestQuerySignozTraces:
         assert result["source"] == "signoz_traces"
         assert result["available"] is False
         assert "not configured" in result.get("error", "").lower()
+
+    def test_high_volume_traces_compacted_to_limit(self) -> None:
+        from core.tool_framework.utils.compaction import DEFAULT_TRACE_LIMIT
+
+        backend = _NoisyTracesBackend(n_traces=50)
+        raw_traces = backend.query_traces()["traces"]
+        result = query_signoz_traces(service="api", signoz_backend=backend)
+
+        assert result["available"] is True
+        # Exact cap (not <=) so a regression in the trace limit is caught.
+        assert len(result["traces"]) == DEFAULT_TRACE_LIMIT
+        # The list is bounded to the first N rows, each passed through unchanged
+        # (SigNoz rows are flat — there is no per-trace span nesting to cap).
+        assert result["traces"] == raw_traces[:DEFAULT_TRACE_LIMIT]
+        assert result["truncation_note"] == f"Showing {DEFAULT_TRACE_LIMIT} of 50 traces"
+        # The aggregate trace summary is passed through untouched by compaction.
+        assert result["summary"] == backend.query_trace_summary()
+
+    def test_small_trace_result_is_not_truncated(self) -> None:
+        backend = _NoisyTracesBackend(n_traces=3)
+        raw_traces = backend.query_traces()["traces"]
+        result = query_signoz_traces(service="api", signoz_backend=backend)
+
+        # Below the cap: every row passes through, no truncation note.
+        assert result["traces"] == raw_traces
+        assert "truncation_note" not in result
+        assert result["summary"] == backend.query_trace_summary()
+
+    def test_unavailable_traces_result_passes_through(self) -> None:
+        class _DownBackend:
+            def query_traces(self, **_kwargs: Any) -> dict[str, Any]:
+                return {
+                    "source": "signoz_traces",
+                    "available": False,
+                    "error": "upstream 503",
+                    "traces": [],
+                }
+
+            def query_trace_summary(self, **_kwargs: Any) -> dict[str, Any]:
+                return {"source": "signoz_traces", "available": False, "error": "upstream 503"}
+
+        result = query_signoz_traces(service="api", signoz_backend=_DownBackend())
+
+        assert result["available"] is False
+        assert result["error"] == "upstream 503"
+        assert "truncation_note" not in result
+
+    def test_truncation_note_uses_server_total_not_fetched_count(self) -> None:
+        # When the server-reported total exceeds the fetched (limit-bounded) list,
+        # the truncation note and the returned `total` must both use the server
+        # total (mirroring _normalize_logs_payload) — never the fetched length.
+        from core.tool_framework.utils.compaction import DEFAULT_TRACE_LIMIT
+
+        class _BigTotalBackend:
+            def query_traces(self, **_kwargs: Any) -> dict[str, Any]:
+                return {
+                    "source": "signoz_traces",
+                    "available": True,
+                    "total": 1000,  # server matched 1000; only 50 rows returned (limit)
+                    "traces": [
+                        {"trace_id": f"t{i}", "span_id": f"s{i}", "has_error": True}
+                        for i in range(50)
+                    ],
+                }
+
+            def query_trace_summary(self, **_kwargs: Any) -> dict[str, Any]:
+                return {"source": "signoz_traces", "available": True, "error_rate": 0.2}
+
+        result = query_signoz_traces(service="api", signoz_backend=_BigTotalBackend())
+
+        assert result["total"] == 1000
+        assert len(result["traces"]) == DEFAULT_TRACE_LIMIT
+        assert result["truncation_note"] == f"Showing {DEFAULT_TRACE_LIMIT} of 1000 traces"
