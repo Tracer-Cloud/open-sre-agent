@@ -179,8 +179,8 @@ def provision_instance_via_ssm(
             f"{docker} login --username AWS --password-stdin {quoted_registry}; then "
             "break; "
             "fi; "
-            f"echo \"ECR auth attempt $i failed, retrying in "
-            f"{PROVISION_ECR_AUTH_RETRY_SECONDS}s...\"; "
+            f'echo "ECR auth attempt $i failed, retrying in '
+            f'{PROVISION_ECR_AUTH_RETRY_SECONDS}s..."; '
             f"sleep {PROVISION_ECR_AUTH_RETRY_SECONDS}; "
             "done"
         ),
