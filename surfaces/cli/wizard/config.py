@@ -105,6 +105,7 @@ class ProviderOption:
 # Source: https://docs.anthropic.com/en/docs/about-claude/models/overview
 ANTHROPIC_MODELS = (
     ModelOption(value=ANTHROPIC_REASONING_MODEL, label="Claude Opus 4.7"),
+    ModelOption(value="claude-fable-5", label="Claude Fable 5 — most capable"),
     ModelOption(value="claude-sonnet-4-6", label="Claude Sonnet 4.6"),
     ModelOption(value="claude-haiku-4-5", label="Claude Haiku 4.5"),
 )
@@ -252,7 +253,8 @@ CLAUDE_CODE_MODELS = (
         value="",
         label="CLI default (no --model; use Claude Code configured model)",
     ),
-    ModelOption(value="claude-opus-4-7", label="Claude Opus 4.7 — most capable"),
+    ModelOption(value="claude-fable-5", label="Claude Fable 5 — most capable"),
+    ModelOption(value="claude-opus-4-7", label="Claude Opus 4.7"),
     ModelOption(value="claude-sonnet-4-6", label="Claude Sonnet 4.6 — balanced"),
     ModelOption(value="claude-haiku-4-5", label="Claude Haiku 4.5 — fast, cost-efficient"),
 )
