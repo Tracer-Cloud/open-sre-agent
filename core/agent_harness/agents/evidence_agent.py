@@ -20,6 +20,7 @@ from collections.abc import Callable
 from typing import Any
 
 from core.agent import Agent
+from core.agent_harness.agent_builder import AgentConfig, build_agent
 from core.agent_harness.ports import ErrorReporter, SessionStore, ToolEventObserver
 from core.agent_harness.prompts.conversation_memory import (
     NO_HISTORY_PLACEHOLDER,
@@ -180,8 +181,8 @@ def _build_evidence_agent(
     resolved: dict[str, Any],
     on_progress: ToolEventObserver | None,
 ) -> Agent[Any]:
-    """Build the Agent for one evidence-gather turn (gateway-style)."""
-    return Agent[Any](
+    """Build the Agent for one evidence-gather turn."""
+    config = AgentConfig(
         llm=llm,
         system=_build_gather_system_prompt(session),
         tools=gather_tools,
@@ -189,6 +190,7 @@ def _build_evidence_agent(
         max_iterations=_MAX_GATHER_ITERATIONS,
         on_runtime_event=runtime_event_callback_from_observer(on_progress),
     )
+    return build_agent(config)
 
 
 def gather_tool_evidence(

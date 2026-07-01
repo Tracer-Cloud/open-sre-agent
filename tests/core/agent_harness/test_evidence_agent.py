@@ -1,11 +1,10 @@
 """Regression tests for ``core.agent_harness.agents.evidence_agent.gather_tool_evidence``.
 
 The public contract (docstring) is: *any* failure is reported and swallowed
-(returns ``None``) so the conversational turn never breaks. After the Agent
-refactor, tool discovery + integration resolution moved into
-``EvidenceAgent.has_usable_tools()`` / ``resolved_integrations()``. These tests
-pin that a raise from either path is swallowed rather than propagated to the
-caller.
+(returns ``None``) so the conversational turn never breaks. Tool discovery,
+integration resolution, and LLM load all run inside ``gather_tool_evidence``'s
+single try/except. These tests pin that a raise from any of those paths is
+swallowed rather than propagated to the caller.
 """
 
 from __future__ import annotations

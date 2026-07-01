@@ -520,11 +520,11 @@ class Agent[RuntimeToolT: RuntimeTool]:
             return list(messages)
 
     def _convert_to_llm(self, messages: list[RuntimeMessage]) -> list[dict[str, Any]]:
-        # ``run()`` populates ``self._llm`` via build_llm before entering the loop;
-        # this method is a per-iteration helper and never called before then.
+        # ``run()`` resolves ``self._llm`` before entering the loop; this method
+        # is a per-iteration helper and never called before then.
         assert self._llm is not None, (
-            "_convert_to_llm called before run() populated self._llm — "
-            "hook subclasses must go through run(), not private helpers"
+            "_convert_to_llm called before run() resolved self._llm — "
+            "callers must go through run(), not private helpers"
         )
         llm = self._llm
         try:

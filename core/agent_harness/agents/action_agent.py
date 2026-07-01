@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from core.agent import Agent
+from core.agent_harness.agent_builder import AgentConfig, build_agent
 from core.agent_harness.models.turn_context import TurnContext
 from core.agent_harness.models.turn_results import ToolCallingTurnResult
 from core.agent_harness.ports import (
@@ -331,7 +332,7 @@ def _build_action_agent(
         system = build_action_system_prompt(turn_ctx or TurnContext.from_session(message, session))
         user_message = build_action_user_message(message)
 
-    agent = Agent[Any](
+    config = AgentConfig(
         llm=llm,
         system=system,
         tools=agent_tools,
@@ -341,7 +342,7 @@ def _build_action_agent(
         tool_hooks=tool_hooks,
         on_runtime_event=runtime_event_callback_from_observer(observer),
     )
-    return agent, user_message
+    return build_agent(config), user_message
 
 
 def run_action_agent_turn(

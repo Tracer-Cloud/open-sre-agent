@@ -12,6 +12,7 @@ from rich.console import Console
 
 from config.gateway_output_sink import GatewayOutputSink
 from core.agent import Agent
+from core.agent_harness.agent_builder import AgentConfig, build_agent
 from core.agent_harness.prompts.action_agent_system_prompt import _SYSTEM_PROMPT_BASE
 from core.agent_harness.providers.default_prompt_context import DefaultPromptContextProvider
 from core.agent_harness.providers.default_providers import (
@@ -39,20 +40,25 @@ from gateway.polling.telegram_polling_runtime import (
 )
 
 
-# Initializing the gateway agent
 def build_gateway_agent(
     resolved_integrations: dict[str, Any],
     tools: list[RegisteredTool],
 ) -> Agent[RegisteredTool]:
-    agent = Agent[
-        RegisteredTool
-    ](
-        system=_SYSTEM_PROMPT_BASE,  # @todo for the future: we will need to pre-pend or modify this system prompt with the gateway specific prompt
-        tools=tools,
+    """Build the Agent that services one gateway turn.
+
+    Uses the shared :func:`~core.agent_harness.agent_builder.build_agent`
+    factory so the gateway shares its :class:`Agent` construction path with
+    the action and evidence surfaces.
+    """
+    # @todo: pre-pend or modify this system prompt with gateway-specific guidance.
+    config = AgentConfig(
+        llm=None,
+        system=_SYSTEM_PROMPT_BASE,
+        tools=list(tools),
         resolved_integrations=resolved_integrations,
         max_iterations=6,
     )
-    return agent
+    return build_agent(config)
 
 
 class GatewayManager:
