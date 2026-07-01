@@ -1,4 +1,12 @@
-"""Execute submitted interactive-shell turns through the shared agent harness."""
+"""
+Execute submitted interactive-shell turns through the shared agent harness.
+
+Comment Vincent: Again 5 functions that are largely overlapping in functionality.  
+Comment Vincent: This file is trying to mimic the functions in the core agent_harness package. It shouldn't do that.
+"""
+
+
+
 
 from __future__ import annotations
 
@@ -78,38 +86,6 @@ def run_action_tool_turn(
     )
 
 
-def answer_shell_question(
-    message: str,
-    session: ReplSession,
-    console: Console,
-    *,
-    confirm_fn: Callable[[str], str] | None = None,
-    is_tty: bool | None = None,
-    tool_observation: str | None = None,
-    tool_observation_on_screen: bool = True,
-    turn_ctx: TurnContext | None = None,
-    output: OutputSink | None = None,
-) -> LlmRunInfo | None:
-    """Answer one shell question through the grounded conversational assistant.
-
-    Delegates to :func:`core.agent_harness.turn_orchestrator.answer_cli_agent`, supplying the shell
-    adapters for Rich output, grounding caches, reasoning client, and telemetry.
-    """
-    return run_core_answer_cli_agent(
-        message,
-        session,
-        _resolve_output_sink(console, output),
-        prompts=ShellPromptContextProvider(session),
-        reasoning=ShellReasoningClientProvider(console),
-        run_factory=ShellRunRecordFactory(session),
-        error_reporter=ShellErrorReporter(),
-        confirm_fn=confirm_fn,
-        is_tty=is_tty,
-        tool_observation=tool_observation,
-        tool_observation_on_screen=tool_observation_on_screen,
-        turn_ctx=turn_ctx,
-    )
-
 
 def execute_shell_turn(
     text: str,
@@ -135,10 +111,10 @@ def execute_shell_turn(
     """
     from core.agent_harness.session.compaction import auto_compact_if_needed
 
+    # This is problematic bwecause at a random place you have session compaction. This should happen in the agent layer in core, and not in the interactive shell in a random function!!!!
     auto_compact_if_needed(session)
     _execute = execute_actions or run_action_tool_turn
     _gather = gather_evidence or gather_integration_tool_evidence
-    _answer = answer_agent or answer_shell_question
     accounting = ShellTurnAccounting(session=session, text=text, recorder=recorder)
     resolved_output = _resolve_output_sink(console, output)
 
