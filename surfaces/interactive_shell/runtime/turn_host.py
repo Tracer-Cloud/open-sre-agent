@@ -1,7 +1,7 @@
 """
 Runtime turn host for submitted interactive-shell prompts
-Comment Vincent (June 28th): This module basically collects state of agent actions in the interactive shell. 
-Comment this file has 6 functions that essentially do the same thing 
+Comment Vincent (June 28th): This module basically collects state of agent actions in the interactive shell.
+Comment this file has 6 functions that essentially do the same thing
 We have:
 - run_agent_turn
 - run_agent_turn_queue
@@ -178,7 +178,7 @@ async def _execute_agent_turn(
 
 
 class AgentTurnRunner:
-    # This class is problematic because it handles spinners which is UI logic, in the core agentic flow. 
+    # This class is problematic because it handles spinners which is UI logic, in the core agentic flow.
     """Stable class API over the functional ``run_agent_turn`` driver."""
 
     def __init__(
