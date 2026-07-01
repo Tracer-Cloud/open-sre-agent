@@ -31,8 +31,7 @@ def gateway_deployment() -> Generator[dict[str, Any]]:
             "TELEGRAM_BOT_TOKEN is not set — export it before running gateway deployment tests"
         )
 
-    from platform.deployment.deploy import deploy
-    from platform.deployment.destroy import destroy
+    from platform.deployment.lifecycle import deploy, destroy
 
     outputs = deploy()
     try:

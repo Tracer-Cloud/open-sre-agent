@@ -263,10 +263,10 @@ docs-dev:
 # Deploy all test case infrastructure in parallel (SDK - fast!)
 # EC2 deploy (web + gateway containers on one instance)
 deploy:
-	$(PYTHON) -m platform.deployment.deploy
+	$(PYTHON) -m platform.deployment.lifecycle deploy
 
 destroy:
-	$(PYTHON) -m platform.deployment.destroy
+	$(PYTHON) -m platform.deployment.lifecycle destroy
 
 test-deploy:
 	$(PYTHON) -m pytest tests/deployment/ec2/ -v -s

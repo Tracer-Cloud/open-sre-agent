@@ -23,7 +23,10 @@ from platform.deployment.aws.config import (
     ECR_READ_POLICY_ARN,
     IAM_PROFILE_PROPAGATION_SECONDS,
     INSTANCE_TYPE,
+    STACK_TAG_KEY,
 )
+
+ACTIVE_EC2_INSTANCE_STATES = ("pending", "running", "stopping")
 
 logger = logging.getLogger(__name__)
 
@@ -151,6 +154,29 @@ def delete_instance_profile(
     except ClientError as e:
         if e.response["Error"]["Code"] != "NoSuchEntity":
             raise
+
+
+def find_stack_instance_ids(
+    stack_name: str,
+    *,
+    region: str = DEFAULT_REGION,
+) -> list[str]:
+    """Return instance IDs tagged for the stack that are still active."""
+    ec2 = get_boto3_client("ec2", region)
+    response = ec2.describe_instances(
+        Filters=[
+            {"Name": f"tag:{STACK_TAG_KEY}", "Values": [stack_name]},
+            {"Name": "instance-state-name", "Values": list(ACTIVE_EC2_INSTANCE_STATES)},
+        ]
+    )
+
+    instance_ids: list[str] = []
+    for reservation in response.get("Reservations", []):
+        for instance in reservation.get("Instances", []):
+            instance_id = instance.get("InstanceId")
+            if instance_id:
+                instance_ids.append(str(instance_id))
+    return sorted(instance_ids)
 
 
 def launch_instance(

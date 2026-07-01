@@ -1,9 +1,13 @@
-"""User-data generation and post-launch health checks for EC2 deployments."""
+"""User-data generation, health polling, and post-launch readiness checks."""
 
 from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
+from dataclasses import dataclass
+
+import requests
 
 from platform.deployment.aws.client import DEFAULT_REGION
 from platform.deployment.aws.config import (
@@ -16,17 +20,87 @@ from platform.deployment.aws.config import (
     USER_DATA_IAM_PROPAGATION_SECONDS,
 )
 from platform.deployment.aws.ssm import run_ssm_shell_command
-from platform.deployment.health import poll_deployment_health
-from platform.deployment.modes import GATEWAY_CONTAINER_NAME, WEB_CONTAINER_NAME
+from platform.deployment.stack import GATEWAY_CONTAINER_NAME, WEB_CONTAINER_NAME
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
     "GATEWAY_CONTAINER_NAME",
+    "HealthPollStatus",
     "WEB_CONTAINER_NAME",
     "generate_user_data",
+    "poll_deployment_health",
     "wait_for_deployment_ready",
 ]
+
+
+@dataclass(frozen=True)
+class HealthPollStatus:
+    """Result for a successful health poll."""
+
+    url: str
+    attempts: int
+    status_code: int
+    elapsed_seconds: float
+
+
+def _build_health_urls(base_url: str) -> tuple[str, ...]:
+    """Return health URL candidates for a deployment base URL."""
+    stripped = base_url.strip().rstrip("/")
+    if stripped.endswith("/health") or stripped.endswith("/ok"):
+        return (stripped,)
+    return (f"{stripped}/health", f"{stripped}/ok")
+
+
+def poll_deployment_health(
+    base_url: str,
+    *,
+    interval_seconds: float = 5.0,
+    max_attempts: int = 60,
+    request_timeout_seconds: float = 5.0,
+    http_get: Callable[..., object] = requests.get,
+    sleep: Callable[[float], None] = time.sleep,
+    time_fn: Callable[[], float] = time.monotonic,
+) -> HealthPollStatus:
+    """Poll deployment health with ``/health`` then ``/ok`` fallback.
+
+    Raises:
+        TimeoutError: When no candidate endpoint returns HTTP 200 in time.
+    """
+    urls = _build_health_urls(base_url)
+    started = time_fn()
+    last_status: int | None = None
+    last_error: str | None = None
+
+    for attempt in range(1, max_attempts + 1):
+        for url in urls:
+            try:
+                response = http_get(url, timeout=request_timeout_seconds)
+                status_code = int(getattr(response, "status_code", 0))
+                if status_code == 200:
+                    return HealthPollStatus(
+                        url=url,
+                        attempts=attempt,
+                        status_code=status_code,
+                        elapsed_seconds=time_fn() - started,
+                    )
+                last_status = status_code
+            except requests.exceptions.RequestException as exc:
+                last_error = str(exc)
+
+        if attempt < max_attempts:
+            sleep(max(interval_seconds, 0.0))
+
+    detail = (
+        f"last status={last_status}"
+        if last_status is not None
+        else f"last error={last_error or 'none'}"
+    )
+    elapsed = time_fn() - started
+    raise TimeoutError(
+        f"Deployment health check timed out after {elapsed:.1f}s "
+        f"({max_attempts} attempts, candidates={list(urls)}, {detail})"
+    )
 
 
 def _format_env_flags(env_vars: dict[str, str]) -> str:

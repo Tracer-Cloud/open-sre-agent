@@ -1,18 +1,14 @@
 #!/usr/bin/env python3
-"""Deploy OpenSRE on EC2 with web and gateway as separate containers on one instance.
-
-Creates:
-- 1 ECR repository and builds/pushes the root Dockerfile
-- 1 IAM role + instance profile for EC2 (with SSM managed-instance policy)
-- 1 Security group (inbound 8000 for web; gateway uses outbound-only polling)
-- 1 EC2 instance running opensre-web and opensre-gateway Docker containers
-"""
+"""Deploy and destroy OpenSRE on EC2 (web + gateway containers on one instance)."""
 
 from __future__ import annotations
 
+import argparse
 import os
 import time
 from pathlib import Path
+
+from botocore.exceptions import ClientError
 
 from platform.deployment.aws import ecr
 from platform.deployment.aws.client import DEFAULT_REGION
@@ -24,15 +20,22 @@ from platform.deployment.aws.config import (
 )
 from platform.deployment.aws.ec2 import (
     create_instance_profile,
+    delete_instance_profile,
     get_latest_al2023_ami,
     launch_instance,
+    terminate_instance,
     wait_for_running,
 )
 from platform.deployment.aws.ssm import wait_for_ssm_registration
-from platform.deployment.aws.vpc import create_security_group, get_default_vpc, get_public_subnets
+from platform.deployment.aws.vpc import (
+    create_security_group,
+    delete_security_group,
+    get_default_vpc,
+    get_public_subnets,
+)
 from platform.deployment.instance import generate_user_data, wait_for_deployment_ready
-from platform.deployment.modes import get_stack
-from platform.deployment.outputs import save_outputs
+from platform.deployment.prep import cleanup_existing_deployment, validate_deploy_env
+from platform.deployment.stack import delete_outputs, get_stack, load_outputs, save_outputs
 
 REGION = DEFAULT_REGION
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -65,12 +68,16 @@ def _collect_env_vars(keys: tuple[str, ...]) -> dict[str, str]:
 
 def deploy() -> dict[str, str]:
     """Build the image, push to ECR, launch EC2, and wait for web + gateway to become healthy."""
+    validate_deploy_env()
+
     stack = get_stack()
     start_time = time.time()
     print("=" * 60)
     print(f"Deploying {stack.stack_name} (web + gateway containers on one EC2 instance)")
     print("=" * 60)
     print()
+
+    cleanup_existing_deployment(region=REGION)
 
     print("Building and pushing image to ECR...")
     repo = ecr.create_repository(stack.ecr_repo_name, stack.stack_name, REGION)
@@ -118,9 +125,6 @@ def deploy() -> dict[str, str]:
 
     web_env_vars = _collect_env_vars(_WEB_ENV_KEYS)
     gateway_env_vars = _collect_env_vars(_GATEWAY_ENV_KEYS)
-
-    if not gateway_env_vars.get("TELEGRAM_BOT_TOKEN"):
-        raise RuntimeError("TELEGRAM_BOT_TOKEN is not set. Export it before running deployment.")
 
     user_data = generate_user_data(
         image_uri=image_uri,
@@ -187,5 +191,94 @@ def deploy() -> dict[str, str]:
     return outputs
 
 
+def destroy() -> dict[str, list[str]]:
+    """Terminate the EC2 instance and clean up all associated resources."""
+    stack = get_stack()
+    start_time = time.time()
+    print("=" * 60)
+    print(f"Destroying {stack.stack_name} infrastructure")
+    print("=" * 60)
+    print()
+
+    results: dict[str, list[str]] = {"deleted": [], "failed": []}
+
+    try:
+        outputs = load_outputs()
+    except FileNotFoundError:
+        print("No outputs file found — attempting cleanup by known names.")
+        outputs = {}
+
+    instance_id = outputs.get("InstanceId", "")
+    sg_id = outputs.get("SecurityGroupId", "")
+    profile_name = outputs.get("ProfileName", f"{stack.stack_name}-profile")
+    role_name = outputs.get("RoleName", f"{stack.stack_name}-role")
+
+    if instance_id:
+        print(f"Terminating EC2 instance {instance_id}...")
+        try:
+            terminate_instance(instance_id, DEFAULT_REGION)
+            results["deleted"].append(f"ec2-instance:{instance_id}")
+            print("  - Instance terminated")
+        except ClientError as e:
+            msg = f"ec2-instance:{instance_id} - {e}"
+            results["failed"].append(msg)
+            print(f"  - Failed: {e}")
+
+    if sg_id:
+        print(f"Deleting security group {sg_id}...")
+        try:
+            delete_security_group(sg_id, DEFAULT_REGION)
+            results["deleted"].append(f"security-group:{sg_id}")
+            print("  - Security group deleted")
+        except ClientError as e:
+            msg = f"security-group:{sg_id} - {e}"
+            results["failed"].append(msg)
+            print(f"  - Failed: {e}")
+
+    print(f"Deleting IAM profile {profile_name} and role {role_name}...")
+    try:
+        delete_instance_profile(profile_name, role_name, DEFAULT_REGION)
+        results["deleted"].append(f"instance-profile:{profile_name}")
+        results["deleted"].append(f"iam-role:{role_name}")
+        print("  - Profile and role deleted")
+    except ClientError as e:
+        msg = f"iam:{profile_name}/{role_name} - {e}"
+        results["failed"].append(msg)
+        print(f"  - Failed: {e}")
+
+    delete_outputs()
+
+    elapsed = time.time() - start_time
+    print()
+    print("=" * 60)
+    print(f"Destroy completed in {elapsed:.1f}s")
+    print("=" * 60)
+
+    if results["deleted"]:
+        print(f"\nDeleted {len(results['deleted'])} resources:")
+        for r in results["deleted"]:
+            print(f"  - {r}")
+
+    if results["failed"]:
+        print(f"\nFailed to delete {len(results['failed'])} resources:")
+        for r in results["failed"]:
+            print(f"  - {r}")
+
+    return results
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="OpenSRE EC2 deployment lifecycle")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    subparsers.add_parser("deploy", help="Provision the EC2 stack")
+    subparsers.add_parser("destroy", help="Tear down the EC2 stack")
+    args = parser.parse_args()
+
+    if args.command == "deploy":
+        deploy()
+    else:
+        destroy()
+
+
 if __name__ == "__main__":
-    deploy()
+    main()

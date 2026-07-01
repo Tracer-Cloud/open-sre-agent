@@ -7,7 +7,7 @@ AWS EC2 deployment and shared provisioning primitives for OpenSRE.
 | Path | Purpose |
 | --- | --- |
 | [`aws/`](aws/) | Shared AWS SDK primitives (`client`, `config`, VPC/SG, EC2/IAM, ECR, SSM). |
-| `deploy.py`, `destroy.py`, … | EC2 provisioning: `opensre-web` + `opensre-gateway` on one instance. |
+| `lifecycle.py`, `prep.py`, `stack.py`, `instance.py` | EC2 provisioning: `opensre-web` + `opensre-gateway` on one instance. |
 | `install-proxy/` | Install proxy utility (Cloudflare Worker). |
 
 ## EC2 deploy commands
@@ -16,15 +16,15 @@ Run from the **repo root**. Requires `make install` first.
 
 | Command | What it does |
 | --- | --- |
-| `make deploy` | Build image → push ECR → launch EC2 → wait for web HTTP + gateway SSM health |
+| `make deploy` | Destroy any existing stack, then build image → push ECR → launch EC2 → wait for health |
 | `make destroy` | Terminate instance, delete security group + IAM profile/role, remove local outputs |
 | `make test-deploy` | Run `tests/deployment/ec2/` e2e tests (live AWS; skipped in CI) |
 
 Equivalent Python entrypoints:
 
 ```bash
-uv run python -m platform.deployment.deploy
-uv run python -m platform.deployment.destroy
+uv run python -m platform.deployment.lifecycle deploy
+uv run python -m platform.deployment.lifecycle destroy
 ```
 
 ### Prerequisites
@@ -35,6 +35,9 @@ uv run python -m platform.deployment.destroy
 4. **Region** — hardcoded to `us-east-1` in [`aws/config.py`](aws/config.py).
 
 ### Environment
+
+`make deploy` validates required variables **before** cleanup or provisioning and prints
+any missing keys (with `MISSING:` / `WARN:` labels).
 
 Copy [`.env.deploy.example`](../../.env.deploy.example) to `.env` in the repo root (or export vars):
 
@@ -65,6 +68,14 @@ After deploy:
 ```bash
 curl http://<PublicIpAddress>:8000/health
 ```
+
+### Redeploy behavior
+
+`make deploy` checks for an existing stack before provisioning:
+
+- If `~/.opensre/deployments/opensre-ec2.json` exists **or** active EC2 instances are tagged with `tracer:stack=opensre-ec2`, deploy **auto-destroys** the previous stack (with a console warning) and then provisions a fresh one.
+- This prevents orphan instances when deploy is run twice without an explicit `make destroy`.
+- Set `OPENSRE_DEPLOY_ABORT_IF_EXISTS=1` to fail instead of auto-destroying (useful when you want deploy to be strictly manual).
 
 ### What `make destroy` removes
 
