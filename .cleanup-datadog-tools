@@ -1,0 +1,12 @@
+This file marks the removal of the dead tools/datadog_tools/ directory.
+
+Issue: #3559
+Description: Delete empty legacy folder after Datadog tools moved to integrations/datadog/
+
+The tools/datadog_tools/ directory only contained __pycache__ and had no references in the codebase.
+All functionality has been migrated to integrations/datadog/
+
+Verification:
+- Searched entire codebase: no imports or references to tools/datadog_tools
+- Directory contained only __pycache__
+- Tests pass: make test-cov ✓
