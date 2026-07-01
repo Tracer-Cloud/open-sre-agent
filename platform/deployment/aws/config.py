@@ -16,7 +16,7 @@ MANAGED_TAG_KEY = "tracer:managed"
 MANAGED_TAG_VALUE = "sdk"
 
 # ─── EC2 instance ─────────────────────────────────────────────────────────────
-INSTANCE_TYPE = "t2.micro"
+INSTANCE_TYPE = "t3.micro"
 AL2023_AMI_SSM_PARAMETER = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
 EC2_ROOT_DEVICE_NAME = "/dev/xvda"
 EC2_VOLUME_SIZE_GB = 30
