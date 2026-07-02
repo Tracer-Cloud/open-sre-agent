@@ -3,8 +3,8 @@ from __future__ import annotations
 import pytest
 
 from integrations.github import login as github_login
-from integrations.github.login import GitHubLoginResult
 from integrations.github.identity import saved_github_username
+from integrations.github.login import GitHubLoginResult
 from integrations.github_mcp import GitHubMCPValidationResult
 from integrations.github_mcp_oauth import GitHubDeviceToken
 
