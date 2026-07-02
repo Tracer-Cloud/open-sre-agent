@@ -44,7 +44,7 @@ class MigrationCase:
 CASES: tuple[MigrationCase, ...] = (
     # trello
     MigrationCase(
-        "integrations/trello.py", "validate_trello_config", "trello", "validate_trello_config"
+        "integrations/trello/config.py", "validate_trello_config", "trello", "validate_trello_config"
     ),
     # kafka
     MigrationCase(
