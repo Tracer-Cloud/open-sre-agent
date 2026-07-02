@@ -26,6 +26,7 @@ from core.agent_harness.prompts.conversation_memory import (
     NO_HISTORY_PLACEHOLDER,
     format_recent_conversation,
 )
+from core.agent_harness.prompts.gather import build_gather_system_prompt
 from core.domain.alerts.alert_source import SECONDARY_TOOL_SOURCES
 from core.events import runtime_event_callback_from_observer
 from integrations.github.repo_scope import (
@@ -85,33 +86,6 @@ def _format_observation(executed: list[tuple[Any, Any]]) -> str:
             f"Tool: {tc.name}\nArguments: {args}\nResult: {_truncate(body, _MAX_PER_TOOL_CHARS)}"
         )
     return _truncate("\n\n".join(blocks), _MAX_OBSERVATION_CHARS)
-
-
-def _build_gather_system_prompt(session: SessionStore) -> str:
-    configured = (
-        ", ".join(session.configured_integrations)
-        if session.configured_integrations
-        else "(unknown)"
-    )
-    return (
-        "You are the data-gathering step of the OpenSRE terminal assistant. The "
-        "user asked a question that may be answerable with live data from the "
-        "connected integrations. You have access to the same tools the "
-        "investigation pipeline uses (logs, metrics, GitHub, error trackers, "
-        "cloud APIs, etc.).\n"
-        "Call the tools needed to gather evidence relevant to the user's "
-        "question. Derive arguments (such as owner/repo, service names, time "
-        "ranges, or search queries) from the user's message. Make tool calls "
-        "ONLY when they will help answer the question; if no tool is relevant, "
-        "respond with a short plain-text note and call nothing.\n"
-        "For GitHub repository metadata such as star count, forks, visibility, "
-        "or default branch, call get_github_repository — do not use "
-        "search_github_code or search_github_issues for those questions.\n"
-        "Do NOT write the final user-facing answer here — a later step composes "
-        "that from the tool results you collect. Stop calling tools as soon as "
-        "you have enough data.\n"
-        f"Configured integrations in this session: {configured}."
-    )
 
 
 def _resolve_gather_integrations(session: SessionStore, message: str) -> dict[str, Any]:
@@ -181,7 +155,7 @@ def _build_evidence_agent(
     """Build the Agent for one evidence-gather turn."""
     config = AgentConfig(
         llm=llm,
-        system=_build_gather_system_prompt(session),
+        system=build_gather_system_prompt(session),
         tools=tuple(gather_tools),
         resolved_integrations=resolved,
         max_iterations=_MAX_GATHER_ITERATIONS,

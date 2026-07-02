@@ -105,8 +105,19 @@ domain-specific prompt, which lives with the investigation stage that uses it.
 ## Seeing the final prompt (debuggability)
 
 The **assembled system prompt is captured on every agent turn** (issue #3434,
-Problem 1). `Agent.run(...)` records the final system prompt onto its result
-(`AgentRunResult.final_system_prompt`) and persists it to the JSONL trace, so you
-can answer "what was influencing the agent when it made this decision?" by reading
-the session file or `/trace` output — you no longer have to re-derive the prompt by
-hand.
+Problem 1). `core/agent.py::Agent.run(...)` records the exact system prompt sent to
+the LLM onto its result — `AgentRunResult.final_system_prompt` — captured *after*
+the `_before_provider_request` hook, so it reflects any per-turn edits, not a
+pre-hook approximation.
+
+The capture lives in the shared core loop, **not** in any one surface, so every
+surface (interactive shell, CLI, gateway/Telegram, headless) records the same
+thing from the same place. That answers "what was influencing the agent when it
+made this decision?" without re-deriving the prompt by hand.
+
+**Follow-up (not yet wired):** persisting `final_system_prompt` to the per-session
+JSONL trace so `/trace` can render it. That belongs in the core turn record (the
+shared run-record path), *not* in the shell-only `PromptRecorder` — recording it in
+one surface is exactly the per-surface divergence this restructure is removing. The
+shell's `PromptRecorder` today records the *user* input text, not the system
+prompt, and is a separate, surface-local mechanism.
