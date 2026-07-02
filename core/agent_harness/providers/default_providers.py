@@ -37,6 +37,25 @@ def _tool_input_preview(value: Any) -> str:
     return preview
 
 
+def _llm_client_unavailable_message(exc: Exception) -> str:
+    """Render the reasoning-client import failure, hinting at the common cause.
+
+    An ``ImportError`` from the ``core.llm`` graph on a long-running process is
+    almost always a stale process: the code changed on disk while the process
+    kept running, so a lazily-imported new module can't find a symbol in a
+    boot-cached old one. Point the operator at a restart instead of leaving them
+    with a bare ``cannot import name …``.
+    """
+    base = f"LLM client unavailable: {escape(str(exc))}"
+    if isinstance(exc, ImportError):
+        return (
+            f"{base} — this usually means the OpenSRE code changed while this "
+            "process was running. Restart it (relaunch with `uv run opensre …`) "
+            "to load the updated modules."
+        )
+    return base
+
+
 class DefaultToolProvider:
     """:class:`core.agent_harness.ports.ToolProvider` backed by action tools."""
 
@@ -137,7 +156,7 @@ class DefaultReasoningClientProvider:
                     context="core.agent_harness.default_reasoning_client.import",
                 )
             if self._output is not None:
-                self._output.render_error(f"LLM client unavailable: {escape(str(exc))}")
+                self._output.render_error(_llm_client_unavailable_message(exc))
             return None
         return get_llm_for_reasoning()
 

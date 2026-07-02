@@ -16,6 +16,7 @@ import signal
 from rich.console import Console
 
 from core.agent_harness.harness import AgentHarness, HarnessConfig
+from core.llm.preload import preload_llm_clients
 from gateway.config.configure_gateway_logging import configure_gateway_logging
 from gateway.config.get_gateway_settings import GatewaySettings
 from gateway.polling.telegram_gateway_background import TelegramGatewayBackground
@@ -36,6 +37,12 @@ class GatewayManager:
         harness = AgentHarness(HarnessConfig(open_storage=False))
         harness.resolve_env_variables()
         logger = configure_gateway_logging()
+
+        # Load the LLM client graph as one consistent snapshot at boot, so a
+        # later code change can't leave this long-running process holding a mix
+        # of old and new core.llm modules (a lazy first-use import against a
+        # boot-cached transport module fails with a cryptic ImportError).
+        preload_llm_clients()
 
         # Compose the transport-agnostic turn handler. Action tools are resolved
         # per turn from each chat's live session inside the handler (not here).
