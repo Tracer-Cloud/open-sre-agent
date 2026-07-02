@@ -8,7 +8,7 @@ import pytest
 from click.testing import CliRunner
 
 from integrations.cli import _setup_github, cmd_setup
-from integrations.github_mcp import GitHubMCPValidationResult
+from integrations.github.mcp import GitHubMCPValidationResult
 from surfaces.cli.__main__ import cli
 
 
@@ -45,7 +45,7 @@ def test_setup_github_prints_connected_and_saves_on_validation_success(
     )
 
     monkeypatch.setattr(
-        "integrations.github_mcp.validate_github_mcp_config",
+        "integrations.github.mcp.validate_github_mcp_config",
         lambda _c, **_kwargs: GitHubMCPValidationResult(
             ok=True,
             detail=(
@@ -106,7 +106,7 @@ def test_setup_github_simple_path_uses_hosted_defaults(
     monkeypatch.setattr("integrations.cli._setup_github_auth_token", lambda _mode: "gho_browser")
     monkeypatch.setattr("integrations.cli._prompt_github_repo_report_level", _no_level_prompt)
     monkeypatch.setattr(
-        "integrations.github_mcp.validate_github_mcp_config",
+        "integrations.github.mcp.validate_github_mcp_config",
         lambda _c, **_kwargs: GitHubMCPValidationResult(
             ok=True,
             detail="OK @u; repos=2; owners=acme; examples=acme/a; mcp_tools=5",
@@ -164,7 +164,7 @@ def test_setup_github_exits_without_save_on_validation_failure(
         lambda *_a, **_k: type("X", (), {"ask": lambda *_aa, **_kk: "auto"})(),
     )
     monkeypatch.setattr(
-        "integrations.github_mcp.validate_github_mcp_config",
+        "integrations.github.mcp.validate_github_mcp_config",
         lambda _c, **_kwargs: GitHubMCPValidationResult(
             ok=False,
             detail="GitHub MCP connected, but authentication failed: bad token",
@@ -202,7 +202,7 @@ def test_cmd_setup_github_skips_saved_line_on_validation_failure(
         lambda *_a, **_k: type("X", (), {"ask": lambda *_aa, **_kk: "auto"})(),
     )
     monkeypatch.setattr(
-        "integrations.github_mcp.validate_github_mcp_config",
+        "integrations.github.mcp.validate_github_mcp_config",
         lambda _c, **_kwargs: GitHubMCPValidationResult(
             ok=False,
             detail="validation failed for test",
@@ -239,7 +239,7 @@ def test_cmd_setup_github_prints_saved_after_success(
         lambda *_a, **_k: type("X", (), {"ask": lambda *_aa, **_kk: "auto"})(),
     )
     monkeypatch.setattr(
-        "integrations.github_mcp.validate_github_mcp_config",
+        "integrations.github.mcp.validate_github_mcp_config",
         lambda _c, **_kwargs: GitHubMCPValidationResult(
             ok=True,
             detail="OK @u; repos=0; owners=-; examples=-; mcp_tools=5",

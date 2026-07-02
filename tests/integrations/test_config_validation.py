@@ -5,7 +5,7 @@ from pydantic import ValidationError
 
 from integrations.config_models import SnowflakeIntegrationConfig
 from integrations.datadog.client import DatadogConfig
-from integrations.github_mcp import (
+from integrations.github.mcp import (
     _remote_github_mcp_session_url,
     build_github_mcp_config,
 )

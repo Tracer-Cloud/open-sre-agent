@@ -24,7 +24,7 @@ from platform.terminal.theme import (
 )
 
 if TYPE_CHECKING:
-    from integrations.github_mcp import GitHubMcpDisplayDetailLevel
+    from integrations.github.mcp import GitHubMcpDisplayDetailLevel
 
 from integrations.gitlab import DEFAULT_GITLAB_BASE_URL
 from integrations.openclaw import build_openclaw_config, validate_openclaw_config
@@ -120,7 +120,7 @@ def _prompt_github_repo_report_level() -> GitHubMcpDisplayDetailLevel:
     if sel is None:
         return "summary"
     if sel in ("summary", "standard", "full"):
-        from integrations.github_mcp import GitHubMcpDisplayDetailLevel as _Detail
+        from integrations.github.mcp import GitHubMcpDisplayDetailLevel as _Detail
 
         return cast(_Detail, sel)
     return "summary"
@@ -464,7 +464,7 @@ def _github_advanced_setup(credentials: dict[str, Any]) -> tuple[str, str]:
 
     Mutates ``credentials`` in place with mode/url/command/args/auth_token/toolsets.
     """
-    from integrations.github_mcp import (
+    from integrations.github.mcp import (
         DEFAULT_GITHUB_MCP_TOOLSETS,
         DEFAULT_GITHUB_MCP_URL,
     )
@@ -519,7 +519,7 @@ def _setup_github() -> str | None:
     result carried no login), so callers like the first-launch gate can propagate
     the username. Exits the process on validation failure.
     """
-    from integrations.github_mcp import (
+    from integrations.github.mcp import (
         DEFAULT_GITHUB_MCP_MODE,
         DEFAULT_GITHUB_MCP_TOOLSETS,
         DEFAULT_GITHUB_MCP_URL,

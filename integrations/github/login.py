@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from integrations.github_mcp import (
+from integrations.github.mcp import (
     DEFAULT_GITHUB_MCP_MODE,
     DEFAULT_GITHUB_MCP_TOOLSETS,
     DEFAULT_GITHUB_MCP_URL,

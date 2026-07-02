@@ -94,7 +94,7 @@ _CLASSIFY_PATCH_TARGETS: list[tuple[str, str, str]] = [
     ("datadog", "integrations.datadog", "DatadogIntegrationConfig"),
     ("honeycomb", "integrations.honeycomb", "HoneycombIntegrationConfig"),
     ("coralogix", "integrations.coralogix", "CoralogixIntegrationConfig"),
-    ("github", "integrations.github_mcp", "build_github_mcp_config"),
+    ("github", "integrations.github.mcp", "build_github_mcp_config"),
     ("sentry", "integrations.sentry", "build_sentry_config"),
     ("gitlab", "integrations.gitlab", "build_gitlab_config"),
     ("mongodb", "integrations.mongodb", "build_mongodb_config"),

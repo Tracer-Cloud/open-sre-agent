@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from integrations.github_mcp import GitHubMCPValidationResult
+    from integrations.github.mcp import GitHubMCPValidationResult
 
 
 @dataclass(frozen=True)

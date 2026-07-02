@@ -73,7 +73,7 @@ CASES: tuple[MigrationCase, ...] = (
     MigrationCase("integrations/clickhouse.py", "get_table_stats", "clickhouse", "get_table_stats"),
     # github_mcp
     MigrationCase(
-        "integrations/github_mcp.py",
+        "integrations/github/mcp.py",
         "validate_github_mcp_config",
         "github_mcp",
         "validate_github_mcp_config",

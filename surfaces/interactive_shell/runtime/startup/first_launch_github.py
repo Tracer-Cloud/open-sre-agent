@@ -54,7 +54,7 @@ def _github_login_explicitly_bypassed() -> bool:
 
 
 def _github_already_configured() -> bool:
-    from integrations.github_mcp import github_integration_is_configured
+    from integrations.github.mcp import github_integration_is_configured
 
     return github_integration_is_configured()
 

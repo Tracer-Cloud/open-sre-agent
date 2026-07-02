@@ -7,7 +7,7 @@ from rich.console import Console
 
 from integrations.github import login as github_login_mod
 from integrations.github.login import GitHubLoginResult
-from integrations.github_mcp import DEFAULT_GITHUB_MCP_TOOLSETS, DEFAULT_GITHUB_MCP_URL
+from integrations.github.mcp import DEFAULT_GITHUB_MCP_TOOLSETS, DEFAULT_GITHUB_MCP_URL
 from integrations.github_mcp_oauth import GitHubDeviceCode
 from platform.analytics import source as analytics_source
 from platform.terminal import theme as ui_theme

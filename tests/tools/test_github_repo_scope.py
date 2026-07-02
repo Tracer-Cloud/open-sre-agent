@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from integrations.github.mcp import GitHubMCPConfig
 from integrations.github.repo_scope import (
     apply_github_repo_scope,
     detect_git_remote_repo_scope,
@@ -14,7 +15,6 @@ from integrations.github.repo_scope import (
     parse_github_repository_reference,
     split_repo_full_name,
 )
-from integrations.github_mcp import GitHubMCPConfig
 
 
 @pytest.mark.parametrize(
