@@ -36,7 +36,8 @@ from surfaces.interactive_shell.runtime.input.actions import (
     SubmitTurn,
 )
 from surfaces.interactive_shell.runtime.turn_host import (
-    AgentTurnRunner,
+    AgentTurnRuntime,
+    run_agent_turn,
     run_agent_turn_queue,
     run_input_loop,
 )
@@ -146,7 +147,7 @@ class InteractiveShellController:
             self.spinner,
             self.runtime_context.pt_session,
         )
-        self.turn_runner = AgentTurnRunner(
+        self.turn_runtime = AgentTurnRuntime(
             session=self.session,
             state=self.state,
             spinner=self.spinner,
@@ -195,9 +196,11 @@ class InteractiveShellController:
         self.tasks = self.background.start_all(
             lambda: run_agent_turn_queue(
                 state=self.state,
-                run_turn=self.turn_runner.run_agent_turn,
+                run_turn=lambda text: run_agent_turn(self.turn_runtime, text),
             )
         )
+        # Fleet sampler is lazy: /fleet triggers it on first live use.
+        self.session.fleet_sampler_starter = self.background.ensure_fleet_sampler_started
 
     async def _handle_input_action(self, action: InputAction) -> bool:
         match action:

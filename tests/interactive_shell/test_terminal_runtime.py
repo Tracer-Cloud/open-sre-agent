@@ -496,8 +496,7 @@ def test_run_initial_input_dispatches_as_non_tty(monkeypatch: pytest.MonkeyPatch
         calls.append(kwargs)
 
     monkeypatch.setattr(
-        startup_initial_input,
-        "execute_shell_turn",
+        "surfaces.interactive_shell.runtime.shell_turn_execution.execute_shell_turn",
         _fake_handle_message,
     )
 

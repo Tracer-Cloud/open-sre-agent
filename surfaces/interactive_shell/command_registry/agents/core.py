@@ -405,6 +405,9 @@ def _cmd_agents_graph(console: Console) -> bool:
 
 
 def _cmd_agents(session: Session, console: Console, args: list[str]) -> bool:
+    # The sampler is lazy: the first /fleet renders a cold snapshot and starts
+    # the background sampler so CPU/token columns warm up on subsequent views.
+    session.ensure_fleet_sampler_started()
     if not args:
         return _cmd_agents_list(console)
 
