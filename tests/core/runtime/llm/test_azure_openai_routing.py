@@ -15,9 +15,9 @@ def _azure_settings() -> SimpleNamespace:
         provider="azure-openai",
         azure_openai_base_url="https://example.openai.azure.com/",
         azure_openai_api_version="2024-10-21",
-        azure_openai_reasoning_model="gpt-4.1",
-        azure_openai_classification_model="gpt-4o-mini",
-        azure_openai_toolcall_model="gpt-4o-mini",
+        azure_openai_reasoning_model="gpt-5.4-mini",
+        azure_openai_classification_model="gpt-5.4-mini",
+        azure_openai_toolcall_model="gpt-5.4-nano",
     )
 
 
@@ -25,7 +25,7 @@ def test_build_litellm_agent_client_for_azure_openai() -> None:
     client = build_litellm_agent_client(_azure_settings(), "azure-openai")
 
     assert isinstance(client, LiteLLMAgentClient)
-    assert client._litellm_model == "azure/gpt-4.1"
+    assert client._litellm_model == "azure/gpt-5.4-mini"
     assert client._api_base == "https://example.openai.azure.com"
     assert client._api_version == "2024-10-21"
     assert client._api_key_env == "AZURE_OPENAI_API_KEY"
@@ -39,10 +39,10 @@ def test_build_litellm_llm_client_for_azure_openai() -> None:
     )
 
     assert isinstance(client, LiteLLMLLMClient)
-    assert client._litellm_model == "azure/gpt-4.1"
+    assert client._litellm_model == "azure/gpt-5.4-mini"
     assert client._api_base == "https://example.openai.azure.com"
     assert client._api_version == "2024-10-21"
-    assert client._model_fallback == "azure/gpt-4o-mini"
+    assert client._model_fallback == "azure/gpt-5.4-nano"
 
 
 def test_azure_openai_requires_base_url_in_settings() -> None:

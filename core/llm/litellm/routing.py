@@ -146,12 +146,14 @@ def build_litellm_llm_client(
 
         azure = resolve_azure_openai_request_kwargs(settings, model_type=model_type)
         raw_fallback = _fallback("azure_openai")
-        fallback_model = (
-            f"azure/{raw_fallback}" if raw_fallback and not raw_fallback.startswith("azure/") else raw_fallback
-        )
+        azure_fallback_model: str | None = None
+        if raw_fallback:
+            azure_fallback_model = (
+                raw_fallback if raw_fallback.startswith("azure/") else f"azure/{raw_fallback}"
+            )
         return LiteLLMLLMClient(
             litellm_model=azure["litellm_model"],
-            model_fallback=fallback_model or None,
+            model_fallback=azure_fallback_model,
             max_tokens=AZURE_OPENAI_LLM_CONFIG.max_tokens,
             api_base=azure["api_base"],
             api_version=azure["api_version"],

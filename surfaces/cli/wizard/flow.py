@@ -224,10 +224,22 @@ def _credential_prompt_label(provider: ProviderOption) -> str:
     return provider.label
 
 
+def _azure_openai_endpoint_env(provider: ProviderOption) -> dict[str, str]:
+    """Return Azure endpoint env vars, using the default API version when unset."""
+    from core.llm.azure_openai import resolve_azure_openai_api_version
+
+    return {
+        provider.endpoint_env: os.getenv(provider.endpoint_env, "").strip(),
+        provider.api_version_env: resolve_azure_openai_api_version(),
+    }
+
+
 def _prompt_azure_openai_endpoint_settings(provider: ProviderOption) -> dict[str, str] | None:
-    """Collect Azure OpenAI endpoint settings during onboarding."""
-    from config.config import DEFAULT_AZURE_OPENAI_API_VERSION
-    from core.llm.azure_openai import normalize_azure_openai_base_url
+    """Collect Azure OpenAI resource URL during onboarding."""
+    from core.llm.azure_openai import (
+        normalize_azure_openai_base_url,
+        resolve_azure_openai_api_version,
+    )
 
     if not provider.endpoint_env or not provider.api_version_env:
         return {}
@@ -240,12 +252,6 @@ def _prompt_azure_openai_endpoint_settings(provider: ProviderOption) -> dict[str
             secret=False,
             back_on_cancel=True,
         )
-        api_version = _prompt_value(
-            f"Azure OpenAI API version ({provider.api_version_env})",
-            default=os.getenv(provider.api_version_env, DEFAULT_AZURE_OPENAI_API_VERSION),
-            secret=False,
-            back_on_cancel=True,
-        )
     except WizardBack:
         return None
 
@@ -253,13 +259,9 @@ def _prompt_azure_openai_endpoint_settings(provider: ProviderOption) -> dict[str
     if not normalized_base:
         _console.print(f"[{ERROR}]Azure OpenAI resource URL is required.[/]")
         return None
-    version = api_version.strip()
-    if not version:
-        _console.print(f"[{ERROR}]Azure OpenAI API version is required.[/]")
-        return None
     return {
         provider.endpoint_env: normalized_base,
-        provider.api_version_env: version,
+        provider.api_version_env: resolve_azure_openai_api_version(),
     }
 
 
@@ -270,10 +272,7 @@ def _ensure_azure_openai_endpoint_settings(provider: ProviderOption) -> dict[str
     if provider.value != "azure-openai":
         return {}
     if azure_openai_endpoint_configured():
-        return {
-            provider.endpoint_env: os.getenv(provider.endpoint_env, "").strip(),
-            provider.api_version_env: os.getenv(provider.api_version_env, "").strip(),
-        }
+        return _azure_openai_endpoint_env(provider)
     return _prompt_azure_openai_endpoint_settings(provider)
 
 

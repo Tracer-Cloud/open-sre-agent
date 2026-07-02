@@ -142,9 +142,9 @@ GROQ_CLASSIFICATION_MODEL = "llama-3.3-70b-versatile"
 GROQ_TOOLCALL_MODEL = "llama-3.1-8b-instant"
 
 # Azure OpenAI deployment-name defaults (must match your Azure deployment names).
-AZURE_OPENAI_REASONING_MODEL = "gpt-4.1"
-AZURE_OPENAI_CLASSIFICATION_MODEL = "gpt-4o-mini"
-AZURE_OPENAI_TOOLCALL_MODEL = "gpt-4o-mini"
+AZURE_OPENAI_REASONING_MODEL = "gpt-5.4-mini"
+AZURE_OPENAI_CLASSIFICATION_MODEL = "gpt-5.4-mini"
+AZURE_OPENAI_TOOLCALL_MODEL = "gpt-5.4-mini"
 DEFAULT_AZURE_OPENAI_API_VERSION = "2024-10-21"
 
 # Base URLs for OpenAI-compatible providers
@@ -459,15 +459,10 @@ class LLMSettings(StrictConfigModel):
 
     @model_validator(mode="after")
     def _require_api_key_for_selected_provider(self) -> "LLMSettings":
-        if self.provider == "azure-openai":
-            if not self.azure_openai_base_url:
-                raise ValueError(
-                    "LLM provider 'azure-openai' requires AZURE_OPENAI_BASE_URL to be set."
-                )
-            if not self.azure_openai_api_version:
-                raise ValueError(
-                    "LLM provider 'azure-openai' requires AZURE_OPENAI_API_VERSION to be set."
-                )
+        if self.provider == "azure-openai" and not self.azure_openai_base_url:
+            raise ValueError(
+                "LLM provider 'azure-openai' requires AZURE_OPENAI_BASE_URL to be set."
+            )
         return self
 
     @classmethod

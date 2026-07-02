@@ -198,14 +198,16 @@ GROQ_MODELS = (
 )
 
 # Azure OpenAI model values are deployment names in your resource.
+# Source: https://learn.microsoft.com/en-us/azure/ai-foundry/model-inference/concepts/models
 AZURE_OPENAI_MODELS = (
-    ModelOption(value=AZURE_OPENAI_REASONING_MODEL, label="gpt-4.1 deployment"),
-    ModelOption(value="gpt-4.1-mini", label="gpt-4.1-mini deployment"),
-    ModelOption(value="gpt-4.1-nano", label="gpt-4.1-nano deployment"),
-    ModelOption(value="gpt-4o", label="gpt-4o deployment"),
-    ModelOption(value="gpt-4o-mini", label="gpt-4o-mini deployment"),
-    ModelOption(value="gpt-5", label="gpt-5 deployment"),
+    ModelOption(value=AZURE_OPENAI_REASONING_MODEL, label="gpt-5.4-mini deployment"),
+    ModelOption(value="gpt-5.5", label="gpt-5.5 deployment"),
+    ModelOption(value="gpt-5.4", label="gpt-5.4 deployment"),
+    ModelOption(value="gpt-5.4-nano", label="gpt-5.4-nano deployment"),
     ModelOption(value="gpt-5-mini", label="gpt-5-mini deployment"),
+    ModelOption(value="gpt-5", label="gpt-5 deployment"),
+    ModelOption(value="gpt-4.1", label="gpt-4.1 deployment"),
+    ModelOption(value="gpt-4.1-mini", label="gpt-4.1-mini deployment"),
     ModelOption(value="o3-mini", label="o3-mini deployment"),
 )
 

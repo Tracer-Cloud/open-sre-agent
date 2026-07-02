@@ -315,6 +315,9 @@ def sync_provider_env(
         keys_to_remove |= _provider_specific_keys(p)
 
     keys_to_remove.add(LLM_AUTH_METHOD_ENV)
+    from core.llm.transport_mode import LLM_TRANSPORT_ENV
+
+    keys_to_remove.add(LLM_TRANSPORT_ENV)
 
     # Keep the active provider's model keys but always remove API key entries
     # (API keys are persisted via the system keyring, not .env).
@@ -326,6 +329,11 @@ def sync_provider_env(
     classification_env = _classification_model_env(resolved_model_provider)
     if classification_env:
         active_non_secret.add(classification_env)
+    if provider.value == "azure-openai":
+        if provider.endpoint_env:
+            active_non_secret.add(provider.endpoint_env)
+        if provider.api_version_env:
+            active_non_secret.add(provider.api_version_env)
     keys_to_remove -= active_non_secret
 
     lines = _remove_keys(existing, keys_to_remove)
@@ -341,9 +349,11 @@ def sync_provider_env(
     if toolcall_model and resolved_model_provider.toolcall_model_env:
         values[resolved_model_provider.toolcall_model_env] = toolcall_model
     if provider.value == "azure-openai":
-        from core.llm.transport_mode import LLM_TRANSPORT_ENV
-
         values[LLM_TRANSPORT_ENV] = "litellm"
+        if provider.api_version_env:
+            from core.llm.azure_openai import resolve_azure_openai_api_version
+
+            values[provider.api_version_env] = resolve_azure_openai_api_version()
     if extra_env:
         values.update(extra_env)
 

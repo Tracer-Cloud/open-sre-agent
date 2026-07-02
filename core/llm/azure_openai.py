@@ -43,24 +43,29 @@ def azure_openai_litellm_model(deployment: str) -> str:
     return f"azure/{name}"
 
 
+def resolve_azure_openai_api_version(value: str = "") -> str:
+    """Return the configured Azure API version, falling back to the OpenSRE default."""
+    from config.config import DEFAULT_AZURE_OPENAI_API_VERSION
+
+    version = (value or os.getenv(AZURE_OPENAI_API_VERSION_ENV, "")).strip()
+    return version or DEFAULT_AZURE_OPENAI_API_VERSION
+
+
 def azure_openai_endpoint_configured() -> bool:
-    """Return True when non-secret Azure OpenAI endpoint settings are present."""
+    """Return True when the Azure OpenAI resource URL is present."""
     base = os.getenv(AZURE_OPENAI_BASE_URL_ENV, "").strip()
-    version = os.getenv(AZURE_OPENAI_API_VERSION_ENV, "").strip()
-    return bool(base and version)
+    return bool(base)
 
 
 def resolve_azure_openai_request_kwargs(settings: Any, *, model_type: ModelType) -> dict[str, str]:
     """Resolve LiteLLM request fields for Azure OpenAI from runtime settings."""
     base_url = normalize_azure_openai_base_url(str(getattr(settings, "azure_openai_base_url", "")))
-    api_version = str(getattr(settings, "azure_openai_api_version", "")).strip()
+    api_version = resolve_azure_openai_api_version(
+        str(getattr(settings, "azure_openai_api_version", ""))
+    )
     if not base_url:
         raise RuntimeError(
             f"LLM provider '{AZURE_OPENAI_PROVIDER}' requires {AZURE_OPENAI_BASE_URL_ENV}."
-        )
-    if not api_version:
-        raise RuntimeError(
-            f"LLM provider '{AZURE_OPENAI_PROVIDER}' requires {AZURE_OPENAI_API_VERSION_ENV}."
         )
     deployment = select_azure_openai_model(settings, model_type)
     return {
@@ -80,6 +85,7 @@ __all__ = [
     "azure_openai_litellm_model",
     "is_azure_openai_provider",
     "normalize_azure_openai_base_url",
+    "resolve_azure_openai_api_version",
     "resolve_azure_openai_request_kwargs",
     "select_azure_openai_model",
 ]

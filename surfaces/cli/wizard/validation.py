@@ -97,11 +97,9 @@ def _check_azure_openai(
             ok=False,
             detail="Azure OpenAI resource URL is missing. Set AZURE_OPENAI_BASE_URL.",
         )
-    if not api_version.strip():
-        return ValidationResult(
-            ok=False,
-            detail="Azure OpenAI API version is missing. Set AZURE_OPENAI_API_VERSION.",
-        )
+    from core.llm.azure_openai import resolve_azure_openai_api_version
+
+    resolved_api_version = resolve_azure_openai_api_version(api_version)
 
     openai_client_cls, openai_auth_error = _load_openai_client()
     azure_base = f"{normalized_base}/openai/deployments/{model}"
@@ -109,14 +107,18 @@ def _check_azure_openai(
         client = openai_client_cls(
             api_key=api_key,
             base_url=azure_base,
-            default_query={"api-version": api_version.strip()},
+            default_query={"api-version": resolved_api_version},
             timeout=30.0,
         )
-        response = client.chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": "Reply with exactly: OpenSRE ready"}],
-            max_tokens=24,
-        )
+        request_kwargs: dict[str, object] = {
+            "model": model,
+            "messages": [{"role": "user", "content": "Reply with exactly: OpenSRE ready"}],
+        }
+        if model.startswith(("o1", "o3", "o4", "gpt-5")):
+            request_kwargs["max_completion_tokens"] = 24
+        else:
+            request_kwargs["max_tokens"] = 24
+        response = client.chat.completions.create(**request_kwargs)
         sample_text = (response.choices[0].message.content or "").strip()
         return ValidationResult(
             ok=True,

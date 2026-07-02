@@ -91,8 +91,7 @@ def switch_llm_provider(
         if not azure_openai_endpoint_configured():
             console.print(
                 f"[{ERROR}]missing Azure OpenAI endpoint config:[/] "
-                "set AZURE_OPENAI_BASE_URL and AZURE_OPENAI_API_VERSION, "
-                "or run [bold]opensre onboard[/bold]."
+                "set AZURE_OPENAI_BASE_URL, or run [bold]opensre onboard[/bold]."
             )
             return False
     if provider.credential_secret and provider.api_key_env and not auth_status.configured:
