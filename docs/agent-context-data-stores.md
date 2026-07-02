@@ -24,40 +24,63 @@ to look when something diverges between shell, gateway, and headless paths.
 
 ## Architecture (four stores)
 
+One picture: the four surfaces funnel into one core engine; the four stores
+(numbered) carry state through the turn; the four prompt builders live in one
+home; and the assembled prompt is captured for debugging.
+
 ```mermaid
 flowchart TB
-    subgraph turn_start [Turn start]
-        UserInput[User message]
-        Session[Session hub]
-        TC[TurnContext snapshot]
-        UserInput --> TC
-        Session --> TC
+    subgraph surfaces [Different flows - thin adapters]
+        SH[Interactive shell]
+        CLI[CLI one-shot]
+        GW[Gateway / Telegram]
+        HL[Headless API]
+    end
+    SH --> DISP
+    CLI --> DISP
+    GW --> DISP
+    HL --> DISP
+    DISP[dispatch_message_to_headless_agent] --> RT[run_turn - one core engine]
+
+    subgraph stores [The four data stores]
+        S1["1 Session - hub (owner: SessionManager)"]
+        S2["2 session.agent = MutableAgentState - transcript only, not read by Agent"]
+        S3["3 TurnContext - immutable snapshot at turn start"]
+        S4["4 JSONL session file (owner: SessionStorage)"]
     end
 
-    subgraph agents [Agent phases]
-        Action[Action agent - Agent.run]
-        Gather[Gather agent - Agent.run]
-        Answer[Assistant - invoke_stream]
+    RT -->|TurnContext.from_session| S3
+    S1 --- S2
+    S1 --> S3
+
+    S3 --> ROUTE{route}
+    ROUTE -->|action| A1[action_agent]
+    ROUTE -->|gather| A2[evidence_agent]
+    ROUTE -->|answer| A3[assistant]
+
+    subgraph prompts [One prompt home: core/agent_harness/prompts/]
+        P1[build_action_system_prompt]
+        P2[build_gather_system_prompt]
+        P3[build_assistant_system_prompt]
     end
+    PI[build_investigation_system_prompt - investigation stage]
 
-    TC --> Action
-    TC --> Gather
-    TC --> Answer
-    Session --> Action
-    Session --> Gather
-    Session --> Answer
+    A1 --> P1
+    A2 --> P2
+    A3 --> P3
 
-    subgraph persist [Persistence]
-        AgentState[session.agent messages]
-        JSONL[Session JSONL file]
-    end
+    P1 --> RUN
+    P2 --> RUN
+    P3 --> RUN
+    RUN["Agent.run()"] -->|capture after _before_provider_request| FP[AgentRunResult.final_system_prompt]
 
-    Action --> AgentState
-    Answer --> AgentState
-    Action --> JSONL
-    Gather --> JSONL
-    Answer --> JSONL
-    Session --> JSONL
+    A1 --> S2
+    A3 --> S2
+    FP -->|persist_turn_system_prompt| S4
+    A1 --> S4
+    A2 --> S4
+    A3 --> S4
+    S1 --> S4
 ```
 
 **Rule of thumb**
