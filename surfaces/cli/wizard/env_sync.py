@@ -354,6 +354,13 @@ def sync_provider_env(
             from core.llm.azure_openai import resolve_azure_openai_api_version
 
             values[provider.api_version_env] = resolve_azure_openai_api_version()
+        if provider.endpoint_env:
+            preserved_base = (
+                _env_value_from_lines(lines, provider.endpoint_env)
+                or os.getenv(provider.endpoint_env, "").strip()
+            )
+            if preserved_base:
+                values[provider.endpoint_env] = preserved_base
     if extra_env:
         values.update(extra_env)
 
