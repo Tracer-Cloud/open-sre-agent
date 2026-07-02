@@ -39,7 +39,7 @@ class AgentConfig:
 
     llm: Any
     system: str
-    tools: list[Any]
+    tools: tuple[Any, ...]
     resolved_integrations: dict[str, Any]
     max_iterations: int
     tool_resources: dict[str, Any] = field(default_factory=dict)

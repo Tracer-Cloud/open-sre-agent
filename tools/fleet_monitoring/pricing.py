@@ -164,6 +164,9 @@ MODEL_PRICES: dict[str, ModelPrice] = {
     "claude-opus-4-7": _price(
         5.00, 25.00, cache_read_usd_per_million=0.50, cache_write_usd_per_million=6.25
     ),
+    "claude-fable-5": _price(
+        10.00, 50.00, cache_read_usd_per_million=1.00, cache_write_usd_per_million=12.50
+    ),
     # OpenAI / Codex.
     "gpt-4o": _price(2.50, 10.00, cache_read_usd_per_million=1.25),
     "gpt-4o-2024-05-13": _price(5.00, 15.00),
@@ -204,6 +207,7 @@ _UNSORTED_FAMILY_FALLBACKS: tuple[tuple[str, str], ...] = (
     ("claude-3-5-sonnet", "claude-3-5-sonnet-20241022"),
     ("claude-3-5-haiku", "claude-3-5-haiku-20241022"),
     ("claude-haiku-4-5", "claude-haiku-4-5"),
+    ("claude-fable-5", "claude-fable-5"),
     ("claude-sonnet-4-6", "claude-sonnet-4-6"),
     ("claude-sonnet-4-5", "claude-sonnet-4-5"),
     ("claude-sonnet-4", "claude-sonnet-4"),

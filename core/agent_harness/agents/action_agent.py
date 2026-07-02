@@ -335,7 +335,7 @@ def _build_action_agent(
     config = AgentConfig(
         llm=llm,
         system=system,
-        tools=agent_tools,
+        tools=tuple(agent_tools),
         resolved_integrations=_resolved_integrations_for_turn(session, turn_ctx),
         max_iterations=_MAX_TOOL_CALLING_ITERATIONS,
         tool_resources=tool_resources,

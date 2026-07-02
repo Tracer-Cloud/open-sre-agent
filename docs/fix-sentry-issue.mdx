@@ -1,0 +1,62 @@
+---
+title: "Fix a Sentry issue"
+description: "Paste a Sentry issue URL and have the Pi coding agent propose a fix as a reviewable diff."
+---
+
+The **Sentry issue-fix tool** lets you point OpenSRE at a [Sentry](https://sentry.io) issue and
+have the [Pi](https://pi.dev) coding agent propose a fix. OpenSRE fetches the issue context,
+runs Pi in your current repository, and returns a summary plus the git diff.
+
+It **does not commit, push, or open a pull request** — it only edits the working tree so you can
+review the diff. (Committing and opening a PR is a planned follow-up.)
+
+<Warning>
+This is a **mutating** tool — it changes files on disk. It is **disabled by default**: it only
+becomes available when `PI_ISSUE_FIX_ENABLED=1`, Sentry is configured, and the Pi CLI is
+installed. Enable it deliberately.
+</Warning>
+
+## Quick reference
+
+| Env var | What it does |
+| --- | --- |
+| `PI_ISSUE_FIX_ENABLED` | Opt-in switch for this tool. Set to `1` to enable. Off by default. |
+| `SENTRY_ORG_SLUG` / `SENTRY_AUTH_TOKEN` | Sentry org + token used to fetch the issue (`SENTRY_URL` for self-hosted). |
+| `PI_CODING_MODEL` | Pi model used for the fix (shared with the Pi coding tool). |
+| `PI_CODING_WORKSPACE` | Repository Pi edits. Defaults to the current directory. |
+| `PI_CODING_TIMEOUT_SECONDS` | Per-run timeout (default 600, clamped 60–1800). |
+
+## Enable it
+
+1. Configure Sentry (org + token) and install/authenticate the Pi CLI:
+   ```bash
+   export SENTRY_ORG_SLUG=your-org
+   export SENTRY_AUTH_TOKEN=...           # token with issue read access
+   npm i -g @earendil-works/pi-coding-agent
+   ```
+2. Turn the tool on:
+   ```bash
+   export PI_ISSUE_FIX_ENABLED=1
+   export PI_CODING_MODEL=anthropic/claude-haiku-4-5   # optional
+   ```
+
+## How it works
+
+1. You paste a Sentry issue URL (e.g. `https://your-org.sentry.io/issues/12345/`) and ask
+   OpenSRE to fix it.
+2. OpenSRE resolves the issue from Sentry and builds a short, **masked** task (title, error,
+   culprit, location) — your Sentry token is never sent to Pi.
+3. Pi edits the current repository to implement the fix.
+4. You get back `success`, a `summary`, `changed_files`, and the `diff` to review.
+
+## Supported URLs
+
+- `https://<org>.sentry.io/issues/<id>/`
+- `https://sentry.io/organizations/<org>/issues/<id>/`
+- self-hosted `https://sentry.<company>.com/organizations/<org>/issues/<id>/`
+
+## Notes
+
+- Nothing is committed or pushed; you review the diff and decide what to do.
+- If the tool is disabled, the URL is unsupported, Sentry is unconfigured, or Pi is missing,
+  it returns a clear `error_kind` instead of running.

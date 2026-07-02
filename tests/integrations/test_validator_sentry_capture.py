@@ -77,13 +77,13 @@ CASES: tuple[MigrationCase, ...] = (
     ),
     # airflow (validate + loop site)
     MigrationCase(
-        "integrations/airflow.py",
+        "integrations/airflow/config.py",
         "validate_airflow_config",
         "airflow",
         "validate_airflow_config",
     ),
     MigrationCase(
-        "integrations/airflow.py",
+        "integrations/airflow/config.py",
         "get_recent_airflow_failures",
         "airflow",
         "get_recent_airflow_failures.task_instances",

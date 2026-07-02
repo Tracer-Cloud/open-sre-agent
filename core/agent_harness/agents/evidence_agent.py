@@ -185,7 +185,7 @@ def _build_evidence_agent(
     config = AgentConfig(
         llm=llm,
         system=_build_gather_system_prompt(session),
-        tools=gather_tools,
+        tools=tuple(gather_tools),
         resolved_integrations=resolved,
         max_iterations=_MAX_GATHER_ITERATIONS,
         on_runtime_event=runtime_event_callback_from_observer(on_progress),

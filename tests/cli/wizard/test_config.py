@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
-from surfaces.cli.wizard.config import PROJECT_ENV_PATH, PROJECT_ROOT, SUPPORTED_PROVIDERS
+from surfaces.cli.wizard.config import (
+    ANTHROPIC_MODELS,
+    CLAUDE_CODE_MODELS,
+    PROJECT_ENV_PATH,
+    PROJECT_ROOT,
+    SUPPORTED_PROVIDERS,
+)
 from surfaces.cli.wizard.flow import _onboarding_provider_options
 
 
@@ -38,6 +44,18 @@ def test_provider_catalog_keeps_legacy_cli_providers_registered() -> None:
     assert labels_by_value["groq"] == "Groq API key"
     assert labels_by_value["grok-cli"] == "xAI Grok Build CLI"
     assert values.index("groq") < values.index("grok-cli") < values.index("cursor")
+
+
+def test_claude_fable_5_is_selectable_without_custom_models() -> None:
+    """#3621: anthropic keeps a curated list, so Fable 5 must be in it explicitly."""
+    anthropic_values = [model.value for model in ANTHROPIC_MODELS]
+    claude_code_values = [model.value for model in CLAUDE_CODE_MODELS]
+
+    assert "claude-fable-5" in anthropic_values
+    assert "claude-fable-5" in claude_code_values
+    # Defaults stay unchanged: Fable 5 is pricier and opt-in only.
+    assert anthropic_values[0] != "claude-fable-5"
+    assert claude_code_values[0] == ""
 
 
 def test_onboarding_provider_options_hide_openai_anthropic_oauth_backends() -> None:
