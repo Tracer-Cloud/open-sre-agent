@@ -64,7 +64,7 @@ Main packages one level deeper:
 - `core/domain/types/` — Shared typed contracts for evidence, retrieval, and tool-related payloads.
 - `platform/` — Guardrails, masking, sandbox, analytics, auth, and cross-cutting platform services (e.g. `platform/notifications/telegram_delivery.py`).
 - `tools/watch_dog/` — Watchdog feature: per-threshold Telegram alarm dispatch with cooldown, sitting on top of `platform/notifications/telegram_delivery.py`.
-- `config/webapp.py` — Web-facing application entrypoint; the `opensre` CLI is `cli/__main__.py`.
+- `config/webapp.py` — Web-facing application entrypoint; the `opensre` CLI is `surfaces/cli/__main__.py`.
 
 ## 2. Entry Points
 
