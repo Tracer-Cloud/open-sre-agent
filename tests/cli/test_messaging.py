@@ -87,6 +87,39 @@ class TestMessagingAllowCommand:
         assert result.exit_code == 0
         assert "already in the allowed list" in result.output
 
+    def test_allow_rejects_at_handle(self, _isolated_store: Path) -> None:
+        runner = CliRunner()
+        result = runner.invoke(
+            messaging, ["allow", "--platform", "telegram", "--user-id", "@opensre_yauhen_bot"]
+        )
+        assert result.exit_code != 0
+        assert "@username" in result.output
+        # Nothing should have been persisted for a rejected id.
+        data = json.loads(_isolated_store.read_text())
+        assert data["integrations"] == []
+
+    def test_allow_rejects_non_numeric_telegram_id(self, _isolated_store: Path) -> None:
+        runner = CliRunner()
+        result = runner.invoke(messaging, ["allow", "--platform", "telegram", "--user-id", "user1"])
+        assert result.exit_code != 0
+        assert "numeric" in result.output
+
+    def test_allow_accepts_numeric_telegram_id(self, _isolated_store: Path) -> None:
+        runner = CliRunner()
+        result = runner.invoke(
+            messaging, ["allow", "--platform", "telegram", "--user-id", " 6514715683 "]
+        )
+        assert result.exit_code == 0
+        assert "Added user 6514715683" in result.output  # normalized (stripped)
+
+    def test_allow_accepts_slack_native_id(self, _isolated_store: Path) -> None:
+        # Non-Telegram platforms keep their native id shape (Slack U..., etc.);
+        # only the @handle guard applies.
+        runner = CliRunner()
+        result = runner.invoke(messaging, ["allow", "--platform", "slack", "--user-id", "U12345"])
+        assert result.exit_code == 0
+        assert "Added user U12345" in result.output
+
 
 class TestMessagingRevokeCommand:
     def test_revoke_removes_user(self, _isolated_store: Path) -> None:
@@ -118,9 +151,9 @@ class TestMessagingStatusCommand:
 
     def test_status_with_configured_integration(self, _isolated_store: Path) -> None:
         runner = CliRunner()
-        # Set up a user first
-        runner.invoke(messaging, ["allow", "--platform", "telegram", "--user-id", "user1"])
+        # Set up a user first (Telegram ids are numeric)
+        runner.invoke(messaging, ["allow", "--platform", "telegram", "--user-id", "6514715683"])
         result = runner.invoke(messaging, ["status", "--platform", "telegram"])
         assert result.exit_code == 0
         assert "Inbound enabled" in result.output
-        assert "user1" in result.output
+        assert "6514715683" in result.output

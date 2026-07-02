@@ -23,20 +23,19 @@ from core.agent_harness.providers.default_providers import (
     DefaultTurnAccounting,
 )
 from core.agent_harness.session import Session
-from core.tool_framework.registered_tool import RegisteredTool
 from gateway.polling.handle_polled_inbound_telegram_msg import GatewayAgentCallback
 
 
 def build_gateway_turn_handler(
     *,
-    tools: list[RegisteredTool],
     console: Console,
 ) -> GatewayAgentCallback:
     """Return a callback that services one inbound gateway message.
 
-    ``tools`` are precomputed once per process and reused each turn. The
-    returned callback builds fresh per-turn providers and drives the static
-    headless dispatch — there is no persistent per-transport agent.
+    Action tools are resolved from the live per-chat ``session`` on every turn
+    (same as the interactive shell), so integration-scoped tools stay available
+    after ``SessionResolver`` hydrates the chat session. The callback drives the
+    shared headless dispatch — there is no persistent per-transport agent.
     """
 
     def handle(
@@ -53,7 +52,6 @@ def build_gateway_turn_handler(
             tools=DefaultToolProvider(
                 session,
                 console,
-                precomputed_action_tools=tools,
                 tool_action_logger=logger,
             ),
             prompts=DefaultPromptContextProvider(session),

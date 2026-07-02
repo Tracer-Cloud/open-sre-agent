@@ -18,7 +18,6 @@ from __future__ import annotations
 import asyncio
 import logging
 from concurrent.futures import ThreadPoolExecutor
-from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -33,13 +32,12 @@ from core.agent_harness.providers.default_providers import (
 )
 from core.agent_harness.session import Session
 from core.agent_harness.session.storage.memory import InMemorySessionStorage
-from core.agent_harness.tools.action_tools import get_action_tool
 from gateway.config.get_gateway_settings import GatewaySettings, TelegramInboundMessage
+from gateway.manager import GatewayManager, start_gateway
 from gateway.polling.handle_polled_inbound_telegram_msg import (
     handle_polled_inbound_telegram_message,
 )
 from gateway.session.enforce_inbound_telegram_message_security import InboundDecision
-from gateway.manager import GatewayManager, start_gateway
 
 
 def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
@@ -47,25 +45,8 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
     logger = logging.getLogger("gateway.lifecycle.test")
     handle = MagicMock()
     dispatch = MagicMock()
-    tools = [MagicMock()]
-    integrations = {"shell": {"enabled": True}}
     signal_calls: list[tuple[int, Any]] = []
     background_kwargs: dict[str, Any] = {}
-
-    class FakeSession:
-        def __init__(self) -> None:
-            self.hydrated = False
-
-        def hydrate_configured_integrations(self) -> None:
-            self.hydrated = True
-
-        def get_integrations(self) -> SimpleNamespace:
-            return SimpleNamespace(resolved_integrations=integrations)
-
-    class FakeSessionManager:
-        def create(self, **kwargs: Any) -> FakeSession:
-            assert kwargs.get("open_storage") is False
-            return FakeSession()
 
     monkeypatch.setattr("core.agent_harness.harness.load_dotenv", lambda **_kwargs: None)
     monkeypatch.setattr("gateway.manager.configure_gateway_logging", lambda: logger)
@@ -74,22 +55,6 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
         "gateway.manager.signal.signal",
         lambda signum, handler: signal_calls.append((signum, handler)),
     )
-    monkeypatch.setattr("core.agent_harness.harness.SessionManager", FakeSessionManager)
-
-    class FakeDefaultToolProvider(DefaultToolProvider):
-        def action_tools(
-            self,
-            *,
-            confirm_fn: Any,
-            is_tty: bool | None,
-        ) -> list[MagicMock]:
-            _ = (confirm_fn, is_tty)
-            if self._precomputed_action_tools is not None:
-                return list(self._precomputed_action_tools)
-            assert self._resolved_integrations() is integrations
-            return tools
-
-    monkeypatch.setattr("gateway.manager.DefaultToolProvider", FakeDefaultToolProvider)
     # Dispatch is a static entry point; patch it on the class to spy the callback.
     monkeypatch.setattr("gateway.turn_handler.Agent.dispatch_message_to_headless_agent", dispatch)
 
@@ -139,7 +104,7 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
     assert dispatch_args.kwargs["output"] is sink
     tool_provider = dispatch_args.kwargs["tools"]
     assert isinstance(tool_provider, DefaultToolProvider)
-    assert tool_provider.action_tools(confirm_fn=None, is_tty=False) == tools
+    assert tool_provider._precomputed_action_tools is None
     with patch.object(logger, "info") as mock_info:
         tool_provider.observer(message="hello")(
             "tool_start",
@@ -167,23 +132,7 @@ def test_polled_telegram_message_reaches_start_gateway_agent_callback(monkeypatc
     )
     logger = logging.getLogger("gateway.lifecycle.e2e.test")
     handle = MagicMock()
-    slash_tool = get_action_tool("slash_invoke")
-    assert slash_tool is not None
-    tools: list[Any] = [slash_tool]
-    integrations: dict[str, Any] = {}
     background_kwargs: dict[str, Any] = {}
-
-    class FakeBootSession:
-        def hydrate_configured_integrations(self) -> None:
-            return None
-
-        def get_integrations(self) -> SimpleNamespace:
-            return SimpleNamespace(resolved_integrations=integrations)
-
-    class FakeSessionManager:
-        def create(self, **kwargs: Any) -> FakeBootSession:
-            assert kwargs.get("open_storage") is False
-            return FakeBootSession()
 
     class FakeSessionResolver:
         def __init__(self, session: Session) -> None:
@@ -203,21 +152,6 @@ def test_polled_telegram_message_reaches_start_gateway_agent_callback(monkeypatc
     monkeypatch.setattr("gateway.manager.configure_gateway_logging", lambda: logger)
     monkeypatch.setattr("gateway.telegram_gateway.load_gateway_settings", lambda: settings)
     monkeypatch.setattr("gateway.manager.signal.signal", lambda *_args: None)
-    monkeypatch.setattr("core.agent_harness.harness.SessionManager", FakeSessionManager)
-
-    class FakeDefaultToolProvider(DefaultToolProvider):
-        def action_tools(
-            self,
-            *,
-            confirm_fn: Any,
-            is_tty: bool | None,
-        ) -> list[Any]:
-            _ = (confirm_fn, is_tty)
-            if self._precomputed_action_tools is not None:
-                return list(self._precomputed_action_tools)
-            return tools
-
-    monkeypatch.setattr("gateway.manager.DefaultToolProvider", FakeDefaultToolProvider)
 
     def _start_telegram_gateway_background(**kwargs: Any) -> MagicMock:
         background_kwargs.update(kwargs)

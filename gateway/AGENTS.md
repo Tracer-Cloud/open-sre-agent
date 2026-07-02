@@ -13,11 +13,10 @@ Pytest discovers these tests through `pytest.ini`; scoped CI maps changes under
 
 ## Layout
 
-- `manager.py` — process composition root: bootstraps action tools via
-  `SessionManager.create(open_storage=False)`, builds the turn handler, starts
-  the Telegram worker, owns signals and shutdown.
+- `manager.py` — process composition root: builds the turn handler, starts the
+  Telegram worker, owns signals and shutdown.
 - `turn_handler.py` — transport-agnostic turn callback:
-  `build_gateway_turn_handler(tools=..., console=...)` returns
+  `build_gateway_turn_handler(console=...)` returns
   `(text, session, sink, logger) -> None` that drives
   `Agent.dispatch_message_to_headless_agent(...)`.
 - `telegram_gateway.py` — wires the handler into the Telegram polling worker.
@@ -26,15 +25,16 @@ Pytest discovers these tests through `pytest.ini`; scoped CI maps changes under
 
 ## Gateway turn dispatch
 
-- **No persistent gateway `Agent` instance.** Tools are precomputed once at
-  process start from a boot `Session`; each inbound message gets a per-chat
-  `Session` from `SessionResolver` and is handled by the shared headless
-  dispatch path (`core.agent_harness.agents.headless_agent`).
+- **No persistent gateway `Agent` instance.** Each inbound message gets a
+  per-chat `Session` from `SessionResolver` and is handled by the shared
+  headless dispatch path (`core.agent_harness.agents.headless_agent`).
 - The turn handler callback signature is exactly four arguments: `text`,
   `session`, `sink`, and `logger`. Do not reintroduce `chat_id` into this
   contract; the sink owns chat transport details.
-- Reuse `DefaultToolProvider` with `precomputed_action_tools=tools` so the
-  gateway does not rebuild or filter the action-tool list per turn.
+- Resolve action tools from the live per-chat `Session` each turn via
+  `DefaultToolProvider(session, console)` — same as the interactive shell.
+  Do **not** precompute tools at process start; chat sessions carry their own
+  integration context after `SessionResolver.resolve`.
 - Per-chat session lifecycle (create / resolve / rotate / restore) is owned by
   `SessionResolver` → `SessionManager`, not by `GatewayManager`.
 
