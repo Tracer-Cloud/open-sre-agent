@@ -224,6 +224,7 @@ def _cmd_investigate_file(session: Session, console: Console, args: list[str]) -
                 session=session,
                 console=console,
                 display_command=f"/investigate {template_name}",
+                investigation_target=target_slug,
             )
             session.record(
                 "alert",
@@ -283,13 +284,14 @@ def _cmd_investigate_file(session: Session, console: Console, args: list[str]) -
         return True
 
     if session.background_mode_enabled:
+        target_slug = normalize_investigation_target(raw_target, path=path)
         start_background_text_investigation(
             alert_text=text,
             session=session,
             console=console,
             display_command=f"/investigate {path}",
+            investigation_target=target_slug,
         )
-        target_slug = normalize_investigation_target(raw_target, path=path)
         session.record(
             "alert",
             args[0],

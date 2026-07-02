@@ -84,6 +84,7 @@ class PromptRecorder:
         self._prompt = prompt
         self._session = session
         self._response: str = ""
+        self._scoped_investigation_id: str | None = None
         self._model: str | None = None
         self._provider: str | None = None
         self._latency_ms: int | None = None
@@ -138,7 +139,7 @@ class PromptRecorder:
         config = PromptLogConfig.load()
         if not config.enabled:
             return None
-        return cls(
+        recorder = cls(
             config=config,
             turn_kind="background_task",
             session_id=_session_id(session),
@@ -146,6 +147,29 @@ class PromptRecorder:
             prompt=_sanitize_text(command, config=config),
             session=session,
         )
+        if _prompt_relates_to_investigation(prompt=command, turn_kind="background_task"):
+            investigation_id = str(uuid.uuid4())
+            recorder.bind_investigation_id(investigation_id)
+            session.last_investigation_id = investigation_id
+        return recorder
+
+    def bind_investigation_id(self, investigation_id: str) -> None:
+        cleaned = investigation_id.strip()
+        if cleaned:
+            self._scoped_investigation_id = cleaned
+
+    def _resolve_investigation_id(self) -> str:
+        if self._scoped_investigation_id:
+            return self._scoped_investigation_id
+        if self._session is None or not _prompt_relates_to_investigation(
+            prompt=self._prompt,
+            turn_kind=self._turn_kind,
+        ):
+            return ""
+        investigation_id = getattr(self._session, "last_investigation_id", "")
+        if isinstance(investigation_id, str):
+            return investigation_id
+        return ""
 
     def set_response(self, text: str, run: LlmRunInfo | None = None) -> None:
         cleaned = _sanitize_text(text, config=self._config)
@@ -231,13 +255,9 @@ class PromptRecorder:
                 slash_outcome = _latest_slash_outcome(self._session)
                 if slash_outcome:
                     posthog_properties["slash_outcome"] = slash_outcome
-                if _prompt_relates_to_investigation(
-                    prompt=self._prompt,
-                    turn_kind=self._turn_kind,
-                ):
-                    investigation_id = getattr(self._session, "last_investigation_id", "")
-                    if isinstance(investigation_id, str) and investigation_id:
-                        posthog_properties["investigation_id"] = investigation_id
+                investigation_id = self._resolve_investigation_id()
+                if investigation_id:
+                    posthog_properties["investigation_id"] = investigation_id
                 capture_ai_generation(posthog_properties)
 
 

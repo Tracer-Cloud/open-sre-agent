@@ -11,6 +11,7 @@ class BackgroundInvestigationRecord:
     task_id: str
     status: str
     command: str
+    investigation_id: str = ""
     root_cause: str = ""
     top_analysis: tuple[str, ...] = ()
     next_steps: tuple[str, ...] = ()
