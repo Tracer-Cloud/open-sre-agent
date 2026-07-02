@@ -43,7 +43,7 @@ async def repl_main(
         return run_initial_input(initial_input, session)
 
     # Open the session file now that we know this is an interactive REPL run.
-    session.storage.open_session(session)
+    SessionManager.for_session(session).open_storage(session)
 
     try:
         if resume_session_id:
@@ -68,7 +68,7 @@ async def repl_main(
         return 0
     finally:
         # True end-of-run teardown: persist and release the session's resources.
-        SessionManager().close(session)
+        SessionManager.for_session(session).close(session)
 
 
 def run_repl(

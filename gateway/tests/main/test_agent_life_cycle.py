@@ -62,6 +62,11 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
         def get_integrations(self) -> SimpleNamespace:
             return SimpleNamespace(resolved_integrations=integrations)
 
+    class FakeSessionManager:
+        def create(self, **kwargs: Any) -> FakeSession:
+            assert kwargs.get("open_storage") is False
+            return FakeSession()
+
     monkeypatch.setattr("gateway.manager.load_dotenv", lambda **_kwargs: None)
     monkeypatch.setattr("gateway.manager.configure_gateway_logging", lambda: logger)
     monkeypatch.setattr("gateway.telegram_gateway.load_gateway_settings", lambda: settings)
@@ -69,7 +74,7 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
         "gateway.manager.signal.signal",
         lambda signum, handler: signal_calls.append((signum, handler)),
     )
-    monkeypatch.setattr("gateway.manager.Session", FakeSession)
+    monkeypatch.setattr("gateway.manager.SessionManager", FakeSessionManager)
 
     class FakeDefaultToolProvider(DefaultToolProvider):
         def action_tools(
@@ -175,6 +180,11 @@ def test_polled_telegram_message_reaches_start_gateway_agent_callback(monkeypatc
         def get_integrations(self) -> SimpleNamespace:
             return SimpleNamespace(resolved_integrations=integrations)
 
+    class FakeSessionManager:
+        def create(self, **kwargs: Any) -> FakeBootSession:
+            assert kwargs.get("open_storage") is False
+            return FakeBootSession()
+
     class FakeSessionResolver:
         def __init__(self, session: Session) -> None:
             self._session = session
@@ -193,7 +203,7 @@ def test_polled_telegram_message_reaches_start_gateway_agent_callback(monkeypatc
     monkeypatch.setattr("gateway.manager.configure_gateway_logging", lambda: logger)
     monkeypatch.setattr("gateway.telegram_gateway.load_gateway_settings", lambda: settings)
     monkeypatch.setattr("gateway.manager.signal.signal", lambda *_args: None)
-    monkeypatch.setattr("gateway.manager.Session", FakeBootSession)
+    monkeypatch.setattr("gateway.manager.SessionManager", FakeSessionManager)
 
     class FakeDefaultToolProvider(DefaultToolProvider):
         def action_tools(

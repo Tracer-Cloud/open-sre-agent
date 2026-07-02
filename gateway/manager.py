@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 from rich.console import Console
 
 from core.agent_harness.providers.default_providers import DefaultToolProvider
-from core.agent_harness.session import Session
+from core.agent_harness.session import SessionManager
 from gateway.config.configure_gateway_logging import configure_gateway_logging
 from gateway.config.get_gateway_settings import GatewaySettings
 from gateway.polling.telegram_gateway_background import TelegramGatewayBackground
@@ -40,8 +40,7 @@ class GatewayManager:
 
         # Compose the transport-agnostic turn handler from a booted session's
         # action tools (precomputed once per process, reused each turn).
-        session = Session()
-        session.hydrate_configured_integrations()
+        session = SessionManager().create(open_storage=False)
         console = Console(force_terminal=False)
         tools = DefaultToolProvider(session, console).action_tools(
             confirm_fn=None,

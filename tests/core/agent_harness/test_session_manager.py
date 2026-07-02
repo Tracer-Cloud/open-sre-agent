@@ -23,6 +23,20 @@ def _manager(*, repo=None) -> SessionManager:
     )
 
 
+def test_open_storage_opens_bootstrapped_session() -> None:
+    storage = InMemorySessionStorage()
+    opened: list[str] = []
+    storage.open_session = lambda session: opened.append(session.session_id)  # type: ignore[method-assign]
+    manager = SessionManager(storage=storage, repo=SimpleNamespace(load_session=lambda _sid: None))
+
+    session = Session(session_id="boot-only")
+    manager.bootstrap(session, hydrate_integrations=False, persistent_tasks=False)
+    manager.open_storage(session)
+
+    assert session.storage is storage
+    assert opened == ["boot-only"]
+
+
 def test_create_opens_storage_and_returns_session() -> None:
     storage = InMemorySessionStorage()
     opened: list[str] = []

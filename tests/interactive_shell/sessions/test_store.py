@@ -838,7 +838,7 @@ def test_repl_session_has_stable_session_id() -> None:
     assert s.started_at <= time.time()
 
 
-def test_repl_session_rotates_id_on_clear() -> None:
+def test_session_rotates_id_on_clear() -> None:
     s = _make_session()
     original_id = s.session_id
     s.history.append({"type": "chat", "text": "hi", "ok": True})

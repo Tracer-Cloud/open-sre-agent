@@ -11,6 +11,8 @@ re-implementing bootstrap + persistence wiring:
   core bootstrap, restore its saved conversation context, and reopen storage.
 - **rotate** — close the outgoing session and create a fresh replacement (new
   handle; used by the gateway).
+- **open_storage** — open the JSONL stream for an already-bootstrapped handle
+  (interactive REPL entry after ``SessionBootstrapSpec``).
 - **rotate_in_place** / **rebind_for_resume** — flush + reset the *live* handle
   the REPL already holds (``/new`` / ``/resume``), preserving loop-owned UI
   state instead of releasing it.
@@ -125,7 +127,18 @@ class SessionManager:
             persistent_tasks=persistent_tasks,
         )
         if open_storage:
-            self._storage.open_session(session)
+            self.open_storage(session)
+        return session
+
+    def open_storage(self, session: Session) -> Session:
+        """Open the JSONL stream for an already-bootstrapped session handle.
+
+        The interactive shell bootstraps via ``SessionBootstrapSpec`` first, then
+        calls this once it knows the run is an interactive REPL (not a one-shot
+        ``initial_input`` path).
+        """
+        session.storage = self._storage
+        self._storage.open_session(session)
         return session
 
     def resolve(
