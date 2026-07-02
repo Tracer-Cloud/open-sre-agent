@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 import os
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Protocol
 
 from core.agent import Agent
 from core.agent_harness.agent_builder import AgentConfig, build_agent
@@ -46,6 +46,20 @@ _MAX_PER_TOOL_CHARS = 4_000
 # A persistence sink for gathered tool calls: ``persist(executed)`` where
 # ``executed`` is a list of ``(tool_call, output)`` pairs.
 PersistToolCalls = Callable[[list[tuple[Any, Any]]], None]
+
+
+class EvidenceAgentFactory(Protocol):
+    """Build the runtime :class:`Agent` for one evidence-gather turn."""
+
+    def __call__(
+        self,
+        *,
+        llm: Any,
+        session: SessionStore,
+        gather_tools: list[Any],
+        resolved: dict[str, Any],
+        on_progress: ToolEventObserver | None,
+    ) -> Agent[Any]: ...
 
 
 def _resolve_session_integrations(session: SessionStore) -> dict[str, Any]:
@@ -184,6 +198,7 @@ def gather_tool_evidence(
     persist: PersistToolCalls | None = None,
     error_reporter: ErrorReporter | None = None,
     is_tty: bool | None = None,  # noqa: ARG001 — reserved for parity with answer agents
+    agent_factory: EvidenceAgentFactory | None = None,
 ) -> str | None:
     """Run a bounded tool-calling loop and return collected evidence, or None.
 
@@ -205,7 +220,8 @@ def gather_tool_evidence(
         llm = _load_gather_llm_or_none(error_reporter)
         if llm is None:
             return None
-        agent = _build_evidence_agent(
+        build_agent_for_turn = agent_factory or _build_evidence_agent
+        agent = build_agent_for_turn(
             llm=llm,
             session=session,
             gather_tools=gather_tools,
@@ -231,4 +247,4 @@ def gather_tool_evidence(
     return _format_observation(result.executed)
 
 
-__all__ = ["PersistToolCalls", "gather_tool_evidence"]
+__all__ = ["EvidenceAgentFactory", "PersistToolCalls", "gather_tool_evidence"]
