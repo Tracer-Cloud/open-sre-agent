@@ -12,7 +12,6 @@ from __future__ import annotations
 from typing import Any
 
 import core.agent_harness.harness as harness_module
-from core.agent_harness.harness import AgentHarness, HarnessConfig
 from core.agent_harness.session import Session
 
 
@@ -36,7 +35,7 @@ class _FakeSessionManager:
 def test_resolve_env_variables_calls_load_dotenv(monkeypatch: Any) -> None:
     calls: list[dict[str, Any]] = []
     monkeypatch.setattr(harness_module, "load_dotenv", lambda **kwargs: calls.append(kwargs))
-    harness = AgentHarness()
+    harness = harness_module.AgentHarness()
 
     harness.resolve_env_variables()
 
@@ -46,7 +45,7 @@ def test_resolve_env_variables_calls_load_dotenv(monkeypatch: Any) -> None:
 def test_resolve_env_variables_skipped_when_load_env_false(monkeypatch: Any) -> None:
     calls: list[dict[str, Any]] = []
     monkeypatch.setattr(harness_module, "load_dotenv", lambda **kwargs: calls.append(kwargs))
-    harness = AgentHarness(HarnessConfig(load_env=False))
+    harness = harness_module.AgentHarness(harness_module.HarnessConfig(load_env=False))
 
     harness.resolve_env_variables()
 
@@ -55,7 +54,7 @@ def test_resolve_env_variables_skipped_when_load_env_false(monkeypatch: Any) -> 
 
 def test_load_or_create_session_creates_when_no_session_id() -> None:
     manager = _FakeSessionManager(Session())
-    harness = AgentHarness(HarnessConfig(session_manager=manager))  # type: ignore[arg-type]
+    harness = harness_module.AgentHarness(harness_module.HarnessConfig(session_manager=manager))  # type: ignore[arg-type]
 
     session = harness.load_or_create_session()
 
@@ -73,8 +72,8 @@ def test_load_or_create_session_creates_when_no_session_id() -> None:
 
 def test_load_or_create_session_resolves_when_session_id_given() -> None:
     manager = _FakeSessionManager(Session())
-    harness = AgentHarness(
-        HarnessConfig(session_id="abc123", session_manager=manager)  # type: ignore[arg-type]
+    harness = harness_module.AgentHarness(
+        harness_module.HarnessConfig(session_id="abc123", session_manager=manager)  # type: ignore[arg-type]
     )
 
     session = harness.load_or_create_session()
@@ -93,8 +92,8 @@ def test_load_or_create_session_resolves_when_session_id_given() -> None:
 
 def test_load_or_create_session_forwards_explicit_warm_integrations() -> None:
     manager = _FakeSessionManager(Session())
-    harness = AgentHarness(
-        HarnessConfig(warm_integrations=True, session_manager=manager)  # type: ignore[arg-type]
+    harness = harness_module.AgentHarness(
+        harness_module.HarnessConfig(warm_integrations=True, session_manager=manager)  # type: ignore[arg-type]
     )
 
     harness.load_or_create_session()
@@ -112,7 +111,7 @@ def test_load_or_create_session_forwards_explicit_warm_integrations() -> None:
 def test_resolve_integrations_delegates_to_session() -> None:
     session = Session()
     session.resolved_integrations_cache = {"datadog": {"api_key": "x"}}
-    harness = AgentHarness()
+    harness = harness_module.AgentHarness()
 
     resolved = harness.resolve_integrations(session)
 
@@ -121,13 +120,13 @@ def test_resolve_integrations_delegates_to_session() -> None:
 
 def test_load_context_returns_configured_prompts() -> None:
     sentinel = object()
-    harness = AgentHarness(HarnessConfig(prompts=sentinel))  # type: ignore[arg-type]
+    harness = harness_module.AgentHarness(harness_module.HarnessConfig(prompts=sentinel))  # type: ignore[arg-type]
 
     assert harness.load_context() is sentinel
 
 
 def test_load_context_returns_none_by_default() -> None:
-    harness = AgentHarness()
+    harness = harness_module.AgentHarness()
 
     assert harness.load_context() is None
 
@@ -144,7 +143,7 @@ def test_startup_runs_env_then_session_then_context(monkeypatch: Any) -> None:
     )
     original_load_session = harness_module.AgentHarness.load_or_create_session
 
-    def _tracked_load_session(self: AgentHarness) -> Session:
+    def _tracked_load_session(self: harness_module.AgentHarness) -> Session:
         order.append("session")
         return original_load_session(self)
 
@@ -153,14 +152,14 @@ def test_startup_runs_env_then_session_then_context(monkeypatch: Any) -> None:
     )
     original_context = harness_module.AgentHarness.load_context
 
-    def _tracked_context(self: AgentHarness) -> Any:
+    def _tracked_context(self: harness_module.AgentHarness) -> Any:
         order.append("context")
         return original_context(self)
 
     monkeypatch.setattr(harness_module.AgentHarness, "load_context", _tracked_context)
 
-    harness = AgentHarness(
-        HarnessConfig(prompts=sentinel, session_manager=manager)  # type: ignore[arg-type]
+    harness = harness_module.AgentHarness(
+        harness_module.HarnessConfig(prompts=sentinel, session_manager=manager)  # type: ignore[arg-type]
     )
     result = harness.startup()
 
