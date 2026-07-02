@@ -22,7 +22,7 @@ from prompt_toolkit.input.defaults import create_pipe_input
 from prompt_toolkit.keys import Keys
 from prompt_toolkit.output import DummyOutput
 
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from platform.terminal import theme as ui_theme
 from platform.terminal.theme import (
     ANSI_RESET,
@@ -187,7 +187,7 @@ def test_repl_session_prompt_history_backend_matches_prompt_toolkit_history(
 
     monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
     with create_app_session(input=DummyInput(), output=DummyOutput()):
-        session = ReplSession()
+        session = Session()
         prompt = input_prompt._build_prompt_session()
         session.prompt_history_backend = prompt.history
     assert session.prompt_history_backend is prompt.history
@@ -195,7 +195,7 @@ def test_repl_session_prompt_history_backend_matches_prompt_toolkit_history(
 
 def test_prompt_message_uses_accent_glyph() -> None:
     set_active_theme("blue")
-    rendered = _prompt_message(ReplSession()).value
+    rendered = _prompt_message(Session()).value
 
     assert ui_theme.PROMPT_ACCENT_ANSI in rendered
     assert "❯" in rendered
@@ -465,7 +465,7 @@ def test_run_text_investigation_uses_background_launcher_when_mode_enabled(
     def _fake_start_background_text_investigation(
         *,
         alert_text: str,
-        session: ReplSession,
+        session: Session,
         console: Console,
         display_command: str,
     ) -> str:
@@ -478,7 +478,7 @@ def test_run_text_investigation_uses_background_launcher_when_mode_enabled(
         _fake_start_background_text_investigation,
     )
 
-    session = ReplSession()
+    session = Session()
     session.background_mode_enabled = True
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
 
@@ -501,7 +501,7 @@ def test_run_initial_input_dispatches_as_non_tty(monkeypatch: pytest.MonkeyPatch
         _fake_handle_message,
     )
 
-    assert startup_initial_input.run_initial_input("/remote", ReplSession()) == 0
+    assert startup_initial_input.run_initial_input("/remote", Session()) == 0
     assert len(calls) == 1
     assert calls[0]["is_tty"] is False
 
@@ -1529,7 +1529,7 @@ class TestExecutionAllowedRespectsDispatchCancelled:
         )
 
         monkeypatch.setattr("sys.stdin.isatty", lambda: True)
-        session = ReplSession()
+        session = Session()
         console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
 
         def _cancel_confirm(_prompt: str) -> str:
@@ -1571,7 +1571,7 @@ class TestExecutionAllowedRespectsDispatchCancelled:
         )
 
         monkeypatch.setattr("sys.stdin.isatty", lambda: True)
-        session = ReplSession()
+        session = Session()
         console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
 
         policy = ExecutionPolicyResult(
@@ -1621,7 +1621,7 @@ class TestThemeCommand:
         )
 
         set_active_theme("green")
-        session = ReplSession()
+        session = Session()
         console, _buf = self._capture()
 
         assert dispatch_slash("/theme", session, console) is True
@@ -1643,7 +1643,7 @@ class TestThemeCommand:
 
         monkeypatch.setattr(theme_cmd, "repl_choose_one", _fake_choose_one)
 
-        session = ReplSession()
+        session = Session()
         session.active_theme_name = "pink"
         set_active_theme("pink")
         console, _buf = self._capture()
@@ -1664,7 +1664,7 @@ class TestThemeCommand:
         monkeypatch.setattr("surfaces.cli.commands.config._save_config", lambda _data: None)
 
         set_active_theme("green")
-        session = ReplSession()
+        session = Session()
         console, _buf = self._capture()
 
         assert dispatch_slash("/theme amber", session, console) is True
@@ -1694,7 +1694,7 @@ class TestThemeCommand:
             _refresh,
         )
 
-        session = ReplSession()
+        session = Session()
         console, _buf = self._capture()
 
         assert dispatch_slash("/theme", session, console) is True
@@ -1715,7 +1715,7 @@ class TestThemeCommand:
 
         monkeypatch.setattr(theme_cmd, "repl_choose_one", _fake_choose_one)
 
-        session = ReplSession()
+        session = Session()
         console, _buf = self._capture()
         dispatch_slash("/theme", session, console)
 
@@ -1741,7 +1741,7 @@ class TestThemeCommand:
         monkeypatch.setattr("surfaces.cli.commands.config._load_config", lambda: {})
         monkeypatch.setattr("surfaces.cli.commands.config._save_config", lambda _data: None)
 
-        session = ReplSession()
+        session = Session()
         console, _buf = self._capture()
         theme_cmd._persist_and_report_theme(session, console, "pink")
 
@@ -1763,7 +1763,7 @@ def test_refresh_prompt_theme_skips_invalidate_when_app_not_running() -> None:
         def invalidate(self) -> None:
             invalidated.append(True)
 
-    session = ReplSession()
+    session = Session()
     session.pt_style_app = _App()
     refresh_prompt_theme(session)
     assert invalidated == []

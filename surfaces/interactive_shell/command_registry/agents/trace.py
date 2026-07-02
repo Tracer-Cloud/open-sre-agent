@@ -11,7 +11,7 @@ from rich.live import Live
 from rich.markup import escape
 from rich.text import Text
 
-from surfaces.interactive_shell.runtime import ReplSession
+from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui import BOLD_BRAND, DIM, ERROR
 from tools.fleet_monitoring.registry import AgentRegistry
 from tools.fleet_monitoring.tail import AttachSession, AttachUnsupported, attach
@@ -124,7 +124,7 @@ def _render_live_tail(console: Console, label: str, sess: AttachSession) -> None
     console.print(f"[{DIM}]· trace ended[/]")
 
 
-def _cmd_agents_trace(session: ReplSession, console: Console, args: list[str]) -> bool:
+def _cmd_agents_trace(session: Session, console: Console, args: list[str]) -> bool:
     """Live-tail an agent's stdout by pid; see :func:`_render_live_tail`.
 
     Validates eagerly (``attach()`` raises :class:`AttachUnsupported`

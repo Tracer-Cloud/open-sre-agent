@@ -93,7 +93,7 @@ class ScenarioCapabilities:
     capability gate (``capability_not_explicitly_disabled``):
 
     * ``None`` — the capability key is absent; the tool stays available, which
-      matches the production default (``ReplSession()`` has no capability
+      matches the production default (``Session()`` has no capability
       constraints).
     * ``()`` — an explicit empty list; the tool is explicitly disabled (hidden
       from the planner specs and blocked at dispatch).

@@ -8,7 +8,7 @@ import threading
 from collections.abc import Callable
 
 from config.gateway_output_sink import GatewayOutputSink
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from gateway.config.get_gateway_settings import GatewaySettings
 from gateway.polling.handle_polled_inbound_telegram_msg import (
     handle_polled_inbound_telegram_message,
@@ -20,7 +20,7 @@ from gateway.polling.telegram_polling_runtime import (
     TelegramPollingRuntime,
 )
 
-GatewayAgentCallback = Callable[[str, ReplSession, GatewayOutputSink, logging.Logger], None]
+GatewayAgentCallback = Callable[[str, Session, GatewayOutputSink, logging.Logger], None]
 
 
 class TelegramGatewayBackground:

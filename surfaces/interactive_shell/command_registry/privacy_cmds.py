@@ -16,7 +16,7 @@ from core.agent_harness.session.prompt_history.policy import (
     RedactingFileHistory,
 )
 from surfaces.interactive_shell.command_registry.types import SlashCommand
-from surfaces.interactive_shell.runtime import ReplSession
+from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui import (
     BOLD_BRAND,
     DIM,
@@ -49,7 +49,7 @@ def _show_history(console: Console) -> bool:
     return True
 
 
-def _history_clear(session: ReplSession, console: Console) -> bool:  # noqa: ARG001
+def _history_clear(session: Session, console: Console) -> bool:  # noqa: ARG001
     if clear_persisted_history():
         console.print(
             f"[{HIGHLIGHT}]cleared[/] persistent history. Up-arrow recall resets on next launch."
@@ -62,7 +62,7 @@ def _history_clear(session: ReplSession, console: Console) -> bool:  # noqa: ARG
     return True
 
 
-def _history_pause(session: ReplSession, console: Console, *, paused: bool) -> bool:
+def _history_pause(session: Session, console: Console, *, paused: bool) -> bool:
     backend = session.prompt_history_backend
     if isinstance(backend, RedactingFileHistory):
         backend.paused = paused
@@ -97,7 +97,7 @@ def _history_pause(session: ReplSession, console: Console, *, paused: bool) -> b
     return True
 
 
-def _history_retention(session: ReplSession, console: Console, args: list[str]) -> bool:
+def _history_retention(session: Session, console: Console, args: list[str]) -> bool:
     if not args:
         console.print(f"[{ERROR}]usage:[/] /history retention <N>")
         return True
@@ -124,7 +124,7 @@ def _history_retention(session: ReplSession, console: Console, args: list[str]) 
     return True
 
 
-def _interactive_history_menu(session: ReplSession, console: Console) -> bool:
+def _interactive_history_menu(session: Session, console: Console) -> bool:
     root = "/history"
     while True:
         sub = repl_choose_one(
@@ -172,7 +172,7 @@ def _interactive_history_menu(session: ReplSession, console: Console) -> bool:
             repl_section_break(console)
 
 
-def _cmd_history(session: ReplSession, console: Console, args: list[str]) -> bool:
+def _cmd_history(session: Session, console: Console, args: list[str]) -> bool:
     if not args and repl_tty_interactive():
         return _interactive_history_menu(session, console)
 
@@ -193,7 +193,7 @@ def _cmd_history(session: ReplSession, console: Console, args: list[str]) -> boo
     return True
 
 
-def _cmd_privacy(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+def _cmd_privacy(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
     backend = session.prompt_history_backend
     table = repl_table(title="Privacy settings\n", title_style=BOLD_BRAND, show_header=False)
     table.add_column("setting", style="bold")

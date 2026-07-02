@@ -28,7 +28,7 @@ In simple terms:
   - `turn_detection.py` — pure text classifiers for cancel, confirm, and correction detection
 - `core.agent_harness.session.tasks` owns the cross-session task registry surfaced via
   `/tasks` and `/cancel`.
-- Reusable per-agent session state (`ReplSession`) lives in
+- Reusable per-agent session state (`Session`) lives in
   `core.agent_harness.session`. Terminal runtime context assembly
   (`ReplRuntimeContext`, `create_repl_runtime_context`) lives in
   `interactive_shell.runtime.context`.
@@ -211,7 +211,7 @@ flowchart TD
 
 - `runtime/__init__.py` should be a thin export layer.
 - Do not duplicate business logic in `__init__.py`.
-- `runtime/__init__.py` exports `ReplSession` from `core.agent_harness.session` and
+- `runtime/__init__.py` exports `Session` from `core.agent_harness.session` and
   runtime-context helpers from `interactive_shell.runtime.context`. New shared
   runtime code should import session names directly from `core.agent_harness.session`.
 - Do not re-add `_xxx` underscore aliases or wrapper functions for

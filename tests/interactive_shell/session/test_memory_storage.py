@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from core.agent_harness.session import InMemorySessionStorage, ReplSession
+from core.agent_harness.session import InMemorySessionStorage, Session
 
 
-def _session(storage: InMemorySessionStorage) -> ReplSession:
-    return ReplSession(storage=storage)
+def _session(storage: InMemorySessionStorage) -> Session:
+    return Session(storage=storage)
 
 
 def test_open_then_record_appends_turn() -> None:

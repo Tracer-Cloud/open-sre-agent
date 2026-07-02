@@ -18,7 +18,7 @@ import core as runtime_module
 import core.agent_harness.agents.evidence_agent as evidence_agent_module
 import core.llm.agent_llm_client as agent_llm_client
 import tools.investigation.stages.gather_evidence.tools as investigate_tools
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from core.llm.types import ToolCall
 from surfaces.interactive_shell.runtime.integration_tool_gathering import (
     _format_gathering_progress_line,
@@ -69,7 +69,7 @@ def _patch_agent_run(monkeypatch: Any, run: Any) -> None:
 
 
 def test_no_tools_available_returns_none(monkeypatch: Any) -> None:
-    session = ReplSession()
+    session = Session()
     session.resolved_integrations_cache = {}
 
     monkeypatch.setattr(investigate_tools, "get_available_tools", lambda _resolved: [])
@@ -78,7 +78,7 @@ def test_no_tools_available_returns_none(monkeypatch: Any) -> None:
 
 
 def test_secondary_only_tools_return_none(monkeypatch: Any) -> None:
-    session = ReplSession()
+    session = Session()
     session.resolved_integrations_cache = {}
 
     monkeypatch.setattr(
@@ -96,7 +96,7 @@ def test_secondary_only_tools_return_none(monkeypatch: Any) -> None:
 
 
 def test_executed_results_return_formatted_observation(monkeypatch: Any) -> None:
-    session = ReplSession()
+    session = Session()
     session.resolved_integrations_cache = {}
 
     monkeypatch.setattr(
@@ -129,7 +129,7 @@ def test_executed_results_return_formatted_observation(monkeypatch: Any) -> None
 
 
 def test_no_executed_returns_none(monkeypatch: Any) -> None:
-    session = ReplSession()
+    session = Session()
     session.resolved_integrations_cache = {}
 
     monkeypatch.setattr(
@@ -150,7 +150,7 @@ def test_no_executed_returns_none(monkeypatch: Any) -> None:
 
 
 def test_exception_path_returns_none(monkeypatch: Any) -> None:
-    session = ReplSession()
+    session = Session()
     session.resolved_integrations_cache = {}
 
     monkeypatch.setattr(
@@ -213,7 +213,7 @@ def test_format_gathering_progress_line_escapes_display_and_hint_markup(
 
 
 def test_gathering_progress_lines_print_on_tool_start(monkeypatch: Any) -> None:
-    session = ReplSession()
+    session = Session()
     session.resolved_integrations_cache = {}
     console = _console()
 
@@ -256,7 +256,7 @@ def test_gathering_progress_lines_print_on_tool_start(monkeypatch: Any) -> None:
 
 
 def test_resolve_gather_integrations_enriches_github_from_repo_url() -> None:
-    session = ReplSession()
+    session = Session()
     session.resolved_integrations_cache = {
         "github": {"connection_verified": True, "url": "https://api.githubcopilot.com/mcp/"}
     }
@@ -273,7 +273,7 @@ def test_resolve_gather_integrations_enriches_github_from_repo_url() -> None:
 
 
 def test_resolve_gather_integrations_uses_session_cache_on_follow_up() -> None:
-    session = ReplSession()
+    session = Session()
     session.resolved_integrations_cache = {
         "github": {"connection_verified": True, "url": "https://api.githubcopilot.com/mcp/"}
     }
@@ -290,7 +290,7 @@ def test_resolve_gather_integrations_uses_session_cache_on_follow_up() -> None:
 
 
 def test_gather_enriches_github_before_selecting_tools(monkeypatch: Any) -> None:
-    session = ReplSession()
+    session = Session()
     session.resolved_integrations_cache = {
         "github": {"connection_verified": True, "url": "https://api.githubcopilot.com/mcp/"}
     }
@@ -325,7 +325,7 @@ def test_gather_enriches_github_before_selecting_tools(monkeypatch: Any) -> None
 
 
 def test_gather_user_message_includes_recent_conversation(monkeypatch: Any) -> None:
-    session = ReplSession()
+    session = Session()
     session.resolved_integrations_cache = {}
     session.agent.messages = [("user", "prior question"), ("assistant", "prior answer")]
     captured: dict[str, Any] = {}

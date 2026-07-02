@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from surfaces.interactive_shell.utils.telemetry.config import PromptLogConfig
 from surfaces.interactive_shell.utils.telemetry.recorder import LlmRunInfo, PromptRecorder
 
@@ -19,7 +19,7 @@ def test_prompt_recorder_start_respects_supported_turns(monkeypatch, tmp_path: P
     monkeypatch.setattr(
         "surfaces.interactive_shell.utils.telemetry.recorder.PromptLogConfig.load", lambda: cfg
     )
-    session = ReplSession()
+    session = Session()
     assert PromptRecorder.start(session=session, text="hello", turn_kind="slash") is None
     assert PromptRecorder.start(session=session, text="hello", turn_kind="agent") is not None
 
@@ -43,7 +43,7 @@ def test_prompt_recorder_for_background_task_uses_task_id_as_trace(
         "surfaces.interactive_shell.utils.telemetry.recorder.capture_ai_generation",
         lambda payload: captured.append(payload),
     )
-    session = ReplSession()
+    session = Session()
     recorder = PromptRecorder.for_background_task(
         session=session, command="opensre investigate --service api", task_id="ab247135"
     )
@@ -62,7 +62,7 @@ def test_prompt_recorder_for_background_task_disabled_returns_none(monkeypatch) 
     monkeypatch.setattr(
         "surfaces.interactive_shell.utils.telemetry.recorder.PromptLogConfig.load", lambda: cfg
     )
-    session = ReplSession()
+    session = Session()
     assert PromptRecorder.for_background_task(session=session, command="x", task_id="t") is None
 
 
@@ -79,7 +79,7 @@ def test_prompt_recorder_flush_writes_and_redacts(monkeypatch, tmp_path: Path) -
     monkeypatch.setattr(
         "surfaces.interactive_shell.utils.telemetry.recorder.PromptLogConfig.load", lambda: cfg
     )
-    session = ReplSession()
+    session = Session()
     recorder = PromptRecorder.start(
         session=session,
         text="Bearer token-value-12345678901234567890",
@@ -122,7 +122,7 @@ def test_prompt_recorder_sends_ai_generation(monkeypatch, tmp_path: Path) -> Non
         "surfaces.interactive_shell.utils.telemetry.recorder.capture_ai_generation",
         lambda payload: captured.append(payload),
     )
-    session = ReplSession()
+    session = Session()
     recorder = PromptRecorder.start(
         session=session,
         text="hello",
@@ -166,7 +166,7 @@ def test_prompt_recorder_sends_connected_integrations(monkeypatch, tmp_path: Pat
             "integration_snapshot_source": "runtime_config",
         },
     )
-    session = ReplSession()
+    session = Session()
     recorder = PromptRecorder.start(
         session=session,
         text="hello",
@@ -207,7 +207,7 @@ def test_prompt_recorder_still_captures_when_tool_resolution_fails(
         _boom,
     )
 
-    session = ReplSession()
+    session = Session()
     session.configured_integrations_known = True
     session.configured_integrations = ("datadog",)
     session.resolved_integrations_cache = {"datadog": {"api_key": "x", "app_key": "y"}}
@@ -248,7 +248,7 @@ def test_prompt_recorder_uses_no_conversational_agent_without_llm_run(
         "surfaces.interactive_shell.utils.telemetry.recorder.capture_ai_generation",
         lambda payload: captured.append(payload),
     )
-    session = ReplSession()
+    session = Session()
     recorder = PromptRecorder.start(
         session=session,
         text="/help",
@@ -282,7 +282,7 @@ def test_prompt_recorder_uses_only_latest_slash_outcome(monkeypatch, tmp_path: P
         "surfaces.interactive_shell.utils.telemetry.recorder.capture_ai_generation",
         lambda payload: captured.append(payload),
     )
-    session = ReplSession()
+    session = Session()
     session.record(
         "slash",
         "/modle",

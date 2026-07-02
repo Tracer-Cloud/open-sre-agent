@@ -10,12 +10,16 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
-from prompt_toolkit.history import History
 from pydantic import ConfigDict
 
 from core.domain.alerts.inbox import IncomingAlert
 
 if TYPE_CHECKING:
+    # Type-only: the session stores the prompt-history backend as an opaque UI
+    # handle (surfaces access its interface). Importing it only under
+    # TYPE_CHECKING keeps core free of a runtime prompt_toolkit dependency.
+    from prompt_toolkit.history import History
+
     from core.agent_harness.grounding.context import GroundingContext
     from core.agent_harness.integrations.resolution import IntegrationResolutionResult
 else:
@@ -87,7 +91,7 @@ class TerminalMetricsSnapshot(StrictConfigModel):
 
 
 @dataclass
-class ReplSession:
+class Session:
     """Per-REPL-process accumulated state.
 
     Carries everything we want to persist across individual investigations
@@ -107,7 +111,7 @@ class ReplSession:
 
     Defaults to the JSONL backend; tests can inject an in-memory backend. All
     of this session's writes (record/append/flush) go through it, so the on-disk
-    format is swappable without touching ReplSession."""
+    format is swappable without touching Session."""
 
     resumed_from_name: str = ""
     """Name of the most recently resumed session. Used by /sessions to display a

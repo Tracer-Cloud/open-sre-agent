@@ -21,7 +21,7 @@ from surfaces.interactive_shell.command_registry.agents.conflicts_view import re
 from surfaces.interactive_shell.command_registry.agents.kill import _cmd_agents_kill
 from surfaces.interactive_shell.command_registry.agents.trace import _cmd_agents_trace
 from surfaces.interactive_shell.command_registry.types import SlashCommand
-from surfaces.interactive_shell.runtime import ReplSession
+from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui import (
     BOLD_BRAND,
     DIM,
@@ -139,7 +139,7 @@ def _cmd_agents_conflicts(console: Console) -> bool:
     return True
 
 
-def _cmd_agents_claim(session: ReplSession, console: Console, args: list[str]) -> bool:
+def _cmd_agents_claim(session: Session, console: Console, args: list[str]) -> bool:
     """Handle /fleet claim <branch> <agent-name>."""
     if len(args) < 2:
         console.print(f"[{ERROR}]Usage:[/] /fleet claim <branch> <agent-name>")
@@ -185,7 +185,7 @@ def _cmd_agents_claim(session: ReplSession, console: Console, args: list[str]) -
     return True
 
 
-def _cmd_agents_release(session: ReplSession, console: Console, args: list[str]) -> bool:
+def _cmd_agents_release(session: Session, console: Console, args: list[str]) -> bool:
     """Handle /fleet release <branch>."""
     if len(args) < 1:
         console.print(f"[{ERROR}]Usage:[/] /fleet release <branch>")
@@ -210,7 +210,7 @@ def _cmd_agents_release(session: ReplSession, console: Console, args: list[str])
     return True
 
 
-def _cmd_agents_budget(session: ReplSession, console: Console, args: list[str]) -> bool:
+def _cmd_agents_budget(session: Session, console: Console, args: list[str]) -> bool:
     """View or edit per-agent budgets stored in ``~/.opensre/agents.yaml``.
 
     No args -> render the current budgets as a table. Two args
@@ -282,7 +282,7 @@ def _cmd_agents_budget(session: ReplSession, console: Console, args: list[str]) 
     return True
 
 
-def _cmd_agents_wait(session: ReplSession, console: Console, args: list[str]) -> bool:
+def _cmd_agents_wait(session: Session, console: Console, args: list[str]) -> bool:
     """Handle ``/fleet wait <pid> --on <other-pid>``.
 
     Parse the two pids out of ``args``, registers the dependency in the agent registry.
@@ -404,7 +404,7 @@ def _cmd_agents_graph(console: Console) -> bool:
     return True
 
 
-def _cmd_agents(session: ReplSession, console: Console, args: list[str]) -> bool:
+def _cmd_agents(session: Session, console: Console, args: list[str]) -> bool:
     if not args:
         return _cmd_agents_list(console)
 

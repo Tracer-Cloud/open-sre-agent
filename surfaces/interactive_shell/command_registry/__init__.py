@@ -58,7 +58,7 @@ from surfaces.interactive_shell.command_registry.theme import COMMANDS as THEME_
 from surfaces.interactive_shell.command_registry.tools_cmds import COMMANDS as TOOLS_COMMANDS
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.command_registry.watch_cmds import COMMANDS as WATCH_COMMANDS
-from surfaces.interactive_shell.runtime import ReplSession
+from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
 from surfaces.interactive_shell.utils.telemetry.console_capture import capture_console_segment
 from surfaces.interactive_shell.utils.telemetry.turn_outcome import format_terminal_turn_outcome
@@ -94,7 +94,7 @@ SLASH_COMMANDS: dict[str, SlashCommand] = {cmd.name: cmd for cmd in _MERGED_SEQU
 _DEFER_SLASH_RECORDING: frozenset[str] = frozenset({"/resume"})
 
 
-def _latest_record_ok(session: ReplSession, kind: str, *, default: bool = True) -> bool:
+def _latest_record_ok(session: Session, kind: str, *, default: bool = True) -> bool:
     """Return ``ok`` from the newest history row of ``kind`` after the handler runs."""
     for entry in reversed(session.history):
         if entry.get("type") == kind:
@@ -102,7 +102,7 @@ def _latest_record_ok(session: ReplSession, kind: str, *, default: bool = True) 
     return default
 
 
-def _latest_slash_record(session: ReplSession) -> dict[str, Any] | None:
+def _latest_slash_record(session: Session) -> dict[str, Any] | None:
     for entry in reversed(session.history):
         if entry.get("type") == "slash":
             return entry
@@ -110,7 +110,7 @@ def _latest_slash_record(session: ReplSession) -> dict[str, Any] | None:
 
 
 def _attach_slash_analytics(
-    session: ReplSession,
+    session: Session,
     command_line: str,
     *,
     captured_output: str,
@@ -135,7 +135,7 @@ def _attach_slash_analytics(
 
 def dispatch_slash(
     command_line: str,
-    session: ReplSession,
+    session: Session,
     console: Console,
     *,
     confirm_fn: Callable[[str], str] | None = None,

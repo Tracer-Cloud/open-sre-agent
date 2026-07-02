@@ -47,7 +47,7 @@ responsibility-scoped subpackage.
     turn pass `NullToolProvider()` explicitly.
 - `models/` — neutral, surface-agnostic data shapes:
   - `turn_context.py` — `TurnContext`, the immutable per-turn snapshot (built from any
-    object satisfying `TurnContextSource`, not `ReplSession` directly).
+    object satisfying `TurnContextSource`, not `Session` directly).
   - `turn_results.py` — neutral turn-result models.
 - `providers/` — core-owned default port implementations and provider resolution
   (`default_providers.py`, `default_prompt_context.py`, `provider_models.py`).
@@ -59,9 +59,29 @@ responsibility-scoped subpackage.
   `conversation_memory.py` (recent-conversation rendering shared by prompts) lives here.
 - `grounding/` — reusable grounding cache and rendering contracts; surfaces
   inject surface-owned command registries instead of being imported here.
-- `session/` — reusable agent session state, JSONL storage, prompt history,
-  task registry, and session-scoped background records.
+- `session/` — reusable agent session state (`Session`), JSONL storage, prompt
+  history, task registry, session-scoped background records, and
+  `SessionManager` (the lifecycle owner). See "Session lifecycle" below.
 - `integrations/` — integration resolution helpers for the harness.
+
+## Session lifecycle (owned by SessionManager)
+
+`core.agent_harness.session.SessionManager` is the single owner of session
+create / resolve / rotate / restore / flush. Every surface delegates lifecycle
+to it instead of re-implementing bootstrap + persistence:
+
+- **shell** — `SessionBootstrapSpec` calls `SessionManager().bootstrap(...)` for
+  the core startup mutations (persistent task registry + integration
+  hydration), then layers shell-only UI concerns (theme, grounding providers,
+  prompt history) on top.
+- **gateway** — `gateway/storage/session/resolver.py::SessionResolver` owns only
+  the platform chat-id ↔ session-id binding + per-turn chat metadata; it
+  delegates `create` / `resolve` / `rotate` to `SessionManager`. It does not
+  import any other surface.
+
+`Session` (formerly `ReplSession`) is the in-memory session object used by every
+surface, including headless gateway — it is not REPL-specific. Do not re-add
+per-surface session bootstrap logic; extend `SessionManager` instead.
 
 ## Agent construction pattern (Pattern A — canonical)
 

@@ -15,7 +15,7 @@ from core.agent_harness.tools.tool_context import (
 )
 from core.tool_framework.registered_tool import RegisteredTool
 from platform.common.task_types import TaskRecord
-from surfaces.interactive_shell.runtime import ReplSession
+from surfaces.interactive_shell.runtime import Session
 from tools.interactive_shell.shared.investigation_launch import launch_investigation
 
 _SAMPLE_ALERT_TEMPLATES = ("generic",)
@@ -23,7 +23,7 @@ _SAMPLE_ALERT_TEMPLATES = ("generic",)
 
 def run_sample_alert(
     template_name: str,
-    session: ReplSession,
+    session: Session,
     console: Console,
     *,
     confirm_fn: Callable[[str], str] | None = None,

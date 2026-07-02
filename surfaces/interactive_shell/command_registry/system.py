@@ -7,7 +7,7 @@ from rich.console import Console
 import platform
 from platform.terminal.prompt_support import print_session_resume_hint
 from surfaces.interactive_shell.command_registry.types import SlashCommand
-from surfaces.interactive_shell.runtime import ReplSession
+from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui import (
     BOLD_BRAND,
     DIM,
@@ -19,7 +19,7 @@ from surfaces.interactive_shell.ui import (
 )
 
 
-def _cmd_exit(session: ReplSession, console: Console, _args: list[str]) -> bool:
+def _cmd_exit(session: Session, console: Console, _args: list[str]) -> bool:
     if session.session_id:
         console.print()
         print_session_resume_hint(console, session.session_id)
@@ -27,7 +27,7 @@ def _cmd_exit(session: ReplSession, console: Console, _args: list[str]) -> bool:
     return False
 
 
-def _cmd_health(_session: ReplSession, console: Console, _args: list[str]) -> bool:
+def _cmd_health(_session: Session, console: Console, _args: list[str]) -> bool:
     from config.config import get_environment
     from integrations.store import STORE_PATH
     from integrations.verify import verify_integrations
@@ -44,7 +44,7 @@ def _cmd_health(_session: ReplSession, console: Console, _args: list[str]) -> bo
     return True
 
 
-def _cmd_doctor(_session: ReplSession, console: Console, _args: list[str]) -> bool:
+def _cmd_doctor(_session: Session, console: Console, _args: list[str]) -> bool:
     from surfaces.cli.commands.doctor import _CHECKS, _check
 
     status_styles: dict[str, str] = {"ok": HIGHLIGHT, "warn": WARNING, "error": ERROR}
@@ -70,7 +70,7 @@ def _cmd_doctor(_session: ReplSession, console: Console, _args: list[str]) -> bo
     return True
 
 
-def _cmd_version(_session: ReplSession, console: Console, _args: list[str]) -> bool:
+def _cmd_version(_session: Session, console: Console, _args: list[str]) -> bool:
     from config.version import get_version
 
     table = repl_table(title="Version info\n", title_style=BOLD_BRAND, show_header=False)

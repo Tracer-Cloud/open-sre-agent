@@ -6,7 +6,7 @@ import io
 
 from rich.console import Console
 
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
 from surfaces.interactive_shell.command_registry.integrations import (
     _INTEGRATIONS_FIRST_ARGS,
@@ -48,7 +48,7 @@ def test_slash_registry_includes_modular_commands() -> None:
 
 
 def test_dispatch_unknown_command_stays_in_repl() -> None:
-    session = ReplSession()
+    session = Session()
     console, buf = _capture()
     assert dispatch_slash("/not-a-real-slash", session, console) is True
     assert "Unknown command" in buf.getvalue()

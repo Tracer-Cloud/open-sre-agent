@@ -8,7 +8,7 @@ from collections import deque
 from rich.console import Console
 from rich.markup import escape
 
-from surfaces.interactive_shell.runtime import ReplSession
+from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui import DIM, ERROR, HIGHLIGHT, WARNING
 from surfaces.interactive_shell.ui.components.choice_menu import (
     repl_choose_one,
@@ -18,7 +18,7 @@ from surfaces.interactive_shell.ui.components.time_format import format_repl_tim
 
 
 def _record_resume_slash(
-    session: ReplSession,
+    session: Session,
     args: list[str],
     *,
     ok: bool = True,
@@ -34,7 +34,7 @@ def _record_resume_slash(
     session.record("slash", text, ok=ok)
 
 
-def _interactive_resume_menu(session: ReplSession, console: Console) -> bool:
+def _interactive_resume_menu(session: Session, console: Console) -> bool:
     """Show a numbered list of recent sessions and resume the selected one."""
     from core.agent_harness.session import default_session_repo
 
@@ -140,7 +140,7 @@ def _render_resumed_session_history(
 
 def _apply_resume_data(
     data: dict,
-    session: ReplSession,
+    session: Session,
     console: Console,
     *,
     slash_command: str | None = None,
@@ -224,7 +224,7 @@ def _apply_resume_data(
 
 def _lookup_resume_session_data(
     prefix: str,
-    session: ReplSession,
+    session: Session,
     console: Console,
 ) -> dict | None:
     """Resolve a session to resume by ID prefix or name substring."""
@@ -264,7 +264,7 @@ def _lookup_resume_session_data(
 
 def _do_resume(
     prefix: str,
-    session: ReplSession,
+    session: Session,
     console: Console,
     *,
     slash_command: str | None = None,
@@ -278,7 +278,7 @@ def _do_resume(
 
 def resume_session_by_prefix(
     prefix: str,
-    session: ReplSession,
+    session: Session,
     console: Console,
     *,
     slash_command: str | None = None,
@@ -287,7 +287,7 @@ def resume_session_by_prefix(
     return _do_resume(prefix, session, console, slash_command=slash_command)
 
 
-def _cmd_resume(session: ReplSession, console: Console, args: list[str]) -> bool:
+def _cmd_resume(session: Session, console: Console, args: list[str]) -> bool:
     if not args and repl_tty_interactive():
         return _interactive_resume_menu(session, console)
 

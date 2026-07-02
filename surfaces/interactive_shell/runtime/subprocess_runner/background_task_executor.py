@@ -13,7 +13,7 @@ from typing import Any
 from rich.console import Console
 from rich.markup import escape
 
-from surfaces.interactive_shell.runtime import ReplSession, TaskKind, TaskRecord
+from surfaces.interactive_shell.runtime import Session, TaskKind, TaskRecord
 from surfaces.interactive_shell.ui import DIM, ERROR, HIGHLIGHT
 from surfaces.interactive_shell.utils.error_handling.exception_reporting import report_exception
 from surfaces.interactive_shell.utils.telemetry import PromptRecorder
@@ -61,7 +61,7 @@ def start_background_cli_task(
     *,
     display_command: str,
     argv_list: list[str],
-    session: ReplSession,
+    session: Session,
     console: Console,
     timeout_seconds: int = SHELL_COMMAND_TIMEOUT_SECONDS,
     kind: TaskKind = TaskKind.CLI_COMMAND,

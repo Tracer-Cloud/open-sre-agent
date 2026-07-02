@@ -22,7 +22,7 @@ from core.agent_harness.providers.default_providers import (
     DefaultToolProvider,
     DefaultTurnAccounting,
 )
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from core.tool_framework.registered_tool import RegisteredTool
 from gateway.config.configure_gateway_logging import configure_gateway_logging
 from gateway.config.get_gateway_settings import (
@@ -76,7 +76,7 @@ class GatewayManager:
         logger = configure_gateway_logging()
 
         # Getting the configured integrations
-        repl_session = ReplSession()
+        repl_session = Session()
         repl_session.hydrate_configured_integrations()
         console = Console(force_terminal=False)
 
@@ -99,7 +99,7 @@ class GatewayManager:
 
         def handle_callback_to_gateway_agent(
             text: str,
-            session: ReplSession,
+            session: Session,
             sink: GatewayOutputSink,
             logger: logging.Logger,
         ) -> None:

@@ -5,14 +5,14 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import MagicMock
 
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from surfaces.interactive_shell.utils.telemetry.integration_snapshot import (
     build_turn_integration_snapshot,
 )
 
 
 def test_build_turn_integration_snapshot_empty_when_unconfigured() -> None:
-    session = ReplSession()
+    session = Session()
     session.configured_integrations_known = True
     session.configured_integrations = ()
 
@@ -29,7 +29,7 @@ def test_build_turn_integration_snapshot_empty_when_unconfigured() -> None:
 def test_build_turn_integration_snapshot_uses_session_configured_slugs(
     monkeypatch: Any,
 ) -> None:
-    session = ReplSession()
+    session = Session()
     session.configured_integrations_known = True
     session.configured_integrations = ("datadog", "github")
     session.resolved_integrations_cache = {
@@ -55,7 +55,7 @@ def test_build_turn_integration_snapshot_uses_session_configured_slugs(
 def test_build_turn_integration_snapshot_excludes_unavailable_tools(
     monkeypatch: Any,
 ) -> None:
-    session = ReplSession()
+    session = Session()
     session.configured_integrations_known = True
     session.configured_integrations = ("datadog", "grafana")
     session.resolved_integrations_cache = {
@@ -78,7 +78,7 @@ def test_build_turn_integration_snapshot_excludes_unavailable_tools(
 def test_build_turn_integration_snapshot_survives_tool_resolution_failure(
     monkeypatch: Any,
 ) -> None:
-    session = ReplSession()
+    session = Session()
     session.configured_integrations_known = True
     session.configured_integrations = ("datadog",)
     session.resolved_integrations_cache = {"datadog": {"api_key": "x", "app_key": "y"}}
@@ -101,7 +101,7 @@ def test_build_turn_integration_snapshot_survives_tool_resolution_failure(
 def test_build_turn_integration_snapshot_survives_family_key_failure(
     monkeypatch: Any,
 ) -> None:
-    session = ReplSession()
+    session = Session()
     session.configured_integrations_known = True
     session.configured_integrations = ("datadog",)
     session.resolved_integrations_cache = {"datadog": {"api_key": "x", "app_key": "y"}}

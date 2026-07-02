@@ -1,7 +1,7 @@
 """Per-turn immutable context snapshot for the agentic turn engine.
 
 Assembled once at the start of each turn from any object satisfying
-:class:`TurnContextSource` (the interactive shell passes its ``ReplSession``;
+:class:`TurnContextSource` (the interactive shell passes its ``Session``;
 headless callers pass an in-memory session store). All fields reflect session
 state at turn-start and do not change while the turn runs, so downstream code
 reads a stable snapshot rather than a live, concurrently-mutated object.
@@ -43,7 +43,7 @@ type SystemPromptInput = str | PromptRenderable
 class TurnContextSource(Protocol):
     """Structural source of per-turn snapshot fields.
 
-    ``ReplSession`` satisfies this without inheriting it; headless session
+    ``Session`` satisfies this without inheriting it; headless session
     stores implement the same attributes. Keeping this structural is what lets
     ``agent/`` build a ``TurnContext`` without importing ``interactive_shell``.
     """
@@ -54,7 +54,7 @@ class TurnContextSource(Protocol):
     last_synthetic_observation_path: str | None
     reasoning_effort: ReasoningEffortChoice | None
 
-    # Read-only here; ``ReplSession`` stores a tuple. A property matches
+    # Read-only here; ``Session`` stores a tuple. A property matches
     # covariantly, so any concrete ``Sequence[str]`` implementation satisfies it.
     @property
     def configured_integrations(self) -> Sequence[str]:
@@ -112,7 +112,7 @@ class TurnContext:
     build prompts and ground answers, frozen at the moment the turn begins. It
     can also carry the runtime loop request fields that ``Agent.run`` needs.
 
-    The live ``ReplSession`` is still passed separately to callers that need
+    The live ``Session`` is still passed separately to callers that need
     to write state (recording history, persisting token usage, updating intent).
     """
 
@@ -172,7 +172,7 @@ class TurnContext:
 
         Call this once at the top of the turn before any mutations happen, then
         pass the returned context downstream. ``session`` is anything satisfying
-        :class:`TurnContextSource` (e.g. the shell's ``ReplSession``). When the
+        :class:`TurnContextSource` (e.g. the shell's ``Session``). When the
         source also exposes ``select_agent_context_input`` directly or through
         ``source.agent``, runtime request fields are snapshotted too.
         """

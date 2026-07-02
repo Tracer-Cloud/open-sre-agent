@@ -28,7 +28,7 @@ from rich.markup import escape
 
 from integrations.llm_cli.claude_code import ClaudeCodeAdapter
 from integrations.llm_cli.subprocess_env import build_cli_subprocess_env
-from surfaces.interactive_shell.runtime import ReplSession, TaskKind
+from surfaces.interactive_shell.runtime import Session, TaskKind
 from surfaces.interactive_shell.runtime.subprocess_runner.task_streaming import (
     _MAX_COMMAND_OUTPUT_CHARS,
     _SYNTHETIC_DIAG_CHARS,
@@ -62,7 +62,7 @@ class _ClaudeInvocation(Protocol):
         raise NotImplementedError
 
 
-def _recent_cli_agent_context(session: ReplSession, *, limit: int = 6) -> str:
+def _recent_cli_agent_context(session: Session, *, limit: int = 6) -> str:
     recent = session.agent.messages[-limit:]
     if not recent:
         return ""
@@ -80,7 +80,7 @@ def _is_context_dependent_implementation_request(request: str) -> bool:
     }
 
 
-def _build_claude_code_implementation_prompt(request: str, session: ReplSession) -> str:
+def _build_claude_code_implementation_prompt(request: str, session: Session) -> str:
     context = _recent_cli_agent_context(session)
     context_block = (
         f"--- Recent OpenSRE terminal assistant context ---\n{context}\n\n" if context else ""
@@ -137,7 +137,7 @@ def _spawn_claude_code(invocation: _ClaudeInvocation) -> subprocess.Popen[str]:
 
 def run_claude_code_implementation(
     request: str,
-    session: ReplSession,
+    session: Session,
     console: Console,
     *,
     confirm_fn: Callable[[str], str] | None = None,

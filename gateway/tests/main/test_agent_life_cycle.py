@@ -32,7 +32,7 @@ from core.agent_harness.providers.default_providers import (
     DefaultToolProvider,
     DefaultTurnAccounting,
 )
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from core.agent_harness.session.storage.memory import InMemorySessionStorage
 from core.agent_harness.tools.action_tools import get_action_tool
 from gateway.config.get_gateway_settings import GatewaySettings, TelegramInboundMessage
@@ -70,7 +70,7 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
         "gateway.start_gateway.signal.signal",
         lambda signum, handler: signal_calls.append((signum, handler)),
     )
-    monkeypatch.setattr("gateway.start_gateway.ReplSession", FakeReplSession)
+    monkeypatch.setattr("gateway.start_gateway.Session", FakeReplSession)
 
     class FakeDefaultToolProvider(DefaultToolProvider):
         def action_tools(
@@ -185,15 +185,15 @@ def test_polled_telegram_message_reaches_start_gateway_agent_callback(monkeypatc
             return SimpleNamespace(resolved_integrations=integrations)
 
     class FakeSessionResolver:
-        def __init__(self, session: ReplSession) -> None:
+        def __init__(self, session: Session) -> None:
             self._session = session
 
-        def resolve(self, *, user_id: str, chat_id: str) -> ReplSession:
+        def resolve(self, *, user_id: str, chat_id: str) -> Session:
             assert user_id == "user-1"
             assert chat_id == "chat-1"
             return self._session
 
-        def rotate(self, *, user_id: str, chat_id: str) -> ReplSession:
+        def rotate(self, *, user_id: str, chat_id: str) -> Session:
             assert user_id == "user-1"
             assert chat_id == "chat-1"
             return self._session
@@ -202,7 +202,7 @@ def test_polled_telegram_message_reaches_start_gateway_agent_callback(monkeypatc
     monkeypatch.setattr("gateway.start_gateway.configure_gateway_logging", lambda: logger)
     monkeypatch.setattr("gateway.start_gateway.load_gateway_settings", lambda: settings)
     monkeypatch.setattr("gateway.start_gateway.signal.signal", lambda *_args: None)
-    monkeypatch.setattr("gateway.start_gateway.ReplSession", FakeBootReplSession)
+    monkeypatch.setattr("gateway.start_gateway.Session", FakeBootReplSession)
 
     class FakeDefaultToolProvider(DefaultToolProvider):
         def action_tools(
@@ -243,7 +243,7 @@ def test_polled_telegram_message_reaches_start_gateway_agent_callback(monkeypatc
 
     GatewayManager().start_gateway(wait=False)
     callback = background_kwargs["handle_callback_to_gateway_agent"]
-    session = ReplSession(storage=InMemorySessionStorage())
+    session = Session(storage=InMemorySessionStorage())
     client = MagicMock()
     client.send_message.return_value = (True, "", "message-1")
     client.edit_message_text.return_value = (True, "")

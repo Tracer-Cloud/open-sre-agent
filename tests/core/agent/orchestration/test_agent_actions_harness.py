@@ -8,7 +8,7 @@ from rich.console import Console
 
 import tools.interactive_shell.actions.slash as slash_tool
 from core.agent_harness.agents.action_agent import ToolCallingDeps, run_action_agent_turn
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from core.tool_framework.registered_tool import RegisteredTool
 from surfaces.interactive_shell.runtime.shell_turn_execution import run_action_tool_turn
 from tests.core.agent.orchestration.action_execution_test_harness import (
@@ -61,7 +61,7 @@ def test_execute_with_harness_runs_slash_tool_call(monkeypatch) -> None:
 
     def _fake_dispatch(
         command: str,
-        session: ReplSession,
+        session: Session,
         console: Console,
         **_kwargs: object,
     ) -> bool:
@@ -74,7 +74,7 @@ def test_execute_with_harness_runs_slash_tool_call(monkeypatch) -> None:
     harness = ActionExecutionHarness(
         llm=FakeActionLLM([tool_response("slash_invoke", {"command": "/health", "args": []})])
     )
-    session = ReplSession()
+    session = Session()
 
     result = run_action_tool_turn(
         "check health",
@@ -110,7 +110,7 @@ def test_generic_registered_action_tool_result_marks_turn_handled() -> None:
 
     result = run_action_agent_turn(
         "send a fake message",
-        ReplSession(),
+        Session(),
         output=_OutputSink(harness.console),
         tools=_GenericActionToolProvider(tool),
         deps=harness.deps,
@@ -136,7 +136,7 @@ def test_literal_slash_command_dispatches_deterministically_without_llm(
 
     def _fake_dispatch(
         command: str,
-        session: ReplSession,
+        session: Session,
         console: Console,
         **_kwargs: object,
     ) -> bool:
@@ -146,7 +146,7 @@ def test_literal_slash_command_dispatches_deterministically_without_llm(
 
     monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
     harness = ActionExecutionHarness(llm=FakeActionLLM([no_tool_response()]))
-    session = ReplSession()
+    session = Session()
 
     result = run_action_tool_turn(
         "/sessions",
@@ -169,7 +169,7 @@ def test_literal_slash_command_forwards_args_without_llm(monkeypatch) -> None:
 
     def _fake_dispatch(
         command: str,
-        session: ReplSession,
+        session: Session,
         console: Console,
         **_kwargs: object,
     ) -> bool:
@@ -182,7 +182,7 @@ def test_literal_slash_command_forwards_args_without_llm(monkeypatch) -> None:
 
     result = run_action_tool_turn(
         "/login chatgpt",
-        ReplSession(),
+        Session(),
         harness.console,
         deps=harness.deps,
     )
@@ -204,7 +204,7 @@ def test_natural_language_still_routes_through_action_agent(monkeypatch) -> None
 
     result = run_action_tool_turn(
         "log me in please",
-        ReplSession(),
+        Session(),
         harness.console,
         deps=harness.deps,
     )
@@ -222,7 +222,7 @@ def test_execute_with_harness_hands_off_handoff_only_tool_call() -> None:
 
     result = run_action_tool_turn(
         "half actionable prompt",
-        ReplSession(),
+        Session(),
         harness.console,
         deps=harness.deps,
     )
@@ -237,7 +237,7 @@ def test_execute_with_harness_handles_llm_unavailable() -> None:
     def _raise() -> object:
         raise RuntimeError("action agent unavailable")
 
-    session = ReplSession()
+    session = Session()
     result = run_action_tool_turn(
         "action agent outage",
         session,

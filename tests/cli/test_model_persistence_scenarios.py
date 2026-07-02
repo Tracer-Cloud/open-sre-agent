@@ -10,7 +10,7 @@ from rich.console import Console
 
 import surfaces.cli.wizard.env_sync as env_sync
 import surfaces.cli.wizard.store as wizard_store
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from surfaces.cli.wizard.config import PROJECT_ENV_PATH, PROJECT_ROOT, PROVIDER_BY_VALUE
 from surfaces.interactive_shell.command_registry import dispatch_slash
 from surfaces.interactive_shell.command_registry import repl_data as repl_data_module
@@ -129,7 +129,7 @@ class TestReplModelPersistence:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
 
         console, buf = _capture()
-        ok = dispatch_slash("/model set anthropic claude-opus-4-7", ReplSession(), console)
+        ok = dispatch_slash("/model set anthropic claude-opus-4-7", Session(), console)
         assert ok is True
         assert "switched LLM provider" in buf.getvalue()
 
@@ -161,7 +161,7 @@ class TestReplModelPersistence:
         )
 
         console, _ = _capture()
-        dispatch_slash("/model set claude-opus-4-7", ReplSession(), console)
+        dispatch_slash("/model set claude-opus-4-7", Session(), console)
 
         env_body = persistence_paths["env"].read_text(encoding="utf-8")
         assert "ANTHROPIC_REASONING_MODEL=claude-opus-4-7" in env_body
@@ -184,7 +184,7 @@ class TestReplModelPersistence:
         console, buf = _capture()
         ok = dispatch_slash(
             "/model set anthropic claude-opus-4-7 --toolcall-model claude-haiku-4-5",
-            ReplSession(),
+            Session(),
             console,
         )
         assert ok is True
@@ -217,7 +217,7 @@ class TestReplModelPersistence:
         )
 
         console, _ = _capture()
-        dispatch_slash("/model toolcall set claude-haiku-4-5-20251001", ReplSession(), console)
+        dispatch_slash("/model toolcall set claude-haiku-4-5-20251001", Session(), console)
 
         assert "ANTHROPIC_TOOLCALL_MODEL=claude-haiku-4-5-20251001" in persistence_paths[
             "env"
@@ -237,7 +237,7 @@ class TestReplModelPersistence:
         monkeypatch.setenv("LLM_PROVIDER", "anthropic")
 
         console, _ = _capture()
-        dispatch_slash("/model restore anthropic", ReplSession(), console)
+        dispatch_slash("/model restore anthropic", Session(), console)
 
         default_model = PROVIDER_BY_VALUE["anthropic"].default_model
         env_body = persistence_paths["env"].read_text(encoding="utf-8")
@@ -257,7 +257,7 @@ class TestReplModelPersistence:
         monkeypatch.setenv("LLM_PROVIDER", "openai")
 
         console, buf = _capture()
-        dispatch_slash("/model set anthropic", ReplSession(), console)
+        dispatch_slash("/model set anthropic", Session(), console)
 
         assert "missing credential for anthropic" in buf.getvalue()
         assert not persistence_paths["env"].exists()
@@ -271,7 +271,7 @@ class TestReplModelPersistence:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
 
         console, buf = _capture()
-        dispatch_slash("/model set anthropic not-a-real-model-xyz", ReplSession(), console)
+        dispatch_slash("/model set anthropic not-a-real-model-xyz", Session(), console)
 
         assert "unknown model for anthropic" in buf.getvalue()
         assert not persistence_paths["env"].exists()

@@ -12,7 +12,7 @@ from unittest.mock import MagicMock
 import pytest
 from rich.console import Console
 
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from integrations.llm_cli.base import CLIInvocation, CLIProbe
 from platform.common.task_types import TaskKind, TaskStatus
 from surfaces.interactive_shell.runtime.subprocess_runner import (
@@ -107,7 +107,7 @@ def test_run_pwd_command_prints_cwd(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(Path, "cwd", classmethod(_fake_cwd))
 
-    session = ReplSession()
+    session = Session()
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)
 
@@ -117,7 +117,7 @@ def test_run_pwd_command_prints_cwd(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_run_pwd_command_rejects_multiple_tokens() -> None:
-    session = ReplSession()
+    session = Session()
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)
 
@@ -137,7 +137,7 @@ def test_run_cd_command_chdirs_to_target(monkeypatch: pytest.MonkeyPatch) -> Non
         _chdir,
     )
 
-    session = ReplSession()
+    session = Session()
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)
 
@@ -161,7 +161,7 @@ def test_run_cd_command_reports_chdir_failure(monkeypatch: pytest.MonkeyPatch) -
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
 
-    session = ReplSession()
+    session = Session()
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)
 
@@ -185,7 +185,7 @@ def test_run_shell_command_records_when_input_is_empty() -> None:
     never echoes a command, and records the attempt as ``ok=False``. (Restricted
     commands like ``sudo`` are no longer blocked — there is no deny floor.)
     """
-    session = ReplSession()
+    session = Session()
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)
 
@@ -276,7 +276,7 @@ def test_run_claude_code_implementation_starts_tracked_task(
         _ImmediateThread,
     )
 
-    session = ReplSession()
+    session = Session()
     session.agent.messages.append(
         ("assistant", "Process auto-discovery should scan local agent processes.")
     )
@@ -313,7 +313,7 @@ def test_run_claude_code_implementation_starts_tracked_task(
 
 
 def test_run_claude_code_implementation_rejects_vague_request_without_context() -> None:
-    session = ReplSession()
+    session = Session()
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)
 
@@ -348,7 +348,7 @@ def test_run_shell_command_silent_success_prints_checkmark(monkeypatch: pytest.M
         _fake_execute,
     )
 
-    session = ReplSession()
+    session = Session()
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)
 
@@ -377,7 +377,7 @@ def test_run_shell_command_success_records_stdout_without_stderr_noise(
         _fake_execute,
     )
 
-    session = ReplSession()
+    session = Session()
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)
 
@@ -413,7 +413,7 @@ def test_run_shell_command_failure_prints_exit_line(monkeypatch: pytest.MonkeyPa
         _fake_execute,
     )
 
-    session = ReplSession()
+    session = Session()
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)
 
@@ -444,7 +444,7 @@ def test_run_shell_command_reports_start_failure(monkeypatch: pytest.MonkeyPatch
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
 
-    session = ReplSession()
+    session = Session()
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)
 
@@ -479,7 +479,7 @@ def test_run_opensre_agents_scan_prints_clean_foreground_output(
         _fake_run,
     )
 
-    session = ReplSession()
+    session = Session()
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)
 
@@ -510,7 +510,7 @@ def test_run_opensre_agents_scan_register_explains_confirmation(
         _fake_run,
     )
 
-    session = ReplSession()
+    session = Session()
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)
 
@@ -557,7 +557,7 @@ def test_run_opensre_agents_watch_runs_in_foreground(
         _fake_popen,
     )
 
-    session = ReplSession()
+    session = Session()
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)
 
@@ -638,7 +638,7 @@ def test_start_background_cli_task_uses_pty_for_live_terminal_output(
         _ImmediateThread,
     )
 
-    session = ReplSession()
+    session = Session()
     buf = _TtyBuffer()
     console = Console(file=buf, force_terminal=True)
 
@@ -695,7 +695,7 @@ def test_start_background_cli_task_falls_back_to_pipes_when_pty_unavailable(
         _ImmediateThread,
     )
 
-    session = ReplSession()
+    session = Session()
     buf = _TtyBuffer()
     console = Console(file=buf, force_terminal=True)
 
@@ -749,7 +749,7 @@ def test_start_background_cli_task_logs_failure_outcome_to_posthog(
         _ImmediateThread,
     )
 
-    session = ReplSession()
+    session = Session()
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)
 
@@ -807,7 +807,7 @@ def test_start_background_cli_task_logs_success_outcome_to_posthog(
         _ImmediateThread,
     )
 
-    session = ReplSession()
+    session = Session()
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)
 
@@ -844,7 +844,7 @@ def test_task_output_stream_reports_unexpected_failure(
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
 
-    session = ReplSession()
+    session = Session()
     task = session.task_registry.create(TaskKind.CLI_COMMAND, command="demo")
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)
@@ -911,7 +911,7 @@ def test_start_background_cli_task_reports_spawn_failure(
         _fake_popen,
     )
 
-    session = ReplSession()
+    session = Session()
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)
 
@@ -963,7 +963,7 @@ def test_start_background_cli_task_reports_watcher_failure(
         lambda _buf: (_ for _ in ()).throw(RuntimeError("diag broke")),
     )
 
-    session = ReplSession()
+    session = Session()
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)
 
@@ -1026,7 +1026,7 @@ def test_start_background_cli_task_skips_follow_up_after_session_reset(
         _fake_popen,
     )
 
-    session = ReplSession()
+    session = Session()
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)
 
@@ -1066,7 +1066,7 @@ def test_watch_synthetic_subprocess_reports_daemon_failure(
         _ImmediateThread,
     )
 
-    session = ReplSession()
+    session = Session()
     task = session.task_registry.create(TaskKind.SYNTHETIC_TEST, command="suite")
     task.mark_running()
     buf = io.StringIO()
@@ -1089,7 +1089,7 @@ def test_watch_synthetic_subprocess_reports_daemon_failure(
 
 
 def test_run_synthetic_test_unknown_suite_records_failure() -> None:
-    session = ReplSession()
+    session = Session()
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)
 
@@ -1128,7 +1128,7 @@ def test_run_synthetic_test_streams_subprocess_output(
         _ImmediateThread,
     )
 
-    session = ReplSession()
+    session = Session()
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)
 
@@ -1179,7 +1179,7 @@ def test_run_synthetic_test_honours_explicit_scenario(
         _ImmediateThread,
     )
 
-    session = ReplSession()
+    session = Session()
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)
 
@@ -1221,7 +1221,7 @@ def test_run_synthetic_test_all_launches_suite_alias(
         _ImmediateThread,
     )
 
-    session = ReplSession()
+    session = Session()
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)
 
@@ -1283,7 +1283,7 @@ def _start_one_task(console: Console) -> None:
     start_background_cli_task(
         display_command="opensre tests synthetic --scenario 001-replication-lag",
         argv_list=["opensre", "tests", "synthetic", "--scenario", "001-replication-lag"],
-        session=ReplSession(),
+        session=Session(),
         console=console,
         kind=TaskKind.SYNTHETIC_TEST,
     )
@@ -1366,7 +1366,7 @@ def test_run_synthetic_test_forwards_columns_to_subprocess(
 
     run_synthetic_test(
         "rds_postgres:005-failover",
-        ReplSession(),
+        Session(),
         console,
         confirm_fn=lambda _prompt: "y",
         is_tty=True,
@@ -1439,7 +1439,7 @@ def test_run_opensre_cli_command_refuses_onboard_with_helpful_message(
         _fake_run,
     )
 
-    session = ReplSession()
+    session = Session()
     buf = io.StringIO()
     # Width >80 so the multi-line warning doesn't wrap mid-substring on
     # the assertions below.
@@ -1488,7 +1488,7 @@ def test_run_opensre_cli_command_refuses_integrations_setup_with_helpful_message
         lambda cmd, **_kw: run_calls.append(cmd),
     )
 
-    session = ReplSession()
+    session = Session()
     buf = io.StringIO()
     # Width >80 so the multi-line warning doesn't wrap mid-substring on
     # assertions below.
@@ -1537,7 +1537,7 @@ def test_run_opensre_cli_command_skips_confirmation_for_investigate(
         _fake_start_background_cli_task,
     )
 
-    session = ReplSession()
+    session = Session()
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)
 
@@ -1579,7 +1579,7 @@ def test_run_opensre_cli_command_allows_integrations_list_without_blocking(
         _fake_start_background_cli_task,
     )
 
-    session = ReplSession()
+    session = Session()
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)
 

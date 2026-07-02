@@ -32,7 +32,7 @@ from tools.interactive_shell.shared import (
 )
 
 if TYPE_CHECKING:
-    from surfaces.interactive_shell.runtime import ReplSession
+    from surfaces.interactive_shell.runtime import Session
 
 
 def _default_confirm_fn(prompt: str) -> str:
@@ -67,7 +67,7 @@ def _emit_decision(
 def execution_allowed(
     result: ExecutionPolicyResult,
     *,
-    session: ReplSession,
+    session: Session,
     console: Console,
     action_summary: str,
     confirm_fn: Callable[[str], str] | None = None,

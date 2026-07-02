@@ -14,7 +14,7 @@ from typing import Any
 from rich.console import Console
 from rich.markup import escape
 
-from surfaces.interactive_shell.runtime import ReplSession, TaskKind, TaskRecord
+from surfaces.interactive_shell.runtime import Session, TaskKind, TaskRecord
 from surfaces.interactive_shell.runtime.subprocess_runner.task_streaming import (
     _SYNTHETIC_DIAG_CHARS,
     _SYNTHETIC_POLL_SECONDS,
@@ -38,7 +38,7 @@ _SYNTHETIC_SCENARIO_ID_RE = re.compile(r"^\d{3}-[a-z0-9][a-z0-9-]*$")
 def watch_synthetic_subprocess(
     task: TaskRecord,
     proc: subprocess.Popen[Any],
-    session: ReplSession,
+    session: Session,
     suite_name: str,
     stderr_buf: tempfile.SpooledTemporaryFile[bytes],  # type: ignore[type-arg]
     console: Console | None = None,
@@ -137,7 +137,7 @@ def watch_synthetic_subprocess(
 
 def run_synthetic_test(
     suite_name: str,
-    session: ReplSession,
+    session: Session,
     console: Console,
     *,
     confirm_fn: Callable[[str], str] | None = None,

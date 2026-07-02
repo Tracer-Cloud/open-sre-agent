@@ -14,7 +14,7 @@ from rich.markup import escape
 from platform.common.errors import OpenSREError
 from surfaces.interactive_shell.runtime import (
     BackgroundInvestigationRecord,
-    ReplSession,
+    Session,
     TaskKind,
 )
 from surfaces.interactive_shell.runtime.background.notifications import (
@@ -33,7 +33,7 @@ def _safe_console_print(console: Console, message: str) -> None:
         console.print(message)
 
 
-def drain_background_notices(session: ReplSession, console: Console) -> None:
+def drain_background_notices(session: Session, console: Console) -> None:
     """Print queued background investigation status lines on the main REPL thread."""
     for message in session.drain_background_notices():
         _safe_console_print(console, message)
@@ -92,7 +92,7 @@ def _stats(final_state: dict[str, Any]) -> dict[str, Any]:
 
 def _start_background_investigation(
     *,
-    session: ReplSession,
+    session: Session,
     console: Console,
     display_command: str,
     run_fn: BackgroundRunFn,
@@ -167,7 +167,7 @@ def _start_background_investigation(
 def start_background_text_investigation(
     *,
     alert_text: str,
-    session: ReplSession,
+    session: Session,
     console: Console,
     display_command: str = "background free-text investigation",
 ) -> str:
@@ -188,7 +188,7 @@ def start_background_text_investigation(
 def start_background_template_investigation(
     *,
     template_name: str,
-    session: ReplSession,
+    session: Session,
     console: Console,
     display_command: str,
 ) -> str:

@@ -6,7 +6,7 @@ from rich.console import Console
 from rich.markup import escape
 
 from surfaces.interactive_shell.command_registry.types import SlashCommand
-from surfaces.interactive_shell.runtime import ReplSession
+from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui import (
     BOLD_BRAND,
     DIM,
@@ -28,7 +28,7 @@ _BACKGROUND_FIRST_ARGS: tuple[tuple[str, str], ...] = (
 )
 
 
-def _render_background_status(session: ReplSession, console: Console) -> None:
+def _render_background_status(session: Session, console: Console) -> None:
     table = repl_table(title="Background mode\n", title_style=BOLD_BRAND, show_header=False)
     table.add_column("key", style="bold")
     table.add_column("value")
@@ -41,7 +41,7 @@ def _render_background_status(session: ReplSession, console: Console) -> None:
     print_repl_table(console, table)
 
 
-def _cmd_background(session: ReplSession, console: Console, args: list[str]) -> bool:
+def _cmd_background(session: Session, console: Console, args: list[str]) -> bool:
     sub = (args[0].lower() if args else "status").strip()
 
     if sub == "on":

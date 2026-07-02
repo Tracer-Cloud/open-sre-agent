@@ -35,7 +35,7 @@ Design notes:
 
 When NOT to use this:
 - Unit tests that mock the console — keep those in tests/cli/.
-- Tests that only need SessionStore / ReplSession — use tmp_path fixtures.
+- Tests that only need SessionStore / Session — use tmp_path fixtures.
 - Tests that need a real LLM response — use make test-rca instead;
   LLM latency makes pty timing unreliable.
 """

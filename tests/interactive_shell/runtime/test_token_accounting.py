@@ -15,7 +15,7 @@ from core.agent_harness.accounting.token_accounting import (
     format_token_total,
     record_llm_turn,
 )
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from surfaces.interactive_shell.runtime.shell_turn_execution import answer_shell_question
 from surfaces.interactive_shell.ui.streaming import _CHARS_PER_TOKEN
 
@@ -26,7 +26,7 @@ def test_estimate_tokens_uses_chars_per_token_ratio() -> None:
 
 
 def test_record_token_usage_accumulates_on_session() -> None:
-    session = ReplSession()
+    session = Session()
     record_llm_turn(session, prompt="a" * 40, response="b" * 20)
     assert session.token_usage == {
         "input": 10,
@@ -47,7 +47,7 @@ def test_record_token_usage_accumulates_on_session() -> None:
 
 
 def test_record_llm_turn_uses_provider_counts_when_present() -> None:
-    session = ReplSession()
+    session = Session()
     inp, out, estimated = record_llm_turn(
         session,
         prompt="ignored when counts supplied",
@@ -66,7 +66,7 @@ def test_record_llm_turn_uses_provider_counts_when_present() -> None:
 
 
 def test_format_token_total_shows_mixed_breakdown() -> None:
-    session = ReplSession()
+    session = Session()
     record_llm_turn(
         session,
         prompt="x",
@@ -86,7 +86,7 @@ def test_format_token_total_shows_mixed_breakdown() -> None:
 
 
 def test_build_llm_run_info_records_tokens_and_metadata() -> None:
-    session = ReplSession()
+    session = Session()
 
     class _Client:
         _model = "claude-test"
@@ -118,7 +118,7 @@ def test_coerce_usage_tokens_accepts_float_counts() -> None:
 
 
 def test_record_token_usage_skips_zero_counts() -> None:
-    session = ReplSession()
+    session = Session()
     session.record_token_usage()
     assert session.token_usage == {}
     assert session.llm_call_count == 0
@@ -137,7 +137,7 @@ class _FakeLLMClient:
 def test_answer_shell_question_records_session_token_usage(monkeypatch: Any) -> None:
     client = _FakeLLMClient("assistant reply")
     monkeypatch.setattr("core.llm.llm_client.get_llm_for_reasoning", lambda: client)
-    session = ReplSession()
+    session = Session()
     console = Console(file=io.StringIO(), force_terminal=False)
     answer_shell_question("hello", session, console)
     assert session.token_usage["input"] > 0

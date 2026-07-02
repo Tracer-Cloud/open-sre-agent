@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from surfaces.interactive_shell.ui.components.choice_menu import repl_tty_interactive
 
 
@@ -75,14 +75,14 @@ _WAIT_FOR_COMPLETION_COMMANDS: frozenset[str] = frozenset(
 )
 
 
-def turn_should_show_spinner(text: str, _session: ReplSession) -> bool:
+def turn_should_show_spinner(text: str, _session: Session) -> bool:
     # UI-only: suppress the "thinking" spinner for literal slash commands, which
     # dispatch deterministically (no LLM) and would otherwise show a misleading
     # spinner. Natural-language turns still go through the action-agent LLM.
     return _literal_slash_command_text(text.strip()) is None
 
 
-def turn_needs_exclusive_stdin(text: str, _session: ReplSession) -> bool:
+def turn_needs_exclusive_stdin(text: str, _session: Session) -> bool:
     if not repl_tty_interactive():
         return False
 

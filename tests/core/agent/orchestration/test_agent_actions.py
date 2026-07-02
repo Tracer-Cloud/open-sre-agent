@@ -20,7 +20,7 @@ import tools.interactive_shell.actions.implementation as implementation_tool
 import tools.interactive_shell.actions.llm_provider as llm_provider_tool
 import tools.interactive_shell.actions.slash as slash_tool
 import tools.interactive_shell.shell.execution as shell_execution
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from core.llm.types import AgentLLMResponse, ToolCall
 from platform.common.task_types import TaskKind, TaskStatus
 from tests.core.agent._planned_action import (
@@ -270,7 +270,7 @@ def test_execute_cli_actions_dispatches_planned_commands(monkeypatch: object) ->
 
     def _fake_dispatch(
         command: str,
-        session: ReplSession,
+        session: Session,
         console: Console,
         **_kwargs: object,
     ) -> bool:
@@ -281,7 +281,7 @@ def test_execute_cli_actions_dispatches_planned_commands(monkeypatch: object) ->
 
     monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
 
-    session = ReplSession()
+    session = Session()
     console, buf = _capture()
     handled = shell_turn_execution.run_action_tool_turn(
         "check the health of my opensre and then show me all connected services",
@@ -337,7 +337,7 @@ def test_execute_cli_actions_skips_remaining_actions_when_cancelled(
 
     def _fake_dispatch(
         command: str,
-        session: ReplSession,
+        session: Session,
         console: Console,
         **_kwargs: object,
     ) -> bool:
@@ -348,7 +348,7 @@ def test_execute_cli_actions_skips_remaining_actions_when_cancelled(
 
     monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
 
-    session = ReplSession()
+    session = Session()
     inner_console, buf = _capture()
     console = _CancelAfterFirst(inner_console, dispatched)
     handled = shell_turn_execution.run_action_tool_turn(
@@ -374,7 +374,7 @@ def test_execute_cli_actions_falls_through_for_local_llama_request(monkeypatch: 
 
     def _fake_dispatch(
         command: str,
-        session: ReplSession,
+        session: Session,
         console: Console,
         **_kwargs: object,
     ) -> bool:
@@ -385,7 +385,7 @@ def test_execute_cli_actions_falls_through_for_local_llama_request(monkeypatch: 
 
     monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
 
-    session = ReplSession()
+    session = Session()
     console, _ = _capture()
     handled = shell_turn_execution.run_action_tool_turn(
         "please connect to local llama", session, console
@@ -407,7 +407,7 @@ def test_execute_cli_actions_switches_llm_provider(monkeypatch: object) -> None:
 
     monkeypatch.setattr(llm_provider_tool, "switch_llm_provider", _fake_switch)
 
-    session = ReplSession()
+    session = Session()
     console, buf = _capture()
     handled = shell_turn_execution.run_action_tool_turn(
         "switch from the current ollama model to setting the model to anthropic",
@@ -434,7 +434,7 @@ def test_execute_cli_actions_records_llm_provider_failure(monkeypatch: object) -
 
     monkeypatch.setattr(llm_provider_tool, "switch_llm_provider", _fake_switch)
 
-    session = ReplSession()
+    session = Session()
     console, _ = _capture()
     handled = shell_turn_execution.run_action_tool_turn(
         "switch from the current ollama model to setting the model to anthropic",
@@ -475,7 +475,7 @@ def test_execute_cli_actions_sets_bare_model_for_active_provider(
         lambda model, console: (reasoning_models.append(model), console.print(model), True)[2],
     )
 
-    session = ReplSession()
+    session = Session()
     console, buf = _capture()
     handled = shell_turn_execution.run_action_tool_turn("switch model to gpt 5.5", session, console)
 
@@ -490,7 +490,7 @@ def test_execute_cli_actions_runs_implementation_action(monkeypatch: object) -> 
 
     def _fake_run_implementation(
         request: str,
-        session: ReplSession,
+        session: Session,
         console: Console,
         **_kwargs: object,
     ) -> None:
@@ -504,7 +504,7 @@ def test_execute_cli_actions_runs_implementation_action(monkeypatch: object) -> 
         _fake_run_implementation,
     )
 
-    session = ReplSession()
+    session = Session()
     console, buf = _capture()
     handled = shell_turn_execution.run_action_tool_turn(
         "please implement /history search", session, console
@@ -527,7 +527,7 @@ def test_execute_cli_actions_answers_discord_then_dispatches_datadog(
 
     def _fake_dispatch(
         command: str,
-        session: ReplSession,
+        session: Session,
         console: Console,
         **_kwargs: object,
     ) -> bool:
@@ -538,7 +538,7 @@ def test_execute_cli_actions_answers_discord_then_dispatches_datadog(
 
     monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
 
-    session = ReplSession()
+    session = Session()
     console, buf = _capture()
     handled = shell_turn_execution.run_action_tool_turn(
         (
@@ -566,7 +566,7 @@ def test_compound_prompt_executes_all_supported_tasks(monkeypatch: object) -> No
 
     def _fake_dispatch(
         command: str,
-        session: ReplSession,
+        session: Session,
         console: Console,
         **_kwargs: object,
     ) -> bool:
@@ -577,7 +577,7 @@ def test_compound_prompt_executes_all_supported_tasks(monkeypatch: object) -> No
 
     monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
 
-    session = ReplSession()
+    session = Session()
     console, buf = _capture()
     handled = shell_turn_execution.run_action_tool_turn(
         (
@@ -608,7 +608,7 @@ def test_nitro_prompt_executes_remote_then_investigation(monkeypatch: object) ->
 
     def _fake_dispatch(
         command: str,
-        session: ReplSession,
+        session: Session,
         console: Console,
         **_kwargs: object,
     ) -> bool:
@@ -636,7 +636,7 @@ def test_nitro_prompt_executes_remote_then_investigation(monkeypatch: object) ->
         _fake_run_investigation_for_session,
     )
 
-    session = ReplSession()
+    session = Session()
     console, buf = _capture()
     handled = shell_turn_execution.run_action_tool_turn(_NITRO_PROMPT, session, console)
 
@@ -655,7 +655,7 @@ def test_services_version_deploy_prompt_executes_in_order(monkeypatch: object) -
 
     def _fake_dispatch(
         command: str,
-        session: ReplSession,
+        session: Session,
         console: Console,
         **_kwargs: object,
     ) -> bool:
@@ -666,7 +666,7 @@ def test_services_version_deploy_prompt_executes_in_order(monkeypatch: object) -
 
     monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
 
-    session = ReplSession()
+    session = Session()
     console, buf = _capture()
     handled = shell_turn_execution.run_action_tool_turn(
         (
@@ -709,7 +709,7 @@ def test_execute_cli_actions_runs_sample_alert(monkeypatch: object) -> None:
         _fake_run_sample_alert_for_session,
     )
 
-    session = ReplSession()
+    session = Session()
     console, buf = _capture()
 
     assert (
@@ -753,7 +753,7 @@ def test_execute_cli_actions_sample_alert_opensre_error_marks_task_failed(
 
     monkeypatch.setattr(investigation_module, "run_sample_alert_for_session", _raise)
 
-    session = ReplSession()
+    session = Session()
     console, _ = _capture()
     assert (
         shell_turn_execution.run_action_tool_turn(
@@ -775,7 +775,7 @@ def test_execute_cli_actions_lists_all_actions_before_synthetic_rds(monkeypatch:
 
     def _fake_dispatch(
         command: str,
-        session: ReplSession,
+        session: Session,
         console: Console,
         **_kwargs: object,
     ) -> bool:
@@ -794,7 +794,7 @@ def test_execute_cli_actions_lists_all_actions_before_synthetic_rds(monkeypatch:
     monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
     monkeypatch.setattr(subprocess_runner.subprocess, "Popen", _fake_popen)
 
-    session = ReplSession()
+    session = Session()
     console, buf = _capture()
     handled = shell_turn_execution.run_action_tool_turn(
         "show me which services are connected and after that run a synthetic test RDS database",
@@ -855,7 +855,7 @@ def test_execute_cli_actions_runs_requested_synthetic_scenario(monkeypatch: obje
 
     monkeypatch.setattr(subprocess_runner.subprocess, "Popen", _fake_popen)
 
-    session = ReplSession()
+    session = Session()
     console, buf = _capture()
     handled = shell_turn_execution.run_action_tool_turn(
         "run synthetic test 005-failover", session, console
@@ -867,7 +867,7 @@ def test_execute_cli_actions_runs_requested_synthetic_scenario(monkeypatch: obje
 
 
 def test_execute_cli_actions_cancels_single_running_synthetic_task() -> None:
-    session = ReplSession()
+    session = Session()
     session.trust_mode = True
     task = session.task_registry.create(TaskKind.SYNTHETIC_TEST)
     task.mark_running()
@@ -906,7 +906,7 @@ def test_partial_match_executes_matched_clause_and_drops_unhandled(monkeypatch: 
 
     def _fake_dispatch(
         command: str,
-        session: ReplSession,
+        session: Session,
         console: Console,
         **_kwargs: object,
     ) -> bool:
@@ -917,7 +917,7 @@ def test_partial_match_executes_matched_clause_and_drops_unhandled(monkeypatch: 
 
     monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
 
-    session = ReplSession()
+    session = Session()
     console, buf = _capture()
 
     # "sing a song" is chatty filler; v0.1 drops it and still runs the matched
@@ -932,7 +932,7 @@ def test_partial_match_executes_matched_clause_and_drops_unhandled(monkeypatch: 
 
 
 def test_execute_cli_actions_falls_through_for_chat() -> None:
-    session = ReplSession()
+    session = Session()
     console, _ = _capture()
 
     assert shell_turn_execution.run_action_tool_turn("hey", session, console).handled is False
@@ -949,7 +949,7 @@ def test_execute_cli_actions_runs_shell_command(monkeypatch: object) -> None:
     monkeypatch.setattr(subprocess_runner.Path, "cwd", classmethod(_fake_cwd))
     monkeypatch.setattr(shell_execution.subprocess, "run", _fail_run)
 
-    session = ReplSession()
+    session = Session()
     console, buf = _capture()
 
     assert shell_turn_execution.run_action_tool_turn("run `pwd`", session, console).handled is True
@@ -970,7 +970,7 @@ def test_execute_cli_actions_cd_preserves_windows_paths(monkeypatch: object) -> 
     monkeypatch.setattr(platform_module, "IS_WINDOWS", True)
     monkeypatch.setattr(subprocess_runner.os, "chdir", _fake_chdir)
 
-    session = ReplSession()
+    session = Session()
     console, _ = _capture()
 
     message = r"run `cd C:\Users\Alice`"
@@ -994,7 +994,7 @@ def test_execute_cli_actions_cd_dispatches_case_insensitively(monkeypatch: objec
     monkeypatch.setattr(subprocess_runner.os, "chdir", _fake_chdir)
     monkeypatch.setattr(shell_execution.subprocess, "run", _fail_run)
 
-    session = ReplSession()
+    session = Session()
     console, _ = _capture()
 
     message = r"run `CD C:\Users\Alice`"
@@ -1014,7 +1014,7 @@ def test_execute_cli_actions_cd_handles_trailing_backslash_on_windows(monkeypatc
     monkeypatch.setattr(platform_module, "IS_WINDOWS", True)
     monkeypatch.setattr(subprocess_runner.os, "chdir", _fake_chdir)
 
-    session = ReplSession()
+    session = Session()
     console, _ = _capture()
 
     message = r"run `cd C:\`"
@@ -1034,7 +1034,7 @@ def test_execute_cli_actions_cd_strips_quotes_on_windows(monkeypatch: object) ->
     monkeypatch.setattr(platform_module, "IS_WINDOWS", True)
     monkeypatch.setattr(subprocess_runner.os, "chdir", _fake_chdir)
 
-    session = ReplSession()
+    session = Session()
     console, _ = _capture()
 
     message = r'run `cd "C:\Users\Alice"`'
@@ -1060,7 +1060,7 @@ def test_execute_cli_actions_records_shell_failure(monkeypatch: object) -> None:
 
     monkeypatch.setattr(shell_execution.subprocess, "run", _fake_run)
 
-    session = ReplSession()
+    session = Session()
     console, buf = _capture()
 
     assert (
@@ -1102,7 +1102,7 @@ def test_execute_cli_actions_shell_command_times_out(monkeypatch: object) -> Non
 
     monkeypatch.setattr(shell_execution.subprocess, "run", _timeout)
 
-    session = ReplSession()
+    session = Session()
     console, buf = _capture()
 
     assert shell_turn_execution.run_action_tool_turn("run `true`", session, console).handled is True
@@ -1132,7 +1132,7 @@ def test_execute_cli_actions_runs_passthrough_with_shell_true(monkeypatch: objec
 
     monkeypatch.setattr(shell_execution.subprocess, "run", _fake_run)
 
-    session = ReplSession()
+    session = Session()
     console, buf = _capture()
 
     assert (
@@ -1176,7 +1176,7 @@ def test_execute_cli_actions_dispatches_bang_cd_through_builtin(monkeypatch: obj
     monkeypatch.setattr(subprocess_runner.os, "chdir", _fake_chdir)
     monkeypatch.setattr(shell_execution.subprocess, "run", _boom)
 
-    session = ReplSession()
+    session = Session()
     console, buf = _capture()
 
     message = "run `!cd /tmp`"
@@ -1197,7 +1197,7 @@ def test_execute_cli_actions_dispatches_bang_pwd_through_builtin(monkeypatch: ob
     monkeypatch.setattr(subprocess_runner.Path, "cwd", classmethod(_fake_cwd))
     monkeypatch.setattr(shell_execution.subprocess, "run", _boom)
 
-    session = ReplSession()
+    session = Session()
     console, buf = _capture()
 
     assert shell_turn_execution.run_action_tool_turn("run `!pwd`", session, console).handled is True
@@ -1208,7 +1208,7 @@ def test_execute_cli_actions_dispatches_bang_pwd_through_builtin(monkeypatch: ob
 
 
 def test_execute_cli_actions_handles_path_with_spaces_run_phrase() -> None:
-    session = ReplSession()
+    session = Session()
     console, buf = _capture()
     result = shell_turn_execution.run_action_tool_turn(
         'run cat "/tmp/file with spaces.txt"', session, console
@@ -1233,7 +1233,7 @@ def test_execute_cli_actions_backtick_shell_preserves_space_path_token(monkeypat
 
     monkeypatch.setattr(shell_execution.subprocess, "run", _fake_run)
 
-    session = ReplSession()
+    session = Session()
     console, _ = _capture()
 
     assert (
@@ -1266,7 +1266,7 @@ def test_execute_cli_actions_counts_planned_and_executed(monkeypatch: object) ->
         ),
     )
 
-    session = ReplSession()
+    session = Session()
     console, _ = _capture()
     # Analytics now fire from ShellTurnAccounting inside execute_shell_turn,
     # not from run_action_tool_turn directly. Drive the full turn with a no-op
@@ -1296,7 +1296,7 @@ def test_execute_cli_actions_persists_action_agent_llm_unavailable(
 
     monkeypatch.setattr(_ACTION_LLM_FACTORY_PATCH, _raise)
 
-    session = ReplSession()
+    session = Session()
     console, buf = _capture()
     handled = shell_turn_execution.run_action_tool_turn("check health", session, console)
 
@@ -1319,7 +1319,7 @@ def test_execute_cli_actions_executes_matched_clause_ignoring_unhandled(
 
     def _fake_dispatch(
         command: str,
-        session: ReplSession,
+        session: Session,
         console: Console,
         **_kwargs: object,
     ) -> bool:
@@ -1344,7 +1344,7 @@ def test_execute_cli_actions_executes_matched_clause_ignoring_unhandled(
         ),
     )
 
-    session = ReplSession()
+    session = Session()
     console, _ = _capture()
     # Analytics now fire from ShellTurnAccounting inside execute_shell_turn.
     result = execute_shell_turn(
@@ -1386,7 +1386,7 @@ def test_execute_cli_actions_bang_prefix_uses_only_explicit_shell_escape(
 
     monkeypatch.setattr(shell_execution.subprocess, "run", _fake_run)
 
-    session = ReplSession()
+    session = Session()
     console, buf = _capture()
 
     # Multiline !cmd with internal whitespace — the exact shape the user types.
@@ -1428,7 +1428,7 @@ def test_execute_cli_actions_bang_prefix_single_line_dispatches_to_shell(
 
     monkeypatch.setattr(shell_execution.subprocess, "run", _fake_run)
 
-    session = ReplSession()
+    session = Session()
     console, _ = _capture()
 
     handled = shell_turn_execution.run_action_tool_turn("!echo hello world", session, console)
@@ -1472,7 +1472,7 @@ def test_execute_cli_actions_handoff_only_plan_falls_through_silently(
         ),
     )
 
-    session = ReplSession()
+    session = Session()
     console, buf = _capture()
     result = shell_turn_execution.run_action_tool_turn(
         "what is our current model?", session, console

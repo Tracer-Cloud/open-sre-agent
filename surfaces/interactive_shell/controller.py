@@ -12,7 +12,7 @@ from prompt_toolkit.patch_stdout import patch_stdout
 from rich.console import Console
 
 from config.repl_config import ReplConfig
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from core.domain.alerts import inbox as _alert_inbox
 from surfaces.interactive_shell.runtime.background.workers import BackgroundTaskManager
 from surfaces.interactive_shell.runtime.context import (
@@ -82,7 +82,7 @@ def _alert_listener(
 
 
 def _resolve_runtime_context(
-    session: ReplSession | ReplRuntimeContext | None,
+    session: Session | ReplRuntimeContext | None,
     *,
     state: ReplState | None,
     spinner: SpinnerState | None,
@@ -113,7 +113,7 @@ class InteractiveShellController:
 
     def __init__(
         self,
-        session: ReplSession | ReplRuntimeContext | None = None,
+        session: Session | ReplRuntimeContext | None = None,
         *,
         config: ReplConfig | None = None,
         state: ReplState | None = None,

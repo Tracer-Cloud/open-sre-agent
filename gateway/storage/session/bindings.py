@@ -1,4 +1,4 @@
-"""SQLite-backed mapping from platform chat ids to ReplSession ids."""
+"""SQLite-backed mapping from platform chat ids to Session ids."""
 
 from __future__ import annotations
 

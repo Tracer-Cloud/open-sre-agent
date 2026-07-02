@@ -15,7 +15,7 @@ from rich.console import Console
 
 from core.agent_harness.session import (
     SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST,
-    ReplSession,
+    Session,
 )
 from core.agent_harness.session.tasks import TaskRegistry
 from platform.common.task_types import TaskKind, TaskStatus
@@ -97,7 +97,7 @@ class TestTaskRegistry:
             return next(_ids)
 
         monkeypatch.setattr("core.agent_harness.session.tasks.secrets.token_hex", _fake_hex)
-        session = ReplSession()
+        session = Session()
         session.task_registry.create(TaskKind.INVESTIGATION)
         session.task_registry.create(TaskKind.INVESTIGATION)
         console, buf = _capture()
@@ -206,7 +206,7 @@ class TestTaskRegistry:
         import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
-        session = ReplSession()
+        session = Session()
         session.task_registry = TaskRegistry.persistent()
         task = session.task_registry.create(TaskKind.SYNTHETIC_TEST, command="opensre tests")
         task.mark_running()
@@ -228,13 +228,13 @@ class TestTaskRegistry:
 
 class TestSlashTaskCommands:
     def test_tasks_empty_message(self) -> None:
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         dispatch_slash("/tasks", session, console)
         assert "no tasks" in buf.getvalue().lower()
 
     def test_tasks_shows_recent_rows(self) -> None:
-        session = ReplSession()
+        session = Session()
         t = session.task_registry.create(TaskKind.INVESTIGATION)
         t.mark_running()
         t.mark_completed(result="rc")
@@ -246,19 +246,19 @@ class TestSlashTaskCommands:
         assert "completed" in out
 
     def test_cancel_usage_without_id(self) -> None:
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         dispatch_slash("/cancel", session, console)
         assert "usage" in buf.getvalue().lower()
 
     def test_cancel_unknown_id(self) -> None:
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         dispatch_slash("/cancel deadbeef", session, console)
         assert "no task" in buf.getvalue().lower()
 
     def test_cancel_completed_task_message(self) -> None:
-        session = ReplSession()
+        session = Session()
         t = session.task_registry.create(TaskKind.INVESTIGATION)
         t.mark_running()
         t.mark_completed(result="x")
@@ -267,7 +267,7 @@ class TestSlashTaskCommands:
         assert "already finished" in buf.getvalue().lower()
 
     def test_cancel_running_investigation_signals(self) -> None:
-        session = ReplSession()
+        session = Session()
         t = session.task_registry.create(TaskKind.INVESTIGATION)
         t.mark_running()
         console, buf = _capture()
@@ -277,7 +277,7 @@ class TestSlashTaskCommands:
         assert "Ctrl+C" in out
 
     def test_cancel_running_synthetic_signals_and_terminates_process(self) -> None:
-        session = ReplSession()
+        session = Session()
         t = session.task_registry.create(TaskKind.SYNTHETIC_TEST)
         t.mark_running()
         proc = MagicMock()
@@ -352,7 +352,7 @@ class TestSyntheticSubprocessWatcher:
         proc.poll.return_value = 0
         proc.returncode = 0
 
-        session = ReplSession()
+        session = Session()
         task = session.task_registry.create(TaskKind.SYNTHETIC_TEST)
         task.mark_running()
         task.attach_process(proc)
@@ -378,7 +378,7 @@ class TestSyntheticSubprocessWatcher:
 
         monkeypatch.setattr(ae.threading, "Thread", _ImmediateThread)
 
-        session = ReplSession()
+        session = Session()
         task = session.task_registry.create(TaskKind.SYNTHETIC_TEST)
         task.mark_running()
         proc = MagicMock()
@@ -416,7 +416,7 @@ class TestSyntheticSubprocessWatcher:
 
         monkeypatch.setattr(ae.threading, "Thread", _ImmediateThread)
 
-        session = ReplSession()
+        session = Session()
         task = session.task_registry.create(TaskKind.SYNTHETIC_TEST)
         task.mark_running()
         proc = MagicMock()
@@ -451,7 +451,7 @@ class TestSyntheticSubprocessWatcher:
 
         monkeypatch.setattr(ae.threading, "Thread", _ImmediateThread)
 
-        session = ReplSession()
+        session = Session()
         task = session.task_registry.create(TaskKind.SYNTHETIC_TEST)
         task.mark_running()
         proc = MagicMock()
@@ -476,7 +476,7 @@ class TestSyntheticSubprocessWatcher:
 
         monkeypatch.setattr(ae.threading, "Thread", _ImmediateThread)
 
-        session = ReplSession()
+        session = Session()
         task = session.task_registry.create(TaskKind.SYNTHETIC_TEST)
         task.mark_running()
         proc = MagicMock()
@@ -504,7 +504,7 @@ class TestSyntheticSubprocessWatcher:
         proc.poll.return_value = 0
         proc.returncode = 0
 
-        session = ReplSession()
+        session = Session()
         task = session.task_registry.create(TaskKind.SYNTHETIC_TEST)
         task.mark_running()
         task.attach_process(proc)
@@ -529,7 +529,7 @@ class TestSyntheticSubprocessWatcher:
         proc.poll.return_value = 0
         proc.returncode = 0
 
-        session = ReplSession()
+        session = Session()
         task = session.task_registry.create(TaskKind.SYNTHETIC_TEST)
         task.mark_running()
         task.attach_process(proc)
