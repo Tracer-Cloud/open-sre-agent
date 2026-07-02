@@ -286,6 +286,66 @@ tail -f ~/.config/opensre/prompt_log.jsonl
 result.final_system_prompt  # last system prompt sent to the provider
 ```
 
+### Verify it yourself
+
+**Real session (needs an LLM key).** Run a turn, then read the prompt back out of
+the newest session file — no need to know the session id:
+
+```bash
+uv run opensre           # ask anything that hits the agent, then exit
+newest=$(ls -t ~/.opensre/sessions/*.jsonl | head -1)
+jq 'select(.type=="message" and .role=="system") | {kind: .metadata.kind, content}' "$newest"
+```
+
+You should see the assembled system prompt with `kind` = `action_agent` or
+`gather_agent` — the thing this issue said was never recorded.
+
+**No key (deterministic).** Proves capture → persist → read-back with a fake LLM
+and a throwaway session:
+
+```python
+import json
+from core.agent import Agent
+from core.agent_harness.debug.prompt_trace import persist_turn_system_prompt
+from core.agent_harness.prompts import build_gather_system_prompt
+from core.agent_harness.session.paths import session_path
+from core.agent_harness.session.storage.jsonl import JsonlSessionStorage
+from core.llm.types import AgentLLMResponse
+
+
+class FakeLLM:
+    def tool_schemas(self, tools):
+        return []
+
+    def invoke(self, messages, *, system=None, tools=None):
+        return AgentLLMResponse(content="done", tool_calls=[], raw_content=None)
+
+    def build_assistant_message(self, content, tool_calls):
+        return {"role": "assistant", "content": content}
+
+
+class Sess:
+    configured_integrations = ("github",)
+    storage = JsonlSessionStorage()
+    session_id = "prompt-verify-demo"
+    started_at = 1700000000.0
+
+
+system = build_gather_system_prompt(Sess())
+result = Agent(llm=FakeLLM(), system=system, tools=[], resolved_integrations={}, max_iterations=1).run(
+    [{"role": "user", "content": "hi"}]
+)
+Sess.storage.open_session(Sess())
+persist_turn_system_prompt(Sess(), phase="gather_agent", system_prompt=result.final_system_prompt)
+
+path = session_path("prompt-verify-demo")
+rows = [json.loads(x) for x in path.read_text().splitlines()]
+system_row = next(r for r in rows if r.get("role") == "system")
+assert system_row["content"] == result.final_system_prompt  # captured == persisted
+print("OK:", system_row["metadata"])
+path.unlink()
+```
+
 ### Prompt builders (single harness home)
 
 | Phase | Builder | Module |
