@@ -69,8 +69,9 @@ def launch_investigation(
             task_command=foreground_task_command,
             run=run,
             exception_context=exception_context,
-        )
-        is None
+            target=record_value,
+        ).status
+        != "completed"
     ):
         session.record("alert", record_value, ok=False)
         return

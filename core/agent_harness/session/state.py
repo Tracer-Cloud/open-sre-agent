@@ -104,6 +104,9 @@ class Session:
     last_state: dict[str, Any] | None = None
     """The final AgentState from the most recent investigation, used by follow-ups."""
 
+    last_investigation_id: str = ""
+    """Most recent investigation lifecycle id for joining terminal turns to PostHog."""
+
     last_assistant_intent: str | None = None
     """Intent label set by the runtime after each handled turn.
 

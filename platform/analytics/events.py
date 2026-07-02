@@ -25,6 +25,8 @@ class Event(StrEnum):
     INVESTIGATION_STARTED = "investigation_started"
     INVESTIGATION_COMPLETED = "investigation_completed"
     INVESTIGATION_FAILED = "investigation_failed"
+    INVESTIGATION_CANCELLED = "investigation_cancelled"
+    INVESTIGATION_OUTCOME = "investigation_outcome"
     INVESTIGATION_FIRST_HYPOTHESIS_RENDERED = "investigation_first_hypothesis_rendered"
     INVESTIGATION_ABANDONED = "investigation_abandoned"
     INVESTIGATION_FEEDBACK_SUBMITTED = "investigation_feedback_submitted"

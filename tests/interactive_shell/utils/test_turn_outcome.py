@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from surfaces.interactive_shell.utils.telemetry.turn_outcome import (
     format_investigation_outcome,
+    format_investigation_terminal_outcome,
     format_terminal_turn_outcome,
     format_wizard_cli_outcome,
     slash_command_is_interactive_wizard,
@@ -29,6 +30,34 @@ def test_format_investigation_outcome_background() -> None:
     text = format_investigation_outcome("generic", background=True)
     assert "started in background" in text
     assert "generic" in text
+
+
+def test_format_investigation_outcome_failed_includes_reason() -> None:
+    text = format_investigation_outcome(
+        "generic",
+        status="failed",
+        error_message="jenkins is not configured",
+    )
+    assert text.startswith("investigation_failed (generic):")
+    assert "jenkins is not configured" in text
+
+
+def test_format_investigation_outcome_cancelled() -> None:
+    text = format_investigation_outcome("alert.json", status="cancelled")
+    assert text == "investigation_cancelled (alert.json): aborted by user"
+
+
+def test_format_investigation_terminal_outcome_failed_two_line_shape() -> None:
+    text = format_investigation_terminal_outcome(
+        "/investigate generic",
+        target="generic",
+        ok=False,
+        error_message="integration timeout",
+        status="failed",
+    )
+    assert text.startswith("slash /investigate generic (failed)")
+    assert "investigation_failed (generic):" in text
+    assert "integration timeout" in text
 
 
 def test_format_investigation_outcome_includes_root_cause() -> None:

@@ -50,6 +50,22 @@ def _latest_slash_outcome(session: Any) -> str | None:
     return None
 
 
+def _fallback_terminal_response(session: Any | None, *, prompt: str) -> str:
+    if session is not None:
+        history = getattr(session, "history", None)
+        if isinstance(history, list):
+            for entry in reversed(history):
+                if not isinstance(entry, dict):
+                    continue
+                response_text = entry.get("response_text")
+                if isinstance(response_text, str) and response_text.strip():
+                    return response_text.strip()
+    stripped = prompt.strip()
+    if stripped:
+        return f"terminal turn handled: {stripped}"
+    return "terminal turn handled"
+
+
 class PromptRecorder:
     """Captures one `(prompt, response)` pair and flushes to configured sinks."""
 
@@ -134,7 +150,10 @@ class PromptRecorder:
         )
 
     def set_response(self, text: str, run: LlmRunInfo | None = None) -> None:
-        self._response = _sanitize_text(text, config=self._config)
+        cleaned = _sanitize_text(text, config=self._config)
+        if not cleaned.strip():
+            cleaned = _fallback_terminal_response(self._session, prompt=self._prompt)
+        self._response = cleaned
         if run is None:
             self._latency_ms = int((time.monotonic() - self._start) * 1000)
             return
@@ -214,6 +233,9 @@ class PromptRecorder:
                 slash_outcome = _latest_slash_outcome(self._session)
                 if slash_outcome:
                     posthog_properties["slash_outcome"] = slash_outcome
+                investigation_id = getattr(self._session, "last_investigation_id", "")
+                if isinstance(investigation_id, str) and investigation_id:
+                    posthog_properties["investigation_id"] = investigation_id
                 capture_ai_generation(posthog_properties)
 
 

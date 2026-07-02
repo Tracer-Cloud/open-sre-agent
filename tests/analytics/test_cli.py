@@ -315,6 +315,35 @@ def test_track_investigation_emits_failed_on_exception(
     _assert_investigation_events_have_source(stub.events)
     failed_props = stub.events[1][1] or {}
     assert failed_props["failure_type"] == "RuntimeError"
+    assert failed_props["failure_message"] == "boom"
+
+
+def test_capture_investigation_outcome_and_cancelled(monkeypatch: pytest.MonkeyPatch) -> None:
+    stub = _StubAnalytics()
+    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
+
+    cli.capture_investigation_outcome(
+        investigation_id="inv-123",
+        status="failed",
+        investigation_target="generic",
+        error_excerpt="boom",
+        failure_category="unknown",
+    )
+    cli.capture_investigation_cancelled(
+        investigation_id="inv-456",
+        investigation_target="alert.json",
+    )
+
+    assert stub.events[0][0] == Event.INVESTIGATION_OUTCOME
+    outcome_props = stub.events[0][1] or {}
+    assert outcome_props["investigation_id"] == "inv-123"
+    assert outcome_props["status"] == "failed"
+    assert outcome_props["investigation_target"] == "generic"
+    assert outcome_props["error_excerpt"] == "boom"
+    assert stub.events[1][0] == Event.INVESTIGATION_CANCELLED
+    cancelled_props = stub.events[1][1] or {}
+    assert cancelled_props["investigation_id"] == "inv-456"
+    assert cancelled_props["failure_category"] == "user_cancelled"
 
 
 def test_track_investigation_nested_context_dedupes(monkeypatch: pytest.MonkeyPatch) -> None:
