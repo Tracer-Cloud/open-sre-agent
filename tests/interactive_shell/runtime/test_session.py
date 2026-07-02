@@ -16,7 +16,7 @@ from core.agent_harness.session.tasks import TaskRegistry
 from platform.common.task_types import TaskKind
 
 
-class TestReplSession:
+class TestSession:
     def test_defaults(self) -> None:
         session = Session()
         assert session.history == []

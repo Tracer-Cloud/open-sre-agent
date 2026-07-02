@@ -73,11 +73,18 @@ to it instead of re-implementing bootstrap + persistence:
 - **shell** — `SessionBootstrapSpec` calls `SessionManager().bootstrap(...)` for
   the core startup mutations (persistent task registry + integration
   hydration), then layers shell-only UI concerns (theme, grounding providers,
-  prompt history) on top.
+  prompt history) on top. ``/new`` calls :meth:`SessionManager.rotate_in_place`;
+  ``/resume`` calls :meth:`SessionManager.rebind_for_resume` then
+  :meth:`SessionManager.restore_context`. REPL exit calls
+  :meth:`SessionManager.close`.
 - **gateway** — `gateway/storage/session/resolver.py::SessionResolver` owns only
   the platform chat-id ↔ session-id binding + per-turn chat metadata; it
   delegates `create` / `resolve` / `rotate` to `SessionManager`. It does not
   import any other surface.
+- **headless** — ephemeral in-memory sessions (``headless_agent.InMemorySessionStore``)
+  bypass ``SessionManager`` by design: they never persist to JSONL and do not
+  need create/resolve/rotate/close. Tool-calling turns still run through the
+  shared harness; only session lifecycle is skipped.
 
 `Session` (formerly `ReplSession`) is the in-memory session object used by every
 surface, including headless gateway — it is not REPL-specific. Do not re-add

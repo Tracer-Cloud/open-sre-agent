@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from rich.console import Console
 
+from core.agent_harness.session import SessionManager
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui import DIM, HIGHLIGHT
 
@@ -28,14 +29,11 @@ def _cmd_new(session: Session, console: Console, _args: list[str]) -> bool:
     saved_context = dict(session.accumulated_context)
     saved_resumed_name = session.resumed_from_name
 
-    session.storage.flush(session)
-    session.clear()
+    SessionManager(storage=session.storage).rotate_in_place(session)
 
     session.agent.messages = saved_messages
     session.accumulated_context = saved_context
     session.resumed_from_name = saved_resumed_name
-
-    session.storage.open_session(session)
     console.print(
         f"[{DIM}]new session started[/] [{HIGHLIGHT}]—[/] [{DIM}]conversation context carried forward.[/]"
     )

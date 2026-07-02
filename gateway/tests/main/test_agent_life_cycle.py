@@ -53,7 +53,7 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
     signal_calls: list[tuple[int, Any]] = []
     background_kwargs: dict[str, Any] = {}
 
-    class FakeReplSession:
+    class FakeSession:
         def __init__(self) -> None:
             self.hydrated = False
 
@@ -70,7 +70,7 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
         "gateway.start_gateway.signal.signal",
         lambda signum, handler: signal_calls.append((signum, handler)),
     )
-    monkeypatch.setattr("gateway.start_gateway.Session", FakeReplSession)
+    monkeypatch.setattr("gateway.start_gateway.Session", FakeSession)
 
     class FakeDefaultToolProvider(DefaultToolProvider):
         def action_tools(
@@ -177,7 +177,7 @@ def test_polled_telegram_message_reaches_start_gateway_agent_callback(monkeypatc
     integrations: dict[str, Any] = {}
     background_kwargs: dict[str, Any] = {}
 
-    class FakeBootReplSession:
+    class FakeBootSession:
         def hydrate_configured_integrations(self) -> None:
             return None
 
@@ -202,7 +202,7 @@ def test_polled_telegram_message_reaches_start_gateway_agent_callback(monkeypatc
     monkeypatch.setattr("gateway.start_gateway.configure_gateway_logging", lambda: logger)
     monkeypatch.setattr("gateway.start_gateway.load_gateway_settings", lambda: settings)
     monkeypatch.setattr("gateway.start_gateway.signal.signal", lambda *_args: None)
-    monkeypatch.setattr("gateway.start_gateway.Session", FakeBootReplSession)
+    monkeypatch.setattr("gateway.start_gateway.Session", FakeBootSession)
 
     class FakeDefaultToolProvider(DefaultToolProvider):
         def action_tools(

@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import contextlib
 from collections import deque
 
 from rich.console import Console
 from rich.markup import escape
 
+from core.agent_harness.session import SessionManager
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui import DIM, ERROR, HIGHLIGHT, WARNING
 from surfaces.interactive_shell.ui.components.choice_menu import (
@@ -174,27 +174,13 @@ def _apply_resume_data(
             "they will be replaced by the resumed context.[/]"
         )
 
-    from datetime import datetime
-
-    target_sid = sid
-    if session.session_id != target_sid:
-        session.storage.flush(session)
-        session.clear(rotate_identity=False)
-        session.session_id = target_sid
-        started_raw = data.get("started_at")
-        if started_raw:
-            with contextlib.suppress(Exception):
-                session.started_at = datetime.fromisoformat(started_raw).timestamp()
-        session.storage.reopen_session(target_sid)
-    else:
-        session.clear(rotate_identity=False)
-        session.session_id = target_sid
-
-    session.agent.messages = list(messages)
-    session.accumulated_context = dict(context)
-
-    if history:
-        session.history = list(history) + session.history
+    manager = SessionManager(storage=session.storage)
+    manager.rebind_for_resume(
+        session,
+        session_id=sid,
+        started_at=data.get("started_at"),
+    )
+    manager.restore_context(session, data)
 
     source = "snapshot" if has_snapshot else "turn records"
     name_str = f" · {escape(name)}" if name else ""

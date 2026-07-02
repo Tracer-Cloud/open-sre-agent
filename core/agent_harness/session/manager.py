@@ -9,10 +9,15 @@ re-implementing bootstrap + persistence wiring:
   tasks + integration hydration/warm), and open its storage stream.
 - **resolve** — load a persisted session by id: construct with that id, run the
   core bootstrap, restore its saved conversation context, and reopen storage.
-- **rotate** — flush the outgoing session and create a replacement.
+- **rotate** — close the outgoing session and create a fresh replacement (new
+  handle; used by the gateway).
+- **rotate_in_place** / **rebind_for_resume** — flush + reset the *live* handle
+  the REPL already holds (``/new`` / ``/resume``), preserving loop-owned UI
+  state instead of releasing it.
 - **restore_context** — rehydrate messages / accumulated context / history from
   a persisted session dict.
-- **flush** — write a session's buffered state to storage.
+- **close** — terminal teardown of a discarded handle: flush + release
+  resources (cancel warm task, drop background references).
 
 Surface-specific concerns stay with the surface: the shell layers terminal UI
 state (theme, grounding providers, prompt history) on top of a manager-created
@@ -22,7 +27,9 @@ bootstrap, and neither reaches across surfaces to do it.
 
 from __future__ import annotations
 
+import contextlib
 import logging
+from datetime import datetime
 from typing import Any
 
 # Import from submodules (not the package __init__) so the session package can
@@ -148,6 +155,53 @@ class SessionManager:
             self.close(outgoing)
         return self.create(session_id=new_session_id, warm_integrations=warm_integrations)
 
+    def rotate_in_place(self, session: Session) -> Session:
+        """Flush the outgoing session file, reset state, and open a new session id.
+
+        Mutates the live ``session`` handle the REPL already holds (``/new``).
+        The caller restores any conversation context to carry forward
+        (``agent.messages``, ``accumulated_context``, ``resumed_from_name``)
+        after this returns.
+
+        Flushes but does not release resources: ``clear()`` resets in-memory
+        state (and cancels the warm task) while the loop-owned
+        ``prompt_refresh_fn`` is preserved for the continuing REPL.
+        """
+        session.storage = self._storage
+        self._flush(session)
+        session.clear()
+        self._storage.open_session(session)
+        return session
+
+    def rebind_for_resume(
+        self,
+        session: Session,
+        *,
+        session_id: str,
+        started_at: Any | None = None,
+    ) -> Session:
+        """Point the live session handle at a persisted id before :meth:`restore_context`.
+
+        Used by the interactive shell ``/resume`` command on the in-process
+        session object. When ``session_id`` differs from the current id the
+        outgoing file is flushed; otherwise only in-memory state is cleared
+        without rotating identity. Either way the live handle is reused, so
+        loop-owned ``prompt_refresh_fn`` is preserved (flush, not close).
+        """
+        session.storage = self._storage
+        if session.session_id != session_id:
+            self._flush(session)
+            session.clear(rotate_identity=False)
+            session.session_id = session_id
+            if isinstance(started_at, str) and started_at:
+                with contextlib.suppress(Exception):
+                    session.started_at = datetime.fromisoformat(started_at).timestamp()
+            self._storage.reopen_session(session_id)
+        else:
+            session.clear(rotate_identity=False)
+            session.session_id = session_id
+        return session
+
     def restore_context(self, session: Session, data: dict[str, Any] | None) -> Session:
         """Rehydrate conversation messages, accumulated context, and history.
 
@@ -176,26 +230,42 @@ class SessionManager:
         return session
 
     def close(self, session: Session) -> None:
-        """Finalize a session: persist buffered state and release live resources.
+        """Finalize a session for good: persist buffered state and release resources.
 
-        This is the terminal lifecycle hook — surfaces call it at end of a REPL
-        run, before ``/new`` or ``/resume`` swaps sessions, and it backs
-        ``rotate``'s outgoing-session teardown. Persisting is best-effort (a
-        failed flush must not crash teardown); resource release prevents
-        per-session leaks (cancels the in-flight integration-warm task and
-        drops background references).
+        This is the terminal teardown hook — the session handle is being
+        discarded (end of a REPL run, or ``rotate``'s outgoing session). It is
+        NOT for the in-place swaps (``/new`` / ``/resume``) which reuse the live
+        handle; those call :meth:`rotate_in_place` / :meth:`rebind_for_resume`,
+        which flush without releasing loop-owned UI state.
+
+        Persisting is best-effort (a failed flush must not crash teardown);
+        resource release prevents per-session leaks (cancels the in-flight
+        integration-warm task and drops background references).
         """
-        try:
-            # Flush through the session's own backend — the one it recorded
-            # turns through — so the end-of-session marker lands with the data.
-            session.storage.flush(session)
-        except OSError:
-            logger.debug("[session] flush failed during close", exc_info=True)
+        self._flush(session)
         self._release_resources(session)
 
     @staticmethod
+    def _flush(session: Session) -> None:
+        """Best-effort persist through the session's own backend.
+
+        Flushes through ``session.storage`` — the backend it recorded turns
+        through — so the end-of-session marker lands with the data. A failed
+        flush is logged, never raised, so teardown/rotation cannot crash.
+        """
+        try:
+            session.storage.flush(session)
+        except OSError:
+            logger.debug("[session] flush failed", exc_info=True)
+
+    @staticmethod
     def _release_resources(session: Session) -> None:
-        """Cancel background work and drop references so a closed session is collectable."""
+        """Cancel background work and drop references so a closed session is collectable.
+
+        Only called on terminal teardown (:meth:`close`) — it nulls the
+        loop-owned ``prompt_refresh_fn``, which must be preserved when the live
+        handle is reused in place.
+        """
         warm_task = getattr(session, "_integration_warm_task", None)
         if warm_task is not None and not warm_task.done():
             warm_task.cancel()

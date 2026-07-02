@@ -155,6 +155,72 @@ def test_close_flush_failure_does_not_crash_teardown() -> None:
     assert session.prompt_refresh_fn is None
 
 
+def test_rotate_in_place_flushes_clears_and_opens_new_id() -> None:
+    storage = InMemorySessionStorage()
+    flushed: list[str] = []
+    opened: list[str] = []
+    storage.flush = lambda session: flushed.append(session.session_id)  # type: ignore[method-assign]
+    storage.open_session = lambda session: opened.append(session.session_id)  # type: ignore[method-assign]
+    manager = SessionManager(storage=storage, repo=SimpleNamespace(load_session=lambda _sid: None))
+
+    session = Session(session_id="old-id")
+    session.storage = storage
+    session.agent.messages = [("user", "carry")]
+    session.accumulated_context["svc"] = "checkout"
+
+    refresh = lambda: None  # noqa: E731 — loop-owned prompt hook stand-in
+    session.prompt_refresh_fn = refresh
+
+    manager.rotate_in_place(session)
+
+    assert flushed == ["old-id"]
+    assert session.session_id != "old-id"
+    assert opened == [session.session_id]
+    assert session.agent.messages == []
+    assert session.accumulated_context == {}
+    # Regression: in-place reuse must NOT drop the loop-owned prompt hook.
+    assert session.prompt_refresh_fn is refresh
+
+
+def test_rebind_for_resume_switches_id_and_reopens_storage() -> None:
+    storage = InMemorySessionStorage()
+    flushed: list[str] = []
+    reopened: list[str] = []
+    storage.flush = lambda session: flushed.append(session.session_id)  # type: ignore[method-assign]
+    storage.reopen_session = lambda session_id: reopened.append(session_id)  # type: ignore[method-assign]
+    manager = SessionManager(storage=storage, repo=SimpleNamespace(load_session=lambda _sid: None))
+
+    session = Session(session_id="live-id")
+    session.storage = storage
+    refresh = lambda: None  # noqa: E731 — loop-owned prompt hook stand-in
+    session.prompt_refresh_fn = refresh
+
+    manager.rebind_for_resume(session, session_id="saved-id", started_at="2026-01-15T10:00:00")
+
+    assert flushed == ["live-id"]
+    assert session.session_id == "saved-id"
+    assert reopened == ["saved-id"]
+    # Regression: /resume reuses the live handle — keep the prompt hook.
+    assert session.prompt_refresh_fn is refresh
+
+
+def test_rebind_for_resume_same_id_clears_without_flush() -> None:
+    storage = InMemorySessionStorage()
+    flushed: list[str] = []
+    storage.flush = lambda session: flushed.append(session.session_id)  # type: ignore[method-assign]
+    manager = SessionManager(storage=storage, repo=SimpleNamespace(load_session=lambda _sid: None))
+
+    session = Session(session_id="same-id")
+    session.storage = storage
+    session.history = [{"type": "shell", "text": "ls", "ok": True}]
+
+    manager.rebind_for_resume(session, session_id="same-id")
+
+    assert flushed == []
+    assert session.session_id == "same-id"
+    assert session.history == []
+
+
 def test_closed_session_is_garbage_collectable() -> None:
     # Memory-leak guard: after close(), dropping the last strong reference must
     # let the session be collected — no lingering references (warm task,

@@ -214,7 +214,7 @@ class TestDrainAndRenderIncoming:
         assert len(session.incoming_alerts) <= session._INCOMING_ALERTS_MAX
 
 
-class TestReplSessionIncomingAlerts:
+class TestSessionIncomingAlerts:
     """Test Session handling of incoming alerts."""
 
     def test_clear_resets_incoming_alerts(self) -> None:
