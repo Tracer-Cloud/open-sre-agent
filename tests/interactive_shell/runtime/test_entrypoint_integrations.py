@@ -256,7 +256,7 @@ def test_gate_error_allows_startup_with_bypass(monkeypatch: Any) -> None:
     assert flg.require_startup_github_login(_console()) is True
 
 
-def test_repl_main_identifies_saved_github_username(monkeypatch: Any) -> None:
+def test_run_repl_async_identifies_saved_github_username(monkeypatch: Any) -> None:
     identified: list[str] = []
     monkeypatch.setattr(
         "platform.analytics.cli.identify_saved_github_username",
@@ -286,23 +286,22 @@ def test_repl_main_identifies_saved_github_username(monkeypatch: Any) -> None:
     class _PromptSession:
         history = None
 
-    def _build_prompt_session() -> _PromptSession:
-        return _PromptSession()
-
     monkeypatch.setattr(
-        main_entrypoint._input_prompt,
-        "_build_prompt_session",
-        _build_prompt_session,
+        main_entrypoint,
+        "build_prompt_session",
+        lambda: _PromptSession(),
     )
 
     import asyncio
 
-    asyncio.run(main_entrypoint.repl_main(initial_input="hello"))
+    asyncio.run(main_entrypoint.run_repl_async(initial_input="hello"))
 
     assert identified == ["called"]
 
 
-def test_repl_main_failed_resume_flushes_starter_session(monkeypatch: Any, tmp_path: Path) -> None:
+def test_run_repl_async_failed_resume_flushes_starter_session(
+    monkeypatch: Any, tmp_path: Path
+) -> None:
     import asyncio
 
     sessions_dir = tmp_path / "sessions"
@@ -331,8 +330,8 @@ def test_repl_main_failed_resume_flushes_starter_session(monkeypatch: Any, tmp_p
         history = None
 
     monkeypatch.setattr(
-        main_entrypoint._input_prompt,
-        "_build_prompt_session",
+        main_entrypoint,
+        "build_prompt_session",
         lambda: _PromptSession(),
     )
     monkeypatch.setattr(
@@ -341,7 +340,7 @@ def test_repl_main_failed_resume_flushes_starter_session(monkeypatch: Any, tmp_p
         lambda **_kwargs: SimpleNamespace(session=session, inbox=None),
     )
 
-    exit_code = asyncio.run(main_entrypoint.repl_main(resume_session_id="missing-session"))
+    exit_code = asyncio.run(main_entrypoint.run_repl_async(resume_session_id="missing-session"))
 
     assert exit_code == 1
     assert flushed == [session.session_id]

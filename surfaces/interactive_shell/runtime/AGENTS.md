@@ -71,8 +71,9 @@ owner module instead of broadening module responsibilities.
 
 The interactive runtime must keep this shape:
 
-1. `interactive_shell.main.run_repl` sets up process-level concerns and calls `repl_main`.
-2. `interactive_shell.main.repl_main` creates `InteractiveShellController`.
+1. `interactive_shell.main.run_repl` (synchronous entrypoint) sets up
+   process-level concerns and calls `run_repl_async`.
+2. `interactive_shell.main.run_repl_async` (async body) creates `InteractiveShellController`.
 3. `InteractiveShellController.start_interactive_shell` owns prompt lifecycle,
    submitted input handling, queued-turn consumption, and per-turn task
    scheduling.
@@ -96,7 +97,7 @@ Do not invert this dependency direction.
 
 ```mermaid
 flowchart TD
-  runRepl["interactive_shell.main.run_repl"] --> replMain["interactive_shell.main.repl_main"]
+  runRepl["interactive_shell.main.run_repl"] --> replMain["interactive_shell.main.run_repl_async"]
   replMain --> controller["interactive_shell.controller.InteractiveShellController"]
   controller --> turnHost["runtime.turn_host.run_agent_turn(turn_runtime, text)"]
   turnHost --> turnEntry["interactive_shell.runtime.shell_turn_execution.execute_shell_turn"]
