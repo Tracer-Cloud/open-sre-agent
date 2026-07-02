@@ -8,6 +8,7 @@ import sys
 from rich.console import Console
 
 from config.repl_config import ReplConfig
+from core.agent_harness.session import SessionManager
 from surfaces.interactive_shell.controller import InteractiveShellController
 from surfaces.interactive_shell.runtime.context import create_repl_runtime_context
 from surfaces.interactive_shell.runtime.startup.first_launch_github import (
@@ -66,7 +67,8 @@ async def repl_main(
         ).start_interactive_shell()
         return 0
     finally:
-        session.storage.flush(session)
+        # True end-of-run teardown: persist and release the session's resources.
+        SessionManager().close(session)
 
 
 def run_repl(

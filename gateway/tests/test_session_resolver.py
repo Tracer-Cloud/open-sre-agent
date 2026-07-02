@@ -13,8 +13,8 @@ from gateway.storage import SessionBindingStore, SessionResolver, connect_gatewa
 @pytest.fixture
 def resolver(tmp_path, monkeypatch) -> SessionResolver:
     # Keep integration bootstrap a no-op so tests don't resolve real integrations.
-    monkeypatch.setattr(Session, "warm_resolved_integrations", lambda self, **_k: None)
-    monkeypatch.setattr(Session, "hydrate_configured_integrations", lambda self: None)
+    monkeypatch.setattr(Session, "warm_resolved_integrations", lambda _self, **_k: None)
+    monkeypatch.setattr(Session, "hydrate_configured_integrations", lambda _self: None)
 
     conn = connect_gateway_db(tmp_path / "state.db")
     store = SessionBindingStore(conn)

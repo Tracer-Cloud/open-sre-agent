@@ -96,6 +96,11 @@ class SessionManager:
     ) -> Session:
         """Build a fresh session, bootstrap it, and open its storage stream."""
         session = Session(session_id=session_id) if session_id else Session()
+        # Align the session's own persistence backend with the manager's, so
+        # session.record()/append go through the same storage the manager opens
+        # and flushes. Otherwise an injected backend is bypassed by the default
+        # JSONL field on Session.
+        session.storage = self._storage
         self.bootstrap(
             session,
             hydrate_integrations=hydrate_integrations,
@@ -134,12 +139,9 @@ class SessionManager:
         new_session_id: str | None = None,
         warm_integrations: bool = True,
     ) -> Session:
-        """Flush the outgoing session (if any) and create its replacement."""
+        """Close the outgoing session (if any) and create its replacement."""
         if old_session_id:
-            try:
-                self._storage.flush(Session(session_id=old_session_id))
-            except OSError:
-                logger.debug("[session] flush failed during rotate", exc_info=True)
+            self.close(Session(session_id=old_session_id))
         return self.create(session_id=new_session_id, warm_integrations=warm_integrations)
 
     def restore_context(self, session: Session, data: dict[str, Any] | None) -> Session:
@@ -169,9 +171,31 @@ class SessionManager:
             session.history = [dict(item) for item in history if isinstance(item, dict)]
         return session
 
-    def flush(self, session: Session) -> None:
-        """Write the session's buffered state to storage."""
-        self._storage.flush(session)
+    def close(self, session: Session) -> None:
+        """Finalize a session: persist buffered state and release live resources.
+
+        This is the terminal lifecycle hook — surfaces call it at end of a REPL
+        run, before ``/new`` or ``/resume`` swaps sessions, and it backs
+        ``rotate``'s outgoing-session teardown. Persisting is best-effort (a
+        failed flush must not crash teardown); resource release prevents
+        per-session leaks (cancels the in-flight integration-warm task and
+        drops background references).
+        """
+        try:
+            self._storage.flush(session)
+        except OSError:
+            logger.debug("[session] flush failed during close", exc_info=True)
+        self._release_resources(session)
+
+    @staticmethod
+    def _release_resources(session: Session) -> None:
+        """Cancel background work and drop references so a closed session is collectable."""
+        warm_task = getattr(session, "_integration_warm_task", None)
+        if warm_task is not None and not warm_task.done():
+            warm_task.cancel()
+        session._integration_warm_task = None
+        session.background_notices.clear()
+        session.prompt_refresh_fn = None
 
 
 __all__ = ["SessionManager"]

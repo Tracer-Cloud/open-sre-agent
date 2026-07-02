@@ -12,8 +12,8 @@ from core.agent_harness.session import InMemorySessionStorage, Session, SessionM
 @pytest.fixture(autouse=True)
 def _no_real_integration_bootstrap(monkeypatch: pytest.MonkeyPatch) -> None:
     # Keep bootstrap from resolving real integrations during unit tests.
-    monkeypatch.setattr(Session, "warm_resolved_integrations", lambda self, **_k: None)
-    monkeypatch.setattr(Session, "hydrate_configured_integrations", lambda self: None)
+    monkeypatch.setattr(Session, "warm_resolved_integrations", lambda _self, **_k: None)
+    monkeypatch.setattr(Session, "hydrate_configured_integrations", lambda _self: None)
 
 
 def _manager(*, repo=None) -> SessionManager:
@@ -78,7 +78,7 @@ def test_restore_context_ignores_empty_and_malformed() -> None:
     assert session.cli_agent_messages == [("user", "ok")]
 
 
-def test_rotate_flushes_old_and_creates_new() -> None:
+def test_rotate_closes_old_and_creates_new() -> None:
     storage = InMemorySessionStorage()
     flushed: list[str] = []
     storage.flush = lambda session: flushed.append(session.session_id)  # type: ignore[method-assign]
@@ -90,7 +90,7 @@ def test_rotate_flushes_old_and_creates_new() -> None:
     assert session.session_id == "new-1"
 
 
-def test_rotate_without_old_id_skips_flush() -> None:
+def test_rotate_without_old_id_skips_close() -> None:
     storage = InMemorySessionStorage()
     flushed: list[str] = []
     storage.flush = lambda session: flushed.append(session.session_id)  # type: ignore[method-assign]
@@ -106,3 +106,93 @@ def test_bootstrap_sets_persistent_task_registry() -> None:
     before = session.task_registry
     _manager().bootstrap(session)
     assert session.task_registry is not before
+
+
+def test_created_session_persists_through_manager_storage() -> None:
+    # Regression: the session's own storage backend must be the manager's, so
+    # session.record() writes to the same place the manager opens/flushes —
+    # not the default JSONL field on Session.
+    storage = InMemorySessionStorage()
+    manager = SessionManager(storage=storage, repo=SimpleNamespace(load_session=lambda _sid: None))
+
+    session = manager.create()
+    assert session.storage is storage
+
+    session.record("chat", "hello")
+    assert any("hello" in str(rec) for rec in storage.read(session.session_id))
+
+
+def test_close_persists_and_releases_resources() -> None:
+    storage = InMemorySessionStorage()
+    flushed: list[str] = []
+    storage.flush = lambda session: flushed.append(session.session_id)  # type: ignore[method-assign]
+    manager = SessionManager(storage=storage, repo=SimpleNamespace(load_session=lambda _sid: None))
+
+    session = manager.create(session_id="s-close")
+    session.background_notices.append("pending notice")
+    session.prompt_refresh_fn = lambda: None
+
+    manager.close(session)
+
+    assert flushed == ["s-close"]
+    assert session.background_notices == []
+    assert session.prompt_refresh_fn is None
+
+
+def test_close_flush_failure_does_not_crash_teardown() -> None:
+    storage = InMemorySessionStorage()
+
+    def _boom(_session: object) -> None:
+        raise OSError("disk full")
+
+    storage.flush = _boom  # type: ignore[method-assign]
+    manager = SessionManager(storage=storage, repo=SimpleNamespace(load_session=lambda _sid: None))
+    session = manager.create(session_id="s-fail")
+    session.prompt_refresh_fn = lambda: None
+
+    # Must not raise; resources still released.
+    manager.close(session)
+    assert session.prompt_refresh_fn is None
+
+
+def test_closed_session_is_garbage_collectable() -> None:
+    # Memory-leak guard: after close(), dropping the last strong reference must
+    # let the session be collected — no lingering references (warm task,
+    # background closures, prompt hook) keep it alive.
+    import gc
+    import weakref
+
+    manager = _manager()
+    session = manager.create(session_id="s-gc")
+    session.prompt_refresh_fn = lambda: None
+    session.background_notices.append("x")
+    ref = weakref.ref(session)
+
+    manager.close(session)
+    del session
+    gc.collect()
+
+    assert ref() is None, "closed session was not garbage-collected — reference leak"
+
+
+def test_close_cancels_in_flight_warm_task() -> None:
+    manager = _manager()
+    session = manager.create(session_id="s-warm")
+
+    class _FakeTask:
+        def __init__(self) -> None:
+            self.cancelled = False
+
+        def done(self) -> bool:
+            return False
+
+        def cancel(self) -> None:
+            self.cancelled = True
+
+    task = _FakeTask()
+    session._integration_warm_task = task
+
+    manager.close(session)
+
+    assert task.cancelled is True
+    assert session._integration_warm_task is None
