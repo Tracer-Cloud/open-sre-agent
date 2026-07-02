@@ -297,7 +297,43 @@ def test_prompt_recorder_includes_investigation_id(monkeypatch, tmp_path: Path) 
     assert captured[0]["investigation_id"] == "inv-abc"
 
 
-def test_prompt_recorder_uses_history_fallback_when_response_empty(
+def test_prompt_recorder_omits_investigation_id_for_unrelated_turns(
+    monkeypatch, tmp_path: Path
+) -> None:
+    captured: list[dict[str, object]] = []
+    cfg = PromptLogConfig(
+        enabled=True,
+        local_enabled=False,
+        posthog_enabled=True,
+        redact=False,
+        max_chars=1000,
+        log_path=tmp_path / "prompt_log.jsonl",
+    )
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.utils.telemetry.recorder.PromptLogConfig.load", lambda: cfg
+    )
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.utils.telemetry.recorder.build_turn_integration_snapshot",
+        lambda _session: {},
+    )
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.utils.telemetry.recorder.capture_ai_generation",
+        lambda payload: captured.append(payload),
+    )
+    session = Session()
+    session.last_investigation_id = "inv-stale"
+    recorder = PromptRecorder.start(
+        session=session,
+        text="what integrations are configured?",
+        turn_kind="agent",
+    )
+    assert recorder is not None
+    recorder.set_response("github and datadog")
+    recorder.flush()
+    assert "investigation_id" not in captured[0]
+
+
+def test_prompt_recorder_uses_prompt_fallback_when_response_empty(
     monkeypatch, tmp_path: Path
 ) -> None:
     cfg = PromptLogConfig(
@@ -326,7 +362,7 @@ def test_prompt_recorder_uses_history_fallback_when_response_empty(
     assert recorder is not None
     recorder.set_response("   ")
     recorder.flush()
-    assert captured[0]["$ai_output_choices"][0]["content"] == "slash /help (succeeded)"
+    assert captured[0]["$ai_output_choices"][0]["content"] == "terminal turn handled: /help"
 
 
 def test_prompt_recorder_uses_only_latest_slash_outcome(monkeypatch, tmp_path: Path) -> None:

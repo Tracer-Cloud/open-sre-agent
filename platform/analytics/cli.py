@@ -8,7 +8,7 @@ from collections.abc import Generator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
-from typing import Final
+from typing import TYPE_CHECKING, Final
 from uuid import uuid4
 
 from platform.analytics.events import Event
@@ -20,6 +20,9 @@ from platform.analytics.source import (
     build_source_properties,
 )
 from platform.observability.sentry_sdk import capture_exception
+
+if TYPE_CHECKING:
+    from core.agent_harness.session import Session
 
 EVAL_AND_TERMINAL_KPI_QUERIES: Final[dict[str, str]] = {
     "eval_pass_rate": """
@@ -530,7 +533,7 @@ def track_investigation(
     evaluate_requested: bool = False,
     investigation_id: str | None = None,
     investigation_target: str | None = None,
-    session: object | None = None,
+    session: Session | None = None,
 ) -> Generator[InvestigationTracker]:
     """Capture investigation lifecycle once, with nested-call dedupe."""
     depth = _INVESTIGATION_TRACKING_DEPTH.get()
@@ -548,7 +551,7 @@ def track_investigation(
         if investigation_target:
             shared_properties["investigation_target"] = investigation_target
         if session is not None:
-            setattr(session, "last_investigation_id", resolved_id)
+            session.last_investigation_id = resolved_id
         _capture(
             Event.INVESTIGATION_STARTED,
             _investigation_started_properties(
