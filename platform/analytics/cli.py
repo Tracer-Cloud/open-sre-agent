@@ -614,7 +614,7 @@ def identify_saved_github_username() -> None:
     ``$ai_generation`` include ``github_username`` without requiring a fresh
     device-flow login each session.
     """
-    from integrations.github_identity import saved_github_username
+    from integrations.github.identity import saved_github_username
 
     identify_github_username(saved_github_username())
 

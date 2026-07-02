@@ -91,7 +91,7 @@ def test_identify_saved_github_username_reads_store(monkeypatch: pytest.MonkeyPa
     stub = _StubAnalytics()
     monkeypatch.setattr(cli, "get_analytics", lambda: stub)
     monkeypatch.setattr(
-        "integrations.github_identity.saved_github_username",
+        "integrations.github.identity.saved_github_username",
         lambda: "octocat",
     )
 
@@ -106,7 +106,7 @@ def test_identify_saved_github_username_noop_when_store_empty(
 ) -> None:
     stub = _StubAnalytics()
     monkeypatch.setattr(cli, "get_analytics", lambda: stub)
-    monkeypatch.setattr("integrations.github_identity.saved_github_username", lambda: "")
+    monkeypatch.setattr("integrations.github.identity.saved_github_username", lambda: "")
 
     cli.identify_saved_github_username()
 
