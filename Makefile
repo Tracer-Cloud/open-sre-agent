@@ -1,7 +1,7 @@
 -include .env
 export
 
-.PHONY: install onboard benchmark benchmark-update-readme test test-full demo alert-template investigate-alert verify-integrations check-docker grafana-local-up grafana-local-down grafana-local-seed clean lint format deploy deploy-lambda deploy-prefect deploy-flink destroy destroy-lambda destroy-prefect destroy-flink test-deploy prefect-local-test simulate-k8s-alert test-k8s-local test-k8s test-k8s-datadog chaos-mesh-up chaos-mesh-down chaos-engineering-apply chaos-engineering-delete chaos-lab-up chaos-lab-down chaos-experiment-list chaos-experiment-up chaos-experiment-down deploy-dd-monitors cleanup-dd-monitors deploy-eks destroy-eks test-k8s-eks datadog-demo crashloop-demo regen-trigger-config test-rca test-rca-grafana test-synthetic test-rds-synthetic test-cli-smoke test-turn-live download-cloudopsbench-hf mirror-cloudopsbench-s3 validate-cloudopsbench test-openclaw test-openclaw-synthetic test-hermes test-hermes-synthetic test-hermes-synthetic-only refresh-hermes-tuples
+.PHONY: install onboard benchmark benchmark-update-readme test test-full demo alert-template investigate-alert verify-integrations check-docker grafana-local-up grafana-local-down grafana-local-seed clean lint format build-image deploy deploy-lambda deploy-prefect deploy-flink destroy destroy-lambda destroy-prefect destroy-flink test-deploy prefect-local-test simulate-k8s-alert test-k8s-local test-k8s test-k8s-datadog chaos-mesh-up chaos-mesh-down chaos-engineering-apply chaos-engineering-delete chaos-lab-up chaos-lab-down chaos-experiment-list chaos-experiment-up chaos-experiment-down deploy-dd-monitors cleanup-dd-monitors deploy-eks destroy-eks test-k8s-eks datadog-demo crashloop-demo regen-trigger-config test-rca test-rca-grafana test-synthetic test-rds-synthetic test-cli-smoke test-turn-live download-cloudopsbench-hf mirror-cloudopsbench-s3 validate-cloudopsbench test-openclaw test-openclaw-synthetic test-hermes test-hermes-synthetic test-hermes-synthetic-only refresh-hermes-tuples
 
 
 ifneq ($(wildcard .venv/bin/python),)
@@ -262,6 +262,11 @@ docs-dev:
 
 # Deploy all test case infrastructure in parallel (SDK - fast!)
 # EC2 deploy (web + gateway containers on one instance)
+# Step 1 — build once per code change, saves URI locally for reuse:
+build-image:
+	$(PYTHON) -m platform.deployment.lifecycle build-image
+
+# Step 2 — launch instance using the pre-built image (fast, no Docker build):
 deploy:
 	$(PYTHON) -m platform.deployment.lifecycle deploy
 
@@ -441,8 +446,9 @@ help:
 	@echo "Available commands:"
 	@echo ""
 	@echo "  EC2 DEPLOY"
-	@echo "  make deploy            - Build image and deploy web + gateway on EC2"
-	@echo "  make destroy           - Terminate EC2 instance and clean up"
+	@echo "  make build-image       - Build and push Docker image to ECR (run once per code change)"
+	@echo "  make deploy            - Launch EC2 instance using pre-built image (fast, no Docker build)"
+	@echo "  make destroy           - Terminate EC2 instance and clean up (keeps ECR image; OPENSRE_DESTROY_PURGE_ECR=1 to also delete it)"
 	@echo "  make test-deploy       - Run EC2 deployment e2e tests"
 	@echo ""
 	@echo "  E2E TEST INFRA (AWS SDK)"

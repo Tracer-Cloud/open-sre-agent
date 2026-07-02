@@ -36,8 +36,11 @@ from platform.deployment.prep import validate_deploy_env
 from platform.deployment.stack import (
     delete_outputs,
     get_stack,
+    image_uri_exists,
+    load_image_uri,
     load_outputs,
     outputs_exists,
+    save_image_uri,
     save_outputs,
 )
 
@@ -45,6 +48,8 @@ REGION = DEFAULT_REGION
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DOCKERFILE = REPO_ROOT / "Dockerfile"
 _ABORT_IF_EXISTS_ENV = "OPENSRE_DEPLOY_ABORT_IF_EXISTS"
+_IMAGE_URI_ENV = "OPENSRE_IMAGE_URI"
+_PURGE_ECR_ENV = "OPENSRE_DESTROY_PURGE_ECR"
 
 _CONTAINER_ENV_KEYS = (
     "TELEGRAM_BOT_TOKEN",
@@ -67,6 +72,81 @@ def _collect_deploy_env_vars() -> dict[str, str]:
 
 def _abort_if_exists_enabled() -> bool:
     return os.getenv(_ABORT_IF_EXISTS_ENV, "").strip().lower() in {"1", "true", "yes"}
+
+
+def _purge_ecr_enabled() -> bool:
+    return os.getenv(_PURGE_ECR_ENV, "").strip().lower() in {"1", "true", "yes"}
+
+
+def _resolve_image_uri() -> str:
+    """Return the Docker image URI for the current deploy.
+
+    Resolution order:
+      1. ``OPENSRE_IMAGE_URI`` environment variable (explicit override).
+      2. URI saved on disk by the last ``make build-image`` run.
+
+    Raises:
+        RuntimeError: When neither source is available, so the caller fails
+            fast with a clear message rather than silently building in-band.
+    """
+    uri = os.getenv(_IMAGE_URI_ENV, "").strip()
+    if uri:
+        return uri
+    if image_uri_exists():
+        return load_image_uri()
+    raise RuntimeError(
+        "No pre-built image found. Run `make build-image` first to build and push the "
+        f"Docker image, or set the {_IMAGE_URI_ENV} environment variable to an existing "
+        "ECR image URI.\n\n"
+        "  Quick start:\n"
+        "    make build-image   # build once, saves URI locally\n"
+        "    make deploy        # reuse the saved URI (fast)\n\n"
+        "  Or in one step:\n"
+        f"    {_IMAGE_URI_ENV}=<uri> make deploy"
+    )
+
+
+def build_image() -> str:
+    """Build the Docker image and push it to ECR.
+
+    Saves the resulting image URI locally so subsequent ``make deploy`` calls
+    can reuse it without rebuilding. Run this once per code change, then call
+    ``make deploy`` as many times as needed.
+
+    Returns:
+        The full ECR image URI (e.g. ``123….dkr.ecr.us-east-1.amazonaws.com/opensre:latest``).
+    """
+    stack = get_stack()
+    start_time = time.time()
+    print("=" * 60)
+    print(f"Building and pushing image for {stack.stack_name}")
+    print("=" * 60)
+    print()
+
+    print("Creating ECR repository (if needed)...")
+    repo = ecr.create_repository(stack.ecr_repo_name, stack.stack_name, REGION)
+    print(f"  - Repository: {repo['uri']}")
+
+    print("Building and pushing Docker image...")
+    image_uri = ecr.build_and_push(
+        dockerfile_path=DOCKERFILE,
+        repository_uri=repo["uri"],
+        tag=ECR_DEFAULT_IMAGE_TAG,
+        platform=ECR_DOCKER_PLATFORM,
+        context_dir=REPO_ROOT,
+        region=REGION,
+    )
+    save_image_uri(image_uri)
+
+    elapsed = time.time() - start_time
+    print()
+    print("=" * 60)
+    print(f"Image built and pushed in {elapsed:.1f}s")
+    print(f"  URI: {image_uri}")
+    print("  URI saved — run `make deploy` to launch an instance with this image.")
+    print("=" * 60)
+    print()
+    return image_uri
 
 
 def cleanup_existing_deployment(*, region: str = DEFAULT_REGION) -> bool:
@@ -114,29 +194,26 @@ def cleanup_existing_deployment(*, region: str = DEFAULT_REGION) -> bool:
 
 
 def deploy() -> dict[str, str]:
-    """Build the image, push to ECR, launch EC2, and wait for web + gateway to become healthy."""
+    """Launch an EC2 instance and wait for web + gateway containers to become healthy.
+
+    Requires a pre-built ECR image. Run ``make build-image`` first, or set the
+    ``OPENSRE_IMAGE_URI`` environment variable to an existing image URI.
+    """
     validate_deploy_env()
 
     stack = get_stack()
     start_time = time.time()
+
+    image_uri = _resolve_image_uri()
+
     print("=" * 60)
     print(f"Deploying {stack.stack_name} (web + gateway containers on one EC2 instance)")
     print("=" * 60)
     print()
+    print(f"Using image: {image_uri}")
+    print()
 
     cleanup_existing_deployment(region=REGION)
-
-    print("Building and pushing image to ECR...")
-    repo = ecr.create_repository(stack.ecr_repo_name, stack.stack_name, REGION)
-    image_uri = ecr.build_and_push(
-        dockerfile_path=DOCKERFILE,
-        repository_uri=repo["uri"],
-        tag=ECR_DEFAULT_IMAGE_TAG,
-        platform=ECR_DOCKER_PLATFORM,
-        context_dir=REPO_ROOT,
-        region=REGION,
-    )
-    print(f"  - Image: {image_uri}")
 
     print("Creating IAM instance profile...")
     profile_info = create_instance_profile(
@@ -213,7 +290,14 @@ def deploy() -> dict[str, str]:
 
 
 def destroy() -> dict[str, list[str]]:
-    """Terminate the EC2 instance and clean up all associated resources."""
+    """Terminate the EC2 instance and clean up EC2/IAM resources.
+
+    The ECR repository and its images are kept by default so that a
+    subsequent ``make deploy`` does not need a full ``make build-image``
+    rebuild — this is the main lever for keeping repeated deploy/destroy
+    cycles fast and cheap. Set ``OPENSRE_DESTROY_PURGE_ECR=1`` to also
+    delete the ECR repository (e.g. for a full account cleanup).
+    """
     stack = get_stack()
     start_time = time.time()
     print("=" * 60)
@@ -255,15 +339,21 @@ def destroy() -> dict[str, list[str]]:
         results["failed"].append(msg)
         print(f"  - Failed: {e}")
 
-    print(f"Deleting ECR repository {stack.ecr_repo_name}...")
-    try:
-        ecr.delete_repository(stack.ecr_repo_name, DEFAULT_REGION)
-        results["deleted"].append(f"ecr-repository:{stack.ecr_repo_name}")
-        print("  - ECR repository deleted")
-    except ClientError as e:
-        msg = f"ecr-repository:{stack.ecr_repo_name} - {e}"
-        results["failed"].append(msg)
-        print(f"  - Failed: {e}")
+    if _purge_ecr_enabled():
+        print(f"Deleting ECR repository {stack.ecr_repo_name} ({_PURGE_ECR_ENV}=1)...")
+        try:
+            ecr.delete_repository(stack.ecr_repo_name, DEFAULT_REGION)
+            results["deleted"].append(f"ecr-repository:{stack.ecr_repo_name}")
+            print("  - ECR repository deleted")
+        except ClientError as e:
+            msg = f"ecr-repository:{stack.ecr_repo_name} - {e}"
+            results["failed"].append(msg)
+            print(f"  - Failed: {e}")
+    else:
+        print(
+            f"Keeping ECR repository {stack.ecr_repo_name} "
+            f"(set {_PURGE_ECR_ENV}=1 to also delete it)."
+        )
 
     delete_outputs()
 
@@ -289,11 +379,14 @@ def destroy() -> dict[str, list[str]]:
 def main() -> None:
     parser = argparse.ArgumentParser(description="OpenSRE EC2 deployment lifecycle")
     subparsers = parser.add_subparsers(dest="command", required=True)
-    subparsers.add_parser("deploy", help="Provision the EC2 stack")
+    subparsers.add_parser("build-image", help="Build and push the Docker image to ECR")
+    subparsers.add_parser("deploy", help="Launch EC2 instance using a pre-built image")
     subparsers.add_parser("destroy", help="Tear down the EC2 stack")
     args = parser.parse_args()
 
-    if args.command == "deploy":
+    if args.command == "build-image":
+        build_image()
+    elif args.command == "deploy":
         deploy()
     else:
         destroy()

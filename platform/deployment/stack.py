@@ -17,6 +17,7 @@ GATEWAY_CONTAINER_NAME = "opensre-gateway"
 DEPLOY_LOG_PATH = "/var/log/opensre-deploy.log"
 
 _OUTPUTS_DIR = OPENSRE_HOME_DIR / "deployments"
+_IMAGE_URI_FILE = _OUTPUTS_DIR / "image-uri.txt"
 
 
 @dataclass(frozen=True)
@@ -95,3 +96,39 @@ def delete_outputs(*, path: Path | None = None) -> None:
     output_path = get_outputs_path(path=path)
     if output_path.exists():
         output_path.unlink()
+
+
+# ── Image URI state ───────────────────────────────────────────────────────────
+
+
+def get_image_uri_path(*, path: Path | None = None) -> Path:
+    """Return the path where the last-built image URI is persisted."""
+    return path if path is not None else _IMAGE_URI_FILE
+
+
+def save_image_uri(image_uri: str, *, path: Path | None = None) -> Path:
+    """Persist the image URI written by ``make build-image``."""
+    uri_path = get_image_uri_path(path=path)
+    uri_path.parent.mkdir(parents=True, exist_ok=True)
+    uri_path.write_text(image_uri.strip() + "\n", encoding="utf-8")
+    return uri_path
+
+
+def load_image_uri(*, path: Path | None = None) -> str:
+    """Load the image URI saved by the last ``make build-image`` run.
+
+    Raises:
+        FileNotFoundError: When no saved URI exists yet.
+    """
+    uri_path = get_image_uri_path(path=path)
+    if not uri_path.exists():
+        raise FileNotFoundError(
+            f"No saved image URI found at {uri_path}. "
+            "Run `make build-image` first, or set OPENSRE_IMAGE_URI."
+        )
+    return uri_path.read_text(encoding="utf-8").strip()
+
+
+def image_uri_exists(*, path: Path | None = None) -> bool:
+    """Return True when a saved image URI is available on disk."""
+    return get_image_uri_path(path=path).exists()
