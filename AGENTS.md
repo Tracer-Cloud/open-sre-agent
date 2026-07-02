@@ -155,9 +155,26 @@ Basic steps:
 5. Run `make verify-integrations` before treating the integration as complete.
 6. Before opening or approving the PR, follow [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md) for integration completeness, investigation wiring, docs, and demo/test requirements.
 
+### Large multi-surface refactors
+
+A consolidation refactor collapses behavior that has diverged across
+multiple surfaces (`interactive_shell/`, `gateway/`, `tools/investigation/`,
+`core/agent_harness/`, etc.) into one shared class or module — e.g. the
+`agent_harness` T-2/T-3 series (session management, integration resolution,
+startup consolidation). These are higher-risk than a normal feature or tool
+change: they touch several call sites at once and the source issue's file
+paths tend to be stale by the time work starts.
+
+Before starting this class of work, follow
+[REFACTOR_CHECKLIST.md](REFACTOR_CHECKLIST.md) — it covers dependency
+ordering, re-validating the issue against current repo state, incremental
+per-surface migration, and the import-boundary tests that must keep
+enforcing the new pattern.
+
 ## 3. Rules (if X -> do Y)
 
 - If core agent or pipeline logic changes -> run `make test-cov` and `make typecheck`.
+- If a change consolidates or re-homes behavior across multiple surfaces (a "refactor" issue, not a localized fix) -> follow [REFACTOR_CHECKLIST.md](REFACTOR_CHECKLIST.md) before writing code and before opening the PR.
 - If a new feature is shipped (tool, CLI command, pipeline behavior, integration) -> add a `docs/` page or section covering usage, configuration, and examples before the PR is opened.
 - If a new `docs/` page is added or renamed -> register it in `docs/docs.json` under the correct `pages` array in the same PR (path without `.mdx`, e.g. `messaging/whatsapp` for `docs/messaging/whatsapp.mdx`).
 - If an existing feature changes behavior, flags, or config shape -> update the relevant `docs/` page in the same PR; docs and code must stay in sync.
@@ -206,3 +223,7 @@ Test commands, turn-handling rules, CI-only paths: **[CI.md](CI.md)**. Live REPL
 ## 6. New Integration Checklist
 
 Follow [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md) — it is the single definition of done for all tool and integration work.
+
+## 7. Large Refactor Checklist
+
+Follow [REFACTOR_CHECKLIST.md](REFACTOR_CHECKLIST.md) — it is the single definition of done for refactors that consolidate or re-home behavior across multiple surfaces (see "Large multi-surface refactors" above).

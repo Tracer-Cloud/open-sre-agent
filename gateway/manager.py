@@ -13,11 +13,10 @@ from __future__ import annotations
 import logging
 import signal
 
-from dotenv import load_dotenv
 from rich.console import Console
 
+from core.agent_harness.harness import AgentHarness, HarnessConfig
 from core.agent_harness.providers.default_providers import DefaultToolProvider
-from core.agent_harness.session import SessionManager
 from gateway.config.configure_gateway_logging import configure_gateway_logging
 from gateway.config.get_gateway_settings import GatewaySettings
 from gateway.polling.telegram_gateway_background import TelegramGatewayBackground
@@ -35,12 +34,13 @@ class GatewayManager:
 
     def start_gateway(self, *, wait: bool = True) -> GatewayManager:
         """Assemble the turn handler, start the worker, and own its lifecycle."""
-        load_dotenv(override=False)
+        harness = AgentHarness(HarnessConfig(open_storage=False))
+        harness.resolve_env_variables()
         logger = configure_gateway_logging()
 
         # Compose the transport-agnostic turn handler from a booted session's
         # action tools (precomputed once per process, reused each turn).
-        session = SessionManager().create(open_storage=False)
+        session = harness.load_or_create_session()
         console = Console(force_terminal=False)
         tools = DefaultToolProvider(session, console).action_tools(
             confirm_fn=None,

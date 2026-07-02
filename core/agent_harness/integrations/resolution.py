@@ -7,7 +7,7 @@ import json
 import logging
 import os
 from collections.abc import Mapping
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -24,6 +24,9 @@ from integrations.catalog import (
 from integrations.catalog import (
     merge_local_integrations as _merge_local_integrations,
 )
+
+if TYPE_CHECKING:
+    from core.agent_harness.ports import SessionStore
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +65,35 @@ class IntegrationResolutionResult(StrictConfigModel):
 def resolve_integrations(state: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """Return integration configs keyed by service for any runtime consumer."""
     return resolve_integrations_with_metadata(state).resolved_integrations
+
+
+def resolve_and_cache_integrations(session: SessionStore) -> dict[str, Any]:
+    """Resolve integration configs once per session and cache the result.
+
+    Canonical, surface-agnostic sync resolver: checks
+    ``session.resolved_integrations_cache`` first, resolves via
+    :func:`resolve_integrations` on a miss, and merges the result back onto the
+    cache (preserving any runtime-only metadata keys already present). Callers
+    that need async/off-critical-path warmup (e.g. the interactive shell's
+    boot-time warm) layer that behavior on top of this function rather than
+    reimplementing the cache check.
+    """
+    from core.agent_harness.session.integrations_cache import (
+        has_only_runtime_metadata,
+        has_resolved_integrations,
+        merge_resolved_integrations,
+    )
+
+    cached = session.resolved_integrations_cache
+    if cached is not None and (
+        has_resolved_integrations(cached) or not has_only_runtime_metadata(cached)
+    ):
+        return cached
+
+    resolved = resolve_integrations()
+    if resolved:
+        session.resolved_integrations_cache = merge_resolved_integrations(cached, resolved)
+    return session.resolved_integrations_cache or {}
 
 
 def resolve_integrations_with_metadata(
@@ -211,6 +243,7 @@ def _strip_bearer(token: str) -> str:
 __all__ = [
     "IntegrationResolutionRequest",
     "IntegrationResolutionResult",
+    "resolve_and_cache_integrations",
     "resolve_integrations",
     "resolve_integrations_with_metadata",
 ]

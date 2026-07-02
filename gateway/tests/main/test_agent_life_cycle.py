@@ -67,14 +67,14 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
             assert kwargs.get("open_storage") is False
             return FakeSession()
 
-    monkeypatch.setattr("gateway.manager.load_dotenv", lambda **_kwargs: None)
+    monkeypatch.setattr("core.agent_harness.harness.load_dotenv", lambda **_kwargs: None)
     monkeypatch.setattr("gateway.manager.configure_gateway_logging", lambda: logger)
     monkeypatch.setattr("gateway.telegram_gateway.load_gateway_settings", lambda: settings)
     monkeypatch.setattr(
         "gateway.manager.signal.signal",
         lambda signum, handler: signal_calls.append((signum, handler)),
     )
-    monkeypatch.setattr("gateway.manager.SessionManager", FakeSessionManager)
+    monkeypatch.setattr("core.agent_harness.harness.SessionManager", FakeSessionManager)
 
     class FakeDefaultToolProvider(DefaultToolProvider):
         def action_tools(
@@ -199,11 +199,11 @@ def test_polled_telegram_message_reaches_start_gateway_agent_callback(monkeypatc
             assert chat_id == "chat-1"
             return self._session
 
-    monkeypatch.setattr("gateway.manager.load_dotenv", lambda **_kwargs: None)
+    monkeypatch.setattr("core.agent_harness.harness.load_dotenv", lambda **_kwargs: None)
     monkeypatch.setattr("gateway.manager.configure_gateway_logging", lambda: logger)
     monkeypatch.setattr("gateway.telegram_gateway.load_gateway_settings", lambda: settings)
     monkeypatch.setattr("gateway.manager.signal.signal", lambda *_args: None)
-    monkeypatch.setattr("gateway.manager.SessionManager", FakeSessionManager)
+    monkeypatch.setattr("core.agent_harness.harness.SessionManager", FakeSessionManager)
 
     class FakeDefaultToolProvider(DefaultToolProvider):
         def action_tools(
