@@ -209,6 +209,7 @@ class DefaultTurnAccounting:
                 kind="chat",
                 prompt=self._text,
                 response=response,
+                llm_run=result.llm_run,
             )
         with contextlib.suppress(AttributeError):
             self._session.last_assistant_intent = result.final_intent
@@ -221,6 +222,7 @@ def _append_turn_detail(
     kind: str,
     prompt: str,
     response: str,
+    llm_run: Any | None = None,
 ) -> None:
     storage = getattr(session, "storage", None)
     append_turn_detail = getattr(storage, "append_turn_detail", None)
@@ -228,7 +230,18 @@ def _append_turn_detail(
     if not callable(append_turn_detail) or not isinstance(session_id, str) or not session_id:
         return
     try:
-        append_turn_detail(session_id, kind, prompt, response=response)
+        append_turn_detail(
+            session_id,
+            kind,
+            prompt,
+            response=response,
+            model=getattr(llm_run, "model", None) if llm_run is not None else None,
+            provider=getattr(llm_run, "provider", None) if llm_run is not None else None,
+            latency_ms=getattr(llm_run, "latency_ms", None) if llm_run is not None else None,
+            system_prompt=getattr(llm_run, "final_system_prompt", None)
+            if llm_run is not None
+            else None,
+        )
     except Exception:
         log.debug("failed to persist default turn detail", exc_info=True)
 

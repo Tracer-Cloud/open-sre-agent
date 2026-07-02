@@ -1,5 +1,8 @@
 """Per-turn immutable context snapshot for the agentic turn engine.
 
+See ``docs/agent-context-data-stores.md`` for how this fits with ``Session``,
+``MutableAgentState``, and JSONL persistence.
+
 Assembled once at the start of each turn from any object satisfying
 :class:`TurnContextSource` (the interactive shell passes its ``Session``;
 headless callers pass an in-memory session store). All fields reflect session
@@ -183,6 +186,7 @@ class TurnContext:
             if isinstance(role, str) and isinstance(content, str)
         )
         runtime_input = _select_runtime_request_input(text, session)
+        last_observation = _read_last_observation(session, runtime_input)
         return cls(
             text=text,
             conversation_messages=snapshot,
@@ -198,7 +202,7 @@ class TurnContext:
             tool_resources=dict(getattr(runtime_input, "tool_resources", {}) or {}),
             max_iterations=int(getattr(runtime_input, "max_iterations", 1)),
             model=getattr(runtime_input, "model", None),
-            last_observation=getattr(runtime_input, "last_observation", None),
+            last_observation=last_observation,
         )
 
     def render_system_prompt(self) -> str:
@@ -219,6 +223,24 @@ class TurnContext:
             raise ValueError("TurnContext.max_iterations must be positive.")
         if not self.active_tools:
             raise ValueError("TurnContext.active_tools must include at least one tool.")
+
+
+def _read_last_observation(session: TurnContextSource, runtime_input: Any | None) -> str | None:
+    """Read the last tool observation from runtime input or the live session."""
+    from_runtime = getattr(runtime_input, "last_observation", None)
+    if isinstance(from_runtime, str) and from_runtime.strip():
+        return from_runtime
+
+    agent = getattr(session, "agent", None)
+    agent_observation = getattr(agent, "last_observation", None)
+    if isinstance(agent_observation, str) and agent_observation.strip():
+        return agent_observation
+
+    session_observation = getattr(session, "last_command_observation", None)
+    if isinstance(session_observation, str) and session_observation.strip():
+        return session_observation
+
+    return None
 
 
 __all__ = [

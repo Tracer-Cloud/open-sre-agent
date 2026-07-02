@@ -79,13 +79,15 @@ to it instead of re-implementing bootstrap + persistence:
   :meth:`SessionManager.rebind_for_resume` then :meth:`SessionManager.restore_context`.
   REPL exit calls :meth:`SessionManager.close` via
   :meth:`SessionManager.for_session`.
-- **gateway** — `gateway/manager.py` bootstraps the process-wide action-tool
-  list via :meth:`SessionManager.create` (``open_storage=False``).
+- **gateway** — `gateway/manager.py` bootstraps the process via
+  :meth:`SessionManager.create` (``open_storage=False``).
   `gateway/storage/session/resolver.py::SessionResolver` owns per-chat
   chat-id ↔ session-id binding + metadata; it delegates `create` / `resolve` /
   `rotate` to `SessionManager`. Turn dispatch uses
-  `Agent.dispatch_message_to_headless_agent` via `gateway/turn_handler.py` —
-  there is no separate gateway-owned `Agent` instance.
+  `Agent.dispatch_message_to_headless_agent` via `gateway/turn_handler.py` with
+  :class:`~core.agent_harness.providers.default_providers.DefaultToolProvider`
+  built from the **live per-chat session** each turn (same tool resolution as
+  shell). There is no separate gateway-owned ``Agent`` instance.
 - **headless** — ephemeral in-memory sessions (``headless_agent.InMemorySessionStore``)
   bypass ``SessionManager`` by design: they never persist to JSONL and do not
   need create/resolve/rotate/close. Tool-calling turns still run through the
@@ -124,9 +126,20 @@ Action (`agents/action_agent.py::_build_action_agent`) and evidence
 (`agents/evidence_agent.py::_build_evidence_agent`) assemble an
 ``AgentConfig`` and call ``build_agent``. The gateway turn path does not
 construct a persistent ``Agent`` — it uses
-``Agent.dispatch_message_to_headless_agent`` with precomputed action tools.
-When ``Agent.__init__``'s signature changes, ``agent_builder.py`` is the single
-edit site for harness surfaces that call ``build_agent``.
+``Agent.dispatch_message_to_headless_agent`` with per-turn
+:class:`~core.agent_harness.providers.default_providers.DefaultToolProvider`
+from the live chat session. When ``Agent.__init__``'s signature changes,
+``agent_builder.py`` is the single edit site for harness surfaces that call
+``build_agent``.
+
+## Agent context and data stores
+
+See [`docs/agent-context-data-stores.md`](../../docs/agent-context-data-stores.md)
+for the four-store model (``Session``, ``MutableAgentState``, ``TurnContext``,
+JSONL), prompt debug paths, and the ``MutableAgentState`` production audit.
+Turn assembly starts with ``TurnContext.from_session`` in
+``agents/turn_orchestrator.py``; system prompts from ``Agent.run`` are persisted
+via ``core/agent_harness/debug/prompt_trace.py``.
 
 **Do NOT** reintroduce per-surface `Agent` subclasses that override
 `build_llm` / `build_system_prompt` / `build_tools` / `resolved_integrations`

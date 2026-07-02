@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from core.agent_harness.models.turn_context import TurnContext
     from core.agent_harness.ports import SessionStore
 
 
@@ -45,3 +46,18 @@ def build_gather_system_prompt(session: SessionStore) -> str:
         "you have enough data.\n"
         f"Configured integrations in this session: {configured}."
     )
+
+
+def build_gather_system_prompt_from_turn_context(turn_ctx: TurnContext) -> str:
+    """Build the gather system prompt from a :class:`TurnContext` snapshot.
+
+    Uses the same integration list the action and assistant agents saw at
+    turn start. Prefer this when a ``TurnContext`` is already available.
+    """
+
+    class _GatherSessionView:
+        @property
+        def configured_integrations(self) -> tuple[str, ...]:
+            return turn_ctx.configured_integrations
+
+    return build_gather_system_prompt(_GatherSessionView())  # type: ignore[arg-type]

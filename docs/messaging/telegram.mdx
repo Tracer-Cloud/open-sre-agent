@@ -197,7 +197,7 @@ or set `TELEGRAM_ALLOWED_USERS=123456789` in `.env`.
 
 <Warning>
   Use the **numeric user id** (Telegram's `from.id`), not a `@username` and not
-  your bot's handle. Inbound authorization only ever matches the numeric id, so a
+  the bot handle. Inbound authorization only ever matches the numeric id, so a
   `@handle` produces an allow-list entry that can never match a real sender — you
   will see `User <id> is not in the allowed users list` for every message. The CLI
   now rejects non-numeric Telegram ids, but older entries may still be wrong; check

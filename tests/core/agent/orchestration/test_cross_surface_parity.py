@@ -39,6 +39,7 @@ from tests.core.agent.orchestration.cross_surface_parity_harness import (
     wire_llms,
     wire_tool_registry,
 )
+from tools.registry import clear_tool_registry_cache
 
 SLACK_INTEGRATIONS = {"slack": {"webhook_url": "https://hooks.example/test"}}
 
@@ -57,6 +58,9 @@ def parity_env(monkeypatch: pytest.MonkeyPatch):
         wire_llms(monkeypatch, action_mode=action_mode, action_tool_name=action_tool_name)
 
     def _configure_with_slash(*, action_mode: str = "text") -> list[str]:
+        # Clear the registry cache so slash_invoke resolves from a fresh
+        # discovery pass, not a set another test warmed (project test convention).
+        clear_tool_registry_cache()
         slash = get_action_tool("slash_invoke")
         assert slash is not None
         dispatched: list[str] = []

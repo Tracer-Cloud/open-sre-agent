@@ -192,6 +192,23 @@ def test_append_turn_detail_writes_full_prompt_and_response(tmp_path: Path) -> N
     assert messages[0]["metadata"]["latency_ms"] == 1500
 
 
+def test_append_turn_detail_stores_system_prompt_metadata(tmp_path: Path) -> None:
+    session = _make_session()
+    with _patch_dir(tmp_path):
+        SessionStore.open_session(session)
+        SessionStore.append_turn_detail(
+            session.session_id,
+            "chat",
+            "question",
+            response="answer",
+            system_prompt="assistant system block",
+        )
+
+    records = _read_lines(tmp_path / f"{session.session_id}.jsonl")
+    messages = [r for r in records if r["type"] == "message"]
+    assert messages[0]["metadata"]["system_prompt"] == "assistant system block"
+
+
 def test_append_turn_detail_omits_none_fields(tmp_path: Path) -> None:
     session = _make_session()
     with _patch_dir(tmp_path):

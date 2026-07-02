@@ -53,6 +53,7 @@ class SessionStorage(Protocol):
         model: str | None = None,
         provider: str | None = None,
         latency_ms: int | None = None,
+        system_prompt: str | None = None,
     ) -> None:
         raise NotImplementedError
 

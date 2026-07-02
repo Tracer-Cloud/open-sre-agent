@@ -21,6 +21,7 @@ from typing import Any, Protocol
 
 from core.agent import Agent
 from core.agent_harness.agent_builder import AgentConfig, build_agent
+from core.agent_harness.debug.prompt_trace import persist_turn_system_prompt
 from core.agent_harness.ports import ErrorReporter, SessionStore, ToolEventObserver
 from core.agent_harness.prompts.conversation_memory import (
     NO_HISTORY_PLACEHOLDER,
@@ -204,6 +205,11 @@ def gather_tool_evidence(
         )
         result = agent.run(
             [{"role": "user", "content": _build_gather_user_message(session, message)}]
+        )
+        persist_turn_system_prompt(
+            session,
+            phase="gather_agent",
+            system_prompt=result.final_system_prompt,
         )
     except KeyboardInterrupt:
         if on_progress is not None:

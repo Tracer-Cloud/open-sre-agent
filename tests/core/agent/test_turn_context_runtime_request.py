@@ -174,6 +174,21 @@ class _Session:
         self.agent = _AgentState(tool)
 
 
+def test_turn_context_from_session_reads_last_command_observation_from_session() -> None:
+    class _Session:
+        cli_agent_messages: list[tuple[str, str]] = []
+        configured_integrations = ()
+        configured_integrations_known = True
+        last_state = None
+        last_synthetic_observation_path = None
+        reasoning_effort = None
+        last_command_observation = "tool output from shell"
+
+    ctx = TurnContext.from_session("why", _Session())
+
+    assert ctx.last_observation == "tool output from shell"
+
+
 def test_turn_context_from_session_snapshots_shell_and_runtime_request_fields() -> None:
     tool = _tool()
     session = _Session(tool)

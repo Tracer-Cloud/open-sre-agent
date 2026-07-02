@@ -53,6 +53,7 @@ class InMemorySessionStorage:
         model: str | None = None,
         provider: str | None = None,
         latency_ms: int | None = None,
+        system_prompt: str | None = None,
     ) -> None:
         metadata = {
             key: value
@@ -62,6 +63,7 @@ class InMemorySessionStorage:
                 "model": model,
                 "provider": provider,
                 "latency_ms": latency_ms,
+                "system_prompt": system_prompt,
             }.items()
             if value is not None
         }
@@ -74,6 +76,26 @@ class InMemorySessionStorage:
                 "message",
                 {"role": "assistant", "content": response, "metadata": metadata},
             )
+
+    def append_message(
+        self,
+        session_id: str,
+        *,
+        role: str,
+        content: str,
+        metadata: dict[str, Any] | None = None,
+        parent_id: str | None = None,
+    ) -> str:
+        return self._append(
+            session_id,
+            "message",
+            {
+                "role": role,
+                "content": content,
+                "metadata": dict(metadata or {}),
+            },
+            parent_id=parent_id,
+        )
 
     def append_tool_call(
         self,

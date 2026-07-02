@@ -1,123 +1,293 @@
-# Agent context & data stores
+# Agent context and data stores
 
-> Contributor reference. If you are trying to understand "what state is the agent
-> actually looking at right now?", start here.
+> **Start here** if you are asking: *what state is the agent looking at right
+> now?* or *where do I debug the prompt that was sent to the model?*
 
-A single agent turn touches **four** in-memory/on-disk stores. They are *not*
-merged into one object — but each has one clear owner and one clear job. This
-page says which is which, so you can find and debug context quickly.
+This page maps the four in-memory/on-disk stores, how they relate, and where
+to look when something diverges between shell, gateway, and headless paths.
 
-## The four stores at a glance
+---
 
-| # | Store | Lives in | Owns (its one job) | Lifecycle owner |
-|---|-------|----------|--------------------|-----------------|
-| 1 | **`Session`** | `core/agent_harness/session/state.py` | The whole REPL/gateway session: identity, history, integration cache, per-session prefs, background tasks. | `SessionManager` |
-| 2 | **`MutableAgentState`** | `core/context/state/agent_state.py` | The **conversation only**: the running `(role, text)` message list + the last tool observation. Held on `Session` as `session.agent`. | `Session` (embeds it) |
-| 3 | **`TurnContext`** | `core/agent_harness/models/turn_context.py` | An **immutable snapshot of one turn**, taken at turn start, so prompt building sees a stable view (not mid-mutation session state). | Built fresh per turn |
-| 4 | **JSONL session file** | `core/agent_harness/session/storage/jsonl.py` | **Durable history on disk**: turns, tool calls, investigation results, compaction. | `SessionStorage` protocol |
+## Quick lookup
 
-Rule of thumb:
-- **Session** = "everything we remember for this process."
-- **MutableAgentState** = "the chat transcript" (a slice of Session).
-- **TurnContext** = "a photo of the session at the instant this turn began."
-- **JSONL** = "the same thing, written to disk so `/resume` and `/trace` work."
+| I want to… | Look at… |
+|------------|----------|
+| See live session state (integrations, history, metrics) | `Session` — `core/agent_harness/session/state.py` |
+| See the chat transcript the assistant uses | `session.agent.messages` (`MutableAgentState`) |
+| See what one turn looked like **at turn start** | `TurnContext.from_session(text, session)` |
+| Resume or trace a past session | JSONL file — `~/.opensre/sessions/{session_id}.jsonl` |
+| See the **system prompt** sent to `Agent.run` | `AgentRunResult.final_system_prompt` (in-memory) or JSONL `role=system` entries |
+| See the **user-facing composed prompt** for the assistant | Session JSONL `message` user rows, or `~/.config/opensre/prompt_log.jsonl` (shell only) |
+| Understand turn routing (action vs answer) | `run_turn` — `core/agent_harness/agents/turn_orchestrator.py` |
 
-## Store 1 — `Session` (the hub)
+---
 
-`Session` is the process-wide session object used by **every** surface (interactive
-shell *and* headless gateway — it is not REPL-specific). Its lifecycle
-(create / resolve / rotate / close) is owned by `SessionManager`; see
-[`core/agent_harness/AGENTS.md`](../core/agent_harness/AGENTS.md).
+## Architecture (four stores)
 
-Cohesive slices have been factored out so `Session` reads as composition, not a
-grab-bag: `session.tokens` (`TokenUsage`), `session.metrics` (`TerminalMetrics`),
-`session.agent` (`MutableAgentState`, store #2), `session.storage`
-(`SessionStorage`, store #4).
+```mermaid
+flowchart TB
+    subgraph turn_start [Turn start]
+        UserInput[User message]
+        Session[Session hub]
+        TC[TurnContext snapshot]
+        UserInput --> TC
+        Session --> TC
+    end
 
-## Store 2 — `MutableAgentState` (conversation only)
+    subgraph agents [Agent phases]
+        Action[Action agent - Agent.run]
+        Gather[Gather agent - Agent.run]
+        Answer[Assistant - invoke_stream]
+    end
 
-**What it actually does in production:** holds the conversation transcript and the
-last tool observation. That's it. Reached through `session.agent`:
+    TC --> Action
+    TC --> Gather
+    TC --> Answer
+    Session --> Action
+    Session --> Gather
+    Session --> Answer
 
-- `session.agent.messages` — the `(role, text)` list (also via the
-  `session.cli_agent_messages` compatibility property).
-- `session.agent.last_observation` — the last turn's tool/command output (also via
-  `session.last_command_observation`).
-- `session.agent.clear()` — reset on `/new`.
+    subgraph persist [Persistence]
+        AgentState[session.agent messages]
+        JSONL[Session JSONL file]
+    end
 
-**Audit result (issue #3434):** `MutableAgentState` is a ~340-line Zustand-style
-store with a much larger API — `system_prompt`, `model`, `available_tools`,
-`active_tools`, `run_status`, `pending_tool_calls`, `subscribe()`, `snapshot()`,
-`begin_run()`, and a family of `set_*` mutators. **In production, none of that
-extra API is used** — only `messages` / `last_observation` / `clear()` are.
+    Action --> AgentState
+    Answer --> AgentState
+    Action --> JSONL
+    Gather --> JSONL
+    Answer --> JSONL
+    Session --> JSONL
+```
 
-**Is it wired into the `Agent` class?** **No.** `core/agent.py` does not import or
-touch `MutableAgentState`. The `Agent` loop takes its system prompt, tools, and
-integrations as explicit constructor arguments (via `AgentConfig` /
-`build_agent`), not from `MutableAgentState`. So `MutableAgentState.system_prompt`
-is written once at construction and never read by the runtime.
+**Rule of thumb**
 
-Practical implication: treat `session.agent` as "the transcript." Do not reach for
-its `set_model` / `begin_run` / `snapshot` machinery — it is not on any live path.
-(Slimming it to the used surface is tracked as a follow-up.)
+| Store | One-line job |
+|-------|----------------|
+| `Session` | Everything this process remembers |
+| `MutableAgentState` (`session.agent`) | The chat transcript + last tool observation |
+| `TurnContext` | A frozen photo of session state at turn start |
+| JSONL session file | Durable copy for `/resume`, `/trace`, and audit |
 
-## Store 3 — `TurnContext` (one-turn snapshot)
+---
 
-Built once per turn via `TurnContext.from_session(text, session)` and passed to the
-prompt builders. Because it is an **immutable** snapshot, a prompt reflects
-turn-start state even if the session mutates mid-turn.
+## Turn flow (one message)
 
-**There is exactly one `TurnContext` type — no surface-specific variants.** (Issue
-#3434 mentioned a `ShellTurnContext`; it does not exist. `ReplRuntimeContext`,
-`GroundingContext`, `ActionToolContext`, etc. are unrelated objects, not
-`TurnContext` subclasses.) So there is nothing to "consolidate" here — the single
-type is already the shared base.
+```mermaid
+sequenceDiagram
+    participant Surface as Shell / Gateway / Headless
+    participant TO as run_turn
+    participant TC as TurnContext
+    participant Action as action_agent
+    participant Gather as evidence_agent
+    participant Answer as answer_cli_agent
+    participant JSONL as Session JSONL
 
-`TurnContext` can also drive `Agent.run(agent_context=...)`: it carries
-`system_prompt`, `active_tools`, `resolved_integrations`, and `max_iterations` for
-the runtime-request path.
+    Surface->>TO: message + Session
+    TO->>TC: TurnContext.from_session
+    TO->>Action: execute_actions (uses TC)
+    alt action handled
+        Action->>JSONL: persist_turn_system_prompt (action)
+        TO-->>Surface: cli_agent_handled
+    else fall through
+        TO->>Gather: gather (optional)
+        Gather->>JSONL: persist_turn_system_prompt (gather)
+        TO->>Answer: answer (uses TC)
+        Answer->>JSONL: append_turn_detail (user + assistant)
+        TO-->>Surface: cli_agent_fallback
+    end
+```
 
-## Store 4 — JSONL session file (durable)
+All surfaces call the same `run_turn` engine. Gateway uses
+`Agent.dispatch_message_to_headless_agent` with `DefaultToolProvider(session, …)`
+so action tools resolve from the **live** session integrations each turn (same as
+shell).
 
-Every turn, tool call, investigation result, and compaction is appended to a
-per-session JSONL file through the `SessionStorage` protocol
-(`JsonlSessionStorage` in production, `InMemorySessionStorage` in tests). This is
-what `/resume` reloads and what `/trace` reads. It is intentionally decoupled from
-the in-memory stores: the on-disk format can change without touching `Session`.
+---
 
-## Where prompts are built
+## Glossary (disambiguation)
 
-System prompts are assembled per surface, then handed to the agent as a plain
-string (`AgentConfig.system`). After issue #3434 the builders live in **two**
-homes:
+| Name | What it is **not** |
+|------|---------------------|
+| `MutableAgentState` | Not `core.agent.Agent` state; not investigation `AgentState` TypedDict |
+| `TurnContext` | Not `ReplRuntimeContext`, `GroundingContext`, or `ActionToolContext` |
+| `AgentContextInput` | Not a store — selector output from `select_agent_context_input()` |
+| `Agent.run(agent_context=…)` | Not used on live shell/gateway paths yet (tests only); production uses `AgentConfig` |
+| `PromptRecorder` | Not the system prompt — records user prompt + assistant response (shell telemetry) |
 
-| Surface | Builder | Home |
-|---------|---------|------|
-| Action agent | `build_action_system_prompt` | `core/agent_harness/prompts/` |
-| Conversational assistant | `build_assistant_system_prompt` | `core/agent_harness/prompts/` |
-| Evidence gather | `build_gather_system_prompt` | `core/agent_harness/prompts/` |
-| Investigation pipeline | `build_investigation_system_prompt` | `tools/investigation/stages/gather_evidence/prompt.py` |
+---
 
-Home 1 — **`core/agent_harness/prompts/`** — is the single home for every
-harness-surface prompt. Home 2 is the investigation pipeline's own
-domain-specific prompt, which lives with the investigation stage that uses it.
+## Store 1 — `Session`
 
-## Seeing the final prompt (debuggability)
+**File:** `core/agent_harness/session/state.py`  
+**Lifecycle:** `SessionManager` — `core/agent_harness/session/manager.py`
 
-The **assembled system prompt is captured on every agent turn** (issue #3434,
-Problem 1). `core/agent.py::Agent.run(...)` records the exact system prompt sent to
-the LLM onto its result — `AgentRunResult.final_system_prompt` — captured *after*
-the `_before_provider_request` hook, so it reflects any per-turn edits, not a
-pre-hook approximation.
+Composition (not a grab-bag):
 
-The capture lives in the shared core loop, **not** in any one surface, so every
-surface (interactive shell, CLI, gateway/Telegram, headless) records the same
-thing from the same place. That answers "what was influencing the agent when it
-made this decision?" without re-deriving the prompt by hand.
+| Slice | Type | Role |
+|-------|------|------|
+| `session.agent` | `MutableAgentState` | Transcript |
+| `session.storage` | `SessionStorage` | JSONL writer |
+| `session.tokens` | `TokenUsage` | Token accounting |
+| `session.metrics` | `TerminalMetrics` | Terminal metrics |
+| `session.resolved_integrations_cache` | `dict` | Integration configs for tools |
 
-**Follow-up (not yet wired):** persisting `final_system_prompt` to the per-session
-JSONL trace so `/trace` can render it. That belongs in the core turn record (the
-shared run-record path), *not* in the shell-only `PromptRecorder` — recording it in
-one surface is exactly the per-surface divergence this restructure is removing. The
-shell's `PromptRecorder` today records the *user* input text, not the system
-prompt, and is a separate, surface-local mechanism.
+Used by **every** surface (shell, gateway, headless). Gateway chat sessions are
+hydrated by `SessionResolver` before each turn.
+
+---
+
+## Store 2 — `MutableAgentState` (audit)
+
+**File:** `core/context/state/agent_state.py`  
+**Access:** `session.agent` (compat: `session.cli_agent_messages`,
+`session.last_command_observation`)
+
+### Production API (use these)
+
+| API | Purpose |
+|-----|---------|
+| `.messages` / setter | Conversation `(role, text)` pairs |
+| `.last_observation` | Last tool/command output for grounding |
+| `.clear()` | Reset on `/new` |
+
+### Unused in production (tests / future only)
+
+| API | Status |
+|-----|--------|
+| `set_system_prompt`, `set_model`, `set_*_tools` | Never called on live paths |
+| `begin_run` / `end_run`, `mark_tool_pending` | Never called on live paths |
+| `subscribe()`, `snapshot()` | Test-only |
+| `record_turn()` | Orchestrator appends to `cli_agent_messages` directly instead |
+
+**Important:** `core.agent.Agent` does **not** read `MutableAgentState`. Tools
+and system prompts are assembled per turn via `TurnContext` + `AgentConfig`.
+
+**Follow-up:** slim the class to transcript + observation only (issue #3434).
+
+---
+
+## Store 3 — `TurnContext` (unified)
+
+**File:** `core/agent_harness/models/turn_context.py`  
+**There is exactly one type** — no `ShellTurnContext` or surface variants.
+
+Built once per turn:
+
+```python
+turn_ctx = TurnContext.from_session(text, session)
+```
+
+Passed to action prompts, assistant prompts, and shell adapters. The live
+`Session` is still passed separately for writes (history, tokens, persistence).
+
+### Field reference
+
+| Field | Populated by `from_session`? | Used by |
+|-------|------------------------------|---------|
+| `text` | Yes | All agents |
+| `conversation_messages` | Yes (capped) | Action + assistant prompts |
+| `configured_integrations` | Yes | Prompts, tool availability |
+| `last_state` | Yes | Follow-up grounding (RCA) |
+| `last_synthetic_observation_path` | Yes | Synthetic failure context |
+| `reasoning_effort` | Yes | LLM calls |
+| `last_observation` | Yes (session → agent → runtime input) | Assistant grounding |
+| `system_prompt`, `active_tools`, … | Only if `select_agent_context_input` populated | `Agent.run(agent_context=…)` tests |
+| `working_directory`, `terminal_capabilities`, … | **No** (reserved / unused) | Do not rely on these |
+
+Runtime-request fields are empty in production because `MutableAgentState` is
+never populated with tools/prompt — builders read `TurnContext` snapshot fields
+and assemble `AgentConfig` separately.
+
+**Gather alignment:** prefer `build_gather_system_prompt_from_turn_context(turn_ctx)`
+when a snapshot exists; the session-only overload remains for adapters.
+
+---
+
+## Store 4 — JSONL session file
+
+**Path:** `~/.opensre/sessions/{session_id}.jsonl`  
+**Protocol:** `SessionStorage` — `core/agent_harness/session/types.py`
+
+| Entry type | Contents |
+|------------|----------|
+| `session` | Header (version, cwd, opensre version) |
+| `message` | User/assistant/system chat rows + metadata |
+| `tool_call` / `tool_result` | Tool execution audit |
+| `compaction` | Context compaction summary |
+| `investigation_result` | RCA output |
+| `custom_message` / `turn_stub` | Turn kind stubs from `Session.record` |
+
+Reload: `SessionRepo.load_session` → `SessionManager.restore_context`.
+
+---
+
+## Prompt recording (debug)
+
+Three layers — know which you need:
+
+| Layer | What is captured | Where | Surfaces |
+|-------|------------------|-------|----------|
+| **A. `AgentRunResult.final_system_prompt`** | Exact system string after `_before_provider_request` | In-memory on `Agent.run` result | Action + gather (`Agent.run`) |
+| **B. `persist_turn_system_prompt`** | Same system prompt appended to JSONL | `message` row, `role=system`, `metadata.debug=system_prompt` | Action + gather (wired in harness) |
+| **C. `append_turn_detail`** | User prompt + assistant response (+ optional `metadata.system_prompt` from `LlmRunInfo`) | Session JSONL `message` rows | Gateway/headless via `DefaultTurnAccounting`; shell via `PromptRecorder.flush` |
+| **D. `PromptRecorder`** | User prompt + response text (telemetry) | `~/.config/opensre/prompt_log.jsonl` | Shell only |
+
+### Debug cookbook
+
+**Find action/gather system prompt in session file:**
+
+```bash
+jq 'select(.type=="message" and .role=="system")' \
+  ~/.opensre/sessions/YOUR_SESSION_ID.jsonl
+```
+
+**Find assistant turn with metadata:**
+
+```bash
+jq 'select(.type=="message" and .metadata.kind=="chat")' \
+  ~/.opensre/sessions/YOUR_SESSION_ID.jsonl
+```
+
+**Shell global prompt log:**
+
+```bash
+tail -f ~/.config/opensre/prompt_log.jsonl
+# Disable: OPENSRE_PROMPT_LOG_DISABLED=1
+# Path override: OPENSRE_PROMPT_LOG_PATH
+```
+
+**In code after `Agent.run`:**
+
+```python
+result.final_system_prompt  # last system prompt sent to the provider
+```
+
+### Prompt builders (single harness home)
+
+| Phase | Builder | Module |
+|-------|---------|--------|
+| Action | `build_action_system_prompt` | `core/agent_harness/prompts/` |
+| Assistant | `build_assistant_system_prompt` | `core/agent_harness/prompts/` |
+| Gather | `build_gather_system_prompt` / `_from_turn_context` | `core/agent_harness/prompts/gather.py` |
+| Investigation | `build_investigation_system_prompt` | `tools/investigation/stages/gather_evidence/prompt.py` |
+
+The assistant path is a **categorical exception**: it streams via
+`invoke_stream(prompt)` and does not use `Agent.run` (see
+`core/agent_harness/AGENTS.md`).
+
+---
+
+## Related docs
+
+- `core/agent_harness/AGENTS.md` — package boundaries, session lifecycle, agent construction
+- `gateway/AGENTS.md` — gateway turn handler and per-chat sessions
+
+---
+
+## Follow-ups (issue #3434)
+
+1. Slim `MutableAgentState` to transcript + observation only
+2. Wire assistant composed prompt split into system vs user blocks in JSONL
+3. Route production action/gather through `Agent.run(agent_context=TurnContext)` instead of parallel `AgentConfig` assembly
+4. Populate or remove reserved `TurnContext` shell fields (`working_directory`, etc.)
