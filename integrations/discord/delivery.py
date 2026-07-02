@@ -8,6 +8,7 @@ from typing import Any
 
 from platform.common.truncation import truncate
 from platform.notifications.delivery_transport import post_json
+from platform.notifications.limits import MAX_MESSAGE_SIZE
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +103,7 @@ def create_discord_thread(
 
 
 _EMBED_TITLE_LIMIT = 256
-_EMBED_DESCRIPTION_LIMIT = 4096
+_EMBED_DESCRIPTION_LIMIT = MAX_MESSAGE_SIZE
 
 
 def send_discord_report(report: str, discord_ctx: dict[str, Any]) -> tuple[bool, str]:
