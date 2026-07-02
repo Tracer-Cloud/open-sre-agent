@@ -28,8 +28,15 @@ def should_compact(
     *,
     threshold_chars: int | None = None,
 ) -> bool:
+    # Headless / in-memory sessions do not have a persisted ``session.agent``;
+    # they can never grow past a threshold worth compacting, so treat missing
+    # attributes as "no compaction needed" rather than raising.
+    agent = getattr(session, "agent", None)
+    messages = getattr(agent, "messages", None) if agent is not None else None
+    if messages is None:
+        return False
     threshold = threshold_chars or _auto_threshold()
-    return _message_chars(list(session.agent.messages)) > threshold
+    return _message_chars(list(messages)) > threshold
 
 
 def compact_session_branch(

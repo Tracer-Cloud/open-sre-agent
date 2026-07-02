@@ -2,7 +2,7 @@
 
 The wizard JSON file lives at the path returned by
 :func:`config.constants.get_store_path`. Several layers below ``surfaces/`` —
-notably ``infra/deployment/`` — need to *read* the persisted remote URLs and
+notably ``platform/deployment/`` — need to *read* the persisted remote URLs and
 the remote ops scope. They cannot import from ``surfaces.cli.wizard.store``
 without violating the layering contract in ``surfaces/__init__.py``.
 

@@ -4,7 +4,7 @@ import io
 
 from rich.console import Console
 
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from surfaces.interactive_shell.runtime.core.turn_accounting import (
     ToolCallingTurnResult,
 )
@@ -43,7 +43,7 @@ def test_execute_shell_turn_cli_agent_empty_response_is_recorded_empty() -> None
     def fake_answer(*_args: object, **_kwargs: object) -> LlmRunInfo:
         return LlmRunInfo(response_text="")
 
-    session = ReplSession()
+    session = Session()
     output = io.StringIO()
     execute_shell_turn(
         "show datadog integration details",

@@ -187,6 +187,25 @@ class TestModelPricesTable:
         for model in ("claude-sonnet-4-5", "claude-opus-4-1", "claude-3-5-sonnet-20241022"):
             assert model in MODEL_PRICES or usd_per_token_blended(model) is not None
 
+    def test_claude_fable_5_has_a_price(self) -> None:
+        # #3621: claude-fable-5 must not render ``-`` on the dashboard.
+        # $10/$50 per MTok, cache read $1.00, cache write $12.50.
+        usage = TokenUsage(
+            input_tokens=100,
+            cache_read_input_tokens=2000,
+            cache_creation_input_tokens=500,
+            output_tokens=50,
+        )
+        cost = usd_for_usage(usage, "claude-fable-5")
+        expected = (100 * 10e-6) + (2000 * 1.0e-6) + (500 * 12.5e-6) + (50 * 50e-6)
+        assert cost == pytest.approx(expected)
+
+    def test_claude_fable_5_dated_suffix_falls_back_to_family(self) -> None:
+        # A future date-suffixed release id resolves via the family prefix.
+        rate = usd_per_token_blended("claude-fable-5-20260609")
+        assert rate is not None
+        assert rate == usd_per_token_blended("claude-fable-5")
+
     def test_codex_default_models_have_prices(self) -> None:
         # Same guarantee for the codex side. ``gpt-5-codex`` is the
         # default model the Codex CLI configures for paid accounts.

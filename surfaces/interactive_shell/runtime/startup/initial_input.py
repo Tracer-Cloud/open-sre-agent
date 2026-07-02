@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from rich.console import Console
 
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from platform.analytics.repl_context import bind_cli_session_id, reset_cli_session_id
 from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 from surfaces.interactive_shell.ui import render_banner
@@ -16,7 +16,7 @@ _TURN_KIND = "agent"
 
 def run_initial_input(
     initial_input: str,
-    session: ReplSession,
+    session: Session,
 ) -> int:
     console = Console(
         highlight=False,

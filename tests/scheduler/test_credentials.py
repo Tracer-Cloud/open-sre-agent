@@ -49,6 +49,26 @@ class TestSlackCredentials:
         creds = resolve_slack_credentials({})
         assert creds == {"access_token": "xoxb-from-env"}
 
+    def test_from_env_access_token_fallback(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("SLACK_BOT_TOKEN", raising=False)
+        monkeypatch.setenv("SLACK_ACCESS_TOKEN", "xoxp-from-access-env")
+        monkeypatch.setattr(
+            "platform.scheduler.credentials._get_integration_credential",
+            lambda *_: "",
+        )
+        creds = resolve_slack_credentials({})
+        assert creds == {"access_token": "xoxp-from-access-env"}
+
+    def test_from_env_bot_token_takes_priority(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("SLACK_BOT_TOKEN", "xoxb-primary")
+        monkeypatch.setenv("SLACK_ACCESS_TOKEN", "xoxp-secondary")
+        monkeypatch.setattr(
+            "platform.scheduler.credentials._get_integration_credential",
+            lambda *_: "",
+        )
+        creds = resolve_slack_credentials({})
+        assert creds == {"access_token": "xoxb-primary"}
+
     def test_empty_when_nothing_configured(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("SLACK_BOT_TOKEN", raising=False)
         monkeypatch.delenv("SLACK_ACCESS_TOKEN", raising=False)

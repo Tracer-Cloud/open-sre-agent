@@ -24,9 +24,8 @@ Before any push or PR creation follow **[CI.md](CI.md)** — lint, format, typec
 | `interactive_shell/`  | Interactive terminal (REPL) loop, slash commands, chat/help surfaces, action-planning harness, and terminal UI. |
 | `integrations/`       | Per-integration config normalization, verification, clients, helpers, store/catalog logic, the Hermes log pipeline, and per-vendor tool packages under `integrations/<vendor>/tools/`. |
 | `tools/`              | Tool registry, per-tool packages for cross-cutting tools that aren't vendor-specific (e.g. `tools/fleet_monitoring/`, `tools/watch_dog/`, `tools/sre_guidance_tool/`), and the interactive-shell action tools. Framework primitives (decorator, base class, utils) live in `core/tool_framework/`. |
-| `platform/`           | Cross-cutting platform services: guardrails, masking, sandbox, analytics, auth, notifications, observability. |
+| `platform/`           | Cross-cutting platform services: guardrails, masking, sandbox, analytics, auth, notifications, observability, and EC2 deployment (`platform/deployment/`). |
 | `config/`             | Shared constants, prompts, UI theme, and the web app entrypoint (`config/webapp.py`).              |
-| `infra/deployment/`         | Deployment operations, remote-hosted runtime code, and external runtime entrypoints.               |
 | `tests/`              | Unit, integration, synthetic, deployment, e2e, chaos engineering, and support tests.               |
 | `docs/`               | User-facing documentation, integration guides, and docs-site assets.                               |
 | `.github/`            | CI workflows, issue templates, pull request template, and repository automation.                   |
@@ -49,7 +48,8 @@ Main packages one level deeper:
 - `interactive_shell/` — Interactive terminal (TTY) loop, slash-command surface, chat/help handoff, session runtime, and terminal UI. REPL watchdog slash commands (`/watch`, `/watches`, `/unwatch`): PR demo steps live under **Interactive shell: REPL watchdog demo** in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#interactive-shell-repl-watchdog-demo).
 - `config/constants/` — Shared prompt and other static constants.
 - `core/context/` — Context assembly boundary for building, trimming, ranking, and packaging incident evidence before agent/runtime consumption.
-- `infra/deployment/` — Health polling, local persisted EC2 outputs, and provider config validation for dry runs (`infra/deployment/operations/`).
+- `platform/deployment/aws/` — Shared boto3 client factory, deployment constants (`config.py`), VPC/subnet/SG helpers, EC2/IAM provisioning, ECR build/push, and SSM run-command primitives. Import from here in deployment scripts instead of duplicating.
+- `platform/deployment/` — EC2 deploy/destroy: `opensre-web` and `opensre-gateway` on one instance. Makefile: `make deploy`.
 - `platform/guardrails/` — Guardrail rules, evaluation engine, audit helpers, and CLI bindings.
 - `integrations/` — Integration config normalization, verification, selectors, clients, integration-local helpers, store, and catalog logic.
 - `integrations/hermes/` — Hermes log tailing, incident classification, correlator, sinks, and investigation bridge.
@@ -155,9 +155,26 @@ Basic steps:
 5. Run `make verify-integrations` before treating the integration as complete.
 6. Before opening or approving the PR, follow [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md) for integration completeness, investigation wiring, docs, and demo/test requirements.
 
+### Large multi-surface refactors
+
+A consolidation refactor collapses behavior that has diverged across
+multiple surfaces (`interactive_shell/`, `gateway/`, `tools/investigation/`,
+`core/agent_harness/`, etc.) into one shared class or module — e.g. the
+`agent_harness` T-2/T-3 series (session management, integration resolution,
+startup consolidation). These are higher-risk than a normal feature or tool
+change: they touch several call sites at once and the source issue's file
+paths tend to be stale by the time work starts.
+
+Before starting this class of work, follow
+[REFACTOR_CHECKLIST.md](REFACTOR_CHECKLIST.md) — it covers dependency
+ordering, re-validating the issue against current repo state, incremental
+per-surface migration, and the import-boundary tests that must keep
+enforcing the new pattern.
+
 ## 3. Rules (if X -> do Y)
 
 - If core agent or pipeline logic changes -> run `make test-cov` and `make typecheck`.
+- If a change consolidates or re-homes behavior across multiple surfaces (a "refactor" issue, not a localized fix) -> follow [REFACTOR_CHECKLIST.md](REFACTOR_CHECKLIST.md) before writing code and before opening the PR.
 - If a new feature is shipped (tool, CLI command, pipeline behavior, integration) -> add a `docs/` page or section covering usage, configuration, and examples before the PR is opened.
 - If a new `docs/` page is added or renamed -> register it in `docs/docs.json` under the correct `pages` array in the same PR (path without `.mdx`, e.g. `messaging/whatsapp` for `docs/messaging/whatsapp.mdx`).
 - If an existing feature changes behavior, flags, or config shape -> update the relevant `docs/` page in the same PR; docs and code must stay in sync.
@@ -206,3 +223,7 @@ Test commands, turn-handling rules, CI-only paths: **[CI.md](CI.md)**. Live REPL
 ## 6. New Integration Checklist
 
 Follow [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md) — it is the single definition of done for all tool and integration work.
+
+## 7. Large Refactor Checklist
+
+Follow [REFACTOR_CHECKLIST.md](REFACTOR_CHECKLIST.md) — it is the single definition of done for refactors that consolidate or re-home behavior across multiple surfaces (see "Large multi-surface refactors" above).

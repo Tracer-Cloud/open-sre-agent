@@ -14,16 +14,16 @@ import pytest
 from rich.console import Console
 
 import tools.interactive_shell.actions.slash as slash_tool
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from core.agent_harness.tools.tool_context import (
     ActionToolContext,
 )
 
 
-def _ctx() -> tuple[ActionToolContext, io.StringIO, ReplSession]:
+def _ctx() -> tuple[ActionToolContext, io.StringIO, Session]:
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False, highlight=False)
-    session = ReplSession()
+    session = Session()
     return ActionToolContext(session=session, console=console), buf, session
 
 

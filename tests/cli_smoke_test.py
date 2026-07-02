@@ -181,16 +181,20 @@ def _clean_terminal_output(text: str) -> str:
 
 
 def _opensre_executable() -> Path:
-    candidates: list[Path] = []
+    """Return the ``opensre`` entrypoint from the active test interpreter's venv.
+
+    Prefer the script adjacent to ``sys.executable`` over ``shutil.which`` so CI
+    and local xdist workers never invoke a stale global ``opensre`` on ``PATH``
+    that predates the ``remote`` command (smoke tests would otherwise see
+    ``Error: No such command 'remote'``).
+    """
+    candidates: list[Path] = [
+        Path(sys.executable).with_name(_SCRIPT_NAME),
+        Path(sysconfig.get_path("scripts")) / _SCRIPT_NAME,
+    ]
     resolved = shutil.which(_SCRIPT_NAME)
     if resolved:
         candidates.append(Path(resolved))
-    candidates.extend(
-        [
-            Path(sysconfig.get_path("scripts")) / _SCRIPT_NAME,
-            Path(sys.executable).with_name(_SCRIPT_NAME),
-        ]
-    )
     for candidate in candidates:
         if candidate.exists():
             return candidate
@@ -866,8 +870,8 @@ def test_tests_interactive_launcher_smoke(cli_sandbox: CliSandbox) -> None:
     assert "Choose a test category:" in result.stdout
 
 
-def test_deploy_help_smoke(cli_sandbox: CliSandbox) -> None:
-    result = _run_cli(cli_sandbox, "remote", "-h")
+def test_gateway_help_smoke(cli_sandbox: CliSandbox) -> None:
+    result = _run_cli(cli_sandbox, "gateway", "-h")
 
     assert result.exit_code == 0
-    assert "health" in result.stdout
+    assert "telegram" in result.stdout

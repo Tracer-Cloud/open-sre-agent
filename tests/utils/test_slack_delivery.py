@@ -492,50 +492,6 @@ class TestDelegatesToSharedTransport:
 # ---------------------------------------------------------------------------
 
 
-class TestRedaction:
-    def test_redact_token_in_error_string(self) -> None:
-        token = "xoxb-1234567890-abcdefghij"
-        error = "connect failed for url=https://slack.com/api/chat.postMessage"
-        result = slack_delivery._redact_token(error, token)
-        assert result == error
-
-    def test_redact_token_in_error_string_with_token_present(self) -> None:
-        token = "xoxb-1234567890-abcdefghij"
-        error = "connect failed with xoxb-1234567890-abcdefghij"
-        result = slack_delivery._redact_token(error, token)
-        assert token not in result
-        assert "<redacted>" in result
-
-    def test_redact_token_returns_original_when_token_not_present(self) -> None:
-        result = slack_delivery._redact_token("some error", "xoxb-missing")
-        assert result == "some error"
-
-    def test_redact_token_scrubs_slack_token_pattern_without_exact_match(self) -> None:
-        leaked_token = "xoxb-token-from-response-body"
-        result = slack_delivery._redact_token(f"proxy echoed {leaked_token}", "different-token")
-        assert leaked_token not in result
-        assert "xoxb-<redacted>" in result
-
-
-class TestExtractError:
-    def test_prefers_error_field(self) -> None:
-        result = slack_delivery._extract_error({"error": "channel_not_found"}, 400, "html body")
-        assert result == "channel_not_found"
-
-    def test_falls_back_to_text_when_no_error_field(self) -> None:
-        result = slack_delivery._extract_error({}, 502, "<html>Bad Gateway</html>")
-        assert result == "<html>Bad Gateway</html>"
-
-    def test_falls_back_to_http_status_when_no_data(self) -> None:
-        result = slack_delivery._extract_error({}, 500, "")
-        assert result == "HTTP 500"
-
-    def test_truncates_text_to_500_chars(self) -> None:
-        long_text = "x" * 1000
-        result = slack_delivery._extract_error({}, 502, long_text)
-        assert len(result) == 500
-
-
 class TestNonJsonBody:
     def test_post_direct_handles_html_error_body(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from platform.notifications.delivery_transport import DeliveryResponse

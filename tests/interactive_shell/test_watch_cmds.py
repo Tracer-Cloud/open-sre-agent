@@ -10,7 +10,7 @@ from unittest.mock import MagicMock
 import pytest
 from rich.console import Console
 
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from integrations.telegram.credentials import TelegramCredentials
 from platform.common.task_types import TaskKind, TaskStatus
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
@@ -72,7 +72,7 @@ def test_dispatch_watch_creates_watchdog_task(
         _fake_start,
     )
 
-    session = ReplSession()
+    session = Session()
     session.trust_mode = True
     console, buf = _capture()
     dispatch_slash(
@@ -113,7 +113,7 @@ def test_unwatch_marks_watchdog_cancelled(monkeypatch: pytest.MonkeyPatch) -> No
         lambda **kw: threading.Thread(target=_slow_watchdog, kwargs=kw, daemon=True).start(),
     )
 
-    session = ReplSession()
+    session = Session()
     session.trust_mode = True
     console, _ = _capture()
     dispatch_slash(
@@ -134,7 +134,7 @@ def test_unwatch_marks_watchdog_cancelled(monkeypatch: pytest.MonkeyPatch) -> No
 
 
 def test_unwatch_rejects_non_watchdog_task() -> None:
-    session = ReplSession()
+    session = Session()
     session.trust_mode = True
     inv = session.task_registry.create(TaskKind.INVESTIGATION, command="x")
     inv.mark_running()

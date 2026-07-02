@@ -1,12 +1,34 @@
-"""Dispatch rendered reports to configured publish channels."""
+"""Dispatch rendered reports to every registered delivery adapter.
+
+Each vendor supplies a
+:class:`platform.reporting.delivery_registry.ReportDeliveryAdapter` from its
+own ``integrations/<vendor>/reporting_adapter.py`` module. The bootstrap
+helper in :mod:`tools.investigation.reporting.delivery.bootstrap` triggers
+their side-effect registrations before the loop runs, so this dispatch node
+never imports from ``integrations.*`` directly (T-4 layering audit, issue
+#3352, items 23/28).
+
+Slack is treated as the primary channel — it renders the shared interactive
+action blocks the pipeline attaches to Slack messages and updates the
+investigation thread's status emoji. All other adapters are called
+opportunistically; each decides for itself whether the current
+:class:`~core.context.state.InvestigationState` carries enough context to
+deliver.
+"""
 
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from core.context.state import InvestigationState
-from tools.investigation.reporting.delivery.slack import deliver_slack_report
+from platform.reporting.delivery_registry import (
+    ReportDeliveryAdapter,
+    get_delivery_adapter,
+    iter_delivery_adapters,
+)
+from tools.investigation.reporting.delivery.bootstrap import (
+    ensure_delivery_adapters_registered,
+)
 from tools.investigation.reporting.formatters.messages import ReportMessages
 from tools.investigation.reporting.gitlab_writeback import post_gitlab_mr_writeback
 
@@ -20,248 +42,106 @@ def dispatch_report(
     investigation_id: str | None,
     investigation_url: str | None,
 ) -> list[dict]:
-    """Dispatch report messages to all configured channels.
+    """Dispatch report messages to every registered delivery channel.
 
-    Returns the Slack blocks sent, including the investigation action blocks.
+    Returns the Slack blocks sent (including the investigation action blocks)
+    so upstream tests can assert the shared block payload without probing each
+    vendor separately.
     """
-    from integrations.slack.delivery import build_action_blocks
+    ensure_delivery_adapters_registered()
 
-    all_blocks = messages.slack_blocks + build_action_blocks(
+    all_blocks = messages.slack_blocks + _build_slack_action_blocks(
         investigation_url or "", investigation_id
     )
-    deliver_slack_report(state, messages.slack_text, all_blocks)
 
     resolved = state.get("resolved_integrations") or {}
-    discord_creds = resolved.get("discord", {})
-    logger.debug(
-        "[publish] discord creds present=%s keys=%s",
-        bool(discord_creds),
-        list(discord_creds.keys()) if discord_creds else [],
-    )
-    _dispatch_discord(state, messages.slack_text, discord_creds)
-    _dispatch_telegram(state, messages.telegram_html, resolved.get("telegram", {}))
-    _dispatch_whatsapp(state, messages.whatsapp_text, resolved.get("whatsapp", {}))
-    _dispatch_twilio_sms(state, messages.sms_text, resolved.get("twilio", {}))
-    _dispatch_openclaw(state, messages.slack_text, resolved.get("openclaw", {}))
+    if isinstance(resolved, dict):
+        _log_discord_debug(resolved.get("discord", {}))
+
+    payload = _messages_payload(messages)
+
+    slack_adapter = get_delivery_adapter("slack")
+    if slack_adapter is not None:
+        _run_adapter(slack_adapter, state, messages=payload, blocks=all_blocks)
+
+    for adapter in iter_delivery_adapters():
+        if adapter.name == "slack":
+            continue
+        _run_adapter(adapter, state, messages=payload, blocks=all_blocks)
+
     post_gitlab_mr_writeback(state, messages.slack_text)
     return all_blocks
 
 
-def _dispatch_discord(
+def _run_adapter(
+    adapter: ReportDeliveryAdapter,
     state: InvestigationState,
-    slack_message: str,
-    discord_creds: dict[str, Any],
+    *,
+    messages: dict[str, object],
+    blocks: list[dict],
 ) -> None:
-    if not discord_creds:
-        logger.debug("[publish] discord delivery: no discord integration configured")
-        return
+    """Invoke ``adapter.deliver`` and swallow non-fatal errors.
 
-    from integrations.discord.delivery import send_discord_report
-
-    discord_ctx = state.get("discord_context") or {}
-    bot_token = discord_ctx.get("bot_token") or discord_creds.get("bot_token", "")
-    channel_id = discord_ctx.get("channel_id") or discord_creds.get("default_channel_id", "")
-    thread_id = discord_ctx.get("thread_id", "")
-    logger.debug(
-        "[publish] discord delivery: channel_id=%s thread_id=%s auth_configured=%s",
-        channel_id,
-        thread_id,
-        bool(bot_token),
-    )
-    if bot_token and channel_id:
-        discord_posted, discord_error = send_discord_report(
-            slack_message,
-            {"bot_token": bot_token, "channel_id": channel_id, "thread_id": thread_id},
+    Vendor adapters raise ``RuntimeError`` only when the failure must abort
+    the investigation (e.g. the Slack thread that triggered the run failed to
+    receive the report). Anything else is logged and does not stop other
+    adapters from running.
+    """
+    try:
+        adapter.deliver(state, messages=messages, blocks=blocks)
+    except RuntimeError:
+        # Fail-closed adapters (currently Slack) raise so upstream can surface
+        # the error; do not swallow.
+        raise
+    except Exception:  # noqa: BLE001
+        logger.warning(
+            "[publish] %s adapter raised while delivering report",
+            adapter.name,
+            exc_info=True,
         )
+
+
+def _messages_payload(messages: ReportMessages) -> dict[str, object]:
+    """Return a plain ``dict`` view of the rendered per-channel messages.
+
+    Adapters accept a :class:`platform.reporting.delivery_registry.DeliveryContext`
+    (a ``Mapping``) so they never touch the concrete
+    :class:`~tools.investigation.reporting.formatters.messages.ReportMessages`
+    dataclass — that keeps the platform boundary free of ``tools`` types.
+    """
+    return {
+        "slack_text": messages.slack_text,
+        "slack_blocks": messages.slack_blocks,
+        "telegram_html": messages.telegram_html,
+        "whatsapp_text": messages.whatsapp_text,
+        "sms_text": messages.sms_text,
+    }
+
+
+def _log_discord_debug(discord_creds: object) -> None:
+    if isinstance(discord_creds, dict):
         logger.debug(
-            "[publish] discord delivery: posted=%s error=%s", discord_posted, discord_error
+            "[publish] discord creds present=%s keys=%s",
+            bool(discord_creds),
+            list(discord_creds.keys()),
         )
-        if not discord_posted:
-            logger.warning(
-                "[publish] Discord delivery failed: channel=%s error=%s",
-                channel_id,
-                discord_error,
-            )
-        return
-
-    logger.debug(
-        "[publish] discord delivery: skipped - auth_configured=%s channel_id=%s",
-        bool(bot_token),
-        channel_id,
-    )
+    else:
+        logger.debug("[publish] discord creds present=%s", bool(discord_creds))
 
 
-def _dispatch_telegram(
-    state: InvestigationState,
-    telegram_message: str,
-    telegram_creds: dict[str, Any],
-) -> None:
-    if not telegram_creds:
-        logger.debug("[publish] telegram delivery: no telegram integration configured")
-        return
+def _build_slack_action_blocks(investigation_url: str, investigation_id: str | None) -> list[dict]:
+    """Build the shared Slack action blocks without importing ``integrations.slack``.
 
-    from integrations.telegram.delivery import send_telegram_report
-
-    telegram_ctx = state.get("telegram_context") or {}
-    bot_token = telegram_ctx.get("bot_token") or telegram_creds.get("bot_token", "")
-    chat_id = telegram_ctx.get("chat_id") or telegram_creds.get("default_chat_id", "")
-    reply_to = str(telegram_ctx.get("reply_to_message_id") or "")
-    logger.debug(
-        "[publish] telegram delivery: chat_id=%s reply_to=%s auth_configured=%s",
-        chat_id,
-        reply_to,
-        bool(bot_token),
-    )
-    if bot_token and chat_id:
-        tg_posted, tg_error = send_telegram_report(
-            telegram_message,
-            {"bot_token": bot_token, "chat_id": chat_id, "reply_to_message_id": reply_to},
-        )
-        logger.debug("[publish] telegram delivery: posted=%s error=%s", tg_posted, tg_error)
-        if not tg_posted:
-            logger.warning(
-                "[publish] Telegram delivery failed: chat_id=%s error=%s",
-                chat_id,
-                tg_error,
-            )
-        return
-
-    logger.debug(
-        "[publish] telegram delivery: skipped - auth_configured=%s chat_id=%s",
-        bool(bot_token),
-        chat_id,
-    )
-
-
-def _dispatch_whatsapp(
-    state: InvestigationState,
-    whatsapp_message: str,
-    whatsapp_creds: dict[str, Any],
-) -> None:
-    if not whatsapp_creds:
-        logger.debug("[publish] whatsapp delivery: no whatsapp integration configured")
-        return
-
-    from integrations.whatsapp.delivery import send_whatsapp_report
-
-    whatsapp_ctx: dict[str, Any] = state.get("whatsapp_context") or {}
-    account_sid = whatsapp_ctx.get("account_sid") or whatsapp_creds.get("account_sid", "")
-    auth_token = whatsapp_ctx.get("auth_token") or whatsapp_creds.get("auth_token", "")
-    from_number = whatsapp_ctx.get("from_number") or whatsapp_creds.get("from_number", "")
-    to = whatsapp_ctx.get("to") or whatsapp_creds.get("default_to", "")
-    logger.debug(
-        "[publish] whatsapp delivery: to=%s account_sid=%s auth_configured=%s from_number=%s",
-        to,
-        account_sid,
-        bool(auth_token),
-        from_number,
-    )
-    if account_sid and auth_token and from_number and to:
-        wa_posted, wa_error = send_whatsapp_report(
-            whatsapp_message,
-            {
-                "account_sid": account_sid,
-                "auth_token": auth_token,
-                "from_number": from_number,
-                "to": to,
-            },
-        )
-        logger.debug("[publish] whatsapp delivery: posted=%s error=%s", wa_posted, wa_error)
-        if not wa_posted:
-            logger.warning(
-                "[publish] WhatsApp delivery failed: to=%s error=%s",
-                to,
-                wa_error,
-            )
-        return
-
-    logger.debug(
-        "[publish] whatsapp delivery: skipped - account_sid_present=%s "
-        "auth_token_present=%s from_number_present=%s to_present=%s",
-        bool(account_sid),
-        bool(auth_token),
-        bool(from_number),
-        bool(to),
-    )
-
-
-def _dispatch_twilio_sms(
-    state: InvestigationState,
-    sms_message: str,
-    twilio_creds: dict[str, Any],
-) -> None:
-    if not twilio_creds:
-        logger.debug("[publish] twilio delivery: no twilio integration configured")
-        return
-
-    sms_cfg = twilio_creds.get("sms") or {}
-    if not sms_cfg.get("enabled"):
-        return
-
-    from integrations.twilio.delivery import send_twilio_sms_report
-
-    twilio_sms_ctx: dict[str, Any] = state.get("twilio_sms_context") or {}
-    sms_to = twilio_sms_ctx.get("to") or sms_cfg.get("default_to") or ""
-    sms_from = sms_cfg.get("from_number", "")
-    messaging_service_sid = sms_cfg.get("messaging_service_sid", "")
-    account_sid = twilio_creds.get("account_sid", "")
-    auth_token = twilio_creds.get("auth_token", "")
-    logger.debug(
-        "[publish] twilio sms delivery: to=%s from=%s msg_service=%s account_sid_present=%s",
-        sms_to,
-        sms_from,
-        messaging_service_sid,
-        bool(account_sid),
-    )
-    if account_sid and auth_token and sms_to and (sms_from or messaging_service_sid):
-        sms_ok, sms_error, sms_sid = send_twilio_sms_report(
-            sms_message,
-            {
-                "account_sid": account_sid,
-                "auth_token": auth_token,
-                "from_number": sms_from,
-                "messaging_service_sid": messaging_service_sid,
-                "to": sms_to,
-            },
-        )
-        logger.debug(
-            "[publish] twilio sms delivery: posted=%s sid=%s error=%s",
-            sms_ok,
-            sms_sid,
-            sms_error,
-        )
-        if not sms_ok:
-            logger.warning(
-                "[publish] Twilio SMS delivery failed: to=%s error=%s",
-                sms_to,
-                sms_error,
-            )
-        return
-
-    logger.warning(
-        "[publish] twilio sms delivery: skipped - SMS channel is enabled "
-        "but not deliverable (recipient_present=%s sender_present=%s "
-        "account_sid_present=%s auth_token_present=%s). "
-        "Set TWILIO_SMS_DEFAULT_TO to enable auto-delivery.",
-        bool(sms_to),
-        bool(sms_from or messaging_service_sid),
-        bool(account_sid),
-        bool(auth_token),
-    )
-
-
-def _dispatch_openclaw(
-    state: InvestigationState,
-    slack_message: str,
-    openclaw_creds: dict[str, Any],
-) -> None:
-    if not openclaw_creds:
-        logger.debug("[publish] openclaw delivery: no openclaw integration configured")
-        return
-
-    from integrations.openclaw.delivery import send_openclaw_report
-
-    oc_posted, oc_error = send_openclaw_report(state, slack_message, openclaw_creds)
-    logger.debug("[publish] openclaw delivery: posted=%s error=%s", oc_posted, oc_error)
-    if not oc_posted:
-        logger.debug("[publish] OpenClaw delivery failed: %s", oc_error)
+    The Slack adapter is the canonical source for these blocks, but importing
+    it directly from the dispatch node reintroduces the ``tools ->
+    integrations`` edge we're removing. Instead, we ask the registered Slack
+    adapter to build them: it exposes ``build_action_blocks`` as a plain
+    attribute, and adapters that do not implement it (test stubs, non-Slack
+    vendors) simply skip the enrichment.
+    """
+    slack_adapter = get_delivery_adapter("slack")
+    builder = getattr(slack_adapter, "build_action_blocks", None)
+    if builder is None:
+        return []
+    result = builder(investigation_url, investigation_id)
+    return list(result) if isinstance(result, list) else []

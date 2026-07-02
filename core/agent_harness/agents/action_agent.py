@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from core.agent import Agent
+from core.agent_harness.agent_builder import AgentConfig, build_agent
 from core.agent_harness.models.turn_context import TurnContext
 from core.agent_harness.models.turn_results import ToolCallingTurnResult
 from core.agent_harness.ports import (
@@ -30,7 +31,7 @@ from core.agent_harness.ports import (
 )
 from core.agent_harness.prompts import build_action_system_prompt, build_action_user_message
 from core.agent_harness.prompts.conversation_memory import MAX_CONVERSATION_MESSAGES
-from core.events import RuntimeEvent, legacy_callback_payload
+from core.events import runtime_event_callback_from_observer
 from core.execution import ToolExecutionHooks, public_tool_input
 from core.llm.types import AgentLLMResponse, ToolCall
 from integrations.llm_cli.failure_explain import is_context_length_overflow
@@ -278,7 +279,73 @@ def _default_llm_factory() -> Any:
     return agent_llm_client.get_agent_llm()
 
 
-def run_agent_turn(
+def _build_action_agent(
+    *,
+    message: str,
+    session: SessionStore,
+    agent_tools: list[Any],
+    turn_ctx: TurnContext | None,
+    deps: ToolCallingDeps | None,
+    tool_hooks: ToolExecutionHooks | None,
+    tool_resources: dict[str, Any],
+    observer: Any,
+) -> tuple[Agent[Any], str]:
+    """Build the Agent for one action turn; return ``(agent, user_message)``.
+
+    Detects the three branches — verbatim ``!shell``, literal ``/slash``, or
+    LLM-selected — and picks a matching LLM (deterministic tool-call or hosted
+    factory), system prompt, and user-message envelope. The caller only has to
+    invoke ``.run()`` and shape the result.
+    """
+    bang_command = _bang_shell_command(message)
+    slash_call = (
+        None if bang_command is not None else _literal_slash_tool_call(message, agent_tools)
+    )
+
+    if bang_command is not None:
+        # Explicit `!` shell escape — dispatches input the user typed verbatim
+        # as a shell command. Not a deterministic-command fast path or
+        # regex/keyword intent matcher.
+        llm: Any = _StaticToolCallLLM(
+            [
+                ToolCall(
+                    id="direct_shell_0",
+                    name="shell_run",
+                    input={"command": bang_command},
+                )
+            ]
+        )
+        system = "Execute the explicit shell_run tool call."
+        user_message = message
+    elif slash_call is not None:
+        # Explicit literal `/slash`. Dispatch through the same `slash_invoke`
+        # AgentTool the LLM would otherwise pick, so typed commands keep working
+        # when the action-agent LLM is unavailable.
+        llm = _StaticToolCallLLM([slash_call])
+        system = "Execute the explicit slash_invoke tool call."
+        user_message = message
+    else:
+        factory = (
+            deps.llm_factory if deps is not None and deps.llm_factory else _default_llm_factory
+        )
+        llm = factory()
+        system = build_action_system_prompt(turn_ctx or TurnContext.from_session(message, session))
+        user_message = build_action_user_message(message)
+
+    config = AgentConfig(
+        llm=llm,
+        system=system,
+        tools=tuple(agent_tools),
+        resolved_integrations=_resolved_integrations_for_turn(session, turn_ctx),
+        max_iterations=_MAX_TOOL_CALLING_ITERATIONS,
+        tool_resources=tool_resources,
+        tool_hooks=tool_hooks,
+        on_runtime_event=runtime_event_callback_from_observer(observer),
+    )
+    return build_agent(config), user_message
+
+
+def run_action_agent_turn(
     message: str,
     session: SessionStore,
     *,
@@ -299,63 +366,28 @@ def run_agent_turn(
     mid-mutation) session.
     """
     history_start = len(session.history)
+
     agent_tools = tools.action_tools(confirm_fn=confirm_fn, is_tty=is_tty)
     tool_resources_provider = getattr(tools, "tool_resources", None)
     tool_resources = tool_resources_provider() if callable(tool_resources_provider) else {}
     observer = tools.observer(message=message)
 
-    bang_command = _bang_shell_command(message)
-    slash_call = (
-        None if bang_command is not None else _literal_slash_tool_call(message, agent_tools)
-    )
-    if bang_command is not None:
-        # Explicit `!` shell escape. This is not a general "deterministic command"
-        # fast path or regex/keyword intent matcher — it dispatches only input the
-        # user typed verbatim as a shell command.
-        def llm_factory() -> _StaticToolCallLLM:
-            return _StaticToolCallLLM(
-                [ToolCall(id="direct_shell_0", name="shell_run", input={"command": bang_command})]
-            )
-
-        user_message = message
-        system_prompt = "Execute the explicit shell_run tool call."
-    elif slash_call is not None:
-        # Explicit literal `/slash` command. Dispatch it deterministically through
-        # the same `slash_invoke` AgentTool the LLM would otherwise pick, so typed
-        # commands run without the action-agent LLM (and keep working when it is
-        # unavailable). Natural-language intent is still LLM-selected below.
-        slash_tool_call = slash_call
-
-        def llm_factory() -> _StaticToolCallLLM:
-            return _StaticToolCallLLM([slash_tool_call])
-
-        user_message = message
-        system_prompt = "Execute the explicit slash_invoke tool call."
-    else:
-        llm_factory = (
-            deps.llm_factory if deps is not None and deps.llm_factory else _default_llm_factory
-        )
-        user_message = build_action_user_message(message)
-        effective_ctx = turn_ctx or TurnContext.from_session(message, session)
-        system_prompt = build_action_system_prompt(effective_ctx)
-
     try:
-
-        def on_runtime_event(event: RuntimeEvent) -> None:
-            legacy = legacy_callback_payload(event)
-            if legacy is not None:
-                observer(*legacy)
-
-        result = Agent(
-            llm=llm_factory(),
-            system=system_prompt,
-            tools=agent_tools,
-            resolved_integrations=_resolved_integrations_for_turn(session, turn_ctx),
-            max_iterations=_MAX_TOOL_CALLING_ITERATIONS,
-            on_runtime_event=on_runtime_event,
-            tool_resources=tool_resources,
+        # LLM selection inside _build_action_agent is inside the try so a factory
+        # raise (e.g. provider unavailable) is caught and rendered like a run-loop
+        # failure. Agent construction is cheap and stays with it for a single
+        # failure boundary.
+        agent, user_message = _build_action_agent(
+            message=message,
+            session=session,
+            agent_tools=agent_tools,
+            turn_ctx=turn_ctx,
+            deps=deps,
             tool_hooks=tool_hooks,
-        ).run([{"role": "user", "content": user_message}])
+            tool_resources=tool_resources,
+            observer=observer,
+        )
+        result = agent.run([{"role": "user", "content": user_message}])
     except Exception as exc:
         if is_context_length_overflow(str(exc)):
             log.debug("shell action prompt overflow; falling through to assistant", exc_info=True)
@@ -409,5 +441,5 @@ def run_agent_turn(
 __all__ = [
     "SELF_RECORDING_ACTION_TOOL_NAMES",
     "ToolCallingDeps",
-    "run_agent_turn",
+    "run_action_agent_turn",
 ]

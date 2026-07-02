@@ -11,7 +11,7 @@ from core.agent_harness.session.prompt_history import load_command_history_entri
 from surfaces.interactive_shell.command_registry.types import (
     SlashCommand,
 )
-from surfaces.interactive_shell.runtime import ReplSession, TaskKind, TaskRecord, TaskStatus
+from surfaces.interactive_shell.runtime import Session, TaskKind, TaskRecord, TaskStatus
 from surfaces.interactive_shell.ui import (
     BOLD_BRAND,
     DIM,
@@ -115,7 +115,7 @@ def _task_detail_label(task: TaskRecord) -> str:
     return first_line or "—"
 
 
-def _cmd_history(_session: ReplSession, console: Console, _args: list[str]) -> bool:
+def _cmd_history(_session: Session, console: Console, _args: list[str]) -> bool:
     entries = load_command_history_entries()
     if not entries:
         console.print(f"[{DIM}]no history yet.[/]")
@@ -131,7 +131,7 @@ def _cmd_history(_session: ReplSession, console: Console, _args: list[str]) -> b
     return True
 
 
-def _cmd_tasks(session: ReplSession, console: Console, _args: list[str]) -> bool:
+def _cmd_tasks(session: Session, console: Console, _args: list[str]) -> bool:
     tasks = session.task_registry.list_recent(n=50)
     if not tasks:
         console.print(f"[{DIM}]no tasks recorded this session.[/]")
@@ -166,7 +166,7 @@ def _cmd_tasks(session: ReplSession, console: Console, _args: list[str]) -> bool
     return True
 
 
-def _cmd_stop(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+def _cmd_stop(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
     console.print(
         f"[{DIM}]in-flight work: press[/] [bold]Ctrl+C[/bold] "
         f"[{DIM}]during a streaming investigation, or run[/] [{HIGHLIGHT}]/tasks[/] "
@@ -181,7 +181,7 @@ def _validate_cancel_args(args: list[str]) -> str | None:
     return None
 
 
-def _cmd_cancel(session: ReplSession, console: Console, args: list[str]) -> bool:
+def _cmd_cancel(session: Session, console: Console, args: list[str]) -> bool:
     needle = args[0]
     candidates = session.task_registry.candidates(needle)
     if not candidates:

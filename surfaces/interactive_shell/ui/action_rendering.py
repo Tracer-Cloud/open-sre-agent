@@ -19,7 +19,7 @@ from typing import Any
 from rich.console import Console
 
 from core.agent_harness.agents.action_agent import SELF_RECORDING_ACTION_TOOL_NAMES
-from surfaces.interactive_shell.runtime import ReplSession
+from surfaces.interactive_shell.runtime import Session
 
 # Tools whose preview is just ``(label, single-arg)``. The display content is the
 # stripped string value of that single argument. Anything that needs to combine
@@ -62,7 +62,7 @@ class ActionRenderObserver:
     assistant runs.
     """
 
-    def __init__(self, *, session: ReplSession, console: Console, message: str) -> None:
+    def __init__(self, *, session: Session, console: Console, message: str) -> None:
         self.session = session
         self.console = console
         self.message = message

@@ -26,9 +26,9 @@ from config.constants.sentry import (
 )
 
 OPENSRE_HOME_DIR: Path = Path.home() / ".opensre"
-LEGACY_TRACER_HOME_DIR: Path = Path.home() / ".tracer"
 INTEGRATIONS_STORE_PATH: Path = OPENSRE_HOME_DIR / "integrations.json"
-LEGACY_INTEGRATIONS_STORE_PATH: Path = LEGACY_TRACER_HOME_DIR / "integrations.json"
+# Legacy read-fallback for migrating pre-OpenSRE installs from ~/.tracer.
+LEGACY_INTEGRATIONS_STORE_PATH: Path = Path.home() / ".tracer" / "integrations.json"
 OPENSRE_TMP_DIR: Path = Path(tempfile.gettempdir()) / "opensre"
 
 
@@ -63,7 +63,6 @@ __all__ = [
     "INTEGRATIONS_STORE_PATH",
     "IS_WINDOWS",
     "LEGACY_INTEGRATIONS_STORE_PATH",
-    "LEGACY_TRACER_HOME_DIR",
     "ensure_opensre_tmp_dir",
     "OPENSRE_HOME_DIR",
     "OPENSRE_TMP_DIR",

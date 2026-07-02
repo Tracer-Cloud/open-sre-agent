@@ -19,7 +19,7 @@ import tools.interactive_shell.actions.shell as shell_tool
 import tools.interactive_shell.actions.slash as slash_tool
 import tools.interactive_shell.actions.synthetic as synthetic_tool
 import tools.interactive_shell.actions.task_cancel as task_cancel_tool
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from platform.analytics.repl_context import bind_cli_session_id, reset_cli_session_id
 from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 from surfaces.interactive_shell.utils.telemetry import PromptRecorder
@@ -128,7 +128,7 @@ def session_capabilities(capabilities: ScenarioCapabilities) -> dict[str, tuple[
 
     Keys whose value is ``None`` (the capability is absent from the fixture) are
     omitted entirely so the tool stays available, mirroring the production
-    default where ``ReplSession()`` carries no capability constraints. An
+    default where ``Session()`` carries no capability constraints. An
     explicit ``()`` (disabled) or a non-empty allowlist is passed through
     verbatim so the runtime capability gate sees the intended constraint.
     """
@@ -150,8 +150,8 @@ def fresh_session(
     configured_integrations: tuple[str, ...] = (),
     available_capabilities: dict[str, tuple[str, ...]] | None = None,
     resolved_integrations_override: dict[str, Any] | None = None,
-) -> ReplSession:
-    session = ReplSession()
+) -> Session:
+    session = Session()
     if with_prior_state:
         session.last_state = {"root_cause": "disk full on orders-api"}
     session.configured_integrations = configured_integrations

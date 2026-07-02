@@ -9,7 +9,7 @@ from rich.console import Console
 
 from core.agent_harness.agents.turn_orchestrator import run_turn
 from core.agent_harness.providers.default_providers import DefaultTurnAccounting
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from core.agent_harness.session.storage.memory import InMemorySessionStorage
 from surfaces.interactive_shell.runtime.core.state import ReplState, SpinnerState
 from surfaces.interactive_shell.runtime.core.turn_accounting import (
@@ -55,7 +55,7 @@ def test_recorder_flushes_once_for_chat_fallback() -> None:
 
     result = execute_shell_turn(
         "question",
-        ReplSession(),
+        Session(),
         _console(),
         recorder=recorder,  # type: ignore[arg-type]
         execute_actions=_unhandled_turn,
@@ -71,7 +71,7 @@ def test_recorder_flushes_once_for_chat_fallback() -> None:
 
 def test_recorder_flushes_once_for_silent_handled_turn() -> None:
     recorder = _Recorder()
-    session = ReplSession()
+    session = Session()
 
     def _handled(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
         return ToolCallingTurnResult(
@@ -105,7 +105,7 @@ def test_recorder_flushes_once_for_silent_handled_turn() -> None:
 
 def test_default_turn_accounting_persists_action_only_context() -> None:
     storage = InMemorySessionStorage()
-    session = ReplSession(storage=storage)
+    session = Session(storage=storage)
     storage.open_session(session)
 
     def _handled(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
@@ -147,7 +147,7 @@ def test_default_turn_accounting_persists_action_only_context() -> None:
 def test_agent_turn_runner_exposes_pi_style_queue_methods() -> None:
     state = ReplState()
     runner = AgentTurnRunner(
-        session=ReplSession(),
+        session=Session(),
         state=state,
         spinner=SpinnerState(),
         invalidate_prompt=lambda: None,

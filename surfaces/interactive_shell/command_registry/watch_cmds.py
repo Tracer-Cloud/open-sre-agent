@@ -16,7 +16,7 @@ from platform.common.errors import OpenSREError
 from surfaces.interactive_shell.command_registry.types import (
     SlashCommand,
 )
-from surfaces.interactive_shell.runtime import ReplSession, TaskKind, TaskRecord, TaskStatus
+from surfaces.interactive_shell.runtime import Session, TaskKind, TaskRecord, TaskStatus
 from surfaces.interactive_shell.ui import (
     BOLD_BRAND,
     DIM,
@@ -191,7 +191,7 @@ def _watched_pid_from_task(task: TaskRecord) -> str:
     return "—"
 
 
-def _cmd_watch(session: ReplSession, console: Console, args: list[str]) -> bool:
+def _cmd_watch(session: Session, console: Console, args: list[str]) -> bool:
     parsed = parse_watch_argv(args)
     if isinstance(parsed, str):
         console.print(parsed)
@@ -235,7 +235,7 @@ def _cmd_watch(session: ReplSession, console: Console, args: list[str]) -> bool:
     return True
 
 
-def _cmd_watches(session: ReplSession, console: Console, _args: list[str]) -> bool:
+def _cmd_watches(session: Session, console: Console, _args: list[str]) -> bool:
     rows = [t for t in session.task_registry.list_recent(n=100) if t.kind == TaskKind.WATCHDOG]
     if not rows:
         console.print(f"[{DIM}]no watchdog tasks in this session.[/]")
@@ -281,7 +281,7 @@ def _validate_unwatch_args(args: list[str]) -> str | None:
     return None
 
 
-def _cmd_unwatch(session: ReplSession, console: Console, args: list[str]) -> bool:
+def _cmd_unwatch(session: Session, console: Console, args: list[str]) -> bool:
     needle = args[0]
     candidates = session.task_registry.candidates(needle)
     if not candidates:

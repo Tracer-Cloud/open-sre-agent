@@ -5,10 +5,25 @@ from __future__ import annotations
 import threading
 from collections.abc import Callable
 from datetime import UTC, datetime
+from typing import Protocol, runtime_checkable
 
-from integrations.telegram.alarms import AlarmDispatcher
 from platform.common.task_types import TaskRecord, TaskStatus
 from tools.fleet_monitoring.probe import probe
+
+
+@runtime_checkable
+class AlarmDispatcherPort(Protocol):
+    """Minimal alarm-dispatch contract the watchdog depends on.
+
+    The concrete implementation lives in
+    :class:`integrations.telegram.alarms.AlarmDispatcher`, but the watchdog
+    stays behind this local protocol so the module never imports
+    ``integrations.*`` directly (T-4 layering audit, issue #3352, item 37).
+    Callers wire the concrete dispatcher in at the CLI entry point.
+    """
+
+    def dispatch(self, threshold_name: str, message: str) -> bool:
+        """Dispatch one threshold alarm. Returns ``True`` when the alert fired."""
 
 
 def run_watchdog(
@@ -20,7 +35,7 @@ def run_watchdog(
     max_runtime_seconds: float | None,
     max_rss_mib: float | None,
     once: bool,
-    dispatcher: AlarmDispatcher,
+    dispatcher: AlarmDispatcherPort,
     on_alarm: Callable[[str, str], None] | None,
 ) -> None:
     """Poll ``watched_pid`` until cancel, process exit, or optional single alarm.
@@ -113,7 +128,7 @@ def start_watchdog_daemon_thread(
     max_runtime_seconds: float | None,
     max_rss_mib: float | None,
     once: bool,
-    dispatcher: AlarmDispatcher,
+    dispatcher: AlarmDispatcherPort,
     on_alarm: Callable[[str, str], None] | None,
 ) -> threading.Thread:
     """Start :func:`run_watchdog` on a daemon thread named ``watchdog-<task_id>``."""
@@ -138,4 +153,4 @@ def start_watchdog_daemon_thread(
     return thread
 
 
-__all__ = ["run_watchdog", "start_watchdog_daemon_thread"]
+__all__ = ["AlarmDispatcherPort", "run_watchdog", "start_watchdog_daemon_thread"]

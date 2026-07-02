@@ -26,7 +26,7 @@ import surfaces.interactive_shell.runtime.shell_turn_execution as shell_turn_exe
 import tools.interactive_shell.actions.slash as slash_tool
 from core.agent_harness.providers import default_prompt_context
 from core.agent_harness.providers.default_prompt_context import DefaultPromptContextProvider
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from surfaces.interactive_shell.command_registry import dispatch_slash
 from tests.core.agent.orchestration.action_execution_test_harness import (
     FakeActionLLM,
@@ -51,7 +51,7 @@ def test_model_show_records_no_observation() -> None:
     sets ``last_command_observation`` (integrations list/verify do). /model does
     not, so a turn that runs /model has nothing to summarize into an answer.
     """
-    session = ReplSession()
+    session = Session()
     console, _ = _capture()
     session.last_command_observation = "stale"
     session.last_command_observation = None
@@ -76,7 +76,7 @@ def test_model_question_routed_to_slash_is_never_answered(
 
     def _fake_dispatch(
         command: str,
-        session: ReplSession,
+        session: Session,
         console: Console,
         **_kwargs: object,
     ) -> bool:
@@ -97,7 +97,7 @@ def test_model_question_routed_to_slash_is_never_answered(
         answer_calls.append(text)
         return None
 
-    session = ReplSession()
+    session = Session()
     console, buf = _capture()
     result = shell_turn_execution.execute_shell_turn(
         _PROMPT,
@@ -146,7 +146,7 @@ def test_model_question_answered_when_handed_off(
         answer_calls.append(text)
         return object()
 
-    session = ReplSession()
+    session = Session()
     console, _ = _capture()
     result = shell_turn_execution.execute_shell_turn(
         _PROMPT,
@@ -198,7 +198,7 @@ def test_model_question_handoff_answers_from_active_llm_context(
     monkeypatch.setattr(provider, "agents_md", lambda _self: "")
     monkeypatch.setattr(provider, "investigation_flow", lambda _self: "")
 
-    session = ReplSession()
+    session = Session()
     session.cli_agent_messages = [
         ("user", "/model"),
         (

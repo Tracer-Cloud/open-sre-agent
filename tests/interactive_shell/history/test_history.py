@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from core.agent_harness.session.prompt_history import load_command_history_entries
 from surfaces.interactive_shell.command_registry import dispatch_slash
 
@@ -52,7 +52,7 @@ def test_history_slash_command_does_not_raise_when_history_dir_unwritable(
         lambda: mock_path,
     )
 
-    session = ReplSession()
+    session = Session()
     console, buf = _capture()
     assert dispatch_slash("/history", session, console) is True
     assert "no history yet" in buf.getvalue()

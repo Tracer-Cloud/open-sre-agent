@@ -10,7 +10,7 @@ from rich.console import Console
 
 import tools.interactive_shell.actions.slash as slash_tool
 from core.agent_harness.models.turn_results import ToolCallingTurnResult
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from surfaces.interactive_shell.runtime.shell_turn_execution import (
     execute_shell_turn,
     run_action_tool_turn,
@@ -25,7 +25,7 @@ from tests.core.agent.orchestration.action_execution_test_harness import (
 
 
 def test_slash_invoke_tool_start_does_not_record_cli_agent() -> None:
-    session = ReplSession()
+    session = Session()
     buffer = io.StringIO()
     console = Console(file=buffer, force_terminal=False, highlight=False)
     observer = ActionRenderObserver(session=session, console=console, message="/model show")
@@ -41,7 +41,7 @@ def test_slash_invoke_tool_start_does_not_record_cli_agent() -> None:
 
 
 def test_shell_run_tool_start_does_not_record_cli_agent() -> None:
-    session = ReplSession()
+    session = Session()
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
     observer = ActionRenderObserver(session=session, console=console, message="!true")
 
@@ -58,7 +58,7 @@ def test_literal_slash_command_records_single_history_entry(
 
     def _fake_dispatch(
         command: str,
-        session: ReplSession,
+        session: Session,
         console: Console,
         **_kwargs: object,
     ) -> bool:
@@ -67,7 +67,7 @@ def test_literal_slash_command_records_single_history_entry(
         return True
 
     monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
-    session = ReplSession()
+    session = Session()
     harness = ActionExecutionHarness(llm=FakeActionLLM([no_tool_response()]))
 
     result = run_action_tool_turn(
@@ -89,12 +89,12 @@ class _FakeLlmRun:
 
 
 def test_chat_turn_records_single_cli_agent_history_entry() -> None:
-    session = ReplSession()
+    session = Session()
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
 
     def _no_actions(
         _text: str,
-        _session: ReplSession,
+        _session: Session,
         _console: Console,
         **kwargs: object,
     ) -> ToolCallingTurnResult:
@@ -109,7 +109,7 @@ def test_chat_turn_records_single_cli_agent_history_entry() -> None:
 
     def _answer(
         _text: str,
-        _session: ReplSession,
+        _session: Session,
         _console: Console,
         **kwargs: object,
     ) -> _FakeLlmRun:

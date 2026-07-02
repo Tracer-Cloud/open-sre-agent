@@ -4,8 +4,12 @@ from fastapi import FastAPI, Response, status
 from pydantic import BaseModel, ValidationError
 
 from config.config import LLMSettings, get_environment
+from config.platform_bootstrap import ensure_project_platform_package
 from config.version import get_version
-from platform.observability.sentry_sdk import init_sentry
+
+ensure_project_platform_package()
+
+from platform.observability.sentry_sdk import init_sentry  # noqa: E402
 
 init_sentry(entrypoint="webapp")
 

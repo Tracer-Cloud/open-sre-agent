@@ -14,7 +14,7 @@ permissions:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
   # Keep in sync with ci.yml — single source of truth for lint/typecheck/coverage targets.
-  PYTHON_SOURCE_PATHS: "config core infra/deployment integrations platform surfaces tools"
+  PYTHON_SOURCE_PATHS: "config core integrations platform surfaces tools"
 
 concurrency:
   group: ci-labels-windows-${{ github.ref }}
@@ -101,7 +101,7 @@ jobs:
       - name: Run full tests
         run: >-
           uv run python -m pytest -n auto -v
-          --cov=config --cov=core --cov=infra.deployment --cov=integrations --cov=platform --cov=surfaces --cov=tools
+          --cov=config --cov=core --cov=platform.deployment.aws --cov=platform.deployment --cov=integrations --cov=platform --cov=surfaces --cov=tools
           --cov-report=term-missing
           --cov-report=html
           --ignore=tests/e2e/kubernetes_local_alert_simulation

@@ -5,7 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from config.constants import LEGACY_TRACER_HOME_DIR, OPENSRE_HOME_DIR
+from config.constants import LEGACY_INTEGRATIONS_STORE_PATH, OPENSRE_HOME_DIR
 from config.version import PACKAGE_NAME
 
 
@@ -40,7 +40,11 @@ def _pip_uninstall() -> int:
 
 
 def _data_dirs() -> list[Path]:
-    return [OPENSRE_HOME_DIR, LEGACY_TRACER_HOME_DIR, Path.home() / ".config" / "opensre"]
+    return [
+        OPENSRE_HOME_DIR,
+        LEGACY_INTEGRATIONS_STORE_PATH.parent,
+        Path.home() / ".config" / "opensre",
+    ]
 
 
 def _is_onedir_binary(exe_path: Path) -> bool:

@@ -7,7 +7,7 @@ on:
       - "surfaces/**"
       - "config/**"
       - "core/**"
-      - "infra/deployment/**"
+      - "platform/deployment/**"
       - "integrations/**"
       - "platform/**"
       - "tools/**"
@@ -28,7 +28,7 @@ on:
       - "surfaces/**"
       - "config/**"
       - "core/**"
-      - "infra/deployment/**"
+      - "platform/deployment/**"
       - "integrations/**"
       - "platform/**"
       - "tools/**"
@@ -48,7 +48,7 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-  PYTHON_SOURCE_PATHS: "config core infra/deployment integrations platform surfaces tools"
+  PYTHON_SOURCE_PATHS: "config core integrations platform surfaces tools"
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -129,14 +129,12 @@ jobs:
             llm_provider: openai
             pytest_paths: >-
               tests/cli
-              tests/remote
               tests/agent
               tests/core/agent
               tests/fleet_monitoring
               tests/analytics
               tests/tools/investigation
               tests/delivery
-              tests/entrypoints
               tests/sandbox
               tests/hermes
               tests/github
@@ -236,12 +234,17 @@ jobs:
       - name: Run tests
         env:
           COVERAGE_FILE: .coverage.${{ matrix.shard }}
-        run: >-
+          # Fork PRs do not receive repository secrets; skip live_llm contracts
+          # (see interactive-shell-live.yml). Use a job env var so the marker
+          # expression is always one quoted token (shell `and` would otherwise
+          # split `-m not synthetic and not live_llm` into separate commands).
+          PYTEST_MARKER_EXPR: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) && 'not (synthetic or live_llm)' || 'not synthetic' }}
+        run: >
           uv run python -m pytest -n auto -v
           ${{ matrix.pytest_paths }}
           --cov=config
           --cov=core
-          --cov=infra.deployment
+          --cov=platform.deployment.aws --cov=platform.deployment
           --cov=integrations
           --cov=platform
           --cov=surfaces
@@ -249,8 +252,8 @@ jobs:
           --cov-report=
           --ignore=tests/e2e/kubernetes_local_alert_simulation
           --ignore=tests/synthetic
-          ${{ matrix.extra_pytest_args || '' }}
-          -m "not synthetic"
+          ${{ matrix.extra_pytest_args }}
+          -m "${PYTEST_MARKER_EXPR}"
 
       - name: Upload shard coverage data
         if: >-
@@ -372,7 +375,7 @@ jobs:
               - ".github/workflows/ci.yml"
               - "pyproject.toml"
               - "uv.lock"
-              - "infra/deployment/**"
+              - "platform/deployment/**"
               - "integrations/**"
               - "tools/investigation/**"
               - "tools/**"

@@ -6,7 +6,7 @@ import re
 
 from rich.console import Console
 
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from core.agent_harness.tools.action_tools import (
     get_action_tool,
     get_action_tools_from_integrations_context,
@@ -20,7 +20,7 @@ from tools.interactive_shell.action_names import TOOL_KIND_TO_NAME
 
 
 def _action_tools(
-    session: ReplSession,
+    session: Session,
     *,
     resolved_integrations: dict[str, dict[str, str]] | None = None,
 ) -> list[object]:
@@ -31,7 +31,7 @@ def _action_tools(
 
 
 def _tool_specs(
-    session: ReplSession,
+    session: Session,
     *,
     resolved_integrations: dict[str, dict[str, str]] | None = None,
 ) -> list[dict[str, object]]:
@@ -59,7 +59,7 @@ def test_action_kind_mapping_targets_registered_tools() -> None:
 
 
 def test_tool_specs_include_required_fields() -> None:
-    specs = _tool_specs(ReplSession())
+    specs = _tool_specs(Session())
     assert specs
     for spec in specs:
         assert spec["name"]
@@ -81,7 +81,7 @@ def test_action_kind_to_tool_names_are_openai_compatible() -> None:
 def test_registered_tool_specs_are_openai_compatible() -> None:
     """Same guarantee, but exercised through the spec builder the LLM
     planner actually feeds to the provider."""
-    specs = _tool_specs(ReplSession())
+    specs = _tool_specs(Session())
     assert specs
     for spec in specs:
         name = spec["name"]
@@ -92,7 +92,7 @@ def test_registered_tool_specs_are_openai_compatible() -> None:
 
 
 def test_tool_schemas_are_closed_objects() -> None:
-    specs = _tool_specs(ReplSession())
+    specs = _tool_specs(Session())
     assert specs
     for spec in specs:
         schema = spec["input_schema"]
@@ -101,7 +101,7 @@ def test_tool_schemas_are_closed_objects() -> None:
 
 
 def test_required_properties_have_descriptions() -> None:
-    specs = _tool_specs(ReplSession())
+    specs = _tool_specs(Session())
     assert specs
     for spec in specs:
         schema = spec["input_schema"]
@@ -118,7 +118,7 @@ def test_required_properties_have_descriptions() -> None:
 
 
 def test_llm_set_provider_schema_enum_matches_runtime_providers() -> None:
-    spec = next(tool for tool in _tool_specs(ReplSession()) if tool["name"] == "llm_set_provider")
+    spec = next(tool for tool in _tool_specs(Session()) if tool["name"] == "llm_set_provider")
     target = spec["input_schema"]["properties"]["target"]
     target_variants = target.get("oneOf", [])
     enum_variant = next(
@@ -128,13 +128,13 @@ def test_llm_set_provider_schema_enum_matches_runtime_providers() -> None:
 
 
 def test_slash_invoke_schema_enum_matches_registered_commands() -> None:
-    spec = next(tool for tool in _tool_specs(ReplSession()) if tool["name"] == "slash_invoke")
+    spec = next(tool for tool in _tool_specs(Session()) if tool["name"] == "slash_invoke")
     command = spec["input_schema"]["properties"]["command"]
     assert set(command["enum"]) == set(SLASH_COMMANDS.keys())
 
 
 def test_tools_hidden_when_capabilities_are_explicitly_empty() -> None:
-    session = ReplSession(
+    session = Session(
         available_capabilities={
             "slash_commands": (),
             "cli_commands": (),
@@ -154,7 +154,7 @@ def test_tools_hidden_when_capabilities_are_explicitly_empty() -> None:
 
 
 def test_telegram_send_message_offered_when_telegram_is_configured() -> None:
-    session = ReplSession(
+    session = Session(
         configured_integrations=("telegram",),
         configured_integrations_known=True,
     )
@@ -169,19 +169,19 @@ def test_telegram_send_message_offered_when_telegram_is_configured() -> None:
 
 
 def test_telegram_send_message_hidden_when_telegram_is_not_configured() -> None:
-    names = {spec["name"] for spec in _tool_specs(ReplSession())}
+    names = {spec["name"] for spec in _tool_specs(Session())}
     assert "telegram_send_message" not in names
 
 
 def test_llm_set_provider_offered_by_default() -> None:
     """With no capability constraints (the production default), the planner is
     still offered the provider-switch tool."""
-    names = {spec["name"] for spec in _tool_specs(ReplSession())}
+    names = {spec["name"] for spec in _tool_specs(Session())}
     assert "llm_set_provider" in names
 
 
 def test_registry_agent_tools_exclude_unavailable_tool() -> None:
-    session = ReplSession(available_capabilities={"slash_commands": ()})
+    session = Session(available_capabilities={"slash_commands": ()})
     ctx = ActionToolContext(session=session, console=Console(force_terminal=False))
     names = {tool.name for tool in get_action_tools_from_integrations_context(ctx)}
     assert "slash_invoke" not in names
@@ -190,7 +190,7 @@ def test_registry_agent_tools_exclude_unavailable_tool() -> None:
 def test_investigation_offered_to_planner() -> None:
     """``investigation_start`` is always offered to the planner so diagnostic
     prompts can trigger the RCA pipeline from the REPL."""
-    names = {spec["name"] for spec in _tool_specs(ReplSession())}
+    names = {spec["name"] for spec in _tool_specs(Session())}
     assert "investigation_start" in names
 
 

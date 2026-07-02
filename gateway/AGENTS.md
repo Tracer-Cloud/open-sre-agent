@@ -11,22 +11,37 @@ be added under `gateway/tests/`.
 Pytest discovers these tests through `pytest.ini`; scoped CI maps changes under
 `gateway/` to `gateway/tests/` through `.github/ci/test_scope_rules.py`.
 
-## Gateway Agent Dispatch Architecture
+## Layout
 
-- `GatewayManager.start_gateway()` owns the gateway `Agent` instance. The nested
-  `handle_callback_to_gateway_agent(text, session, sink, logger)` callback must
-  dispatch through that object with `gateway_agent.dispatch_message_to_headless_agent(...)`.
-  Do not add a standalone gateway turn-dispatch helper for this path; that hides
-  the gateway-manager-owned agent lifecycle.
-- The Telegram polling layer calls the gateway callback with exactly four
-  arguments: text, session, sink, and logger. Do not reintroduce `chat_id` into
-  this callback contract; the sink already owns the chat transport details.
-- Reuse `DefaultToolProvider` for action tools in the gateway callback. If the
-  gateway has already built the action-tool list for its agent, pass it through
-  `DefaultToolProvider(precomputed_action_tools=...)` rather than adding another
-  gateway-specific tool-provider adapter.
-- Gateway E2E regression tests should drive a normalized polled Telegram message
-  into `handle_polled_inbound_telegram_message(...)` and let it invoke the
-  nested gateway callback. Do not test this path by swapping in fake LLM clients;
-  prefer explicit registered commands such as `/status` when the test only needs
-  to validate dispatch and provider wiring.
+- `manager.py` — process composition root: bootstraps action tools via
+  `SessionManager.create(open_storage=False)`, builds the turn handler, starts
+  the Telegram worker, owns signals and shutdown.
+- `turn_handler.py` — transport-agnostic turn callback:
+  `build_gateway_turn_handler(tools=..., console=...)` returns
+  `(text, session, sink, logger) -> None` that drives
+  `Agent.dispatch_message_to_headless_agent(...)`.
+- `telegram_gateway.py` — wires the handler into the Telegram polling worker.
+- `storage/session/resolver.py` — per-chat session binding; delegates
+  create / resolve / rotate to `SessionManager`.
+
+## Gateway turn dispatch
+
+- **No persistent gateway `Agent` instance.** Tools are precomputed once at
+  process start from a boot `Session`; each inbound message gets a per-chat
+  `Session` from `SessionResolver` and is handled by the shared headless
+  dispatch path (`core.agent_harness.agents.headless_agent`).
+- The turn handler callback signature is exactly four arguments: `text`,
+  `session`, `sink`, and `logger`. Do not reintroduce `chat_id` into this
+  contract; the sink owns chat transport details.
+- Reuse `DefaultToolProvider` with `precomputed_action_tools=tools` so the
+  gateway does not rebuild or filter the action-tool list per turn.
+- Per-chat session lifecycle (create / resolve / rotate / restore) is owned by
+  `SessionResolver` → `SessionManager`, not by `GatewayManager`.
+
+## Testing
+
+Gateway E2E regression tests should drive a normalized polled Telegram message
+into `handle_polled_inbound_telegram_message(...)` and let it invoke the turn
+handler. Do not test this path by swapping in fake LLM clients when validating
+dispatch wiring; prefer explicit registered commands such as `/status` when the
+test only needs to validate providers and callback plumbing.

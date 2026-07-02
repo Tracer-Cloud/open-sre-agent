@@ -111,7 +111,7 @@ _CLASSIFY_PATCH_TARGETS: list[tuple[str, str, str]] = [
     ("mysql", "integrations.mysql", "build_mysql_config"),
     ("rabbitmq", "integrations.rabbitmq", "build_rabbitmq_config"),
     ("rds", "integrations.rds", "build_rds_config"),
-    ("airflow", "integrations.airflow", "build_airflow_config"),
+    ("airflow", "integrations.airflow.config", "build_airflow_config"),
     ("betterstack", "integrations.betterstack", "build_betterstack_config"),
     ("azure_sql", "integrations.azure_sql", "build_azure_sql_config"),
     ("alertmanager", "integrations.alertmanager", "AlertmanagerIntegrationConfig"),

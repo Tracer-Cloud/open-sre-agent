@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from core.tool_framework.telemetry import report_run_error
 from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.mcp_params import first_list, first_string
 from core.tool_framework.utils.mcp_tool_listing import build_mcp_tool_listing
 from integrations.sentry_mcp import (
     SentryMCPConfig,
@@ -31,28 +32,6 @@ SentryMCPParams = dict[str, object]
 SentryMCPResponse = dict[str, object]
 
 _COMPONENT = "integrations.sentry_mcp.tools.sentry_mcp_tool"
-
-
-def _string_list(value: object) -> list[str]:
-    if not isinstance(value, list):
-        return []
-    return [str(item).strip() for item in value if str(item).strip()]
-
-
-def _first_string(source: dict[str, object], *keys: str) -> str | None:
-    for key in keys:
-        value = str(source.get(key, "")).strip()
-        if value:
-            return value
-    return None
-
-
-def _first_list(source: dict[str, object], *keys: str) -> list[str]:
-    for key in keys:
-        values = _string_list(source.get(key, []))
-        if values:
-            return values
-    return []
 
 
 def _unavailable_response(
@@ -113,11 +92,11 @@ def _sentry_mcp_extract_params(sources: dict[str, dict]) -> SentryMCPParams:
     if not sentry:
         return {}
     return {
-        "sentry_url": _first_string(sentry, "sentry_url", "url"),
-        "sentry_mode": _first_string(sentry, "sentry_mode", "mode"),
-        "sentry_token": _first_string(sentry, "sentry_token", "auth_token"),
-        "sentry_command": _first_string(sentry, "sentry_command", "command"),
-        "sentry_args": _first_list(sentry, "sentry_args", "args"),
+        "sentry_url": first_string(sentry, "sentry_url", "url"),
+        "sentry_mode": first_string(sentry, "sentry_mode", "mode"),
+        "sentry_token": first_string(sentry, "sentry_token", "auth_token"),
+        "sentry_command": first_string(sentry, "sentry_command", "command"),
+        "sentry_args": first_list(sentry, "sentry_args", "args"),
     }
 
 

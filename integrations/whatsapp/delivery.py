@@ -9,18 +9,12 @@ import httpx
 
 from platform.common.truncation import truncate
 from platform.notifications.limits import MAX_MESSAGE_SIZE
+from platform.notifications.redaction import redact_token
 
 logger = logging.getLogger(__name__)
 
 _MESSAGE_LIMIT = MAX_MESSAGE_SIZE
 _TWILIO_BASE_URL = "https://api.twilio.com/2010-04-01/Accounts"
-
-
-def _redact_token(text: str, token: str) -> str:
-    """Replace access token with <redacted> to prevent accidental log leakage."""
-    if token and token in text:
-        return text.replace(token, "<redacted>")
-    return text
 
 
 def post_whatsapp_message_twilio(
@@ -52,7 +46,7 @@ def post_whatsapp_message_twilio(
             follow_redirects=False,
         )
     except Exception as exc:
-        error = _redact_token(str(exc), auth_token)
+        error = redact_token(str(exc), auth_token)
         logger.warning("[whatsapp] twilio post exception: %s", error)
         return False, error, ""
 
@@ -74,7 +68,7 @@ def post_whatsapp_message_twilio(
             )
         else:
             error_message = response.text or f"HTTP {response.status_code}"
-        error_message = _redact_token(error_message, auth_token)
+        error_message = redact_token(error_message, auth_token)
         logger.warning("[whatsapp] twilio post failed: %s", error_message)
         return False, error_message, ""
 

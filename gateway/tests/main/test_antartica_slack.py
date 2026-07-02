@@ -18,9 +18,9 @@ from unittest.mock import MagicMock
 import pytest
 from rich.console import Console
 
-from core.agent_harness.agents.action_agent import ToolCallingDeps, run_agent_turn
+from core.agent_harness.agents.action_agent import ToolCallingDeps, run_action_agent_turn
 from core.agent_harness.providers.default_providers import DefaultToolProvider
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from core.agent_harness.session.storage.memory import InMemorySessionStorage
 from core.agent_harness.tools.action_tools import action_tool_names
 from core.llm.types import AgentLLMResponse, ToolCall
@@ -170,7 +170,7 @@ def test_agent_computes_temperature_then_sends_it_to_slack(
 
     # Build the gateway agent's action surface exactly as ``start_gateway`` does:
     # shared action tools wrapped in the core-owned default provider.
-    session = ReplSession(storage=InMemorySessionStorage())
+    session = Session(storage=InMemorySessionStorage())
     integrations: dict[str, Any] = {"slack": {"webhook_url": _SLACK_WEBHOOK}}
     session.resolved_integrations_cache = integrations
     console = Console(force_terminal=False)
@@ -183,7 +183,7 @@ def test_agent_computes_temperature_then_sends_it_to_slack(
     provider = DefaultToolProvider(session, console, precomputed_action_tools=action_tools)
     llm = _ComputeThenSlackLLM()
 
-    result = run_agent_turn(
+    result = run_action_agent_turn(
         _USER_MESSAGE,
         session,
         output=MagicMock(),

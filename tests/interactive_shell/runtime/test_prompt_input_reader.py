@@ -11,7 +11,7 @@ from typing import Any
 import pytest
 from rich.console import Console
 
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from surfaces.interactive_shell.runtime.core.state import ReplState
 from surfaces.interactive_shell.runtime.input import (
     InputCancelled,
@@ -41,13 +41,13 @@ class SequencePrompt:
 def _reader(
     prompt: Any,
     state: ReplState | None = None,
-    session: ReplSession | None = None,
+    session: Session | None = None,
     console: Console | None = None,
 ) -> PromptInputReader:
     return PromptInputReader(
         prompt,
         state or ReplState(),
-        session or ReplSession(),
+        session or Session(),
         console or Console(file=io.StringIO(), force_terminal=False),
     )
 
@@ -92,7 +92,7 @@ async def test_prompt_input_reader_eof_with_dispatch_running_returns_cancelled()
 @pytest.mark.asyncio
 async def test_prompt_input_reader_eof_without_dispatch_renders_resume_hint() -> None:
     output = io.StringIO()
-    session = ReplSession()
+    session = Session()
     session.session_id = "session-123"
     console = Console(file=output, force_terminal=False, color_system=None)
 

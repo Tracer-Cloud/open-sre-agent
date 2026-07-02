@@ -93,7 +93,7 @@ class ScenarioCapabilities:
     capability gate (``capability_not_explicitly_disabled``):
 
     * ``None`` — the capability key is absent; the tool stays available, which
-      matches the production default (``ReplSession()`` has no capability
+      matches the production default (``Session()`` has no capability
       constraints).
     * ``()`` — an explicit empty list; the tool is explicitly disabled (hidden
       from the planner specs and blocked at dispatch).
@@ -169,7 +169,7 @@ class GatheredToolsContract:
       ``must_return_valid_data``).
 
     For ``must_call_any``, ``must_call_all``, and ``must_not_call`` a tool counts
-    as "called" when it appears in ``ToolLoopResult.executed`` regardless of
+    as "called" when it appears in ``AgentRunResult.executed`` regardless of
     whether the call succeeded. ``must_return_valid_data`` additionally inspects
     the tool's output and only counts a call that returned valid data.
     """

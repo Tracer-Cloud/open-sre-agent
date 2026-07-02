@@ -30,6 +30,12 @@ def test_main_binary_publish_runs_when_verify_is_skipped_on_push() -> None:
     ) in source
 
 
+def test_release_workflow_changes_trigger_main_build_publish() -> None:
+    source = _RELEASE_WORKFLOW.read_text()
+
+    assert '- ".github/**"' not in source
+
+
 def test_main_build_has_distinct_binary_version() -> None:
     source = _RELEASE_WORKFLOW.read_text()
 
@@ -57,11 +63,17 @@ def test_binary_build_bundles_registry_discovered_tool_modules() -> None:
     assert "--collect-submodules integrations" in source
 
 
-def test_unix_binary_build_uses_onedir_and_pinned_linux_x64_runner() -> None:
+def test_unix_binary_build_uses_onedir_and_pinned_ubuntu_22_runners() -> None:
     source = _RELEASE_WORKFLOW.read_text()
 
     assert "runner: ubuntu-22.04" in source
+    assert "runner: ubuntu-22.04-arm" in source
+    assert "runner: ubuntu-24.04-arm" not in source
     assert "target: linux-x64" in source
+    assert "target: linux-arm64" in source
     assert "pyinstaller_mode: onedir" in source
+    assert "manylinux" not in source
+    assert "Check Linux binary glibc compatibility" in source
+    assert "GLIBC_2.35" in source
     assert "--${{ matrix.pyinstaller_mode }}" in source
     assert 'BINARY_PATH="./dist/opensre/${{ matrix.binary_name }}"' in source

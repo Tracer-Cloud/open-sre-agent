@@ -49,7 +49,7 @@ def test_post_whatsapp_message_twilio_success(monkeypatch: pytest.MonkeyPatch) -
 
 def test_post_whatsapp_message_twilio_transport_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     def _fake_post(*args: Any, **kwargs: Any) -> Any:
-        raise RuntimeError("Connection refused")
+        raise RuntimeError("auth header tok-leak failed")
 
     monkeypatch.setattr("integrations.whatsapp.delivery.httpx.post", _fake_post)
 
@@ -57,12 +57,13 @@ def test_post_whatsapp_message_twilio_transport_failure(monkeypatch: pytest.Monk
         to="+123",
         text="test",
         account_sid="AC123",
-        auth_token="tok",
+        auth_token="tok-leak",
         from_number="whatsapp:+14155238886",
     )
 
     assert success is False
-    assert "Connection refused" in error
+    assert "tok-leak" not in error
+    assert "<redacted>" in error
     assert message_id == ""
 
 

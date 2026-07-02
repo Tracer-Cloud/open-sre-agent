@@ -14,7 +14,7 @@ from surfaces.interactive_shell.command_registry.investigation import (
     write_investigation_export,
 )
 from surfaces.interactive_shell.command_registry.types import SlashCommand
-from surfaces.interactive_shell.runtime import ReplSession
+from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui import (
     BOLD_BRAND,
     DIM,
@@ -232,12 +232,12 @@ def _picked_investigation_id(picked: str, records: list[dict[str, object]]) -> s
 
 
 def _interactive_rca_report_menu(
-    session: ReplSession,
+    session: Session,
     console: Console,
     *,
     breadcrumb_suffix: str,
     include_latest: bool,
-    on_pick: Callable[[ReplSession, Console, dict[str, object]], bool],
+    on_pick: Callable[[Session, Console, dict[str, object]], bool],
 ) -> bool:
     records = _require_rca_records(console)
     if records is None:
@@ -259,7 +259,7 @@ def _interactive_rca_report_menu(
 
 
 def _interactive_show_record(
-    session: ReplSession,
+    session: Session,
     console: Console,
     record: dict[str, object],
 ) -> bool:
@@ -272,7 +272,7 @@ def _interactive_show_record(
 
 
 def _interactive_save_record(
-    _session: ReplSession,
+    _session: Session,
     console: Console,
     record: dict[str, object],
 ) -> bool:
@@ -282,7 +282,7 @@ def _interactive_save_record(
     return _save_rca_record(console, record, dest_path)
 
 
-def _interactive_rca_history_menu(session: ReplSession, console: Console) -> bool:
+def _interactive_rca_history_menu(session: Session, console: Console) -> bool:
     return _interactive_rca_report_menu(
         session,
         console,
@@ -292,7 +292,7 @@ def _interactive_rca_history_menu(session: ReplSession, console: Console) -> boo
     )
 
 
-def _interactive_rca_save_menu(session: ReplSession, console: Console) -> bool:
+def _interactive_rca_save_menu(session: Session, console: Console) -> bool:
     return _interactive_rca_report_menu(
         session,
         console,
@@ -302,7 +302,7 @@ def _interactive_rca_save_menu(session: ReplSession, console: Console) -> bool:
     )
 
 
-def _interactive_rca_root_menu(session: ReplSession, console: Console) -> bool:
+def _interactive_rca_root_menu(session: Session, console: Console) -> bool:
     records = _require_rca_records(console)
     if records is None:
         return True
@@ -330,7 +330,7 @@ def _interactive_rca_root_menu(session: ReplSession, console: Console) -> bool:
     return _interactive_show_record(session, console, records[0])
 
 
-def _cmd_rca_history(_session: ReplSession, console: Console) -> bool:
+def _cmd_rca_history(_session: Session, console: Console) -> bool:
     records = _require_rca_records(console)
     if records is None:
         return True
@@ -373,7 +373,7 @@ def _print_rca_record_header(console: Console, record: dict[str, object]) -> Non
 
 
 def _cmd_rca_show(
-    _session: ReplSession,
+    _session: Session,
     console: Console,
     investigation_id: str,
     *,
@@ -401,7 +401,7 @@ def _cmd_rca_show(
 
 
 def _cmd_rca_save(
-    _session: ReplSession,
+    _session: Session,
     console: Console,
     *,
     investigation_id: str | None,
@@ -423,7 +423,7 @@ def _cmd_rca_save(
     return _save_rca_record(console, record, dest_path)
 
 
-def _cmd_rca(_session: ReplSession, console: Console, args: list[str]) -> bool:
+def _cmd_rca(_session: Session, console: Console, args: list[str]) -> bool:
     prepare_repl_output_line()
     if not args:
         if repl_tty_interactive():

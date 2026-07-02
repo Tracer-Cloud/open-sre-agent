@@ -21,6 +21,8 @@ class ProviderSpec:
     toolcall_model_env: str | None = None
     classification_model_env: str | None = None
     cli_model_env: str | None = None
+    endpoint_env: str = ""
+    api_version_env: str = ""
     allow_custom_models: bool = False
 
     @property
@@ -114,6 +116,19 @@ PROVIDER_SPECS: tuple[ProviderSpec, ...] = (
         legacy_model_env="GROQ_MODEL",
         toolcall_model_env="GROQ_TOOLCALL_MODEL",
         classification_model_env="GROQ_CLASSIFICATION_MODEL",
+        allow_custom_models=True,
+    ),
+    ProviderSpec(
+        value="azure-openai",
+        label="Azure OpenAI",
+        credential_kind="api_key",
+        api_key_env="AZURE_OPENAI_API_KEY",
+        model_env="AZURE_OPENAI_REASONING_MODEL",
+        legacy_model_env="AZURE_OPENAI_MODEL",
+        toolcall_model_env="AZURE_OPENAI_TOOLCALL_MODEL",
+        classification_model_env="AZURE_OPENAI_CLASSIFICATION_MODEL",
+        endpoint_env="AZURE_OPENAI_BASE_URL",
+        api_version_env="AZURE_OPENAI_API_VERSION",
         allow_custom_models=True,
     ),
     ProviderSpec(

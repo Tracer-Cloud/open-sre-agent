@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from core.tool_framework.telemetry import report_run_error
 from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.mcp_params import first_list, first_string
 from core.tool_framework.utils.mcp_tool_listing import build_mcp_tool_listing
 from integrations.posthog_mcp import (
     PostHogMCPConfig,
@@ -31,28 +32,6 @@ PostHogMCPParams = dict[str, object]
 PostHogMCPResponse = dict[str, object]
 
 _COMPONENT = "integrations.posthog_mcp.tools.posthog_mcp_tool"
-
-
-def _string_list(value: object) -> list[str]:
-    if not isinstance(value, list):
-        return []
-    return [str(item).strip() for item in value if str(item).strip()]
-
-
-def _first_string(source: dict[str, object], *keys: str) -> str | None:
-    for key in keys:
-        value = str(source.get(key, "")).strip()
-        if value:
-            return value
-    return None
-
-
-def _first_list(source: dict[str, object], *keys: str) -> list[str]:
-    for key in keys:
-        values = _string_list(source.get(key, []))
-        if values:
-            return values
-    return []
 
 
 def _unavailable_response(
@@ -133,15 +112,15 @@ def _posthog_mcp_extract_params(sources: dict[str, dict]) -> PostHogMCPParams:
     if not posthog:
         return {}
     return {
-        "posthog_url": _first_string(posthog, "posthog_url", "url"),
-        "posthog_mode": _first_string(posthog, "posthog_mode", "mode"),
-        "posthog_token": _first_string(posthog, "posthog_token", "auth_token"),
-        "posthog_command": _first_string(posthog, "posthog_command", "command"),
-        "posthog_args": _first_list(posthog, "posthog_args", "args"),
-        "posthog_organization_id": _first_string(
+        "posthog_url": first_string(posthog, "posthog_url", "url"),
+        "posthog_mode": first_string(posthog, "posthog_mode", "mode"),
+        "posthog_token": first_string(posthog, "posthog_token", "auth_token"),
+        "posthog_command": first_string(posthog, "posthog_command", "command"),
+        "posthog_args": first_list(posthog, "posthog_args", "args"),
+        "posthog_organization_id": first_string(
             posthog, "posthog_organization_id", "organization_id"
         ),
-        "posthog_project_id": _first_string(posthog, "posthog_project_id", "project_id"),
+        "posthog_project_id": first_string(posthog, "posthog_project_id", "project_id"),
     }
 
 

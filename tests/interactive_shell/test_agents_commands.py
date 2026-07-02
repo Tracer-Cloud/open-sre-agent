@@ -9,7 +9,7 @@ import pytest
 from rich.console import Console
 from rich.table import Table
 
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
 from surfaces.interactive_shell.command_registry.agents import core as agents_core
 from surfaces.interactive_shell.command_registry.agents import trace as agents_trace
@@ -100,7 +100,7 @@ class TestAgentsRegistration:
 
 class TestAgentsDispatch:
     def test_conflicts_with_empty_event_source_renders_empty_state(self) -> None:
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         assert dispatch_slash("/fleet conflicts", session, console) is True
         assert "no conflicts detected" in buf.getvalue()
@@ -109,7 +109,7 @@ class TestAgentsDispatch:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         _isolate_registry(monkeypatch, tmp_path / "agents.jsonl")
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
 
         assert dispatch_slash("/fleet", session, console) is True
@@ -128,7 +128,7 @@ class TestAgentsDispatch:
         registry.register(AgentRecord(name="claude-code", pid=8421, command="claude"))
         registry.register(AgentRecord(name="cursor-tab", pid=9133, command="cursor"))
 
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         assert dispatch_slash("/fleet", session, console) is True
 
@@ -152,7 +152,7 @@ class TestAgentsDispatch:
             ],
         )
 
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         assert dispatch_slash("/fleet", session, console) is True
 
@@ -161,7 +161,7 @@ class TestAgentsDispatch:
         assert "80435" in out
 
     def test_unknown_subcommand_prints_error(self) -> None:
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         assert dispatch_slash("/fleet bogus", session, console) is True
         out = buf.getvalue()
@@ -171,7 +171,7 @@ class TestAgentsDispatch:
     def test_unknown_subcommand_message_lists_trace(self) -> None:
         # When the user types a bogus subcommand the help string should
         # advertise every supported one, including ``bus`` and ``trace``.
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         assert dispatch_slash("/fleet bogus", session, console) is True
         out = buf.getvalue().lower()
@@ -193,7 +193,7 @@ class TestAgentsDispatch:
         registry.register(AgentRecord(name="claude-code", pid=8421, command="claude"))
 
         # Seed a budget — exercises the full slash write path.
-        session = ReplSession()
+        session = Session()
         write_console, _ = _capture()
         assert dispatch_slash("/fleet budget claude-code 5", session, write_console) is True
 
@@ -224,7 +224,7 @@ class TestAgentsDispatch:
             encoding="utf-8",
         )
 
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         assert dispatch_slash("/fleet", session, console) is True
         out = buf.getvalue()
@@ -235,13 +235,13 @@ class TestAgentsDispatch:
 
 class TestAgentsBudget:
     def test_no_args_empty_state_when_no_config(self) -> None:
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         assert dispatch_slash("/fleet budget", session, console) is True
         assert "no per-agent budgets" in buf.getvalue().lower()
 
     def test_writes_and_round_trips_through_load(self, isolated_agents_yaml: Path) -> None:
-        session = ReplSession()
+        session = Session()
         write_console, write_buf = _capture()
         assert dispatch_slash("/fleet budget claude-code 5", session, write_console) is True
 
@@ -261,7 +261,7 @@ class TestAgentsBudget:
         assert isolated_agents_yaml.exists()
 
     def test_rejects_negative_budget(self) -> None:
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         assert dispatch_slash("/fleet budget claude-code -3", session, console) is True
         out = buf.getvalue()
@@ -270,14 +270,14 @@ class TestAgentsBudget:
         assert session.history[-1]["ok"] is False
 
     def test_rejects_zero_budget(self) -> None:
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         assert dispatch_slash("/fleet budget claude-code 0", session, console) is True
         assert "invalid budget" in buf.getvalue().lower()
         assert session.history[-1]["ok"] is False
 
     def test_rejects_non_numeric_budget(self) -> None:
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         assert dispatch_slash("/fleet budget claude-code five", session, console) is True
         assert "invalid budget" in buf.getvalue().lower()
@@ -287,7 +287,7 @@ class TestAgentsBudget:
         # ``float("nan") <= 0`` is ``False``, so without ``math.isfinite``
         # ``nan`` would slip past the guard, hit set_agent_budget, and
         # poison agents.yaml so the next load raises ValidationError.
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         assert dispatch_slash("/fleet budget claude-code nan", session, console) is True
         assert "invalid budget" in buf.getvalue().lower()
@@ -299,7 +299,7 @@ class TestAgentsBudget:
     def test_rejects_inf_budget(self, isolated_agents_yaml: Path) -> None:
         # ``float("inf") <= 0`` is ``False`` and ``gt=0`` alone accepts
         # ``inf`` (``inf > 0`` is ``True``); only ``isfinite`` blocks it.
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         assert dispatch_slash("/fleet budget claude-code inf", session, console) is True
         assert "invalid budget" in buf.getvalue().lower()
@@ -307,7 +307,7 @@ class TestAgentsBudget:
         assert not isolated_agents_yaml.exists()
 
     def test_single_arg_prints_usage(self) -> None:
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         assert dispatch_slash("/fleet budget claude-code", session, console) is True
         assert "usage" in buf.getvalue().lower()
@@ -328,7 +328,7 @@ class TestAgentsBudget:
             "agents:\n  claude-code:\n    hourly_budegt_usd: 5.0\n",
             encoding="utf-8",
         )
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         assert dispatch_slash("/fleet budget", session, console) is True
         out = buf.getvalue()
@@ -494,7 +494,7 @@ class TestSliceToUtf8Boundary:
 
 class TestAgentsTrace:
     def test_no_args_prints_usage(self) -> None:
-        sess_obj = ReplSession()
+        sess_obj = Session()
         console, buf = _capture()
         assert dispatch_slash("/fleet trace", sess_obj, console) is True
         out = buf.getvalue().lower()
@@ -503,7 +503,7 @@ class TestAgentsTrace:
         assert sess_obj.history[-1]["ok"] is False
 
     def test_non_numeric_pid_rejected(self) -> None:
-        sess_obj = ReplSession()
+        sess_obj = Session()
         console, buf = _capture()
         assert dispatch_slash("/fleet trace abc", sess_obj, console) is True
         out = buf.getvalue().lower()
@@ -511,7 +511,7 @@ class TestAgentsTrace:
         assert sess_obj.history[-1]["ok"] is False
 
     def test_too_many_args_rejected(self) -> None:
-        sess_obj = ReplSession()
+        sess_obj = Session()
         console, buf = _capture()
         assert dispatch_slash("/fleet trace 1 2", sess_obj, console) is True
         assert "usage" in buf.getvalue().lower()
@@ -523,7 +523,7 @@ class TestAgentsTrace:
 
         monkeypatch.setattr(agents_trace, "attach", _refuse)
 
-        sess_obj = ReplSession()
+        sess_obj = Session()
         console, buf = _capture()
         assert dispatch_slash("/fleet trace 8421", sess_obj, console) is True
         out = buf.getvalue()
@@ -538,7 +538,7 @@ class TestAgentsTrace:
         _isolate_registry(monkeypatch, tmp_path / "agents.jsonl")
         monkeypatch.setattr(agents_trace, "attach", lambda _pid: _FakeSession(chunks=[]))
 
-        sess_obj = ReplSession()
+        sess_obj = Session()
         console, buf = _capture()
         assert dispatch_slash("/fleet trace 8421", sess_obj, console) is True
         out = buf.getvalue()
@@ -552,7 +552,7 @@ class TestAgentsTrace:
         registry.register(AgentRecord(name="claude-code", pid=8421, command="claude"))
         monkeypatch.setattr(agents_trace, "attach", lambda _pid: _FakeSession(chunks=[]))
 
-        sess_obj = ReplSession()
+        sess_obj = Session()
         console, buf = _capture()
         assert dispatch_slash("/fleet trace 8421", sess_obj, console) is True
         out = buf.getvalue()
@@ -569,7 +569,7 @@ class TestAgentsTrace:
             lambda _pid: _FakeSession(chunks=[b"hello ", b"world\n"]),
         )
 
-        sess_obj = ReplSession()
+        sess_obj = Session()
         console, buf = _capture()
         assert dispatch_slash("/fleet trace 8421", sess_obj, console) is True
         out = buf.getvalue()
@@ -583,7 +583,7 @@ class TestAgentsTrace:
         # ``stream_to_console``'s double-press pattern.
         monkeypatch.setattr(agents_trace, "attach", lambda _pid: _FakeSession(raise_ki=True))
 
-        sess_obj = ReplSession()
+        sess_obj = Session()
         console, buf = _capture()
         # Must not raise:
         assert dispatch_slash("/fleet trace 8421", sess_obj, console) is True
@@ -599,7 +599,7 @@ class TestAgentsTrace:
         fake = _FakeSession(raise_ki=True)
         monkeypatch.setattr(agents_trace, "attach", lambda _pid: fake)
 
-        sess_obj = ReplSession()
+        sess_obj = Session()
         console, _ = _capture()
         assert dispatch_slash("/fleet trace 8421", sess_obj, console) is True
         assert fake.closed is True
@@ -615,7 +615,7 @@ class TestAgentsTrace:
             "attach",
             lambda _pid: _FakeSession(chunks=[b"goodbye\n"], producer_exited=True),
         )
-        sess_obj = ReplSession()
+        sess_obj = Session()
         console, buf = _capture()
         assert dispatch_slash("/fleet trace 8421", sess_obj, console) is True
         out = buf.getvalue()
@@ -632,7 +632,7 @@ class TestAgentsTrace:
             "attach",
             lambda _pid: _FakeSession(raise_ki=True, producer_exited=False),
         )
-        sess_obj = ReplSession()
+        sess_obj = Session()
         console, buf = _capture()
         assert dispatch_slash("/fleet trace 8421", sess_obj, console) is True
         out = buf.getvalue()
@@ -642,26 +642,26 @@ class TestAgentsTrace:
 
 class TestAgentsWait:
     def test_usage_when_missing_on_flag(self) -> None:
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         assert dispatch_slash("/fleet wait 1234 5678", session, console) is True
         assert "usage:" in buf.getvalue().lower()
 
     def test_rejects_non_numeric_pid(self) -> None:
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         assert dispatch_slash("/fleet wait abc --on 5678", session, console) is True
         assert "invalid pid" in buf.getvalue().lower()
 
     def test_rejects_non_numeric_on_pid(self) -> None:
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         assert dispatch_slash("/fleet wait 1234 --on xyz", session, console) is True
         assert "invalid other-pid" in buf.getvalue().lower()
 
     def test_rejects_self_wait(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         _isolate_registry(monkeypatch, tmp_path / "agents.jsonl")
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         assert dispatch_slash("/fleet wait 1234 --on 1234", session, console) is True
         assert "waiting for itself" in buf.getvalue()
@@ -669,7 +669,7 @@ class TestAgentsWait:
     def test_rejects_unknown_waiter(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         registry = _isolate_registry(monkeypatch, tmp_path / "agents.jsonl")
         registry.register(AgentRecord(name="claude-code", pid=8421, command="claude"))
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         assert dispatch_slash("/fleet wait 9999 --on 8421", session, console) is True
         assert "pid 9999 is not in the agent registry" in buf.getvalue()
@@ -677,7 +677,7 @@ class TestAgentsWait:
     def test_rejects_unknown_target(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         registry = _isolate_registry(monkeypatch, tmp_path / "agents.jsonl")
         registry.register(AgentRecord(name="aider", pid=7702, command="aider"))
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         assert dispatch_slash("/fleet wait 7702 --on 9999", session, console) is True
         assert "pid 9999 is not in the agent registry" in buf.getvalue()
@@ -692,7 +692,7 @@ class TestAgentsWait:
         registry.register(AgentRecord(name="claude-code", pid=8421, command="claude"))
         registry.register(AgentRecord(name="aider", pid=7702, command="aider"))
 
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         assert dispatch_slash("/fleet wait 7702 --on 8421", session, console) is True
         out = buf.getvalue()
@@ -715,7 +715,7 @@ class TestAgentsWait:
         registry.register(AgentRecord(name="claude-code", pid=8421, command="claude"))
         registry.register(AgentRecord(name="aider", pid=7702, command="aider"))
 
-        session = ReplSession()
+        session = Session()
         for _ in range(2):
             console, _ = _capture()
             assert dispatch_slash("/fleet wait 7702 --on 8421", session, console) is True
@@ -730,7 +730,7 @@ class TestAgentsGraph:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         _isolate_registry(monkeypatch, tmp_path / "agents.jsonl")
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         assert dispatch_slash("/fleet graph", session, console) is True
         assert "no registered agents" in buf.getvalue()
@@ -749,7 +749,7 @@ class TestAgentsGraph:
             AgentRecord(name="cursor-tab", pid=9133, command="cursor", waits_on=(7702,))
         )
 
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         assert dispatch_slash("/fleet graph", session, console) is True
         out = buf.getvalue()
@@ -765,7 +765,7 @@ class TestAgentsGraph:
         registry.register(AgentRecord(name="alpha", pid=1, command="a", waits_on=(2,)))
         registry.register(AgentRecord(name="beta", pid=2, command="b", waits_on=(1,)))
 
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         assert dispatch_slash("/fleet graph", session, console) is True
         out = buf.getvalue()
@@ -784,7 +784,7 @@ class TestAgentsGraph:
         registry.register(AgentRecord(name="cursor-tab", pid=9133, command="cursor"))
         registry.register(AgentRecord(name="aider", pid=8491, command="aider", waits_on=(9133,)))
 
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         assert dispatch_slash("/fleet graph", session, console) is True
         out = buf.getvalue()
@@ -805,7 +805,7 @@ class TestAgentsGraph:
         registry.register(
             AgentRecord(name="aider", pid=8491, command="aider", waits_on=(9133, 7702))
         )
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         assert dispatch_slash("/fleet graph", session, console) is True
         out = buf.getvalue()
@@ -826,7 +826,7 @@ class TestAgentsGraph:
             AgentRecord(name="cursor-tab", pid=9134, command="cursor", waits_on=(9133, 8421))
         )
         registry.register(AgentRecord(name="aider", pid=8491, command="aider", waits_on=(9134,)))
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         assert dispatch_slash("/fleet graph", session, console) is True
         out = buf.getvalue()

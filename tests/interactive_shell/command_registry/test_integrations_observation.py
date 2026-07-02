@@ -6,7 +6,7 @@ the actual ``/integrations`` output instead of leaving the user with a raw table
 
 from __future__ import annotations
 
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from surfaces.interactive_shell.command_registry.integrations import (
     _MAX_OBSERVATION_DETAIL_CHARS,
     _record_integration_show_observation,
@@ -15,7 +15,7 @@ from surfaces.interactive_shell.command_registry.integrations import (
 
 
 def test_records_status_lines_for_each_service() -> None:
-    session = ReplSession()
+    session = Session()
     results = [
         {"service": "datadog", "source": "local store", "status": "passed", "detail": "Connected."},
         {"service": "sentry", "source": "-", "status": "missing", "detail": "Not configured."},
@@ -31,7 +31,7 @@ def test_records_status_lines_for_each_service() -> None:
 
 
 def test_truncates_long_detail() -> None:
-    session = ReplSession()
+    session = Session()
     long_detail = "x" * (_MAX_OBSERVATION_DETAIL_CHARS + 50)
     _record_integrations_observation(
         session, [{"service": "datadog", "status": "passed", "detail": long_detail}]
@@ -44,13 +44,13 @@ def test_truncates_long_detail() -> None:
 
 
 def test_skips_rows_without_a_service_name() -> None:
-    session = ReplSession()
+    session = Session()
     _record_integrations_observation(session, [{"service": "", "status": "missing"}])
     assert session.agent.last_observation is None
 
 
 def test_show_observation_renders_key_values() -> None:
-    session = ReplSession()
+    session = Session()
     _record_integration_show_observation(
         session, {"service": "datadog", "status": "passed", "monitors": "14"}
     )

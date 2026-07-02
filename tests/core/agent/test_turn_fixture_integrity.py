@@ -178,7 +178,7 @@ def test_available_capabilities_blocks_are_not_redundant_boilerplate() -> None:
 
     With the three-state ``available_capabilities`` model, omitting the block
     inherits the production default (every planner tool enabled, matching
-    ``ReplSession()``). A block that explicitly disables all three surfaces
+    ``Session()``). A block that explicitly disables all three surfaces
     (``slash_commands: []`` + ``cli_commands: []`` + ``synthetic_suites: []``)
     is the old redundant boilerplate this cleanup removed: it adds noise and
     hides the production default. Scenarios should instead omit the block, or

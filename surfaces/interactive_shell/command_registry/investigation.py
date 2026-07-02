@@ -11,7 +11,7 @@ from rich.markup import escape
 from config.llm_reasoning_effort import apply_reasoning_effort
 from platform.common.task_types import TaskRecord
 from surfaces.interactive_shell.command_registry.types import SlashCommand
-from surfaces.interactive_shell.runtime import ReplSession
+from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.runtime.background.runner import (
     start_background_template_investigation,
     start_background_text_investigation,
@@ -32,7 +32,7 @@ from surfaces.interactive_shell.utils.error_handling.exception_reporting import 
 from surfaces.interactive_shell.utils.telemetry.turn_outcome import format_investigation_outcome
 
 
-def _interactive_template_menu(session: ReplSession, console: Console) -> bool:
+def _interactive_template_menu(session: Session, console: Console) -> bool:
     from surfaces.cli.constants import ALERT_TEMPLATE_CHOICES
 
     root = "/template"
@@ -50,7 +50,7 @@ def _interactive_template_menu(session: ReplSession, console: Console) -> bool:
         repl_section_break(console)
 
 
-def _queue_investigate_target(session: ReplSession, target: str) -> None:
+def _queue_investigate_target(session: Session, target: str) -> None:
     """Defer a menu selection to a normal ``/investigate <target>`` turn.
 
     The interactive picker needs exclusive stdin, but long-running RCA must not
@@ -60,7 +60,7 @@ def _queue_investigate_target(session: ReplSession, target: str) -> None:
     session.queue_auto_command(f"/investigate {target}")
 
 
-def _interactive_investigate_menu(session: ReplSession, console: Console) -> bool:
+def _interactive_investigate_menu(session: Session, console: Console) -> bool:
     from surfaces.cli.constants import SAMPLE_ALERT_OPTIONS
 
     root = "/investigate"
@@ -101,7 +101,7 @@ def _prompt_investigate_path(console: Console) -> str | None:
     return value if value else None
 
 
-def _cmd_template(session: ReplSession, console: Console, args: list[str]) -> bool:
+def _cmd_template(session: Session, console: Console, args: list[str]) -> bool:
     from surfaces.cli.constants import ALERT_TEMPLATE_CHOICES
     from surfaces.cli.investigation.alert_templates import build_alert_template
 
@@ -145,7 +145,7 @@ def _validate_save_args(args: list[str]) -> str | None:
     return None
 
 
-def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str]) -> bool:
+def _cmd_investigate_file(session: Session, console: Console, args: list[str]) -> bool:
     from platform.analytics.cli import track_investigation
     from platform.analytics.source import EntrypointSource, TriggerMode
     from surfaces.cli.constants import ALERT_TEMPLATE_CHOICES
@@ -311,7 +311,7 @@ def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str
     return True
 
 
-def _cmd_last(session: ReplSession, console: Console, _args: list[str]) -> bool:
+def _cmd_last(session: Session, console: Console, _args: list[str]) -> bool:
     if session.last_state is None:
         console.print(f"[{DIM}]no investigation in this session yet.[/]")
         return True
@@ -387,7 +387,7 @@ def write_investigation_export(
     dest.write_text("\n".join(lines) or "(no report content)", encoding="utf-8")
 
 
-def _cmd_save(session: ReplSession, console: Console, args: list[str]) -> bool:
+def _cmd_save(session: Session, console: Console, args: list[str]) -> bool:
     if session.last_state is None:
         console.print(f"[{DIM}]nothing to save — run an investigation first.[/]")
         return True

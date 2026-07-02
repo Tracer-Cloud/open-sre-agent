@@ -8,7 +8,7 @@ import io
 import pytest
 from rich.console import Console
 
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from core.llm.types import AgentLLMResponse, ToolCall
 from surfaces.interactive_shell.runtime.core.turn_accounting import (
     ToolCallingTurnResult,
@@ -31,7 +31,7 @@ def test_turn_needs_exclusive_stdin_for_bare_integration_menu(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(loop_input_policy, "repl_tty_interactive", lambda: True)
-    session = ReplSession()
+    session = Session()
 
     assert loop_input_policy.turn_needs_exclusive_stdin("/integrations", session) is True
     assert loop_input_policy.turn_needs_exclusive_stdin("/investigate", session) is True
@@ -55,7 +55,7 @@ def test_turn_needs_exclusive_stdin_false_for_investigate_with_target(
 ) -> None:
     """Queued menu selections run as ``/investigate <target>`` without blocking the prompt."""
     monkeypatch.setattr(loop_input_policy, "repl_tty_interactive", lambda: True)
-    session = ReplSession()
+    session = Session()
 
     assert loop_input_policy.turn_needs_exclusive_stdin("/investigate generic", session) is False
     assert loop_input_policy.turn_needs_exclusive_stdin("/investigate alert.json", session) is False
@@ -65,7 +65,7 @@ def test_turn_needs_exclusive_stdin_for_exit_commands(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(loop_input_policy, "repl_tty_interactive", lambda: True)
-    session = ReplSession()
+    session = Session()
 
     assert loop_input_policy.turn_needs_exclusive_stdin("/exit", session) is True
     assert loop_input_policy.turn_needs_exclusive_stdin("/quit", session) is True
@@ -78,7 +78,7 @@ def test_turn_needs_exclusive_stdin_for_update(
 ) -> None:
     """``/update`` hits the network; block the next prompt until output is printed."""
     monkeypatch.setattr(loop_input_policy, "repl_tty_interactive", lambda: True)
-    session = ReplSession()
+    session = Session()
 
     assert loop_input_policy.turn_needs_exclusive_stdin("/update", session) is True
     # Bare command words are not recognized under literal-/slash gating.
@@ -89,7 +89,7 @@ def test_turn_needs_exclusive_stdin_for_integration_setup(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(loop_input_policy, "repl_tty_interactive", lambda: True)
-    session = ReplSession()
+    session = Session()
 
     assert loop_input_policy.turn_needs_exclusive_stdin("/integrations setup", session) is True
     assert loop_input_policy.turn_needs_exclusive_stdin("/mcp connect github", session) is True
@@ -106,7 +106,7 @@ def test_turn_needs_exclusive_stdin_for_integration_remove(
     stdin; the REPL must block the next prompt so keystrokes and CPR responses
     do not leak into the prompt buffer."""
     monkeypatch.setattr(loop_input_policy, "repl_tty_interactive", lambda: True)
-    session = ReplSession()
+    session = Session()
 
     assert loop_input_policy.turn_needs_exclusive_stdin("/integrations remove", session) is True
     assert (
@@ -128,7 +128,7 @@ def test_turn_needs_exclusive_stdin_for_onboard(
     exclusive stdin and can drive its own questionary widgets.
     """
     monkeypatch.setattr(loop_input_policy, "repl_tty_interactive", lambda: True)
-    session = ReplSession()
+    session = Session()
 
     assert loop_input_policy.turn_needs_exclusive_stdin("/onboard", session) is True
     # Args don't change the exclusive-stdin requirement.
@@ -144,7 +144,7 @@ def test_turn_needs_exclusive_stdin_for_config(
     is printed so config lines do not overlap the pinned input bar.
     """
     monkeypatch.setattr(loop_input_policy, "repl_tty_interactive", lambda: True)
-    session = ReplSession()
+    session = Session()
 
     assert loop_input_policy.turn_needs_exclusive_stdin("/config", session) is True
     assert loop_input_policy.turn_needs_exclusive_stdin("/config show", session) is True
@@ -162,7 +162,7 @@ def test_queued_literal_quit_requests_runtime_exit() -> None:
         from surfaces.interactive_shell.runtime.core.state import ReplState
 
         state = ReplState()
-        session = ReplSession()
+        session = Session()
         console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
 
         async def _run_turn(text: str) -> None:
@@ -199,7 +199,7 @@ def test_execute_shell_turn_nitro_prompt_uses_cli_agent_actions(
 
     def _fake_execute_cli_actions(
         text: str,
-        _session: ReplSession,
+        _session: Session,
         _console: Console,
         **kwargs: object,
     ) -> ToolCallingTurnResult:
@@ -214,13 +214,13 @@ def test_execute_shell_turn_nitro_prompt_uses_cli_agent_actions(
 
     def _fake_answer_shell_question(
         text: str,
-        _session: ReplSession,
+        _session: Session,
         _console: Console,
         **kwargs: object,
     ) -> None:
         llm_calls.append(text)
 
-    session = ReplSession()
+    session = Session()
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
     execute_shell_turn(
         nitro_prompt,
@@ -248,7 +248,7 @@ def test_execute_shell_turn_nitro_prompt_executes_remote_then_investigation(
 
     def _fake_dispatch(
         command: str,
-        session: ReplSession,
+        session: Session,
         console: Console,
         **_kwargs: object,
     ) -> bool:
@@ -259,7 +259,7 @@ def test_execute_shell_turn_nitro_prompt_executes_remote_then_investigation(
 
     def _fake_run_text_investigation(
         alert_text: str,
-        _session: ReplSession,
+        _session: Session,
         _console: Console,
         **_kwargs: object,
     ) -> None:
@@ -291,7 +291,7 @@ def test_execute_shell_turn_nitro_prompt_executes_remote_then_investigation(
     monkeypatch.setattr(_slash_tool, "dispatch_slash", _fake_dispatch)
     monkeypatch.setattr(_investigation_tool, "run_text_investigation", _fake_run_text_investigation)
 
-    session = ReplSession()
+    session = Session()
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
     execute_shell_turn(
         nitro_prompt,
@@ -315,7 +315,7 @@ class TestDispatchSpinnerBehavior:
         ],
     )
     def test_slash_dispatches_do_not_show_assistant_spinner(self, text: str) -> None:
-        assert loop_input_policy.turn_should_show_spinner(text, ReplSession()) is False
+        assert loop_input_policy.turn_should_show_spinner(text, Session()) is False
 
     @pytest.mark.parametrize(
         "text",
@@ -330,4 +330,4 @@ class TestDispatchSpinnerBehavior:
         ],
     )
     def test_non_slash_dispatches_show_assistant_spinner(self, text: str) -> None:
-        assert loop_input_policy.turn_should_show_spinner(text, ReplSession()) is True
+        assert loop_input_policy.turn_should_show_spinner(text, Session()) is True

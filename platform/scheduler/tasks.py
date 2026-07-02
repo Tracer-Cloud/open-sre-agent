@@ -4,10 +4,11 @@ Each task kind maps to a function that produces a formatted report string
 suitable for delivery to messaging providers.
 
 The daily_summary, weekly_audit, and synthetic_run kinds query the real
-investigation pipeline to produce data-driven reports. When the pipeline
-returns no findings, a clear quiet-period message is delivered. Pipeline
-failures raise RuntimeError so the executor records FAILED in cron logs
-without masking outages as success.
+investigation pipeline through the runner registered in
+:mod:`platform.scheduler.investigation_runner`. When the pipeline returns no
+findings, a clear quiet-period message is delivered. Pipeline failures raise
+RuntimeError so the executor records FAILED in cron logs without masking
+outages as success.
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime, timedelta
 
+from platform.scheduler.investigation_runner import invoke_investigation_runner
 from platform.scheduler.types import ScheduledTask, TaskKind
 
 logger = logging.getLogger(__name__)
@@ -53,8 +55,6 @@ def _build_daily_summary(task: ScheduledTask) -> str:
     window_start = now - timedelta(hours=task.window_hours)
 
     try:
-        from tools.investigation.capability import run_investigation
-
         alert_payload = {
             "source": "scheduled_daily_summary",
             "task_id": task.id,
@@ -63,7 +63,7 @@ def _build_daily_summary(task: ScheduledTask) -> str:
             "window_start": window_start.isoformat(),
             "window_end": now.isoformat(),
         }
-        result = run_investigation(alert_payload)
+        result = invoke_investigation_runner(alert_payload)
         if result and result.get("report"):
             return str(result["report"])
         # Pipeline ran successfully but returned no report — genuinely quiet
@@ -94,8 +94,6 @@ def _build_weekly_audit(task: ScheduledTask) -> str:
     window_start = now - timedelta(hours=task.window_hours)
 
     try:
-        from tools.investigation.capability import run_investigation
-
         alert_payload = {
             "source": "scheduled_weekly_audit",
             "task_id": task.id,
@@ -104,7 +102,7 @@ def _build_weekly_audit(task: ScheduledTask) -> str:
             "window_start": window_start.isoformat(),
             "window_end": now.isoformat(),
         }
-        result = run_investigation(alert_payload)
+        result = invoke_investigation_runner(alert_payload)
         if result and result.get("report"):
             return str(result["report"])
     except Exception as exc:
@@ -130,15 +128,13 @@ def _build_incident_window_replay(task: ScheduledTask) -> str:
     without leaking exception details to the chat.
     """
     try:
-        from tools.investigation.capability import run_investigation
-
         alert_payload = {
             "source": "scheduled_replay",
             "task_id": task.id,
             "window_hours": task.window_hours,
             "kind": task.kind.value,
         }
-        result = run_investigation(alert_payload)
+        result = invoke_investigation_runner(alert_payload)
         if result and result.get("report"):
             return str(result["report"])
         return (
@@ -164,15 +160,13 @@ def _build_synthetic_run(task: ScheduledTask) -> str:
     now = datetime.now(UTC)
 
     try:
-        from tools.investigation.capability import run_investigation
-
         alert_payload = {
             "source": "scheduled_synthetic",
             "task_id": task.id,
             "kind": task.kind.value,
             "window_hours": task.window_hours,
         }
-        result = run_investigation(alert_payload)
+        result = invoke_investigation_runner(alert_payload)
         if result and result.get("report"):
             return str(result["report"])
     except Exception as exc:
@@ -197,8 +191,6 @@ def _build_custom_investigation(task: ScheduledTask) -> str:
     without leaking exception details to the chat.
     """
     try:
-        from tools.investigation.capability import run_investigation
-
         # Strip credential keys before passing params to the pipeline
         safe_params = {k: v for k, v in task.params.items() if k not in _CREDENTIAL_KEYS}
         alert_payload = {
@@ -208,7 +200,7 @@ def _build_custom_investigation(task: ScheduledTask) -> str:
             "kind": task.kind.value,
             **safe_params,
         }
-        result = run_investigation(alert_payload)
+        result = invoke_investigation_runner(alert_payload)
         if result and result.get("report"):
             return str(result["report"])
         return (

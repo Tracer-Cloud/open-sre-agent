@@ -160,6 +160,7 @@
               "jira",
               "integrations/trello",
               "pi-coding",
+              "fix-sentry-issue",
               "vercel"
             ]
           },

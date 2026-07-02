@@ -7,11 +7,11 @@ from rich.console import Console
 from core.domain.alerts.inbox import get_current_inbox
 from platform.terminal.theme import BOLD_BRAND, DIM, HIGHLIGHT, WARNING
 from surfaces.interactive_shell.command_registry.types import SlashCommand
-from surfaces.interactive_shell.runtime import ReplSession
+from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui import print_repl_table, repl_table
 
 
-def _cmd_alerts(_session: ReplSession, console: Console, _args: list[str]) -> bool:
+def _cmd_alerts(_session: Session, console: Console, _args: list[str]) -> bool:
     inbox = get_current_inbox()
     if inbox is None:
         console.print(f"[{WARNING}]alert listener is not active.[/]")

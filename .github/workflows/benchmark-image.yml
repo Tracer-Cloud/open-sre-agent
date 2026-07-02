@@ -46,7 +46,7 @@ on:
       - "surfaces/**"
       - "config/**"
       - "core/**"
-      - "infra/deployment/**"
+      - "platform/deployment/**"
       - "integrations/**"
       - "platform/**"
       - "tools/**"

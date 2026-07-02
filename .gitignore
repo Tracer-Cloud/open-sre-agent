@@ -169,3 +169,11 @@ tests/synthetic/rds_postgres/_observations/
 
 # Local CI-fix scratch clone (not part of this repo)
 opensre-ci-fix/
+
+# Terraform local state + provider cache
+**/.terraform/
+**/.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfvars
+crash.log

@@ -224,6 +224,58 @@ def _credential_prompt_label(provider: ProviderOption) -> str:
     return provider.label
 
 
+def _azure_openai_endpoint_env(provider: ProviderOption) -> dict[str, str]:
+    """Return Azure endpoint env vars, using the default API version when unset."""
+    from core.llm.azure_openai import resolve_azure_openai_api_version
+
+    return {
+        provider.endpoint_env: os.getenv(provider.endpoint_env, "").strip(),
+        provider.api_version_env: resolve_azure_openai_api_version(),
+    }
+
+
+def _prompt_azure_openai_endpoint_settings(provider: ProviderOption) -> dict[str, str] | None:
+    """Collect Azure OpenAI resource URL during onboarding."""
+    from core.llm.azure_openai import (
+        normalize_azure_openai_base_url,
+        resolve_azure_openai_api_version,
+    )
+
+    if not provider.endpoint_env or not provider.api_version_env:
+        return {}
+
+    _step("Azure endpoint")
+    try:
+        base_url = _prompt_value(
+            f"Azure OpenAI resource URL ({provider.endpoint_env})",
+            default=os.getenv(provider.endpoint_env, provider.credential_default),
+            secret=False,
+            back_on_cancel=True,
+        )
+    except WizardBack:
+        return None
+
+    normalized_base = normalize_azure_openai_base_url(base_url)
+    if not normalized_base:
+        _console.print(f"[{ERROR}]Azure OpenAI resource URL is required.[/]")
+        return None
+    return {
+        provider.endpoint_env: normalized_base,
+        provider.api_version_env: resolve_azure_openai_api_version(),
+    }
+
+
+def _ensure_azure_openai_endpoint_settings(provider: ProviderOption) -> dict[str, str] | None:
+    """Return Azure endpoint env vars, prompting when missing."""
+    from core.llm.azure_openai import azure_openai_endpoint_configured
+
+    if provider.value != "azure-openai":
+        return {}
+    if azure_openai_endpoint_configured():
+        return _azure_openai_endpoint_env(provider)
+    return _prompt_azure_openai_endpoint_settings(provider)
+
+
 def _subscription_login_command(
     provider: ProviderOption, binary_path: str | None
 ) -> list[str] | None:
@@ -682,6 +734,7 @@ def run_wizard(_argv: list[str] | None = None) -> int:
     model_provider: ProviderOption
     auth_method: LLMAuthMethod | None
     model: str
+    provider_extra_env: dict[str, str] = {}
     while True:
         _step_header(2, WIZARD_TOTAL_STEPS, "LLM Provider")
         saved_provider = (
@@ -745,6 +798,12 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                     return 1
                 if not _persist_llm_api_key(provider.api_key_env, api_key):
                     return 1
+                azure_env = _ensure_azure_openai_endpoint_settings(provider)
+                if azure_env is None:
+                    force_repick = True
+                    continue
+                provider_extra_env = azure_env
+                os.environ.update(azure_env)
         else:
             assert saved_provider is not None
             provider = saved_provider
@@ -778,6 +837,12 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                         return 1
                     if not _persist_llm_api_key(provider.api_key_env, api_key):
                         return 1
+            azure_env = _ensure_azure_openai_endpoint_settings(provider)
+            if azure_env is None:
+                force_repick = True
+                continue
+            provider_extra_env = azure_env
+            os.environ.update(azure_env)
 
         if change_provider:
             try:
@@ -843,6 +908,7 @@ def run_wizard(_argv: list[str] | None = None) -> int:
         model=model,
         model_provider=model_provider,
         auth_method=persisted_auth_method,
+        extra_env=provider_extra_env or None,
     )
 
     _step_header(3, WIZARD_TOTAL_STEPS, "Integrations")

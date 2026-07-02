@@ -15,7 +15,7 @@ from rich.markup import escape
 
 from surfaces.interactive_shell.command_registry.suggestions import closest_choice
 from surfaces.interactive_shell.command_registry.types import SlashCommand
-from surfaces.interactive_shell.runtime import ReplSession, TaskKind
+from surfaces.interactive_shell.runtime import Session, TaskKind
 from surfaces.interactive_shell.runtime.subprocess_runner import (
     SYNTHETIC_TEST_TIMEOUT_SECONDS,
     build_opensre_cli_argv,
@@ -43,7 +43,7 @@ def run_cli_command(
     console: Console,
     args: list[str],
     *,
-    session: ReplSession | None = None,
+    session: Session | None = None,
     subprocess_timeout: float | None = None,
     capture_output: bool = False,
 ) -> bool:
@@ -115,7 +115,7 @@ def run_cli_command(
     return True
 
 
-def _cmd_onboard(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+def _cmd_onboard(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
     # The REPL loop treats ``/onboard`` as exclusive-stdin in
     # ``runtime.utils.input_policy`` so the prompt_toolkit Application is torn down before
     # this handler runs — the wizard subprocess therefore gets exclusive
@@ -124,16 +124,16 @@ def _cmd_onboard(session: ReplSession, console: Console, args: list[str]) -> boo
     return run_cli_command(console, ["onboard", *args], session=session)
 
 
-def _cmd_auth(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+def _cmd_auth(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
     capture_output = not args or args[0].lower() in {"status", "logout"}
     return run_cli_command(console, ["auth", *args], capture_output=capture_output, session=session)
 
 
-def _cmd_login(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+def _cmd_login(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
     return run_cli_command(console, ["auth", "login", *args], session=session)
 
 
-def _cmd_remote(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+def _cmd_remote(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
     return run_cli_command(console, ["remote", *args])
 
 
@@ -149,7 +149,7 @@ def _argv_for_catalog_command(command: list[str]) -> list[str]:
 
 def _start_test_command(
     *,
-    session: ReplSession,
+    session: Session,
     console: Console,
     command: list[str],
     display_command: str | None = None,
@@ -167,7 +167,7 @@ def _start_test_command(
     )
 
 
-def _run_test_picker_for_background(session: ReplSession, console: Console) -> bool:
+def _run_test_picker_for_background(session: Session, console: Console) -> bool:
     console.print()
     with contextlib.closing(
         tempfile.NamedTemporaryFile(
@@ -219,7 +219,7 @@ def _run_test_picker_for_background(session: ReplSession, console: Console) -> b
     return True
 
 
-def _cmd_tests(session: ReplSession, console: Console, args: list[str]) -> bool:
+def _cmd_tests(session: Session, console: Console, args: list[str]) -> bool:
     if not args:
         return _run_test_picker_for_background(session, console)
 
@@ -254,7 +254,7 @@ def _cmd_tests(session: ReplSession, console: Console, args: list[str]) -> bool:
     return run_cli_command(console, ["tests", *args], capture_output=True)
 
 
-def _cmd_guardrails(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+def _cmd_guardrails(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
     # ``opensre guardrails`` and its subcommands are all non-interactive printers
     # (init/test/audit/rules just ``click.echo``). Capture so the output — and
     # Click's usage block when no subcommand is given — reaches the REPL buffer
@@ -262,7 +262,7 @@ def _cmd_guardrails(session: ReplSession, console: Console, args: list[str]) -> 
     return run_cli_command(console, ["guardrails", *args], capture_output=True)
 
 
-def _cmd_update(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+def _cmd_update(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
     return run_cli_command(
         console,
         ["update", *args],
@@ -270,37 +270,37 @@ def _cmd_update(session: ReplSession, console: Console, args: list[str]) -> bool
     )
 
 
-def _cmd_uninstall(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+def _cmd_uninstall(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
     return run_cli_command(console, ["uninstall", *args])
 
 
-def _cmd_config(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+def _cmd_config(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
     # Non-interactive click.echo only; capture so output reaches the REPL buffer
     # instead of the child's inherited stdout while prompt_toolkit redraws.
     return run_cli_command(console, ["config", *args], capture_output=True)
 
 
-def _cmd_messaging(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+def _cmd_messaging(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
     return run_cli_command(console, ["messaging", *args])
 
 
-def _cmd_hermes(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+def _cmd_hermes(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
     return run_cli_command(console, ["hermes", *args])
 
 
-def _cmd_cron(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+def _cmd_cron(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
     return run_cli_command(console, ["cron", *args])
 
 
-def _cmd_watchdog(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+def _cmd_watchdog(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
     return run_cli_command(console, ["watchdog", *args])
 
 
-def _cmd_debug(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+def _cmd_debug(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
     return run_cli_command(console, ["debug", *args])
 
 
-def _cmd_misses(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+def _cmd_misses(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
     # Non-interactive printers only (list/stats/export/convert) — capture so the
     # output reaches the REPL buffer instead of the child's inherited stdout.
     return run_cli_command(console, ["misses", *args], capture_output=True)

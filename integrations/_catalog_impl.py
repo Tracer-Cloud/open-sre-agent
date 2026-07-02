@@ -10,8 +10,8 @@ from typing import Any
 
 from config.config import get_tracer_base_url
 from config.llm_credentials import resolve_env_credential
-from integrations.airflow import airflow_config_from_env
-from integrations.airflow import classify as _classify_airflow
+from integrations.airflow.config import airflow_config_from_env
+from integrations.airflow.config import classify as _classify_airflow
 from integrations.alertmanager import classify as _classify_alertmanager
 from integrations.argocd import classify as _classify_argocd
 from integrations.aws import classify as _classify_aws

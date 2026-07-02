@@ -21,7 +21,7 @@ def test_gateway_requires_telegram_subcommand(runner: CliRunner) -> None:
 
 
 def test_gateway_telegram_starts_gateway(runner: CliRunner) -> None:
-    with patch("gateway.start_gateway.start_gateway") as mock_start:
+    with patch("gateway.manager.start_gateway") as mock_start:
         result = runner.invoke(cli, ["gateway", "telegram"])
 
     assert result.exit_code == 0

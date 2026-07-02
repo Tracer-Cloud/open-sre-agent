@@ -16,7 +16,7 @@ from config.llm_reasoning_effort import (
     provider_supports_reasoning_effort,
 )
 from surfaces.interactive_shell.command_registry.types import SlashCommand
-from surfaces.interactive_shell.runtime import ReplSession
+from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui import (
     DIM,
     ERROR,
@@ -49,7 +49,7 @@ _EFFORT_FIRST_ARGS: tuple[tuple[str, str], ...] = (
 )
 
 
-def _interactive_trust_menu(session: ReplSession, console: Console) -> bool:
+def _interactive_trust_menu(session: Session, console: Console) -> bool:
     while True:
         mode = repl_choose_one(
             title="trust",
@@ -62,7 +62,7 @@ def _interactive_trust_menu(session: ReplSession, console: Console) -> bool:
         repl_section_break(console)
 
 
-def _cmd_trust(session: ReplSession, console: Console, args: list[str]) -> bool:
+def _cmd_trust(session: Session, console: Console, args: list[str]) -> bool:
     if not args and repl_tty_interactive():
         return _interactive_trust_menu(session, console)
 
@@ -75,7 +75,7 @@ def _cmd_trust(session: ReplSession, console: Console, args: list[str]) -> bool:
     return True
 
 
-def _cmd_effort(session: ReplSession, console: Console, args: list[str]) -> bool:
+def _cmd_effort(session: Session, console: Console, args: list[str]) -> bool:
     settings = repl_data.load_llm_settings()
     provider = str(getattr(settings, "provider", os.getenv("LLM_PROVIDER", "anthropic")))
     reasoning_model = ""
@@ -123,7 +123,7 @@ def _cmd_effort(session: ReplSession, console: Console, args: list[str]) -> bool
     return True
 
 
-def _interactive_verbose_menu(_session: ReplSession, console: Console) -> bool:
+def _interactive_verbose_menu(_session: Session, console: Console) -> bool:
     while True:
         mode = repl_choose_one(
             title="verbose",
@@ -136,7 +136,7 @@ def _interactive_verbose_menu(_session: ReplSession, console: Console) -> bool:
         repl_section_break(console)
 
 
-def _cmd_verbose(_session: ReplSession, console: Console, args: list[str]) -> bool:
+def _cmd_verbose(_session: Session, console: Console, args: list[str]) -> bool:
     if not args and repl_tty_interactive():
         return _interactive_verbose_menu(_session, console)
 
@@ -149,7 +149,7 @@ def _cmd_verbose(_session: ReplSession, console: Console, args: list[str]) -> bo
     return True
 
 
-def _cmd_compact(session: ReplSession, console: Console, _args: list[str]) -> bool:
+def _cmd_compact(session: Session, console: Console, _args: list[str]) -> bool:
     before = len(session.history)
     if before > 20:
         session.history = session.history[-20:]

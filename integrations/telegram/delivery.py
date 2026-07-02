@@ -10,6 +10,7 @@ from typing import Any
 from platform.common.truncation import truncate
 from platform.notifications.delivery_transport import post_json
 from platform.notifications.limits import MAX_MESSAGE_SIZE
+from platform.notifications.redaction import redact_token
 
 logger = logging.getLogger(__name__)
 
@@ -119,13 +120,6 @@ def _install_httpx_token_filter() -> None:
 _install_httpx_token_filter()
 
 
-def _redact_token(text: str, bot_token: str) -> str:
-    """Replace bot token with <redacted> to prevent accidental log/error leakage."""
-    if bot_token and bot_token in text:
-        return text.replace(bot_token, "<redacted>")
-    return text
-
-
 def post_telegram_message(
     chat_id: str,
     text: str,
@@ -152,7 +146,7 @@ def post_telegram_message(
         payload=payload,
     )
     if not response.ok:
-        error = _redact_token(response.error, bot_token)
+        error = redact_token(response.error, bot_token)
         logger.warning("[telegram] post message exception: %s", error)
         return False, error, ""
     if response.status_code != 200:

@@ -13,7 +13,7 @@ import pytest
 from core.agent_harness.session import (
     JsonlSessionRepo,
     JsonlSessionStorage,
-    ReplSession,
+    Session,
 )
 from core.agent_harness.session.paths import sessions_dir as _sessions_dir
 
@@ -27,8 +27,8 @@ SessionStore = _SessionStoreFacade()
 # ── helpers ───────────────────────────────────────────────────────────────────
 
 
-def _make_session() -> ReplSession:
-    return ReplSession()
+def _make_session() -> Session:
+    return Session()
 
 
 def _read_lines(path: Path) -> list[dict]:
@@ -829,7 +829,7 @@ def test_new_closes_old_session_and_opens_new(tmp_path: Path) -> None:
     assert new_records[-1]["type"] != "leaf"
 
 
-# ── ReplSession field behaviour ───────────────────────────────────────────────
+# ── Session field behaviour ───────────────────────────────────────────────
 
 
 def test_repl_session_has_stable_session_id() -> None:
@@ -838,7 +838,7 @@ def test_repl_session_has_stable_session_id() -> None:
     assert s.started_at <= time.time()
 
 
-def test_repl_session_rotates_id_on_clear() -> None:
+def test_session_rotates_id_on_clear() -> None:
     s = _make_session()
     original_id = s.session_id
     s.history.append({"type": "chat", "text": "hi", "ok": True})
@@ -892,7 +892,7 @@ def test_append_investigation_result_uses_report_fallback(tmp_path: Path) -> Non
 
 def test_load_investigation_history_returns_newest_first(tmp_path: Path) -> None:
     session_a = _make_session()
-    session_b = ReplSession()
+    session_b = Session()
     with _patch_dir(tmp_path):
         SessionStore.open_session(session_a)
         SessionStore.append_investigation_result(
@@ -934,7 +934,7 @@ def test_apply_investigation_result_persists_record(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
-    session = ReplSession()
+    session = Session()
     SessionStore.open_session(session)
     session.apply_investigation_result(
         {"root_cause": "OOM killer", "problem_md": "memory spike"},

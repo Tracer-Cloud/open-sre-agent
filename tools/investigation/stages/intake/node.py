@@ -24,6 +24,10 @@ from platform.observability import (
 from platform.observability import (
     get_progress_tracker as get_tracker,
 )
+from platform.reporting.slack_reactions import SlackReactionsPort, get_slack_reactions_port
+from tools.investigation.reporting.delivery.bootstrap import (
+    ensure_delivery_adapters_registered,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -181,9 +185,10 @@ def _handle_noise_reaction(state: InvestigationState) -> None:
         return
 
     channel, timestamp, token = slack_context
-    from integrations.slack.delivery import swap_reaction
-
-    swap_reaction("eyes", "white_check_mark", channel, timestamp, token)
+    port = _resolve_slack_reactions_port()
+    if port is None:
+        return
+    port.swap_reaction("eyes", "white_check_mark", channel, timestamp, token)
 
 
 def _handle_start_reaction(state: InvestigationState) -> None:
@@ -192,9 +197,22 @@ def _handle_start_reaction(state: InvestigationState) -> None:
         return
 
     channel, timestamp, token = slack_context
-    from integrations.slack.delivery import add_reaction
+    port = _resolve_slack_reactions_port()
+    if port is None:
+        return
+    port.add_reaction("eyes", channel, timestamp, token)
 
-    add_reaction("eyes", channel, timestamp, token)
+
+def _resolve_slack_reactions_port() -> SlackReactionsPort | None:
+    """Return the currently registered Slack reactions port, loading adapters on demand.
+
+    The delivery bootstrap is idempotent and cheap; calling it here guarantees
+    the Slack integration adapter has had a chance to register its port
+    without ``core/`` or ``tools/investigation/stages/`` importing
+    ``integrations.slack`` directly (T-4 layering audit, issue #3352).
+    """
+    ensure_delivery_adapters_registered()
+    return get_slack_reactions_port()
 
 
 def _slack_reaction_context(state: InvestigationState) -> tuple[str, str, str] | None:

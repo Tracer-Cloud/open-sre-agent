@@ -6,17 +6,17 @@ import os
 from typing import Any
 
 from core.tool_framework.tool_decorator import tool
-from integrations.airflow import (
+from integrations.airflow.config import (
     AirflowConfig,
     build_airflow_config,
 )
-from integrations.airflow import (
+from integrations.airflow.config import (
     get_airflow_dag_runs as fetch_airflow_dag_runs,
 )
-from integrations.airflow import (
+from integrations.airflow.config import (
     get_airflow_task_instances as fetch_airflow_task_instances,
 )
-from integrations.airflow import (
+from integrations.airflow.config import (
     get_recent_airflow_failures as fetch_recent_airflow_failures,
 )
 

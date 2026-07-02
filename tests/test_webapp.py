@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import sys
 from unittest.mock import MagicMock
 
 import pytest
@@ -18,6 +19,18 @@ def test_webapp_module_calls_init_sentry_on_import(monkeypatch: pytest.MonkeyPat
     importlib.reload(webapp)
 
     init_mock.assert_called_once()
+
+
+def test_webapp_imports_after_stdlib_platform_cached(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Docker/uvicorn can cache stdlib ``platform`` before loading the ASGI app."""
+    import platform as stdlib_platform
+
+    monkeypatch.setitem(sys.modules, "platform", stdlib_platform)
+
+    reloaded = importlib.reload(webapp)
+
+    assert hasattr(reloaded, "app")
+    assert hasattr(sys.modules["platform"], "__path__")
 
 
 def test_health_response_returns_known_fields() -> None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -10,6 +11,11 @@ from click.testing import CliRunner
 
 from core.domain.feedback import MissTaxonomy, record_miss
 from surfaces.cli.__main__ import cli
+
+# Seed misses a couple of days in the past: comfortably inside the ``--since 30d``
+# export window regardless of the current date. A hardcoded date here drifts to
+# the 30-day boundary over time and makes the export test calendar-flaky.
+_SEED_TIMESTAMP = (datetime.now(UTC) - timedelta(days=2)).isoformat()
 
 
 @pytest.fixture
@@ -23,7 +29,7 @@ def _seed(alert: str, taxonomy: MissTaxonomy, *, feedback_id: str = "fb") -> dic
     return record_miss(
         {
             "feedback_id": feedback_id,
-            "timestamp": "2026-06-02T10:00:00+00:00",
+            "timestamp": _SEED_TIMESTAMP,
             "run_id": f"run-{feedback_id}",
             "alert_name": alert,
             "rating": "inaccurate",

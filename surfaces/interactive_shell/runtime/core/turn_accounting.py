@@ -17,7 +17,7 @@ from core.agent_harness.models.turn_results import (
     ToolCallingAccountingStatus,
     ToolCallingTurnResult,
 )
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from platform.analytics.cli import capture_terminal_turn_summarized
 from surfaces.interactive_shell.utils.telemetry import PromptRecorder
 
@@ -32,7 +32,7 @@ class ShellTurnAccounting:
     assistant-intent stamp.
     """
 
-    session: ReplSession
+    session: Session
     text: str
     recorder: PromptRecorder | None
 
@@ -86,7 +86,7 @@ class ShellTurnAccounting:
 
     def _record_terminal_turn(self, action_result: ToolCallingTurnResult) -> None:
         fallback_to_llm = not action_result.handled
-        snapshot = self.session.record_terminal_turn(
+        snapshot = self.session.metrics.record_turn(
             executed_count=action_result.executed_count,
             executed_success_count=action_result.executed_success_count,
             fallback_to_llm=fallback_to_llm,

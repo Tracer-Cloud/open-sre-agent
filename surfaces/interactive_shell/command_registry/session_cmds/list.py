@@ -7,7 +7,7 @@ import contextlib
 from rich.console import Console
 from rich.markup import escape
 
-from surfaces.interactive_shell.runtime import ReplSession
+from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui import (
     BOLD_BRAND,
     DIM,
@@ -20,7 +20,7 @@ from surfaces.interactive_shell.ui.components.time_format import (
 )
 
 
-def _cmd_sessions(session: ReplSession, console: Console, _args: list[str]) -> bool:
+def _cmd_sessions(session: Session, console: Console, _args: list[str]) -> bool:
     from datetime import UTC, datetime
 
     from core.agent_harness.session import default_session_repo

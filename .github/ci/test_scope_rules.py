@@ -540,7 +540,7 @@ RULES: tuple[PathRule, ...] = (
     PathRule("platform/masking/", ("tests/masking/",)),
     PathRule("platform/packaging/", ("tests/packaging/",)),
     PathRule("platform/sandbox/", ("tests/sandbox/",)),
-    PathRule("infra/deployment/", ("tests/deployment/",)),
+    PathRule("platform/deployment/", ("tests/deployment/", "tests/test_deployment_health.py")),
     PathRule("platform/auth/", ("tests/platform/auth/",)),
     PathRule("config/webapp.py", ("tests/test_webapp.py",)),
     # Repo-wide config
@@ -558,7 +558,7 @@ def _matches(path: str, prefix: str) -> bool:
 
 def _area_key(prefix: str) -> str:
     parts = prefix.split("/")
-    if parts[0] == "deployment" or parts[:2] == ["infra", "deployment"]:
+    if parts[0] == "deployment" or parts[:2] == ["platform", "deployment"]:
         return "deployment"
     return prefix
 

@@ -12,7 +12,7 @@ import pytest
 from prompt_toolkit.history import FileHistory
 from rich.console import Console
 
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from core.agent_harness.session.background import BackgroundInvestigationRecord
 from platform.common.task_types import TaskKind, TaskStatus
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
@@ -32,13 +32,13 @@ def _capture() -> tuple[Console, io.StringIO]:
 
 class TestDispatchSlash:
     def test_exit_returns_false(self) -> None:
-        session = ReplSession()
+        session = Session()
         console, _ = _capture()
         assert dispatch_slash("/exit", session, console) is False
         assert dispatch_slash("/quit", session, console) is False
 
     def test_help_lists_all_commands(self) -> None:
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         assert dispatch_slash("/help", session, console) is True
         output = buf.getvalue()
@@ -54,7 +54,7 @@ class TestDispatchSlash:
 
     def test_question_mark_shortcut_runs_help(self) -> None:
         """`/?` is the canonical shortcut for `/help` (vim / less convention)."""
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         assert dispatch_slash("/?", session, console) is True
         output = buf.getvalue()
@@ -63,7 +63,7 @@ class TestDispatchSlash:
         assert "/tools" in output
 
     def test_help_command_detail_shows_usage(self) -> None:
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         assert dispatch_slash("/help /model", session, console) is True
         output = buf.getvalue()
@@ -72,7 +72,7 @@ class TestDispatchSlash:
         assert "In a TTY, bare /model opens an interactive menu." in output
 
     def test_help_category_shows_compact_section(self) -> None:
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         assert dispatch_slash("/help tasks", session, console) is True
         output = buf.getvalue()
@@ -85,7 +85,7 @@ class TestDispatchSlash:
     ) -> None:
         from surfaces.interactive_shell.command_registry import help as help_cmd
 
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         picker_called: list[bool] = []
         monkeypatch.setattr(help_cmd, "repl_tty_interactive", lambda: True)
@@ -99,7 +99,7 @@ class TestDispatchSlash:
         assert buf.getvalue() == ""
 
     def test_bare_slash_previews_all_commands(self) -> None:
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         assert dispatch_slash("/", session, console) is True
         output = buf.getvalue()
@@ -109,7 +109,7 @@ class TestDispatchSlash:
         assert "unknown command" not in output
 
     def test_trust_toggle(self) -> None:
-        session = ReplSession()
+        session = Session()
         console, _ = _capture()
         assert session.trust_mode is False
         dispatch_slash("/trust", session, console)
@@ -122,7 +122,7 @@ class TestDispatchSlash:
             provider = "openai"
 
         monkeypatch.setattr(repl_data_module, "load_llm_settings", lambda: _FakeLLM())
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
 
         dispatch_slash("/effort max", session, console)
@@ -133,7 +133,7 @@ class TestDispatchSlash:
         assert "runtime: xhigh" in output
 
     def test_effort_rejects_unknown_value(self) -> None:
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
 
         dispatch_slash("/effort turbo", session, console)
@@ -148,7 +148,7 @@ class TestDispatchSlash:
             anthropic_toolcall_model = "claude-haiku-4-5-20251001"
 
         monkeypatch.setattr(repl_data_module, "load_llm_settings", lambda: _FakeLLM())
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
 
         dispatch_slash("/effort", session, console)
@@ -160,7 +160,7 @@ class TestDispatchSlash:
         assert "anthropic does not use reasoning-effort overrides" in output
 
     def test_new_clears_session(self) -> None:
-        session = ReplSession()
+        session = Session()
         session.record("alert", "test")
         session.last_state = {"x": 1}
         session.trust_mode = True
@@ -173,7 +173,7 @@ class TestDispatchSlash:
         assert session.trust_mode is True  # /new keeps trust mode
 
     def test_status_shows_session_fields(self) -> None:
-        session = ReplSession()
+        session = Session()
         session.record("alert", "hello")
         session.reasoning_effort = "max"
         console, buf = _capture()
@@ -186,7 +186,7 @@ class TestDispatchSlash:
         assert "grounding docs cache" in output
 
     def test_background_toggle_and_status(self) -> None:
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
 
         assert dispatch_slash("/background on", session, console) is True
@@ -199,14 +199,14 @@ class TestDispatchSlash:
         assert "none" in output
 
     def test_background_list_empty_message(self) -> None:
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
 
         assert dispatch_slash("/background list", session, console) is True
         assert "no background investigations" in buf.getvalue().lower()
 
     def test_background_show_and_use_completed_record(self) -> None:
-        session = ReplSession()
+        session = Session()
         session.background_investigations["bg123"] = BackgroundInvestigationRecord(
             task_id="bg123",
             status="completed",
@@ -229,7 +229,7 @@ class TestDispatchSlash:
         assert session.accumulated_context["service"] == "api"
 
     def test_background_notify_set_rejects_invalid_channel(self) -> None:
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
 
         assert dispatch_slash("/background notify set pagerduty", session, console) is True
@@ -238,7 +238,7 @@ class TestDispatchSlash:
         assert session.background_notification_preferences.channels == ()
 
     def test_background_notify_set_updates_channels(self) -> None:
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
 
         assert dispatch_slash("/background notify set email", session, console)
@@ -246,13 +246,13 @@ class TestDispatchSlash:
         assert "background notify channels set" in buf.getvalue().lower()
 
     def test_unknown_command_does_not_exit(self) -> None:
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         assert dispatch_slash("/made-up", session, console) is True
         assert "Unknown command" in buf.getvalue()
 
     def test_unknown_command_suggests_close_match(self) -> None:
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         assert dispatch_slash("/modle", session, console) is True
         output = buf.getvalue()
@@ -277,14 +277,14 @@ class TestDispatchSlash:
 
         monkeypatch.setattr(cli_parity, "run_cli_command", _fake_run_cli_command)
 
-        session = ReplSession()
+        session = Session()
         console, _ = _capture()
 
         assert dispatch_slash("/hermes", session, console) is True
         assert calls == [["hermes"]]
 
     def test_empty_input_is_noop(self) -> None:
-        session = ReplSession()
+        session = Session()
         console, _ = _capture()
         assert dispatch_slash("   ", session, console) is True
 
@@ -300,7 +300,7 @@ class TestDispatchSlash:
         history.store_string("opensre health")
         history.store_string("/integrations list")
 
-        session = ReplSession()
+        session = Session()
         session.record("alert", "current session only")
         console, buf = _capture()
 
@@ -328,7 +328,7 @@ class TestDispatchSlash:
             lambda exc, **_kwargs: captured_errors.append(exc),
         )
 
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
 
         assert dispatch_slash("/investigate incident.json", session, console) is True
@@ -350,7 +350,7 @@ class TestDispatchSlash:
             lambda exc, **_kwargs: captured_errors.append(exc),
         )
 
-        session = ReplSession()
+        session = Session()
         session.last_state = {"root_cause": "cache issue", "problem_md": "details"}
         console, buf = _capture()
 
@@ -381,7 +381,7 @@ class TestSpecificListCommands:
     def test_integrations_list_includes_mcp_services(self, monkeypatch: object) -> None:
         self._patch_verify(monkeypatch)
         console, buf = _capture()
-        dispatch_slash("/integrations list", ReplSession(), console)
+        dispatch_slash("/integrations list", Session(), console)
         output = buf.getvalue()
         assert "datadog" in output
         assert "slack" in output
@@ -391,7 +391,7 @@ class TestSpecificListCommands:
     def test_mcp_list_shows_only_mcp_services(self, monkeypatch: object) -> None:
         self._patch_verify(monkeypatch)
         console, buf = _capture()
-        dispatch_slash("/mcp list", ReplSession(), console)
+        dispatch_slash("/mcp list", Session(), console)
         output = buf.getvalue()
         assert "openclaw" in output
         assert "github" in output
@@ -410,7 +410,7 @@ class TestSpecificListCommands:
     def test_model_show_displays_provider_and_models(self, monkeypatch: object) -> None:
         self._patch_llm(monkeypatch)
         console, buf = _capture()
-        dispatch_slash("/model show", ReplSession(), console)
+        dispatch_slash("/model show", Session(), console)
         output = buf.getvalue()
         assert "provider" in output
         assert "reasoning model" in output
@@ -424,7 +424,7 @@ class TestSpecificListCommands:
 
         monkeypatch.setattr(repl_data_module, "load_llm_settings", lambda: _FakeLLM())
         console, buf = _capture()
-        dispatch_slash("/model show", ReplSession(), console)
+        dispatch_slash("/model show", Session(), console)
         output = buf.getvalue()
         assert "ollama" in output
         assert "qwen2.5:7b" in output
@@ -433,7 +433,7 @@ class TestSpecificListCommands:
     def test_model_show_handles_missing_env_gracefully(self, monkeypatch: object) -> None:
         monkeypatch.setattr(repl_data_module, "load_llm_settings", lambda: None)
         console, buf = _capture()
-        dispatch_slash("/model show", ReplSession(), console)
+        dispatch_slash("/model show", Session(), console)
         assert "LLM settings unavailable" in buf.getvalue()
 
     def test_integrations_list_empty_prints_onboarding_hint(self, monkeypatch: object) -> None:
@@ -443,7 +443,7 @@ class TestSpecificListCommands:
             list,  # callable returning []
         )
         console, buf = _capture()
-        dispatch_slash("/integrations list", ReplSession(), console)
+        dispatch_slash("/integrations list", Session(), console)
         assert "opensre onboard" in buf.getvalue()
 
     def test_tools_list_prints_registered_tools(self, monkeypatch: object) -> None:
@@ -464,7 +464,7 @@ class TestSpecificListCommands:
         )
 
         console, buf = _capture()
-        dispatch_slash("/tools list", ReplSession(), console)
+        dispatch_slash("/tools list", Session(), console)
         output = buf.getvalue()
         assert "search_github" in output
         assert "investigation" in output
@@ -493,7 +493,7 @@ class TestIntegrationsCommand:
     def test_list_shows_all_services_including_github(self, monkeypatch: object) -> None:
         self._patch(monkeypatch)
         console, buf = _capture()
-        dispatch_slash("/integrations list", ReplSession(), console)
+        dispatch_slash("/integrations list", Session(), console)
         output = buf.getvalue()
         assert "datadog" in output
         assert "github" in output
@@ -501,13 +501,13 @@ class TestIntegrationsCommand:
     def test_list_is_default_when_no_subcommand(self, monkeypatch: object) -> None:
         self._patch(monkeypatch)
         console, buf = _capture()
-        dispatch_slash("/integrations", ReplSession(), console)
+        dispatch_slash("/integrations", Session(), console)
         assert "datadog" in buf.getvalue()
 
     def test_verify_reports_issues(self, monkeypatch: object) -> None:
         self._patch(monkeypatch)
         console, buf = _capture()
-        dispatch_slash("/integrations verify", ReplSession(), console)
+        dispatch_slash("/integrations verify", Session(), console)
         assert "need attention" in buf.getvalue()
 
     def test_verify_all_ok(self, monkeypatch: object) -> None:
@@ -519,13 +519,13 @@ class TestIntegrationsCommand:
             ],
         )
         console, buf = _capture()
-        dispatch_slash("/integrations verify", ReplSession(), console)
+        dispatch_slash("/integrations verify", Session(), console)
         assert "all integrations ok" in buf.getvalue()
 
     def test_verify_via_slash_command(self, monkeypatch: object) -> None:
         self._patch(monkeypatch)
         console, buf = _capture()
-        dispatch_slash("/verify", ReplSession(), console)
+        dispatch_slash("/verify", Session(), console)
         assert "need attention" in buf.getvalue()
 
     def test_verify_one_service_via_slash_command(self, monkeypatch: object) -> None:
@@ -546,7 +546,7 @@ class TestIntegrationsCommand:
         )
         monkeypatch.setattr(repl_data_module, "verify_integration", _verify_one)
         console, buf = _capture()
-        dispatch_slash("/verify datadog", ReplSession(), console)
+        dispatch_slash("/verify datadog", Session(), console)
         assert verified == ["datadog"]
         assert "datadog ok" in buf.getvalue()
 
@@ -555,7 +555,7 @@ class TestIntegrationsCommand:
             "integrations.registry.SUPPORTED_VERIFY_SERVICES",
             ("datadog",),
         )
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         dispatch_slash("/verify not_a_real_service", session, console)
         assert "unsupported verify target" in buf.getvalue()
@@ -575,7 +575,7 @@ class TestIntegrationsCommand:
 
         monkeypatch.setattr(repl_data_module, "verify_integration", _verify_one)
         console, buf = _capture()
-        dispatch_slash("/integrations verify datadog", ReplSession(), console)
+        dispatch_slash("/integrations verify datadog", Session(), console)
         assert verified == ["datadog"]
         assert "datadog ok" in buf.getvalue()
 
@@ -598,13 +598,13 @@ class TestIntegrationsCommand:
         )
         monkeypatch.setattr(repl_data_module, "verify_integration", _verify_one)
         console, buf = _capture()
-        dispatch_slash("/integrations show datadog", ReplSession(), console)
+        dispatch_slash("/integrations show datadog", Session(), console)
         assert verified == ["datadog"]
         assert "datadog" in buf.getvalue()
 
     def test_show_unknown_service(self, monkeypatch: object) -> None:
         monkeypatch.setattr(repl_data_module, "configured_integration_names", lambda: ["datadog"])
-        session = ReplSession()
+        session = Session()
         session.record("slash", "/integrations show bogus")
         console, buf = _capture()
         dispatch_slash("/integrations show bogus", session, console)
@@ -614,13 +614,13 @@ class TestIntegrationsCommand:
     def test_show_missing_arg(self, monkeypatch: object) -> None:
         self._patch(monkeypatch)
         console, buf = _capture()
-        dispatch_slash("/integrations show", ReplSession(), console)
+        dispatch_slash("/integrations show", Session(), console)
         assert "usage" in buf.getvalue()
 
     def test_unknown_subcommand_prints_hint(self, monkeypatch: object) -> None:
         self._patch(monkeypatch)
         console, buf = _capture()
-        dispatch_slash("/integrations bogus", ReplSession(), console)
+        dispatch_slash("/integrations bogus", Session(), console)
         assert "unknown subcommand" in buf.getvalue()
 
     def test_setup_delegates_to_cli(self, monkeypatch: object) -> None:
@@ -628,7 +628,7 @@ class TestIntegrationsCommand:
 
         captured = []
         monkeypatch.setattr(m, "run_cli_command", lambda _, args: (captured.append(args), True)[1])
-        dispatch_slash("/integrations setup", ReplSession(), Console())
+        dispatch_slash("/integrations setup", Session(), Console())
         assert captured == [["integrations", "setup"]]
 
     def test_remove_uses_native_store_removal(self, monkeypatch: object) -> None:
@@ -641,7 +641,7 @@ class TestIntegrationsCommand:
         monkeypatch.setattr(m, "repl_choose_one", lambda **_: "yes")
         monkeypatch.setattr(store, "remove_integration", lambda svc: (removed.append(svc), True)[1])
         monkeypatch.setattr(analytics_cli, "capture_integration_removed", lambda *_: None)
-        dispatch_slash("/integrations remove slack", ReplSession(), Console())
+        dispatch_slash("/integrations remove slack", Session(), Console())
         assert removed == ["slack"]
 
     def test_remove_cancelled_does_not_touch_store(self, monkeypatch: object) -> None:
@@ -652,7 +652,7 @@ class TestIntegrationsCommand:
         monkeypatch.setattr(m, "repl_tty_interactive", lambda: True)
         monkeypatch.setattr(m, "repl_choose_one", lambda **_: "no")
         monkeypatch.setattr(store, "remove_integration", lambda svc: (removed.append(svc), True)[1])
-        dispatch_slash("/integrations remove slack", ReplSession(), Console())
+        dispatch_slash("/integrations remove slack", Session(), Console())
         assert removed == []
 
 
@@ -672,13 +672,13 @@ class TestMcpCommand:
     def test_list_shows_mcp_services(self, monkeypatch: object) -> None:
         self._patch(monkeypatch)
         console, buf = _capture()
-        dispatch_slash("/mcp list", ReplSession(), console)
+        dispatch_slash("/mcp list", Session(), console)
         assert "github" in buf.getvalue()
 
     def test_list_is_default_when_no_subcommand(self, monkeypatch: object) -> None:
         self._patch(monkeypatch)
         console, buf = _capture()
-        dispatch_slash("/mcp", ReplSession(), console)
+        dispatch_slash("/mcp", Session(), console)
         assert "github" in buf.getvalue()
 
     def test_connect_delegates_to_cli(self, monkeypatch: object) -> None:
@@ -686,7 +686,7 @@ class TestMcpCommand:
 
         captured = []
         monkeypatch.setattr(m, "run_cli_command", lambda _, args: (captured.append(args), True)[1])
-        dispatch_slash("/mcp connect", ReplSession(), Console())
+        dispatch_slash("/mcp connect", Session(), Console())
         assert captured == [["integrations", "setup"]]
 
     def test_disconnect_uses_native_store_removal(self, monkeypatch: object) -> None:
@@ -699,13 +699,13 @@ class TestMcpCommand:
         monkeypatch.setattr(m, "repl_choose_one", lambda **_: "yes")
         monkeypatch.setattr(store, "remove_integration", lambda svc: (removed.append(svc), True)[1])
         monkeypatch.setattr(analytics_cli, "capture_integration_removed", lambda *_: None)
-        dispatch_slash("/mcp disconnect github", ReplSession(), Console())
+        dispatch_slash("/mcp disconnect github", Session(), Console())
         assert removed == ["github"]
 
     def test_unknown_subcommand(self, monkeypatch: object) -> None:
         self._patch(monkeypatch)
         console, buf = _capture()
-        dispatch_slash("/mcp bogus", ReplSession(), console)
+        dispatch_slash("/mcp bogus", Session(), console)
         assert "unknown subcommand" in buf.getvalue()
 
 
@@ -732,13 +732,13 @@ class TestModelCommand:
     def test_show_displays_model_info(self, monkeypatch: object) -> None:
         self._patch_llm(monkeypatch)
         console, buf = _capture()
-        dispatch_slash("/model show", ReplSession(), console)
+        dispatch_slash("/model show", Session(), console)
         assert "anthropic" in buf.getvalue()
 
     def test_show_is_default_when_no_subcommand(self, monkeypatch: object) -> None:
         self._patch_llm(monkeypatch)
         console, buf = _capture()
-        dispatch_slash("/model", ReplSession(), console)
+        dispatch_slash("/model", Session(), console)
         assert "anthropic" in buf.getvalue()
 
     def test_model_interactive_set_flow_applies_selection(
@@ -759,7 +759,7 @@ class TestModelCommand:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
 
         console, buf = _capture()
-        dispatch_slash("/model", ReplSession(), console)
+        dispatch_slash("/model", Session(), console)
 
         output = buf.getvalue()
         assert "switched LLM provider" in output
@@ -779,7 +779,7 @@ class TestModelCommand:
         picks = iter(["show", "done"])
         monkeypatch.setattr(model_cmd, "repl_choose_one", lambda **_: next(picks))
         console, buf = _capture()
-        dispatch_slash("/model", ReplSession(), console)
+        dispatch_slash("/model", Session(), console)
         assert "anthropic" in buf.getvalue()
 
     def test_model_interactive_escape_backs_out_without_changes(
@@ -800,7 +800,7 @@ class TestModelCommand:
             ]
         )
         monkeypatch.setattr(model_cmd, "repl_choose_one", lambda **_: next(selections))
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         dispatch_slash("/model", session, console)
 
@@ -824,7 +824,7 @@ class TestModelCommand:
         # has no usable credential; supply one so the happy path still runs.
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
         console, buf = _capture()
-        dispatch_slash("/model set anthropic", ReplSession(), console)
+        dispatch_slash("/model set anthropic", Session(), console)
 
         output = buf.getvalue()
         assert "switched LLM provider" in output
@@ -862,7 +862,7 @@ class TestModelCommand:
         monkeypatch.setenv("LLM_PROVIDER", "gemini")
 
         console, buf = _capture()
-        dispatch_slash("/model set anthropic", ReplSession(), console)
+        dispatch_slash("/model set anthropic", Session(), console)
 
         output = buf.getvalue()
         assert "missing credential for anthropic" in output
@@ -878,7 +878,7 @@ class TestModelCommand:
 
     def test_set_missing_provider_prints_usage(self) -> None:
         console, buf = _capture()
-        dispatch_slash("/model set", ReplSession(), console)
+        dispatch_slash("/model set", Session(), console)
         assert "usage" in buf.getvalue()
 
     def test_set_unknown_reasoning_model_is_rejected(
@@ -892,7 +892,7 @@ class TestModelCommand:
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
-        session = ReplSession()
+        session = Session()
         session.record("slash", "/model set anthropic not-a-real-model-xyz")
 
         console, buf = _capture()
@@ -918,7 +918,7 @@ class TestModelCommand:
         monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
 
         console, buf = _capture()
-        dispatch_slash("/model set openai gpt-5.5", ReplSession(), console)
+        dispatch_slash("/model set openai gpt-5.5", Session(), console)
 
         output = buf.getvalue()
         assert "switched LLM provider" in output
@@ -942,7 +942,7 @@ class TestModelCommand:
         monkeypatch.setenv("LLM_PROVIDER", "openai")
 
         console, buf = _capture()
-        dispatch_slash("/model set gpt-5.5", ReplSession(), console)
+        dispatch_slash("/model set gpt-5.5", Session(), console)
 
         output = buf.getvalue()
         assert "reasoning model set to" in output
@@ -967,7 +967,7 @@ class TestModelCommand:
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
         monkeypatch.setenv("LLM_PROVIDER", "openai")
 
-        dispatch_slash("/model set gpt 5.5", ReplSession(), _capture()[0])
+        dispatch_slash("/model set gpt 5.5", Session(), _capture()[0])
 
         contents = env_path.read_text(encoding="utf-8")
         assert "OPENAI_REASONING_MODEL=gpt-5.5" in contents
@@ -1018,7 +1018,7 @@ class TestModelCommand:
         console, buf = _capture()
         dispatch_slash(
             "/model set anthropic claude-opus-4-7 --toolcall-model not-a-real-model-xyz",
-            ReplSession(),
+            Session(),
             console,
         )
 
@@ -1043,7 +1043,7 @@ class TestModelCommand:
         console, buf = _capture()
         dispatch_slash(
             "/model set anthropic claude-opus-4-7 --toolcall-model claude-opus-4-7",
-            ReplSession(),
+            Session(),
             console,
         )
 
@@ -1070,7 +1070,7 @@ class TestModelCommand:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
 
         console, buf = _capture()
-        dispatch_slash("/model restore", ReplSession(), console)
+        dispatch_slash("/model restore", Session(), console)
 
         output = buf.getvalue()
         assert "switched LLM provider" in output
@@ -1091,7 +1091,7 @@ class TestModelCommand:
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", tmp_path / ".env")
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
         console, buf = _capture()
-        dispatch_slash("/model set anthropic --made-up-flag x", ReplSession(), console)
+        dispatch_slash("/model set anthropic --made-up-flag x", Session(), console)
         output = buf.getvalue()
         assert "unknown flag" in output
         assert "--made-up-flag" in output
@@ -1111,7 +1111,7 @@ class TestModelCommand:
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
         console, buf = _capture()
-        dispatch_slash("/model set anthropic --toolcall-model", ReplSession(), console)
+        dispatch_slash("/model set anthropic --toolcall-model", Session(), console)
         output = buf.getvalue()
         assert "missing value for --toolcall-model" in output
         # And we must not have written anything to .env on a parse failure.
@@ -1134,7 +1134,7 @@ class TestModelCommand:
         monkeypatch.setenv("LLM_PROVIDER", "anthropic")
 
         console, buf = _capture()
-        dispatch_slash("/model toolcall set claude-opus-4-7", ReplSession(), console)
+        dispatch_slash("/model toolcall set claude-opus-4-7", Session(), console)
 
         output = buf.getvalue()
         assert "toolcall model set to" in output
@@ -1148,7 +1148,7 @@ class TestModelCommand:
 
     def test_toolcall_set_missing_arg_prints_usage(self) -> None:
         console, buf = _capture()
-        dispatch_slash("/model toolcall set", ReplSession(), console)
+        dispatch_slash("/model toolcall set", Session(), console)
         assert "usage" in buf.getvalue()
 
     def test_toolcall_set_for_codex_provider_is_rejected(
@@ -1163,7 +1163,7 @@ class TestModelCommand:
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", tmp_path / ".env")
         monkeypatch.setenv("LLM_PROVIDER", "codex")
         console, buf = _capture()
-        dispatch_slash("/model toolcall set gpt-5.4", ReplSession(), console)
+        dispatch_slash("/model toolcall set gpt-5.4", Session(), console)
         assert "does not expose a separate toolcall model" in buf.getvalue()
 
     def test_switch_alias_switches_provider(
@@ -1177,21 +1177,21 @@ class TestModelCommand:
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", tmp_path / ".env")
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
         console, buf = _capture()
-        dispatch_slash("/model switch anthropic", ReplSession(), console)
+        dispatch_slash("/model switch anthropic", Session(), console)
 
         assert "switched LLM provider" in buf.getvalue()
 
     def test_unknown_subcommand(self, monkeypatch: object) -> None:
         self._patch_llm(monkeypatch)
         console, buf = _capture()
-        dispatch_slash("/model bogus", ReplSession(), console)
+        dispatch_slash("/model bogus", Session(), console)
         assert "unknown subcommand" in buf.getvalue()
 
 
 class TestVersionCommand:
     def test_shows_version_info(self) -> None:
         console, buf = _capture()
-        dispatch_slash("/version", ReplSession(), console)
+        dispatch_slash("/version", Session(), console)
         output = buf.getvalue()
         assert "opensre" in output
         assert "python" in output
@@ -1201,29 +1201,29 @@ class TestVersionCommand:
 class TestTemplateCommand:
     def test_known_template_prints_json(self) -> None:
         console, buf = _capture()
-        dispatch_slash("/template generic", ReplSession(), console)
+        dispatch_slash("/template generic", Session(), console)
         assert "alert_name" in buf.getvalue()
 
     def test_unknown_template_prints_hint(self) -> None:
         console, buf = _capture()
-        dispatch_slash("/template bogus", ReplSession(), console)
+        dispatch_slash("/template bogus", Session(), console)
         assert "unknown template" in buf.getvalue()
 
     def test_missing_arg_prints_usage(self) -> None:
         console, buf = _capture()
-        dispatch_slash("/template", ReplSession(), console)
+        dispatch_slash("/template", Session(), console)
         assert "usage" in buf.getvalue()
 
 
 class TestInvestigateFileCommand:
     def test_missing_arg_prints_usage(self) -> None:
         console, buf = _capture()
-        dispatch_slash("/investigate", ReplSession(), console)
+        dispatch_slash("/investigate", Session(), console)
         assert "usage" in buf.getvalue()
         assert "/investigate <file|template>" in buf.getvalue()
 
     def test_missing_file_prints_error(self) -> None:
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         dispatch_slash("/investigate /nonexistent/path.json", session, console)
         assert "file not found" in buf.getvalue()
@@ -1233,7 +1233,7 @@ class TestInvestigateFileCommand:
         assert latest["response_text"] == "slash /investigate /nonexistent/path.json (failed)"
 
     def test_missing_arg_analytics_reports_failure(self) -> None:
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         dispatch_slash("/investigate", session, console)
         assert "usage" in buf.getvalue()
@@ -1258,7 +1258,7 @@ class TestInvestigateFileCommand:
 
         # Patch package re-export: slash handler does `from surfaces.cli.investigation import ...`.
         monkeypatch.setattr("surfaces.cli.investigation.run_investigation_for_session", _fake)
-        session = ReplSession()
+        session = Session()
         console, _ = _capture()
         dispatch_slash(f"/investigate {alert_file}", session, console)
         assert session.last_state == {"root_cause": "test cause"}
@@ -1279,7 +1279,7 @@ class TestInvestigateFileCommand:
 
         monkeypatch.setattr("surfaces.cli.investigation.run_sample_alert_for_session", _fake_sample)
 
-        session = ReplSession()
+        session = Session()
         console, _ = _capture()
         dispatch_slash("/investigate generic", session, console)
 
@@ -1294,7 +1294,7 @@ class TestInvestigateFileCommand:
         def _fake_start_background_template_investigation(
             *,
             template_name: str,
-            session: ReplSession,
+            session: Session,
             console: Console,
             display_command: str,
         ) -> str:
@@ -1307,7 +1307,7 @@ class TestInvestigateFileCommand:
             _fake_start_background_template_investigation,
         )
 
-        session = ReplSession()
+        session = Session()
         session.background_mode_enabled = True
         console, _ = _capture()
         dispatch_slash("/investigate generic", session, console)
@@ -1339,7 +1339,7 @@ class TestInvestigateFileCommand:
             lambda **_kwargs: {"root_cause": "sample cause"},
         )
 
-        session = ReplSession()
+        session = Session()
         console, _ = _capture()
         dispatch_slash("/investigate generic", session, console)
 
@@ -1364,7 +1364,7 @@ class TestInvestigateFileCommand:
 
         monkeypatch.setattr("surfaces.cli.investigation.run_sample_alert_for_session", _fake_sample)
 
-        session = ReplSession()
+        session = Session()
         console, _ = _capture()
         dispatch_slash("/investigate generic", session, console)
 
@@ -1395,7 +1395,7 @@ class TestInvestigateFileCommand:
         monkeypatch.setattr(investigation_cmd, "repl_choose_one", lambda **_: next(picks))
         monkeypatch.setattr("surfaces.cli.investigation.run_sample_alert_for_session", _fake_sample)
 
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         dispatch_slash("/investigate", session, console)
 
@@ -1441,7 +1441,7 @@ class TestInvestigateFileCommand:
         )
         monkeypatch.setattr("surfaces.cli.investigation.run_investigation_for_session", _fake)
 
-        session = ReplSession()
+        session = Session()
         console, _ = _capture()
         dispatch_slash("/investigate", session, console)
 
@@ -1481,7 +1481,7 @@ class TestInvestigateFileCommand:
             "surfaces.cli.investigation.run_investigation_for_session",
             lambda **_kwargs: {"root_cause": "test cause"},
         )
-        session = ReplSession()
+        session = Session()
         console, _ = _capture()
 
         dispatch_slash(f"/investigate {alert_file}", session, console)
@@ -1513,7 +1513,7 @@ class TestInvestigateFileCommand:
 
         monkeypatch.setattr("surfaces.cli.investigation.run_investigation_for_session", _fake)
 
-        session = ReplSession()
+        session = Session()
         console, _ = _capture()
         dispatch_slash(f"/investigate {alert_file}", session, console)
 
@@ -1534,7 +1534,7 @@ class TestInvestigateFileCommand:
         def _fake_start_background_text_investigation(
             *,
             alert_text: str,
-            session: ReplSession,
+            session: Session,
             console: Console,
             display_command: str,
         ) -> str:
@@ -1547,7 +1547,7 @@ class TestInvestigateFileCommand:
             _fake_start_background_text_investigation,
         )
 
-        session = ReplSession()
+        session = Session()
         session.background_mode_enabled = True
         console, _ = _capture()
         dispatch_slash(f"/investigate {alert_file}", session, console)
@@ -1573,7 +1573,7 @@ class TestInvestigateFileCommand:
             raise OpenSREError("bad config")
 
         monkeypatch.setattr("surfaces.cli.investigation.run_investigation_for_session", _raise)
-        session = ReplSession()
+        session = Session()
         console, _ = _capture()
         dispatch_slash(f"/investigate {alert_file}", session, console)
         inv_tasks = [
@@ -1602,7 +1602,7 @@ class TestResumeCommand:
         from surfaces.interactive_shell.command_registry.session_cmds import _apply_resume_data
 
         SessionStore = JsonlSessionStorage()
-        session = ReplSession()
+        session = Session()
         old_id = session.session_id
         target_id = "old-abc-1234567890"
 
@@ -1734,7 +1734,7 @@ class TestResumeCommand:
         early without rotating the session."""
         from surfaces.interactive_shell.command_registry.session_cmds import _apply_resume_data
 
-        session = ReplSession()
+        session = Session()
         old_id = session.session_id
 
         data: dict = {
@@ -1775,7 +1775,7 @@ class TestResumeCommand:
             "turn_details": [],
             "has_snapshot": True,
         }
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
 
         with patch(
@@ -1815,7 +1815,7 @@ class TestResumeCommand:
             "has_snapshot": True,
         }
 
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         _apply_resume_data(data, session, console)
 
@@ -1833,7 +1833,7 @@ class TestResumeCommand:
             run_action_tool_turn,
         )
 
-        session = ReplSession()
+        session = Session()
         console, _ = _capture()
 
         def _raise(*_args: object, **_kwargs: object) -> None:
@@ -1864,7 +1864,7 @@ class TestHistoryCommand:
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
         console, buf = _capture()
-        dispatch_slash("/history", ReplSession(), console)
+        dispatch_slash("/history", Session(), console)
         assert "no history" in buf.getvalue()
 
     def test_history_shows_entries(
@@ -1880,7 +1880,7 @@ class TestHistoryCommand:
         history.store_string("/status")
 
         console, buf = _capture()
-        dispatch_slash("/history", ReplSession(), console)
+        dispatch_slash("/history", Session(), console)
         output = buf.getvalue()
         assert "Command history" in output
         assert "pod crash in prod" in output
@@ -1894,7 +1894,7 @@ class TestHistoryCommand:
         import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
-        session = ReplSession()
+        session = Session()
         session.record("alert", "bad input", ok=False)
         console, buf = _capture()
         dispatch_slash("/history", session, console)
@@ -1906,25 +1906,25 @@ class TestHistoryCommand:
 class TestLastCommand:
     def test_no_investigation_says_so(self) -> None:
         console, buf = _capture()
-        dispatch_slash("/last", ReplSession(), console)
+        dispatch_slash("/last", Session(), console)
         assert "no investigation" in buf.getvalue()
 
     def test_shows_root_cause(self) -> None:
-        session = ReplSession()
+        session = Session()
         session.last_state = {"root_cause": "OOMKilled in orders-api"}
         console, buf = _capture()
         dispatch_slash("/last", session, console)
         assert "OOMKilled in orders-api" in buf.getvalue()
 
     def test_shows_problem_md_when_no_root_cause(self) -> None:
-        session = ReplSession()
+        session = Session()
         session.last_state = {"problem_md": "## Summary\n\nlatency spike"}
         console, buf = _capture()
         dispatch_slash("/last", session, console)
         assert "latency spike" in buf.getvalue()
 
     def test_empty_state_says_no_content(self) -> None:
-        session = ReplSession()
+        session = Session()
         session.last_state = {}
         console, buf = _capture()
         dispatch_slash("/last", session, console)
@@ -1934,18 +1934,18 @@ class TestLastCommand:
 class TestSaveCommand:
     def test_no_investigation_says_so(self) -> None:
         console, buf = _capture()
-        dispatch_slash("/save out.md", ReplSession(), console)
+        dispatch_slash("/save out.md", Session(), console)
         assert "nothing to save" in buf.getvalue()
 
     def test_missing_arg_prints_usage(self) -> None:
-        session = ReplSession()
+        session = Session()
         session.last_state = {"root_cause": "x"}
         console, buf = _capture()
         dispatch_slash("/save", session, console)
         assert "usage" in buf.getvalue()
 
     def test_saves_markdown(self, tmp_path: object) -> None:
-        session = ReplSession()
+        session = Session()
         session.last_state = {"root_cause": "db timeout", "problem_md": "## Details\n\nlatency"}
         dest = tmp_path / "report.md"  # type: ignore[operator]
         console, buf = _capture()
@@ -1955,7 +1955,7 @@ class TestSaveCommand:
         assert "db timeout" in content
 
     def test_saves_json(self, tmp_path: object) -> None:
-        session = ReplSession()
+        session = Session()
         session.last_state = {"root_cause": "db timeout"}
         dest = tmp_path / "report.json"  # type: ignore[operator]
         console, _ = _capture()
@@ -1967,11 +1967,11 @@ class TestSaveCommand:
 class TestContextCommand:
     def test_empty_context_says_so(self) -> None:
         console, buf = _capture()
-        dispatch_slash("/context", ReplSession(), console)
+        dispatch_slash("/context", Session(), console)
         assert "no infra context" in buf.getvalue()
 
     def test_shows_accumulated_keys(self) -> None:
-        session = ReplSession()
+        session = Session()
         session.accumulated_context = {"service": "orders-api", "region": "us-east-1"}
         console, buf = _capture()
         dispatch_slash("/context", session, console)
@@ -1983,13 +1983,13 @@ class TestContextCommand:
 class TestCostCommand:
     def test_no_token_data_shows_placeholder(self) -> None:
         console, buf = _capture()
-        dispatch_slash("/cost", ReplSession(), console)
+        dispatch_slash("/cost", Session(), console)
         assert "no LLM usage recorded yet" in buf.getvalue()
 
     def test_shows_token_counts_when_available(self) -> None:
-        session = ReplSession()
-        session.token_usage = {"input": 1000, "output": 500}
-        session.llm_call_count = 2
+        session = Session()
+        session.tokens.totals = {"input": 1000, "output": 500}
+        session.tokens.call_count = 2
         console, buf = _capture()
         dispatch_slash("/cost", session, console)
         output = buf.getvalue()
@@ -1999,8 +1999,8 @@ class TestCostCommand:
         assert "2" in output
 
     def test_shows_estimate_labels_when_mixed(self) -> None:
-        session = ReplSession()
-        session.token_usage = {
+        session = Session()
+        session.tokens.totals = {
             "input": 400,
             "output": 60,
             "input_measured": 300,
@@ -2008,7 +2008,7 @@ class TestCostCommand:
             "input_estimated": 100,
             "output_estimated": 20,
         }
-        session.llm_call_count = 2
+        session.tokens.call_count = 2
         console, buf = _capture()
         dispatch_slash("/cost", session, console)
         output = buf.getvalue()
@@ -2023,7 +2023,7 @@ class TestVerboseCommand:
 
         monkeypatch.delenv("TRACER_VERBOSE", raising=False)  # type: ignore[attr-defined]
         console, buf = _capture()
-        dispatch_slash("/verbose on", ReplSession(), console)
+        dispatch_slash("/verbose on", Session(), console)
         assert os.environ.get("TRACER_VERBOSE") == "1"
         assert "verbose logging on" in buf.getvalue()
 
@@ -2032,7 +2032,7 @@ class TestVerboseCommand:
 
         monkeypatch.setenv("TRACER_VERBOSE", "1")  # type: ignore[attr-defined]
         console, buf = _capture()
-        dispatch_slash("/verbose off", ReplSession(), console)
+        dispatch_slash("/verbose off", Session(), console)
         assert "TRACER_VERBOSE" not in os.environ
         assert "verbose logging off" in buf.getvalue()
 
@@ -2041,13 +2041,13 @@ class TestVerboseCommand:
 
         monkeypatch.delenv("TRACER_VERBOSE", raising=False)  # type: ignore[attr-defined]
         console, _ = _capture()
-        dispatch_slash("/verbose", ReplSession(), console)
+        dispatch_slash("/verbose", Session(), console)
         assert os.environ.get("TRACER_VERBOSE") == "1"
 
 
 class TestCompactCommand:
     def test_nothing_to_compact_when_small(self) -> None:
-        session = ReplSession()
+        session = Session()
         for i in range(5):
             session.record("slash", f"/cmd{i}")
         console, buf = _capture()
@@ -2057,7 +2057,7 @@ class TestCompactCommand:
         assert session.history[-1]["text"] == "/compact"
 
     def test_trims_to_20_when_over_limit(self) -> None:
-        session = ReplSession()
+        session = Session()
         for i in range(30):
             session.record("slash", f"/cmd{i}")
         console, buf = _capture()
@@ -2069,7 +2069,7 @@ class TestCompactCommand:
 class TestCancelCommand:
     def test_usage_without_task_id(self) -> None:
         console, buf = _capture()
-        dispatch_slash("/cancel", ReplSession(), console)
+        dispatch_slash("/cancel", Session(), console)
         assert "usage" in buf.getvalue().lower()
         assert "/tasks" in buf.getvalue()
 
@@ -2095,7 +2095,7 @@ class TestPrePolicyValidation:
             confirm_calls.append(prompt)
             return "n"
 
-        session = ReplSession()
+        session = Session()
 
         console, buf = _capture()
         dispatch_slash(command, session, console, confirm_fn=_confirm, is_tty=True)
@@ -2120,7 +2120,7 @@ class TestPrePolicyValidation:
             confirm_calls.append(prompt)
             return "y"
 
-        session = ReplSession()
+        session = Session()
         session.trust_mode = True
 
         console, buf = _capture()
@@ -2140,7 +2140,7 @@ class TestPrePolicyValidation:
             confirm_calls.append(prompt)
             return "n"
 
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         dispatch_slash(
             f"/investigate {alert_file}",
@@ -2252,7 +2252,7 @@ class TestRunCliCommand:
 
         monkeypatch.setattr(m.subprocess, "run", _fake_run)
         console, buf = _capture()
-        assert m._cmd_config(ReplSession(), console, ["show"]) is True
+        assert m._cmd_config(Session(), console, ["show"]) is True
         assert "Provider : cursor" in buf.getvalue()
 
     def test_capture_output_replays_stdout_through_console_without_timeout(
@@ -2448,7 +2448,7 @@ class TestCliDelegatedCommands:
             return True
 
         monkeypatch.setattr(m, "run_cli_command", _fake_run_cli_command)
-        dispatch_slash(command, ReplSession(), Console())
+        dispatch_slash(command, Session(), Console())
         assert captured == [expected_args]
 
     def test_slash_onboard_delegates_to_run_cli_command(self, monkeypatch: object) -> None:
@@ -2468,7 +2468,7 @@ class TestCliDelegatedCommands:
 
         monkeypatch.setattr(m, "run_cli_command", _fake_run_cli_command)
 
-        session = ReplSession()
+        session = Session()
         buf = io.StringIO()
         console = Console(file=buf, force_terminal=False, width=200)
         dispatch_slash("/onboard", session, console)
@@ -2494,7 +2494,7 @@ class TestCliDelegatedCommands:
             return True
 
         monkeypatch.setattr(m, "run_cli_command", _fake_run_cli_command)
-        dispatch_slash(slash_input, ReplSession(), Console())
+        dispatch_slash(slash_input, Session(), Console())
 
         assert captured_kwargs == [{"capture_output": True}]
 
@@ -2520,7 +2520,7 @@ class TestCliDelegatedCommands:
             return True
 
         monkeypatch.setattr(m, "run_cli_command", _fake_run_cli_command)
-        dispatch_slash(slash_input, ReplSession(), Console())
+        dispatch_slash(slash_input, Session(), Console())
 
         assert captured_kwargs == [{"capture_output": True}]
 
@@ -2536,7 +2536,7 @@ class TestCliDelegatedCommands:
 
         monkeypatch.setattr(m, "run_cli_command", _fake_run_cli_command)
 
-        session = ReplSession()
+        session = Session()
         buf = io.StringIO()
         console = Console(file=buf, force_terminal=False, width=200)
         dispatch_slash("/onboard local_llm", session, console)
@@ -2552,7 +2552,7 @@ class TestCliDelegatedCommands:
             *,
             display_command: str,
             argv_list: list[str],
-            session: ReplSession,
+            session: Session,
             console: Console,
             timeout_seconds: int,
             kind: TaskKind,
@@ -2563,7 +2563,7 @@ class TestCliDelegatedCommands:
             return object()
 
         monkeypatch.setattr(m, "start_background_cli_task", _fake_start_background_cli_task)
-        dispatch_slash("/tests synthetic --scenario 001-replication-lag", ReplSession(), Console())
+        dispatch_slash("/tests synthetic --scenario 001-replication-lag", Session(), Console())
 
         assert started == [
             (
@@ -2627,7 +2627,7 @@ class TestCliDelegatedCommands:
             lambda **kwargs: started.append(kwargs["display_command"]),
         )
 
-        dispatch_slash("/tests", ReplSession(), Console())
+        dispatch_slash("/tests", Session(), Console())
 
         assert started == ["opensre tests synthetic"]
         assert not selection_path.exists()
@@ -2642,7 +2642,7 @@ class TestCliDelegatedCommands:
             lambda _console, args, **_kwargs: (delegated.append(args), True)[1],
         )
 
-        dispatch_slash("/tests --help", ReplSession(), Console())
+        dispatch_slash("/tests --help", Session(), Console())
 
         assert delegated == [["tests", "--help"]]
 
@@ -2663,7 +2663,7 @@ class TestCliDelegatedCommands:
             lambda **kwargs: started.append(kwargs["argv_list"]),
         )
 
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         dispatch_slash("/tests synthetics", session, console)
 

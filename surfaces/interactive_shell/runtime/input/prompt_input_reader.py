@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from rich.console import Console
 
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from platform.terminal.prompt_support import (
     print_session_resume_hint,
     repl_prompt_note_ctrl_c,
@@ -32,7 +32,7 @@ class PromptInputReader:
         self,
         prompt: PromptManager,
         state: ReplState,
-        session: ReplSession,
+        session: Session,
         console: Console,
     ) -> None:
         self.prompt = prompt

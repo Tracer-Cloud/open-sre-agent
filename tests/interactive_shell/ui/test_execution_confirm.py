@@ -11,7 +11,7 @@ import io
 
 from rich.console import Console
 
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
 from tools.interactive_shell.shared import (
     ExecutionPolicyResult,
@@ -32,7 +32,7 @@ def _ask_result() -> ExecutionPolicyResult:
 
 
 def test_allow_verdict_runs_without_prompt() -> None:
-    session = ReplSession()
+    session = Session()
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)
 
@@ -53,7 +53,7 @@ def test_allow_verdict_runs_without_prompt() -> None:
 
 def test_non_tty_allows_default_policy() -> None:
     """Default-allow no longer fails closed on non-interactive stdin."""
-    session = ReplSession()
+    session = Session()
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)
     r = allow_tool("slash")
@@ -67,7 +67,7 @@ def test_non_tty_allows_default_policy() -> None:
 
 
 def test_deny_verdict_blocks() -> None:
-    session = ReplSession()
+    session = Session()
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)
     # The default policy never emits a deny; construct one explicitly to cover
@@ -92,7 +92,7 @@ def test_deny_verdict_blocks() -> None:
 
 
 def test_explicit_ask_trust_mode_allows() -> None:
-    session = ReplSession()
+    session = Session()
     session.trust_mode = True
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)
@@ -107,7 +107,7 @@ def test_explicit_ask_trust_mode_allows() -> None:
 
 
 def test_explicit_ask_non_tty_blocks() -> None:
-    session = ReplSession()
+    session = Session()
     session.trust_mode = False
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)
@@ -122,7 +122,7 @@ def test_explicit_ask_non_tty_blocks() -> None:
 
 
 def test_explicit_ask_tty_accepts_empty_confirmation() -> None:
-    session = ReplSession()
+    session = Session()
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)
     captured: list[str] = []
@@ -143,7 +143,7 @@ def test_explicit_ask_tty_accepts_empty_confirmation() -> None:
 
 
 def test_explicit_ask_tty_rejects_explicit_no() -> None:
-    session = ReplSession()
+    session = Session()
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)
     assert not execution_allowed(

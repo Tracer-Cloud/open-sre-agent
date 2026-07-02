@@ -18,21 +18,12 @@ def resolve_telegram_credentials(task_params: dict[str, str]) -> dict[str, str]:
 
     Priority: task.params > integration store > environment variable.
     """
-    bot_token = task_params.get("bot_token", "")
-    if bot_token:
-        return {"bot_token": bot_token}
-
-    # Try integration store
-    bot_token = _get_integration_credential("telegram", "bot_token")
-    if bot_token:
-        return {"bot_token": bot_token}
-
-    # Fall back to environment
-    bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "")
-    if bot_token:
-        return {"bot_token": bot_token}
-
-    return {}
+    return _resolve_credentials(
+        task_params,
+        service="telegram",
+        credential_key="bot_token",
+        env_vars=("TELEGRAM_BOT_TOKEN",),
+    )
 
 
 def resolve_slack_credentials(task_params: dict[str, str]) -> dict[str, str]:
@@ -40,21 +31,12 @@ def resolve_slack_credentials(task_params: dict[str, str]) -> dict[str, str]:
 
     Priority: task.params > integration store > environment variable.
     """
-    access_token = task_params.get("access_token", "")
-    if access_token:
-        return {"access_token": access_token}
-
-    # Try integration store
-    access_token = _get_integration_credential("slack", "access_token")
-    if access_token:
-        return {"access_token": access_token}
-
-    # Fall back to environment
-    access_token = os.getenv("SLACK_BOT_TOKEN", "") or os.getenv("SLACK_ACCESS_TOKEN", "")
-    if access_token:
-        return {"access_token": access_token}
-
-    return {}
+    return _resolve_credentials(
+        task_params,
+        service="slack",
+        credential_key="access_token",
+        env_vars=("SLACK_BOT_TOKEN", "SLACK_ACCESS_TOKEN"),
+    )
 
 
 def resolve_discord_credentials(task_params: dict[str, str]) -> dict[str, str]:
@@ -62,19 +44,34 @@ def resolve_discord_credentials(task_params: dict[str, str]) -> dict[str, str]:
 
     Priority: task.params > integration store > environment variable.
     """
-    bot_token = task_params.get("bot_token", "")
-    if bot_token:
-        return {"bot_token": bot_token}
+    return _resolve_credentials(
+        task_params,
+        service="discord",
+        credential_key="bot_token",
+        env_vars=("DISCORD_BOT_TOKEN",),
+    )
 
-    # Try integration store
-    bot_token = _get_integration_credential("discord", "bot_token")
-    if bot_token:
-        return {"bot_token": bot_token}
 
-    # Fall back to environment
-    bot_token = os.getenv("DISCORD_BOT_TOKEN", "")
-    if bot_token:
-        return {"bot_token": bot_token}
+def _resolve_credentials(
+    task_params: dict[str, str],
+    *,
+    service: str,
+    credential_key: str,
+    env_vars: tuple[str, ...],
+) -> dict[str, str]:
+    """Resolve a single credential from task params, integration store, or env."""
+    value = task_params.get(credential_key, "")
+    if value:
+        return {credential_key: value}
+
+    value = _get_integration_credential(service, credential_key)
+    if value:
+        return {credential_key: value}
+
+    for env_var in env_vars:
+        value = os.getenv(env_var, "")
+        if value:
+            return {credential_key: value}
 
     return {}
 

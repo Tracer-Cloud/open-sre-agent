@@ -14,12 +14,12 @@ from platform.terminal.theme import ERROR, WARNING
 from surfaces.interactive_shell.utils.error_handling.exception_reporting import report_exception
 
 if TYPE_CHECKING:
-    from core.agent_harness.session import ReplSession
+    from core.agent_harness.session import Session
 
 
 def run_foreground_investigation(
     *,
-    session: ReplSession,
+    session: Session,
     console: Console,
     task_command: str,
     run: Callable[[TaskRecord], dict[str, Any]],

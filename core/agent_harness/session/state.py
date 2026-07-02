@@ -8,21 +8,22 @@ import time
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Literal
-
-from prompt_toolkit.history import History
-from pydantic import ConfigDict
+from typing import TYPE_CHECKING, Any
 
 from core.domain.alerts.inbox import IncomingAlert
 
 if TYPE_CHECKING:
+    # Type-only: the session stores the prompt-history backend as an opaque UI
+    # handle (surfaces access its interface). Importing it only under
+    # TYPE_CHECKING keeps core free of a runtime prompt_toolkit dependency.
+    from prompt_toolkit.history import History
+
     from core.agent_harness.grounding.context import GroundingContext
     from core.agent_harness.integrations.resolution import IntegrationResolutionResult
 else:
     GroundingContext = Any
 
 from config.llm_reasoning_effort import ReasoningEffortChoice
-from config.strict_config import StrictConfigModel
 from core.agent_harness.session.background import (
     BackgroundInvestigationRecord,
     BackgroundNotificationPreferences,
@@ -34,10 +35,10 @@ from core.agent_harness.session.integrations_cache import (
 )
 from core.agent_harness.session.storage.jsonl import JsonlSessionStorage
 from core.agent_harness.session.tasks import TaskRegistry
+from core.agent_harness.session.terminal_metrics import TerminalMetrics
+from core.agent_harness.session.token_usage import TokenUsage
 from core.agent_harness.session.types import SessionStorage
 from core.context.state import MutableAgentState
-
-InterventionKind = Literal["ctrl_c", "correction"]
 
 # Prefilled into the next prompt after a background synthetic test exits non-zero,
 # so the user can ask the CLI assistant for a quick RCA explanation.
@@ -70,24 +71,8 @@ def _default_grounding() -> GroundingContext:
     return GroundingContext()
 
 
-class TerminalMetricsSnapshot(StrictConfigModel):
-    """Session-level aggregate counters for interactive-shell analytics.
-
-    A pure immutable value snapshot returned from ``record_terminal_turn``; the
-    mutable session state itself stays a dataclass (it holds a lock and mutates
-    per turn).
-    """
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    turn_index: int
-    fallback_count: int
-    action_success_percent: float
-    fallback_rate_percent: float
-
-
 @dataclass
-class ReplSession:
+class Session:
     """Per-REPL-process accumulated state.
 
     Carries everything we want to persist across individual investigations
@@ -107,7 +92,7 @@ class ReplSession:
 
     Defaults to the JSONL backend; tests can inject an in-memory backend. All
     of this session's writes (record/append/flush) go through it, so the on-disk
-    format is swappable without touching ReplSession."""
+    format is swappable without touching Session."""
 
     resumed_from_name: str = ""
     """Name of the most recently resumed session. Used by /sessions to display a
@@ -166,15 +151,8 @@ class ReplSession:
     reasoning_effort: ReasoningEffortChoice | None = None
     """Session-scoped reasoning effort preference for REPL-driven LLM calls."""
 
-    token_usage: dict[str, int] = field(default_factory=dict)
-    """Accumulated token counts.
-
-    Totals: ``input``, ``output``. Breakdown: ``input_measured``,
-    ``output_measured``, ``input_estimated``, ``output_estimated``.
-    """
-
-    llm_call_count: int = 0
-    """Number of LLM calls accumulated into ``token_usage`` (for ``/cost``)."""
+    tokens: TokenUsage = field(default_factory=TokenUsage)
+    """Per-session token accounting (running totals + LLM call count) for ``/cost``."""
 
     agent: MutableAgentState = field(default_factory=MutableAgentState)
     """Dedicated conversational-agent state (transcript + per-turn observation).
@@ -259,20 +237,8 @@ class ReplSession:
     history_generation: int = 0
     """Incremented on /new so background synthetic watchers can skip stale history writes."""
 
-    terminal_turn_count: int = 0
-    terminal_fallback_count: int = 0
-    terminal_actions_executed_count: int = 0
-    terminal_actions_success_count: int = 0
-
-    ctrl_c_intervention_count: int = 0
-    """Incremented when the user Ctrl-Cs an active investigation. Bare-prompt
-    Ctrl-C with no agent running is intentionally not counted."""
-
-    correction_intervention_count: int = 0
-    """Incremented when a follow-up or new-alert message starts with a
-    correction cue (see ``looks_like_correction`` in ``runtime.core.turn_detection``).
-    Slash and CLI-agent turns are not counted because content like
-    ``actually run ps aux`` is a command, not a correction."""
+    metrics: TerminalMetrics = field(default_factory=TerminalMetrics)
+    """Interactive-shell turn/intervention analytics counters (see ``/status``)."""
 
     pending_prompt_default: str | None = None
     """When set, the next interactive prompt is pre-filled with this string (then cleared)."""
@@ -374,8 +340,11 @@ class ReplSession:
         if not scenario_id:
             self.last_synthetic_observation_path = None
             return
+        # ``config`` is the shared layer both ``core`` and ``surfaces`` can
+        # depend on; the constant used to live in ``surfaces.cli.tests.discover``
+        # but that direct edge is a T-4 layering violation (issue #3352).
         try:
-            from surfaces.cli.tests.discover import SYNTHETIC_SCENARIOS_DIR
+            from config.synthetic_paths import SYNTHETIC_SCENARIOS_DIR
         except Exception:
             self.last_synthetic_observation_path = None
             return
@@ -386,30 +355,6 @@ class ReplSession:
                 return
             time.sleep(0.06)
         self.last_synthetic_observation_path = None
-
-    @property
-    def token_usage_has_estimates(self) -> bool:
-        usage = self.token_usage
-        return bool(usage.get("input_estimated") or usage.get("output_estimated"))
-
-    def record_token_usage(
-        self,
-        *,
-        input_tokens: int = 0,
-        output_tokens: int = 0,
-        estimated: bool = False,
-    ) -> None:
-        """Accumulate token counts for ``/cost`` (input/output keys)."""
-        if not input_tokens and not output_tokens:
-            return
-        suffix = "estimated" if estimated else "measured"
-        for direction, count in (("input", input_tokens), ("output", output_tokens)):
-            if not count:
-                continue
-            self.token_usage[direction] = self.token_usage.get(direction, 0) + count
-            bucket = f"{direction}_{suffix}"
-            self.token_usage[bucket] = self.token_usage.get(bucket, 0) + count
-        self.llm_call_count += 1
 
     def record(
         self,
@@ -678,8 +623,7 @@ class ReplSession:
             pending.cancel()
         self.available_capabilities.clear()
         self.accumulated_context.clear()
-        self.token_usage.clear()
-        self.llm_call_count = 0
+        self.tokens.reset()
         self.agent.clear()
         self.incoming_alerts.clear()
         # Keep persisted cross-session task history on disk intact.
@@ -692,13 +636,7 @@ class ReplSession:
             else TaskRegistry()
         )
 
-        self.terminal_turn_count = 0
-        self.terminal_fallback_count = 0
-        self.terminal_actions_executed_count = 0
-        self.terminal_actions_success_count = 0
-
-        self.ctrl_c_intervention_count = 0
-        self.correction_intervention_count = 0
+        self.metrics.reset()
         self.pending_prompt_default = None
         self.pending_prompt_autosubmit = False
         self.exclusive_stdin_active = False
@@ -717,37 +655,21 @@ class ReplSession:
             self.session_id = str(uuid.uuid4())
             self.started_at = time.time()
 
-    def record_intervention(self, kind: InterventionKind) -> None:
-        """Increment the per-kind intervention counter (Ctrl-C or correction)."""
-        if kind == "ctrl_c":
-            self.ctrl_c_intervention_count += 1
-        elif kind == "correction":
-            self.correction_intervention_count += 1
-        else:
-            raise ValueError(f"Unknown intervention kind: {kind!r}")
+    def release_resources(self) -> None:
+        """Cancel background work and drop references for terminal teardown.
 
-    def record_terminal_turn(
-        self,
-        *,
-        executed_count: int,
-        executed_success_count: int,
-        fallback_to_llm: bool,
-    ) -> TerminalMetricsSnapshot:
-        """Update aggregate terminal metrics and return a stable snapshot."""
-        self.terminal_turn_count += 1
-        self.terminal_actions_executed_count += max(0, executed_count)
-        self.terminal_actions_success_count += max(0, executed_success_count)
-        if fallback_to_llm:
-            self.terminal_fallback_count += 1
-        action_success_percent = (
-            100.0 * self.terminal_actions_success_count / self.terminal_actions_executed_count
-            if self.terminal_actions_executed_count > 0
-            else 0.0
-        )
-        fallback_rate_percent = 100.0 * self.terminal_fallback_count / self.terminal_turn_count
-        return TerminalMetricsSnapshot(
-            turn_index=self.terminal_turn_count,
-            fallback_count=self.terminal_fallback_count,
-            action_success_percent=action_success_percent,
-            fallback_rate_percent=fallback_rate_percent,
-        )
+        Called when this handle is being discarded (see ``SessionManager.close``),
+        so the session owns its own teardown instead of exposing internals to
+        callers. Uses the same locks as :meth:`clear`, so cancelling the
+        in-flight integration-warm task is thread-safe against a background
+        warm thread.
+        """
+        with self._integration_warm_lock:
+            self._integration_warm_generation += 1
+            pending = self._integration_warm_task
+            self._integration_warm_task = None
+        if pending is not None and not pending.done():
+            pending.cancel()
+        with self._background_notices_lock:
+            self.background_notices.clear()
+        self.prompt_refresh_fn = None

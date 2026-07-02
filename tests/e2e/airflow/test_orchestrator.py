@@ -31,7 +31,7 @@ import pytest
 
 pytestmark = pytest.mark.e2e
 
-from integrations.airflow import (
+from integrations.airflow.config import (
     DEFAULT_AIRFLOW_BASE_URL,
     build_airflow_config,
     get_airflow_dag_runs,

@@ -27,6 +27,12 @@ def main() -> None:
     docs_root = Path(__file__).resolve().parents[3] / "docs"
 
     cli = CliReference()
+    # The grounding cache no longer imports ``surfaces.cli`` (T-4 boundary
+    # fix); bind the CLI group here the same way the interactive shell does
+    # at startup so the benchmark inspects the real command surface.
+    from surfaces.cli.__main__ import cli as _cli_group
+
+    cli.set_command_group_provider(lambda: _cli_group)
     docs = DocsReference()
 
     cold_cli, _ = _timed("CLI reference (cold)", cli.build_text)

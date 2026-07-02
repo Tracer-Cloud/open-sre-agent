@@ -332,8 +332,15 @@ run_with_progress() {
   trap - INT TERM
 
   if [ "$status" -ne 0 ]; then
-    printf '%sError:%s %s failed.%s\n' "${COLOR_RED:-}" "${COLOR_RESET:-}" "$label" "${COLOR_RESET:-}" >&2
-    cat "$log_file" >&2
+    printf '%sError:%s %s failed (exit %s).%s\n' "${COLOR_RED:-}" "${COLOR_RESET:-}" "$label" "$status" "${COLOR_RESET:-}" >&2
+    if [ "$status" -gt 128 ]; then
+      printf 'Process was terminated by signal %s (e.g. killed by the OS, possibly out-of-memory).\n' "$((status - 128))" >&2
+    fi
+    if [ -s "$log_file" ]; then
+      cat "$log_file" >&2
+    else
+      printf '(no output was captured before the process ended)\n' >&2
+    fi
     rm -f "$log_file"
     return "$status"
   fi
@@ -390,9 +397,16 @@ capture_with_progress() {
   trap - INT TERM
 
   if [ "$status" -ne 0 ]; then
-    printf '%sError:%s %s failed.%s\n' "${COLOR_RED:-}" "${COLOR_RESET:-}" "$label" "${COLOR_RESET:-}" >&2
-    cat "$stdout_file" >&2
-    cat "$stderr_file" >&2
+    printf '%sError:%s %s failed (exit %s).%s\n' "${COLOR_RED:-}" "${COLOR_RESET:-}" "$label" "$status" "${COLOR_RESET:-}" >&2
+    if [ "$status" -gt 128 ]; then
+      printf 'Process was terminated by signal %s (e.g. killed by the OS, possibly out-of-memory).\n' "$((status - 128))" >&2
+    fi
+    if [ ! -s "$stdout_file" ] && [ ! -s "$stderr_file" ]; then
+      printf '(no output was captured before the process ended)\n' >&2
+    else
+      cat "$stdout_file" >&2
+      cat "$stderr_file" >&2
+    fi
     rm -f "$stdout_file" "$stderr_file"
     return "$status"
   fi
@@ -818,13 +832,26 @@ extract_and_verify_binary() {
   local extraction_dir="$2"
   local extracted_binary_path
   local extracted_version
+  local extract_status
 
+  printf 'Extracting %s into %s...\n' "$archive_path" "$extraction_dir" >&2
+  set +e
   extract_archive "$archive_path" "$extraction_dir"
+  extract_status=$?
+  set -e
+  if [ "$extract_status" -ne 0 ]; then
+    printf 'Archive extraction failed (exit %s).\n' "$extract_status" >&2
+    return "$extract_status"
+  fi
+  printf 'Extraction finished, locating %s binary...\n' "$BIN_NAME" >&2
+
   extracted_binary_path="$(get_binary_path_from_archive "$extraction_dir" "$BIN_NAME")"
+  printf 'Found binary at %s, verifying it runs...\n' "$extracted_binary_path" >&2
+
   if [ "$INSTALL_CHANNEL" = "main" ]; then
-    extracted_version="$(verify_binary_version "$extracted_binary_path")"
+    extracted_version="$(verify_binary_version "$extracted_binary_path")" || return "$?"
   else
-    extracted_version="$(verify_binary_version "$extracted_binary_path" "$version")"
+    extracted_version="$(verify_binary_version "$extracted_binary_path" "$version")" || return "$?"
   fi
 
   printf '%s\n%s\n' "$extracted_binary_path" "$extracted_version"
@@ -854,7 +881,7 @@ get_binary_path_from_archive() {
       printf '%s\n' "${binary_candidates[0]}"
       ;;
     0)
-      die "Archive '${archive}' did not contain '${binary_name}'."
+      die "Archive did not contain '${binary_name}'."
       ;;
     *)
       binary_locations="$(printf '%s, ' "${binary_candidates[@]}")"
@@ -1188,9 +1215,49 @@ prepare_download() {
   fi
 }
 
+dir_available_kib() {
+  local dir="$1"
+  local avail
+
+  command -v df >/dev/null 2>&1 || return 1
+  avail="$(df -Pk "$dir" 2>/dev/null | awk 'NR==2 { print $4 }')"
+  [ -n "$avail" ] || return 1
+  printf '%s\n' "$avail"
+}
+
+select_temp_base_dir() {
+  local min_kib="$1"
+  local candidate
+  local avail
+
+  for candidate in "${TMPDIR:-}" "${HOME:-}/.cache" /var/tmp /tmp; do
+    [ -n "$candidate" ] || continue
+    [ -d "$candidate" ] || continue
+    is_candidate_dir_writable "$candidate" || continue
+
+    avail="$(dir_available_kib "$candidate")" || continue
+    if [ "$avail" -ge "$min_kib" ]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
 create_temp_workspace() {
+  local temp_base_dir
+  local min_kib=524288
+
   need_cmd mktemp
-  tmp_dir="$(mktemp -d)"
+
+  if temp_base_dir="$(select_temp_base_dir "$min_kib")"; then
+    tmp_dir="$(mktemp -d "${temp_base_dir%/}/opensre-install.XXXXXX")"
+  else
+    warn "Could not find a temp directory with at least 512MB free; falling back to the system default and hoping for the best."
+    tmp_dir="$(mktemp -d)"
+  fi
+
   trap cleanup EXIT
 }
 

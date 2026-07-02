@@ -7,7 +7,7 @@ from contextlib import suppress
 from prompt_toolkit.styles import Style
 
 from platform.terminal import theme as ui_theme
-from surfaces.interactive_shell.runtime import ReplSession
+from surfaces.interactive_shell.runtime import Session
 
 
 def _build_prompt_style() -> Style:
@@ -38,7 +38,7 @@ def _build_prompt_style() -> Style:
     )
 
 
-def refresh_prompt_theme(session: ReplSession) -> None:
+def refresh_prompt_theme(session: Session) -> None:
     """Apply the active palette to the running prompt (input text + placeholder)."""
     app = session.pt_style_app
     if app is None:

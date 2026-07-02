@@ -1,7 +1,7 @@
 -include .env
 export
 
-.PHONY: install onboard benchmark benchmark-update-readme test test-full demo alert-template investigate-alert verify-integrations check-docker grafana-local-up grafana-local-down grafana-local-seed clean lint format deploy deploy-lambda deploy-prefect deploy-flink destroy destroy-lambda destroy-prefect destroy-flink prefect-local-test simulate-k8s-alert test-k8s-local test-k8s test-k8s-datadog chaos-mesh-up chaos-mesh-down chaos-engineering-apply chaos-engineering-delete chaos-lab-up chaos-lab-down chaos-experiment-list chaos-experiment-up chaos-experiment-down deploy-dd-monitors cleanup-dd-monitors deploy-eks destroy-eks test-k8s-eks datadog-demo crashloop-demo regen-trigger-config test-rca test-rca-grafana test-synthetic test-rds-synthetic test-cli-smoke test-turn-live deploy-vercel destroy-vercel test-vercel deploy-ec2 destroy-ec2 test-ec2 deploy-ec2-hello destroy-ec2-hello deploy-bedrock destroy-bedrock test-bedrock download-cloudopsbench-hf mirror-cloudopsbench-s3 validate-cloudopsbench test-openclaw test-openclaw-synthetic test-hermes test-hermes-synthetic test-hermes-synthetic-only refresh-hermes-tuples
+.PHONY: install onboard benchmark benchmark-update-readme test test-full demo alert-template investigate-alert verify-integrations check-docker grafana-local-up grafana-local-down grafana-local-seed clean lint format deploy deploy-lambda deploy-prefect deploy-flink destroy destroy-lambda destroy-prefect destroy-flink test-deploy prefect-local-test simulate-k8s-alert test-k8s-local test-k8s test-k8s-datadog chaos-mesh-up chaos-mesh-down chaos-engineering-apply chaos-engineering-delete chaos-lab-up chaos-lab-down chaos-experiment-list chaos-experiment-up chaos-experiment-down deploy-dd-monitors cleanup-dd-monitors deploy-eks destroy-eks test-k8s-eks datadog-demo crashloop-demo regen-trigger-config test-rca test-rca-grafana test-synthetic test-rds-synthetic test-cli-smoke test-turn-live download-cloudopsbench-hf mirror-cloudopsbench-s3 validate-cloudopsbench test-openclaw test-openclaw-synthetic test-hermes test-hermes-synthetic test-hermes-synthetic-only refresh-hermes-tuples
 
 
 ifneq ($(wildcard .venv/bin/python),)
@@ -28,7 +28,7 @@ USER_BASE := $(shell $(PYTHON) -m site --user-base)
 USER_BIN := $(if $(filter Windows_NT,$(OS)),$(USER_BASE)/Scripts,$(USER_BASE)/bin)
 export PATH := $(if $(wildcard .venv/bin),$(CURDIR)/.venv/bin:,$(if $(wildcard .venv/Scripts),$(CURDIR)/.venv/Scripts:))$(USER_BIN):$(PATH)
 
-PYTHON_SOURCE_PATHS := config core infra/deployment integrations platform surfaces tools
+PYTHON_SOURCE_PATHS := config core integrations platform surfaces tools
 
 # Create venv and install dependencies (requires https://docs.astral.sh/uv/)
 install:
@@ -261,13 +261,15 @@ docs-dev:
 
 
 # Deploy all test case infrastructure in parallel (SDK - fast!)
+# EC2 deploy (web + gateway containers on one instance)
 deploy:
-	@echo "Deploying all stacks in parallel..."
-	@$(PYTHON) -m tests.e2e.upstream_lambda.infrastructure_sdk.deploy & \
-	$(PYTHON) -m tests.e2e.upstream_prefect_ecs_fargate.infrastructure_sdk.deploy & \
-	$(PYTHON) -m tests.e2e.upstream_apache_flink_ecs.infrastructure_sdk.deploy & \
-	wait
-	@echo "All stacks deployed."
+	$(PYTHON) -m platform.deployment.lifecycle deploy
+
+destroy:
+	$(PYTHON) -m platform.deployment.lifecycle destroy
+
+test-deploy:
+	$(PYTHON) -m pytest tests/deployment/ec2/ -v -s
 
 # Deploy Lambda test case
 deploy-lambda:
@@ -284,15 +286,6 @@ deploy-flink:
 	@echo "Deploying Flink ECS stack..."
 	$(PYTHON) -m tests.e2e.upstream_apache_flink_ecs.infrastructure_sdk.deploy
 
-# Destroy all test case infrastructure in parallel
-destroy:
-	@echo "Destroying all stacks in parallel..."
-	@$(PYTHON) -m tests.e2e.upstream_lambda.infrastructure_sdk.destroy & \
-	$(PYTHON) -m tests.e2e.upstream_prefect_ecs_fargate.infrastructure_sdk.destroy & \
-	$(PYTHON) -m tests.e2e.upstream_apache_flink_ecs.infrastructure_sdk.destroy & \
-	wait
-	@echo "All stacks destroyed."
-
 # Destroy Lambda test case
 destroy-lambda:
 	@echo "Destroying Lambda stack..."
@@ -307,18 +300,6 @@ destroy-prefect:
 destroy-flink:
 	@echo "Destroying Flink ECS stack..."
 	$(PYTHON) -m tests.e2e.upstream_apache_flink_ecs.infrastructure_sdk.destroy
-
-# Deploy Bedrock Agent test case
-deploy-bedrock:
-	$(PYTHON) -m tests.deployment.bedrock.infrastructure_sdk.deploy
-
-# Destroy Bedrock Agent test case
-destroy-bedrock:
-	$(PYTHON) -m tests.deployment.bedrock.infrastructure_sdk.destroy
-
-# Run Bedrock Agent deployment tests
-test-bedrock:
-	$(PYTHON) -m pytest tests/deployment/bedrock/ -v -s
 
 # Run fast tests + Prefect cloud E2E
 test:
@@ -455,59 +436,22 @@ check-layers-strict: check-imports-strict
 # Run all checks (lint + format read-only check + types + imports + full tests; mirrors CI quality gates)
 check: lint format-check typecheck check-imports test-full
 
-# ─── Deployment Tests (Vercel) ───────────────────────────────────────────────
-deploy-vercel:
-	$(PYTHON) -m tests.deployment.vercel.infrastructure_sdk.deploy
-
-destroy-vercel:
-	$(PYTHON) -m tests.deployment.vercel.infrastructure_sdk.destroy
-
-test-vercel:
-	$(PYTHON) -m pytest tests/deployment/vercel/ -v -s
-
-# ─── Deployment Tests (EC2) ──────────────────────────────────────────────────
-deploy-ec2:
-	$(PYTHON) -m tests.deployment.ec2.infrastructure_sdk.deploy
-
-destroy-ec2:
-	$(PYTHON) -m tests.deployment.ec2.infrastructure_sdk.destroy
-
-test-ec2:
-	$(PYTHON) -m pytest tests/deployment/ec2/ -v -s
-
-# ─── EC2 Hello World (fast, <60s) ────────────────────────────────────────────
-deploy-ec2-hello:
-	$(PYTHON) -m tests.deployment.ec2.infrastructure_sdk.deploy_hello
-
-destroy-ec2-hello:
-	$(PYTHON) -m tests.deployment.ec2.infrastructure_sdk.destroy_hello
-
 # Show help
 help:
 	@echo "Available commands:"
 	@echo ""
-	@echo "  DEPLOYMENT TESTS"
-	@echo "  make deploy-bedrock    - Deploy Bedrock Agent stack"
-	@echo "  make destroy-bedrock   - Destroy Bedrock Agent stack"
-	@echo "  make test-bedrock      - Run Bedrock Agent deployment tests"
-	@echo "  make deploy-vercel     - Deploy health-check function to Vercel"
-	@echo "  make destroy-vercel    - Destroy Vercel deployment"
-	@echo "  make test-vercel       - Run Vercel deployment tests"
-	@echo "  make deploy-ec2        - Deploy OpenSRE on EC2 with Docker"
-	@echo "  make destroy-ec2       - Terminate EC2 instance and clean up"
-	@echo "  make test-ec2          - Run EC2 deployment tests"
-	@echo "  make deploy-ec2-hello  - Deploy hello-world on EC2 (<60s)"
-	@echo "  make destroy-ec2-hello - Terminate hello-world EC2 instance"
+	@echo "  EC2 DEPLOY"
+	@echo "  make deploy            - Build image and deploy web + gateway on EC2"
+	@echo "  make destroy           - Terminate EC2 instance and clean up"
+	@echo "  make test-deploy       - Run EC2 deployment e2e tests"
 	@echo ""
-	@echo "  DEPLOYMENT (AWS SDK - fast!)"
-	@echo "  make deploy          - Deploy all test case infrastructure"
-	@echo "  make deploy-lambda   - Deploy Lambda stack (~50s)"
-	@echo "  make deploy-prefect  - Deploy Prefect ECS stack (~55s)"
-	@echo "  make deploy-flink    - Deploy Flink ECS stack (~90s)"
-	@echo "  make destroy         - Destroy all test case infrastructure"
-	@echo "  make destroy-lambda  - Destroy Lambda stack"
-	@echo "  make destroy-prefect - Destroy Prefect ECS stack"
-	@echo "  make destroy-flink   - Destroy Flink ECS stack"
+	@echo "  E2E TEST INFRA (AWS SDK)"
+	@echo "  make deploy-lambda     - Deploy Lambda stack (~50s)"
+	@echo "  make deploy-prefect    - Deploy Prefect ECS stack (~55s)"
+	@echo "  make deploy-flink      - Deploy Flink ECS stack (~90s)"
+	@echo "  make destroy-lambda    - Destroy Lambda stack"
+	@echo "  make destroy-prefect   - Destroy Prefect ECS stack"
+	@echo "  make destroy-flink     - Destroy Flink ECS stack"
 	@echo ""
 	@echo "  DEMOS"
 	@echo "  make demo            - Run Prefect ECS E2E test (default, shows Investigation Trace)"

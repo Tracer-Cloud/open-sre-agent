@@ -37,6 +37,7 @@ class FakeLLM:
         self.invocations = 0
         self.schema_tool_names: list[list[str]] = []
         self.seen_messages: list[list[dict[str, Any]]] = []
+        self.model_id: str | None = None
 
     def tool_schemas(self, tools: list[Any]) -> list[dict[str, Any]]:
         self.schema_tool_names.append([t.name for t in tools])
@@ -136,10 +137,14 @@ def test_agent_exposes_headless_dispatch_entrypoint(monkeypatch: pytest.MonkeyPa
         lambda: FakeLLM(iter([AgentLLMResponse(content="", tool_calls=[], raw_content=None)])),
     )
 
-    from core.agent_harness.agents.headless_agent import StaticReasoningClientProvider
+    from core.agent_harness.agents.headless_agent import (
+        NullToolProvider,
+        StaticReasoningClientProvider,
+    )
 
     result = Agent.dispatch_message_to_headless_agent(
         "hello",
+        tools=NullToolProvider(),
         reasoning=StaticReasoningClientProvider(client=EchoReasoningClient()),
     )
 

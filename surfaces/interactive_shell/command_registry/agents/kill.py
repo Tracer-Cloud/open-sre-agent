@@ -10,7 +10,7 @@ from rich.markup import escape
 
 from platform.analytics.events import Event
 from platform.analytics.provider import get_analytics
-from surfaces.interactive_shell.runtime import ReplSession
+from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui import DIM, ERROR, HIGHLIGHT, WARNING
 from tools.fleet_monitoring.lifecycle import TerminateResult, terminate
 from tools.fleet_monitoring.registry import AgentRegistry
@@ -20,7 +20,7 @@ _ConfirmFn = Callable[[str], str]
 
 
 def _cmd_agents_kill(
-    session: ReplSession,
+    session: Session,
     console: Console,
     args: list[str],
     *,

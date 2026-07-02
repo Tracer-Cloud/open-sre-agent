@@ -216,14 +216,16 @@ def test_pure_baseline_agent_is_subclass_of_production_agent() -> None:
 def test_pure_baseline_agent_overrides_system_prompt() -> None:
     """The whole point of the third arm: the system prompt is NOT
     opensre's. Pin that the override returns a string distinct from the
-    default ``build_system_prompt`` so a future hook removal can't
-    silently turn this back into a flavor of BaselineLLMAloneAgent."""
+    default ``build_investigation_system_prompt`` so a future hook removal
+    can't silently turn this back into a flavor of BaselineLLMAloneAgent."""
     from tests.benchmarks.cloudopsbench.bench_agent import PureBaselineAgent
-    from tools.investigation.stages.gather_evidence.prompt import build_system_prompt
+    from tools.investigation.stages.gather_evidence.prompt import (
+        build_investigation_system_prompt,
+    )
 
     agent = PureBaselineAgent()
     pure_prompt = agent._build_system_prompt({})
-    opensre_prompt = build_system_prompt({})
+    opensre_prompt = build_investigation_system_prompt({})
     assert pure_prompt != opensre_prompt
     # The minimal prompt should still describe the task — not empty, not None
     assert pure_prompt

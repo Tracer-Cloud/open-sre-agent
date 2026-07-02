@@ -10,7 +10,7 @@ from prompt_toolkit.application import Application
 from prompt_toolkit.formatted_text import ANSI
 from rich.console import Console
 
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from surfaces.interactive_shell.runtime.core.state import (
     PROMPT_REFRESH_INTERVAL_S,
     ReplState,
@@ -35,7 +35,7 @@ class PromptManager:
 
     def __init__(
         self,
-        session: ReplSession,
+        session: Session,
         state: ReplState,
         spinner: SpinnerState,
         pt_session: PromptSession[str] | None = None,

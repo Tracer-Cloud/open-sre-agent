@@ -34,7 +34,7 @@ from tools.investigation.stages.gather_evidence.loop import (
     tool_call_signature,
 )
 from tools.investigation.stages.gather_evidence.prompt import (
-    build_system_prompt,
+    build_investigation_system_prompt,
     format_alert_context,
 )
 from tools.investigation.stages.gather_evidence.tools import (
@@ -59,17 +59,17 @@ def _mark_messages(messages: list[dict[str, Any]], key: str) -> None:
 class ConnectedInvestigationAgent(Agent[RegisteredTool]):
     """ReAct loop scoped to the tools enabled by connected integrations.
 
-    Subclasses :class:`~core.agent.Agent` to inherit the shared hook
-    interface. The investigation loop is more specialised than the generic
-    :meth:`Agent.run` (seed calls, evidence collection, duplicate detection,
-    stagnation handling), so it overrides ``run()`` entirely.
+    Extends :class:`~core.agent.Agent` to reuse the shared event-emission and
+    tool-filtering infrastructure. The investigation loop is more specialised
+    than the generic :meth:`Agent.run` (seed calls, evidence collection,
+    duplicate detection, stagnation handling), so it overrides ``run()``
+    entirely — config plumbing (LLM, tools, prompt, resolved integrations) is
+    assembled inline in ``run()`` from ``state`` rather than through subclass
+    init hooks.
     """
 
     def __init__(self) -> None:
-        # Investigation agent builds its LLM/tools/system from the pipeline
-        # state at run-time, not at construction time. Sentinel values here;
-        # run() assigns the real ones before the loop starts.
-        super().__init__(llm=None, system="", tools=[], resolved_integrations={}, max_iterations=0)
+        super().__init__(max_iterations=MAX_INVESTIGATION_LOOPS)
 
     def _should_accept_conclusion(
         self,
@@ -77,12 +77,20 @@ class ConnectedInvestigationAgent(Agent[RegisteredTool]):
         evidence_count: int,  # noqa: ARG002 — used by overrides
         iteration: int,  # noqa: ARG002 — used by overrides
     ) -> tuple[bool, str | None]:
-        """Hook: decide what to do when the LLM stops requesting tools."""
+        """Decide what to do when the LLM stops requesting tools.
+
+        Override in subclasses (e.g. :class:`CLIBackedInvestigationAgent`) to
+        nudge the model back into tool calls before accepting a conclusion.
+        """
         return True, None
 
     def _build_system_prompt(self, state: dict[str, Any]) -> str:
-        """Hook: produce the LLM system prompt for this investigation."""
-        return build_system_prompt(state)
+        """Produce the LLM system prompt from an augmented state dict.
+
+        Extension point for bench harnesses that need to swap the prompt body
+        without reimplementing the state/tool_context merge.
+        """
+        return build_investigation_system_prompt(state)
 
     def _record_tool_start(self, tc: ToolCall) -> None:
         self._tracker.record_tool_start(tc.name, redact_sensitive(tc.input), event_key=tc.id)
@@ -104,15 +112,15 @@ class ConnectedInvestigationAgent(Agent[RegisteredTool]):
         on_runtime_event: RuntimeEventCallback | None = None,
     ) -> dict[str, Any]:
         """Run the full investigation. Returns a dict of state updates."""
-        self._on_legacy_event = on_event
+        self._on_tuple_event = on_event
         self._on_runtime_event = on_runtime_event
         self._tracker = get_tracker()
         self._tracker.start("investigation_agent", "Running investigation agent loop")
 
         state_dict = cast(dict[str, Any], state)
-        resolved = state.get("resolved_integrations") or {}
-        available_tools = self._filter_tools(get_available_tools(resolved))
-        tools = select_investigation_tools(available_tools, state_dict)
+        resolved = dict(state.get("resolved_integrations") or {})
+        available_tools = list(self._filter_tools(get_available_tools(resolved)))
+        tools = list(select_investigation_tools(available_tools, state_dict))
         tool_context = build_connected_tool_context(resolved, tools)
 
         if not tools:
@@ -122,9 +130,6 @@ class ConnectedInvestigationAgent(Agent[RegisteredTool]):
         msg_formatter = MessageFormatter(llm)
         tool_schemas = llm.tool_schemas(tools)
 
-        # Merge tool_context into a local view so the system prompt and the alert
-        # context read the SAME narrowed tool set the model receives as schemas —
-        # never naming tools that aren't actually callable this turn.
         prompt_state = {**state_dict, **tool_context}
         system = self._build_system_prompt(prompt_state)
         alert_text = format_alert_context(prompt_state, tools)

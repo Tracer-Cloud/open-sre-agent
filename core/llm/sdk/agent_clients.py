@@ -70,6 +70,10 @@ class AnthropicAgentClient:
         self._model = model
         self._max_tokens = max_tokens
 
+    @property
+    def model_id(self) -> str | None:
+        return self._model
+
     def tool_schemas(self, tools: list[Any]) -> list[dict[str, Any]]:
         return [_anthropic_tool_schema(t) for t in tools]
 
@@ -290,6 +294,10 @@ class BedrockConverseAgentClient:
         region = require_aws_region()
         self._boto3_client = boto3.client("bedrock-runtime", region_name=region)
 
+    @property
+    def model_id(self) -> str | None:
+        return self._model
+
     def tool_schemas(self, tools: list[Any]) -> list[dict[str, Any]]:
         from core.llm.sdk.bedrock_converse import build_converse_tool_specs
 
@@ -428,6 +436,10 @@ class OpenAIAgentClient:
         self._model = model
         self._max_tokens = max_tokens
         self._api_key_env = api_key_env
+
+    @property
+    def model_id(self) -> str | None:
+        return self._model
 
     def tool_schemas(self, tools: list[Any]) -> list[dict[str, Any]]:
         return build_openai_tool_specs(tools)
@@ -569,6 +581,10 @@ class CLIBackedAgentClient:
         # Reuse one subprocess client so the 45s probe cache in CLIBackedLLMClient
         # applies across ReAct iterations instead of re-probing every invoke.
         self._cli_client = CLIBackedLLMClient(adapter, model=self._model)
+
+    @property
+    def model_id(self) -> str | None:
+        return self._model
 
     def tool_schemas(self, tools: list[Any]) -> list[dict[str, Any]]:
         # Return the same dicts — used only to pass back into invoke() below.

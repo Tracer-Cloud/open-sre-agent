@@ -130,7 +130,7 @@ def _ask_retry(_console: Console) -> bool:
 
 def _attempt_login(console: Console) -> str:
     """Run one login attempt. Returns ``"success"``, ``"failed"``, or ``"quit"``."""
-    from integrations.github_login import authenticate_and_configure_github
+    from integrations.github.login import authenticate_and_configure_github
     from integrations.github_mcp_oauth import GitHubDeviceFlowError
 
     try:

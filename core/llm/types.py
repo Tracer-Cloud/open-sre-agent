@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
 
 
 @dataclass(frozen=True)
@@ -42,4 +43,50 @@ class AgentLLMResponse:
         return bool(self.tool_calls)
 
 
-__all__ = ["AgentLLMResponse", "LLMResponse", "ToolCall"]
+@runtime_checkable
+class AgentLLMClient(Protocol):
+    """The tool-calling LLM contract the shared ``Agent`` loop depends on.
+
+    Deliberately narrow: only the two methods ``Agent`` invokes on its ``llm``
+    (``tool_schemas`` and ``invoke``). Provider message-shaping (
+    ``build_assistant_message`` / ``build_tool_result_message``) rides a
+    separate seam (``core.messages.convert_to_llm_messages``) whose signatures
+    diverge across providers, so it is intentionally excluded here.
+
+    Implementers: the SDK clients (Anthropic / OpenAI / Bedrock-Converse /
+    CLI-backed) and the canned ``_StaticToolCallLLM`` used by the explicit
+    ``!``/``/slash`` paths.
+    """
+
+    @property
+    def model_id(self) -> str | None:
+        """The provider model identifier, used for context-budget sizing (may be None)."""
+
+    def tool_schemas(self, tools: list[Any]) -> list[dict[str, Any]]:
+        """Translate runtime tools into the provider's tool-schema payloads."""
+
+    def invoke(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        system: str | None = None,
+        tools: list[dict[str, Any]] | None = None,
+    ) -> AgentLLMResponse:
+        """Run one provider request and return the assistant response."""
+
+
+@runtime_checkable
+class StreamingReasoningClient(Protocol):
+    """The streaming LLM contract the conversational assistant answer depends on."""
+
+    def invoke_stream(self, prompt_or_messages: Any) -> Iterator[str]:
+        """Stream the assistant reply as text chunks."""
+
+
+__all__ = [
+    "AgentLLMClient",
+    "AgentLLMResponse",
+    "LLMResponse",
+    "StreamingReasoningClient",
+    "ToolCall",
+]

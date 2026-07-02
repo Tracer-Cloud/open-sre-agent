@@ -6,11 +6,11 @@ import asyncio
 from collections.abc import Callable
 from typing import Any
 
-from surfaces.interactive_shell.runtime import ReplSession
+from surfaces.interactive_shell.runtime import Session
 
 
 def wire_prompt_refresh(
-    session: ReplSession,
+    session: Session,
     pt_app: Any,
     loop: asyncio.AbstractEventLoop,
 ) -> Callable[[], None]:
