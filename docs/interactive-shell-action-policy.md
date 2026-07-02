@@ -132,7 +132,7 @@ inline mid-turn (the live prompt is competing for stdin). Instead
 `tools/interactive_shell/actions/slash.py` queues the command via
 `session.queue_auto_command(...)`, which prefills the next prompt and marks it
 for auto-submit. The prompt refresh hook
-(`wire_prompt_refresh` in `prompting/prompt_surface.py`) then submits it, so the
+(`wire_prompt_refresh` in `surfaces/interactive_shell/ui/input_prompt/refresh.py`) then submits it, so the
 command flows through the normal exclusive-stdin turn path of the REPL
 (`turn_needs_exclusive_stdin` recognizes `/integrations setup`) — the only
 place an interactive child process gets clean stdin. In a non-TTY/scripted
