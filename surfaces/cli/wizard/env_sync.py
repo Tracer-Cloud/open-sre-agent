@@ -253,6 +253,10 @@ def _provider_specific_keys(p: ProviderOption) -> set[str]:
         keys.add(p.legacy_model_env)
     if p.toolcall_model_env:
         keys.add(p.toolcall_model_env)
+    if p.endpoint_env:
+        keys.add(p.endpoint_env)
+    if p.api_version_env:
+        keys.add(p.api_version_env)
     classification_env = _classification_model_env(p)
     if classification_env:
         keys.add(classification_env)
@@ -286,6 +290,7 @@ def sync_provider_env(
     toolcall_model: str | None = None,
     model_provider: ProviderOption | None = None,
     auth_method: str | None = None,
+    extra_env: dict[str, str] | None = None,
     env_path: Path | None = None,
 ) -> Path:
     """Write non-secret provider settings into the project .env.
@@ -335,6 +340,12 @@ def sync_provider_env(
         values[resolved_model_provider.legacy_model_env] = model
     if toolcall_model and resolved_model_provider.toolcall_model_env:
         values[resolved_model_provider.toolcall_model_env] = toolcall_model
+    if provider.value == "azure-openai":
+        from core.llm.transport_mode import LLM_TRANSPORT_ENV
+
+        values[LLM_TRANSPORT_ENV] = "litellm"
+    if extra_env:
+        values.update(extra_env)
 
     for key, value in values.items():
         lines = _set_env_value(lines, key, value)

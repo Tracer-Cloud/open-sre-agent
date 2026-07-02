@@ -18,7 +18,7 @@ from core.llm.sdk.agent_clients import (
     _try_parse_tool_call_json,
 )
 from core.llm.tool_schema_normalize import build_openai_tool_specs
-from core.llm.transport_mode import current_llm_transport, use_litellm_transport
+from core.llm.transport_mode import current_llm_transport, use_litellm_for_provider
 from core.llm.types import AgentLLMClient
 
 __all__ = [
@@ -82,7 +82,7 @@ def get_agent_llm() -> _AgentClientType:
         _agent_state.transport = transport
         return _agent_state.client
 
-    if use_litellm_transport():
+    if use_litellm_for_provider(runtime_provider):
         from core.llm.litellm.routing import build_litellm_agent_client
 
         _agent_state.client = build_litellm_agent_client(settings, runtime_provider)

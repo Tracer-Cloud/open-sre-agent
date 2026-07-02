@@ -45,6 +45,7 @@ class LiteLLMAgentClient:
         litellm_model: str,
         max_tokens: int = 4096,
         api_base: str | None = None,
+        api_version: str | None = None,
         api_key_env: str | None = None,
         api_key_default: str = "",
         temperature: float | None = None,
@@ -54,6 +55,7 @@ class LiteLLMAgentClient:
         self._litellm_model = litellm_model
         self._max_tokens = max_tokens
         self._api_base = api_base
+        self._api_version = api_version
         self._api_key_env = api_key_env
         self._api_key_default = api_key_default
         self._temperature = temperature
@@ -99,6 +101,8 @@ class LiteLLMAgentClient:
             kwargs["api_key"] = api_key
         if self._api_base is not None:
             kwargs["api_base"] = self._api_base
+        if self._api_version is not None:
+            kwargs["api_version"] = self._api_version
         if self._temperature is not None:
             kwargs["temperature"] = self._temperature
         if tools:
@@ -138,6 +142,7 @@ class LiteLLMLLMClient:
         max_tokens: int = 1024,
         temperature: float | None = None,
         api_base: str | None = None,
+        api_version: str | None = None,
         api_key_env: str | None = None,
         api_key_default: str = "",
         credential_resolver: Callable[[str], str] | None = None,
@@ -150,6 +155,7 @@ class LiteLLMLLMClient:
         self._max_tokens = max_tokens
         self._temperature = temperature
         self._api_base = api_base
+        self._api_version = api_version
         self._api_key_env = api_key_env
         self._api_key_default = api_key_default
         self._credential_resolver = credential_resolver
@@ -213,6 +219,8 @@ class LiteLLMLLMClient:
             kwargs["api_key"] = api_key
         if self._api_base is not None:
             kwargs["api_base"] = self._api_base
+        if self._api_version is not None:
+            kwargs["api_version"] = self._api_version
         if self._temperature is not None:
             kwargs["temperature"] = self._temperature
         if self._bound_tools:

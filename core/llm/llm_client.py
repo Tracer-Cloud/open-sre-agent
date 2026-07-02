@@ -32,7 +32,7 @@ from core.llm.openai_compat_providers import (
     resolve_openai_compat_provider,
 )
 from core.llm.provider_credentials import resolve_llm_api_key
-from core.llm.transport_mode import current_llm_transport, use_litellm_transport
+from core.llm.transport_mode import current_llm_transport, use_litellm_for_provider
 from core.llm.types import LLMResponse
 from core.llm.usage import UsageHook, emit_usage, set_usage_hook
 
@@ -199,7 +199,7 @@ def _create_llm_client(model_type: ModelType) -> _LLMClientType:
             model_type=model_type,
         )
 
-    if use_litellm_transport():
+    if use_litellm_for_provider(runtime_provider):
         from core.llm.litellm.routing import build_litellm_llm_client
 
         return build_litellm_llm_client(
