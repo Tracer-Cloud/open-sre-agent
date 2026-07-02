@@ -431,9 +431,7 @@ def test_sync_provider_env_writes_toolcall_model_atomically(tmp_path, monkeypatc
     assert os.environ["OPENAI_TOOLCALL_MODEL"] == "gpt-5.4-nano"
 
 
-def test_sync_provider_env_sets_and_clears_azure_litellm_transport(
-    tmp_path, monkeypatch
-) -> None:
+def test_sync_provider_env_sets_and_clears_azure_litellm_transport(tmp_path, monkeypatch) -> None:
     env_path = tmp_path / ".env"
     azure = PROVIDER_BY_VALUE["azure-openai"]
     env_path.write_text(
@@ -470,9 +468,7 @@ def test_sync_provider_env_sets_and_clears_azure_litellm_transport(
     assert os.environ["OPENSRE_LLM_TRANSPORT"] == "litellm"
 
 
-def test_sync_provider_env_preserves_azure_endpoint_on_model_switch(
-    tmp_path, monkeypatch
-) -> None:
+def test_sync_provider_env_preserves_azure_endpoint_on_model_switch(tmp_path, monkeypatch) -> None:
     env_path = tmp_path / ".env"
     azure = PROVIDER_BY_VALUE["azure-openai"]
     env_path.write_text(
