@@ -29,7 +29,7 @@ def _cmd_new(session: Session, console: Console, _args: list[str]) -> bool:
     saved_context = dict(session.accumulated_context)
     saved_resumed_name = session.resumed_from_name
 
-    SessionManager(storage=session.storage).rotate_in_place(session)
+    SessionManager.for_session(session).rotate_in_place(session)
 
     session.agent.messages = saved_messages
     session.accumulated_context = saved_context

@@ -18,13 +18,16 @@ from __future__ import annotations
 from core.agent_harness.session.repo import JsonlSessionRepo
 from core.agent_harness.session.state import (
     SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST,
-    InterventionKind,
     Session,
-    TerminalMetricsSnapshot,
 )
 from core.agent_harness.session.storage import (
     InMemorySessionStorage,
     JsonlSessionStorage,
+)
+from core.agent_harness.session.terminal_metrics import (
+    InterventionKind,
+    TerminalMetrics,
+    TerminalMetricsSnapshot,
 )
 from core.agent_harness.session.types import (
     CHAT_KINDS,
@@ -68,6 +71,7 @@ __all__ = [
     "SessionPersistenceSource",
     "SessionRepo",
     "SessionStorage",
+    "TerminalMetrics",
     "TerminalMetricsSnapshot",
     "default_session_repo",
     "default_session_storage",

@@ -14,6 +14,6 @@ def gateway_command() -> None:
 def gateway_telegram_command() -> None:
     """Run the Telegram two-way messaging gateway."""
     click.echo("Starting Telegram gateway (long-poll mode)")
-    from gateway.start_gateway import start_gateway
+    from gateway.manager import start_gateway
 
     start_gateway()

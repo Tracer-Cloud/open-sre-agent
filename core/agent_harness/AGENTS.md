@@ -115,7 +115,7 @@ config = AgentConfig(
 agent = build_agent(config)
 ```
 
-Gateway (`gateway/start_gateway.py::build_gateway_agent`), action
+Gateway (`gateway/manager.py::build_gateway_agent`), action
 (`agents/action_agent.py::_build_action_agent`), and evidence
 (`agents/evidence_agent.py::_build_evidence_agent`) all follow this shape.
 When `Agent.__init__`'s signature changes, `agent_builder.py` is the single

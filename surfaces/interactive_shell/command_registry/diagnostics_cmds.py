@@ -67,16 +67,16 @@ def _cmd_status(session: Session, console: Console, _args: list[str]) -> bool:
 
 def _cmd_cost(session: Session, console: Console, _args: list[str]) -> bool:
     title = "Session cost"
-    if session.token_usage_has_estimates:
+    if session.tokens.has_estimates:
         title = "Session cost (includes estimates)"
     table = repl_table(title=f"{title}\n", title_style=BOLD_BRAND, show_header=False)
     table.add_column("key", style="bold")
     table.add_column("value")
     table.add_row("history entries", str(len(session.history)))
-    if session.llm_call_count:
-        table.add_row("llm calls", str(session.llm_call_count))
+    if session.tokens.call_count:
+        table.add_row("llm calls", str(session.tokens.call_count))
 
-    if session.token_usage:
+    if session.tokens.totals:
         for direction in ("input", "output"):
             label, value = format_token_total(session, direction=direction)
             table.add_row(label, value)

@@ -66,6 +66,16 @@ class SessionManager:
         self._storage = storage
         self._repo = repo
 
+    @classmethod
+    def for_session(cls, session: Session) -> SessionManager:
+        """Build a manager bound to a live session's own storage backend.
+
+        The single named construction point for the in-place lifecycle calls
+        (``/new`` / ``/resume``) so they all bind to ``session.storage``
+        consistently instead of re-passing it at each call site.
+        """
+        return cls(storage=session.storage)
+
     # ─── Core bootstrap ──────────────────────────────────────────────────
 
     def bootstrap(
@@ -239,11 +249,11 @@ class SessionManager:
         which flush without releasing loop-owned UI state.
 
         Persisting is best-effort (a failed flush must not crash teardown);
-        resource release prevents per-session leaks (cancels the in-flight
-        integration-warm task and drops background references).
+        the session releases its own resources (:meth:`Session.release_resources`)
+        to prevent per-session leaks.
         """
         self._flush(session)
-        self._release_resources(session)
+        session.release_resources()
 
     @staticmethod
     def _flush(session: Session) -> None:
@@ -257,21 +267,6 @@ class SessionManager:
             session.storage.flush(session)
         except OSError:
             logger.debug("[session] flush failed", exc_info=True)
-
-    @staticmethod
-    def _release_resources(session: Session) -> None:
-        """Cancel background work and drop references so a closed session is collectable.
-
-        Only called on terminal teardown (:meth:`close`) — it nulls the
-        loop-owned ``prompt_refresh_fn``, which must be preserved when the live
-        handle is reused in place.
-        """
-        warm_task = getattr(session, "_integration_warm_task", None)
-        if warm_task is not None and not warm_task.done():
-            warm_task.cancel()
-        session._integration_warm_task = None
-        session.background_notices.clear()
-        session.prompt_refresh_fn = None
 
 
 __all__ = ["SessionManager"]

@@ -28,22 +28,22 @@ def test_estimate_tokens_uses_chars_per_token_ratio() -> None:
 def test_record_token_usage_accumulates_on_session() -> None:
     session = Session()
     record_llm_turn(session, prompt="a" * 40, response="b" * 20)
-    assert session.token_usage == {
+    assert session.tokens.totals == {
         "input": 10,
         "output": 5,
         "input_estimated": 10,
         "output_estimated": 5,
     }
-    assert session.llm_call_count == 1
-    assert session.token_usage_has_estimates is True
+    assert session.tokens.call_count == 1
+    assert session.tokens.has_estimates is True
     record_llm_turn(session, prompt="c" * 8, response="d" * 4)
-    assert session.token_usage == {
+    assert session.tokens.totals == {
         "input": 12,
         "output": 6,
         "input_estimated": 12,
         "output_estimated": 6,
     }
-    assert session.llm_call_count == 2
+    assert session.tokens.call_count == 2
 
 
 def test_record_llm_turn_uses_provider_counts_when_present() -> None:
@@ -56,13 +56,13 @@ def test_record_llm_turn_uses_provider_counts_when_present() -> None:
         output_tokens=80,
     )
     assert (inp, out, estimated) == (1200, 80, False)
-    assert session.token_usage == {
+    assert session.tokens.totals == {
         "input": 1200,
         "output": 80,
         "input_measured": 1200,
         "output_measured": 80,
     }
-    assert session.token_usage_has_estimates is False
+    assert session.tokens.has_estimates is False
 
 
 def test_format_token_total_shows_mixed_breakdown() -> None:
@@ -119,9 +119,9 @@ def test_coerce_usage_tokens_accepts_float_counts() -> None:
 
 def test_record_token_usage_skips_zero_counts() -> None:
     session = Session()
-    session.record_token_usage()
-    assert session.token_usage == {}
-    assert session.llm_call_count == 0
+    session.tokens.record()
+    assert session.tokens.totals == {}
+    assert session.tokens.call_count == 0
 
 
 class _FakeLLMClient:
@@ -140,6 +140,6 @@ def test_answer_shell_question_records_session_token_usage(monkeypatch: Any) -> 
     session = Session()
     console = Console(file=io.StringIO(), force_terminal=False)
     answer_shell_question("hello", session, console)
-    assert session.token_usage["input"] > 0
-    assert session.token_usage["output"] == estimate_tokens("assistant reply")
-    assert session.token_usage_has_estimates is True
+    assert session.tokens.totals["input"] > 0
+    assert session.tokens.totals["output"] == estimate_tokens("assistant reply")
+    assert session.tokens.has_estimates is True

@@ -1988,8 +1988,8 @@ class TestCostCommand:
 
     def test_shows_token_counts_when_available(self) -> None:
         session = Session()
-        session.token_usage = {"input": 1000, "output": 500}
-        session.llm_call_count = 2
+        session.tokens.totals = {"input": 1000, "output": 500}
+        session.tokens.call_count = 2
         console, buf = _capture()
         dispatch_slash("/cost", session, console)
         output = buf.getvalue()
@@ -2000,7 +2000,7 @@ class TestCostCommand:
 
     def test_shows_estimate_labels_when_mixed(self) -> None:
         session = Session()
-        session.token_usage = {
+        session.tokens.totals = {
             "input": 400,
             "output": 60,
             "input_measured": 300,
@@ -2008,7 +2008,7 @@ class TestCostCommand:
             "input_estimated": 100,
             "output_estimated": 20,
         }
-        session.llm_call_count = 2
+        session.tokens.call_count = 2
         console, buf = _capture()
         dispatch_slash("/cost", session, console)
         output = buf.getvalue()

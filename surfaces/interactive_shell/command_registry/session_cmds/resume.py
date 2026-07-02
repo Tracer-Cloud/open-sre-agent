@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from collections import deque
-
 from rich.console import Console
 from rich.markup import escape
 
 from core.agent_harness.session import SessionManager
+from surfaces.interactive_shell.command_registry.session_cmds.resume_rendering import (
+    render_resumed_session_history,
+)
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui import DIM, ERROR, HIGHLIGHT, WARNING
 from surfaces.interactive_shell.ui.components.choice_menu import (
@@ -65,79 +66,6 @@ def _interactive_resume_menu(session: Session, console: Console) -> bool:
     return True
 
 
-_HISTORY_DISPLAY_CHAT_KINDS: frozenset[str] = frozenset(
-    {"chat", "cli_agent", "follow_up", "alert", "incoming_alert"}
-)
-
-
-def _response_for_prompt(turn_details: list[dict], prompt: str) -> str:
-    for detail in turn_details:
-        if detail.get("prompt") == prompt:
-            return str(detail.get("response") or "")
-    return ""
-
-
-def _render_resumed_session_history(
-    console: Console,
-    *,
-    history: list[dict],
-    turn_details: list[dict],
-    messages: list[tuple[str, str]],
-) -> None:
-    """Render prior session activity in REPL turn order, including slash commands."""
-    from rich.markdown import Markdown
-
-    from platform.terminal.theme import MARKDOWN_THEME
-    from surfaces.interactive_shell.ui.streaming import render_response_header
-
-    if not history and not messages:
-        return
-
-    console.print(f"[{DIM}]─── conversation history ─────────────────────────────────[/]")
-
-    if history:
-        assistant_by_user: dict[str, deque[str]] = {}
-        pending_user: str | None = None
-        for role, text in messages:
-            if role == "user":
-                pending_user = text
-            elif role == "assistant" and pending_user is not None:
-                assistant_by_user.setdefault(pending_user, deque()).append(text)
-                pending_user = None
-
-        for rec in history:
-            kind = rec.get("kind", "")
-            text = rec.get("text") or ""
-            if kind == "slash":
-                console.print(f"[bold]$ {escape(text)}[/bold]")
-                continue
-            if kind not in _HISTORY_DISPLAY_CHAT_KINDS or not text:
-                continue
-            console.print(f"[bold {HIGHLIGHT}]❯[/] {escape(text)}")
-            response = _response_for_prompt(turn_details, text)
-            if not response:
-                queued = assistant_by_user.get(text)
-                response = queued.popleft() if queued else ""
-            if response:
-                render_response_header(console, "assistant")
-                with console.use_theme(MARKDOWN_THEME):
-                    console.print(Markdown(response, code_theme="ansi_dark"))
-        console.print(f"[{DIM}]─────────────────────────────────────────────────────────[/]")
-        return
-
-    has_pending_user = False
-    for role, text in messages:
-        if role == "user":
-            console.print(f"[bold {HIGHLIGHT}]❯[/] {escape(text)}")
-            has_pending_user = True
-        elif role == "assistant" and has_pending_user:
-            render_response_header(console, "assistant")
-            with console.use_theme(MARKDOWN_THEME):
-                console.print(Markdown(text, code_theme="ansi_dark"))
-            has_pending_user = False
-    console.print(f"[{DIM}]─────────────────────────────────────────────────────────[/]")
-
-
 def _apply_resume_data(
     data: dict,
     session: Session,
@@ -174,7 +102,7 @@ def _apply_resume_data(
             "they will be replaced by the resumed context.[/]"
         )
 
-    manager = SessionManager(storage=session.storage)
+    manager = SessionManager.for_session(session)
     manager.rebind_for_resume(
         session,
         session_id=sid,
@@ -189,7 +117,7 @@ def _apply_resume_data(
         f"[{DIM}]({len(messages)} messages in context from {source})[/]"
     )
 
-    _render_resumed_session_history(
+    render_resumed_session_history(
         console,
         history=history,
         turn_details=data.get("turn_details") or [],

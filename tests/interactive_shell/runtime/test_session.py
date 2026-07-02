@@ -24,10 +24,10 @@ class TestSession:
         assert session.accumulated_context == {}
         assert session.trust_mode is False
         assert session.task_registry.list_recent() == []
-        assert session.terminal_turn_count == 0
-        assert session.terminal_fallback_count == 0
-        assert session.ctrl_c_intervention_count == 0
-        assert session.correction_intervention_count == 0
+        assert session.metrics.turn_count == 0
+        assert session.metrics.fallback_count == 0
+        assert session.metrics.ctrl_c_intervention_count == 0
+        assert session.metrics.correction_intervention_count == 0
         assert session.pending_prompt_default is None
         assert session.last_synthetic_observation_path is None
 
@@ -114,8 +114,8 @@ class TestSession:
         session.record("alert", "something")
         session.last_state = {"foo": "bar"}
         session.agent.messages.append(("user", "hey"))
-        session.record_intervention("ctrl_c")
-        session.record_intervention("correction")
+        session.metrics.record_intervention("ctrl_c")
+        session.metrics.record_intervention("correction")
 
         assert session.history_generation == 0
         session.clear()
@@ -126,8 +126,8 @@ class TestSession:
         assert session.accumulated_context == {}
         assert session.agent.messages == []
         assert session.task_registry.list_recent() == []
-        assert session.ctrl_c_intervention_count == 0
-        assert session.correction_intervention_count == 0
+        assert session.metrics.ctrl_c_intervention_count == 0
+        assert session.metrics.correction_intervention_count == 0
         assert session.background_notification_preferences.channels == ("email",)
         assert session.trust_mode is True  # preserved intentionally
 
@@ -202,12 +202,12 @@ class TestSession:
     def test_record_terminal_turn_updates_aggregates(self) -> None:
         session = Session()
 
-        first = session.record_terminal_turn(
+        first = session.metrics.record_turn(
             executed_count=2,
             executed_success_count=1,
             fallback_to_llm=True,
         )
-        second = session.record_terminal_turn(
+        second = session.metrics.record_turn(
             executed_count=1,
             executed_success_count=1,
             fallback_to_llm=False,
@@ -226,29 +226,29 @@ class TestSession:
     def test_record_intervention_increments_per_kind(self) -> None:
         session = Session()
 
-        session.record_intervention("ctrl_c")
-        session.record_intervention("ctrl_c")
-        session.record_intervention("correction")
+        session.metrics.record_intervention("ctrl_c")
+        session.metrics.record_intervention("ctrl_c")
+        session.metrics.record_intervention("correction")
 
-        assert session.ctrl_c_intervention_count == 2
-        assert session.correction_intervention_count == 1
+        assert session.metrics.ctrl_c_intervention_count == 2
+        assert session.metrics.correction_intervention_count == 1
 
     def test_record_intervention_kinds_are_independent(self) -> None:
         """Incrementing one kind does not touch the other."""
         session = Session()
 
-        session.record_intervention("correction")
+        session.metrics.record_intervention("correction")
 
-        assert session.ctrl_c_intervention_count == 0
-        assert session.correction_intervention_count == 1
+        assert session.metrics.ctrl_c_intervention_count == 0
+        assert session.metrics.correction_intervention_count == 1
 
     def test_fresh_session_starts_with_zero_intervention_counts(self) -> None:
         """A new Session does not inherit any prior session's counters."""
         first = Session()
-        first.record_intervention("ctrl_c")
-        first.record_intervention("correction")
+        first.metrics.record_intervention("ctrl_c")
+        first.metrics.record_intervention("correction")
 
         second = Session()
 
-        assert second.ctrl_c_intervention_count == 0
-        assert second.correction_intervention_count == 0
+        assert second.metrics.ctrl_c_intervention_count == 0
+        assert second.metrics.correction_intervention_count == 0

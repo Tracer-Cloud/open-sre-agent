@@ -58,16 +58,16 @@ def record_llm_turn(
     input_tokens: int | None = None,
     output_tokens: int | None = None,
 ) -> tuple[int, int, bool]:
-    """Accumulate one LLM call on any session exposing ``record_token_usage``."""
+    """Accumulate one LLM call on any session exposing ``tokens.record``."""
     if input_tokens is not None and output_tokens is not None:
         inp, out, estimated = input_tokens, output_tokens, False
     else:
         inp = estimate_tokens(prompt)
         out = estimate_tokens(response)
         estimated = True
-    record_token_usage = getattr(session, "record_token_usage", None)
-    if callable(record_token_usage):
-        record_token_usage(input_tokens=inp, output_tokens=out, estimated=estimated)
+    tokens = getattr(session, "tokens", None)
+    if tokens is not None and callable(getattr(tokens, "record", None)):
+        tokens.record(input_tokens=inp, output_tokens=out, estimated=estimated)
     return inp, out, estimated
 
 
@@ -115,7 +115,7 @@ def build_llm_run_info(
 
 def format_token_total(session: Any, *, direction: str) -> tuple[str, str]:
     """Return ``(row_label, formatted_value)`` for input or output tokens."""
-    usage = session.token_usage
+    usage = session.tokens.totals
     measured = usage.get(f"{direction}_measured", 0)
     estimated = usage.get(f"{direction}_estimated", 0)
     total = usage.get(direction, 0)

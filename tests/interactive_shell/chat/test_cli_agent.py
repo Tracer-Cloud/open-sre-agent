@@ -336,7 +336,7 @@ class TestAssistantOutputRendering:
         assert "**world**" not in output
         assert "world" in output
         assert "Hello" in output
-        assert session.token_usage.get("output", 0) > 0
+        assert session.tokens.totals.get("output", 0) > 0
 
     def test_table_markdown_is_rendered_as_table(self, monkeypatch: Any) -> None:
         markdown = (
@@ -376,7 +376,7 @@ class TestAssistantOutputRendering:
             ("user", "what command do I use?"),
             ("assistant", "Use `opensre investigate` for incidents."),
         ]
-        assert session.llm_call_count == 1
+        assert session.tokens.call_count == 1
 
     def test_structured_content_blocks_are_rendered(self, monkeypatch: Any) -> None:
         class _Block:

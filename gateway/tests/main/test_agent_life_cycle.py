@@ -22,7 +22,6 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-from core.agent import Agent
 from core.agent_harness.models.turn_results import ShellTurnResult, ToolCallingTurnResult
 from core.agent_harness.providers.default_prompt_context import DefaultPromptContextProvider
 from core.agent_harness.providers.default_providers import (
@@ -40,14 +39,14 @@ from gateway.polling.handle_polled_inbound_telegram_msg import (
     handle_polled_inbound_telegram_message,
 )
 from gateway.session.enforce_inbound_telegram_message_security import InboundDecision
-from gateway.start_gateway import GatewayManager, start_gateway
+from gateway.manager import GatewayManager, start_gateway
 
 
 def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
     settings = GatewaySettings(bot_token="tok", auto_start_enabled=False)
     logger = logging.getLogger("gateway.lifecycle.test")
     handle = MagicMock()
-    agent = MagicMock()
+    dispatch = MagicMock()
     tools = [MagicMock()]
     integrations = {"shell": {"enabled": True}}
     signal_calls: list[tuple[int, Any]] = []
@@ -63,14 +62,14 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
         def get_integrations(self) -> SimpleNamespace:
             return SimpleNamespace(resolved_integrations=integrations)
 
-    monkeypatch.setattr("gateway.start_gateway.load_dotenv", lambda **_kwargs: None)
-    monkeypatch.setattr("gateway.start_gateway.configure_gateway_logging", lambda: logger)
-    monkeypatch.setattr("gateway.start_gateway.load_gateway_settings", lambda: settings)
+    monkeypatch.setattr("gateway.manager.load_dotenv", lambda **_kwargs: None)
+    monkeypatch.setattr("gateway.manager.configure_gateway_logging", lambda: logger)
+    monkeypatch.setattr("gateway.telegram_gateway.load_gateway_settings", lambda: settings)
     monkeypatch.setattr(
-        "gateway.start_gateway.signal.signal",
+        "gateway.manager.signal.signal",
         lambda signum, handler: signal_calls.append((signum, handler)),
     )
-    monkeypatch.setattr("gateway.start_gateway.Session", FakeSession)
+    monkeypatch.setattr("gateway.manager.Session", FakeSession)
 
     class FakeDefaultToolProvider(DefaultToolProvider):
         def action_tools(
@@ -85,23 +84,16 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
             assert self._resolved_integrations() is integrations
             return tools
 
-    def _build_gateway_agent(
-        resolved_integrations: dict[str, Any],
-        discovered_tools: list[MagicMock],
-    ) -> MagicMock:
-        assert resolved_integrations is integrations
-        assert discovered_tools is tools
-        return agent
-
-    monkeypatch.setattr("gateway.start_gateway.DefaultToolProvider", FakeDefaultToolProvider)
-    monkeypatch.setattr("gateway.start_gateway.build_gateway_agent", _build_gateway_agent)
+    monkeypatch.setattr("gateway.manager.DefaultToolProvider", FakeDefaultToolProvider)
+    # Dispatch is a static entry point; patch it on the class to spy the callback.
+    monkeypatch.setattr("gateway.turn_handler.Agent.dispatch_message_to_headless_agent", dispatch)
 
     def _start_telegram_gateway_background(**kwargs: Any) -> MagicMock:
         background_kwargs.update(kwargs)
         return handle
 
     monkeypatch.setattr(
-        "gateway.start_gateway.start_telegram_gateway_background",
+        "gateway.telegram_gateway.start_telegram_gateway_background",
         _start_telegram_gateway_background,
     )
 
@@ -111,7 +103,6 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
     assert gateway.settings is settings
     assert gateway.logger is logger
     assert gateway.telegram_background_worker is handle
-    assert gateway.agent is agent
     assert background_kwargs["settings"] is settings
     assert background_kwargs["logger"] is logger
     assert background_kwargs["handle_callback_to_gateway_agent"] is not None
@@ -120,7 +111,7 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
 
     sink = MagicMock()
     session = MagicMock()
-    agent.dispatch_message_to_headless_agent.return_value = ShellTurnResult(
+    dispatch.return_value = ShellTurnResult(
         final_intent="cli_agent_handled",
         action_result=ToolCallingTurnResult(
             planned_count=1,
@@ -135,9 +126,9 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
     )
     callback = background_kwargs["handle_callback_to_gateway_agent"]
     callback("hello", session, sink, logger)
-    agent.dispatch_message_to_headless_agent.assert_called_once()
+    dispatch.assert_called_once()
     sink.finalize.assert_called_once_with("Hawaii: +25C")
-    dispatch_args = agent.dispatch_message_to_headless_agent.call_args
+    dispatch_args = dispatch.call_args
     assert dispatch_args.args == ("hello",)
     assert dispatch_args.kwargs["session"] is session
     assert dispatch_args.kwargs["output"] is sink
@@ -198,11 +189,11 @@ def test_polled_telegram_message_reaches_start_gateway_agent_callback(monkeypatc
             assert chat_id == "chat-1"
             return self._session
 
-    monkeypatch.setattr("gateway.start_gateway.load_dotenv", lambda **_kwargs: None)
-    monkeypatch.setattr("gateway.start_gateway.configure_gateway_logging", lambda: logger)
-    monkeypatch.setattr("gateway.start_gateway.load_gateway_settings", lambda: settings)
-    monkeypatch.setattr("gateway.start_gateway.signal.signal", lambda *_args: None)
-    monkeypatch.setattr("gateway.start_gateway.Session", FakeBootSession)
+    monkeypatch.setattr("gateway.manager.load_dotenv", lambda **_kwargs: None)
+    monkeypatch.setattr("gateway.manager.configure_gateway_logging", lambda: logger)
+    monkeypatch.setattr("gateway.telegram_gateway.load_gateway_settings", lambda: settings)
+    monkeypatch.setattr("gateway.manager.signal.signal", lambda *_args: None)
+    monkeypatch.setattr("gateway.manager.Session", FakeBootSession)
 
     class FakeDefaultToolProvider(DefaultToolProvider):
         def action_tools(
@@ -216,23 +207,14 @@ def test_polled_telegram_message_reaches_start_gateway_agent_callback(monkeypatc
                 return list(self._precomputed_action_tools)
             return tools
 
-    monkeypatch.setattr("gateway.start_gateway.DefaultToolProvider", FakeDefaultToolProvider)
-    monkeypatch.setattr(
-        "gateway.start_gateway.build_gateway_agent",
-        lambda *_args, **_kwargs: Agent(
-            system="gateway test",
-            tools=tools,
-            resolved_integrations=integrations,
-            max_iterations=1,
-        ),
-    )
+    monkeypatch.setattr("gateway.manager.DefaultToolProvider", FakeDefaultToolProvider)
 
     def _start_telegram_gateway_background(**kwargs: Any) -> MagicMock:
         background_kwargs.update(kwargs)
         return handle
 
     monkeypatch.setattr(
-        "gateway.start_gateway.start_telegram_gateway_background",
+        "gateway.telegram_gateway.start_telegram_gateway_background",
         _start_telegram_gateway_background,
     )
     monkeypatch.setattr(
