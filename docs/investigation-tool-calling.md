@@ -118,8 +118,9 @@ When set to `litellm`, both investigation (`get_agent_llm()`) and non-agent LLM 
 native vendor SDK clients under `core/llm/sdk/`.
 
 Supported providers: `anthropic`, `openai`, `bedrock`, and OpenAI-compatible providers
-(`deepseek`, `groq`, `openrouter`, `gemini`, `nvidia`, `minimax`, `ollama`). Set the matching
-API key and model env vars from `.env.example` as usual.
+(`deepseek`, `groq`, `openrouter`, `gemini`, `nvidia`, `minimax`, `ollama`), plus
+`azure-openai` (always via LiteLLM). Set the matching API key and model env vars from
+`.env.example` as usual. User-facing setup: [LLM Providers](/llm-providers#litellm-transport).
 
 CLI-backed providers (`codex`, `claude-code`, `opencode`, `kimi`, `copilot`, etc.) always use
 their subprocess path regardless of this setting.

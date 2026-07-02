@@ -9,8 +9,9 @@ All configuration options for OpenSRE can be set via environment variables. This
 
 | Variable | Default | Description | Module |
 |----------|---------|-------------|--------|
-| `LLM_PROVIDER` | `anthropic` | Primary LLM provider (`anthropic`, `openai`, `openrouter`, `deepseek`, `gemini`, `nvidia`, `minimax`, `groq`, `bedrock`, `ollama`, `codex`, `claude-code`, `cursor`, `gemini-cli`, `antigravity-cli`, `opencode`, `kimi`, `copilot`, `grok-cli`, `pi`) | `config` |
+| `LLM_PROVIDER` | `anthropic` | Primary LLM provider (`anthropic`, `openai`, `openrouter`, `deepseek`, `gemini`, `nvidia`, `minimax`, `groq`, `azure-openai`, `bedrock`, `ollama`, `codex`, `claude-code`, `cursor`, `gemini-cli`, `antigravity-cli`, `opencode`, `kimi`, `copilot`, `grok-cli`, `pi`) | `config` |
 | `LLM_MAX_TOKENS` | `4096` | Maximum tokens for LLM responses | `config` |
+| `OPENSRE_LLM_TRANSPORT` | `sdk` | LLM transport for API providers: `sdk` (native SDKs) or `litellm` | `core/llm/transport_mode` |
 
 ### Anthropic
 | Variable | Default | Description | Module |
@@ -73,6 +74,17 @@ All configuration options for OpenSRE can be set via environment variables. This
 | `GROQ_MODEL` | | Shared model for all tasks | `config` |
 | `GROQ_REASONING_MODEL` | | Override model for reasoning | `config` |
 | `GROQ_TOOLCALL_MODEL` | | Override model for tool calling | `config` |
+
+### Azure OpenAI
+| Variable | Default | Description | Module |
+|----------|---------|-------------|--------|
+| `AZURE_OPENAI_BASE_URL` | | Azure OpenAI resource URL (`https://<resource>.openai.azure.com`) | `config` |
+| `AZURE_OPENAI_API_KEY` | | API key for Azure OpenAI | `llm_credentials` |
+| `AZURE_OPENAI_API_VERSION` | `2024-10-21` | Azure OpenAI API version | `config` |
+| `AZURE_OPENAI_MODEL` | | Shared deployment name for all slots | `config` |
+| `AZURE_OPENAI_REASONING_MODEL` | `gpt-5.4-mini` | Deployment for reasoning tasks | `config` |
+| `AZURE_OPENAI_CLASSIFICATION_MODEL` | `gpt-5.4-mini` | Deployment for classification | `config` |
+| `AZURE_OPENAI_TOOLCALL_MODEL` | `gpt-5.4-mini` | Deployment for tool calling | `config` |
 
 ### Amazon Bedrock
 | Variable | Default | Description | Module |

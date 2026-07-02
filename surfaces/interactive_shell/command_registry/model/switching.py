@@ -85,6 +85,15 @@ def switch_llm_provider(
     # provider has no credential path. Stale metadata gets a warning, because
     # confirming it requires an intentional request-time credential read.
     auth_status = credential_status(provider.value)
+    if provider.value == "azure-openai":
+        from core.llm.azure_openai import azure_openai_endpoint_configured
+
+        if not azure_openai_endpoint_configured():
+            console.print(
+                f"[{ERROR}]missing Azure OpenAI endpoint config:[/] "
+                "set AZURE_OPENAI_BASE_URL, or run [bold]opensre onboard[/bold]."
+            )
+            return False
     if provider.credential_secret and provider.api_key_env and not auth_status.configured:
         console.print(
             f"[{ERROR}]missing credential for {provider.value}:[/] "

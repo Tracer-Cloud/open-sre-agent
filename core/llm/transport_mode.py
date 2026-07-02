@@ -17,6 +17,13 @@ def use_litellm_transport() -> bool:
     return os.getenv(LLM_TRANSPORT_ENV, "").strip().lower() == "litellm"
 
 
+def use_litellm_for_provider(provider: str) -> bool:
+    """Return ``True`` when *provider* must route through LiteLLM."""
+    from core.llm.azure_openai import is_azure_openai_provider
+
+    return use_litellm_transport() or is_azure_openai_provider(provider)
+
+
 def current_llm_transport() -> str:
     """Normalized ``OPENSRE_LLM_TRANSPORT`` value (empty when unset)."""
     return os.getenv(LLM_TRANSPORT_ENV, "").strip().lower()

@@ -11,6 +11,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.llm.azure_openai import (
+    is_azure_openai_provider,
+    resolve_azure_openai_request_kwargs,
+)
 from core.llm.litellm.clients import LiteLLMAgentClient, LiteLLMLLMClient
 from core.llm.openai_compat_providers import (
     ModelType,
@@ -51,6 +55,18 @@ def build_litellm_agent_client(settings: Any, provider: str) -> LiteLLMAgentClie
         return LiteLLMAgentClient(
             litellm_model=f"bedrock/{model}",
             max_tokens=BEDROCK_LLM_CONFIG.max_tokens,
+        )
+
+    if is_azure_openai_provider(provider):
+        from config.config import AZURE_OPENAI_LLM_CONFIG
+
+        azure = resolve_azure_openai_request_kwargs(settings, model_type="reasoning")
+        return LiteLLMAgentClient(
+            litellm_model=azure["litellm_model"],
+            max_tokens=AZURE_OPENAI_LLM_CONFIG.max_tokens,
+            api_base=azure["api_base"],
+            api_version=azure["api_version"],
+            api_key_env=azure["api_key_env"],
         )
 
     if is_openai_compat_provider(provider):
@@ -122,6 +138,26 @@ def build_litellm_llm_client(
             litellm_model=f"bedrock/{model}",
             model_fallback=(_fallback("bedrock") and f"bedrock/{_fallback('bedrock')}") or None,
             max_tokens=BEDROCK_LLM_CONFIG.max_tokens,
+            usage_callback=usage_callback,
+        )
+
+    if is_azure_openai_provider(provider):
+        from config.config import AZURE_OPENAI_LLM_CONFIG
+
+        azure = resolve_azure_openai_request_kwargs(settings, model_type=model_type)
+        raw_fallback = _fallback("azure_openai")
+        azure_fallback_model: str | None = None
+        if raw_fallback:
+            azure_fallback_model = (
+                raw_fallback if raw_fallback.startswith("azure/") else f"azure/{raw_fallback}"
+            )
+        return LiteLLMLLMClient(
+            litellm_model=azure["litellm_model"],
+            model_fallback=azure_fallback_model,
+            max_tokens=AZURE_OPENAI_LLM_CONFIG.max_tokens,
+            api_base=azure["api_base"],
+            api_version=azure["api_version"],
+            api_key_env=azure["api_key_env"],
             usage_callback=usage_callback,
         )
 

@@ -25,6 +25,7 @@ from config.config import (
 )
 from config.llm_auth.auth_method import effective_llm_provider, get_configured_llm_auth_method
 from core.domain.types.root_cause_categories import VALID_ROOT_CAUSE_CATEGORIES
+from core.llm.client_cache_key import current_llm_client_cache_key
 from core.llm.openai_chat_completions import _RETRY_MAX_ATTEMPTS
 from core.llm.openai_compat_providers import (
     ModelType,
@@ -32,7 +33,7 @@ from core.llm.openai_compat_providers import (
     resolve_openai_compat_provider,
 )
 from core.llm.provider_credentials import resolve_llm_api_key
-from core.llm.transport_mode import current_llm_transport, use_litellm_transport
+from core.llm.transport_mode import use_litellm_for_provider
 from core.llm.types import LLMResponse
 from core.llm.usage import UsageHook, emit_usage, set_usage_hook
 
@@ -134,7 +135,7 @@ class _LLMSingletonState:
     llm: _LLMClientType | None = None
     llm_for_classification: _LLMClientType | None = None
     llm_for_tools: _LLMClientType | None = None
-    transport: str | None = None
+    cache_key: tuple[str, str] | None = None
 
 
 _llm_state = _LLMSingletonState()
@@ -145,16 +146,16 @@ def reset_llm_singletons() -> None:
     _llm_state.llm = None
     _llm_state.llm_for_classification = None
     _llm_state.llm_for_tools = None
-    _llm_state.transport = None
+    _llm_state.cache_key = None
 
 
-def _ensure_llm_transport_current() -> None:
-    transport = current_llm_transport()
-    if _llm_state.transport != transport:
+def _ensure_llm_cache_current() -> None:
+    cache_key = current_llm_client_cache_key()
+    if _llm_state.cache_key != cache_key:
         _llm_state.llm = None
         _llm_state.llm_for_classification = None
         _llm_state.llm_for_tools = None
-        _llm_state.transport = transport
+        _llm_state.cache_key = cache_key
 
 
 def _get_cli_provider_registration(provider: str) -> CLIProviderRegistration | None:
@@ -199,7 +200,7 @@ def _create_llm_client(model_type: ModelType) -> _LLMClientType:
             model_type=model_type,
         )
 
-    if use_litellm_transport():
+    if use_litellm_for_provider(runtime_provider):
         from core.llm.litellm.routing import build_litellm_llm_client
 
         return build_litellm_llm_client(
@@ -249,7 +250,7 @@ def _create_llm_client(model_type: ModelType) -> _LLMClientType:
 
 def get_llm_for_reasoning() -> _LLMClientType:
     """Return the singleton LLM client for complex reasoning tasks."""
-    _ensure_llm_transport_current()
+    _ensure_llm_cache_current()
     if _llm_state.llm is None:
         _llm_state.llm = _create_llm_client(model_type="reasoning")
     return _llm_state.llm
@@ -257,7 +258,7 @@ def get_llm_for_reasoning() -> _LLMClientType:
 
 def get_llm_for_classification() -> _LLMClientType:
     """Return the singleton LLM client for the mid-tier classification tier."""
-    _ensure_llm_transport_current()
+    _ensure_llm_cache_current()
     if _llm_state.llm_for_classification is None:
         _llm_state.llm_for_classification = _create_llm_client(model_type="classification")
     return _llm_state.llm_for_classification
@@ -265,7 +266,7 @@ def get_llm_for_classification() -> _LLMClientType:
 
 def get_llm_for_tools() -> _LLMClientType:
     """Return the singleton lightweight LLM client for tool selection / action planning."""
-    _ensure_llm_transport_current()
+    _ensure_llm_cache_current()
     if _llm_state.llm_for_tools is None:
         _llm_state.llm_for_tools = _create_llm_client(model_type="toolcall")
     return _llm_state.llm_for_tools

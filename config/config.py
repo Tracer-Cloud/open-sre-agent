@@ -141,6 +141,12 @@ GROQ_REASONING_MODEL = "llama-3.3-70b-versatile"
 GROQ_CLASSIFICATION_MODEL = "llama-3.3-70b-versatile"
 GROQ_TOOLCALL_MODEL = "llama-3.1-8b-instant"
 
+# Azure OpenAI deployment-name defaults (must match your Azure deployment names).
+AZURE_OPENAI_REASONING_MODEL = "gpt-5.4-mini"
+AZURE_OPENAI_CLASSIFICATION_MODEL = "gpt-5.4-mini"
+AZURE_OPENAI_TOOLCALL_MODEL = "gpt-5.4-mini"
+DEFAULT_AZURE_OPENAI_API_VERSION = "2024-10-21"
+
 # Base URLs for OpenAI-compatible providers
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"  # no /v1 — DeepSeek serves the OpenAI-compatible API at the root path
@@ -169,6 +175,7 @@ LLMProvider = Literal[
     "bedrock",
     "minimax",
     "groq",
+    "azure-openai",
     "codex",
     "cursor",
     "claude-code",
@@ -331,6 +338,26 @@ def _llm_settings_env_payload(provider: str) -> dict[str, object]:
             os.getenv("GROQ_MODEL", GROQ_TOOLCALL_MODEL),
         ).strip()
         or GROQ_TOOLCALL_MODEL,
+        "azure_openai_base_url": os.getenv("AZURE_OPENAI_BASE_URL", "").strip(),
+        "azure_openai_api_version": os.getenv(
+            "AZURE_OPENAI_API_VERSION", DEFAULT_AZURE_OPENAI_API_VERSION
+        ).strip()
+        or DEFAULT_AZURE_OPENAI_API_VERSION,
+        "azure_openai_reasoning_model": os.getenv(
+            "AZURE_OPENAI_REASONING_MODEL",
+            os.getenv("AZURE_OPENAI_MODEL", AZURE_OPENAI_REASONING_MODEL),
+        ).strip()
+        or AZURE_OPENAI_REASONING_MODEL,
+        "azure_openai_classification_model": os.getenv(
+            "AZURE_OPENAI_CLASSIFICATION_MODEL",
+            os.getenv("AZURE_OPENAI_MODEL", AZURE_OPENAI_CLASSIFICATION_MODEL),
+        ).strip()
+        or AZURE_OPENAI_CLASSIFICATION_MODEL,
+        "azure_openai_toolcall_model": os.getenv(
+            "AZURE_OPENAI_TOOLCALL_MODEL",
+            os.getenv("AZURE_OPENAI_MODEL", AZURE_OPENAI_TOOLCALL_MODEL),
+        ).strip()
+        or AZURE_OPENAI_TOOLCALL_MODEL,
         "bedrock_reasoning_model": os.getenv(
             "BEDROCK_REASONING_MODEL", BEDROCK_REASONING_MODEL
         ).strip()
@@ -362,6 +389,9 @@ class LLMSettings(StrictConfigModel):
     nvidia_api_key: str = ""
     minimax_api_key: str = ""
     groq_api_key: str = ""
+    azure_openai_api_key: str = ""
+    azure_openai_base_url: str = ""
+    azure_openai_api_version: str = DEFAULT_AZURE_OPENAI_API_VERSION
     ollama_model: str = DEFAULT_OLLAMA_MODEL
     ollama_host: str = DEFAULT_OLLAMA_HOST
     anthropic_reasoning_model: str = ANTHROPIC_REASONING_MODEL
@@ -388,6 +418,9 @@ class LLMSettings(StrictConfigModel):
     groq_reasoning_model: str = GROQ_REASONING_MODEL
     groq_classification_model: str = GROQ_CLASSIFICATION_MODEL
     groq_toolcall_model: str = GROQ_TOOLCALL_MODEL
+    azure_openai_reasoning_model: str = AZURE_OPENAI_REASONING_MODEL
+    azure_openai_classification_model: str = AZURE_OPENAI_CLASSIFICATION_MODEL
+    azure_openai_toolcall_model: str = AZURE_OPENAI_TOOLCALL_MODEL
     bedrock_reasoning_model: str = BEDROCK_REASONING_MODEL
     bedrock_classification_model: str = BEDROCK_CLASSIFICATION_MODEL
     bedrock_toolcall_model: str = BEDROCK_TOOLCALL_MODEL
@@ -400,6 +433,13 @@ class LLMSettings(StrictConfigModel):
         if not host.startswith(("http://", "https://")):
             host = f"http://{host}"
         return host
+
+    @field_validator("azure_openai_base_url", mode="before")
+    @classmethod
+    def _normalize_azure_openai_base_url(cls, value: object) -> str:
+        from core.llm.azure_openai import normalize_azure_openai_base_url
+
+        return normalize_azure_openai_base_url(str(value or ""))
 
     @field_validator("provider", mode="before")
     @classmethod
@@ -419,6 +459,10 @@ class LLMSettings(StrictConfigModel):
 
     @model_validator(mode="after")
     def _require_api_key_for_selected_provider(self) -> "LLMSettings":
+        if self.provider == "azure-openai" and not self.azure_openai_base_url:
+            raise ValueError(
+                "LLM provider 'azure-openai' requires AZURE_OPENAI_BASE_URL to be set."
+            )
         return self
 
     @classmethod
@@ -571,6 +615,13 @@ GROQ_LLM_CONFIG = LLMModelConfig(
     reasoning_model=GROQ_REASONING_MODEL,
     classification_model=GROQ_CLASSIFICATION_MODEL,
     toolcall_model=GROQ_TOOLCALL_MODEL,
+    max_tokens=DEFAULT_MAX_TOKENS,
+)
+
+AZURE_OPENAI_LLM_CONFIG = LLMModelConfig(
+    reasoning_model=AZURE_OPENAI_REASONING_MODEL,
+    classification_model=AZURE_OPENAI_CLASSIFICATION_MODEL,
+    toolcall_model=AZURE_OPENAI_TOOLCALL_MODEL,
     max_tokens=DEFAULT_MAX_TOKENS,
 )
 
