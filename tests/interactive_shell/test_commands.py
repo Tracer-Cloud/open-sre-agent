@@ -1297,8 +1297,9 @@ class TestInvestigateFileCommand:
             session: Session,
             console: Console,
             display_command: str,
+            investigation_target: str = "",
         ) -> str:
-            _ = (session, console, display_command)
+            _ = (session, console, display_command, investigation_target)
             launches.append(template_name)
             return "bg123"
 
@@ -1537,8 +1538,9 @@ class TestInvestigateFileCommand:
             session: Session,
             console: Console,
             display_command: str,
+            investigation_target: str = "",
         ) -> str:
-            _ = (session, console)
+            _ = (session, console, investigation_target)
             launches.append((alert_text, display_command))
             return "bg123"
 

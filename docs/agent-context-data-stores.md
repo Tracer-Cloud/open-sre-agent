@@ -140,7 +140,7 @@ hydrated by `SessionResolver` before each turn.
 ## Store 2 — `MutableAgentState` (audit)
 
 **File:** `core/context/state/agent_state.py`  
-**Access:** `session.agent` (compat: `session.cli_agent_messages`,
+**Access:** `session.agent` (compatibility: `session.cli_agent_messages`,
 `session.last_command_observation`)
 
 ### Production API (use these)
@@ -211,7 +211,7 @@ when a snapshot exists; the session-only overload remains for adapters.
 
 | Entry type | Contents |
 |------------|----------|
-| `session` | Header (version, cwd, opensre version) |
+| `session` | Header (version, working directory, opensre version) |
 | `message` | User/assistant/system chat rows + metadata |
 | `tool_call` / `tool_result` | Tool execution audit |
 | `compaction` | Context compaction summary |
