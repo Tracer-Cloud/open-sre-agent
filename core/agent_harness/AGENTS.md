@@ -78,7 +78,7 @@ from core.agent_harness.agent_builder import AgentConfig, build_agent
 config = AgentConfig(
     llm=llm_client,                    # or None to fall back to get_agent_llm()
     system=system_prompt,
-    tools=agent_tools,
+    tools=tuple(agent_tools),
     resolved_integrations=resolved,
     max_iterations=6,
     tool_resources={},                  # optional
