@@ -20,8 +20,8 @@ Before any push or PR creation follow **[CI.md](CI.md)** — lint, format, typec
 | Path                  | What it does                                                                                       |
 | --------------------- | -------------------------------------------------------------------------------------------------- |
 | `core/`               | Investigation orchestration, context assembly, the shared runtime tool-calling loop, and domain logic (state, types, correlation rules). Includes `core/tool_framework/` — the `BaseTool` base class, `@tool` decorator, registered-tool primitives, error telemetry, skill-guidance helpers, and shared payload utilities (`utils/`). |
-| `cli/`                | Command-line interface, onboarding wizard, local LLM helpers, and CLI tests support.               |
-| `interactive_shell/`  | Interactive terminal (REPL) loop, slash commands, chat/help surfaces, action-planning harness, and terminal UI. |
+| `surfaces/cli/`       | Command-line interface, onboarding wizard, local LLM helpers, and CLI tests support.               |
+| `surfaces/interactive_shell/` | Interactive terminal (REPL) loop, slash commands, chat/help surfaces, action-planning harness, and terminal UI. |
 | `integrations/`       | Per-integration config normalization, verification, clients, helpers, store/catalog logic, the Hermes log pipeline, and per-vendor tool packages under `integrations/<vendor>/tools/`. |
 | `tools/`              | Tool registry, per-tool packages for cross-cutting tools that aren't vendor-specific (e.g. `tools/fleet_monitoring/`, `tools/watch_dog/`, `tools/sre_guidance_tool/`), and the interactive-shell action tools. Framework primitives (decorator, base class, utils) live in `core/tool_framework/`. |
 | `platform/`           | Cross-cutting platform services: guardrails, masking, sandbox, analytics, auth, notifications, observability, and EC2 deployment (`platform/deployment/`). |
@@ -44,8 +44,8 @@ Main packages one level deeper:
 
 - `platform/analytics/` — Analytics event plumbing and install helpers used by the onboarding flow.
 - `platform/auth/` — JWT and authentication helpers for local and hosted runtime access.
-- `cli/` — Command-line interface, onboarding wizard, local LLM helpers, and CLI tests support.
-- `interactive_shell/` — Interactive terminal (TTY) loop, slash-command surface, chat/help handoff, session runtime, and terminal UI. REPL watchdog slash commands (`/watch`, `/watches`, `/unwatch`): PR demo steps live under **Interactive shell: REPL watchdog demo** in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#interactive-shell-repl-watchdog-demo).
+- `surfaces/cli/` — Command-line interface, onboarding wizard, local LLM helpers, and CLI tests support.
+- `surfaces/interactive_shell/` — Interactive terminal (TTY) loop, slash-command surface, chat/help handoff, session runtime, and terminal UI. REPL watchdog slash commands (`/watch`, `/watches`, `/unwatch`): PR demo steps live under **Interactive shell: REPL watchdog demo** in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#interactive-shell-repl-watchdog-demo).
 - `config/constants/` — Shared prompt and other static constants.
 - `core/context/` — Context assembly boundary for building, trimming, ranking, and packaging incident evidence before agent/runtime consumption.
 - `platform/deployment/aws/` — Shared boto3 client factory, deployment constants (`config.py`), VPC/subnet/SG helpers, EC2/IAM provisioning, ECR build/push, and SSM run-command primitives. Import from here in deployment scripts instead of duplicating.
