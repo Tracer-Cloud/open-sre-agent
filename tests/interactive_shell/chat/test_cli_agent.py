@@ -191,9 +191,7 @@ class TestSystemPromptInvestigationFlowGrounding:
         )
 
         console, _ = _capture()
-        answer_shell_question(
-            "Can you see how investigations are structured?", Session(), console
-        )
+        answer_shell_question("Can you see how investigations are structured?", Session(), console)
 
         assert client.last_prompt is not None
         assert "--- Investigation flow reference ---" in client.last_prompt

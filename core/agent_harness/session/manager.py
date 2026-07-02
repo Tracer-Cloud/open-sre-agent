@@ -141,7 +141,11 @@ class SessionManager:
     ) -> Session:
         """Close the outgoing session (if any) and create its replacement."""
         if old_session_id:
-            self.close(Session(session_id=old_session_id))
+            outgoing = Session(session_id=old_session_id)
+            # Reconstructed handle: align its backend with the manager's so the
+            # close flush lands on the same storage the manager owns.
+            outgoing.storage = self._storage
+            self.close(outgoing)
         return self.create(session_id=new_session_id, warm_integrations=warm_integrations)
 
     def restore_context(self, session: Session, data: dict[str, Any] | None) -> Session:
@@ -182,7 +186,9 @@ class SessionManager:
         drops background references).
         """
         try:
-            self._storage.flush(session)
+            # Flush through the session's own backend — the one it recorded
+            # turns through — so the end-of-session marker lands with the data.
+            session.storage.flush(session)
         except OSError:
             logger.debug("[session] flush failed during close", exc_info=True)
         self._release_resources(session)
