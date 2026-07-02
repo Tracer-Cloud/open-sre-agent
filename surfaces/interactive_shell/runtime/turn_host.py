@@ -160,7 +160,6 @@ async def _run_agent_turn_loop(
 
 
 async def run_input_loop(
-    # This function is also problematic because it is not clear how from here, the state (i.e. prompt input text gets to the agent)
     *,
     state: ReplState,
     session: Session,
@@ -169,7 +168,19 @@ async def run_input_loop(
     echo_console: Console,
     handle_input_action: Callable[[InputAction], Awaitable[bool]],
 ) -> None:
-    """Read input events and dispatch them until exit or close is requested."""
+    """Run the interactive session's main input loop until exit or close.
+
+    This loop reads input; it does not run agent turns itself. Each raw input
+    event is classified into an ``InputAction`` by ``decide_input_action`` and
+    handed to ``handle_input_action``. For a submitted prompt that handler pushes
+    the text onto ``state.queue``; the queued text is then consumed
+    asynchronously by ``run_agent_turn_queue`` (started in the controller's
+    ``_start_runtime_services``), which runs each turn via ``run_agent_turn``.
+
+    Keeping input reading and turn execution as two separate loops joined only by
+    ``state.queue`` is deliberate: it lets the user keep typing, cancel, or
+    answer a confirmation while a turn is still in flight.
+    """
     while not state.exit_requested:
         if background is not None:
             background.drain_turn_start_output(echo_console)

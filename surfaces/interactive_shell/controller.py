@@ -171,8 +171,9 @@ class InteractiveShellController:
             self._start_runtime_services()
             try:
                 with patch_stdout(raw=True):
-                    # Comment Vincent: This is is horrible name for the most important function in the interactive shell.
-                    # It should be clear that it is the start of the agentic flow.
+                    # Main input loop: reads prompts and enqueues submitted turns
+                    # onto state.queue. The agent turns themselves run in
+                    # run_agent_turn_queue, started above in _start_runtime_services.
                     await run_input_loop(
                         state=self.state,
                         session=self.session,
