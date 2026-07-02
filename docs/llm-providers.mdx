@@ -433,6 +433,29 @@ OpenSRE does not silently switch LLM providers when the provider in `LLM_PROVIDE
 
 If credentials are missing, set the provider's API-key environment variable, run `opensre auth login <provider>`, or change `LLM_PROVIDER` to a provider you have configured.
 
+### Troubleshooting provider and API-key issues
+
+Use this checklist when `opensre investigate`, the interactive shell, or a deployed runtime fails before the first model response:
+
+1. **Confirm the selected provider is the one you expect.** `LLM_PROVIDER` is case-normalized, but values must match a supported provider such as `anthropic`, `openai`, `openrouter`, `gemini`, `bedrock`, or a CLI-backed provider listed above.
+2. **Match the key to the provider.** `LLM_PROVIDER=openai` needs `OPENAI_API_KEY`; `LLM_PROVIDER=anthropic` needs `ANTHROPIC_API_KEY`; `LLM_PROVIDER=openrouter` needs `OPENROUTER_API_KEY`; `LLM_PROVIDER=gemini` needs `GEMINI_API_KEY` or compatible Google credentials.
+3. **Check the environment seen by the process.** A key exported in one terminal is not available to another shell, systemd unit, Docker container, Railway service, or EC2 session unless it is passed into that runtime.
+4. **Re-run the lightweight diagnostics after changing credentials:**
+
+   ```bash
+   opensre config llm
+   opensre doctor
+   opensre auth verify "$LLM_PROVIDER"
+   ```
+
+5. **Restart long-running processes after edits.** The CLI picks up a new environment on each invocation, but web servers, Telegram gateways, workers, and local shells that already created an LLM client may need a restart.
+6. **For OAuth/CLI providers, verify the external login first.** Run the matching provider CLI status command (for example Codex, Claude Code, Gemini CLI, or Cursor) and then `opensre auth verify <provider>` so OpenSRE refreshes its cached auth metadata.
+7. **For deployed services, compare local and deployed variables.** Confirm the deployment has both `LLM_PROVIDER` and the matching secret configured, then redeploy or restart so the new values are loaded.
+8. **Avoid mixing provider aliases during debugging.** If you switch from an API-key provider to a CLI-backed provider, unset the old API-key variables or run in a fresh shell to make the active auth path obvious.
+9. **Inspect the provider prefix in the error.** Messages like `[LLM provider: openai]` identify the provider that handled the failed request; fix that provider's credential or update `LLM_PROVIDER` before retrying.
+
+If diagnostics still disagree with the environment you expect, run them from the same shell, container, or host that launches OpenSRE; most false negatives come from checking credentials in a different runtime than the one serving requests.
+
 ## Switching providers at runtime
 
 OpenSRE caches LLM clients on first use. To switch providers within a single process (tests, benchmarks), call `reset_llm_singletons()` from `core.llm.llm_client` after updating the env vars; otherwise a fresh process picks up the new `LLM_PROVIDER` automatically.
