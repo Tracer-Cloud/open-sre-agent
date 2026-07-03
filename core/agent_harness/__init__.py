@@ -19,7 +19,7 @@ from core.agent_harness.agents.action_agent import (
 from core.agent_harness.agents.evidence_agent import gather_tool_evidence
 from core.agent_harness.agents.evidence_agent import gather_tool_evidence as gather_evidence
 from core.agent_harness.agents.headless_agent import dispatch_message_to_headless_agent
-from core.agent_harness.agents.turn_orchestrator import answer_cli_agent, run_turn
+from core.agent_harness.agents.turn_orchestrator import run_turn, stream_answer
 from core.agent_harness.harness import AgentHarness, HarnessConfig, HarnessStartupResult
 from core.agent_harness.models.turn_context import (
     AgentRuntimeRequest,
@@ -38,10 +38,10 @@ __all__ = [
     "ToolCallingTurnResult",
     "TurnContext",
     "TurnContextSource",
-    "answer_cli_agent",
     "execute_action_agent_turn",
     "gather_evidence",
     "gather_tool_evidence",
     "dispatch_message_to_headless_agent",
     "run_turn",
+    "stream_answer",
 ]

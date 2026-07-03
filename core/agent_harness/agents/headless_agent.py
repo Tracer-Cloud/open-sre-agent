@@ -34,7 +34,7 @@ from typing import Any
 
 from core.agent_harness.agents.action_agent import run_action_agent_turn
 from core.agent_harness.agents.evidence_agent import gather_tool_evidence
-from core.agent_harness.agents.turn_orchestrator import answer_cli_agent, run_turn
+from core.agent_harness.agents.turn_orchestrator import run_turn, stream_answer
 from core.agent_harness.models.turn_context import TurnContext
 from core.agent_harness.models.turn_results import ShellTurnResult, ToolCallingTurnResult
 from core.agent_harness.ports import (
@@ -268,7 +268,7 @@ def dispatch_message_to_headless_agent(
         )
 
     def answer(text: str, **kwargs: object) -> object:
-        return answer_cli_agent(
+        return stream_answer(
             text,
             store,
             output,

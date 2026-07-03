@@ -1,7 +1,9 @@
 # agent_harness/ package rules
 
-`agent_harness/` owns the **decoupled agent harness** around the shared
-`core.agent.Agent` loop: action tool-calling turns, three-path routing,
+`agent_harness/` owns the **decoupled agent harness** for two agent shapes:
+the tool-calling loop (`core.agent.Agent` via `build_agent`) and the
+streaming-answer path (`answer_cli_agent` via the `AnswerFn` seam in
+`ports.py`). It orchestrates action tool-calling turns, three-path routing,
 conversational answers, evidence gather, and headless execution. It was
 extracted out of `interactive_shell` so the same harness can run the interactive
 terminal and be invoked headlessly via `agent_harness.agents.headless_agent`.
@@ -142,25 +144,56 @@ See `docs/agent-context-data-stores.md`. Turn assembly starts in
 hooks. Those hooks were removed because they let each surface hide per-turn
 configuration on `self`, which diverged routing across surfaces.
 
-## Answer agent — categorical exception
+## Two agent shapes (not one pattern with an exception)
 
-`turn_orchestrator.answer_cli_agent` streams grounded text via
-`client.invoke_stream(prompt)` and does **not** use `core.agent.Agent`. Reason:
-`Agent.run()` is a tool-calling loop; streaming a no-tool text response is a
-different modality. If streaming is added to `Agent` in a future change,
-`answer_cli_agent` should be migrated onto it. Until then, treat this as an
-intentional gap, not a hook-pattern regression.
+The harness has **two** intentional agent shapes. This is a design, not a 4/4
+uniformity claim with an exception bolted on:
 
-## Investigation agent — extends Agent, custom run()
+- **Tool-calling agent** — `core.agent.Agent`, the ReAct loop (think → call
+  tools → observe) driven by `llm.invoke`. Built via `AgentConfig` +
+  `build_agent` (the construction pattern above). Used by the action,
+  evidence/gather, and investigation agents.
+- **Streaming-answer agent** — `turn_orchestrator.answer_cli_agent`, one no-tool
+  grounded text answer streamed via `client.invoke_stream` (the `AnswerFn`
+  seam in `ports.py` — named `Fn`, not `Agent`, to avoid conflating this
+  callable with `core.agent.Agent`). It does **not** use `Agent`, by design: there is no tool
+  loop, no observe step, and it streams on a different client method. A genuinely
+  different modality — not a workaround to be folded into `Agent.run()`.
+
+A new agent is one shape or the other: if it calls tools it is the tool-calling
+shape; if it streams a text answer it is the streaming shape.
+
+### Contributor checklist (agent changes)
+
+Before opening or merging an agent PR, confirm:
+
+1. **Shape** — State explicitly: tool-calling (`Agent` / `build_agent` /
+   `ExecuteActions`) or streaming-answer (`AnswerFn` / `invoke_stream`).
+2. **Entrypoint docstring** — The public function or class documents which shape
+   it implements (three lines max; link here if helpful).
+3. **Docs** — Update this file when harness rules change; update
+   `docs/agent-context-data-stores.md` when routing or prompt capture changes
+   (diagram must match runtime — assistant never flows through `Agent.run()`).
+4. **Seams** — Inject through `ports.py` callables (`AnswerFn`,
+   `ExecuteActions`, `EvidenceGatherer`); do not import surface code into
+   `agent_harness/`.
+5. **Tests** — Add or extend guards in
+   `tests/core/agent_harness/test_agent_shapes.py` when you introduce a new
+   entrypoint or rename a shape seam.
+
+**Read order for new code:** this file → `docs/agent-context-data-stores.md` →
+`agents/turn_orchestrator.py` (`run_turn`) → `core/agent.py` (tool-calling loop
+only).
+
+## Investigation agent — the tool-calling shape with a custom loop
 
 `tools/investigation/stages/gather_evidence/agent.py::ConnectedInvestigationAgent`
-extends `Agent[RegisteredTool]` to reuse the shared event-emission and
-`_filter_tools` infrastructure, then overrides `.run()` with a specialised
-ReAct loop (seed calls, evidence collection, duplicate detection, stagnation
-handling). This is a legitimate use of subclassing — the specialised loop
-cannot delegate to `Agent.run()`'s generic tool-calling loop. The class does
-**not** override the removed config hooks; it assembles its config inline at
-the top of `run()`.
+composes the shared `AgentEventEmitter` and `AgentToolFilter` mixins
+(`core.agent_mixins`) instead of subclassing `Agent`, and owns a specialised
+ReAct `run()` (seed calls, evidence collection, duplicate detection, stagnation
+handling). It is still the tool-calling shape — a specialised loop that reuses
+the two agent hooks by composition rather than delegating to the generic
+`Agent.run()`. It assembles its config inline at the top of `run()`.
 
 ## Keep the loop primitive in core
 

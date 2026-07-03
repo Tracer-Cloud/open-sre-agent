@@ -6,9 +6,10 @@ per-turn configuration in a surface-specific factory, then hands it to
 changes, this file is the single edit site — all surfaces adopt the change
 automatically.
 
-Investigation stays a subclass of :class:`~core.agent.Agent` (it reuses
-``_filter_tools`` and the event-emission plumbing) and constructs its own
-loop, but the LLM/tools wiring it uses at ``run()`` start mirrors the
+Investigation composes :class:`~core.agent_mixins.AgentEventEmitter` and
+:class:`~core.agent_mixins.AgentToolFilter` instead of subclassing
+:class:`~core.agent.Agent`, and constructs its own specialised tool-calling
+loop. The LLM/tools wiring it uses at ``run()`` start mirrors the
 :class:`AgentConfig` fields so a future refactor can bring it under the same
 roof without changing shape.
 """
