@@ -80,7 +80,7 @@ class GatherEvidenceExecutionError(AgentExecutionError):
     """Bounded evidence gathering failed, so the turn falls back gracefully."""
 
 
-def safe_execute[T](
+def _safe_execute[T](
     operation: Callable[[], T],
     *,
     error_reporter: ErrorReporter | None,
@@ -92,8 +92,6 @@ def safe_execute[T](
 
     try:
         return operation()
-    except KeyboardInterrupt:
-        raise
     except Exception as exc:  # noqa: BLE001 - centralized turn-safe fallback boundary
         wrapped = wrap_error(exc)
         if error_reporter is not None:
@@ -163,7 +161,7 @@ def _load_gather_llm_or_none(error_reporter: ErrorReporter | None) -> Any | None
     """
     from core.llm.agent_llm_client import get_agent_llm
 
-    return safe_execute(
+    return _safe_execute(
         get_agent_llm,
         error_reporter=error_reporter,
         context="core.agent_harness.agents.evidence_agent.client",
@@ -216,7 +214,7 @@ def gather_tool_evidence(
     def _run_gather_turn() -> Any | None:
         # Tool discovery + integration resolution + LLM load happen inside the
         # helper so a raise from tool-registry import, credential resolution, or
-        # LLM client init is swallowed by ``safe_execute`` rather than breaking
+        # LLM client init is swallowed by ``_safe_execute`` rather than breaking
         # the turn.
         from tools.investigation.stages.gather_evidence.tools import get_available_tools
 
@@ -246,7 +244,7 @@ def gather_tool_evidence(
         return result
 
     try:
-        result = safe_execute(
+        result = _safe_execute(
             _run_gather_turn,
             error_reporter=error_reporter,
             context="core.agent_harness.agents.evidence_agent",
