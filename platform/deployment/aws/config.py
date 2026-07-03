@@ -23,7 +23,8 @@ AL2023_AMI_SSM_PARAMETER = "/aws/service/ami-amazon-linux-latest/al2023-ami-kern
 UBUNTU2204_AMI_SSM_PARAMETER = (
     "/aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id"
 )
-EC2_ROOT_DEVICE_NAME = "/dev/xvda"
+EC2_ROOT_DEVICE_NAME = "/dev/xvda"  # Amazon Linux 2023
+EC2_UBUNTU_ROOT_DEVICE_NAME = "/dev/sda1"  # Ubuntu official AMIs (22.04+)
 EC2_VOLUME_SIZE_GB = 30
 EC2_VOLUME_TYPE = "gp3"
 EC2_INSTANCE_ROLE_DESCRIPTION = "EC2 instance role for OpenSRE deployment"

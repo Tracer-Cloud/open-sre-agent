@@ -23,9 +23,6 @@ _ENV_DIR = "/etc/opensre"
 _GATEWAY_ENV_PATH = f"{_ENV_DIR}/gateway.env"
 _SERVICE_NAME = "opensre-gateway"
 
-# Keys that are gateway-only and must not appear in the web service env file
-_GATEWAY_ONLY_ENV_KEYS = frozenset({"TELEGRAM_BOT_TOKEN", "TELEGRAM_ALLOWED_USERS"})
-
 
 def _env_file_content(env_vars: dict[str, str]) -> str:
     """Return systemd EnvironmentFile content for the given variables."""

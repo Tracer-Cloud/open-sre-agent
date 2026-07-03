@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 import platform.deployment.gateway.direct_deploy as direct_module
+from platform.deployment.aws.config import EC2_UBUNTU_ROOT_DEVICE_NAME
 
 _INSTANCE_ID = "i-direct123"
 _PUBLIC_IP = "1.2.3.4"
@@ -21,15 +22,16 @@ _FAKE_PROFILE = {
 
 def _stub_deploy(monkeypatch: pytest.MonkeyPatch) -> dict[str, list[str]]:
     """Stub every external call in deploy_direct() and return captured SSM calls."""
-    calls: dict[str, list[str]] = {"ssm_commands": []}
+    calls: dict[str, list[str]] = {"ssm_commands": [], "launch_kwargs": []}
 
     monkeypatch.setattr(direct_module, "create_instance_profile", lambda *_a, **_kw: _FAKE_PROFILE)
     monkeypatch.setattr(direct_module, "get_latest_ubuntu2204_ami", lambda _region: _BASE_AMI)
-    monkeypatch.setattr(
-        direct_module,
-        "launch_instance",
-        lambda *_a, **_kw: {"InstanceId": _INSTANCE_ID},
-    )
+
+    def fake_launch_instance(*_args: object, **kwargs: object) -> dict[str, str]:
+        calls["launch_kwargs"].append(kwargs)
+        return {"InstanceId": _INSTANCE_ID}
+
+    monkeypatch.setattr(direct_module, "launch_instance", fake_launch_instance)
     monkeypatch.setattr(
         direct_module,
         "wait_for_running",
@@ -85,6 +87,20 @@ def test_deploy_direct_persists_outputs(
     assert data["InstanceId"] == _INSTANCE_ID
 
 
+def test_deploy_direct_uses_ubuntu_root_device_for_volume_resize(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Ubuntu AMIs use /dev/sda1; direct deploy must pass that root device name."""
+    monkeypatch.setattr(direct_module, "_OUTPUTS_DIR", tmp_path)
+    calls = _stub_deploy(monkeypatch)
+
+    direct_module.deploy_direct(env_vars={}, region="us-east-1")
+
+    assert calls["launch_kwargs"]
+    assert calls["launch_kwargs"][0]["root_device_name"] == EC2_UBUNTU_ROOT_DEVICE_NAME
+
+
 def test_deploy_direct_uses_curl_installer(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -96,7 +112,7 @@ def test_deploy_direct_uses_curl_installer(
     direct_module.deploy_direct(env_vars={}, region="us-east-1")
 
     joined = "\n".join(calls["ssm_commands"])
-    assert "install.opensre.com" in joined
+    assert direct_module._INSTALL_URL in joined
     assert "curl" in joined
     assert "pip install" not in joined
     assert "git+" not in joined
@@ -207,7 +223,7 @@ def test_curl_install_commands_structure() -> None:
 
     assert "set -eu" in joined
     assert "useradd" in joined  # creates opensre user
-    assert "install.opensre.com" in joined  # curl installer URL
+    assert direct_module._INSTALL_URL in joined  # curl installer URL
     assert "/usr/local/bin" in joined  # install dir
     assert "export HOME=/root" in joined  # SSM has no HOME set
     assert "OPENSRE_AUTO_LAUNCH=0" in joined  # no interactive wizard

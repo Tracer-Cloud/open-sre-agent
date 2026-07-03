@@ -2,18 +2,19 @@ from __future__ import annotations
 
 import base64
 import json
-import logging
 import os
 import shlex
 import time
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from botocore.exceptions import ClientError
 
 from config.constants import OPENSRE_HOME_DIR
 from platform.deployment.aws.client import DEFAULT_REGION
 from platform.deployment.aws.config import (
+    EC2_UBUNTU_ROOT_DEVICE_NAME,
     INSTANCE_TYPE,
     SSM_MANAGED_POLICY_ARN,
 )
@@ -32,16 +33,27 @@ from platform.deployment.gateway.provision import (
     wait_for_gateway_ready,
 )
 
-logger = logging.getLogger(__name__)
-
 # ── Constants ──────────────────────────────────────────────────────────────────
 
 _DIRECT_STACK_NAME = "opensre-gateway-direct"
 _STACK_SUFFIX_ENV = "OPENSRE_STACK_SUFFIX"
 _OUTPUTS_DIR = OPENSRE_HOME_DIR / "deployments"
 
-# The published install script URL.
-_INSTALL_URL = "https://install.opensre.com"
+_INSTALL_URL_HOST = "install.opensre.com"
+
+
+def _validated_install_url(url: str) -> str:
+    """Return ``url`` when it targets the published installer host exactly."""
+    parsed = urlparse(url)
+    if parsed.scheme != "https" or parsed.hostname != _INSTALL_URL_HOST:
+        raise ValueError(f"Install URL must be https://{_INSTALL_URL_HOST}/, got {url!r}")
+    if parsed.username or parsed.password:
+        raise ValueError("Install URL must not include credentials")
+    return url
+
+
+# The published install script URL (hostname checked at import time).
+_INSTALL_URL = _validated_install_url(f"https://{_INSTALL_URL_HOST}")
 
 # Where the binary is installed on the instance.  /usr/local/bin is always on
 # the system PATH, accessible to the opensre system user running under systemd.
@@ -256,6 +268,7 @@ def deploy_direct(
         instance_profile_arn=profile_info["ProfileArn"],
         stack_name=stack_name,
         instance_type=INSTANCE_TYPE,
+        root_device_name=EC2_UBUNTU_ROOT_DEVICE_NAME,
         region=region,
     )
     instance_id = instance["InstanceId"]

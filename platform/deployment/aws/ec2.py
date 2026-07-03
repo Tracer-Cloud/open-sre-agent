@@ -201,6 +201,7 @@ def launch_instance(
     *,
     user_data: str | None = None,
     instance_type: str = INSTANCE_TYPE,
+    root_device_name: str = EC2_ROOT_DEVICE_NAME,
     region: str = DEFAULT_REGION,
 ) -> dict[str, str]:
     """Launch an EC2 instance in the default VPC and return its InstanceId.
@@ -208,6 +209,10 @@ def launch_instance(
     No subnet or security group is specified; AWS assigns the default VPC subnet
     and default security group. SSM access is outbound-only and works without any
     inbound rules.
+
+    ``root_device_name`` must match the AMI root block device (``/dev/xvda`` for
+    Amazon Linux 2023, ``/dev/sda1`` for Ubuntu official AMIs) or the requested
+    EBS volume size is silently ignored.
     """
     ec2 = get_boto3_client("ec2", region)
     tags = get_standard_tags(stack_name)
@@ -222,7 +227,7 @@ def launch_instance(
         "TagSpecifications": [{"ResourceType": "instance", "Tags": tags}],
         "BlockDeviceMappings": [
             {
-                "DeviceName": EC2_ROOT_DEVICE_NAME,
+                "DeviceName": root_device_name,
                 "Ebs": {"VolumeSize": EC2_VOLUME_SIZE_GB, "VolumeType": EC2_VOLUME_TYPE},
             }
         ],
