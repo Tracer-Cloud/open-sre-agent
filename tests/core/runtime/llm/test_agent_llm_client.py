@@ -1475,3 +1475,58 @@ def test_anthropic_unexpected_response_shape_raises_runtime_error(
 
     with pytest.raises(RuntimeError, match="unexpected response"):
         client.invoke(messages=[{"role": "user", "content": "hello"}])
+
+
+def test_anthropic_agent_client_emits_provider_usage(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Successful agent invokes must report provider token usage via the usage hook
+    so investigation-turn telemetry can carry real token counts (issue #3698)."""
+    from core.llm.usage import set_usage_hook
+
+    _install_fake_anthropic(monkeypatch)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    response = types.SimpleNamespace(
+        content=[types.SimpleNamespace(type="text", text="hi there")],
+        stop_reason="end_turn",
+        usage=types.SimpleNamespace(input_tokens=123, output_tokens=45),
+    )
+    client = AnthropicAgentClient(model="claude-sonnet-4-6")
+    client._client = types.SimpleNamespace(
+        messages=types.SimpleNamespace(create=lambda **_: response)
+    )
+
+    usage: list[tuple[str, int, int]] = []
+    set_usage_hook(
+        lambda model, tokens_in, tokens_out: usage.append((model, tokens_in, tokens_out))
+    )
+    try:
+        result = client.invoke(messages=[{"role": "user", "content": "hi"}])
+    finally:
+        set_usage_hook(None)
+
+    assert result.content == "hi there"
+    assert usage == [("claude-sonnet-4-6", 123, 45)]
+
+
+def test_bedrock_converse_emits_provider_usage(monkeypatch: pytest.MonkeyPatch) -> None:
+    from core.llm.usage import set_usage_hook
+
+    monkeypatch.setenv("AWS_REGION", "us-east-1")
+    response = _make_converse_response(text="ok")
+    response["usage"] = {"inputTokens": 200, "outputTokens": 30}
+    _stub_boto3_converse(monkeypatch, converse_response=response)
+
+    from core.llm.agent_llm_client import BedrockConverseAgentClient
+
+    usage: list[tuple[str, int, int]] = []
+    set_usage_hook(
+        lambda model, tokens_in, tokens_out: usage.append((model, tokens_in, tokens_out))
+    )
+    try:
+        result = BedrockConverseAgentClient(model=_MISTRAL_MODEL).invoke(
+            messages=[{"role": "user", "content": [{"text": "hi"}]}]
+        )
+    finally:
+        set_usage_hook(None)
+
+    assert result.content == "ok"
+    assert usage == [(_MISTRAL_MODEL, 200, 30)]

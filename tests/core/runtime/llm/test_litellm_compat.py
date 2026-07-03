@@ -80,6 +80,29 @@ def test_litellm_agent_client_parses_tool_calls() -> None:
     assert response.raw_content["tool_calls"] == [tool_call]
 
 
+def test_litellm_agent_client_emits_global_usage_hook() -> None:
+    from core.llm.usage import set_usage_hook
+
+    client = LiteLLMAgentClient(
+        litellm_model="openai/deepseek-v4-pro",
+        api_base="https://api.deepseek.com",
+        api_key_env="DEEPSEEK_API_KEY",
+        credential_resolver=lambda _env: "ds-key",
+        completion_func=lambda **_kwargs: _fake_response(content="hello"),
+    )
+
+    usage: list[tuple[str, int, int]] = []
+    set_usage_hook(
+        lambda model, tokens_in, tokens_out: usage.append((model, tokens_in, tokens_out))
+    )
+    try:
+        client.invoke([{"role": "user", "content": "hi"}])
+    finally:
+        set_usage_hook(None)
+
+    assert usage == [("openai/deepseek-v4-pro", 11, 7)]
+
+
 def test_litellm_llm_client_emits_usage_callback() -> None:
     usage: list[tuple[str, int | None, int | None]] = []
     client = LiteLLMLLMClient(

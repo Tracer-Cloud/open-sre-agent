@@ -58,6 +58,7 @@ def build_gateway_turn_handler(
             reasoning=DefaultReasoningClientProvider(
                 output=sink,
                 error_reporter=error_reporter,
+                session=session,
             ),
             run_factory=DefaultRunRecordFactory(session),
             accounting=DefaultTurnAccounting(session, text),

@@ -155,6 +155,35 @@ def _validate_save_args(args: list[str]) -> str | None:
     return None
 
 
+def _stage_investigation_turn_telemetry(session: Session, outcome: InvestigationOutcome) -> None:
+    """Stage LLM run metadata and structured errors for this turn's recorder flush."""
+    from core.agent_harness.accounting.token_accounting import LlmRunInfo, record_llm_turn
+
+    if outcome.llm_model or outcome.llm_input_tokens or outcome.llm_output_tokens:
+        session.set_pending_turn_llm(
+            LlmRunInfo(
+                model=outcome.llm_model or None,
+                provider=outcome.llm_provider or None,
+                latency_ms=outcome.duration_ms or None,
+                input_tokens=outcome.llm_input_tokens or None,
+                output_tokens=outcome.llm_output_tokens or None,
+            )
+        )
+        if outcome.llm_input_tokens or outcome.llm_output_tokens:
+            record_llm_turn(
+                session,
+                prompt="",
+                response="",
+                input_tokens=outcome.llm_input_tokens,
+                output_tokens=outcome.llm_output_tokens,
+            )
+    if outcome.status == "failed":
+        session.set_pending_turn_error(
+            outcome.failure_category or "unknown",
+            outcome.error_message or "investigation failed",
+        )
+
+
 def _record_investigation_turn(
     session: Session,
     *,
@@ -180,6 +209,7 @@ def _record_investigation_turn(
         session.mark_latest(ok=False, kind="slash")
     if outcome.investigation_id:
         session.last_investigation_id = outcome.investigation_id
+    _stage_investigation_turn_telemetry(session, outcome)
     publish_investigation_outcome_analytics(outcome)
 
 

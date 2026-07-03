@@ -161,6 +161,7 @@ def answer_shell_question(
         reasoning=DefaultReasoningClientProvider(
             output=_resolve_output_sink(console, output),
             error_reporter=DefaultErrorReporter(),
+            session=session,
         ),
         run_factory=DefaultRunRecordFactory(session),
         error_reporter=DefaultErrorReporter(),

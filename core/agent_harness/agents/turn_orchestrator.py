@@ -49,6 +49,13 @@ _ASSISTANT_LABEL = "assistant"
 # ---------------------------------------------------------------------------
 
 
+def stage_turn_error(session: Any, kind: str, message: str) -> None:
+    """Best-effort structured error staging for the turn's telemetry flush."""
+    setter = getattr(session, "set_pending_turn_error", None)
+    if callable(setter):
+        setter(kind, message)
+
+
 def _stream_cli_agent_response(
     *,
     client: Any,
@@ -56,6 +63,7 @@ def _stream_cli_agent_response(
     output: OutputSink,
     run_factory: RunRecordFactory,
     error_reporter: ErrorReporter | None,
+    session: Any | None = None,
 ) -> Any | None:
     try:
         started = time.monotonic()
@@ -73,6 +81,9 @@ def _stream_cli_agent_response(
                 context="core.agent_harness.agents.turn_orchestrator.stream",
                 expected=isinstance(exc, CLITimeoutError),
             )
+        if session is not None:
+            kind = "timeout" if isinstance(exc, CLITimeoutError) else "assistant_error"
+            stage_turn_error(session, kind, str(exc))
         output.render_error(f"assistant failed: {exc}")
         return None
     return run_factory.build(client=client, prompt=prompt, response_text=text_str, started=started)
@@ -140,6 +151,7 @@ def answer_cli_agent(
         output=output,
         run_factory=run_factory,
         error_reporter=error_reporter,
+        session=session,
     )
     if run is None:
         return None

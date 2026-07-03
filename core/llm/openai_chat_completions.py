@@ -13,6 +13,7 @@ from core.llm.llm_retry import (
     rate_limit_sleep_seconds,
 )
 from core.llm.types import AgentLLMResponse, LLMResponse, ToolCall
+from core.llm.usage import emit_usage
 
 _RETRY_INITIAL_BACKOFF_SEC = 1.0
 _RETRY_MAX_ATTEMPTS = 3
@@ -135,7 +136,12 @@ def build_assistant_message(content: str, tool_calls: list[ToolCall]) -> dict[st
     return msg
 
 
-def agent_response_from_completion(response: Any, *, provider_name: str) -> AgentLLMResponse:
+def agent_response_from_completion(
+    response: Any,
+    *,
+    provider_name: str,
+    model: str | None = None,
+) -> AgentLLMResponse:
     choices = get_attr_or_item(response, "choices", None)
     if not choices:
         raise RuntimeError(
@@ -147,6 +153,8 @@ def agent_response_from_completion(response: Any, *, provider_name: str) -> Agen
         raise RuntimeError(
             f"{provider_name} API returned an unexpected response: {type(response).__name__}"
         )
+    input_tokens, output_tokens = usage_tokens(get_attr_or_item(response, "usage", None))
+    emit_usage(model or provider_name, input_tokens, output_tokens)
     content = str(get_attr_or_item(message, "content", "") or "")
     stop_reason = str(get_attr_or_item(choice, "finish_reason", "stop") or "stop")
     return AgentLLMResponse(
