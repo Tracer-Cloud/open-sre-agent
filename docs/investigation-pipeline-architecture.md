@@ -90,10 +90,13 @@ flowchart TD
     S7 -->|yes| S10{Identical to a\nprior call?}
     S10 -->|yes| S11["Replay cached result,\ntell LLM not to repeat"]
     S10 -->|no| S12[Execute tool, record evidence]
-    S11 --> S13{2 consecutive\nall-duplicate iterations?}
+    S11 --> S13{Any fresh calls\nthis iteration?}
     S12 --> S13
-    S13 -->|yes| S14["Strip tool access;\nloop back for one\nfinal llm.invoke"]
-    S13 -->|no| S4
+    S13 -->|yes| S4
+    S13 -->|no| S15["Send stagnation nudge\n(stagnant_iterations += 1)"]
+    S15 --> S16{stagnant_iterations\n>= 2?}
+    S16 -->|yes| S14["Strip tool access;\nloop back for one\nfinal llm.invoke"]
+    S16 -->|no| S4
     S14 --> S4
 ```
 
@@ -102,10 +105,12 @@ Guardrails inside the loop:
 - **Duplicate detection** (`InvestigationToolCallCache`) — identical
   tool name + args is served from cache instead of re-executed, and the LLM
   is told explicitly it already has that result.
-- **Stagnation breaker** — after `MAX_STAGNANT_ITERATIONS = 2` consecutive
-  iterations that produced only duplicate calls, the model gets one nudge,
-  then tool access is stripped to force a text-only conclusion rather than
-  burning the rest of the loop budget.
+- **Stagnation breaker** — any iteration where every tool call was a
+  replayed duplicate (no fresh evidence) appends a nudge telling the model to
+  stop repeating itself and try something different. After
+  `MAX_STAGNANT_ITERATIONS = 2` such iterations in a row (two nudges), tool
+  access is stripped on the next turn to force a text-only conclusion rather
+  than burning the rest of the loop budget.
 - **CLI-backed models** (Codex, Claude Code CLI) use a subclass,
   `CLIBackedInvestigationAgent`, that overrides conclusion acceptance to
   refuse an early stop until every planned tool has been called — these
