@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from platform.deployment import prep
+from platform.deployment.ecr_deploy import prep
 
 
 def test_validate_deploy_env_passes_with_required_vars(

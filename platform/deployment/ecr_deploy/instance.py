@@ -24,7 +24,7 @@ from platform.deployment.aws.config import (
     SSM_PROVISION_CMD_POLL_INTERVAL_SECONDS,
 )
 from platform.deployment.aws.ssm import run_ssm_shell_command
-from platform.deployment.stack import GATEWAY_CONTAINER_NAME, WEB_CONTAINER_NAME
+from platform.deployment.ecr_deploy.stack import GATEWAY_CONTAINER_NAME, WEB_CONTAINER_NAME
 
 logger = logging.getLogger(__name__)
 
@@ -316,8 +316,7 @@ def wait_for_web_process(
             time.sleep(poll_interval)
 
     raise TimeoutError(
-        f"Web container on {instance_id} did not become ready "
-        f"after {max_attempts * poll_interval}s"
+        f"Web container on {instance_id} did not become ready after {max_attempts * poll_interval}s"
     )
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -19,11 +20,17 @@ def opensre_home(monkeypatch, tmp_path: Path) -> Path:
     return home
 
 
-def _seed(alert: str, taxonomy: MissTaxonomy, *, feedback_id: str = "fb") -> dict:
+def _seed(
+    alert: str,
+    taxonomy: MissTaxonomy,
+    *,
+    feedback_id: str = "fb",
+    timestamp: str | None = None,
+) -> dict:
     return record_miss(
         {
             "feedback_id": feedback_id,
-            "timestamp": "2026-06-02T10:00:00+00:00",
+            "timestamp": timestamp or datetime.now(UTC).isoformat(),
             "run_id": f"run-{feedback_id}",
             "alert_name": alert,
             "rating": "inaccurate",

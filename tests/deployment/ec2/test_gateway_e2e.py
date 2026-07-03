@@ -20,7 +20,7 @@ import pytest
 import requests
 
 from platform.deployment.aws.ssm import run_ssm_shell_command
-from platform.deployment.instance import (
+from platform.deployment.ecr_deploy.instance import (
     GATEWAY_CONTAINER_NAME,
     WEB_CONTAINER_NAME,
     poll_deployment_health,

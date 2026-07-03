@@ -18,6 +18,11 @@ MANAGED_TAG_VALUE = "sdk"
 # ─── EC2 instance ─────────────────────────────────────────────────────────────
 INSTANCE_TYPE = "t3.micro"
 AL2023_AMI_SSM_PARAMETER = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
+# Ubuntu 22.04 LTS (Jammy) — ships glibc 2.35, required by the pre-built opensre
+# PyInstaller binary.  AL2023 only ships glibc 2.34 so the binary fails there.
+UBUNTU2204_AMI_SSM_PARAMETER = (
+    "/aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id"
+)
 EC2_ROOT_DEVICE_NAME = "/dev/xvda"
 EC2_VOLUME_SIZE_GB = 30
 EC2_VOLUME_TYPE = "gp3"
@@ -59,3 +64,12 @@ GATEWAY_HEALTH_POLL_INTERVAL_SECONDS = 15
 GATEWAY_HEALTH_MAX_ATTEMPTS = 60
 GATEWAY_LOG_TAIL_LINES = 200
 GATEWAY_READY_LOG_SENTINEL = "polling started"
+
+# ─── Gateway AMI baking ────────────────────────────────────────────────────────
+GATEWAY_AMI_NAME_PREFIX = "opensre-gateway"
+GATEWAY_BUILDER_INSTANCE_TYPE = "t3.small"
+GATEWAY_AMI_WAITER_DELAY_SECONDS = 30
+GATEWAY_AMI_WAITER_MAX_ATTEMPTS = 40  # 20 minutes max
+GATEWAY_AMI_GIT_REF_ENV = "OPENSRE_GATEWAY_GIT_REF"
+GATEWAY_AMI_ID_ENV = "OPENSRE_GATEWAY_AMI_ID"
+GATEWAY_AMI_DESTROY_PURGE_ENV = "OPENSRE_GATEWAY_DESTROY_PURGE_AMI"

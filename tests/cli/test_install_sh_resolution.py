@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shlex
 import subprocess
 import sys
 import textwrap
@@ -35,7 +36,7 @@ def _run_resolution(
     fake_home.mkdir(exist_ok=True)
 
     script = textwrap.dedent(f"""\
-        __fns=$(awk 'p&&/^ps_escape\\(\\)/{{exit}} /^path_has_dir\\(\\)/{{p=1}} p{{print}}' {INSTALL_SH})
+        __fns=$(awk 'p&&/^ps_escape\\(\\)/{{exit}} /^path_has_dir\\(\\)/{{p=1}} p{{print}}' {shlex.quote(str(INSTALL_SH))})
         if [ -z "$__fns" ]; then
             echo "resolve_install_dir block not found in install.sh" >&2
             exit 1

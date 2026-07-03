@@ -28,12 +28,12 @@ from platform.deployment.aws.ec2 import (
     wait_for_running,
 )
 from platform.deployment.aws.ssm import wait_for_ssm_registration
-from platform.deployment.instance import (
+from platform.deployment.ecr_deploy.instance import (
     provision_instance_via_ssm,
     wait_for_deployment_ready,
 )
-from platform.deployment.prep import validate_deploy_env
-from platform.deployment.stack import (
+from platform.deployment.ecr_deploy.prep import validate_deploy_env
+from platform.deployment.ecr_deploy.stack import (
     delete_outputs,
     get_stack,
     image_uri_exists,
@@ -45,7 +45,7 @@ from platform.deployment.stack import (
 )
 
 REGION = DEFAULT_REGION
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 DOCKERFILE = REPO_ROOT / "Dockerfile"
 _ABORT_IF_EXISTS_ENV = "OPENSRE_DEPLOY_ABORT_IF_EXISTS"
 _IMAGE_URI_ENV = "OPENSRE_IMAGE_URI"

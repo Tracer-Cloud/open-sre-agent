@@ -1,0 +1,33 @@
+[Unit]
+Description=OpenSRE Telegram Gateway
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=120
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=opensre
+Group=opensre
+
+# HOME must be set explicitly so ~/.opensre/* paths resolve correctly
+# for the gateway SQLite db, session files, integrations config, etc.
+Environment=HOME=/var/lib/opensre-gateway
+
+# Env file written by SSM provisioning (deploy step, not bake step)
+EnvironmentFile=/etc/opensre/gateway.env
+
+ExecStart=/opt/opensre/.venv/bin/opensre gateway telegram
+
+Restart=always
+RestartSec=5
+TimeoutStartSec=30
+TimeoutStopSec=20
+
+# Keep logs in journald; rotate handled by system journal limits
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=opensre-gateway
+
+[Install]
+WantedBy=multi-user.target

@@ -93,9 +93,10 @@ def test_check_llm_provider_hosted_keyring_key(monkeypatch) -> None:
 
 
 def test_check_llm_provider_non_secret_env_stays_env_only(monkeypatch) -> None:
+    monkeypatch.setenv("GRAFANA_CONFIG_SKIP_ENV_FILE", "1")
     monkeypatch.setenv("LLM_PROVIDER", "bedrock")
     monkeypatch.delenv("AWS_REGION", raising=False)
-    monkeypatch.setenv("AWS_DEFAULT_REGION", "")
+    monkeypatch.delenv("AWS_DEFAULT_REGION", raising=False)
 
     ok, detail = doctor._check_llm_provider()
 

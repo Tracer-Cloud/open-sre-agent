@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from platform.deployment import lifecycle
+from platform.deployment.ecr_deploy import lifecycle
 
 
 def test_cleanup_skips_when_no_existing_deployment(
@@ -20,6 +20,7 @@ def test_cleanup_terminates_orphans_then_runs_destroy(
     terminated: list[str] = []
     destroy_calls: list[int] = []
 
+    monkeypatch.delenv("OPENSRE_DEPLOY_ABORT_IF_EXISTS", raising=False)
     monkeypatch.setattr(lifecycle, "outputs_exists", lambda: True)
     monkeypatch.setattr(
         lifecycle,
@@ -44,6 +45,7 @@ def test_cleanup_terminates_orphans_without_outputs(
     terminated: list[str] = []
     destroy_calls: list[int] = []
 
+    monkeypatch.delenv("OPENSRE_DEPLOY_ABORT_IF_EXISTS", raising=False)
     monkeypatch.setattr(lifecycle, "outputs_exists", lambda: False)
     monkeypatch.setattr(
         lifecycle, "find_stack_instance_ids", lambda *_args, **_kwargs: ["i-orphan"]

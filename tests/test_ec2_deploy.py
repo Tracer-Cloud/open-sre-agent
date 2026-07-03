@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from platform.deployment import lifecycle as deploy_module
+from platform.deployment.ecr_deploy import lifecycle as deploy_module
 
 _FAKE_IMAGE_URI = "123456789012.dkr.ecr.us-east-1.amazonaws.com/opensre:latest"
 
@@ -61,7 +61,7 @@ def test_deploy_uses_saved_image_uri_when_env_not_set(
     tmp_path: pytest.TempPathFactory,
 ) -> None:
     """deploy() falls back to the saved URI file when OPENSRE_IMAGE_URI is not set."""
-    import platform.deployment.stack as stack_module
+    import platform.deployment.ecr_deploy.stack as stack_module
 
     uri_file = tmp_path / "image-uri.txt"
     uri_file.write_text(_FAKE_IMAGE_URI + "\n")
@@ -81,9 +81,7 @@ def test_deploy_uses_saved_image_uri_when_env_not_set(
         },
     )
     monkeypatch.setattr(deploy_module, "get_latest_al2023_ami", lambda *_a, **_kw: "ami-x")
-    monkeypatch.setattr(
-        deploy_module, "launch_instance", lambda *_a, **_kw: {"InstanceId": "i-x"}
-    )
+    monkeypatch.setattr(deploy_module, "launch_instance", lambda *_a, **_kw: {"InstanceId": "i-x"})
     monkeypatch.setattr(
         deploy_module,
         "wait_for_running",

@@ -38,6 +38,20 @@ def get_latest_al2023_ami(region: str = DEFAULT_REGION) -> str:
     return str(resp["Parameter"]["Value"])
 
 
+def get_latest_ubuntu2204_ami(region: str = DEFAULT_REGION) -> str:
+    """Find the latest Ubuntu 22.04 LTS (Jammy) x86_64 AMI via Canonical's SSM parameter.
+
+    Ubuntu 22.04 ships glibc 2.35, which satisfies the pre-built opensre PyInstaller
+    binary's runtime requirement.  Amazon Linux 2023 only ships glibc 2.34 and will
+    fail with a ``GLIBC_2.35 not found`` error at binary launch time.
+    """
+    from platform.deployment.aws.config import UBUNTU2204_AMI_SSM_PARAMETER
+
+    ssm = get_boto3_client("ssm", region)
+    resp = ssm.get_parameter(Name=UBUNTU2204_AMI_SSM_PARAMETER)
+    return str(resp["Parameter"]["Value"])
+
+
 def create_instance_profile(
     role_name: str,
     profile_name: str,
@@ -240,6 +254,83 @@ def wait_for_running(instance_id: str, region: str = DEFAULT_REGION) -> dict[str
 
     logger.info("Instance %s running at %s", instance_id, public_ip)
     return {"InstanceId": instance_id, "PublicIpAddress": public_ip}
+
+
+def create_image_from_instance(
+    instance_id: str,
+    name: str,
+    stack_name: str,
+    *,
+    region: str = DEFAULT_REGION,
+) -> str:
+    """Create an AMI from a running instance and wait until it is available.
+
+    AWS stops the instance, takes the snapshot, then restarts it.  The caller
+    is responsible for terminating the builder instance afterward.
+
+    Returns the new AMI id (e.g. ``ami-0abc123...``).
+    """
+    from platform.deployment.aws.config import (
+        GATEWAY_AMI_WAITER_DELAY_SECONDS,
+        GATEWAY_AMI_WAITER_MAX_ATTEMPTS,
+    )
+
+    ec2 = get_boto3_client("ec2", region)
+    tags = get_standard_tags(stack_name)
+    tags.append({"Key": "Name", "Value": name})
+
+    resp = ec2.create_image(
+        InstanceId=instance_id,
+        Name=name,
+        NoReboot=False,
+        TagSpecifications=[{"ResourceType": "image", "Tags": tags}],
+    )
+    image_id = str(resp["ImageId"])
+    logger.info("Creating AMI %s from instance %s", image_id, instance_id)
+
+    waiter = ec2.get_waiter("image_available")
+    waiter.wait(
+        ImageIds=[image_id],
+        WaiterConfig={
+            "Delay": GATEWAY_AMI_WAITER_DELAY_SECONDS,
+            "MaxAttempts": GATEWAY_AMI_WAITER_MAX_ATTEMPTS,
+        },
+    )
+    logger.info("AMI %s is now available", image_id)
+    return image_id
+
+
+def deregister_image(image_id: str, *, region: str = DEFAULT_REGION) -> None:
+    """Deregister an AMI and delete its backing EBS snapshot.
+
+    Tolerates ``InvalidAMIID.NotFound`` so destroy() is idempotent.
+    """
+    ec2 = get_boto3_client("ec2", region)
+
+    try:
+        resp = ec2.describe_images(ImageIds=[image_id])
+        images = resp.get("Images", [])
+        snapshot_ids: list[str] = []
+        for image in images:
+            for mapping in image.get("BlockDeviceMappings", []):
+                ebs = mapping.get("Ebs", {})
+                if ebs.get("SnapshotId"):
+                    snapshot_ids.append(str(ebs["SnapshotId"]))
+
+        ec2.deregister_image(ImageId=image_id)
+        logger.info("Deregistered AMI %s", image_id)
+
+        for snapshot_id in snapshot_ids:
+            try:
+                ec2.delete_snapshot(SnapshotId=snapshot_id)
+                logger.info("Deleted snapshot %s", snapshot_id)
+            except ClientError as e:
+                if "InvalidSnapshot.NotFound" not in str(e):
+                    logger.warning("Failed to delete snapshot %s: %s", snapshot_id, e)
+    except ClientError as e:
+        if "InvalidAMIID.NotFound" not in str(e):
+            raise
+        logger.warning("AMI %s already gone", image_id)
 
 
 def terminate_instance(instance_id: str, region: str = DEFAULT_REGION) -> None:

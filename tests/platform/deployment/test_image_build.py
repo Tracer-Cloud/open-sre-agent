@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-import platform.deployment.stack as stack_module
-from platform.deployment import lifecycle as deploy_module
-from platform.deployment.lifecycle import _IMAGE_URI_ENV
+import platform.deployment.ecr_deploy.stack as stack_module
+from platform.deployment.ecr_deploy import lifecycle as deploy_module
+from platform.deployment.ecr_deploy.lifecycle import _IMAGE_URI_ENV
 
 _FAKE_URI = "123456789012.dkr.ecr.us-east-1.amazonaws.com/opensre:latest"
 

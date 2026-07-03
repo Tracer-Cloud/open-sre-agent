@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from platform.deployment import lifecycle
+from platform.deployment.ecr_deploy import lifecycle
 
 
 def _stub_destroy_dependencies(monkeypatch: pytest.MonkeyPatch) -> list[str]:

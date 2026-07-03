@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,6 +16,8 @@ ECR_REPO_NAME = "opensre"
 WEB_CONTAINER_NAME = "opensre-web"
 GATEWAY_CONTAINER_NAME = "opensre-gateway"
 DEPLOY_LOG_PATH = "/var/log/opensre-deploy.log"
+
+_STACK_SUFFIX_ENV = "OPENSRE_STACK_SUFFIX"
 
 _OUTPUTS_DIR = OPENSRE_HOME_DIR / "deployments"
 _IMAGE_URI_FILE = _OUTPUTS_DIR / "image-uri.txt"
@@ -41,7 +44,27 @@ DEPLOY_STACK = DeployStack(
 
 
 def get_stack() -> DeployStack:
-    """Return the unified EC2 deployment stack configuration."""
+    """Return the unified EC2 deployment stack configuration.
+
+    When ``OPENSRE_STACK_SUFFIX`` is set, all resource names are suffixed with
+    ``-<value>`` so each developer gets an isolated set of AWS resources (EC2
+    instance, IAM role/profile, ECR repo) within a shared account.
+
+    Example — with ``OPENSRE_STACK_SUFFIX=joe``:
+        stack_name         → ``opensre-ec2-joe``
+        ecr_repo_name      → ``opensre-joe``
+        web_container_name → ``opensre-web-joe``
+        gateway_container  → ``opensre-gateway-joe``
+    """
+    suffix = os.getenv(_STACK_SUFFIX_ENV, "").strip()
+    if suffix:
+        return DeployStack(
+            stack_name=f"{STACK_NAME}-{suffix}",
+            ecr_repo_name=f"{ECR_REPO_NAME}-{suffix}",
+            web_container_name=f"{WEB_CONTAINER_NAME}-{suffix}",
+            gateway_container_name=f"{GATEWAY_CONTAINER_NAME}-{suffix}",
+            log_path=DEPLOY_LOG_PATH,
+        )
     return DEPLOY_STACK
 
 
