@@ -157,3 +157,23 @@ class TestMessagingStatusCommand:
         assert result.exit_code == 0
         assert "Inbound enabled" in result.output
         assert "6514715683" in result.output
+
+
+class TestMessagingGroupNoSubcommand:
+    def test_bare_group_shows_help_and_exits_zero(self) -> None:
+        # A bare group is a help request, not an error — must exit 0 (not Click's 2)
+        # so the interactive shell doesn't surface a scary "non-zero code" line.
+        runner = CliRunner()
+        result = runner.invoke(messaging, [])
+        assert result.exit_code == 0
+        assert "Commands:" in result.output
+        for sub in ("allow", "pair", "revoke", "status"):
+            assert sub in result.output
+
+    def test_pair_message_points_to_platform_not_shell(self, _isolated_store: Path) -> None:
+        runner = CliRunner()
+        result = runner.invoke(messaging, ["pair", "--platform", "telegram"])
+        assert result.exit_code == 0
+        assert "not this shell" in result.output
+        assert "/pair" in result.output
+        assert "gateway" in result.output.lower()

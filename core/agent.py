@@ -65,6 +65,7 @@ if TYPE_CHECKING:
         TurnAccounting,
     )
 
+
 @dataclass
 class AgentRunResult:
     """Outcome of :meth:`Agent.run`.

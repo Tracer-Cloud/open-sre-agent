@@ -8,6 +8,7 @@ import time
 from collections.abc import Iterable
 
 from gateway.polling.telegram_poller.client import TelegramBotClient
+from integrations.telegram.formatting import markdown_to_telegram_html
 from platform.common.truncation import truncate
 
 _MESSAGE_LIMIT = 4096
@@ -93,11 +94,27 @@ class GatewayOutputSink:
 
     def _finalize(self, text: str) -> None:
         final = truncate(text, _MESSAGE_LIMIT, suffix="…")
-        if self._message_id:
-            ok, _ = self._client.edit_message_text(self._chat_id, self._message_id, final)
-            if ok:
-                logger.info("outbound chat=%s text=%r", self._chat_id, _log_preview(final))
-                return
-        ok, _, _ = self._client.send_message(self._chat_id, final)
-        if ok:
+        html_final = markdown_to_telegram_html(final)
+        if self._message_id and self._edit_final(html_final, final):
             logger.info("outbound chat=%s text=%r", self._chat_id, _log_preview(final))
+            return
+        if self._send_final(html_final, final):
+            logger.info("outbound chat=%s text=%r", self._chat_id, _log_preview(final))
+
+    def _edit_final(self, html_text: str, plain_text: str) -> bool:
+        # Render the answer's Markdown as Telegram HTML, falling back to plain text
+        # if the API rejects the markup so a message is never lost to a bad tag.
+        ok, _ = self._client.edit_message_text(
+            self._chat_id, self._message_id, html_text, parse_mode="HTML"
+        )
+        if ok:
+            return True
+        ok, _ = self._client.edit_message_text(self._chat_id, self._message_id, plain_text)
+        return ok
+
+    def _send_final(self, html_text: str, plain_text: str) -> bool:
+        ok, _, _ = self._client.send_message(self._chat_id, html_text, parse_mode="HTML")
+        if ok:
+            return True
+        ok, _, _ = self._client.send_message(self._chat_id, plain_text)
+        return ok

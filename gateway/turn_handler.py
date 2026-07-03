@@ -67,8 +67,11 @@ def build_gateway_turn_handler(
         outbound_text = (
             turn_result.assistant_response_text or turn_result.action_result.response_text
         ).strip()
-        if not turn_result.answered and outbound_text:
-            sink.finalize(outbound_text)
+        # A streamed answer (answered=True) already resolved the "Working…" status
+        # via the sink. Otherwise always finalize so the placeholder never hangs —
+        # even when the turn produced no text.
+        if not turn_result.answered:
+            sink.finalize(outbound_text or "I didn't have anything to add for that.")
 
     return handle
 
