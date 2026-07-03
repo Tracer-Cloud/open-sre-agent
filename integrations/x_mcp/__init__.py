@@ -410,7 +410,13 @@ async def _list_tools_async(config: XMCPConfig) -> list[types.Tool]:
 
 
 def _list_tools_sync(config: XMCPConfig) -> list[types.Tool]:
-    return cast(list[types.Tool], _run_async(_list_tools_async(config)))
+    # Bound session open (transport connect + MCP `initialize` handshake) and
+    # the list_tools RPC together, so a server that accepts a connection but
+    # never completes the handshake or responds cannot hang the pipeline.
+    return cast(
+        list[types.Tool],
+        _run_async(asyncio.wait_for(_list_tools_async(config), timeout=config.timeout_seconds)),
+    )
 
 
 def list_x_mcp_tools(config: XMCPConfig) -> list[XMCPToolDescriptor]:
@@ -432,12 +438,7 @@ async def _call_tool_async(
     arguments: dict[str, object] | None = None,
 ) -> XMCPToolCallResult:
     async with _open_x_mcp_session(config) as session:
-        # Bound the call uniformly across transports so a hung MCP tool cannot
-        # block the investigation pipeline indefinitely.
-        result = await asyncio.wait_for(
-            session.call_tool(tool_name, arguments or {}),
-            timeout=config.timeout_seconds,
-        )
+        result = await session.call_tool(tool_name, arguments or {})
         payload = _tool_result_to_dict(result)
         payload["tool"] = tool_name
         payload["arguments"] = arguments or {}
@@ -450,9 +451,16 @@ def call_x_mcp_tool(
     arguments: dict[str, object] | None = None,
 ) -> XMCPToolCallResult:
     """Call an X MCP tool and normalize the result."""
+    # Bound session open (transport connect + MCP `initialize` handshake) and
+    # the call_tool RPC together, so a server that accepts a connection but
+    # never completes the handshake or responds cannot hang the pipeline.
     return cast(
         XMCPToolCallResult,
-        _run_async(_call_tool_async(config, tool_name, arguments)),
+        _run_async(
+            asyncio.wait_for(
+                _call_tool_async(config, tool_name, arguments), timeout=config.timeout_seconds
+            )
+        ),
     )
 
 
