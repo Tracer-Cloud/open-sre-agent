@@ -57,6 +57,9 @@ from surfaces.cli.wizard.integration_health import IntegrationHealthResult
 from surfaces.cli.wizard.probes import ProbeResult, probe_local_target, probe_remote_target
 from surfaces.cli.wizard.store import get_store_path, save_local_config
 from surfaces.cli.wizard.validation import build_demo_action_response as _build_demo_action_response
+from surfaces.interactive_shell.runtime.startup.first_launch_github import (
+    require_startup_github_login,
+)
 
 DEFAULT_GITHUB_MCP_MODE = _integration_configurators_module.DEFAULT_GITHUB_MCP_MODE
 DEFAULT_GITHUB_MCP_URL = _integration_configurators_module.DEFAULT_GITHUB_MCP_URL
@@ -673,6 +676,8 @@ def _run_cli_llm_onboarding(
 def run_wizard(_argv: list[str] | None = None) -> int:
     """Run the interactive wizard."""
     _render_header()
+    if not require_startup_github_login(_console):
+        return 1
     defaults = _local_defaults()
     saved_provider_value = defaults["provider"] if isinstance(defaults["provider"], str) else None
     saved_model_value = defaults["model"] if isinstance(defaults["model"], str) else ""
