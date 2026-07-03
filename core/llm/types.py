@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import dataclass, field
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Protocol, TypeAlias, runtime_checkable
 
 from core.types import RuntimeTool
 
-type ResolvedIntegrations = dict[str, dict[str, object]]
+ResolvedIntegrations: TypeAlias = dict[str, Any]  # noqa: UP040
 
 
 @dataclass(frozen=True)
@@ -68,7 +68,7 @@ class AgentLLMClient(Protocol):
 
     def tool_schemas[RuntimeToolT: RuntimeTool](
         self, tools: list[RuntimeToolT]
-    ) -> list[dict[str, object]]:
+    ) -> list[dict[str, Any]]:
         """Translate runtime tools into the provider's tool-schema payloads."""
 
     def invoke(

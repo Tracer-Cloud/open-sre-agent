@@ -16,7 +16,7 @@ roof without changing shape.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Generic, TypeVar
 
 from core.agent import Agent
 from core.events import RuntimeEventCallback
@@ -24,9 +24,11 @@ from core.execution import ToolExecutionHooks
 from core.llm.types import AgentLLMClient, ResolvedIntegrations
 from core.types import RuntimeTool
 
+RuntimeToolT = TypeVar("RuntimeToolT", bound=RuntimeTool)
+
 
 @dataclass(frozen=True)
-class AgentConfig[RuntimeToolT: RuntimeTool]:
+class AgentConfig(Generic[RuntimeToolT]):  # noqa: UP046
     """Immutable per-turn config the runtime :class:`Agent` needs to construct.
 
     Surfaces assemble one of these and hand it to :func:`build_agent`.
@@ -42,7 +44,7 @@ class AgentConfig[RuntimeToolT: RuntimeTool]:
     on_runtime_event: RuntimeEventCallback | None = None
 
 
-def build_agent[RuntimeToolT: RuntimeTool](
+def build_agent(  # noqa: UP047
     config: AgentConfig[RuntimeToolT],
 ) -> Agent[RuntimeToolT]:
     """Construct a runtime :class:`Agent` from an :class:`AgentConfig`.
