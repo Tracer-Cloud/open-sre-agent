@@ -19,15 +19,15 @@ class _NoToolLLM:
         self.seen_system: str | None = None
         self.seen_messages: list[dict[str, object]] | None = None
 
-    def tool_schemas(self, _tools: list[AgentTool]) -> list[dict[str, object]]:
+    def tool_schemas(self, _tools: list[Any]) -> list[dict[str, Any]]:
         return []
 
     def invoke(
         self,
-        messages: list[dict[str, object]],
+        messages: list[dict[str, Any]],
         *,
         system: str | None = None,
-        tools: list[dict[str, object]] | None = None,
+        tools: list[dict[str, Any]] | None = None,
     ) -> AgentLLMResponse:
         self.seen_system = system
         self.seen_messages = messages
