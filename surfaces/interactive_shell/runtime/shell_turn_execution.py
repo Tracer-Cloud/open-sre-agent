@@ -3,13 +3,14 @@
 Adapter-only: binds the shell's action-turn (``action_turn``), gather pass
 (``integration_tool_gathering``), and answer (``answer_turn``) adapters to the
 surface-agnostic ``run_turn`` engine. Each adapter owns its own binding; this
-file only composes them and attaches turn accounting.
+file only composes them and attaches turn accounting. The injection contracts
+live in ``turn_seams``.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any, Protocol
+from typing import Unpack
 
 from rich.console import Console
 
@@ -26,60 +27,13 @@ from surfaces.interactive_shell.runtime.core.turn_accounting import ShellTurnAcc
 from surfaces.interactive_shell.runtime.integration_tool_gathering import (
     gather_integration_tool_evidence,
 )
+from surfaces.interactive_shell.runtime.turn_seams import (
+    AnswerKwargs,
+    AnswerShellQuestion,
+    GatherEvidence,
+    RunActionToolTurn,
+)
 from surfaces.interactive_shell.utils.telemetry import LlmRunInfo, PromptRecorder
-
-
-# Dependency seams: tests inject doubles through the explicit parameters below.
-# Typed as protocols (not bare Callable[..., X]) so an injected double must match
-# the exact call shape execute_shell_turn drives — a mis-shaped double fails at
-# type-check, not at runtime.
-class RunActionToolTurn(Protocol):
-    """Action-selection seam: run one action turn and return its facts."""
-
-    def __call__(
-        self,
-        message: str,
-        session: Session,
-        console: Console,
-        *,
-        confirm_fn: Callable[[str], str] | None = ...,
-        is_tty: bool | None = ...,
-        request_exit: Callable[[], None] | None = ...,
-        turn_ctx: TurnContext | None = ...,
-        output: OutputSink | None = ...,
-        tool_hooks: ToolExecutionHooks | None = ...,
-    ) -> ToolCallingTurnResult: ...
-
-
-class GatherEvidence(Protocol):
-    """Gather seam: collect read-only integration evidence, or None."""
-
-    def __call__(
-        self,
-        message: str,
-        session: Session,
-        console: Console,
-        *,
-        is_tty: bool | None = ...,
-    ) -> str | None: ...
-
-
-class AnswerShellQuestion(Protocol):
-    """Answer seam: respond via the grounded conversational assistant."""
-
-    def __call__(
-        self,
-        message: str,
-        session: Session,
-        console: Console,
-        *,
-        confirm_fn: Callable[[str], str] | None = ...,
-        is_tty: bool | None = ...,
-        tool_observation: str | None = ...,
-        tool_observation_on_screen: bool = ...,
-        turn_ctx: TurnContext | None = ...,
-        output: OutputSink | None = ...,
-    ) -> LlmRunInfo | None: ...
 
 
 def execute_shell_turn(
@@ -101,8 +55,8 @@ def execute_shell_turn(
 
     The action driver, gather pass, and conversational assistant default to the
     shell adapters but are overridable via ``execute_actions`` / ``gather_evidence``
-    / ``answer_agent`` (the test injection seams). They are bound to the live
-    ``session``/``console`` here and handed to
+    / ``answer_agent`` (the test injection seams, typed in ``turn_seams``). They are
+    bound to the live ``session``/``console`` here and handed to
     :func:`core.agent_harness.agents.turn_orchestrator.run_turn`, which performs
     the pure path routing.
     """
@@ -131,17 +85,10 @@ def execute_shell_turn(
             tool_hooks=tool_hooks,
         )
 
-    def answer_bound(t: str, **kwargs: Any) -> LlmRunInfo | None:
-        # Pure passthrough so the engine controls the exact call shape: when it
-        # omits ``tool_observation_on_screen`` (no evidence gathered) the bound
-        # call omits it too, matching the plain conversational path.
-        return _answer(
-            t,
-            session,
-            console,
-            output=resolved_output,
-            **kwargs,
-        )
+    def answer_bound(t: str, **kwargs: Unpack[AnswerKwargs]) -> LlmRunInfo | None:
+        # run_turn controls which keys are present (it omits tool_observation_on_screen
+        # on the plain path); AnswerKwargs types them without forcing presence.
+        return _answer(t, session, console, output=resolved_output, **kwargs)
 
     def gather_bound(t: str, *, is_tty: bool | None = None) -> str | None:
         return _gather(t, session, console, is_tty=is_tty)
@@ -158,9 +105,4 @@ def execute_shell_turn(
     )
 
 
-__all__ = [
-    "AnswerShellQuestion",
-    "GatherEvidence",
-    "RunActionToolTurn",
-    "execute_shell_turn",
-]
+__all__ = ["execute_shell_turn"]
