@@ -56,7 +56,7 @@ def _mark_messages(messages: list[dict[str, Any]], key: str) -> None:
         msg[key] = True
 
 
-class ConnectedInvestigationAgent(AgentEventEmitter, AgentToolFilter[RegisteredTool]):
+class ConnectedInvestigationAgent(AgentEventEmitter, AgentToolFilter):
     """ReAct loop scoped to the tools enabled by connected integrations.
 
     Composes the shared :class:`~core.agent_mixins.AgentEventEmitter` (event

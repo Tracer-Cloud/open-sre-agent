@@ -92,7 +92,7 @@ class AgentRunResult:
 ToolLoopResult = AgentRunResult
 
 
-class Agent[RuntimeToolT: RuntimeTool](AgentEventEmitter, AgentToolFilter[RuntimeToolT]):
+class Agent[RuntimeToolT: RuntimeTool](AgentEventEmitter, AgentToolFilter):
     """Stateful, configurable ReAct agent.
 
     Owns the think → call-tools → observe loop and exposes hook methods so

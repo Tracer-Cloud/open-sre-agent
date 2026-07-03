@@ -1,9 +1,8 @@
-"""Composable agent behaviors extracted from :class:`core.agent.Agent`.
+"""Reusable agent behavior mixins: event dispatch and tool filtering.
 
-``AgentEventEmitter`` (event dispatch) and ``AgentToolFilter`` (tool narrowing)
-are the only pieces that investigation-style loops — which override ``run()``
-entirely — reuse. Exposing them as mixins lets such loops compose the behavior
-instead of subclassing the full ``Agent`` (composition over inheritance).
+``AgentEventEmitter`` forwards ``(kind, data)`` tuple events and typed runtime
+events to optional callbacks. ``AgentToolFilter`` exposes the tool-narrowing
+hook. ``Agent`` and any custom tool-calling loop compose these mixins.
 """
 
 from __future__ import annotations
