@@ -460,7 +460,7 @@ def _github_wizard_browser_authorize() -> str | None:
     """Run GitHub device-flow browser authorization inside the wizard."""
     from rich.markup import escape
 
-    from integrations.github_mcp_oauth import (
+    from integrations.github.mcp_oauth import (
         GitHubDeviceCode,
         GitHubDeviceFlowError,
         authorize_github_via_device_flow,

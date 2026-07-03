@@ -391,7 +391,7 @@ def _github_browser_authorize() -> str | None:
     Returns the access token, or ``None`` when the flow is unavailable so the
     caller can fall back to manual token entry.
     """
-    from integrations.github_mcp_oauth import (
+    from integrations.github.mcp_oauth import (
         GitHubDeviceCode,
         GitHubDeviceFlowError,
         authorize_github_via_device_flow,

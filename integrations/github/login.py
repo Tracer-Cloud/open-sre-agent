@@ -18,7 +18,7 @@ from integrations.github.mcp import (
     build_github_mcp_config,
     validate_github_mcp_config,
 )
-from integrations.github_mcp_oauth import (
+from integrations.github.mcp_oauth import (
     GitHubDeviceCode,
     authorize_github_via_device_flow,
 )
