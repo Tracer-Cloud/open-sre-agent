@@ -23,7 +23,6 @@ from core.llm.agent_llm_client import get_agent_llm
 from core.llm.types import ToolCall
 from core.llm_invoke_errors import classify_llm_invoke_failure
 from core.messages import MessageFormatter
-from core.tool_framework.registered_tool import RegisteredTool
 from platform.observability import debug_print
 from platform.observability import get_progress_tracker as get_tracker
 from platform.observability.tool_trace import redact_sensitive
@@ -59,13 +58,11 @@ def _mark_messages(messages: list[dict[str, Any]], key: str) -> None:
 class ConnectedInvestigationAgent(AgentEventEmitter, AgentToolFilter):
     """ReAct loop scoped to the tools enabled by connected integrations.
 
-    Composes the shared :class:`~core.agent_mixins.AgentEventEmitter` (event
-    dispatch) and :class:`~core.agent_mixins.AgentToolFilter` (tool narrowing)
-    rather than subclassing :class:`~core.agent.Agent`: the investigation loop is
-    specialised (seed calls, evidence collection, duplicate detection, stagnation
-    handling) and owns its own ``run()``, so it needs those two hooks, not the
-    generic agent loop. Config (LLM, tools, prompt, resolved integrations) is
-    assembled inline in ``run()`` from ``state``.
+    Owns a specialised investigation ``run()`` — seed calls, evidence collection,
+    duplicate detection, and stagnation handling — assembling its config (LLM,
+    tools, prompt, resolved integrations) inline from ``state``. Uses two agent
+    hooks: :class:`~core.agent_mixins.AgentEventEmitter` for event dispatch and
+    :class:`~core.agent_mixins.AgentToolFilter` for tool narrowing.
     """
 
     def _should_accept_conclusion(
@@ -102,7 +99,7 @@ class ConnectedInvestigationAgent(AgentEventEmitter, AgentToolFilter):
         )
         self._emit("tool_end", tool_event_payload(tc, output=output))
 
-    def run(  # type: ignore[override]
+    def run(
         self,
         state: InvestigationState,
         on_event: LoopEventCallback | None = None,

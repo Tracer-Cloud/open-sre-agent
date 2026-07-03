@@ -68,7 +68,7 @@ def resolve_integrations(state: Mapping[str, Any] | None = None) -> dict[str, An
 
 
 def resolve_and_cache_integrations(session: SessionStore) -> dict[str, Any]:
-    """Alias for :meth:`core.agent.Agent.resolve_integrations`."""
+    """Resolve a session's integration configs, using and updating its cache."""
     from core.agent import Agent
 
     return Agent.resolve_integrations(session)
