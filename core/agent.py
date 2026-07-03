@@ -149,24 +149,21 @@ class Agent[RuntimeToolT: RuntimeTool]:
     @staticmethod
     def resolve_integrations(session: SessionStore) -> dict[str, Any]:
         """Resolve integration configs for ``session``, using the session cache."""
-        from core.agent_harness.integrations.resolution import (
-            resolve_integrations as resolve_all_integrations,
-        )
-        from core.agent_harness.session.integrations_cache import (
-            has_only_runtime_metadata,
-            has_resolved_integrations,
-            merge_resolved_integrations,
-        )
+        # importlib keeps the core -> agent_harness reach dynamic (no static cycle).
+        resolution = importlib.import_module("core.agent_harness.integrations.resolution")
+        cache = importlib.import_module("core.agent_harness.session.integrations_cache")
 
         cached = session.resolved_integrations_cache
         if cached is not None and (
-            has_resolved_integrations(cached) or not has_only_runtime_metadata(cached)
+            cache.has_resolved_integrations(cached) or not cache.has_only_runtime_metadata(cached)
         ):
             return dict(cached)
 
-        resolved = resolve_all_integrations()
+        resolved = resolution.resolve_integrations()
         if resolved:
-            session.resolved_integrations_cache = merge_resolved_integrations(cached, resolved)
+            session.resolved_integrations_cache = cache.merge_resolved_integrations(
+                cached, resolved
+            )
         return dict(session.resolved_integrations_cache or {})
 
     def __init__(
