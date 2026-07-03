@@ -2,8 +2,8 @@
 
 `agent_harness/` owns the **decoupled agent harness** for two agent shapes:
 the tool-calling loop (`core.agent.Agent` via `build_agent`) and the
-streaming-answer path (`stream_answer` via the `StreamAnswerFn` seam in
-`ports.py`). It orchestrates action tool-calling turns, three-path routing,
+direct-answer path (`stream_answer` via the `StreamAnswerFn` seam in
+`ports.py`, no tools). It orchestrates action tool-calling turns, three-path routing,
 conversational answers, evidence gather, and headless execution. It was
 extracted out of `interactive_shell` so the same harness can run the interactive
 terminal and be invoked headlessly via `agent_harness.agents.headless_agent`.
@@ -153,22 +153,20 @@ uniformity claim with an exception bolted on:
   tools → observe) driven by `llm.invoke`. Built via `AgentConfig` +
   `build_agent` (the construction pattern above). Used by the action,
   evidence/gather, and investigation agents.
-- **Streaming-answer agent** — `turn_orchestrator.stream_answer`, one no-tool
-  grounded text answer streamed via `client.invoke_stream` (the `StreamAnswerFn`
-  seam in `ports.py` — named `Fn`, not `Agent`, to avoid conflating this
-  callable with `core.agent.Agent`). It does **not** use `Agent`, by design: there is no tool
-  loop, no observe step, and it streams on a different client method. A genuinely
-  different modality — not a workaround to be folded into `Agent.run()`.
+- **Direct answer (no tools)** — `turn_orchestrator.stream_answer`, one grounded
+  text answer streamed via `client.invoke_stream` (the `StreamAnswerFn` seam in
+  `ports.py`). It does **not** use `Agent`: there is no tool loop and no observe
+  step, and it streams on a different client method.
 
 A new agent is one shape or the other: if it calls tools it is the tool-calling
-shape; if it streams a text answer it is the streaming shape.
+shape; if it answers directly without tools it is the direct-answer shape.
 
 ### Contributor checklist (agent changes)
 
 Before opening or merging an agent PR, confirm:
 
 1. **Shape** — State explicitly: tool-calling (`Agent` / `build_agent` /
-   `ExecuteActions`) or streaming-answer (`StreamAnswerFn` / `invoke_stream`).
+   `ExecuteActions`) or direct answer (`StreamAnswerFn` / `invoke_stream`, no tools).
 2. **Entrypoint docstring** — The public function or class documents which shape
    it implements (three lines max; link here if helpful).
 3. **Docs** — Update this file when harness rules change; update

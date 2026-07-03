@@ -357,7 +357,7 @@ path.unlink()
 | Gather | `build_gather_system_prompt` / `_from_turn_context` | `core/agent_harness/prompts/gather.py` |
 | Investigation | `build_investigation_system_prompt` | `tools/investigation/stages/gather_evidence/prompt.py` |
 
-The assistant path is the **streaming-answer** agent shape: it streams via
+The assistant path is the **direct answer** shape (no tools): it streams via
 `invoke_stream(prompt)` and does not use `Agent.run` (the tool-calling shape).
 The two shapes are described in `core/agent_harness/AGENTS.md`.
 

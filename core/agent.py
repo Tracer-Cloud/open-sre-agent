@@ -90,8 +90,8 @@ class Agent[RuntimeToolT: RuntimeTool](AgentEventEmitter, AgentToolFilter):
 
     Owns the think → call-tools → observe loop and exposes hook methods so
     subclasses can customise stopping logic and tool filtering without
-    re-implementing the loop. For the streaming-answer shape (no tools, streams
-    text), see ``core/agent_harness/AGENTS.md``.
+    re-implementing the loop. For the direct-answer shape (no tools), see
+    ``core/agent_harness/AGENTS.md``.
     """
 
     @staticmethod

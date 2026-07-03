@@ -43,7 +43,7 @@ def test_streaming_answer_is_not_tool_calling_shape() -> None:
     assert getattr(stream_answer, "run", None) is None
 
 
-def test_stream_answer_entrypoint_doc_names_streaming_shape() -> None:
+def test_stream_answer_entrypoint_doc_names_direct_answer_shape() -> None:
     doc = inspect.getdoc(stream_answer) or ""
-    assert "streaming-answer" in doc
+    assert "direct answer" in doc
     assert "tool-calling" in doc

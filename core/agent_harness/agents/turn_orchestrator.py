@@ -107,7 +107,7 @@ def _record_action_only_turn(session: SessionStore, message: str, assistant_text
 
 
 def stream_answer(
-    # No-tool streaming answer shared by the interactive shell and headless surfaces.
+    # Direct answer (no tools) shared by the interactive shell and headless surfaces.
     message: str,
     session: SessionStore,
     output: OutputSink,
@@ -124,9 +124,9 @@ def stream_answer(
 ) -> Any | None:
     """Stream one grounded conversational answer (guidance only, no tools).
 
-    The **streaming-answer** path: a single ``invoke_stream`` call with no ReAct
-    loop and no tool use. The **tool-calling** agent is ``core.agent.Agent`` —
-    see ``core/agent_harness/AGENTS.md``.
+    The **direct answer** path (no tools): a single ``invoke_stream`` call with
+    no ReAct loop. The **tool-calling** agent is ``core.agent.Agent`` — see
+    ``core/agent_harness/AGENTS.md``.
 
     ``turn_ctx`` is the immutable per-turn snapshot assembled at turn start.
     When present, snapshot fields (conversation history, integration state,
