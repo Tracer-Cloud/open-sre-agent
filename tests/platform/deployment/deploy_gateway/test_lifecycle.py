@@ -110,6 +110,32 @@ def test_destroy_keeps_ami_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     assert not any(item.startswith("ami:") for item in results["deleted"])
 
 
+def test_cleanup_terminates_orphans_then_runs_destroy_for_iam(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Orphan instances without an outputs file still trigger destroy() for IAM cleanup."""
+    terminated: list[str] = []
+    destroy_calls: list[int] = []
+
+    monkeypatch.delenv("OPENSRE_DEPLOY_ABORT_IF_EXISTS", raising=False)
+    monkeypatch.setattr(lifecycle_module, "outputs_exists", lambda: False)
+    monkeypatch.setattr(
+        lifecycle_module,
+        "find_stack_instance_ids",
+        lambda *_args, **_kwargs: ["i-orphan"],
+    )
+    monkeypatch.setattr(
+        lifecycle_module,
+        "terminate_instance",
+        lambda instance_id, _region: terminated.append(instance_id),
+    )
+    monkeypatch.setattr(lifecycle_module, "destroy", lambda: destroy_calls.append(1) or {})
+
+    assert lifecycle_module.cleanup_existing_deployment() is True
+    assert terminated == ["i-orphan"]
+    assert destroy_calls == [1]
+
+
 def test_destroy_purges_ami_when_opted_in(monkeypatch: pytest.MonkeyPatch) -> None:
     """destroy() deregisters the AMI when OPENSRE_GATEWAY_DESTROY_PURGE_AMI=1."""
     monkeypatch.setenv(GATEWAY_AMI_DESTROY_PURGE_ENV, "1")

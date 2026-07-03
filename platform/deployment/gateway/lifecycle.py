@@ -132,6 +132,8 @@ def cleanup_existing_deployment(*, region: str = DEFAULT_REGION) -> bool:
 
     if has_outputs:
         destroy()
+    elif instance_ids:
+        destroy()
 
     print()
     return True
