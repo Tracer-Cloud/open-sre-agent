@@ -253,13 +253,22 @@ class TestLoaderAutoDiscovery:
         assert before == after
 
     def test_loader_skips_shared_verification_package_but_registry_api_remains_available(
-        self,
+        self, _isolated_registry: None
     ) -> None:
+        import importlib
+
+        import integrations.aws.verifier as aws_verifier
         from integrations._verifiers_loader import _SKIP_INTEGRATION_PACKAGES
 
+        _reset_for_testing()
+
         assert "verification" in _SKIP_INTEGRATION_PACKAGES
-        assert callable(register_verifier)
-        assert callable(get_verifier)
+        assert get_verifier("aws") is None
+
+        importlib.reload(aws_verifier)
+        register_all_verifiers()
+
+        assert get_verifier("aws") is not None
 
 
 class TestVerifyWithValidationResult:
