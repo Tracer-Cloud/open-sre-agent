@@ -16,7 +16,7 @@ def test_resolve_integrations_returns_cached_configs_without_lookup(
     session = Session()
     session.resolved_integrations_cache = {"slack": {"webhook_url": "https://example/hook"}}
 
-    def _unexpected(**_kwargs: object) -> dict[str, Any]:
+    def _unexpected(*_args: object, **_kwargs: object) -> dict[str, Any]:
         raise AssertionError("resolve_integrations() must not run on a cache hit")
 
     monkeypatch.setattr(

@@ -119,7 +119,8 @@ class DefaultToolProvider:
     def _resolved_integrations(self) -> dict[str, Any]:
         from core.agent import Agent
 
-        return dict(Agent.resolve_integrations(self._session))
+        # Agent.resolve_integrations already returns a fresh dict.
+        return Agent.resolve_integrations(self._session)
 
 
 class DefaultReasoningClientProvider:
