@@ -65,7 +65,8 @@ empty plan.
 
 ### 4. The ReAct loop — the core evidence-gathering agent
 
-`ConnectedInvestigationAgent.run()` in `gather_evidence/agent.py`. Before the
+`ConnectedInvestigationAgent.run()` in
+`tools/investigation/stages/gather_evidence/agent.py`. Before the
 model's first turn: the tool set is narrowed to a hard cap
 (`select_investigation_tools`, `MAX_AGENT_TOOL_SCHEMAS = 32`) using the plan
 from stage 3 if present, otherwise alert-source relevance ranking. A handful
@@ -91,9 +92,9 @@ flowchart TD
     S10 -->|no| S12[Execute tool, record evidence]
     S11 --> S13{2 consecutive\nall-duplicate iterations?}
     S12 --> S13
-    S13 -->|yes| S14["Force a tool-free\nfinal iteration"]
+    S13 -->|yes| S14["Strip tool access;\nloop back for one\nfinal llm.invoke"]
     S13 -->|no| S4
-    S14 --> S9
+    S14 --> S4
 ```
 
 Guardrails inside the loop:
@@ -123,24 +124,25 @@ fallback (`parse_root_cause`) if structured parsing fails.
 
 ### 6. `deliver` — publish it
 
-Formats and ships the report to whatever's configured on `state` — Slack,
-GitLab writeback, local `report.md`, etc. See
-[`tools/investigation/reporting/`](../tools/investigation/reporting/).
+Formats and ships the report to the destinations configured in `state` —
+Slack, GitLab writeback, local `report.md`, etc. See
+[`tools/investigation/reporting/`](https://github.com/Tracer-Cloud/opensre/tree/main/tools/investigation/reporting/).
 
 ## Guardrails at a glance
 
 | Guardrail            | Constant                              | Defined in                                   | Purpose                                                        |
 | --------------------- | -------------------------------------- | ---------------------------------------------- | ---------------------------------------------------------------- |
-| Tool schema cap       | `MAX_AGENT_TOOL_SCHEMAS = 32`         | `gather_evidence/tools.py`                    | Bounds per-turn schema payload regardless of registry size.    |
-| Secondary tool reserve | `MAX_SECONDARY_FALLBACK_TOOLS = 3`    | `gather_evidence/tools.py`                    | Guarantees cheap reasoning/knowledge tools survive the cap.     |
+| Tool schema cap       | `MAX_AGENT_TOOL_SCHEMAS = 32`         | `tools/investigation/stages/gather_evidence/tools.py` | Bounds per-turn schema payload regardless of registry size.    |
+| Secondary tool reserve | `MAX_SECONDARY_FALLBACK_TOOLS = 3`    | `tools/investigation/stages/gather_evidence/tools.py` | Guarantees cheap reasoning/knowledge tools survive the cap.     |
 | Loop iteration cap    | `MAX_INVESTIGATION_LOOPS = 20`        | `config/constants/investigation.py`           | Worst-case runtime bound for the ReAct loop.                   |
-| Stagnation breaker    | `MAX_STAGNANT_ITERATIONS = 2`         | `gather_evidence/tools.py`                    | Stops the loop from spinning on duplicate-only iterations.     |
+| Stagnation breaker    | `MAX_STAGNANT_ITERATIONS = 2`         | `tools/investigation/stages/gather_evidence/tools.py` | Stops the loop from spinning on duplicate-only iterations.     |
 | Context budget        | `context_budget_ceiling_for_model()`  | `core/context_budget.py`                      | Evicts/truncates lowest-value evidence before the model's context limit. |
-| Pre-loop plan size    | `tool_budget` (default 10)            | `plan_evidence/node.py`                       | Shortlist size the plan hands the loop before it even starts.  |
+| Pre-loop plan size    | `tool_budget` (default 10)            | `tools/investigation/stages/plan_evidence/node.py` | Shortlist size the plan hands the loop before it even starts.  |
 
 ## Related docs
 
 - [`investigation-tool-calling.md`](investigation-tool-calling.md) — tool
   schema / LLM invoke payload mechanics, per provider.
-- [`../AGENTS.md`](../AGENTS.md) — "Changing the investigation pipeline"
-  entry point and checklist for making changes here.
+- [`AGENTS.md`](https://github.com/Tracer-Cloud/opensre/blob/main/AGENTS.md) —
+  "Changing the investigation pipeline" entry point and checklist for making
+  changes here.
