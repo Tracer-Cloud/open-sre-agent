@@ -10,7 +10,7 @@ import tools.interactive_shell.actions.slash as slash_tool
 from core.agent_harness.agents.action_agent import ToolCallingDeps, run_action_agent_turn
 from core.agent_harness.session import Session
 from core.tool_framework.registered_tool import RegisteredTool
-from surfaces.interactive_shell.runtime.shell_turn_execution import run_action_tool_turn
+from surfaces.interactive_shell.runtime.action_turn import run_action_tool_turn
 from tests.core.agent.orchestration.action_execution_test_harness import (
     ActionExecutionHarness,
     FakeActionLLM,

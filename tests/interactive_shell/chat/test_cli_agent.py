@@ -28,8 +28,8 @@ from core.agent_harness.prompts.assistant_agent_prompt import (
 from core.agent_harness.providers import default_prompt_context
 from core.agent_harness.providers.default_prompt_context import DefaultPromptContextProvider
 from core.agent_harness.session import Session
-from surfaces.interactive_shell.runtime import shell_turn_execution as cli_agent
-from surfaces.interactive_shell.runtime.shell_turn_execution import answer_shell_question
+from surfaces.interactive_shell.runtime import answer_turn as cli_agent
+from surfaces.interactive_shell.runtime.answer_turn import answer_shell_question
 
 
 def _build_environment_block(session: Session) -> str:

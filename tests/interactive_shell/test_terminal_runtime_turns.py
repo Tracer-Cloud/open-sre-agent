@@ -266,7 +266,7 @@ def test_execute_shell_turn_nitro_prompt_executes_remote_then_investigation(
         call_order.append(f"investigation:{alert_text}")
 
     monkeypatch.setattr(
-        "surfaces.interactive_shell.runtime.shell_turn_execution._default_llm_factory",
+        "surfaces.interactive_shell.runtime.action_turn._default_llm_factory",
         lambda: FakeActionLLM(
             [
                 AgentLLMResponse(
