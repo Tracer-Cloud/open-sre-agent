@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
+import pytest
+
+import core.execution
 from core.agent import Agent
 from core.execution import (
     BeforeToolCallResult,
@@ -10,6 +14,7 @@ from core.execution import (
     ToolExecutionPatch,
     ToolExecutionRequest,
     ToolExecutionResult,
+    _requires_sequential_execution,
     execute_tool_calls,
     execute_tools,
 )
@@ -33,6 +38,7 @@ def _tool(
     *,
     execute: Any | None = None,
     execution_mode: str | None = None,
+    parallel_safe: bool = True,
 ) -> AgentTool:
     return AgentTool(
         name=name,
@@ -40,6 +46,7 @@ def _tool(
         input_schema=_schema(["value"]),
         execute=execute or (lambda args, _ctx: {"value": args["value"]}),
         execution_mode=execution_mode,  # type: ignore[arg-type]
+        parallel_safe=parallel_safe,
     )
 
 
@@ -252,6 +259,124 @@ def test_parallel_batch_preserves_provider_order() -> None:
     results = execute_tool_calls(calls, tools, {})
 
     assert [result.details for result in results] == [{"order": 2}, {"order": 1}]
+
+
+def _registered_echo(name: str, *, parallel_safe: bool = True) -> RegisteredTool:
+    return RegisteredTool(
+        name=name,
+        description="test registered tool",
+        input_schema=_schema(["value"]),
+        source="knowledge",
+        run=lambda value: {"value": value},
+        parallel_safe=parallel_safe,
+    )
+
+
+def _record_pool_constructions(monkeypatch: pytest.MonkeyPatch) -> list[int]:
+    constructions: list[int] = []
+
+    class _RecordingPool(ThreadPoolExecutor):
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            constructions.append(1)
+            super().__init__(*args, **kwargs)
+
+    monkeypatch.setattr(core.execution, "ThreadPoolExecutor", _RecordingPool)
+    return constructions
+
+
+def test_all_parallel_safe_batch_goes_through_thread_pool(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Control for the serialization tests below: proves the recording patch
+    # observes pool construction, so their `constructions == []` assertions
+    # cannot pass vacuously.
+    constructions = _record_pool_constructions(monkeypatch)
+    tools = [_tool("first"), _tool("second")]
+    calls = [_call("first", "a"), _call("second", "b")]
+
+    results = execute_tool_calls(calls, tools, {})
+
+    assert constructions == [1]
+    assert [result.details for result in results] == [{"value": "a"}, {"value": "b"}]
+
+
+def test_non_parallel_safe_registered_tool_serializes_mixed_batch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    constructions = _record_pool_constructions(monkeypatch)
+    tools = [
+        _tool("safe_one"),
+        _tool("safe_two"),
+        _registered_echo("stateful", parallel_safe=False),
+    ]
+    calls = [_call("safe_one", "a"), _call("stateful", "b"), _call("safe_two", "c")]
+
+    results = execute_tool_calls(calls, tools, {})
+
+    assert constructions == []
+    assert [result.details for result in results] == [
+        {"value": "a"},
+        {"value": "b"},
+        {"value": "c"},
+    ]
+
+
+def test_agent_tool_sequential_execution_mode_serializes_mixed_batch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    constructions = _record_pool_constructions(monkeypatch)
+    tools = [_tool("safe"), _tool("stateful", execution_mode="sequential")]
+    calls = [_call("safe", "a"), _call("stateful", "b")]
+
+    results = execute_tool_calls(calls, tools, {})
+
+    assert constructions == []
+    assert [result.details for result in results] == [{"value": "a"}, {"value": "b"}]
+
+
+def test_agent_tool_parallel_safe_false_serializes_via_execution_mode_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # No explicit execution_mode: effective_execution_mode must fall back to
+    # parallel_safe and still force the whole batch sequential.
+    constructions = _record_pool_constructions(monkeypatch)
+    tools = [_tool("safe"), _tool("stateful", parallel_safe=False)]
+    calls = [_call("safe", "a"), _call("stateful", "b")]
+
+    results = execute_tool_calls(calls, tools, {})
+
+    assert constructions == []
+    assert [result.details for result in results] == [{"value": "a"}, {"value": "b"}]
+
+
+def test_requires_sequential_execution_forces_serial_for_stateful_tools() -> None:
+    tools = [
+        _tool("safe"),
+        _tool("sequential_agent", execution_mode="sequential"),
+        _tool("unsafe_agent", parallel_safe=False),
+        _registered_echo("unsafe_registered", parallel_safe=False),
+    ]
+    tool_map = {t.name: t for t in tools}
+
+    # One sequential tool anywhere in the batch forces the whole batch.
+    assert _requires_sequential_execution([_call("safe"), _call("sequential_agent")], tool_map)
+    assert _requires_sequential_execution([_call("safe"), _call("unsafe_agent")], tool_map)
+    assert _requires_sequential_execution([_call("safe"), _call("unsafe_registered")], tool_map)
+
+
+def test_requires_sequential_execution_allows_parallel_otherwise() -> None:
+    tools = [
+        _tool("safe"),
+        # Explicit execution_mode="parallel" overrides parallel_safe=False.
+        _tool("override", execution_mode="parallel", parallel_safe=False),
+        _registered_echo("safe_registered"),
+    ]
+    tool_map = {t.name: t for t in tools}
+
+    assert not _requires_sequential_execution([], tool_map)
+    assert not _requires_sequential_execution([_call("safe"), _call("safe_registered")], tool_map)
+    assert not _requires_sequential_execution([_call("unknown_tool")], tool_map)
+    assert not _requires_sequential_execution([_call("safe"), _call("override")], tool_map)
 
 
 class _FakeLLM:
