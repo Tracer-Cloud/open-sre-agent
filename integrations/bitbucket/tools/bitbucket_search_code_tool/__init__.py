@@ -12,6 +12,7 @@ from integrations.bitbucket import (
     build_bitbucket_config,
     search_code,
 )
+from integrations.bitbucket.availability import bitbucket_available_or_backend
 
 
 def _resolve_config(
@@ -39,13 +40,7 @@ def _resolve_config(
 
 
 def _bb_available(sources: dict[str, dict]) -> bool:
-    bb = sources.get("bitbucket", {})
-    return bool(
-        bb.get("connection_verified")
-        and bb.get("workspace")
-        and bb.get("username")
-        and bb.get("app_password")
-    )
+    return bitbucket_available_or_backend(sources)
 
 
 def _bb_creds(bb: dict[str, Any]) -> dict[str, Any]:
