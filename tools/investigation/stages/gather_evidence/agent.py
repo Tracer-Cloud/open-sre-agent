@@ -16,7 +16,7 @@ from core import (
     summarise,
     tool_source,
 )
-from core.agent import Agent
+from core.agent_mixins import AgentEventEmitter, AgentToolFilter
 from core.context.state import InvestigationState
 from core.context.state.evidence import EvidenceEntry
 from core.llm.agent_llm_client import get_agent_llm
@@ -56,20 +56,17 @@ def _mark_messages(messages: list[dict[str, Any]], key: str) -> None:
         msg[key] = True
 
 
-class ConnectedInvestigationAgent(Agent[RegisteredTool]):
+class ConnectedInvestigationAgent(AgentEventEmitter, AgentToolFilter[RegisteredTool]):
     """ReAct loop scoped to the tools enabled by connected integrations.
 
-    Extends :class:`~core.agent.Agent` to reuse the shared event-emission and
-    tool-filtering infrastructure. The investigation loop is more specialised
-    than the generic :meth:`Agent.run` (seed calls, evidence collection,
-    duplicate detection, stagnation handling), so it overrides ``run()``
-    entirely — config plumbing (LLM, tools, prompt, resolved integrations) is
-    assembled inline in ``run()`` from ``state`` rather than through subclass
-    init hooks.
+    Composes the shared :class:`~core.agent_mixins.AgentEventEmitter` (event
+    dispatch) and :class:`~core.agent_mixins.AgentToolFilter` (tool narrowing)
+    rather than subclassing :class:`~core.agent.Agent`: the investigation loop is
+    specialised (seed calls, evidence collection, duplicate detection, stagnation
+    handling) and owns its own ``run()``, so it needs those two hooks, not the
+    generic agent loop. Config (LLM, tools, prompt, resolved integrations) is
+    assembled inline in ``run()`` from ``state``.
     """
-
-    def __init__(self) -> None:
-        super().__init__(max_iterations=MAX_INVESTIGATION_LOOPS)
 
     def _should_accept_conclusion(
         self,

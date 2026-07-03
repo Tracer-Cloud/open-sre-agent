@@ -9,6 +9,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from core.agent_mixins import AgentEventEmitter, AgentToolFilter
 from core.context_budget import (
     context_budget_ceiling_for_model,
     enforce_context_budget,
@@ -20,7 +21,6 @@ from core.events import (
     MessageUpdateEvent,
     ProviderRequestEndEvent,
     ProviderRequestStartEvent,
-    RuntimeEvent,
     RuntimeEventCallback,
     ToolExecutionEndEvent,
     ToolExecutionStartEvent,
@@ -28,8 +28,6 @@ from core.events import (
     TupleEventCallback,
     TurnEndEvent,
     TurnStartEvent,
-    runtime_event_from_tuple,
-    tuple_payload_from_event,
 )
 from core.execution import (
     ToolExecutionHooks,
@@ -94,7 +92,7 @@ class AgentRunResult:
 ToolLoopResult = AgentRunResult
 
 
-class Agent[RuntimeToolT: RuntimeTool]:
+class Agent[RuntimeToolT: RuntimeTool](AgentEventEmitter, AgentToolFilter[RuntimeToolT]):
     """Stateful, configurable ReAct agent.
 
     Owns the think → call-tools → observe loop and exposes hook methods so
@@ -454,10 +452,6 @@ class Agent[RuntimeToolT: RuntimeTool]:
         """
         return True, None
 
-    def _filter_tools(self, tools: list[RuntimeToolT]) -> list[RuntimeToolT]:
-        """Hook: narrow the tool list the agent will see."""
-        return tools
-
     def _drain_steering_messages(self, messages: list[RuntimeMessage]) -> None:
         while self._steering_messages:
             messages.append(UserRuntimeMessage(content=self._steering_messages.popleft()))
@@ -466,34 +460,6 @@ class Agent[RuntimeToolT: RuntimeTool]:
         if not self._follow_up_messages:
             return None
         return self._follow_up_messages.popleft()
-
-    def _emit(self, kind: str, data: dict[str, Any]) -> None:
-        event = runtime_event_from_tuple(kind, data)
-        if event is not None:
-            self._emit_runtime(event)
-            return
-        self._emit_tuple(kind, data)
-
-    def _emit_runtime(self, event: RuntimeEvent) -> None:
-        if self._on_runtime_event is not None:
-            try:
-                self._on_runtime_event(event)
-            except Exception:  # noqa: BLE001 - event rendering must never break the loop
-                logger.debug(
-                    "[runtime] on_runtime_event(%s) raised; ignoring",
-                    event.type,
-                    exc_info=True,
-                )
-        payload = tuple_payload_from_event(event)
-        if payload is not None:
-            self._emit_tuple(*payload)
-
-    def _emit_tuple(self, kind: str, data: dict[str, Any]) -> None:
-        if self._on_tuple_event is not None:
-            try:
-                self._on_tuple_event(kind, data)
-            except Exception:  # noqa: BLE001 - event rendering must never break the loop
-                logger.debug("[runtime] on_event(%s) raised; ignoring", kind, exc_info=True)
 
     def _emit_tool_update(
         self,
