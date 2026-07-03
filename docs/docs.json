@@ -140,7 +140,8 @@
               "signoz",
               "tempo",
               "splunk",
-              "victoria_logs"
+              "victoria_logs",
+              "x-mcp"
             ]
           },
           {
