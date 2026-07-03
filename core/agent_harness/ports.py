@@ -149,9 +149,9 @@ class RunRecordFactory(Protocol):
         raise NotImplementedError
 
 
-# Bound conversational-answer callable. Returns an opaque LLM-run record (or
-# None). The shell binds session/console/grounding; headless binds a simple
-# core-LLM call.
+# Bound streaming-answer callable — the no-tool answer path, not an agent.
+# Returns an opaque LLM-run record (or None). The shell binds
+# session/console/grounding; headless binds a simple core-LLM call.
 StreamAnswerFn = Callable[..., Any]
 
 # Bound evidence-gather callable: ``gather(text, *, is_tty) -> str | None``.

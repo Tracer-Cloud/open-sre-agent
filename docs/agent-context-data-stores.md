@@ -74,7 +74,7 @@ flowchart TB
     P3 --> STREAM
 
     RUN["Agent.run() - tool-calling shape"] -->|capture after _before_provider_request| FP[AgentRunResult.final_system_prompt]
-    STREAM["answer_cli_agent / invoke_stream - streaming shape"]
+    STREAM["stream_answer / invoke_stream - streaming shape"]
 
     A1 --> S2
     A3 --> S2
@@ -105,7 +105,7 @@ sequenceDiagram
     participant TC as TurnContext
     participant Action as action_agent
     participant Gather as evidence_agent
-    participant Answer as answer_cli_agent
+    participant Answer as stream_answer
     participant JSONL as Session JSONL
 
     Surface->>TO: message + Session

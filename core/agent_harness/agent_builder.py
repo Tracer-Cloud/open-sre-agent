@@ -1,17 +1,8 @@
 """Shared factory for building runtime :class:`~core.agent.Agent` instances.
 
-Every agent harness surface (action, evidence, gateway) assembles the
-per-turn configuration in a surface-specific factory, then hands it to
-:func:`build_agent`. If :class:`~core.agent.Agent`'s constructor signature
-changes, this file is the single edit site — all surfaces adopt the change
-automatically.
-
-Investigation composes :class:`~core.agent_mixins.AgentEventEmitter` and
-:class:`~core.agent_mixins.AgentToolFilter` instead of subclassing
-:class:`~core.agent.Agent`, and constructs its own specialised tool-calling
-loop. The LLM/tools wiring it uses at ``run()`` start mirrors the
-:class:`AgentConfig` fields so a future refactor can bring it under the same
-roof without changing shape.
+Each agent harness surface (action, evidence, gateway) assembles its per-turn
+configuration in a surface-specific factory and hands it to :func:`build_agent`,
+the single construction site for :class:`~core.agent.Agent` across surfaces.
 """
 
 from __future__ import annotations

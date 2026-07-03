@@ -21,7 +21,7 @@ def _accept_execute_actions(driver: ExecuteActions) -> ExecuteActions:
     return driver
 
 
-def test_stream_answer_matches_answer_fn_seam() -> None:
+def test_stream_answer_matches_stream_answer_fn_seam() -> None:
     assert _accept_answer(stream_answer) is stream_answer
 
 
