@@ -65,10 +65,6 @@ if TYPE_CHECKING:
         TurnAccounting,
     )
 
-# Public alias for the ``(kind, data)`` tuple callback surfaces provide.
-LoopEventCallback = TupleEventCallback
-
-
 @dataclass
 class AgentRunResult:
     """Outcome of :meth:`Agent.run`.
@@ -86,10 +82,6 @@ class AgentRunResult:
     hit_iteration_cap: bool = False
     final_system_prompt: str = ""
     """System prompt sent to the LLM on the last request (post-hook), for debugging."""
-
-
-# Backward-compat alias — callers that still reference ToolLoopResult compile unchanged.
-ToolLoopResult = AgentRunResult
 
 
 class Agent[RuntimeToolT: RuntimeTool](AgentEventEmitter, AgentToolFilter):
@@ -172,7 +164,7 @@ class Agent[RuntimeToolT: RuntimeTool](AgentEventEmitter, AgentToolFilter):
         tools: Sequence[RuntimeToolT] | None = None,
         resolved_integrations: dict[str, Any] | None = None,
         max_iterations: int | None = None,
-        on_event: LoopEventCallback | None = None,
+        on_event: TupleEventCallback | None = None,
         on_runtime_event: RuntimeEventCallback | None = None,
         tool_hooks: ToolExecutionHooks | None = None,
         tool_resources: dict[str, Any] | None = None,

@@ -29,7 +29,7 @@ from surfaces.interactive_shell.runtime.integration_tool_gathering import (
     gather_integration_tool_evidence,
 )
 
-_FakeRun = Callable[[dict[str, Any], list[dict[str, Any]]], runtime_module.ToolLoopResult]
+_FakeRun = Callable[[dict[str, Any], list[dict[str, Any]]], runtime_module.AgentRunResult]
 
 
 def _console() -> Console:
@@ -49,7 +49,7 @@ def _stub_agent_factory(run: _FakeRun) -> EvidenceAgentFactory:
         def __init__(self, on_runtime_event: Any) -> None:
             self._on_runtime_event = on_runtime_event
 
-        def run(self, initial_messages: list[dict[str, Any]]) -> runtime_module.ToolLoopResult:
+        def run(self, initial_messages: list[dict[str, Any]]) -> runtime_module.AgentRunResult:
             kwargs = {"on_runtime_event": self._on_runtime_event}
             return run(kwargs, initial_messages)
 
@@ -116,8 +116,8 @@ def test_executed_results_return_formatted_observation(monkeypatch: Any) -> None
 
     def _fake_run(
         _kwargs: dict[str, Any], _initial_messages: list[dict[str, Any]]
-    ) -> runtime_module.ToolLoopResult:
-        return runtime_module.ToolLoopResult(messages=[], final_text="", executed=executed)
+    ) -> runtime_module.AgentRunResult:
+        return runtime_module.AgentRunResult(messages=[], final_text="", executed=executed)
 
     observation = gather_integration_tool_evidence(
         "any open issues?",
@@ -145,8 +145,8 @@ def test_no_executed_returns_none(monkeypatch: Any) -> None:
 
     def _fake_run(
         _kwargs: dict[str, Any], _initial_messages: list[dict[str, Any]]
-    ) -> runtime_module.ToolLoopResult:
-        return runtime_module.ToolLoopResult(messages=[], final_text="nothing to do", executed=[])
+    ) -> runtime_module.AgentRunResult:
+        return runtime_module.AgentRunResult(messages=[], final_text="nothing to do", executed=[])
 
     assert (
         gather_integration_tool_evidence(
@@ -236,7 +236,7 @@ def test_gathering_progress_lines_print_on_tool_start(monkeypatch: Any) -> None:
 
     def _fake_run(
         kwargs: dict[str, Any], _initial_messages: list[dict[str, Any]]
-    ) -> runtime_module.ToolLoopResult:
+    ) -> runtime_module.AgentRunResult:
         on_runtime_event = kwargs.get("on_runtime_event")
         if on_runtime_event is not None:
             on_runtime_event(
@@ -255,7 +255,7 @@ def test_gathering_progress_lines_print_on_tool_start(monkeypatch: Any) -> None:
                     iteration=0,
                 )
             )
-        return runtime_module.ToolLoopResult(messages=[], final_text="", executed=[])
+        return runtime_module.AgentRunResult(messages=[], final_text="", executed=[])
 
     gather_integration_tool_evidence(
         "check metrics",
@@ -321,8 +321,8 @@ def test_gather_enriches_github_before_selecting_tools(monkeypatch: Any) -> None
 
     def _fake_run(
         _kwargs: dict[str, Any], _initial_messages: list[dict[str, Any]]
-    ) -> runtime_module.ToolLoopResult:
-        return runtime_module.ToolLoopResult(messages=[], final_text="", executed=[])
+    ) -> runtime_module.AgentRunResult:
+        return runtime_module.AgentRunResult(messages=[], final_text="", executed=[])
 
     gather_integration_tool_evidence(
         "check github issues in https://github.com/Tracer-Cloud/opensre",
@@ -351,9 +351,9 @@ def test_gather_user_message_includes_recent_conversation(monkeypatch: Any) -> N
 
     def _fake_run(
         _kwargs: dict[str, Any], initial_messages: list[dict[str, Any]]
-    ) -> runtime_module.ToolLoopResult:
+    ) -> runtime_module.AgentRunResult:
         captured["messages"] = initial_messages
-        return runtime_module.ToolLoopResult(messages=[], final_text="", executed=[])
+        return runtime_module.AgentRunResult(messages=[], final_text="", executed=[])
 
     gather_integration_tool_evidence(
         "follow up",

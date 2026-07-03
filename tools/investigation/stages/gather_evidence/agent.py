@@ -7,8 +7,8 @@ from typing import Any, cast
 
 from config.constants.investigation import MAX_INVESTIGATION_LOOPS
 from core import (
-    LoopEventCallback,
     RuntimeEventCallback,
+    TupleEventCallback,
     context_budget_ceiling_for_model,
     enforce_context_budget,
     estimate_message_tokens,
@@ -102,7 +102,7 @@ class ConnectedInvestigationAgent(AgentEventEmitter, AgentToolFilter):
     def run(
         self,
         state: InvestigationState,
-        on_event: LoopEventCallback | None = None,
+        on_event: TupleEventCallback | None = None,
         on_runtime_event: RuntimeEventCallback | None = None,
     ) -> dict[str, Any]:
         """Run the full investigation. Returns a dict of state updates."""
