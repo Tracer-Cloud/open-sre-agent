@@ -24,6 +24,7 @@ OpenSRE is provider-agnostic: bring your own model. Selection is controlled by t
 | Ollama (local)| `ollama`     | None (local daemon)             | `llama3.2`                                    | `llama3.2`                                      |
 | GitHub Copilot CLI| `copilot`| `copilot login` or `gh auth login` (CLI) | Copilot CLI default                           | Copilot CLI default                             |
 | xAI Groq API key | `groq`      | `GROQ_API_KEY`                  | `llama-3.3-70b-versatile`                     | `llama-3.1-8b-instant`                          |
+| Azure OpenAI | `azure-openai` | `AZURE_OPENAI_API_KEY` + resource URL | `gpt-5.4-mini` (deployment name)            | `gpt-5.4-mini` (deployment name)                 |
 | xAI Grok Build CLI | `grok-cli` | `grok login` (CLI)             | Grok Build CLI default                        | Grok Build CLI default                          |
 | Pi CLI (BYOK)| `pi`          | provider API key env or `pi` → `/login` | Pi configured model (`PI_MODEL` to override) | same as reasoning model |
 
@@ -74,6 +75,38 @@ export OPENAI_TOOLCALL_MODEL=gpt-5.4-mini
 ```
 
 A shared `LLM_MAX_TOKENS` (default `4096`) controls the response token budget for every provider.
+
+## LiteLLM transport
+
+OpenSRE can route **hosted API providers** through [LiteLLM](https://docs.litellm.ai/) instead of native vendor SDKs. This is opt-in for most providers and **required** for Azure OpenAI.
+
+| Command / variable | What it does |
+| ------------------ | ------------ |
+| `export OPENSRE_LLM_TRANSPORT=litellm` | Route API providers through LiteLLM |
+| unset or `export OPENSRE_LLM_TRANSPORT=sdk` | Use native SDK clients (default) |
+| `opensre onboard` → **Azure OpenAI** | Writes `OPENSRE_LLM_TRANSPORT=litellm` automatically |
+
+**CLI-backed providers** (`codex`, `claude-code`, `copilot`, `pi`, etc.) always use their subprocess path — LiteLLM does not affect them.
+
+### Providers supported via LiteLLM
+
+When `OPENSRE_LLM_TRANSPORT=litellm` (or when using `LLM_PROVIDER=azure-openai`), OpenSRE builds investigation tool schemas the same way as the SDK path and passes them to `litellm.completion(..., tools=..., tool_choice="auto")`. LiteLLM handles provider routing; OpenSRE keeps schema normalization, retries, and message replay.
+
+| `LLM_PROVIDER` | Native SDK path (default) | LiteLLM path | Notes |
+| -------------- | ------------------------- | ------------ | ----- |
+| `anthropic` | Anthropic SDK | `anthropic/<model>` | Opt-in via `OPENSRE_LLM_TRANSPORT=litellm` |
+| `openai` | OpenAI SDK | `openai/<model>` | Opt-in |
+| `bedrock` | boto3 / AnthropicBedrock / Converse | `bedrock/<model-id>` | Opt-in; uses AWS credential chain |
+| `openrouter` | OpenAI-compatible SDK | `openai/<model>` + OpenRouter base URL | Opt-in |
+| `deepseek` | OpenAI-compatible SDK | `openai/<model>` + DeepSeek base URL | Opt-in |
+| `gemini` | OpenAI-compatible SDK | `openai/<model>` + Gemini base URL | Opt-in |
+| `nvidia` | OpenAI-compatible SDK | `openai/<model>` + NVIDIA NIM base URL | Opt-in |
+| `minimax` | OpenAI-compatible SDK | `openai/<model>` + MiniMax base URL | Opt-in |
+| `groq` | OpenAI-compatible SDK | `openai/<model>` + Groq base URL | Opt-in |
+| `ollama` | OpenAI-compatible SDK | `openai/<model>` + `${OLLAMA_HOST}/v1` | Opt-in |
+| `azure-openai` | — | `azure/<deployment>` | **Always** via LiteLLM |
+
+For providers beyond this list, LiteLLM supports [100+ backends](https://docs.litellm.ai/docs/providers). OpenSRE only wires the slugs above today — use one of them, or open an issue if you need another first-class provider.
 
 ## Login and secret storage
 
@@ -142,6 +175,42 @@ export OPENAI_TOOLCALL_MODEL=gpt-5.4-mini
 ```
 
 Uses the OpenAI SDK. Reasoning models (`o1`, `o3`, `o4`, `gpt-5*`) automatically use `max_completion_tokens` instead of `max_tokens`.
+
+### Azure OpenAI
+
+Azure OpenAI routes through LiteLLM. Model env vars hold **deployment names** from your Azure resource, not public OpenAI model IDs.
+
+```bash
+export LLM_PROVIDER=azure-openai
+export OPENSRE_LLM_TRANSPORT=litellm   # set automatically by `opensre onboard`
+
+export AZURE_OPENAI_BASE_URL=https://your-resource.openai.azure.com
+export AZURE_OPENAI_API_KEY=...
+# Optional override; defaults to 2024-10-21 when unset:
+# export AZURE_OPENAI_API_VERSION=2024-10-21
+
+# Deployment names (must exist in your Azure resource):
+export AZURE_OPENAI_REASONING_MODEL=gpt-5.4-mini
+export AZURE_OPENAI_TOOLCALL_MODEL=gpt-5.4-mini
+export AZURE_OPENAI_CLASSIFICATION_MODEL=gpt-5.4-mini
+```
+
+Quick setup:
+
+```bash
+opensre onboard   # choose Azure OpenAI; paste resource URL, API key, deployment
+```
+
+Onboarding asks only for your **resource URL**, **API key**, and **reasoning deployment name**. OpenSRE sets `AZURE_OPENAI_API_VERSION=2024-10-21` and `OPENSRE_LLM_TRANSPORT=litellm` automatically unless you override them in `.env`.
+
+In the REPL, switch provider or deployment like any other API provider:
+
+```bash
+/model set azure-openai gpt-5.4-mini
+/model set azure-openai gpt-5.4-mini --toolcall-model gpt-5.4-nano
+```
+
+Common deployment names in the onboarding picker include `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.4-nano`, `gpt-5-mini`, `gpt-4.1`, and `o3-mini`. Use custom names when your Azure deployment names differ (`allow_custom_models` is enabled).
 
 ### OpenRouter
 
@@ -213,6 +282,20 @@ export MINIMAX_TOOLCALL_MODEL=MiniMax-M2.7-highspeed
 ```
 
 OpenAI-compatible endpoint at `https://api.minimax.io/v1`. Temperature is fixed to `1.0` to match MiniMax recommendations.
+
+### Groq
+
+```bash
+export LLM_PROVIDER=groq
+export GROQ_API_KEY=gsk_...
+# Optional override:
+export GROQ_MODEL=llama-3.3-70b-versatile
+# Or per-slot:
+export GROQ_REASONING_MODEL=llama-3.3-70b-versatile
+export GROQ_TOOLCALL_MODEL=llama-3.1-8b-instant
+```
+
+Uses Groq's OpenAI-compatible API at `https://api.groq.com/openai/v1`.
 
 ### Amazon Bedrock
 
@@ -446,5 +529,7 @@ OpenSRE caches LLM clients on first use. To switch providers within a single pro
 
 - Provider literals and defaults: [`config/config.py`](https://github.com/Tracer-Cloud/opensre/blob/main/config/config.py) (`LLMProvider`, `LLMSettings`).
 - Runtime routing: [`core/llm/llm_client.py`](https://github.com/Tracer-Cloud/opensre/blob/main/core/llm/llm_client.py) (`_create_llm_client`).
+- LiteLLM routing (when enabled): [`core/llm/litellm/routing.py`](https://github.com/Tracer-Cloud/opensre/blob/main/core/llm/litellm/routing.py).
+- Investigation tool-calling adapters: [`docs/investigation-tool-calling.md`](/investigation-tool-calling).
 - API-backed provider guide: [`core/llm/AGENTS.md`](https://github.com/Tracer-Cloud/opensre/blob/main/core/llm/AGENTS.md).
 - CLI-backed provider guide: [`integrations/llm_cli/AGENTS.md`](https://github.com/Tracer-Cloud/opensre/blob/main/integrations/llm_cli/AGENTS.md).

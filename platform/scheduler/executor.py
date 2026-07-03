@@ -124,13 +124,10 @@ def _deliver_telegram(task: ScheduledTask, message: str) -> tuple[bool, str, str
 
 
 def _deliver_slack(task: ScheduledTask, message: str) -> tuple[bool, str, str]:
-    """Deliver via Slack using direct chat.postMessage (no thread_ts needed).
-
-    Scheduled deliveries start a new top-level message, not a thread reply.
-    Falls back to webhook if no access_token is available.
-    """
+    """Deliver via Slack using the shared Slack delivery helper when possible."""
     creds = resolve_slack_credentials(task.params)
     access_token = creds.get("access_token", "")
+    webhook_url = creds.get("webhook_url", "")
 
     # Strip HTML tags — Slack uses mrkdwn, not HTML
     plain_message = _strip_html(message)
@@ -163,12 +160,21 @@ def _deliver_slack(task: ScheduledTask, message: str) -> tuple[bool, str, str]:
         msg_ts = str(response.data.get("ts", ""))
         return True, "", msg_ts
 
-    # No access_token — cannot deliver to the configured chat_id
+    if webhook_url:
+        from integrations.slack.delivery import send_slack_webhook_message
+
+        ok, error = send_slack_webhook_message(
+            plain_message,
+            webhook_url=webhook_url,
+        )
+        return ok, error, ""
+
     if not task.chat_id:
-        return False, "Missing chat_id for Slack delivery", ""
+        return False, "Missing chat_id or webhook_url for Slack delivery", ""
+
     return (
         False,
-        "Scheduled tasks require a Slack bot access_token; webhook delivery is not supported",
+        "Scheduled tasks require Slack webhook_url or bot access_token",
         "",
     )
 

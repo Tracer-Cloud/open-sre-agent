@@ -20,6 +20,7 @@ from typing import Any
 
 from core.agent import Agent
 from core.agent_harness.agent_builder import AgentConfig, build_agent
+from core.agent_harness.debug.prompt_trace import persist_turn_system_prompt
 from core.agent_harness.models.turn_context import TurnContext
 from core.agent_harness.models.turn_results import ToolCallingTurnResult
 from core.agent_harness.ports import (
@@ -388,6 +389,11 @@ def run_action_agent_turn(
             observer=observer,
         )
         result = agent.run([{"role": "user", "content": user_message}])
+        persist_turn_system_prompt(
+            session,
+            phase="action_agent",
+            system_prompt=result.final_system_prompt,
+        )
     except Exception as exc:
         if is_context_length_overflow(str(exc)):
             log.debug("shell action prompt overflow; falling through to assistant", exc_info=True)

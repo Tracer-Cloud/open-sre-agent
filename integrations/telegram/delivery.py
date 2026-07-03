@@ -9,11 +9,12 @@ from typing import Any
 
 from platform.common.truncation import truncate
 from platform.notifications.delivery_transport import post_json
+from platform.notifications.limits import MAX_MESSAGE_SIZE
 from platform.notifications.redaction import redact_token
 
 logger = logging.getLogger(__name__)
 
-_MESSAGE_LIMIT = 4096
+_MESSAGE_LIMIT = MAX_MESSAGE_SIZE
 _BOT_TOKEN_RE = re.compile(r"(bot)[^/]+(/)")
 _SIMPLE_TAG_NAMES = frozenset({"b", "i", "u", "code"})
 

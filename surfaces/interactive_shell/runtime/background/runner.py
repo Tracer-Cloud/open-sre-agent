@@ -6,11 +6,14 @@ import threading
 from collections.abc import Callable
 from contextlib import nullcontext
 from typing import Any
+from uuid import uuid4
 
 from prompt_toolkit.patch_stdout import patch_stdout
 from rich.console import Console
 from rich.markup import escape
 
+from platform.analytics.cli import track_investigation
+from platform.analytics.source import EntrypointSource, TriggerMode
 from platform.common.errors import OpenSREError
 from surfaces.interactive_shell.runtime import (
     BackgroundInvestigationRecord,
@@ -43,11 +46,13 @@ def _build_record(
     *,
     task_id: str,
     command: str,
+    investigation_id: str,
 ) -> BackgroundInvestigationRecord:
     return BackgroundInvestigationRecord(
         task_id=task_id,
         status="running",
         command=command,
+        investigation_id=investigation_id,
     )
 
 
@@ -97,18 +102,32 @@ def _start_background_investigation(
     display_command: str,
     run_fn: BackgroundRunFn,
     kwargs: dict[str, Any],
+    investigation_target: str = "",
+    input_path: str | None = None,
 ) -> str:
+    investigation_id = str(uuid4())
+    session.last_investigation_id = investigation_id
     task = session.task_registry.create(TaskKind.INVESTIGATION, command=display_command)
     task.mark_running()
     record = _build_record(
         task_id=task.task_id,
         command=display_command,
+        investigation_id=investigation_id,
     )
     session.background_investigations[task.task_id] = record
 
     def _worker() -> None:
         try:
-            final_state = run_fn(cancel_requested=task.cancel_requested, **kwargs)
+            with track_investigation(
+                entrypoint=EntrypointSource.CLI_REPL_FILE,
+                trigger_mode=TriggerMode.FILE,
+                input_path=input_path,
+                interactive=True,
+                investigation_id=investigation_id,
+                investigation_target=investigation_target or None,
+                session=session,
+            ):
+                final_state = run_fn(cancel_requested=task.cancel_requested, **kwargs)
             root = str(final_state.get("root_cause") or "")
             record.status = "completed"
             record.root_cause = root
@@ -170,6 +189,7 @@ def start_background_text_investigation(
     session: Session,
     console: Console,
     display_command: str = "background free-text investigation",
+    investigation_target: str = "",
 ) -> str:
     from surfaces.cli.investigation import run_investigation_for_session_background
 
@@ -182,6 +202,8 @@ def start_background_text_investigation(
             "alert_text": alert_text,
             "context_overrides": session.accumulated_context or None,
         },
+        investigation_target=investigation_target,
+        input_path=display_command,
     )
 
 
@@ -191,6 +213,7 @@ def start_background_template_investigation(
     session: Session,
     console: Console,
     display_command: str,
+    investigation_target: str = "",
 ) -> str:
     from surfaces.cli.investigation import run_sample_alert_for_session_background
 
@@ -203,4 +226,6 @@ def start_background_template_investigation(
             "template_name": template_name,
             "context_overrides": session.accumulated_context or None,
         },
+        investigation_target=investigation_target,
+        input_path=f"template:{template_name}",
     )

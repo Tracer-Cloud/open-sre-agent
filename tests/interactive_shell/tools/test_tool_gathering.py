@@ -4,20 +4,22 @@
 registered tools the investigation uses and returns the collected outputs as a
 formatted observation block (or ``None`` when there is nothing to add). These
 tests exercise the no-tools, executed-results, no-executed, and exception paths
-without any live LLM by monkeypatching the lazily-imported collaborators.
+without any live LLM by stubbing ``agent_factory`` and monkeypatching tool
+discovery / LLM load where needed.
 """
 
 from __future__ import annotations
 
 import io
+from collections.abc import Callable
 from typing import Any
 
 from rich.console import Console
 
 import core as runtime_module
-import core.agent_harness.agents.evidence_agent as evidence_agent_module
 import core.llm.agent_llm_client as agent_llm_client
 import tools.investigation.stages.gather_evidence.tools as investigate_tools
+from core.agent_harness.agents.evidence_agent import EvidenceAgentFactory
 from core.agent_harness.session import Session
 from core.llm.types import ToolCall
 from surfaces.interactive_shell.runtime.integration_tool_gathering import (
@@ -26,6 +28,8 @@ from surfaces.interactive_shell.runtime.integration_tool_gathering import (
     _tool_input_hint,
     gather_integration_tool_evidence,
 )
+
+_FakeRun = Callable[[dict[str, Any], list[dict[str, Any]]], runtime_module.ToolLoopResult]
 
 
 def _console() -> Console:
@@ -38,18 +42,8 @@ class _DummyTool:
         self.source = source
 
 
-def _patch_agent_run(monkeypatch: Any, run: Any) -> None:
-    """Stub ``_build_evidence_agent`` so gathering returns controlled results.
-
-    Gathering now constructs a plain :class:`core.agent.Agent` via the
-    ``_build_evidence_agent`` factory. Patching ``core.agent.Agent`` globally
-    would intercept every agent in the process, so we swap the factory instead:
-    the real tool-discovery, integration-resolution, and GitHub-scope paths run
-    (tests below depend on those), and the returned stub only replaces
-    ``.run()``. The tuple-event observer wired into the real Agent is surfaced
-    via a ``kwargs`` dict so existing ``_fake_run(kwargs, initial_messages)``
-    bodies keep working.
-    """
+def _stub_agent_factory(run: _FakeRun) -> EvidenceAgentFactory:
+    """Return a factory that runs real gather setup but stubs ``Agent.run``."""
 
     class _StubAgent:
         def __init__(self, on_runtime_event: Any) -> None:
@@ -59,13 +53,20 @@ def _patch_agent_run(monkeypatch: Any, run: Any) -> None:
             kwargs = {"on_runtime_event": self._on_runtime_event}
             return run(kwargs, initial_messages)
 
-    def _build(*, llm: Any, on_progress: Any, **_ignored: Any) -> Any:
-        _ = llm
+    def factory(
+        *,
+        llm: Any,
+        session: Session,
+        gather_tools: list[Any],
+        resolved: dict[str, Any],
+        on_progress: Any,
+    ) -> _StubAgent:
+        _ = (llm, session, gather_tools, resolved)
         from core.events import runtime_event_callback_from_observer
 
         return _StubAgent(runtime_event_callback_from_observer(on_progress))
 
-    monkeypatch.setattr(evidence_agent_module, "_build_evidence_agent", _build)
+    return factory
 
 
 def test_no_tools_available_returns_none(monkeypatch: Any) -> None:
@@ -118,9 +119,12 @@ def test_executed_results_return_formatted_observation(monkeypatch: Any) -> None
     ) -> runtime_module.ToolLoopResult:
         return runtime_module.ToolLoopResult(messages=[], final_text="", executed=executed)
 
-    _patch_agent_run(monkeypatch, _fake_run)
-
-    observation = gather_integration_tool_evidence("any open issues?", session, _console())
+    observation = gather_integration_tool_evidence(
+        "any open issues?",
+        session,
+        _console(),
+        agent_factory=_stub_agent_factory(_fake_run),
+    )
 
     assert observation is not None
     assert "search_github_issues" in observation
@@ -144,9 +148,15 @@ def test_no_executed_returns_none(monkeypatch: Any) -> None:
     ) -> runtime_module.ToolLoopResult:
         return runtime_module.ToolLoopResult(messages=[], final_text="nothing to do", executed=[])
 
-    _patch_agent_run(monkeypatch, _fake_run)
-
-    assert gather_integration_tool_evidence("any question", session, _console()) is None
+    assert (
+        gather_integration_tool_evidence(
+            "any question",
+            session,
+            _console(),
+            agent_factory=_stub_agent_factory(_fake_run),
+        )
+        is None
+    )
 
 
 def test_exception_path_returns_none(monkeypatch: Any) -> None:
@@ -247,9 +257,12 @@ def test_gathering_progress_lines_print_on_tool_start(monkeypatch: Any) -> None:
             )
         return runtime_module.ToolLoopResult(messages=[], final_text="", executed=[])
 
-    _patch_agent_run(monkeypatch, _fake_run)
-
-    gather_integration_tool_evidence("check metrics", session, console)
+    gather_integration_tool_evidence(
+        "check metrics",
+        session,
+        console,
+        agent_factory=_stub_agent_factory(_fake_run),
+    )
     output = console.file.getvalue()
     assert "Grafana · Mimir — pipeline_runs_total" in output
     assert "Grafana · Mimir (2) — http_errors_total" in output
@@ -311,12 +324,11 @@ def test_gather_enriches_github_before_selecting_tools(monkeypatch: Any) -> None
     ) -> runtime_module.ToolLoopResult:
         return runtime_module.ToolLoopResult(messages=[], final_text="", executed=[])
 
-    _patch_agent_run(monkeypatch, _fake_run)
-
     gather_integration_tool_evidence(
         "check github issues in https://github.com/Tracer-Cloud/opensre",
         session,
         _console(),
+        agent_factory=_stub_agent_factory(_fake_run),
     )
 
     gh = seen["resolved"]["github"]
@@ -343,9 +355,12 @@ def test_gather_user_message_includes_recent_conversation(monkeypatch: Any) -> N
         captured["messages"] = initial_messages
         return runtime_module.ToolLoopResult(messages=[], final_text="", executed=[])
 
-    _patch_agent_run(monkeypatch, _fake_run)
-
-    gather_integration_tool_evidence("follow up", session, _console())
+    gather_integration_tool_evidence(
+        "follow up",
+        session,
+        _console(),
+        agent_factory=_stub_agent_factory(_fake_run),
+    )
 
     content = captured["messages"][0]["content"]
     assert "Recent conversation:" in content

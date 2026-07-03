@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import Any
 
@@ -80,6 +81,56 @@ def _provider_validation_label(provider: ProviderOption) -> str:
     return provider.label
 
 
+def _check_azure_openai(
+    *,
+    api_key: str,
+    model: str,
+    base_url: str,
+    api_version: str,
+) -> ValidationResult:
+    """Validate Azure OpenAI credentials with a tiny chat completion."""
+    from core.llm.azure_openai import normalize_azure_openai_base_url
+
+    normalized_base = normalize_azure_openai_base_url(base_url)
+    if not normalized_base:
+        return ValidationResult(
+            ok=False,
+            detail="Azure OpenAI resource URL is missing. Set AZURE_OPENAI_BASE_URL.",
+        )
+    from core.llm.azure_openai import resolve_azure_openai_api_version
+
+    resolved_api_version = resolve_azure_openai_api_version(api_version)
+
+    openai_client_cls, openai_auth_error = _load_openai_client()
+    azure_base = f"{normalized_base}/openai/deployments/{model}"
+    try:
+        client = openai_client_cls(
+            api_key=api_key,
+            base_url=azure_base,
+            default_query={"api-version": resolved_api_version},
+            timeout=30.0,
+        )
+        request_kwargs: dict[str, object] = {
+            "model": model,
+            "messages": [{"role": "user", "content": "Reply with exactly: OpenSRE ready"}],
+        }
+        if model.startswith(("o1", "o3", "o4", "gpt-5")):
+            request_kwargs["max_completion_tokens"] = 24
+        else:
+            request_kwargs["max_tokens"] = 24
+        response = client.chat.completions.create(**request_kwargs)
+        sample_text = (response.choices[0].message.content or "").strip()
+        return ValidationResult(
+            ok=True,
+            detail="Azure OpenAI API key validated.",
+            sample_response=sample_text,
+        )
+    except openai_auth_error:
+        return ValidationResult(ok=False, detail="Azure OpenAI rejected the API key.")
+    except Exception as err:
+        return ValidationResult(ok=False, detail=f"Validation request failed: {err}")
+
+
 def _check_ollama(host: str, model: str) -> ValidationResult:
     """Check Ollama server connectivity and verify model responds to inference."""
     import httpx
@@ -138,6 +189,14 @@ def validate_provider_credentials(
     """Run a tiny live request against the selected provider."""
     if provider.value == "ollama":
         return _check_ollama(host=api_key, model=model)
+
+    if provider.value == "azure-openai":
+        return _check_azure_openai(
+            api_key=api_key,
+            model=model,
+            base_url=os.getenv(provider.endpoint_env, "").strip(),
+            api_version=os.getenv(provider.api_version_env, "").strip(),
+        )
 
     anthropic_client_cls, anthropic_auth_error = _load_anthropic_client()
     openai_client_cls, openai_auth_error = _load_openai_client()

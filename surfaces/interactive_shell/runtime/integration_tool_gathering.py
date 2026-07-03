@@ -17,6 +17,7 @@ from rich.console import Console
 from rich.markup import escape
 
 from core.agent_harness.agents import evidence_agent
+from core.agent_harness.agents.evidence_agent import EvidenceAgentFactory
 from core.agent_harness.session import Session
 from surfaces.interactive_shell.ui import DIM
 from surfaces.interactive_shell.ui.output.tool_details import (
@@ -150,6 +151,7 @@ def gather_integration_tool_evidence(
     console: Console,
     *,
     is_tty: bool | None = None,
+    agent_factory: EvidenceAgentFactory | None = None,
 ) -> str | None:
     """Run a bounded tool-calling loop and return collected evidence, or None.
 
@@ -181,6 +183,7 @@ def gather_integration_tool_evidence(
         persist=persist,
         error_reporter=_ShellGatherErrorReporter(),
         is_tty=is_tty,
+        agent_factory=agent_factory,
     )
 
 

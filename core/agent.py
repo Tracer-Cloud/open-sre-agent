@@ -86,6 +86,13 @@ class AgentRunResult:
     tool_results: list[tuple[ToolCall, ToolExecutionResult]] = field(default_factory=list)
     terminated_by_tool: bool = False
     hit_iteration_cap: bool = False
+    final_system_prompt: str = ""
+    """The system prompt actually sent to the LLM on the last provider request.
+
+    Recorded so debugging can answer "what was influencing the agent when it made
+    this decision?" without re-deriving the prompt by hand. Captured after the
+    ``_before_provider_request`` hook, so it reflects any per-turn edits.
+    """
 
 
 # Backward-compat alias — callers that still reference ToolLoopResult compile unchanged.
@@ -227,6 +234,7 @@ class Agent[RuntimeToolT: RuntimeTool]:
         executed: list[tuple[ToolCall, Any]] = []
         tool_results: list[tuple[ToolCall, ToolExecutionResult]] = []
         final_text = ""
+        final_system_prompt = system
         hit_cap = True
         terminated_by_tool = False
         self._emit_runtime(
@@ -257,6 +265,7 @@ class Agent[RuntimeToolT: RuntimeTool]:
                 metadata={"iteration": iteration},
             )
             provider_request = self._before_provider_request(provider_request)
+            final_system_prompt = provider_request.system
             self._emit_runtime(
                 ProviderRequestStartEvent(
                     iteration=iteration,
@@ -401,6 +410,7 @@ class Agent[RuntimeToolT: RuntimeTool]:
             tool_results=tool_results,
             terminated_by_tool=terminated_by_tool,
             hit_iteration_cap=hit_cap,
+            final_system_prompt=final_system_prompt,
         )
         self._emit_runtime(
             AgentEndEvent(

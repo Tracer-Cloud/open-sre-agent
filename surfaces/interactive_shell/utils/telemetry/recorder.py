@@ -50,6 +50,20 @@ def _latest_slash_outcome(session: Any) -> str | None:
     return None
 
 
+def _fallback_terminal_response(*, prompt: str) -> str:
+    stripped = prompt.strip()
+    if stripped:
+        return f"terminal turn handled: {stripped}"
+    return "terminal turn handled"
+
+
+def _prompt_relates_to_investigation(*, prompt: str, turn_kind: str) -> bool:
+    stripped = prompt.strip().lower()
+    if turn_kind == "background_task":
+        return "investigate" in stripped
+    return stripped.startswith("/investigate")
+
+
 class PromptRecorder:
     """Captures one `(prompt, response)` pair and flushes to configured sinks."""
 
@@ -70,6 +84,7 @@ class PromptRecorder:
         self._prompt = prompt
         self._session = session
         self._response: str = ""
+        self._scoped_investigation_id: str | None = None
         self._model: str | None = None
         self._provider: str | None = None
         self._latency_ms: int | None = None
@@ -124,7 +139,7 @@ class PromptRecorder:
         config = PromptLogConfig.load()
         if not config.enabled:
             return None
-        return cls(
+        recorder = cls(
             config=config,
             turn_kind="background_task",
             session_id=_session_id(session),
@@ -132,9 +147,35 @@ class PromptRecorder:
             prompt=_sanitize_text(command, config=config),
             session=session,
         )
+        if _prompt_relates_to_investigation(prompt=command, turn_kind="background_task"):
+            investigation_id = str(uuid.uuid4())
+            recorder.bind_investigation_id(investigation_id)
+            session.last_investigation_id = investigation_id
+        return recorder
+
+    def bind_investigation_id(self, investigation_id: str) -> None:
+        cleaned = investigation_id.strip()
+        if cleaned:
+            self._scoped_investigation_id = cleaned
+
+    def _resolve_investigation_id(self) -> str:
+        if self._scoped_investigation_id:
+            return self._scoped_investigation_id
+        if self._session is None or not _prompt_relates_to_investigation(
+            prompt=self._prompt,
+            turn_kind=self._turn_kind,
+        ):
+            return ""
+        investigation_id = getattr(self._session, "last_investigation_id", "")
+        if isinstance(investigation_id, str):
+            return investigation_id
+        return ""
 
     def set_response(self, text: str, run: LlmRunInfo | None = None) -> None:
-        self._response = _sanitize_text(text, config=self._config)
+        cleaned = _sanitize_text(text, config=self._config)
+        if not cleaned.strip():
+            cleaned = _fallback_terminal_response(prompt=self._prompt)
+        self._response = cleaned
         if run is None:
             self._latency_ms = int((time.monotonic() - self._start) * 1000)
             return
@@ -214,6 +255,9 @@ class PromptRecorder:
                 slash_outcome = _latest_slash_outcome(self._session)
                 if slash_outcome:
                     posthog_properties["slash_outcome"] = slash_outcome
+                investigation_id = self._resolve_investigation_id()
+                if investigation_id:
+                    posthog_properties["investigation_id"] = investigation_id
                 capture_ai_generation(posthog_properties)
 
 

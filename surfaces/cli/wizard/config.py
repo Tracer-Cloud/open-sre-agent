@@ -8,6 +8,7 @@ from typing import Literal
 
 from config.config import (
     ANTHROPIC_REASONING_MODEL,
+    AZURE_OPENAI_REASONING_MODEL,
     BEDROCK_REASONING_MODEL,
     DEEPSEEK_REASONING_MODEL,
     DEFAULT_OLLAMA_HOST,
@@ -58,6 +59,8 @@ class ProviderOption:
     #: unset, ``sync_provider_env`` falls back to replacing ``_REASONING_MODEL``
     #: with ``_CLASSIFICATION_MODEL`` in ``model_env``.
     classification_model_env: str | None = None
+    endpoint_env: str = ""
+    api_version_env: str = ""
     #: Human-readable name for the credential requested during onboarding. Most
     #: providers want an API key; Ollama wants a host URL. Used as the wizard
     #: prompt label, e.g. ``{label} {credential_label} ({api_key_env})``.
@@ -89,6 +92,8 @@ class ProviderOption:
                 self.classification_model_env,
                 spec.classification_model_env,
             ),
+            "endpoint_env": (self.endpoint_env, spec.endpoint_env),
+            "api_version_env": (self.api_version_env, spec.api_version_env),
             "credential_kind": (catalog_kind, spec.credential_kind),
             "allow_custom_models": (self.allow_custom_models, spec.allow_custom_models),
         }
@@ -190,6 +195,20 @@ GROQ_MODELS = (
     ModelOption(value="openai/gpt-oss-20b", label="GPT-OSS 20B"),
     ModelOption(value="qwen/qwen3-32b", label="Qwen3 32B"),
     ModelOption(value="meta-llama/llama-4-scout-17b-16e-instruct", label="Llama 4 Scout 17B"),
+)
+
+# Azure OpenAI model values are deployment names in your resource.
+# Source: https://learn.microsoft.com/en-us/azure/ai-foundry/model-inference/concepts/models
+AZURE_OPENAI_MODELS = (
+    ModelOption(value=AZURE_OPENAI_REASONING_MODEL, label="gpt-5.4-mini deployment"),
+    ModelOption(value="gpt-5.5", label="gpt-5.5 deployment"),
+    ModelOption(value="gpt-5.4", label="gpt-5.4 deployment"),
+    ModelOption(value="gpt-5.4-nano", label="gpt-5.4-nano deployment"),
+    ModelOption(value="gpt-5-mini", label="gpt-5-mini deployment"),
+    ModelOption(value="gpt-5", label="gpt-5 deployment"),
+    ModelOption(value="gpt-4.1", label="gpt-4.1 deployment"),
+    ModelOption(value="gpt-4.1-mini", label="gpt-4.1-mini deployment"),
+    ModelOption(value="o3-mini", label="o3-mini deployment"),
 )
 
 BEDROCK_MODELS = (
@@ -675,6 +694,22 @@ SUPPORTED_PROVIDERS = (
         legacy_model_env="GROQ_MODEL",
         toolcall_model_env="GROQ_TOOLCALL_MODEL",
         classification_model_env="GROQ_CLASSIFICATION_MODEL",
+        allow_custom_models=True,
+    ),
+    ProviderOption(
+        value="azure-openai",
+        label="Azure OpenAI",
+        group="Hosted providers",
+        api_key_env="AZURE_OPENAI_API_KEY",
+        model_env="AZURE_OPENAI_REASONING_MODEL",
+        default_model=AZURE_OPENAI_REASONING_MODEL,
+        models=AZURE_OPENAI_MODELS,
+        legacy_model_env="AZURE_OPENAI_MODEL",
+        toolcall_model_env="AZURE_OPENAI_TOOLCALL_MODEL",
+        classification_model_env="AZURE_OPENAI_CLASSIFICATION_MODEL",
+        endpoint_env="AZURE_OPENAI_BASE_URL",
+        api_version_env="AZURE_OPENAI_API_VERSION",
+        credential_default="https://your-resource.openai.azure.com",
         allow_custom_models=True,
     ),
     ProviderOption(

@@ -60,7 +60,7 @@ def import_checks(*, strict_layers: bool = False) -> Sequence[ImportCheck]:
             "Import layers (import-linter)",
             lambda: _run_importlinter(config=layer_config),
         ),
-        ImportCheck("Forbidden direct import edges", check_direct_imports),
+        ImportCheck("Forbidden direct import edges (module + nested)", check_direct_imports),
     )
 
 

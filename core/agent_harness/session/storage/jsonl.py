@@ -69,6 +69,7 @@ class JsonlSessionStorage:
         model: str | None = None,
         provider: str | None = None,
         latency_ms: int | None = None,
+        system_prompt: str | None = None,
     ) -> None:
         metadata = {
             key: value
@@ -78,6 +79,7 @@ class JsonlSessionStorage:
                 "model": model,
                 "provider": provider,
                 "latency_ms": latency_ms,
+                "system_prompt": system_prompt,
             }.items()
             if value is not None
         }

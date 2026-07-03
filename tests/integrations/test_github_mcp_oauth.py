@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-import integrations.github_mcp_oauth as oauth
+import integrations.github.mcp_oauth as oauth
 
 
 class _FakeResponse:

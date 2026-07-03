@@ -22,6 +22,7 @@ class LlmRunInfo:
     input_tokens: int | None = None
     output_tokens: int | None = None
     response_text: str | None = None
+    final_system_prompt: str | None = None
 
 
 def estimate_tokens(text: str) -> int:
@@ -99,6 +100,7 @@ def build_llm_run_info(
     client: object | None = None,
     model: str | None = None,
     provider: str | None = None,
+    final_system_prompt: str | None = None,
 ) -> LlmRunInfo:
     """Record token usage and assemble metadata for prompt logging."""
     inp, out, _estimated = record_llm_turn(session, prompt=prompt, response=response_text)
@@ -110,6 +112,7 @@ def build_llm_run_info(
         input_tokens=inp,
         output_tokens=out,
         response_text=response_text,
+        final_system_prompt=final_system_prompt,
     )
 
 

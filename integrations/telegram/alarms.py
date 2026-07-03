@@ -23,11 +23,12 @@ from integrations.telegram.delivery import (
     truncate_for_telegram_html,
 )
 from platform.common.truncation import truncate
+from platform.notifications.limits import MAX_MESSAGE_SIZE
 
 logger = logging.getLogger(__name__)
 
 _DEFAULT_COOLDOWN_SECONDS = 300.0
-_TELEGRAM_MESSAGE_LIMIT = 4096
+_TELEGRAM_MESSAGE_LIMIT = MAX_MESSAGE_SIZE
 
 
 class AlarmDispatcher:

@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import os
+import traceback
 from collections.abc import Generator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
-from typing import Final
+from typing import TYPE_CHECKING, Final
 from uuid import uuid4
 
 from platform.analytics.events import Event
@@ -19,6 +20,9 @@ from platform.analytics.source import (
     build_source_properties,
 )
 from platform.observability.sentry_sdk import capture_exception
+
+if TYPE_CHECKING:
+    from core.agent_harness.session import Session
 
 EVAL_AND_TERMINAL_KPI_QUERIES: Final[dict[str, str]] = {
     "eval_pass_rate": """
@@ -207,10 +211,63 @@ def _investigation_failed_properties(
     *,
     shared_properties: Properties,
     failure_type: str | None = None,
+    failure_message: str | None = None,
+    failure_detail: str | None = None,
+    failure_category: str | None = None,
+    integration_involved: str | None = None,
+    integration_failure_message: str | None = None,
+    investigation_target: str | None = None,
 ) -> Properties:
     properties: Properties = {**shared_properties}
     if failure_type:
         properties["failure_type"] = failure_type
+    if failure_message:
+        properties["failure_message"] = failure_message
+    if failure_detail:
+        properties["failure_detail"] = failure_detail
+    if failure_category:
+        properties["failure_category"] = failure_category
+    if integration_involved:
+        properties["integration_involved"] = integration_involved
+    if integration_failure_message:
+        properties["integration_failure_message"] = integration_failure_message
+    if investigation_target:
+        properties["investigation_target"] = investigation_target
+    return properties
+
+
+def _investigation_outcome_properties(
+    *,
+    investigation_id: str,
+    status: str,
+    investigation_target: str,
+    root_cause_excerpt: str = "",
+    error_excerpt: str = "",
+    failure_category: str | None = None,
+    integration_involved: str | None = None,
+    integration_failure_message: str | None = None,
+    failure_detail: str | None = None,
+) -> Properties:
+    properties: Properties = {
+        "investigation_id": investigation_id,
+        "status": status,
+        "investigation_target": investigation_target,
+    }
+    if root_cause_excerpt:
+        properties["root_cause_excerpt"] = root_cause_excerpt
+    if error_excerpt:
+        properties["error_excerpt"] = error_excerpt
+    if failure_category:
+        properties["failure_category"] = failure_category
+    if integration_involved:
+        properties["integration_involved"] = integration_involved
+    if integration_failure_message:
+        properties["integration_failure_message"] = integration_failure_message
+    if failure_detail:
+        properties["failure_detail"] = failure_detail
+    session_id = get_cli_session_id()
+    if session_id:
+        properties["cli_session_id"] = session_id
     return properties
 
 
@@ -389,27 +446,80 @@ def capture_investigation_failed(
     *,
     tracker: InvestigationTracker | None = None,
     failure_type: str | None = None,
+    failure_message: str | None = None,
+    failure_detail: str | None = None,
+    failure_category: str | None = None,
+    integration_involved: str | None = None,
+    integration_failure_message: str | None = None,
+    investigation_target: str | None = None,
+    shared_properties: Properties | None = None,
 ) -> None:
+    props = _investigation_failed_properties(
+        shared_properties=shared_properties or (tracker.shared_properties if tracker else {}),
+        failure_type=failure_type,
+        failure_message=failure_message,
+        failure_detail=failure_detail,
+        failure_category=failure_category,
+        integration_involved=integration_involved,
+        integration_failure_message=integration_failure_message,
+        investigation_target=investigation_target,
+    )
     if tracker is None:
-        _capture(
-            Event.INVESTIGATION_FAILED,
-            _investigation_failed_properties(
-                shared_properties={},
-                failure_type=failure_type,
-            ),
-        )
+        _capture(Event.INVESTIGATION_FAILED, props)
         return
     if tracker.failed or not tracker.enabled:
         tracker.failed = True
         return
+    _capture(Event.INVESTIGATION_FAILED, props)
+    tracker.failed = True
+
+
+def capture_investigation_cancelled(
+    *,
+    investigation_id: str,
+    investigation_target: str = "",
+    tracker: InvestigationTracker | None = None,
+) -> None:
+    shared = tracker.shared_properties if tracker is not None and tracker.enabled else {}
+    if investigation_id and not shared.get("investigation_id"):
+        shared = {**shared, "investigation_id": investigation_id}
+    properties: Properties = {
+        **shared,
+        "failure_category": "user_cancelled",
+    }
+    if investigation_target:
+        properties["investigation_target"] = investigation_target
+    _capture(Event.INVESTIGATION_CANCELLED, properties)
+
+
+def capture_investigation_outcome(
+    *,
+    investigation_id: str,
+    status: str,
+    investigation_target: str,
+    root_cause_excerpt: str = "",
+    error_excerpt: str = "",
+    failure_category: str | None = None,
+    integration_involved: str | None = None,
+    integration_failure_message: str | None = None,
+    failure_detail: str | None = None,
+) -> None:
+    if not investigation_id:
+        return
     _capture(
-        Event.INVESTIGATION_FAILED,
-        _investigation_failed_properties(
-            shared_properties=tracker.shared_properties,
-            failure_type=failure_type,
+        Event.INVESTIGATION_OUTCOME,
+        _investigation_outcome_properties(
+            investigation_id=investigation_id,
+            status=status,
+            investigation_target=investigation_target,
+            root_cause_excerpt=root_cause_excerpt,
+            error_excerpt=error_excerpt,
+            failure_category=failure_category,
+            integration_involved=integration_involved,
+            integration_failure_message=integration_failure_message,
+            failure_detail=failure_detail,
         ),
     )
-    tracker.failed = True
 
 
 @contextmanager
@@ -422,6 +532,8 @@ def track_investigation(
     interactive: bool = False,
     evaluate_requested: bool = False,
     investigation_id: str | None = None,
+    investigation_target: str | None = None,
+    session: Session | None = None,
 ) -> Generator[InvestigationTracker]:
     """Capture investigation lifecycle once, with nested-call dedupe."""
     depth = _INVESTIGATION_TRACKING_DEPTH.get()
@@ -430,11 +542,16 @@ def track_investigation(
     if depth > 0:
         tracker = InvestigationTracker(shared_properties={}, enabled=False)
     else:
+        resolved_id = investigation_id or str(uuid4())
         shared_properties = build_source_properties(
             entrypoint=entrypoint,
             trigger_mode=trigger_mode,
-            investigation_id=investigation_id or str(uuid4()),
+            investigation_id=resolved_id,
         )
+        if investigation_target:
+            shared_properties["investigation_target"] = investigation_target
+        if session is not None:
+            session.last_investigation_id = resolved_id
         _capture(
             Event.INVESTIGATION_STARTED,
             _investigation_started_properties(
@@ -451,9 +568,14 @@ def track_investigation(
         yielded = tracker
         yield yielded
     except Exception as exc:
+        failure_message = str(exc).strip()[:500]
+        failure_detail = "".join(traceback.format_exception_only(exc)).strip()[:500]
         capture_investigation_failed(
             tracker=yielded,
             failure_type=type(exc).__name__,
+            failure_message=failure_message or type(exc).__name__,
+            failure_detail=failure_detail or None,
+            investigation_target=investigation_target,
         )
         raise
     else:
@@ -492,7 +614,7 @@ def identify_saved_github_username() -> None:
     ``$ai_generation`` include ``github_username`` without requiring a fresh
     device-flow login each session.
     """
-    from integrations.github_identity import saved_github_username
+    from integrations.github.identity import saved_github_username
 
     identify_github_username(saved_github_username())
 

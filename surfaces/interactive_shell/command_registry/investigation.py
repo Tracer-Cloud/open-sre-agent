@@ -28,8 +28,18 @@ from surfaces.interactive_shell.ui.components.choice_menu import (
     repl_tty_interactive,
 )
 from surfaces.interactive_shell.ui.foreground_investigation import run_foreground_investigation
+from surfaces.interactive_shell.ui.investigation_outcome import (
+    InvestigationOutcome,
+    normalize_investigation_target,
+)
 from surfaces.interactive_shell.utils.error_handling.exception_reporting import report_exception
-from surfaces.interactive_shell.utils.telemetry.turn_outcome import format_investigation_outcome
+from surfaces.interactive_shell.utils.telemetry.investigation_analytics import (
+    publish_investigation_outcome_analytics,
+)
+from surfaces.interactive_shell.utils.telemetry.turn_outcome import (
+    format_investigation_outcome,
+    format_investigation_terminal_outcome,
+)
 
 
 def _interactive_template_menu(session: Session, console: Console) -> bool:
@@ -145,6 +155,34 @@ def _validate_save_args(args: list[str]) -> str | None:
     return None
 
 
+def _record_investigation_turn(
+    session: Session,
+    *,
+    command_line: str,
+    outcome: InvestigationOutcome,
+) -> None:
+    ok = outcome.status == "completed"
+    response_text = format_investigation_terminal_outcome(
+        command_line,
+        target=outcome.target,
+        ok=ok,
+        final_state=outcome.final_state,
+        error_message=outcome.error_message,
+        status=outcome.status,
+    )
+    session.record(
+        "alert",
+        command_line,
+        ok=ok,
+        response_text=response_text,
+    )
+    if not ok:
+        session.mark_latest(ok=False, kind="slash")
+    if outcome.investigation_id:
+        session.last_investigation_id = outcome.investigation_id
+    publish_investigation_outcome_analytics(outcome)
+
+
 def _cmd_investigate_file(session: Session, console: Console, args: list[str]) -> bool:
     from platform.analytics.cli import track_investigation
     from platform.analytics.source import EntrypointSource, TriggerMode
@@ -179,18 +217,20 @@ def _cmd_investigate_file(session: Session, console: Console, args: list[str]) -
     # in the working directory. Users can still force file mode with an explicit
     # path form (for example: ``/investigate ./generic``).
     if template_name:
+        target_slug = normalize_investigation_target(template_name)
         if session.background_mode_enabled:
             start_background_template_investigation(
                 template_name=template_name,
                 session=session,
                 console=console,
                 display_command=f"/investigate {template_name}",
+                investigation_target=target_slug,
             )
             session.record(
                 "alert",
                 f"/investigate {template_name}",
                 response_text=format_investigation_outcome(
-                    template_name,
+                    target_slug,
                     background=True,
                 ),
             )
@@ -203,6 +243,8 @@ def _cmd_investigate_file(session: Session, console: Console, args: list[str]) -
                     trigger_mode=TriggerMode.FILE,
                     input_path=f"template:{template_name}",
                     interactive=True,
+                    session=session,
+                    investigation_target=target_slug,
                 ),
                 apply_reasoning_effort(session.reasoning_effort),
             ):
@@ -215,28 +257,16 @@ def _cmd_investigate_file(session: Session, console: Console, args: list[str]) -
                     cancel_requested=task.cancel_requested,
                 )
 
-        final_state = run_foreground_investigation(
+        command_line = f"/investigate {template_name}"
+        outcome = run_foreground_investigation(
             session=session,
             console=console,
-            task_command=f"/investigate {template_name}",
+            task_command=command_line,
             run=_run_template,
             exception_context="surfaces.interactive_shell.investigate_template",
+            target=target_slug,
         )
-        if final_state is None:
-            session.record(
-                "alert",
-                f"/investigate {template_name}",
-                ok=False,
-                response_text=format_investigation_outcome(template_name),
-            )
-            session.mark_latest(ok=False, kind="slash")
-            return True
-
-        session.record(
-            "alert",
-            f"/investigate {template_name}",
-            response_text=format_investigation_outcome(template_name, final_state=final_state),
-        )
+        _record_investigation_turn(session, command_line=command_line, outcome=outcome)
         return True
 
     path = resolve_alert_path(raw_target)
@@ -254,18 +284,22 @@ def _cmd_investigate_file(session: Session, console: Console, args: list[str]) -
         return True
 
     if session.background_mode_enabled:
+        target_slug = normalize_investigation_target(raw_target, path=path)
         start_background_text_investigation(
             alert_text=text,
             session=session,
             console=console,
             display_command=f"/investigate {path}",
+            investigation_target=target_slug,
         )
         session.record(
             "alert",
             args[0],
-            response_text=format_investigation_outcome(str(path), background=True),
+            response_text=format_investigation_outcome(target_slug, background=True),
         )
         return True
+
+    target_slug = normalize_investigation_target(raw_target, path=path)
 
     def _run_file(task: TaskRecord) -> dict[str, object]:
         with (
@@ -274,6 +308,8 @@ def _cmd_investigate_file(session: Session, console: Console, args: list[str]) -
                 trigger_mode=TriggerMode.FILE,
                 input_path=str(path),
                 interactive=True,
+                session=session,
+                investigation_target=target_slug,
             ),
             apply_reasoning_effort(session.reasoning_effort),
         ):
@@ -286,28 +322,16 @@ def _cmd_investigate_file(session: Session, console: Console, args: list[str]) -
                 cancel_requested=task.cancel_requested,
             )
 
-    final_state = run_foreground_investigation(
+    command_line = f"/investigate {raw_target}"
+    outcome = run_foreground_investigation(
         session=session,
         console=console,
         task_command=f"/investigate {path}",
         run=_run_file,
         exception_context="surfaces.interactive_shell.investigate_file",
+        target=target_slug,
     )
-    if final_state is None:
-        session.record(
-            "alert",
-            args[0],
-            ok=False,
-            response_text=format_investigation_outcome(raw_target),
-        )
-        session.mark_latest(ok=False, kind="slash")
-        return True
-
-    session.record(
-        "alert",
-        f"/investigate {raw_target}",
-        response_text=format_investigation_outcome(raw_target, final_state=final_state),
-    )
+    _record_investigation_turn(session, command_line=command_line, outcome=outcome)
     return True
 
 

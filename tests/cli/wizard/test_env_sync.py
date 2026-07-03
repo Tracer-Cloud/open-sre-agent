@@ -431,6 +431,68 @@ def test_sync_provider_env_writes_toolcall_model_atomically(tmp_path, monkeypatc
     assert os.environ["OPENAI_TOOLCALL_MODEL"] == "gpt-5.4-nano"
 
 
+def test_sync_provider_env_sets_and_clears_azure_litellm_transport(tmp_path, monkeypatch) -> None:
+    env_path = tmp_path / ".env"
+    azure = PROVIDER_BY_VALUE["azure-openai"]
+    env_path.write_text(
+        "LLM_PROVIDER=anthropic\n"
+        "OPENSRE_LLM_TRANSPORT=litellm\n"
+        "AZURE_OPENAI_BASE_URL=https://example.openai.azure.com\n",
+        encoding="utf-8",
+    )
+
+    sync_provider_env(
+        provider=PROVIDER_BY_VALUE["openai"],
+        model="gpt-5.4-mini",
+        env_path=env_path,
+    )
+
+    content = env_path.read_text(encoding="utf-8")
+    assert "LLM_PROVIDER=openai\n" in content
+    assert "OPENSRE_LLM_TRANSPORT=" not in content
+
+    sync_provider_env(
+        provider=azure,
+        model="gpt-5.4-mini",
+        extra_env={
+            "AZURE_OPENAI_BASE_URL": "https://example.openai.azure.com",
+            "AZURE_OPENAI_API_VERSION": "2024-10-21",
+        },
+        env_path=env_path,
+    )
+
+    content = env_path.read_text(encoding="utf-8")
+    assert "LLM_PROVIDER=azure-openai\n" in content
+    assert "OPENSRE_LLM_TRANSPORT=litellm\n" in content
+    assert "AZURE_OPENAI_API_VERSION=2024-10-21\n" in content
+    assert os.environ["OPENSRE_LLM_TRANSPORT"] == "litellm"
+
+
+def test_sync_provider_env_preserves_azure_endpoint_on_model_switch(tmp_path, monkeypatch) -> None:
+    env_path = tmp_path / ".env"
+    azure = PROVIDER_BY_VALUE["azure-openai"]
+    env_path.write_text(
+        "LLM_PROVIDER=azure-openai\n"
+        "OPENSRE_LLM_TRANSPORT=litellm\n"
+        "AZURE_OPENAI_BASE_URL=https://example.openai.azure.com\n"
+        "AZURE_OPENAI_API_VERSION=2024-10-21\n"
+        "AZURE_OPENAI_REASONING_MODEL=gpt-5.4-mini\n",
+        encoding="utf-8",
+    )
+
+    sync_provider_env(
+        provider=azure,
+        model="gpt-5.4",
+        env_path=env_path,
+    )
+
+    content = env_path.read_text(encoding="utf-8")
+    assert "AZURE_OPENAI_BASE_URL=https://example.openai.azure.com\n" in content
+    assert "AZURE_OPENAI_API_VERSION=2024-10-21\n" in content
+    assert "AZURE_OPENAI_REASONING_MODEL=gpt-5.4\n" in content
+    assert os.environ["AZURE_OPENAI_BASE_URL"] == "https://example.openai.azure.com"
+
+
 @pytest.mark.skipif(_SKIP_AS_ROOT, reason="root bypasses file permission checks")
 def test_sync_provider_env_permission_error(tmp_path) -> None:
     env_path = tmp_path / ".env"

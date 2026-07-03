@@ -1,13 +1,66 @@
 from __future__ import annotations
 
+from collections.abc import Generator
+
 import pytest
 
+from platform.terminal.theme import DEFAULT_THEME_NAME, set_active_theme
 from tools.investigation.reporting.renderers.terminal import (
     _rich_line_with_links,
     _strip_mrkdwn,
     _strip_slack_links,
     render_report,
 )
+
+
+@pytest.fixture
+def restore_active_theme() -> Generator[None]:
+    """Restore the default active theme after tests mutate the global palette."""
+    yield
+    set_active_theme(DEFAULT_THEME_NAME)
+
+
+_GREEN_BRAND_HEX = "#66A17D"
+_AMBER_BRAND_HEX = "#C99944"
+_GREEN_HIGHLIGHT_HEX = "#B9EDAF"
+_AMBER_HIGHLIGHT_HEX = "#F2D48A"
+
+
+def test_rich_line_with_links_tracks_active_brand(restore_active_theme: None) -> None:
+    """Link styling must follow set_active_theme BRAND, not a static palette."""
+    set_active_theme("green")
+    green = _rich_line_with_links("<https://example.com|grafana>")
+    green_styles = [str(span.style) for span in green.spans if span.style]
+    assert any(_GREEN_BRAND_HEX in style for style in green_styles)
+
+    set_active_theme("amber")
+    amber = _rich_line_with_links("<https://example.com|grafana>")
+    amber_styles = [str(span.style) for span in amber.spans if span.style]
+    assert any(_AMBER_BRAND_HEX in style for style in amber_styles)
+    assert not any(_GREEN_BRAND_HEX in style for style in amber_styles)
+
+
+def test_render_rich_section_heading_tracks_active_highlight(restore_active_theme: None) -> None:
+    """Section headings must follow set_active_theme HIGHLIGHT, not a static palette."""
+    from tools.investigation.reporting.renderers.terminal import _render_rich_section_heading
+
+    captured: list[object] = []
+
+    class FakeConsole:
+        def print(self, *args: object, **_kwargs: object) -> None:
+            if args:
+                captured.append(args[0])
+
+    set_active_theme("green")
+    _render_rich_section_heading(FakeConsole(), "Findings")
+    assert _GREEN_HIGHLIGHT_HEX in str(captured[0])
+
+    captured.clear()
+    set_active_theme("amber")
+    _render_rich_section_heading(FakeConsole(), "Findings")
+    amber_rule = str(captured[0])
+    assert _AMBER_HIGHLIGHT_HEX in amber_rule
+    assert _GREEN_HIGHLIGHT_HEX not in amber_rule
 
 
 def test_strip_mrkdwn_does_not_cross_lines_with_metric_regex() -> None:

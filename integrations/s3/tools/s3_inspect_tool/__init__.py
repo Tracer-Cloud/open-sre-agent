@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from core.tool_framework.tool_decorator import tool
 from integrations.aws.s3_client import get_object_metadata, get_object_sample
+from platform.notifications.limits import MAX_MESSAGE_SIZE
 
 
 def _inspect_s3_available(sources: dict[str, dict]) -> bool:
@@ -55,7 +56,7 @@ def inspect_s3_object(bucket: str, key: str) -> dict:
     if not metadata_result.get("exists"):
         return {"found": False, "bucket": bucket, "key": key, "message": "Object does not exist"}
 
-    sample_result = get_object_sample(bucket, key, max_bytes=4096)
+    sample_result = get_object_sample(bucket, key, max_bytes=MAX_MESSAGE_SIZE)
     metadata = metadata_result.get("data", {})
     sample_data = sample_result.get("data", {}) if sample_result.get("success") else {}
 

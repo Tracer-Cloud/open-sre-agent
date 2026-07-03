@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 from integrations.github.helpers import github_creds, resolve_github_mcp_config
-from integrations.github_mcp import DEFAULT_GITHUB_MCP_MODE
+from integrations.github.mcp import DEFAULT_GITHUB_MCP_MODE
 
 
 def test_github_creds_maps_classified_integration_fields() -> None:

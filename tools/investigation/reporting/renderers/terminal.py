@@ -8,8 +8,8 @@ import sys
 from rich.console import Console
 from rich.text import Text
 
-from config.ui_theme import BRAND, DIM, HIGHLIGHT, WARNING
 from platform.observability import get_output_format
+from platform.terminal.theme import BRAND, DIM, HIGHLIGHT, WARNING
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
