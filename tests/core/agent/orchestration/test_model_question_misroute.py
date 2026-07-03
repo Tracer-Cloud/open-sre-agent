@@ -33,9 +33,7 @@ from tests.core.agent.orchestration.action_execution_test_harness import (
     tool_response,
 )
 
-_ACTION_LLM_FACTORY_PATCH = (
-    "surfaces.interactive_shell.runtime.shell_turn_execution._default_llm_factory"
-)
+_ACTION_LLM_FACTORY_PATCH = "surfaces.interactive_shell.runtime.action_turn._default_llm_factory"
 _PROMPT = "which model is being used now?"
 
 

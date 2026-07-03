@@ -4,7 +4,7 @@ This module owns the terminal-facing action observer. Planner tool calls are
 internal state by default: the observer records them for history/storage while
 the concrete action executors render user-facing command output. The execution
 orchestration that drives it lives in
-:func:`interactive_shell.runtime.shell_turn_execution.run_action_tool_turn`.
+:func:`interactive_shell.runtime.action_turn.run_action_tool_turn`.
 
 Keeping rendering here means the shell turn-entry adapter stays focused on
 binding core ports while terminal formatting stays in ``ui/``.

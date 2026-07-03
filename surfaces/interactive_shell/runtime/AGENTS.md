@@ -139,8 +139,11 @@ flowchart TD
   `run_agent_turn` own shell presentation (StreamingConsole, spinner, recorder,
   progress scope), construct a `ConsoleAgentEventSink`, own dispatch state, and
   call `interactive_shell.runtime.shell_turn_execution.execute_shell_turn`.
-- The shell adapter entry lives in `runtime/shell_turn_execution.py`: it binds shell
-  adapters and accounting around `core.agent_harness.agents.turn_orchestrator.run_turn`.
+- The shell adapter entry lives in `runtime/shell_turn_execution.py`: `execute_shell_turn`
+  composes the action-turn (`runtime/action_turn.py`), gather (`runtime/integration_tool_gathering.py`),
+  and answer (`runtime/answer_turn.py`) adapters plus accounting around
+  `core.agent_harness.agents.turn_orchestrator.run_turn`. Each adapter owns its own
+  binding; tests import them from their owning module (not `shell_turn_execution`).
 - The reusable per-prompt loop lives in `core.agent_harness`: turn snapshots,
   observation reset, action/response routing, and core result construction stay
   surface-agnostic.
@@ -154,7 +157,7 @@ flowchart TD
   `interactive_shell/runtime/core/turn_accounting.py`, invoked from
   `interactive_shell.runtime.shell_turn_execution.execute_shell_turn`. It owns action-agent analytics, terminal-turn aggregate
   telemetry, prompt-recorder flush, conversational-turn persistence, and the final
-  assistant-intent stamp. `interactive_shell.runtime.shell_turn_execution.run_action_tool_turn` returns facts
+  assistant-intent stamp. `interactive_shell.runtime.action_turn.run_action_tool_turn` returns facts
   only (`ToolCallingTurnResult` with `accounting_status` of `completed` / `not_run`)
   and emits no analytics itself. Do not re-scatter accounting back into
   `run_action_tool_turn` or standalone `_record_*` helpers.
