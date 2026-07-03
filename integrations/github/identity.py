@@ -1,6 +1,6 @@
 """Lightweight GitHub identity helpers for UI and analytics.
 
-Kept separate from :mod:`integrations.github_login` so callers like the welcome
+Kept separate from :mod:`integrations.github.login` so callers like the welcome
 banner can read the saved handle without importing the heavy GitHub MCP stack.
 """
 

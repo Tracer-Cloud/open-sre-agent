@@ -1,7 +1,10 @@
 """Per-turn immutable context snapshot for the agentic turn engine.
 
+See ``docs/agent-context-data-stores.md`` for how this fits with ``Session``,
+``MutableAgentState``, and JSONL persistence.
+
 Assembled once at the start of each turn from any object satisfying
-:class:`TurnContextSource` (the interactive shell passes its ``ReplSession``;
+:class:`TurnContextSource` (the interactive shell passes its ``Session``;
 headless callers pass an in-memory session store). All fields reflect session
 state at turn-start and do not change while the turn runs, so downstream code
 reads a stable snapshot rather than a live, concurrently-mutated object.
@@ -43,7 +46,7 @@ type SystemPromptInput = str | PromptRenderable
 class TurnContextSource(Protocol):
     """Structural source of per-turn snapshot fields.
 
-    ``ReplSession`` satisfies this without inheriting it; headless session
+    ``Session`` satisfies this without inheriting it; headless session
     stores implement the same attributes. Keeping this structural is what lets
     ``agent/`` build a ``TurnContext`` without importing ``interactive_shell``.
     """
@@ -54,7 +57,7 @@ class TurnContextSource(Protocol):
     last_synthetic_observation_path: str | None
     reasoning_effort: ReasoningEffortChoice | None
 
-    # Read-only here; ``ReplSession`` stores a tuple. A property matches
+    # Read-only here; ``Session`` stores a tuple. A property matches
     # covariantly, so any concrete ``Sequence[str]`` implementation satisfies it.
     @property
     def configured_integrations(self) -> Sequence[str]:
@@ -112,7 +115,7 @@ class TurnContext:
     build prompts and ground answers, frozen at the moment the turn begins. It
     can also carry the runtime loop request fields that ``Agent.run`` needs.
 
-    The live ``ReplSession`` is still passed separately to callers that need
+    The live ``Session`` is still passed separately to callers that need
     to write state (recording history, persisting token usage, updating intent).
     """
 
@@ -172,7 +175,7 @@ class TurnContext:
 
         Call this once at the top of the turn before any mutations happen, then
         pass the returned context downstream. ``session`` is anything satisfying
-        :class:`TurnContextSource` (e.g. the shell's ``ReplSession``). When the
+        :class:`TurnContextSource` (e.g. the shell's ``Session``). When the
         source also exposes ``select_agent_context_input`` directly or through
         ``source.agent``, runtime request fields are snapshotted too.
         """
@@ -183,6 +186,7 @@ class TurnContext:
             if isinstance(role, str) and isinstance(content, str)
         )
         runtime_input = _select_runtime_request_input(text, session)
+        last_observation = _read_last_observation(session, runtime_input)
         return cls(
             text=text,
             conversation_messages=snapshot,
@@ -198,7 +202,7 @@ class TurnContext:
             tool_resources=dict(getattr(runtime_input, "tool_resources", {}) or {}),
             max_iterations=int(getattr(runtime_input, "max_iterations", 1)),
             model=getattr(runtime_input, "model", None),
-            last_observation=getattr(runtime_input, "last_observation", None),
+            last_observation=last_observation,
         )
 
     def render_system_prompt(self) -> str:
@@ -219,6 +223,24 @@ class TurnContext:
             raise ValueError("TurnContext.max_iterations must be positive.")
         if not self.active_tools:
             raise ValueError("TurnContext.active_tools must include at least one tool.")
+
+
+def _read_last_observation(session: TurnContextSource, runtime_input: Any | None) -> str | None:
+    """Read the last tool observation from runtime input or the live session."""
+    from_runtime = getattr(runtime_input, "last_observation", None)
+    if isinstance(from_runtime, str) and from_runtime.strip():
+        return from_runtime
+
+    agent = getattr(session, "agent", None)
+    agent_observation = getattr(agent, "last_observation", None)
+    if isinstance(agent_observation, str) and agent_observation.strip():
+        return agent_observation
+
+    session_observation = getattr(session, "last_command_observation", None)
+    if isinstance(session_observation, str) and session_observation.strip():
+        return session_observation
+
+    return None
 
 
 __all__ = [

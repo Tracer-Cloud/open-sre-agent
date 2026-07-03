@@ -15,7 +15,7 @@ from rich.console import Console
 
 import surfaces.interactive_shell.main as main_entrypoint
 from core.agent_harness.integrations.resolution import IntegrationResolutionResult
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from surfaces.interactive_shell.runtime.startup import first_launch_github as flg
 
 
@@ -28,7 +28,7 @@ def test_hydrate_populates_session_from_effective_resolution(monkeypatch: Any) -
         "integrations.catalog.configured_integration_services",
         lambda: ["gitlab", "datadog"],
     )
-    session = ReplSession()
+    session = Session()
     session.hydrate_configured_integrations()
     assert session.configured_integrations_known is True
     # Metadata discovery covers env + local store and is returned in sorted order.
@@ -40,7 +40,7 @@ def test_hydrate_marks_known_even_when_none_configured(monkeypatch: Any) -> None
         "integrations.catalog.configured_integration_services",
         list,
     )
-    session = ReplSession()
+    session = Session()
     session.hydrate_configured_integrations()
     assert session.configured_integrations_known is True
     assert session.configured_integrations == ()
@@ -52,7 +52,7 @@ def test_warm_resolved_integrations_populates_cache(monkeypatch: Any) -> None:
         "core.agent_harness.integrations.resolution.resolve_integrations",
         lambda: resolved,
     )
-    session = ReplSession()
+    session = Session()
     session.warm_resolved_integrations()
     assert session.resolved_integrations_cache == resolved
 
@@ -68,7 +68,7 @@ def test_warm_resolved_integrations_is_idempotent(monkeypatch: Any) -> None:
         "core.agent_harness.integrations.resolution.resolve_integrations",
         _resolve,
     )
-    session = ReplSession()
+    session = Session()
     session.warm_resolved_integrations()
     session.warm_resolved_integrations()
     assert calls == ["resolve"]
@@ -85,7 +85,7 @@ def test_warm_resolved_integrations_skips_empty_cache(monkeypatch: Any) -> None:
         "core.agent_harness.integrations.resolution.resolve_integrations",
         _resolve,
     )
-    session = ReplSession()
+    session = Session()
     session.warm_resolved_integrations()
     assert session.resolved_integrations_cache is None
     session.warm_resolved_integrations()
@@ -105,7 +105,7 @@ def test_warm_resolved_integrations_uses_quiet_resolve(monkeypatch: Any) -> None
         lambda: quiet_calls.append("quiet") or {"datadog": {}},
     )
 
-    session = ReplSession()
+    session = Session()
     session.warm_resolved_integrations()
 
     assert quiet_calls == ["quiet"]
@@ -121,7 +121,7 @@ def test_get_integrations_returns_pydantic_cached_result(monkeypatch: Any) -> No
         "core.agent_harness.integrations.resolution.resolve_integrations",
         _unexpected_resolve,
     )
-    session = ReplSession()
+    session = Session()
     session.resolved_integrations_cache = {"datadog": {"site": "datadoghq.com"}}
 
     result = session.get_integrations()
@@ -137,7 +137,7 @@ def test_get_integrations_respects_explicit_empty_cache(monkeypatch: Any) -> Non
         "core.agent_harness.integrations.resolution.resolve_integrations",
         lambda: calls.append("resolve") or {"datadog": {}},
     )
-    session = ReplSession()
+    session = Session()
     session.resolved_integrations_cache = {}
 
     result = session.get_integrations()
@@ -152,7 +152,7 @@ def test_get_integrations_warms_metadata_only_cache(monkeypatch: Any) -> None:
         "core.agent_harness.integrations.resolution.resolve_integrations",
         lambda: calls.append("resolve") or {"datadog": {"site": "datadoghq.com"}},
     )
-    session = ReplSession()
+    session = Session()
     session.resolved_integrations_cache = {"_gateway_chat_id": "chat-1"}
 
     result = session.get_integrations()
@@ -165,7 +165,7 @@ def test_get_integrations_warms_metadata_only_cache(monkeypatch: Any) -> None:
 
 
 def test_stale_background_warm_does_not_overwrite_refreshed_cache() -> None:
-    session = ReplSession()
+    session = Session()
     stale_generation = session._integration_warm_generation
     session._integration_warm_generation += 1
     session._store_warm_cache(
@@ -190,7 +190,7 @@ def test_hydrate_entrypoint_does_not_warm_before_prompt(monkeypatch: Any) -> Non
         "core.agent_harness.integrations.resolution.resolve_integrations",
         _resolve,
     )
-    session = ReplSession()
+    session = Session()
     session.hydrate_configured_integrations()
     assert session.configured_integrations_known is True
     assert session.resolved_integrations_cache is None
@@ -204,13 +204,13 @@ def test_schedule_warm_resolved_integrations_runs_in_background(
 
     warmed = asyncio.Event()
 
-    def _warm(self: ReplSession, *, generation: int | None = None) -> None:
+    def _warm(self: Session, *, generation: int | None = None) -> None:
         warmed.set()
 
-    monkeypatch.setattr(ReplSession, "warm_resolved_integrations", _warm)
+    monkeypatch.setattr(Session, "warm_resolved_integrations", _warm)
 
     async def _run() -> None:
-        session = ReplSession()
+        session = Session()
         session.schedule_warm_resolved_integrations()
         await asyncio.wait_for(warmed.wait(), timeout=1.0)
         assert warmed.is_set()
@@ -226,7 +226,7 @@ def test_hydrate_leaves_unknown_on_failure(monkeypatch: Any) -> None:
         "integrations.catalog.configured_integration_services",
         _boom,
     )
-    session = ReplSession()
+    session = Session()
     session.hydrate_configured_integrations()
     assert session.configured_integrations_known is False
     assert session.configured_integrations == ()
@@ -317,11 +317,11 @@ def test_repl_main_failed_resume_flushes_starter_session(monkeypatch: Any, tmp_p
         lambda *_args, **_kwargs: False,
     )
 
-    session = ReplSession()
+    session = Session()
     flushed: list[str] = []
     original_flush = session.storage.flush
 
-    def _track_flush(current_session: ReplSession) -> None:
+    def _track_flush(current_session: Session) -> None:
         flushed.append(current_session.session_id)
         original_flush(current_session)
 

@@ -8,7 +8,7 @@ from typing import Any
 
 from rich.console import Console
 
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from surfaces.interactive_shell.runtime.core.turn_accounting import (
     ToolCallingTurnResult,
 )
@@ -32,7 +32,7 @@ def _unhandled_turn(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
 def _record_answer() -> tuple[list[dict[str, Any]], Callable[..., None]]:
     calls: list[dict[str, Any]] = []
 
-    def _fake_answer(message: str, session: ReplSession, console: Console, **kwargs: Any) -> None:
+    def _fake_answer(message: str, session: Session, console: Console, **kwargs: Any) -> None:
         calls.append({"message": message, **kwargs})
         return None
 
@@ -44,7 +44,7 @@ def test_gather_string_threads_offscreen_observation() -> None:
 
     execute_shell_turn(
         "question",
-        ReplSession(),
+        Session(),
         _console(),
         recorder=None,
         execute_actions=_unhandled_turn,
@@ -62,7 +62,7 @@ def test_gather_none_passes_through_without_observation() -> None:
 
     execute_shell_turn(
         "question",
-        ReplSession(),
+        Session(),
         _console(),
         recorder=None,
         execute_actions=_unhandled_turn,
@@ -83,7 +83,7 @@ def test_existing_command_observation_skips_gather() -> None:
 
     def _handled_with_observation(
         _text: str,
-        session: ReplSession,
+        session: Session,
         _console: Console,
         **_kwargs: object,
     ) -> ToolCallingTurnResult:
@@ -98,7 +98,7 @@ def test_existing_command_observation_skips_gather() -> None:
 
     execute_shell_turn(
         "question",
-        ReplSession(),
+        Session(),
         _console(),
         recorder=None,
         execute_actions=_handled_with_observation,

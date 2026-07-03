@@ -13,14 +13,14 @@ from platform.terminal.theme import (
     set_active_theme,
 )
 from surfaces.interactive_shell.command_registry.types import SlashCommand
-from surfaces.interactive_shell.runtime import ReplSession
+from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui.components.choice_menu import (
     repl_choose_one,
     repl_tty_interactive,
 )
 
 
-def _refresh_prompt_style(session: ReplSession) -> None:
+def _refresh_prompt_style(session: Session) -> None:
     """Defer prompt-toolkit style refresh until the next prompt_async turn."""
     session.pending_theme_refresh = True
 
@@ -34,7 +34,7 @@ def _settle_and_drain_cpr() -> None:
 
 
 def _persist_and_report_theme(
-    session: ReplSession,
+    session: Session,
     console: Console,
     selected: str,
 ) -> None:
@@ -56,7 +56,7 @@ def _persist_and_report_theme(
     _refresh_prompt_style(session)
 
 
-def _cmd_theme(session: ReplSession, console: Console, args: list[str]) -> bool:
+def _cmd_theme(session: Session, console: Console, args: list[str]) -> bool:
     if args:
         selected = args[0].strip().lower()
         if selected not in list_theme_names():

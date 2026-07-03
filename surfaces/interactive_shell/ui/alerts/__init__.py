@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from rich.console import RenderableType
 
     from core.domain.alerts.inbox import AlertInbox
-    from surfaces.interactive_shell.runtime import ReplSession
+    from surfaces.interactive_shell.runtime import Session
 
 
 def time_ago(then: datetime | None) -> str:
@@ -88,7 +88,7 @@ def format_incoming_alert(alert: IncomingAlert) -> RenderableType:
 
 
 def drain_and_render_incoming(
-    session: ReplSession,
+    session: Session,
     console: Console,
     inbox: AlertInbox,
 ) -> int:

@@ -12,7 +12,7 @@ import io
 
 from rich.console import Console
 
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from surfaces.interactive_shell.runtime.core.turn_accounting import (
     ToolCallingTurnResult,
 )
@@ -31,7 +31,7 @@ def test_discovery_output_is_summarized_into_a_direct_answer() -> None:
 
     def fake_execute(
         text: str,
-        session: ReplSession,
+        session: Session,
         console: Console,
         **kwargs: object,
     ) -> ToolCallingTurnResult:
@@ -46,14 +46,14 @@ def test_discovery_output_is_summarized_into_a_direct_answer() -> None:
 
     def fake_answer(
         text: str,
-        session: ReplSession,
+        session: Session,
         console: Console,
         **kwargs: object,
     ) -> LlmRunInfo:
         observed.append(kwargs.get("tool_observation"))  # type: ignore[arg-type]
         return LlmRunInfo(response_text="No — Sentry is not configured.")
 
-    session = ReplSession()
+    session = Session()
     execute_shell_turn(
         "is sentry installed?",
         session,
@@ -73,7 +73,7 @@ def test_no_observation_keeps_silent_handled_turn() -> None:
 
     def fake_execute(
         text: str,
-        session: ReplSession,
+        session: Session,
         console: Console,
         **kwargs: object,
     ) -> ToolCallingTurnResult:
@@ -90,7 +90,7 @@ def test_no_observation_keeps_silent_handled_turn() -> None:
         answer_calls.append(text)
         return None
 
-    session = ReplSession()
+    session = Session()
     execute_shell_turn(
         "deploy the remote instance",
         session,
@@ -110,7 +110,7 @@ def test_literal_slash_command_skips_observation_summary() -> None:
 
     def fake_execute(
         text: str,
-        session: ReplSession,
+        session: Session,
         console: Console,
         **kwargs: object,
     ) -> ToolCallingTurnResult:
@@ -127,7 +127,7 @@ def test_literal_slash_command_skips_observation_summary() -> None:
         answer_calls.append(text)
         return None
 
-    session = ReplSession()
+    session = Session()
     execute_shell_turn(
         "/integrations list",
         session,
@@ -147,7 +147,7 @@ def test_failed_discovery_is_not_summarized() -> None:
 
     def fake_execute(
         text: str,
-        session: ReplSession,
+        session: Session,
         console: Console,
         **kwargs: object,
     ) -> ToolCallingTurnResult:
@@ -164,7 +164,7 @@ def test_failed_discovery_is_not_summarized() -> None:
         answer_calls.append(text)
         return None
 
-    session = ReplSession()
+    session = Session()
     execute_shell_turn(
         "is sentry installed?",
         session,
@@ -184,7 +184,7 @@ def test_observation_is_reset_each_turn() -> None:
 
     def fake_execute(
         text: str,
-        session: ReplSession,
+        session: Session,
         console: Console,
         **kwargs: object,
     ) -> ToolCallingTurnResult:
@@ -201,7 +201,7 @@ def test_observation_is_reset_each_turn() -> None:
         answer_calls.append(kwargs.get("tool_observation"))
         return None
 
-    session = ReplSession()
+    session = Session()
     session.last_command_observation = "stale observation from a previous turn"
     execute_shell_turn(
         "deploy the remote instance",

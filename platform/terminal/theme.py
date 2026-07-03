@@ -247,7 +247,7 @@ def get_active_theme_name() -> str:
 
 
 def _apply_theme(theme: CliTheme) -> None:
-    global HIGHLIGHT_ANSI, BRAND_ANSI, TEXT_ANSI, DIM_ANSI, BOLD_BRAND_ANSI
+    global HIGHLIGHT_ANSI, BRAND_ANSI, TEXT_ANSI, SECONDARY_ANSI, DIM_ANSI, BOLD_BRAND_ANSI
     global PROMPT_ACCENT_ANSI, PROMPT_FRAME_ANSI, DIM_COUNTER_ANSI, SURFACE_BG_ANSI
     global INPUT_SURFACE_BG_ANSI, MENU_SELECTION_ROW_ANSI, MARKDOWN_THEME
     global DEVICE_CODE_ANSI
@@ -255,6 +255,7 @@ def _apply_theme(theme: CliTheme) -> None:
     _highlight_rgb = _parse_hex_color(theme.HIGHLIGHT)
     _brand_rgb = _parse_hex_color(theme.BRAND)
     _text_rgb = _parse_hex_color(theme.TEXT)
+    _secondary_rgb = _parse_hex_color(theme.SECONDARY)
     _dim_rgb = _parse_hex_color(theme.DIM)
     _bg_rgb = _parse_hex_color(theme.BG)
     _input_surface_rgb = _parse_hex_color(theme.INPUT_SURFACE)
@@ -262,6 +263,7 @@ def _apply_theme(theme: CliTheme) -> None:
     HIGHLIGHT_ANSI = _fg(_highlight_rgb)
     BRAND_ANSI = _fg(_brand_rgb)
     TEXT_ANSI = _fg(_text_rgb)
+    SECONDARY_ANSI = _fg(_secondary_rgb)
     DIM_ANSI = _fg(_dim_rgb)
     BOLD_BRAND_ANSI = f"\x1b[1m{BRAND_ANSI}"
 
@@ -356,6 +358,7 @@ __all__ = [
     "PROMPT_ACCENT_ANSI",
     "PROMPT_FRAME_ANSI",
     "SECONDARY",
+    "SECONDARY_ANSI",
     "SURFACE_BG_ANSI",
     "TEXT",
     "TEXT_ANSI",
@@ -380,6 +383,7 @@ GLYPH_BULLET = "·"
 HIGHLIGHT_ANSI = ""
 BRAND_ANSI = ""
 TEXT_ANSI = ""
+SECONDARY_ANSI = ""
 DIM_ANSI = ""
 BOLD_BRAND_ANSI = ""
 DEVICE_CODE_ANSI = ""

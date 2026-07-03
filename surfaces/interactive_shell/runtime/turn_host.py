@@ -23,7 +23,7 @@ from typing import Any
 
 from rich.console import Console
 
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from platform.analytics.repl_context import bind_cli_session_id, reset_cli_session_id
 from surfaces.interactive_shell.runtime.agent_presentation import (
     AgentEvent,
@@ -69,7 +69,7 @@ def _bound_cli_session(session_id: str) -> Iterator[None]:
 class AgentTurnRuntime:
     """Immutable dependencies for running one submitted shell turn."""
 
-    session: ReplSession
+    session: Session
     state: ReplState
     spinner: SpinnerState
     invalidate_prompt: Callable[[], None]
@@ -157,7 +157,7 @@ async def _run_agent_turn_loop(
 
 async def _execute_agent_turn(
     *,
-    session: ReplSession,
+    session: Session,
     text: str,
     output: StreamingConsole,
     recorder: PromptRecorder | None,
@@ -184,7 +184,7 @@ class AgentTurnRunner:
     def __init__(
         self,
         *,
-        session: ReplSession,
+        session: Session,
         state: ReplState,
         spinner: SpinnerState,
         invalidate_prompt: Callable[[], None],
@@ -199,7 +199,7 @@ class AgentTurnRunner:
         )
 
     @property
-    def session(self) -> ReplSession:
+    def session(self) -> Session:
         return self.runtime.session
 
     @property
@@ -243,7 +243,7 @@ async def run_input_loop(
     # This function is also problematic because it is not clear how from here, the state (i.e. prompt input text gets to the agent)
     *,
     state: ReplState,
-    session: ReplSession,
+    session: Session,
     background: BackgroundTaskManager | None,
     input_reader: PromptInputReader,
     echo_console: Console,

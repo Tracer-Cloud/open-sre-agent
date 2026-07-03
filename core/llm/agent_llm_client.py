@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
+from core.llm.client_cache_key import current_llm_client_cache_key
 from core.llm.openai_compat_providers import (
     is_openai_compat_provider,
     resolve_openai_compat_provider,
@@ -18,7 +19,7 @@ from core.llm.sdk.agent_clients import (
     _try_parse_tool_call_json,
 )
 from core.llm.tool_schema_normalize import build_openai_tool_specs
-from core.llm.transport_mode import current_llm_transport, use_litellm_transport
+from core.llm.transport_mode import use_litellm_for_provider
 from core.llm.types import AgentLLMClient
 
 __all__ = [
@@ -48,7 +49,7 @@ class _AgentClientState:
     """
 
     client: _AgentClientType | None = None
-    transport: str | None = None
+    cache_key: tuple[str, str] | None = None
 
 
 _agent_state = _AgentClientState()
@@ -56,8 +57,8 @@ _agent_state = _AgentClientState()
 
 def get_agent_llm() -> _AgentClientType:
     """Return a singleton tool-calling LLM client for the investigation agent."""
-    transport = current_llm_transport()
-    if _agent_state.client is not None and _agent_state.transport != transport:
+    cache_key = current_llm_client_cache_key()
+    if _agent_state.client is not None and _agent_state.cache_key != cache_key:
         _agent_state.client = None
     if _agent_state.client is not None:
         return _agent_state.client
@@ -79,14 +80,14 @@ def get_agent_llm() -> _AgentClientType:
     if (cli_reg := _get_cli_provider_registration(runtime_provider)) is not None:
         model_name = os.getenv(cli_reg.model_env_key, "").strip() or None
         _agent_state.client = CLIBackedAgentClient(cli_reg.adapter_factory(), model=model_name)
-        _agent_state.transport = transport
+        _agent_state.cache_key = cache_key
         return _agent_state.client
 
-    if use_litellm_transport():
+    if use_litellm_for_provider(runtime_provider):
         from core.llm.litellm.routing import build_litellm_agent_client
 
         _agent_state.client = build_litellm_agent_client(settings, runtime_provider)
-        _agent_state.transport = transport
+        _agent_state.cache_key = cache_key
         return _agent_state.client
 
     if runtime_provider == "openai":
@@ -121,7 +122,7 @@ def get_agent_llm() -> _AgentClientType:
             max_tokens=ANTHROPIC_LLM_CONFIG.max_tokens,
         )
 
-    _agent_state.transport = transport
+    _agent_state.cache_key = cache_key
     return _agent_state.client
 
 
@@ -147,4 +148,4 @@ def _get_cli_provider_registration(provider: str) -> Any:
 def reset_agent_client() -> None:
     """Reset the singleton (for tests / config changes)."""
     _agent_state.client = None
-    _agent_state.transport = None
+    _agent_state.cache_key = None

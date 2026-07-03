@@ -8,7 +8,7 @@ from dataclasses import dataclass
 import pytest
 from prompt_toolkit.completion import Completion
 
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from platform.common.task_types import TaskKind
 from surfaces.interactive_shell.runtime.core import state as loop_state
 from surfaces.interactive_shell.ui.input_prompt import completion as prompt_completion
@@ -29,7 +29,7 @@ def _strip_ansi(text: str) -> str:
     return re.sub(r"\x1b\[[0-9;]*m", "", text)
 
 
-def _placeholder_text(session: ReplSession) -> str:
+def _placeholder_text(session: Session) -> str:
     return resolve_prompt_placeholder(session).value
 
 
@@ -61,7 +61,7 @@ class TestPromptRefreshAutoSubmit:
     def test_queue_auto_command_fills_and_submits_prompt(self) -> None:
         """An agent-queued interactive command should be both prefilled and
         auto-submitted so it dispatches through the exclusive-stdin path."""
-        session = ReplSession()
+        session = Session()
         app = _RefreshFakeApp()
         wire_prompt_refresh(session, app, _RefreshFakeLoop())
         session.queue_auto_command("/integrations setup sentry")
@@ -70,7 +70,7 @@ class TestPromptRefreshAutoSubmit:
 
     def test_plain_prefill_does_not_auto_submit(self) -> None:
         """A prefill without the auto-submit flag must wait for the user (Enter)."""
-        session = ReplSession()
+        session = Session()
         app = _RefreshFakeApp()
         wire_prompt_refresh(session, app, _RefreshFakeLoop())
         session.pending_prompt_default = "why did it fail?"
@@ -81,12 +81,12 @@ class TestPromptRefreshAutoSubmit:
 
 class TestPromptTurnCounter:
     def test_first_turn_is_numbered_one(self) -> None:
-        session = ReplSession()
+        session = Session()
         assert _prompt_turn_number(session) == 1
         assert _prompt_counter_text(session) == "[1] "
 
     def test_counter_advances_with_history(self) -> None:
-        session = ReplSession()
+        session = Session()
         session.record("chat", "hello")
         assert _prompt_turn_number(session) == 2
         assert _prompt_counter_text(session) == "[2] "
@@ -94,7 +94,7 @@ class TestPromptTurnCounter:
 
 class TestResolveIdleHint:
     def test_shows_connected_integrations_in_hint_bar(self) -> None:
-        session = ReplSession()
+        session = Session()
         session.configured_integrations_known = True
         session.configured_integrations = ("datadog", "github", "grafana")
         rendered = _strip_ansi(resolve_idle_hint_ansi(session))
@@ -104,7 +104,7 @@ class TestResolveIdleHint:
         assert "Grafana" in rendered
 
     def test_omits_integrations_when_none_configured(self) -> None:
-        session = ReplSession()
+        session = Session()
         session.configured_integrations_known = True
         session.configured_integrations = ()
         rendered = _strip_ansi(resolve_idle_hint_ansi(session))
@@ -114,18 +114,18 @@ class TestResolveIdleHint:
 
 class TestResolvePromptPlaceholder:
     def test_default_when_no_session_context(self) -> None:
-        session = ReplSession()
+        session = Session()
         assert _DEFAULT_PLACEHOLDER_TEXT in _placeholder_text(session)
 
     def test_shows_trust_mode(self) -> None:
-        session = ReplSession()
+        session = Session()
         session.trust_mode = True
         text = _placeholder_text(session)
         assert "trust on" in text
         assert _DEFAULT_PLACEHOLDER_TEXT not in text
 
     def test_shows_running_task_count(self) -> None:
-        session = ReplSession()
+        session = Session()
         task = session.task_registry.create(TaskKind.SYNTHETIC_TEST)
         task.mark_running()
         assert "1 task running" in _placeholder_text(session)
@@ -135,13 +135,13 @@ class TestResolvePromptPlaceholder:
         assert "2 tasks running" in _placeholder_text(session)
 
     def test_shows_resumed_session_name(self) -> None:
-        session = ReplSession()
+        session = Session()
         session.resumed_from_name = "redis-incident"
         text = _placeholder_text(session)
         assert "resumed: redis-incident" in text
 
     def test_combines_multiple_state_segments(self) -> None:
-        session = ReplSession()
+        session = Session()
         session.trust_mode = True
         session.resumed_from_name = "redis-incident"
         task = session.task_registry.create(TaskKind.WATCHDOG)

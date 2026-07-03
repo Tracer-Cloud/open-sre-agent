@@ -11,18 +11,20 @@ from platform.terminal.theme import (
     HIGHLIGHT,
     SECONDARY,
     TEXT,
-    WARNING,
 )
 from surfaces.interactive_shell.ui.components.time_format import _elapsed_hms, _fmt_timing
 from tools.registry import resolve_tool_display_name
 
-# (padded_label, text_color) -- all labels are 6 chars wide.
+# (padded_label, text_color) -- all labels are 6 chars wide. Every badge draws
+# from the theme's accent tokens (HIGHLIGHT / BRAND) so the whole phase strip
+# stays within the active palette (e.g. all blue shades under the blue theme),
+# alternating the two accents for light per-phase distinction.
 BADGE_STYLES: dict[str, tuple[str, str]] = {
     "READ": ("READ  ", HIGHLIGHT),
     "PLAN": ("PLAN  ", BRAND),
-    "INVEST": ("INVEST", WARNING),
-    "DIAG": ("DIAG  ", TEXT),
-    "MERGE": ("MERGE ", SECONDARY),
+    "INVEST": ("INVEST", HIGHLIGHT),
+    "DIAG": ("DIAG  ", BRAND),
+    "MERGE": ("MERGE ", HIGHLIGHT),
 }
 
 _NODE_EVENT_TYPE: dict[str, str] = {
@@ -105,7 +107,7 @@ def build_progress_step_text(
     message: str | None = None,
 ) -> Text:
     ev_type = _node_event_type(node_name)
-    badge_label, badge_color = BADGE_STYLES.get(ev_type, ("DIAG  ", WARNING))
+    badge_label, badge_color = BADGE_STYLES.get(ev_type, BADGE_STYLES["DIAG"])
     label = _node_label(node_name)
     err = status == "error"
     timing = _fmt_timing(elapsed_step_ms) if elapsed_step_ms is not None else ""

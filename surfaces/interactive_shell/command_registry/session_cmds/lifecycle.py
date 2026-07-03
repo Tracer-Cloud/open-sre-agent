@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from rich.console import Console
 
-from surfaces.interactive_shell.runtime import ReplSession
+from core.agent_harness.session import SessionManager
+from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui import DIM, HIGHLIGHT
 
 
-def _cmd_clear(session: ReplSession, console: Console, _args: list[str]) -> bool:
+def _cmd_clear(session: Session, console: Console, _args: list[str]) -> bool:
     from surfaces.interactive_shell.ui import render_ready_box
 
     console.clear()
@@ -16,7 +17,7 @@ def _cmd_clear(session: ReplSession, console: Console, _args: list[str]) -> bool
     return True
 
 
-def _cmd_new(session: ReplSession, console: Console, _args: list[str]) -> bool:
+def _cmd_new(session: Session, console: Console, _args: list[str]) -> bool:
     """Start a new session while preserving the current LLM conversation context.
 
     Unlike /clear (which only clears the screen), /new rotates the session ID
@@ -28,14 +29,11 @@ def _cmd_new(session: ReplSession, console: Console, _args: list[str]) -> bool:
     saved_context = dict(session.accumulated_context)
     saved_resumed_name = session.resumed_from_name
 
-    session.storage.flush(session)
-    session.clear()
+    SessionManager.for_session(session).rotate_in_place(session)
 
     session.agent.messages = saved_messages
     session.accumulated_context = saved_context
     session.resumed_from_name = saved_resumed_name
-
-    session.storage.open_session(session)
     console.print(
         f"[{DIM}]new session started[/] [{HIGHLIGHT}]—[/] [{DIM}]conversation context carried forward.[/]"
     )
@@ -44,7 +42,7 @@ def _cmd_new(session: ReplSession, console: Console, _args: list[str]) -> bool:
     return True
 
 
-def _cmd_compact(session: ReplSession, console: Console, _args: list[str]) -> bool:
+def _cmd_compact(session: Session, console: Console, _args: list[str]) -> bool:
     """Compact the live session branch and persist a compaction entry."""
     from core.agent_harness.session.compaction import compact_session_branch
 

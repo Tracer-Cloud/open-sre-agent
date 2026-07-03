@@ -28,7 +28,7 @@ from core.agent_harness.providers.default_providers import (
     DefaultRunRecordFactory,
     DefaultToolProvider,
 )
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from core.execution import ToolExecutionHooks
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS
 from surfaces.interactive_shell.command_registry.suggestions import resolve_literal_slash_typo
@@ -59,7 +59,7 @@ def _resolve_output_sink(console: Console, output: OutputSink | None) -> OutputS
 
 
 def _action_observer_factory(
-    session: ReplSession,
+    session: Session,
     console: Console,
     message: str,
 ) -> ActionRenderObserver:
@@ -68,7 +68,7 @@ def _action_observer_factory(
 
 def _complete_literal_slash_typo_turn(
     message: str,
-    session: ReplSession,
+    session: Session,
     output: OutputSink,
 ) -> ToolCallingTurnResult | None:
     """Handle unknown slash roots and invalid subcommands before tool validation."""
@@ -96,7 +96,7 @@ def _complete_literal_slash_typo_turn(
 
 def run_action_tool_turn(
     message: str,
-    session: ReplSession,
+    session: Session,
     console: Console,
     *,
     confirm_fn: Callable[[str], str] | None = None,
@@ -138,7 +138,7 @@ def run_action_tool_turn(
 
 def answer_shell_question(
     message: str,
-    session: ReplSession,
+    session: Session,
     console: Console,
     *,
     confirm_fn: Callable[[str], str] | None = None,
@@ -174,7 +174,7 @@ def answer_shell_question(
 
 def execute_shell_turn(
     text: str,
-    session: ReplSession,
+    session: Session,
     console: Console,
     *,
     recorder: PromptRecorder | None,

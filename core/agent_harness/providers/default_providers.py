@@ -37,6 +37,25 @@ def _tool_input_preview(value: Any) -> str:
     return preview
 
 
+def _llm_client_unavailable_message(exc: Exception) -> str:
+    """Render the reasoning-client import failure, hinting at the common cause.
+
+    An ``ImportError`` from the ``core.llm`` graph on a long-running process is
+    almost always a stale process: the code changed on disk while the process
+    kept running, so a lazily-imported new module can't find a symbol in a
+    boot-cached old one. Point the operator at a restart instead of leaving them
+    with a bare ``cannot import name …``.
+    """
+    base = f"LLM client unavailable: {escape(str(exc))}"
+    if isinstance(exc, ImportError):
+        return (
+            f"{base} — this usually means the OpenSRE code changed while this "
+            "process was running. Restart it (relaunch with `uv run opensre …`) "
+            "to load the updated modules."
+        )
+    return base
+
+
 class DefaultToolProvider:
     """:class:`core.agent_harness.ports.ToolProvider` backed by action tools."""
 
@@ -137,7 +156,7 @@ class DefaultReasoningClientProvider:
                     context="core.agent_harness.default_reasoning_client.import",
                 )
             if self._output is not None:
-                self._output.render_error(f"LLM client unavailable: {escape(str(exc))}")
+                self._output.render_error(_llm_client_unavailable_message(exc))
             return None
         return get_llm_for_reasoning()
 
@@ -190,6 +209,7 @@ class DefaultTurnAccounting:
                 kind="chat",
                 prompt=self._text,
                 response=response,
+                llm_run=result.llm_run,
             )
         with contextlib.suppress(AttributeError):
             self._session.last_assistant_intent = result.final_intent
@@ -202,6 +222,7 @@ def _append_turn_detail(
     kind: str,
     prompt: str,
     response: str,
+    llm_run: Any | None = None,
 ) -> None:
     storage = getattr(session, "storage", None)
     append_turn_detail = getattr(storage, "append_turn_detail", None)
@@ -209,7 +230,18 @@ def _append_turn_detail(
     if not callable(append_turn_detail) or not isinstance(session_id, str) or not session_id:
         return
     try:
-        append_turn_detail(session_id, kind, prompt, response=response)
+        append_turn_detail(
+            session_id,
+            kind,
+            prompt,
+            response=response,
+            model=getattr(llm_run, "model", None) if llm_run is not None else None,
+            provider=getattr(llm_run, "provider", None) if llm_run is not None else None,
+            latency_ms=getattr(llm_run, "latency_ms", None) if llm_run is not None else None,
+            system_prompt=getattr(llm_run, "final_system_prompt", None)
+            if llm_run is not None
+            else None,
+        )
     except Exception:
         log.debug("failed to persist default turn detail", exc_info=True)
 

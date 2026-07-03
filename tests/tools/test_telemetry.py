@@ -1009,6 +1009,9 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "execute_github_issue_mutation",
         "execute_python_code",
         "fetch_failed_run",
+        # fix_sentry_issue catches only its own FixIssueError for known states;
+        # unexpected errors escape to the global #1476 wrapper.
+        "fix_sentry_issue",
         "generate_work_status_report",
         "get_airflow_dag_runs",
         "get_airflow_metrics",

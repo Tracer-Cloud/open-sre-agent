@@ -13,7 +13,7 @@ from integrations.github.helpers import (
     normalize_github_tool_result,
     resolve_github_mcp_config,
 )
-from integrations.github_mcp import call_github_mcp_tool
+from integrations.github.mcp import call_github_mcp_tool
 
 
 def _extract_json_text(result: dict[str, Any]) -> dict[str, Any] | str | None:

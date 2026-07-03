@@ -1,7 +1,7 @@
 """Ports (structural Protocols) the agentic turn engine talks to.
 
 These are the seams that keep ``agent/`` decoupled from any concrete surface.
-The interactive shell implements them as adapters over its ``ReplSession``,
+The interactive shell implements them as adapters over its ``Session``,
 Rich console, tool registry, and grounding caches; the headless adapters in
 :mod:`core.agent_harness.agents.headless_agent` implement minimal in-memory versions for API / test runs.
 
@@ -52,7 +52,7 @@ class OutputSink(Protocol):
 class SessionStore(Protocol):
     """Mutable per-session state the engine reads and writes.
 
-    ``ReplSession`` satisfies this structurally. The fields mirror what the
+    ``Session`` satisfies this structurally. The fields mirror what the
     action driver, the three-path engine, and the gather loop touch.
     """
 
@@ -60,7 +60,7 @@ class SessionStore(Protocol):
     cli_agent_messages: list[tuple[str, str]]
     configured_integrations_known: bool
 
-    # Read-only here; ``ReplSession`` stores a tuple. A property matches
+    # Read-only here; ``Session`` stores a tuple. A property matches
     # covariantly, so any concrete ``Sequence[str]`` implementation satisfies it.
     @property
     def configured_integrations(self) -> Sequence[str]:

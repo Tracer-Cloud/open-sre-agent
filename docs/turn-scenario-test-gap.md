@@ -61,7 +61,7 @@ entirely:
 
 ```python
 # interactive_shell/runtime/integration_tool_gathering.py
-def _resolve_session_integrations(session: ReplSession) -> dict[str, Any]:
+def _resolve_session_integrations(session: Session) -> dict[str, Any]:
     if session.resolved_integrations_cache is not None:
         return session.resolved_integrations_cache
     resolved = resolve_integrations({})  # hits the real env and ~/.opensre/integrations.json
@@ -209,8 +209,8 @@ def fresh_session(
     configured_integrations: tuple[str, ...] = (),
     available_capabilities: dict[str, tuple[str, ...]] | None = None,
     resolved_integrations_override: dict[str, Any] | None = None,
-) -> ReplSession:
-    session = ReplSession()
+) -> Session:
+    session = Session()
     ...
     if resolved_integrations_override is not None:
         session.resolved_integrations_cache = resolved_integrations_override

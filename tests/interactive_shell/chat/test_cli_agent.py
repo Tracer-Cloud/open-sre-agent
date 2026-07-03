@@ -27,12 +27,12 @@ from core.agent_harness.prompts.assistant_agent_prompt import (
 )
 from core.agent_harness.providers import default_prompt_context
 from core.agent_harness.providers.default_prompt_context import DefaultPromptContextProvider
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from surfaces.interactive_shell.runtime import shell_turn_execution as cli_agent
 from surfaces.interactive_shell.runtime.shell_turn_execution import answer_shell_question
 
 
-def _build_environment_block(session: ReplSession) -> str:
+def _build_environment_block(session: Session) -> str:
     """Adapter for the relocated, signature-changed environment-block builder."""
     return build_environment_block(
         integrations=tuple(session.configured_integrations),
@@ -191,9 +191,7 @@ class TestSystemPromptInvestigationFlowGrounding:
         )
 
         console, _ = _capture()
-        answer_shell_question(
-            "Can you see how investigations are structured?", ReplSession(), console
-        )
+        answer_shell_question("Can you see how investigations are structured?", Session(), console)
 
         assert client.last_prompt is not None
         assert "--- Investigation flow reference ---" in client.last_prompt
@@ -204,7 +202,7 @@ class TestEnvironmentIntegrationGrounding:
     """The assistant must be told which integrations are configured (#sentry-context)."""
 
     def test_block_lists_configured_services_when_known(self) -> None:
-        session = ReplSession()
+        session = Session()
         session.configured_integrations_known = True
         session.configured_integrations = ("gitlab", "datadog")
         block = _build_environment_block(session)
@@ -214,7 +212,7 @@ class TestEnvironmentIntegrationGrounding:
         assert "not in that list is NOT configured" in block
 
     def test_block_states_none_when_known_and_empty(self) -> None:
-        session = ReplSession()
+        session = Session()
         session.configured_integrations_known = True
         session.configured_integrations = ()
         block = _build_environment_block(session)
@@ -249,7 +247,7 @@ class TestEnvironmentIntegrationGrounding:
         assert "could not be read" in block
 
     def test_block_omitted_when_unknown(self) -> None:
-        session = ReplSession()
+        session = Session()
         assert session.configured_integrations_known is False
         assert _build_environment_block(session) == ""
 
@@ -257,7 +255,7 @@ class TestEnvironmentIntegrationGrounding:
         client = _patch_llm(monkeypatch, "No, Sentry is not configured.")
         _patch_grounding(monkeypatch)
 
-        session = ReplSession()
+        session = Session()
         session.configured_integrations_known = True
         session.configured_integrations = ("gitlab",)
         console, _ = _capture()
@@ -282,7 +280,7 @@ class TestEnvironmentIntegrationGrounding:
         )
 
         console, _ = _capture()
-        answer_shell_question("what model am I using now?", ReplSession(), console)
+        answer_shell_question("what model am I using now?", Session(), console)
 
         assert client.last_prompt is not None
         assert "Active LLM settings in this session" in client.last_prompt
@@ -310,7 +308,7 @@ class TestObservationSummaryBlock:
         client = _patch_llm(monkeypatch, "No — Sentry is not configured.")
         _patch_grounding(monkeypatch)
 
-        session = ReplSession()
+        session = Session()
         console, _ = _capture()
         observation = (
             "Integration status from `/integrations`:\n- sentry: missing (Not configured.)"
@@ -331,14 +329,14 @@ class TestAssistantOutputRendering:
         # End-of-stream force-flush renders the buffered text as
         # Markdown — ``**`` delimiters are stripped.
         _patch_llm(monkeypatch, "Hello **world**")
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         answer_shell_question("hi", session, console)
         output = _strip_ansi(buf.getvalue())
         assert "**world**" not in output
         assert "world" in output
         assert "Hello" in output
-        assert session.token_usage.get("output", 0) > 0
+        assert session.tokens.totals.get("output", 0) > 0
 
     def test_table_markdown_is_rendered_as_table(self, monkeypatch: Any) -> None:
         markdown = (
@@ -346,7 +344,7 @@ class TestAssistantOutputRendering:
             "| `opensre` | Start the interactive shell (TTY) |\n"
         )
         _patch_llm(monkeypatch, markdown)
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         answer_shell_question("show commands", session, console)
         output = _strip_ansi(buf.getvalue())
@@ -359,7 +357,7 @@ class TestAssistantOutputRendering:
 
     def test_response_is_recorded_in_session_history(self, monkeypatch: Any) -> None:
         _patch_llm(monkeypatch, "Sure thing.")
-        session = ReplSession()
+        session = Session()
         console, _ = _capture()
         answer_shell_question("hello", session, console)
         assert session.cli_agent_messages[-2:] == [
@@ -369,7 +367,7 @@ class TestAssistantOutputRendering:
 
     def test_command_selection_prompt_uses_llm_response(self, monkeypatch: Any) -> None:
         _patch_llm(monkeypatch, "Use `opensre investigate` for incidents.")
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         answer_shell_question("what command do I use?", session, console)
         output = _strip_ansi(buf.getvalue()).casefold()
@@ -378,7 +376,7 @@ class TestAssistantOutputRendering:
             ("user", "what command do I use?"),
             ("assistant", "Use `opensre investigate` for incidents."),
         ]
-        assert session.llm_call_count == 1
+        assert session.tokens.call_count == 1
 
     def test_structured_content_blocks_are_rendered(self, monkeypatch: Any) -> None:
         class _Block:
@@ -386,7 +384,7 @@ class TestAssistantOutputRendering:
                 self.text = text
 
         _patch_llm(monkeypatch, [_Block("First line"), {"text": "Second line"}])
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         answer_shell_question("hello", session, console)
         output = _strip_ansi(buf.getvalue())
@@ -409,7 +407,7 @@ class TestAssistantOutputRendering:
             "core.agent_harness.providers.default_providers.capture_exception",
             lambda exc, **_kwargs: captured_errors.append(exc),
         )
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         answer_shell_question("hi", session, console)
         output = _strip_ansi(buf.getvalue())
@@ -443,7 +441,7 @@ class TestStreamingMigration:
         monkeypatch.setattr(llm_module, "get_llm_for_reasoning", lambda: _Recording())
 
         console, _ = _capture()
-        answer_shell_question("hi", ReplSession(), console)
+        answer_shell_question("hi", Session(), console)
 
         assert calls == ["invoke_stream"]
 
@@ -453,7 +451,7 @@ class TestStreamingMigration:
             '{"actions":[{"action":"switch_llm_provider","provider":"anthropic"}]}',
         )
 
-        session = ReplSession()
+        session = Session()
         console, buf = _capture()
         answer_shell_question("switch to anthropic", session, console)
 
@@ -477,7 +475,7 @@ def test_answer_shell_question_injects_synthetic_observation_on_why_failed(
         '{"scenario_id": "008-storage-full-missing-metric", "score": {"passed": false}}',
         encoding="utf-8",
     )
-    session = ReplSession()
+    session = Session()
     session.last_synthetic_observation_path = str(obs.resolve())
     console, _buf = _capture()
     client = _patch_llm(monkeypatch, "The synthetic run failed the scoring gate.")
@@ -493,7 +491,7 @@ def test_answer_shell_question_skips_observation_without_failure_question(
 ) -> None:
     obs = tmp_path / "latest.json"
     obs.write_text("{}", encoding="utf-8")
-    session = ReplSession()
+    session = Session()
     session.last_synthetic_observation_path = str(obs.resolve())
     console, _buf = _capture()
     client = _patch_llm(monkeypatch, "hi")

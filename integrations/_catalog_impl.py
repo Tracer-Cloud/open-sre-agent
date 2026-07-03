@@ -10,8 +10,8 @@ from typing import Any
 
 from config.config import get_tracer_base_url
 from config.llm_credentials import resolve_env_credential
-from integrations.airflow import airflow_config_from_env
-from integrations.airflow import classify as _classify_airflow
+from integrations.airflow.config import airflow_config_from_env
+from integrations.airflow.config import classify as _classify_airflow
 from integrations.alertmanager import classify as _classify_alertmanager
 from integrations.argocd import classify as _classify_argocd
 from integrations.aws import classify as _classify_aws
@@ -50,8 +50,8 @@ from integrations.dagster import classify as _classify_dagster
 from integrations.datadog import classify as _classify_datadog
 from integrations.discord import classify as _classify_discord
 from integrations.effective_models import EffectiveIntegrations
-from integrations.github_mcp import build_github_mcp_config
-from integrations.github_mcp import classify as _classify_github
+from integrations.github.mcp import build_github_mcp_config
+from integrations.github.mcp import classify as _classify_github
 from integrations.gitlab import DEFAULT_GITLAB_BASE_URL, build_gitlab_config
 from integrations.gitlab import classify as _classify_gitlab
 from integrations.grafana import classify as _classify_grafana

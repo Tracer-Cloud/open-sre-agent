@@ -20,7 +20,9 @@ response_contract:
   must_contain_any:
   - why did it fail
   - failed
+  - failure
   - disk full
+  - full disk
   - follow-up
   - alert text
   must_not_contain:

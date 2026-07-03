@@ -13,7 +13,7 @@ from pathlib import Path
 from rich.console import Console
 from rich.markup import escape
 
-from surfaces.interactive_shell.runtime import ReplSession
+from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui import DIM, ERROR, WARNING, print_command_output
 from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
 from surfaces.interactive_shell.utils.error_handling.exception_reporting import report_exception
@@ -268,7 +268,7 @@ def _to_tool_execution_plan(plan: OpensreExecutionPlan) -> ToolExecutionPlan:
 def _run_opensre_foreground(
     argv_list: list[str],
     display_command: str,
-    session: ReplSession,
+    session: Session,
     console: Console,
 ) -> None:
     console.print(f"[bold]$ {escape(display_command)}[/bold]")
@@ -307,7 +307,7 @@ def _run_opensre_foreground(
 def _run_opensre_foreground_streaming(
     argv_list: list[str],
     display_command: str,
-    session: ReplSession,
+    session: Session,
     console: Console,
 ) -> None:
     console.print(f"[bold]$ {escape(display_command)}[/bold]")
@@ -338,7 +338,7 @@ def _run_opensre_foreground_streaming(
 
 def run_opensre_cli_command(
     args: str,
-    session: ReplSession,
+    session: Session,
     console: Console,
     *,
     confirm_fn: Callable[[str], str] | None = None,
@@ -356,7 +356,7 @@ def run_opensre_cli_command(
 
 def run_opensre_cli_command_result(
     args: str,
-    session: ReplSession,
+    session: Session,
     console: Console,
     *,
     confirm_fn: Callable[[str], str] | None = None,

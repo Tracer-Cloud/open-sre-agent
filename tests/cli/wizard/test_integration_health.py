@@ -8,7 +8,7 @@ import httpx
 import pytest
 
 from integrations.betterstack import BetterStackValidationResult
-from integrations.github_mcp import GitHubMCPValidationResult
+from integrations.github.mcp import GitHubMCPValidationResult
 from surfaces.cli.wizard.integration_health import (
     validate_aws_integration,
     validate_betterstack_integration,

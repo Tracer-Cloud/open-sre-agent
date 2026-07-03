@@ -17,20 +17,17 @@ from __future__ import annotations
 import json
 import os
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Protocol
 
 from core.agent import Agent
 from core.agent_harness.agent_builder import AgentConfig, build_agent
+from core.agent_harness.debug.prompt_trace import persist_turn_system_prompt
 from core.agent_harness.ports import ErrorReporter, SessionStore, ToolEventObserver
 from core.agent_harness.prompts.conversation_memory import (
     NO_HISTORY_PLACEHOLDER,
     format_recent_conversation,
 )
-from core.agent_harness.session.integrations_cache import (
-    has_only_runtime_metadata,
-    has_resolved_integrations,
-    merge_resolved_integrations,
-)
+from core.agent_harness.prompts.gather import build_gather_system_prompt
 from core.domain.alerts.alert_source import SECONDARY_TOOL_SOURCES
 from core.events import runtime_event_callback_from_observer
 from integrations.github.repo_scope import (
@@ -53,23 +50,25 @@ _MAX_PER_TOOL_CHARS = 4_000
 PersistToolCalls = Callable[[list[tuple[Any, Any]]], None]
 
 
+class EvidenceAgentFactory(Protocol):
+    """Build the runtime :class:`Agent` for one evidence-gather turn."""
+
+    def __call__(
+        self,
+        *,
+        llm: Any,
+        session: SessionStore,
+        gather_tools: list[Any],
+        resolved: dict[str, Any],
+        on_progress: ToolEventObserver | None,
+    ) -> Agent[Any]: ...
+
+
 def _resolve_session_integrations(session: SessionStore) -> dict[str, Any]:
     """Resolve integration configs once per session and cache the result."""
-    cached = session.resolved_integrations_cache
-    if cached is not None and (
-        has_resolved_integrations(cached) or not has_only_runtime_metadata(cached)
-    ):
-        return cached
+    from core.agent_harness.integrations.resolution import resolve_and_cache_integrations
 
-    from core.agent_harness.integrations.resolution import resolve_integrations
-
-    resolved = resolve_integrations()
-    if resolved:
-        session.resolved_integrations_cache = merge_resolved_integrations(
-            cached,
-            resolved,
-        )
-    return session.resolved_integrations_cache or {}
+    return resolve_and_cache_integrations(session)
 
 
 def _truncate(text: str, limit: int) -> str:
@@ -88,33 +87,6 @@ def _format_observation(executed: list[tuple[Any, Any]]) -> str:
             f"Tool: {tc.name}\nArguments: {args}\nResult: {_truncate(body, _MAX_PER_TOOL_CHARS)}"
         )
     return _truncate("\n\n".join(blocks), _MAX_OBSERVATION_CHARS)
-
-
-def _build_gather_system_prompt(session: SessionStore) -> str:
-    configured = (
-        ", ".join(session.configured_integrations)
-        if session.configured_integrations
-        else "(unknown)"
-    )
-    return (
-        "You are the data-gathering step of the OpenSRE terminal assistant. The "
-        "user asked a question that may be answerable with live data from the "
-        "connected integrations. You have access to the same tools the "
-        "investigation pipeline uses (logs, metrics, GitHub, error trackers, "
-        "cloud APIs, etc.).\n"
-        "Call the tools needed to gather evidence relevant to the user's "
-        "question. Derive arguments (such as owner/repo, service names, time "
-        "ranges, or search queries) from the user's message. Make tool calls "
-        "ONLY when they will help answer the question; if no tool is relevant, "
-        "respond with a short plain-text note and call nothing.\n"
-        "For GitHub repository metadata such as star count, forks, visibility, "
-        "or default branch, call get_github_repository — do not use "
-        "search_github_code or search_github_issues for those questions.\n"
-        "Do NOT write the final user-facing answer here — a later step composes "
-        "that from the tool results you collect. Stop calling tools as soon as "
-        "you have enough data.\n"
-        f"Configured integrations in this session: {configured}."
-    )
 
 
 def _resolve_gather_integrations(session: SessionStore, message: str) -> dict[str, Any]:
@@ -184,8 +156,8 @@ def _build_evidence_agent(
     """Build the Agent for one evidence-gather turn."""
     config = AgentConfig(
         llm=llm,
-        system=_build_gather_system_prompt(session),
-        tools=gather_tools,
+        system=build_gather_system_prompt(session),
+        tools=tuple(gather_tools),
         resolved_integrations=resolved,
         max_iterations=_MAX_GATHER_ITERATIONS,
         on_runtime_event=runtime_event_callback_from_observer(on_progress),
@@ -201,6 +173,7 @@ def gather_tool_evidence(
     persist: PersistToolCalls | None = None,
     error_reporter: ErrorReporter | None = None,
     is_tty: bool | None = None,  # noqa: ARG001 — reserved for parity with answer agents
+    agent_factory: EvidenceAgentFactory | None = None,
 ) -> str | None:
     """Run a bounded tool-calling loop and return collected evidence, or None.
 
@@ -222,7 +195,8 @@ def gather_tool_evidence(
         llm = _load_gather_llm_or_none(error_reporter)
         if llm is None:
             return None
-        agent = _build_evidence_agent(
+        build_agent_for_turn = agent_factory or _build_evidence_agent
+        agent = build_agent_for_turn(
             llm=llm,
             session=session,
             gather_tools=gather_tools,
@@ -231,6 +205,11 @@ def gather_tool_evidence(
         )
         result = agent.run(
             [{"role": "user", "content": _build_gather_user_message(session, message)}]
+        )
+        persist_turn_system_prompt(
+            session,
+            phase="gather_agent",
+            system_prompt=result.final_system_prompt,
         )
     except KeyboardInterrupt:
         if on_progress is not None:
@@ -248,4 +227,4 @@ def gather_tool_evidence(
     return _format_observation(result.executed)
 
 
-__all__ = ["PersistToolCalls", "gather_tool_evidence"]
+__all__ = ["EvidenceAgentFactory", "PersistToolCalls", "gather_tool_evidence"]

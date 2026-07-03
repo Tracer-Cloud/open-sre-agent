@@ -10,14 +10,14 @@ from rich.console import Console
 from rich.markup import escape as _rich_escape
 
 from platform.terminal.theme import ERROR
-from surfaces.interactive_shell.runtime import ReplSession
+from surfaces.interactive_shell.runtime import Session
 
 
 @dataclass(frozen=True)
 class SlashCommand:
     name: str
     description: str
-    handler: Callable[[ReplSession, Console, list[str]], bool]
+    handler: Callable[[Session, Console, list[str]], bool]
     usage: tuple[str, ...] = ()
     examples: tuple[str, ...] = ()
     notes: tuple[str, ...] = ()
@@ -39,10 +39,10 @@ class SlashCommand:
 
 def make_list_root_handler(
     command_name: str,
-    list_handler: Callable[[ReplSession, Console, list[str]], bool],
+    list_handler: Callable[[Session, Console, list[str]], bool],
     *,
     list_aliases: tuple[str, ...] = ("list", "ls"),
-) -> Callable[[ReplSession, Console, list[str]], bool]:
+) -> Callable[[Session, Console, list[str]], bool]:
     """Build a root handler that accepts list aliases and delegates to *list_handler*.
 
     Bare invocation (no args) defaults to ``list``. Unknown subcommands
@@ -50,7 +50,7 @@ def make_list_root_handler(
     """
     aliases = frozenset(list_aliases)
 
-    def _root(session: ReplSession, console: Console, args: list[str]) -> bool:
+    def _root(session: Session, console: Console, args: list[str]) -> bool:
         sub = (args[0].lower() if args else "list").strip()
         if sub in aliases:
             return list_handler(session, console, args[1:])

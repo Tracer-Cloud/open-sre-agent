@@ -187,13 +187,22 @@ OpenSRE can also run a **Telegram messaging gateway** so you can chat with the a
 
 ### Allow your Telegram user
 
-Find your numeric user id with [@userinfobot](https://t.me/userinfobot), then either:
+Find your **numeric user id** with [@userinfobot](https://t.me/userinfobot), then either:
 
 ```bash
 opensre messaging allow -p telegram -u 123456789
 ```
 
 or set `TELEGRAM_ALLOWED_USERS=123456789` in `.env`.
+
+<Warning>
+  Use the **numeric user id** (Telegram's `from.id`), not a `@username` and not
+  the bot handle. Inbound authorization only ever matches the numeric id, so a
+  `@handle` produces an allow-list entry that can never match a real sender — you
+  will see `User <id> is not in the allowed users list` for every message. The CLI
+  now rejects non-numeric Telegram ids, but older entries may still be wrong; check
+  with `opensre messaging status -p telegram` and re-add with the numeric id.
+</Warning>
 
 Optional DM pairing (same policy as other messaging platforms):
 
@@ -220,6 +229,27 @@ The gateway uses the same headless agent harness as the interactive shell, with 
 - **Action tools** — `shell_run` and `investigation_start`
 
 Investigation delivery, watchdog alerts, and cron still use the outbound-only paths documented above — they do not require the gateway process.
+
+### Deploying the gateway to a remote host
+
+Running the gateway on a server with `make deploy` (EC2) is different from local
+use in one important way: **the remote host cannot read your local machine's
+keychain**. Guided setup stores the bot token (and your LLM API key) in the system
+keyring, which is perfect locally but does not travel to the deployed instance.
+
+So `make deploy` validates that the required secrets are present as **plaintext
+env vars** in `.env`, and aborts if they are only in the keychain:
+
+```bash
+TELEGRAM_BOT_TOKEN=<numeric-id>:<token-secret>
+TELEGRAM_ALLOWED_USERS=123456789        # numeric user id(s), comma-separated
+ANTHROPIC_API_KEY=...                    # or your provider's key env
+```
+
+If `make deploy` reports `MISSING: Telegram gateway bot configuration` or
+`MISSING: LLM provider configuration` even though local setup succeeded, this is
+why — copy the values into `.env` (or `.env.deploy.example`) for the deploy. A
+"missing" here means "not in the deploy env", not "not configured".
 
 ---
 

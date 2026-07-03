@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 from rich.console import Console
 
 from core.domain.alerts.inbox import AlertInbox, IncomingAlert
-from surfaces.interactive_shell.runtime import ReplSession
+from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui.alerts import (
     drain_and_render_incoming,
     format_incoming_alert,
@@ -126,7 +126,7 @@ class TestDrainAndRenderIncoming:
     """Test drain_and_render_incoming functionality."""
 
     def test_drains_fifo_order(self) -> None:
-        session = ReplSession()
+        session = Session()
         inbox = AlertInbox(maxsize=10)
         console = Console()
 
@@ -149,7 +149,7 @@ class TestDrainAndRenderIncoming:
         assert session.incoming_alerts[2].text == "third"
 
     def test_records_in_history(self) -> None:
-        session = ReplSession()
+        session = Session()
         inbox = AlertInbox(maxsize=10)
         console = Console()
 
@@ -165,7 +165,7 @@ class TestDrainAndRenderIncoming:
         assert session.history[0]["ok"] is True
 
     def test_renders_to_console(self) -> None:
-        session = ReplSession()
+        session = Session()
         inbox = AlertInbox(maxsize=10)
         console = Console()
 
@@ -177,7 +177,7 @@ class TestDrainAndRenderIncoming:
         assert count == 1
 
     def test_returns_count(self) -> None:
-        session = ReplSession()
+        session = Session()
         inbox = AlertInbox(maxsize=10)
         console = Console()
 
@@ -189,7 +189,7 @@ class TestDrainAndRenderIncoming:
         assert count == 2
 
     def test_drains_empty_inbox(self) -> None:
-        session = ReplSession()
+        session = Session()
         inbox = AlertInbox(maxsize=10)
         console = Console()
 
@@ -199,7 +199,7 @@ class TestDrainAndRenderIncoming:
         assert len(session.history) == 0
 
     def test_caps_incoming_alerts_at_max(self) -> None:
-        session = ReplSession()
+        session = Session()
         inbox = AlertInbox(maxsize=10)
         console = Console()
 
@@ -214,11 +214,11 @@ class TestDrainAndRenderIncoming:
         assert len(session.incoming_alerts) <= session._INCOMING_ALERTS_MAX
 
 
-class TestReplSessionIncomingAlerts:
-    """Test ReplSession handling of incoming alerts."""
+class TestSessionIncomingAlerts:
+    """Test Session handling of incoming alerts."""
 
     def test_clear_resets_incoming_alerts(self) -> None:
-        session = ReplSession()
+        session = Session()
         inbox = AlertInbox()
         console = Console()
 
@@ -236,7 +236,7 @@ class TestReplSessionIncomingAlerts:
         assert len(session.history) == 0
 
     def test_record_incoming_alert_kind(self) -> None:
-        session = ReplSession()
+        session = Session()
         alert = IncomingAlert(text="test alert")
 
         session.record_incoming_alert(alert)
@@ -249,7 +249,7 @@ class TestReplSessionIncomingAlerts:
         assert session.incoming_alerts[0].text == "test alert"
 
     def test_record_incoming_alert_always_ok(self) -> None:
-        session = ReplSession()
+        session = Session()
         alert = IncomingAlert(text="test alert")
 
         session.record_incoming_alert(alert)
@@ -257,7 +257,7 @@ class TestReplSessionIncomingAlerts:
         assert session.history[0]["ok"] is True
 
     def test_incoming_alerts_fifo_list(self) -> None:
-        session = ReplSession()
+        session = Session()
 
         session.record_incoming_alert(IncomingAlert(text="first"))
         session.record_incoming_alert(IncomingAlert(text="second"))

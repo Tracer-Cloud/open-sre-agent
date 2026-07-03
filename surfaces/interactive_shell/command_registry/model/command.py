@@ -16,7 +16,7 @@ from surfaces.interactive_shell.command_registry.model.switching import (
     switch_toolcall_model,
 )
 from surfaces.interactive_shell.command_registry.types import SlashCommand
-from surfaces.interactive_shell.runtime import ReplSession
+from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui import DIM, ERROR, HIGHLIGHT, WARNING, render_models_table
 from surfaces.interactive_shell.ui.components.choice_menu import (
     CRUMB_SEP,
@@ -204,7 +204,7 @@ def _interactive_set_toolcall(console: Console) -> bool | None:
     return switch_toolcall_model(str(model_value), console, provider_name=provider.value)
 
 
-def _interactive_model_menu(session: ReplSession, console: Console) -> bool:
+def _interactive_model_menu(session: Session, console: Console) -> bool:
     while True:
         action = repl_choose_one(
             title="Select Model and Effort",
@@ -287,7 +287,7 @@ def parse_model_set_args(args: list[str]) -> tuple[str, str | None, str | None]:
     return provider, reasoning_model, toolcall_model
 
 
-def _cmd_model(session: ReplSession, console: Console, args: list[str]) -> bool:
+def _cmd_model(session: Session, console: Console, args: list[str]) -> bool:
     if not args and repl_tty_interactive():
         return _interactive_model_menu(session, console)
 

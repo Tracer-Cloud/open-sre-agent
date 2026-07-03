@@ -288,7 +288,7 @@ async def _open_posthog_mcp_session(config: PostHogMCPConfig) -> AsyncIterator[C
                 env={
                     **os.environ,
                     # Suppress terminal control codes so the MCP server's stdout
-                    # stays clean JSON-RPC (mirrors github_mcp.py mitigation).
+                    # stays clean JSON-RPC (mirrors integrations/github/mcp.py mitigation).
                     "NO_COLOR": "1",
                     "TERM": "dumb",
                     **(

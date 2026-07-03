@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 
 from config.gateway_output_sink import GatewayOutputSink
 from gateway.polling.telegram_poller.client import TelegramBotClient
+from platform.notifications.limits import MAX_MESSAGE_SIZE
 
 
 def test_stream_throttles_edits() -> None:
@@ -24,7 +25,7 @@ def test_finalize_truncates_long_text() -> None:
     sink = GatewayOutputSink(client=client, chat_id="123", edit_interval_seconds=0.0)
     sink.finalize("x" * 5000)
     edited = client.edit_message_text.call_args[0][2]
-    assert len(edited) <= 4096
+    assert len(edited) <= MAX_MESSAGE_SIZE
 
 
 def test_finalize_logs_outbound_edited_message(caplog) -> None:

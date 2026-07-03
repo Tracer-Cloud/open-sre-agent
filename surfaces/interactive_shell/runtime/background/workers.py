@@ -9,7 +9,7 @@ from typing import Any
 
 from rich.console import Console
 
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from core.domain.alerts import inbox as _alert_inbox
 from surfaces.interactive_shell.runtime.background.runner import drain_background_notices
 from surfaces.interactive_shell.runtime.core.state import ReplState, SpinnerState
@@ -24,7 +24,7 @@ class BackgroundTaskManager:
 
     def __init__(
         self,
-        session: ReplSession,
+        session: Session,
         state: ReplState,
         spinner: SpinnerState,
         inbox: _alert_inbox.AlertInbox | None,

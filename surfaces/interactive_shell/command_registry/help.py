@@ -8,7 +8,7 @@ from rich.console import Console
 from rich.markup import escape
 
 from surfaces.interactive_shell.command_registry.types import SlashCommand
-from surfaces.interactive_shell.runtime import ReplSession
+from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui import ERROR
 from surfaces.interactive_shell.ui.components.choice_menu import repl_tty_interactive
 from surfaces.interactive_shell.ui.help.help_menu import (
@@ -144,7 +144,7 @@ def _find_section(
     return None
 
 
-def _cmd_help(_session: ReplSession, console: Console, args: list[str]) -> bool:
+def _cmd_help(_session: Session, console: Console, args: list[str]) -> bool:
     sections = _help_sections()
     if args:
         target = " ".join(args).strip()

@@ -8,7 +8,7 @@ from rich.markup import escape
 import surfaces.interactive_shell.command_registry.repl_data as repl_data
 from surfaces.interactive_shell.command_registry.cli_parity import run_cli_command
 from surfaces.interactive_shell.command_registry.types import SlashCommand
-from surfaces.interactive_shell.runtime import ReplSession
+from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui import (
     BOLD_BRAND,
     DIM,
@@ -39,7 +39,7 @@ _ROOT_MCP = "/mcp"
 _MAX_OBSERVATION_DETAIL_CHARS = 160
 
 
-def _record_integrations_observation(session: ReplSession, results: list[dict[str, str]]) -> None:
+def _record_integrations_observation(session: Session, results: list[dict[str, str]]) -> None:
     """Stash a compact text view of verification results for agent summarization.
 
     Lets the agent answer questions like "is sentry installed?" by summarizing
@@ -66,7 +66,7 @@ def _record_integrations_observation(session: ReplSession, results: list[dict[st
         )
 
 
-def _record_integration_show_observation(session: ReplSession, match: dict[str, str]) -> None:
+def _record_integration_show_observation(session: Session, match: dict[str, str]) -> None:
     """Stash a compact text view of a single integration's verified details."""
     lines: list[str] = []
     for key, value in match.items():
@@ -85,7 +85,7 @@ def _configured_service_choices() -> list[tuple[str, str]]:
     return [(name, name) for name in repl_data.configured_integration_names()]
 
 
-def _handle_remove(session: ReplSession, console: Console, service: str | None) -> bool:
+def _handle_remove(session: Session, console: Console, service: str | None) -> bool:
     """Remove an integration with a native inline-picker confirmation (no subprocess)."""
     from integrations.registry import resolve_management_service
     from integrations.store import remove_integration
@@ -175,7 +175,7 @@ def _print_verify_summary(
         repl_print(console, f"[{HIGHLIGHT}]all integrations ok.[/]")
 
 
-def _run_verify(session: ReplSession, console: Console, service: str | None = None) -> bool:
+def _run_verify(session: Session, console: Console, service: str | None = None) -> bool:
     normalized = ""
     if service is not None:
         from integrations.registry import SUPPORTED_VERIFY_SERVICES, resolve_management_service
@@ -209,11 +209,11 @@ def _run_verify(session: ReplSession, console: Console, service: str | None = No
     return True
 
 
-def _cmd_verify(session: ReplSession, console: Console, args: list[str]) -> bool:
+def _cmd_verify(session: Session, console: Console, args: list[str]) -> bool:
     return _cmd_integrations(session, console, ["verify", *args])
 
 
-def _render_integration_show(session: ReplSession, console: Console, service: str) -> bool:
+def _render_integration_show(session: Session, console: Console, service: str) -> bool:
     """Verify and print one integration. Returns False when the service is unknown."""
     from integrations.registry import resolve_management_service
 
@@ -251,7 +251,7 @@ def _render_integration_show(session: ReplSession, console: Console, service: st
     return True
 
 
-def _cmd_integrations(session: ReplSession, console: Console, args: list[str]) -> bool:
+def _cmd_integrations(session: Session, console: Console, args: list[str]) -> bool:
     if not args and repl_tty_interactive():
         return _interactive_integrations_menu(session, console)
 
@@ -303,7 +303,7 @@ def _cmd_integrations(session: ReplSession, console: Console, args: list[str]) -
     return True
 
 
-def _interactive_integrations_menu(session: ReplSession, console: Console) -> bool:
+def _interactive_integrations_menu(session: Session, console: Console) -> bool:
     root = _ROOT_INTEGRATIONS
     while True:
         sub = repl_choose_one(
@@ -350,7 +350,7 @@ def _interactive_integrations_menu(session: ReplSession, console: Console) -> bo
             repl_section_break(console)
 
 
-def _cmd_mcp(session: ReplSession, console: Console, args: list[str]) -> bool:
+def _cmd_mcp(session: Session, console: Console, args: list[str]) -> bool:
     if not args and repl_tty_interactive():
         return _interactive_mcp_menu(session, console)
 
@@ -375,7 +375,7 @@ def _cmd_mcp(session: ReplSession, console: Console, args: list[str]) -> bool:
     return True
 
 
-def _interactive_mcp_menu(session: ReplSession, console: Console) -> bool:
+def _interactive_mcp_menu(session: Session, console: Console) -> bool:
     root = _ROOT_MCP
     while True:
         sub = repl_choose_one(

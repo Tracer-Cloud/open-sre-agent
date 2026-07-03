@@ -14,7 +14,7 @@ from typing import Any
 
 from rich.console import Console
 
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from surfaces.interactive_shell.command_registry import integrations as _integrations
 
 
@@ -37,7 +37,7 @@ def test_refresh_integration_state_rehydrates_and_clears_cache(monkeypatch: Any)
         "core.agent_harness.integrations.resolution.resolve_integrations",
         lambda: refreshed,
     )
-    session = ReplSession()
+    session = Session()
     # Stale boot-time snapshot + a cached resolution from an earlier turn.
     session.configured_integrations = ("gitlab",)
     session.configured_integrations_known = True
@@ -65,7 +65,7 @@ def test_setup_subcommand_refreshes_configured_integrations(monkeypatch: Any) ->
         lambda: dict(store),
     )
 
-    session = ReplSession()
+    session = Session()
     session.hydrate_configured_integrations()
     assert session.configured_integrations == ("gitlab",)
 
@@ -90,7 +90,7 @@ def test_remove_subcommand_refreshes_configured_integrations(monkeypatch: Any) -
         lambda: dict(store),
     )
 
-    session = ReplSession()
+    session = Session()
     session.hydrate_configured_integrations()
     assert "sentry" in session.configured_integrations
 
@@ -114,7 +114,7 @@ def test_mcp_connect_refreshes_configured_integrations(monkeypatch: Any) -> None
         lambda: dict(store),
     )
 
-    session = ReplSession()
+    session = Session()
     session.hydrate_configured_integrations()
 
     store["github_mcp"] = {}

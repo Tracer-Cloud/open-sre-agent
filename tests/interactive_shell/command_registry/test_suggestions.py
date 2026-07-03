@@ -7,7 +7,7 @@ import io
 import pytest
 from rich.console import Console
 
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
 from surfaces.interactive_shell.command_registry.suggestions import (
     format_invalid_subcommand_message,
@@ -70,7 +70,7 @@ def test_dispatch_invalid_subcommand_is_handled_by_command_handler(
         "surfaces.interactive_shell.command_registry.integrations.repl_data.load_verified_integrations",
         lambda: [],
     )
-    session = ReplSession()
+    session = Session()
     console, buf = _capture()
     assert dispatch_slash("/integrations bogus", session, console) is True
     assert "unknown subcommand" in buf.getvalue().lower()
@@ -92,7 +92,7 @@ def test_format_invalid_subcommand_message_lists_known_subcommands() -> None:
 
 
 def test_dispatch_unknown_command_records_full_response_and_outcome() -> None:
-    session = ReplSession()
+    session = Session()
     console, buf = _capture()
     assert dispatch_slash("/modle", session, console) is True
     output = buf.getvalue()
@@ -105,7 +105,7 @@ def test_dispatch_unknown_command_records_full_response_and_outcome() -> None:
 
 
 def test_run_action_tool_turn_handles_unknown_literal_slash_before_tool_validation() -> None:
-    session = ReplSession()
+    session = Session()
     console, buf = _capture()
     result = run_action_tool_turn("/invest", session, console)
     assert result.handled is True

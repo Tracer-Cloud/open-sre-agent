@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from rich.console import Console
 
-from core.agent_harness.session import JsonlSessionStorage, ReplSession
+from core.agent_harness.session import JsonlSessionStorage, Session
 from surfaces.interactive_shell.command_registry import dispatch_slash
 
 SessionStore = JsonlSessionStorage()
@@ -25,7 +25,7 @@ def test_rca_history_lists_persisted_reports(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
-    session = ReplSession()
+    session = Session()
     SessionStore.open_session(session)
     SessionStore.append_investigation_result(
         session.session_id,
@@ -34,7 +34,7 @@ def test_rca_history_lists_persisted_reports(
     )
 
     console, buf = _capture()
-    assert dispatch_slash("/rca history", ReplSession(), console) is True
+    assert dispatch_slash("/rca history", Session(), console) is True
     output = buf.getvalue()
     assert "RCA history" in output
     assert "redis timeout" in output
@@ -46,7 +46,7 @@ def test_rca_show_renders_full_report(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
-    session = ReplSession()
+    session = Session()
     SessionStore.open_session(session)
     inv_id = SessionStore.append_investigation_result(
         session.session_id,
@@ -55,7 +55,7 @@ def test_rca_show_renders_full_report(
     )
 
     console, buf = _capture()
-    assert dispatch_slash(f"/rca show {inv_id[:4]}", ReplSession(), console) is True
+    assert dispatch_slash(f"/rca show {inv_id[:4]}", Session(), console) is True
     output = buf.getvalue()
     assert "bad deploy" in output
     assert "Rollback required" in output
@@ -67,7 +67,7 @@ def test_bare_rca_defaults_to_history(
 ) -> None:
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
     console, buf = _capture()
-    assert dispatch_slash("/rca", ReplSession(), console) is True
+    assert dispatch_slash("/rca", Session(), console) is True
     assert "no persisted RCA reports yet" in buf.getvalue()
 
 
@@ -78,7 +78,7 @@ def test_tty_rca_menu_latest_shows_report(
     from surfaces.interactive_shell.command_registry import rca_cmds
 
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
-    session = ReplSession()
+    session = Session()
     SessionStore.open_session(session)
     inv_id = SessionStore.append_investigation_result(
         session.session_id,
@@ -104,7 +104,7 @@ def test_tty_rca_history_menu_picks_report_directly(
     from surfaces.interactive_shell.command_registry import rca_cmds
 
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
-    session = ReplSession()
+    session = Session()
     SessionStore.open_session(session)
     older_id = SessionStore.append_investigation_result(
         session.session_id,
@@ -135,7 +135,7 @@ def test_tty_rca_root_menu_history_picks_report(
     from surfaces.interactive_shell.command_registry import rca_cmds
 
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
-    session = ReplSession()
+    session = Session()
     SessionStore.open_session(session)
     older_id = SessionStore.append_investigation_result(
         session.session_id,
@@ -165,7 +165,7 @@ def test_rca_save_writes_markdown(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
-    session = ReplSession()
+    session = Session()
     SessionStore.open_session(session)
     SessionStore.append_investigation_result(
         session.session_id,
@@ -175,7 +175,7 @@ def test_rca_save_writes_markdown(
 
     dest = tmp_path / "report.md"
     console, buf = _capture()
-    assert dispatch_slash(f"/rca save {dest}", ReplSession(), console) is True
+    assert dispatch_slash(f"/rca save {dest}", Session(), console) is True
     assert (
         dest.read_text(encoding="utf-8")
         == "## Root Cause\n\nredis timeout\n\n## Report\n\ncache unavailable\n"
@@ -188,7 +188,7 @@ def test_rca_save_by_id_writes_json(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
-    session = ReplSession()
+    session = Session()
     SessionStore.open_session(session)
     inv_id = SessionStore.append_investigation_result(
         session.session_id,
@@ -198,7 +198,7 @@ def test_rca_save_by_id_writes_json(
 
     dest = tmp_path / "report.json"
     console, buf = _capture()
-    assert dispatch_slash(f"/rca save {inv_id[:4]} {dest}", ReplSession(), console) is True
+    assert dispatch_slash(f"/rca save {inv_id[:4]} {dest}", Session(), console) is True
     payload = json.loads(dest.read_text(encoding="utf-8"))
     assert payload["root_cause"] == "bad deploy"
     assert payload["problem_md"] == "rollback required"
@@ -211,7 +211,7 @@ def test_rca_save_strips_quoted_path(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
-    session = ReplSession()
+    session = Session()
     SessionStore.open_session(session)
     inv_id = SessionStore.append_investigation_result(
         session.session_id,
@@ -221,7 +221,7 @@ def test_rca_save_strips_quoted_path(
 
     dest = tmp_path / "quoted.md"
     console, buf = _capture()
-    assert dispatch_slash(f"/rca save {inv_id[:4]} '{dest}'", ReplSession(), console) is True
+    assert dispatch_slash(f"/rca save {inv_id[:4]} '{dest}'", Session(), console) is True
     assert dest.read_text(encoding="utf-8").startswith("## Root Cause")
     assert "saved:" in buf.getvalue()
 
@@ -231,7 +231,7 @@ def test_rca_save_to_new_folder_adds_default_filename(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
-    session = ReplSession()
+    session = Session()
     SessionStore.open_session(session)
     inv_id = SessionStore.append_investigation_result(
         session.session_id,
@@ -242,7 +242,7 @@ def test_rca_save_to_new_folder_adds_default_filename(
     folder = tmp_path / "rca_reports"
     folder.mkdir()
     console, buf = _capture()
-    assert dispatch_slash(f"/rca save {inv_id[:4]} {folder}/", ReplSession(), console) is True
+    assert dispatch_slash(f"/rca save {inv_id[:4]} {folder}/", Session(), console) is True
     saved = folder / f"rca-{inv_id[:8]}.md"
     assert saved.exists()
     assert "folder save" in saved.read_text(encoding="utf-8")
@@ -254,7 +254,7 @@ def test_rca_save_to_new_folder_trailing_slash_creates_subdirectory(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
-    session = ReplSession()
+    session = Session()
     SessionStore.open_session(session)
     inv_id = SessionStore.append_investigation_result(
         session.session_id,
@@ -264,7 +264,7 @@ def test_rca_save_to_new_folder_trailing_slash_creates_subdirectory(
 
     folder = tmp_path / "new_rca_folder"
     console, buf = _capture()
-    assert dispatch_slash(f"/rca save {inv_id[:4]} {folder}/", ReplSession(), console) is True
+    assert dispatch_slash(f"/rca save {inv_id[:4]} {folder}/", Session(), console) is True
     saved = folder / f"rca-{inv_id[:8]}.md"
     assert saved.exists()
     assert "nested save" in saved.read_text(encoding="utf-8")
@@ -276,7 +276,7 @@ def test_rca_save_unknown_id_reports_not_found(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
-    session = ReplSession()
+    session = Session()
     SessionStore.open_session(session)
     SessionStore.append_investigation_result(
         session.session_id,
@@ -286,7 +286,7 @@ def test_rca_save_unknown_id_reports_not_found(
 
     dest = tmp_path / "report.md"
     console, buf = _capture()
-    assert dispatch_slash(f"/rca save badid {dest}", ReplSession(), console) is True
+    assert dispatch_slash(f"/rca save badid {dest}", Session(), console) is True
     output = buf.getvalue()
     assert "RCA report not found" in output
     assert "no persisted RCA reports yet" not in output
@@ -307,7 +307,7 @@ def test_tty_rca_save_menu_picks_latest_and_prompts_path(
     from surfaces.interactive_shell.command_registry import rca_cmds
 
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
-    session = ReplSession()
+    session = Session()
     SessionStore.open_session(session)
     SessionStore.append_investigation_result(
         session.session_id,

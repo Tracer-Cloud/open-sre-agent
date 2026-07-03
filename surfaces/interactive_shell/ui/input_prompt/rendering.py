@@ -8,7 +8,7 @@ from rich.console import Console
 from rich.text import Text
 
 from platform.terminal import theme as ui_theme
-from surfaces.interactive_shell.runtime import ReplSession
+from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui.banner.banner_state import integration_display_name
 from surfaces.interactive_shell.ui.input_prompt.completion import completion_preview_hint_ansi
 from surfaces.interactive_shell.ui.input_prompt.layout import _short_meta, _terminal_columns
@@ -30,31 +30,31 @@ def _prompt_rule_ansi() -> str:
     )
 
 
-def _prompt_turn_number(session: ReplSession) -> int:
+def _prompt_turn_number(session: Session) -> int:
     """1-based index for the turn about to be entered or just submitted."""
     return len(session.history) + 1
 
 
-def _prompt_counter_text(session: ReplSession) -> str:
+def _prompt_counter_text(session: Session) -> str:
     return f"[{_prompt_turn_number(session)}] "
 
 
-def _prompt_prefix_text(session: ReplSession) -> str:
+def _prompt_prefix_text(session: Session) -> str:
     return f"{_prompt_counter_text(session)}❯ "
 
 
-def _prompt_line_ansi(session: ReplSession) -> ANSI:
+def _prompt_line_ansi(session: Session) -> ANSI:
     counter = _prompt_counter_text(session)
     prefix = f"{ui_theme.DIM_COUNTER_ANSI}{counter}{ui_theme.ANSI_RESET}"
     return ANSI(f"{prefix}{ui_theme.PROMPT_ACCENT_ANSI}❯{ui_theme.ANSI_RESET} ")
 
 
-def _prompt_message(session: ReplSession) -> ANSI:
+def _prompt_message(session: Session) -> ANSI:
     """Top border rule plus cursor line: the top two rows of the input box."""
     return ANSI(f"{_prompt_rule_ansi()}\n{_prompt_line_ansi(session).value}")
 
 
-def render_submitted_prompt(console: Console, session: ReplSession, text: str) -> None:
+def render_submitted_prompt(console: Console, session: Session, text: str) -> None:
     """Render the submitted user turn above the streamed assistant response."""
     lines = text.splitlines() or [""]
     continuation_prefix = " " * len(_prompt_prefix_text(session))
@@ -80,7 +80,7 @@ def resolve_prompt_prefix_ansi(*, inline_spinner: str, idle_hint: str) -> str:
     return preview or idle_hint
 
 
-def resolve_idle_hint_ansi(session: ReplSession) -> str:
+def resolve_idle_hint_ansi(session: Session) -> str:
     """Dim hint line above the prompt rule: shortcuts plus connected integrations."""
     parts = ["/ for commands", "↑↓ history"]
     if session.configured_integrations_known and session.configured_integrations:
@@ -99,7 +99,7 @@ def resolve_idle_hint_ansi(session: ReplSession) -> str:
     return f"{ui_theme.DIM_ANSI}{hint}{ui_theme.ANSI_RESET}"
 
 
-def resolve_prompt_placeholder(session: ReplSession) -> ANSI:
+def resolve_prompt_placeholder(session: Session) -> ANSI:
     """Contextual ghost text when the input buffer is empty."""
     parts: list[str] = []
     if session.trust_mode:

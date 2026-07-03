@@ -30,7 +30,7 @@ from integrations.github.helpers import (
     normalize_github_tool_result,
     resolve_github_mcp_config,
 )
-from integrations.github_mcp import call_github_mcp_tool
+from integrations.github.mcp import call_github_mcp_tool
 
 DEFAULT_WINDOW_MINUTES = 120
 MAX_WINDOW_MINUTES = 7 * 24 * 60  # 7 days

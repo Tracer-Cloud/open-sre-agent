@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import pytest
 
-from integrations import github_login
-from integrations.github_identity import saved_github_username
-from integrations.github_login import GitHubLoginResult
-from integrations.github_mcp import GitHubMCPValidationResult
-from integrations.github_mcp_oauth import GitHubDeviceToken
+from integrations.github import login as github_login
+from integrations.github.identity import saved_github_username
+from integrations.github.login import GitHubLoginResult
+from integrations.github.mcp import GitHubMCPValidationResult
+from integrations.github.mcp_oauth import GitHubDeviceToken
 
 
 def test_authenticate_and_configure_github_happy_path(monkeypatch: pytest.MonkeyPatch) -> None:

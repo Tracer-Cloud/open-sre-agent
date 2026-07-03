@@ -12,7 +12,7 @@ from integrations.github.helpers import (
     normalize_github_tool_result,
     resolve_github_mcp_config,
 )
-from integrations.github_mcp import (
+from integrations.github.mcp import (
     build_github_code_search_query,
     call_github_mcp_tool,
 )

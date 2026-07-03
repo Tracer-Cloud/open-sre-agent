@@ -199,7 +199,7 @@ class CliReference:
     """Session-scoped cache for assembled CLI help reference text.
 
     Holds its cache as instance state so each :class:`GroundingContext` (and
-    thus each ``ReplSession``) owns an isolated cache with no module-level
+    thus each ``Session``) owns an isolated cache with no module-level
     mutable globals.
     """
 

@@ -40,6 +40,7 @@
             "pages": [
               "quickstart",
               "investigation-overview",
+              "how-investigations-work",
               "interactive-shell-commands",
               "interactive-shell-assistant",
               "deployment",
@@ -160,6 +161,7 @@
               "jira",
               "integrations/trello",
               "pi-coding",
+              "fix-sentry-issue",
               "vercel"
             ]
           },

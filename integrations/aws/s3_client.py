@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Any
 
 from integrations.aws.env import make_boto3_client, require_aws_credentials
+from platform.notifications.limits import MAX_MESSAGE_SIZE
 
 try:
     from botocore.exceptions import ClientError
@@ -120,7 +121,7 @@ def get_object_metadata(bucket: str, key: str) -> dict[str, Any]:
 def get_object_sample(
     bucket: str,
     key: str,
-    max_bytes: int = 4096,
+    max_bytes: int = MAX_MESSAGE_SIZE,
 ) -> dict[str, Any]:
     """
     Get a sample of an S3 object's contents.
@@ -302,7 +303,7 @@ def compare_versions(
     key: str,
     version_id_1: str,
     version_id_2: str,
-    max_bytes: int = 4096,
+    max_bytes: int = MAX_MESSAGE_SIZE,
 ) -> dict[str, Any]:
     """
     Compare two versions of an S3 object.

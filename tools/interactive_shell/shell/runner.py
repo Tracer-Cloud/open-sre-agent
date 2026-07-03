@@ -13,7 +13,7 @@ from rich.markup import escape
 from rich.text import Text
 
 import config.constants.platform as _platform
-from surfaces.interactive_shell.runtime import ReplSession
+from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.runtime.subprocess_runner.task_streaming import (
     _MAX_COMMAND_OUTPUT_CHARS,
     SHELL_COMMAND_TIMEOUT_SECONDS,
@@ -62,7 +62,7 @@ def _shell_payload(
 
 def run_shell_command(
     command: str,
-    session: ReplSession,
+    session: Session,
     console: Console,
     *,
     argv: list[str] | None = None,
@@ -190,7 +190,7 @@ def run_shell_command(
     )
 
 
-def run_cd_command(command: str, session: ReplSession, console: Console) -> dict[str, Any]:
+def run_cd_command(command: str, session: Session, console: Console) -> dict[str, Any]:
     def _strip_outer_quotes(value: str) -> str:
         if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
             return value[1:-1]
@@ -231,7 +231,7 @@ def run_cd_command(command: str, session: ReplSession, console: Console) -> dict
     return _shell_payload(command=command, ok=True, response_text=str(Path.cwd()))
 
 
-def run_pwd_command(command: str, session: ReplSession, console: Console) -> dict[str, Any]:
+def run_pwd_command(command: str, session: Session, console: Console) -> dict[str, Any]:
     try:
         tokens = shlex.split(command, posix=not _platform.IS_WINDOWS)
     except ValueError as exc:

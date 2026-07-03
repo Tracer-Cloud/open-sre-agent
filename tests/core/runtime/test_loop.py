@@ -3,6 +3,7 @@ from __future__ import annotations
 import builtins
 import logging
 from collections.abc import Iterator
+from dataclasses import replace
 from typing import Any, cast
 
 import pytest
@@ -189,6 +190,33 @@ def test_immediate_final_answer_executes_no_tools() -> None:
     assert result.executed == []
     assert result.final_text == "done immediately"
     assert result.hit_iteration_cap is False
+
+
+def test_run_records_final_system_prompt() -> None:
+    # The assembled system prompt is captured on the result so debugging can see
+    # what was influencing the agent, without re-deriving it by hand (issue #3434).
+    llm = FakeLLM(iter([_text_response("done")]))
+
+    result = _agent(llm, _tools(FakeTool("query_logs"))).run([{"role": "user", "content": "hello"}])
+
+    assert result.final_system_prompt == "sys"
+
+
+def test_run_records_system_prompt_edited_by_before_provider_request_hook() -> None:
+    # Capture happens after the _before_provider_request hook, so per-turn edits
+    # to the prompt are what gets recorded (not the pre-hook value).
+    class EditingAgent(Agent):
+        def _before_provider_request(self, request: Any) -> Any:
+            return replace(request, system=request.system + " [edited]")
+
+    llm = FakeLLM(iter([_text_response("done")]))
+    agent = EditingAgent(
+        llm=llm, system="sys", tools=[], resolved_integrations={}, max_iterations=1
+    )
+
+    result = agent.run([{"role": "user", "content": "hello"}])
+
+    assert result.final_system_prompt == "sys [edited]"
 
 
 def test_one_tool_round_then_final() -> None:

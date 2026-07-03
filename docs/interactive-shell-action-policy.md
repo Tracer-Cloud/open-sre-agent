@@ -67,7 +67,7 @@ Factual questions about live state (for example "is sentry installed?") are
 answered without adding keyword/regex rules. Two complementary mechanisms:
 
 1. Context grounding (not action planning). At REPL boot, `repl_main`
-   (`interactive_shell/main.py`) hydrates
+   (`surfaces/interactive_shell/main.py`) hydrates
    `session.configured_integrations` from the shared
    `configured_integration_services()` helper in `integrations/catalog.py`
    (the same source the welcome banner uses, so they never diverge). The chat
@@ -98,7 +98,7 @@ output:
 1. Read-only discovery slash commands stash a compact text view of what they
    found on `session.agent.last_observation`
    (`_record_integrations_observation` in
-   `interactive_shell/command_registry/integrations.py`).
+   `surfaces/interactive_shell/command_registry/integrations.py`).
 2. `run_agent_prompt` resets that field at the start of every action-agent
    turn and, when a discovery command produced an observation and succeeded,
    calls the conversational assistant with `tool_observation=...`
@@ -129,10 +129,10 @@ the service; there is no per-vendor hardcoding.
 
 The setup wizard is a child process that needs exclusive stdin, so it cannot run
 inline mid-turn (the live prompt is competing for stdin). Instead
-`interactive_shell/tools/slash_tool.py` queues the command via
+`tools/interactive_shell/actions/slash.py` queues the command via
 `session.queue_auto_command(...)`, which prefills the next prompt and marks it
 for auto-submit. The prompt refresh hook
-(`wire_prompt_refresh` in `prompting/prompt_surface.py`) then submits it, so the
+(`wire_prompt_refresh` in `surfaces/interactive_shell/ui/input_prompt/refresh.py`) then submits it, so the
 command flows through the normal exclusive-stdin turn path of the REPL
 (`turn_needs_exclusive_stdin` recognizes `/integrations setup`) — the only
 place an interactive child process gets clean stdin. In a non-TTY/scripted
@@ -202,7 +202,7 @@ The `ask`/confirmation machinery (`trust_mode` plus the confirmation UX) is
 retained as an unused hook, split across two layers: the pure decision lives in
 `tools/interactive_shell/shared/execution_policy.py` (`resolve_confirmation`), and the terminal
 interaction (`execution_allowed` — console output, the `Proceed? [Y/n]` prompt,
-analytics) lives in `interactive_shell/ui/execution_confirm.py`. If command
+analytics) lives in `surfaces/interactive_shell/ui/execution_confirm.py`. If command
 guardrails are reintroduced after alpha, gate them here at the execution stage —
 never with an action-selection denial in the planner.
 

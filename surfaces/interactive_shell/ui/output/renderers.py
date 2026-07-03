@@ -84,7 +84,7 @@ def render_event(
     if _is_silent_output():
         return
     if get_output_format() == "rich":
-        badge_label, badge_color = BADGE_STYLES.get(event_type, ("DIAG  ", WARNING))
+        badge_label, badge_color = BADGE_STYLES.get(event_type, BADGE_STYLES["DIAG"])
         t = Text()
         t.append(f"{_elapsed_hms(elapsed_s)}  ", style=SECONDARY)
         if muted:

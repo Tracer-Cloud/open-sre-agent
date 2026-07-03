@@ -21,9 +21,6 @@ from surfaces.interactive_shell.ui.output.labels import (
 
 _REPL_ANIM_FRAMES = ("·", "··", "···", "··")
 _REPL_ANIM_INTERVAL = 0.35
-_ANIM_SEC = "\x1b[38;5;247m"
-_ANIM_DIM = "\x1b[2m"
-_ANIM_RST = "\x1b[0m"
 # Timestamp + indent + trailing dot animation; keep hints on one physical row.
 _HINT_LINE_OVERHEAD = 20
 
@@ -101,6 +98,8 @@ class _ReplEventLogDisplay:
         t0 = self._t0
 
         def _run() -> None:
+            from platform.terminal import theme
+
             frame_idx = 0
             while not stop.wait(_REPL_ANIM_INTERVAL):
                 frame_idx = (frame_idx + 1) % len(_REPL_ANIM_FRAMES)
@@ -108,9 +107,9 @@ class _ReplEventLogDisplay:
                 ts = _elapsed_hms(time.monotonic() - t0)
                 frame_str = (
                     f"\033[A\r"
-                    f"{_ANIM_SEC}{ts}  {_ANIM_RST}"
-                    f"{_ANIM_DIM}      ↳  {_ANIM_RST}"
-                    f"{_ANIM_SEC}{fitted_prefix} {dots}{_ANIM_RST}"
+                    f"{theme.SECONDARY_ANSI}{ts}  {theme.ANSI_RESET}"
+                    f"{theme.ANSI_DIM}      ↳  {theme.ANSI_RESET}"
+                    f"{theme.SECONDARY_ANSI}{fitted_prefix} {dots}{theme.ANSI_RESET}"
                     f"\033[K\n"
                 )
                 if not stop.is_set():

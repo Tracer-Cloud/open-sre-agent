@@ -17,7 +17,8 @@ from rich.console import Console
 from rich.markup import escape
 
 from core.agent_harness.agents import evidence_agent
-from core.agent_harness.session import ReplSession
+from core.agent_harness.agents.evidence_agent import EvidenceAgentFactory
+from core.agent_harness.session import Session
 from surfaces.interactive_shell.ui import DIM
 from surfaces.interactive_shell.ui.output.tool_details import (
     tool_short_label,
@@ -104,7 +105,7 @@ def _format_gathering_progress_line(
     return f"· gathering via {safe_display}…"
 
 
-def _resolve_gather_integrations(session: ReplSession, message: str) -> dict[str, Any]:
+def _resolve_gather_integrations(session: Session, message: str) -> dict[str, Any]:
     """Resolve gather integrations through the decoupled agent helper."""
     return evidence_agent._resolve_gather_integrations(session, message)  # noqa: SLF001
 
@@ -115,7 +116,7 @@ def _truncate(text: str, limit: int) -> str:
     return text[:limit] + f"\n…[truncated, {len(text)} chars total]"
 
 
-def _persist_tool_calls(session: ReplSession, executed: list[tuple[Any, Any]]) -> None:
+def _persist_tool_calls(session: Session, executed: list[tuple[Any, Any]]) -> None:
     """Record each gathered tool-call result into the session log.
 
     Arguments and results are redacted and bounded before writing; failures are
@@ -146,10 +147,11 @@ def _persist_tool_calls(session: ReplSession, executed: list[tuple[Any, Any]]) -
 
 def gather_integration_tool_evidence(
     message: str,
-    session: ReplSession,
+    session: Session,
     console: Console,
     *,
     is_tty: bool | None = None,
+    agent_factory: EvidenceAgentFactory | None = None,
 ) -> str | None:
     """Run a bounded tool-calling loop and return collected evidence, or None.
 
@@ -181,6 +183,7 @@ def gather_integration_tool_evidence(
         persist=persist,
         error_reporter=_ShellGatherErrorReporter(),
         is_tty=is_tty,
+        agent_factory=agent_factory,
     )
 
 

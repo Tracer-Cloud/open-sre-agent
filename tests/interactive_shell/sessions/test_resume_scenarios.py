@@ -18,7 +18,7 @@ from config.config import (
     resolve_llm_settings_verbose,
 )
 from config.llm_auth.credentials import status as credential_status
-from core.agent_harness.session import JsonlSessionStorage, ReplSession
+from core.agent_harness.session import JsonlSessionStorage, Session
 from surfaces.interactive_shell.command_registry import dispatch_slash
 
 SessionStore = JsonlSessionStorage()
@@ -133,7 +133,7 @@ def isolated_sessions(tmp_path: Path) -> Path:
         yield directory
 
 
-def _open_current(session: ReplSession) -> None:
+def _open_current(session: Session) -> None:
     SessionStore.open_session(session)
 
 
@@ -182,7 +182,7 @@ class TestResumeScenarioMatrix:
         target_id = "aaaa1111-2222-3333-4444-555566667777"
         _write_finalized_session(isolated_sessions, target_id, chat_text="why is redis slow?")
 
-        session = ReplSession()
+        session = Session()
         current_id = session.session_id
         _open_current(session)
 
@@ -215,7 +215,7 @@ class TestResumeScenarioMatrix:
         target_id = "bbbb2222-3333-4444-5555-666677778888"
         _write_finalized_session(isolated_sessions, target_id)
 
-        session = ReplSession()
+        session = Session()
         _open_current(session)
         console, _ = _capture()
 
@@ -238,7 +238,7 @@ class TestResumeScenarioMatrix:
         target_id = "cccc3333-4444-5555-6666-777788889999"
         _write_finalized_session(isolated_sessions, target_id)
 
-        session = ReplSession()
+        session = Session()
         starter_id = session.session_id
         _open_current(session)
         console, _ = _capture()
@@ -253,7 +253,7 @@ class TestResumeScenarioMatrix:
         target_id = "dddd4444-5555-6666-7777-888899990000"
         _write_finalized_session(isolated_sessions, target_id, chat_text="investigate OOM killer")
 
-        session = ReplSession()
+        session = Session()
         _open_current(session)
         console, buf = _capture()
 
@@ -275,7 +275,7 @@ class TestResumeScenarioMatrix:
         target_id = "eeee5555-6666-7777-8888-999900001111"
         _write_finalized_session(isolated_sessions, target_id, chat_text="investigate OOM killer")
 
-        session = ReplSession()
+        session = Session()
         _open_current(session)
         console, buf = _capture()
 
@@ -287,7 +287,7 @@ class TestResumeScenarioMatrix:
         self,
         isolated_sessions: Path,
     ) -> None:
-        session = ReplSession()
+        session = Session()
         current_id = session.session_id
         _open_current(session)
         console, buf = _capture()
@@ -305,7 +305,7 @@ class TestResumeScenarioMatrix:
         self,
         isolated_sessions: Path,
     ) -> None:
-        session = ReplSession()
+        session = Session()
         _open_current(session)
         session.record("chat", "still working here")
         console, buf = _capture()
@@ -337,7 +337,7 @@ class TestResumeScenarioMatrix:
             encoding="utf-8",
         )
 
-        session = ReplSession()
+        session = Session()
         current_id = session.session_id
         _open_current(session)
         console, buf = _capture()
@@ -357,7 +357,7 @@ class TestResumeScenarioMatrix:
         _write_finalized_session(isolated_sessions, id_a, chat_text="session A question")
         _write_finalized_session(isolated_sessions, id_b, chat_text="session B question")
 
-        session = ReplSession()
+        session = Session()
         _open_current(session)
         console, _ = _capture()
 
@@ -381,7 +381,7 @@ class TestResumeScenarioMatrix:
         target_id = "22228888-9999-0000-1111-222233334444"
         _write_finalized_session(isolated_sessions, target_id)
 
-        session = ReplSession()
+        session = Session()
         current_id = session.session_id
         _open_current(session)
         session.record("chat", "work in progress")

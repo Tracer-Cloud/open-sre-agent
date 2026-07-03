@@ -101,17 +101,57 @@ def format_investigation_outcome(
     *,
     final_state: dict[str, object] | None = None,
     background: bool = False,
+    error_message: str = "",
+    status: str | None = None,
 ) -> str:
-    """Human-readable investigation outcome for analytics."""
+    """Human-readable investigation outcome body for analytics."""
     label = target.strip() or "investigation"
     if background:
         return f"investigation started in background: {label}"
+    if status == "cancelled":
+        return f"investigation_cancelled ({label}): aborted by user"
+    if status == "failed" or (final_state is None and error_message):
+        reason = error_message.strip() or "investigation failed"
+        return truncate_analytics_text(f"investigation_failed ({label}):\n{reason}")
     if final_state is None:
-        return f"investigation failed or cancelled: {label}"
+        return f"investigation_failed ({label}): investigation did not complete"
     excerpt = _investigation_report_excerpt(final_state)
     if excerpt:
         return truncate_analytics_text(f"investigation completed ({label}):\n{excerpt}")
     return f"investigation completed: {label}"
+
+
+def format_investigation_terminal_outcome(
+    command_line: str,
+    *,
+    target: str,
+    ok: bool,
+    final_state: dict[str, object] | None = None,
+    background: bool = False,
+    error_message: str = "",
+    status: str | None = None,
+) -> str:
+    """Two-line terminal analytics payload for ``/investigate`` turns."""
+    if background:
+        return format_investigation_outcome(target, background=True)
+    resolved_status = status or ("succeeded" if ok and final_state is not None else "failed")
+    if resolved_status == "completed":
+        resolved_status = "succeeded"
+    slash_status = {
+        "succeeded": "succeeded",
+        "failed": "failed",
+        "cancelled": "cancelled",
+    }.get(resolved_status, "failed")
+    prefix = f"slash {command_line.strip()} ({slash_status})"
+    body = format_investigation_outcome(
+        target,
+        final_state=final_state,
+        error_message=error_message,
+        status="cancelled"
+        if resolved_status == "cancelled"
+        else ("failed" if resolved_status == "failed" else None),
+    )
+    return truncate_analytics_text(f"{prefix}\n{body}")
 
 
 def format_terminal_turn_outcome(

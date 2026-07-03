@@ -13,6 +13,7 @@ from typing import Any
 
 from integrations.config_models import HelmIntegrationConfig
 from integrations.probes import ProbeResult
+from platform.notifications.limits import MAX_MESSAGE_SIZE
 
 logger = logging.getLogger(__name__)
 
@@ -159,7 +160,7 @@ class HelmClient:
         all_namespaces: bool = False,
         max_releases: int = 256,
     ) -> dict[str, Any]:
-        cap = max(1, min(max_releases, 4096))
+        cap = max(1, min(max_releases, MAX_MESSAGE_SIZE))
         args = ["list", "-o", "json", "--max", str(cap)]
         if all_namespaces:
             args.append("-A")

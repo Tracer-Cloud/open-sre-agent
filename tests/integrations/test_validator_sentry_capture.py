@@ -44,7 +44,10 @@ class MigrationCase:
 CASES: tuple[MigrationCase, ...] = (
     # trello
     MigrationCase(
-        "integrations/trello.py", "validate_trello_config", "trello", "validate_trello_config"
+        "integrations/trello/config.py",
+        "validate_trello_config",
+        "trello",
+        "validate_trello_config",
     ),
     # kafka
     MigrationCase(
@@ -70,20 +73,20 @@ CASES: tuple[MigrationCase, ...] = (
     MigrationCase("integrations/clickhouse.py", "get_table_stats", "clickhouse", "get_table_stats"),
     # github_mcp
     MigrationCase(
-        "integrations/github_mcp.py",
+        "integrations/github/mcp.py",
         "validate_github_mcp_config",
         "github_mcp",
         "validate_github_mcp_config",
     ),
     # airflow (validate + loop site)
     MigrationCase(
-        "integrations/airflow.py",
+        "integrations/airflow/config.py",
         "validate_airflow_config",
         "airflow",
         "validate_airflow_config",
     ),
     MigrationCase(
-        "integrations/airflow.py",
+        "integrations/airflow/config.py",
         "get_recent_airflow_failures",
         "airflow",
         "get_recent_airflow_failures.task_instances",

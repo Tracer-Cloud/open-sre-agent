@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from core.tool_framework.telemetry import report_run_error
 from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.mcp_params import first_list, first_string
 from core.tool_framework.utils.mcp_tool_listing import build_mcp_tool_listing
 from integrations.openclaw import (
     OpenClawConfig,
@@ -23,28 +24,6 @@ from integrations.openclaw import (
 OpenClawParams = dict[str, object]
 OpenClawBridgeResponse = dict[str, object]
 OpenClawConversationRow = dict[str, object]
-
-
-def _string_list(value: object) -> list[str]:
-    if not isinstance(value, list):
-        return []
-    return [str(item).strip() for item in value if str(item).strip()]
-
-
-def _first_string(openclaw: dict[str, object], *keys: str) -> str | None:
-    for key in keys:
-        value = str(openclaw.get(key, "")).strip()
-        if value:
-            return value
-    return None
-
-
-def _first_list(openclaw: dict[str, object], *keys: str) -> list[str]:
-    for key in keys:
-        values = _string_list(openclaw.get(key, []))
-        if values:
-            return values
-    return []
 
 
 def _openclaw_unavailable_response(
@@ -101,11 +80,11 @@ def _openclaw_extract_params(sources: dict[str, dict]) -> OpenClawParams:
     if not openclaw:
         return {}
     return {
-        "openclaw_url": _first_string(openclaw, "openclaw_url", "url"),
-        "openclaw_mode": _first_string(openclaw, "openclaw_mode", "mode"),
-        "openclaw_token": _first_string(openclaw, "openclaw_token", "auth_token"),
-        "openclaw_command": _first_string(openclaw, "openclaw_command", "command"),
-        "openclaw_args": _first_list(openclaw, "openclaw_args", "args"),
+        "openclaw_url": first_string(openclaw, "openclaw_url", "url"),
+        "openclaw_mode": first_string(openclaw, "openclaw_mode", "mode"),
+        "openclaw_token": first_string(openclaw, "openclaw_token", "auth_token"),
+        "openclaw_command": first_string(openclaw, "openclaw_command", "command"),
+        "openclaw_args": first_list(openclaw, "openclaw_args", "args"),
     }
 
 

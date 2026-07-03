@@ -207,7 +207,7 @@ owning area rather than adding more logic to the caller.
 
 ## State, history, config, and background work
 
-- Prefer explicit `ReplSession` fields for session state. Keep ownership clear:
+- Prefer explicit `Session` fields for session state. Keep ownership clear:
   runtime owns lifecycle, history owns persistence, config owns shell-specific
   settings.
 - Background threads/tasks/listeners must have deterministic shutdown. Tests

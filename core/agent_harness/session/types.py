@@ -1,6 +1,6 @@
 """Session persistence contracts for the interactive shell.
 
-These protocols decouple the in-memory session object (:class:`ReplSession`)
+These protocols decouple the in-memory session object (:class:`Session`)
 and the slash-command surfaces from any concrete persistence backend. Two
 roles are kept deliberately separate, mirroring a storage-vs-repository split:
 
@@ -17,7 +17,7 @@ from typing import Any, Protocol, runtime_checkable
 
 from core.context.state import MutableAgentState
 
-# Turn kinds that represent user-initiated chat messages. ReplSession.record()
+# Turn kinds that represent user-initiated chat messages. Session.record()
 # is called with the turn kind, not a normalized "chat" label, so this set must
 # cover all kinds that produce conversational turns.
 CHAT_KINDS: frozenset[str] = frozenset({"chat", "cli_agent", "follow_up"})
@@ -53,6 +53,7 @@ class SessionStorage(Protocol):
         model: str | None = None,
         provider: str | None = None,
         latency_ms: int | None = None,
+        system_prompt: str | None = None,
     ) -> None:
         raise NotImplementedError
 

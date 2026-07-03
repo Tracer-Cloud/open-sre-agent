@@ -12,7 +12,7 @@ from unittest.mock import patch
 import pytest
 from rich.console import Console
 
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 from core.tool_framework.registered_tool import RegisteredTool
 from surfaces.interactive_shell.command_registry import dispatch_slash
 from surfaces.interactive_shell.command_registry.tools_cmds import _TOOLS_FIRST_ARGS, _cmd_tools
@@ -240,7 +240,7 @@ class TestListToolsSlashCommand:
 
     def test_list_tools_prints_grouped_catalog(self) -> None:
         console, buf = self._capture()
-        session = ReplSession()
+        session = Session()
         # Stub the catalog so the test stays decoupled from registry contents.
         fake = [
             ToolCatalogEntry(
@@ -264,7 +264,7 @@ class TestListToolsSlashCommand:
 
     def test_bare_tools_command_prints_full_registered_catalog(self) -> None:
         console, buf = self._capture()
-        session = ReplSession()
+        session = Session()
         fake = [
             ToolCatalogEntry(
                 name="telegram_send_message",
@@ -291,7 +291,7 @@ class TestListToolsSlashCommand:
 
     def test_list_tools_disables_markup_for_plain_catalog_text(self) -> None:
         console, buf = self._capture()
-        session = ReplSession()
+        session = Session()
         fake = [
             ToolCatalogEntry(
                 name="risky_tool",
@@ -311,7 +311,7 @@ class TestListToolsSlashCommand:
 
     def test_list_tools_handles_empty_registry(self) -> None:
         console, buf = self._capture()
-        session = ReplSession()
+        session = Session()
         with patch(
             "surfaces.interactive_shell.command_registry.tools_cmds.build_tool_catalog",
             return_value=[],

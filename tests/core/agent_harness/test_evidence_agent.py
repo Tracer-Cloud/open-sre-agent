@@ -13,7 +13,7 @@ from typing import Any
 
 import core.agent_harness.agents.evidence_agent as evidence_agent
 import tools.investigation.stages.gather_evidence.tools as gather_tools
-from core.agent_harness.session import ReplSession
+from core.agent_harness.session import Session
 
 
 class _RecordingReporter:
@@ -26,8 +26,8 @@ class _RecordingReporter:
         self.calls.append((exc, context, expected))
 
 
-def _session() -> ReplSession:
-    session = ReplSession()
+def _session() -> Session:
+    session = Session()
     session.resolved_integrations_cache = {}
     return session
 
