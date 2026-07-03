@@ -3,12 +3,12 @@
 This is the surface-agnostic heart of the turn harness, lifted out of the
 interactive shell. It owns:
 
-* ``answer_cli_agent`` — one turn of the grounded conversational assistant
-  (guidance only; no investigation run), streaming a reply and recording the
-  exchange.
+* ``stream_answer`` — one no-tool streamed answer from the grounded
+  conversational assistant (guidance only; no investigation run). A single
+  streaming LLM call with no ReAct loop and no tool use. Records the exchange.
 * ``run_turn`` — the three-path routing (summarize-observation / handled /
   gather+answer) that sequences the action driver, the gather pass, and the
-  assistant.
+  answer path.
 
 All terminal/session/grounding/telemetry concerns are reached through the
 Protocols in :mod:`core.agent_harness.ports`. Nothing here imports ``interactive_shell``.
@@ -24,7 +24,6 @@ from config.llm_reasoning_effort import apply_reasoning_effort
 from core.agent_harness.models.turn_context import TurnContext
 from core.agent_harness.models.turn_results import ShellTurnResult, ToolCallingTurnResult
 from core.agent_harness.ports import (
-    AnswerAgent,
     ConfirmFn,
     ErrorReporter,
     EvidenceGatherer,
@@ -34,6 +33,7 @@ from core.agent_harness.ports import (
     ReasoningClientProvider,
     RunRecordFactory,
     SessionStore,
+    StreamAnswerFn,
     TurnAccounting,
 )
 from core.agent_harness.prompts import build_cli_agent_prompt_from_provider
@@ -56,7 +56,7 @@ def stage_turn_error(session: Any, kind: str, message: str) -> None:
         setter(kind, message)
 
 
-def _stream_cli_agent_response(
+def _stream_response(
     *,
     client: Any,
     prompt: str,
@@ -89,7 +89,7 @@ def _stream_cli_agent_response(
     return run_factory.build(client=client, prompt=prompt, response_text=text_str, started=started)
 
 
-def _record_cli_agent_turn(session: SessionStore, message: str, assistant_text: str) -> None:
+def _record_answer_turn(session: SessionStore, message: str, assistant_text: str) -> None:
     session.cli_agent_messages.append(("user", message))
     session.cli_agent_messages.append(("assistant", assistant_text))
     if len(session.cli_agent_messages) > MAX_CONVERSATION_MESSAGES:
@@ -103,12 +103,11 @@ def _record_action_only_turn(session: SessionStore, message: str, assistant_text
     latest = session.cli_agent_messages[-2:]
     if latest == [("user", message), ("assistant", text)]:
         return
-    _record_cli_agent_turn(session, message, text)
+    _record_answer_turn(session, message, text)
 
 
-def answer_cli_agent(
-    # This function is very important because it is used as the entry point inside interactive shell!!!
-    # This function doesn't execute tools. Only answers text.
+def stream_answer(
+    # Direct answer (no tools) shared by the interactive shell and headless surfaces.
     message: str,
     session: SessionStore,
     output: OutputSink,
@@ -123,7 +122,11 @@ def answer_cli_agent(
     tool_observation_on_screen: bool = True,
     turn_ctx: TurnContext | None = None,
 ) -> Any | None:
-    """Run one turn of the conversational assistant (guidance only).
+    """Stream one grounded conversational answer (guidance only, no tools).
+
+    The **direct answer** path (no tools): a single ``invoke_stream`` call with
+    no ReAct loop. The **tool-calling** agent is ``core.agent.Agent`` — see
+    ``core/agent_harness/AGENTS.md``.
 
     ``turn_ctx`` is the immutable per-turn snapshot assembled at turn start.
     When present, snapshot fields (conversation history, integration state,
@@ -145,7 +148,7 @@ def answer_cli_agent(
         turn_ctx=ctx,
     )
 
-    run = _stream_cli_agent_response(
+    run = _stream_response(
         client=client,
         prompt=prompt,
         output=output,
@@ -157,7 +160,7 @@ def answer_cli_agent(
         return None
 
     text_str = getattr(run, "response_text", "") or ""
-    _record_cli_agent_turn(session, message, text_str)
+    _record_answer_turn(session, message, text_str)
 
     return run
 
@@ -220,7 +223,7 @@ def _routing_input_from_result(
 def _gather_and_answer(
     *,
     text: str,
-    answer: AnswerAgent,
+    answer: StreamAnswerFn,
     gather: EvidenceGatherer,
     confirm_fn: ConfirmFn | None,
     is_tty: bool | None,
@@ -248,7 +251,7 @@ def run_turn(
     session: SessionStore,
     *,
     execute_actions: ExecuteActions,
-    answer: AnswerAgent,
+    answer: StreamAnswerFn,
     gather: EvidenceGatherer,
     accounting: TurnAccounting,
     confirm_fn: ConfirmFn | None = None,
@@ -339,6 +342,6 @@ def run_turn(
 
 
 __all__ = [
-    "answer_cli_agent",
     "run_turn",
+    "stream_answer",
 ]

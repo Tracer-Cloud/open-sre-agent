@@ -1,7 +1,7 @@
 """Shell adapter for one conversational answer turn.
 
 Binds the interactive shell's Rich output, grounding caches, reasoning client,
-and telemetry around core ``answer_cli_agent``.
+and telemetry around core ``stream_answer``.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from collections.abc import Callable
 from rich.console import Console
 
 from core.agent_harness.agents.turn_orchestrator import (
-    answer_cli_agent as run_core_answer_cli_agent,
+    stream_answer as core_stream_answer,
 )
 from core.agent_harness.models.turn_context import TurnContext
 from core.agent_harness.ports import OutputSink
@@ -40,7 +40,7 @@ def answer_shell_question(
 ) -> LlmRunInfo | None:
     """Answer one shell question through the grounded conversational assistant."""
     resolved_output = resolve_output_sink(console, output)
-    return run_core_answer_cli_agent(
+    return core_stream_answer(
         message,
         session,
         resolved_output,

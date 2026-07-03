@@ -71,8 +71,10 @@ flowchart TB
 
     P1 --> RUN
     P2 --> RUN
-    P3 --> RUN
-    RUN["Agent.run()"] -->|capture after _before_provider_request| FP[AgentRunResult.final_system_prompt]
+    P3 --> STREAM
+
+    RUN["Agent.run() - tool-calling shape"] -->|capture after _before_provider_request| FP[AgentRunResult.final_system_prompt]
+    STREAM["stream_answer / invoke_stream - streaming shape"]
 
     A1 --> S2
     A3 --> S2
@@ -103,7 +105,7 @@ sequenceDiagram
     participant TC as TurnContext
     participant Action as action_agent
     participant Gather as evidence_agent
-    participant Answer as answer_cli_agent
+    participant Answer as stream_answer
     participant JSONL as Session JSONL
 
     Surface->>TO: message + Session
@@ -355,9 +357,9 @@ path.unlink()
 | Gather | `build_gather_system_prompt` / `_from_turn_context` | `core/agent_harness/prompts/gather.py` |
 | Investigation | `build_investigation_system_prompt` | `tools/investigation/stages/gather_evidence/prompt.py` |
 
-The assistant path is a **categorical exception**: it streams via
-`invoke_stream(prompt)` and does not use `Agent.run` (see
-`core/agent_harness/AGENTS.md`).
+The assistant path is the **direct answer** shape (no tools): it streams via
+`invoke_stream(prompt)` and does not use `Agent.run` (the tool-calling shape).
+The two shapes are described in `core/agent_harness/AGENTS.md`.
 
 ---
 

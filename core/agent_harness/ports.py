@@ -149,10 +149,9 @@ class RunRecordFactory(Protocol):
         raise NotImplementedError
 
 
-# Bound conversational-answer callable. Returns an opaque LLM-run record (or
-# None). The shell binds session/console/grounding; headless binds a simple
-# core-LLM call.
-AnswerAgent = Callable[..., Any]
+# Bound direct-answer callable (no tools):
+# ``answer(text, *, confirm_fn, is_tty, tool_observation, turn_ctx) -> LLM-run record | None``.
+StreamAnswerFn = Callable[..., Any]
 
 # Bound evidence-gather callable: ``gather(text, *, is_tty) -> str | None``.
 EvidenceGatherer = Callable[..., "str | None"]
@@ -174,7 +173,7 @@ class TurnAccounting(Protocol):
 
 
 __all__ = [
-    "AnswerAgent",
+    "StreamAnswerFn",
     "ConfirmFn",
     "ErrorReporter",
     "EvidenceGatherer",

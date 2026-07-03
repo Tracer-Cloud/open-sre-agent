@@ -86,11 +86,12 @@ class AgentRunResult:
 
 
 class Agent[RuntimeToolT: RuntimeTool](AgentEventEmitter, AgentToolFilter):
-    """Stateful, configurable ReAct agent.
+    """Stateful, configurable ReAct agent — the tool-calling agent shape.
 
     Owns the think → call-tools → observe loop and exposes hook methods so
     subclasses can customise stopping logic and tool filtering without
-    re-implementing the loop.
+    re-implementing the loop. For the direct-answer shape (no tools), see
+    ``core/agent_harness/AGENTS.md``.
     """
 
     @staticmethod
