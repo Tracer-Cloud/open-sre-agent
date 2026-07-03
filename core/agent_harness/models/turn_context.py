@@ -1,19 +1,7 @@
 """Per-turn immutable context snapshot for the agentic turn engine.
 
-See ``docs/agent-context-data-stores.md`` for how this fits with ``Session``,
-``MutableAgentState``, and JSONL persistence.
-
-Assembled once at the start of each turn from any object satisfying
-:class:`TurnContextSource` (the interactive shell passes its ``Session``;
-headless callers pass an in-memory session store). All fields reflect session
-state at turn-start and do not change while the turn runs, so downstream code
-reads a stable snapshot rather than a live, concurrently-mutated object.
-
-Usage::
-
-    turn_ctx = TurnContext.from_session(text, session)
-    # pass turn_ctx to action agent + conversational assistant
-    # keep passing the live session for writes (history, token usage, etc.)
+Built once at turn start via :meth:`TurnContext.from_session`. Downstream
+prompt builders read this snapshot; the live session is still used for writes.
 """
 
 from __future__ import annotations

@@ -64,13 +64,6 @@ class EvidenceAgentFactory(Protocol):
     ) -> Agent[Any]: ...
 
 
-def _resolve_session_integrations(session: SessionStore) -> dict[str, Any]:
-    """Resolve integration configs once per session and cache the result."""
-    from core.agent_harness.integrations.resolution import resolve_and_cache_integrations
-
-    return resolve_and_cache_integrations(session)
-
-
 def _truncate(text: str, limit: int) -> str:
     if len(text) <= limit:
         return text
@@ -91,7 +84,7 @@ def _format_observation(executed: list[tuple[Any, Any]]) -> str:
 
 def _resolve_gather_integrations(session: SessionStore, message: str) -> dict[str, Any]:
     """Resolve integrations for one gather turn, enriching GitHub repo scope when inferred."""
-    base = _resolve_session_integrations(session)
+    base = Agent.resolve_integrations(session)
     scope = infer_github_repo_scope(
         message=message,
         conversation_messages=session.cli_agent_messages,

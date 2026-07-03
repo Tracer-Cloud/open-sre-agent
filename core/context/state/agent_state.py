@@ -1,15 +1,7 @@
 """Shared mutable agent state and immutable turn-request snapshots.
 
-Production usage (see ``docs/agent-context-data-stores.md``):
-
-* ``messages`` / ``last_observation`` / ``clear()`` — the live CLI transcript
-  embedded on ``Session`` as ``session.agent``.
-* Everything else in this module (``set_model``, ``begin_run``, ``subscribe``,
-  etc.) exists for tests and future runtime-request wiring; it is **not** on
-  any live harness path today.
-
-``core.agent.Agent`` does **not** read from ``MutableAgentState``; prompts and
-tools are assembled per turn via ``TurnContext`` + ``AgentConfig``.
+Production uses ``messages``, ``last_observation``, and ``clear()`` on
+``session.agent`` only. Other APIs exist for tests and future wiring.
 """
 
 from __future__ import annotations

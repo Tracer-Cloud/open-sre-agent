@@ -213,8 +213,7 @@ def _resolved_integrations_for_turn(
 ) -> dict[str, Any]:
     if turn_ctx is not None and turn_ctx.resolved_integrations:
         return dict(turn_ctx.resolved_integrations)
-    cached = getattr(session, "resolved_integrations_cache", None)
-    return dict(cached or {})
+    return dict(Agent.resolve_integrations(session))
 
 
 def _persist_tool_calling_error(session: SessionStore, user_text: str, error_text: str) -> None:
