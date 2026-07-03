@@ -101,7 +101,7 @@ Separately from typed-command history, the interactive shell records each LLM tu
 | --- | --- | --- |
 | `OPENSRE_PROMPT_LOG_DISABLED` | `0` | Set to `1` to disable prompt/response logging entirely (both local file and PostHog). |
 | `OPENSRE_PROMPT_LOG_LOCAL_DISABLED` | `0` | Set to `1` to skip the local JSONL file while leaving PostHog forwarding (if enabled) unaffected. |
-| `OPENSRE_PROMPT_LOG_REDACT` | `1` | Set to `0` to log/send raw, unredacted prompt and response text. |
+| `OPENSRE_PROMPT_LOG_REDACT` | `1` | Set to `0` to log/send raw prompt and response text without redaction. |
 | `OPENSRE_PROMPT_LOG_PATH` | `~/.opensre/prompt_log.jsonl` | Override the local JSONL file path. |
 
 PostHog forwarding for this event additionally honors the global telemetry opt-outs: set **`OPENSRE_NO_TELEMETRY=1`**, `OPENSRE_ANALYTICS_DISABLED=1`, or `DO_NOT_TRACK=1` to stop all PostHog traffic (including `$ai_generation`) without touching the local JSONL file. See [Environment Variables](/configuration/environment-variables#telemetry-monitoring).
@@ -117,7 +117,7 @@ interactive:
     path: ~/.opensre/prompt_log.jsonl
 ```
 
-Redaction here uses the same built-in pattern set as command history (see [Redaction patterns](#redaction-patterns) above) — it catches known secret shapes, not arbitrary sensitive content. Raw incident details, hostnames, or business context in a prompt are not redacted; only credential-shaped substrings are.
+Redaction here uses the same built-in pattern set as command history (see [Redaction patterns](#redaction-patterns) above) — it catches known secret shapes, not arbitrary sensitive content. Raw incident details, hostnames, or business context in a prompt are not redacted; only credential-shaped substring patterns are.
 
 ## Threat model
 
