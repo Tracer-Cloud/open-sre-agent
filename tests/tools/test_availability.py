@@ -127,6 +127,16 @@ class TestBitbucketAvailableOrBackend:
         sources = {"bitbucket": {"connection_verified": True, "workspace": "acme"}}
         assert bitbucket_available_or_backend(sources) is False
 
+    def test_bitbucket_requires_connection_verification(self) -> None:
+        sources = {
+            "bitbucket": {
+                "workspace": "acme",
+                "username": "bb-user",
+                "app_password": "bb-pass",
+            }
+        }
+        assert bitbucket_available_or_backend(sources) is False
+
     def test_bitbucket_backend(self) -> None:
         sources = {"bitbucket": {"_backend": object()}}
         assert bitbucket_available_or_backend(sources) is True

@@ -39,10 +39,6 @@ def _resolve_config(
     return env_config
 
 
-def _bb_available(sources: dict[str, dict]) -> bool:
-    return bitbucket_available_or_backend(sources)
-
-
 def _bb_creds(bb: dict[str, Any]) -> dict[str, Any]:
     return {
         "workspace": bb.get("workspace"),
@@ -65,7 +61,7 @@ def _search_bitbucket_code_extract_params(sources: dict[str, dict]) -> dict[str,
 
 
 def _search_bitbucket_code_available(sources: dict[str, dict]) -> bool:
-    return _bb_available(sources)
+    return bitbucket_available_or_backend(sources)
 
 
 @tool(
