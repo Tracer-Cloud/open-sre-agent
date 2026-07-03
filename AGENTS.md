@@ -34,6 +34,7 @@ Before any push or PR creation follow **[CI.md](CI.md)** — lint, format, typec
 | `Makefile`            | Canonical local automation for install, test, verify, deploy, and cleanup targets.                 |
 | `README.md`           | Product overview, install, quick start, high-level capabilities, and links to deeper docs.         |
 | `docs/DEVELOPMENT.md` | Contributor workflows: CI parity commands, dev container, benchmark, deployment, telemetry detail. |
+| `docs/investigation-pipeline-architecture.md` | Investigation pipeline stages, ReAct loop control flow, and guardrails (tool cap, stagnation breaker, context budget), with diagrams. |
 | `docs/investigation-tool-calling.md` | Investigation ReAct tool schemas, LLM invoke payloads, and message shapes (all providers). |
 | `SETUP.md`            | Machine setup (all platforms, Windows, MCP/OpenClaw, troubleshooting).                             |
 | `CI.md`               | Mandatory pre-push checklist: lint, format, typecheck, tests — agents MUST follow before pushing. |
@@ -98,7 +99,9 @@ Steps:
 Investigations are coordinated in `tools/investigation/lifecycle.py` and exposed via
 `tools/investigation/capability.py`. Semantic stages live under
 `tools/investigation/stages/`; reporting lives under
-`tools/investigation/reporting/`.
+`tools/investigation/reporting/`. See
+[docs/investigation-pipeline-architecture.md](docs/investigation-pipeline-architecture.md)
+for the end-to-end stage/loop diagrams before making structural changes.
 
 Files to touch:
 

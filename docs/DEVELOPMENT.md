@@ -36,6 +36,10 @@ Before a PR, run at least `make lint`, `make format-check`, `make typecheck`, an
 
 Action-planner behavior, postprocessing transforms, compatibility seams, and the rule-extension checklist are documented in [`docs/interactive-shell-action-policy.md`](https://github.com/Tracer-Cloud/opensre/blob/main/docs/interactive-shell-action-policy.md).
 
+## Investigation pipeline architecture
+
+The six-stage investigation pipeline (resolve integrations → extract alert → plan → ReAct evidence loop → diagnose → deliver), the loop's guardrails (tool cap, stagnation breaker, context budget, duplicate detection), and diagrams are documented in [`docs/investigation-pipeline-architecture.md`](investigation-pipeline-architecture.md).
+
 ## Investigation tool calling
 
 Tool schemas, provider adapters (`agent_llm_client.py`), and investigation message shapes are documented in [`docs/investigation-tool-calling.md`](investigation-tool-calling.md) (all LLM providers, not vendor-specific).
