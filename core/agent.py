@@ -87,12 +87,7 @@ class AgentRunResult:
     terminated_by_tool: bool = False
     hit_iteration_cap: bool = False
     final_system_prompt: str = ""
-    """The system prompt actually sent to the LLM on the last provider request.
-
-    Recorded so debugging can answer "what was influencing the agent when it made
-    this decision?" without re-deriving the prompt by hand. Captured after the
-    ``_before_provider_request`` hook, so it reflects any per-turn edits.
-    """
+    """System prompt sent to the LLM on the last request (post-hook), for debugging."""
 
 
 # Backward-compat alias — callers that still reference ToolLoopResult compile unchanged.
@@ -150,6 +145,26 @@ class Agent[RuntimeToolT: RuntimeTool]:
             tool_hooks=tool_hooks,
         )
         return result
+
+    @staticmethod
+    def resolve_integrations(session: SessionStore) -> dict[str, Any]:
+        """Resolve integration configs for ``session``, using the session cache."""
+        # importlib keeps the core -> agent_harness reach dynamic (no static cycle).
+        resolution = importlib.import_module("core.agent_harness.integrations.resolution")
+        cache = importlib.import_module("core.agent_harness.session.integrations_cache")
+
+        cached = session.resolved_integrations_cache
+        if cached is not None and (
+            cache.has_resolved_integrations(cached) or not cache.has_only_runtime_metadata(cached)
+        ):
+            return dict(cached)
+
+        resolved = resolution.resolve_integrations()
+        if resolved:
+            session.resolved_integrations_cache = cache.merge_resolved_integrations(
+                cached, resolved
+            )
+        return dict(session.resolved_integrations_cache or {})
 
     def __init__(
         self,

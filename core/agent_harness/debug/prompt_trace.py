@@ -11,12 +11,7 @@ def persist_turn_system_prompt(
     phase: str,
     system_prompt: str,
 ) -> None:
-    """Append the system prompt the LLM saw for one agent phase.
-
-    Writes a ``message`` entry with ``role=system`` and metadata
-    ``debug=system_prompt`` so ``/trace`` and session JSONL readers can find
-    what influenced the model without re-deriving prompts by hand.
-    """
+    """Append the system prompt sent to the LLM for this turn phase."""
     text = system_prompt.strip()
     if not text:
         return

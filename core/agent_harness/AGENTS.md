@@ -134,19 +134,13 @@ from the live chat session. When ``Agent.__init__``'s signature changes,
 
 ## Agent context and data stores
 
-See [`docs/agent-context-data-stores.md`](../../docs/agent-context-data-stores.md)
-for the four-store model (``Session``, ``MutableAgentState``, ``TurnContext``,
-JSONL), prompt debug paths, and the ``MutableAgentState`` production audit.
-Turn assembly starts with ``TurnContext.from_session`` in
-``agents/turn_orchestrator.py``; system prompts from ``Agent.run`` are persisted
-via ``core/agent_harness/debug/prompt_trace.py``.
+See `docs/agent-context-data-stores.md`. Turn assembly starts in
+``agents/turn_orchestrator.py`` with ``TurnContext.from_session``.
 
 **Do NOT** reintroduce per-surface `Agent` subclasses that override
 `build_llm` / `build_system_prompt` / `build_tools` / `resolved_integrations`
-hooks. Those hooks were removed for this reason: they let each surface hide
-per-turn configuration on `self`, which fragmented context loading and
-diverged the four surfaces (see issue #3347 and Vincent's 2026-07-01
-braindump).
+hooks. Those hooks were removed because they let each surface hide per-turn
+configuration on `self`, which diverged routing across surfaces.
 
 ## Answer agent — categorical exception
 

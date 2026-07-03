@@ -38,14 +38,7 @@ def _tool_input_preview(value: Any) -> str:
 
 
 def _llm_client_unavailable_message(exc: Exception) -> str:
-    """Render the reasoning-client import failure, hinting at the common cause.
-
-    An ``ImportError`` from the ``core.llm`` graph on a long-running process is
-    almost always a stale process: the code changed on disk while the process
-    kept running, so a lazily-imported new module can't find a symbol in a
-    boot-cached old one. Point the operator at a restart instead of leaving them
-    with a bare ``cannot import name …``.
-    """
+    """Render the reasoning-client import failure; on ImportError, hint at a restart."""
     base = f"LLM client unavailable: {escape(str(exc))}"
     if isinstance(exc, ImportError):
         return (
@@ -124,14 +117,10 @@ class DefaultToolProvider:
         return _logging_observer
 
     def _resolved_integrations(self) -> dict[str, Any]:
-        get_integrations = getattr(self._session, "get_integrations", None)
-        if callable(get_integrations):
-            integrations = get_integrations()
-            resolved = getattr(integrations, "resolved_integrations", None)
-            if isinstance(resolved, dict):
-                return resolved
-        cached = getattr(self._session, "resolved_integrations_cache", None)
-        return dict(cached or {})
+        from core.agent import Agent
+
+        # Agent.resolve_integrations already returns a fresh dict.
+        return Agent.resolve_integrations(self._session)
 
 
 class DefaultReasoningClientProvider:

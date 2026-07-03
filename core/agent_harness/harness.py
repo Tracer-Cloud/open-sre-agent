@@ -133,14 +133,10 @@ class AgentHarness:
         )
 
     def resolve_integrations(self, session: Session) -> dict[str, Any]:
-        """Full, cache-aware integration config resolution for ``session``.
+        """Return resolved integration configs for ``session``."""
+        from core.agent import Agent
 
-        Thin wrapper over ``Session.get_integrations()`` so callers that
-        already went through :meth:`load_or_create_session` don't need to
-        know that method exists on ``Session`` — they go through the harness
-        for every startup concern.
-        """
-        return session.get_integrations().resolved_integrations
+        return Agent.resolve_integrations(session)
 
     def load_context(self) -> PromptContextProvider | None:
         """Return the surface's grounding-context provider, if any."""

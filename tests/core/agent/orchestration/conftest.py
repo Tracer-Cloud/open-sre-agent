@@ -1,11 +1,4 @@
-"""Shared fixtures for cross-surface orchestration tests.
-
-The parity harness records probe runs and resolved integrations in module-level
-lists. They are reset inside ``wire_tool_registry``, but a test that drives a
-surface without going through that path would otherwise inherit stale entries.
-This autouse fixture resets them before every test, so the reset no longer
-depends on which configure helper a test happens to call.
-"""
+"""Shared fixtures for cross-surface orchestration tests."""
 
 from __future__ import annotations
 

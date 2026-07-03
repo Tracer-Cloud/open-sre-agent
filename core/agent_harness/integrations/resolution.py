@@ -68,32 +68,10 @@ def resolve_integrations(state: Mapping[str, Any] | None = None) -> dict[str, An
 
 
 def resolve_and_cache_integrations(session: SessionStore) -> dict[str, Any]:
-    """Resolve integration configs once per session and cache the result.
+    """Alias for :meth:`core.agent.Agent.resolve_integrations`."""
+    from core.agent import Agent
 
-    Canonical, surface-agnostic sync resolver: checks
-    ``session.resolved_integrations_cache`` first, resolves via
-    :func:`resolve_integrations` on a miss, and merges the result back onto the
-    cache (preserving any runtime-only metadata keys already present). Callers
-    that need async/off-critical-path warmup (e.g. the interactive shell's
-    boot-time warm) layer that behavior on top of this function rather than
-    reimplementing the cache check.
-    """
-    from core.agent_harness.session.integrations_cache import (
-        has_only_runtime_metadata,
-        has_resolved_integrations,
-        merge_resolved_integrations,
-    )
-
-    cached = session.resolved_integrations_cache
-    if cached is not None and (
-        has_resolved_integrations(cached) or not has_only_runtime_metadata(cached)
-    ):
-        return cached
-
-    resolved = resolve_integrations()
-    if resolved:
-        session.resolved_integrations_cache = merge_resolved_integrations(cached, resolved)
-    return session.resolved_integrations_cache or {}
+    return Agent.resolve_integrations(session)
 
 
 def resolve_integrations_with_metadata(
