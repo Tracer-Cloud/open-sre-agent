@@ -130,9 +130,7 @@ def cleanup_existing_deployment(*, region: str = DEFAULT_REGION) -> bool:
         print(f"Terminating stack instance {instance_id}...")
         terminate_instance(instance_id, region)
 
-    if has_outputs:
-        destroy()
-    elif instance_ids:
+    if has_outputs or instance_ids:
         destroy()
 
     print()
