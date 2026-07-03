@@ -24,7 +24,7 @@ def test_verify_openobserve_passes_with_api_token() -> None:
     )
 
     assert result["status"] == "passed"
-    assert "https://openobserve.example.com" in result["detail"]
+    assert result["detail"].endswith("at https://openobserve.example.com.")
 
 
 def test_verify_openobserve_passes_with_username_password() -> None:
@@ -38,3 +38,4 @@ def test_verify_openobserve_passes_with_username_password() -> None:
     )
 
     assert result["status"] == "passed"
+    assert result["detail"].endswith("at https://openobserve.example.com.")
