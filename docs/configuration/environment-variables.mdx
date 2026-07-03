@@ -243,7 +243,7 @@ All configuration options for OpenSRE can be set via environment variables. This
 | `SLACK_WEBHOOK_URL` | | Slack incoming webhook URL | `interactive_shell/ui/output`, `integrations/slack/delivery.py` |
 | `SLACK_BOT_TOKEN` | | Slack bot token | `scheduler/credentials`, `.env.example` |
 | `SLACK_ACCESS_TOKEN` | | Slack user token | `scheduler/credentials` |
-| `SLACK_GITHUB_ISSUES_WEBHOOK_URL` | | Slack webhook for GitHub issues | `integrations/github_issue_comments` |
+| `SLACK_GITHUB_ISSUES_WEBHOOK_URL` | | Slack webhook for GitHub issues | `integrations/github/issue_comments` |
 | `DISCORD_BOT_TOKEN` | | Discord bot token | `scheduler/credentials`, `remote/server` |
 | `DISCORD_APPLICATION_ID` | | Discord application ID | `integrations/_catalog_impl` |
 | `DISCORD_PUBLIC_KEY` | | Discord public key | `integrations/_catalog_impl` |
@@ -401,8 +401,8 @@ All configuration options for OpenSRE can be set via environment variables. This
 ### Git Integrations
 | Variable | Default | Description | Module |
 |----------|---------|-------------|--------|
-| `GITHUB_EVENT_PATH` | | GitHub Actions event payload path | `integrations/github_issue_comments` |
-| `GITHUB_REPOSITORY` | | GitHub repository (owner/repo) | `integrations/github_issue_comments` |
+| `GITHUB_EVENT_PATH` | | GitHub Actions event payload path | `integrations/github/issue_comments` |
+| `GITHUB_REPOSITORY` | | GitHub repository (owner/repo) | `integrations/github/issue_comments` |
 | `GITHUB_TOKEN` | | GitHub personal access token | `.env.example` |
 
 ## Multi-Instance Integrations
