@@ -73,9 +73,12 @@ def _type_checking_import_lines(tree: ast.Module) -> set[int]:
             isinstance(test, ast.Attribute) and test.attr == "TYPE_CHECKING"
         )
         if is_guard:
-            for child in ast.walk(node):
-                if isinstance(child, ast.Import | ast.ImportFrom):
-                    lines.add(child.lineno)
+            # Walk only the ``if`` body — an import in the ``else:`` branch runs at
+            # runtime (TYPE_CHECKING is False then), so it must not be exempted.
+            for stmt in node.body:
+                for child in ast.walk(stmt):
+                    if isinstance(child, ast.Import | ast.ImportFrom):
+                        lines.add(child.lineno)
     return lines
 
 

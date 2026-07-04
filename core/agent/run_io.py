@@ -63,7 +63,7 @@ class AgentRunInput[RuntimeToolT: RuntimeTool]:
             llm=llm,
             system=system,
             tools=list(request.active_tools),
-            resolved=request.resolved_integrations,
+            resolved=dict(request.resolved_integrations or {}),
             tool_resources=dict(getattr(request, "tool_resources", {}) or {}),
             max_iterations=request.max_iterations,
             messages=messages,

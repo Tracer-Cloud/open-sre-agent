@@ -127,7 +127,7 @@ def test_resolve_run_input_from_messages_uses_construction_config() -> None:
     assert run_input.max_iterations == 3
 
 
-def test_resolve_llm_caches_process_wide_client(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_get_llm_caches_process_wide_client(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = {"count": 0}
 
     def _factory() -> _NoToolLLM:
@@ -137,8 +137,8 @@ def test_resolve_llm_caches_process_wide_client(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr("core.llm.agent_llm_client.get_agent_llm", _factory)
     agent = Agent(system="sys", tools=[], resolved_integrations={}, max_iterations=1)
 
-    first = agent._resolve_llm()
-    second = agent._resolve_llm()
+    first = agent._get_llm()
+    second = agent._get_llm()
 
     assert first is second
     assert calls["count"] == 1

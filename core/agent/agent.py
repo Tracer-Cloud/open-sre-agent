@@ -92,7 +92,7 @@ class Agent[RuntimeToolT: RuntimeTool](EventEmitterMixin, ToolFilterMixin, Steer
         if runtime_request is not None:
             runtime_request.validate_runtime_request()
             return AgentRunInput[RuntimeToolT].from_runtime_request(
-                runtime_request, llm=self._resolve_llm()
+                runtime_request, llm=self._get_llm()
             )
         if initial_messages is not None:
             if self._system is None:
@@ -101,7 +101,7 @@ class Agent[RuntimeToolT: RuntimeTool](EventEmitterMixin, ToolFilterMixin, Steer
                 raise ValueError("Agent.run: max_iterations= must be set at construction.")
             return AgentRunInput[RuntimeToolT].from_messages(
                 initial_messages,
-                llm=self._resolve_llm(),
+                llm=self._get_llm(),
                 system=self._system,
                 tools=self._tools,
                 resolved=self._resolved,
@@ -110,11 +110,12 @@ class Agent[RuntimeToolT: RuntimeTool](EventEmitterMixin, ToolFilterMixin, Steer
             )
         raise ValueError("Agent.run requires initial_messages or runtime_request.")
 
-    def _resolve_llm(self) -> Any:
+    def _get_llm(self) -> Any:
         """Return the run's LLM: the instance given at construction, or the process-wide singleton."""
         if self._llm is None:
             self._llm = agent_llm_client.get_agent_llm()
-        assert self._llm is not None, "Agent.run: llm must be set before the loop"
+        if self._llm is None:
+            raise RuntimeError("Agent.run: llm must be set before the loop")
         return self._llm
 
     def _should_accept_conclusion(
