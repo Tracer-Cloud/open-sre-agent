@@ -85,7 +85,7 @@ def test_turn_context_can_drive_agent_runtime_request() -> None:
         tools=[],
         resolved_integrations={},
         max_iterations=1,
-    ).run(agent_context=ctx)
+    ).run(runtime_request=ctx)
 
     assert result.final_text == "done"
     assert result.hit_iteration_cap is False
@@ -96,7 +96,7 @@ def test_turn_context_can_drive_agent_runtime_request() -> None:
 
 
 def test_agent_context_falls_back_to_process_wide_llm(monkeypatch: pytest.MonkeyPatch) -> None:
-    """When ``llm=`` is omitted at construction, ``run(agent_context=...)`` resolves
+    """When ``llm=`` is omitted at construction, ``run(runtime_request=...)`` resolves
     the process-wide client via :func:`agent_llm_client.get_agent_llm`."""
     tool = _tool()
     built = _NoToolLLM()
@@ -110,7 +110,7 @@ def test_agent_context_falls_back_to_process_wide_llm(monkeypatch: pytest.Monkey
         max_iterations=2,
     )
 
-    result = Agent[Any](max_iterations=1).run(agent_context=ctx)
+    result = Agent[Any](max_iterations=1).run(runtime_request=ctx)
 
     assert result.final_text == "done"
     assert built.seen_system == "runtime system"

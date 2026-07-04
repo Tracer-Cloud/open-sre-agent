@@ -24,7 +24,7 @@ from core.agent.run_io import AgentRunInput, AgentRunResult
 from core.events import RuntimeEventCallback, TupleEventCallback
 from core.execution import ToolExecutionHooks
 from core.llm import agent_llm_client
-from core.messages import MessageFormatter, ProviderMessage, RuntimeMessage, RuntimeMessageLike
+from core.messages import ProviderMessage, RuntimeMessage, RuntimeMessageLike
 from core.provider import ProviderHooks, ProviderRequest
 from core.types import RuntimeTool
 
@@ -72,64 +72,39 @@ class Agent[RuntimeToolT: RuntimeTool](EventEmitterMixin, ToolFilterMixin, Steer
         self,
         initial_messages: Sequence[RuntimeMessageLike] | None = None,
         *,
-        agent_context: AgentRuntimeRequest | None = None,
+        runtime_request: AgentRuntimeRequest | None = None,
     ) -> AgentRunResult:
-        """Resolve per-run context and hand it to ``run_react_loop``."""
-        if agent_context is not None:
-            run_input = self._input_from_request(agent_context)
+        """Resolve per-run context and hand it to ``run_react_loop``.
+
+        Preconditions are checked here — the request is validated, or the
+        construction-time ``system``/``max_iterations`` must be present — then
+        ``AgentRunInput`` assembles the resolved inputs for the loop.
+        """
+        if runtime_request is not None:
+            runtime_request.validate_runtime_request()
+            run_input = AgentRunInput[RuntimeToolT].from_runtime_request(
+                runtime_request, llm=self._resolve_llm()
+            )
         elif initial_messages is not None:
-            run_input = self._input_from_messages(initial_messages)
+            if self._system is None:
+                raise ValueError("Agent.run: system= must be set at construction.")
+            if self._max_iterations is None:
+                raise ValueError("Agent.run: max_iterations= must be set at construction.")
+            run_input = AgentRunInput[RuntimeToolT].from_messages(
+                initial_messages,
+                llm=self._resolve_llm(),
+                system=self._system,
+                tools=self._tools,
+                resolved=self._resolved,
+                tool_resources=self._tool_resources,
+                max_iterations=self._max_iterations,
+            )
         else:
-            raise ValueError("Agent.run requires initial_messages or agent_context.")
+            raise ValueError("Agent.run requires initial_messages or runtime_request.")
         return run_react_loop(run_input, self)
 
-    def _input_from_request(
-        self, agent_context: AgentRuntimeRequest
-    ) -> AgentRunInput[RuntimeToolT]:
-        """Assemble the run input from a fully-resolved per-turn request."""
-        agent_context.validate_runtime_request()
-        messages = agent_context.runtime_messages()
-        render_system_prompt = getattr(agent_context, "render_system_prompt", None)
-        if callable(render_system_prompt):
-            system = render_system_prompt()
-        else:
-            system = str(agent_context.system_prompt)
-        tools = list(agent_context.active_tools)
-        resolved = agent_context.resolved_integrations
-        tool_resources = dict(getattr(agent_context, "tool_resources", {}) or {})
-        max_iterations = agent_context.max_iterations
-        llm = self._ensure_llm()
-        return AgentRunInput[RuntimeToolT](
-            llm=llm,
-            system=system,
-            tools=tools,
-            resolved=resolved,
-            tool_resources=tool_resources,
-            max_iterations=max_iterations,
-            messages=messages,
-        )
-
-    def _input_from_messages(
-        self, initial_messages: Sequence[RuntimeMessageLike]
-    ) -> AgentRunInput[RuntimeToolT]:
-        """Assemble the run input from raw messages and the construction-time config."""
-        if self._system is None:
-            raise ValueError("Agent.run: system= must be set at construction.")
-        if self._max_iterations is None:
-            raise ValueError("Agent.run: max_iterations= must be set at construction.")
-        llm = self._ensure_llm()
-        return AgentRunInput[RuntimeToolT](
-            llm=llm,
-            system=self._system,
-            tools=list(self._tools) if self._tools is not None else [],
-            resolved=dict(self._resolved) if self._resolved is not None else {},
-            tool_resources=dict(self._tool_resources),
-            max_iterations=self._max_iterations,
-            messages=MessageFormatter.normalize(initial_messages),
-        )
-
-    def _ensure_llm(self) -> Any:
-        """Return the run's LLM, creating the default agent client on first use."""
+    def _resolve_llm(self) -> Any:
+        """Return the run's LLM: the instance given at construction, or the process-wide singleton."""
         if self._llm is None:
             self._llm = agent_llm_client.get_agent_llm()
         assert self._llm is not None, "Agent.run: llm must be set before the loop"
@@ -138,8 +113,8 @@ class Agent[RuntimeToolT: RuntimeTool](EventEmitterMixin, ToolFilterMixin, Steer
     def _should_accept_conclusion(
         self,
         *,
-        evidence_count: int,  # noqa: ARG002 - used by overrides
-        iteration: int,  # noqa: ARG002 - used by overrides
+        evidence_count: int,  # noqa: ARG002
+        iteration: int,  # noqa: ARG002
     ) -> tuple[bool, str | None]:
         """Hook: decide what to do when the LLM stops requesting tools.
 

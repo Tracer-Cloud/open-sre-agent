@@ -1,8 +1,8 @@
 """Shared harness for cross-surface turn parity tests.
 
-Every client (interactive shell, headless dispatch, ``Agent`` static entry,
-gateway turn handler) must route through the same ``run_turn`` engine and produce
-the same outcome for the same input, tools, and LLM wiring.
+Every client (interactive shell, headless dispatch, gateway turn handler) must
+route through the same ``run_turn`` engine and produce the same outcome for the
+same input, tools, and LLM wiring.
 """
 
 from __future__ import annotations
@@ -32,12 +32,11 @@ from core.tool_framework.registered_tool import RegisteredTool
 from gateway.turn_handler import build_gateway_turn_handler
 from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 
-Surface = Literal["shell", "headless", "agent_static", "gateway_handler"]
+Surface = Literal["shell", "headless", "gateway_handler"]
 
 ALL_SURFACES: tuple[Surface, ...] = (
     "shell",
     "headless",
-    "agent_static",
     "gateway_handler",
 )
 
@@ -327,25 +326,6 @@ def snapshot_headless(message: str, *, integrations: dict[str, Any] | None = Non
     return TurnSnapshot.from_result(result, probe_ran=probe_run_count() > before)
 
 
-def snapshot_agent_static(
-    message: str, *, integrations: dict[str, Any] | None = None
-) -> TurnSnapshot:
-    session = fresh_session(integrations=integrations)
-    output = BufferOutputSink()
-    before = probe_run_count()
-    result = dispatch_message_to_headless_agent(
-        message,
-        tools=DefaultToolProvider(session, console()),
-        session=session,
-        output=output,
-        prompts=DefaultPromptContextProvider(session),
-        reasoning=DefaultReasoningClientProvider(output=output),
-        accounting=NoopTurnAccounting(),
-        gather_enabled=True,
-    )
-    return TurnSnapshot.from_result(result, probe_ran=probe_run_count() > before)
-
-
 def snapshot_gateway_handler(
     message: str,
     monkeypatch: Any,
@@ -381,8 +361,6 @@ def run_surface(
         return snapshot_shell(message, integrations=integrations)
     if surface == "headless":
         return snapshot_headless(message, integrations=integrations)
-    if surface == "agent_static":
-        return snapshot_agent_static(message, integrations=integrations)
     if surface == "gateway_handler":
         return snapshot_gateway_handler(message, monkeypatch, integrations=integrations)
     raise AssertionError(f"unknown surface: {surface}")
