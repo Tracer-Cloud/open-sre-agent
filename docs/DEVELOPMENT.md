@@ -38,11 +38,9 @@ Action-planner behavior, postprocessing transforms, compatibility seams, and the
 
 ## Package architecture
 
-The seven first-party packages, the four-tier layering contract between them
-(which package may import which), the folder diagram, cross-layer flows, and
-how `make check-imports` / `make check-layers-strict` enforce it are documented
-in [`docs/ARCHITECTURE.md`](ARCHITECTURE.md). It is the canonical reference for
-`T-*` architecture refactor tasks.
+The seven first-party packages, the four-tier layering (which package may
+import which), the folder diagram, per-layer responsibilities, and cross-layer
+flows are documented in [`docs/ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ## Investigation pipeline architecture
 
