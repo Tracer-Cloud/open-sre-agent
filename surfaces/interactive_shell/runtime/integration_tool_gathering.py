@@ -20,11 +20,8 @@ from core.agent_harness.agents import evidence_agent
 from core.agent_harness.agents.evidence_agent import EvidenceAgentFactory
 from core.agent_harness.session import Session
 from surfaces.interactive_shell.ui import DIM
-from surfaces.interactive_shell.ui.output.tool_details import (
-    tool_short_label,
-    tool_source_label,
-)
 from surfaces.interactive_shell.utils.error_handling.exception_reporting import report_exception
+from surfaces.shared.tool_labels import tool_short_label, tool_source_label
 
 # Cap so a chatty tool result can't blow up persistence writes.
 _MAX_PER_TOOL_CHARS = 4_000
