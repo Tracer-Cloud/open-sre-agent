@@ -137,7 +137,7 @@ shell).
 | `MutableAgentState` | Not `core.agent.Agent` state; not investigation `AgentState` TypedDict |
 | `TurnContext` | Not `ReplRuntimeContext`, `GroundingContext`, or `ActionToolContext` |
 | `AgentContextInput` | Not a store — selector output from `select_agent_context_input()` |
-| `Agent.run(agent_context=…)` | Not used on live shell/gateway paths yet (tests only); production uses `AgentConfig` |
+| `Agent.run(runtime_request=…)` | Not used on live shell/gateway paths yet (tests only); production uses `AgentConfig` |
 | `PromptRecorder` | Not the system prompt — records user prompt + assistant response (shell telemetry) |
 
 ---
@@ -217,7 +217,7 @@ Passed to action prompts, assistant prompts, and shell adapters. The live
 | `last_synthetic_observation_path` | Yes | Synthetic failure context |
 | `reasoning_effort` | Yes | LLM calls |
 | `last_observation` | Yes (session → agent → runtime input) | Assistant grounding |
-| `system_prompt`, `active_tools`, … | Only if `select_agent_context_input` populated | `Agent.run(agent_context=…)` tests |
+| `system_prompt`, `active_tools`, … | Only if `select_agent_context_input` populated | `Agent.run(runtime_request=…)` tests |
 | `working_directory`, `terminal_capabilities`, … | **No** (reserved / unused) | Do not rely on these |
 
 Runtime-request fields are empty in production because `MutableAgentState` is
@@ -374,5 +374,5 @@ The two shapes are described in `core/agent_harness/AGENTS.md`.
 
 1. Slim `MutableAgentState` to transcript + observation only
 2. Wire assistant composed prompt split into system vs user blocks in JSONL
-3. Route production action/gather through `Agent.run(agent_context=TurnContext)` instead of parallel `AgentConfig` assembly
+3. Route production action/gather through `Agent.run(runtime_request=TurnContext)` instead of parallel `AgentConfig` assembly
 4. Populate or remove reserved `TurnContext` shell fields (`working_directory`, etc.)

@@ -74,23 +74,32 @@ class Agent[RuntimeToolT: RuntimeTool](EventEmitterMixin, ToolFilterMixin, Steer
         *,
         runtime_request: AgentRuntimeRequest | None = None,
     ) -> AgentRunResult:
-        """Resolve per-run context and hand it to ``run_react_loop``.
+        """Assemble the resolved per-run input and hand it to ``run_react_loop``."""
+        run_input = self._resolve_run_input(initial_messages, runtime_request)
+        return run_react_loop(run_input, self)
 
-        Preconditions are checked here — the request is validated, or the
-        construction-time ``system``/``max_iterations`` must be present — then
-        ``AgentRunInput`` assembles the resolved inputs for the loop.
+    def _resolve_run_input(
+        self,
+        initial_messages: Sequence[RuntimeMessageLike] | None,
+        runtime_request: AgentRuntimeRequest | None,
+    ) -> AgentRunInput[RuntimeToolT]:
+        """Assemble the run input from whichever source the caller supplied.
+
+        A ``runtime_request`` is validated and carries its own resolved context;
+        raw ``initial_messages`` fall back to the construction-time config, which
+        must include ``system`` and ``max_iterations``.
         """
         if runtime_request is not None:
             runtime_request.validate_runtime_request()
-            run_input = AgentRunInput[RuntimeToolT].from_runtime_request(
+            return AgentRunInput[RuntimeToolT].from_runtime_request(
                 runtime_request, llm=self._resolve_llm()
             )
-        elif initial_messages is not None:
+        if initial_messages is not None:
             if self._system is None:
                 raise ValueError("Agent.run: system= must be set at construction.")
             if self._max_iterations is None:
                 raise ValueError("Agent.run: max_iterations= must be set at construction.")
-            run_input = AgentRunInput[RuntimeToolT].from_messages(
+            return AgentRunInput[RuntimeToolT].from_messages(
                 initial_messages,
                 llm=self._resolve_llm(),
                 system=self._system,
@@ -99,9 +108,7 @@ class Agent[RuntimeToolT: RuntimeTool](EventEmitterMixin, ToolFilterMixin, Steer
                 tool_resources=self._tool_resources,
                 max_iterations=self._max_iterations,
             )
-        else:
-            raise ValueError("Agent.run requires initial_messages or runtime_request.")
-        return run_react_loop(run_input, self)
+        raise ValueError("Agent.run requires initial_messages or runtime_request.")
 
     def _resolve_llm(self) -> Any:
         """Return the run's LLM: the instance given at construction, or the process-wide singleton."""

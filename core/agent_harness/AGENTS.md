@@ -203,7 +203,7 @@ it does not re-implement it. Do not fork the loop here.
 `core/agent/` is a package with one file per responsibility (see
 [docs/NAMING.md](../../docs/NAMING.md) for the naming convention). `Agent`
 (in `agent.py`) is a thin facade: `__init__` stores construction-time config and
-`run()` resolves per-run context (from `agent_context=` or `initial_messages=`)
+`run()` resolves per-run context (from `runtime_request=` or `initial_messages=`)
 and hands it to `core.agent.react_loop.run_react_loop`, which owns the actual
 think → call-tools → observe algorithm.
 
