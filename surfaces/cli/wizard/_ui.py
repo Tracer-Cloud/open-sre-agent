@@ -23,6 +23,7 @@ from config.llm_credentials import get_keyring_setup_instructions, save_llm_api_
 from config.version import get_version
 from integrations.store import get_integration
 from platform.terminal.theme import (
+    BG,
     BRAND,
     DIM,
     ERROR,
@@ -45,21 +46,29 @@ _console = Console(
     highlight=False, force_terminal=True, color_system="truecolor", legacy_windows=False
 )
 
-_STYLE = questionary.Style(
-    [
-        ("qmark", f"fg:{HIGHLIGHT} bold"),
-        ("question", f"fg:{TEXT} bold"),
-        ("answer", f"fg:{BRAND} bold"),
-        ("pointer", f"fg:{HIGHLIGHT} bold"),
-        ("highlighted", f"fg:{TEXT} bg:{HIGHLIGHT} bold"),
-        ("selected", f"fg:{TEXT} bg:default bold"),
-        ("group-header", f"fg:{HIGHLIGHT} bold"),
-        ("separator", f"fg:{DIM}"),
-        ("text", f"fg:{TEXT} bg:default"),
-        ("disabled", f"fg:{SECONDARY} bg:default italic"),
-        ("instruction", f"fg:{SECONDARY} italic"),
-    ]
-)
+
+def _questionary_style() -> questionary.Style:
+    """Build questionary styles from the active terminal theme.
+
+    Highlighted list rows use ``BG`` (dark) on ``HIGHLIGHT`` (light accent) so
+    selected options stay readable across every palette — light ``TEXT`` on a
+    light ``HIGHLIGHT`` background was nearly invisible in green and similar themes.
+    """
+    return questionary.Style(
+        [
+            ("qmark", f"fg:{HIGHLIGHT} bold"),
+            ("question", f"fg:{TEXT} bold"),
+            ("answer", f"fg:{BRAND} bold"),
+            ("pointer", f"fg:{HIGHLIGHT} bold"),
+            ("highlighted", f"fg:{BG} bg:{HIGHLIGHT} bold"),
+            ("selected", f"fg:{TEXT} bg:default bold"),
+            ("group-header", f"fg:{HIGHLIGHT} bold"),
+            ("separator", f"fg:{DIM}"),
+            ("text", f"fg:{TEXT} bg:default"),
+            ("disabled", f"fg:{SECONDARY} bg:default italic"),
+            ("instruction", f"fg:{SECONDARY} italic"),
+        ]
+    )
 
 
 def _group_header_label(group: str) -> str:
@@ -316,7 +325,7 @@ def _choose(
         prompt,
         choices=q_choices,
         default=default,
-        style=_STYLE,
+        style=_questionary_style(),
         instruction="(Use arrows to move, Enter to choose)",
     ).ask()
 
@@ -328,7 +337,7 @@ def _choose(
 
 
 def _confirm(prompt: str, *, default: bool = True) -> bool:
-    result = questionary.confirm(prompt, default=default, style=_STYLE).ask()
+    result = questionary.confirm(prompt, default=default, style=_questionary_style()).ask()
     if result is None:
         raise KeyboardInterrupt
     return bool(result)
@@ -348,14 +357,14 @@ def _prompt_value(
             result = questionary.password(
                 label,
                 default=default,
-                style=_STYLE,
+                style=_questionary_style(),
                 instruction=instruction,
             ).ask()
         else:
             result = questionary.text(
                 label,
                 default=default,
-                style=_STYLE,
+                style=_questionary_style(),
                 instruction=instruction,
             ).ask()
 
