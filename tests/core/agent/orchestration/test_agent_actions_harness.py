@@ -257,11 +257,6 @@ def test_execute_with_harness_handles_llm_unavailable() -> None:
 
 
 def test_build_action_agent_returns_action_turn_plan() -> None:
-    from tests.core.agent.orchestration.action_execution_test_harness import (
-        FakeActionLLM,
-        no_tool_response,
-    )
-
     llm = FakeActionLLM([no_tool_response()])
     deps = ToolCallingDeps(llm_factory=lambda: llm)
     session = Session()
