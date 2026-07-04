@@ -21,6 +21,7 @@ from typing import Any
 from core.agent import Agent
 from core.agent_harness.agent_builder import AgentConfig, build_agent
 from core.agent_harness.debug.prompt_trace import persist_turn_system_prompt
+from core.agent_harness.integrations.resolution import resolve_and_cache_integrations
 from core.agent_harness.models.turn_context import TurnContext
 from core.agent_harness.models.turn_results import ToolCallingTurnResult
 from core.agent_harness.ports import (
@@ -219,7 +220,7 @@ def _resolved_integrations_for_turn(
 ) -> dict[str, Any]:
     if turn_ctx is not None and turn_ctx.resolved_integrations:
         return dict(turn_ctx.resolved_integrations)
-    return dict(Agent.resolve_integrations(session))
+    return dict(resolve_and_cache_integrations(session))
 
 
 def _persist_tool_calling_error(session: SessionStore, user_text: str, error_text: str) -> None:

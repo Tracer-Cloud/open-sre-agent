@@ -69,9 +69,18 @@ def resolve_integrations(state: Mapping[str, Any] | None = None) -> dict[str, An
 
 def resolve_and_cache_integrations(session: SessionStore) -> dict[str, Any]:
     """Resolve a session's integration configs, using and updating its cache."""
-    from core.agent import Agent
+    from core.agent_harness.session import integrations_cache as cache
 
-    return Agent.resolve_integrations(session)
+    cached = session.resolved_integrations_cache
+    if cached is not None and (
+        cache.has_resolved_integrations(cached) or not cache.has_only_runtime_metadata(cached)
+    ):
+        return dict(cached)
+
+    resolved = resolve_integrations()
+    if resolved:
+        session.resolved_integrations_cache = cache.merge_resolved_integrations(cached, resolved)
+    return dict(session.resolved_integrations_cache or {})
 
 
 def resolve_integrations_with_metadata(

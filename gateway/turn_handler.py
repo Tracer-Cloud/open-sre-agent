@@ -12,8 +12,7 @@ import logging
 
 from rich.console import Console
 
-from gateway.gateway_output_sink import GatewayOutputSink
-from core.agent import Agent
+from core.agent_harness.agents.headless_agent import dispatch_message_to_headless_agent
 from core.agent_harness.providers.default_prompt_context import DefaultPromptContextProvider
 from core.agent_harness.providers.default_providers import (
     DefaultErrorReporter,
@@ -23,6 +22,7 @@ from core.agent_harness.providers.default_providers import (
     DefaultTurnAccounting,
 )
 from core.agent_harness.session import Session
+from gateway.gateway_output_sink import GatewayOutputSink
 from gateway.polling.handle_polled_inbound_telegram_msg import GatewayAgentCallback
 
 
@@ -45,7 +45,7 @@ def build_gateway_turn_handler(
         logger: logging.Logger,
     ) -> None:
         error_reporter = DefaultErrorReporter(logger)
-        turn_result = Agent.dispatch_message_to_headless_agent(
+        turn_result = dispatch_message_to_headless_agent(
             text,
             session=session,
             output=sink,

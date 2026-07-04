@@ -49,7 +49,7 @@ def test_turn_handler_resolves_action_tools_from_live_session(monkeypatch: Any) 
         )
     )
     monkeypatch.setattr(
-        "gateway.turn_handler.Agent.dispatch_message_to_headless_agent",
+        "gateway.turn_handler.dispatch_message_to_headless_agent",
         dispatch,
     )
 
@@ -85,7 +85,7 @@ def _empty_turn_result(*, llm_run: Any = None) -> ShellTurnResult:
 def test_turn_handler_finalizes_fallback_on_empty_response(monkeypatch: Any) -> None:
     """An empty, non-answered turn still finalizes so the 'Working…' status can't hang."""
     monkeypatch.setattr(
-        "gateway.turn_handler.Agent.dispatch_message_to_headless_agent",
+        "gateway.turn_handler.dispatch_message_to_headless_agent",
         MagicMock(return_value=_empty_turn_result()),
     )
     sink = MagicMock()
@@ -98,7 +98,7 @@ def test_turn_handler_skips_finalize_when_answer_was_streamed(monkeypatch: Any) 
     """A streamed answer (llm_run set) already resolved the status; do not re-finalize."""
     result = _empty_turn_result(llm_run=MagicMock())  # answered=True
     monkeypatch.setattr(
-        "gateway.turn_handler.Agent.dispatch_message_to_headless_agent",
+        "gateway.turn_handler.dispatch_message_to_headless_agent",
         MagicMock(return_value=result),
     )
     sink = MagicMock()

@@ -15,7 +15,6 @@ from typing import Any, Literal
 
 from rich.console import Console
 
-from core.agent import Agent
 from core.agent_harness.agents.headless_agent import (
     BufferOutputSink,
     NoopTurnAccounting,
@@ -334,7 +333,7 @@ def snapshot_agent_static(
     session = fresh_session(integrations=integrations)
     output = BufferOutputSink()
     before = probe_run_count()
-    result = Agent.dispatch_message_to_headless_agent(
+    result = dispatch_message_to_headless_agent(
         message,
         tools=DefaultToolProvider(session, console()),
         session=session,
@@ -356,14 +355,14 @@ def snapshot_gateway_handler(
     session = fresh_session(integrations=integrations)
     sink = RecordingGatewaySink()
     captured: list[ShellTurnResult] = []
-    real_dispatch = Agent.dispatch_message_to_headless_agent
+    real_dispatch = dispatch_message_to_headless_agent
 
     def _spy(*args: Any, **kwargs: Any) -> ShellTurnResult:
         result = real_dispatch(*args, **kwargs)
         captured.append(result)
         return result
 
-    monkeypatch.setattr("gateway.turn_handler.Agent.dispatch_message_to_headless_agent", _spy)
+    monkeypatch.setattr("gateway.turn_handler.dispatch_message_to_headless_agent", _spy)
     before = probe_run_count()
     handler = build_gateway_turn_handler(console=console())
     handler(message, session, sink, logging.getLogger("test.parity.gateway"))
@@ -430,14 +429,14 @@ def run_gateway_turn_with_sink(
     session = fresh_session(integrations=integrations)
     sink = RecordingGatewaySink()
     captured: list[ShellTurnResult] = []
-    real_dispatch = Agent.dispatch_message_to_headless_agent
+    real_dispatch = dispatch_message_to_headless_agent
 
     def _spy(*args: Any, **kwargs: Any) -> ShellTurnResult:
         result = real_dispatch(*args, **kwargs)
         captured.append(result)
         return result
 
-    monkeypatch.setattr("gateway.turn_handler.Agent.dispatch_message_to_headless_agent", _spy)
+    monkeypatch.setattr("gateway.turn_handler.dispatch_message_to_headless_agent", _spy)
     before = probe_run_count()
     handler = build_gateway_turn_handler(console=console())
     handler(message, session, sink, logging.getLogger("test.parity.gateway.sink"))

@@ -9,7 +9,6 @@ from unittest.mock import MagicMock
 import pytest
 from rich.console import Console
 
-from core.agent import Agent
 from core.agent_harness.agents.turn_orchestrator import run_turn
 from core.agent_harness.models.turn_results import ShellTurnResult, ToolCallingTurnResult
 from core.agent_harness.providers.default_providers import DefaultToolProvider
@@ -35,7 +34,7 @@ def test_gateway_turn_handler_delegates_to_agent_dispatch(monkeypatch: pytest.Mo
             assistant_response_text="gateway-ok",
         )
 
-    monkeypatch.setattr("gateway.turn_handler.Agent.dispatch_message_to_headless_agent", _spy)
+    monkeypatch.setattr("gateway.turn_handler.dispatch_message_to_headless_agent", _spy)
 
     session = Session(storage=InMemorySessionStorage())
     sink = MagicMock()
@@ -57,7 +56,7 @@ def test_gateway_turn_handler_does_not_finalize_answered_turn(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "gateway.turn_handler.Agent.dispatch_message_to_headless_agent",
+        "gateway.turn_handler.dispatch_message_to_headless_agent",
         lambda *_args, **_kwargs: ShellTurnResult(
             final_intent="cli_agent_fallback",
             action_result=ToolCallingTurnResult(0, 0, 0, False, False),
@@ -108,31 +107,3 @@ def test_run_turn_routes_unhandled_action_to_answer_callback() -> None:
     assert answer_calls == ["question?"]
     assert result.final_intent == "cli_agent_fallback"
     assert result.answered is True
-
-
-def test_agent_static_dispatch_forwards_to_headless_with_kwargs(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """``Agent.dispatch_message_to_headless_agent`` forwards message and kwargs."""
-    captured: dict[str, Any] = {}
-
-    def _fake(message: str, **kwargs: object) -> ShellTurnResult:
-        captured["message"] = message
-        captured.update(kwargs)
-        return ShellTurnResult(
-            final_intent="cli_agent_handled",
-            action_result=ToolCallingTurnResult(0, 0, 0, False, True),
-        )
-
-    monkeypatch.setattr(
-        "core.agent_harness.agents.headless_agent.dispatch_message_to_headless_agent",
-        _fake,
-    )
-
-    from core.agent_harness.agents.headless_agent import NullToolProvider
-
-    tools = NullToolProvider()
-    Agent.dispatch_message_to_headless_agent("ping", tools=tools, gather_enabled=True)
-    assert captured["message"] == "ping"
-    assert captured["tools"] is tools
-    assert captured["gather_enabled"] is True

@@ -117,10 +117,10 @@ class DefaultToolProvider:
         return _logging_observer
 
     def _resolved_integrations(self) -> dict[str, Any]:
-        from core.agent import Agent
+        from core.agent_harness.integrations.resolution import resolve_and_cache_integrations
 
-        # Agent.resolve_integrations already returns a fresh dict.
-        return Agent.resolve_integrations(self._session)
+        # resolve_and_cache_integrations returns a fresh dict.
+        return resolve_and_cache_integrations(self._session)
 
 
 class DefaultReasoningClientProvider:

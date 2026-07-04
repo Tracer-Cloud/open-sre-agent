@@ -1,4 +1,4 @@
-"""Tests for Agent.resolve_integrations."""
+"""Tests for resolve_and_cache_integrations."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from core.agent import Agent
+from core.agent_harness.integrations.resolution import resolve_and_cache_integrations
 from core.agent_harness.session import Session
 
 
@@ -24,7 +24,7 @@ def test_resolve_integrations_returns_cached_configs_without_lookup(
         _unexpected,
     )
 
-    assert Agent.resolve_integrations(session) == {
+    assert resolve_and_cache_integrations(session) == {
         "slack": {"webhook_url": "https://example/hook"},
     }
 
@@ -38,28 +38,10 @@ def test_resolve_integrations_resolves_on_cache_miss_and_merges(
         lambda *_args, **_kwargs: {"datadog": {"api_key": "dd-key"}},
     )
 
-    resolved = Agent.resolve_integrations(session)
+    resolved = resolve_and_cache_integrations(session)
 
     assert resolved == {"datadog": {"api_key": "dd-key"}}
     assert session.resolved_integrations_cache == {"datadog": {"api_key": "dd-key"}}
-
-
-def test_resolve_and_cache_integrations_delegates_to_agent(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from core.agent_harness.integrations.resolution import resolve_and_cache_integrations
-
-    session = Session()
-    calls: list[Session] = []
-
-    def _fake(session_arg: Session) -> dict[str, Any]:
-        calls.append(session_arg)
-        return {"github": {"token": "ghp_test"}}
-
-    monkeypatch.setattr(Agent, "resolve_integrations", staticmethod(_fake))
-
-    assert resolve_and_cache_integrations(session) == {"github": {"token": "ghp_test"}}
-    assert calls == [session]
 
 
 def test_resolve_integrations_does_not_cache_empty_resolve(
@@ -72,7 +54,7 @@ def test_resolve_integrations_does_not_cache_empty_resolve(
         lambda *_args, **_kwargs: {},
     )
 
-    assert Agent.resolve_integrations(session) == {}
+    assert resolve_and_cache_integrations(session) == {}
     assert session.resolved_integrations_cache is None
 
 
@@ -87,7 +69,7 @@ def test_resolve_integrations_reresolves_metadata_only_cache(
         lambda *_args, **_kwargs: {"datadog": {"api_key": "dd-key"}},
     )
 
-    resolved = Agent.resolve_integrations(session)
+    resolved = resolve_and_cache_integrations(session)
 
     assert resolved["datadog"] == {"api_key": "dd-key"}
     assert session.resolved_integrations_cache["datadog"] == {"api_key": "dd-key"}

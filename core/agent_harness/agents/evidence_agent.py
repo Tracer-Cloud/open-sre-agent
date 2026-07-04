@@ -22,6 +22,7 @@ from typing import Any, Protocol
 from core.agent import Agent
 from core.agent_harness.agent_builder import AgentConfig, build_agent
 from core.agent_harness.debug.prompt_trace import persist_turn_system_prompt
+from core.agent_harness.integrations.resolution import resolve_and_cache_integrations
 from core.agent_harness.ports import ErrorReporter, SessionStore, ToolEventObserver
 from core.agent_harness.prompts.conversation_memory import (
     NO_HISTORY_PLACEHOLDER,
@@ -119,7 +120,7 @@ def _format_observation(executed: list[tuple[Any, Any]]) -> str:
 
 def _resolve_gather_integrations(session: SessionStore, message: str) -> dict[str, Any]:
     """Resolve integrations for one gather turn, enriching GitHub repo scope when inferred."""
-    base = Agent.resolve_integrations(session)
+    base = resolve_and_cache_integrations(session)
     scope = infer_github_repo_scope(
         message=message,
         conversation_messages=session.cli_agent_messages,

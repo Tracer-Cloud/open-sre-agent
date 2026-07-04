@@ -134,9 +134,9 @@ class AgentHarness:
 
     def resolve_integrations(self, session: Session) -> dict[str, Any]:
         """Return resolved integration configs for ``session``."""
-        from core.agent import Agent
+        from core.agent_harness.integrations.resolution import resolve_and_cache_integrations
 
-        return Agent.resolve_integrations(session)
+        return resolve_and_cache_integrations(session)
 
     def load_context(self) -> PromptContextProvider | None:
         """Return the surface's grounding-context provider, if any."""

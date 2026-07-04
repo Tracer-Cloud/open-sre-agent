@@ -13,7 +13,6 @@ see ``core/agent_harness/AGENTS.md``.
 
 from __future__ import annotations
 
-import importlib
 from collections import deque
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
@@ -31,18 +30,6 @@ from core.types import RuntimeTool
 
 if TYPE_CHECKING:
     from core.agent_harness.models.turn_context import AgentRuntimeRequest
-    from core.agent_harness.models.turn_results import ShellTurnResult
-    from core.agent_harness.ports import (
-        ConfirmFn,
-        ErrorReporter,
-        OutputSink,
-        PromptContextProvider,
-        ReasoningClientProvider,
-        RunRecordFactory,
-        SessionStore,
-        ToolProvider,
-        TurnAccounting,
-    )
 
 
 class Agent[RuntimeToolT: RuntimeTool](EventEmitterMixin, ToolFilterMixin, SteeringMixin):
@@ -53,70 +40,6 @@ class Agent[RuntimeToolT: RuntimeTool](EventEmitterMixin, ToolFilterMixin, Steer
     re-implementing the loop. For the direct-answer shape (no tools), see
     ``core/agent_harness/AGENTS.md``.
     """
-
-    @staticmethod
-    def dispatch_message_to_headless_agent(
-        message: str,
-        *,
-        tools: ToolProvider,
-        session: SessionStore | None = None,
-        output: OutputSink | None = None,
-        prompts: PromptContextProvider | None = None,
-        reasoning: ReasoningClientProvider | None = None,
-        run_factory: RunRecordFactory | None = None,
-        accounting: TurnAccounting | None = None,
-        error_reporter: ErrorReporter | None = None,
-        gather_enabled: bool = False,
-        confirm_fn: ConfirmFn | None = None,
-        is_tty: bool | None = None,
-        tool_hooks: ToolExecutionHooks | None = None,
-    ) -> ShellTurnResult:
-        """Run a full headless turn through the shared agent harness.
-
-        ``tools`` is required — surfaces must decide explicitly whether to
-        expose any. Callers that genuinely want a text-only turn pass
-        :class:`~core.agent_harness.agents.headless_agent.NullToolProvider`.
-        """
-        # Resolved dynamically so this module keeps the layering one-way
-        # (agent_harness -> core): a static import of the harness here would form a
-        # core.agent <-> agent_harness.agents cycle (CodeQL py/cyclic-import).
-        headless = importlib.import_module("core.agent_harness.agents.headless_agent")
-        result: ShellTurnResult = headless.dispatch_message_to_headless_agent(
-            message,
-            tools=tools,
-            session=session,
-            output=output,
-            prompts=prompts,
-            reasoning=reasoning,
-            run_factory=run_factory,
-            accounting=accounting,
-            error_reporter=error_reporter,
-            gather_enabled=gather_enabled,
-            confirm_fn=confirm_fn,
-            is_tty=is_tty,
-            tool_hooks=tool_hooks,
-        )
-        return result
-
-    @staticmethod
-    def resolve_integrations(session: SessionStore) -> dict[str, Any]:
-        """Resolve integration configs for ``session``, using the session cache."""
-        # importlib keeps the core -> agent_harness reach dynamic (no static cycle).
-        resolution = importlib.import_module("core.agent_harness.integrations.resolution")
-        cache = importlib.import_module("core.agent_harness.session.integrations_cache")
-
-        cached = session.resolved_integrations_cache
-        if cached is not None and (
-            cache.has_resolved_integrations(cached) or not cache.has_only_runtime_metadata(cached)
-        ):
-            return dict(cached)
-
-        resolved = resolution.resolve_integrations()
-        if resolved:
-            session.resolved_integrations_cache = cache.merge_resolved_integrations(
-                cached, resolved
-            )
-        return dict(session.resolved_integrations_cache or {})
 
     def __init__(
         self,

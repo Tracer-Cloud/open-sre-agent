@@ -74,7 +74,7 @@ pieces, the same shape Telegram already has:
    receives incoming Slack messages (Slack Events API or Socket Mode) and calls the
    shared handler with `(text, session, sink, logger)`.
 2. **An output sink** (implement `GatewayOutputSink` from
-   `config/gateway_output_sink.py`): its `stream()` / `finalize()` send text back to
+   `gateway/gateway_output_sink.py`): its `stream()` / `finalize()` send text back to
    the Slack channel via `integrations/slack/delivery.py`.
 3. **A session resolver** (like `gateway/storage/session/resolver.py`): map a Slack
    user + channel to a `Session`.

@@ -4,7 +4,7 @@ Surfaces under test:
 
 * ``shell`` — ``execute_shell_turn`` (interactive REPL / CLI one-shot)
 * ``headless`` — ``dispatch_message_to_headless_agent``
-* ``agent_static`` — ``Agent.dispatch_message_to_headless_agent``
+* ``agent_static`` — ``dispatch_message_to_headless_agent``
 * ``gateway_handler`` — ``build_gateway_turn_handler`` (Telegram/API gateway)
 
 Each test wires ONE tool registry and ONE pair of LLMs, drives the same message
