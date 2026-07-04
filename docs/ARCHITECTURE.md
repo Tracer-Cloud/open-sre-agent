@@ -14,7 +14,8 @@ last column says whether peers may import each other.
 | Tier | Packages | May import | Must never import | Peer rule |
 | --- | --- | --- | --- | --- |
 | 1 (top) | `surfaces`, `gateway` | `tools`, `integrations`, `core`, `platform`, `config` | — | Independent: must not import each other. |
-| 2 | `tools`, `integrations` | `core`, `platform`, `config` | `surfaces`, `gateway` | One-directional: `integrations` must never import `tools`; a tool may use an integration client, so `integrations` effectively sits below `tools`. |
+| 2 | `tools` | `integrations`, `core`, `platform`, `config` | `surfaces`, `gateway` | May use an integration's client, so `integrations` effectively sits below it. |
+| 2 | `integrations` | `core`, `platform`, `config` | `tools`, `surfaces`, `gateway` | Must never import `tools`; stays reusable below the tool layer. |
 | 3 | `core`, `platform` | `config` | `surfaces`, `gateway`, `tools`, `integrations` | Siblings: **may** cross-import each other. |
 | 4 (bottom) | `config` | — (nothing first-party) | everything above | Independent — imports no other first-party package. |
 
