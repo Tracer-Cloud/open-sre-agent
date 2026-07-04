@@ -89,17 +89,22 @@ class AgentLoopHost[RuntimeToolT: RuntimeTool](Protocol):
     _tool_hooks: ToolExecutionHooks
     _hooks: AgentProviderHookDelegate
 
-    def _filter_tools(self, tools: list[RuntimeToolT]) -> list[RuntimeToolT]: ...
+    def _filter_tools(self, tools: list[RuntimeToolT]) -> list[RuntimeToolT]:
+        pass
 
-    def _emit_runtime(self, event: RuntimeEvent) -> None: ...
+    def _emit_runtime(self, event: RuntimeEvent) -> None:
+        pass
 
-    def _drain_steering_messages(self, messages: list[RuntimeMessage]) -> None: ...
+    def _drain_steering_messages(self, messages: list[RuntimeMessage]) -> None:
+        pass
 
-    def _pop_follow_up_message(self) -> str | None: ...
+    def _pop_follow_up_message(self) -> str | None:
+        pass
 
     def _should_accept_conclusion(
         self, *, evidence_count: int, iteration: int
-    ) -> tuple[bool, str | None]: ...
+    ) -> tuple[bool, str | None]:
+        pass
 
 
 def _emit_tool_update(
