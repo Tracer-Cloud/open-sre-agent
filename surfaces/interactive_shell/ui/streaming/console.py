@@ -42,18 +42,20 @@ class StreamingConsole(Console):
     def cancel_requested(self) -> bool:
         return self._cancel_event.is_set()
 
+    def _fire_prompt_refresh(self) -> None:
+        if self._prompt_invalidator is not None:
+            self._prompt_invalidator()
+
     def suppress_prompt_spinner(self) -> None:
         """Stop the REPL spinner before another live renderer owns the footer."""
         if not self._spinner.streaming:
             return
         self._spinner.stop()
-        if self._prompt_invalidator is not None:
-            self._prompt_invalidator()
+        self._fire_prompt_refresh()
 
     def request_prompt_refresh(self) -> None:
         """Trigger an immediate prompt redraw without affecting spinner state."""
-        if self._prompt_invalidator is not None:
-            self._prompt_invalidator()
+        self._fire_prompt_refresh()
 
     def print(self, *args: Any, **kwargs: Any) -> None:
         """Reset the TTY column before each print when not streaming."""

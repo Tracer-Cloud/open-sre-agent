@@ -898,8 +898,8 @@ class TestSpinnerTicker:
 
     def test_ticker_calls_invalidator_immediately_when_streaming(self) -> None:
         """Invalidator is called on the first iteration (before sleep) if streaming."""
-        from surfaces.interactive_shell.runtime.background.workers import BackgroundTaskManager
         from core.agent_harness.session import Session
+        from surfaces.interactive_shell.runtime.background.workers import BackgroundTaskManager
 
         calls: list[int] = []
 
@@ -929,8 +929,8 @@ class TestSpinnerTicker:
 
     def test_ticker_skips_invalidator_when_not_streaming(self) -> None:
         """No invalidation when spinner is idle."""
-        from surfaces.interactive_shell.runtime.background.workers import BackgroundTaskManager
         from core.agent_harness.session import Session
+        from surfaces.interactive_shell.runtime.background.workers import BackgroundTaskManager
 
         calls: list[int] = []
 
@@ -959,8 +959,8 @@ class TestSpinnerTicker:
 
     def test_ticker_fires_repeatedly_at_100ms_interval(self) -> None:
         """Over a 350 ms window the invalidator is called at least 3 times."""
-        from surfaces.interactive_shell.runtime.background.workers import BackgroundTaskManager
         from core.agent_harness.session import Session
+        from surfaces.interactive_shell.runtime.background.workers import BackgroundTaskManager
 
         calls: list[float] = []
 
