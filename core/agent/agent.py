@@ -75,10 +75,10 @@ class Agent[RuntimeToolT: RuntimeTool](EventEmitterMixin, ToolFilterMixin, Steer
         runtime_request: AgentRuntimeRequest | None = None,
     ) -> AgentRunResult:
         """Assemble the resolved per-run input and hand it to ``run_react_loop``."""
-        run_input = self._resolve_run_input(initial_messages, runtime_request)
+        run_input = self._build_run_input(initial_messages, runtime_request)
         return run_react_loop(run_input, self)
 
-    def _resolve_run_input(
+    def _build_run_input(
         self,
         initial_messages: Sequence[RuntimeMessageLike] | None,
         runtime_request: AgentRuntimeRequest | None,

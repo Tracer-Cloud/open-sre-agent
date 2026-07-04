@@ -87,7 +87,7 @@ def test_run_with_initial_messages_requires_max_iterations_at_construction() -> 
         agent.run([{"role": "user", "content": "hello"}])
 
 
-def test_resolve_run_input_from_runtime_request_uses_construction_llm() -> None:
+def test_build_run_input_from_runtime_request_uses_construction_llm() -> None:
     llm = _NoToolLLM()
     agent = Agent(
         llm=llm,
@@ -98,14 +98,14 @@ def test_resolve_run_input_from_runtime_request_uses_construction_llm() -> None:
     )
     ctx = _runtime_request()
 
-    run_input = agent._resolve_run_input(None, ctx)
+    run_input = agent._build_run_input(None, ctx)
 
     assert isinstance(run_input, AgentRunInput)
     assert run_input.llm is llm
     assert run_input.system == "runtime system"
 
 
-def test_resolve_run_input_from_messages_uses_construction_config() -> None:
+def test_build_run_input_from_messages_uses_construction_config() -> None:
     llm = _NoToolLLM()
     tool = _tool()
     agent = Agent(
@@ -117,7 +117,7 @@ def test_resolve_run_input_from_messages_uses_construction_config() -> None:
         tool_resources={"marker": "instance"},
     )
 
-    run_input = agent._resolve_run_input([{"role": "user", "content": "hello"}], None)
+    run_input = agent._build_run_input([{"role": "user", "content": "hello"}], None)
 
     assert run_input.llm is llm
     assert run_input.system == "construction system"
@@ -159,7 +159,7 @@ def test_runtime_request_path_uses_explicit_construction_llm_not_process_default
         max_iterations=1,
     )
 
-    run_input = agent._resolve_run_input(None, _runtime_request())
+    run_input = agent._build_run_input(None, _runtime_request())
 
     assert run_input.llm is explicit
     assert run_input.llm is not default
