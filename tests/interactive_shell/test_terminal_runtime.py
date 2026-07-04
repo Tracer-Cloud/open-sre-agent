@@ -983,9 +983,7 @@ class TestSpinnerTicker:
             with contextlib.suppress(asyncio.CancelledError):
                 await ticker
 
-            assert len(calls) >= 3, (
-                f"expected ≥3 invalidations in 350 ms, got {len(calls)}"
-            )
+            assert len(calls) >= 3, f"expected ≥3 invalidations in 350 ms, got {len(calls)}"
 
         asyncio.run(_run())
 
