@@ -265,7 +265,7 @@ def test_build_action_agent_returns_action_turn_plan() -> None:
         message="test message",
         session=session,
         agent_tools=[],
-        turn_ctx=None,
+        turn_snapshot=None,
         deps=deps,
         tool_hooks=None,
         tool_resources={},

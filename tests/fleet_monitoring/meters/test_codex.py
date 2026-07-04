@@ -199,7 +199,7 @@ def test_malformed_json_lines_are_skipped(meter: CodexMeter) -> None:
     assert meter.parse_chunk(chunk) == 15
 
 
-def test_sample_chunk_surfaces_latest_turn_context_model(meter: CodexMeter) -> None:
+def test_sample_chunk_surfaces_latest_turn_snapshot_model(meter: CodexMeter) -> None:
     """``sample_chunk`` returns ``model`` from the latest
     ``turn_context`` event so pricing follows the active model when
     a session migrates mid-stream (e.g. fallback from a paid model
@@ -224,7 +224,7 @@ def test_sample_chunk_surfaces_latest_turn_context_model(meter: CodexMeter) -> N
     assert sample.model == "gpt-5-codex"
 
 
-def test_sample_chunk_returns_none_model_when_no_turn_context(
+def test_sample_chunk_returns_none_model_when_no_turn_snapshot(
     meter: CodexMeter,
 ) -> None:
     """``session_meta`` carries ``model_provider`` (e.g. ``"openai"``)

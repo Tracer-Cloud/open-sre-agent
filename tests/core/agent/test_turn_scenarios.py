@@ -424,11 +424,11 @@ def _assert_live_action_planning_once(case: ScenarioCase) -> None:
     from core.llm import agent_llm_client
 
     llm = agent_llm_client.get_agent_llm()
-    from core.agent_harness.models.turn_context import TurnContext
+    from core.agent_harness.models.turn_snapshot import TurnSnapshot
 
     result = Agent(
         llm=llm,
-        system=build_action_system_prompt(TurnContext.from_session(prompt, session)),
+        system=build_action_system_prompt(TurnSnapshot.from_session(prompt, session)),
         tools=[_planning_probe_tool(tool) for tool in tools],
         resolved_integrations={},
         max_iterations=_LIVE_PLANNING_MAX_ITERATIONS,

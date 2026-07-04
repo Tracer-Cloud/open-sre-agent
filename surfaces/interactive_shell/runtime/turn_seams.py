@@ -13,8 +13,8 @@ from typing import Protocol, TypedDict
 
 from rich.console import Console
 
-from core.agent_harness.models.turn_context import TurnContext
 from core.agent_harness.models.turn_results import ToolCallingTurnResult
+from core.agent_harness.models.turn_snapshot import TurnSnapshot
 from core.agent_harness.ports import OutputSink
 from core.agent_harness.session import Session
 from core.execution import ToolExecutionHooks
@@ -37,7 +37,7 @@ class RunActionToolTurn(Protocol):
         confirm_fn: Callable[[str], str] | None = None,
         is_tty: bool | None = None,
         request_exit: Callable[[], None] | None = None,
-        turn_ctx: TurnContext | None = None,
+        turn_snapshot: TurnSnapshot | None = None,
         output: OutputSink | None = None,
         tool_hooks: ToolExecutionHooks | None = None,
     ) -> ToolCallingTurnResult:
@@ -69,7 +69,7 @@ class AnswerKwargs(TypedDict, total=False):
     is_tty: bool | None
     tool_observation: str | None
     tool_observation_on_screen: bool
-    turn_ctx: TurnContext | None
+    turn_snapshot: TurnSnapshot | None
 
 
 class AnswerShellQuestion(Protocol):
@@ -85,7 +85,7 @@ class AnswerShellQuestion(Protocol):
         is_tty: bool | None = None,
         tool_observation: str | None = None,
         tool_observation_on_screen: bool = True,
-        turn_ctx: TurnContext | None = None,
+        turn_snapshot: TurnSnapshot | None = None,
         output: OutputSink | None = None,
     ) -> LlmRunInfo | None:
         """Answer the question, returning the LLM run info or None."""

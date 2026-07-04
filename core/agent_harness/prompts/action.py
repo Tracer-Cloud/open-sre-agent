@@ -16,7 +16,7 @@ from core.agent_harness.prompts.action_agent_prompt import (
 from core.agent_harness.prompts.envelope import PromptEnvelope
 
 if TYPE_CHECKING:
-    from core.agent_harness.models.turn_context import TurnContext
+    from core.agent_harness.models.turn_snapshot import TurnSnapshot
 
 
 @dataclass(frozen=True)
@@ -27,9 +27,9 @@ class ActionPlannerPrompt:
     user: str
 
 
-def build_action_planner_prompt(*, turn_ctx: TurnContext, text: str) -> ActionPlannerPrompt:
+def build_action_planner_prompt(*, turn_snapshot: TurnSnapshot, text: str) -> ActionPlannerPrompt:
     """Build the action planner's system prompt and literal user message."""
-    system_envelope = build_action_system_prompt_envelope(turn_ctx)
+    system_envelope = build_action_system_prompt_envelope(turn_snapshot)
     return ActionPlannerPrompt(
         system=system_envelope.render(),
         user=build_action_user_message(text),

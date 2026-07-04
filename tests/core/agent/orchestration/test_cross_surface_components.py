@@ -109,10 +109,10 @@ def test_run_turn_routes_unhandled_action_to_answer_callback() -> None:
     assert result.answered is True
 
 
-def test_run_turn_populates_resolved_integrations_on_turn_ctx(
+def test_run_turn_populates_resolved_integrations_on_turn_snapshot(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """run_turn resolves integrations once and hands them to the action path on turn_ctx."""
+    """run_turn resolves integrations once and hands them to the action path on turn_snapshot."""
     resolved = {"github": {"configured": True}}
     monkeypatch.setattr(
         "core.agent_harness.agents.turn_orchestrator.resolve_and_cache_integrations",
@@ -121,9 +121,9 @@ def test_run_turn_populates_resolved_integrations_on_turn_ctx(
     captured: list[Any] = []
 
     def execute_actions(
-        _text: str, *, turn_ctx: Any = None, **_kwargs: object
+        _text: str, *, turn_snapshot: Any = None, **_kwargs: object
     ) -> ToolCallingTurnResult:
-        captured.append(turn_ctx)
+        captured.append(turn_snapshot)
         return ToolCallingTurnResult(0, 0, 0, False, False)
 
     def answer(_text: str, **_kwargs: object) -> object:

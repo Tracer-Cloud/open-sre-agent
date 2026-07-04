@@ -6,7 +6,7 @@ from typing import Any
 import pytest
 
 from core.agent import Agent
-from core.agent_harness.models.turn_context import TurnContext
+from core.agent_harness.models.turn_snapshot import TurnSnapshot
 from core.agent_harness.prompts import PromptEnvelope
 from core.agent_harness.prompts.conversation_memory import MAX_CONVERSATION_MESSAGES
 from core.llm.types import AgentLLMResponse
@@ -54,7 +54,7 @@ def _tool() -> AgentTool:
     )
 
 
-def _turn_context(**overrides: Any) -> TurnContext:
+def _turn_snapshot(**overrides: Any) -> TurnSnapshot:
     values: dict[str, Any] = {
         "text": "investigate",
         "conversation_messages": (),
@@ -65,13 +65,13 @@ def _turn_context(**overrides: Any) -> TurnContext:
         "reasoning_effort": None,
     }
     values.update(overrides)
-    return TurnContext(**values)
+    return TurnSnapshot(**values)
 
 
-def test_turn_context_can_drive_agent_runtime_request() -> None:
+def test_turn_snapshot_can_drive_agent_runtime_request() -> None:
     tool = _tool()
     llm = _NoToolLLM()
-    ctx = _turn_context(
+    ctx = _turn_snapshot(
         system_prompt=PromptEnvelope.from_text("runtime system"),
         available_tools=(tool,),
         active_tools=(tool,),
@@ -102,7 +102,7 @@ def test_agent_context_falls_back_to_process_wide_llm(monkeypatch: pytest.Monkey
     built = _NoToolLLM()
     monkeypatch.setattr("core.llm.agent_llm_client.get_agent_llm", lambda: built)
 
-    ctx = _turn_context(
+    ctx = _turn_snapshot(
         system_prompt=PromptEnvelope.from_text("runtime system"),
         available_tools=(tool,),
         active_tools=(tool,),
@@ -116,15 +116,15 @@ def test_agent_context_falls_back_to_process_wide_llm(monkeypatch: pytest.Monkey
     assert built.seen_system == "runtime system"
 
 
-def test_turn_context_runtime_validation_requires_runtime_fields() -> None:
+def test_turn_snapshot_runtime_validation_requires_runtime_fields() -> None:
     with pytest.raises(ValueError, match="system_prompt"):
-        _turn_context().validate_runtime_request()
+        _turn_snapshot().validate_runtime_request()
 
     with pytest.raises(ValueError, match="max_iterations"):
-        _turn_context(system_prompt="runtime system", max_iterations=0).validate_runtime_request()
+        _turn_snapshot(system_prompt="runtime system", max_iterations=0).validate_runtime_request()
 
     with pytest.raises(ValueError, match="active_tools"):
-        _turn_context(system_prompt="runtime system", max_iterations=1).validate_runtime_request()
+        _turn_snapshot(system_prompt="runtime system", max_iterations=1).validate_runtime_request()
 
 
 @dataclass(frozen=True)
@@ -174,7 +174,7 @@ class _Session:
         self.agent = _AgentState(tool)
 
 
-def test_turn_context_from_session_reads_last_command_observation_from_session() -> None:
+def test_turn_snapshot_from_session_reads_last_command_observation_from_session() -> None:
     class _Session:
         cli_agent_messages: list[tuple[str, str]] = []
         configured_integrations = ()
@@ -184,16 +184,16 @@ def test_turn_context_from_session_reads_last_command_observation_from_session()
         reasoning_effort = None
         last_command_observation = "tool output from shell"
 
-    ctx = TurnContext.from_session("why", _Session())
+    ctx = TurnSnapshot.from_session("why", _Session())
 
     assert ctx.last_observation == "tool output from shell"
 
 
-def test_turn_context_from_session_snapshots_shell_and_runtime_request_fields() -> None:
+def test_turn_snapshot_from_session_snapshots_shell_and_runtime_request_fields() -> None:
     tool = _tool()
     session = _Session(tool)
 
-    ctx = TurnContext.from_session("next turn", session)
+    ctx = TurnSnapshot.from_session("next turn", session)
 
     assert session.agent.seen_text == "next turn"
     assert ctx.text == "next turn"

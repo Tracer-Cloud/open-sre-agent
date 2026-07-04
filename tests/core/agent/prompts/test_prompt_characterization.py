@@ -31,7 +31,7 @@ import pytest
 from core.agent_harness.grounding.investigation_flow_reference import (
     build_investigation_flow_reference_text,
 )
-from core.agent_harness.models.turn_context import TurnContext
+from core.agent_harness.models.turn_snapshot import TurnSnapshot
 from core.agent_harness.prompts import (
     build_action_system_prompt,
     build_action_user_message,
@@ -88,8 +88,8 @@ def _agent_ctx(
     configured_integrations_known: bool = False,
     last_state: dict[str, Any] | None = None,
     last_synthetic_observation_path: str | None = None,
-) -> TurnContext:
-    return TurnContext(
+) -> TurnSnapshot:
+    return TurnSnapshot(
         text=text,
         conversation_messages=conversation_messages,
         configured_integrations=configured_integrations,
@@ -147,7 +147,7 @@ def _build_cases(tmp_path: Path) -> dict[str, str]:
         prompts=_prompts(),
         tool_observation=None,
         tool_observation_on_screen=True,
-        turn_ctx=_agent_ctx(text="how do I configure datadog?"),
+        turn_snapshot=_agent_ctx(text="how do I configure datadog?"),
     )
 
     cases["cli_agent_no_integrations_guard"] = build_cli_agent_prompt_from_provider(
@@ -155,7 +155,7 @@ def _build_cases(tmp_path: Path) -> dict[str, str]:
         prompts=_prompts(configured_integrations_known=True),
         tool_observation=None,
         tool_observation_on_screen=True,
-        turn_ctx=_agent_ctx(text="set up sentry", configured_integrations_known=True),
+        turn_snapshot=_agent_ctx(text="set up sentry", configured_integrations_known=True),
     )
 
     cases["cli_agent_integrations_listed_with_prior_state"] = build_cli_agent_prompt_from_provider(
@@ -166,7 +166,7 @@ def _build_cases(tmp_path: Path) -> dict[str, str]:
         ),
         tool_observation=None,
         tool_observation_on_screen=True,
-        turn_ctx=_agent_ctx(
+        turn_snapshot=_agent_ctx(
             text="why did checkout fail?",
             configured_integrations=("datadog", "github"),
             configured_integrations_known=True,
@@ -189,7 +189,7 @@ def _build_cases(tmp_path: Path) -> dict[str, str]:
         ),
         tool_observation="datadog: configured (connection_verified=true)",
         tool_observation_on_screen=True,
-        turn_ctx=_agent_ctx(
+        turn_snapshot=_agent_ctx(
             text="is datadog configured?",
             configured_integrations=("datadog",),
             configured_integrations_known=True,
@@ -204,7 +204,7 @@ def _build_cases(tmp_path: Path) -> dict[str, str]:
         ),
         tool_observation="sentry issues: [#1 NPE in checkout]",
         tool_observation_on_screen=False,
-        turn_ctx=_agent_ctx(
+        turn_snapshot=_agent_ctx(
             text="any open sentry issues for checkout?",
             configured_integrations=("sentry",),
             configured_integrations_known=True,
@@ -221,7 +221,7 @@ def _build_cases(tmp_path: Path) -> dict[str, str]:
         prompts=_prompts(),
         tool_observation=None,
         tool_observation_on_screen=True,
-        turn_ctx=_agent_ctx(
+        turn_snapshot=_agent_ctx(
             text="why did it fail?",
             last_synthetic_observation_path=str(obs_path),
         ),

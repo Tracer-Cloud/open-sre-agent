@@ -15,8 +15,8 @@ from typing import Unpack
 from rich.console import Console
 
 from core.agent_harness.agents.turn_orchestrator import run_turn
-from core.agent_harness.models.turn_context import TurnContext
 from core.agent_harness.models.turn_results import ShellTurnResult, ToolCallingTurnResult
+from core.agent_harness.models.turn_snapshot import TurnSnapshot
 from core.agent_harness.ports import OutputSink
 from core.agent_harness.session import Session
 from core.execution import ToolExecutionHooks
@@ -71,7 +71,7 @@ def execute_shell_turn(
         *,
         confirm_fn: Callable[[str], str] | None = None,
         is_tty: bool | None = None,
-        turn_ctx: TurnContext | None = None,
+        turn_snapshot: TurnSnapshot | None = None,
     ) -> ToolCallingTurnResult:
         return _execute(
             t,
@@ -80,7 +80,7 @@ def execute_shell_turn(
             confirm_fn=confirm_fn,
             is_tty=is_tty,
             request_exit=request_exit,
-            turn_ctx=turn_ctx,
+            turn_snapshot=turn_snapshot,
             output=resolved_output,
             tool_hooks=tool_hooks,
         )

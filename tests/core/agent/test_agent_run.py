@@ -8,7 +8,7 @@ import pytest
 
 from core.agent import Agent
 from core.agent.run_io import AgentRunInput
-from core.agent_harness.models.turn_context import TurnContext
+from core.agent_harness.models.turn_snapshot import TurnSnapshot
 from core.agent_harness.prompts import PromptEnvelope
 from core.llm.types import AgentLLMResponse
 from core.types import AgentTool
@@ -48,9 +48,9 @@ def _tool() -> AgentTool:
     )
 
 
-def _runtime_request() -> TurnContext:
+def _runtime_request() -> TurnSnapshot:
     tool = _tool()
-    return TurnContext(
+    return TurnSnapshot(
         text="turn",
         conversation_messages=(),
         configured_integrations=(),

@@ -18,7 +18,7 @@ from core.agent_harness.prompts.conversation_memory import (
 from core.agent_harness.session import SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
 
 if TYPE_CHECKING:
-    from core.agent_harness.models.turn_context import TurnContext
+    from core.agent_harness.models.turn_snapshot import TurnSnapshot
 
 _logger = logging.getLogger(__name__)
 
@@ -149,7 +149,7 @@ def _load_synthetic_observation_text(
     return raw
 
 
-def _build_integration_guard(ctx: TurnContext) -> str:
+def _build_integration_guard(ctx: TurnSnapshot) -> str:
     """Render the no-integrations guidance block from the turn snapshot."""
     if not (ctx.configured_integrations_known and not ctx.configured_integrations):
         return ""
@@ -164,7 +164,7 @@ def _build_integration_guard(ctx: TurnContext) -> str:
 
 
 def _build_synthetic_failure_block(
-    ctx: TurnContext,
+    ctx: TurnSnapshot,
     *,
     suggested_prompt: str = SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST,
 ) -> str:
@@ -198,26 +198,28 @@ def build_cli_agent_prompt_from_provider(
     prompts: AssistantPromptContextProvider,
     tool_observation: str | None,
     tool_observation_on_screen: bool,
-    turn_ctx: TurnContext,
+    turn_snapshot: TurnSnapshot,
 ) -> str:
     """Render an assistant prompt from the core prompt-provider port."""
     prompts.log_diagnostics("cli_agent_grounding")
     system = build_assistant_system_prompt(
         prompts.cli_reference(),
-        format_recent_conversation(list(turn_ctx.conversation_messages)),
+        format_recent_conversation(list(turn_snapshot.conversation_messages)),
         agents_md=prompts.agents_md(),
         investigation_flow=prompts.investigation_flow(),
         prior_investigation=(
-            _summarize_last_state(turn_ctx.last_state) if turn_ctx.last_state is not None else ""
+            _summarize_last_state(turn_snapshot.last_state)
+            if turn_snapshot.last_state is not None
+            else ""
         ),
-        prior_action_facts=format_prior_action_facts(list(turn_ctx.conversation_messages)),
+        prior_action_facts=format_prior_action_facts(list(turn_snapshot.conversation_messages)),
         environment=prompts.environment_block(),
     )
     return (
         f"{system}\n"
-        f"{_build_integration_guard(turn_ctx)}"
+        f"{_build_integration_guard(turn_snapshot)}"
         f"{build_observation_block(tool_observation, on_screen=tool_observation_on_screen)}"
-        f"{_build_synthetic_failure_block(turn_ctx, suggested_prompt=prompts.suggested_synthetic_prompt())}"
+        f"{_build_synthetic_failure_block(turn_snapshot, suggested_prompt=prompts.suggested_synthetic_prompt())}"
         f"--- User message ---\n{message}"
     )
 

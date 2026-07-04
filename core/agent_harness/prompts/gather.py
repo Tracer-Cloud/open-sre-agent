@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from core.agent_harness.models.turn_context import TurnContext
+    from core.agent_harness.models.turn_snapshot import TurnSnapshot
     from core.agent_harness.ports import SessionStore
 
 
@@ -43,12 +43,12 @@ def build_gather_system_prompt(session: SessionStore) -> str:
     )
 
 
-def build_gather_system_prompt_from_turn_context(turn_ctx: TurnContext) -> str:
+def build_gather_system_prompt_from_turn_snapshot(turn_snapshot: TurnSnapshot) -> str:
     """Same as :func:`build_gather_system_prompt`, from a turn snapshot."""
 
     class _GatherSessionView:
         @property
         def configured_integrations(self) -> tuple[str, ...]:
-            return turn_ctx.configured_integrations
+            return turn_snapshot.configured_integrations
 
     return build_gather_system_prompt(_GatherSessionView())  # type: ignore[arg-type]

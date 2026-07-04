@@ -21,12 +21,12 @@ from core.agent_harness.agents.evidence_agent import gather_tool_evidence as gat
 from core.agent_harness.agents.headless_agent import dispatch_message_to_headless_agent
 from core.agent_harness.agents.turn_orchestrator import run_turn, stream_answer
 from core.agent_harness.harness import AgentHarness, HarnessConfig, HarnessStartupResult
-from core.agent_harness.models.turn_context import (
-    AgentRuntimeRequest,
-    TurnContext,
-    TurnContextSource,
-)
 from core.agent_harness.models.turn_results import ShellTurnResult, ToolCallingTurnResult
+from core.agent_harness.models.turn_snapshot import (
+    AgentRuntimeRequest,
+    TurnSnapshot,
+    TurnSnapshotSource,
+)
 
 __all__ = [
     "AgentHarness",
@@ -36,8 +36,8 @@ __all__ = [
     "ShellTurnResult",
     "ToolCallingDeps",
     "ToolCallingTurnResult",
-    "TurnContext",
-    "TurnContextSource",
+    "TurnSnapshot",
+    "TurnSnapshotSource",
     "execute_action_agent_turn",
     "gather_evidence",
     "gather_tool_evidence",

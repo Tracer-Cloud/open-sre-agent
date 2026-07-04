@@ -13,17 +13,17 @@ from core.agent_harness.prompts.conversation_memory import (
 from core.agent_harness.prompts.envelope import PromptBlock, PromptEnvelope
 
 if TYPE_CHECKING:
-    from core.agent_harness.models.turn_context import TurnContext
+    from core.agent_harness.models.turn_snapshot import TurnSnapshot
 
 _MAX_TEXT_LEN = 512
 _USER_TEMPLATE = "USER MESSAGE (literal): <<<{text}>>>"
 
 
-def build_action_system_prompt(turn_ctx: TurnContext) -> str:
-    return build_action_system_prompt_envelope(turn_ctx).render()
+def build_action_system_prompt(turn_snapshot: TurnSnapshot) -> str:
+    return build_action_system_prompt_envelope(turn_snapshot).render()
 
 
-def build_action_system_prompt_envelope(turn_ctx: TurnContext) -> PromptEnvelope:
+def build_action_system_prompt_envelope(turn_snapshot: TurnSnapshot) -> PromptEnvelope:
     blocks = [
         PromptBlock(
             id="action-agent-system-base",
@@ -34,24 +34,24 @@ def build_action_system_prompt_envelope(turn_ctx: TurnContext) -> PromptEnvelope
         PromptBlock(
             id="connected-integrations",
             kind="context",
-            content=connected_integrations_block(turn_ctx),
-            provenance="core.agent_harness.models.turn_context",
+            content=connected_integrations_block(turn_snapshot),
+            provenance="core.agent_harness.models.turn_snapshot",
         ),
         PromptBlock(
             id="recent-conversation",
             kind="conversation",
-            content=recent_conversation_block(turn_ctx),
-            provenance="core.agent_harness.models.turn_context",
+            content=recent_conversation_block(turn_snapshot),
+            provenance="core.agent_harness.models.turn_snapshot",
         ),
     ]
-    action_facts = prior_action_facts_block(turn_ctx)
+    action_facts = prior_action_facts_block(turn_snapshot)
     if action_facts:
         blocks.append(
             PromptBlock(
                 id="prior-action-facts",
                 kind="context",
                 content=action_facts,
-                provenance="core.agent_harness.models.turn_context",
+                provenance="core.agent_harness.models.turn_snapshot",
             )
         )
     return PromptEnvelope.from_blocks(
@@ -61,10 +61,10 @@ def build_action_system_prompt_envelope(turn_ctx: TurnContext) -> PromptEnvelope
     )
 
 
-def connected_integrations_block(turn_ctx: TurnContext) -> str:
+def connected_integrations_block(turn_snapshot: TurnSnapshot) -> str:
     """Render which integrations are connected for this shell action turn."""
-    known = turn_ctx.configured_integrations_known
-    configured = turn_ctx.configured_integrations
+    known = turn_snapshot.configured_integrations_known
+    configured = turn_snapshot.configured_integrations
     if known and configured:
         listing = ", ".join(sorted(str(name) for name in configured))
     elif known:
@@ -81,8 +81,8 @@ def connected_integrations_block(turn_ctx: TurnContext) -> str:
     return f"CONNECTED INTEGRATIONS (this install, right now): {listing}\n{gate_note}\n"
 
 
-def recent_conversation_block(turn_ctx: TurnContext) -> str:
-    history = format_recent_conversation(list(turn_ctx.conversation_messages))
+def recent_conversation_block(turn_snapshot: TurnSnapshot) -> str:
+    history = format_recent_conversation(list(turn_snapshot.conversation_messages))
     return (
         "RECENT CONVERSATION (context only, oldest first; previous assistant messages "
         "may contain shell stdout, computed values, and prior tool inputs/results. Use "
@@ -92,8 +92,8 @@ def recent_conversation_block(turn_ctx: TurnContext) -> str:
     )
 
 
-def prior_action_facts_block(turn_ctx: TurnContext) -> str:
-    facts = format_prior_action_facts(list(turn_ctx.conversation_messages))
+def prior_action_facts_block(turn_snapshot: TurnSnapshot) -> str:
+    facts = format_prior_action_facts(list(turn_snapshot.conversation_messages))
     if not facts:
         return ""
     return (

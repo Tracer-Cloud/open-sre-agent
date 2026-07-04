@@ -1,6 +1,6 @@
 """Per-turn immutable context snapshot for the agentic turn engine.
 
-Built once at turn start via :meth:`TurnContext.from_session`. Downstream
+Built once at turn start via :meth:`TurnSnapshot.from_session`. Downstream
 prompt builders read this snapshot; the live session is still used for writes.
 """
 
@@ -31,12 +31,12 @@ type SystemPromptInput = str | PromptRenderable
 
 
 @runtime_checkable
-class TurnContextSource(Protocol):
+class TurnSnapshotSource(Protocol):
     """Structural source of per-turn snapshot fields.
 
     ``Session`` satisfies this without inheriting it; headless session
     stores implement the same attributes. Keeping this structural is what lets
-    ``agent/`` build a ``TurnContext`` without importing ``interactive_shell``.
+    ``agent/`` build a ``TurnSnapshot`` without importing ``interactive_shell``.
     """
 
     cli_agent_messages: list[tuple[str, str]]
@@ -96,7 +96,7 @@ def _select_runtime_request_input(text: str, source: Any) -> Any | None:
 
 
 @dataclass(frozen=True)
-class TurnContext:
+class TurnSnapshot:
     """Immutable per-turn snapshot and optional runtime request.
 
     Carries everything the action agent and conversational assistant need to
@@ -158,12 +158,12 @@ class TurnContext:
     last_observation: str | None = None
 
     @classmethod
-    def from_session(cls, text: str, session: TurnContextSource) -> TurnContext:
+    def from_session(cls, text: str, session: TurnSnapshotSource) -> TurnSnapshot:
         """Snapshot the relevant session fields for one turn.
 
         Call this once at the top of the turn before any mutations happen, then
         pass the returned context downstream. ``session`` is anything satisfying
-        :class:`TurnContextSource` (e.g. the shell's ``Session``). When the
+        :class:`TurnSnapshotSource` (e.g. the shell's ``Session``). When the
         source also exposes ``select_agent_context_input`` directly or through
         ``source.agent``, runtime request fields are snapshotted too.
         """
@@ -206,14 +206,14 @@ class TurnContext:
     def validate_runtime_request(self) -> None:
         """Validate fields required once this object reaches ``Agent.run``."""
         if not self.render_system_prompt():
-            raise ValueError("TurnContext.system_prompt is required for Agent.run().")
+            raise ValueError("TurnSnapshot.system_prompt is required for Agent.run().")
         if self.max_iterations < 1:
-            raise ValueError("TurnContext.max_iterations must be positive.")
+            raise ValueError("TurnSnapshot.max_iterations must be positive.")
         if not self.active_tools:
-            raise ValueError("TurnContext.active_tools must include at least one tool.")
+            raise ValueError("TurnSnapshot.active_tools must include at least one tool.")
 
 
-def _read_last_observation(session: TurnContextSource, runtime_input: Any | None) -> str | None:
+def _read_last_observation(session: TurnSnapshotSource, runtime_input: Any | None) -> str | None:
     """Read the last tool observation from runtime input or the live session."""
     from_runtime = getattr(runtime_input, "last_observation", None)
     if isinstance(from_runtime, str) and from_runtime.strip():
@@ -234,6 +234,6 @@ def _read_last_observation(session: TurnContextSource, runtime_input: Any | None
 __all__ = [
     "AgentRuntimeRequest",
     "PromptRenderable",
-    "TurnContext",
-    "TurnContextSource",
+    "TurnSnapshot",
+    "TurnSnapshotSource",
 ]
