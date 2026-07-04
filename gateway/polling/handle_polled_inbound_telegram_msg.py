@@ -7,7 +7,7 @@ import logging
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 
-from config.gateway_output_sink import GatewayOutputSink
+from gateway.gateway_output_sink import GatewayOutputSink
 from core.agent_harness.session import Session
 from gateway.config.get_gateway_settings import GatewaySettings, TelegramInboundMessage
 from gateway.polling.telegram_poller.client import TelegramBotClient

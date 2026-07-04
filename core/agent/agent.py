@@ -209,7 +209,7 @@ class Agent[RuntimeToolT: RuntimeTool](EventEmitterMixin, ToolFilterMixin, Steer
 
     # Thin forwarders to ``self._hooks`` (a ProviderHookDelegate). Kept as
     # methods rather than an exposed attribute so LoopHost's contract is
-    # the four calls, not this concrete delegate type — see agent_loop.py.
+    # the four calls, not this concrete delegate type — see loop_host.py.
     def _transform_context(self, messages: list[RuntimeMessage]) -> list[RuntimeMessage]:
         return self._hooks.transform_context(messages)
 

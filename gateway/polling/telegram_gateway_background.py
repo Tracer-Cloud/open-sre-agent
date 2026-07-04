@@ -7,7 +7,7 @@ import logging
 import threading
 from collections.abc import Callable
 
-from config.gateway_output_sink import GatewayOutputSink
+from gateway.gateway_output_sink import GatewayOutputSink
 from core.agent_harness.session import Session
 from gateway.config.get_gateway_settings import GatewaySettings
 from gateway.polling.handle_polled_inbound_telegram_msg import (

@@ -34,8 +34,6 @@ layers =
 ignore_imports =
     # config upward imports (T-4 debt — refactor into lower layers)
     config.config -> core.llm.azure_openai
-    config.gateway_output_sink -> gateway.polling.telegram_poller.client
-    config.gateway_output_sink -> platform.common.truncation
     config.llm_auth.credentials -> integrations.llm_cli.registry
     config.llm_keyring -> platform
     config.repl_config -> platform.terminal.theme
@@ -60,6 +58,7 @@ ignore_imports =
     platform.observability.sentry_sdk -> integrations.llm_cli.errors
     platform.scheduler.credentials -> integrations.catalog
     platform.scheduler.executor -> integrations.discord.delivery
+    platform.scheduler.executor -> integrations.slack.delivery
     platform.scheduler.executor -> integrations.telegram.delivery
     # integrations -> tools (hermes investigation bridge)
     integrations.hermes.investigation -> tools.investigation.capability

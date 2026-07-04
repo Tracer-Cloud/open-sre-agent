@@ -22,6 +22,7 @@ from core.agent_harness.session import Session
 from surfaces.interactive_shell.runtime.core.state import SpinnerState
 from surfaces.interactive_shell.runtime.utils.input_policy import turn_should_show_spinner
 from surfaces.interactive_shell.ui import (
+    DIM,
     ERROR,
     WARNING,
 )
@@ -91,6 +92,11 @@ async def _render_agent_presentation_transition(
             if exc is None:
                 raise ValueError("turn_error event requires an error")
             console.print(f"[{ERROR}]turn error:[/] {escape(str(exc))}")
+            # On a credit/billing wall, add the in-tool recovery hint.
+            from core.llm.llm_retry import LLMCreditExhaustedError
+
+            if isinstance(exc, LLMCreditExhaustedError):
+                console.print(f"[{DIM}]Run /model to switch to another provider.[/]")
         case "turn_end":
             set_prompt_suppress_fn(None)
             if previous.show_spinner:

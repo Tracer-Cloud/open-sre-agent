@@ -12,7 +12,7 @@ import logging
 
 from rich.console import Console
 
-from config.gateway_output_sink import GatewayOutputSink
+from gateway.gateway_output_sink import GatewayOutputSink
 from core.agent import Agent
 from core.agent_harness.providers.default_prompt_context import DefaultPromptContextProvider
 from core.agent_harness.providers.default_providers import (

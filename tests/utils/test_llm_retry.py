@@ -183,6 +183,18 @@ def test_is_credit_exhausted_falls_back_to_text_for_anthropic_400() -> None:
     assert llm_retry.is_credit_exhausted_error(err)
 
 
+def test_maybe_raise_credit_exhausted_offers_provider_switch_recovery() -> None:
+    """The message leads with the in-tool recovery (switch providers), not only
+    a pointer to the billing console."""
+    with pytest.raises(llm_retry.LLMCreditExhaustedError) as excinfo:
+        llm_retry.maybe_raise_credit_exhausted(
+            "Anthropic", RuntimeError("Your credit balance is too low")
+        )
+    message = str(excinfo.value)
+    assert "switch to another configured LLM provider" in message
+    assert "Anthropic console" in message
+
+
 # --------------------------------------------------------------------------- #
 # retry_on_rate_limit — control flow                                          #
 # --------------------------------------------------------------------------- #

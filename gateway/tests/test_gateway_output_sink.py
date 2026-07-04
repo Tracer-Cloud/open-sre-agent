@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from unittest.mock import MagicMock
 
-from config.gateway_output_sink import GatewayOutputSink
+from gateway.gateway_output_sink import GatewayOutputSink
 from gateway.polling.telegram_poller.client import TelegramBotClient
 from platform.notifications.limits import MAX_MESSAGE_SIZE
 
