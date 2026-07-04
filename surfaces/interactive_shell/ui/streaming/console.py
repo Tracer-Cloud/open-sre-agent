@@ -50,6 +50,11 @@ class StreamingConsole(Console):
         if self._prompt_invalidator is not None:
             self._prompt_invalidator()
 
+    def request_prompt_refresh(self) -> None:
+        """Trigger an immediate prompt redraw without affecting spinner state."""
+        if self._prompt_invalidator is not None:
+            self._prompt_invalidator()
+
     def print(self, *args: Any, **kwargs: Any) -> None:
         """Reset the TTY column before each print when not streaming."""
         if not self._spinner.streaming and not isinstance(sys.stdout, FileProxy):

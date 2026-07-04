@@ -85,11 +85,13 @@ class BackgroundTaskManager:
         # visible prompt redraws while patch_stdout(raw=True) is active and
         # the LLM stream is writing rapidly. This task explicitly invalidates
         # the prompt at 100 ms intervals so the braille glyph cycles smoothly.
+        # Check-before-sleep so the first invalidation fires as soon as streaming
+        # starts rather than always lagging by one full tick interval.
         tick_s = 0.1
         while not self.state.exit_requested:
+            if self.spinner.streaming:
+                self.prompt_invalidator()
             try:
                 await asyncio.sleep(tick_s)
             except asyncio.CancelledError:
                 return
-            if self.spinner.streaming:
-                self.prompt_invalidator()

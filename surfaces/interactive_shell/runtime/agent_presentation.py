@@ -84,6 +84,7 @@ async def _render_agent_presentation_transition(
             if current.show_spinner:
                 spinner.start()
                 set_prompt_suppress_fn(console.suppress_prompt_spinner)
+                console.request_prompt_refresh()
         case "turn_interrupted":
             console.print(f"[{WARNING}]· interrupted[/]")
         case "turn_error":

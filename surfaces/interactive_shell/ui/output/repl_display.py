@@ -44,9 +44,11 @@ def _fit_hint_prefix(prefix: str, *, cols: int | None = None) -> str:
 
 
 def _stdout_is_tty() -> bool:
+    # Use fd 1 directly: sys.stdout may be a FileProxy under patch_stdout(raw=True),
+    # whose fileno() raises UnsupportedOperation and would falsely report non-TTY.
     try:
-        return os.isatty(sys.stdout.fileno())
-    except (AttributeError, io.UnsupportedOperation, OSError):
+        return os.isatty(1)
+    except OSError:
         return False
 
 
