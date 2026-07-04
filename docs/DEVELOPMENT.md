@@ -36,6 +36,14 @@ Before a PR, run at least `make lint`, `make format-check`, `make typecheck`, an
 
 Action-planner behavior, postprocessing transforms, compatibility seams, and the rule-extension checklist are documented in [`docs/interactive-shell-action-policy.md`](https://github.com/Tracer-Cloud/opensre/blob/main/docs/interactive-shell-action-policy.md).
 
+## Package architecture
+
+The seven first-party packages, the four-tier layering contract between them
+(which package may import which), the folder diagram, cross-layer flows, and
+how `make check-imports` / `make check-layers-strict` enforce it are documented
+in [`docs/ARCHITECTURE.md`](ARCHITECTURE.md). It is the canonical reference for
+`T-*` architecture refactor tasks.
+
 ## Investigation pipeline architecture
 
 The six-stage investigation pipeline (resolve integrations → extract alert → plan → ReAct evidence loop → diagnose → deliver), the loop's guardrails (tool cap, stagnation breaker, context budget, duplicate detection), and diagrams are documented in [`docs/investigation-pipeline-architecture.md`](investigation-pipeline-architecture.md).

@@ -34,6 +34,7 @@ Before any push or PR creation follow **[CI.md](CI.md)** — lint, format, typec
 | `Makefile`            | Canonical local automation for install, test, verify, deploy, and cleanup targets.                 |
 | `README.md`           | Product overview, install, quick start, high-level capabilities, and links to deeper docs.         |
 | `docs/DEVELOPMENT.md` | Contributor workflows: CI parity commands, dev container, benchmark, deployment, telemetry detail. |
+| `docs/ARCHITECTURE.md` | Canonical package-layering contract: the four-tier layer table, folder diagram, allowed cross-layer edges, and how `.importlinter.strict` / `check_direct_imports.py` enforce it. Start here for any `T-*` architecture refactor. |
 | `docs/investigation-pipeline-architecture.md` | Investigation pipeline stages, ReAct loop control flow, and guardrails (tool cap, stagnation breaker, context budget), with diagrams. |
 | `docs/investigation-tool-calling.md` | Investigation ReAct tool schemas, LLM invoke payloads, and message shapes (all providers). |
 | `SETUP.md`            | Machine setup (all platforms, Windows, MCP/OpenClaw, troubleshooting).                             |

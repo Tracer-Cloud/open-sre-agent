@@ -9,7 +9,10 @@ config handling, or merging duplicated logic that has diverged across
 It does not apply to a localized bug fix or a single-file cleanup — use it
 when the change touches "every surface does X its own way" style problems
 (the T-2/T-3 `agent_harness` consolidation series is the reference case).
-Use it together with [AGENTS.md](AGENTS.md) and [CI.md](CI.md).
+Use it together with [AGENTS.md](AGENTS.md) and [CI.md](CI.md). The package
+layers you are moving code between — and the edges you are allowed to create —
+are defined in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md); treat it as the
+source of truth and update it in the same PR if a boundary changes.
 
 ## 1. Before writing code
 
