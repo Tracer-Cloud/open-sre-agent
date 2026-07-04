@@ -1,7 +1,10 @@
-"""The callback contract the ReAct loop drives.
+"""What the ReAct loop needs from whoever runs it.
 
-``run_react_loop`` depends only on this ``LoopHost`` and an
-``AgentRunInput`` — any object implementing these methods can drive the loop.
+The loop calls back out for a handful of things — emitting events, narrowing the
+tool list, deciding when to stop, and the optional provider hooks. ``LoopHost``
+is that set of callbacks as a ``Protocol``: ``run_react_loop`` depends only on it
+(plus an ``AgentRunInput``), so it never has to know about ``Agent`` — any object
+with these methods can drive the loop. ``Agent`` is the usual one.
 """
 
 from __future__ import annotations

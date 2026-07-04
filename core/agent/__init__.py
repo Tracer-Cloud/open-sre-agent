@@ -1,10 +1,14 @@
-"""The stateful ReAct agent primitive: facade, loop, mixins, and hooks.
+"""The reusable tool-calling agent, one file per responsibility.
 
-``agent.py`` holds ``Agent``, the facade that wires per-run context into
-``loop.py``'s ``run_react_loop``. ``mixins.py`` holds the reusable behaviors
-(event dispatch, tool filtering, steering); ``hooks.py`` holds the provider-hook
-delegate. See ``core/agent_harness/AGENTS.md`` for how surfaces build and drive
-an ``Agent``.
+- ``agent.py``          — ``Agent``: the object surfaces create and call.
+- ``react_loop.py``     — the think -> call-tools -> observe loop it runs.
+- ``loop_host.py``      — the callbacks the loop needs from whoever drives it.
+- ``run_io.py``         — the input the loop takes and the result it returns.
+- ``mixins.py``         — the reusable behaviors ``Agent`` is built from.
+- ``provider_hooks.py`` — optional hooks applied around each LLM call.
+
+``from core.agent import Agent`` is the entry point. See
+``core/agent_harness/AGENTS.md`` for how surfaces build and drive an ``Agent``.
 """
 
 from __future__ import annotations

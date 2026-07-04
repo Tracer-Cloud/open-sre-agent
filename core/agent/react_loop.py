@@ -1,10 +1,12 @@
-"""The ReAct loop: think -> call tools -> observe.
+"""The ReAct loop: reason, act (call tools), observe results, repeat.
 
-``ReactLoop`` is the algorithm ``core.agent.Agent`` wires context into. It has
-no direct coupling to ``Agent`` — it takes an ``AgentRunInput``
-(``core.agent.run_io``) and an ``LoopHost`` (``core.agent.loop_host``): any
-object implementing that host can drive the loop. ``run_react_loop`` is the
-thin functional entry point.
+``ReactLoop`` runs the loop. Each pass asks the LLM what to do (reason); if it
+requests tools, they run and their results are fed back in (act + observe); this
+repeats until the LLM answers with no tool calls or an iteration cap is hit. The
+loop knows nothing about ``Agent`` — it takes an ``AgentRunInput``
+(``core.agent.run_io``, the resolved inputs) and a ``LoopHost``
+(``core.agent.loop_host``, the callbacks it needs), so anything implementing that
+host can drive it. ``run_react_loop`` is the one-line functional entry.
 """
 
 from __future__ import annotations
@@ -45,11 +47,12 @@ logger = logging.getLogger(__name__)
 
 
 class ReactLoop[RuntimeToolT: RuntimeTool]:
-    """The ReAct loop: think -> call tools -> observe, over one ``AgentRunInput``.
+    """Runs one ReAct loop over a single ``AgentRunInput``.
 
-    Holds the per-run state as fields and drives it to completion in ``run()``.
-    Each step calls back into the ``LoopHost`` for its seams — events, tool
-    filtering, steering, conclusion acceptance, and the provider hooks.
+    The per-run state — the running message list, the tool results, whether a
+    tool ended the turn — lives in the instance fields; ``run()`` drives it to
+    completion. The loop never decides things like which tools to expose or when
+    to stop; it asks the ``LoopHost`` at each of those points.
     """
 
     def __init__(

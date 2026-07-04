@@ -180,14 +180,14 @@ Before opening or merging an agent PR, confirm:
    entrypoint or rename a shape seam.
 
 **Read order for new code:** this file → `docs/agent-context-data-stores.md` →
-`agents/turn_orchestrator.py` (`run_turn`) → `core/agent.py` (facade + wiring)
-→ `core/agent_loop.py` (`run_react_loop`, the tool-calling algorithm).
+`agents/turn_orchestrator.py` (`run_turn`) → `core/agent/agent.py` (facade + wiring)
+→ `core/agent/react_loop.py` (`run_react_loop`, the tool-calling algorithm).
 
 ## Investigation agent — the tool-calling shape with a custom loop
 
 `tools/investigation/stages/gather_evidence/agent.py::ConnectedInvestigationAgent`
-composes the shared `AgentEventEmitter` and `AgentToolFilter` mixins
-(`core.agent_mixins`) instead of subclassing `Agent`, and owns a specialised
+composes the shared `EventEmitterMixin` and `ToolFilterMixin` mixins
+(`core.agent.mixins`) instead of subclassing `Agent`, and owns a specialised
 ReAct `run()` (seed calls, evidence collection, duplicate detection, stagnation
 handling). It is still the tool-calling shape — a specialised loop that reuses
 the two agent hooks by composition rather than delegating to the generic
@@ -198,41 +198,43 @@ the two agent hooks by composition rather than delegating to the generic
 The ReAct loop primitive is `core.agent.Agent`. `agent_harness/` orchestrates it;
 it does not re-implement it. Do not fork the loop here.
 
-## core/agent* module split (Agent is a facade, not the algorithm owner)
+## core/agent package (Agent is a facade, not the algorithm owner)
 
-`core/agent.py` is a thin facade + hook binder — `Agent.__init__` stores
-construction-time config and `Agent.run()` resolves per-run context (from
-`agent_context=` or `initial_messages=`) and hands it to
-`core.agent_loop.run_react_loop`, which owns the actual think → call-tools →
-observe algorithm:
+`core/agent/` is a package with one file per responsibility (see
+[docs/NAMING.md](../../docs/NAMING.md) for the naming convention). `Agent`
+(in `agent.py`) is a thin facade: `__init__` stores construction-time config and
+`run()` resolves per-run context (from `agent_context=` or `initial_messages=`)
+and hands it to `core.agent.react_loop.run_react_loop`, which owns the actual
+think → call-tools → observe algorithm.
 
-- `core/agent_mixins.py` — `AgentEventEmitter` (event dispatch),
-  `AgentToolFilter` (tool-narrowing hook), `AgentSteering` (the
-  `steer`/`follow_up` stop/continue/redirect control-plane). `Agent` composes
-  all three; `ConnectedInvestigationAgent`
+- `core/agent/mixins.py` — `EventEmitterMixin` (event dispatch),
+  `ToolFilterMixin` (tool-narrowing hook), `SteeringMixin` (`steer`/`follow_up`
+  to nudge a run in progress). `Agent` composes all three;
+  `ConnectedInvestigationAgent`
   (`tools/investigation/stages/gather_evidence/agent.py`) composes the first
-  two directly instead of subclassing `Agent`.
-- `core/agent_hooks.py` — `AgentProviderHookDelegate`, a fail-open wrapper
-  around `core.provider.ProviderHooks` (context transform, provider
-  request/response, LLM conversion). A raised hook exception is logged and
-  swallowed; it never breaks the loop.
-- `core/agent_loop.py` — `AgentRunContext` (resolved per-run inputs),
-  `AgentLoopHost` (the `Protocol` `run_react_loop` calls back into — `Agent`
-  implements it via the mixins above plus its own `_transform_context` /
-  `_convert_to_llm` / `_before_request` / `_after_response` forwarders), and
-  `run_react_loop` itself. `AgentLoopHost` intentionally exposes the four
-  provider-hook seams as method calls, not a `_hooks: AgentProviderHookDelegate`
-  attribute — the concrete delegate type is an `Agent` implementation detail,
-  not part of the host contract, so any host can wire the seams however it
-  likes. `AgentRunResult` also lives here; `core.agent` re-exports it for the
-  existing `from core.agent import AgentRunResult` import path.
-- `core/agent.py` — the facade: static `dispatch_message_to_headless_agent` /
-  `resolve_integrations` entrypoints, `__init__`, `run()`, and the
+  two instead of subclassing `Agent`.
+- `core/agent/provider_hooks.py` — `ProviderHookDelegate`, a fail-open wrapper
+  around `core.provider.ProviderHooks` applied around each LLM call. A raised
+  hook exception is logged and swallowed; it never breaks the loop.
+- `core/agent/loop_host.py` — `LoopHost`, the `Protocol` `run_react_loop` calls
+  back into. `Agent` implements it via the mixins plus its own
+  `_transform_context` / `_convert_to_llm` / `_before_request` /
+  `_after_response` forwarders. The concrete `ProviderHookDelegate` type is an
+  `Agent` implementation detail, not part of the host contract, so any host can
+  wire those four provider hooks however it likes.
+- `core/agent/run_io.py` — `AgentRunInput` (resolved per-run inputs) and
+  `AgentRunResult` (the loop's outcome). `core.agent` re-exports `AgentRunResult`
+  for the `from core.agent import AgentRunResult` path.
+- `core/agent/react_loop.py` — `ReactLoop` (the loop as a method-object, phases
+  `_think` / `_handle_conclusion` / `_observe`) and `run_react_loop` (its thin
+  functional entry).
+- `core/agent/agent.py` — the facade: static `dispatch_message_to_headless_agent`
+  / `resolve_integrations` entrypoints, `__init__`, `run()`, and the
   `_should_accept_conclusion` override hook.
 
 Do not reintroduce hook-method overrides on `Agent` itself (e.g. a subclass
 overriding a private `_before_provider_request`-style method) — customize via
 `provider_hooks=ProviderHooks(...)` at construction instead, which
-`AgentProviderHookDelegate` applies. Subclassing remains the pattern for
+`ProviderHookDelegate` applies. Subclassing remains the pattern for
 `_filter_tools` and `_should_accept_conclusion`, which are genuine per-agent
 overrides, not seams `ProviderHooks` covers.

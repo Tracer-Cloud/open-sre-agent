@@ -14,7 +14,7 @@ a frozen view, and a package's purpose from its name alone.
 | **Slice** | A typed segment of a state dict | `DiagnosisSlice`, `AlertInputSlice` |
 | **Resources** | Handles passed into tool executors for one call | `ToolCallResources` |
 | **Budget** | An LLM token/window policy — not application state | `enforce_token_budget` |
-| **Host** | The callback contract an algorithm drives (a `Protocol`) | `AgentLoopHost` |
+| **Host** | The callback contract an algorithm drives (a `Protocol`) | `LoopHost` |
 
 ## Module naming: `{domain}_{role}.py`
 

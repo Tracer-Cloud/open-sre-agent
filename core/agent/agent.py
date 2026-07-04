@@ -1,9 +1,14 @@
-"""Stateful ReAct agent — the shared primitive for all tool-calling surfaces.
+"""The reusable tool-calling agent every surface runs (shell, gateway, investigation).
 
-``Agent`` is a facade + hook binder: ``__init__`` stores construction-time
-config and ``run()`` wires per-run context into ``core.agent.react_loop.run_react_loop``,
-the actual algorithm. See ``core/agent_harness/AGENTS.md`` for the direct-answer
-(no-tools) shape and the harness construction pattern.
+You create an ``Agent`` with its config (LLM, system prompt, tools, iteration
+cap); ``run()`` gathers that config for one run and hands it to
+``core.agent.react_loop.run_react_loop``, which runs the actual
+think -> call-tools -> observe loop. ``Agent`` stays thin: it holds the config
+and provides the callback methods (from the mixins) the loop calls back into —
+it does not contain the loop itself.
+
+The other agent shape — a direct answer with no tools — is not an ``Agent``;
+see ``core/agent_harness/AGENTS.md``.
 """
 
 from __future__ import annotations

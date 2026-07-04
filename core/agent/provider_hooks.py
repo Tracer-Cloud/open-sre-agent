@@ -1,10 +1,11 @@
-"""Provider-hook delegate: applies :class:`~core.provider.ProviderHooks` with
-fail-open error handling so a broken hook never breaks the agent loop.
+"""Applies the optional :class:`~core.provider.ProviderHooks` around each LLM
+call, and swallows a hook's error instead of letting it break the loop.
 
-``Agent`` owns one :class:`ProviderHookDelegate` per run and the loop
-(``core.agent.react_loop.run_react_loop``) calls it at each of the four seams
-(context transform, provider request, provider response, LLM conversion)
-instead of talking to ``ProviderHooks`` directly.
+``Agent`` owns one :class:`ProviderHookDelegate` per run. The loop
+(``core.agent.react_loop.run_react_loop``) calls it at four points around each
+request — transform the messages, convert them to the provider format, adjust
+the outgoing request, adjust the incoming response — instead of touching
+``ProviderHooks`` directly.
 """
 
 from __future__ import annotations

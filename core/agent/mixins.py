@@ -1,10 +1,10 @@
-"""Reusable agent behavior mixins: event dispatch, tool filtering, steering.
+"""The reusable behaviors ``Agent`` (and any custom loop) is built from.
 
-``EventEmitterMixin`` forwards ``(kind, data)`` tuple events and typed runtime
-events to optional callbacks. ``ToolFilterMixin`` exposes the tool-narrowing
-hook. ``SteeringMixin`` is the stop/continue/redirect control-plane: queued
-user messages injected into (steer) or appended after (follow_up) a run.
-``Agent`` and any custom tool-calling loop compose these mixins.
+``EventEmitterMixin`` forwards ``(kind, data)`` and typed runtime events to
+optional listener callbacks. ``ToolFilterMixin`` is the hook for narrowing which
+tools a run sees. ``SteeringMixin`` lets you nudge a run already in progress:
+``steer`` injects a user message before the next LLM turn, ``follow_up`` queues
+one for after the run would otherwise stop.
 """
 
 from __future__ import annotations
