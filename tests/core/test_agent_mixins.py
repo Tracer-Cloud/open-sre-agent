@@ -1,24 +1,24 @@
-"""Unit tests for the AgentEventEmitter, AgentToolFilter, and AgentSteering mixins."""
+"""Unit tests for the EventEmitterMixin, ToolFilterMixin, and SteeringMixin mixins."""
 
 from __future__ import annotations
 
 from collections import deque
 from typing import Any
 
-from core.agent_mixins import AgentEventEmitter, AgentSteering, AgentToolFilter
+from core.agent.mixins import EventEmitterMixin, SteeringMixin, ToolFilterMixin
 from core.events import RuntimeEvent, runtime_event_from_tuple
 from core.messages import UserRuntimeMessage
 
 
-class _Emitter(AgentEventEmitter):
+class _Emitter(EventEmitterMixin):
     pass
 
 
-class _Filter(AgentToolFilter):
+class _Filter(ToolFilterMixin):
     pass
 
 
-class _Steering(AgentSteering):
+class _Steering(SteeringMixin):
     def __init__(self) -> None:
         self._steering_messages: deque[str] = deque()
         self._follow_up_messages: deque[str] = deque()
@@ -100,7 +100,7 @@ def test_filter_tools_returns_the_same_list() -> None:
 
 def test_mixins_compose_in_one_class() -> None:
     # A single class can compose both mixins (as ConnectedInvestigationAgent does).
-    class _Composed(AgentEventEmitter, AgentToolFilter):
+    class _Composed(EventEmitterMixin, ToolFilterMixin):
         pass
 
     seen: list[tuple[str, dict[str, Any]]] = []

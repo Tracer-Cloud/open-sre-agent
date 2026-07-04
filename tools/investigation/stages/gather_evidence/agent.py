@@ -16,7 +16,7 @@ from core import (
     summarise,
     tool_source,
 )
-from core.agent_mixins import AgentEventEmitter, AgentToolFilter
+from core.agent.mixins import EventEmitterMixin, ToolFilterMixin
 from core.context.state import InvestigationState
 from core.context.state.evidence import EvidenceEntry
 from core.llm.agent_llm_client import get_agent_llm
@@ -55,14 +55,14 @@ def _mark_messages(messages: list[dict[str, Any]], key: str) -> None:
         msg[key] = True
 
 
-class ConnectedInvestigationAgent(AgentEventEmitter, AgentToolFilter):
+class ConnectedInvestigationAgent(EventEmitterMixin, ToolFilterMixin):
     """ReAct loop scoped to the tools enabled by connected integrations.
 
     Owns a specialised investigation ``run()`` — seed calls, evidence collection,
     duplicate detection, and stagnation handling — assembling its config (LLM,
     tools, prompt, resolved integrations) inline from ``state``. Uses two agent
-    hooks: :class:`~core.agent_mixins.AgentEventEmitter` for event dispatch and
-    :class:`~core.agent_mixins.AgentToolFilter` for tool narrowing.
+    hooks: :class:`~core.agent.mixins.EventEmitterMixin` for event dispatch and
+    :class:`~core.agent.mixins.ToolFilterMixin` for tool narrowing.
     """
 
     def _should_accept_conclusion(

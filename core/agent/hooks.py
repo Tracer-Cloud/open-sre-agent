@@ -2,7 +2,7 @@
 fail-open error handling so a broken hook never breaks the agent loop.
 
 ``Agent`` owns one :class:`AgentProviderHookDelegate` per run and the loop
-(``core.agent_loop.run_react_loop``) calls it at each of the four seams
+(``core.agent.loop.run_react_loop``) calls it at each of the four seams
 (context transform, provider request, provider response, LLM conversion)
 instead of talking to ``ProviderHooks`` directly.
 """

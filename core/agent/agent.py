@@ -1,7 +1,7 @@
 """Stateful ReAct agent — the shared primitive for all tool-calling surfaces.
 
 ``Agent`` is a facade + hook binder: ``__init__`` stores construction-time
-config and ``run()`` wires per-run context into ``core.agent_loop.run_react_loop``,
+config and ``run()`` wires per-run context into ``core.agent.loop.run_react_loop``,
 the actual algorithm. See ``core/agent_harness/AGENTS.md`` for the direct-answer
 (no-tools) shape and the harness construction pattern.
 """
@@ -13,9 +13,10 @@ from collections import deque
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
-from core.agent_hooks import AgentProviderHookDelegate
-from core.agent_loop import AgentRunContext, AgentRunResult, run_react_loop
-from core.agent_mixins import AgentEventEmitter, AgentSteering, AgentToolFilter
+from core.agent.hooks import AgentProviderHookDelegate
+from core.agent.loop import run_react_loop
+from core.agent.mixins import EventEmitterMixin, SteeringMixin, ToolFilterMixin
+from core.agent.run_io import AgentRunInput, AgentRunResult
 from core.events import RuntimeEventCallback, TupleEventCallback
 from core.execution import ToolExecutionHooks
 from core.llm import agent_llm_client
@@ -39,7 +40,7 @@ if TYPE_CHECKING:
     )
 
 
-class Agent[RuntimeToolT: RuntimeTool](AgentEventEmitter, AgentToolFilter, AgentSteering):
+class Agent[RuntimeToolT: RuntimeTool](EventEmitterMixin, ToolFilterMixin, SteeringMixin):
     """Stateful, configurable ReAct agent — the tool-calling agent shape.
 
     Wires per-run context into ``run_react_loop`` and exposes hook methods so
@@ -177,7 +178,7 @@ class Agent[RuntimeToolT: RuntimeTool](AgentEventEmitter, AgentToolFilter, Agent
             raise ValueError("Agent.run requires initial_messages or agent_context.")
 
         assert self._llm is not None, "Agent.run: llm must be set before the loop"
-        run_context = AgentRunContext[RuntimeToolT](
+        run_context = AgentRunInput[RuntimeToolT](
             llm=self._llm,
             system=system,
             tools=tools,

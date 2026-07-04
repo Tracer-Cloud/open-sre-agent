@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any
 
-from core.agent_hooks import AgentProviderHookDelegate
+from core.agent.hooks import AgentProviderHookDelegate
 from core.messages import MessageFormatter, UserRuntimeMessage
 from core.provider import ProviderHooks, ProviderRequest
 
