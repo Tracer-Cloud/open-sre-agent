@@ -73,12 +73,20 @@ For self-hosted Prefect Server, set `api_url` to your server's API endpoint (no 
 opensre integrations verify prefect
 ```
 
-Expected output on success:
+Expected output on success (self-hosted, `api_url` set):
 
 ```
 Service: prefect
 Status:  passed
 Detail:  Configured for Prefect at http://prefect-server:4200/api.
+```
+
+For Prefect Cloud (only `api_key` set, no `api_url`):
+
+```
+Service: prefect
+Status:  passed
+Detail:  Configured for Prefect at cloud.
 ```
 
 This is a configuration-presence check (`api_url` or `api_key` is set) rather than a live API call.
