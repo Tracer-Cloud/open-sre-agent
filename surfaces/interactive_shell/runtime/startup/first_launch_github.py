@@ -84,6 +84,8 @@ def should_require_github_login() -> bool:
 
 def clear_github_login_deferral() -> None:
     """Clear a saved skip so removing GitHub can re-prompt on the next launch."""
+    if not read_github_login_deferred():
+        return
     write_github_login_deferred(False)
 
 
@@ -156,20 +158,27 @@ def _sleep_until_or_cancel(seconds: float) -> None:
         return
 
     import select
+    import termios
+    import tty
 
     from surfaces.interactive_shell.ui.components.key_reader import read_key_unix
 
-    deadline = time.monotonic() + seconds
     fd = sys.stdin.fileno()
-    while time.monotonic() < deadline:
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            return
-        ready, _, _ = select.select([fd], [], [], min(remaining, 0.15))
-        if not ready:
-            continue
-        if read_key_unix() == "cancel":
-            raise KeyboardInterrupt
+    old_attrs = termios.tcgetattr(fd)  # type: ignore[attr-defined]
+    try:
+        tty.setraw(fd)  # type: ignore[attr-defined]
+        deadline = time.monotonic() + seconds
+        while time.monotonic() < deadline:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return
+            ready, _, _ = select.select([fd], [], [], min(remaining, 0.15))
+            if not ready:
+                continue
+            if read_key_unix() == "cancel":
+                raise KeyboardInterrupt
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_attrs)  # type: ignore[attr-defined]
 
 
 def _offer_github_login(_console: Console) -> bool:

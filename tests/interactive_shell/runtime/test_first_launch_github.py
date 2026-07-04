@@ -230,6 +230,28 @@ def test_orchestrator_retries_until_success(monkeypatch: pytest.MonkeyPatch) -> 
     assert calls["n"] == 2
 
 
+def test_clear_github_login_deferral_noop_when_not_deferred(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(flg, "read_github_login_deferred", lambda: False)
+    writes: list[bool] = []
+    monkeypatch.setattr(flg, "write_github_login_deferred", writes.append)
+
+    flg.clear_github_login_deferral()
+
+    assert writes == []
+
+
+def test_clear_github_login_deferral_clears_when_deferred(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(flg, "read_github_login_deferred", lambda: True)
+    writes: list[bool] = []
+    monkeypatch.setattr(flg, "write_github_login_deferred", writes.append)
+
+    flg.clear_github_login_deferral()
+
+    assert writes == [False]
+
+
 def test_sleep_until_or_cancel_raises_on_escape(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(flg.os, "name", "posix")
     monkeypatch.setattr(flg.sys.stdin, "isatty", lambda: True)
@@ -237,6 +259,13 @@ def test_sleep_until_or_cancel_raises_on_escape(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr(
         "surfaces.interactive_shell.ui.components.key_reader.read_key_unix",
         lambda **_kwargs: "cancel",
+    )
+    monkeypatch.setattr("termios.tcgetattr", lambda _fd: [0] * 7)
+    monkeypatch.setattr("tty.setraw", lambda _fd: None)
+    restored: list[bool] = []
+    monkeypatch.setattr(
+        "termios.tcsetattr",
+        lambda _fd, _when, _attrs: restored.append(True),
     )
 
     def _ready(
@@ -248,3 +277,5 @@ def test_sleep_until_or_cancel_raises_on_escape(monkeypatch: pytest.MonkeyPatch)
 
     with pytest.raises(KeyboardInterrupt):
         flg._sleep_until_or_cancel(1.0)
+
+    assert restored == [True]
