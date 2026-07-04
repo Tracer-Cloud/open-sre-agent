@@ -1,6 +1,6 @@
 """The callback contract the ReAct loop drives.
 
-``run_react_loop`` depends only on this ``AgentLoopHost`` and an
+``run_react_loop`` depends only on this ``LoopHost`` and an
 ``AgentRunInput`` — any object implementing these methods can drive the loop.
 """
 
@@ -15,12 +15,12 @@ from core.provider import ProviderRequest
 from core.types import RuntimeTool
 
 
-class AgentLoopHost[RuntimeToolT: RuntimeTool](Protocol):
+class LoopHost[RuntimeToolT: RuntimeTool](Protocol):
     """The narrow set of hooks ``run_react_loop`` calls back into.
 
     ``core.agent.Agent`` implements this via ``EventEmitterMixin``,
     ``ToolFilterMixin``, ``SteeringMixin`` (``core.agent.mixins``), and its own
-    ``_should_accept_conclusion`` override hook plus thin ``AgentProviderHookDelegate``
+    ``_should_accept_conclusion`` override hook plus thin ``ProviderHookDelegate``
     forwarders (``_transform_context``/``_convert_to_llm``/``_before_request``/
     ``_after_response``). The provider-hook delegate's concrete type is
     deliberately *not* part of this contract — only the method calls are —
@@ -59,4 +59,4 @@ class AgentLoopHost[RuntimeToolT: RuntimeTool](Protocol):
         pass
 
 
-__all__ = ["AgentLoopHost"]
+__all__ = ["LoopHost"]

@@ -17,7 +17,7 @@ from core.types import RuntimeTool
 
 @dataclass
 class AgentRunResult:
-    """Outcome of :func:`core.agent.loop.run_react_loop` (returned as-is by ``Agent.run``).
+    """Outcome of :func:`core.agent.react_loop.run_react_loop` (returned as-is by ``Agent.run``).
 
     ``messages`` is the full conversation, ``final_text`` is the assistant's
     last no-tool-call turn, ``executed`` is the historical ordered list of raw

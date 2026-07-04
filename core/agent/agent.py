@@ -1,7 +1,7 @@
 """Stateful ReAct agent — the shared primitive for all tool-calling surfaces.
 
 ``Agent`` is a facade + hook binder: ``__init__`` stores construction-time
-config and ``run()`` wires per-run context into ``core.agent.loop.run_react_loop``,
+config and ``run()`` wires per-run context into ``core.agent.react_loop.run_react_loop``,
 the actual algorithm. See ``core/agent_harness/AGENTS.md`` for the direct-answer
 (no-tools) shape and the harness construction pattern.
 """
@@ -13,9 +13,9 @@ from collections import deque
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
-from core.agent.hooks import AgentProviderHookDelegate
-from core.agent.loop import run_react_loop
 from core.agent.mixins import EventEmitterMixin, SteeringMixin, ToolFilterMixin
+from core.agent.provider_hooks import ProviderHookDelegate
+from core.agent.react_loop import run_react_loop
 from core.agent.run_io import AgentRunInput, AgentRunResult
 from core.events import RuntimeEventCallback, TupleEventCallback
 from core.execution import ToolExecutionHooks
@@ -136,7 +136,7 @@ class Agent[RuntimeToolT: RuntimeTool](EventEmitterMixin, ToolFilterMixin, Steer
         self._on_runtime_event = on_runtime_event
         self._tool_hooks = tool_hooks or ToolExecutionHooks()
         self._tool_resources = dict(tool_resources or {})
-        self._hooks = AgentProviderHookDelegate(provider_hooks or ProviderHooks())
+        self._hooks = ProviderHookDelegate(provider_hooks or ProviderHooks())
         self._steering_messages: deque[str] = deque()
         self._follow_up_messages: deque[str] = deque()
 
@@ -202,8 +202,8 @@ class Agent[RuntimeToolT: RuntimeTool](EventEmitterMixin, ToolFilterMixin, Steer
         """
         return True, None
 
-    # Thin forwarders to ``self._hooks`` (an AgentProviderHookDelegate). Kept as
-    # methods rather than an exposed attribute so AgentLoopHost's contract is
+    # Thin forwarders to ``self._hooks`` (a ProviderHookDelegate). Kept as
+    # methods rather than an exposed attribute so LoopHost's contract is
     # the four calls, not this concrete delegate type — see agent_loop.py.
     def _transform_context(self, messages: list[RuntimeMessage]) -> list[RuntimeMessage]:
         return self._hooks.transform_context(messages)

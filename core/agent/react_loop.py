@@ -2,7 +2,7 @@
 
 ``ReactLoop`` is the algorithm ``core.agent.Agent`` wires context into. It has
 no direct coupling to ``Agent`` — it takes an ``AgentRunInput``
-(``core.agent.run_io``) and an ``AgentLoopHost`` (``core.agent.host``): any
+(``core.agent.run_io``) and an ``LoopHost`` (``core.agent.loop_host``): any
 object implementing that host can drive the loop. ``run_react_loop`` is the
 thin functional entry point.
 """
@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from core.agent.host import AgentLoopHost
+from core.agent.loop_host import LoopHost
 from core.agent.run_io import AgentRunInput, AgentRunResult
 from core.context_budget import context_budget_ceiling_for_model, enforce_context_budget
 from core.events import (
@@ -48,14 +48,14 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
     """The ReAct loop: think -> call tools -> observe, over one ``AgentRunInput``.
 
     Holds the per-run state as fields and drives it to completion in ``run()``.
-    Each step calls back into the ``AgentLoopHost`` for its seams — events, tool
+    Each step calls back into the ``LoopHost`` for its seams — events, tool
     filtering, steering, conclusion acceptance, and the provider hooks.
     """
 
     def __init__(
         self,
         run_input: AgentRunInput[RuntimeToolT],
-        host: AgentLoopHost[RuntimeToolT],
+        host: LoopHost[RuntimeToolT],
     ) -> None:
         self._host = host
         self._llm = run_input.llm
@@ -312,7 +312,7 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
 
 def run_react_loop[RuntimeToolT: RuntimeTool](
     run_input: AgentRunInput[RuntimeToolT],
-    host: AgentLoopHost[RuntimeToolT],
+    host: LoopHost[RuntimeToolT],
 ) -> AgentRunResult:
     """Run the think -> call-tools -> observe loop and return its outcome."""
     return ReactLoop(run_input, host).run()

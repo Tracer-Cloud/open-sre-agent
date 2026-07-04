@@ -22,12 +22,12 @@ Name a file for the concept it holds, not with a generic bucket word.
 
 ```
 core/agent/
-  agent.py      # the Agent facade
-  loop.py       # ReactLoop + run_react_loop  (the algorithm)
-  host.py       # AgentLoopHost               (the callback contract)
-  run_io.py     # AgentRunInput, AgentRunResult (the run boundary's I/O)
-  mixins.py     # the reusable *Mixin behaviors
-  hooks.py      # AgentProviderHookDelegate
+  agent.py          # the Agent facade
+  react_loop.py     # ReactLoop + run_react_loop  (the algorithm)
+  loop_host.py      # LoopHost                    (the callback contract)
+  run_io.py         # AgentRunInput, AgentRunResult (the run boundary's I/O)
+  mixins.py         # the reusable *Mixin behaviors
+  provider_hooks.py # ProviderHookDelegate
 ```
 
 ## Type naming
@@ -37,7 +37,7 @@ core/agent/
   `SteeringMixin`.
 - **Protocols** are named by their role, not with a `Protocol` suffix — matches
   the stdlib (`Iterable`, `SupportsRead`) and `agent_harness/ports.py`
-  (`OutputSink`, `SessionStore`). `AgentLoopHost`, not `AgentLoopHostProtocol`.
+  (`OutputSink`, `SessionStore`). `LoopHost`, not `LoopHostProtocol`.
 - **Do not prefix a type with its own package name.** Inside `core/agent/`, a
   class is `EventEmitterMixin`, not `AgentEventEmitter` — the namespace already
   says "agent."
@@ -58,8 +58,8 @@ Use fully qualified paths in code; keep short mental labels for docs.
 | Mental label | Import |
 | --- | --- |
 | ReAct run I/O | `from core.agent.run_io import AgentRunInput, AgentRunResult` |
-| ReAct loop | `from core.agent.loop import run_react_loop` |
-| Loop callback contract | `from core.agent.host import AgentLoopHost` |
+| ReAct loop | `from core.agent.react_loop import run_react_loop` |
+| Loop callback contract | `from core.agent.loop_host import LoopHost` |
 | The agent primitive | `from core.agent import Agent` |
 | Harness turn snapshot | `from core.agent_harness.models.turn_context import TurnContext` |
 

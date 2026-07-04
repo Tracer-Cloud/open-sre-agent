@@ -1,8 +1,8 @@
 """Provider-hook delegate: applies :class:`~core.provider.ProviderHooks` with
 fail-open error handling so a broken hook never breaks the agent loop.
 
-``Agent`` owns one :class:`AgentProviderHookDelegate` per run and the loop
-(``core.agent.loop.run_react_loop``) calls it at each of the four seams
+``Agent`` owns one :class:`ProviderHookDelegate` per run and the loop
+(``core.agent.react_loop.run_react_loop``) calls it at each of the four seams
 (context transform, provider request, provider response, LLM conversion)
 instead of talking to ``ProviderHooks`` directly.
 """
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class AgentProviderHookDelegate:
+class ProviderHookDelegate:
     """Wraps :class:`ProviderHooks`; swallows hook exceptions and logs instead."""
 
     hooks: ProviderHooks
@@ -60,4 +60,4 @@ class AgentProviderHookDelegate:
             return response
 
 
-__all__ = ["AgentProviderHookDelegate"]
+__all__ = ["ProviderHookDelegate"]
