@@ -1,11 +1,13 @@
-"""Unit tests for the AgentEventEmitter and AgentToolFilter mixins."""
+"""Unit tests for the AgentEventEmitter, AgentToolFilter, and AgentSteering mixins."""
 
 from __future__ import annotations
 
+from collections import deque
 from typing import Any
 
-from core.agent_mixins import AgentEventEmitter, AgentToolFilter
+from core.agent_mixins import AgentEventEmitter, AgentSteering, AgentToolFilter
 from core.events import RuntimeEvent, runtime_event_from_tuple
+from core.messages import UserRuntimeMessage
 
 
 class _Emitter(AgentEventEmitter):
@@ -14,6 +16,12 @@ class _Emitter(AgentEventEmitter):
 
 class _Filter(AgentToolFilter):
     pass
+
+
+class _Steering(AgentSteering):
+    def __init__(self) -> None:
+        self._steering_messages: deque[str] = deque()
+        self._follow_up_messages: deque[str] = deque()
 
 
 def test_default_callbacks_are_none() -> None:
@@ -103,3 +111,51 @@ def test_mixins_compose_in_one_class() -> None:
 
     tools: list[Any] = [1, 2, 3]
     assert c._filter_tools(tools) is tools
+
+
+def test_steer_queues_message_drained_into_transcript() -> None:
+    s = _Steering()
+    s.steer("look at the newest deploy first")
+    messages: list[Any] = []
+    s._drain_steering_messages(messages)
+    assert len(messages) == 1
+    assert isinstance(messages[0], UserRuntimeMessage)
+    assert messages[0].content == "look at the newest deploy first"
+
+
+def test_steer_ignores_blank_message() -> None:
+    s = _Steering()
+    s.steer("   ")
+    messages: list[Any] = []
+    s._drain_steering_messages(messages)
+    assert messages == []
+
+
+def test_drain_steering_messages_empties_the_queue() -> None:
+    s = _Steering()
+    s.steer("first")
+    s.steer("second")
+    messages: list[Any] = []
+    s._drain_steering_messages(messages)
+    assert [m.content for m in messages] == ["first", "second"]
+    more: list[Any] = []
+    s._drain_steering_messages(more)
+    assert more == []
+
+
+def test_follow_up_pop_returns_none_when_empty() -> None:
+    s = _Steering()
+    assert s._pop_follow_up_message() is None
+
+
+def test_follow_up_pop_returns_queued_message_once() -> None:
+    s = _Steering()
+    s.follow_up("now summarize the remediation")
+    assert s._pop_follow_up_message() == "now summarize the remediation"
+    assert s._pop_follow_up_message() is None
+
+
+def test_follow_up_ignores_blank_message() -> None:
+    s = _Steering()
+    s.follow_up("  ")
+    assert s._pop_follow_up_message() is None

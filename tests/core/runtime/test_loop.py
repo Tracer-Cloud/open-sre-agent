@@ -21,6 +21,7 @@ from core.messages import (
     ToolResultRuntimeMessage,
     UserRuntimeMessage,
 )
+from core.provider import ProviderHooks
 from core.tool_framework.registered_tool import RegisteredTool
 from core.types import AgentTool, AgentToolContext
 
@@ -201,13 +202,18 @@ def test_run_records_final_system_prompt() -> None:
 
 
 def test_run_records_system_prompt_edited_by_before_provider_request_hook() -> None:
-    class EditingAgent(Agent):
-        def _before_provider_request(self, request: Any) -> Any:
-            return replace(request, system=request.system + " [edited]")
-
     llm = FakeLLM(iter([_text_response("done")]))
-    agent = EditingAgent(
-        llm=llm, system="sys", tools=[], resolved_integrations={}, max_iterations=1
+    agent = Agent(
+        llm=llm,
+        system="sys",
+        tools=[],
+        resolved_integrations={},
+        max_iterations=1,
+        provider_hooks=ProviderHooks(
+            before_provider_request=lambda request: replace(
+                request, system=request.system + " [edited]"
+            )
+        ),
     )
 
     result = agent.run([{"role": "user", "content": "hello"}])

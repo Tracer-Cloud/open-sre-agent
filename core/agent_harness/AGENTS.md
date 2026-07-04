@@ -180,8 +180,8 @@ Before opening or merging an agent PR, confirm:
    entrypoint or rename a shape seam.
 
 **Read order for new code:** this file → `docs/agent-context-data-stores.md` →
-`agents/turn_orchestrator.py` (`run_turn`) → `core/agent.py` (tool-calling loop
-only).
+`agents/turn_orchestrator.py` (`run_turn`) → `core/agent.py` (facade + wiring)
+→ `core/agent_loop.py` (`run_react_loop`, the tool-calling algorithm).
 
 ## Investigation agent — the tool-calling shape with a custom loop
 
@@ -197,3 +197,38 @@ the two agent hooks by composition rather than delegating to the generic
 
 The ReAct loop primitive is `core.agent.Agent`. `agent_harness/` orchestrates it;
 it does not re-implement it. Do not fork the loop here.
+
+## core/agent* module split (Agent is a facade, not the algorithm owner)
+
+`core/agent.py` is a thin facade + hook binder — `Agent.__init__` stores
+construction-time config and `Agent.run()` resolves per-run context (from
+`agent_context=` or `initial_messages=`) and hands it to
+`core.agent_loop.run_react_loop`, which owns the actual think → call-tools →
+observe algorithm:
+
+- `core/agent_mixins.py` — `AgentEventEmitter` (event dispatch),
+  `AgentToolFilter` (tool-narrowing hook), `AgentSteering` (the
+  `steer`/`follow_up` stop/continue/redirect control-plane). `Agent` composes
+  all three; `ConnectedInvestigationAgent`
+  (`tools/investigation/stages/gather_evidence/agent.py`) composes the first
+  two directly instead of subclassing `Agent`.
+- `core/agent_hooks.py` — `AgentProviderHookDelegate`, a fail-open wrapper
+  around `core.provider.ProviderHooks` (context transform, provider
+  request/response, LLM conversion). A raised hook exception is logged and
+  swallowed; it never breaks the loop.
+- `core/agent_loop.py` — `AgentRunContext` (resolved per-run inputs),
+  `AgentLoopHost` (the `Protocol` `run_react_loop` calls back into — `Agent`
+  implements it via the mixins above plus `_hooks`/`_tool_hooks`), and
+  `run_react_loop` itself. `AgentRunResult` also lives here; `core.agent`
+  re-exports it for the existing `from core.agent import AgentRunResult`
+  import path.
+- `core/agent.py` — the facade: static `dispatch_message_to_headless_agent` /
+  `resolve_integrations` entrypoints, `__init__`, `run()`, and the
+  `_should_accept_conclusion` override hook.
+
+Do not reintroduce hook-method overrides on `Agent` itself (e.g. a subclass
+overriding a private `_before_provider_request`-style method) — customize via
+`provider_hooks=ProviderHooks(...)` at construction instead, which
+`AgentProviderHookDelegate` applies. Subclassing remains the pattern for
+`_filter_tools` and `_should_accept_conclusion`, which are genuine per-agent
+overrides, not seams `ProviderHooks` covers.
