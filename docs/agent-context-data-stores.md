@@ -14,7 +14,7 @@ to look when something diverges between shell, gateway, and headless paths.
 |------------|----------|
 | See live session state (integrations, history, metrics) | `Session` — `core/agent_harness/session/state.py` |
 | See the chat transcript the assistant uses | `session.agent.messages` (`MutableAgentState`) |
-| See what one turn looked like **at turn start** | `TurnContext.from_session(text, session)` |
+| See what one turn looked like **at turn start** | `TurnSnapshot.from_session(text, session)` |
 | Resume or trace a past session | JSONL file — `~/.opensre/sessions/{session_id}.jsonl` |
 | See the **system prompt** sent to `Agent.run` | `AgentRunResult.final_system_prompt` (in-memory) or JSONL `role=system` entries |
 | See the **user-facing composed prompt** for the assistant | Session JSONL `message` user rows, or `~/.config/opensre/prompt_log.jsonl` (shell only) |
@@ -45,11 +45,11 @@ flowchart TB
     subgraph stores [The four data stores]
         S1["1 Session - hub (owner: SessionManager)"]
         S2["2 session.agent = MutableAgentState - transcript only, not read by Agent"]
-        S3["3 TurnContext - immutable snapshot at turn start"]
+        S3["3 TurnSnapshot - immutable snapshot at turn start"]
         S4["4 JSONL session file (owner: SessionStorage)"]
     end
 
-    RT -->|TurnContext.from_session| S3
+    RT -->|TurnSnapshot.from_session| S3
     S1 --- S2
     S1 --> S3
 
@@ -91,7 +91,7 @@ flowchart TB
 |-------|----------------|
 | `Session` | Everything this process remembers |
 | `MutableAgentState` (`session.agent`) | The chat transcript + last tool observation |
-| `TurnContext` | A frozen photo of session state at turn start |
+| `TurnSnapshot` | A frozen photo of session state at turn start |
 | JSONL session file | Durable copy for `/resume`, `/trace`, and audit |
 
 ---
@@ -102,14 +102,14 @@ flowchart TB
 sequenceDiagram
     participant Surface as Shell / Gateway / Headless
     participant TO as run_turn
-    participant TC as TurnContext
+    participant TC as TurnSnapshot
     participant Action as action_agent
     participant Gather as evidence_agent
     participant Answer as stream_answer
     participant JSONL as Session JSONL
 
     Surface->>TO: message + Session
-    TO->>TC: TurnContext.from_session
+    TO->>TC: TurnSnapshot.from_session
     TO->>Action: execute_actions (uses TC)
     alt action handled
         Action->>JSONL: persist_turn_system_prompt (action)
@@ -135,7 +135,7 @@ shell).
 | Name | What it is **not** |
 |------|---------------------|
 | `MutableAgentState` | Not `core.agent.Agent` state; not investigation `AgentState` TypedDict |
-| `TurnContext` | Not `ReplRuntimeContext`, `GroundingContext`, or `ActionToolContext` |
+| `TurnSnapshot` | Not `ReplRuntimeContext`, `GroundingContext`, or `ActionToolContext` |
 | `AgentContextInput` | Not a store — selector output from `select_agent_context_input()` |
 | `Agent.run(runtime_request=…)` | Not used on live shell/gateway paths yet (tests only); production uses `AgentConfig` |
 | `PromptRecorder` | Not the system prompt — records user prompt + assistant response (shell telemetry) |
@@ -186,21 +186,21 @@ hydrated by `SessionResolver` before each turn.
 | `record_turn()` | Orchestrator appends to `cli_agent_messages` directly instead |
 
 **Important:** `core.agent.Agent` does **not** read `MutableAgentState`. Tools
-and system prompts are assembled per turn via `TurnContext` + `AgentConfig`.
+and system prompts are assembled per turn via `TurnSnapshot` + `AgentConfig`.
 
 **Follow-up:** slim the class to transcript + observation only (issue #3434).
 
 ---
 
-## Store 3 — `TurnContext` (unified)
+## Store 3 — `TurnSnapshot` (unified)
 
-**File:** `core/agent_harness/models/turn_context.py`  
-**There is exactly one type** — no `ShellTurnContext` or surface variants.
+**File:** `core/agent_harness/models/turn_snapshot.py`  
+**There is exactly one type** — no `ShellTurnSnapshot` or surface variants.
 
 Built once per turn:
 
 ```python
-turn_ctx = TurnContext.from_session(text, session)
+turn_snapshot = TurnSnapshot.from_session(text, session)
 ```
 
 Passed to action prompts, assistant prompts, and shell adapters. The live
@@ -221,10 +221,10 @@ Passed to action prompts, assistant prompts, and shell adapters. The live
 | `working_directory`, `terminal_capabilities`, … | **No** (reserved / unused) | Do not rely on these |
 
 Runtime-request fields are empty in production because `MutableAgentState` is
-never populated with tools/prompt — builders read `TurnContext` snapshot fields
+never populated with tools/prompt — builders read `TurnSnapshot` snapshot fields
 and assemble `AgentConfig` separately.
 
-**Gather alignment:** prefer `build_gather_system_prompt_from_turn_context(turn_ctx)`
+**Gather alignment:** prefer `build_gather_system_prompt_from_turn_snapshot(turn_snapshot)`
 when a snapshot exists; the session-only overload remains for adapters.
 
 ---
@@ -354,7 +354,7 @@ path.unlink()
 |-------|---------|--------|
 | Action | `build_action_system_prompt` | `core/agent_harness/prompts/` |
 | Assistant | `build_assistant_system_prompt` | `core/agent_harness/prompts/` |
-| Gather | `build_gather_system_prompt` / `_from_turn_context` | `core/agent_harness/prompts/gather.py` |
+| Gather | `build_gather_system_prompt` / `_from_turn_snapshot` | `core/agent_harness/prompts/gather.py` |
 | Investigation | `build_investigation_system_prompt` | `tools/investigation/stages/gather_evidence/prompt.py` |
 
 The assistant path is the **direct answer** shape (no tools): it streams via
@@ -374,5 +374,5 @@ The two shapes are described in `core/agent_harness/AGENTS.md`.
 
 1. Slim `MutableAgentState` to transcript + observation only
 2. Wire assistant composed prompt split into system vs user blocks in JSONL
-3. Route production action/gather through `Agent.run(runtime_request=TurnContext)` instead of parallel `AgentConfig` assembly
-4. Populate or remove reserved `TurnContext` shell fields (`working_directory`, etc.)
+3. Route production action/gather through `Agent.run(runtime_request=TurnSnapshot)` instead of parallel `AgentConfig` assembly
+4. Populate or remove reserved `TurnSnapshot` shell fields (`working_directory`, etc.)

@@ -9,7 +9,7 @@ a frozen view, and a package's purpose from its name alone.
 | Term | Means | Example |
 | --- | --- | --- |
 | **State** | Mutable investigation/session facts that evolve during a run | `AgentState`, `InvestigationState` |
-| **Snapshot** | A frozen view captured at a boundary (turn start, run start) | `TurnContext` |
+| **Snapshot** | A frozen view captured at a boundary (turn start, run start) | `TurnSnapshot` |
 | **RunInput** / **RunResult** | The input to and output from one `Agent.run()` boundary | `AgentRunInput`, `AgentRunResult` |
 | **Slice** | A typed segment of a state dict | `DiagnosisSlice`, `AlertInputSlice` |
 | **Resources** | Handles passed into tool executors for one call | `ToolCallResources` |
@@ -45,7 +45,7 @@ core/agent/
 ## Anti-patterns (do not add in new code)
 
 - `context.py` at `core/` or `core/agent/` root — "context" is overloaded across
-  the repo. Name the concept (`run_io.py`, `turn_context.py`).
+  the repo. Name the concept (`run_io.py`, `turn_snapshot.py`).
 - `models.py` when the file holds only run I/O — too vague. Say what the models
   are (`run_io.py`).
 - `*Context` without a domain prefix when another `*Context` already exists.
@@ -61,7 +61,7 @@ Use fully qualified paths in code; keep short mental labels for docs.
 | ReAct loop | `from core.agent.react_loop import run_react_loop` |
 | Loop callback contract | `from core.agent.loop_host import LoopHost` |
 | The agent primitive | `from core.agent import Agent` |
-| Harness turn snapshot | `from core.agent_harness.models.turn_context import TurnContext` |
+| Harness turn snapshot | `from core.agent_harness.models.turn_snapshot import TurnSnapshot` |
 
 Re-export from a package `__init__.py` only for its single canonical symbol
 (`Agent`), not everything — avoid `from core.agent import *`-style ambiguity.

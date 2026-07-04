@@ -40,11 +40,11 @@ responsibility-scoped subpackage.
   - `turn_orchestrator.py` — `run_turn`: the three-path routing
     (summarize-observation / handled / gather+answer) and the conversational
     answer. Resolves integrations **once** at the top of the turn and stores
-    them on the frozen `turn_ctx`, so `turn_ctx.resolved_integrations` is the
+    them on the frozen `turn_snapshot`, so `turn_snapshot.resolved_integrations` is the
     single source of truth for what the turn knows. Downstream components read
-    `turn_ctx.resolved_integrations` (e.g. `action_agent._resolved_integrations_for_turn`
+    `turn_snapshot.resolved_integrations` (e.g. `action_agent._resolved_integrations_for_turn`
     prefers it) rather than re-resolving. Do NOT reintroduce a per-component
-    integration resolution when `turn_ctx` already carries it.
+    integration resolution when `turn_snapshot` already carries it.
   - `evidence_agent.py` — bounded evidence-gather loop. Uses
     `_build_evidence_agent` factory that returns an `AgentConfig` handed to
     `build_agent`.
@@ -53,8 +53,8 @@ responsibility-scoped subpackage.
     API / test runs. `tools` is required — surfaces that want a text-only
     turn pass `NullToolProvider()` explicitly.
 - `models/` — neutral, surface-agnostic data shapes:
-  - `turn_context.py` — `TurnContext`, the immutable per-turn snapshot (built from any
-    object satisfying `TurnContextSource`, not `Session` directly).
+  - `turn_snapshot.py` — `TurnSnapshot`, the immutable per-turn snapshot (built from any
+    object satisfying `TurnSnapshotSource`, not `Session` directly).
   - `turn_results.py` — neutral turn-result models.
 - `providers/` — core-owned default port implementations and provider resolution
   (`default_providers.py`, `default_prompt_context.py`, `provider_models.py`).
@@ -142,7 +142,7 @@ from the live chat session. When ``Agent.__init__``'s signature changes,
 ## Agent context and data stores
 
 See `docs/agent-context-data-stores.md`. Turn assembly starts in
-``agents/turn_orchestrator.py`` with ``TurnContext.from_session``.
+``agents/turn_orchestrator.py`` with ``TurnSnapshot.from_session``.
 
 **Do NOT** reintroduce per-surface `Agent` subclasses that override
 `build_llm` / `build_system_prompt` / `build_tools` / `resolved_integrations`
