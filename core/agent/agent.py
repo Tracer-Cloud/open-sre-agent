@@ -76,38 +76,31 @@ class Agent[RuntimeToolT: RuntimeTool](EventEmitterMixin, ToolFilterMixin, Steer
     ) -> AgentRunResult:
         """Resolve per-run context and hand it to ``run_react_loop``."""
         if agent_context is not None:
-            agent_context.validate_runtime_request()
-            messages = agent_context.runtime_messages()
-            render_system_prompt = getattr(agent_context, "render_system_prompt", None)
-            if callable(render_system_prompt):
-                system = render_system_prompt()
-            else:
-                system = str(agent_context.system_prompt)
-            tools = list(agent_context.active_tools)
-            resolved = agent_context.resolved_integrations
-            tool_resources = dict(getattr(agent_context, "tool_resources", {}) or {})
-            max_iterations = agent_context.max_iterations
-            if self._llm is None:
-                self._llm = agent_llm_client.get_agent_llm()
+            run_input = self._input_from_request(agent_context)
         elif initial_messages is not None:
-            if self._system is None:
-                raise ValueError("Agent.run: system= must be set at construction.")
-            if self._max_iterations is None:
-                raise ValueError("Agent.run: max_iterations= must be set at construction.")
-            if self._llm is None:
-                self._llm = agent_llm_client.get_agent_llm()
-            system = self._system
-            tools = list(self._tools) if self._tools is not None else []
-            resolved = dict(self._resolved) if self._resolved is not None else {}
-            max_iterations = self._max_iterations
-            messages = MessageFormatter.normalize(initial_messages)
-            tool_resources = dict(self._tool_resources)
+            run_input = self._input_from_messages(initial_messages)
         else:
             raise ValueError("Agent.run requires initial_messages or agent_context.")
+        return run_react_loop(run_input, self)
 
-        assert self._llm is not None, "Agent.run: llm must be set before the loop"
-        run_context = AgentRunInput[RuntimeToolT](
-            llm=self._llm,
+    def _input_from_request(
+        self, agent_context: AgentRuntimeRequest
+    ) -> AgentRunInput[RuntimeToolT]:
+        """Assemble the run input from a fully-resolved per-turn request."""
+        agent_context.validate_runtime_request()
+        messages = agent_context.runtime_messages()
+        render_system_prompt = getattr(agent_context, "render_system_prompt", None)
+        if callable(render_system_prompt):
+            system = render_system_prompt()
+        else:
+            system = str(agent_context.system_prompt)
+        tools = list(agent_context.active_tools)
+        resolved = agent_context.resolved_integrations
+        tool_resources = dict(getattr(agent_context, "tool_resources", {}) or {})
+        max_iterations = agent_context.max_iterations
+        llm = self._ensure_llm()
+        return AgentRunInput[RuntimeToolT](
+            llm=llm,
             system=system,
             tools=tools,
             resolved=resolved,
@@ -115,7 +108,32 @@ class Agent[RuntimeToolT: RuntimeTool](EventEmitterMixin, ToolFilterMixin, Steer
             max_iterations=max_iterations,
             messages=messages,
         )
-        return run_react_loop(run_context, self)
+
+    def _input_from_messages(
+        self, initial_messages: Sequence[RuntimeMessageLike]
+    ) -> AgentRunInput[RuntimeToolT]:
+        """Assemble the run input from raw messages and the construction-time config."""
+        if self._system is None:
+            raise ValueError("Agent.run: system= must be set at construction.")
+        if self._max_iterations is None:
+            raise ValueError("Agent.run: max_iterations= must be set at construction.")
+        llm = self._ensure_llm()
+        return AgentRunInput[RuntimeToolT](
+            llm=llm,
+            system=self._system,
+            tools=list(self._tools) if self._tools is not None else [],
+            resolved=dict(self._resolved) if self._resolved is not None else {},
+            tool_resources=dict(self._tool_resources),
+            max_iterations=self._max_iterations,
+            messages=MessageFormatter.normalize(initial_messages),
+        )
+
+    def _ensure_llm(self) -> Any:
+        """Return the run's LLM, creating the default agent client on first use."""
+        if self._llm is None:
+            self._llm = agent_llm_client.get_agent_llm()
+        assert self._llm is not None, "Agent.run: llm must be set before the loop"
+        return self._llm
 
     def _should_accept_conclusion(
         self,
