@@ -189,8 +189,9 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
     ),
     IntegrationSpec(
         service="jira",
+        has_verifier=True,
         direct_effective=True,
-        verify_order=None,
+        verify_order=50,
     ),
     IntegrationSpec(
         service="discord",
@@ -358,7 +359,7 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
     IntegrationSpec(service="clickhouse", has_verifier=True, verify_order=23),
     IntegrationSpec(service="alicloud", direct_effective=True),
     IntegrationSpec(service="notion"),
-    IntegrationSpec(service="prefect"),
+    IntegrationSpec(service="prefect", has_verifier=True, verify_order=51),
     IntegrationSpec(service="posthog"),
     IntegrationSpec(service="trello"),
     IntegrationSpec(service="rds", setup_order=11),

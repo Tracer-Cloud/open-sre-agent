@@ -44,11 +44,11 @@ class ElasticsearchLogsTool(BaseTool):
             "limit": {"type": "integer", "default": 50},
             "index_pattern": {
                 "type": "string",
-                "description": "Index pattern to search (e.g. 'logs-*'). Defaults to ELASTICSEARCH_INDEX_PATTERN env var or '*'.",
+                "description": "Index pattern to search (e.g. 'logs-*'). Defaults to the configured OpenSearch/Elasticsearch index_pattern or '*'.",
             },
             "url": {
                 "type": "string",
-                "description": "Elasticsearch URL (overrides ELASTICSEARCH_URL env var)",
+                "description": "Elasticsearch/OpenSearch URL (overrides the configured OPENSEARCH_URL)",
             },
             "api_key": {
                 "type": "string",
@@ -67,10 +67,13 @@ class ElasticsearchLogsTool(BaseTool):
     }
 
     def is_available(self, sources: dict) -> bool:
-        return bool(sources.get("elasticsearch", {}).get("connection_verified"))
+        # Shares the "opensearch" source: same client, same credentials (see
+        # docs/opensearch.mdx — configuring OpenSearch/Elasticsearch once
+        # enables both the analytics tool and this log-search tool).
+        return bool(sources.get("opensearch", {}).get("connection_verified"))
 
     def extract_params(self, sources: dict) -> dict:
-        es = sources.get("elasticsearch", {})
+        es = sources.get("opensearch", {})
         return {
             "query": es.get("default_query", "*"),
             "time_range_minutes": es.get("time_range_minutes", 60),

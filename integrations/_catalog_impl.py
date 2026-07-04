@@ -80,6 +80,7 @@ from integrations.postgresql import build_postgresql_config
 from integrations.postgresql import classify as _classify_postgresql
 from integrations.posthog_mcp import DEFAULT_POSTHOG_MCP_URL, build_posthog_mcp_config
 from integrations.posthog_mcp import classify as _classify_posthog_mcp
+from integrations.prefect import classify as _classify_prefect
 from integrations.rabbitmq import build_rabbitmq_config
 from integrations.rabbitmq import classify as _classify_rabbitmq
 from integrations.rds import classify as _classify_rds
@@ -281,6 +282,7 @@ _CLASSIFIERS: dict[str, _ClassifyFn] = {
     "tempo": _classify_tempo,
     "temporal": _classify_temporal,
     "smtp": _classify_smtp,
+    "prefect": _classify_prefect,
 }
 
 
