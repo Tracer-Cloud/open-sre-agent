@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import io
 import re
 import subprocess
@@ -883,6 +884,112 @@ def _extract_glyph(ansi_text: str, frames: tuple[str, ...]) -> str:
     return ""
 
 
+# ── Spinner ticker scheduling tests ──────────────────────────────────────────
+
+
+class TestSpinnerTicker:
+    """``BackgroundTaskManager._spinner_ticker`` drives prompt redraws so the
+    braille glyph cycles while streaming is active.
+
+    The check-before-sleep ordering means the invalidator is called without
+    waiting a full tick first — important because the LLM turn may start and
+    complete before the old sleep-first code would have fired even once.
+    """
+
+    def test_ticker_calls_invalidator_immediately_when_streaming(self) -> None:
+        """Invalidator is called on the first iteration (before sleep) if streaming."""
+        from surfaces.interactive_shell.runtime.background.workers import BackgroundTaskManager
+        from core.agent_harness.session import Session
+
+        calls: list[int] = []
+
+        async def _run() -> None:
+            state = loop_state.ReplState()
+            spinner = loop_state.SpinnerState()
+            spinner.start()  # streaming = True before ticker starts
+
+            manager = BackgroundTaskManager(
+                session=Session(),
+                state=state,
+                spinner=spinner,
+                inbox=None,
+                prompt_invalidator=lambda: calls.append(1),
+            )
+
+            ticker = asyncio.create_task(manager._spinner_ticker())
+            # Yield once so ticker runs its first iteration check
+            await asyncio.sleep(0)
+            ticker.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await ticker
+
+            assert len(calls) >= 1, "invalidator must fire on the first iteration, before any sleep"
+
+        asyncio.run(_run())
+
+    def test_ticker_skips_invalidator_when_not_streaming(self) -> None:
+        """No invalidation when spinner is idle."""
+        from surfaces.interactive_shell.runtime.background.workers import BackgroundTaskManager
+        from core.agent_harness.session import Session
+
+        calls: list[int] = []
+
+        async def _run() -> None:
+            state = loop_state.ReplState()
+            spinner = loop_state.SpinnerState()
+            # streaming remains False
+
+            manager = BackgroundTaskManager(
+                session=Session(),
+                state=state,
+                spinner=spinner,
+                inbox=None,
+                prompt_invalidator=lambda: calls.append(1),
+            )
+
+            ticker = asyncio.create_task(manager._spinner_ticker())
+            await asyncio.sleep(0)
+            ticker.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await ticker
+
+            assert calls == [], "invalidator must not fire when spinner is idle"
+
+        asyncio.run(_run())
+
+    def test_ticker_fires_repeatedly_at_100ms_interval(self) -> None:
+        """Over a 350 ms window the invalidator is called at least 3 times."""
+        from surfaces.interactive_shell.runtime.background.workers import BackgroundTaskManager
+        from core.agent_harness.session import Session
+
+        calls: list[float] = []
+
+        async def _run() -> None:
+            state = loop_state.ReplState()
+            spinner = loop_state.SpinnerState()
+            spinner.start()
+
+            manager = BackgroundTaskManager(
+                session=Session(),
+                state=state,
+                spinner=spinner,
+                inbox=None,
+                prompt_invalidator=lambda: calls.append(time.monotonic()),
+            )
+
+            ticker = asyncio.create_task(manager._spinner_ticker())
+            await asyncio.sleep(0.35)
+            ticker.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await ticker
+
+            assert len(calls) >= 3, (
+                f"expected ≥3 invalidations in 350 ms, got {len(calls)}"
+            )
+
+        asyncio.run(_run())
+
+
 # ── Streaming-console adapter tests ──────────────────────────────────────────
 
 
@@ -926,6 +1033,37 @@ class TestStreamingConsole:
         assert console.cancel_requested is True
         cancel.clear()
         assert console.cancel_requested is False
+
+    def test_request_prompt_refresh_calls_invalidator(self) -> None:
+        """request_prompt_refresh() must invoke the prompt_invalidator callable."""
+        import threading as _threading
+
+        spinner = loop_state.SpinnerState()
+        calls: list[int] = []
+        console = StreamingConsole(
+            spinner,
+            _threading.Event(),
+            prompt_invalidator=lambda: calls.append(1),
+            highlight=False,
+            force_terminal=True,
+            color_system=None,
+        )
+        console.request_prompt_refresh()
+        assert calls == [1]
+
+    def test_request_prompt_refresh_is_noop_without_invalidator(self) -> None:
+        """request_prompt_refresh() must not raise when no invalidator is wired."""
+        import threading as _threading
+
+        spinner = loop_state.SpinnerState()
+        console = StreamingConsole(
+            spinner,
+            _threading.Event(),
+            highlight=False,
+            force_terminal=True,
+            color_system=None,
+        )
+        console.request_prompt_refresh()  # must not raise
 
     def test_blank_print_resets_column_without_preparing_new_line(
         self,
