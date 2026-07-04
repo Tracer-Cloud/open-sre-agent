@@ -36,7 +36,7 @@ responsibility-scoped subpackage.
 - `agents/` — the turn drivers that orchestrate `core.agent.Agent`:
   - `action_agent.py` — `run_action_agent_turn`: one action tool-calling turn
     over the ports. Uses `_build_action_agent` factory that returns an
-    `AgentConfig` handed to `build_agent`.
+    `ActionTurnPlan`.
   - `turn_orchestrator.py` — `run_turn`: the three-path routing
     (summarize-observation / handled / gather+answer) and the conversational
     answer.

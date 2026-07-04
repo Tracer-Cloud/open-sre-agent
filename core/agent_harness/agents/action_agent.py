@@ -75,6 +75,12 @@ SELF_RECORDING_ACTION_TOOL_NAMES: frozenset[str] = frozenset(
 
 
 @dataclass(frozen=True)
+class ActionTurnPlan:
+    agent: Agent[Any]
+    user_message: str
+
+
+@dataclass(frozen=True)
 class ToolCallingDeps:
     """Optional dependency seams used by tests/harnesses."""
 
@@ -289,8 +295,8 @@ def _build_action_agent(
     tool_hooks: ToolExecutionHooks | None,
     tool_resources: dict[str, Any],
     observer: Any,
-) -> tuple[Agent[Any], str]:
-    """Build the Agent for one action turn; return ``(agent, user_message)``.
+) -> ActionTurnPlan:
+    """Build the Agent for one action turn; return an ``ActionTurnPlan``.
 
     Detects the three branches — verbatim ``!shell``, literal ``/slash``, or
     LLM-selected — and picks a matching LLM (deterministic tool-call or hosted
@@ -342,7 +348,7 @@ def _build_action_agent(
         tool_hooks=tool_hooks,
         on_runtime_event=runtime_event_callback_from_observer(observer),
     )
-    return build_agent(config), user_message
+    return ActionTurnPlan(agent=build_agent(config), user_message=user_message)
 
 
 def run_action_agent_turn(
@@ -377,7 +383,7 @@ def run_action_agent_turn(
         # raise (e.g. provider unavailable) is caught and rendered like a run-loop
         # failure. Agent construction is cheap and stays with it for a single
         # failure boundary.
-        agent, user_message = _build_action_agent(
+        plan = _build_action_agent(
             message=message,
             session=session,
             agent_tools=agent_tools,
@@ -387,7 +393,7 @@ def run_action_agent_turn(
             tool_resources=tool_resources,
             observer=observer,
         )
-        result = agent.run([{"role": "user", "content": user_message}])
+        result = plan.agent.run([{"role": "user", "content": plan.user_message}])
         persist_turn_system_prompt(
             session,
             phase="action_agent",
@@ -444,6 +450,7 @@ def run_action_agent_turn(
 
 
 __all__ = [
+    "ActionTurnPlan",
     "SELF_RECORDING_ACTION_TOOL_NAMES",
     "ToolCallingDeps",
     "run_action_agent_turn",
