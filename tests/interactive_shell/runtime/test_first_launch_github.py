@@ -239,7 +239,9 @@ def test_sleep_until_or_cancel_raises_on_escape(monkeypatch: pytest.MonkeyPatch)
         lambda **_kwargs: "cancel",
     )
 
-    def _ready(_fd: int, *_args: object, **_kwargs: object) -> tuple[list[int], list[int], list[int]]:
+    def _ready(
+        _fd: int, *_args: object, **_kwargs: object
+    ) -> tuple[list[int], list[int], list[int]]:
         return ([0], [], [])
 
     monkeypatch.setattr("select.select", _ready)

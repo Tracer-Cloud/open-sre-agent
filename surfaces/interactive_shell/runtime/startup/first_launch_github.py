@@ -121,8 +121,7 @@ def _show_device_code(console: Console, code: object) -> None:
     console.print("  3. Approve the request for OpenSRE.")
     console.print()
     console.print(
-        "  [dim]Waiting for you to approve in the browser… "
-        "(Escape or Ctrl-C to skip)[/dim]"
+        "  [dim]Waiting for you to approve in the browser… (Escape or Ctrl-C to skip)[/dim]"
     )
 
 
