@@ -42,11 +42,8 @@ flowchart TD
 
     SURFACES --> TOOLS
     SURFACES --> INTEGRATIONS
-    SURFACES --> CORE
-    SURFACES --> PLATFORM
     GATEWAY --> TOOLS
-    GATEWAY --> CORE
-    GATEWAY --> PLATFORM
+    GATEWAY --> INTEGRATIONS
 
     TOOLS --> CORE
     TOOLS --> PLATFORM
@@ -55,10 +52,15 @@ flowchart TD
 
     CORE <--> PLATFORM
 
-    T1 --> CONFIG
-    T2 --> CONFIG
-    T3 --> CONFIG
+    CORE --> CONFIG
+    PLATFORM --> CONFIG
 ```
+
+The arrows show edges between **adjacent** tiers to keep the diagram readable.
+The actual rule is broader: a tier may import **any** tier below it, not only
+the one directly beneath — so a surface may import `config` directly, and a
+tool may import `platform`. Refer to the "May import" column above for the
+complete set of allowed edges.
 
 ## The layers in detail
 
