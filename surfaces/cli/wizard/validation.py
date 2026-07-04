@@ -251,6 +251,6 @@ def validate_provider_credentials(
 
 def build_demo_action_response() -> dict:
     """Return a safe built-in action response for onboarding."""
-    from tools.sre_guidance_tool import get_sre_guidance
+    from tools.system.sre_guidance_tool import get_sre_guidance
 
     return get_sre_guidance(topic="recovery_remediation", max_topics=1)

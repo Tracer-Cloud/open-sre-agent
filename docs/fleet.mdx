@@ -378,7 +378,7 @@ Any process that can speak Unix-domain sockets can publish. The simplest path
 is to import the helper:
 
 ```python
-from tools.fleet_monitoring import BusMessage, publish
+from tools.system.fleet_monitoring import BusMessage, publish
 
 publish(BusMessage(
     agent="claude-code:8421",

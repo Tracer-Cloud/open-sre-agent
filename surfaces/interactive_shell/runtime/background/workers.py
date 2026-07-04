@@ -14,7 +14,7 @@ from core.domain.alerts import inbox as _alert_inbox
 from surfaces.interactive_shell.runtime.background.runner import drain_background_notices
 from surfaces.interactive_shell.runtime.core.state import ReplState, SpinnerState
 from surfaces.interactive_shell.ui.alerts import drain_and_render_incoming
-from tools.fleet_monitoring.sampler import start_sampler
+from tools.system.fleet_monitoring.sampler import start_sampler
 
 log = logging.getLogger(__name__)
 

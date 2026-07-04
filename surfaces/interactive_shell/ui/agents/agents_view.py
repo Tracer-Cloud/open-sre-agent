@@ -8,7 +8,7 @@ in ``tokens/min``: ``0`` is observed-but-idle, ``-`` is unobservable
 sampler task is not running — e.g. non-interactive
 ``opensre fleet list``).
 
-This module lives outside ``tools/fleet_monitoring/`` so collectors don't pull
+This module lives outside ``tools/system/fleet_monitoring/`` so collectors don't pull
 in Rich.
 """
 
@@ -23,9 +23,9 @@ from rich.table import Table
 
 from platform.terminal.theme import BOLD_BRAND
 from surfaces.interactive_shell.ui.components.rendering import print_repl_table, repl_table
-from tools.fleet_monitoring.registry import AgentRecord
-from tools.fleet_monitoring.sampler import get_snapshot, get_tokens_per_min, get_usd_per_hour
-from tools.fleet_monitoring.status import Status, compute_status
+from tools.system.fleet_monitoring.registry import AgentRecord
+from tools.system.fleet_monitoring.sampler import get_snapshot, get_tokens_per_min, get_usd_per_hour
+from tools.system.fleet_monitoring.status import Status, compute_status
 
 _UNFILLED = "-"
 

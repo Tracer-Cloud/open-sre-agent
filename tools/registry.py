@@ -105,7 +105,7 @@ def _skill_guidance_files() -> tuple[Path, ...]:
     """Return explicit and package-local SKILL.md files attached at registry load."""
 
     explicit = (_REPO_ROOT / "integrations" / "github" / "tools" / "workflow" / "SKILL.md",)
-    discovered = sorted(_TOOLS_PACKAGE_DIR.glob("python_execution_tool/skills/*/SKILL.md"))
+    discovered = sorted(_TOOLS_PACKAGE_DIR.glob("system/python_execution_tool/skills/*/SKILL.md"))
     return (*explicit, *discovered)
 
 

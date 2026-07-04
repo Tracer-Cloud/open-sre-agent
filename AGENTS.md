@@ -23,7 +23,7 @@ Before any push or PR creation follow **[CI.md](CI.md)** — lint, format, typec
 | `surfaces/cli/`       | Command-line interface, onboarding wizard, local LLM helpers, and CLI tests support.               |
 | `surfaces/interactive_shell/` | Interactive terminal (REPL) loop, slash commands, chat/help surfaces, action-planning harness, and terminal UI. |
 | `integrations/`       | Per-integration config normalization, verification, clients, helpers, store/catalog logic, the Hermes log pipeline, and per-vendor tool packages under `integrations/<vendor>/tools/`. |
-| `tools/`              | Tool registry, per-tool packages for cross-cutting tools that aren't vendor-specific (e.g. `tools/fleet_monitoring/`, `tools/watch_dog/`, `tools/sre_guidance_tool/`), and the interactive-shell action tools. Framework primitives (decorator, base class, utils) live in `core/tool_framework/`. |
+| `tools/`              | Tool registry, per-tool packages for cross-cutting tools that aren't vendor-specific (e.g. `tools/system/fleet_monitoring/`, `tools/system/watch_dog/`, `tools/system/sre_guidance_tool/`), and the interactive-shell action tools. Framework primitives (decorator, base class, utils) live in `core/tool_framework/`. |
 | `platform/`           | Cross-cutting platform services: guardrails, masking, sandbox, analytics, auth, notifications, observability, and EC2 deployment (`platform/deployment/`). |
 | `config/`             | Shared constants, prompts, UI theme, and the web app entrypoint (`config/webapp.py`).              |
 | `tests/`              | Unit, integration, synthetic, deployment, e2e, chaos engineering, and support tests.               |
@@ -37,6 +37,7 @@ Before any push or PR creation follow **[CI.md](CI.md)** — lint, format, typec
 | `docs/ARCHITECTURE.md` | Package architecture: the four-tier layer table, folder diagram, per-layer responsibilities, allowed cross-layer edges, and cross-layer flows. |
 | `docs/investigation-pipeline-architecture.md` | Investigation pipeline stages, ReAct loop control flow, and guardrails (tool cap, stagnation breaker, context budget), with diagrams. |
 | `docs/investigation-tool-calling.md` | Investigation ReAct tool schemas, LLM invoke payloads, and message shapes (all providers). |
+| `docs/tool-placement-policy.md` | Decision rule for where a tool lives: `integrations/<vendor>/tools/` vs. `tools/system/` vs. `tools/cross_vendor/` vs. `surfaces/shared/`. |
 | `SETUP.md`            | Machine setup (all platforms, Windows, MCP/OpenClaw, troubleshooting).                             |
 | `CI.md`               | Mandatory pre-push checklist: lint, format, typecheck, tests — agents MUST follow before pushing. |
 | `TESTING.md`          | `ReplDriver` reference: API, usage patterns, wait-time guide, and limitations.                    |
@@ -65,7 +66,7 @@ Main packages one level deeper:
 - `tools/` — Tool registry, decorator, base classes, per-tool packages, shared utilities, and registry helpers.
 - `core/domain/types/` — Shared typed contracts for evidence, retrieval, and tool-related payloads.
 - `platform/` — Guardrails, masking, sandbox, analytics, auth, and cross-cutting platform services (e.g. `platform/notifications/telegram_delivery.py`).
-- `tools/watch_dog/` — Watchdog feature: per-threshold Telegram alarm dispatch with cooldown, sitting on top of `platform/notifications/telegram_delivery.py`.
+- `tools/system/watch_dog/` — Watchdog feature: per-threshold Telegram alarm dispatch with cooldown, sitting on top of `platform/notifications/telegram_delivery.py`.
 - `config/webapp.py` — Web-facing application entrypoint; the `opensre` CLI is `surfaces/cli/__main__.py`.
 
 ## 2. Entry Points
@@ -77,7 +78,7 @@ The tool registry auto-discovers modules under `tools/`, so the normal path is t
 Files to touch:
 
 - `integrations/<vendor>/tools/<tool_name>_tool/__init__.py` when the tool belongs to an existing vendor integration (most common path).
-- `tools/<ToolName>/__init__.py` only when the tool is not vendor-specific (e.g. cross-cutting helpers such as `tools/sre_guidance_tool/`).
+- `tools/system/<ToolName>/__init__.py` or `tools/cross_vendor/<ToolName>/__init__.py` only when the tool is not vendor-specific — see [docs/tool-placement-policy.md](docs/tool-placement-policy.md) for the system vs. cross_vendor decision rule (e.g. `tools/system/sre_guidance_tool/`).
 - `core/tool_framework/utils/` if the tool needs shared helper code reused across vendors.
 - `integrations/<name>/client.py` if the tool should reuse a dedicated integration API client instead of inlining requests.
 - `docs/<tool_name>.mdx` for user-facing usage, parameters, and examples.

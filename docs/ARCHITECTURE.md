@@ -92,9 +92,15 @@ responsibility:
   `integrations/grafana`, `integrations/github`, …) plus cross-cutting pieces
   like `integrations/hermes` and `integrations/llm_cli`.
 - **`tools/`** — the **agent-callable** boundary: every `@tool(...)` function
-  and `BaseTool` subclass, the tool registry, and cross-cutting tool packages
-  (`tools/investigation`, `tools/fleet_monitoring`, `tools/watch_dog`). A tool
-  is what the planner selects and the runtime executes.
+  and `BaseTool` subclass, the tool registry, framework subsystems
+  (`tools/investigation`, `tools/interactive_shell`), `tools/system/` for
+  tools with no vendor in their domain purpose (`fleet_monitoring`,
+  `python_execution_tool`, `sre_guidance_tool`, `watch_dog`), and
+  `tools/cross_vendor/` for tools whose logic spans 2+ vendor integrations
+  (`fix_sentry_issue`). See
+  [tool-placement-policy.md](tool-placement-policy.md) for the full decision
+  rule, including when a tool belongs under `integrations/<vendor>/tools/`
+  instead. A tool is what the planner selects and the runtime executes.
 
 The import rule between them is one-directional: `integrations` must never
 import `tools` (or `surfaces`), so a vendor client never depends on the agent

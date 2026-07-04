@@ -27,8 +27,8 @@ from surfaces.interactive_shell.ui import (
     repl_table,
 )
 from surfaces.interactive_shell.ui.components.time_format import format_repl_timestamp
-from tools.fleet_monitoring.probe import pid_exists
-from tools.watch_dog.monitor import start_watchdog_daemon_thread
+from tools.system.fleet_monitoring.probe import pid_exists
+from tools.system.watch_dog.monitor import start_watchdog_daemon_thread
 
 _PID_IN_COMMAND_RE = re.compile(r"pid=(\d+)")
 _CONSOLE_PRINT_LOCK = threading.Lock()

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from tools.fleet_monitoring.quality import LoopDetector, _shingle_fingerprint
+from tools.system.fleet_monitoring.quality import LoopDetector, _shingle_fingerprint
 
 
 class TestShingleFingerprint:

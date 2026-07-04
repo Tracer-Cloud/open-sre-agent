@@ -17,7 +17,7 @@ from surfaces.interactive_shell.runtime.startup.first_launch_github import (
 from surfaces.interactive_shell.runtime.startup.initial_input import run_initial_input
 from surfaces.interactive_shell.ui import input_prompt as _input_prompt
 from surfaces.interactive_shell.ui import render_banner
-from tools.fleet_monitoring.sweep import run_startup_sweep
+from tools.system.fleet_monitoring.sweep import run_startup_sweep
 
 _console = Console(
     highlight=False, force_terminal=True, color_system="truecolor", legacy_windows=False

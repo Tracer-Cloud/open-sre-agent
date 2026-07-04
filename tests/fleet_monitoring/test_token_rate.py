@@ -7,8 +7,8 @@ import time
 
 import pytest
 
-from tools.fleet_monitoring.meters import TokenUsage
-from tools.fleet_monitoring.token_rate import TokenRateTracker
+from tools.system.fleet_monitoring.meters import TokenUsage
+from tools.system.fleet_monitoring.token_rate import TokenRateTracker
 
 
 @pytest.fixture

@@ -16,8 +16,8 @@ import pytest
 
 _POSIX_FCNTL_AVAILABLE = importlib.util.find_spec("fcntl") is not None
 
-from tools.fleet_monitoring import bus as bus_module
-from tools.fleet_monitoring.bus import (
+from tools.system.fleet_monitoring import bus as bus_module
+from tools.system.fleet_monitoring.bus import (
     BUS_SCHEMA_VERSION,
     BusMessage,
     BusServer,
@@ -634,7 +634,7 @@ class TestPublishSubscribe:
         # Simulate a hostile broker that wins the bind race and streams unlimited
         # bytes without newlines. The subscriber must cap its buffer and bail
         # rather than grow memory unboundedly.
-        from tools.fleet_monitoring.bus import _MAX_FRAME_BYTES, BusServer, subscribe
+        from tools.system.fleet_monitoring.bus import _MAX_FRAME_BYTES, BusServer, subscribe
 
         # Stand up a fake "hostile" broker that pushes garbage to every client.
         server = BusServer(sock_path)
@@ -719,7 +719,7 @@ class TestBrokerElectionRace:
                     textwrap.dedent(
                         f"""
                         from pathlib import Path
-                        from tools.fleet_monitoring import bus
+                        from tools.system.fleet_monitoring import bus
 
                         result = bus._ensure_broker(Path({str(sock_path)!r}))
                         print("OWNER" if result is not None else "PEER")
@@ -785,7 +785,7 @@ class TestBrokerElectionRace:
                     f"""
                     import os, fcntl, sys, time
                     from pathlib import Path
-                    from tools.fleet_monitoring import bus
+                    from tools.system.fleet_monitoring import bus
 
                     fd = bus._acquire_election_flock(Path({str(sock_path)!r}))
                     print("READY", flush=True)

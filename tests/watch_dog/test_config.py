@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from tools.watch_dog.config import (
+from tools.system.watch_dog.config import (
     WatchdogConfig,
     parse_byte_size,
     parse_duration_seconds,

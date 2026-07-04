@@ -8,8 +8,8 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
-from tools.fleet_monitoring import config as config_mod
-from tools.fleet_monitoring.config import (
+from tools.system.fleet_monitoring import config as config_mod
+from tools.system.fleet_monitoring.config import (
     AgentBudget,
     AgentsConfig,
     load_agents_config,

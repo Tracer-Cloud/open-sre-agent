@@ -32,20 +32,20 @@ from surfaces.interactive_shell.ui import (
     render_agents_table,
     repl_table,
 )
-from tools.fleet_monitoring.bus import BusMessage, subscribe
-from tools.fleet_monitoring.config import (
+from tools.system.fleet_monitoring.bus import BusMessage, subscribe
+from tools.system.fleet_monitoring.config import (
     agents_config_path,
     load_agents_config,
     set_agent_budget,
 )
-from tools.fleet_monitoring.conflicts import (
+from tools.system.fleet_monitoring.conflicts import (
     DEFAULT_WINDOW_SECONDS,
     WriteEvent,
     detect_conflicts,
 )
-from tools.fleet_monitoring.coordination import BranchClaims
-from tools.fleet_monitoring.discovery import registered_and_discovered_agents
-from tools.fleet_monitoring.registry import AgentRegistry
+from tools.system.fleet_monitoring.coordination import BranchClaims
+from tools.system.fleet_monitoring.discovery import registered_and_discovered_agents
+from tools.system.fleet_monitoring.registry import AgentRegistry
 
 _AGENTS_FIRST_ARGS: tuple[tuple[str, str], ...] = (
     ("budget", "view or edit per-agent hourly budgets"),

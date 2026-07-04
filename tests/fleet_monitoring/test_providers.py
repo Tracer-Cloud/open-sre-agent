@@ -1,9 +1,9 @@
-"""Tests for ``tools.fleet_monitoring.providers.provider_for`` canonical resolution."""
+"""Tests for ``tools.system.fleet_monitoring.providers.provider_for`` canonical resolution."""
 
 from __future__ import annotations
 
-from tools.fleet_monitoring.providers import provider_for, provider_from_command
-from tools.fleet_monitoring.registry import AgentRecord
+from tools.system.fleet_monitoring.providers import provider_for, provider_from_command
+from tools.system.fleet_monitoring.registry import AgentRecord
 
 
 def _record(

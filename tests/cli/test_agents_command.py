@@ -9,8 +9,8 @@ from click.testing import CliRunner
 
 from surfaces.cli.__main__ import cli
 from surfaces.cli.commands import agent as agent_cmd_mod
-from tools.fleet_monitoring.discovery import DiscoveredAgent
-from tools.fleet_monitoring.registry import AgentRecord, AgentRegistry
+from tools.system.fleet_monitoring.discovery import DiscoveredAgent
+from tools.system.fleet_monitoring.registry import AgentRecord, AgentRegistry
 
 
 @pytest.fixture

@@ -106,9 +106,9 @@ ignore_imports =
     tools.community_followup_tool -> integrations.github.client
     tools.community_followup_tool -> integrations.github.helpers
     tools.community_followup_tool -> integrations.github.tools.workflow
-    tools.fix_sentry_issue.context -> integrations.sentry
-    tools.fix_sentry_issue.context -> integrations.sentry.issue_url
-    tools.fix_sentry_issue.runner -> integrations.pi
+    tools.cross_vendor.fix_sentry_issue.context -> integrations.sentry
+    tools.cross_vendor.fix_sentry_issue.context -> integrations.sentry.issue_url
+    tools.cross_vendor.fix_sentry_issue.runner -> integrations.pi
     tools.git_deploy_timeline_tool -> integrations.github.helpers
     tools.git_deploy_timeline_tool -> integrations.github.mcp
     tools.interactive_shell.implementation.claude_code_executor -> integrations.llm_cli.claude_code
@@ -126,12 +126,12 @@ ignore_imports =
     tools.pi_coding_tool -> integrations.pi
     tools.pi_coding_tool.runner -> integrations.pi
     tools.pi_coding_tool.validation -> integrations.pi
-    tools.python_execution_tool.credentials -> integrations.github.client
-    tools.python_execution_tool.credentials -> integrations.github.helpers
+    tools.system.python_execution_tool.credentials -> integrations.github.client
+    tools.system.python_execution_tool.credentials -> integrations.github.helpers
     tools.slack_send_message_tool.delivery -> integrations.catalog
     tools.slack_send_message_tool.delivery -> integrations.slack.delivery
-    tools.watch_dog.runner -> integrations.telegram.alarms
-    tools.watch_dog.runner -> integrations.telegram.credentials
+    tools.system.watch_dog.runner -> integrations.telegram.alarms
+    tools.system.watch_dog.runner -> integrations.telegram.credentials
     tools.work_status_report_tool -> integrations.github.client
     tools.work_status_report_tool -> integrations.github.helpers
     tools.work_status_report_tool -> integrations.github.tools.work_status
