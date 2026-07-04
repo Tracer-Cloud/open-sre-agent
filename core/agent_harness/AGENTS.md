@@ -34,21 +34,21 @@ responsibility-scoped subpackage.
   single instantiation site for `core.agent.Agent` across all surfaces
   (action, evidence, gateway). See "Agent construction pattern" below.
 - `turns/` — the turn drivers that orchestrate `core.agent.Agent`:
-  - `action_agent.py` — `run_action_agent_turn`: one action tool-calling turn
+  - `action_driver.py` — `run_action_agent_turn`: one action tool-calling turn
     over the ports. Uses `_build_action_agent` factory that returns an
     `ActionTurnPlan`.
-  - `turn_orchestrator.py` — `run_turn`: the three-path routing
+  - `orchestrator.py` — `run_turn`: the three-path routing
     (summarize-observation / handled / gather+answer) and the conversational
     answer. Resolves integrations **once** at the top of the turn and stores
     them on the frozen `turn_snapshot`, so `turn_snapshot.resolved_integrations` is the
     single source of truth for what the turn knows. Downstream components read
-    `turn_snapshot.resolved_integrations` (e.g. `action_agent._resolved_integrations_for_turn`
+    `turn_snapshot.resolved_integrations` (e.g. `action_driver._resolved_integrations_for_turn`
     prefers it) rather than re-resolving. Do NOT reintroduce a per-component
     integration resolution when `turn_snapshot` already carries it.
-  - `evidence_agent.py` — bounded evidence-gather loop. Uses
+  - `evidence_driver.py` — bounded evidence-gather loop. Uses
     `_build_evidence_agent` factory that returns an `AgentConfig` handed to
     `build_agent`.
-  - `headless_agent.py` — headless programmatic entry point
+  - `headless_dispatch.py` — headless programmatic entry point
     (`dispatch_message_to_headless_agent`) plus in-memory port adapters for
     API / test runs. `tools` is required — surfaces that want a text-only
     turn pass `NullToolProvider()` explicitly.
@@ -95,7 +95,7 @@ to it instead of re-implementing bootstrap + persistence:
   :class:`~core.agent_harness.providers.default_providers.DefaultToolProvider`
   built from the **live per-chat session** each turn (same tool resolution as
   shell). There is no separate gateway-owned ``Agent`` instance.
-- **headless** — ephemeral in-memory sessions (``headless_agent.InMemorySessionStore``)
+- **headless** — ephemeral in-memory sessions (``headless_dispatch.InMemorySessionStore``)
   bypass ``SessionManager`` by design: they never persist to JSONL and do not
   need create/resolve/rotate/close. Tool-calling turns still run through the
   shared harness; only session lifecycle is skipped.
@@ -158,7 +158,7 @@ uniformity claim with an exception bolted on:
   tools → observe) driven by `llm.invoke`. Built via `AgentConfig` +
   `build_agent` (the construction pattern above). Used by the action,
   evidence/gather, and investigation agents.
-- **Direct answer (no tools)** — `turn_orchestrator.stream_answer`, one grounded
+- **Direct answer (no tools)** — `orchestrator.stream_answer`, one grounded
   text answer streamed via `client.invoke_stream` (the `StreamAnswerFn` seam in
   `ports.py`). It does **not** use `Agent`: there is no tool loop and no observe
   step, and it streams on a different client method.
