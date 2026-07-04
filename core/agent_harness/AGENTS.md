@@ -91,7 +91,7 @@ to it instead of re-implementing bootstrap + persistence:
   `gateway/storage/session/resolver.py::SessionResolver` owns per-chat
   chat-id ↔ session-id binding + metadata; it delegates `create` / `resolve` /
   `rotate` to `SessionManager`. Turn dispatch uses
-  `Agent.dispatch_message_to_headless_agent` via `gateway/turn_handler.py` with
+  `dispatch_message_to_headless_agent` via `gateway/turn_handler.py` with
   :class:`~core.agent_harness.providers.default_providers.DefaultToolProvider`
   built from the **live per-chat session** each turn (same tool resolution as
   shell). There is no separate gateway-owned ``Agent`` instance.
@@ -133,7 +133,7 @@ Action (`turns/action_driver.py::_build_action_agent`) and evidence
 (`turns/evidence_driver.py::_build_evidence_agent`) assemble an
 ``AgentConfig`` and call ``build_agent``. The gateway turn path does not
 construct a persistent ``Agent`` — it uses
-``Agent.dispatch_message_to_headless_agent`` with per-turn
+``dispatch_message_to_headless_agent`` with per-turn
 :class:`~core.agent_harness.providers.default_providers.DefaultToolProvider`
 from the live chat session. When ``Agent.__init__``'s signature changes,
 ``agent_builder.py`` is the single edit site for harness surfaces that call
@@ -233,9 +233,9 @@ think → call-tools → observe algorithm.
 - `core/agent/react_loop.py` — `ReactLoop` (the loop as a method-object, phases
   `_think` / `_handle_conclusion` / `_observe`) and `run_react_loop` (its thin
   functional entry).
-- `core/agent/agent.py` — the facade: static `dispatch_message_to_headless_agent`
-  / `resolve_integrations` entrypoints, `__init__`, `run()`, and the
-  `_should_accept_conclusion` override hook.
+- `core/agent/agent.py` — the `Agent` facade: `__init__` (holds config), `run()`
+  (builds the per-run `AgentRunInput` via `_build_run_input` and hands it to
+  `run_react_loop`), and the `_should_accept_conclusion` override hook.
 
 Do not reintroduce hook-method overrides on `Agent` itself (e.g. a subclass
 overriding a private `_before_provider_request`-style method) — customize via
