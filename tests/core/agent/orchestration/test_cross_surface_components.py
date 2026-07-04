@@ -107,3 +107,47 @@ def test_run_turn_routes_unhandled_action_to_answer_callback() -> None:
     assert answer_calls == ["question?"]
     assert result.final_intent == "cli_agent_fallback"
     assert result.answered is True
+
+
+def test_run_turn_populates_resolved_integrations_on_turn_ctx(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """run_turn resolves integrations once and hands them to the action path on turn_ctx."""
+    resolved = {"github": {"configured": True}}
+    monkeypatch.setattr(
+        "core.agent_harness.agents.turn_orchestrator.resolve_and_cache_integrations",
+        lambda _session: resolved,
+    )
+    captured: list[Any] = []
+
+    def execute_actions(
+        _text: str, *, turn_ctx: Any = None, **_kwargs: object
+    ) -> ToolCallingTurnResult:
+        captured.append(turn_ctx)
+        return ToolCallingTurnResult(0, 0, 0, False, False)
+
+    def answer(_text: str, **_kwargs: object) -> object:
+        return type("Run", (), {"response_text": "answered"})()
+
+    def gather(_text: str, **_kwargs: object) -> None:
+        return None
+
+    class _Accounting:
+        def record_action_result(self, _result: ToolCallingTurnResult) -> None:
+            return None
+
+        def finalize(self, result: ShellTurnResult) -> ShellTurnResult:
+            return result
+
+    session = Session(storage=InMemorySessionStorage())
+    run_turn(
+        "hi",
+        session,
+        execute_actions=execute_actions,
+        answer=answer,
+        gather=gather,
+        accounting=_Accounting(),
+    )
+
+    assert captured, "execute_actions was never called"
+    assert captured[0].resolved_integrations == resolved

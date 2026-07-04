@@ -437,7 +437,7 @@ def test_provider_boundary_hooks_transform_convert_and_observe() -> None:
     llm = _FakeLLM(iter([AgentLLMResponse(content="final", tool_calls=[], raw_content=None)]))
 
     hooks = ProviderHooks(
-        transform_context=lambda messages: list(messages)[-1:],
+        transform_messages=lambda messages: list(messages)[-1:],
         convert_to_llm=lambda _llm, messages: [
             {"role": "user", "content": f"converted:{messages[0].content}"}
         ],

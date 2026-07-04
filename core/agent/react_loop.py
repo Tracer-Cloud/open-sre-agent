@@ -122,7 +122,7 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
 
     def _think(self, iteration: int) -> Any:
         """Build the request, apply the provider hooks, and call the LLM."""
-        transformed_messages = self._host._transform_context(self._messages)
+        transformed_messages = self._host._transform_messages(self._messages)
         llm_messages = self._host._convert_to_llm(self._llm, transformed_messages)
         enforce_context_budget(
             llm_messages, system=self._system, tools=self._tool_schemas, ceiling=self._ceiling

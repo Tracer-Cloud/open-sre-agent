@@ -14,27 +14,27 @@ def _request() -> ProviderRequest:
     return ProviderRequest(messages=[], system="sys", tools=None)
 
 
-def test_transform_context_passes_through_by_default() -> None:
+def test_transform_messages_passes_through_by_default() -> None:
     delegate = ProviderHookDelegate(ProviderHooks())
     messages = [UserRuntimeMessage(content="hi")]
-    assert delegate.transform_context(messages) == messages
+    assert delegate.transform_messages(messages) == messages
 
 
-def test_transform_context_applies_hook() -> None:
+def test_transform_messages_applies_hook() -> None:
     extra = UserRuntimeMessage(content="injected")
-    hooks = ProviderHooks(transform_context=lambda messages: [*messages, extra])
+    hooks = ProviderHooks(transform_messages=lambda messages: [*messages, extra])
     delegate = ProviderHookDelegate(hooks)
-    result = delegate.transform_context([UserRuntimeMessage(content="hi")])
+    result = delegate.transform_messages([UserRuntimeMessage(content="hi")])
     assert result[-1] is extra
 
 
-def test_transform_context_swallows_hook_exception() -> None:
+def test_transform_messages_swallows_hook_exception() -> None:
     def boom(messages: Any) -> Any:
         raise RuntimeError("hook broke")
 
-    delegate = ProviderHookDelegate(ProviderHooks(transform_context=boom))
+    delegate = ProviderHookDelegate(ProviderHooks(transform_messages=boom))
     messages = [UserRuntimeMessage(content="hi")]
-    assert delegate.transform_context(messages) == messages
+    assert delegate.transform_messages(messages) == messages
 
 
 def test_convert_to_llm_falls_back_to_message_formatter() -> None:

@@ -30,12 +30,12 @@ class ProviderHookDelegate:
 
     hooks: ProviderHooks
 
-    def transform_context(self, messages: Sequence[RuntimeMessage]) -> list[RuntimeMessage]:
+    def transform_messages(self, messages: Sequence[RuntimeMessage]) -> list[RuntimeMessage]:
         try:
-            return self.hooks.apply_transform_context(messages)
+            return self.hooks.apply_transform_messages(messages)
         except Exception:  # noqa: BLE001 - fall back to the unmodified transcript
             logger.debug(
-                "[runtime] transform_context raised; using original messages", exc_info=True
+                "[runtime] transform_messages raised; using original messages", exc_info=True
             )
             return list(messages)
 

@@ -39,7 +39,12 @@ responsibility-scoped subpackage.
     `ActionTurnPlan`.
   - `turn_orchestrator.py` — `run_turn`: the three-path routing
     (summarize-observation / handled / gather+answer) and the conversational
-    answer.
+    answer. Resolves integrations **once** at the top of the turn and stores
+    them on the frozen `turn_ctx`, so `turn_ctx.resolved_integrations` is the
+    single source of truth for what the turn knows. Downstream components read
+    `turn_ctx.resolved_integrations` (e.g. `action_agent._resolved_integrations_for_turn`
+    prefers it) rather than re-resolving. Do NOT reintroduce a per-component
+    integration resolution when `turn_ctx` already carries it.
   - `evidence_agent.py` — bounded evidence-gather loop. Uses
     `_build_evidence_agent` factory that returns an `AgentConfig` handed to
     `build_agent`.

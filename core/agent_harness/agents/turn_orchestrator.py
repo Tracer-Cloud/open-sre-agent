@@ -17,10 +17,11 @@ Protocols in :mod:`core.agent_harness.ports`. Nothing here imports ``interactive
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Literal
 
 from config.llm_reasoning_effort import apply_reasoning_effort
+from core.agent_harness.integrations.resolution import resolve_and_cache_integrations
 from core.agent_harness.models.turn_context import TurnContext
 from core.agent_harness.models.turn_results import ShellTurnResult, ToolCallingTurnResult
 from core.agent_harness.ports import (
@@ -278,6 +279,14 @@ def run_turn(
     # and the conversational assistant read from this frozen context so their
     # prompts reflect a consistent turn-start view rather than live session state.
     turn_ctx = TurnContext.from_session(text, session)
+
+    # Resolve integrations once, at the top of the turn, so the frozen context is
+    # the single source of truth for what this turn knows. Downstream readers
+    # (e.g. the action agent) read ``turn_ctx.resolved_integrations`` instead of
+    # re-resolving per component. Only fill it when a runtime-request source
+    # (``select_agent_context_input``) hasn't already populated it.
+    if not turn_ctx.resolved_integrations:
+        turn_ctx = replace(turn_ctx, resolved_integrations=resolve_and_cache_integrations(session))
 
     # Clear any observation left by a prior turn so only this turn's discovery
     # output can trigger a summary pass.

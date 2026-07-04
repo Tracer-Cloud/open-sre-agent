@@ -20,7 +20,7 @@ class ProviderRequest:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
-TransformContextHook = Callable[[Sequence["RuntimeMessage"]], Sequence["RuntimeMessage"]]
+TransformMessagesHook = Callable[[Sequence["RuntimeMessage"]], Sequence["RuntimeMessage"]]
 ConvertToLlmHook = Callable[[Any, Sequence["RuntimeMessage"]], list["ProviderMessage"]]
 BeforeProviderRequestHook = Callable[[ProviderRequest], ProviderRequest | None]
 AfterProviderResponseHook = Callable[[ProviderRequest, Any], Any | None]
@@ -31,19 +31,19 @@ ApiKeyResolver = Callable[[str], str]
 class ProviderHooks:
     """Hooks around context conversion, credentials, and provider requests."""
 
-    transform_context: TransformContextHook | None = None
+    transform_messages: TransformMessagesHook | None = None
     convert_to_llm: ConvertToLlmHook | None = None
     before_provider_request: BeforeProviderRequestHook | None = None
     after_provider_response: AfterProviderResponseHook | None = None
     get_api_key: ApiKeyResolver | None = None
 
-    def apply_transform_context(
+    def apply_transform_messages(
         self,
         messages: Sequence[RuntimeMessage],
     ) -> list[RuntimeMessage]:
-        if self.transform_context is None:
+        if self.transform_messages is None:
             return list(messages)
-        return list(self.transform_context(messages))
+        return list(self.transform_messages(messages))
 
     def apply_convert_to_llm(
         self,
