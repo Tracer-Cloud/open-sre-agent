@@ -1863,7 +1863,7 @@ class TestResumeCommand:
             raise RuntimeError("codex: quota or rate limit exceeded (exit 1)")
 
         with patch(
-            "surfaces.interactive_shell.runtime.action_turn._default_llm_factory",
+            "surfaces.interactive_shell.runtime.action_turn.default_llm_factory",
             side_effect=_raise,
         ):
             result = run_action_tool_turn("check cpu usage", session, console)

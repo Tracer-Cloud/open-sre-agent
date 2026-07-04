@@ -136,7 +136,7 @@ def test_agent_exposes_headless_dispatch_entrypoint(monkeypatch: pytest.MonkeyPa
             yield "hello from headless"
 
     monkeypatch.setattr(
-        "core.agent_harness.agents.action_agent._default_llm_factory",
+        "core.agent_harness.agents.action_agent.default_llm_factory",
         lambda: FakeLLM(iter([AgentLLMResponse(content="", tool_calls=[], raw_content=None)])),
     )
 

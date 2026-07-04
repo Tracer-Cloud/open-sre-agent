@@ -21,6 +21,7 @@ from typing import Any
 from core.agent import Agent
 from core.agent_harness.agent_builder import AgentConfig, build_agent
 from core.agent_harness.debug.prompt_trace import persist_turn_system_prompt
+from core.agent_harness.factories import default_llm_factory
 from core.agent_harness.integrations.resolution import resolve_and_cache_integrations
 from core.agent_harness.models.turn_context import TurnContext
 from core.agent_harness.models.turn_results import ToolCallingTurnResult
@@ -280,12 +281,6 @@ def _literal_slash_tool_call(message: str, agent_tools: list[Any]) -> ToolCall |
     )
 
 
-def _default_llm_factory() -> Any:
-    from core.llm import agent_llm_client
-
-    return agent_llm_client.get_agent_llm()
-
-
 def _build_action_agent(
     *,
     message: str,
@@ -332,9 +327,7 @@ def _build_action_agent(
         system = "Execute the explicit slash_invoke tool call."
         user_message = message
     else:
-        factory = (
-            deps.llm_factory if deps is not None and deps.llm_factory else _default_llm_factory
-        )
+        factory = deps.llm_factory if deps is not None and deps.llm_factory else default_llm_factory
         llm = factory()
         system = build_action_system_prompt(turn_ctx or TurnContext.from_session(message, session))
         user_message = build_action_user_message(message)
