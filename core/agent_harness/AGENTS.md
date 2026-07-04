@@ -218,10 +218,14 @@ observe algorithm:
   swallowed; it never breaks the loop.
 - `core/agent_loop.py` — `AgentRunContext` (resolved per-run inputs),
   `AgentLoopHost` (the `Protocol` `run_react_loop` calls back into — `Agent`
-  implements it via the mixins above plus `_hooks`/`_tool_hooks`), and
-  `run_react_loop` itself. `AgentRunResult` also lives here; `core.agent`
-  re-exports it for the existing `from core.agent import AgentRunResult`
-  import path.
+  implements it via the mixins above plus its own `_transform_context` /
+  `_convert_to_llm` / `_before_request` / `_after_response` forwarders), and
+  `run_react_loop` itself. `AgentLoopHost` intentionally exposes the four
+  provider-hook seams as method calls, not a `_hooks: AgentProviderHookDelegate`
+  attribute — the concrete delegate type is an `Agent` implementation detail,
+  not part of the host contract, so any host can wire the seams however it
+  likes. `AgentRunResult` also lives here; `core.agent` re-exports it for the
+  existing `from core.agent import AgentRunResult` import path.
 - `core/agent.py` — the facade: static `dispatch_message_to_headless_agent` /
   `resolve_integrations` entrypoints, `__init__`, `run()`, and the
   `_should_accept_conclusion` override hook.

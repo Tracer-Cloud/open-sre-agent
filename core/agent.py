@@ -19,8 +19,8 @@ from core.agent_mixins import AgentEventEmitter, AgentSteering, AgentToolFilter
 from core.events import RuntimeEventCallback, TupleEventCallback
 from core.execution import ToolExecutionHooks
 from core.llm import agent_llm_client
-from core.messages import MessageFormatter, RuntimeMessageLike
-from core.provider import ProviderHooks
+from core.messages import MessageFormatter, ProviderMessage, RuntimeMessage, RuntimeMessageLike
+from core.provider import ProviderHooks, ProviderRequest
 from core.types import RuntimeTool
 
 if TYPE_CHECKING:
@@ -200,3 +200,18 @@ class Agent[RuntimeToolT: RuntimeTool](AgentEventEmitter, AgentToolFilter, Agent
         Return ``(False, nudge_text)`` to inject a user message and continue.
         """
         return True, None
+
+    # Thin forwarders to ``self._hooks`` (an AgentProviderHookDelegate). Kept as
+    # methods rather than an exposed attribute so AgentLoopHost's contract is
+    # the four calls, not this concrete delegate type — see agent_loop.py.
+    def _transform_context(self, messages: list[RuntimeMessage]) -> list[RuntimeMessage]:
+        return self._hooks.transform_context(messages)
+
+    def _convert_to_llm(self, llm: Any, messages: list[RuntimeMessage]) -> list[ProviderMessage]:
+        return self._hooks.convert_to_llm(llm, messages)
+
+    def _before_request(self, request: ProviderRequest) -> ProviderRequest:
+        return self._hooks.before_request(request)
+
+    def _after_response(self, request: ProviderRequest, response: Any) -> Any:
+        return self._hooks.after_response(request, response)

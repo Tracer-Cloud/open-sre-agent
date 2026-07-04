@@ -14,7 +14,6 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-from core.agent_hooks import AgentProviderHookDelegate
 from core.context_budget import context_budget_ceiling_for_model, enforce_context_budget
 from core.events import (
     AgentEndEvent,
@@ -38,7 +37,7 @@ from core.execution import (
     public_tool_input,
 )
 from core.llm.types import ToolCall
-from core.messages import MessageFormatter, RuntimeMessage, UserRuntimeMessage
+from core.messages import MessageFormatter, ProviderMessage, RuntimeMessage, UserRuntimeMessage
 from core.provider import ProviderRequest
 from core.types import RuntimeTool
 from platform.observability.tool_trace import redact_sensitive
@@ -83,11 +82,14 @@ class AgentLoopHost[RuntimeToolT: RuntimeTool](Protocol):
 
     ``core.agent.Agent`` implements this via ``AgentEventEmitter``,
     ``AgentToolFilter``, ``AgentSteering`` (``core.agent_mixins``), and its own
-    ``_should_accept_conclusion`` override hook.
+    ``_should_accept_conclusion`` override hook plus thin ``AgentProviderHookDelegate``
+    forwarders (``_transform_context``/``_convert_to_llm``/``_before_request``/
+    ``_after_response``). The provider-hook delegate's concrete type is
+    deliberately *not* part of this contract — only the method calls are —
+    so a host can wire the four seams however it likes.
     """
 
     _tool_hooks: ToolExecutionHooks
-    _hooks: AgentProviderHookDelegate
 
     def _filter_tools(self, tools: list[RuntimeToolT]) -> list[RuntimeToolT]:
         pass
@@ -104,6 +106,18 @@ class AgentLoopHost[RuntimeToolT: RuntimeTool](Protocol):
     def _should_accept_conclusion(
         self, *, evidence_count: int, iteration: int
     ) -> tuple[bool, str | None]:
+        pass
+
+    def _transform_context(self, messages: list[RuntimeMessage]) -> list[RuntimeMessage]:
+        pass
+
+    def _convert_to_llm(self, llm: Any, messages: list[RuntimeMessage]) -> list[ProviderMessage]:
+        pass
+
+    def _before_request(self, request: ProviderRequest) -> ProviderRequest:
+        pass
+
+    def _after_response(self, request: ProviderRequest, response: Any) -> Any:
         pass
 
 
@@ -174,8 +188,8 @@ def run_react_loop[RuntimeToolT: RuntimeTool](
                 data={"message_count": len(messages), "tool_count": len(runtime_tools)},
             )
         )
-        transformed_messages = host._hooks.transform_context(messages)
-        llm_messages = host._hooks.convert_to_llm(llm, transformed_messages)
+        transformed_messages = host._transform_context(messages)
+        llm_messages = host._convert_to_llm(llm, transformed_messages)
         enforce_context_budget(llm_messages, system=system, tools=tool_schemas, ceiling=ceiling)
         provider_request = ProviderRequest(
             messages=llm_messages,
@@ -183,7 +197,7 @@ def run_react_loop[RuntimeToolT: RuntimeTool](
             tools=tool_schemas,
             metadata={"iteration": iteration},
         )
-        provider_request = host._hooks.before_request(provider_request)
+        provider_request = host._before_request(provider_request)
         final_system_prompt = provider_request.system or system
         host._emit_runtime(
             ProviderRequestStartEvent(
@@ -196,7 +210,7 @@ def run_react_loop[RuntimeToolT: RuntimeTool](
             system=provider_request.system,
             tools=provider_request.tools,
         )
-        response = host._hooks.after_response(provider_request, response)
+        response = host._after_response(provider_request, response)
         host._emit_runtime(
             ProviderRequestEndEvent(
                 iteration=iteration,
