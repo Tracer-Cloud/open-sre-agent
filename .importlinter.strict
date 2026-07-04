@@ -39,9 +39,9 @@ ignore_imports =
     config.repl_config -> platform.terminal.theme
     config.webapp -> platform.observability.sentry_sdk
     # core -> integrations/tools (T-4 debt — agent_harness / llm_cli)
-    core.agent_harness.agents.action_agent -> integrations.llm_cli.failure_explain
-    core.agent_harness.agents.evidence_agent -> integrations.github.repo_scope
-    core.agent_harness.agents.turn_orchestrator -> integrations.llm_cli.errors
+    core.agent_harness.turns.action_driver -> integrations.llm_cli.failure_explain
+    core.agent_harness.turns.evidence_driver -> integrations.github.repo_scope
+    core.agent_harness.turns.orchestrator -> integrations.llm_cli.errors
     core.agent_harness.integrations.resolution -> integrations.catalog
     core.agent_harness.integrations.resolution -> integrations.port
     core.agent_harness.integrations.resolution -> integrations.store

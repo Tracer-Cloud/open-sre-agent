@@ -1,4 +1,4 @@
-"""Regression tests for ``core.agent_harness.agents.evidence_agent.gather_tool_evidence``.
+"""Regression tests for ``core.agent_harness.turns.evidence_driver.gather_tool_evidence``.
 
 The public contract (docstring) is: *any* failure is reported and swallowed
 (returns ``None``) so the conversational turn never breaks. Tool discovery,
@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-import core.agent_harness.agents.evidence_agent as evidence_agent
+import core.agent_harness.turns.evidence_driver as evidence_agent
 import tools.investigation.stages.gather_evidence.tools as gather_tools
 from core.agent_harness.session import Session
 

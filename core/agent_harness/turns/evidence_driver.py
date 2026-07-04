@@ -165,7 +165,7 @@ def _load_gather_llm_or_none(error_reporter: ErrorReporter | None) -> Any | None
     return _safe_execute(
         get_agent_llm,
         error_reporter=error_reporter,
-        context="core.agent_harness.agents.evidence_agent.client",
+        context="core.agent_harness.turns.evidence_driver.client",
         wrap_error=lambda exc: GatherLlmLoadError(
             "Failed to load the evidence-gather LLM client.",
             cause=exc,
@@ -213,10 +213,8 @@ def gather_tool_evidence(
     """
 
     def _run_gather_turn() -> Any | None:
-        # Tool discovery + integration resolution + LLM load happen inside the
-        # helper so a raise from tool-registry import, credential resolution, or
-        # LLM client init is swallowed by ``_safe_execute`` rather than breaking
-        # the turn.
+        # Tool discovery, integration resolution, and LLM load run inside this
+        # helper, within the ``_safe_execute`` fallback boundary.
         from tools.investigation.stages.gather_evidence.tools import get_available_tools
 
         resolved = _resolve_gather_integrations(session, message)
@@ -248,7 +246,7 @@ def gather_tool_evidence(
         result = _safe_execute(
             _run_gather_turn,
             error_reporter=error_reporter,
-            context="core.agent_harness.agents.evidence_agent",
+            context="core.agent_harness.turns.evidence_driver",
             wrap_error=lambda exc: GatherEvidenceExecutionError(
                 "Failed to gather evidence for the current conversational turn.",
                 cause=exc,

@@ -7,7 +7,7 @@ dependency is injectable so a real surface can override any of them.
 
 Example::
 
-    from core.agent_harness.agents.headless_agent import (
+    from core.agent_harness.turns.headless_dispatch import (
         dispatch_message_to_headless_agent,
         InMemorySessionStore,
         NullToolProvider,
@@ -32,9 +32,6 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
-from core.agent_harness.agents.action_agent import run_action_agent_turn
-from core.agent_harness.agents.evidence_agent import gather_tool_evidence
-from core.agent_harness.agents.turn_orchestrator import run_turn, stream_answer
 from core.agent_harness.models.turn_results import ShellTurnResult, ToolCallingTurnResult
 from core.agent_harness.models.turn_snapshot import TurnSnapshot
 from core.agent_harness.ports import (
@@ -54,6 +51,9 @@ from core.agent_harness.providers.default_prompt_context import (
     supports_default_prompt_context,
 )
 from core.agent_harness.providers.default_providers import DefaultTurnAccounting
+from core.agent_harness.turns.action_driver import run_action_agent_turn
+from core.agent_harness.turns.evidence_driver import gather_tool_evidence
+from core.agent_harness.turns.orchestrator import run_turn, stream_answer
 from core.execution import ToolExecutionHooks
 
 

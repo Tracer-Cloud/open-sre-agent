@@ -15,11 +15,6 @@ from typing import Any, Literal
 
 from rich.console import Console
 
-from core.agent_harness.agents.headless_agent import (
-    BufferOutputSink,
-    NoopTurnAccounting,
-    dispatch_message_to_headless_agent,
-)
 from core.agent_harness.models.turn_results import ShellTurnResult
 from core.agent_harness.providers.default_prompt_context import DefaultPromptContextProvider
 from core.agent_harness.providers.default_providers import (
@@ -27,6 +22,11 @@ from core.agent_harness.providers.default_providers import (
     DefaultToolProvider,
 )
 from core.agent_harness.session import InMemorySessionStorage, Session
+from core.agent_harness.turns.headless_dispatch import (
+    BufferOutputSink,
+    NoopTurnAccounting,
+    dispatch_message_to_headless_agent,
+)
 from core.llm.types import AgentLLMResponse, ToolCall
 from core.tool_framework.registered_tool import RegisteredTool
 from gateway.turn_handler import build_gateway_turn_handler

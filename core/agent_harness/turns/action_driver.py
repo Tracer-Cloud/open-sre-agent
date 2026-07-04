@@ -21,7 +21,6 @@ from typing import Any
 from core.agent import Agent
 from core.agent_harness.agent_builder import AgentConfig, build_agent
 from core.agent_harness.debug.prompt_trace import persist_turn_system_prompt
-from core.agent_harness.factories import default_llm_factory
 from core.agent_harness.integrations.resolution import resolve_and_cache_integrations
 from core.agent_harness.models.turn_results import ToolCallingTurnResult
 from core.agent_harness.models.turn_snapshot import TurnSnapshot
@@ -34,6 +33,7 @@ from core.agent_harness.ports import (
 )
 from core.agent_harness.prompts import build_action_system_prompt, build_action_user_message
 from core.agent_harness.prompts.conversation_memory import MAX_CONVERSATION_MESSAGES
+from core.agent_harness.providers.provider_models import default_llm_factory
 from core.events import runtime_event_callback_from_observer
 from core.execution import ToolExecutionHooks, public_tool_input
 from core.llm.types import AgentLLMResponse, ToolCall
@@ -305,9 +305,7 @@ def _build_action_agent(
     )
 
     if bang_command is not None:
-        # Explicit `!` shell escape — dispatches input the user typed verbatim
-        # as a shell command. Not a deterministic-command fast path or
-        # regex/keyword intent matcher.
+        # Explicit `!` shell escape: dispatch the verbatim text as a shell_run call.
         llm: Any = _StaticToolCallLLM(
             [
                 ToolCall(

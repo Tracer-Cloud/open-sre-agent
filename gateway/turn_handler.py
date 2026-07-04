@@ -12,7 +12,6 @@ import logging
 
 from rich.console import Console
 
-from core.agent_harness.agents.headless_agent import dispatch_message_to_headless_agent
 from core.agent_harness.providers.default_prompt_context import DefaultPromptContextProvider
 from core.agent_harness.providers.default_providers import (
     DefaultErrorReporter,
@@ -22,6 +21,7 @@ from core.agent_harness.providers.default_providers import (
     DefaultTurnAccounting,
 )
 from core.agent_harness.session import Session
+from core.agent_harness.turns.headless_dispatch import dispatch_message_to_headless_agent
 from gateway.gateway_output_sink import GatewayOutputSink
 from gateway.polling.handle_polled_inbound_telegram_msg import GatewayAgentCallback
 

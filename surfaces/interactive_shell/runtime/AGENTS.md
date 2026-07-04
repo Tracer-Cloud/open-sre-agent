@@ -83,7 +83,7 @@ The interactive runtime must keep this shape:
    (`session`, `state`, `spinner`, `invalidate_prompt`), presentation setup,
    prompt-mediated confirmation, dispatch state, and per-turn task execution.
 6. `interactive_shell.runtime.shell_turn_execution.execute_shell_turn` binds shell adapters
-   around `core.agent_harness.agents.turn_orchestrator.run_turn`.
+   around `core.agent_harness.turns.orchestrator.run_turn`.
 7. `core.agent_harness` owns one prompt's action/answer mechanics and accounting
    finalization. The terminal presentation for `AgentEvent` emissions lives in
    `runtime/agent_presentation.py`.
@@ -98,7 +98,7 @@ flowchart TD
   replMain --> controller["interactive_shell.controller.InteractiveShellController"]
   controller --> turnHost["runtime.turn_host.AgentTurnRunner.run_agent_turn"]
   turnHost --> turnEntry["interactive_shell.runtime.shell_turn_execution.execute_shell_turn"]
-  turnEntry --> coreHarness["core.agent_harness.agents.turn_orchestrator.run_turn"]
+  turnEntry --> coreHarness["core.agent_harness.turns.orchestrator.run_turn"]
   coreHarness --> sideEffects["slash/help/agent/follow-up/investigation side effects"]
   controller --> replState["core.state.ReplState"]
   controller --> spinnerState["core.state.SpinnerState"]
@@ -142,7 +142,7 @@ flowchart TD
 - The shell adapter entry lives in `runtime/shell_turn_execution.py`: `execute_shell_turn`
   composes the action-turn (`runtime/action_turn.py`), gather (`runtime/integration_tool_gathering.py`),
   and answer (`runtime/answer_turn.py`) adapters plus accounting around
-  `core.agent_harness.agents.turn_orchestrator.run_turn`. Each adapter owns its own
+  `core.agent_harness.turns.orchestrator.run_turn`. Each adapter owns its own
   binding; tests import them from their owning module (not `shell_turn_execution`).
 - The reusable per-prompt loop lives in `core.agent_harness`: turn snapshots,
   observation reset, action/response routing, and core result construction stay

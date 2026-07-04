@@ -9,7 +9,7 @@ from typing import Any, cast
 import pytest
 
 from core.agent import Agent, AgentRunResult
-from core.agent_harness.agents.headless_agent import dispatch_message_to_headless_agent
+from core.agent_harness.turns.headless_dispatch import dispatch_message_to_headless_agent
 from core.events import (
     MessageUpdateEvent,
     RuntimeEvent,
@@ -136,11 +136,11 @@ def test_agent_exposes_headless_dispatch_entrypoint(monkeypatch: pytest.MonkeyPa
             yield "hello from headless"
 
     monkeypatch.setattr(
-        "core.agent_harness.agents.action_agent.default_llm_factory",
+        "core.agent_harness.turns.action_driver.default_llm_factory",
         lambda: FakeLLM(iter([AgentLLMResponse(content="", tool_calls=[], raw_content=None)])),
     )
 
-    from core.agent_harness.agents.headless_agent import (
+    from core.agent_harness.turns.headless_dispatch import (
         NullToolProvider,
         StaticReasoningClientProvider,
     )

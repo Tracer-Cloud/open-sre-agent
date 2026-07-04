@@ -10,9 +10,6 @@ from collections.abc import Callable
 
 from rich.console import Console
 
-from core.agent_harness.agents.turn_orchestrator import (
-    stream_answer as core_stream_answer,
-)
 from core.agent_harness.models.turn_snapshot import TurnSnapshot
 from core.agent_harness.ports import OutputSink
 from core.agent_harness.providers.default_providers import (
@@ -21,6 +18,9 @@ from core.agent_harness.providers.default_providers import (
     DefaultRunRecordFactory,
 )
 from core.agent_harness.session import Session
+from core.agent_harness.turns.orchestrator import (
+    stream_answer as core_stream_answer,
+)
 from surfaces.interactive_shell.grounding.cli_reference import shell_prompt_context_provider
 from surfaces.interactive_shell.runtime.agent_harness_adapters import resolve_output_sink
 from surfaces.interactive_shell.utils.telemetry import LlmRunInfo

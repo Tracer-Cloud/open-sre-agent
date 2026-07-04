@@ -7,10 +7,10 @@ from collections.abc import Callable
 from typing import Any, get_type_hints
 
 from core.agent import Agent
-from core.agent_harness.agents.action_agent import run_action_agent_turn
-from core.agent_harness.agents.turn_orchestrator import run_turn, stream_answer
 from core.agent_harness.models.turn_results import ToolCallingTurnResult
 from core.agent_harness.ports import ExecuteActions, StreamAnswerFn
+from core.agent_harness.turns.action_driver import run_action_agent_turn
+from core.agent_harness.turns.orchestrator import run_turn, stream_answer
 
 
 def _accept_answer(answer: StreamAnswerFn) -> StreamAnswerFn:

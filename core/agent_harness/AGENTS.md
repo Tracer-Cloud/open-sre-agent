@@ -6,7 +6,7 @@ direct-answer path (`stream_answer` via the `StreamAnswerFn` seam in
 `ports.py`, no tools). It orchestrates action tool-calling turns, three-path routing,
 conversational answers, evidence gather, and headless execution. It was
 extracted out of `interactive_shell` so the same harness can run the interactive
-terminal and be invoked headlessly via `agent_harness.agents.headless_agent`.
+terminal and be invoked headlessly via `agent_harness.turns.headless_dispatch`.
 
 ## Hard boundary (enforced by tests)
 
@@ -33,7 +33,7 @@ responsibility-scoped subpackage.
 - `agent_builder.py` — `AgentConfig` dataclass + `build_agent(config)`. The
   single instantiation site for `core.agent.Agent` across all surfaces
   (action, evidence, gateway). See "Agent construction pattern" below.
-- `agents/` — the turn drivers that orchestrate `core.agent.Agent`:
+- `turns/` — the turn drivers that orchestrate `core.agent.Agent`:
   - `action_agent.py` — `run_action_agent_turn`: one action tool-calling turn
     over the ports. Uses `_build_action_agent` factory that returns an
     `ActionTurnPlan`.
@@ -129,8 +129,8 @@ config = AgentConfig(
 agent = build_agent(config)
 ```
 
-Action (`agents/action_agent.py::_build_action_agent`) and evidence
-(`agents/evidence_agent.py::_build_evidence_agent`) assemble an
+Action (`turns/action_driver.py::_build_action_agent`) and evidence
+(`turns/evidence_driver.py::_build_evidence_agent`) assemble an
 ``AgentConfig`` and call ``build_agent``. The gateway turn path does not
 construct a persistent ``Agent`` — it uses
 ``Agent.dispatch_message_to_headless_agent`` with per-turn
@@ -142,7 +142,7 @@ from the live chat session. When ``Agent.__init__``'s signature changes,
 ## Agent context and data stores
 
 See `docs/agent-context-data-stores.md`. Turn assembly starts in
-``agents/turn_orchestrator.py`` with ``TurnSnapshot.from_session``.
+``turns/orchestrator.py`` with ``TurnSnapshot.from_session``.
 
 **Do NOT** reintroduce per-surface `Agent` subclasses that override
 `build_llm` / `build_system_prompt` / `build_tools` / `resolved_integrations`
@@ -185,7 +185,7 @@ Before opening or merging an agent PR, confirm:
    entrypoint or rename a shape seam.
 
 **Read order for new code:** this file → `docs/agent-context-data-stores.md` →
-`agents/turn_orchestrator.py` (`run_turn`) → `core/agent/agent.py` (facade + wiring)
+`turns/orchestrator.py` (`run_turn`) → `core/agent/agent.py` (facade + wiring)
 → `core/agent/react_loop.py` (`run_react_loop`, the tool-calling algorithm).
 
 ## Investigation agent — the tool-calling shape with a custom loop

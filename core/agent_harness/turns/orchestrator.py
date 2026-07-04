@@ -79,7 +79,7 @@ def _stream_response(
         if error_reporter is not None:
             error_reporter.report(
                 exc,
-                context="core.agent_harness.agents.turn_orchestrator.stream",
+                context="core.agent_harness.turns.orchestrator.stream",
                 expected=isinstance(exc, CLITimeoutError),
             )
         if session is not None:

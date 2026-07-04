@@ -18,7 +18,7 @@ to look when something diverges between shell, gateway, and headless paths.
 | Resume or trace a past session | JSONL file — `~/.opensre/sessions/{session_id}.jsonl` |
 | See the **system prompt** sent to `Agent.run` | `AgentRunResult.final_system_prompt` (in-memory) or JSONL `role=system` entries |
 | See the **user-facing composed prompt** for the assistant | Session JSONL `message` user rows, or `~/.config/opensre/prompt_log.jsonl` (shell only) |
-| Understand turn routing (action vs answer) | `run_turn` — `core/agent_harness/agents/turn_orchestrator.py` |
+| Understand turn routing (action vs answer) | `run_turn` — `core/agent_harness/turns/orchestrator.py` |
 
 ---
 

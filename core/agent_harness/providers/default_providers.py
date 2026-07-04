@@ -157,7 +157,7 @@ class DefaultReasoningClientProvider:
         if self._error_reporter is not None:
             self._error_reporter.report(exc, context=context)
         if self._session is not None:
-            from core.agent_harness.agents.turn_orchestrator import stage_turn_error
+            from core.agent_harness.turns.orchestrator import stage_turn_error
 
             stage_turn_error(self._session, "llm_unavailable", str(exc))
         if self._output is not None:

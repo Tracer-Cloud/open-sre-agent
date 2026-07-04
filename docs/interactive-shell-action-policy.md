@@ -38,7 +38,7 @@ recurring source of precedence drift.
    detection in `runtime/utils/input_policy._literal_slash_command_text` remains
    terminal-UI policy (spinner suppression and exclusive-stdin gating); the
    execution-side deterministic dispatch lives in
-   `core/agent_harness/agents/action_agent.py`.
+   `core/agent_harness/turns/action_driver.py`.
 
 ## What this means for changes
 - To change how a phrasing maps to a tool, edit the action-agent system prompt and/or

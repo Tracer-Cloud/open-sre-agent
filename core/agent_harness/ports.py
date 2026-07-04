@@ -3,7 +3,7 @@
 These are the seams that keep ``agent/`` decoupled from any concrete surface.
 The interactive shell implements them as adapters over its ``Session``,
 Rich console, tool registry, and grounding caches; the headless adapters in
-:mod:`core.agent_harness.agents.headless_agent` implement minimal in-memory versions for API / test runs.
+:mod:`core.agent_harness.turns.headless_dispatch` implement minimal in-memory versions for API / test runs.
 
 Nothing here imports ``interactive_shell``.
 """

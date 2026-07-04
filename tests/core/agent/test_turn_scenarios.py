@@ -12,13 +12,13 @@ import pytest
 from rich.console import Console
 
 from core import Agent, AgentTool, AgentToolContext
-from core.agent_harness.agents.action_agent import _MAX_TOOL_CALLING_ITERATIONS
 from core.agent_harness.prompts import (
     build_action_system_prompt,
     build_action_user_message,
 )
 from core.agent_harness.tools.action_tools import get_action_tools_from_integrations_context
 from core.agent_harness.tools.tool_context import ActionToolContext
+from core.agent_harness.turns.action_driver import _MAX_TOOL_CALLING_ITERATIONS
 from core.llm.llm_retry import LLMCreditExhaustedError
 from core.llm.types import ToolCall
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS
