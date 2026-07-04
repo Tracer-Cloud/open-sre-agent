@@ -14,7 +14,7 @@ last column says whether peers may import each other.
 | Tier | Packages | May import | Must never import | Peer rule |
 | --- | --- | --- | --- | --- |
 | 1 (top) | `surfaces`, `gateway` | `tools`, `integrations`, `core`, `platform`, `config` | — | Independent: must not import each other. |
-| 2 | `tools`, `integrations` | `core`, `platform`, `config` | `surfaces`, `gateway` | Independent: must not import each other. |
+| 2 | `tools`, `integrations` | `core`, `platform`, `config` | `surfaces`, `gateway` | One-directional: `integrations` must never import `tools`; a tool may use an integration client, so `integrations` effectively sits below `tools`. |
 | 3 | `core`, `platform` | `config` | `surfaces`, `gateway`, `tools`, `integrations` | Siblings: **may** cross-import each other. |
 | 4 (bottom) | `config` | — (nothing first-party) | everything above | Independent — imports no other first-party package. |
 
@@ -95,9 +95,11 @@ responsibility:
   (`tools/investigation`, `tools/fleet_monitoring`, `tools/watch_dog`). A tool
   is what the planner selects and the runtime executes.
 
-`tools` and `integrations` are independent peers: neither imports the other.
-Keeping vendor clients (`integrations`) separate from agent-callable tools
-(`tools`) is what lets a client be reused outside the tool layer. Do **not**
+The import rule between them is one-directional: `integrations` must never
+import `tools` (or `surfaces`), so a vendor client never depends on the agent
+layer and stays reusable on its own. The reverse edge is allowed and common — a
+tool reaches an integration's client for external data — so `integrations`
+effectively sits one step below `tools` in the dependency graph. Do **not**
 reintroduce top-level `vendors/` or `services/` packages — external-system code
 belongs in `integrations/`, agent-callable code in `tools/`.
 
