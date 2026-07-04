@@ -199,7 +199,9 @@ def _offer_github_login(_console: Console) -> bool:
         ).ask()
     except (EOFError, KeyboardInterrupt):
         return False
-    return choice == _SIGN_IN_CHOICE
+    if choice is None:
+        return False
+    return bool(choice == _SIGN_IN_CHOICE)
 
 
 def _ask_retry(_console: Console) -> bool:
