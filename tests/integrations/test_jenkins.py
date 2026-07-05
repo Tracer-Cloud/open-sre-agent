@@ -496,6 +496,59 @@ class TestListRunningBuilds:
         assert result["running_builds"][0]["number"] == 9
 
 
+class TestClientErrorPaths:
+    @pytest.mark.parametrize(
+        ("method_name", "args"),
+        [
+            ("list_builds", ("demo",)),
+            ("get_build_log", ("demo", 1)),
+            ("get_pipeline_stages", ("demo", 1)),
+            ("list_jobs", ()),
+            ("list_running_builds", ()),
+        ],
+    )
+    def test_client_methods_return_failure_on_timeout(
+        self,
+        method_name: str,
+        args: tuple[Any, ...],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        def handler(_: httpx.Request) -> httpx.Response:
+            raise httpx.TimeoutException("jenkins timed out")
+
+        client = _client_with_handler(handler, monkeypatch)
+
+        result = getattr(client, method_name)(*args)
+
+        assert result["success"] is False
+        assert "jenkins timed out" in result["error"]
+
+    @pytest.mark.parametrize(
+        ("method_name", "args"),
+        [
+            ("list_builds", ("demo",)),
+            ("get_pipeline_stages", ("demo", 1)),
+            ("list_jobs", ()),
+            ("list_running_builds", ()),
+        ],
+    )
+    def test_json_methods_return_failure_on_invalid_json(
+        self,
+        method_name: str,
+        args: tuple[Any, ...],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        def handler(_: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, content=b"not-json")
+
+        client = _client_with_handler(handler, monkeypatch)
+
+        result = getattr(client, method_name)(*args)
+
+        assert result["success"] is False
+        assert "expecting value" in result["error"].lower()
+
+
 class TestMakeClient:
     def test_returns_none_without_creds(self) -> None:
         assert make_jenkins_client("", api_token="") is None
