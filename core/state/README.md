@@ -31,9 +31,12 @@ request assembly.
 
 ## Also exported (temporary)
 
-- ``MutableAgentState`` and related harness session types in ``agent_state.py``.
-  These live here for historical import paths; target home is
-  ``core/agent_harness/session/`` ([#3685](https://github.com/Tracer-Cloud/opensre/issues/3685)).
+- ``MutableAgentState`` in ``agent_state.py``. Now slimmed to the cross-turn
+  transcript (``messages``) plus ``last_observation`` and ``clear()`` — the
+  per-turn tool/prompt machinery has been removed. It still lives here for
+  historical import paths; the remaining move to
+  ``core/agent_harness/session/`` is pending
+  ([#3685](https://github.com/Tracer-Cloud/opensre/issues/3685)).
 
 ## Naming Rule
 

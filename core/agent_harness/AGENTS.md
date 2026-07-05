@@ -141,8 +141,8 @@ from the live chat session. When ``Agent.__init__``'s signature changes,
 
 ## Agent context and data stores
 
-See `docs/agent-context-data-stores.md`. Turn assembly starts in
-``turns/orchestrator.py`` with ``TurnSnapshot.from_session``.
+Turn assembly starts in ``turns/orchestrator.py`` with
+``TurnSnapshot.from_session``.
 
 **Do NOT** reintroduce per-surface `Agent` subclasses that override
 `build_llm` / `build_system_prompt` / `build_tools` / `resolved_integrations`
@@ -174,9 +174,8 @@ Before opening or merging an agent PR, confirm:
    `ExecuteActions`) or direct answer (`StreamAnswerFn` / `invoke_stream`, no tools).
 2. **Entrypoint docstring** — The public function or class documents which shape
    it implements (three lines max; link here if helpful).
-3. **Docs** — Update this file when harness rules change; update
-   `docs/agent-context-data-stores.md` when routing or prompt capture changes
-   (diagram must match runtime — assistant never flows through `Agent.run()`).
+3. **Docs** — Update this file when harness rules change (the assistant never
+   flows through `Agent.run()`; keep any routing description consistent with that).
 4. **Seams** — Inject through `ports.py` callables (`StreamAnswerFn`,
    `ExecuteActions`, `EvidenceGatherer`); do not import surface code into
    `agent_harness/`.
@@ -184,9 +183,9 @@ Before opening or merging an agent PR, confirm:
    `tests/core/agent_harness/test_agent_shapes.py` when you introduce a new
    entrypoint or rename a shape seam.
 
-**Read order for new code:** this file → `docs/agent-context-data-stores.md` →
-`turns/orchestrator.py` (`run_turn`) → `core/agent/agent.py` (facade + wiring)
-→ `core/agent/react_loop.py` (`run_react_loop`, the tool-calling algorithm).
+**Read order for new code:** this file → `turns/orchestrator.py` (`run_turn`) →
+`core/agent/agent.py` (facade + wiring) → `core/agent/react_loop.py`
+(`run_react_loop`, the tool-calling algorithm).
 
 ## Investigation agent — the tool-calling shape with a custom loop
 
