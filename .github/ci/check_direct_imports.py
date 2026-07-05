@@ -89,8 +89,6 @@ _BASELINE_IGNORES: frozenset[str] = frozenset(
 # below ``surfaces/`` or making tools UI-agnostic.
 _NESTED_BASELINE_IGNORES: frozenset[str] = frozenset(
     {
-        # Hermes defers investigation pipeline import until an incident runs.
-        "integrations.hermes.investigation -> tools.investigation.capability",
         "tools.interactive_shell.actions.investigation -> surfaces.interactive_shell.runtime.background.runner",
         "tools.interactive_shell.actions.investigation -> surfaces.interactive_shell.runtime.investigation_adapter",
         "tools.interactive_shell.actions.sample_alert -> surfaces.interactive_shell.runtime.background.runner",

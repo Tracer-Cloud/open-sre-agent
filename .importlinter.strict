@@ -60,8 +60,6 @@ ignore_imports =
     platform.scheduler.executor -> integrations.discord.delivery
     platform.scheduler.executor -> integrations.slack.delivery
     platform.scheduler.executor -> integrations.telegram.delivery
-    # integrations -> tools (hermes investigation bridge)
-    integrations.hermes.investigation -> tools.investigation.capability
     # surfaces -> gateway (cli gateway command)
     surfaces.cli.commands.gateway -> gateway.manager
     # tools.interactive_shell -> surfaces (T-4 debt — issue #3352)
