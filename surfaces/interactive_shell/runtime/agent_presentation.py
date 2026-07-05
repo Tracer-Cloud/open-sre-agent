@@ -96,7 +96,10 @@ async def _render_agent_presentation_transition(
             from core.llm.llm_retry import LLMCreditExhaustedError
 
             if isinstance(exc, LLMCreditExhaustedError):
-                console.print(f"[{DIM}]Run /model to switch to another provider.[/]")
+                console.print(
+                    f"[{DIM}]Run /auth login (or `opensre auth login <provider>`) "
+                    f"to switch to another provider.[/]"
+                )
         case "turn_end":
             set_prompt_suppress_fn(None)
             if previous.show_spinner:
