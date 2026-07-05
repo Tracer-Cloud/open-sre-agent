@@ -66,8 +66,8 @@ Main packages one level deeper:
 - `core/context/state/` — Shared agent runtime envelope (`AgentState`), chat slice, investigation pipeline slice contracts, `EvidenceEntry`, state-update helpers, and pure defaults.
 - `tools/` — Tool registry, decorator, base classes, per-tool packages, shared utilities, and registry helpers.
 - `core/domain/types/` — Shared typed contracts for evidence, retrieval, and tool-related payloads.
-- `platform/` — Guardrails, masking, sandbox, analytics, auth, and cross-cutting platform services (e.g. `platform/notifications/telegram_delivery.py`).
-- `tools/system/watch_dog/` — Watchdog feature: per-threshold Telegram alarm dispatch with cooldown, sitting on top of `platform/notifications/telegram_delivery.py`.
+- `platform/` — Guardrails, masking, sandbox, analytics, auth, and cross-cutting platform services (e.g. `integrations/telegram/*`).
+- `tools/system/watch_dog/` — Watchdog feature: per-threshold Telegram alarm dispatch with cooldown, sitting on top of `integrations/telegram/*`.
 - `config/webapp.py` — Web-facing application entrypoint; the `opensre` CLI is `surfaces/cli/__main__.py`.
 
 ## 2. Entry Points
