@@ -115,7 +115,7 @@ def test_run_turn_builds_turn_plan_for_action_path(
     """run_turn resolves once and hands the action path a turn_plan carrying them."""
     resolved = {"github": {"configured": True}}
     monkeypatch.setattr(
-        "core.agent_harness.turns.orchestrator.resolve_and_cache_integrations",
+        "core.agent_harness.turns.turn_plan.resolve_and_cache_integrations",
         lambda _session: resolved,
     )
     captured: list[Any] = []
@@ -159,7 +159,7 @@ def test_run_turn_passes_turn_plan_to_gather(
     """run_turn hands the gather phase the turn_plan carrying resolved integrations (no re-resolve)."""
     resolved = {"github": {"configured": True}}
     monkeypatch.setattr(
-        "core.agent_harness.turns.orchestrator.resolve_and_cache_integrations",
+        "core.agent_harness.turns.turn_plan.resolve_and_cache_integrations",
         lambda _session: resolved,
     )
     gather_calls: list[Any] = []
@@ -192,6 +192,50 @@ def test_run_turn_passes_turn_plan_to_gather(
     )
 
     assert gather_calls == [resolved]
+
+
+def test_run_turn_passes_turn_plan_to_answer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The answer phase receives the same turn_plan (its snapshot grounds the prompt)."""
+    resolved = {"github": {"configured": True}}
+    monkeypatch.setattr(
+        "core.agent_harness.turns.turn_plan.resolve_and_cache_integrations",
+        lambda _session: resolved,
+    )
+    answer_plans: list[Any] = []
+
+    def execute_actions(_text: str, **_kwargs: object) -> ToolCallingTurnResult:
+        return ToolCallingTurnResult(0, 0, 0, False, False)
+
+    def answer(_text: str, *, turn_plan: Any = None, **_kwargs: object) -> object:
+        answer_plans.append(turn_plan)
+        return type("Run", (), {"response_text": "answered"})()
+
+    def gather(_text: str, **_kwargs: object) -> None:
+        return None
+
+    class _Accounting:
+        def record_action_result(self, _result: ToolCallingTurnResult) -> None:
+            return None
+
+        def finalize(self, result: ShellTurnResult) -> ShellTurnResult:
+            return result
+
+    session = Session(storage=InMemorySessionStorage())
+    run_turn(
+        "why is it down?",
+        session,
+        execute_actions=execute_actions,
+        answer=answer,
+        gather=gather,
+        accounting=_Accounting(),
+    )
+
+    assert answer_plans, "answer was never called"
+    assert answer_plans[0] is not None
+    assert answer_plans[0].snapshot.text == "why is it down?"
+    assert answer_plans[0].resolved_integrations == resolved
 
 
 def test_action_tools_uses_passed_resolved_integrations(

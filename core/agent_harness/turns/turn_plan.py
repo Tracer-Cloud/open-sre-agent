@@ -2,22 +2,25 @@
 
 Assembled once at the top of ``run_turn`` and read by the action, gather, and
 answer phases so they cannot disagree about what this turn knows. It composes the
-frozen :class:`TurnSnapshot` (the read view of session state at turn start) and
-exposes the turn's single resolved-integration view.
+frozen :class:`TurnSnapshot` (the read view of session state at turn start) with
+the turn's resolved-integration decision.
 
 The snapshot answers "what did the session look like at turn start?"; the plan
-answers "what is this turn running on?". Today the plan's decision is the
-resolved integrations; tool lists and prompts stay built by their phases (action
-tools need surface context; gather tools depend on message-time GitHub scope),
-each reading ``resolved_integrations`` here so there is one source.
+answers "what is this turn running on?". ``build_turn_plan`` owns the assembly:
+it resolves integrations once and composes them into the snapshot. Tool lists and
+prompts stay built by their phases (action tools need surface context; gather
+tools depend on message-time GitHub scope), each reading ``resolved_integrations``
+here so there is one source.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
+from core.agent_harness.integrations.resolution import resolve_and_cache_integrations
 from core.agent_harness.models.turn_snapshot import TurnSnapshot
+from core.agent_harness.ports import SessionStore
 
 
 @dataclass(frozen=True)
@@ -37,8 +40,15 @@ class TurnPlan:
         return self.snapshot.resolved_integrations
 
 
-def build_turn_plan(snapshot: TurnSnapshot) -> TurnPlan:
-    """Assemble the turn plan from the resolved snapshot (the single owner)."""
+def build_turn_plan(snapshot: TurnSnapshot, session: SessionStore) -> TurnPlan:
+    """Assemble the turn plan: resolve integrations once, then compose the snapshot.
+
+    Resolution runs only when the snapshot has not already been populated (a
+    runtime-request source can pre-fill it), so the plan is the single place that
+    decides what this turn knows about connected integrations.
+    """
+    if not snapshot.resolved_integrations:
+        snapshot = replace(snapshot, resolved_integrations=resolve_and_cache_integrations(session))
     return TurnPlan(snapshot=snapshot)
 
 

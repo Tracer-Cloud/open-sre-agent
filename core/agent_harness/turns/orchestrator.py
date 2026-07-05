@@ -17,11 +17,10 @@ Protocols in :mod:`core.agent_harness.ports`. Nothing here imports ``interactive
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import Any, Literal
 
 from config.llm_reasoning_effort import apply_reasoning_effort
-from core.agent_harness.integrations.resolution import resolve_and_cache_integrations
 from core.agent_harness.models.turn_results import ShellTurnResult, ToolCallingTurnResult
 from core.agent_harness.models.turn_snapshot import TurnSnapshot
 from core.agent_harness.ports import (
@@ -283,19 +282,11 @@ def run_turn(
     # prompts reflect a consistent turn-start view rather than live session state.
     turn_snapshot = TurnSnapshot.from_session(text, session)
 
-    # Resolve integrations once, at the top of the turn, so the frozen context is
-    # the single source of truth for what this turn knows. Downstream readers
-    # (e.g. the action agent) read ``turn_snapshot.resolved_integrations`` instead of
-    # re-resolving per component. Only fill it when a runtime-request source
-    # (``select_turn_runtime_input``) hasn't already populated it.
-    if not turn_snapshot.resolved_integrations:
-        turn_snapshot = replace(
-            turn_snapshot, resolved_integrations=resolve_and_cache_integrations(session)
-        )
-
-    # Assemble the turn plan once: the single object the action, gather, and
-    # answer phases read so they cannot disagree about what this turn knows.
-    turn_plan = build_turn_plan(turn_snapshot)
+    # Assemble the turn plan once: it resolves integrations and composes the
+    # snapshot into the single object the action, gather, and answer phases read,
+    # so they cannot disagree about what this turn knows.
+    turn_plan = build_turn_plan(turn_snapshot, session)
+    turn_snapshot = turn_plan.snapshot
 
     # Clear any observation left by a prior turn so only this turn's discovery
     # output can trigger a summary pass.
