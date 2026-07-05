@@ -30,7 +30,6 @@ Example::
 from __future__ import annotations
 
 from core.agent_harness.models.turn_results import ShellTurnResult, ToolCallingTurnResult
-from core.agent_harness.models.turn_snapshot import TurnSnapshot
 from core.agent_harness.ports import (
     ConfirmFn,
     ErrorReporter,
@@ -61,6 +60,7 @@ from core.agent_harness.turns.headless_adapters import (
     StaticReasoningClientProvider,
 )
 from core.agent_harness.turns.orchestrator import run_turn, stream_answer
+from core.agent_harness.turns.turn_plan import TurnPlan
 from core.execution import ToolExecutionHooks
 
 
@@ -119,7 +119,7 @@ def dispatch_message_to_headless_agent(
         *,
         confirm_fn: ConfirmFn | None = None,
         is_tty: bool | None = None,
-        turn_snapshot: TurnSnapshot | None = None,
+        turn_plan: TurnPlan | None = None,
     ) -> ToolCallingTurnResult:
         return run_action_agent_turn(
             text,
@@ -128,7 +128,7 @@ def dispatch_message_to_headless_agent(
             tools=tools,
             confirm_fn=confirm_fn,
             is_tty=is_tty,
-            turn_snapshot=turn_snapshot,
+            turn_plan=turn_plan,
             error_reporter=error_reporter,
             tool_hooks=tool_hooks,
         )
