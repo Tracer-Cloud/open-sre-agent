@@ -8,12 +8,13 @@ from pydantic import Field
 from typing_extensions import TypedDict
 
 from config.strict_config import StrictConfigModel
+from core.state.agent_state import AgentMessageRole
 
 AgentMode = Literal["chat", "investigation", "agent_incident"]
 
 
 class ChatMessage(TypedDict, total=False):
-    role: Literal["system", "user", "assistant", "tool"]
+    role: AgentMessageRole
     content: str
     tool_calls: list[dict[str, Any]]
     # Tool-role messages (role: "tool") carry OpenAI-compatible correlation fields.
@@ -22,7 +23,7 @@ class ChatMessage(TypedDict, total=False):
 
 
 class ChatMessageModel(StrictConfigModel):
-    role: Literal["system", "user", "assistant", "tool"]
+    role: AgentMessageRole
     content: str = ""
     tool_calls: list[dict[str, Any]] = Field(default_factory=list)
     tool_call_id: str = ""

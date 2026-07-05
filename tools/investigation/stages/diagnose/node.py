@@ -7,7 +7,7 @@ from typing import Any, TypedDict, cast
 
 from pydantic import BaseModel
 
-from core.context.state import InvestigationState
+from core.state import InvestigationState
 from core.domain.alerts.alert_source import resolve_alert_source
 from core.domain.diagnosis import (
     InvestigationResult,

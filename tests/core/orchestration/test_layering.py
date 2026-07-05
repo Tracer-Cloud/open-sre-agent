@@ -174,7 +174,7 @@ def test_config_does_not_import_first_party_packages() -> None:
         "(see docs/ARCHITECTURE.md Tier 4). Offenders:\n"
         + "\n".join(f"  {item}" for item in offenders)
     )
-    assert len(baseline) >= 8
+    assert len(baseline) >= 5
 
 
 def test_surfaces_and_gateway_are_independent_peers() -> None:

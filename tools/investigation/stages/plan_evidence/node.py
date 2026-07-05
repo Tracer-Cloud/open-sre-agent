@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.context.state import InvestigationState
+from core.state import InvestigationState
 from core.domain.alerts.alert_source import (
     primary_sources_for_alert,
     relevant_sources_for_alert,

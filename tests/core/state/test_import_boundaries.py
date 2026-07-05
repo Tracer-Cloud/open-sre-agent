@@ -32,7 +32,7 @@ def _is_ignored_scan_path(path: Path, root: Path) -> bool:
     return relative.parts[:2] == (".claude", "worktrees")
 
 
-def test_context_state_stays_dependency_light() -> None:
+def test_state_stays_dependency_light() -> None:
     root = _repo_root()
     forbidden = (
         "core." + "orchestration",
@@ -40,7 +40,7 @@ def test_context_state_stays_dependency_light() -> None:
         "core.domain.alerts.normalization",
     )
     offenders: list[str] = []
-    for path in sorted((root / "core" / "context" / "state").rglob("*.py")):
+    for path in sorted((root / "core" / "state").rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
             module_names: list[str] = []

@@ -38,7 +38,7 @@ from core.agent_harness.session.tasks import TaskRegistry
 from core.agent_harness.session.terminal_metrics import TerminalMetrics
 from core.agent_harness.session.token_usage import TokenUsage
 from core.agent_harness.session.types import SessionStorage
-from core.context.state import MutableAgentState
+from core.state import MutableAgentState
 
 # Prefilled into the next prompt after a background synthetic test exits non-zero,
 # so the user can ask the CLI assistant for a quick RCA explanation.

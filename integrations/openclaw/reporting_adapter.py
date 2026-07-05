@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from typing import Any, cast
 
-from core.context.state import InvestigationState
+from core.state import InvestigationState
 from platform.reporting.delivery_registry import (
     DeliveryContext,
     register_delivery_adapter,

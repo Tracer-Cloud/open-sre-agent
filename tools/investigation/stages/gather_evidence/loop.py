@@ -7,7 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from core.context.state.evidence import EvidenceEntry
+from core.state.evidence import EvidenceEntry
 from core.llm.types import ToolCall
 from core.llm_invoke_errors import LLMInvokeFailure
 from platform.common.truncation import truncate

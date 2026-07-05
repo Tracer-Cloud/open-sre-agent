@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from core.context.state import AgentStateModel, make_chat_state
+from core.state import AgentStateModel, make_chat_state
 from tools.investigation.state_factory import make_initial_state
 
 

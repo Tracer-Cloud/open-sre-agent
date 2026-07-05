@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Protocol, cast
 
-from core.context.state import InvestigationState
+from core.state import InvestigationState
 from core.domain.types.upstream import (
     UpstreamEvidenceBundle,
 )

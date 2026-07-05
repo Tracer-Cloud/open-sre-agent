@@ -2,13 +2,13 @@
 
 ``AgentStateModel`` is the single source of truth for field defaults and
 validation. ``AgentState`` composes investigation slices from
-:mod:`core.context.state.runtime_slices` and chat slice from
-:mod:`core.context.state.slices`; the runtime dict remains flat.
+:mod:`core.state.runtime_slices` and chat slice from
+:mod:`core.state.slices`; the runtime dict remains flat.
 
 Whenever you add or remove a field, update ``AgentStateModel`` and the
 appropriate slice in ``runtime_slices.py`` or ``slices.py``.
-``tests/app/test_agent_state_sync.py`` asserts slice keys and Pydantic fields
-stay aligned with ``AgentState``.
+``tests/core/state/test_agent_state_sync.py`` asserts slice keys and Pydantic
+fields stay aligned with ``AgentState``.
 """
 
 from __future__ import annotations
@@ -18,7 +18,8 @@ from typing import Any, cast
 from pydantic import ConfigDict, Field
 
 from config.strict_config import StrictConfigModel
-from core.context.state.runtime_slices import (
+from core.domain.types.retrieval import RetrievalControlsMap
+from core.state.runtime_slices import (
     AlertInputSlice,
     DeliveryContextSlice,
     DeliveryOutputSlice,
@@ -29,9 +30,8 @@ from core.context.state.runtime_slices import (
     MaskingSlice,
     SessionContext,
 )
-from core.context.state.slices import ChatStateSlice
-from core.context.state.types import AgentMode, ChatMessage, ChatMessageModel
-from core.domain.types.retrieval import RetrievalControlsMap
+from core.state.slices import ChatStateSlice
+from core.state.types import AgentMode, ChatMessage, ChatMessageModel
 
 
 class AgentState(
@@ -51,7 +51,7 @@ class AgentState(
 
     Chat mode primarily uses ``ChatStateSlice`` + ``SessionContext``.
     Investigation mode uses alert, plan, runtime, diagnosis, and delivery slices.
-    See :mod:`core.context.state.runtime_slices` for investigation field groupings.
+    See :mod:`core.state.runtime_slices` for investigation field groupings.
     """
 
 

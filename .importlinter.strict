@@ -34,9 +34,6 @@ layers =
 ignore_imports =
     # config upward imports (T-4 debt — refactor into lower layers)
     config.config -> core.llm.azure_openai
-    config.gateway_output_sink -> gateway.polling.telegram_poller.client
-    config.gateway_output_sink -> integrations.telegram.formatting
-    config.gateway_output_sink -> platform.common.truncation
     config.llm_auth.credentials -> integrations.llm_cli.registry
     config.llm_keyring -> platform
     config.repl_config -> platform.terminal.theme

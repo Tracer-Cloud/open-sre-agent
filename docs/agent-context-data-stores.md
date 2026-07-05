@@ -164,7 +164,7 @@ hydrated by `SessionResolver` before each turn.
 
 ## Store 2 — `MutableAgentState` (audit)
 
-**File:** `core/context/state/agent_state.py`  
+**File:** `core/state/agent_state.py`  
 **Access:** `session.agent` (compatibility: `session.cli_agent_messages`,
 `session.last_command_observation`)
 

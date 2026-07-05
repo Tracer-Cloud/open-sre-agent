@@ -115,8 +115,8 @@ belongs in `integrations/`, agent-callable code in `tools/`.
 The shared runtime and cross-cutting services the capability layer is built on.
 
 - **`core/`** — the provider-agnostic agent runtime: the think → call tools →
-  observe loop (`core.agent.Agent`), context assembly and budget enforcement
-  (`core/context`, `core/context_budget.py`), the tool framework primitives
+  observe loop (`core.agent.Agent`), agent/investigation state (`core/state`) and
+  context-budget enforcement (`core/context_budget.py`), the tool framework primitives
   (`core/tool_framework`), shared LLM clients (`core/llm`), agent-harness
   session handling (`core/agent_harness`), and pure domain rules (`core/domain`).
 - **`platform/`** — cross-cutting services with no investigation logic of their
@@ -127,7 +127,7 @@ The shared runtime and cross-cutting services the capability layer is built on.
 These two are the one bidirectional pair by design: `core` reaches `platform`
 for guardrails, masking, observability, and evidence/log compaction, while
 `platform` reaches back into `core` for the shared state and session types
-(`core.context.state`, `core.agent_harness.session`). Splitting them into
+(`core.state`, `core.agent_harness.session`). Splitting them into
 separate tiers would forbid that edge, so they share a tier as siblings.
 
 ### Tier 4 — `config`
