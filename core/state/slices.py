@@ -9,6 +9,7 @@ from typing_extensions import TypedDict
 
 from core.state.runtime_slices import (
     AlertInputSlice,
+    CallerMetadataSlice,
     DeliveryContextSlice,
     DeliveryOutputSlice,
     DiagnosisSlice,
@@ -16,7 +17,6 @@ from core.state.runtime_slices import (
     InvestigationPlanSlice,
     InvestigationRuntimeSlice,
     MaskingSlice,
-    SessionContext,
 )
 
 
@@ -36,5 +36,5 @@ __all__ = [
     "InvestigationPlanSlice",
     "InvestigationRuntimeSlice",
     "MaskingSlice",
-    "SessionContext",
+    "CallerMetadataSlice",
 ]

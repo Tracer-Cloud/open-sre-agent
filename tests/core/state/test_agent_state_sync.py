@@ -8,6 +8,7 @@ Fix drift by updating ``AgentStateModel`` and the matching slice in
 from core.state.models import AgentState, AgentStateModel
 from core.state.runtime_slices import (
     AlertInputSlice,
+    CallerMetadataSlice,
     DeliveryContextSlice,
     DeliveryOutputSlice,
     DiagnosisSlice,
@@ -15,12 +16,11 @@ from core.state.runtime_slices import (
     InvestigationPlanSlice,
     InvestigationRuntimeSlice,
     MaskingSlice,
-    SessionContext,
 )
 from core.state.slices import ChatStateSlice
 
 _SLICE_TYPES: tuple[type, ...] = (
-    SessionContext,
+    CallerMetadataSlice,
     ChatStateSlice,
     AlertInputSlice,
     InvestigationPlanSlice,

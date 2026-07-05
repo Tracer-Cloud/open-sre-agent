@@ -136,7 +136,7 @@ shell).
 |------|---------------------|
 | `MutableAgentState` | Not `core.agent.Agent` state; not investigation `AgentState` TypedDict |
 | `TurnSnapshot` | Not `ReplRuntimeContext`, `GroundingContext`, or `ActionToolContext` |
-| `AgentContextInput` | Not a store — selector output from `select_agent_context_input()` |
+| `TurnRuntimeInput` | Not a store — selector output from `select_turn_runtime_input()` |
 | `Agent.run(runtime_request=…)` | Not used on live shell/gateway paths yet (tests only); production uses `AgentConfig` |
 | `PromptRecorder` | Not the system prompt — records user prompt + assistant response (shell telemetry) |
 
@@ -217,7 +217,7 @@ Passed to action prompts, assistant prompts, and shell adapters. The live
 | `last_synthetic_observation_path` | Yes | Synthetic failure context |
 | `reasoning_effort` | Yes | LLM calls |
 | `last_observation` | Yes (session → agent → runtime input) | Assistant grounding |
-| `system_prompt`, `active_tools`, … | Only if `select_agent_context_input` populated | `Agent.run(runtime_request=…)` tests |
+| `system_prompt`, `active_tools`, … | Only if `select_turn_runtime_input` populated | `Agent.run(runtime_request=…)` tests |
 | `working_directory`, `terminal_capabilities`, … | **No** (reserved / unused) | Do not rely on these |
 
 Runtime-request fields are empty in production because `MutableAgentState` is

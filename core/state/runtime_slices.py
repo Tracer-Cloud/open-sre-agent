@@ -23,7 +23,7 @@ from core.domain.types.retrieval import RetrievalControlsMap
 from core.state.types import AgentMode
 
 
-class SessionContext(TypedDict, total=False):
+class CallerMetadataSlice(TypedDict, total=False):
     """Mode, auth, and run identifiers injected by callers."""
 
     mode: AgentMode
@@ -141,5 +141,5 @@ __all__ = [
     "InvestigationPlanSlice",
     "InvestigationRuntimeSlice",
     "MaskingSlice",
-    "SessionContext",
+    "CallerMetadataSlice",
 ]

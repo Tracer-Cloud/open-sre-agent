@@ -21,6 +21,7 @@ from config.strict_config import StrictConfigModel
 from core.domain.types.retrieval import RetrievalControlsMap
 from core.state.runtime_slices import (
     AlertInputSlice,
+    CallerMetadataSlice,
     DeliveryContextSlice,
     DeliveryOutputSlice,
     DiagnosisSlice,
@@ -28,14 +29,13 @@ from core.state.runtime_slices import (
     InvestigationPlanSlice,
     InvestigationRuntimeSlice,
     MaskingSlice,
-    SessionContext,
 )
 from core.state.slices import ChatStateSlice
 from core.state.types import AgentMode, ChatMessage, ChatMessageModel
 
 
 class AgentState(
-    SessionContext,
+    CallerMetadataSlice,
     ChatStateSlice,
     AlertInputSlice,
     InvestigationPlanSlice,
@@ -49,7 +49,7 @@ class AgentState(
 ):
     """Unified flat state for chat and investigation modes.
 
-    Chat mode primarily uses ``ChatStateSlice`` + ``SessionContext``.
+    Chat mode primarily uses ``ChatStateSlice`` + ``CallerMetadataSlice``.
     Investigation mode uses alert, plan, runtime, diagnosis, and delivery slices.
     See :mod:`core.state.runtime_slices` for investigation field groupings.
     """

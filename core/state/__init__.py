@@ -29,6 +29,7 @@ from core.state.models import (
 )
 from core.state.runtime_slices import (
     AlertInputSlice,
+    CallerMetadataSlice,
     DeliveryContextSlice,
     DeliveryOutputSlice,
     DiagnosisSlice,
@@ -36,7 +37,6 @@ from core.state.runtime_slices import (
     InvestigationPlanSlice,
     InvestigationRuntimeSlice,
     MaskingSlice,
-    SessionContext,
 )
 from core.state.slices import ChatStateSlice
 from core.state.types import AgentMode, ChatMessage, ChatMessageModel
@@ -70,7 +70,7 @@ __all__ = [
     "InvestigationRuntimeSlice",
     "InvestigationState",
     "MaskingSlice",
-    "SessionContext",
+    "CallerMetadataSlice",
     "apply_state_updates",
     "make_chat_state",
     "model_default_payload",
