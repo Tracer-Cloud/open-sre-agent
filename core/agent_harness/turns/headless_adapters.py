@@ -87,8 +87,14 @@ class EmptyPromptContextProvider:
 class NullToolProvider:
     """Provides no action tools and a no-op tool-event observer."""
 
-    def action_tools(self, *, confirm_fn: ConfirmFn | None, is_tty: bool | None) -> list[Any]:
-        _ = (confirm_fn, is_tty)
+    def action_tools(
+        self,
+        *,
+        confirm_fn: ConfirmFn | None,
+        is_tty: bool | None,
+        resolved_integrations: dict[str, Any] | None = None,
+    ) -> list[Any]:
+        _ = (confirm_fn, is_tty, resolved_integrations)
         return []
 
     def tool_resources(self) -> dict[str, Any]:
