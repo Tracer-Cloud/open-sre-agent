@@ -118,9 +118,23 @@ def _format_observation(executed: list[tuple[Any, Any]]) -> str:
     return _truncate("\n\n".join(blocks), _MAX_OBSERVATION_CHARS)
 
 
-def _resolve_gather_integrations(session: SessionStore, message: str) -> dict[str, Any]:
-    """Resolve integrations for one gather turn, enriching GitHub repo scope when inferred."""
-    base = resolve_and_cache_integrations(session)
+def _resolve_gather_integrations(
+    session: SessionStore,
+    message: str,
+    resolved_integrations: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Resolve integrations for one gather turn, enriching GitHub repo scope when inferred.
+
+    ``resolved_integrations`` is the turn's already-resolved view (from
+    ``TurnSnapshot``); when supplied it is used as the base instead of resolving
+    again, so the gather phase agrees with the action prompt and tools about what
+    is connected. GitHub repo scope is still applied on top.
+    """
+    base = (
+        dict(resolved_integrations)
+        if resolved_integrations is not None
+        else resolve_and_cache_integrations(session)
+    )
     scope = infer_github_repo_scope(
         message=message,
         conversation_messages=session.cli_agent_messages,
@@ -203,6 +217,7 @@ def gather_tool_evidence(
     error_reporter: ErrorReporter | None = None,
     is_tty: bool | None = None,  # noqa: ARG001 — reserved for parity with answer agents
     agent_factory: GatherAgentFactory | None = None,
+    resolved_integrations: dict[str, Any] | None = None,
 ) -> str | None:
     """Run a bounded tool-calling loop and return collected evidence, or None.
 
@@ -217,7 +232,9 @@ def gather_tool_evidence(
         # helper, within the ``_safe_execute`` fallback boundary.
         from tools.investigation.stages.gather_evidence.tools import get_available_tools
 
-        resolved = _resolve_gather_integrations(session, message)
+        resolved = _resolve_gather_integrations(
+            session, message, resolved_integrations=resolved_integrations
+        )
         gather_tools = list(get_available_tools(resolved))
         if not _has_usable_gather_tools(gather_tools):
             return None

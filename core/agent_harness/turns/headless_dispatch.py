@@ -26,6 +26,7 @@ Example::
     print(result.assistant_response_text)  # -> "hello"
 """
 
+
 from __future__ import annotations
 
 from core.agent_harness.models.turn_results import ShellTurnResult, ToolCallingTurnResult

@@ -9,14 +9,14 @@ checked at type-time rather than at runtime. The default adapters
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Protocol, TypedDict
+from typing import Any, Protocol, TypedDict
 
 from rich.console import Console
 
 from core.agent_harness.models.turn_results import ToolCallingTurnResult
-from core.agent_harness.models.turn_snapshot import TurnSnapshot
 from core.agent_harness.ports import OutputSink
 from core.agent_harness.session import Session
+from core.agent_harness.turns.turn_plan import TurnPlan
 from core.execution import ToolExecutionHooks
 from surfaces.interactive_shell.utils.telemetry import LlmRunInfo
 
@@ -37,7 +37,7 @@ class RunActionToolTurn(Protocol):
         confirm_fn: Callable[[str], str] | None = None,
         is_tty: bool | None = None,
         request_exit: Callable[[], None] | None = None,
-        turn_snapshot: TurnSnapshot | None = None,
+        turn_plan: TurnPlan | None = None,
         output: OutputSink | None = None,
         tool_hooks: ToolExecutionHooks | None = None,
     ) -> ToolCallingTurnResult:
@@ -54,6 +54,7 @@ class GatherEvidence(Protocol):
         console: Console,
         *,
         is_tty: bool | None = None,
+        resolved_integrations: dict[str, Any] | None = None,
     ) -> str | None:
         """Gather evidence for the message, or return None when nothing applies."""
 
@@ -69,7 +70,7 @@ class AnswerKwargs(TypedDict, total=False):
     is_tty: bool | None
     tool_observation: str | None
     tool_observation_on_screen: bool
-    turn_snapshot: TurnSnapshot | None
+    turn_plan: TurnPlan | None
 
 
 class AnswerShellQuestion(Protocol):
@@ -85,7 +86,7 @@ class AnswerShellQuestion(Protocol):
         is_tty: bool | None = None,
         tool_observation: str | None = None,
         tool_observation_on_screen: bool = True,
-        turn_snapshot: TurnSnapshot | None = None,
+        turn_plan: TurnPlan | None = None,
         output: OutputSink | None = None,
     ) -> LlmRunInfo | None:
         """Answer the question, returning the LLM run info or None."""

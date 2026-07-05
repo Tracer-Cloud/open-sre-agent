@@ -87,8 +87,19 @@ class SessionStore(Protocol):
 class ToolProvider(Protocol):
     """Supplies the action-agent tools and the per-turn tool-event observer."""
 
-    def action_tools(self, *, confirm_fn: ConfirmFn | None, is_tty: bool | None) -> list[Any]:
-        """Return the agent tools available for this turn."""
+    def action_tools(
+        self,
+        *,
+        confirm_fn: ConfirmFn | None,
+        is_tty: bool | None,
+        resolved_integrations: dict[str, Any] | None = None,
+    ) -> list[Any]:
+        """Return the agent tools available for this turn.
+
+        When ``resolved_integrations`` is supplied it is the turn's single
+        resolved-integration view (from ``TurnSnapshot``); the provider builds
+        tools from it instead of resolving again, so tools and the prompt agree.
+        """
 
     def tool_resources(self) -> dict[str, Any]:
         """Return non-serializable resources for tools that opt into runtime context."""
@@ -150,14 +161,15 @@ class RunRecordFactory(Protocol):
 
 
 # Bound direct-answer callable (no tools):
-# ``answer(text, *, confirm_fn, is_tty, tool_observation, turn_snapshot) -> LLM-run record | None``.
+# ``answer(text, *, confirm_fn, is_tty, tool_observation, turn_plan) -> LLM-run record | None``.
 StreamAnswerFn = Callable[..., Any]
 
-# Bound evidence-gather callable: ``gather(text, *, is_tty) -> str | None``.
+# Bound evidence-gather callable:
+# ``gather(text, *, is_tty, turn_plan) -> str | None``.
 EvidenceGatherer = Callable[..., "str | None"]
 
 # Bound action tool-calling driver:
-# ``execute_actions(text, *, confirm_fn, is_tty, turn_snapshot) -> ToolCallingTurnResult``.
+# ``execute_actions(text, *, confirm_fn, is_tty, turn_plan) -> ToolCallingTurnResult``.
 ExecuteActions = Callable[..., ToolCallingTurnResult]
 
 

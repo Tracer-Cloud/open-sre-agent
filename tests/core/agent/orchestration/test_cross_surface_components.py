@@ -109,21 +109,21 @@ def test_run_turn_routes_unhandled_action_to_answer_callback() -> None:
     assert result.answered is True
 
 
-def test_run_turn_populates_resolved_integrations_on_turn_snapshot(
+def test_run_turn_builds_turn_plan_for_action_path(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """run_turn resolves integrations once and hands them to the action path on turn_snapshot."""
+    """run_turn resolves once and hands the action path a turn_plan carrying them."""
     resolved = {"github": {"configured": True}}
     monkeypatch.setattr(
-        "core.agent_harness.turns.orchestrator.resolve_and_cache_integrations",
+        "core.agent_harness.turns.turn_plan.resolve_and_cache_integrations",
         lambda _session: resolved,
     )
     captured: list[Any] = []
 
     def execute_actions(
-        _text: str, *, turn_snapshot: Any = None, **_kwargs: object
+        _text: str, *, turn_plan: Any = None, **_kwargs: object
     ) -> ToolCallingTurnResult:
-        captured.append(turn_snapshot)
+        captured.append(turn_plan)
         return ToolCallingTurnResult(0, 0, 0, False, False)
 
     def answer(_text: str, **_kwargs: object) -> object:
@@ -151,3 +151,140 @@ def test_run_turn_populates_resolved_integrations_on_turn_snapshot(
 
     assert captured, "execute_actions was never called"
     assert captured[0].resolved_integrations == resolved
+
+
+def test_run_turn_passes_turn_plan_to_gather(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """run_turn hands the gather phase the turn_plan carrying resolved integrations (no re-resolve)."""
+    resolved = {"github": {"configured": True}}
+    monkeypatch.setattr(
+        "core.agent_harness.turns.turn_plan.resolve_and_cache_integrations",
+        lambda _session: resolved,
+    )
+    gather_calls: list[Any] = []
+
+    def execute_actions(_text: str, **_kwargs: object) -> ToolCallingTurnResult:
+        return ToolCallingTurnResult(0, 0, 0, False, False)
+
+    def answer(_text: str, **_kwargs: object) -> object:
+        return type("Run", (), {"response_text": "answered"})()
+
+    def gather(_text: str, *, turn_plan: Any = None, **_kwargs: object) -> None:
+        gather_calls.append(turn_plan.resolved_integrations if turn_plan is not None else None)
+        return None
+
+    class _Accounting:
+        def record_action_result(self, _result: ToolCallingTurnResult) -> None:
+            return None
+
+        def finalize(self, result: ShellTurnResult) -> ShellTurnResult:
+            return result
+
+    session = Session(storage=InMemorySessionStorage())
+    run_turn(
+        "hi",
+        session,
+        execute_actions=execute_actions,
+        answer=answer,
+        gather=gather,
+        accounting=_Accounting(),
+    )
+
+    assert gather_calls == [resolved]
+
+
+def test_run_turn_passes_turn_plan_to_answer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The answer phase receives the same turn_plan (its snapshot grounds the prompt)."""
+    resolved = {"github": {"configured": True}}
+    monkeypatch.setattr(
+        "core.agent_harness.turns.turn_plan.resolve_and_cache_integrations",
+        lambda _session: resolved,
+    )
+    answer_plans: list[Any] = []
+
+    def execute_actions(_text: str, **_kwargs: object) -> ToolCallingTurnResult:
+        return ToolCallingTurnResult(0, 0, 0, False, False)
+
+    def answer(_text: str, *, turn_plan: Any = None, **_kwargs: object) -> object:
+        answer_plans.append(turn_plan)
+        return type("Run", (), {"response_text": "answered"})()
+
+    def gather(_text: str, **_kwargs: object) -> None:
+        return None
+
+    class _Accounting:
+        def record_action_result(self, _result: ToolCallingTurnResult) -> None:
+            return None
+
+        def finalize(self, result: ShellTurnResult) -> ShellTurnResult:
+            return result
+
+    session = Session(storage=InMemorySessionStorage())
+    run_turn(
+        "why is it down?",
+        session,
+        execute_actions=execute_actions,
+        answer=answer,
+        gather=gather,
+        accounting=_Accounting(),
+    )
+
+    assert answer_plans, "answer was never called"
+    assert answer_plans[0] is not None
+    assert answer_plans[0].snapshot.text == "why is it down?"
+    assert answer_plans[0].resolved_integrations == resolved
+
+
+def test_action_tools_uses_passed_resolved_integrations(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The turn's resolved dict is what tools are built from — no second resolve."""
+    captured: list[dict[str, Any]] = []
+
+    def _fake_build(_ctx: Any, *, resolved_integrations: dict[str, Any]) -> list[Any]:
+        captured.append(resolved_integrations)
+        return []
+
+    monkeypatch.setattr(
+        "core.agent_harness.providers.default_providers.get_action_tools_from_integrations_context",
+        _fake_build,
+    )
+    provider = DefaultToolProvider(
+        Session(storage=InMemorySessionStorage()), Console(force_terminal=False)
+    )
+    turn_resolved = {"github": {"configured": True}}
+
+    provider.action_tools(confirm_fn=None, is_tty=False, resolved_integrations=turn_resolved)
+
+    assert captured == [turn_resolved]
+
+
+def test_action_tools_falls_back_to_session_resolve_when_none(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Omitting the turn's dict keeps the prior behavior: resolve from the session."""
+    captured: list[dict[str, Any]] = []
+    session_resolved = {"slack": {"configured": True}}
+
+    def _fake_build(_ctx: Any, *, resolved_integrations: dict[str, Any]) -> list[Any]:
+        captured.append(resolved_integrations)
+        return []
+
+    monkeypatch.setattr(
+        "core.agent_harness.providers.default_providers.get_action_tools_from_integrations_context",
+        _fake_build,
+    )
+    monkeypatch.setattr(
+        "core.agent_harness.integrations.resolution.resolve_and_cache_integrations",
+        lambda _session: dict(session_resolved),
+    )
+    provider = DefaultToolProvider(
+        Session(storage=InMemorySessionStorage()), Console(force_terminal=False)
+    )
+
+    provider.action_tools(confirm_fn=None, is_tty=False)
+
+    assert captured == [session_resolved]

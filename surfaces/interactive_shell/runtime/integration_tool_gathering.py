@@ -102,9 +102,15 @@ def _format_gathering_progress_line(
     return f"· gathering via {safe_display}…"
 
 
-def _resolve_gather_integrations(session: Session, message: str) -> dict[str, Any]:
+def _resolve_gather_integrations(
+    session: Session,
+    message: str,
+    resolved_integrations: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Resolve gather integrations through the decoupled agent helper."""
-    return evidence_driver._resolve_gather_integrations(session, message)  # noqa: SLF001
+    return evidence_driver._resolve_gather_integrations(  # noqa: SLF001
+        session, message, resolved_integrations=resolved_integrations
+    )
 
 
 def _truncate(text: str, limit: int) -> str:
@@ -149,11 +155,14 @@ def gather_integration_tool_evidence(
     *,
     is_tty: bool | None = None,
     agent_factory: GatherAgentFactory | None = None,
+    resolved_integrations: dict[str, Any] | None = None,
 ) -> str | None:
     """Run a bounded tool-calling loop and return collected evidence, or None.
 
     Returns a formatted observation block when at least one tool was executed;
     otherwise ``None`` so the caller falls back to the normal text-only answer.
+    ``resolved_integrations`` is the turn's resolved view; it is forwarded so the
+    gather phase reuses it instead of resolving again.
     """
     tool_call_counts: dict[str, int] = {}
 
@@ -181,6 +190,7 @@ def gather_integration_tool_evidence(
         error_reporter=_ShellGatherErrorReporter(),
         is_tty=is_tty,
         agent_factory=agent_factory,
+        resolved_integrations=resolved_integrations,
     )
 
 
