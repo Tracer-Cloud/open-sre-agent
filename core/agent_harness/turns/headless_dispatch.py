@@ -26,7 +26,6 @@ Example::
     print(result.assistant_response_text)  # -> "hello"
 """
 
-
 from __future__ import annotations
 
 from core.agent_harness.models.turn_results import ShellTurnResult, ToolCallingTurnResult
@@ -119,7 +118,7 @@ def dispatch_message_to_headless_agent(
         *,
         confirm_fn: ConfirmFn | None = None,
         is_tty: bool | None = None,
-        turn_plan: TurnPlan | None = None,
+        turn_plan: TurnPlan | None = None,  # noqa: ARG001
     ) -> ToolCallingTurnResult:
         return run_action_agent_turn(
             text,
@@ -145,9 +144,15 @@ def dispatch_message_to_headless_agent(
             **kwargs,  # type: ignore[arg-type]
         )
 
-    def gather(text: str, *, is_tty: bool | None = None) -> str | None:
+    def gather(
+        text: str,
+        *,
+        is_tty: bool | None = None,
+        turn_plan: TurnPlan | None = None,  # noqa: ARG001
+    ) -> str | None:
         if not gather_enabled:
             return None
+
         return gather_tool_evidence(
             text,
             store,
