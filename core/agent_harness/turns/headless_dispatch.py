@@ -136,8 +136,14 @@ class EmptyPromptContextProvider:
 class NullToolProvider:
     """Provides no action tools and a no-op tool-event observer."""
 
-    def action_tools(self, *, confirm_fn: ConfirmFn | None, is_tty: bool | None) -> list[Any]:
-        _ = (confirm_fn, is_tty)
+    def action_tools(
+        self,
+        *,
+        confirm_fn: ConfirmFn | None,
+        is_tty: bool | None,
+        resolved_integrations: dict[str, Any] | None = None,
+    ) -> list[Any]:
+        _ = (confirm_fn, is_tty, resolved_integrations)
         return []
 
     def tool_resources(self) -> dict[str, Any]:
@@ -279,7 +285,12 @@ def dispatch_message_to_headless_agent(
             **kwargs,  # type: ignore[arg-type]
         )
 
-    def gather(text: str, *, is_tty: bool | None = None) -> str | None:
+    def gather(
+        text: str,
+        *,
+        is_tty: bool | None = None,
+        resolved_integrations: dict[str, Any] | None = None,
+    ) -> str | None:
         if not gather_enabled:
             return None
         return gather_tool_evidence(
@@ -287,6 +298,7 @@ def dispatch_message_to_headless_agent(
             store,
             error_reporter=error_reporter,
             is_tty=is_tty,
+            resolved_integrations=resolved_integrations,
         )
 
     return run_turn(

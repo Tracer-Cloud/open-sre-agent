@@ -151,3 +151,55 @@ def test_run_turn_populates_resolved_integrations_on_turn_snapshot(
 
     assert captured, "execute_actions was never called"
     assert captured[0].resolved_integrations == resolved
+
+
+def test_action_tools_uses_passed_resolved_integrations(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The turn's resolved dict is what tools are built from — no second resolve."""
+    captured: list[dict[str, Any]] = []
+
+    def _fake_build(_ctx: Any, *, resolved_integrations: dict[str, Any]) -> list[Any]:
+        captured.append(resolved_integrations)
+        return []
+
+    monkeypatch.setattr(
+        "core.agent_harness.providers.default_providers.get_action_tools_from_integrations_context",
+        _fake_build,
+    )
+    provider = DefaultToolProvider(
+        Session(storage=InMemorySessionStorage()), Console(force_terminal=False)
+    )
+    turn_resolved = {"github": {"configured": True}}
+
+    provider.action_tools(confirm_fn=None, is_tty=False, resolved_integrations=turn_resolved)
+
+    assert captured == [turn_resolved]
+
+
+def test_action_tools_falls_back_to_session_resolve_when_none(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Omitting the turn's dict keeps the prior behavior: resolve from the session."""
+    captured: list[dict[str, Any]] = []
+    session_resolved = {"slack": {"configured": True}}
+
+    def _fake_build(_ctx: Any, *, resolved_integrations: dict[str, Any]) -> list[Any]:
+        captured.append(resolved_integrations)
+        return []
+
+    monkeypatch.setattr(
+        "core.agent_harness.providers.default_providers.get_action_tools_from_integrations_context",
+        _fake_build,
+    )
+    monkeypatch.setattr(
+        "core.agent_harness.integrations.resolution.resolve_and_cache_integrations",
+        lambda _session: dict(session_resolved),
+    )
+    provider = DefaultToolProvider(
+        Session(storage=InMemorySessionStorage()), Console(force_terminal=False)
+    )
+
+    provider.action_tools(confirm_fn=None, is_tty=False)
+
+    assert captured == [session_resolved]

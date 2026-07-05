@@ -70,7 +70,13 @@ class DefaultToolProvider:
         self._tool_action_logger = tool_action_logger
         self._tool_context: ActionToolContext | None = None
 
-    def action_tools(self, *, confirm_fn: ConfirmFn | None, is_tty: bool | None) -> list[Any]:
+    def action_tools(
+        self,
+        *,
+        confirm_fn: ConfirmFn | None,
+        is_tty: bool | None,
+        resolved_integrations: dict[str, Any] | None = None,
+    ) -> list[Any]:
         ctx = ActionToolContext(
             session=self._session,
             console=self._console,
@@ -82,9 +88,12 @@ class DefaultToolProvider:
         self._tool_context = ctx
         if self._precomputed_action_tools is not None:
             return list(self._precomputed_action_tools)
-        return get_action_tools_from_integrations_context(
-            ctx, resolved_integrations=self._resolved_integrations()
+        resolved = (
+            resolved_integrations
+            if resolved_integrations is not None
+            else self._resolved_integrations()
         )
+        return get_action_tools_from_integrations_context(ctx, resolved_integrations=resolved)
 
     def tool_resources(self) -> dict[str, Any]:
         if self._tool_context is None:

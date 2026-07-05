@@ -9,7 +9,7 @@ checked at type-time rather than at runtime. The default adapters
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Protocol, TypedDict
+from typing import Any, Protocol, TypedDict
 
 from rich.console import Console
 
@@ -54,6 +54,7 @@ class GatherEvidence(Protocol):
         console: Console,
         *,
         is_tty: bool | None = None,
+        resolved_integrations: dict[str, Any] | None = None,
     ) -> str | None:
         """Gather evidence for the message, or return None when nothing applies."""
 

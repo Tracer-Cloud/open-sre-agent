@@ -302,6 +302,38 @@ def test_resolve_gather_integrations_uses_session_cache_on_follow_up() -> None:
     assert resolved["github"]["repo"] == "opensre"
 
 
+def test_resolve_gather_integrations_uses_passed_turn_view() -> None:
+    """When the turn's resolved view is supplied, it is the base — no session re-resolve."""
+    session = Session()
+    # The session cache holds a different integration than the turn resolved this turn.
+    session.resolved_integrations_cache = {"datadog": {"connection_verified": True}}
+    turn_resolved = {"slack": {"connection_verified": True}}
+
+    resolved = _resolve_gather_integrations(
+        session, "post an update", resolved_integrations=turn_resolved
+    )
+
+    assert resolved == {"slack": {"connection_verified": True}}
+
+
+def test_resolve_gather_integrations_applies_github_scope_over_passed_view() -> None:
+    """GitHub repo scope is still enriched on top of the passed turn view."""
+    session = Session()
+    session.resolved_integrations_cache = {}
+    turn_resolved = {
+        "github": {"connection_verified": True, "url": "https://api.githubcopilot.com/mcp/"}
+    }
+
+    resolved = _resolve_gather_integrations(
+        session,
+        "check github issues in https://github.com/Tracer-Cloud/opensre",
+        resolved_integrations=turn_resolved,
+    )
+
+    assert resolved["github"]["owner"] == "Tracer-Cloud"
+    assert resolved["github"]["repo"] == "opensre"
+
+
 def test_gather_enriches_github_before_selecting_tools(monkeypatch: Any) -> None:
     session = Session()
     session.resolved_integrations_cache = {

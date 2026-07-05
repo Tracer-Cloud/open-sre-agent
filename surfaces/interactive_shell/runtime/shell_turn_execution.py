@@ -10,7 +10,7 @@ live in ``turn_seams``.
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Unpack
+from typing import Any, Unpack
 
 from rich.console import Console
 
@@ -90,8 +90,15 @@ def execute_shell_turn(
         # on the plain path); AnswerKwargs types them without forcing presence.
         return _answer(t, session, console, output=resolved_output, **kwargs)
 
-    def gather_bound(t: str, *, is_tty: bool | None = None) -> str | None:
-        return _gather(t, session, console, is_tty=is_tty)
+    def gather_bound(
+        t: str,
+        *,
+        is_tty: bool | None = None,
+        resolved_integrations: dict[str, Any] | None = None,
+    ) -> str | None:
+        return _gather(
+            t, session, console, is_tty=is_tty, resolved_integrations=resolved_integrations
+        )
 
     return run_turn(
         text,

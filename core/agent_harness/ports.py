@@ -87,8 +87,19 @@ class SessionStore(Protocol):
 class ToolProvider(Protocol):
     """Supplies the action-agent tools and the per-turn tool-event observer."""
 
-    def action_tools(self, *, confirm_fn: ConfirmFn | None, is_tty: bool | None) -> list[Any]:
-        """Return the agent tools available for this turn."""
+    def action_tools(
+        self,
+        *,
+        confirm_fn: ConfirmFn | None,
+        is_tty: bool | None,
+        resolved_integrations: dict[str, Any] | None = None,
+    ) -> list[Any]:
+        """Return the agent tools available for this turn.
+
+        When ``resolved_integrations`` is supplied it is the turn's single
+        resolved-integration view (from ``TurnSnapshot``); the provider builds
+        tools from it instead of resolving again, so tools and the prompt agree.
+        """
 
     def tool_resources(self) -> dict[str, Any]:
         """Return non-serializable resources for tools that opt into runtime context."""

@@ -230,7 +230,11 @@ def _gather_and_answer(
     is_tty: bool | None,
     turn_snapshot: TurnSnapshot,
 ) -> Any | None:
-    gathered = gather(text, is_tty=is_tty)
+    gathered = gather(
+        text,
+        is_tty=is_tty,
+        resolved_integrations=turn_snapshot.resolved_integrations,
+    )
 
     # When evidence was gathered, mark it off-screen so the prompt builder
     # includes it. When nothing was gathered, omit the flag entirely so the

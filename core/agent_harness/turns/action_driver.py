@@ -367,7 +367,11 @@ def run_action_agent_turn(
     """
     history_start = len(session.history)
 
-    agent_tools = tools.action_tools(confirm_fn=confirm_fn, is_tty=is_tty)
+    agent_tools = tools.action_tools(
+        confirm_fn=confirm_fn,
+        is_tty=is_tty,
+        resolved_integrations=_resolved_integrations_for_turn(session, turn_snapshot),
+    )
     tool_resources_provider = getattr(tools, "tool_resources", None)
     tool_resources = tool_resources_provider() if callable(tool_resources_provider) else {}
     observer = tools.observer(message=message)
