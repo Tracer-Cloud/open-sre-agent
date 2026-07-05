@@ -46,6 +46,11 @@ def build_turn_plan(snapshot: TurnSnapshot, session: SessionStore) -> TurnPlan:
     Resolution runs only when the snapshot has not already been populated (a
     runtime-request source can pre-fill it), so the plan is the single place that
     decides what this turn knows about connected integrations.
+
+    An empty result (``{}`` — no integrations configured) is a valid resolved
+    view; downstream phases read it from the plan rather than re-checking, so the
+    resolve-once contract holds even in that case (``resolve_and_cache`` also
+    caches, so a repeat call would be a no-op regardless).
     """
     if not snapshot.resolved_integrations:
         snapshot = replace(snapshot, resolved_integrations=resolve_and_cache_integrations(session))

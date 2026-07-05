@@ -216,12 +216,19 @@ def _generic_tool_result_counts(result: Any) -> tuple[int, int]:
     return executed_count, success_count
 
 
-def _resolved_integrations_for_turn(
+def _turn_resolved_integrations(
     session: SessionStore,
-    turn_snapshot: TurnSnapshot | None,
+    turn_plan: TurnPlan | None,
 ) -> dict[str, Any]:
-    if turn_snapshot is not None and turn_snapshot.resolved_integrations:
-        return dict(turn_snapshot.resolved_integrations)
+    """The turn's single resolved-integration view: from the plan, else resolve once.
+
+    ``build_turn_plan`` already resolved integrations, so the plan is trusted even
+    when the result is empty (``{}`` means "no integrations", not "unresolved").
+    Only the direct-call path with no plan (some tests, headless without a turn)
+    resolves here.
+    """
+    if turn_plan is not None:
+        return dict(turn_plan.resolved_integrations)
     return dict(resolve_and_cache_integrations(session))
 
 
@@ -288,6 +295,7 @@ def _build_action_agent(
     session: SessionStore,
     agent_tools: list[Any],
     turn_snapshot: TurnSnapshot | None,
+    resolved_integrations: dict[str, Any],
     deps: ToolCallingDeps | None,
     tool_hooks: ToolExecutionHooks | None,
     tool_resources: dict[str, Any],
@@ -337,7 +345,7 @@ def _build_action_agent(
         llm=llm,
         system=system,
         tools=tuple(agent_tools),
-        resolved_integrations=_resolved_integrations_for_turn(session, turn_snapshot),
+        resolved_integrations=resolved_integrations,
         max_iterations=_MAX_TOOL_CALLING_ITERATIONS,
         tool_resources=tool_resources,
         tool_hooks=tool_hooks,
@@ -367,12 +375,15 @@ def run_action_agent_turn(
     action tools so prompt and tools agree.
     """
     turn_snapshot = turn_plan.snapshot if turn_plan is not None else None
+    # Read the turn's resolved integrations once, so the action tools and the
+    # AgentConfig are built from the same view (single source, no re-resolve).
+    resolved_integrations = _turn_resolved_integrations(session, turn_plan)
     history_start = len(session.history)
 
     agent_tools = tools.action_tools(
         confirm_fn=confirm_fn,
         is_tty=is_tty,
-        resolved_integrations=_resolved_integrations_for_turn(session, turn_snapshot),
+        resolved_integrations=resolved_integrations,
     )
     tool_resources_provider = getattr(tools, "tool_resources", None)
     tool_resources = tool_resources_provider() if callable(tool_resources_provider) else {}
@@ -388,6 +399,7 @@ def run_action_agent_turn(
             session=session,
             agent_tools=agent_tools,
             turn_snapshot=turn_snapshot,
+            resolved_integrations=resolved_integrations,
             deps=deps,
             tool_hooks=tool_hooks,
             tool_resources=tool_resources,
