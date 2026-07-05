@@ -17,12 +17,12 @@ from core import (
     tool_source,
 )
 from core.agent.mixins import EventEmitterMixin, ToolFilterMixin
-from core.state import InvestigationState
-from core.state.evidence import EvidenceEntry
 from core.llm.agent_llm_client import get_agent_llm
 from core.llm.types import ToolCall
 from core.llm_invoke_errors import classify_llm_invoke_failure
 from core.messages import MessageFormatter
+from core.state import InvestigationState
+from core.state.evidence import EvidenceEntry
 from platform.observability import debug_print
 from platform.observability import get_progress_tracker as get_tracker
 from platform.observability.tool_trace import redact_sensitive

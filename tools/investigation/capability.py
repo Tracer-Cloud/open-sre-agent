@@ -10,8 +10,8 @@ import threading
 from collections.abc import AsyncIterator, Callable
 from typing import TYPE_CHECKING, Any, cast
 
-from core.state import AgentState
 from core.domain.stream import StreamEvent
+from core.state import AgentState
 from platform.observability.errors import report_and_reraise
 from platform.observability.sentry_sdk import init_sentry
 from tools.investigation.state_factory import make_initial_state
