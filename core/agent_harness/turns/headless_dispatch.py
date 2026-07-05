@@ -33,7 +33,6 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from core.agent_harness.models.turn_results import ShellTurnResult, ToolCallingTurnResult
-from core.agent_harness.models.turn_snapshot import TurnSnapshot
 from core.agent_harness.ports import (
     ConfirmFn,
     ErrorReporter,
@@ -54,6 +53,7 @@ from core.agent_harness.providers.default_providers import DefaultTurnAccounting
 from core.agent_harness.turns.action_driver import run_action_agent_turn
 from core.agent_harness.turns.evidence_driver import gather_tool_evidence
 from core.agent_harness.turns.orchestrator import run_turn, stream_answer
+from core.agent_harness.turns.turn_plan import TurnPlan
 from core.execution import ToolExecutionHooks
 
 
@@ -259,7 +259,7 @@ def dispatch_message_to_headless_agent(
         *,
         confirm_fn: ConfirmFn | None = None,
         is_tty: bool | None = None,
-        turn_snapshot: TurnSnapshot | None = None,
+        turn_plan: TurnPlan | None = None,
     ) -> ToolCallingTurnResult:
         return run_action_agent_turn(
             text,
@@ -268,7 +268,7 @@ def dispatch_message_to_headless_agent(
             tools=tools,
             confirm_fn=confirm_fn,
             is_tty=is_tty,
-            turn_snapshot=turn_snapshot,
+            turn_plan=turn_plan,
             error_reporter=error_reporter,
             tool_hooks=tool_hooks,
         )
@@ -289,16 +289,17 @@ def dispatch_message_to_headless_agent(
         text: str,
         *,
         is_tty: bool | None = None,
-        resolved_integrations: dict[str, Any] | None = None,
+        turn_plan: TurnPlan | None = None,
     ) -> str | None:
         if not gather_enabled:
             return None
+        resolved = turn_plan.resolved_integrations if turn_plan is not None else None
         return gather_tool_evidence(
             text,
             store,
             error_reporter=error_reporter,
             is_tty=is_tty,
-            resolved_integrations=resolved_integrations,
+            resolved_integrations=resolved,
         )
 
     return run_turn(

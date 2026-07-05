@@ -161,15 +161,15 @@ class RunRecordFactory(Protocol):
 
 
 # Bound direct-answer callable (no tools):
-# ``answer(text, *, confirm_fn, is_tty, tool_observation, turn_snapshot) -> LLM-run record | None``.
+# ``answer(text, *, confirm_fn, is_tty, tool_observation, turn_plan) -> LLM-run record | None``.
 StreamAnswerFn = Callable[..., Any]
 
 # Bound evidence-gather callable:
-# ``gather(text, *, is_tty, resolved_integrations) -> str | None``.
+# ``gather(text, *, is_tty, turn_plan) -> str | None``.
 EvidenceGatherer = Callable[..., "str | None"]
 
 # Bound action tool-calling driver:
-# ``execute_actions(text, *, confirm_fn, is_tty, turn_snapshot) -> ToolCallingTurnResult``.
+# ``execute_actions(text, *, confirm_fn, is_tty, turn_plan) -> ToolCallingTurnResult``.
 ExecuteActions = Callable[..., ToolCallingTurnResult]
 
 

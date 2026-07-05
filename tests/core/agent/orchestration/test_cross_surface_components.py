@@ -109,10 +109,10 @@ def test_run_turn_routes_unhandled_action_to_answer_callback() -> None:
     assert result.answered is True
 
 
-def test_run_turn_populates_resolved_integrations_on_turn_snapshot(
+def test_run_turn_builds_turn_plan_for_action_path(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """run_turn resolves integrations once and hands them to the action path on turn_snapshot."""
+    """run_turn resolves once and hands the action path a turn_plan carrying them."""
     resolved = {"github": {"configured": True}}
     monkeypatch.setattr(
         "core.agent_harness.turns.orchestrator.resolve_and_cache_integrations",
@@ -121,9 +121,9 @@ def test_run_turn_populates_resolved_integrations_on_turn_snapshot(
     captured: list[Any] = []
 
     def execute_actions(
-        _text: str, *, turn_snapshot: Any = None, **_kwargs: object
+        _text: str, *, turn_plan: Any = None, **_kwargs: object
     ) -> ToolCallingTurnResult:
-        captured.append(turn_snapshot)
+        captured.append(turn_plan)
         return ToolCallingTurnResult(0, 0, 0, False, False)
 
     def answer(_text: str, **_kwargs: object) -> object:
@@ -153,10 +153,10 @@ def test_run_turn_populates_resolved_integrations_on_turn_snapshot(
     assert captured[0].resolved_integrations == resolved
 
 
-def test_run_turn_passes_resolved_integrations_to_gather(
+def test_run_turn_passes_turn_plan_to_gather(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """run_turn hands the turn's resolved integrations to the gather phase (no re-resolve)."""
+    """run_turn hands the gather phase the turn_plan carrying resolved integrations (no re-resolve)."""
     resolved = {"github": {"configured": True}}
     monkeypatch.setattr(
         "core.agent_harness.turns.orchestrator.resolve_and_cache_integrations",
@@ -170,8 +170,8 @@ def test_run_turn_passes_resolved_integrations_to_gather(
     def answer(_text: str, **_kwargs: object) -> object:
         return type("Run", (), {"response_text": "answered"})()
 
-    def gather(_text: str, *, resolved_integrations: Any = None, **_kwargs: object) -> None:
-        gather_calls.append(resolved_integrations)
+    def gather(_text: str, *, turn_plan: Any = None, **_kwargs: object) -> None:
+        gather_calls.append(turn_plan.resolved_integrations if turn_plan is not None else None)
         return None
 
     class _Accounting:

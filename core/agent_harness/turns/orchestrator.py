@@ -40,6 +40,7 @@ from core.agent_harness.ports import (
 from core.agent_harness.prompts import build_cli_agent_prompt_from_provider
 from core.agent_harness.prompts.conversation_memory import MAX_CONVERSATION_MESSAGES
 from core.agent_harness.session.compaction import auto_compact_if_needed
+from core.agent_harness.turns.turn_plan import TurnPlan, build_turn_plan
 from integrations.llm_cli.errors import CLITimeoutError
 
 _ASSISTANT_LABEL = "assistant"
@@ -121,7 +122,7 @@ def stream_answer(
     is_tty: bool | None = None,
     tool_observation: str | None = None,
     tool_observation_on_screen: bool = True,
-    turn_snapshot: TurnSnapshot | None = None,
+    turn_plan: TurnPlan | None = None,
 ) -> Any | None:
     """Stream one grounded conversational answer (guidance only, no tools).
 
@@ -129,16 +130,18 @@ def stream_answer(
     no ReAct loop. The **tool-calling** agent is ``core.agent.Agent`` — see
     ``core/agent_harness/AGENTS.md``.
 
-    ``turn_snapshot`` is the immutable per-turn snapshot assembled at turn start.
-    When present, snapshot fields (conversation history, integration state,
-    prior investigation, synthetic-run path) are read from it rather than from
-    the live session, so prompt construction reflects a stable turn-start view.
+    ``turn_plan`` is the turn-wide assembly built at turn start. Its snapshot
+    (conversation history, integration state, prior investigation, synthetic-run
+    path) grounds prompt construction in a stable turn-start view rather than the
+    live session.
     """
     client = reasoning.get()
     if client is None:
         return None
 
-    ctx = turn_snapshot or TurnSnapshot.from_session(message, session)
+    ctx = (
+        turn_plan.snapshot if turn_plan is not None else TurnSnapshot.from_session(message, session)
+    )
     _ = (confirm_fn, is_tty)
 
     prompt = build_cli_agent_prompt_from_provider(
@@ -228,13 +231,9 @@ def _gather_and_answer(
     gather: EvidenceGatherer,
     confirm_fn: ConfirmFn | None,
     is_tty: bool | None,
-    turn_snapshot: TurnSnapshot,
+    turn_plan: TurnPlan,
 ) -> Any | None:
-    gathered = gather(
-        text,
-        is_tty=is_tty,
-        resolved_integrations=turn_snapshot.resolved_integrations,
-    )
+    gathered = gather(text, is_tty=is_tty, turn_plan=turn_plan)
 
     # When evidence was gathered, mark it off-screen so the prompt builder
     # includes it. When nothing was gathered, omit the flag entirely so the
@@ -246,7 +245,7 @@ def _gather_and_answer(
         confirm_fn=confirm_fn,
         is_tty=is_tty,
         tool_observation=gathered or None,
-        turn_snapshot=turn_snapshot,
+        turn_plan=turn_plan,
         **on_screen,
     )
 
@@ -294,6 +293,10 @@ def run_turn(
             turn_snapshot, resolved_integrations=resolve_and_cache_integrations(session)
         )
 
+    # Assemble the turn plan once: the single object the action, gather, and
+    # answer phases read so they cannot disagree about what this turn knows.
+    turn_plan = build_turn_plan(turn_snapshot)
+
     # Clear any observation left by a prior turn so only this turn's discovery
     # output can trigger a summary pass.
     session.last_command_observation = None
@@ -305,7 +308,7 @@ def run_turn(
         text,
         confirm_fn=confirm_fn,
         is_tty=is_tty,
-        turn_snapshot=turn_snapshot,
+        turn_plan=turn_plan,
     )
     accounting.record_action_result(action_result)
 
@@ -319,7 +322,7 @@ def run_turn(
                 confirm_fn=confirm_fn,
                 is_tty=is_tty,
                 tool_observation=observation,
-                turn_snapshot=turn_snapshot,
+                turn_plan=turn_plan,
             )
         result = ShellTurnResult(
             final_intent="cli_agent_summarized",
@@ -342,7 +345,7 @@ def run_turn(
                 gather=gather,
                 confirm_fn=confirm_fn,
                 is_tty=is_tty,
-                turn_snapshot=turn_snapshot,
+                turn_plan=turn_plan,
             )
         result = ShellTurnResult(
             final_intent="cli_agent_fallback",

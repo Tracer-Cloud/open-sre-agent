@@ -10,15 +10,15 @@ live in ``turn_seams``.
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any, Unpack
+from typing import Unpack
 
 from rich.console import Console
 
 from core.agent_harness.models.turn_results import ShellTurnResult, ToolCallingTurnResult
-from core.agent_harness.models.turn_snapshot import TurnSnapshot
 from core.agent_harness.ports import OutputSink
 from core.agent_harness.session import Session
 from core.agent_harness.turns.orchestrator import run_turn
+from core.agent_harness.turns.turn_plan import TurnPlan
 from core.execution import ToolExecutionHooks
 from surfaces.interactive_shell.runtime.action_turn import run_action_tool_turn
 from surfaces.interactive_shell.runtime.agent_harness_adapters import resolve_output_sink
@@ -71,7 +71,7 @@ def execute_shell_turn(
         *,
         confirm_fn: Callable[[str], str] | None = None,
         is_tty: bool | None = None,
-        turn_snapshot: TurnSnapshot | None = None,
+        turn_plan: TurnPlan | None = None,
     ) -> ToolCallingTurnResult:
         return _execute(
             t,
@@ -80,7 +80,7 @@ def execute_shell_turn(
             confirm_fn=confirm_fn,
             is_tty=is_tty,
             request_exit=request_exit,
-            turn_snapshot=turn_snapshot,
+            turn_plan=turn_plan,
             output=resolved_output,
             tool_hooks=tool_hooks,
         )
@@ -94,11 +94,10 @@ def execute_shell_turn(
         t: str,
         *,
         is_tty: bool | None = None,
-        resolved_integrations: dict[str, Any] | None = None,
+        turn_plan: TurnPlan | None = None,
     ) -> str | None:
-        return _gather(
-            t, session, console, is_tty=is_tty, resolved_integrations=resolved_integrations
-        )
+        resolved = turn_plan.resolved_integrations if turn_plan is not None else None
+        return _gather(t, session, console, is_tty=is_tty, resolved_integrations=resolved)
 
     return run_turn(
         text,

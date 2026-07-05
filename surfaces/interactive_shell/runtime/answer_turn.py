@@ -10,7 +10,6 @@ from collections.abc import Callable
 
 from rich.console import Console
 
-from core.agent_harness.models.turn_snapshot import TurnSnapshot
 from core.agent_harness.ports import OutputSink
 from core.agent_harness.providers.default_providers import (
     DefaultErrorReporter,
@@ -21,6 +20,7 @@ from core.agent_harness.session import Session
 from core.agent_harness.turns.orchestrator import (
     stream_answer as core_stream_answer,
 )
+from core.agent_harness.turns.turn_plan import TurnPlan
 from surfaces.interactive_shell.grounding.cli_reference import shell_prompt_context_provider
 from surfaces.interactive_shell.runtime.agent_harness_adapters import resolve_output_sink
 from surfaces.interactive_shell.utils.telemetry import LlmRunInfo
@@ -35,7 +35,7 @@ def answer_shell_question(
     is_tty: bool | None = None,
     tool_observation: str | None = None,
     tool_observation_on_screen: bool = True,
-    turn_snapshot: TurnSnapshot | None = None,
+    turn_plan: TurnPlan | None = None,
     output: OutputSink | None = None,
 ) -> LlmRunInfo | None:
     """Answer one shell question through the grounded conversational assistant."""
@@ -56,7 +56,7 @@ def answer_shell_question(
         is_tty=is_tty,
         tool_observation=tool_observation,
         tool_observation_on_screen=tool_observation_on_screen,
-        turn_snapshot=turn_snapshot,
+        turn_plan=turn_plan,
     )
 
 

@@ -34,6 +34,7 @@ from core.agent_harness.ports import (
 from core.agent_harness.prompts import build_action_system_prompt, build_action_user_message
 from core.agent_harness.prompts.conversation_memory import MAX_CONVERSATION_MESSAGES
 from core.agent_harness.providers.provider_models import default_llm_factory
+from core.agent_harness.turns.turn_plan import TurnPlan
 from core.events import runtime_event_callback_from_observer
 from core.execution import ToolExecutionHooks, public_tool_input
 from core.llm.types import AgentLLMResponse, ToolCall
@@ -354,17 +355,18 @@ def run_action_agent_turn(
     confirm_fn: ConfirmFn | None = None,
     is_tty: bool | None = None,
     deps: ToolCallingDeps | None = None,
-    turn_snapshot: TurnSnapshot | None = None,
+    turn_plan: TurnPlan | None = None,
     error_reporter: ErrorReporter | None = None,
     tool_hooks: ToolExecutionHooks | None = None,
 ) -> ToolCallingTurnResult:
     """Run one action tool-calling turn through the shared agent harness.
 
-    ``turn_snapshot`` is the immutable per-turn snapshot assembled at turn start.
-    When present it is used to build the action-agent system prompt so the
-    prompt reflects turn-start state rather than the live (potentially
-    mid-mutation) session.
+    ``turn_plan`` is the turn-wide assembly. Its snapshot builds the action-agent
+    system prompt so the prompt reflects turn-start state rather than the live
+    (potentially mid-mutation) session, and its resolved integrations build the
+    action tools so prompt and tools agree.
     """
+    turn_snapshot = turn_plan.snapshot if turn_plan is not None else None
     history_start = len(session.history)
 
     agent_tools = tools.action_tools(
