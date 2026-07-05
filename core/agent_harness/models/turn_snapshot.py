@@ -83,12 +83,12 @@ def _render_system_prompt(prompt: SystemPromptInput) -> str:
 
 def _select_runtime_request_input(text: str, source: Any) -> Any | None:
     """Read optional runtime-request fields from a structural session source."""
-    direct_selector = getattr(source, "select_agent_context_input", None)
+    direct_selector = getattr(source, "select_turn_runtime_input", None)
     if callable(direct_selector):
         return direct_selector(text)
 
     agent_state = getattr(source, "agent", None)
-    state_selector = getattr(agent_state, "select_agent_context_input", None)
+    state_selector = getattr(agent_state, "select_turn_runtime_input", None)
     if callable(state_selector):
         return state_selector(text)
 
@@ -164,7 +164,7 @@ class TurnSnapshot:
         Call this once at the top of the turn before any mutations happen, then
         pass the returned context downstream. ``session`` is anything satisfying
         :class:`TurnSnapshotSource` (e.g. the shell's ``Session``). When the
-        source also exposes ``select_agent_context_input`` directly or through
+        source also exposes ``select_turn_runtime_input`` directly or through
         ``source.agent``, runtime request fields are snapshotted too.
         """
         messages = session.cli_agent_messages

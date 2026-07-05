@@ -146,7 +146,7 @@ class _AgentState:
         self.seen_text: str | None = None
         self.model = object()
 
-    def select_agent_context_input(self, text: str) -> _RuntimeInput:
+    def select_turn_runtime_input(self, text: str) -> _RuntimeInput:
         self.seen_text = text
         return _RuntimeInput(
             text=text,

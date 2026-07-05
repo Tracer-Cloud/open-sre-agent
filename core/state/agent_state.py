@@ -34,7 +34,7 @@ class AgentModelInfo:
 
 
 @dataclass(frozen=True)
-class AgentContextInput:
+class TurnRuntimeInput:
     """Selector output used to build a per-turn runtime request (``TurnSnapshot``)."""
 
     text: str
@@ -200,8 +200,8 @@ class MutableAgentState:
     def select_messages(self) -> tuple[tuple[str, str], ...]:
         return tuple(self._messages)
 
-    def select_agent_context_input(self, text: str) -> AgentContextInput:
-        return AgentContextInput(
+    def select_turn_runtime_input(self, text: str) -> TurnRuntimeInput:
+        return TurnRuntimeInput(
             text=text,
             messages=tuple(self._messages[-MAX_CONVERSATION_MESSAGES:]),
             system_prompt=self._system_prompt,
@@ -348,7 +348,7 @@ def create_mutable_agent_state(**kwargs: Any) -> MutableAgentState:
 
 
 __all__ = [
-    "AgentContextInput",
+    "TurnRuntimeInput",
     "AgentMessageRole",
     "AgentModelInfo",
     "AgentRunStatus",

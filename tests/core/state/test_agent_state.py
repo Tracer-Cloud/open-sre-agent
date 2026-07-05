@@ -83,7 +83,7 @@ def test_run_status_and_pending_tool_invariants() -> None:
         state.end_run()
 
 
-def test_select_agent_context_input_excludes_shell_metadata() -> None:
+def test_select_turn_runtime_input_excludes_shell_metadata() -> None:
     tool = _tool("inspect")
     state = MutableAgentState(
         system_prompt="system",
@@ -94,7 +94,7 @@ def test_select_agent_context_input_excludes_shell_metadata() -> None:
     )
     state.record_turn("u", "a")
 
-    selected = state.select_agent_context_input("next")
+    selected = state.select_turn_runtime_input("next")
 
     assert selected.text == "next"
     assert selected.system_prompt == "system"

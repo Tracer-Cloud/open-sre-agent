@@ -284,7 +284,7 @@ def run_turn(
     # the single source of truth for what this turn knows. Downstream readers
     # (e.g. the action agent) read ``turn_snapshot.resolved_integrations`` instead of
     # re-resolving per component. Only fill it when a runtime-request source
-    # (``select_agent_context_input``) hasn't already populated it.
+    # (``select_turn_runtime_input``) hasn't already populated it.
     if not turn_snapshot.resolved_integrations:
         turn_snapshot = replace(
             turn_snapshot, resolved_integrations=resolve_and_cache_integrations(session)

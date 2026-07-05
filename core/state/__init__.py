@@ -9,7 +9,6 @@ from __future__ import annotations
 from core.state.agent_state import (
     MAX_CONVERSATION_MESSAGES,
     MAX_CONVERSATION_TURNS,
-    AgentContextInput,
     AgentMessageRole,
     AgentModelInfo,
     AgentRunStatus,
@@ -17,6 +16,7 @@ from core.state.agent_state import (
     AgentStateError,
     MutableAgentState,
     SessionAgentSnapshot,
+    TurnRuntimeInput,
     create_mutable_agent_state,
 )
 from core.state.evidence import EvidenceEntry
@@ -43,7 +43,7 @@ from core.state.types import AgentMode, ChatMessage, ChatMessageModel
 from core.state.updates import apply_state_updates
 
 __all__ = [
-    "AgentContextInput",
+    "TurnRuntimeInput",
     "AgentMessageRole",
     "AgentModelInfo",
     "AgentRunStatus",
