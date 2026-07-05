@@ -153,6 +153,47 @@ def test_run_turn_populates_resolved_integrations_on_turn_snapshot(
     assert captured[0].resolved_integrations == resolved
 
 
+def test_run_turn_passes_resolved_integrations_to_gather(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """run_turn hands the turn's resolved integrations to the gather phase (no re-resolve)."""
+    resolved = {"github": {"configured": True}}
+    monkeypatch.setattr(
+        "core.agent_harness.turns.orchestrator.resolve_and_cache_integrations",
+        lambda _session: resolved,
+    )
+    gather_calls: list[Any] = []
+
+    def execute_actions(_text: str, **_kwargs: object) -> ToolCallingTurnResult:
+        return ToolCallingTurnResult(0, 0, 0, False, False)
+
+    def answer(_text: str, **_kwargs: object) -> object:
+        return type("Run", (), {"response_text": "answered"})()
+
+    def gather(_text: str, *, resolved_integrations: Any = None, **_kwargs: object) -> None:
+        gather_calls.append(resolved_integrations)
+        return None
+
+    class _Accounting:
+        def record_action_result(self, _result: ToolCallingTurnResult) -> None:
+            return None
+
+        def finalize(self, result: ShellTurnResult) -> ShellTurnResult:
+            return result
+
+    session = Session(storage=InMemorySessionStorage())
+    run_turn(
+        "hi",
+        session,
+        execute_actions=execute_actions,
+        answer=answer,
+        gather=gather,
+        accounting=_Accounting(),
+    )
+
+    assert gather_calls == [resolved]
+
+
 def test_action_tools_uses_passed_resolved_integrations(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -164,7 +164,8 @@ class RunRecordFactory(Protocol):
 # ``answer(text, *, confirm_fn, is_tty, tool_observation, turn_snapshot) -> LLM-run record | None``.
 StreamAnswerFn = Callable[..., Any]
 
-# Bound evidence-gather callable: ``gather(text, *, is_tty) -> str | None``.
+# Bound evidence-gather callable:
+# ``gather(text, *, is_tty, resolved_integrations) -> str | None``.
 EvidenceGatherer = Callable[..., "str | None"]
 
 # Bound action tool-calling driver:

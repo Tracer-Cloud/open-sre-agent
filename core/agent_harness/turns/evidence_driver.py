@@ -131,7 +131,7 @@ def _resolve_gather_integrations(
     is connected. GitHub repo scope is still applied on top.
     """
     base = (
-        resolved_integrations
+        dict(resolved_integrations)
         if resolved_integrations is not None
         else resolve_and_cache_integrations(session)
     )
