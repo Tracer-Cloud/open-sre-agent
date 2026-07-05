@@ -148,7 +148,7 @@ def dispatch_message_to_headless_agent(
         text: str,
         *,
         is_tty: bool | None = None,
-        turn_plan: TurnPlan | None = None,  # noqa: ARG001
+        turn_plan: TurnPlan | None = None,
     ) -> str | None:
         if not gather_enabled:
             return None
@@ -158,6 +158,7 @@ def dispatch_message_to_headless_agent(
             store,
             error_reporter=error_reporter,
             is_tty=is_tty,
+            turn_plan=turn_plan,
         )
 
     return run_turn(
