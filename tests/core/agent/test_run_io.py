@@ -57,6 +57,25 @@ def test_from_runtime_request_uses_render_system_prompt_when_callable() -> None:
     assert run_input.messages == [UserRuntimeMessage(content="hello")]
 
 
+def test_from_runtime_request_copies_resolved_integrations() -> None:
+    resolved_integrations = {"github": {"configured": True}}
+    request = _PlainRuntimeRequest(
+        system_prompt="sys",
+        active_tools=(),
+        resolved_integrations=resolved_integrations,
+        max_iterations=1,
+    )
+
+    run_input = AgentRunInput.from_runtime_request(request, llm=object())
+
+    # Mutate the source dict after construction. If `from_runtime_request`
+    # stored a reference instead of a copy, this mutation would leak into
+    # `run_input.resolved`.
+    resolved_integrations["aws"] = {"configured": True}
+
+    assert run_input.resolved == {"github": {"configured": True}}
+
+
 def test_from_runtime_request_falls_back_to_system_prompt_string() -> None:
     tool = _tool()
     request = _PlainRuntimeRequest(
