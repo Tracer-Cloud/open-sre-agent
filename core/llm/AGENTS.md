@@ -36,18 +36,21 @@ Default path is **native vendor SDKs** (`OPENSRE_LLM_TRANSPORT` unset or `sdk`).
 `OPENSRE_LLM_TRANSPORT` is unset. Onboarding writes `OPENSRE_LLM_TRANSPORT=litellm` to
 `.env`; switching away from Azure removes that key so other providers return to SDK routing.
 
-Dispatch entrypoints — all routing lives in **one** place, `core/llm/factory.py`:
+Dispatch entrypoints — all routing lives in **one** place, `core/llm/factory.py`;
+construction lives in `core/llm/client_builders.py`:
 
 ```text
-get_llm(role)  # role ∈ {AGENT, REASONING, CLASSIFICATION, TOOLCALL}
-  → resolve_llm_route()               # the single provider/transport decision
+get_llm(role)  # role ∈ {AGENT, REASONING, CLASSIFICATION, TOOLCALL}   # factory.py
+  → resolve_llm_route()               # the single provider/transport decision  # factory.py
+  → client_builders.build_agent_client(route) / build_reasoning_client(route, model_type)
       cli_provider_registration?  → CLI-backed subprocess client
       use_litellm_for_provider? → build_litellm_*_client(settings, provider)   # transports/litellm/routing.py
       else      → native SDK client in transports/sdk/agent_clients.py or transports/sdk/llm_clients.py
 ```
 
-When changing routing, edit only `resolve_llm_route` / the role builders in `factory.py` —
-there is no second copy to keep in sync.
+When changing routing, edit only `resolve_llm_route` in `factory.py`; when changing how a
+provider's client is built, edit the builders in `client_builders.py` — there is no second
+copy to keep in sync.
 
 One cache in `factory.py` keyed by `(role, transport, runtime_provider)`, invalidated
 together on `(transport, runtime_provider)` change (not transport alone). REPL `/model`
