@@ -30,6 +30,15 @@ def test_resolve_alert_source_grafana_labels_heuristic() -> None:
     assert resolve_alert_source(state) == "grafana"
 
 
+def test_resolve_alert_source_grafana_datasource_uid_heuristic() -> None:
+    state = {
+        "raw_alert": {
+            "commonLabels": {"datasource_uid": "abc123"},
+        }
+    }
+    assert resolve_alert_source(state) == "grafana"
+
+
 def test_resolve_alert_source_grafana_external_url_heuristic() -> None:
     state = {
         "raw_alert": {
@@ -59,6 +68,24 @@ def test_declared_context_sources_from_common_annotations() -> None:
         }
     }
     assert declared_context_sources(state) == {"github", "datadog"}
+
+
+def test_declared_context_sources_from_annotations() -> None:
+    state = {
+        "raw_alert": {
+            "annotations": {"context_sources": "datadog"},
+        }
+    }
+    assert declared_context_sources(state) == {"datadog"}
+
+
+def test_declared_context_sources_from_common_labels() -> None:
+    state = {
+        "raw_alert": {
+            "commonLabels": {"context_sources": "sentry"},
+        }
+    }
+    assert declared_context_sources(state) == {"sentry"}
 
 
 def test_declared_context_sources_from_labels_fallback() -> None:
@@ -91,6 +118,17 @@ def test_collect_alert_text_lowercases_and_joins_fields() -> None:
     assert "checkout" in text
     assert "p99 spike" in text
     assert "problem" in text
+
+
+def test_collect_alert_text_includes_pipeline_name() -> None:
+    text = collect_alert_text({"pipeline_name": "CheckoutPipeline", "alert_name": "Latency"})
+    assert "checkoutpipeline" in text
+    assert "latency" in text
+
+
+def test_collect_alert_text_from_string_raw_alert() -> None:
+    text = collect_alert_text({"raw_alert": "Lambda ERROR timeout"})
+    assert "lambda error timeout" in text
 
 
 def test_relevant_sources_prefers_declared_context_sources() -> None:
