@@ -945,7 +945,7 @@ def test_build_openai_tool_specs_normalizes_anyof_optional_parameters() -> None:
     assert_strict_tool_schema_node(parameters, path="optional_field_tool")
 
 
-def test_get_agent_llm_routes_deepseek_to_openai_compatible_client(
+def test_get_llm_agent_routes_deepseek_to_openai_compatible_client(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
 
@@ -987,7 +987,7 @@ def test_get_agent_llm_routes_deepseek_to_openai_compatible_client(
     assert captured["api_key_env"] == "DEEPSEEK_API_KEY"
 
 
-def test_get_agent_llm_routes_deepseek_to_litellm_when_transport_enabled(
+def test_get_llm_agent_routes_deepseek_to_litellm_when_transport_enabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from core.llm.transports.litellm.clients import LiteLLMAgentClient
@@ -1006,7 +1006,7 @@ def test_get_agent_llm_routes_deepseek_to_litellm_when_transport_enabled(
     assert client._api_key_env == "DEEPSEEK_API_KEY"
 
 
-def test_get_agent_llm_uses_sdk_without_transport_flag(
+def test_get_llm_agent_uses_sdk_without_transport_flag(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
 
@@ -1034,7 +1034,7 @@ def test_get_agent_llm_uses_sdk_without_transport_flag(
         "copilot",
     ],
 )
-def test_get_agent_llm_returns_cli_backed_client_for_cli_providers(
+def test_get_llm_agent_returns_cli_backed_client_for_cli_providers(
     provider: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from core.llm.transports.sdk.agent_clients import (
@@ -1049,7 +1049,7 @@ def test_get_agent_llm_returns_cli_backed_client_for_cli_providers(
     )
 
 
-def test_get_agent_llm_openai_oauth_routes_to_codex_cli(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_get_llm_agent_openai_oauth_routes_to_codex_cli(monkeypatch: pytest.MonkeyPatch) -> None:
     from core.llm.transports.sdk.agent_clients import (
         CLIBackedAgentClient,
     )
@@ -1067,7 +1067,7 @@ def test_get_agent_llm_openai_oauth_routes_to_codex_cli(monkeypatch: pytest.Monk
     assert client._model == "gpt-5.5"
 
 
-def test_get_agent_llm_anthropic_oauth_routes_to_claude_code_cli(
+def test_get_llm_agent_anthropic_oauth_routes_to_claude_code_cli(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from core.llm.transports.sdk.agent_clients import (
@@ -1478,7 +1478,7 @@ def test_bedrock_converse_invoke_parses_tool_use(monkeypatch: pytest.MonkeyPatch
     assert result.stop_reason == "tool_use"
 
 
-def test_get_agent_llm_routes_non_anthropic_bedrock_to_converse(
+def test_get_llm_agent_routes_non_anthropic_bedrock_to_converse(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "bedrock")
@@ -1494,7 +1494,7 @@ def test_get_agent_llm_routes_non_anthropic_bedrock_to_converse(
     assert isinstance(get_llm(LLMRole.AGENT), BedrockConverseAgentClient)
 
 
-def test_get_agent_llm_routes_anthropic_bedrock_to_sdk(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_get_llm_agent_routes_anthropic_bedrock_to_sdk(monkeypatch: pytest.MonkeyPatch) -> None:
     _install_fake_anthropic(monkeypatch)
     monkeypatch.setenv("LLM_PROVIDER", "bedrock")
     monkeypatch.setenv("BEDROCK_REASONING_MODEL", "us.anthropic.claude-sonnet-4-6")
