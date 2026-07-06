@@ -37,8 +37,8 @@ from core.agent_harness.providers.provider_models import default_llm_factory
 from core.agent_harness.turns.turn_plan import TurnPlan
 from core.events import runtime_event_callback_from_observer
 from core.execution import ToolExecutionHooks, public_tool_input
+from core.llm.failure_classification import is_context_length_overflow
 from core.llm.types import AgentLLMResponse, ToolCall
-from integrations.llm_cli.failure_explain import is_context_length_overflow
 
 log = logging.getLogger(__name__)
 

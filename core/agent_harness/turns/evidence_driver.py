@@ -31,7 +31,7 @@ from core.agent_harness.prompts.conversation_memory import (
 from core.agent_harness.prompts.gather import build_gather_system_prompt
 from core.domain.alerts.alert_source import SECONDARY_TOOL_SOURCES
 from core.events import runtime_event_callback_from_observer
-from integrations.github.repo_scope import (
+from platform.harness_ports import (
     apply_github_repo_scope,
     infer_github_repo_scope,
 )
@@ -230,12 +230,12 @@ def gather_tool_evidence(
     def _run_gather_turn() -> Any | None:
         # Tool discovery, integration resolution, and LLM load run inside this
         # helper, within the ``_safe_execute`` fallback boundary.
-        from tools.investigation.stages.gather_evidence.tools import get_available_tools
+        from platform.harness_ports import get_investigation_tools
 
         resolved = _resolve_gather_integrations(
             session, message, resolved_integrations=resolved_integrations
         )
-        gather_tools = list(get_available_tools(resolved))
+        gather_tools = list(get_investigation_tools(resolved))
         if not _has_usable_gather_tools(gather_tools):
             return None
         llm = _load_gather_llm_or_none(error_reporter)

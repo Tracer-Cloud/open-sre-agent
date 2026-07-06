@@ -2071,22 +2071,27 @@ class TestVerboseCommand:
 class TestCompactCommand:
     def test_nothing_to_compact_when_small(self) -> None:
         session = Session()
-        for i in range(5):
-            session.record("slash", f"/cmd{i}")
+        session.agent.messages = [("user", f"m{i}") for i in range(4)]
         console, buf = _capture()
         dispatch_slash("/compact", session, console)
-        assert "nothing to compact" in buf.getvalue()
-        assert len(session.history) == 6
-        assert session.history[-1]["text"] == "/compact"
+        assert "Nothing to compact yet." in buf.getvalue()
+        assert len(session.agent.messages) == 4
 
-    def test_trims_to_20_when_over_limit(self) -> None:
+    def test_compacts_conversation_branch_when_over_keep_limit(self) -> None:
         session = Session()
-        for i in range(30):
-            session.record("slash", f"/cmd{i}")
+        session.agent.messages = [("user", f"message number {i}") for i in range(20)]
         console, buf = _capture()
         dispatch_slash("/compact", session, console)
-        assert len(session.history) == 20
-        assert "compacted" in buf.getvalue()
+        # compact_session_branch keeps the most recent 8 messages and prepends
+        # a single summary message.
+        assert len(session.agent.messages) == 9
+        assert session.agent.messages[0][0] == "assistant"
+        assert "Session summary" in session.agent.messages[0][1]
+        assert "compacted session context" in buf.getvalue()
+        assert any(
+            entry.get("type") == "slash" and entry.get("text") == "/compact"
+            for entry in session.history
+        )
 
 
 class TestCancelCommand:

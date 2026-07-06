@@ -152,7 +152,7 @@ def test_build_prompt_session_uses_persistent_history(
     monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
 
     with create_app_session(input=DummyInput(), output=DummyOutput()):
-        prompt = input_prompt._build_prompt_session()
+        prompt = input_prompt.build_prompt_session()
 
     assert isinstance(prompt.history, FileHistory)
     assert prompt.history.filename == str(tmp_path / "interactive_history")
@@ -174,7 +174,7 @@ def test_build_prompt_session_falls_back_to_memory_history(
     monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", blocked_home)
 
     with create_app_session(input=DummyInput(), output=DummyOutput()):
-        prompt = input_prompt._build_prompt_session()
+        prompt = input_prompt.build_prompt_session()
 
     assert isinstance(prompt.history, InMemoryHistory)
 
@@ -188,7 +188,7 @@ def test_repl_session_prompt_history_backend_matches_prompt_toolkit_history(
     monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
     with create_app_session(input=DummyInput(), output=DummyOutput()):
         session = Session()
-        prompt = input_prompt._build_prompt_session()
+        prompt = input_prompt.build_prompt_session()
         session.prompt_history_backend = prompt.history
     assert session.prompt_history_backend is prompt.history
 
@@ -215,7 +215,7 @@ def test_shift_enter_inserts_newline_before_submit(
             create_pipe_input() as pipe_input,
             create_app_session(input=pipe_input, output=DummyOutput()),
         ):
-            prompt = input_prompt._build_prompt_session()
+            prompt = input_prompt.build_prompt_session()
             task = asyncio.create_task(prompt.prompt_async(""))
             pipe_input.send_bytes(b"first line")
             pipe_input.send_bytes(_SHIFT_ENTER_SEQUENCE.encode())
@@ -496,8 +496,7 @@ def test_run_initial_input_dispatches_as_non_tty(monkeypatch: pytest.MonkeyPatch
         calls.append(kwargs)
 
     monkeypatch.setattr(
-        startup_initial_input,
-        "execute_shell_turn",
+        "surfaces.interactive_shell.runtime.shell_turn_execution.execute_shell_turn",
         _fake_handle_message,
     )
 

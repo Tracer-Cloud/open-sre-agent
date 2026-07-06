@@ -149,16 +149,6 @@ def _cmd_verbose(_session: Session, console: Console, args: list[str]) -> bool:
     return True
 
 
-def _cmd_compact(session: Session, console: Console, _args: list[str]) -> bool:
-    before = len(session.history)
-    if before > 20:
-        session.history = session.history[-20:]
-        console.print(f"[{DIM}]compacted: kept last 20 of {before} entries.[/]")
-    else:
-        console.print(f"[{DIM}]nothing to compact ({before} entries, limit is 20).[/]")
-    return True
-
-
 COMMANDS: list[SlashCommand] = [
     SlashCommand(
         "/trust",
@@ -183,7 +173,6 @@ COMMANDS: list[SlashCommand] = [
         notes=("In a TTY, bare /verbose opens an interactive menu.",),
         first_arg_completions=_VERBOSE_FIRST_ARGS,
     ),
-    SlashCommand("/compact", "Trim old session history to free memory.", _cmd_compact),
 ]
 
 __all__ = ["COMMANDS", "_TRUST_FIRST_ARGS", "_VERBOSE_FIRST_ARGS", "_EFFORT_FIRST_ARGS"]

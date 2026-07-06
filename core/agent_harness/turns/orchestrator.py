@@ -40,7 +40,7 @@ from core.agent_harness.prompts import build_cli_agent_prompt_from_provider
 from core.agent_harness.prompts.conversation_memory import MAX_CONVERSATION_MESSAGES
 from core.agent_harness.session.compaction import auto_compact_if_needed
 from core.agent_harness.turns.turn_plan import TurnPlan, build_turn_plan
-from integrations.llm_cli.errors import CLITimeoutError
+from core.llm_invoke_errors import is_cli_timeout_error
 
 _ASSISTANT_LABEL = "assistant"
 
@@ -80,10 +80,10 @@ def _stream_response(
             error_reporter.report(
                 exc,
                 context="core.agent_harness.turns.orchestrator.stream",
-                expected=isinstance(exc, CLITimeoutError),
+                expected=is_cli_timeout_error(exc),
             )
         if session is not None:
-            kind = "timeout" if isinstance(exc, CLITimeoutError) else "assistant_error"
+            kind = "timeout" if is_cli_timeout_error(exc) else "assistant_error"
             stage_turn_error(session, kind, str(exc))
         output.render_error(f"assistant failed: {exc}")
         return None

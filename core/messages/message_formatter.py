@@ -6,6 +6,7 @@ import json
 from collections.abc import Sequence
 from typing import Any, cast
 
+from core.context_budget import strip_internal_message_markers
 from core.llm.types import AgentLLMResponse, ToolCall
 from core.messages.runtime_message_types import (
     AppRuntimeMessage,
@@ -36,11 +37,16 @@ class MessageFormatter:
         return [_coerce_runtime_message(m) for m in messages]
 
     def to_provider_messages(self, messages: Sequence[RuntimeMessage]) -> list[ProviderMessage]:
-        """Render a RuntimeMessage sequence into provider dicts for llm.invoke."""
+        """Render a RuntimeMessage sequence into provider dicts for llm.invoke.
+
+        ``provider_payload``/``provider_payloads`` on a coerced RuntimeMessage retain
+        internal ``_opensre_*`` markers (see ``_metadata_from_provider_message``), so
+        the outbound render is stripped here rather than trusting each producer.
+        """
         result: list[ProviderMessage] = []
         for message in messages:
             result.extend(self._for_runtime_message(message))
-        return result
+        return strip_internal_message_markers(result)
 
     def assistant_from_response(self, response: AgentLLMResponse) -> ProviderMessage:
         """Build the provider assistant-message payload from an LLM response."""

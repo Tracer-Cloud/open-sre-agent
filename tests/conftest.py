@@ -1,6 +1,7 @@
 """Root pytest configuration — loads .env for all test directories."""
 
 import os
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -31,6 +32,17 @@ def _mark_tests_for_analytics() -> None:
 _load_env()
 _disable_sentry()
 _mark_tests_for_analytics()
+
+
+@pytest.fixture(autouse=True)
+def _harness_ports_per_test() -> Iterator[None]:
+    """Wire harness ports before each test; reset after to avoid session leakage."""
+    from platform.harness_ports import reset_harness_ports
+    from surfaces.interactive_shell.ui.output.boundary import install_harness_ports
+
+    install_harness_ports()
+    yield
+    reset_harness_ports()
 
 
 @pytest.fixture(autouse=True)

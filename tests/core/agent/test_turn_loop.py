@@ -11,12 +11,10 @@ from core.agent_harness.providers.default_providers import DefaultTurnAccounting
 from core.agent_harness.session import Session
 from core.agent_harness.session.storage.memory import InMemorySessionStorage
 from core.agent_harness.turns.orchestrator import run_turn
-from surfaces.interactive_shell.runtime.core.state import ReplState, SpinnerState
 from surfaces.interactive_shell.runtime.core.turn_accounting import (
     ToolCallingTurnResult,
 )
 from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
-from surfaces.interactive_shell.runtime.turn_host import AgentTurnRunner
 from surfaces.interactive_shell.utils.telemetry.recorder import LlmRunInfo
 
 
@@ -141,33 +139,4 @@ def test_default_turn_accounting_persists_action_only_context() -> None:
     ] == [
         ("user", "weather in Hawaii", {"kind": "chat"}),
         ("assistant", "Hawaii: +28C", {"kind": "chat"}),
-    ]
-
-
-def test_agent_turn_runner_exposes_pi_style_queue_methods() -> None:
-    state = ReplState()
-    runner = AgentTurnRunner(
-        session=Session(),
-        state=state,
-        spinner=SpinnerState(),
-        invalidate_prompt=lambda: None,
-    )
-
-    runner.steer(" steer the current work ")
-    runner.follow_up(" follow up ")
-    runner.next_turn(" next turn ")
-    runner.followUp(" camel follow ")
-    runner.nextTurn(" camel next ")
-
-    queued: list[str] = []
-    while not state.queue.empty():
-        queued.append(state.queue.get_nowait())
-        state.queue.task_done()
-
-    assert queued == [
-        "steer the current work",
-        "follow up",
-        "next turn",
-        "camel follow",
-        "camel next",
     ]
