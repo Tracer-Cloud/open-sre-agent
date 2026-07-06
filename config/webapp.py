@@ -24,16 +24,12 @@ class HealthResponse(BaseModel):
 app = FastAPI()
 
 
-def _llm_configured() -> bool:
+def get_health_response() -> HealthResponse:
     try:
         LLMSettings.from_env()
+        llm_configured = True
     except ValidationError:
-        return False
-    return True
-
-
-def get_health_response() -> HealthResponse:
-    llm_configured = _llm_configured()
+        llm_configured = False
 
     return HealthResponse(
         ok=llm_configured,
