@@ -332,17 +332,9 @@ class RegisteredTool:
         return None
 
     def __call__(self, **kwargs: Any) -> Any:
-        try:
-            return self.run(**kwargs)
-        except Exception as exc:
-            from platform.observability.sentry_sdk import capture_exception
+        from core.tool_framework.telemetry import invoke_tool
 
-            capture_exception(
-                exc,
-                context=f"tool.{self.name}",
-                tags={"surface": "tool", "tool": self.name},
-            )
-            return {"error": str(exc), "exception_type": type(exc).__name__}
+        return invoke_tool(self.run, name=self.name, source=str(self.source), kwargs=kwargs)
 
     @classmethod
     def from_base_tool(

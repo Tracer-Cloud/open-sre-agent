@@ -60,25 +60,6 @@ class ToolMetadata(StrictConfigModel):
 
 
 class BaseTool(ABC):
-    """Abstract base for all investigation tool actions.
-
-    Each subclass declares metadata as ClassVars and implements ``run()``.
-    ``is_available()`` and ``extract_params()`` may be overridden to make the
-    tool self-describing — the investigation registry calls these instead of
-    the old ``availability_check`` / ``parameter_extractor`` lambdas.
-
-    Instances are directly callable; ``tool(**kwargs)`` delegates to ``run()``.
-
-    Subclasses define ``run()`` with their own explicit signatures for type
-    safety and readability.  The method is **not** declared here to avoid
-    forcing every subclass into a single ``**kwargs`` signature — the
-    ``__call__`` protocol provides the uniform dispatch contract instead.
-
-    Backward compatibility: ``retrieval_controls`` is optional. Tools that
-    don't declare it default to no supported controls. Existing tools continue
-    to work without modification.
-    """
-
     name: ClassVar[str]
     description: ClassVar[str]
     display_name: ClassVar[str | None] = None
@@ -163,17 +144,9 @@ class BaseTool(ABC):
         }
 
     def __call__(self, **kwargs: Any) -> dict[str, Any]:
-        try:
-            return self.run(**kwargs)  # type: ignore[attr-defined, no-any-return]
-        except Exception as exc:
-            from platform.observability.sentry_sdk import capture_exception
+        from core.tool_framework.telemetry import invoke_tool
 
-            capture_exception(
-                exc,
-                context=f"tool.{self.name}",
-                tags={"surface": "tool", "tool": self.name},
-            )
-            return {"error": str(exc), "exception_type": type(exc).__name__}
+        return invoke_tool(self.run, name=self.name, source=str(self.source), kwargs=kwargs)  # type: ignore[attr-defined]
 
     def is_available(self, _sources: dict[str, dict]) -> bool:
         """Return True when required data sources are present.
