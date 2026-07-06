@@ -31,7 +31,7 @@ class _ABaseTool(BaseTool):
 
 
 def test_tool_applied_without_kwargs_to_function_is_noop() -> None:
-    def plain_fn() -> None: ...
+    def plain_fn() -> None: pass
 
     result = tool(plain_fn)
     assert result is plain_fn
@@ -89,7 +89,7 @@ def test_function_tool_surfaces_defaults_to_investigation() -> None:
         source="grafana",
         input_schema={"type": "object", "properties": {}},
     )
-    def fn() -> None: ...
+    def fn() -> None: pass
 
     registered = getattr(fn, REGISTERED_TOOL_ATTR)
     assert registered.surfaces == ("investigation",)
@@ -103,7 +103,7 @@ def test_function_tool_surfaces_are_propagated() -> None:
         input_schema={"type": "object", "properties": {}},
         surfaces=("investigation", "chat"),
     )
-    def fn() -> None: ...
+    def fn() -> None: pass
 
     registered = getattr(fn, REGISTERED_TOOL_ATTR)
     assert set(registered.surfaces) == {"investigation", "chat"}
