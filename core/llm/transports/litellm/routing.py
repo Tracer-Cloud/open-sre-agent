@@ -16,11 +16,11 @@ from core.llm.providers.azure_openai import (
     resolve_azure_openai_request_kwargs,
 )
 from core.llm.providers.openai_compat_providers import (
-    ModelType,
     is_openai_compat_provider,
     resolve_openai_compat_provider,
 )
 from core.llm.transports.litellm.clients import LiteLLMAgentClient, LiteLLMLLMClient
+from core.llm.types import ModelType
 
 
 def _litellm_model_for_compat(model: str) -> str:
