@@ -6,7 +6,6 @@ import sys
 from pathlib import Path
 
 from config.constants import LEGACY_INTEGRATIONS_STORE_PATH, OPENSRE_HOME_DIR
-from config.version import PACKAGE_NAME
 
 
 def _is_windows() -> bool:
@@ -32,7 +31,7 @@ def _remove_path(p: Path) -> tuple[bool, str | None]:
 
 def _pip_uninstall() -> int:
     result = subprocess.run(
-        [sys.executable, "-m", "pip", "uninstall", "--yes", PACKAGE_NAME],
+        [sys.executable, "-m", "pip", "uninstall", "--yes", "opensre"],
         check=False,
         capture_output=True,
     )
@@ -48,13 +47,11 @@ def _data_dirs() -> list[Path]:
 
 
 def _is_onedir_binary(exe_path: Path) -> bool:
-    return (
-        exe_path.parent.name == f".{PACKAGE_NAME}-app" and (exe_path.parent / "_internal").is_dir()
-    )
+    return exe_path.parent.name == ".opensre-app" and (exe_path.parent / "_internal").is_dir()
 
 
 def _launcher_for_binary(exe_path: Path) -> Path | None:
-    launcher = shutil.which(PACKAGE_NAME)
+    launcher = shutil.which("opensre")
     if not launcher:
         return None
     launcher_path = Path(launcher)
@@ -102,7 +99,7 @@ def run_uninstall(*, yes: bool = False) -> int:
         for path in binary_paths:
             print(f"    {path}  (binary)")
     else:
-        print(f"    pip package: {PACKAGE_NAME}")
+        print("    pip package: opensre")
     print()
 
     if not yes:
@@ -143,16 +140,16 @@ def run_uninstall(*, yes: bool = False) -> int:
                 print(f"  error    {path}: {err}", file=sys.stderr)
                 any_error = True
     else:
-        print(f"  running  pip uninstall {PACKAGE_NAME}")
+        print("  running  pip uninstall opensre")
         rc = _pip_uninstall()
         if rc == 0:
-            print(f"  deleted  pip package {PACKAGE_NAME}")
+            print("  deleted  pip package opensre")
         else:
             print(f"  error    pip uninstall failed (exit {rc})", file=sys.stderr)
             if _is_windows():
-                hint = f"pip uninstall {PACKAGE_NAME}"
+                hint = "pip uninstall opensre"
             else:
-                hint = f"pip uninstall {PACKAGE_NAME}  (or: pipx uninstall {PACKAGE_NAME})"
+                hint = "pip uninstall opensre  (or: pipx uninstall opensre)"
             print(f"           retry manually: {hint}", file=sys.stderr)
             any_error = True
 

@@ -21,7 +21,7 @@ ensure_project_platform_package()
 
 import click  # noqa: E402
 
-from config.version import get_version  # noqa: E402
+from config.version import get_opensre_version  # noqa: E402
 from surfaces.cli.group import LazyRichGroup, ThemeParamType  # noqa: E402
 from surfaces.cli.invocation import (  # noqa: E402
     ensure_utf8_stdio,
@@ -84,7 +84,7 @@ def _capture_accepted_cli_invocation(ctx: click.Context) -> None:
     context_settings={"help_option_names": ["-h", "--help"]},
     invoke_without_command=True,
 )
-@click.version_option(version=get_version(), prog_name="opensre")
+@click.version_option(version=get_opensre_version(), prog_name="opensre")
 @click.option(
     "--json", "-j", "json_output", is_flag=True, help="Emit machine-readable JSON output."
 )

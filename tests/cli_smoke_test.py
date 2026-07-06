@@ -18,7 +18,7 @@ from threading import Thread
 
 import pytest
 
-from config.version import get_version
+from config.version import get_opensre_version
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 _SCRIPT_NAME = "opensre.exe" if os.name == "nt" else "opensre"
@@ -459,7 +459,7 @@ def test_opensre_version_smoke(cli_sandbox: CliSandbox) -> None:
     result = _run_cli(cli_sandbox, "--version")
 
     assert result.exit_code == 0
-    assert get_version() in result.stdout
+    assert get_opensre_version() in result.stdout
 
 
 def test_health_smoke_uses_real_datadog_store_config(cli_sandbox: CliSandbox) -> None:

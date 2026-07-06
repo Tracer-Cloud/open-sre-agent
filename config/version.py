@@ -1,4 +1,4 @@
-"""Version helpers shared by packaged and frozen entrypoints."""
+"""OpenSRE package version for CLI, telemetry, and release reporting."""
 
 from __future__ import annotations
 
@@ -6,35 +6,22 @@ import importlib.metadata
 import tomllib
 from pathlib import Path
 
-from config.constants.opensre import DEFAULT_RELEASE_VERSION
 
-PACKAGE_NAME = "opensre"
-DEFAULT_VERSION = DEFAULT_RELEASE_VERSION
-_PYPROJECT_PATH = Path(__file__).resolve().parents[1] / "pyproject.toml"
-
-
-def _read_pyproject_version() -> str | None:
-    """Return the repo version when running directly from a source checkout."""
+def get_opensre_version() -> str:
+    """Return the installed package version, else checkout metadata, else the dev fallback."""
     try:
-        data = tomllib.loads(_PYPROJECT_PATH.read_text(encoding="utf-8"))
-    except (FileNotFoundError, OSError, tomllib.TOMLDecodeError):
-        return None
-
-    project = data.get("project")
-    if not isinstance(project, dict):
-        return None
-
-    version = project.get("version")
-    if not isinstance(version, str):
-        return None
-
-    version = version.strip()
-    return version or None
-
-
-def get_version() -> str:
-    """Return the installed package version, then repo metadata, then a bundled fallback."""
-    try:
-        return importlib.metadata.version(PACKAGE_NAME)
+        return importlib.metadata.version("opensre")
     except importlib.metadata.PackageNotFoundError:
-        return _read_pyproject_version() or DEFAULT_VERSION
+        pass
+
+    pyproject = Path(__file__).resolve().parents[1] / "pyproject.toml"
+    try:
+        project = tomllib.loads(pyproject.read_text(encoding="utf-8")).get("project")
+        if isinstance(project, dict):
+            version = project.get("version")
+            if isinstance(version, str) and version.strip():
+                return version.strip()
+    except (FileNotFoundError, OSError, tomllib.TOMLDecodeError):
+        pass
+
+    return "0.1"

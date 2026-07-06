@@ -220,12 +220,12 @@ def test_init_sentry_dsn_env_overrides_constant(monkeypatch) -> None:
     assert init_mock.call_args.kwargs["dsn"] == custom_dsn
 
 
-def test_init_sentry_release_tag_uses_get_version(monkeypatch) -> None:
+def test_init_sentry_release_tag_uses_get_opensre_version(monkeypatch) -> None:
     sentry_mod._init_sentry_once.cache_clear()
     monkeypatch.delenv("OPENSRE_SENTRY_DISABLED", raising=False)
     monkeypatch.delenv("OPENSRE_NO_TELEMETRY", raising=False)
     monkeypatch.delenv("DO_NOT_TRACK", raising=False)
-    monkeypatch.setattr("config.version.get_version", lambda: "9.9.9")
+    monkeypatch.setattr("config.version.get_opensre_version", lambda: "9.9.9")
     init_mock = MagicMock()
     monkeypatch.setitem(sys.modules, "sentry_sdk", SimpleNamespace(init=init_mock))
 

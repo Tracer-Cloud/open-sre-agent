@@ -16,7 +16,7 @@ from surfaces.cli.lifecycle.update import (
 def test_already_up_to_date(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setattr("surfaces.cli.lifecycle.update.get_version", lambda: "1.2.3")
+    monkeypatch.setattr("surfaces.cli.lifecycle.update.get_opensre_version", lambda: "1.2.3")
     monkeypatch.setattr("surfaces.cli.lifecycle.update._fetch_latest_version", lambda: "1.2.3")
 
     rc = run_update()
@@ -29,7 +29,7 @@ def test_check_only_returns_1_when_update_available(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    monkeypatch.setattr("surfaces.cli.lifecycle.update.get_version", lambda: "1.0.0")
+    monkeypatch.setattr("surfaces.cli.lifecycle.update.get_opensre_version", lambda: "1.0.0")
     monkeypatch.setattr("surfaces.cli.lifecycle.update._fetch_latest_version", lambda: "1.2.3")
     monkeypatch.setattr(
         "surfaces.cli.lifecycle.update._upgrade_via_install_script",
@@ -48,7 +48,7 @@ def test_check_only_returns_0_when_up_to_date(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    monkeypatch.setattr("surfaces.cli.lifecycle.update.get_version", lambda: "1.2.3")
+    monkeypatch.setattr("surfaces.cli.lifecycle.update.get_opensre_version", lambda: "1.2.3")
     monkeypatch.setattr("surfaces.cli.lifecycle.update._fetch_latest_version", lambda: "1.2.3")
 
     rc = run_update(check_only=True)
@@ -60,7 +60,7 @@ def test_check_only_returns_0_when_up_to_date(
 def test_update_install_script_success(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setattr("surfaces.cli.lifecycle.update.get_version", lambda: "1.0.0")
+    monkeypatch.setattr("surfaces.cli.lifecycle.update.get_opensre_version", lambda: "1.0.0")
     monkeypatch.setattr("surfaces.cli.lifecycle.update._fetch_latest_version", lambda: "1.2.3")
     monkeypatch.setattr("surfaces.cli.lifecycle.update._upgrade_via_install_script", lambda: 0)
 
@@ -74,7 +74,7 @@ def test_update_install_script_failure_shows_retry_hint(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    monkeypatch.setattr("surfaces.cli.lifecycle.update.get_version", lambda: "1.0.0")
+    monkeypatch.setattr("surfaces.cli.lifecycle.update.get_opensre_version", lambda: "1.0.0")
     monkeypatch.setattr("surfaces.cli.lifecycle.update._fetch_latest_version", lambda: "1.2.3")
     monkeypatch.setattr("surfaces.cli.lifecycle.update._upgrade_via_install_script", lambda: 1)
 
@@ -89,7 +89,7 @@ def test_update_install_script_failure_shows_retry_hint(
 def test_fetch_error_returns_1(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setattr("surfaces.cli.lifecycle.update.get_version", lambda: "1.0.0")
+    monkeypatch.setattr("surfaces.cli.lifecycle.update.get_opensre_version", lambda: "1.0.0")
 
     def _raise() -> str:
         raise RuntimeError("network unreachable")
@@ -105,7 +105,7 @@ def test_fetch_error_returns_1(
 def test_rate_limit_error_message(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setattr("surfaces.cli.lifecycle.update.get_version", lambda: "1.0.0")
+    monkeypatch.setattr("surfaces.cli.lifecycle.update.get_opensre_version", lambda: "1.0.0")
 
     def _raise() -> str:
         raise RuntimeError("GitHub API rate limit exceeded, try again later")
@@ -121,7 +121,7 @@ def test_rate_limit_error_message(
 def test_proxy_hint_in_connect_error(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setattr("surfaces.cli.lifecycle.update.get_version", lambda: "1.0.0")
+    monkeypatch.setattr("surfaces.cli.lifecycle.update.get_opensre_version", lambda: "1.0.0")
 
     def _raise() -> str:
         raise RuntimeError(
@@ -140,7 +140,7 @@ def test_binary_install_upgrades_via_install_script(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    monkeypatch.setattr("surfaces.cli.lifecycle.update.get_version", lambda: "1.0.0")
+    monkeypatch.setattr("surfaces.cli.lifecycle.update.get_opensre_version", lambda: "1.0.0")
     monkeypatch.setattr("surfaces.cli.lifecycle.update._fetch_latest_version", lambda: "1.2.3")
     monkeypatch.setattr("surfaces.cli.lifecycle.update._is_binary_install", lambda: True)
     monkeypatch.setattr("surfaces.cli.lifecycle.update._upgrade_via_install_script", lambda: 0)
@@ -155,7 +155,7 @@ def test_editable_install_prints_warning(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    monkeypatch.setattr("surfaces.cli.lifecycle.update.get_version", lambda: "1.0.0")
+    monkeypatch.setattr("surfaces.cli.lifecycle.update.get_opensre_version", lambda: "1.0.0")
     monkeypatch.setattr("surfaces.cli.lifecycle.update._fetch_latest_version", lambda: "1.2.3")
     monkeypatch.setattr("surfaces.cli.lifecycle.update._is_binary_install", lambda: False)
     monkeypatch.setattr("surfaces.cli.lifecycle.update._is_editable_install", lambda: True)
@@ -173,7 +173,7 @@ def test_install_script_failure_windows_shows_powershell_hint(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    monkeypatch.setattr("surfaces.cli.lifecycle.update.get_version", lambda: "1.0.0")
+    monkeypatch.setattr("surfaces.cli.lifecycle.update.get_opensre_version", lambda: "1.0.0")
     monkeypatch.setattr("surfaces.cli.lifecycle.update._fetch_latest_version", lambda: "1.2.3")
     monkeypatch.setattr("surfaces.cli.lifecycle.update._is_windows", lambda: True)
     monkeypatch.setattr("surfaces.cli.lifecycle.update._upgrade_via_install_script", lambda: 1)
@@ -188,7 +188,7 @@ def test_install_script_failure_unix_shows_curl_hint(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    monkeypatch.setattr("surfaces.cli.lifecycle.update.get_version", lambda: "1.0.0")
+    monkeypatch.setattr("surfaces.cli.lifecycle.update.get_opensre_version", lambda: "1.0.0")
     monkeypatch.setattr("surfaces.cli.lifecycle.update._fetch_latest_version", lambda: "1.2.3")
     monkeypatch.setattr("surfaces.cli.lifecycle.update._is_windows", lambda: False)
     monkeypatch.setattr("surfaces.cli.lifecycle.update._upgrade_via_install_script", lambda: 1)
@@ -203,7 +203,7 @@ def test_update_prints_main_build_url_after_success(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    monkeypatch.setattr("surfaces.cli.lifecycle.update.get_version", lambda: "1.0.0")
+    monkeypatch.setattr("surfaces.cli.lifecycle.update.get_opensre_version", lambda: "1.0.0")
     monkeypatch.setattr("surfaces.cli.lifecycle.update._fetch_latest_version", lambda: "1.2.3")
     monkeypatch.setattr("surfaces.cli.lifecycle.update._is_binary_install", lambda: False)
     monkeypatch.setattr("surfaces.cli.lifecycle.update._upgrade_via_install_script", lambda: 0)

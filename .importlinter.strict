@@ -30,28 +30,11 @@ ignore_imports =
     config.llm_keyring -> platform
     config.repl_config -> platform.terminal.theme
     config.webapp -> platform.observability.sentry_sdk
-<<<<<<< HEAD
-    # core -> integrations/tools (T-4 debt — agent_harness / llm_cli)
-    core.agent_harness.turns.action_driver -> integrations.llm_cli.failure_explain
-    core.agent_harness.turns.evidence_driver -> integrations.github.repo_scope
-    core.agent_harness.turns.orchestrator -> integrations.llm_cli.errors
-    core.agent_harness.integrations.resolution -> integrations.catalog
-    core.agent_harness.integrations.resolution -> integrations.port
-    core.agent_harness.integrations.resolution -> integrations.store
-    core.agent_harness.session.state -> integrations.catalog
-    core.agent_harness.tools.action_tools -> tools.registry
+    # core -> integrations/tools (T-4 debt — llm_cli)
     core.llm.factory -> integrations.llm_cli.registry
     core.llm.factory -> integrations.llm_cli.runner
     core.llm.transports.sdk.agent_clients -> integrations.llm_cli.runner
     core.llm.transports.sdk.agent_clients -> integrations.llm_cli.text
-=======
-    # core -> integrations/tools (T-4 debt — llm_cli)
-    core.llm.agent_llm_client -> integrations.llm_cli.registry
-    core.llm.llm_client -> integrations.llm_cli.registry
-    core.llm.llm_client -> integrations.llm_cli.runner
-    core.llm.sdk.agent_clients -> integrations.llm_cli.runner
-    core.llm.sdk.agent_clients -> integrations.llm_cli.text
->>>>>>> origin
     core.llm_invoke_errors -> integrations.llm_cli.errors
     # platform -> integrations (T-4 debt — scheduler / observability)
     platform.analytics.cli -> integrations.github.identity

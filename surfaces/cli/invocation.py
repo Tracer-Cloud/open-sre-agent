@@ -12,7 +12,7 @@ from contextlib import suppress
 
 import click
 
-from config.version import get_version
+from config.version import get_opensre_version
 
 
 def ensure_utf8_stdio() -> None:
@@ -78,7 +78,7 @@ def is_fast_version_invocation(argv: list[str]) -> bool:
 
 def print_fast_version(argv: list[str]) -> None:
     if argv == ["--version"]:
-        click.echo(f"opensre, version {get_version()}")
+        click.echo(f"opensre, version {get_opensre_version()}")
         return
 
     import json
@@ -87,7 +87,7 @@ def print_fast_version(argv: list[str]) -> None:
 
     json_output = argv[0] in {"--json", "-j"}
     payload = {
-        "opensre": get_version(),
+        "opensre": get_opensre_version(),
         "python": platform.python_version(),
         "os": platform.system().lower(),
         "arch": platform.machine(),

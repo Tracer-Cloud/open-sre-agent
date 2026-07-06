@@ -31,7 +31,7 @@ from rich.rule import Rule
 from rich.text import Text
 
 import platform
-from config.version import get_version
+from config.version import get_opensre_version
 from platform.common.exit_codes import ERROR as EXIT_ERROR
 from platform.common.exit_codes import SUCCESS
 from platform.common.runtime_flags import is_json_output
@@ -102,7 +102,7 @@ def _check_integrations() -> tuple[bool, str]:
 
 
 def _check_version_freshness() -> tuple[bool, str]:
-    current = get_version()
+    current = get_opensre_version()
     from surfaces.cli.lifecycle.update import (
         _fetch_latest_version,
         _is_update_available,
