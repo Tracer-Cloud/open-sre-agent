@@ -4,12 +4,9 @@ from __future__ import annotations
 
 from core.domain.alerts.alert_source import (
     ALERT_SOURCE_ROUTING,
-    ALERT_SOURCE_TO_SEED_TOOL_SOURCES,
-    ALERT_SOURCE_TO_TOOL_SOURCES,
     collect_alert_text,
     declared_context_sources,
     primary_sources_for_alert,
-    relevance_tool_sources_for_alert,
     relevant_sources_for_alert,
     resolve_alert_source,
     seed_tool_sources_for_alert,
@@ -58,19 +55,19 @@ def test_resolve_alert_source_empty_when_unresolved() -> None:
 
 def test_primary_sources_for_alert_known_source() -> None:
     assert primary_sources_for_alert({"alert_source": "eks"}) == ("eks", "ec2", "cloudtrail")
-    assert relevance_tool_sources_for_alert({"alert_source": "eks"}) == primary_sources_for_alert(
-        {"alert_source": "eks"}
-    )
 
 
 def test_seed_tool_sources_for_alert_known_source() -> None:
     assert seed_tool_sources_for_alert({"alert_source": "eks"}) == ("eks",)
 
 
-def test_routing_registry_derives_legacy_dict_views() -> None:
+def test_routing_registry_entries_are_well_formed() -> None:
     for alert_source, routing in ALERT_SOURCE_ROUTING.items():
-        assert ALERT_SOURCE_TO_TOOL_SOURCES[alert_source] == routing.relevance_tool_sources
-        assert ALERT_SOURCE_TO_SEED_TOOL_SOURCES[alert_source] == routing.seed_tool_sources
+        assert routing.relevance_tool_sources, alert_source
+        assert routing.seed_tool_sources, alert_source
+        # Seeding is a subset of relevance: anything auto-invoked pre-LLM
+        # must also be prioritized during planning.
+        assert set(routing.seed_tool_sources) <= set(routing.relevance_tool_sources), alert_source
 
 
 def test_primary_sources_for_alert_unknown_source() -> None:
@@ -174,6 +171,7 @@ def test_relevant_sources_empty_when_no_text_and_no_declared_sources() -> None:
 
 def test_seed_sources_narrower_than_relevance_sources_for_eks() -> None:
     """Regression guard: seeding stays narrower than relevance routing."""
-    assert ALERT_SOURCE_TO_SEED_TOOL_SOURCES["eks"] == ("eks",)
-    assert "ec2" in ALERT_SOURCE_TO_TOOL_SOURCES["eks"]
-    assert "ec2" not in ALERT_SOURCE_TO_SEED_TOOL_SOURCES["eks"]
+    routing = ALERT_SOURCE_ROUTING["eks"]
+    assert routing.seed_tool_sources == ("eks",)
+    assert "ec2" in routing.relevance_tool_sources
+    assert "ec2" not in routing.seed_tool_sources

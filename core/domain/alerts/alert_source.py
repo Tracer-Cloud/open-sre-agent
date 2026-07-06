@@ -84,16 +84,6 @@ ALERT_SOURCE_ROUTING: dict[str, AlertSourceRouting] = {
     "temporal": _routing(("temporal",), ("temporal",)),
 }
 
-# Derived views for callers that still iterate the flat dict shape.
-ALERT_SOURCE_TO_TOOL_SOURCES: dict[str, tuple[str, ...]] = {
-    alert_source: routing.relevance_tool_sources
-    for alert_source, routing in ALERT_SOURCE_ROUTING.items()
-}
-ALERT_SOURCE_TO_SEED_TOOL_SOURCES: dict[str, tuple[str, ...]] = {
-    alert_source: routing.seed_tool_sources
-    for alert_source, routing in ALERT_SOURCE_ROUTING.items()
-}
-
 # Generic fallback sources: useful, but never primary when incident-specific
 # integrations match.
 SECONDARY_TOOL_SOURCES = frozenset({"knowledge", "openclaw", "google_docs"})
@@ -142,8 +132,12 @@ def routing_for_alert_source(alert_source: str) -> AlertSourceRouting | None:
     return ALERT_SOURCE_ROUTING.get(alert_source.strip().lower())
 
 
-def relevance_tool_sources_for_alert(state: dict[str, Any]) -> tuple[str, ...]:
-    """Return tool sources used for broad alert-driven tool prioritization."""
+def primary_sources_for_alert(state: dict[str, Any]) -> tuple[str, ...]:
+    """Return the routing entry's ``relevance_tool_sources`` for this alert.
+
+    Used for broad alert-driven tool prioritization; callers surface these
+    as ``primary_sources`` in plan audits and prompts.
+    """
     routing = routing_for_alert_source(resolve_alert_source(state))
     return routing.relevance_tool_sources if routing is not None else ()
 
@@ -152,11 +146,6 @@ def seed_tool_sources_for_alert(state: dict[str, Any]) -> tuple[str, ...]:
     """Return tool sources auto-called before the investigation LLM loop."""
     routing = routing_for_alert_source(resolve_alert_source(state))
     return routing.seed_tool_sources if routing is not None else ()
-
-
-def primary_sources_for_alert(state: dict[str, Any]) -> tuple[str, ...]:
-    """Return tool sources that directly match the parsed alert source."""
-    return relevance_tool_sources_for_alert(state)
 
 
 def declared_context_sources(state: dict[str, Any]) -> set[str]:
@@ -253,15 +242,12 @@ def resolve_alert_source(state: dict[str, Any]) -> str:
 
 __all__ = [
     "ALERT_SOURCE_ROUTING",
-    "ALERT_SOURCE_TO_SEED_TOOL_SOURCES",
-    "ALERT_SOURCE_TO_TOOL_SOURCES",
     "AlertSourceRouting",
     "SECONDARY_TOOL_SOURCES",
     "SOURCE_ALIASES",
     "collect_alert_text",
     "declared_context_sources",
     "primary_sources_for_alert",
-    "relevance_tool_sources_for_alert",
     "relevant_sources_for_alert",
     "resolve_alert_source",
     "routing_for_alert_source",

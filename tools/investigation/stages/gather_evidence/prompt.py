@@ -5,10 +5,10 @@ from __future__ import annotations
 from typing import Any
 
 from core.domain.alerts.alert_source import (
-    ALERT_SOURCE_TO_TOOL_SOURCES,
     SECONDARY_TOOL_SOURCES,
     relevant_sources_for_alert,
     resolve_alert_source,
+    routing_for_alert_source,
 )
 from core.domain.diagnosis import root_cause_category_instruction_for_source
 from tools.investigation.stages.gather_evidence.tools import (
@@ -69,9 +69,6 @@ Severity: {severity}
 {start_guidance}
 """
 
-_ALERT_SOURCE_TO_TOOL_SOURCES = {
-    source: list(tool_sources) for source, tool_sources in ALERT_SOURCE_TO_TOOL_SOURCES.items()
-}
 _SECONDARY_SOURCES = SECONDARY_TOOL_SOURCES
 
 
@@ -191,7 +188,8 @@ def _build_start_guidance(
             lines.extend(["", f"Plan rationale: {rationale}"])
         return "\n".join(lines)
 
-    primary_sources = _ALERT_SOURCE_TO_TOOL_SOURCES.get(alert_source, [])
+    routing = routing_for_alert_source(alert_source)
+    primary_sources = routing.relevance_tool_sources if routing is not None else ()
     available_primary = [s for s in primary_sources if s in tools_by_source]
 
     non_secondary = [s for s in tools_by_source if s not in _SECONDARY_SOURCES]
