@@ -105,28 +105,32 @@ def _cli_provider_registration(provider: str) -> Any:
 
 
 def _build_agent_client(route: LLMRoute) -> AgentLLMClient:
-    """Build the tool-calling client for the resolved route."""
-    from config.config import PROVIDER_BEDROCK, PROVIDER_OLLAMA, PROVIDER_OPENAI
-    from core.llm.transports.sdk.agent_clients import (
-        AnthropicAgentClient,
-        BedrockAgentClient,
-        BedrockConverseAgentClient,
-        CLIBackedAgentClient,
-        OpenAIAgentClient,
-    )
-
-    settings, provider = route.settings, route.provider
-
+    """Build the tool-calling client for the route: CLI or LiteLLM transport, else native SDK."""
     if route.cli_provider_registration is not None:
-        model_name = os.getenv(route.cli_provider_registration.model_env_key, "").strip() or None
-        return CLIBackedAgentClient(
-            route.cli_provider_registration.adapter_factory(), model=model_name
-        )
+        return _cli_agent_client(route.cli_provider_registration)
 
     if route.use_litellm:
         from core.llm.transports.litellm.routing import build_litellm_agent_client
 
-        return build_litellm_agent_client(settings, provider)
+        return build_litellm_agent_client(route.settings, route.provider)
+
+    return _native_sdk_agent_client(route)
+
+
+def _cli_agent_client(registration: Any) -> AgentLLMClient:
+    """Build the subprocess CLI-backed tool-calling client for a CLI provider registration."""
+    from core.llm.transports.sdk.agent_clients import CLIBackedAgentClient
+
+    model_name = os.getenv(registration.model_env_key, "").strip() or None
+    return CLIBackedAgentClient(registration.adapter_factory(), model=model_name)
+
+
+def _native_sdk_agent_client(route: LLMRoute) -> AgentLLMClient:
+    """Build the native vendor-SDK tool-calling client for the route's provider."""
+    from config.config import PROVIDER_BEDROCK, PROVIDER_OLLAMA, PROVIDER_OPENAI
+    from core.llm.transports.sdk.agent_clients import AnthropicAgentClient, OpenAIAgentClient
+
+    settings, provider = route.settings, route.provider
 
     if provider == PROVIDER_OPENAI:
         from config.config import OPENAI_LLM_CONFIG
@@ -153,13 +157,7 @@ def _build_agent_client(route: LLMRoute) -> AgentLLMClient:
         )
 
     if provider == PROVIDER_BEDROCK:
-        from config.config import BEDROCK_LLM_CONFIG
-        from core.llm.providers.bedrock_model_ids import is_anthropic_bedrock_model
-
-        model = settings.bedrock_reasoning_model
-        if is_anthropic_bedrock_model(model):
-            return BedrockAgentClient(model=model, max_tokens=BEDROCK_LLM_CONFIG.max_tokens)
-        return BedrockConverseAgentClient(model=model, max_tokens=BEDROCK_LLM_CONFIG.max_tokens)
+        return _bedrock_agent_client(settings.bedrock_reasoning_model)
 
     from config.config import ANTHROPIC_LLM_CONFIG
 
@@ -167,6 +165,18 @@ def _build_agent_client(route: LLMRoute) -> AgentLLMClient:
         model=settings.anthropic_reasoning_model,
         max_tokens=ANTHROPIC_LLM_CONFIG.max_tokens,
     )
+
+
+def _bedrock_agent_client(model: str) -> AgentLLMClient:
+    """Pick the Anthropic vs Converse Bedrock tool-calling client for the model id."""
+    from config.config import BEDROCK_LLM_CONFIG
+    from core.llm.providers.bedrock_model_ids import is_anthropic_bedrock_model
+    from core.llm.transports.sdk.agent_clients import BedrockAgentClient, BedrockConverseAgentClient
+
+    max_tokens = BEDROCK_LLM_CONFIG.max_tokens
+    if is_anthropic_bedrock_model(model):
+        return BedrockAgentClient(model=model, max_tokens=max_tokens)
+    return BedrockConverseAgentClient(model=model, max_tokens=max_tokens)
 
 
 def _build_llm_client(route: LLMRoute, model_type: _ModelType) -> Any:
