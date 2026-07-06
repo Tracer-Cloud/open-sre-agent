@@ -5,6 +5,8 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any
 
+from core.domain.alerts.fields import iter_alert_blocks
+
 # Maps alert_source values to integration source keys (tool `.source` field).
 # Used for broad prioritization/relevance, not automatic pre-seeding.
 ALERT_SOURCE_TO_TOOL_SOURCES: dict[str, tuple[str, ...]] = {
@@ -132,12 +134,10 @@ def declared_context_sources(state: dict[str, Any]) -> set[str]:
     raw = state.get("raw_alert")
     if not isinstance(raw, dict):
         return set()
-    for block_key in ("commonAnnotations", "annotations", "commonLabels", "labels"):
-        block = raw.get(block_key)
-        if isinstance(block, dict):
-            value = block.get("context_sources")
-            if isinstance(value, str) and value.strip():
-                return {item.strip().lower() for item in value.split(",") if item.strip()}
+    for block in iter_alert_blocks(raw):
+        value = block.get("context_sources")
+        if isinstance(value, str) and value.strip():
+            return {item.strip().lower() for item in value.split(",") if item.strip()}
     return set()
 
 
@@ -154,10 +154,8 @@ def collect_alert_text(state: dict[str, Any]) -> str:
             value = raw.get(key)
             if isinstance(value, str):
                 parts.append(value)
-        for block_key in ("commonAnnotations", "annotations", "commonLabels", "labels"):
-            block = raw.get(block_key)
-            if isinstance(block, dict):
-                parts.extend(str(v) for v in block.values() if isinstance(v, (str, int, float)))
+        for block in iter_alert_blocks(raw):
+            parts.extend(str(v) for v in block.values() if isinstance(v, (str, int, float)))
     elif isinstance(raw, str):
         parts.append(raw)
 
