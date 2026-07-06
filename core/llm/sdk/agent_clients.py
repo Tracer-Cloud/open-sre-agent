@@ -13,6 +13,7 @@ import time
 from collections.abc import Callable
 from typing import Any
 
+from core.context_budget import strip_internal_message_markers
 from core.llm.llm_retry import (
     maybe_raise_credit_exhausted,
     rate_limit_sleep_seconds,
@@ -97,7 +98,7 @@ class AnthropicAgentClient:
         kwargs: dict[str, Any] = {
             "model": self._model,
             "max_tokens": self._max_tokens,
-            "messages": messages,
+            "messages": strip_internal_message_markers(messages),
         }
         if system:
             kwargs["system"] = system
@@ -329,7 +330,7 @@ class BedrockConverseAgentClient:
         from platform.guardrails.apply import apply_guardrails_to_converse_payload
         from platform.guardrails.engine import GuardrailBlockedError
 
-        converse_messages = to_converse_messages(messages)
+        converse_messages = to_converse_messages(strip_internal_message_markers(messages))
         converse_messages, system = apply_guardrails_to_converse_payload(
             messages=converse_messages,
             system=system,

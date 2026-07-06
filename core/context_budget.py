@@ -38,6 +38,19 @@ _PINNED_MESSAGE_KEY = "_opensre_seed"
 _DUPLICATE_RESULT_KEY = "_opensre_duplicate_result"
 
 
+def strip_internal_message_markers(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return a copy of ``messages`` without internal ``_opensre_*`` keys.
+
+    Context-budget eviction tags seed and duplicate tool exchanges with these
+    markers. They must remain on the in-memory transcript for trimming heuristics
+    but are rejected by strict provider message schemas (e.g. Anthropic).
+    """
+    return [
+        {key: value for key, value in message.items() if not key.startswith("_opensre_")}
+        for message in messages
+    ]
+
+
 @dataclass(frozen=True)
 class _ToolExchange:
     start: int
