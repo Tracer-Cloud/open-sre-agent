@@ -113,7 +113,7 @@ class Agent[RuntimeToolT: RuntimeTool](EventEmitterMixin, ToolFilterMixin, Steer
     def _get_llm(self) -> Any:
         """Return the run's LLM: the instance given at construction, or the process-wide singleton."""
         if self._llm is None:
-            self._llm = agent_llm_client.get_agent_llm()
+            self._llm = agent_llm_client.get_llm(LLMRole.AGENT)
         if self._llm is None:
             raise RuntimeError("Agent.run: llm must be set before the loop")
         return self._llm

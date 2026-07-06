@@ -177,11 +177,11 @@ Respond with ONE JSON object only (no markdown), exactly this shape:
 
 def run_opensre_llm_judge(*, state: dict[str, Any], rubric: str) -> dict[str, Any]:
     from config.config import resolve_llm_settings
-    from core.llm.llm_client import get_llm_for_reasoning
+    from core.llm.factory import LLMRole, get_llm
 
     resolve_llm_settings()
     prompt = build_opensre_judge_prompt(rubric=rubric, state=state)
-    llm = get_llm_for_reasoning()
+    llm = get_llm(LLMRole.REASONING)
     response = llm.invoke(prompt)
     content = response.content if hasattr(response, "content") else str(response)
     if not isinstance(content, str):

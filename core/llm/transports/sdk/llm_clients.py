@@ -47,8 +47,8 @@ logger = logging.getLogger(__name__)
 
 
 def _resolve_llm_api_key(env_name: str) -> str:
-    """Delegate to ``core.llm.llm_client.resolve_llm_api_key``."""
-    from core.llm.llm_client import resolve_llm_api_key
+    """Delegate to the shared provider-credential resolver."""
+    from core.llm.providers.provider_credentials import resolve_llm_api_key
 
     return resolve_llm_api_key(env_name)
 

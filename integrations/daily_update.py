@@ -18,7 +18,7 @@ from zoneinfo import ZoneInfo
 from pydantic import BaseModel, Field
 
 from config.version import get_version
-from core.llm.llm_client import get_llm_for_reasoning
+from core.llm.factory import LLMRole, get_llm
 from integrations._validation_helpers import report_validation_failure
 
 logger = logging.getLogger(__name__)
@@ -523,7 +523,7 @@ def summarize_highlights(
 
     prompt = _build_summary_prompt(repository, window, pull_requests)
     try:
-        response = get_llm_for_reasoning().with_structured_output(HighlightResponse).invoke(prompt)
+        response = get_llm(LLMRole.REASONING).with_structured_output(HighlightResponse).invoke(prompt)
         highlights = tuple(item.strip() for item in response.highlights if item.strip())
         if highlights:
             return highlights, False

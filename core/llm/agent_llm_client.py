@@ -31,7 +31,7 @@ __all__ = [
 ]
 
 
-def get_agent_llm() -> AgentLLMClient:
+def get_llm(LLMRole.AGENT) -> AgentLLMClient:
     """Return the singleton tool-calling LLM client for the investigation agent."""
     return get_llm(LLMRole.AGENT)
 

@@ -67,7 +67,7 @@ def _reset_fake_openai_state() -> None:
 
 def test_openai_llm_client_defers_openai_until_ensure(monkeypatch) -> None:
     """Avoid constructing OpenAI in __init__: sdk 2.34+ rejects empty api_key."""
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env_var: "")
+    monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env_var: "")
     monkeypatch.setattr(sdk_llm, "OpenAI", _FakeOpenAI)
 
     llm_client.OpenAILLMClient(model="gpt-4.1-mini")
@@ -78,8 +78,7 @@ def test_openai_llm_client_defers_openai_until_ensure(monkeypatch) -> None:
 
 def test_openai_llm_client_reads_secure_local_api_key(monkeypatch) -> None:
     monkeypatch.setattr(
-        llm_client,
-        "resolve_llm_api_key",
+        "core.llm.providers.provider_credentials.resolve_llm_api_key",
         lambda env_var: "stored-openai-key" if env_var == "OPENAI_API_KEY" else "",
     )
     monkeypatch.setattr(sdk_llm, "OpenAI", _FakeOpenAI)
@@ -93,8 +92,7 @@ def test_openai_llm_client_reads_secure_local_api_key(monkeypatch) -> None:
 
 def test_openai_llm_client_adds_reasoning_effort_for_reasoning_models(monkeypatch) -> None:
     monkeypatch.setattr(
-        llm_client,
-        "resolve_llm_api_key",
+        "core.llm.providers.provider_credentials.resolve_llm_api_key",
         lambda env_var: "stored-openai-key" if env_var == "OPENAI_API_KEY" else "",
     )
     monkeypatch.setattr(sdk_llm, "OpenAI", _FakeOpenAI)
@@ -108,8 +106,7 @@ def test_openai_llm_client_adds_reasoning_effort_for_reasoning_models(monkeypatc
 
 def test_openai_llm_client_omits_reasoning_effort_for_non_reasoning_models(monkeypatch) -> None:
     monkeypatch.setattr(
-        llm_client,
-        "resolve_llm_api_key",
+        "core.llm.providers.provider_credentials.resolve_llm_api_key",
         lambda env_var: "stored-openai-key" if env_var == "OPENAI_API_KEY" else "",
     )
     monkeypatch.setattr(sdk_llm, "OpenAI", _FakeOpenAI)
@@ -122,7 +119,7 @@ def test_openai_llm_client_omits_reasoning_effort_for_non_reasoning_models(monke
 
 
 def test_openai_llm_client_invoke_fails_when_key_missing(monkeypatch) -> None:
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env_var: "")
+    monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env_var: "")
     client = llm_client.OpenAILLMClient(model="gpt-4.1-mini")
 
     with pytest.raises(RuntimeError, match="Missing OPENAI_API_KEY"):
@@ -131,7 +128,7 @@ def test_openai_llm_client_invoke_fails_when_key_missing(monkeypatch) -> None:
 
 def test_openai_llm_client_rebuilds_client_when_key_rotates(monkeypatch) -> None:
     state = {"key": "first-key"}
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env_var: state["key"])
+    monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env_var: state["key"])
     monkeypatch.setattr(sdk_llm, "OpenAI", _FakeOpenAI)
     client = llm_client.OpenAILLMClient(model="gpt-4.1-mini")
 
@@ -347,8 +344,7 @@ def test_bedrock_anthropic_stream_bad_request_does_not_retry(monkeypatch) -> Non
 
 def test_anthropic_llm_client_reads_secure_local_api_key(monkeypatch) -> None:
     monkeypatch.setattr(
-        llm_client,
-        "resolve_llm_api_key",
+        "core.llm.providers.provider_credentials.resolve_llm_api_key",
         lambda env_var: "stored-anthropic-key" if env_var == "ANTHROPIC_API_KEY" else "",
     )
     monkeypatch.setattr(sdk_llm, "Anthropic", _FakeAnthropic)
@@ -361,8 +357,7 @@ def test_anthropic_llm_client_reads_secure_local_api_key(monkeypatch) -> None:
 
 def test_minimax_llm_client_reads_api_key_and_base_url(monkeypatch) -> None:
     monkeypatch.setattr(
-        llm_client,
-        "resolve_llm_api_key",
+        "core.llm.providers.provider_credentials.resolve_llm_api_key",
         lambda env_var: "minimax-test-key" if env_var == "MINIMAX_API_KEY" else "",
     )
     monkeypatch.setattr(sdk_llm, "OpenAI", _FakeOpenAI)
@@ -381,8 +376,7 @@ def test_minimax_llm_client_reads_api_key_and_base_url(monkeypatch) -> None:
 
 def test_minimax_llm_client_temperature_is_set(monkeypatch) -> None:
     monkeypatch.setattr(
-        llm_client,
-        "resolve_llm_api_key",
+        "core.llm.providers.provider_credentials.resolve_llm_api_key",
         lambda env_var: "minimax-test-key" if env_var == "MINIMAX_API_KEY" else "",
     )
     monkeypatch.setattr(sdk_llm, "OpenAI", _FakeOpenAI)
@@ -455,7 +449,7 @@ def _make_capturing_anthropic(
 def test_anthropic_invoke_forwards_built_kwargs_to_messages_create(monkeypatch) -> None:
     """Refactored invoke() still sends model, max_tokens, and messages to the SDK."""
     fake, captured = _make_capturing_anthropic(response_text="hello")
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "Anthropic", fake)
 
     client = llm_client.LLMClient(model="claude-test", max_tokens=64)
@@ -480,7 +474,7 @@ def test_anthropic_invoke_bad_request_does_not_retry(monkeypatch) -> None:
         def __init__(self, **_kwargs) -> None:
             self.messages = _Messages()
 
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "Anthropic", _Anthropic)
     monkeypatch.setattr(sdk_llm.time, "sleep", lambda s: sleeps.append(s))
 
@@ -495,7 +489,7 @@ def test_anthropic_invoke_bad_request_does_not_retry(monkeypatch) -> None:
 def test_anthropic_invoke_stream_yields_text_stream_chunks(monkeypatch) -> None:
     """invoke_stream() routes through the same builder and yields SDK chunks in order."""
     fake, captured = _make_capturing_anthropic(chunks=["Hel", "lo, ", "world"])
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "Anthropic", fake)
 
     client = llm_client.LLMClient(model="claude-test", max_tokens=64)
@@ -519,7 +513,7 @@ def test_anthropic_invoke_stream_bad_request_does_not_retry(monkeypatch) -> None
         def __init__(self, **_kwargs) -> None:
             self.messages = _Messages()
 
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "Anthropic", _Anthropic)
     monkeypatch.setattr(sdk_llm.time, "sleep", lambda s: sleeps.append(s))
 
@@ -534,7 +528,7 @@ def test_anthropic_invoke_stream_bad_request_does_not_retry(monkeypatch) -> None
 def test_anthropic_invoke_stream_applies_guardrails_to_input(monkeypatch) -> None:
     """The shared kwargs builder runs guardrail redaction before the stream opens."""
     fake, captured = _make_capturing_anthropic(chunks=["ok"])
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "Anthropic", fake)
 
     class _RedactingEngine:
@@ -578,7 +572,7 @@ def test_anthropic_invoke_stream_retries_when_no_chunk_emitted(monkeypatch) -> N
         def __init__(self, **_kwargs) -> None:
             self.messages = _Messages()
 
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "Anthropic", _Anthropic)
     # Skip the real backoff sleep so the test is fast.
     monkeypatch.setattr(sdk_llm.time, "sleep", lambda _seconds: None)
@@ -617,7 +611,7 @@ def test_anthropic_invoke_stream_does_not_retry_after_yielding(monkeypatch) -> N
         def __init__(self, **_kwargs) -> None:
             self.messages = _Messages()
 
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "Anthropic", _Anthropic)
     monkeypatch.setattr(sdk_llm.time, "sleep", lambda _seconds: None)
 
@@ -673,7 +667,7 @@ def test_anthropic_invoke_stream_overloaded_via_body_raises_friendly_error(
         def __init__(self, **_kwargs) -> None:
             self.messages = _Messages()
 
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "Anthropic", _Anthropic)
     monkeypatch.setattr(sdk_llm.time, "sleep", lambda _s: None)
 
@@ -762,7 +756,7 @@ def _make_capturing_openai(
 def test_openai_invoke_forwards_built_kwargs_to_chat_completions_create(monkeypatch) -> None:
     """Refactored invoke() still sends model, max_tokens, and messages to the SDK."""
     fake, captured = _make_capturing_openai(response_text="hello")
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "OpenAI", fake)
 
     client = llm_client.OpenAILLMClient(model="gpt-test", max_tokens=64)
@@ -792,7 +786,7 @@ def test_openai_invoke_bad_request_does_not_retry(monkeypatch) -> None:
         def __init__(self, **_kwargs) -> None:
             self.chat = _Chat()
 
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "OpenAI", _OpenAI)
     monkeypatch.setattr(sdk_llm.time, "sleep", lambda s: sleeps.append(s))
 
@@ -820,7 +814,7 @@ def test_openai_invoke_invalid_model_identifier_raises_not_found(monkeypatch) ->
         def __init__(self, **_kwargs) -> None:
             self.chat = _Chat()
 
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "OpenAI", _OpenAI)
 
     client = llm_client.OpenAILLMClient(model="relay-ops-claude-opus-4-7")
@@ -844,7 +838,7 @@ def test_openai_invoke_stream_invalid_model_identifier_raises_not_found(monkeypa
         def __init__(self, **_kwargs) -> None:
             self.chat = _Chat()
 
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "OpenAI", _OpenAI)
 
     client = llm_client.OpenAILLMClient(model="relay-ops-claude-opus-4-7")
@@ -880,7 +874,7 @@ def test_openai_invoke_invalid_reasoning_model_falls_back_to_toolcall(monkeypatc
         def __init__(self, **_kwargs) -> None:
             self.chat = _Chat()
 
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "OpenAI", _OpenAI)
 
     client = llm_client.OpenAILLMClient(
@@ -926,7 +920,7 @@ def test_openai_invoke_stream_invalid_reasoning_model_falls_back_to_toolcall(mon
         def __init__(self, **_kwargs) -> None:
             self.chat = _Chat()
 
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "OpenAI", _OpenAI)
 
     client = llm_client.OpenAILLMClient(
@@ -943,7 +937,7 @@ def test_openai_invoke_stream_invalid_reasoning_model_falls_back_to_toolcall(mon
 def test_openai_invoke_stream_yields_delta_content_chunks(monkeypatch) -> None:
     """invoke_stream() routes through the same builder and yields delta.content in order."""
     fake, captured = _make_capturing_openai(chunk_contents=["Hel", "lo, ", "world"])
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "OpenAI", fake)
 
     client = llm_client.OpenAILLMClient(model="gpt-test", max_tokens=64)
@@ -972,7 +966,7 @@ def test_openai_invoke_stream_bad_request_does_not_retry(monkeypatch) -> None:
         def __init__(self, **_kwargs) -> None:
             self.chat = _Chat()
 
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "OpenAI", _OpenAI)
     monkeypatch.setattr(sdk_llm.time, "sleep", lambda s: sleeps.append(s))
 
@@ -987,7 +981,7 @@ def test_openai_invoke_stream_bad_request_does_not_retry(monkeypatch) -> None:
 def test_openai_invoke_stream_skips_empty_deltas_and_choiceless_chunks(monkeypatch) -> None:
     """OpenAI keep-alive frames have empty delta or no choices — those must not be yielded."""
     fake, _ = _make_capturing_openai(chunk_contents=["Hi", None, "", " there", None])
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "OpenAI", fake)
 
     client = llm_client.OpenAILLMClient(model="gpt-test")
@@ -1027,7 +1021,7 @@ def test_openai_invoke_stream_retries_when_no_chunk_emitted(monkeypatch) -> None
         def __init__(self, **_kwargs) -> None:
             self.chat = _Chat()
 
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "OpenAI", _OpenAI)
     monkeypatch.setattr(sdk_llm.time, "sleep", lambda _seconds: None)
 
@@ -1071,7 +1065,7 @@ def test_openai_invoke_stream_does_not_retry_after_yielding(monkeypatch) -> None
         def __init__(self, **_kwargs) -> None:
             self.chat = _Chat()
 
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "OpenAI", _OpenAI)
     monkeypatch.setattr(sdk_llm.time, "sleep", lambda _seconds: None)
 
@@ -1298,7 +1292,7 @@ class _NotFoundAnthropic:
 
 def test_anthropic_invoke_not_found_raises_friendly_runtime_error(monkeypatch) -> None:
     """NotFoundError from the Anthropic API must become a clear RuntimeError."""
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "Anthropic", _NotFoundAnthropic)
 
     client = llm_client.LLMClient(model="not-a-real-model-xyz")
@@ -1325,7 +1319,7 @@ def test_anthropic_invoke_not_found_does_not_retry(monkeypatch) -> None:
         def __init__(self, **_kwargs) -> None:
             self.messages = _CountingMessages()
 
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "Anthropic", _CountingAnthropic)
     monkeypatch.setattr(sdk_llm.time, "sleep", lambda _: None)
 
@@ -1339,7 +1333,7 @@ def test_anthropic_invoke_not_found_does_not_retry(monkeypatch) -> None:
 
 def test_anthropic_invoke_stream_not_found_raises_friendly_runtime_error(monkeypatch) -> None:
     """NotFoundError during streaming must also surface a clear message."""
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "Anthropic", _NotFoundAnthropic)
 
     client = llm_client.LLMClient(model="not-a-real-model-xyz")
@@ -1408,7 +1402,7 @@ def test_openai_invoke_rate_limit_retries_with_suggested_delay(monkeypatch) -> N
         def __init__(self, **_kwargs) -> None:
             self.chat = _Chat()
 
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "OpenAI", _OpenAI)
     monkeypatch.setattr(sdk_llm.time, "sleep", lambda s: sleeps.append(s))
 
@@ -1437,7 +1431,7 @@ def test_openai_invoke_rate_limit_raises_quota_message_after_exhaustion(monkeypa
         def __init__(self, **_kwargs) -> None:
             self.chat = _Chat()
 
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "OpenAI", _OpenAI)
     monkeypatch.setattr(sdk_llm.time, "sleep", lambda s: sleeps.append(s))
 
@@ -1483,7 +1477,7 @@ def test_openai_invoke_stream_rate_limit_retries_before_emit(monkeypatch) -> Non
         def __init__(self, **_kwargs) -> None:
             self.chat = _Chat()
 
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "OpenAI", _OpenAI)
     monkeypatch.setattr(sdk_llm.time, "sleep", lambda s: sleeps.append(s))
 
@@ -1528,7 +1522,7 @@ def test_openai_invoke_rate_limit_insufficient_quota_raises_immediately(monkeypa
         def __init__(self, **_kwargs) -> None:
             self.chat = _Chat()
 
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "OpenAI", _OpenAI)
     sleeps: list[float] = []
     monkeypatch.setattr(sdk_llm.time, "sleep", lambda s: sleeps.append(s))
@@ -1563,7 +1557,7 @@ def test_openai_invoke_stream_rate_limit_insufficient_quota_raises_immediately(
         def __init__(self, **_kwargs) -> None:
             self.chat = _Chat()
 
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "OpenAI", _OpenAI)
     sleeps: list[float] = []
     monkeypatch.setattr(sdk_llm.time, "sleep", lambda s: sleeps.append(s))
@@ -1615,7 +1609,7 @@ def test_openai_invoke_stream_rate_limit_insufficient_quota_after_emit_is_wrappe
         def __init__(self, **_kwargs) -> None:
             self.chat = _Chat()
 
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "OpenAI", _OpenAI)
     sleeps: list[float] = []
     monkeypatch.setattr(sdk_llm.time, "sleep", lambda s: sleeps.append(s))
@@ -1673,7 +1667,7 @@ def test_openai_invoke_timeout_retries_and_succeeds(monkeypatch) -> None:
         def __init__(self, **_kwargs) -> None:
             self.chat = _Chat()
 
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "OpenAI", _OpenAI)
     monkeypatch.setattr(sdk_llm.time, "sleep", lambda s: sleeps.append(s))
 
@@ -1701,7 +1695,7 @@ def test_openai_invoke_timeout_raises_timeout_message_after_exhaustion(monkeypat
         def __init__(self, **_kwargs) -> None:
             self.chat = _Chat()
 
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "OpenAI", _OpenAI)
     monkeypatch.setattr(sdk_llm.time, "sleep", lambda s: sleeps.append(s))
 
@@ -1751,7 +1745,7 @@ def test_openai_invoke_stream_timeout_retries_before_emit(monkeypatch) -> None:
         def __init__(self, **_kwargs) -> None:
             self.chat = _Chat()
 
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "OpenAI", _OpenAI)
     monkeypatch.setattr(sdk_llm.time, "sleep", lambda s: sleeps.append(s))
 
@@ -1799,7 +1793,7 @@ def test_openai_invoke_stream_timeout_does_not_retry_after_emit(monkeypatch) -> 
         def __init__(self, **_kwargs) -> None:
             self.chat = _Chat()
 
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "OpenAI", _OpenAI)
     monkeypatch.setattr(sdk_llm.time, "sleep", lambda s: sleeps.append(s))
 
@@ -2240,7 +2234,7 @@ class _UsageLimitAnthropic:
 
 def test_anthropic_invoke_usage_limit_raises_friendly_runtime_error(monkeypatch) -> None:
     """HTTP 400 usage-limit error must surface a clear message, not a raw SDK repr."""
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "Anthropic", _UsageLimitAnthropic)
 
     client = llm_client.LLMClient(model="claude-3-5-sonnet-20241022")
@@ -2267,7 +2261,7 @@ def test_anthropic_invoke_usage_limit_does_not_retry(monkeypatch) -> None:
         def __init__(self, **_kwargs) -> None:
             self.messages = _CountingMessages()
 
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "Anthropic", _CountingAnthropic)
     monkeypatch.setattr(sdk_llm.time, "sleep", lambda _: None)
 
@@ -2281,7 +2275,7 @@ def test_anthropic_invoke_usage_limit_does_not_retry(monkeypatch) -> None:
 
 def test_anthropic_invoke_stream_usage_limit_raises_friendly_runtime_error(monkeypatch) -> None:
     """HTTP 400 usage-limit during streaming must also surface a clear message."""
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "Anthropic", _UsageLimitAnthropic)
 
     client = llm_client.LLMClient(model="claude-3-5-sonnet-20241022")
@@ -2299,7 +2293,7 @@ def test_anthropic_invoke_bad_request_non_usage_limit_raises_generic_message(mon
         "type": "error",
         "error": {"type": "invalid_request_error", "message": "Invalid JSON in request."},
     }
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
 
     class _OtherBadRequestAnthropic:
         def __init__(self, **_kwargs) -> None:
@@ -2361,7 +2355,7 @@ def test_usage_hook_anthropic_invoke_fires_with_correct_token_counts(monkeypatch
             self.messages = _Messages()
 
     monkeypatch.setattr("platform.guardrails.engine.get_guardrail_engine", _InactiveGuardrailEngine)
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "Anthropic", _FakeAnthropicWithUsage)
 
     calls, hook = _make_recording_hook()
@@ -2401,7 +2395,7 @@ def test_usage_hook_openai_invoke_fires_with_correct_token_counts(monkeypatch) -
             self.chat = _Chat()
 
     monkeypatch.setattr("platform.guardrails.engine.get_guardrail_engine", _InactiveGuardrailEngine)
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "OpenAI", _FakeOpenAIWithUsage)
 
     calls, hook = _make_recording_hook()
@@ -2456,7 +2450,7 @@ def test_usage_hook_exception_propagates(monkeypatch) -> None:
             self.messages = _Messages()
 
     monkeypatch.setattr("platform.guardrails.engine.get_guardrail_engine", _InactiveGuardrailEngine)
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "Anthropic", _FakeAnthropicWithUsage)
 
     class _BudgetExceeded(RuntimeError):
@@ -2496,7 +2490,7 @@ def test_usage_hook_unset_is_default_noop(monkeypatch) -> None:
             self.messages = _Messages()
 
     monkeypatch.setattr("platform.guardrails.engine.get_guardrail_engine", _InactiveGuardrailEngine)
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
+    monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "Anthropic", _FakeAnthropicWithUsage)
 
     client = llm_client.LLMClient(model="claude-sonnet-4-5-20250929")

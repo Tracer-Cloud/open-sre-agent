@@ -52,8 +52,7 @@ def _is_model_allowed(provider: object, model: str) -> bool:
 
 def _reset_runtime_llm_caches() -> None:
     """Force subsequent REPL assistant calls to use the updated model env."""
-    from core.llm.agent_llm_client import reset_agent_client
-    from core.llm.llm_client import reset_llm_singletons
+    from core.llm.factory import reset_agent_client, reset_llm_singletons
 
     reset_llm_singletons()
     reset_agent_client()

@@ -17,7 +17,7 @@ from core import (
     tool_source,
 )
 from core.agent.mixins import EventEmitterMixin, ToolFilterMixin
-from core.llm.agent_llm_client import get_agent_llm
+from core.llm.factory import LLMRole, get_llm
 from core.llm.types import ToolCall
 from core.llm_invoke_errors import classify_llm_invoke_failure
 from core.messages import MessageFormatter
@@ -120,7 +120,7 @@ class ConnectedInvestigationAgent(EventEmitterMixin, ToolFilterMixin):
         if not tools:
             logger.warning("No tools available for investigation")
 
-        llm = get_agent_llm()
+        llm = get_llm(LLMRole.AGENT)
         msg_formatter = MessageFormatter(llm)
         tool_schemas = llm.tool_schemas(tools)
 
@@ -365,7 +365,7 @@ def get_investigation_agent_class() -> type[ConnectedInvestigationAgent]:
     """
     from core.llm.transports.sdk.agent_clients import CLIBackedAgentClient
 
-    if isinstance(get_agent_llm(), CLIBackedAgentClient):
+    if isinstance(get_llm(LLMRole.AGENT), CLIBackedAgentClient):
         return CLIBackedInvestigationAgent
     return ConnectedInvestigationAgent
 

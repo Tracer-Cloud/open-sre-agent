@@ -108,7 +108,7 @@ def _create_llm_client(model_type: Any) -> Any:
     return build_llm_client(model_type)
 
 
-def get_llm_for_reasoning() -> Any:
+def get_llm(LLMRole.REASONING) -> Any:
     """Return the singleton LLM client for complex reasoning tasks."""
     return get_llm(LLMRole.REASONING)
 

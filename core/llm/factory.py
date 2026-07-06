@@ -298,11 +298,6 @@ def reset_llm_clients() -> None:
     _cache.cache_key = None
 
 
-def build_agent_client() -> AgentLLMClient:
-    """Build a fresh (uncached) tool-calling client for the current config."""
-    return _build_agent_client(resolve_llm_route())
-
-
 def build_llm_client(model_type: _ModelType) -> Any:
     """Build a fresh (uncached) reasoning-family client for the current config."""
     return _build_llm_client(resolve_llm_route(), model_type)
@@ -311,7 +306,6 @@ def build_llm_client(model_type: _ModelType) -> Any:
 __all__ = [
     "LLMRole",
     "LLMRoute",
-    "build_agent_client",
     "build_llm_client",
     "get_llm",
     "reset_llm_clients",

@@ -13,7 +13,7 @@ def default_llm_factory() -> Any:
     """
     from core.llm import agent_llm_client
 
-    return agent_llm_client.get_agent_llm()
+    return agent_llm_client.get_llm(LLMRole.AGENT)
 
 
 def resolve_provider_models(settings: object, provider: str) -> tuple[str, str]:
