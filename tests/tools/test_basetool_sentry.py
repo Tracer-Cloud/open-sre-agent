@@ -37,7 +37,11 @@ def test_base_tool_exception_is_captured_with_tool_tag(
     assert len(captured) == 1
     exc, kwargs = captured[0]
     assert isinstance(exc, RuntimeError)
-    assert kwargs["tags"] == {"surface": "tool", "tool_name": "exploding_base_tool", "source": "grafana"}  # type: ignore[index]
+    assert kwargs["tags"] == {
+        "surface": "tool",
+        "tool_name": "exploding_base_tool",
+        "source": "grafana",
+    }  # type: ignore[index]
 
 
 def test_decorated_function_tool_exception_is_captured_with_tool_tag(
@@ -66,4 +70,8 @@ def test_decorated_function_tool_exception_is_captured_with_tool_tag(
     assert len(captured) == 1
     exc, kwargs = captured[0]
     assert isinstance(exc, ValueError)
-    assert kwargs["tags"] == {"surface": "tool", "tool_name": "decorated_failure", "source": "grafana"}  # type: ignore[index]
+    assert kwargs["tags"] == {
+        "surface": "tool",
+        "tool_name": "decorated_failure",
+        "source": "grafana",
+    }  # type: ignore[index]
