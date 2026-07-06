@@ -20,25 +20,32 @@ class PlannableTool(Protocol):
     """Read-only view of the tool fields the alert planner scores against."""
 
     @property
-    def name(self) -> str: ...
+    def name(self) -> str:
+        raise NotImplementedError
 
     @property
-    def source(self) -> str: ...
+    def source(self) -> str:
+        raise NotImplementedError
 
     @property
-    def description(self) -> str: ...
+    def description(self) -> str:
+        raise NotImplementedError
 
     @property
-    def use_cases(self) -> Sequence[str]: ...
+    def use_cases(self) -> Sequence[str]:
+        raise NotImplementedError
 
     @property
-    def examples(self) -> Sequence[str]: ...
+    def examples(self) -> Sequence[str]:
+        raise NotImplementedError
 
     @property
-    def tags(self) -> Sequence[str]: ...
+    def tags(self) -> Sequence[str]:
+        raise NotImplementedError
 
     @property
-    def evidence_type(self) -> Any: ...
+    def evidence_type(self) -> Any:
+        raise NotImplementedError
 
 
 def score_tools(

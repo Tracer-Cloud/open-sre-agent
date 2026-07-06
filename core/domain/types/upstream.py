@@ -75,10 +75,12 @@ class PeriodicityScore:
 
 class HintEvidenceScore(Protocol):
     @property
-    def score(self) -> float: ...
+    def score(self) -> float:
+        raise NotImplementedError
 
     @property
-    def rationale(self) -> str: ...
+    def rationale(self) -> str:
+        raise NotImplementedError
 
 
 @dataclass(frozen=True)
