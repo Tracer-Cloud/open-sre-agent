@@ -55,6 +55,11 @@ class InvestigationOutcome:
     failure_category: FailureCategory = "unknown"
     integration_involved: str = ""
     integration_failure_message: str = ""
+    llm_model: str = ""
+    llm_provider: str = ""
+    llm_input_tokens: int = 0
+    llm_output_tokens: int = 0
+    duration_ms: int = 0
 
 
 def normalize_investigation_target(raw_target: str, *, path: Path | None = None) -> str:

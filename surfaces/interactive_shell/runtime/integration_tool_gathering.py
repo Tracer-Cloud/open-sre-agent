@@ -1,10 +1,10 @@
 """Gather integration evidence for a conversational shell answer.
 
 The bounded think -> call-tools -> observe loop lives in the decoupled
-:func:`core.agent_harness.agents.evidence_agent.gather_tool_evidence`. This module is the terminal adapter:
+:func:`core.agent_harness.turns.evidence_driver.gather_tool_evidence`. This module is the terminal adapter:
 it renders each gathering step to the console and persists the gathered tool
 calls into the shell's session storage, then hands the collected observation back
-to :func:`interactive_shell.runtime.shell_turn_execution.answer_shell_question`.
+to :func:`interactive_shell.runtime.answer_turn.answer_shell_question`.
 """
 
 from __future__ import annotations
@@ -16,15 +16,12 @@ from typing import Any
 from rich.console import Console
 from rich.markup import escape
 
-from core.agent_harness.agents import evidence_agent
-from core.agent_harness.agents.evidence_agent import EvidenceAgentFactory
 from core.agent_harness.session import Session
+from core.agent_harness.turns import evidence_driver
+from core.agent_harness.turns.evidence_driver import GatherAgentFactory
 from surfaces.interactive_shell.ui import DIM
-from surfaces.interactive_shell.ui.output.tool_details import (
-    tool_short_label,
-    tool_source_label,
-)
 from surfaces.interactive_shell.utils.error_handling.exception_reporting import report_exception
+from surfaces.shared.tool_labels import tool_short_label, tool_source_label
 
 # Cap so a chatty tool result can't blow up persistence writes.
 _MAX_PER_TOOL_CHARS = 4_000
@@ -105,9 +102,15 @@ def _format_gathering_progress_line(
     return f"· gathering via {safe_display}…"
 
 
-def _resolve_gather_integrations(session: Session, message: str) -> dict[str, Any]:
+def _resolve_gather_integrations(
+    session: Session,
+    message: str,
+    resolved_integrations: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Resolve gather integrations through the decoupled agent helper."""
-    return evidence_agent._resolve_gather_integrations(session, message)  # noqa: SLF001
+    return evidence_driver._resolve_gather_integrations(  # noqa: SLF001
+        session, message, resolved_integrations=resolved_integrations
+    )
 
 
 def _truncate(text: str, limit: int) -> str:
@@ -151,12 +154,15 @@ def gather_integration_tool_evidence(
     console: Console,
     *,
     is_tty: bool | None = None,
-    agent_factory: EvidenceAgentFactory | None = None,
+    agent_factory: GatherAgentFactory | None = None,
+    resolved_integrations: dict[str, Any] | None = None,
 ) -> str | None:
     """Run a bounded tool-calling loop and return collected evidence, or None.
 
     Returns a formatted observation block when at least one tool was executed;
     otherwise ``None`` so the caller falls back to the normal text-only answer.
+    ``resolved_integrations`` is the turn's resolved view; it is forwarded so the
+    gather phase reuses it instead of resolving again.
     """
     tool_call_counts: dict[str, int] = {}
 
@@ -176,7 +182,7 @@ def gather_integration_tool_evidence(
     def persist(executed: list[tuple[Any, Any]]) -> None:
         _persist_tool_calls(session, executed)
 
-    return evidence_agent.gather_tool_evidence(
+    return evidence_driver.gather_tool_evidence(
         message,
         session,
         on_progress=on_progress,
@@ -184,6 +190,7 @@ def gather_integration_tool_evidence(
         error_reporter=_ShellGatherErrorReporter(),
         is_tty=is_tty,
         agent_factory=agent_factory,
+        resolved_integrations=resolved_integrations,
     )
 
 

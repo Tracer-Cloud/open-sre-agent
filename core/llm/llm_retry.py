@@ -61,6 +61,11 @@ class LLMCreditExhaustedError(Exception):
     """Fatal provider billing/quota exhaustion; retries will not help."""
 
 
+# Stable substring every credit-exhausted message carries. Surfaces match on it
+# to attach their own recovery hint (e.g. the shell's ``/model`` command).
+CREDIT_EXHAUSTED_MARKER = "credit exhausted (provider billing/quota)"
+
+
 def is_rate_limit_error(exc: BaseException) -> bool:
     """Return True for transient TPM/429 errors, excluding billing exhaustion."""
     if is_credit_exhausted_error(exc):
@@ -129,9 +134,10 @@ def maybe_raise_credit_exhausted(provider_name: str, err: BaseException) -> None
     """Raise LLMCreditExhaustedError when billing/quota exhaustion is detected."""
     if is_credit_exhausted_error(err):
         raise LLMCreditExhaustedError(
-            f"{provider_name} credit exhausted (provider billing/quota): "
-            f"top up balance or raise the spending cap at the provider "
-            f"console. Original error: {err}"
+            f"{provider_name} {CREDIT_EXHAUSTED_MARKER}. "
+            f"To keep going, switch to another configured LLM provider — or top up "
+            f"your balance / raise the spending cap at the {provider_name} console. "
+            f"Original error: {err}"
         ) from err
 
 

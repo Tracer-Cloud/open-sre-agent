@@ -38,6 +38,7 @@ def authenticate_and_configure_github(
     *,
     on_prompt: Callable[[GitHubDeviceCode], None] | None = None,
     open_browser: bool = True,
+    poll_sleep: Callable[[float], None] | None = None,
 ) -> GitHubLoginResult:
     """Run device-flow login, validate, and persist the hosted GitHub MCP integration.
 
@@ -45,7 +46,11 @@ def authenticate_and_configure_github(
     propagate to the caller so it can present a message and decide whether to retry.
     The integration is persisted only when validation succeeds.
     """
-    token = authorize_github_via_device_flow(on_prompt=on_prompt, open_browser=open_browser)
+    token = authorize_github_via_device_flow(
+        on_prompt=on_prompt,
+        open_browser=open_browser,
+        poll_sleep=poll_sleep,
+    )
     credentials: dict[str, object] = {
         "mode": DEFAULT_GITHUB_MCP_MODE,
         "url": DEFAULT_GITHUB_MCP_URL,

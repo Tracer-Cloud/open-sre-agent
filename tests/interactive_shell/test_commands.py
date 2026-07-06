@@ -1256,8 +1256,11 @@ class TestInvestigateFileCommand:
             captured.append(alert_text)
             return {"root_cause": "test cause"}
 
-        # Patch package re-export: slash handler does `from surfaces.cli.investigation import ...`.
-        monkeypatch.setattr("surfaces.cli.investigation.run_investigation_for_session", _fake)
+        # Patch REPL adapter used by slash handler lazy import.
+        monkeypatch.setattr(
+            "surfaces.interactive_shell.runtime.investigation_adapter.run_investigation_for_session",
+            _fake,
+        )
         session = Session()
         console, _ = _capture()
         dispatch_slash(f"/investigate {alert_file}", session, console)
@@ -1277,7 +1280,10 @@ class TestInvestigateFileCommand:
             captured.append(template_name)
             return {"root_cause": "sample cause"}
 
-        monkeypatch.setattr("surfaces.cli.investigation.run_sample_alert_for_session", _fake_sample)
+        monkeypatch.setattr(
+            "surfaces.interactive_shell.runtime.investigation_adapter.run_sample_alert_for_session",
+            _fake_sample,
+        )
 
         session = Session()
         console, _ = _capture()
@@ -1336,7 +1342,7 @@ class TestInvestigateFileCommand:
 
         monkeypatch.setattr("platform.analytics.cli.track_investigation", _fake_track)
         monkeypatch.setattr(
-            "surfaces.cli.investigation.run_sample_alert_for_session",
+            "surfaces.interactive_shell.runtime.investigation_adapter.run_sample_alert_for_session",
             lambda **_kwargs: {"root_cause": "sample cause"},
         )
 
@@ -1363,7 +1369,10 @@ class TestInvestigateFileCommand:
             calls.append(template_name)
             return {"root_cause": "template-wins"}
 
-        monkeypatch.setattr("surfaces.cli.investigation.run_sample_alert_for_session", _fake_sample)
+        monkeypatch.setattr(
+            "surfaces.interactive_shell.runtime.investigation_adapter.run_sample_alert_for_session",
+            _fake_sample,
+        )
 
         session = Session()
         console, _ = _capture()
@@ -1394,7 +1403,10 @@ class TestInvestigateFileCommand:
 
         monkeypatch.setattr(investigation_cmd, "repl_tty_interactive", lambda: True)
         monkeypatch.setattr(investigation_cmd, "repl_choose_one", lambda **_: next(picks))
-        monkeypatch.setattr("surfaces.cli.investigation.run_sample_alert_for_session", _fake_sample)
+        monkeypatch.setattr(
+            "surfaces.interactive_shell.runtime.investigation_adapter.run_sample_alert_for_session",
+            _fake_sample,
+        )
 
         session = Session()
         console, buf = _capture()
@@ -1440,7 +1452,10 @@ class TestInvestigateFileCommand:
             "_prompt_investigate_path",
             lambda _console: str(alert_file),
         )
-        monkeypatch.setattr("surfaces.cli.investigation.run_investigation_for_session", _fake)
+        monkeypatch.setattr(
+            "surfaces.interactive_shell.runtime.investigation_adapter.run_investigation_for_session",
+            _fake,
+        )
 
         session = Session()
         console, _ = _capture()
@@ -1479,7 +1494,7 @@ class TestInvestigateFileCommand:
 
         monkeypatch.setattr("platform.analytics.cli.track_investigation", _fake_track)
         monkeypatch.setattr(
-            "surfaces.cli.investigation.run_investigation_for_session",
+            "surfaces.interactive_shell.runtime.investigation_adapter.run_investigation_for_session",
             lambda **_kwargs: {"root_cause": "test cause"},
         )
         session = Session()
@@ -1512,7 +1527,10 @@ class TestInvestigateFileCommand:
                 "region": "us-east-1",
             }
 
-        monkeypatch.setattr("surfaces.cli.investigation.run_investigation_for_session", _fake)
+        monkeypatch.setattr(
+            "surfaces.interactive_shell.runtime.investigation_adapter.run_investigation_for_session",
+            _fake,
+        )
 
         session = Session()
         console, _ = _capture()
@@ -1574,7 +1592,10 @@ class TestInvestigateFileCommand:
         ) -> dict[str, object]:
             raise OpenSREError("bad config")
 
-        monkeypatch.setattr("surfaces.cli.investigation.run_investigation_for_session", _raise)
+        monkeypatch.setattr(
+            "surfaces.interactive_shell.runtime.investigation_adapter.run_investigation_for_session",
+            _raise,
+        )
         session = Session()
         console, _ = _capture()
         dispatch_slash(f"/investigate {alert_file}", session, console)
@@ -1831,7 +1852,7 @@ class TestResumeCommand:
         """Action-agent LLM failures must be stored so /resume can show them."""
         from unittest.mock import patch
 
-        from surfaces.interactive_shell.runtime.shell_turn_execution import (
+        from surfaces.interactive_shell.runtime.action_turn import (
             run_action_tool_turn,
         )
 
@@ -1842,7 +1863,7 @@ class TestResumeCommand:
             raise RuntimeError("codex: quota or rate limit exceeded (exit 1)")
 
         with patch(
-            "surfaces.interactive_shell.runtime.shell_turn_execution._default_llm_factory",
+            "surfaces.interactive_shell.runtime.action_turn.default_llm_factory",
             side_effect=_raise,
         ):
             result = run_action_tool_turn("check cpu usage", session, console)
@@ -2050,22 +2071,27 @@ class TestVerboseCommand:
 class TestCompactCommand:
     def test_nothing_to_compact_when_small(self) -> None:
         session = Session()
-        for i in range(5):
-            session.record("slash", f"/cmd{i}")
+        session.agent.messages = [("user", f"m{i}") for i in range(4)]
         console, buf = _capture()
         dispatch_slash("/compact", session, console)
-        assert "nothing to compact" in buf.getvalue()
-        assert len(session.history) == 6
-        assert session.history[-1]["text"] == "/compact"
+        assert "Nothing to compact yet." in buf.getvalue()
+        assert len(session.agent.messages) == 4
 
-    def test_trims_to_20_when_over_limit(self) -> None:
+    def test_compacts_conversation_branch_when_over_keep_limit(self) -> None:
         session = Session()
-        for i in range(30):
-            session.record("slash", f"/cmd{i}")
+        session.agent.messages = [("user", f"message number {i}") for i in range(20)]
         console, buf = _capture()
         dispatch_slash("/compact", session, console)
-        assert len(session.history) == 20
-        assert "compacted" in buf.getvalue()
+        # compact_session_branch keeps the most recent 8 messages and prepends
+        # a single summary message.
+        assert len(session.agent.messages) == 9
+        assert session.agent.messages[0][0] == "assistant"
+        assert "Session summary" in session.agent.messages[0][1]
+        assert "compacted session context" in buf.getvalue()
+        assert any(
+            entry.get("type") == "slash" and entry.get("text") == "/compact"
+            for entry in session.history
+        )
 
 
 class TestCancelCommand:

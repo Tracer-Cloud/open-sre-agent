@@ -38,10 +38,8 @@ class GatewayManager:
         harness.resolve_env_variables()
         logger = configure_gateway_logging()
 
-        # Load the LLM client graph as one consistent snapshot at boot, so a
-        # later code change can't leave this long-running process holding a mix
-        # of old and new core.llm modules (a lazy first-use import against a
-        # boot-cached transport module fails with a cryptic ImportError).
+        # Load the LLM client graph as one snapshot at boot (avoids a stale
+        # mixed-version process after a code change).
         preload_llm_clients()
 
         # Compose the transport-agnostic turn handler. Action tools are resolved

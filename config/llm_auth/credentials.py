@@ -257,26 +257,44 @@ def resolve_for_request(provider: str) -> CredentialResolution:
                 detail=f"{spec.api_key_env} resolved from environment.",
             )
 
-        from config.llm_keyring import resolve_llm_api_key
+        import keyring.errors
 
-        key = resolve_llm_api_key(spec.api_key_env)
-        if key:
-            save_provider_auth_record(
-                provider=spec.value,
-                auth_name=spec.value,
-                kind="api_key",
-                source="keyring",
-                detail=f"{spec.api_key_env} stored in the system keychain.",
-                verified=True,
-                stale=False,
-                env_var=spec.api_key_env,
-            )
-            return CredentialResolution(
-                provider=spec.value,
-                api_key=key,
-                source="keyring",
-                detail=f"{spec.api_key_env} resolved from secure local storage.",
-            )
+        from config.llm_keyring import keyring_is_disabled, read_keychain_secret
+
+        if not keyring_is_disabled():
+            try:
+                key = read_keychain_secret(spec.api_key_env)
+            except keyring.errors.KeyringError as exc:
+                # The backend itself couldn't be reached (e.g. no D-Bus/Secret
+                # Service session in this process) — this is not evidence the
+                # credential is missing, so leave any previously-verified
+                # metadata untouched instead of marking it stale.
+                return CredentialResolution(
+                    provider=spec.value,
+                    api_key="",
+                    source="unknown",
+                    detail=(
+                        f"Could not reach the system keychain to check {spec.api_key_env}: "
+                        f"{exc}. Retry once the keychain is reachable."
+                    ),
+                )
+            if key:
+                save_provider_auth_record(
+                    provider=spec.value,
+                    auth_name=spec.value,
+                    kind="api_key",
+                    source="keyring",
+                    detail=f"{spec.api_key_env} stored in the system keychain.",
+                    verified=True,
+                    stale=False,
+                    env_var=spec.api_key_env,
+                )
+                return CredentialResolution(
+                    provider=spec.value,
+                    api_key=key,
+                    source="keyring",
+                    detail=f"{spec.api_key_env} resolved from secure local storage.",
+                )
 
         detail = (
             f"Missing credential for LLM provider '{spec.value}'. Set {spec.api_key_env} "

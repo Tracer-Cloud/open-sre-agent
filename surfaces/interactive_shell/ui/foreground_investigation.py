@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
@@ -19,9 +20,26 @@ from surfaces.interactive_shell.ui.investigation_outcome import (
     user_facing_error_message,
 )
 from surfaces.interactive_shell.utils.error_handling.exception_reporting import report_exception
+from surfaces.interactive_shell.utils.telemetry.investigation_llm_usage import (
+    InvestigationLlmUsage,
+    observe_investigation_llm_usage,
+    resolve_configured_llm_identity,
+)
 
 if TYPE_CHECKING:
     from core.agent_harness.session import Session
+
+
+def _llm_fields(usage: InvestigationLlmUsage, started: float) -> dict[str, Any]:
+    """LLM identity, token, and timing fields shared by every outcome shape."""
+    provider, configured_model = resolve_configured_llm_identity()
+    return {
+        "llm_model": usage.model or configured_model,
+        "llm_provider": provider,
+        "llm_input_tokens": usage.input_tokens,
+        "llm_output_tokens": usage.output_tokens,
+        "duration_ms": int((time.monotonic() - started) * 1000),
+    }
 
 
 def run_foreground_investigation(
@@ -38,8 +56,10 @@ def run_foreground_investigation(
     session.last_investigation_id = ""
     task = session.task_registry.create(TaskKind.INVESTIGATION, command=task_command)
     task.mark_running()
+    started = time.monotonic()
     try:
-        final_state = run(task)
+        with observe_investigation_llm_usage() as usage:
+            final_state = run(task)
     except KeyboardInterrupt:
         task.mark_cancelled()
         console.print(f"[{WARNING}]investigation cancelled.[/]")
@@ -48,6 +68,7 @@ def run_foreground_investigation(
             target=normalized_target,
             investigation_id=str(getattr(session, "last_investigation_id", "") or ""),
             failure_category="user_cancelled",
+            **_llm_fields(usage, started),
         )
     except OpenSREError as exc:
         task.mark_failed(str(exc))
@@ -64,6 +85,7 @@ def run_foreground_investigation(
             failure_category=category,
             integration_involved=integration,
             integration_failure_message=integration_detail,
+            **_llm_fields(usage, started),
         )
     except Exception as exc:
         task.mark_failed(str(exc))
@@ -79,6 +101,7 @@ def run_foreground_investigation(
             failure_category=category,
             integration_involved=integration,
             integration_failure_message=integration_detail,
+            **_llm_fields(usage, started),
         )
 
     root = final_state.get("root_cause")
@@ -98,6 +121,7 @@ def run_foreground_investigation(
         target=normalized_target,
         investigation_id=str(getattr(session, "last_investigation_id", "") or ""),
         final_state=final_state,
+        **_llm_fields(usage, started),
     )
 
 

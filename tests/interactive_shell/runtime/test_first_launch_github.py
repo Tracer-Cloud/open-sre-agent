@@ -28,6 +28,7 @@ def _force_required(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(flg, "is_test_run", lambda: False)
     monkeypatch.setattr(flg, "repl_tty_interactive", lambda: True)
     monkeypatch.setattr(flg, "_github_already_configured", lambda: False)
+    monkeypatch.setattr(flg, "read_github_login_deferred", lambda: False)
 
 
 def test_gate_required_when_all_conditions_met(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -98,6 +99,12 @@ def test_gate_skipped_in_ci_like_environment(
     assert flg.should_require_github_login() is False
 
 
+def test_gate_skipped_when_github_login_deferred(monkeypatch: pytest.MonkeyPatch) -> None:
+    _force_required(monkeypatch)
+    monkeypatch.setattr(flg, "read_github_login_deferred", lambda: True)
+    assert flg.should_require_github_login() is False
+
+
 def test_gate_required_when_stale_github_store_record_has_no_token(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -140,6 +147,7 @@ def test_device_code_prompt_highlights_user_code(monkeypatch: pytest.MonkeyPatch
 
 
 def test_orchestrator_success_proceeds_and_propagates(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(flg, "_offer_github_login", lambda _console: True)
     monkeypatch.setattr(
         github_login_mod,
         "authenticate_and_configure_github",
@@ -147,38 +155,62 @@ def test_orchestrator_success_proceeds_and_propagates(monkeypatch: pytest.Monkey
     )
     completed: list[str] = []
     monkeypatch.setattr(flg, "capture_github_login_completed", completed.append)
+    cleared: list[bool] = []
+    monkeypatch.setattr(flg, "clear_github_login_deferral", lambda: cleared.append(True))
 
     proceed = flg.require_github_login_on_first_launch(_console())
 
     assert proceed is True
     assert completed == ["octocat"]
+    assert cleared == [True]
 
 
-def test_orchestrator_quit_does_not_proceed(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_orchestrator_skip_at_menu_proceeds(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(flg, "_offer_github_login", lambda _console: False)
+    deferred: list[bool] = []
+    monkeypatch.setattr(flg, "write_github_login_deferred", deferred.append)
+
+    proceed = flg.require_github_login_on_first_launch(_console())
+
+    assert proceed is True
+    assert deferred == [True]
+
+
+def test_orchestrator_escape_during_wait_proceeds(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(flg, "_offer_github_login", lambda _console: True)
+
     def _raise_cancel(**_kwargs: object) -> GitHubLoginResult:
         raise KeyboardInterrupt
 
     monkeypatch.setattr(github_login_mod, "authenticate_and_configure_github", _raise_cancel)
+    deferred: list[bool] = []
+    monkeypatch.setattr(flg, "write_github_login_deferred", deferred.append)
 
     proceed = flg.require_github_login_on_first_launch(_console())
 
-    assert proceed is False
+    assert proceed is True
+    assert deferred == [True]
 
 
-def test_orchestrator_failure_then_decline_retry_quits(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_orchestrator_failure_then_decline_retry_skips(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(flg, "_offer_github_login", lambda _console: True)
     monkeypatch.setattr(
         github_login_mod,
         "authenticate_and_configure_github",
         lambda **_kwargs: GitHubLoginResult(ok=False, detail="cannot verify"),
     )
     monkeypatch.setattr(flg, "_ask_retry", lambda _console: False)
+    deferred: list[bool] = []
+    monkeypatch.setattr(flg, "write_github_login_deferred", deferred.append)
 
     proceed = flg.require_github_login_on_first_launch(_console())
 
-    assert proceed is False
+    assert proceed is True
+    assert deferred == [True]
 
 
 def test_orchestrator_retries_until_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(flg, "_offer_github_login", lambda _console: True)
     calls = {"n": 0}
 
     def _login(**_kwargs: object) -> GitHubLoginResult:
@@ -190,8 +222,60 @@ def test_orchestrator_retries_until_success(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(github_login_mod, "authenticate_and_configure_github", _login)
     monkeypatch.setattr(flg, "_ask_retry", lambda _console: True)
     monkeypatch.setattr(flg, "capture_github_login_completed", lambda _username: None)
+    monkeypatch.setattr(flg, "clear_github_login_deferral", lambda: None)
 
     proceed = flg.require_github_login_on_first_launch(_console())
 
     assert proceed is True
     assert calls["n"] == 2
+
+
+def test_clear_github_login_deferral_noop_when_not_deferred(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(flg, "read_github_login_deferred", lambda: False)
+    writes: list[bool] = []
+    monkeypatch.setattr(flg, "write_github_login_deferred", writes.append)
+
+    flg.clear_github_login_deferral()
+
+    assert writes == []
+
+
+def test_clear_github_login_deferral_clears_when_deferred(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(flg, "read_github_login_deferred", lambda: True)
+    writes: list[bool] = []
+    monkeypatch.setattr(flg, "write_github_login_deferred", writes.append)
+
+    flg.clear_github_login_deferral()
+
+    assert writes == [False]
+
+
+def test_sleep_until_or_cancel_raises_on_escape(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(flg.os, "name", "posix")
+    monkeypatch.setattr(flg.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(flg.sys.stdin, "fileno", lambda: 0)
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.ui.components.key_reader.read_key_unix",
+        lambda **_kwargs: "cancel",
+    )
+    monkeypatch.setattr("termios.tcgetattr", lambda _fd: [0] * 7)
+    monkeypatch.setattr("tty.setraw", lambda _fd: None)
+    restored: list[bool] = []
+    monkeypatch.setattr(
+        "termios.tcsetattr",
+        lambda _fd, _when, _attrs: restored.append(True),
+    )
+
+    def _ready(
+        _fd: int, *_args: object, **_kwargs: object
+    ) -> tuple[list[int], list[int], list[int]]:
+        return ([0], [], [])
+
+    monkeypatch.setattr("select.select", _ready)
+
+    with pytest.raises(KeyboardInterrupt):
+        flg._sleep_until_or_cancel(1.0)
+
+    assert restored == [True]

@@ -5,7 +5,7 @@ they live in :mod:`config` (the layered root package that everyone may depend
 on). Hosting them here lets both surface code (the CLI ``tests`` command) and
 core session state (post-synthetic-failure follow-up hinting) reference the
 same directories without ``core -> surfaces`` imports (see T-4 layering audit,
-issue #3352).
+issue #3352; harness decoupling T-06, issue #3539).
 
 The constants intentionally do not touch the file system at import time — they
 are lazy path expressions consumed by callers that check ``is_dir()`` /

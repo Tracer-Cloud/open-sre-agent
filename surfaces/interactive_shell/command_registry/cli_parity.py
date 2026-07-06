@@ -71,6 +71,10 @@ def run_cli_command(
     should_capture = capture_output or subprocess_timeout is not None
     child_env = os.environ.copy()
     child_env[_PARENT_INTERACTIVE_SHELL_ENV] = "1"
+    if should_capture:
+        # Captured child stdout isn't a TTY, so force Rich colour there and parse
+        # it back in print_command_output — otherwise its styling would be lost.
+        child_env["FORCE_COLOR"] = "1"
     exit_code: int | None = 0
     try:
         if should_capture:
@@ -280,8 +284,10 @@ def _cmd_config(session: Session, console: Console, args: list[str]) -> bool:  #
     return run_cli_command(console, ["config", *args], capture_output=True)
 
 
-def _cmd_messaging(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
-    return run_cli_command(console, ["messaging", *args])
+def _cmd_messaging(session: Session, console: Console, args: list[str]) -> bool:
+    # Non-interactive subcommands: capture so output renders through the REPL
+    # (inherited stdout gets clipped by prompt_toolkit's screen management).
+    return run_cli_command(console, ["messaging", *args], capture_output=True, session=session)
 
 
 def _cmd_hermes(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001

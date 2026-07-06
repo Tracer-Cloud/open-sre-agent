@@ -124,6 +124,7 @@ def start_background_cli_task(
         task.mark_failed(str(exc))
         if recorder is not None:
             with contextlib.suppress(Exception):
+                recorder.set_error("spawn_failed", str(exc))
                 recorder.set_response(
                     _compose_task_log_response(
                         headline=f"command failed to start: {exc}",
@@ -169,6 +170,7 @@ def start_background_cli_task(
         timed_out = False
         suggest_follow_up = False
         outcome_headline = "command completed (exit 0)"
+        outcome_error_kind = ""
         while proc.poll() is None:
             if time.monotonic() - started_at > timeout_seconds:
                 timed_out = True
@@ -185,6 +187,7 @@ def start_background_cli_task(
         try:
             if timed_out:
                 outcome_headline = f"command timed out after {timeout_seconds} seconds"
+                outcome_error_kind = "timeout"
                 task.mark_failed(f"timed out after {timeout_seconds}s")
                 suggest_follow_up = kind is TaskKind.SYNTHETIC_TEST
                 return
@@ -201,11 +204,13 @@ def start_background_cli_task(
                 diag = _sr_resolve("read_diag", read_diag)(stderr_buf)
                 error_msg = f"exit code {code}" + (f": {diag}" if diag else "")
                 outcome_headline = f"command failed (exit {code})"
+                outcome_error_kind = "cli_exit_nonzero"
                 task.mark_failed(error_msg)
                 console.print(f"[{ERROR}]command failed (exit {code}):[/]")
                 suggest_follow_up = kind is TaskKind.SYNTHETIC_TEST
         except Exception as exc:  # noqa: BLE001
             outcome_headline = f"command error: {exc}"
+            outcome_error_kind = "watcher_error"
             task.mark_failed(str(exc))
             report_exception(exc, context="surfaces.interactive_shell.background_cli_task.watch")
             console.print(f"[{ERROR}]error:[/] {escape(str(exc))}")
@@ -216,6 +221,8 @@ def start_background_cli_task(
             # stderr, exit/timeout/cancel) before the capture buffers are closed.
             if recorder is not None:
                 with contextlib.suppress(Exception):
+                    if outcome_error_kind:
+                        recorder.set_error(outcome_error_kind, outcome_headline)
                     recorder.set_response(
                         _compose_task_log_response(
                             headline=outcome_headline,

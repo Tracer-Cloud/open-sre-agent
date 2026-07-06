@@ -63,6 +63,20 @@ def _looks_like_timeout(exc: BaseException) -> bool:
     return False
 
 
+def is_cli_timeout_error(exc: BaseException) -> bool:
+    """Return True when *exc* is a CLI subprocess timeout (expected on slow turns).
+
+    Uses duck typing so callers in ``core/agent_harness`` need not import
+    ``integrations.llm_cli`` (T-13). ``classify_llm_invoke_failure`` below
+    still imports ``CLITimeoutError`` directly (T-4 debt; baselined in
+    ``.importlinter.strict``).
+    """
+    exc_type = type(exc)
+    return exc_type.__name__ == "CLITimeoutError" and exc_type.__module__.endswith(
+        "integrations.llm_cli.errors"
+    )
+
+
 def classify_llm_invoke_failure(exc: BaseException) -> LLMInvokeFailure | None:
     """Return a structured failure when *exc* is a known operational LLM error.
 

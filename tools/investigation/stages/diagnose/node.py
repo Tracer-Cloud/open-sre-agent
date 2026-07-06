@@ -7,7 +7,6 @@ from typing import Any, TypedDict, cast
 
 from pydantic import BaseModel
 
-from core.context.state import InvestigationState
 from core.domain.alerts.alert_source import resolve_alert_source
 from core.domain.diagnosis import (
     InvestigationResult,
@@ -17,6 +16,7 @@ from core.domain.diagnosis import (
     result_to_state,
     taxonomy_categories_for_alert_source,
 )
+from core.state import InvestigationState
 
 logger = logging.getLogger(__name__)
 

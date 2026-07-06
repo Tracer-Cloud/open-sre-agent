@@ -3,8 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 
 import keyring
+import keyring.errors
 import pytest
+from keyring.backend import KeyringBackend
 
+from config.llm_auth.credentials import resolve_for_request, status
 from config.llm_auth.records import resolve_provider_auth_record, save_provider_auth_record
 from config.llm_credentials import resolve_llm_api_key
 from integrations.llm_cli.base import CLIProbe
@@ -236,6 +239,94 @@ def test_configure_cli_subscription_uses_managed_codex_oauth_when_status_probe_u
         assert "LLM_AUTH_METHOD=oauth\n" in env_content
         assert "CODEX_MODEL=gpt-5-codex\n" in env_content
         assert resolve_provider_auth_record("codex")["source"] == "codex-oauth"
+    finally:
+        keyring.set_keyring(previous_backend)
+
+
+class _ErroringKeyring(KeyringBackend):
+    """Simulates a keychain backend that can't be reached (e.g. no D-Bus session)."""
+
+    priority = 1.0
+
+    def get_password(self, _service: str, _username: str) -> str | None:
+        raise keyring.errors.KeyringError("Secret Service is not reachable")
+
+    def set_password(self, _service: str, _username: str, _password: str) -> None:
+        raise keyring.errors.KeyringError("Secret Service is not reachable")
+
+    def delete_password(self, _service: str, _username: str) -> None:
+        raise keyring.errors.KeyringError("Secret Service is not reachable")
+
+
+def test_resolve_for_request_does_not_stale_verified_record_on_keyring_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A backend hiccup (regression for #3721) must not downgrade a verified credential.
+
+    Previously any ``keyring.errors.KeyringError`` during the on-demand keychain
+    read was swallowed into an empty string, which read as "credential missing"
+    and permanently marked the metadata record stale/unverified — even though
+    the secret itself was untouched.
+    """
+    monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    # OPENSRE_LLM_AUTH_METADATA_PATH is already redirected to this same tmp_path
+    # by the autouse ``_isolate_opensre_home_files`` fixture in tests/conftest.py.
+    save_provider_auth_record(
+        provider="deepseek",
+        auth_name="deepseek",
+        kind="api_key",
+        source="keyring",
+        detail="DEEPSEEK_API_KEY stored in the system keychain.",
+        verified=True,
+        stale=False,
+        env_var="DEEPSEEK_API_KEY",
+    )
+
+    previous_backend = keyring.get_keyring()
+    keyring.set_keyring(_ErroringKeyring())
+    try:
+        resolution = resolve_for_request("deepseek")
+
+        assert resolution.ok is False
+        assert "keychain" in resolution.detail.lower()
+
+        record = resolve_provider_auth_record("deepseek")
+        assert record["stale"] == "false"
+        assert record["verified"] == "true"
+        assert status("deepseek").verified is True
+    finally:
+        keyring.set_keyring(previous_backend)
+
+
+def test_resolve_for_request_still_stales_when_credential_is_genuinely_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A clean (error-free) keychain miss is real evidence and should still stale."""
+    monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    # OPENSRE_LLM_AUTH_METADATA_PATH is already redirected by the autouse
+    # ``_isolate_opensre_home_files`` fixture in tests/conftest.py.
+    save_provider_auth_record(
+        provider="deepseek",
+        auth_name="deepseek",
+        kind="api_key",
+        source="keyring",
+        detail="DEEPSEEK_API_KEY stored in the system keychain.",
+        verified=True,
+        stale=False,
+        env_var="DEEPSEEK_API_KEY",
+    )
+
+    previous_backend = keyring.get_keyring()
+    keyring.set_keyring(MemoryKeyring())
+    try:
+        resolution = resolve_for_request("deepseek")
+
+        assert resolution.ok is False
+        record = resolve_provider_auth_record("deepseek")
+        assert record["stale"] == "true"
+        assert record["verified"] == "false"
     finally:
         keyring.set_keyring(previous_backend)
 

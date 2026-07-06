@@ -404,6 +404,72 @@ def test_prompt_recorder_background_task_uses_bound_investigation_id(
     assert investigation_id not in {"", "inv-stale", "inv-other"}
 
 
+def test_prompt_recorder_set_error_adds_structured_properties(monkeypatch, tmp_path: Path) -> None:
+    captured: list[dict[str, object]] = []
+    cfg = PromptLogConfig(
+        enabled=True,
+        local_enabled=False,
+        posthog_enabled=True,
+        redact=False,
+        max_chars=1000,
+        log_path=tmp_path / "prompt_log.jsonl",
+    )
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.utils.telemetry.recorder.PromptLogConfig.load", lambda: cfg
+    )
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.utils.telemetry.recorder.build_turn_integration_snapshot",
+        lambda _session: {},
+    )
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.utils.telemetry.recorder.capture_ai_generation",
+        lambda payload: captured.append(payload),
+    )
+    session = Session()
+    recorder = PromptRecorder.start(session=session, text="/investigate generic", turn_kind="agent")
+    assert recorder is not None
+    recorder.set_error("config", "ANTHROPIC_API_KEY not set")
+    recorder.set_response(
+        "slash /investigate generic (failed)\ninvestigation_failed (generic):\n"
+        "ANTHROPIC_API_KEY not set"
+    )
+    recorder.flush()
+    assert captured[0]["$ai_is_error"] is True
+    assert captured[0]["$ai_error"] == "ANTHROPIC_API_KEY not set"
+    assert captured[0]["error_kind"] == "config"
+
+
+def test_prompt_recorder_omits_error_properties_by_default(monkeypatch, tmp_path: Path) -> None:
+    captured: list[dict[str, object]] = []
+    cfg = PromptLogConfig(
+        enabled=True,
+        local_enabled=False,
+        posthog_enabled=True,
+        redact=False,
+        max_chars=1000,
+        log_path=tmp_path / "prompt_log.jsonl",
+    )
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.utils.telemetry.recorder.PromptLogConfig.load", lambda: cfg
+    )
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.utils.telemetry.recorder.build_turn_integration_snapshot",
+        lambda _session: {},
+    )
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.utils.telemetry.recorder.capture_ai_generation",
+        lambda payload: captured.append(payload),
+    )
+    session = Session()
+    recorder = PromptRecorder.start(session=session, text="hello", turn_kind="agent")
+    assert recorder is not None
+    recorder.set_response("world")
+    recorder.flush()
+    assert "$ai_is_error" not in captured[0]
+    assert "$ai_error" not in captured[0]
+    assert "error_kind" not in captured[0]
+
+
 def test_prompt_recorder_uses_only_latest_slash_outcome(monkeypatch, tmp_path: Path) -> None:
     captured: list[dict[str, object]] = []
     cfg = PromptLogConfig(

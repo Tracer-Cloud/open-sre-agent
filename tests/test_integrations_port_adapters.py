@@ -1,4 +1,4 @@
-"""Integration tests for CLI → integrations port wiring."""
+"""Integration tests for CLI → harness port wiring."""
 
 from __future__ import annotations
 
@@ -6,8 +6,7 @@ from collections.abc import Iterator
 
 import pytest
 
-from integrations import port as integrations_port
-from integrations.port import fetch_remote_integrations, set_remote_integrations_fetcher
+import platform.harness_ports as harness_ports
 from integrations.tracer.integrations_adapter import fetch_tracer_remote_integrations
 from platform.observability import NoopProgressTracker
 from platform.observability import debug as obs_debug
@@ -26,15 +25,7 @@ from surfaces.interactive_shell.ui.output import boundary as output_boundary
 
 
 def _reset_all_ports() -> None:
-    """Restore every port + global to its no-op / default state.
-
-    ``install_product_adapters`` wires four observability ports in
-    addition to the integrations fetcher; resetting only the
-    integrations fetcher would leave the other four registered for
-    the rest of the pytest session. Symmetric with the helper in
-    :mod:`tests.test_observability_adapters`.
-    """
-    set_remote_integrations_fetcher(integrations_port._default_fetcher)
+    harness_ports.reset_harness_ports()
     set_progress_tracker(NoopProgressTracker())
     set_progress_tracker_factory(None)
     obs_progress._silenced = False
@@ -45,27 +36,19 @@ def _reset_all_ports() -> None:
 
 @pytest.fixture(autouse=True)
 def _reset_integrations_port() -> Iterator[None]:
-    """Reset every port the boundary wires before AND after each test.
-
-    The teardown matters: without it, the final test that calls
-    ``install_product_adapters`` (e.g.
-    ``test_install_product_adapters_wires_tracer_fetcher``) leaks the
-    CLI debug printer, Rich header/footer renderers, and progress-tracker
-    factory into the rest of the pytest session.
-    """
     _reset_all_ports()
     yield
     _reset_all_ports()
 
 
 def test_port_defaults_to_empty_before_boundary_install() -> None:
-    assert fetch_remote_integrations(org_id="org-1", auth_token="tok") == []
+    assert harness_ports.fetch_remote_integrations(org_id="org-1", auth_token="tok") == []
 
 
 def test_install_product_adapters_wires_tracer_fetcher() -> None:
     output_boundary.install_product_adapters()
 
-    assert integrations_port._fetcher is fetch_tracer_remote_integrations
+    assert harness_ports._fetch_remote is fetch_tracer_remote_integrations
 
 
 def test_registered_fetcher_is_invoked() -> None:
@@ -75,8 +58,15 @@ def test_registered_fetcher_is_invoked() -> None:
         calls.append((org_id, auth_token))
         return [{"service": "grafana", "config": {}}]
 
-    set_remote_integrations_fetcher(_fake_fetcher)
-    result = fetch_remote_integrations(org_id="org-42", auth_token="jwt-here")
+    harness_ports.set_remote_integrations_fetcher(_fake_fetcher)
+    result = harness_ports.fetch_remote_integrations(org_id="org-42", auth_token="jwt-here")
 
     assert calls == [("org-42", "jwt-here")]
     assert result == [{"service": "grafana", "config": {}}]
+
+
+def test_install_harness_ports_wires_catalog_and_registry() -> None:
+    output_boundary.install_harness_ports()
+
+    assert harness_ports._load_integrations is not harness_ports._default_load_integrations
+    assert isinstance(harness_ports.get_surface_tools("action"), list)

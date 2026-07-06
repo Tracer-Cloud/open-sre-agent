@@ -7,8 +7,8 @@ from typing import Any, cast
 
 from config.constants.investigation import MAX_INVESTIGATION_LOOPS
 from core import (
-    LoopEventCallback,
     RuntimeEventCallback,
+    TupleEventCallback,
     context_budget_ceiling_for_model,
     enforce_context_budget,
     estimate_message_tokens,
@@ -16,14 +16,13 @@ from core import (
     summarise,
     tool_source,
 )
-from core.agent import Agent
-from core.context.state import InvestigationState
-from core.context.state.evidence import EvidenceEntry
+from core.agent.mixins import EventEmitterMixin, ToolFilterMixin
 from core.llm.agent_llm_client import get_agent_llm
 from core.llm.types import ToolCall
 from core.llm_invoke_errors import classify_llm_invoke_failure
 from core.messages import MessageFormatter
-from core.tool_framework.registered_tool import RegisteredTool
+from core.state import InvestigationState
+from core.state.evidence import EvidenceEntry
 from platform.observability import debug_print
 from platform.observability import get_progress_tracker as get_tracker
 from platform.observability.tool_trace import redact_sensitive
@@ -56,20 +55,15 @@ def _mark_messages(messages: list[dict[str, Any]], key: str) -> None:
         msg[key] = True
 
 
-class ConnectedInvestigationAgent(Agent[RegisteredTool]):
+class ConnectedInvestigationAgent(EventEmitterMixin, ToolFilterMixin):
     """ReAct loop scoped to the tools enabled by connected integrations.
 
-    Extends :class:`~core.agent.Agent` to reuse the shared event-emission and
-    tool-filtering infrastructure. The investigation loop is more specialised
-    than the generic :meth:`Agent.run` (seed calls, evidence collection,
-    duplicate detection, stagnation handling), so it overrides ``run()``
-    entirely — config plumbing (LLM, tools, prompt, resolved integrations) is
-    assembled inline in ``run()`` from ``state`` rather than through subclass
-    init hooks.
+    Owns a specialised investigation ``run()`` — seed calls, evidence collection,
+    duplicate detection, and stagnation handling — assembling its config (LLM,
+    tools, prompt, resolved integrations) inline from ``state``. Uses two agent
+    hooks: :class:`~core.agent.mixins.EventEmitterMixin` for event dispatch and
+    :class:`~core.agent.mixins.ToolFilterMixin` for tool narrowing.
     """
-
-    def __init__(self) -> None:
-        super().__init__(max_iterations=MAX_INVESTIGATION_LOOPS)
 
     def _should_accept_conclusion(
         self,
@@ -105,10 +99,10 @@ class ConnectedInvestigationAgent(Agent[RegisteredTool]):
         )
         self._emit("tool_end", tool_event_payload(tc, output=output))
 
-    def run(  # type: ignore[override]
+    def run(
         self,
         state: InvestigationState,
-        on_event: LoopEventCallback | None = None,
+        on_event: TupleEventCallback | None = None,
         on_runtime_event: RuntimeEventCallback | None = None,
     ) -> dict[str, Any]:
         """Run the full investigation. Returns a dict of state updates."""

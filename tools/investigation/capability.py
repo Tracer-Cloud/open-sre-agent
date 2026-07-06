@@ -10,8 +10,8 @@ import threading
 from collections.abc import AsyncIterator, Callable
 from typing import TYPE_CHECKING, Any, cast
 
-from core.context.state import AgentState
 from core.domain.stream import StreamEvent
+from core.state import AgentState
 from platform.observability.errors import report_and_reraise
 from platform.observability.sentry_sdk import init_sentry
 from tools.investigation.state_factory import make_initial_state
@@ -288,7 +288,7 @@ async def astream_investigation(
 
     def _run_pipeline() -> None:
         try:
-            from core.context.state.updates import apply_state_updates
+            from core.state.updates import apply_state_updates
             from tools.investigation.reporting.node import generate_report
             from tools.investigation.stages.diagnose import diagnose
             from tools.investigation.stages.gather_evidence import ConnectedInvestigationAgent

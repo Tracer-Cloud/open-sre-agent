@@ -56,7 +56,7 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
         lambda signum, handler: signal_calls.append((signum, handler)),
     )
     # Dispatch is a static entry point; patch it on the class to spy the callback.
-    monkeypatch.setattr("gateway.turn_handler.Agent.dispatch_message_to_headless_agent", dispatch)
+    monkeypatch.setattr("gateway.turn_handler.dispatch_message_to_headless_agent", dispatch)
 
     def _start_telegram_gateway_background(**kwargs: Any) -> MagicMock:
         background_kwargs.update(kwargs)

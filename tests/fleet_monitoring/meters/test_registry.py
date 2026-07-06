@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from tools.fleet_monitoring.meters import NullMeter, null_meter
-from tools.fleet_monitoring.meters.claude_code import ClaudeCodeMeter
-from tools.fleet_monitoring.meters.codex import CodexMeter
-from tools.fleet_monitoring.meters.registry import TOKEN_METER_REGISTRY, get_token_meter
+from tools.system.fleet_monitoring.meters import NullMeter, null_meter
+from tools.system.fleet_monitoring.meters.claude_code import ClaudeCodeMeter
+from tools.system.fleet_monitoring.meters.codex import CodexMeter
+from tools.system.fleet_monitoring.meters.registry import TOKEN_METER_REGISTRY, get_token_meter
 
 
 def test_claude_code_resolves_to_real_meter() -> None:
@@ -51,7 +51,7 @@ def test_registry_keys_cover_known_providers() -> None:
     to ``null_meter`` — correct fallback behavior, but masks the
     wiring bug.
     """
-    from tools.fleet_monitoring.providers import KNOWN_PROVIDERS
+    from tools.system.fleet_monitoring.providers import KNOWN_PROVIDERS
 
     assert set(TOKEN_METER_REGISTRY) >= KNOWN_PROVIDERS
 

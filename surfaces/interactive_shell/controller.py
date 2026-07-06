@@ -36,7 +36,8 @@ from surfaces.interactive_shell.runtime.input.actions import (
     SubmitTurn,
 )
 from surfaces.interactive_shell.runtime.turn_host import (
-    AgentTurnRunner,
+    AgentTurnRuntime,
+    run_agent_turn,
     run_agent_turn_queue,
     run_input_loop,
 )
@@ -146,7 +147,7 @@ class InteractiveShellController:
             self.spinner,
             self.runtime_context.pt_session,
         )
-        self.turn_runner = AgentTurnRunner(
+        self.turn_runtime = AgentTurnRuntime(
             session=self.session,
             state=self.state,
             spinner=self.spinner,
@@ -170,8 +171,9 @@ class InteractiveShellController:
             self._start_runtime_services()
             try:
                 with patch_stdout(raw=True):
-                    # Comment Vincent: This is is horrible name for the most important function in the interactive shell.
-                    # It should be clear that it is the start of the agentic flow.
+                    # Main input loop: reads prompts and enqueues submitted turns
+                    # onto state.queue. The agent turns themselves run in
+                    # run_agent_turn_queue, started above in _start_runtime_services.
                     await run_input_loop(
                         state=self.state,
                         session=self.session,
@@ -195,9 +197,11 @@ class InteractiveShellController:
         self.tasks = self.background.start_all(
             lambda: run_agent_turn_queue(
                 state=self.state,
-                run_turn=self.turn_runner.run_agent_turn,
+                run_turn=lambda text: run_agent_turn(self.turn_runtime, text),
             )
         )
+        # Fleet sampler is lazy: /fleet triggers it on first live use.
+        self.session.fleet_sampler_starter = self.background.ensure_fleet_sampler_started
 
     async def _handle_input_action(self, action: InputAction) -> bool:
         match action:

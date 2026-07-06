@@ -27,7 +27,6 @@ def supports_default_prompt_context(session: object) -> bool:
     grounding = getattr(session, "grounding", None)
     return (
         grounding is not None
-        and hasattr(grounding, "cli")
         and hasattr(grounding, "agents_md")
         and hasattr(session, "configured_integrations")
         and hasattr(session, "configured_integrations_known")
@@ -41,7 +40,7 @@ class DefaultPromptContextProvider:
         self._session = session
 
     def cli_reference(self) -> str:
-        return str(self._session.grounding.cli.build_text())
+        return ""
 
     def agents_md(self) -> str:
         return str(self._session.grounding.agents_md.build_text())

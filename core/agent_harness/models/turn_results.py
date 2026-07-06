@@ -3,7 +3,7 @@
 These are surface-agnostic "facts only" records: they describe what a turn did
 (actions planned/executed, the assistant response) without any terminal,
 session, or analytics coupling. The interactive shell's accounting layer
-(:mod:`interactive_shell.runtime.core.turn_accounting`) consumes them.
+(:mod:`surfaces.interactive_shell.runtime.core.turn_accounting`) consumes them.
 """
 
 from __future__ import annotations
@@ -27,6 +27,7 @@ class ToolCallingTurnResult:
     has_unhandled_clause: bool
     handled: bool
     response_text: str = ""
+    handoff_contents: tuple[str, ...] = ()
     accounting_status: ToolCallingAccountingStatus = "completed"
 
 

@@ -11,6 +11,8 @@ from collections.abc import Iterable
 from rich.console import Console
 from rich.markup import escape
 
+from core.agent_harness.ports import OutputSink
+from core.llm.llm_retry import CREDIT_EXHAUSTED_MARKER
 from surfaces.interactive_shell.ui import (
     stream_to_console,
 )
@@ -31,6 +33,9 @@ class ShellOutputSink:
 
     def render_error(self, message: str) -> None:
         self._console.print(f"[yellow]{escape(message)}[/]")
+        # On a credit/billing wall, add the in-tool recovery hint.
+        if CREDIT_EXHAUSTED_MARKER in message:
+            self._console.print("[dim]Run /model to switch to another provider.[/]")
 
     def stream(
         self,
@@ -47,4 +52,11 @@ class ShellOutputSink:
         )
 
 
-__all__ = ["ShellOutputSink"]
+def resolve_output_sink(console: Console, output: OutputSink | None) -> OutputSink:
+    """Return the caller's sink, or a shell sink bound to ``console``."""
+    if output is not None:
+        return output
+    return ShellOutputSink(console)
+
+
+__all__ = ["ShellOutputSink", "resolve_output_sink"]

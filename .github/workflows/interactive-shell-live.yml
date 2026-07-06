@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - "core/agent.py"
+      - "core/agent/**"
       - "core/agent_harness/**"
       - "tests/core/agent/**"
       - "surfaces/interactive_shell/**"
@@ -18,7 +18,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "core/agent.py"
+      - "core/agent/**"
       - "core/agent_harness/**"
       - "tests/core/agent/**"
       - "surfaces/interactive_shell/**"

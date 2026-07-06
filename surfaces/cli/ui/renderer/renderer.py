@@ -32,8 +32,6 @@ from surfaces.cli.ui.renderer.tools import (
     _tool_event_key,
     _tool_input,
     _tool_output,
-    _tool_short_label,
-    _tool_source_label,
 )
 from surfaces.interactive_shell.ui.output import (
     ProgressTracker,
@@ -42,6 +40,8 @@ from surfaces.interactive_shell.ui.output import (
     get_output_format,
     register_tool_detail_toggle,
 )
+from surfaces.shared.tool_labels import tool_short_label as _tool_short_label
+from surfaces.shared.tool_labels import tool_source_label as _tool_source_label
 from tools.registry import resolve_tool_display_name
 
 

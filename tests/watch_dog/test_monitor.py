@@ -10,8 +10,8 @@ import psutil
 import pytest
 
 from platform.common.errors import OpenSREError
-from tools.watch_dog.config import WatchdogConfig
-from tools.watch_dog.process_monitor import ProcessMonitor
+from tools.system.watch_dog.config import WatchdogConfig
+from tools.system.watch_dog.process_monitor import ProcessMonitor
 
 
 @dataclass
@@ -81,7 +81,7 @@ def test_process_monitor_resolves_by_pid_and_warms_cpu(
 ) -> None:
     process = _FakeProcess(123, "python", cpu_values=(0.0, 22.0))
     monkeypatch.setattr(
-        "tools.watch_dog.process_monitor.process_probe.process", lambda _pid: process
+        "tools.system.watch_dog.process_monitor.process_probe.process", lambda _pid: process
     )
 
     monitor = ProcessMonitor(WatchdogConfig(pid=123, max_cpu=90))
@@ -101,7 +101,7 @@ def test_process_monitor_resolves_name_regex(
     first = _FakeProcess(20, "python")
     second = _FakeProcess(10, "claude")
     monkeypatch.setattr(
-        "tools.watch_dog.process_monitor.process_probe.process_iter",
+        "tools.system.watch_dog.process_monitor.process_probe.process_iter",
         lambda _attrs: iter([first, second]),
     )
 
@@ -114,7 +114,7 @@ def test_process_monitor_requires_pick_first_for_multiple_name_matches(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "tools.watch_dog.process_monitor.process_probe.process_iter",
+        "tools.system.watch_dog.process_monitor.process_probe.process_iter",
         lambda _attrs: iter([_FakeProcess(20, "claude"), _FakeProcess(10, "claude")]),
     )
 
@@ -130,7 +130,7 @@ def test_process_monitor_returns_dead_sample_on_no_such_process(
 ) -> None:
     process = _GoneProcess(123, "python")
     monkeypatch.setattr(
-        "tools.watch_dog.process_monitor.process_probe.process", lambda _pid: process
+        "tools.system.watch_dog.process_monitor.process_probe.process", lambda _pid: process
     )
 
     monitor = ProcessMonitor(WatchdogConfig(pid=123, max_cpu=90))
@@ -146,7 +146,7 @@ def test_process_monitor_returns_dead_sample_on_access_denied(
 ) -> None:
     process = _AccessDeniedProcess(123, "python")
     monkeypatch.setattr(
-        "tools.watch_dog.process_monitor.process_probe.process", lambda _pid: process
+        "tools.system.watch_dog.process_monitor.process_probe.process", lambda _pid: process
     )
 
     monitor = ProcessMonitor(WatchdogConfig(pid=123, max_cpu=90))

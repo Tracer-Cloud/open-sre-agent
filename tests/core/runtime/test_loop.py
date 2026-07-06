@@ -9,6 +9,7 @@ from typing import Any, cast
 import pytest
 
 from core.agent import Agent, AgentRunResult
+from core.agent_harness.turns.headless_dispatch import dispatch_message_to_headless_agent
 from core.events import (
     MessageUpdateEvent,
     RuntimeEvent,
@@ -21,6 +22,7 @@ from core.messages import (
     ToolResultRuntimeMessage,
     UserRuntimeMessage,
 )
+from core.provider import ProviderHooks
 from core.tool_framework.registered_tool import RegisteredTool
 from core.types import AgentTool, AgentToolContext
 
@@ -134,16 +136,16 @@ def test_agent_exposes_headless_dispatch_entrypoint(monkeypatch: pytest.MonkeyPa
             yield "hello from headless"
 
     monkeypatch.setattr(
-        "core.agent_harness.agents.action_agent._default_llm_factory",
+        "core.agent_harness.turns.action_driver.default_llm_factory",
         lambda: FakeLLM(iter([AgentLLMResponse(content="", tool_calls=[], raw_content=None)])),
     )
 
-    from core.agent_harness.agents.headless_agent import (
+    from core.agent_harness.turns.headless_dispatch import (
         NullToolProvider,
         StaticReasoningClientProvider,
     )
 
-    result = Agent.dispatch_message_to_headless_agent(
+    result = dispatch_message_to_headless_agent(
         "hello",
         tools=NullToolProvider(),
         reasoning=StaticReasoningClientProvider(client=EchoReasoningClient()),
@@ -193,8 +195,6 @@ def test_immediate_final_answer_executes_no_tools() -> None:
 
 
 def test_run_records_final_system_prompt() -> None:
-    # The assembled system prompt is captured on the result so debugging can see
-    # what was influencing the agent, without re-deriving it by hand (issue #3434).
     llm = FakeLLM(iter([_text_response("done")]))
 
     result = _agent(llm, _tools(FakeTool("query_logs"))).run([{"role": "user", "content": "hello"}])
@@ -203,20 +203,86 @@ def test_run_records_final_system_prompt() -> None:
 
 
 def test_run_records_system_prompt_edited_by_before_provider_request_hook() -> None:
-    # Capture happens after the _before_provider_request hook, so per-turn edits
-    # to the prompt are what gets recorded (not the pre-hook value).
-    class EditingAgent(Agent):
-        def _before_provider_request(self, request: Any) -> Any:
-            return replace(request, system=request.system + " [edited]")
-
     llm = FakeLLM(iter([_text_response("done")]))
-    agent = EditingAgent(
-        llm=llm, system="sys", tools=[], resolved_integrations={}, max_iterations=1
+    agent = Agent(
+        llm=llm,
+        system="sys",
+        tools=[],
+        resolved_integrations={},
+        max_iterations=1,
+        provider_hooks=ProviderHooks(
+            before_provider_request=lambda request: replace(
+                request, system=request.system + " [edited]"
+            )
+        ),
     )
 
     result = agent.run([{"role": "user", "content": "hello"}])
 
     assert result.final_system_prompt == "sys [edited]"
+
+
+def test_transform_messages_hook_filters_context_sent_to_llm() -> None:
+    llm = FakeLLM(iter([_text_response("done")]))
+    agent = Agent(
+        llm=llm,
+        system="sys",
+        tools=[],
+        resolved_integrations={},
+        max_iterations=1,
+        provider_hooks=ProviderHooks(transform_messages=lambda messages: list(messages)[-1:]),
+    )
+
+    agent.run(
+        [
+            {"role": "user", "content": "first"},
+            {"role": "user", "content": "second"},
+        ]
+    )
+
+    assert llm.invocations == 1
+    assert len(llm.seen_messages[0]) == 1
+    assert llm.seen_messages[0][0]["content"] == "second"
+
+
+def test_convert_to_llm_hook_replaces_default_message_conversion() -> None:
+    llm = FakeLLM(iter([_text_response("done")]))
+
+    def stamp(_llm: Any, messages: Any) -> list[dict[str, Any]]:
+        return [{"role": "user", "content": f"converted:{m.content}"} for m in messages]
+
+    agent = Agent(
+        llm=llm,
+        system="sys",
+        tools=[],
+        resolved_integrations={},
+        max_iterations=1,
+        provider_hooks=ProviderHooks(convert_to_llm=stamp),
+    )
+
+    agent.run([{"role": "user", "content": "hello"}])
+
+    assert llm.invocations == 1
+    assert llm.seen_messages[0][0]["content"] == "converted:hello"
+
+
+def test_after_response_hook_can_rewrite_llm_reply() -> None:
+    llm = FakeLLM(iter([_text_response("original")]))
+    agent = Agent(
+        llm=llm,
+        system="sys",
+        tools=[],
+        resolved_integrations={},
+        max_iterations=1,
+        provider_hooks=ProviderHooks(
+            after_provider_response=lambda _req, resp: replace(resp, content="rewritten")
+        ),
+    )
+
+    result = agent.run([{"role": "user", "content": "hi"}])
+
+    assert llm.invocations == 1
+    assert result.final_text == "rewritten"
 
 
 def test_one_tool_round_then_final() -> None:
@@ -386,7 +452,7 @@ def test_on_event_failure_is_logged_and_swallowed(caplog: pytest.LogCaptureFixtu
     def on_event(_kind: str, _data: dict[str, Any]) -> None:
         raise RuntimeError("broken renderer")
 
-    with caplog.at_level(logging.DEBUG, logger="core.agent"):
+    with caplog.at_level(logging.DEBUG, logger="core.agent.mixins"):
         result = _agent(llm, _tools(FakeTool("query_logs")), on_event=on_event).run(
             [{"role": "user", "content": "hello"}]
         )

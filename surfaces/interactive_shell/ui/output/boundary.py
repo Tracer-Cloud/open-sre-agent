@@ -10,6 +10,15 @@ from here.
 from __future__ import annotations
 
 
+def install_harness_ports() -> None:
+    """Register integrations/tools adapters into :mod:`platform.harness_ports`."""
+    from integrations.harness_adapters import register_harness_adapters as register_integrations
+    from tools.harness_adapters import register_harness_adapters as register_tools
+
+    register_integrations()
+    register_tools()
+
+
 def install_product_adapters() -> None:
     """Wire product adapters into observability and integration ports.
 
@@ -22,11 +31,12 @@ def install_product_adapters() -> None:
     - render_investigation_header: no-op default → Rich panel
     - progress tracker: Noop default → Rich-backed CLI singleton (lazy)
     - remote integrations fetcher: empty default → Tracer Cloud adapter
+    - harness ports: catalog/store, tool registry, investigation tools, GitHub scope
     """
-    from integrations.port import set_remote_integrations_fetcher
     from integrations.tracer.integrations_adapter import (
         fetch_tracer_remote_integrations,
     )
+    from platform.harness_ports import set_remote_integrations_fetcher
     from platform.observability.debug import set_debug_printer
     from platform.observability.display import (
         set_investigation_footer_renderer,
@@ -43,7 +53,6 @@ def install_product_adapters() -> None:
     set_debug_printer(debug_print)
     set_investigation_header_renderer(render_investigation_header)
     set_investigation_footer_renderer(render_completed_investigation_footer)
-    # Lazy: first core ``get_progress_tracker()`` call constructs the CLI
-    # tracker after REPL boot so ``_repl_progress_active()`` is accurate.
     set_progress_tracker_factory(get_tracker)
     set_remote_integrations_fetcher(fetch_tracer_remote_integrations)
+    install_harness_ports()

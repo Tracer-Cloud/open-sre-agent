@@ -8,6 +8,7 @@ from rich.markup import escape
 from config.llm_reasoning_effort import display_reasoning_effort
 from core.agent_harness.accounting.token_accounting import format_token_total
 from surfaces.interactive_shell.command_registry.types import SlashCommand
+from surfaces.interactive_shell.grounding.cli_reference import session_cli_reference
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui import (
     BOLD_BRAND,
@@ -56,6 +57,10 @@ def _cmd_status(session: Session, console: Console, _args: list[str]) -> bool:
     table.add_row("trust mode", "on" if session.trust_mode else "off")
     table.add_row("reasoning effort", display_reasoning_effort(session.reasoning_effort))
     table.add_row("provider", _status_provider_display())
+    table.add_row(
+        "grounding cli cache",
+        session_cli_reference(session).stats().render(),
+    )
     for source in session.grounding.iter_sources():
         table.add_row(f"grounding {source.name} cache", source.stats_fn().render())
     acc = session.accumulated_context

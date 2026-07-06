@@ -7,6 +7,11 @@ Each integration verifier registers itself via :func:`register_verifier`
 the registry instead of importing every verifier by name. Adding a new
 verifier becomes a single new ``integrations/<name>/verifier.py`` file with one
 registration call — the loader auto-discovers it.
+
+This package is shared verification infrastructure, not a vendor integration
+package. Vendor-local verifier modules import and register through this API,
+which is why ``integrations._verifiers_loader`` intentionally skips scanning
+``integrations.verification`` as an integration package.
 """
 
 from __future__ import annotations

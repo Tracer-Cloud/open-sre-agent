@@ -10,21 +10,64 @@ and the display/record strings).
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Literal, Protocol, runtime_checkable
 
 from rich.console import Console
 from rich.markup import escape
 
+from core.agent_harness.session import Session
 from platform.common.task_types import TaskRecord
-from surfaces.interactive_shell.runtime import Session
-from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
-from surfaces.interactive_shell.ui.foreground_investigation import run_foreground_investigation
-from tools.interactive_shell.shared.execution_policy import plan_foreground_tool
+from tools.interactive_shell.shared.execution_policy import (
+    ExecutionPolicyResult,
+    plan_foreground_tool,
+)
+
+ForegroundInvestigationStatus = Literal["completed", "failed", "cancelled"]
+
+
+@dataclass(frozen=True)
+class ForegroundInvestigationResult:
+    """Minimal foreground investigation outcome for launch gating."""
+
+    status: ForegroundInvestigationStatus
+
+
+@runtime_checkable
+class InvestigationLaunchPorts(Protocol):
+    """Surface-specific hooks for gating and foreground investigation UX."""
+
+    def execution_allowed(
+        self,
+        *,
+        policy: ExecutionPolicyResult,
+        session: Session,
+        console: Console,
+        action_summary: str,
+        confirm_fn: Callable[[str], str] | None,
+        is_tty: bool | None,
+        action_already_listed: bool,
+    ) -> bool:
+        raise NotImplementedError
+
+    def run_foreground_investigation(
+        self,
+        *,
+        session: Session,
+        console: Console,
+        task_command: str,
+        run: Callable[[TaskRecord], dict[str, object]],
+        exception_context: str,
+        target: str,
+    ) -> ForegroundInvestigationResult:
+        raise NotImplementedError
 
 
 def launch_investigation(
     *,
     session: Session,
     console: Console,
+    ports: InvestigationLaunchPorts,
     tool_type: str,
     action_summary: str,
     announce_label: str,
@@ -43,8 +86,8 @@ def launch_investigation(
     Every outcome is recorded on the ``alert`` channel keyed by ``record_value``.
     """
     plan = plan_foreground_tool(tool_type, "investigation_launch")
-    if not execution_allowed(
-        plan.policy,
+    if not ports.execution_allowed(
+        policy=plan.policy,
         session=session,
         console=console,
         action_summary=action_summary,
@@ -63,7 +106,7 @@ def launch_investigation(
         return
 
     if (
-        run_foreground_investigation(
+        ports.run_foreground_investigation(
             session=session,
             console=console,
             task_command=foreground_task_command,
@@ -79,4 +122,9 @@ def launch_investigation(
     session.record("alert", record_value)
 
 
-__all__ = ["launch_investigation"]
+__all__ = [
+    "ForegroundInvestigationResult",
+    "InvestigationLaunchPorts",
+    "Session",
+    "launch_investigation",
+]

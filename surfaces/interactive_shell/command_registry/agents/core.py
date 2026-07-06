@@ -32,20 +32,20 @@ from surfaces.interactive_shell.ui import (
     render_agents_table,
     repl_table,
 )
-from tools.fleet_monitoring.bus import BusMessage, subscribe
-from tools.fleet_monitoring.config import (
+from tools.system.fleet_monitoring.bus import BusMessage, subscribe
+from tools.system.fleet_monitoring.config import (
     agents_config_path,
     load_agents_config,
     set_agent_budget,
 )
-from tools.fleet_monitoring.conflicts import (
+from tools.system.fleet_monitoring.conflicts import (
     DEFAULT_WINDOW_SECONDS,
     WriteEvent,
     detect_conflicts,
 )
-from tools.fleet_monitoring.coordination import BranchClaims
-from tools.fleet_monitoring.discovery import registered_and_discovered_agents
-from tools.fleet_monitoring.registry import AgentRegistry
+from tools.system.fleet_monitoring.coordination import BranchClaims
+from tools.system.fleet_monitoring.discovery import registered_and_discovered_agents
+from tools.system.fleet_monitoring.registry import AgentRegistry
 
 _AGENTS_FIRST_ARGS: tuple[tuple[str, str], ...] = (
     ("budget", "view or edit per-agent hourly budgets"),
@@ -405,6 +405,9 @@ def _cmd_agents_graph(console: Console) -> bool:
 
 
 def _cmd_agents(session: Session, console: Console, args: list[str]) -> bool:
+    # The sampler is lazy: the first /fleet renders a cold snapshot and starts
+    # the background sampler so CPU/token columns warm up on subsequent views.
+    session.ensure_fleet_sampler_started()
     if not args:
         return _cmd_agents_list(console)
 

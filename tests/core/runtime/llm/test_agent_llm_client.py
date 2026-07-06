@@ -201,6 +201,84 @@ def test_anthropic_rate_limit_error_is_retried_then_raises(
     )
 
 
+def test_anthropic_invoke_strips_internal_message_markers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_anthropic(monkeypatch)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+
+    captured: dict[str, Any] = {}
+
+    def capture_create(**kwargs: object) -> object:
+        captured.update(kwargs)
+        return types.SimpleNamespace(
+            content=[types.SimpleNamespace(type="text", text="ok")],
+            usage=types.SimpleNamespace(input_tokens=1, output_tokens=1),
+        )
+
+    client = AnthropicAgentClient(model="claude-sonnet-4-6")
+    client._client = types.SimpleNamespace(messages=types.SimpleNamespace(create=capture_create))
+
+    messages = [
+        {"role": "user", "content": "alert"},
+        {
+            "role": "assistant",
+            "content": [{"type": "tool_use", "id": "seed", "name": "n", "input": {}}],
+            "_opensre_seed": True,
+        },
+    ]
+    client.invoke(messages=messages)
+
+    api_messages = captured["messages"]
+    assert api_messages[1] == {
+        "role": "assistant",
+        "content": [{"type": "tool_use", "id": "seed", "name": "n", "input": {}}],
+    }
+    assert messages[1]["_opensre_seed"] is True
+
+
+def test_openai_agent_client_invoke_strips_internal_message_markers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_openai(monkeypatch)
+
+    captured: dict[str, Any] = {}
+
+    def capture_create(**kwargs: object) -> object:
+        captured.update(kwargs)
+        return _make_fake_openai_response(content="ok")
+
+    client = OpenAIAgentClient.__new__(OpenAIAgentClient)
+    client._client = types.SimpleNamespace(
+        chat=types.SimpleNamespace(completions=types.SimpleNamespace(create=capture_create))
+    )
+    client._model = "gpt-4o"
+    client._max_tokens = 1024
+
+    messages = [
+        {"role": "user", "content": "alert"},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {"id": "seed", "type": "function", "function": {"name": "n", "arguments": "{}"}},
+            ],
+            "_opensre_seed": True,
+        },
+    ]
+    client.invoke(messages=messages)
+
+    api_messages = captured["messages"]
+    assert api_messages[1] == {
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [
+            {"id": "seed", "type": "function", "function": {"name": "n", "arguments": "{}"}},
+        ],
+    }
+    assert messages[1]["_opensre_seed"] is True
+
+
 def test_anthropic_credit_balance_too_low_raises_LLMCreditExhaustedError(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -711,6 +789,57 @@ def test_openai_permission_denied_error_is_not_retried(
         client.invoke(messages=[{"role": "user", "content": "hi"}])
 
     assert call_count == 1, "403 should not retry"
+
+
+def test_openai_agent_client_reports_configured_provider_name_on_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Errors from an OpenAI-compatible provider (e.g. DeepSeek) must be
+    reported under that provider's name, not a hardcoded "OpenAI" prefix —
+    see GH issue #3753."""
+    fake_openai = _install_fake_openai(monkeypatch)
+
+    def raise_insufficient_balance(**_: object) -> object:
+        raise fake_openai.BadRequestError(
+            "Error code: 402 - {'error': {'message': 'Insufficient Balance'}}"
+        )
+
+    client = OpenAIAgentClient.__new__(OpenAIAgentClient)
+    client._client = types.SimpleNamespace(
+        chat=types.SimpleNamespace(
+            completions=types.SimpleNamespace(create=raise_insufficient_balance)
+        )
+    )
+    client._model = "deepseek-v4-pro"
+    client._max_tokens = 512
+    client._api_key_env = "DEEPSEEK_API_KEY"
+
+    with pytest.raises(RuntimeError, match="Deepseek request rejected"):
+        client.invoke(messages=[{"role": "user", "content": "hi"}])
+
+
+@pytest.mark.parametrize(
+    ("api_key_env", "expected_label"),
+    [
+        ("OPENAI_API_KEY", "OpenAI"),
+        ("OPENROUTER_API_KEY", "OpenRouter"),
+        ("MINIMAX_API_KEY", "MiniMax"),
+        ("GEMINI_API_KEY", "Gemini"),
+        ("GROQ_API_KEY", "Groq"),
+        ("NVIDIA_API_KEY", "Nvidia"),
+    ],
+)
+def test_openai_agent_client_provider_label_preserves_brand_casing(
+    api_key_env: str, expected_label: str
+) -> None:
+    """.title() mangles brand names with an internal capital letter (e.g.
+    "OpenRouter" -> "Openrouter", "MiniMax" -> "Minimax"). Providers this
+    class is actually constructed with (see
+    core/llm/openai_compat_providers.py) must keep their canonical casing."""
+    client = OpenAIAgentClient.__new__(OpenAIAgentClient)
+    client._api_key_env = api_key_env
+
+    assert client._provider_label == expected_label
 
 
 def test_sdk_type_error_for_missing_api_key_fails_fast(
@@ -1475,3 +1604,58 @@ def test_anthropic_unexpected_response_shape_raises_runtime_error(
 
     with pytest.raises(RuntimeError, match="unexpected response"):
         client.invoke(messages=[{"role": "user", "content": "hello"}])
+
+
+def test_anthropic_agent_client_emits_provider_usage(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Successful agent invokes must report provider token usage via the usage hook
+    so investigation-turn telemetry can carry real token counts (issue #3698)."""
+    from core.llm.usage import set_usage_hook
+
+    _install_fake_anthropic(monkeypatch)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    response = types.SimpleNamespace(
+        content=[types.SimpleNamespace(type="text", text="hi there")],
+        stop_reason="end_turn",
+        usage=types.SimpleNamespace(input_tokens=123, output_tokens=45),
+    )
+    client = AnthropicAgentClient(model="claude-sonnet-4-6")
+    client._client = types.SimpleNamespace(
+        messages=types.SimpleNamespace(create=lambda **_: response)
+    )
+
+    usage: list[tuple[str, int, int]] = []
+    set_usage_hook(
+        lambda model, tokens_in, tokens_out: usage.append((model, tokens_in, tokens_out))
+    )
+    try:
+        result = client.invoke(messages=[{"role": "user", "content": "hi"}])
+    finally:
+        set_usage_hook(None)
+
+    assert result.content == "hi there"
+    assert usage == [("claude-sonnet-4-6", 123, 45)]
+
+
+def test_bedrock_converse_emits_provider_usage(monkeypatch: pytest.MonkeyPatch) -> None:
+    from core.llm.usage import set_usage_hook
+
+    monkeypatch.setenv("AWS_REGION", "us-east-1")
+    response = _make_converse_response(text="ok")
+    response["usage"] = {"inputTokens": 200, "outputTokens": 30}
+    _stub_boto3_converse(monkeypatch, converse_response=response)
+
+    from core.llm.agent_llm_client import BedrockConverseAgentClient
+
+    usage: list[tuple[str, int, int]] = []
+    set_usage_hook(
+        lambda model, tokens_in, tokens_out: usage.append((model, tokens_in, tokens_out))
+    )
+    try:
+        result = BedrockConverseAgentClient(model=_MISTRAL_MODEL).invoke(
+            messages=[{"role": "user", "content": [{"text": "hi"}]}]
+        )
+    finally:
+        set_usage_hook(None)
+
+    assert result.content == "ok"
+    assert usage == [(_MISTRAL_MODEL, 200, 30)]

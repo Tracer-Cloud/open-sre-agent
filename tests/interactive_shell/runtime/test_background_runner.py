@@ -46,7 +46,7 @@ def test_start_background_template_investigation_assigns_fresh_investigation_id(
         return {"root_cause": "done"}
 
     monkeypatch.setattr(
-        "surfaces.cli.investigation.run_sample_alert_for_session_background",
+        "surfaces.interactive_shell.runtime.investigation_adapter.run_sample_alert_for_session_background",
         _fake_run,
     )
     monkeypatch.setattr(

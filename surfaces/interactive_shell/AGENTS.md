@@ -131,7 +131,7 @@ owning area rather than adding more logic to the caller.
   for reintroducing intent heuristics that compete with the action agent.
   - **Sanctioned exception:** input the user types as a literal `/slash` command
     is dispatched deterministically (a static `slash_invoke` call in
-    `core/agent_harness/agents/action_agent.py`), so slash commands keep working when the
+    `core/agent_harness/turns/action_driver.py`), so slash commands keep working when the
     action-agent LLM is unavailable. This is an explicit-command bypass, not
     intent inference — it fires only when the message *is* a `/command`, and
     free-form text is still LLM-selected. See

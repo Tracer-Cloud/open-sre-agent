@@ -6,8 +6,8 @@ from typing import Any
 
 from core.tool_framework.tool_decorator import tool
 from integrations.bitbucket import list_commits
+from integrations.bitbucket.availability import bitbucket_available_or_backend
 from integrations.bitbucket.tools.bitbucket_search_code_tool import (
-    _bb_available,
     _bb_creds,
     _resolve_config,
 )
@@ -25,7 +25,7 @@ def _list_bitbucket_commits_extract_params(sources: dict[str, dict]) -> dict[str
 
 def _list_bitbucket_commits_available(sources: dict[str, dict]) -> bool:
     bb = sources.get("bitbucket", {})
-    return bool(_bb_available(sources) and bb.get("repo_slug", bb.get("repo")))
+    return bool(bitbucket_available_or_backend(sources) and bb.get("repo_slug", bb.get("repo")))
 
 
 @tool(

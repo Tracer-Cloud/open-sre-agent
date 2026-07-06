@@ -637,7 +637,7 @@ class TestTimingFooter:
 
 class TestRenderResponseHeader:
     """``render_response_header`` is the bullet-row marker shared with
-    ``shell_turn_execution.run_action_tool_turn`` — three call sites collapsed
+    ``action_turn.run_action_tool_turn`` — three call sites collapsed
     to one helper, so we lock in the visible output here.
     """
 

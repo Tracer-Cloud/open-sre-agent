@@ -7,7 +7,7 @@ from click.testing import CliRunner
 
 from surfaces.cli.__main__ import cli
 from surfaces.cli.commands.watchdog import watchdog_command
-from tools.watch_dog.config import WatchdogConfig
+from tools.system.watch_dog.config import WatchdogConfig
 
 
 def test_watchdog_help_lists_expected_flags() -> None:

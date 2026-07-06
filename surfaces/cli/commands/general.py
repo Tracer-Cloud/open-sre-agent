@@ -174,8 +174,8 @@ def investigate_command(
 
     from surfaces.cli import write_json
     from surfaces.cli.investigation import run_investigation_cli, run_investigation_cli_streaming
-    from surfaces.cli.investigation.alert_templates import build_alert_template
     from surfaces.cli.investigation.payload import load_payload
+    from tools.investigation.alert_templates import build_alert_template
 
     try:
         if print_template:

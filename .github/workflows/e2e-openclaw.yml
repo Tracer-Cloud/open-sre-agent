@@ -28,7 +28,7 @@ on:
       - "tests/utils/alert_factory/**"
       - ".github/workflows/e2e-openclaw.yml"
       - "docs/openclaw.mdx"
-      - ".nvmrc"
+      - ".tool-versions"
   push:
     branches: [main]
     paths:
@@ -38,7 +38,7 @@ on:
       - "tests/utils/alert_factory/**"
       - ".github/workflows/e2e-openclaw.yml"
       - "docs/openclaw.mdx"
-      - ".nvmrc"
+      - ".tool-versions"
   schedule:
     - cron: "0 6 * * *"
   workflow_dispatch:
@@ -78,16 +78,16 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Set up Node (OpenClaw requires >=22.12; version pinned in .nvmrc)
+      - name: Set up Node (OpenClaw requires >=22.12; version pinned in .tool-versions)
         uses: actions/setup-node@v4
         with:
-          node-version-file: ".nvmrc"
+          node-version-file: ".tool-versions"
 
       - name: Cache npm downloads
         uses: actions/cache@v4
         with:
           path: ~/.npm
-          key: ${{ runner.os }}-openclaw-npm-${{ hashFiles('.nvmrc') }}
+          key: ${{ runner.os }}-openclaw-npm-${{ hashFiles('.tool-versions') }}
           restore-keys: |
             ${{ runner.os }}-openclaw-npm-
 

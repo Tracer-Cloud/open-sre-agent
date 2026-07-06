@@ -104,9 +104,14 @@ def _save_identity_policy(
         )
 
 
-@click.group("messaging")
-def messaging() -> None:
+@click.group("messaging", invoke_without_command=True)
+@click.pass_context
+def messaging(ctx: click.Context) -> None:
     """Messaging security: DM pairing and identity management."""
+    # No subcommand: show help and exit 0 (a bare group is a help request here,
+    # not an error) instead of Click's default missing-command exit code 2.
+    if ctx.invoked_subcommand is None:
+        click.echo(ctx.get_help())
 
 
 @messaging.command("pair")
@@ -143,7 +148,14 @@ def pair_command(platform: str) -> None:
         _console.print(f"[yellow]Note: inbound messaging has been enabled for {platform}.[/yellow]")
     _console.print(f"\n[bold green]Pairing code generated for {platform}:[/bold green]")
     _console.print(f"\n  [bold yellow]{code}[/bold yellow]\n")
-    _console.print(f"Send this to the bot via DM: [dim]/pair {code}[/dim]")
+    _console.print(
+        f"Next: open [bold]{platform}[/bold] (not this shell), DM your bot, and send: "
+        f"[dim]/pair {code}[/dim]"
+    )
+    _console.print(
+        f"[dim]The {platform} gateway must be running to receive it "
+        f"(e.g. `opensre gateway {platform}`).[/dim]"
+    )
     _console.print("[dim]The code is single-use and will expire in 15 minutes.[/dim]\n")
 
 

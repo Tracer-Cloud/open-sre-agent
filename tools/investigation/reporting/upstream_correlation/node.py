@@ -3,10 +3,10 @@ from __future__ import annotations
 import logging
 from typing import Any, Protocol, cast
 
-from core.context.state import InvestigationState
 from core.domain.types.upstream import (
     UpstreamEvidenceBundle,
 )
+from core.state import InvestigationState
 from platform.observability import get_progress_tracker as get_tracker
 from platform.observability.tracing import traceable
 from tools.investigation.reporting.upstream_correlation.providers import (

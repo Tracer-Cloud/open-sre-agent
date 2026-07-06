@@ -51,7 +51,7 @@ class ReportDeliveryAdapter(Protocol):
         """Deliver the rendered report to this vendor's channel.
 
         ``state`` is the raw investigation state (typed as
-        :class:`core.context.state.InvestigationState` at the call site).
+        :class:`core.state.InvestigationState` at the call site).
         ``messages`` carries the pre-rendered per-channel payloads
         (``slack_text``, ``telegram_html`` …). ``blocks`` is the shared list of
         Slack Block Kit blocks that vendors may reuse for interactive replies.

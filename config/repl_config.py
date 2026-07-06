@@ -237,3 +237,33 @@ def read_prompt_log_settings() -> dict[str, Any]:
     interactive = _read_config_file()
     raw = interactive.get("prompt_log", {})
     return raw if isinstance(raw, dict) else {}
+
+
+def read_github_login_deferred() -> bool:
+    """Return True when the user skipped the first-launch GitHub sign-in prompt."""
+    interactive = _read_config_file()
+    return ReplConfig._coerce_bool(interactive.get("github_login_deferred"), default=False)
+
+
+def write_github_login_deferred(deferred: bool) -> None:
+    """Persist or clear the first-launch GitHub sign-in deferral flag."""
+    try:
+        import yaml  # type: ignore[import-untyped]
+
+        from config.constants import OPENSRE_HOME_DIR
+
+        config_path = OPENSRE_HOME_DIR / "config.yml"
+        data: dict[str, Any] = {}
+        if config_path.exists():
+            loaded = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                data = loaded
+        interactive = data.get("interactive")
+        if not isinstance(interactive, dict):
+            interactive = {}
+        interactive["github_login_deferred"] = deferred
+        data["interactive"] = interactive
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    except Exception:
+        log.debug("Could not persist github_login_deferred", exc_info=True)

@@ -8,6 +8,10 @@ Adding a new verifier is one new file in the owning integration package. No
 edits to a central import list are required — this loader walks the integration
 tree.
 
+``integrations.verification`` is intentionally not scanned as an integration
+package. It is the shared registry/decorator API imported by vendor-local
+verifier modules.
+
 Public surface: :func:`register_all_verifiers`. Callers invoke it once
 during startup (``integrations.verify`` and the test suite both do).
 Re-invocation is safe: the registry's ``register_verifier`` decorator
@@ -22,6 +26,8 @@ import pkgutil
 import integrations as _integrations_pkg
 
 _VERIFIER_SUBMODULE = "verifier"
+# ``integrations.verification`` is shared verifier infrastructure, not a vendor
+# integration package with its own ``verifier.py`` module to discover.
 _SKIP_INTEGRATION_PACKAGES = frozenset({"verification", "__pycache__"})
 
 

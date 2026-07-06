@@ -2,8 +2,8 @@
 
 This is the safety net for the typed/DRY/functional refactor of
 ``context``: the action-agent system prompt, the
-action user message, and the conversational ``build_cli_agent_prompt`` output
-are heavily relied upon by the locked live turn-scenario suite and MUST stay
+action user message, and the conversational ``build_cli_agent_prompt_from_provider``
+output are heavily relied upon by the locked live turn-scenario suite and MUST stay
 byte-for-byte identical across the refactor.
 
 The test renders every prompt across a fixed matrix of inputs and compares the
@@ -28,12 +28,17 @@ from typing import Any
 
 import pytest
 
-from core.agent_harness.models.turn_context import TurnContext
+from core.agent_harness.grounding.investigation_flow_reference import (
+    build_investigation_flow_reference_text,
+)
+from core.agent_harness.models.turn_snapshot import TurnSnapshot
 from core.agent_harness.prompts import (
     build_action_system_prompt,
     build_action_user_message,
-    build_cli_agent_prompt,
+    build_cli_agent_prompt_from_provider,
+    build_environment_block,
 )
+from core.agent_harness.session import SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
 
 _SNAPSHOT_PATH = Path(__file__).with_name("prompt_characterization_snapshot.json")
 
@@ -41,24 +46,37 @@ _CLI_REFERENCE_TEXT = "=== opensre --help ===\nUsage: opensre [OPTIONS] COMMAND 
 _AGENTS_MD_TEXT = "=== AGENTS.md (root) ===\nrepo map body\n"
 
 
-class _StubReference:
-    """Grounding reference stub returning fixed text regardless of arguments."""
+class _StubPromptContextProvider:
+    """Prompt-context stub with deterministic grounding text."""
 
-    def __init__(self, text: str) -> None:
-        self._text = text
+    def __init__(
+        self,
+        *,
+        configured_integrations: tuple[str, ...] = (),
+        configured_integrations_known: bool = False,
+    ) -> None:
+        self._configured_integrations = configured_integrations
+        self._configured_integrations_known = configured_integrations_known
 
-    def build_text(self, *_args: Any, **_kwargs: Any) -> str:
-        return self._text
+    def cli_reference(self) -> str:
+        return _CLI_REFERENCE_TEXT
 
+    def agents_md(self) -> str:
+        return _AGENTS_MD_TEXT
 
-class _StubGrounding:
-    """Stand-in for ``GroundingContext`` with deterministic reference text."""
+    def investigation_flow(self) -> str:
+        return build_investigation_flow_reference_text()
 
-    def __init__(self) -> None:
-        self.cli = _StubReference(_CLI_REFERENCE_TEXT)
-        self.agents_md = _StubReference(_AGENTS_MD_TEXT)
+    def environment_block(self) -> str:
+        return build_environment_block(
+            integrations=self._configured_integrations,
+            known=self._configured_integrations_known,
+        )
 
-    def log_cache_diagnostics(self, reason: str) -> None:  # noqa: ARG002 - stub
+    def suggested_synthetic_prompt(self) -> str:
+        return SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
+
+    def log_diagnostics(self, reason: str) -> None:  # noqa: ARG002 - stub
         return None
 
 
@@ -70,8 +88,8 @@ def _agent_ctx(
     configured_integrations_known: bool = False,
     last_state: dict[str, Any] | None = None,
     last_synthetic_observation_path: str | None = None,
-) -> TurnContext:
-    return TurnContext(
+) -> TurnSnapshot:
+    return TurnSnapshot(
         text=text,
         conversation_messages=conversation_messages,
         configured_integrations=configured_integrations,
@@ -82,26 +100,12 @@ def _agent_ctx(
     )
 
 
-class _StubSession:
-    """Minimal shell session shape needed by the prompt adapter."""
-
-    def __init__(
-        self,
-        *,
-        configured_integrations: tuple[str, ...] = (),
-        configured_integrations_known: bool = False,
-    ) -> None:
-        self.configured_integrations = configured_integrations
-        self.configured_integrations_known = configured_integrations_known
-        self.grounding = _StubGrounding()
-
-
-def _session(
+def _prompts(
     *,
     configured_integrations: tuple[str, ...] = (),
     configured_integrations_known: bool = False,
-) -> _StubSession:
-    return _StubSession(
+) -> _StubPromptContextProvider:
+    return _StubPromptContextProvider(
         configured_integrations=configured_integrations,
         configured_integrations_known=configured_integrations_known,
     )
@@ -138,31 +142,31 @@ def _build_cases(tmp_path: Path) -> dict[str, str]:
     )
 
     # --- cli agent prompt variants ---
-    cases["cli_agent_minimal"] = build_cli_agent_prompt(
+    cases["cli_agent_minimal"] = build_cli_agent_prompt_from_provider(
         message="how do I configure datadog?",
-        session=_session(),
+        prompts=_prompts(),
         tool_observation=None,
         tool_observation_on_screen=True,
-        turn_ctx=_agent_ctx(text="how do I configure datadog?"),
+        turn_snapshot=_agent_ctx(text="how do I configure datadog?"),
     )
 
-    cases["cli_agent_no_integrations_guard"] = build_cli_agent_prompt(
+    cases["cli_agent_no_integrations_guard"] = build_cli_agent_prompt_from_provider(
         message="set up sentry",
-        session=_session(configured_integrations_known=True),
+        prompts=_prompts(configured_integrations_known=True),
         tool_observation=None,
         tool_observation_on_screen=True,
-        turn_ctx=_agent_ctx(text="set up sentry", configured_integrations_known=True),
+        turn_snapshot=_agent_ctx(text="set up sentry", configured_integrations_known=True),
     )
 
-    cases["cli_agent_integrations_listed_with_prior_state"] = build_cli_agent_prompt(
+    cases["cli_agent_integrations_listed_with_prior_state"] = build_cli_agent_prompt_from_provider(
         message="why did checkout fail?",
-        session=_session(
+        prompts=_prompts(
             configured_integrations=("datadog", "github"),
             configured_integrations_known=True,
         ),
         tool_observation=None,
         tool_observation_on_screen=True,
-        turn_ctx=_agent_ctx(
+        turn_snapshot=_agent_ctx(
             text="why did checkout fail?",
             configured_integrations=("datadog", "github"),
             configured_integrations_known=True,
@@ -177,30 +181,30 @@ def _build_cases(tmp_path: Path) -> dict[str, str]:
         ),
     )
 
-    cases["cli_agent_observation_on_screen"] = build_cli_agent_prompt(
+    cases["cli_agent_observation_on_screen"] = build_cli_agent_prompt_from_provider(
         message="is datadog configured?",
-        session=_session(
+        prompts=_prompts(
             configured_integrations=("datadog",),
             configured_integrations_known=True,
         ),
         tool_observation="datadog: configured (connection_verified=true)",
         tool_observation_on_screen=True,
-        turn_ctx=_agent_ctx(
+        turn_snapshot=_agent_ctx(
             text="is datadog configured?",
             configured_integrations=("datadog",),
             configured_integrations_known=True,
         ),
     )
 
-    cases["cli_agent_observation_off_screen"] = build_cli_agent_prompt(
+    cases["cli_agent_observation_off_screen"] = build_cli_agent_prompt_from_provider(
         message="any open sentry issues for checkout?",
-        session=_session(
+        prompts=_prompts(
             configured_integrations=("sentry",),
             configured_integrations_known=True,
         ),
         tool_observation="sentry issues: [#1 NPE in checkout]",
         tool_observation_on_screen=False,
-        turn_ctx=_agent_ctx(
+        turn_snapshot=_agent_ctx(
             text="any open sentry issues for checkout?",
             configured_integrations=("sentry",),
             configured_integrations_known=True,
@@ -212,12 +216,12 @@ def _build_cases(tmp_path: Path) -> dict[str, str]:
         json.dumps({"scenario": "005-failover", "passed": False, "score": 0.4}),
         encoding="utf-8",
     )
-    synthetic_prompt = build_cli_agent_prompt(
+    synthetic_prompt = build_cli_agent_prompt_from_provider(
         message="why did it fail?",
-        session=_session(),
+        prompts=_prompts(),
         tool_observation=None,
         tool_observation_on_screen=True,
-        turn_ctx=_agent_ctx(
+        turn_snapshot=_agent_ctx(
             text="why did it fail?",
             last_synthetic_observation_path=str(obs_path),
         ),

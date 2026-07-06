@@ -27,12 +27,29 @@ def resolve_telegram_credentials(task_params: dict[str, str]) -> dict[str, str]:
 
 
 def resolve_slack_credentials(task_params: dict[str, str]) -> dict[str, str]:
-    """Resolve Slack access_token from task params, integration store, or env.
+    """Resolve Slack credentials from task params, integration store, or env.
 
     Priority: task.params > integration store > environment variable.
     """
+    webhook_url = task_params.get("webhook_url", "")
+    if webhook_url:
+        return {"webhook_url": webhook_url}
+
+    access_token = task_params.get("access_token", "")
+    if access_token:
+        return {"access_token": access_token}
+
+    webhook = _resolve_credentials(
+        {},
+        service="slack",
+        credential_key="webhook_url",
+        env_vars=("SLACK_WEBHOOK_URL",),
+    )
+    if webhook:
+        return webhook
+
     return _resolve_credentials(
-        task_params,
+        {},
         service="slack",
         credential_key="access_token",
         env_vars=("SLACK_BOT_TOKEN", "SLACK_ACCESS_TOKEN"),

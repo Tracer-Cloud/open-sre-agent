@@ -77,7 +77,7 @@ def mock_agent_state(overrides: dict | None = None) -> dict[str, Any]:
             "github_mode": "streamable-http",
             "github_token": "ghp_test",
         },
-        "elasticsearch": {
+        "opensearch": {
             "connection_verified": True,
             "url": "http://localhost:9200",
             "api_key": None,

@@ -6,7 +6,6 @@ from core.agent_harness.grounding.agents_md_reference import (
     AgentsMdFile,
     AgentsMdReference,
 )
-from core.agent_harness.grounding.cli_reference import CliReference
 from core.agent_harness.grounding.context import GroundingContext
 from core.agent_harness.grounding.docs_reference import DocPage, DocsReference
 from core.agent_harness.grounding.investigation_flow_reference import (
@@ -16,7 +15,6 @@ from core.agent_harness.grounding.investigation_flow_reference import (
 __all__ = [
     "AgentsMdFile",
     "AgentsMdReference",
-    "CliReference",
     "DocPage",
     "DocsReference",
     "GroundingContext",

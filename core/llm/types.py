@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import dataclass, field
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Protocol, TypeAlias, runtime_checkable
+
+from core.types import RuntimeTool
+
+ResolvedIntegrations: TypeAlias = dict[str, Any]  # noqa: UP040
 
 
 @dataclass(frozen=True)
@@ -62,7 +66,9 @@ class AgentLLMClient(Protocol):
     def model_id(self) -> str | None:
         """The provider model identifier, used for context-budget sizing (may be None)."""
 
-    def tool_schemas(self, tools: list[Any]) -> list[dict[str, Any]]:
+    def tool_schemas[RuntimeToolT: RuntimeTool](
+        self, tools: list[RuntimeToolT]
+    ) -> list[dict[str, Any]]:
         """Translate runtime tools into the provider's tool-schema payloads."""
 
     def invoke(
@@ -87,6 +93,7 @@ __all__ = [
     "AgentLLMClient",
     "AgentLLMResponse",
     "LLMResponse",
+    "ResolvedIntegrations",
     "StreamingReasoningClient",
     "ToolCall",
 ]
