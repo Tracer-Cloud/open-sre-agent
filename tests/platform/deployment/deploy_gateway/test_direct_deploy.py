@@ -206,6 +206,46 @@ def test_destroy_direct_handles_missing_outputs(
     assert isinstance(results["failed"], list)
 
 
+def test_cleanup_existing_cleans_iam_when_no_outputs_file(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """_cleanup_existing() must delete the IAM profile/role even when no outputs file exists.
+
+    Regression: tagged instances were terminated but the outputs file was absent,
+    so destroy_direct() was skipped and IAM resources were silently orphaned.
+    """
+    monkeypatch.setattr(direct_module, "_OUTPUTS_DIR", tmp_path)
+    # No outputs file — simulates a lost or never-written outputs file.
+
+    terminated: list[str] = []
+    deleted_profiles: list[str] = []
+
+    monkeypatch.setattr(
+        direct_module,
+        "find_stack_instance_ids",
+        lambda _stack, _region: ["i-orphan01"],
+    )
+    monkeypatch.setattr(
+        direct_module,
+        "terminate_instance",
+        lambda instance_id, _region: terminated.append(instance_id),
+    )
+    monkeypatch.setattr(
+        direct_module,
+        "delete_instance_profile",
+        lambda profile, _role, _region: deleted_profiles.append(profile),
+    )
+
+    ran = direct_module._cleanup_existing(region="us-east-1")
+
+    assert ran is True
+    assert "i-orphan01" in terminated
+    # IAM must be cleaned up using derived names, not skipped.
+    stack_name = direct_module._direct_stack_name()
+    assert deleted_profiles == [f"{stack_name}-profile"]
+
+
 def test_stack_name_includes_suffix(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("OPENSRE_STACK_SUFFIX", "joe")
     assert direct_module._direct_stack_name() == "opensre-gateway-direct-joe"

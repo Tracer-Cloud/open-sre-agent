@@ -418,8 +418,11 @@ def _cleanup_existing(*, region: str = DEFAULT_REGION) -> bool:
         print(f"Terminating stack instance {instance_id}...")
         terminate_instance(instance_id, region)
 
-    if has_outputs:
-        destroy_direct(region=region)
+    # Always run destroy_direct so IAM profile/role are cleaned up even when
+    # the outputs file is missing.  destroy_direct() falls back to derived
+    # names ({stack_name}-profile / {stack_name}-role) when no outputs file
+    # exists, so orphaned IAM resources are never left behind.
+    destroy_direct(region=region)
 
     print()
     return True
