@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import logging
+import warnings
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+logger = logging.getLogger(__name__)
 
 # Maps alert_source values to integration source keys (tool `.source` field).
 # Used for broad prioritization/relevance, not automatic pre-seeding.
@@ -51,16 +55,34 @@ ALERT_SOURCE_TO_TOOL_SOURCES: dict[str, tuple[str, ...]] = {
 # Auto-called before the LLM loop starts. Keep this narrower than
 # ALERT_SOURCE_TO_TOOL_SOURCES for expensive or context-dependent tools.
 def _load_seed_sources() -> dict[str, tuple[str, ...]]:
+    # parents[3]: core/domain/alerts/alert_source.py -> core/domain/alerts -> core/domain -> core -> repo root
     seed_yaml = Path(__file__).resolve().parents[3] / "config" / "alert_seed_sources.yaml"
-    if seed_yaml.is_file():
+    if not seed_yaml.is_file():
+        warnings.warn(
+            f"alert_seed_sources.yaml not found at {seed_yaml}; pre-seeding disabled for all alert sources.",
+            stacklevel=2,
+        )
+        return {}
+    try:
         raw = yaml.safe_load(seed_yaml.read_text(encoding="utf-8"))
-        if isinstance(raw, dict):
-            return {
-                str(k): tuple(str(v) for v in val if isinstance(v, str))
-                for k, val in raw.items()
-                if isinstance(val, list)
-            }
-    return {}
+    except (yaml.YAMLError, OSError) as exc:
+        logger.warning(
+            "Failed to load alert_seed_sources.yaml from %s: %s; pre-seeding disabled.",
+            seed_yaml,
+            exc,
+        )
+        return {}
+    if not isinstance(raw, dict):
+        warnings.warn(
+            f"alert_seed_sources.yaml at {seed_yaml} did not parse as a mapping; pre-seeding disabled.",
+            stacklevel=2,
+        )
+        return {}
+    return {
+        str(k): tuple(str(v) for v in val if isinstance(v, str))
+        for k, val in raw.items()
+        if isinstance(val, list)
+    }
 
 
 ALERT_SOURCE_TO_SEED_TOOL_SOURCES: dict[str, tuple[str, ...]] = _load_seed_sources()
