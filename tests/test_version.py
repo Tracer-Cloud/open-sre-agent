@@ -6,27 +6,35 @@ from config import version as version_module
 
 
 def _raise_package_not_found(_: str) -> str:
-    raise importlib.metadata.PackageNotFoundError(version_module.PACKAGE_NAME)
+    raise importlib.metadata.PackageNotFoundError("opensre")
 
 
-def test_get_version_falls_back_to_pyproject_when_package_metadata_is_missing(
+def test_get_opensre_version_falls_back_to_pyproject_when_package_metadata_is_missing(
     monkeypatch,
     tmp_path,
 ) -> None:
-    pyproject = tmp_path / "pyproject.toml"
-    pyproject.write_text('[project]\nversion = "9.9.9"\n', encoding="utf-8")
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    version_file = config_dir / "version.py"
+    version_file.touch()
+    (tmp_path / "pyproject.toml").write_text('[project]\nversion = "9.9.9"\n', encoding="utf-8")
 
     monkeypatch.setattr(version_module.importlib.metadata, "version", _raise_package_not_found)
-    monkeypatch.setattr(version_module, "_PYPROJECT_PATH", pyproject)
+    monkeypatch.setattr(version_module, "__file__", str(version_file))
 
-    assert version_module.get_version() == "9.9.9"
+    assert version_module.get_opensre_version() == "9.9.9"
 
 
-def test_get_version_falls_back_to_default_when_package_metadata_and_pyproject_are_missing(
+def test_get_opensre_version_falls_back_to_dev_default_when_metadata_and_pyproject_missing(
     monkeypatch,
     tmp_path,
 ) -> None:
-    monkeypatch.setattr(version_module.importlib.metadata, "version", _raise_package_not_found)
-    monkeypatch.setattr(version_module, "_PYPROJECT_PATH", tmp_path / "missing.toml")
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    version_file = config_dir / "version.py"
+    version_file.touch()
 
-    assert version_module.get_version() == version_module.DEFAULT_VERSION
+    monkeypatch.setattr(version_module.importlib.metadata, "version", _raise_package_not_found)
+    monkeypatch.setattr(version_module, "__file__", str(version_file))
+
+    assert version_module.get_opensre_version() == "0.1"

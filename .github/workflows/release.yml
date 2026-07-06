@@ -273,6 +273,7 @@ jobs:
           --noconfirm
           --collect-data surfaces.cli
           --collect-data config
+          --copy-metadata opensre
           --collect-data litellm
           --collect-submodules integrations
           --collect-submodules surfaces.interactive_shell

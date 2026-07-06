@@ -6,10 +6,10 @@ from __future__ import annotations
 import argparse
 import os
 import time
-from pathlib import Path
 
 from botocore.exceptions import ClientError
 
+from config.constants.paths import REPO_ROOT
 from platform.deployment.aws import ecr
 from platform.deployment.aws.client import DEFAULT_REGION
 from platform.deployment.aws.config import (
@@ -45,7 +45,6 @@ from platform.deployment.ecr_deploy.stack import (
 )
 
 REGION = DEFAULT_REGION
-REPO_ROOT = Path(__file__).resolve().parents[3]
 DOCKERFILE = REPO_ROOT / "Dockerfile"
 _ABORT_IF_EXISTS_ENV = "OPENSRE_DEPLOY_ABORT_IF_EXISTS"
 _IMAGE_URI_ENV = "OPENSRE_IMAGE_URI"

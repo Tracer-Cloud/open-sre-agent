@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import importlib.util
 import sys
-from pathlib import Path
+
+from config.constants.paths import REPO_ROOT
 
 
 def ensure_project_platform_package() -> None:
@@ -20,8 +21,7 @@ def ensure_project_platform_package() -> None:
     if current is not None and hasattr(current, "__path__"):
         return
 
-    repo_root = Path(__file__).resolve().parent.parent
-    package_dir = repo_root / "platform"
+    package_dir = REPO_ROOT / "platform"
     init_path = package_dir / "__init__.py"
     spec = importlib.util.spec_from_file_location(
         "platform",

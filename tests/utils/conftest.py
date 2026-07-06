@@ -1,13 +1,13 @@
 """Pytest configuration and fixtures for all tests."""
 
 import os
-from pathlib import Path
 
+from config.constants.paths import PROJECT_ROOT
 from config.grafana_cloud import load_env
 
-# Environment loading
-_PROJECT_ROOT = Path(__file__).parent.parent
-_ENV_PATH = _PROJECT_ROOT / ".env"
+# Load repo-root .env (same as tests/conftest.py). This module is imported
+# directly by e2e helpers, so env must be set here — not only via pytest hooks.
+_ENV_PATH = PROJECT_ROOT / ".env"
 
 
 def _load_env() -> None:

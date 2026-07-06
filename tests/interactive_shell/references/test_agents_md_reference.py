@@ -75,7 +75,7 @@ class TestBuildAgentsMdReferenceText:
         monkeypatch: pytest.MonkeyPatch,
         tmp_path: Path,
     ) -> None:
-        monkeypatch.setattr(agents_md_reference, "_REPO_ROOT", tmp_path / "missing")
+        monkeypatch.setattr(agents_md_reference, "REPO_ROOT", tmp_path / "missing")
         assert AgentsMdReference().build_text() == ""
 
     def test_concatenates_each_file_with_labelled_header(
@@ -84,7 +84,7 @@ class TestBuildAgentsMdReferenceText:
         tmp_path: Path,
     ) -> None:
         _seed_agents_md(tmp_path)
-        monkeypatch.setattr(agents_md_reference, "_REPO_ROOT", tmp_path)
+        monkeypatch.setattr(agents_md_reference, "REPO_ROOT", tmp_path)
         text = AgentsMdReference().build_text()
         # Root file must be disambiguated from per-package files.
         assert "=== AGENTS.md (root) ===" in text
@@ -101,7 +101,7 @@ class TestBuildAgentsMdReferenceText:
         tmp_path: Path,
     ) -> None:
         _seed_agents_md(tmp_path)
-        monkeypatch.setattr(agents_md_reference, "_REPO_ROOT", tmp_path)
+        monkeypatch.setattr(agents_md_reference, "REPO_ROOT", tmp_path)
         text = AgentsMdReference().build_text(max_chars=100)
         # Allow a small margin for the truncation marker appended at the cap.
         assert len(text) <= 200

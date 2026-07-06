@@ -5,7 +5,7 @@ from pydantic import BaseModel, ValidationError
 
 from config.config import LLMSettings, get_environment
 from config.platform_bootstrap import ensure_project_platform_package
-from config.version import get_version
+from config.version import get_opensre_version
 
 ensure_project_platform_package()
 
@@ -24,20 +24,16 @@ class HealthResponse(BaseModel):
 app = FastAPI()
 
 
-def _llm_configured() -> bool:
+def get_health_response() -> HealthResponse:
     try:
         LLMSettings.from_env()
+        llm_configured = True
     except ValidationError:
-        return False
-    return True
-
-
-def get_health_response() -> HealthResponse:
-    llm_configured = _llm_configured()
+        llm_configured = False
 
     return HealthResponse(
         ok=llm_configured,
-        version=get_version(),
+        version=get_opensre_version(),
         llm_configured=llm_configured,
         env=get_environment().value,
     )

@@ -13,6 +13,7 @@ from pathlib import Path
 from types import ModuleType
 
 import tools as tools_package
+from config.constants.paths import REPO_ROOT
 from core.tool_framework.base import BaseTool
 from core.tool_framework.registered_tool import REGISTERED_TOOL_ATTR, RegisteredTool, ToolSurface
 from core.tool_framework.skill_guidance import format_tool_skill_guidance, load_tool_skill_guidance
@@ -97,15 +98,15 @@ _SKIP_MODULE_NAMES = {
 }
 _TOOL_MODULES_ATTR = "TOOL_MODULES"
 _MAX_TOOL_SKILL_GUIDANCE_CHARS = 2400
-_TOOLS_PACKAGE_DIR = Path(__file__).resolve().parent
-_REPO_ROOT = _TOOLS_PACKAGE_DIR.parent
 
 
 def _skill_guidance_files() -> tuple[Path, ...]:
     """Return explicit and package-local SKILL.md files attached at registry load."""
 
-    explicit = (_REPO_ROOT / "integrations" / "github" / "tools" / "workflow" / "SKILL.md",)
-    discovered = sorted(_TOOLS_PACKAGE_DIR.glob("system/python_execution_tool/skills/*/SKILL.md"))
+    explicit = (REPO_ROOT / "integrations" / "github" / "tools" / "workflow" / "SKILL.md",)
+    discovered = sorted(
+        (REPO_ROOT / "tools" / "system" / "python_execution_tool" / "skills").glob("*/SKILL.md")
+    )
     return (*explicit, *discovered)
 
 

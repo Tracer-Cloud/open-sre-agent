@@ -1,6 +1,7 @@
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+from config.constants.paths import REPO_ROOT
+
 LEGACY_TOKENS = ("tests/test_case_", "test_case=test_case_", "test_orchestrator")
 
 
