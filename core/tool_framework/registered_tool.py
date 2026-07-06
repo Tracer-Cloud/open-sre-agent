@@ -32,6 +32,12 @@ def _extract_no_params(_sources: dict[str, dict]) -> dict[str, Any]:
     return {}
 
 
+def _normalize_evidence_noop(
+    _output: dict[str, Any], _tool_input: dict[str, Any]
+) -> dict[str, Any]:
+    return {}
+
+
 def _normalize_surfaces(surfaces: Iterable[str] | None) -> tuple[ToolSurface, ...]:
     if surfaces is None:
         return _DEFAULT_SURFACES
@@ -222,6 +228,10 @@ class RegisteredTool:
     origin_module: str = ""
     origin_name: str = ""
     skill_guidance: str = ""
+    normalize_evidence: Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]] = field(
+        default=_normalize_evidence_noop,
+        repr=False,
+    )
 
     def __post_init__(self) -> None:
         metadata = ToolMetadata.model_validate(
@@ -359,6 +369,8 @@ class RegisteredTool:
         approval_expiry_seconds: int | None = None,
         parallel_safe: bool | None = None,
         accepts_runtime_context: bool | None = None,
+        normalize_evidence: Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]]
+        | None = None,
     ) -> RegisteredTool:
         metadata = tool.metadata()
         input_model = cast(type[BaseModel] | None, getattr(tool, "input_model", None))
@@ -439,6 +451,9 @@ class RegisteredTool:
             ),
             origin_module=tool.__class__.__module__,
             origin_name=tool.__class__.__name__,
+            normalize_evidence=normalize_evidence
+            or getattr(tool, "normalize_evidence", None)
+            or _normalize_evidence_noop,
         )
 
     @classmethod
@@ -475,6 +490,8 @@ class RegisteredTool:
         approval_expiry_seconds: int | None = None,
         parallel_safe: bool | None = None,
         accepts_runtime_context: bool | None = None,
+        normalize_evidence: Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]]
+        | None = None,
     ) -> RegisteredTool:
         if source is None:
             raise ValueError("Function tools must declare a source.")
@@ -519,4 +536,5 @@ class RegisteredTool:
             accepts_runtime_context=bool(accepts_runtime_context),
             origin_module=func.__module__,
             origin_name=func.__name__,
+            normalize_evidence=normalize_evidence or _normalize_evidence_noop,
         )

@@ -173,7 +173,7 @@ class ConnectedInvestigationAgent(EventEmitterMixin, ToolFilterMixin):
 
             for tc, output in zip(seed_calls, seed_results):
                 tool_call_cache.store(tool_call_signature(tc), output, loop_iteration=-1)
-                merge_tool_evidence(evidence, tc.name, output, tc.input)
+                merge_tool_evidence(evidence, tc.name, output, tc.input, tools)
                 evidence_entries.append(
                     EvidenceEntry(
                         key=tc.name,
@@ -291,7 +291,7 @@ class ConnectedInvestigationAgent(EventEmitterMixin, ToolFilterMixin):
                 if is_dup:
                     debug_print(f"[{tc.name}] → duplicate call suppressed")
                     continue
-                merge_tool_evidence(evidence, tc.name, output, tc.input)
+                merge_tool_evidence(evidence, tc.name, output, tc.input, tools)
                 evidence_entries.append(
                     EvidenceEntry(
                         key=tc.name,

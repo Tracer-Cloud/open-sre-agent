@@ -1,0 +1,65 @@
+# Auto-called before the LLM loop starts. Keep this narrower than
+# ALERT_SOURCE_TO_TOOL_SOURCES for expensive or context-dependent tools.
+grafana:
+  - grafana
+datadog:
+  - datadog
+cloudwatch:
+  - cloudwatch
+eks:
+  - eks
+alertmanager:
+  - grafana
+  - cloudwatch
+sentry:
+  - sentry
+honeycomb:
+  - honeycomb
+coralogix:
+  - coralogix
+airflow:
+  - airflow
+hermes:
+  - hermes
+kafka:
+  - kafka
+postgresql:
+  - postgresql
+mysql:
+  - mysql
+mariadb:
+  - mariadb
+mongodb:
+  - mongodb
+  - mongodb_atlas
+redis:
+  - redis
+snowflake:
+  - snowflake
+clickhouse:
+  - clickhouse
+dagster:
+  - dagster
+rabbitmq:
+  - rabbitmq
+supabase:
+  - supabase
+opensearch:
+  - opensearch
+openobserve:
+  - openobserve
+betterstack:
+  - betterstack
+azure:
+  - azure
+  - azure_sql
+splunk:
+  - splunk
+signoz:
+  - signoz
+jenkins:
+  - jenkins
+tempo:
+  - tempo
+temporal:
+  - temporal

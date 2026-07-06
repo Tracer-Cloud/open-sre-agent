@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from pathlib import Path
 from typing import Any
+
+import yaml
 
 # Maps alert_source values to integration source keys (tool `.source` field).
 # Used for broad prioritization/relevance, not automatic pre-seeding.
@@ -44,40 +47,23 @@ ALERT_SOURCE_TO_TOOL_SOURCES: dict[str, tuple[str, ...]] = {
     "temporal": ("temporal",),
 }
 
+
 # Auto-called before the LLM loop starts. Keep this narrower than
 # ALERT_SOURCE_TO_TOOL_SOURCES for expensive or context-dependent tools.
-ALERT_SOURCE_TO_SEED_TOOL_SOURCES: dict[str, tuple[str, ...]] = {
-    "grafana": ("grafana",),
-    "datadog": ("datadog",),
-    "cloudwatch": ("cloudwatch",),
-    "eks": ("eks",),
-    "alertmanager": ("grafana", "cloudwatch"),
-    "sentry": ("sentry",),
-    "honeycomb": ("honeycomb",),
-    "coralogix": ("coralogix",),
-    "airflow": ("airflow",),
-    "hermes": ("hermes",),
-    "kafka": ("kafka",),
-    "postgresql": ("postgresql",),
-    "mysql": ("mysql",),
-    "mariadb": ("mariadb",),
-    "mongodb": ("mongodb", "mongodb_atlas"),
-    "redis": ("redis",),
-    "snowflake": ("snowflake",),
-    "clickhouse": ("clickhouse",),
-    "dagster": ("dagster",),
-    "rabbitmq": ("rabbitmq",),
-    "supabase": ("supabase",),
-    "opensearch": ("opensearch",),
-    "openobserve": ("openobserve",),
-    "betterstack": ("betterstack",),
-    "azure": ("azure", "azure_sql"),
-    "splunk": ("splunk",),
-    "signoz": ("signoz",),
-    "jenkins": ("jenkins",),
-    "tempo": ("tempo",),
-    "temporal": ("temporal",),
-}
+def _load_seed_sources() -> dict[str, tuple[str, ...]]:
+    seed_yaml = Path(__file__).resolve().parents[3] / "config" / "alert_seed_sources.yaml"
+    if seed_yaml.is_file():
+        raw = yaml.safe_load(seed_yaml.read_text(encoding="utf-8"))
+        if isinstance(raw, dict):
+            return {
+                str(k): tuple(str(v) for v in val if isinstance(v, str))
+                for k, val in raw.items()
+                if isinstance(val, list)
+            }
+    return {}
+
+
+ALERT_SOURCE_TO_SEED_TOOL_SOURCES: dict[str, tuple[str, ...]] = _load_seed_sources()
 
 # Generic fallback sources: useful, but never primary when incident-specific
 # integrations match.

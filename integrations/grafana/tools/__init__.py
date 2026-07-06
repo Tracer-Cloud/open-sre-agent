@@ -50,6 +50,12 @@ def _normalize_backend_alert_rules(raw: dict[str, Any]) -> list[dict[str, Any]]:
     return rules
 
 
+def _normalize_grafana_alert_rules_evidence(
+    output: dict[str, Any], _tool_input: dict[str, Any]
+) -> dict[str, Any]:
+    return {"grafana_alert_rules": output.get("rules", [])}
+
+
 @tool(
     name="query_grafana_alert_rules",
     display_name="Grafana alerts",
@@ -72,6 +78,7 @@ def _normalize_backend_alert_rules(raw: dict[str, Any]) -> list[dict[str, Any]]:
     },
     is_available=_query_grafana_alert_rules_available,
     extract_params=_query_grafana_alert_rules_extract_params,
+    normalize_evidence=_normalize_grafana_alert_rules_evidence,
 )
 def query_grafana_alert_rules(
     folder: str | None = None,
@@ -346,6 +353,17 @@ def _query_grafana_logs_available(sources: dict[str, dict]) -> bool:
     return _grafana_available(sources)
 
 
+def _normalize_grafana_logs_evidence(
+    output: dict[str, Any], _tool_input: dict[str, Any]
+) -> dict[str, Any]:
+    return {
+        "grafana_logs": output.get("logs", []),
+        "grafana_error_logs": output.get("error_logs", []),
+        "grafana_logs_query": output.get("query", ""),
+        "grafana_logs_service": output.get("service_name", ""),
+    }
+
+
 @tool(
     name="query_grafana_logs",
     display_name="Grafana Loki",
@@ -374,6 +392,7 @@ def _query_grafana_logs_available(sources: dict[str, dict]) -> bool:
     },
     is_available=_query_grafana_logs_available,
     extract_params=_query_grafana_logs_extract_params,
+    normalize_evidence=_normalize_grafana_logs_evidence,
 )
 def query_grafana_logs(
     service_name: str,
@@ -526,6 +545,18 @@ def _query_grafana_metrics_available(sources: dict[str, dict]) -> bool:
     return _grafana_available(sources)
 
 
+def _normalize_grafana_metrics_evidence(
+    output: dict[str, Any], tool_input: dict[str, Any]
+) -> dict[str, Any]:
+    metric_name = str(output.get("metric_name") or tool_input.get("metric_name") or "")
+    result: dict[str, Any] = {
+        "grafana_metrics": output.get("metrics", []),
+    }
+    if metric_name:
+        result["grafana_metric_results"] = {metric_name: output}
+    return result
+
+
 @tool(
     name="query_grafana_metrics",
     display_name="Grafana Mimir",
@@ -556,6 +587,7 @@ def _query_grafana_metrics_available(sources: dict[str, dict]) -> bool:
     ),
     is_available=_query_grafana_metrics_available,
     extract_params=_query_grafana_metrics_extract_params,
+    normalize_evidence=_normalize_grafana_metrics_evidence,
 )
 def query_grafana_metrics(
     metric_name: str,
@@ -633,6 +665,12 @@ def _query_grafana_service_names_available(sources: dict[str, dict]) -> bool:
     return _grafana_available(sources)
 
 
+def _normalize_grafana_service_names_evidence(
+    output: dict[str, Any], _tool_input: dict[str, Any]
+) -> dict[str, Any]:
+    return {"grafana_service_names": output.get("service_names", [])}
+
+
 @tool(
     name="query_grafana_service_names",
     source="grafana",
@@ -652,6 +690,7 @@ def _query_grafana_service_names_available(sources: dict[str, dict]) -> bool:
     },
     is_available=_query_grafana_service_names_available,
     extract_params=_query_grafana_service_names_extract_params,
+    normalize_evidence=_normalize_grafana_service_names_evidence,
 )
 def query_grafana_service_names(
     grafana_endpoint: str | None = None,
@@ -713,6 +752,15 @@ def _query_grafana_traces_available(sources: dict[str, dict]) -> bool:
     return _grafana_available(sources)
 
 
+def _normalize_grafana_traces_evidence(
+    output: dict[str, Any], _tool_input: dict[str, Any]
+) -> dict[str, Any]:
+    return {
+        "grafana_traces": output.get("traces", []),
+        "grafana_pipeline_spans": output.get("pipeline_spans", []),
+    }
+
+
 @tool(
     name="query_grafana_traces",
     display_name="Grafana Tempo",
@@ -737,6 +785,7 @@ def _query_grafana_traces_available(sources: dict[str, dict]) -> bool:
     },
     is_available=_query_grafana_traces_available,
     extract_params=_query_grafana_traces_extract_params,
+    normalize_evidence=_normalize_grafana_traces_evidence,
 )
 def query_grafana_traces(
     service_name: str,

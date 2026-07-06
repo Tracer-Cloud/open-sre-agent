@@ -241,8 +241,14 @@ def merge_tool_evidence(
     tool_name: str,
     output: Any,
     tool_input: dict[str, Any],
+    tools: list[RegisteredTool],
 ) -> None:
-    """Store raw tool output and the legacy report-facing evidence keys."""
+    """Store raw tool output and tool-owned evidence keys.
+
+    Tool-specific evidence keys are delegated to each tool's
+    ``normalize_evidence(output, tool_input)`` method, keeping the evidence
+    logic alongside the tool that owns it instead of in a central chain.
+    """
     evidence[tool_name] = output
     tool_outputs = evidence.setdefault("tool_outputs", [])
     if isinstance(tool_outputs, list):
@@ -257,29 +263,23 @@ def merge_tool_evidence(
     if not isinstance(output, dict):
         return
 
-    if tool_name == "query_grafana_logs":
-        evidence["grafana_logs"] = output.get("logs", [])
-        evidence["grafana_error_logs"] = output.get("error_logs", [])
-        evidence["grafana_logs_query"] = output.get("query", "")
-        evidence["grafana_logs_service"] = output.get("service_name", "")
+    tool = _find_tool(tools, tool_name)
+    if tool is None:
         return
 
-    if tool_name == "query_grafana_metrics":
-        metric_name = str(output.get("metric_name") or tool_input.get("metric_name") or "")
-        metric_results = evidence.setdefault("grafana_metric_results", {})
-        if isinstance(metric_results, dict) and metric_name:
-            metric_results[metric_name] = output
-        evidence["grafana_metrics"] = output.get("metrics", [])
+    normalized = tool.normalize_evidence(output, tool_input)
+    if not normalized:
         return
 
-    if tool_name == "query_grafana_traces":
-        evidence["grafana_traces"] = output.get("traces", [])
-        evidence["grafana_pipeline_spans"] = output.get("pipeline_spans", [])
-        return
+    for key, value in normalized.items():
+        if isinstance(value, dict) and isinstance(evidence.get(key), dict):
+            evidence[key].update(value)
+        else:
+            evidence[key] = value
 
-    if tool_name == "query_grafana_alert_rules":
-        evidence["grafana_alert_rules"] = output.get("rules", [])
-        return
 
-    if tool_name == "query_grafana_service_names":
-        evidence["grafana_service_names"] = output.get("service_names", [])
+def _find_tool(tools: list[RegisteredTool], name: str) -> RegisteredTool | None:
+    for tool in tools:
+        if tool.name == name:
+            return tool
+    return None

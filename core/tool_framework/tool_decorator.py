@@ -46,6 +46,7 @@ def tool(
     approval_expiry_seconds: int | None = None,
     parallel_safe: bool | None = None,
     accepts_runtime_context: bool | None = None,
+    normalize_evidence: Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]] | None = None,
 ) -> BaseTool:
     pass
 
@@ -83,6 +84,7 @@ def tool[F: Callable[..., Any]](
     approval_expiry_seconds: int | None = None,
     parallel_safe: bool | None = None,
     accepts_runtime_context: bool | None = None,
+    normalize_evidence: Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]] | None = None,
 ) -> F:
     pass
 
@@ -120,6 +122,7 @@ def tool[F: Callable[..., Any]](
     approval_expiry_seconds: int | None = None,
     parallel_safe: bool | None = None,
     accepts_runtime_context: bool | None = None,
+    normalize_evidence: Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]] | None = None,
 ) -> Callable[[F], F]:
     pass
 
@@ -156,6 +159,7 @@ def tool[F: Callable[..., Any]](
     approval_expiry_seconds: int | None = None,
     parallel_safe: bool | None = None,
     accepts_runtime_context: bool | None = None,
+    normalize_evidence: Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]] | None = None,
 ) -> Any:
     """Register a lightweight function tool or annotate an existing BaseTool.
 
@@ -195,6 +199,7 @@ def tool[F: Callable[..., Any]](
                 approval_expiry_seconds is not None,
                 parallel_safe is not None,
                 accepts_runtime_context is not None,
+                normalize_evidence is not None,
             ]
         )
 
@@ -266,6 +271,7 @@ def tool[F: Callable[..., Any]](
                     approval_expiry_seconds=approval_expiry_seconds,
                     parallel_safe=parallel_safe,
                     accepts_runtime_context=accepts_runtime_context,
+                    normalize_evidence=normalize_evidence,
                 ),
             )
         return target
