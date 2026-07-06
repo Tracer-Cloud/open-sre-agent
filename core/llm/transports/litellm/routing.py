@@ -30,33 +30,15 @@ def _litellm_model_for_compat(model: str) -> str:
 
 def build_litellm_agent_client(settings: Any, provider: str) -> LiteLLMAgentClient:
     """Build a :class:`LiteLLMAgentClient` for the given provider and settings."""
-    from config.config import PROVIDER_ANTHROPIC, PROVIDER_BEDROCK, PROVIDER_OLLAMA, PROVIDER_OPENAI
+    from core.llm.providers.provider_registry import FIRST_PARTY_PROVIDERS
 
-    if provider == PROVIDER_ANTHROPIC:
-        from config.config import ANTHROPIC_LLM_CONFIG
-
+    spec = FIRST_PARTY_PROVIDERS.get(provider)
+    if spec is not None:
+        model = getattr(settings, f"{spec.env_prefix}_reasoning_model")
         return LiteLLMAgentClient(
-            litellm_model=f"anthropic/{settings.anthropic_reasoning_model}",
-            max_tokens=ANTHROPIC_LLM_CONFIG.max_tokens,
-            api_key_env="ANTHROPIC_API_KEY",
-        )
-
-    if provider == PROVIDER_OPENAI:
-        from config.config import OPENAI_LLM_CONFIG
-
-        return LiteLLMAgentClient(
-            litellm_model=f"openai/{settings.openai_reasoning_model}",
-            max_tokens=OPENAI_LLM_CONFIG.max_tokens,
-            api_key_env="OPENAI_API_KEY",
-        )
-
-    if provider == PROVIDER_BEDROCK:
-        from config.config import BEDROCK_LLM_CONFIG
-
-        model = settings.bedrock_reasoning_model
-        return LiteLLMAgentClient(
-            litellm_model=f"bedrock/{model}",
-            max_tokens=BEDROCK_LLM_CONFIG.max_tokens,
+            litellm_model=f"{spec.litellm_prefix}/{model}",
+            max_tokens=spec.max_tokens,
+            api_key_env=spec.api_key_env,
         )
 
     if is_azure_openai_provider(provider):
@@ -72,6 +54,8 @@ def build_litellm_agent_client(settings: Any, provider: str) -> LiteLLMAgentClie
         )
 
     if is_openai_compat_provider(provider):
+        from config.config import PROVIDER_OLLAMA
+
         resolved = resolve_openai_compat_provider(settings, provider, "reasoning")
         max_tokens = 1024 if provider == PROVIDER_OLLAMA else resolved.config.max_tokens
         return LiteLLMAgentClient(
@@ -98,7 +82,7 @@ def build_litellm_llm_client(
 ) -> LiteLLMLLMClient:
     """Build a :class:`LiteLLMLLMClient` for the given provider, model tier, and settings."""
 
-    from config.config import PROVIDER_ANTHROPIC, PROVIDER_BEDROCK, PROVIDER_OPENAI
+    from core.llm.providers.provider_registry import FIRST_PARTY_PROVIDERS
 
     def _fallback(provider_prefix: str) -> str | None:
         if model_type == "toolcall":
@@ -106,42 +90,15 @@ def build_litellm_llm_client(
         attr = f"{provider_prefix}_toolcall_model"
         return str(getattr(settings, attr, None) or "")
 
-    if provider == PROVIDER_ANTHROPIC:
-        from config.config import ANTHROPIC_LLM_CONFIG
-
-        attr = f"anthropic_{model_type}_model"
-        model = str(getattr(settings, attr))
+    spec = FIRST_PARTY_PROVIDERS.get(provider)
+    if spec is not None:
+        model = str(getattr(settings, f"{spec.env_prefix}_{model_type}_model"))
+        fallback = _fallback(spec.env_prefix)
         return LiteLLMLLMClient(
-            litellm_model=f"anthropic/{model}",
-            model_fallback=(_fallback("anthropic") and f"anthropic/{_fallback('anthropic')}")
-            or None,
-            max_tokens=ANTHROPIC_LLM_CONFIG.max_tokens,
-            api_key_env="ANTHROPIC_API_KEY",
-            usage_callback=usage_callback,
-        )
-
-    if provider == PROVIDER_OPENAI:
-        from config.config import OPENAI_LLM_CONFIG
-
-        attr = f"openai_{model_type}_model"
-        model = str(getattr(settings, attr))
-        return LiteLLMLLMClient(
-            litellm_model=f"openai/{model}",
-            model_fallback=(_fallback("openai") and f"openai/{_fallback('openai')}") or None,
-            max_tokens=OPENAI_LLM_CONFIG.max_tokens,
-            api_key_env="OPENAI_API_KEY",
-            usage_callback=usage_callback,
-        )
-
-    if provider == PROVIDER_BEDROCK:
-        from config.config import BEDROCK_LLM_CONFIG
-
-        attr = f"bedrock_{model_type}_model"
-        model = str(getattr(settings, attr))
-        return LiteLLMLLMClient(
-            litellm_model=f"bedrock/{model}",
-            model_fallback=(_fallback("bedrock") and f"bedrock/{_fallback('bedrock')}") or None,
-            max_tokens=BEDROCK_LLM_CONFIG.max_tokens,
+            litellm_model=f"{spec.litellm_prefix}/{model}",
+            model_fallback=(fallback and f"{spec.litellm_prefix}/{fallback}") or None,
+            max_tokens=spec.max_tokens,
+            api_key_env=spec.api_key_env,
             usage_callback=usage_callback,
         )
 
