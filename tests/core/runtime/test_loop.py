@@ -222,6 +222,69 @@ def test_run_records_system_prompt_edited_by_before_provider_request_hook() -> N
     assert result.final_system_prompt == "sys [edited]"
 
 
+def test_transform_messages_hook_filters_context_sent_to_llm() -> None:
+    llm = FakeLLM(iter([_text_response("done")]))
+    agent = Agent(
+        llm=llm,
+        system="sys",
+        tools=[],
+        resolved_integrations={},
+        max_iterations=1,
+        provider_hooks=ProviderHooks(
+            transform_messages=lambda messages: list(messages)[-1:]
+        ),
+    )
+
+    agent.run([
+        {"role": "user", "content": "first"},
+        {"role": "user", "content": "second"},
+    ])
+
+    assert llm.invocations == 1
+    assert len(llm.seen_messages[0]) == 1
+    assert llm.seen_messages[0][0]["content"] == "second"
+
+
+def test_convert_to_llm_hook_replaces_default_message_conversion() -> None:
+    llm = FakeLLM(iter([_text_response("done")]))
+
+    def stamp(_llm: Any, messages: Any) -> list[dict[str, Any]]:
+        return [{"role": "user", "content": f"converted:{m.content}"} for m in messages]
+
+    agent = Agent(
+        llm=llm,
+        system="sys",
+        tools=[],
+        resolved_integrations={},
+        max_iterations=1,
+        provider_hooks=ProviderHooks(convert_to_llm=stamp),
+    )
+
+    agent.run([{"role": "user", "content": "hello"}])
+
+    assert llm.invocations == 1
+    assert llm.seen_messages[0][0]["content"] == "converted:hello"
+
+
+def test_after_response_hook_can_rewrite_llm_reply() -> None:
+    llm = FakeLLM(iter([_text_response("original")]))
+    agent = Agent(
+        llm=llm,
+        system="sys",
+        tools=[],
+        resolved_integrations={},
+        max_iterations=1,
+        provider_hooks=ProviderHooks(
+            after_provider_response=lambda _req, resp: replace(resp, content="rewritten")
+        ),
+    )
+
+    result = agent.run([{"role": "user", "content": "hi"}])
+
+    assert llm.invocations == 1
+    assert result.final_text == "rewritten"
+
+
 def test_one_tool_round_then_final() -> None:
     output = {"value": 42}
     llm = FakeLLM(
