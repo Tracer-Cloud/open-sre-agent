@@ -10,8 +10,8 @@ from collections.abc import Iterable
 from gateway.polling.telegram_poller.client import TelegramBotClient
 from integrations.telegram.formatting import markdown_to_telegram_html
 from platform.common.truncation import truncate
+from platform.notifications.limits import MAX_MESSAGE_SIZE
 
-_MESSAGE_LIMIT = 4096
 _LOG_PREVIEW_LIMIT = 500
 logger = logging.getLogger("gateway")
 
@@ -83,7 +83,7 @@ class GatewayOutputSink:
     def _edit_preview(self, text: str) -> None:
         if not self._message_id:
             return
-        preview = truncate(text or self._status_text, _MESSAGE_LIMIT, suffix="…")
+        preview = truncate(text or self._status_text, MAX_MESSAGE_SIZE, suffix="…")
         with self._lock:
             ok, _ = self._client.edit_message_text(self._chat_id, self._message_id, preview)
             if ok:
@@ -93,7 +93,7 @@ class GatewayOutputSink:
         self._finalize(text)
 
     def _finalize(self, text: str) -> None:
-        final = truncate(text, _MESSAGE_LIMIT, suffix="…")
+        final = truncate(text, MAX_MESSAGE_SIZE, suffix="…")
         html_final = markdown_to_telegram_html(final)
         if self._message_id and self._edit_final(html_final, final):
             logger.info("outbound chat=%s text=%r", self._chat_id, _log_preview(final))
