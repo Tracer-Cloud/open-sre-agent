@@ -740,6 +740,30 @@ def test_openai_agent_client_reports_configured_provider_name_on_failure(
         client.invoke(messages=[{"role": "user", "content": "hi"}])
 
 
+@pytest.mark.parametrize(
+    ("api_key_env", "expected_label"),
+    [
+        ("OPENAI_API_KEY", "OpenAI"),
+        ("OPENROUTER_API_KEY", "OpenRouter"),
+        ("MINIMAX_API_KEY", "MiniMax"),
+        ("GEMINI_API_KEY", "Gemini"),
+        ("GROQ_API_KEY", "Groq"),
+        ("NVIDIA_API_KEY", "Nvidia"),
+    ],
+)
+def test_openai_agent_client_provider_label_preserves_brand_casing(
+    api_key_env: str, expected_label: str
+) -> None:
+    """.title() mangles brand names with an internal capital letter (e.g.
+    "OpenRouter" -> "Openrouter", "MiniMax" -> "Minimax"). Providers this
+    class is actually constructed with (see
+    core/llm/openai_compat_providers.py) must keep their canonical casing."""
+    client = OpenAIAgentClient.__new__(OpenAIAgentClient)
+    client._api_key_env = api_key_env
+
+    assert client._provider_label == expected_label
+
+
 def test_sdk_type_error_for_missing_api_key_fails_fast(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

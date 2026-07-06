@@ -429,6 +429,17 @@ def _openai_max_token_kwarg(model: str) -> str:
     return "max_tokens"
 
 
+# .title() breaks brand names with an internal capital letter (e.g.
+# "OPENAI_API_KEY" -> "Openai" instead of "OpenAI"). Override just the
+# providers this class is actually constructed with (see
+# core/llm/openai_compat_providers.py) where that happens.
+_PROVIDER_LABEL_OVERRIDES = {
+    "OPENAI_API_KEY": "OpenAI",
+    "OPENROUTER_API_KEY": "OpenRouter",
+    "MINIMAX_API_KEY": "MiniMax",
+}
+
+
 class OpenAIAgentClient:
     """OpenAI-compatible client with tool-calling for the agent loop."""
 
@@ -459,8 +470,9 @@ class OpenAIAgentClient:
     @property
     def _provider_label(self) -> str:
         api_key_env = str(getattr(self, "_api_key_env", "OPENAI_API_KEY"))
-        if api_key_env == "OPENAI_API_KEY":
-            return "OpenAI"
+        override = _PROVIDER_LABEL_OVERRIDES.get(api_key_env)
+        if override:
+            return override
         return api_key_env.removesuffix("_API_KEY").replace("_", " ").title()
 
     def tool_schemas(self, tools: list[Any]) -> list[dict[str, Any]]:
