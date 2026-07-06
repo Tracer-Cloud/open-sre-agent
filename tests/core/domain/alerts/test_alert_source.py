@@ -1,0 +1,125 @@
+"""Unit tests for core.domain.alerts.alert_source."""
+
+from __future__ import annotations
+
+from core.domain.alerts.alert_source import (
+    ALERT_SOURCE_TO_SEED_TOOL_SOURCES,
+    ALERT_SOURCE_TO_TOOL_SOURCES,
+    collect_alert_text,
+    declared_context_sources,
+    primary_sources_for_alert,
+    relevant_sources_for_alert,
+    resolve_alert_source,
+)
+
+
+def test_resolve_alert_source_from_state_field() -> None:
+    assert resolve_alert_source({"alert_source": "Datadog"}) == "datadog"
+
+
+def test_resolve_alert_source_from_raw_alert_field() -> None:
+    assert resolve_alert_source({"raw_alert": {"alert_source": "Grafana"}}) == "grafana"
+
+
+def test_resolve_alert_source_grafana_labels_heuristic() -> None:
+    state = {
+        "raw_alert": {
+            "commonLabels": {"grafana_folder": "prod-alerts"},
+        }
+    }
+    assert resolve_alert_source(state) == "grafana"
+
+
+def test_resolve_alert_source_grafana_external_url_heuristic() -> None:
+    state = {
+        "raw_alert": {
+            "externalURL": "https://grafana.example.com/alerting",
+        }
+    }
+    assert resolve_alert_source(state) == "grafana"
+
+
+def test_resolve_alert_source_empty_when_unresolved() -> None:
+    assert resolve_alert_source({}) == ""
+    assert resolve_alert_source({"raw_alert": "not a dict"}) == ""
+
+
+def test_primary_sources_for_alert_known_source() -> None:
+    assert primary_sources_for_alert({"alert_source": "eks"}) == ALERT_SOURCE_TO_TOOL_SOURCES["eks"]
+
+
+def test_primary_sources_for_alert_unknown_source() -> None:
+    assert primary_sources_for_alert({"alert_source": "unknown_vendor"}) == ()
+
+
+def test_declared_context_sources_from_common_annotations() -> None:
+    state = {
+        "raw_alert": {
+            "commonAnnotations": {"context_sources": "github, Datadog"},
+        }
+    }
+    assert declared_context_sources(state) == {"github", "datadog"}
+
+
+def test_declared_context_sources_from_labels_fallback() -> None:
+    state = {
+        "raw_alert": {
+            "labels": {"context_sources": "grafana"},
+        }
+    }
+    assert declared_context_sources(state) == {"grafana"}
+
+
+def test_declared_context_sources_empty_when_missing() -> None:
+    assert declared_context_sources({}) == set()
+    assert declared_context_sources({"raw_alert": {"title": "x"}}) == set()
+
+
+def test_collect_alert_text_lowercases_and_joins_fields() -> None:
+    state = {
+        "alert_name": "HighLatency",
+        "message": "API Slow",
+        "raw_alert": {
+            "title": "Checkout",
+            "commonAnnotations": {"summary": "p99 spike"},
+        },
+        "problem_md": "# Problem",
+    }
+    text = collect_alert_text(state)
+    assert "highlatency" in text
+    assert "api slow" in text
+    assert "checkout" in text
+    assert "p99 spike" in text
+    assert "problem" in text
+
+
+def test_relevant_sources_prefers_declared_context_sources() -> None:
+    state = {
+        "raw_alert": {
+            "commonAnnotations": {"context_sources": "github"},
+        },
+        "message": "datadog monitor fired",
+    }
+    assert relevant_sources_for_alert(state, ["github", "datadog", "knowledge"]) == ["github"]
+
+
+def test_relevant_sources_matches_keywords_in_alert_text() -> None:
+    state = {"message": "kubernetes pod crashloop in eks cluster"}
+    matched = relevant_sources_for_alert(state, ["eks", "datadog", "knowledge"])
+    assert matched == ["eks"]
+
+
+def test_relevant_sources_excludes_secondary_sources() -> None:
+    state = {"message": "need guidance"}
+    assert relevant_sources_for_alert(state, ["knowledge", "openclaw"]) == []
+
+
+def test_relevant_sources_empty_when_no_text_and_no_declared_sources() -> None:
+    assert relevant_sources_for_alert({}, ["github", "datadog"]) == []
+
+
+def test_seed_sources_narrower_than_relevance_sources_for_eks() -> None:
+    """Regression guard: seeding stays narrower than relevance routing."""
+    assert ALERT_SOURCE_TO_SEED_TOOL_SOURCES["eks"] == ("eks",)
+    assert "ec2" in ALERT_SOURCE_TO_TOOL_SOURCES["eks"]
+    assert "ec2" not in ALERT_SOURCE_TO_SEED_TOOL_SOURCES["eks"]
