@@ -84,15 +84,6 @@ class BaseTool(ABC):
             }
         )
 
-    @property
-    def inputs(self) -> dict[str, str]:
-        """Derived from input_schema for backward-compatibility with build_prompt.py."""
-        props = self.metadata().input_schema.get("properties", {})
-        return {
-            param: str(info.get("description", info.get("type", "")))
-            for param, info in props.items()
-        }
-
     def __call__(self, **kwargs: Any) -> dict[str, Any]:
         from core.tool_framework.telemetry import invoke_tool
 
