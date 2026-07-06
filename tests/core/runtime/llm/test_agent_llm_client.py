@@ -637,7 +637,7 @@ def test_openai_rate_limit_error_is_retried_then_raises(
     client._model = "gpt-4o"
     client._max_tokens = 512
 
-    with pytest.raises(RuntimeError, match="Openai rate limit exceeded"):
+    with pytest.raises(RuntimeError, match="OpenAI rate limit exceeded"):
         client.invoke(messages=[{"role": "user", "content": "hi"}])
 
     assert call_count == _RETRY_MAX_ATTEMPTS, (
@@ -674,7 +674,7 @@ def test_openai_rate_limit_honors_body_text_hint(
     client._model = "gpt-4o"
     client._max_tokens = 512
 
-    with pytest.raises(RuntimeError, match="Openai rate limit exceeded"):
+    with pytest.raises(RuntimeError, match="OpenAI rate limit exceeded"):
         client.invoke(messages=[{"role": "user", "content": "hi"}])
 
     assert len(sleeps) == 2
@@ -707,7 +707,7 @@ def test_openai_permission_denied_error_is_not_retried(
     client._model = "gpt-4o"
     client._max_tokens = 512
 
-    with pytest.raises(RuntimeError, match="Openai request forbidden"):
+    with pytest.raises(RuntimeError, match="OpenAI request forbidden"):
         client.invoke(messages=[{"role": "user", "content": "hi"}])
 
     assert call_count == 1, "403 should not retry"

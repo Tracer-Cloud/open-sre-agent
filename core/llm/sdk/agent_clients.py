@@ -459,7 +459,9 @@ class OpenAIAgentClient:
     @property
     def _provider_label(self) -> str:
         api_key_env = str(getattr(self, "_api_key_env", "OPENAI_API_KEY"))
-        return api_key_env.removesuffix("_API_KEY").replace("_", " ").title()
+        label = api_key_env.removesuffix("_API_KEY").replace("_", " ").title()
+        # .title() mangles the canonical "OpenAI" casing to "Openai" — restore it.
+        return label.replace("Openai", "OpenAI")
 
     def tool_schemas(self, tools: list[Any]) -> list[dict[str, Any]]:
         return build_openai_tool_specs(tools)
