@@ -13,6 +13,27 @@ from core.tool_framework.metadata import EvidenceType, SideEffectLevel, ToolMeta
 
 
 class BaseTool(ABC):
+    """Abstract base class for every investigation tool.
+
+    Subclass contract
+    -----------------
+    * Declare all metadata as **ClassVars** (``name``, ``description``,
+      ``input_schema``, ``source``, etc.).  ``__init_subclass__`` validates
+      them through ``ToolMetadata`` on class creation, so missing or
+      ill-typed declarations fail at import time rather than at runtime.
+    * Implement ``run(**kwargs)`` — *not* declared here to avoid forcing a
+      fixed signature on every subclass.  The planner invokes the tool
+      through ``__call__``, which delegates to ``run`` via
+      ``telemetry.invoke_tool`` so exceptions are always captured and
+      converted to a structured ``{"error": ..., "exception_type": ...}``
+      dict rather than propagating to the agent loop.
+    * Override ``is_available`` and ``extract_params`` when the tool
+      requires specific data-source checks or needs to pull kwargs from the
+      investigation sources dict.
+    * Do **not** declare ``run`` with positional arguments — the call site
+      always uses keyword arguments: ``tool_instance.run(**kwargs)``.
+    """
+
     name: ClassVar[str]
     description: ClassVar[str]
     display_name: ClassVar[str | None] = None

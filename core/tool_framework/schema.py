@@ -20,7 +20,6 @@ from pydantic import BaseModel
 __all__ = [
     "infer_input_schema",
     "model_to_json_schema",
-    "_value_matches_schema",
 ]
 
 

@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import call
 
 import pytest
 
+import core.tool_framework.telemetry as telemetry_mod
 from core.tool_framework.base import BaseTool
 from core.tool_framework.registered_tool import REGISTERED_TOOL_ATTR
 from core.tool_framework.tool_decorator import tool
-import core.tool_framework.telemetry as telemetry_mod
 
 
 class ExplodingBaseTool(BaseTool):
