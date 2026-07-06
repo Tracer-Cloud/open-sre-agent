@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import pytest
-
 from integrations.grafana.tools import (
     _normalize_grafana_alert_rules_evidence,
     _normalize_grafana_logs_evidence,
@@ -110,9 +108,9 @@ class TestMergeToolEvidence:
 
     def test_merges_tool_owned_evidence_keys(self) -> None:
         from core.tool_framework.registered_tool import (
+            RegisteredTool,
             _always_available,
             _extract_no_params,
-            RegisteredTool,
         )
         from tools.investigation.stages.gather_evidence.tools import merge_tool_evidence
 
@@ -121,7 +119,7 @@ class TestMergeToolEvidence:
             description="Test tool",
             input_schema={"type": "object", "properties": {}, "required": []},
             source="grafana",
-            run=lambda **kw: {},
+            run=lambda **_: {},
             is_available=_always_available,
             extract_params=_extract_no_params,
             normalize_evidence=_normalize_grafana_logs_evidence,
@@ -142,9 +140,9 @@ class TestMergeToolEvidence:
 
     def test_preserves_generic_tool_output_and_tool_outputs_list(self) -> None:
         from core.tool_framework.registered_tool import (
+            RegisteredTool,
             _always_available,
             _extract_no_params,
-            RegisteredTool,
         )
         from tools.investigation.stages.gather_evidence.tools import merge_tool_evidence
 
@@ -153,7 +151,7 @@ class TestMergeToolEvidence:
             description="Test tool",
             input_schema={"type": "object", "properties": {}, "required": []},
             source="grafana",
-            run=lambda **kw: {},
+            run=lambda **_: {},
             is_available=_always_available,
             extract_params=_extract_no_params,
             normalize_evidence=_normalize_grafana_logs_evidence,
@@ -176,9 +174,9 @@ class TestMergeToolEvidence:
 
     def test_accumulates_metric_results_across_calls(self) -> None:
         from core.tool_framework.registered_tool import (
+            RegisteredTool,
             _always_available,
             _extract_no_params,
-            RegisteredTool,
         )
         from tools.investigation.stages.gather_evidence.tools import merge_tool_evidence
 
@@ -187,7 +185,7 @@ class TestMergeToolEvidence:
             description="Test tool",
             input_schema={"type": "object", "properties": {}, "required": []},
             source="grafana",
-            run=lambda **kw: {},
+            run=lambda **_: {},
             is_available=_always_available,
             extract_params=_extract_no_params,
             normalize_evidence=_normalize_grafana_metrics_evidence,
