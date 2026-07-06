@@ -299,7 +299,7 @@ def test_from_function_approval_expiry_zero_is_preserved() -> None:
 
 def test_from_function_approval_expiry_none_uses_default() -> None:
     """approval_expiry_seconds=None must fall back to DEFAULT_APPROVAL_EXPIRY_SECONDS."""
-    from config.constants.opensre import DEFAULT_APPROVAL_EXPIRY_SECONDS
+    from config.constants.investigation import DEFAULT_APPROVAL_EXPIRY_SECONDS
 
     def fn() -> None:
         pass

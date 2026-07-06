@@ -6,7 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Literal, TypeAlias
 
-from config.constants.opensre import DEFAULT_APPROVAL_EXPIRY_SECONDS
+from config.constants.investigation import DEFAULT_APPROVAL_EXPIRY_SECONDS
 from core.tool_framework.registered_tool import RegisteredTool
 from core.tool_framework.schema import _value_matches_schema
 

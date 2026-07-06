@@ -10,7 +10,7 @@ from typing import Any, cast, get_args
 
 from pydantic import BaseModel
 
-from config.constants.opensre import DEFAULT_APPROVAL_EXPIRY_SECONDS
+from config.constants.investigation import DEFAULT_APPROVAL_EXPIRY_SECONDS
 from core.domain.types.evidence import EvidenceSource
 from core.domain.types.retrieval import RetrievalControls
 from core.domain.types.tools import ToolSurface

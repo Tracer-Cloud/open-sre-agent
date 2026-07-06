@@ -6,7 +6,12 @@ orchestration and domain packages.
 
 from __future__ import annotations
 
+from typing import Final
+
 MAX_INVESTIGATION_LOOPS = 20
+
+# Approval tokens auto-expire after this many seconds (5 minutes).
+DEFAULT_APPROVAL_EXPIRY_SECONDS: Final[int] = 300
 
 # Maximum number of times ``adapt_window`` may replace ``state.incident_window``
 # during a single investigation. Each replacement records the previous window

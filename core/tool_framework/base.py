@@ -8,7 +8,7 @@ from typing import Any, ClassVar
 
 from pydantic import BaseModel
 
-from config.constants.opensre import DEFAULT_APPROVAL_EXPIRY_SECONDS
+from config.constants.investigation import DEFAULT_APPROVAL_EXPIRY_SECONDS
 from core.domain.types.evidence import EvidenceSource
 from core.domain.types.retrieval import RetrievalControls
 from core.tool_framework.metadata import EvidenceType, SideEffectLevel, ToolMetadata
