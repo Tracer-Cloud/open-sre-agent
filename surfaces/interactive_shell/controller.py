@@ -13,6 +13,7 @@ from rich.console import Console
 
 from config.repl_config import ReplConfig
 from core.agent_harness.session import Session
+from core.domain.alerts import alert_listener as _alert_listener_module
 from core.domain.alerts import inbox as _alert_inbox
 from surfaces.interactive_shell.runtime.background.workers import BackgroundTaskManager
 from surfaces.interactive_shell.runtime.context import (
@@ -61,10 +62,10 @@ def _alert_listener(
         return
 
     inbox: _alert_inbox.AlertInbox | None = None
-    handle: _alert_inbox.AlertListenerHandle | None = None
+    handle: _alert_listener_module.AlertListenerHandle | None = None
     try:
         inbox = _alert_inbox.AlertInbox()
-        handle = _alert_inbox.start_alert_listener(
+        handle = _alert_listener_module.start_alert_listener(
             inbox,
             host=cfg.alert_listener_host,
             port=cfg.alert_listener_port,
