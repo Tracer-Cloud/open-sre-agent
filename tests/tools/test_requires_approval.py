@@ -59,7 +59,6 @@ class _DestructiveTool(BaseTool):
     input_schema={"type": "object", "properties": {}},
     requires_approval=True,
     approval_reason="Needs approval",
-    approval_scope="session",
     approval_expiry_seconds=60,
 )
 def approval_function_tool() -> dict[str, Any]:
@@ -95,5 +94,4 @@ class TestRequiresApprovalOnRegisteredTool:
         registered = approval_function_tool.__opensre_registered_tool__  # type: ignore[attr-defined]
         assert registered.requires_approval is True
         assert registered.approval_reason == "Needs approval"
-        assert registered.approval_scope == "session"
         assert registered.approval_expiry_seconds == 60

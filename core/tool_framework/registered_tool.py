@@ -7,7 +7,7 @@ from collections.abc import Callable, Iterable
 from copy import deepcopy
 from dataclasses import dataclass, field
 from types import NoneType
-from typing import Any, Literal, cast, get_args, get_origin, get_type_hints
+from typing import Any, cast, get_args, get_origin, get_type_hints
 
 from pydantic import BaseModel
 
@@ -20,8 +20,6 @@ REGISTERED_TOOL_ATTR = "__opensre_registered_tool__"
 
 _DEFAULT_SURFACES: tuple[ToolSurface, ...] = ("investigation",)
 _VALID_SURFACES = set(get_args(ToolSurface))
-CostTier = Literal["cheap", "moderate", "expensive"]
-_VALID_COST_TIERS = set(get_args(CostTier))
 
 
 def _always_available(_sources: dict[str, dict]) -> bool:
@@ -212,11 +210,9 @@ class RegisteredTool:
         repr=False,
     )
     tags: tuple[str, ...] = ()
-    cost_tier: CostTier | None = None
     requires_approval: bool = False
     approval_reason: str = ""
     approval_expiry_seconds: int = 300
-    approval_scope: str = "one_shot"
     parallel_safe: bool = True
     accepts_runtime_context: bool = False
     origin_module: str = ""
@@ -261,14 +257,6 @@ class RegisteredTool:
         self.injected_params = tuple(metadata.injected_params)
         self.retrieval_controls = metadata.retrieval_controls
         self.surfaces = _normalize_surfaces(self.surfaces)
-        if self.cost_tier is not None:
-            normalized_cost_tier = self.cost_tier.strip().lower()
-            if normalized_cost_tier not in _VALID_COST_TIERS:
-                valid = ", ".join(sorted(_VALID_COST_TIERS))
-                raise ValueError(
-                    f"Unsupported cost tier '{self.cost_tier}'. Expected one of: {valid}."
-                )
-            self.cost_tier = cast(CostTier, normalized_cost_tier)
 
         if not callable(self.run):
             raise TypeError("run must be callable")
@@ -344,10 +332,8 @@ class RegisteredTool:
         surfaces: Iterable[str] | None = None,
         retrieval_controls: RetrievalControls | None = None,
         tags: tuple[str, ...] | None = None,
-        cost_tier: CostTier | None = None,
         requires_approval: bool | None = None,
         approval_reason: str | None = None,
-        approval_scope: str | None = None,
         approval_expiry_seconds: int | None = None,
         parallel_safe: bool | None = None,
         accepts_runtime_context: bool | None = None,
@@ -369,12 +355,6 @@ class RegisteredTool:
                 Iterable[str],
                 tags or getattr(tool, "tags", None) or getattr(tool.__class__, "tags", ()),
             )
-        )
-        resolved_cost_tier = cast(
-            CostTier | None,
-            cost_tier
-            or getattr(tool, "cost_tier", None)
-            or getattr(tool.__class__, "cost_tier", None),
         )
         return cls(
             name=metadata.name,
@@ -398,7 +378,6 @@ class RegisteredTool:
             is_available=tool.is_available,
             extract_params=tool.extract_params,
             tags=resolved_tags,
-            cost_tier=resolved_cost_tier,
             requires_approval=bool(
                 requires_approval
                 if requires_approval is not None
@@ -413,11 +392,6 @@ class RegisteredTool:
                 approval_expiry_seconds
                 if approval_expiry_seconds is not None
                 else getattr(tool.__class__, "approval_expiry_seconds", 300)
-            ),
-            approval_scope=str(
-                approval_scope
-                if approval_scope is not None
-                else getattr(tool.__class__, "approval_scope", "one_shot")
             ),
             parallel_safe=bool(
                 parallel_safe
@@ -460,10 +434,8 @@ class RegisteredTool:
         is_available: Callable[[dict[str, dict]], bool] | None = None,
         extract_params: Callable[[dict[str, dict]], dict[str, Any]] | None = None,
         tags: tuple[str, ...] | None = None,
-        cost_tier: CostTier | None = None,
         requires_approval: bool | None = None,
         approval_reason: str | None = None,
-        approval_scope: str | None = None,
         approval_expiry_seconds: int | None = None,
         parallel_safe: bool | None = None,
         accepts_runtime_context: bool | None = None,
@@ -502,10 +474,8 @@ class RegisteredTool:
             is_available=is_available or _always_available,
             extract_params=extract_params or _extract_no_params,
             tags=tags or (),
-            cost_tier=cost_tier,
             requires_approval=bool(requires_approval),
             approval_reason=approval_reason or "",
-            approval_scope=approval_scope or "one_shot",
             approval_expiry_seconds=approval_expiry_seconds or 300,
             parallel_safe=True if parallel_safe is None else bool(parallel_safe),
             accepts_runtime_context=bool(accepts_runtime_context),

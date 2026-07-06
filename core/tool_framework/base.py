@@ -85,9 +85,6 @@ class BaseTool(ABC):
     approval_expiry_seconds: ClassVar[int] = (
         300  # Approval auto-expires after N seconds (default 5 min)
     )
-    approval_scope: ClassVar[str] = (
-        "one_shot"  # "one_shot" (single call) or "session" (until disconnect)
-    )
     accepts_runtime_context: ClassVar[bool] = False
 
     def __init_subclass__(cls, **kwargs: Any) -> None:

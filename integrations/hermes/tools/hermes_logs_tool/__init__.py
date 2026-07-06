@@ -213,7 +213,6 @@ def _serialise_poll(
         + "warning_burst) from a slice of recent log activity",
     ],
     tags=("safe", "fast", "no-credentials"),
-    cost_tier="cheap",
     is_available=hermes_available_or_backend,
     input_schema={
         "type": "object",

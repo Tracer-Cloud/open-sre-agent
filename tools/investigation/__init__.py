@@ -24,7 +24,6 @@ from tools.investigation.capability import (
     side_effect_level="external",
     surfaces=("chat",),
     tags=("investigation", "composite"),
-    cost_tier="expensive",
     input_schema={
         "type": "object",
         "properties": {

@@ -21,7 +21,6 @@ from platform.common.evidence_compaction import truncate_list
         "Identifying AWS infrastructure issues",
     ],
     tags=("metrics", "aws"),
-    cost_tier="moderate",
     requires=["job_queue"],
     is_available=cloudwatch_is_available,
     input_schema={

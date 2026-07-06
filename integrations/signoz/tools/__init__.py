@@ -70,7 +70,6 @@ def _normalize_logs_payload(
     display_name="SigNoz logs",
     source="signoz",
     tags=("logs", "observability"),
-    cost_tier="moderate",
     description="Query SigNoz logs by service, severity, and time window.",
     use_cases=[
         "Investigating application errors reported by SigNoz alerts",
@@ -163,7 +162,6 @@ def _metrics_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     display_name="SigNoz metrics",
     source="signoz",
     tags=("metrics", "observability"),
-    cost_tier="moderate",
     description=("Query SigNoz metrics (CPU, memory, request rate) by service and time window."),
     use_cases=[
         "Checking CPU and memory usage from SigNoz metrics",
@@ -268,7 +266,6 @@ def _traces_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     display_name="SigNoz traces",
     source="signoz",
     tags=("traces", "observability"),
-    cost_tier="moderate",
     description="Query SigNoz traces for error rate, latency, and slow spans.",
     use_cases=[
         "Investigating slow spans and error traces in SigNoz",
