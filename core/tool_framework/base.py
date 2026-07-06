@@ -108,7 +108,7 @@ class BaseTool(ABC):
     def __call__(self, **kwargs: Any) -> dict[str, Any]:
         from core.tool_framework.telemetry import invoke_tool
 
-        return invoke_tool(self.run, name=self.name, source=str(self.source), kwargs=kwargs)  # type: ignore[attr-defined]
+        return invoke_tool(self.run, name=self.name, source=str(self.source), kwargs=kwargs)  # type: ignore[attr-defined, no-any-return]
 
     def is_available(self, _sources: dict[str, dict]) -> bool:
         """Return True when required data sources are present.
