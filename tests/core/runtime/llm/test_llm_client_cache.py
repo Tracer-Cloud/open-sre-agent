@@ -8,12 +8,12 @@ from core.llm import agent_llm_client, llm_client
 def test_llm_singleton_invalidates_on_provider_change(monkeypatch) -> None:
     created: list[object] = []
 
-    def fake_create(*, model_type: str) -> object:
+    def fake_build(_route: object, _model_type: str) -> object:
         marker = object()
         created.append(marker)
         return marker
 
-    monkeypatch.setattr(llm_client, "_create_llm_client", fake_create)
+    monkeypatch.setattr("core.llm.factory._build_llm_client", fake_build)
     monkeypatch.setenv("LLM_PROVIDER", "anthropic")
     llm_client.reset_llm_singletons()
 

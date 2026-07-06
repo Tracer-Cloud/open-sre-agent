@@ -47,9 +47,8 @@ ignore_imports =
     core.agent_harness.integrations.resolution -> integrations.store
     core.agent_harness.session.state -> integrations.catalog
     core.agent_harness.tools.action_tools -> tools.registry
-    core.llm.agent_llm_client -> integrations.llm_cli.registry
-    core.llm.llm_client -> integrations.llm_cli.registry
-    core.llm.llm_client -> integrations.llm_cli.runner
+    core.llm.factory -> integrations.llm_cli.registry
+    core.llm.factory -> integrations.llm_cli.runner
     core.llm.sdk.agent_clients -> integrations.llm_cli.runner
     core.llm.sdk.agent_clients -> integrations.llm_cli.text
     core.llm_invoke_errors -> integrations.llm_cli.errors

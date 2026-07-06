@@ -36,29 +36,33 @@ Default path is **native vendor SDKs** (`OPENSRE_LLM_TRANSPORT` unset or `sdk`).
 `OPENSRE_LLM_TRANSPORT` is unset. Onboarding writes `OPENSRE_LLM_TRANSPORT=litellm` to
 `.env`; switching away from Azure removes that key so other providers return to SDK routing.
 
-Dispatch entrypoints:
+Dispatch entrypoints — all routing lives in **one** place, `core/llm/factory.py`:
 
 ```text
-get_agent_llm() / get_llm_for_*()
-  → use_litellm_for_provider(runtime_provider)?
-      yes → build_litellm_*_client(settings, provider)   # litellm/routing.py
-      no  → native SDK client in sdk/agent_clients.py or sdk/llm_clients.py
+get_llm(role)  # role ∈ {AGENT, REASONING, CLASSIFICATION, TOOLCALL}
+  → resolve_llm_route()               # the single provider/transport decision
+      cli_reg?  → CLI-backed subprocess client
+      use_litellm_for_provider? → build_litellm_*_client(settings, provider)   # litellm/routing.py
+      else      → native SDK client in sdk/agent_clients.py or sdk/llm_clients.py
 ```
 
-When changing routing, update **both** `agent_llm_client.py` and `llm_client.py` if the
-provider appears in investigation and chat/reasoning surfaces.
+`get_agent_llm()` and `get_llm_for_*()` are thin wrappers over `get_llm(role)`. When
+changing routing, edit only `resolve_llm_route` / the role builders in `factory.py` —
+there is no second copy to keep in sync.
 
-Singleton caches invalidate on `(transport, runtime_provider)` changes — not transport alone.
-REPL `/model` and wizard env sync call `reset_llm_singletons()` / `reset_agent_client()`.
+One cache in `factory.py` keyed by `(role, transport, runtime_provider)`, invalidated
+together on `(transport, runtime_provider)` change (not transport alone). REPL `/model`
+and wizard env sync call `reset_llm_clients()` (via `reset_llm_singletons()` /
+`reset_agent_client()`).
 
 ## Adding a Hosted API Provider
 
 1. Add the provider literal to `LLMProvider` and normalization/validation paths in `config/config.py`.
 2. Add `ProviderSpec` in `config/llm_auth/provider_catalog.py` and matching `ProviderOption` in
    `surfaces/cli/wizard/config.py` (model env vars, defaults, `endpoint_env` if needed).
-3. Add runtime routing:
-   - **SDK path:** `core/llm/sdk/llm_clients.py` and/or `core/llm/sdk/agent_clients.py`, wired from
-     `llm_client.py` / `agent_llm_client.py`.
+3. Add runtime routing (all in `core/llm/factory.py`):
+   - **SDK path:** the client class in `core/llm/sdk/llm_clients.py` and/or `core/llm/sdk/agent_clients.py`,
+     wired into `_build_llm_client` / `_build_agent_client` in `factory.py`.
    - **LiteLLM path (optional or required):** branch in `core/llm/litellm/routing.py`.
    - **OpenAI-compatible:** register in `openai_compat_providers.py` (SDK compat path) and/or
      `litellm/routing.py` (LiteLLM path).
