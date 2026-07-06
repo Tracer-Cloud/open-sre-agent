@@ -193,19 +193,19 @@ def _make_fake_openai_bad_request_error(message: str = "invalid request") -> Exc
 
 
 def test_is_anthropic_bedrock_model_claude_ids() -> None:
-    assert sdk_llm._is_anthropic_bedrock_model("anthropic.claude-3-haiku-20240307-v1:0")
-    assert sdk_llm._is_anthropic_bedrock_model(
+    assert sdk_llm.is_anthropic_bedrock_model("anthropic.claude-3-haiku-20240307-v1:0")
+    assert sdk_llm.is_anthropic_bedrock_model(
         "us.anthropic.claude-haiku-4-5-20251001-v1:0",
     )
 
 
 def test_is_anthropic_bedrock_model_foundation_model_arn() -> None:
     arn = "arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0"
-    assert sdk_llm._is_anthropic_bedrock_model(arn)
+    assert sdk_llm.is_anthropic_bedrock_model(arn)
 
 
 def test_is_anthropic_bedrock_model_non_anthropic() -> None:
-    assert not sdk_llm._is_anthropic_bedrock_model(
+    assert not sdk_llm.is_anthropic_bedrock_model(
         "mistral.mistral-large-2402-v1:0",
     )
 
@@ -214,7 +214,7 @@ def test_is_anthropic_bedrock_model_application_inference_profile_arn() -> None:
     profile_arn = (
         "arn:aws:bedrock:us-east-2:012345678901:application-inference-profile/a1b2c3profile"
     )
-    assert not sdk_llm._is_anthropic_bedrock_model(profile_arn)
+    assert not sdk_llm.is_anthropic_bedrock_model(profile_arn)
 
 
 def test_bedrock_client_routes_mistral_to_converse(monkeypatch) -> None:
