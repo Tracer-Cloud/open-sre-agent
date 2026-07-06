@@ -19,7 +19,8 @@ from core.tool_framework.schema import (
 
 
 def test_infer_str_param() -> None:
-    def fn(query: str) -> None: pass
+    def fn(query: str) -> None:
+        pass
 
     schema = infer_input_schema(fn)
     assert schema["properties"]["query"] == {"type": "string"}
@@ -27,7 +28,8 @@ def test_infer_str_param() -> None:
 
 
 def test_infer_int_param() -> None:
-    def fn(limit: int) -> None: pass
+    def fn(limit: int) -> None:
+        pass
 
     schema = infer_input_schema(fn)
     assert schema["properties"]["limit"] == {"type": "integer"}
@@ -35,28 +37,32 @@ def test_infer_int_param() -> None:
 
 
 def test_infer_float_param() -> None:
-    def fn(threshold: float) -> None: pass
+    def fn(threshold: float) -> None:
+        pass
 
     schema = infer_input_schema(fn)
     assert schema["properties"]["threshold"] == {"type": "number"}
 
 
 def test_infer_bool_param() -> None:
-    def fn(verbose: bool) -> None: pass
+    def fn(verbose: bool) -> None:
+        pass
 
     schema = infer_input_schema(fn)
     assert schema["properties"]["verbose"] == {"type": "boolean"}
 
 
 def test_infer_list_param() -> None:
-    def fn(tags: list) -> None: pass
+    def fn(tags: list) -> None:
+        pass
 
     schema = infer_input_schema(fn)
     assert schema["properties"]["tags"] == {"type": "array"}
 
 
 def test_infer_dict_param() -> None:
-    def fn(meta: dict) -> None: pass
+    def fn(meta: dict) -> None:
+        pass
 
     schema = infer_input_schema(fn)
     assert schema["properties"]["meta"] == {"type": "object"}
@@ -68,14 +74,16 @@ def test_infer_dict_param() -> None:
 
 
 def test_required_params_are_in_required_list() -> None:
-    def fn(a: str, b: int) -> None: pass
+    def fn(a: str, b: int) -> None:
+        pass
 
     schema = infer_input_schema(fn)
     assert set(schema["required"]) == {"a", "b"}
 
 
 def test_optional_params_not_in_required_list() -> None:
-    def fn(a: str, b: str | None = None) -> None: pass  # noqa: UP007
+    def fn(a: str, b: str | None = None) -> None:
+        pass  # noqa: UP007
 
     schema = infer_input_schema(fn)
     assert "a" in schema["required"]
@@ -83,14 +91,16 @@ def test_optional_params_not_in_required_list() -> None:
 
 
 def test_union_none_marks_nullable() -> None:
-    def fn(val: str | None) -> None: pass
+    def fn(val: str | None) -> None:
+        pass
 
     schema = infer_input_schema(fn)
     assert schema["properties"]["val"].get("nullable") is True
 
 
 def test_defaulted_non_optional_param_not_required() -> None:
-    def fn(a: str, b: str = "default") -> None: pass
+    def fn(a: str, b: str = "default") -> None:
+        pass
 
     schema = infer_input_schema(fn)
     assert "a" in schema["required"]
@@ -103,7 +113,8 @@ def test_defaulted_non_optional_param_not_required() -> None:
 
 
 def test_underscore_prefixed_params_skipped() -> None:
-    def fn(query: str, _internal: str = "x") -> None: pass
+    def fn(query: str, _internal: str = "x") -> None:
+        pass
 
     schema = infer_input_schema(fn)
     assert "_internal" not in schema["properties"]
@@ -111,7 +122,8 @@ def test_underscore_prefixed_params_skipped() -> None:
 
 
 def test_var_positional_and_var_keyword_skipped() -> None:
-    def fn(a: str, *args: Any, **kwargs: Any) -> None: pass
+    def fn(a: str, *args: Any, **kwargs: Any) -> None:
+        pass
 
     schema = infer_input_schema(fn)
     assert "args" not in schema["properties"]

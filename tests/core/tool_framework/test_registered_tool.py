@@ -223,14 +223,16 @@ def test_from_function_infers_description_from_docstring() -> None:
 
 
 def test_from_function_uses_func_name_when_no_docstring() -> None:
-    def snake_case_fn() -> None: pass
+    def snake_case_fn() -> None:
+        pass
 
     rt = RegisteredTool.from_function(snake_case_fn, source="grafana")
     assert rt.description == "snake case fn"
 
 
 def test_from_function_infers_input_schema_when_none_provided() -> None:
-    def my_fn(host: str, port: int) -> None: pass
+    def my_fn(host: str, port: int) -> None:
+        pass
 
     rt = RegisteredTool.from_function(my_fn, source="grafana")
     assert "host" in rt.input_schema["properties"]
