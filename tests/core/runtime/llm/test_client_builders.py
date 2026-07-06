@@ -82,3 +82,19 @@ def test_bedrock_picks_converse_client_for_non_anthropic_model() -> None:
         settings=settings, provider="bedrock", cli_provider_registration=None, use_litellm=False
     )
     assert type(build_agent_client(route)).__name__ == "BedrockConverseAgentClient"
+
+
+def test_ollama_sdk_reasoning_builds_without_per_tier_toolcall_attr(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression: Ollama stores a flat ``ollama_model`` key (no per-tier toolcall
+    attribute), so the SDK reasoning fallback lookup must default rather than raise
+    ``AttributeError`` — mirroring the defensive lookup on the LiteLLM path."""
+    from core.llm.factory import build_llm_client
+
+    monkeypatch.setenv("LLM_PROVIDER", "ollama")
+    monkeypatch.delenv("OPENSRE_LLM_TRANSPORT", raising=False)
+
+    # reasoning + classification are the non-toolcall tiers that hit the fallback lookup.
+    assert type(build_llm_client("reasoning")).__name__ == "OpenAILLMClient"
+    assert type(build_llm_client("classification")).__name__ == "OpenAILLMClient"

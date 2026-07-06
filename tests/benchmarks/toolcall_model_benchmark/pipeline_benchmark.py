@@ -94,7 +94,7 @@ def configure_baseline_reasoning_for_tools() -> None:
     """Ablation: tool nodes use the same client instance as reasoning."""
     reset_llm_singletons()
     reasoning = get_llm(LLMRole.REASONING)
-    factory._cache.clients[LLMRole.TOOLCALL] = reasoning
+    factory._cache.store(LLMRole.TOOLCALL, reasoning)
 
 
 def make_investigation_state(fixture: ScenarioFixture) -> AgentState:

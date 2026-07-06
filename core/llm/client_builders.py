@@ -139,7 +139,7 @@ def _native_sdk_llm_client(route: LLMRoute, model_type: ModelType) -> Any:
     def _fallback_model(provider_prefix: str) -> str | None:
         if model_type == "toolcall":
             return None
-        return str(getattr(settings, f"{provider_prefix}_toolcall_model"))
+        return str(getattr(settings, f"{provider_prefix}_toolcall_model", None) or "") or None
 
     if is_openai_compat_provider(provider):
         compat = resolve_openai_compat_provider(settings, provider, model_type)

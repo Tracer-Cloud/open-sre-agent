@@ -22,6 +22,7 @@ from enum import Enum
 from typing import Any, Literal, overload
 
 from core.llm import client_builders
+from core.llm.internal.client_cache import LLMClientCache
 from core.llm.internal.client_cache_key import current_llm_client_cache_key
 from core.llm.transport_mode import use_litellm_for_provider
 from core.llm.types import AgentLLMClient, LLMRoute, ModelType
@@ -86,26 +87,11 @@ def _cli_provider_registration(provider: str) -> Any:
 
 
 # ---------------------------------------------------------------------------
-# Unified cache + public entrypoint
+# Public entrypoint (cache lives in ``core.llm.internal.client_cache``)
 # ---------------------------------------------------------------------------
 
 
-class _FactoryCache:
-    """One client per role, invalidated together on ``(transport, provider)`` change.
-
-    Wrapped in a class so fields are read/written via attribute access on a stable
-    container, avoiding the ``global`` keyword (which CodeQL's unused-global rule
-    misreports despite the in-function reads).
-    """
-
-    clients: dict[LLMRole, Any]
-    cache_key: tuple[str, str] | None = None
-
-    def __init__(self) -> None:
-        self.clients = {}
-
-
-_cache = _FactoryCache()
+_cache = LLMClientCache()
 
 
 @overload
@@ -120,12 +106,7 @@ def get_llm(role: LLMRole) -> Any:
 
 def get_llm(role: LLMRole) -> Any:
     """Return the cached LLM client for *role*, building it once per config."""
-    cache_key = current_llm_client_cache_key()
-    if _cache.cache_key != cache_key:
-        _cache.clients.clear()
-        _cache.cache_key = cache_key
-
-    cached = _cache.clients.get(role)
+    cached = _cache.get(role, current_llm_client_cache_key())
     if cached is not None:
         return cached
 
@@ -134,14 +115,13 @@ def get_llm(role: LLMRole) -> Any:
         client = client_builders.build_agent_client(route)
     else:
         client = client_builders.build_reasoning_client(route, _MODEL_TYPE_BY_ROLE[role])
-    _cache.clients[role] = client
+    _cache.store(role, client)
     return client
 
 
 def reset_llm_clients() -> None:
     """Clear all cached role clients (tests, benchmarks, ``/model`` switch, env sync)."""
-    _cache.clients.clear()
-    _cache.cache_key = None
+    _cache.clear()
 
 
 def build_llm_client(model_type: ModelType) -> Any:
