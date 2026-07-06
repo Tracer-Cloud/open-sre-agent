@@ -12,7 +12,7 @@ from rich.console import Console
 from rich.markup import escape
 
 from core.agent_harness.ports import OutputSink
-from core.llm.llm_retry import CREDIT_EXHAUSTED_MARKER
+from core.llm.shared.llm_retry import CREDIT_EXHAUSTED_MARKER
 from surfaces.interactive_shell.ui import (
     stream_to_console,
 )

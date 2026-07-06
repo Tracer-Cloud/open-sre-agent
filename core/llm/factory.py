@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Literal, overload
 
-from core.llm.client_cache_key import current_llm_client_cache_key
+from core.llm.internal.client_cache_key import current_llm_client_cache_key
 from core.llm.transport_mode import use_litellm_for_provider
 from core.llm.types import AgentLLMClient
 
@@ -107,7 +107,7 @@ def _cli_provider_registration(provider: str) -> Any:
 
 def _build_agent_client(route: LLMRoute) -> AgentLLMClient:
     """Build the tool-calling client for the resolved route."""
-    from core.llm.sdk.agent_clients import (
+    from core.llm.transports.sdk.agent_clients import (
         AnthropicAgentClient,
         BedrockAgentClient,
         BedrockConverseAgentClient,
@@ -122,7 +122,7 @@ def _build_agent_client(route: LLMRoute) -> AgentLLMClient:
         return CLIBackedAgentClient(route.cli_reg.adapter_factory(), model=model_name)
 
     if route.use_litellm:
-        from core.llm.litellm.routing import build_litellm_agent_client
+        from core.llm.transports.litellm.routing import build_litellm_agent_client
 
         return build_litellm_agent_client(settings, provider)
 
@@ -134,7 +134,7 @@ def _build_agent_client(route: LLMRoute) -> AgentLLMClient:
             max_tokens=OPENAI_LLM_CONFIG.max_tokens,
         )
 
-    from core.llm.openai_compat_providers import (
+    from core.llm.providers.openai_compat_providers import (
         is_openai_compat_provider,
         resolve_openai_compat_provider,
     )
@@ -152,7 +152,7 @@ def _build_agent_client(route: LLMRoute) -> AgentLLMClient:
 
     if provider == "bedrock":
         from config.config import BEDROCK_LLM_CONFIG
-        from core.llm.bedrock_model_ids import is_anthropic_bedrock_model
+        from core.llm.providers.bedrock_model_ids import is_anthropic_bedrock_model
 
         model = settings.bedrock_reasoning_model
         if is_anthropic_bedrock_model(model):
@@ -192,8 +192,8 @@ def _build_llm_client(route: LLMRoute, model_type: _ModelType) -> Any:
         )
 
     if route.use_litellm:
-        from core.llm.litellm.routing import build_litellm_llm_client
-        from core.llm.usage import emit_usage
+        from core.llm.shared.usage import emit_usage
+        from core.llm.transports.litellm.routing import build_litellm_llm_client
 
         return build_litellm_llm_client(
             settings,
@@ -202,11 +202,11 @@ def _build_llm_client(route: LLMRoute, model_type: _ModelType) -> Any:
             usage_callback=emit_usage,
         )
 
-    from core.llm.openai_compat_providers import (
+    from core.llm.providers.openai_compat_providers import (
         is_openai_compat_provider,
         resolve_openai_compat_provider,
     )
-    from core.llm.sdk import llm_clients as sdk
+    from core.llm.transports.sdk import llm_clients as sdk
 
     if provider == "openai":
         from config.config import OPENAI_LLM_CONFIG

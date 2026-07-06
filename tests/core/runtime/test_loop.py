@@ -321,7 +321,7 @@ def test_generic_tool_result_conversion_does_not_import_litellm(
     real_import = builtins.__import__
 
     def guarded_import(name: str, *args: Any, **kwargs: Any) -> Any:
-        if name == "core.llm.litellm.clients" or name.startswith("litellm"):
+        if name == "core.llm.transports.litellm.clients" or name.startswith("litellm"):
             raise AssertionError(f"unexpected LiteLLM import: {name}")
         return real_import(name, *args, **kwargs)
 

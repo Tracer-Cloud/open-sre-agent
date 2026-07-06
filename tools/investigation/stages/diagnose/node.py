@@ -147,7 +147,7 @@ def _parse_via_legacy(
     *,
     alert_source: str = "",
 ) -> InvestigationResult:
-    from core.llm.llm_client import parse_root_cause
+    from core.llm.root_cause import parse_root_cause
 
     try:
         rr = parse_root_cause(last_text)

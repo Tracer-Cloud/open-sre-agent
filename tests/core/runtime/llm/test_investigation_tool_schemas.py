@@ -6,10 +6,13 @@ from collections.abc import Generator
 
 import pytest
 
-from core.llm.sdk.bedrock_converse import build_converse_tool_specs, normalize_tool_input_schema
-from core.llm.tool_schema_normalize import (
+from core.llm.shared.tool_schema_normalize import (
     build_openai_tool_specs,
     normalize_openai_tool_input_schema,
+)
+from core.llm.transports.sdk.bedrock_converse import (
+    build_converse_tool_specs,
+    normalize_tool_input_schema,
 )
 from tests.core.runtime.llm.investigation_tool_schema_contract import (
     assert_all_investigation_tools_satisfy_strict_adapter,

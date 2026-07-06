@@ -31,17 +31,17 @@ from openai import OpenAI
 from openai import RateLimitError as OpenAIRateLimitError
 from pydantic import BaseModel
 
-from core.llm.bedrock_model_ids import is_anthropic_bedrock_model
-from core.llm.llm_retry import extract_retry_after_seconds
-from core.llm.openai_chat_completions import (
+from core.llm.providers.bedrock_model_ids import is_anthropic_bedrock_model
+from core.llm.shared.llm_retry import extract_retry_after_seconds
+from core.llm.shared.openai_chat_completions import (
     _RETRY_INITIAL_BACKOFF_SEC,
     _RETRY_MAX_ATTEMPTS,
     LLM_CLIENT_TIMEOUT_SEC,
     normalize_messages_openai,
 )
-from core.llm.structured_output import StructuredOutputClient
+from core.llm.shared.structured_output import StructuredOutputClient
+from core.llm.shared.usage import llm_response_with_usage
 from core.llm.types import LLMResponse
-from core.llm.usage import llm_response_with_usage
 
 logger = logging.getLogger(__name__)
 

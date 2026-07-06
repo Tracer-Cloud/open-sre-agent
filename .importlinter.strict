@@ -33,7 +33,7 @@ layers =
     config
 ignore_imports =
     # config upward imports (T-4 debt — refactor into lower layers)
-    config.config -> core.llm.azure_openai
+    config.config -> core.llm.providers.azure_openai
     config.llm_auth.credentials -> integrations.llm_cli.registry
     config.llm_keyring -> platform
     config.repl_config -> platform.terminal.theme
@@ -49,8 +49,8 @@ ignore_imports =
     core.agent_harness.tools.action_tools -> tools.registry
     core.llm.factory -> integrations.llm_cli.registry
     core.llm.factory -> integrations.llm_cli.runner
-    core.llm.sdk.agent_clients -> integrations.llm_cli.runner
-    core.llm.sdk.agent_clients -> integrations.llm_cli.text
+    core.llm.transports.sdk.agent_clients -> integrations.llm_cli.runner
+    core.llm.transports.sdk.agent_clients -> integrations.llm_cli.text
     core.llm_invoke_errors -> integrations.llm_cli.errors
     # platform -> integrations (T-4 debt — scheduler / observability)
     platform.analytics.cli -> integrations.github.identity

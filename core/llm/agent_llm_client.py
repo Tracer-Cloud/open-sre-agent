@@ -7,7 +7,8 @@ Provider routing lives in :mod:`core.llm.factory`; this module keeps the histori
 from __future__ import annotations
 
 from core.llm.factory import LLMRole, get_llm, reset_llm_clients
-from core.llm.sdk.agent_clients import (
+from core.llm.shared.tool_schema_normalize import build_openai_tool_specs
+from core.llm.transports.sdk.agent_clients import (
     AnthropicAgentClient,
     BedrockAgentClient,
     BedrockConverseAgentClient,
@@ -15,7 +16,6 @@ from core.llm.sdk.agent_clients import (
     OpenAIAgentClient,
     _try_parse_tool_call_json,
 )
-from core.llm.tool_schema_normalize import build_openai_tool_specs
 from core.llm.types import AgentLLMClient
 
 __all__ = [

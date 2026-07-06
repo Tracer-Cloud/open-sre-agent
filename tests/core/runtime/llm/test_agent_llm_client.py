@@ -151,7 +151,7 @@ def test_internal_server_error_without_model_data_is_retried(
 ) -> None:
     fake_anthropic = _install_fake_anthropic(monkeypatch)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-    monkeypatch.setattr("core.llm.sdk.agent_clients.time.sleep", lambda _: None)
+    monkeypatch.setattr("core.llm.transports.sdk.agent_clients.time.sleep", lambda _: None)
 
     call_count = 0
 
@@ -177,11 +177,11 @@ def test_anthropic_rate_limit_error_is_retried_then_raises(
     """Rate-limit is transient by design — retry with backoff like 500s do.
     Without retry, a single 429 mid-investigation kills the whole case.
     """
-    from core.llm.openai_chat_completions import _RETRY_MAX_ATTEMPTS
+    from core.llm.shared.openai_chat_completions import _RETRY_MAX_ATTEMPTS
 
     fake_anthropic = _install_fake_anthropic(monkeypatch)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-    monkeypatch.setattr("core.llm.sdk.agent_clients.time.sleep", lambda _: None)
+    monkeypatch.setattr("core.llm.transports.sdk.agent_clients.time.sleep", lambda _: None)
 
     call_count = 0
 
@@ -208,7 +208,7 @@ def test_anthropic_credit_balance_too_low_raises_LLMCreditExhaustedError(
     Distinguish billing exhaustion (fatal, no retry) from real schema errors
     so the bench runner halts on first occurrence instead of wrapping into
     a generic RuntimeError that the cell loop catches as a per-cell failure."""
-    from core.llm.llm_retry import LLMCreditExhaustedError
+    from core.llm.shared.llm_retry import LLMCreditExhaustedError
 
     fake_anthropic = _install_fake_anthropic(monkeypatch)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
@@ -242,7 +242,7 @@ def test_openai_insufficient_quota_raises_LLMCreditExhaustedError(
     though it lands in our RateLimitError handler (which normally retries),
     the credit check must short-circuit to LLMCreditExhaustedError. This is
     the exact scenario that burned 1h42m on the June-3 run #2."""
-    from core.llm.llm_retry import LLMCreditExhaustedError
+    from core.llm.shared.llm_retry import LLMCreditExhaustedError
 
     fake_openai = _install_fake_openai(monkeypatch)
 
@@ -286,7 +286,7 @@ def test_anthropic_rate_limit_honors_retry_after_header(
 
     sleeps: list[float] = []
     monkeypatch.setattr(
-        "core.llm.sdk.agent_clients.time.sleep",
+        "core.llm.transports.sdk.agent_clients.time.sleep",
         sleeps.append,
     )
 
@@ -321,11 +321,11 @@ def test_bedrock_rate_limit_error_is_retried_then_raises(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Bedrock shares the Anthropic invoke path; 429 retry applies the same way."""
-    from core.llm.openai_chat_completions import _RETRY_MAX_ATTEMPTS
+    from core.llm.shared.openai_chat_completions import _RETRY_MAX_ATTEMPTS
 
     fake_anthropic = _install_fake_anthropic(monkeypatch)
     monkeypatch.setenv("AWS_REGION", "us-west-2")
-    monkeypatch.setattr("core.llm.sdk.agent_clients.time.sleep", lambda _: None)
+    monkeypatch.setattr("core.llm.transports.sdk.agent_clients.time.sleep", lambda _: None)
 
     call_count = 0
 
@@ -618,10 +618,10 @@ def test_openai_rate_limit_error_is_retried_then_raises(
     Without retry, a single 429 mid-investigation kills the whole case (matters
     especially on tight OpenAI tiers like gpt-4o's 30k TPM).
     """
-    from core.llm.openai_chat_completions import _RETRY_MAX_ATTEMPTS
+    from core.llm.shared.openai_chat_completions import _RETRY_MAX_ATTEMPTS
 
     fake_openai = _install_fake_openai(monkeypatch)
-    monkeypatch.setattr("core.llm.sdk.agent_clients.time.sleep", lambda _: None)
+    monkeypatch.setattr("core.llm.transports.sdk.agent_clients.time.sleep", lambda _: None)
 
     call_count = 0
 
@@ -655,7 +655,7 @@ def test_openai_rate_limit_honors_body_text_hint(
 
     sleeps: list[float] = []
     monkeypatch.setattr(
-        "core.llm.sdk.agent_clients.time.sleep",
+        "core.llm.transports.sdk.agent_clients.time.sleep",
         sleeps.append,
     )
 
@@ -689,7 +689,7 @@ def test_openai_permission_denied_error_is_not_retried(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     fake_openai = _install_fake_openai(monkeypatch)
-    monkeypatch.setattr("core.llm.sdk.agent_clients.time.sleep", lambda _: None)
+    monkeypatch.setattr("core.llm.transports.sdk.agent_clients.time.sleep", lambda _: None)
 
     call_count = 0
 
@@ -749,7 +749,7 @@ def test_unrelated_type_error_is_retried_and_wrapped(
 ) -> None:
     _install_fake_anthropic(monkeypatch)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-    monkeypatch.setattr("core.llm.sdk.agent_clients.time.sleep", lambda _: None)
+    monkeypatch.setattr("core.llm.transports.sdk.agent_clients.time.sleep", lambda _: None)
 
     call_count = 0
 
@@ -840,7 +840,7 @@ def test_get_agent_llm_routes_deepseek_to_openai_compatible_client(
                 }
             )
 
-    monkeypatch.setattr("core.llm.sdk.agent_clients.OpenAIAgentClient", _FakeOpenAIAgentClient)
+    monkeypatch.setattr("core.llm.transports.sdk.agent_clients.OpenAIAgentClient", _FakeOpenAIAgentClient)
     monkeypatch.setenv("LLM_PROVIDER", "deepseek")
     monkeypatch.setenv("DEEPSEEK_API_KEY", "ds-test")
     monkeypatch.setenv("DEEPSEEK_REASONING_MODEL", "deepseek-v4-pro")
@@ -859,7 +859,7 @@ def test_get_agent_llm_routes_deepseek_to_litellm_when_transport_enabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from core.llm import agent_llm_client as alc
-    from core.llm.litellm.clients import LiteLLMAgentClient
+    from core.llm.transports.litellm.clients import LiteLLMAgentClient
 
     monkeypatch.setenv("LLM_PROVIDER", "deepseek")
     monkeypatch.setenv("DEEPSEEK_API_KEY", "ds-test")
@@ -993,7 +993,7 @@ def test_cli_backed_agent_client_tool_call_parsing() -> None:
     # Patch CLIBackedLLMClient.invoke to return a known JSON response.
     import unittest.mock as mock
 
-    from core.llm.llm_client import LLMResponse
+    from core.llm.types import LLMResponse
 
     json_response = '{"tool_calls": [{"id": "c1", "name": "my_tool", "input": {"x": 1}}]}'
     with mock.patch(
@@ -1052,7 +1052,7 @@ def test_cli_backed_agent_client_reuses_single_cli_llm_client() -> None:
     import unittest.mock as mock
 
     from core.llm.agent_llm_client import CLIBackedAgentClient
-    from core.llm.llm_client import LLMResponse
+    from core.llm.types import LLMResponse
     from integrations.llm_cli.runner import CLIBackedLLMClient
 
     fake_adapter = _types.SimpleNamespace(
@@ -1094,7 +1094,7 @@ def test_cli_backed_agent_client_plain_text_response() -> None:
     import unittest.mock as mock
 
     from core.llm.agent_llm_client import CLIBackedAgentClient
-    from core.llm.llm_client import LLMResponse
+    from core.llm.types import LLMResponse
 
     fake_adapter = _types.SimpleNamespace(
         name="codex",
@@ -1129,7 +1129,7 @@ def test_cli_backed_agent_client_invalid_tool_json_falls_back_to_text_response()
     import unittest.mock as mock
 
     from core.llm.agent_llm_client import CLIBackedAgentClient
-    from core.llm.llm_client import LLMResponse
+    from core.llm.types import LLMResponse
 
     fake_adapter = _types.SimpleNamespace(
         name="codex",
@@ -1165,7 +1165,7 @@ def test_cli_backed_agent_client_filtered_tool_calls_fall_back_to_text_response(
     import unittest.mock as mock
 
     from core.llm.agent_llm_client import CLIBackedAgentClient
-    from core.llm.llm_client import LLMResponse
+    from core.llm.types import LLMResponse
 
     fake_adapter = _types.SimpleNamespace(
         name="codex",
@@ -1480,7 +1480,7 @@ def test_anthropic_unexpected_response_shape_raises_runtime_error(
 def test_anthropic_agent_client_emits_provider_usage(monkeypatch: pytest.MonkeyPatch) -> None:
     """Successful agent invokes must report provider token usage via the usage hook
     so investigation-turn telemetry can carry real token counts (issue #3698)."""
-    from core.llm.usage import set_usage_hook
+    from core.llm.shared.usage import set_usage_hook
 
     _install_fake_anthropic(monkeypatch)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
@@ -1508,7 +1508,7 @@ def test_anthropic_agent_client_emits_provider_usage(monkeypatch: pytest.MonkeyP
 
 
 def test_bedrock_converse_emits_provider_usage(monkeypatch: pytest.MonkeyPatch) -> None:
-    from core.llm.usage import set_usage_hook
+    from core.llm.shared.usage import set_usage_hook
 
     monkeypatch.setenv("AWS_REGION", "us-east-1")
     response = _make_converse_response(text="ok")

@@ -38,7 +38,7 @@ def test_agent_singleton_invalidates_on_provider_change(monkeypatch) -> None:
         return client
 
     monkeypatch.setattr(
-        "core.llm.litellm.routing.build_litellm_agent_client",
+        "core.llm.transports.litellm.routing.build_litellm_agent_client",
         fake_build,
     )
     monkeypatch.setenv("LLM_PROVIDER", "azure-openai")

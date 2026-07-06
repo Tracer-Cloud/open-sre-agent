@@ -44,7 +44,10 @@ class MessageFormatter:
 
     def assistant_from_response(self, response: AgentLLMResponse) -> ProviderMessage:
         """Build the provider assistant-message payload from an LLM response."""
-        from core.llm.sdk.agent_clients import AnthropicAgentClient, BedrockConverseAgentClient
+        from core.llm.transports.sdk.agent_clients import (
+            AnthropicAgentClient,
+            BedrockConverseAgentClient,
+        )
 
         llm = self._llm
         if isinstance(llm, (AnthropicAgentClient, BedrockConverseAgentClient)):
@@ -62,7 +65,7 @@ class MessageFormatter:
         results: list[Any],
     ) -> list[ProviderMessage]:
         """Build provider tool-result payloads for a batch of tool calls."""
-        from core.llm.sdk.agent_clients import AnthropicAgentClient, OpenAIAgentClient
+        from core.llm.transports.sdk.agent_clients import AnthropicAgentClient, OpenAIAgentClient
 
         llm = self._llm
         if isinstance(llm, AnthropicAgentClient):
@@ -78,7 +81,7 @@ class MessageFormatter:
 
         Used to inject pre-seeded tool results into the conversation without special-casing.
         """
-        from core.llm.sdk.agent_clients import (
+        from core.llm.transports.sdk.agent_clients import (
             AnthropicAgentClient,
             BedrockConverseAgentClient,
             CLIBackedAgentClient,
@@ -88,7 +91,7 @@ class MessageFormatter:
         llm = self._llm
 
         if isinstance(llm, BedrockConverseAgentClient):
-            from core.llm.sdk.bedrock_converse import build_assistant_tool_use_message
+            from core.llm.transports.sdk.bedrock_converse import build_assistant_tool_use_message
 
             return cast("ProviderMessage", build_assistant_tool_use_message(tool_calls))
 
@@ -164,7 +167,7 @@ class MessageFormatter:
         return []
 
     def _app_message_content(self, message: AppRuntimeMessage) -> RuntimeContent:
-        from core.llm.sdk.agent_clients import BedrockConverseAgentClient
+        from core.llm.transports.sdk.agent_clients import BedrockConverseAgentClient
 
         if isinstance(self._llm, BedrockConverseAgentClient):
             return _to_converse_text_blocks(message.content)
@@ -208,7 +211,7 @@ def _coerce_runtime_message(message: RuntimeMessageLike) -> RuntimeMessage:
 
 def _is_litellm_agent_client(llm: Any) -> bool:
     cls = type(llm)
-    return cls.__module__ == "core.llm.litellm.clients" and cls.__name__ == "LiteLLMAgentClient"
+    return cls.__module__ == "core.llm.transports.litellm.clients" and cls.__name__ == "LiteLLMAgentClient"
 
 
 def _to_converse_text_blocks(content: RuntimeContent) -> RuntimeContent:

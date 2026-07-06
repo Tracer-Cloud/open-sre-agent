@@ -93,7 +93,7 @@ async def _render_agent_presentation_transition(
                 raise ValueError("turn_error event requires an error")
             console.print(f"[{ERROR}]turn error:[/] {escape(str(exc))}")
             # On a credit/billing wall, add the in-tool recovery hint.
-            from core.llm.llm_retry import LLMCreditExhaustedError
+            from core.llm.shared.llm_retry import LLMCreditExhaustedError
 
             if isinstance(exc, LLMCreditExhaustedError):
                 console.print(f"[{DIM}]Run /model to switch to another provider.[/]")

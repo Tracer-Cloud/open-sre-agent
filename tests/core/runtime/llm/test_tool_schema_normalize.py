@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from core.llm.tool_schema_normalize import (
+from core.llm.shared.tool_schema_normalize import (
     BEDROCK_UNSUPPORTED_SCHEMA_KEYS,
     COMMON_UNSUPPORTED_SCHEMA_KEYS,
     normalize_openai_tool_input_schema,

@@ -205,8 +205,8 @@ def build_seed_calls(
     if not seed_tools:
         return []
 
-    from core.llm.sdk.agent_clients import BedrockConverseAgentClient
-    from core.llm.sdk.bedrock_converse import new_tool_use_id
+    from core.llm.transports.sdk.agent_clients import BedrockConverseAgentClient
+    from core.llm.transports.sdk.bedrock_converse import new_tool_use_id
 
     use_converse_ids = isinstance(llm, BedrockConverseAgentClient)
     calls: list[ToolCall] = []

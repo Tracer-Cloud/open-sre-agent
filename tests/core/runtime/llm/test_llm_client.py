@@ -4,9 +4,10 @@ import pytest
 from anthropic import AuthenticationError, NotFoundError, PermissionDeniedError
 from anthropic import BadRequestError as AnthropicBadRequestError
 
-import core.llm.sdk.llm_clients as sdk_llm
+import core.llm.transports.sdk.llm_clients as sdk_llm
 from core.llm import llm_client
-from core.llm.structured_output import extract_json_payload
+from core.llm.root_cause import parse_root_cause
+from core.llm.shared.structured_output import extract_json_payload
 
 
 class _FakeAnthropicMessages:
@@ -232,14 +233,14 @@ def test_bedrock_client_routes_mistral_to_converse(monkeypatch) -> None:
 
 
 def test_parse_root_cause_extracts_category_when_not_first_token() -> None:
-    parsed = llm_client.parse_root_cause(
+    parsed = parse_root_cause(
         "ROOT_CAUSE_CATEGORY:\nroot_cause_category: agent_hang\nROOT_CAUSE: test"
     )
     assert parsed.root_cause_category == "agent_hang"
 
 
 def test_parse_root_cause_extracts_category_from_arrow_format() -> None:
-    parsed = llm_client.parse_root_cause(
+    parsed = parse_root_cause(
         "ROOT_CAUSE_CATEGORY:\ncategory -> delivery_hang\nROOT_CAUSE: test"
     )
     assert parsed.root_cause_category == "delivery_hang"

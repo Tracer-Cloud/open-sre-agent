@@ -86,7 +86,7 @@ def switch_llm_provider(
     # confirming it requires an intentional request-time credential read.
     auth_status = credential_status(provider.value)
     if provider.value == "azure-openai":
-        from core.llm.azure_openai import azure_openai_endpoint_configured
+        from core.llm.providers.azure_openai import azure_openai_endpoint_configured
 
         if not azure_openai_endpoint_configured():
             console.print(

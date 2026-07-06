@@ -437,7 +437,7 @@ class LLMSettings(StrictConfigModel):
     @field_validator("azure_openai_base_url", mode="before")
     @classmethod
     def _normalize_azure_openai_base_url(cls, value: object) -> str:
-        from core.llm.azure_openai import normalize_azure_openai_base_url
+        from core.llm.providers.azure_openai import normalize_azure_openai_base_url
 
         return normalize_azure_openai_base_url(str(value or ""))
 

@@ -2,8 +2,8 @@
 
 Maps each API provider (anthropic, openai, bedrock, openai-compat) to the
 correct LiteLLM model prefix, credential env var, and optional ``api_base``
-so the dispatch entrypoints can build a :class:`~core.llm.litellm.clients.LiteLLMAgentClient`
-or :class:`~core.llm.litellm.clients.LiteLLMLLMClient` without embedding
+so the dispatch entrypoints can build a :class:`~core.llm.transports.litellm.clients.LiteLLMAgentClient`
+or :class:`~core.llm.transports.litellm.clients.LiteLLMLLMClient` without embedding
 provider-specific knowledge.
 """
 
@@ -11,16 +11,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.llm.azure_openai import (
+from core.llm.providers.azure_openai import (
     is_azure_openai_provider,
     resolve_azure_openai_request_kwargs,
 )
-from core.llm.litellm.clients import LiteLLMAgentClient, LiteLLMLLMClient
-from core.llm.openai_compat_providers import (
+from core.llm.providers.openai_compat_providers import (
     ModelType,
     is_openai_compat_provider,
     resolve_openai_compat_provider,
 )
+from core.llm.transports.litellm.clients import LiteLLMAgentClient, LiteLLMLLMClient
 
 
 def _litellm_model_for_compat(model: str) -> str:

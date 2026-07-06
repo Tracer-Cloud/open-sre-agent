@@ -19,7 +19,7 @@ from core.agent_harness.prompts import (
 from core.agent_harness.tools.action_tools import get_action_tools_from_integrations_context
 from core.agent_harness.tools.tool_context import ActionToolContext
 from core.agent_harness.turns.action_driver import _MAX_TOOL_CALLING_ITERATIONS
-from core.llm.llm_retry import LLMCreditExhaustedError
+from core.llm.shared.llm_retry import LLMCreditExhaustedError
 from core.llm.types import ToolCall
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS
 from tests.core.agent._ci_gates import (

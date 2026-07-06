@@ -14,8 +14,8 @@ from types import SimpleNamespace
 import pytest
 
 import core.llm.llm_client as llm_client
-from core.llm.litellm.clients import LiteLLMLLMClient
-from core.llm.openai_compat_providers import OPENAI_COMPATIBLE_PROVIDERS
+from core.llm.providers.openai_compat_providers import OPENAI_COMPATIBLE_PROVIDERS
+from core.llm.transports.litellm.clients import LiteLLMLLMClient
 
 _OPENAI_COMPATIBLE_PROVIDERS = OPENAI_COMPATIBLE_PROVIDERS
 OpenAILLMClient = llm_client.OpenAILLMClient

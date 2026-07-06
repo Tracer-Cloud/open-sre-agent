@@ -12,7 +12,7 @@ from core.agent_harness.providers.default_providers import (
     DefaultReasoningClientProvider,
     _llm_client_unavailable_message,
 )
-from core.llm.preload import preload_llm_clients
+from core.llm.internal.preload import preload_llm_clients
 
 
 def test_preload_imports_the_llm_client_graph() -> None:

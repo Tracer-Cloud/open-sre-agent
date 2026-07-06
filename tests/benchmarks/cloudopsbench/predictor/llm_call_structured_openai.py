@@ -60,8 +60,8 @@ from typing import Any, Literal
 from openai import OpenAI
 from pydantic import BaseModel, ConfigDict, Field
 
-from core.llm.llm_retry import LLMCreditExhaustedError, retry_on_rate_limit
-from core.llm.usage import emit_usage
+from core.llm.shared.llm_retry import LLMCreditExhaustedError, retry_on_rate_limit
+from core.llm.shared.usage import emit_usage
 from tests.benchmarks.cloudopsbench.predictor.llm_call import (
     _build_system_prompt,
     _build_user_prompt,
