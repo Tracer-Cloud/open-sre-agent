@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from core.agent_harness.models.turn_context import TurnContext
+from core.agent_harness.models.turn_snapshot import TurnSnapshot
 from core.agent_harness.prompts import (
     _SYSTEM_PROMPT_BASE,
     build_action_system_prompt,
@@ -18,8 +18,8 @@ def _ctx(
     messages: list[tuple[str, str]] | None = None,
     integrations: tuple[str, ...] = (),
     integrations_known: bool = False,
-) -> TurnContext:
-    return TurnContext(
+) -> TurnSnapshot:
+    return TurnSnapshot(
         text="",
         conversation_messages=tuple(messages or []),
         configured_integrations=integrations,

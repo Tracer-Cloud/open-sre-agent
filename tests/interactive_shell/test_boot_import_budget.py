@@ -15,8 +15,8 @@ import sys
 _FORBIDDEN_AT_BOOT: tuple[str, ...] = (
     # Harness/turn-execution stack — deferred until the first turn is dispatched.
     "surfaces.interactive_shell.runtime.shell_turn_execution",
-    "core.agent",
-    "core.agent_harness.agents.action_agent",
+    "core.agent.agent",
+    "core.agent_harness.turns.action_driver",
     # Email delivery — only loads on background-RCA completion.
     "integrations.smtp.delivery",
 )

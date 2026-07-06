@@ -25,6 +25,7 @@ _ORCHESTRATION_PIPELINE_FILES: tuple[Path, ...] = (
     Path("tools/investigation/capability.py"),
     Path("tools/investigation/state_factory.py"),
     Path("tools/investigation/streaming.py"),
+    Path("tools/investigation/session_runner.py"),
 )
 # ``cli`` is the presentation layer; same rule.
 _FORBIDDEN_PREFIXES: tuple[str, ...] = ("cli",)

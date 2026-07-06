@@ -8,11 +8,12 @@ from typing import Any
 import httpx
 
 from platform.common.truncation import truncate
+from platform.notifications.limits import MAX_MESSAGE_SIZE
 from platform.notifications.redaction import redact_token
 
 logger = logging.getLogger(__name__)
 
-_MESSAGE_LIMIT = 4096
+_MESSAGE_LIMIT = MAX_MESSAGE_SIZE
 _TWILIO_BASE_URL = "https://api.twilio.com/2010-04-01/Accounts"
 
 

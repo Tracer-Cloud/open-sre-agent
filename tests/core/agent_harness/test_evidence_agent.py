@@ -1,4 +1,4 @@
-"""Regression tests for ``core.agent_harness.agents.evidence_agent.gather_tool_evidence``.
+"""Regression tests for ``core.agent_harness.turns.evidence_driver.gather_tool_evidence``.
 
 The public contract (docstring) is: *any* failure is reported and swallowed
 (returns ``None``) so the conversational turn never breaks. Tool discovery,
@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-import core.agent_harness.agents.evidence_agent as evidence_agent
+import core.agent_harness.turns.evidence_driver as evidence_agent
 import tools.investigation.stages.gather_evidence.tools as gather_tools
 from core.agent_harness.session import Session
 
@@ -35,7 +35,9 @@ def _session() -> Session:
 def test_tool_discovery_raise_is_swallowed(monkeypatch: Any) -> None:
     """A raise from ``get_available_tools`` must not break the turn."""
     monkeypatch.setattr(
-        evidence_agent, "_resolve_gather_integrations", lambda _session, _message: {}
+        evidence_agent,
+        "_resolve_gather_integrations",
+        lambda *_args, **_kwargs: {},
     )
 
     def _boom(_resolved: dict[str, Any]) -> Any:
@@ -56,7 +58,7 @@ def test_tool_discovery_raise_is_swallowed(monkeypatch: Any) -> None:
 def test_integration_resolution_raise_is_swallowed(monkeypatch: Any) -> None:
     """A raise from integration resolution must not break the turn."""
 
-    def _boom(_session: Any, _message: str) -> dict[str, Any]:
+    def _boom(_session: Any, _message: str, resolved_integrations: Any = None) -> dict[str, Any]:
         raise RuntimeError("credential store unreadable")
 
     monkeypatch.setattr(evidence_agent, "_resolve_gather_integrations", _boom)
@@ -74,7 +76,9 @@ def test_integration_resolution_raise_is_swallowed(monkeypatch: Any) -> None:
 def test_no_error_reporter_still_swallows(monkeypatch: Any) -> None:
     """Even without an error reporter, a discovery raise returns None (no crash)."""
     monkeypatch.setattr(
-        evidence_agent, "_resolve_gather_integrations", lambda _session, _message: {}
+        evidence_agent,
+        "_resolve_gather_integrations",
+        lambda *_args, **_kwargs: {},
     )
 
     def _boom(_resolved: dict[str, Any]) -> Any:
@@ -88,7 +92,9 @@ def test_no_error_reporter_still_swallows(monkeypatch: Any) -> None:
 def test_no_usable_tools_returns_none(monkeypatch: Any) -> None:
     """Empty toolset short-circuits to None without invoking the LLM."""
     monkeypatch.setattr(
-        evidence_agent, "_resolve_gather_integrations", lambda _session, _message: {}
+        evidence_agent,
+        "_resolve_gather_integrations",
+        lambda *_args, **_kwargs: {},
     )
     monkeypatch.setattr(gather_tools, "get_available_tools", lambda _resolved: [])
 

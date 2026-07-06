@@ -18,10 +18,10 @@ from rich.table import Table
 
 from surfaces.interactive_shell.ui.agents import agents_view as agents_view_mod
 from surfaces.interactive_shell.ui.agents.agents_view import _build_agents_table
-from tools.fleet_monitoring import config as config_mod
-from tools.fleet_monitoring.probe import ProcessSnapshot
-from tools.fleet_monitoring.registry import AgentRecord
-from tools.fleet_monitoring.token_rate import TOKEN_RATE_TRACKER
+from tools.system.fleet_monitoring import config as config_mod
+from tools.system.fleet_monitoring.probe import ProcessSnapshot
+from tools.system.fleet_monitoring.registry import AgentRecord
+from tools.system.fleet_monitoring.token_rate import TOKEN_RATE_TRACKER
 
 
 @pytest.fixture(autouse=True)
@@ -43,9 +43,9 @@ def _clear_sampler_module_state() -> None:
 
     Three globals can leak across test files:
 
-    - :data:`tools.fleet_monitoring.sampler._latest` (probe snapshots dict)
-    - :data:`tools.fleet_monitoring.token_rate.TOKEN_RATE_TRACKER` (per-PID deque)
-    - :data:`tools.fleet_monitoring.sampler._TickCache.registry_snapshot` and
+    - :data:`tools.system.fleet_monitoring.sampler._latest` (probe snapshots dict)
+    - :data:`tools.system.fleet_monitoring.token_rate.TOKEN_RATE_TRACKER` (per-PID deque)
+    - :data:`tools.system.fleet_monitoring.sampler._TickCache.registry_snapshot` and
       :data:`_TickCache.agents_config` (tick caches added in #2023 to
       avoid re-reading the disk on every render)
 
@@ -53,7 +53,7 @@ def _clear_sampler_module_state() -> None:
     so placeholder assertions are stable under ``pytest-xdist`` and
     in arbitrary alphabetical order.
     """
-    from tools.fleet_monitoring import sampler as sampler_mod
+    from tools.system.fleet_monitoring import sampler as sampler_mod
 
     sampler_mod._latest.clear()
     sampler_mod._TickCache.registry_snapshot = {}

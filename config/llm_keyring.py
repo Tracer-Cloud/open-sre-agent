@@ -61,6 +61,17 @@ def macos_keychain_item_exists(username: str) -> bool | None:
     return None
 
 
+def read_keychain_secret(env_var: str) -> str:
+    """Read a secret directly from the system keychain, backend errors uncaught.
+
+    Callers that must tell "genuinely absent" apart from "keychain backend
+    could not be reached right now" (e.g. deciding whether to persist a
+    credential as stale) should use this instead of ``resolve_llm_api_key``,
+    which collapses both cases to ``""``.
+    """
+    return (keyring.get_password(_KEYRING_SERVICE, env_var) or "").strip()
+
+
 def resolve_llm_api_key(env_var: str) -> str:
     """Resolve an LLM API key from env first, then the local keychain."""
     env_value = os.getenv(env_var, "").strip()
@@ -69,7 +80,7 @@ def resolve_llm_api_key(env_var: str) -> str:
     if keyring_is_disabled():
         return ""
     try:
-        return (keyring.get_password(_KEYRING_SERVICE, env_var) or "").strip()
+        return read_keychain_secret(env_var)
     except keyring.errors.KeyringError:
         return ""
 

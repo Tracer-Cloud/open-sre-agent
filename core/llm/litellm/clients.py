@@ -124,7 +124,11 @@ class LiteLLMAgentClient:
             provider_name=self.provider_name,
             model=self._litellm_model,
         )
-        return agent_response_from_completion(response, provider_name=self.provider_name)
+        return agent_response_from_completion(
+            response,
+            provider_name=self.provider_name,
+            model=self._litellm_model,
+        )
 
     @staticmethod
     def build_tool_result_message(tool_calls: list[ToolCall], results: list[Any]) -> dict[str, Any]:

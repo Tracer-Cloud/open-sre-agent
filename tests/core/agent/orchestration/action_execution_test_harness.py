@@ -8,7 +8,7 @@ from typing import Any
 
 from rich.console import Console
 
-from core.agent_harness.agents.action_agent import ToolCallingDeps
+from core.agent_harness.turns.action_driver import ToolCallingDeps
 from core.llm.types import AgentLLMResponse, ToolCall
 
 

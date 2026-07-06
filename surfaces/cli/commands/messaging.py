@@ -20,6 +20,33 @@ _console = Console(highlight=False)
 _PLATFORM_CHOICES = [p.value for p in MessagingPlatform]
 
 
+def _validate_allow_user_id(platform: str, user_id: str) -> str:
+    """Normalize + validate a user id for ``allow``; raise on non-native values.
+
+    Inbound authorization matches the platform-native user id (Telegram
+    ``from.id``, Slack ``user_id``, Discord member id) — never a ``@username``.
+    Accepting a handle silently produces an allow-list entry that can never
+    match a real sender, which is exactly the "user X is not allowed" trap.
+    """
+    uid = user_id.strip()
+    if not uid:
+        raise click.BadParameter("user id must not be empty.", param_hint="--user-id")
+    if uid.startswith("@"):
+        raise click.BadParameter(
+            f"'{uid}' is a @username, not a platform user id. Inbound auth matches the "
+            "numeric platform user id, not the handle — get it from @userinfobot or the "
+            "bot's getUpdates response.",
+            param_hint="--user-id",
+        )
+    if platform == MessagingPlatform.TELEGRAM.value and not uid.isdigit():
+        raise click.BadParameter(
+            f"Telegram user ids are numeric (e.g. 6514715683); got '{uid}'. Use the numeric "
+            "from.id, not a username or display name.",
+            param_hint="--user-id",
+        )
+    return uid
+
+
 def _load_identity_policy(service: str) -> tuple[dict | None, MessagingIdentityPolicy]:
     """Load the integration record and its identity policy."""
     record = get_integration(service)
@@ -77,9 +104,14 @@ def _save_identity_policy(
         )
 
 
-@click.group("messaging")
-def messaging() -> None:
+@click.group("messaging", invoke_without_command=True)
+@click.pass_context
+def messaging(ctx: click.Context) -> None:
     """Messaging security: DM pairing and identity management."""
+    # No subcommand: show help and exit 0 (a bare group is a help request here,
+    # not an error) instead of Click's default missing-command exit code 2.
+    if ctx.invoked_subcommand is None:
+        click.echo(ctx.get_help())
 
 
 @messaging.command("pair")
@@ -116,7 +148,14 @@ def pair_command(platform: str) -> None:
         _console.print(f"[yellow]Note: inbound messaging has been enabled for {platform}.[/yellow]")
     _console.print(f"\n[bold green]Pairing code generated for {platform}:[/bold green]")
     _console.print(f"\n  [bold yellow]{code}[/bold yellow]\n")
-    _console.print(f"Send this to the bot via DM: [dim]/pair {code}[/dim]")
+    _console.print(
+        f"Next: open [bold]{platform}[/bold] (not this shell), DM your bot, and send: "
+        f"[dim]/pair {code}[/dim]"
+    )
+    _console.print(
+        f"[dim]The {platform} gateway must be running to receive it "
+        f"(e.g. `opensre gateway {platform}`).[/dim]"
+    )
     _console.print("[dim]The code is single-use and will expire in 15 minutes.[/dim]\n")
 
 
@@ -137,6 +176,7 @@ def pair_command(platform: str) -> None:
 def allow_command(platform: str, user_id: str) -> None:
     """Manually add a user to the allowed-users list (bypasses DM pairing)."""
     service = platform.lower()
+    user_id = _validate_allow_user_id(service, user_id)
     record, policy = _load_identity_policy(service)
 
     if user_id in policy.allowed_user_ids:

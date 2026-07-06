@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, cast
 
 import tools.investigation.reporting.upstream_correlation.node as correlation_node
-from core.context.state import InvestigationState
+from core.state import InvestigationState
 from tools.investigation.reporting.upstream_correlation.registry import (
     build_upstream_evidence_provider,
 )

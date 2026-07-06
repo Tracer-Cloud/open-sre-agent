@@ -102,7 +102,7 @@ def test_github_username_survives_identity_import_failure(monkeypatch: object) -
     real_import = builtins.__import__
 
     def _fail_github_identity(name: str, *args: object, **kwargs: object) -> object:
-        if name == "integrations.github_identity":
+        if name == "integrations.github.identity":
             raise ImportError("simulated heavy import failure")
         return real_import(name, *args, **kwargs)
 

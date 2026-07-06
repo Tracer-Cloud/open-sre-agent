@@ -7,6 +7,7 @@ from typing import Any
 
 from rich.console import Console
 
+from core.agent_harness.session import Session
 from core.agent_harness.tools.tool_context import (
     ActionToolContext,
     execute_with_action_context,
@@ -15,7 +16,6 @@ from core.agent_harness.tools.tool_context import (
 )
 from core.tool_framework.registered_tool import RegisteredTool
 from platform.common.task_types import TaskRecord
-from surfaces.interactive_shell.runtime import Session
 from tools.interactive_shell.shared.investigation_launch import launch_investigation
 
 
@@ -36,9 +36,12 @@ def run_text_investigation(
     is_tty: bool | None = None,
     action_already_listed: bool = False,
 ) -> None:
-    def _run(task: TaskRecord) -> dict[str, object]:
-        from surfaces.cli.investigation import run_investigation_for_session
+    from surfaces.interactive_shell.runtime.investigation_adapter import (
+        repl_investigation_launch_ports,
+        run_investigation_for_session,
+    )
 
+    def _run(task: TaskRecord) -> dict[str, object]:
         return run_investigation_for_session(
             alert_text=alert_text,
             context_overrides=session.accumulated_context or None,
@@ -60,6 +63,7 @@ def run_text_investigation(
     launch_investigation(
         session=session,
         console=console,
+        ports=repl_investigation_launch_ports(),
         tool_type="investigation",
         action_summary=f'investigation from text "{alert_text}"',
         announce_label="investigation",

@@ -1,4 +1,4 @@
-"""Tests for platform/notifications/telegram_credentials and telegram_alarms."""
+"""Tests for integrations.telegram.credentials and integrations.telegram.alarms."""
 
 from __future__ import annotations
 

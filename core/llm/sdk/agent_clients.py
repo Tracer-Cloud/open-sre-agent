@@ -30,6 +30,7 @@ from core.llm.openai_chat_completions import (
 )
 from core.llm.tool_schema_normalize import build_openai_tool_specs
 from core.llm.types import AgentLLMResponse, ToolCall
+from core.llm.usage import emit_provider_usage
 
 logger = logging.getLogger(__name__)
 
@@ -188,6 +189,13 @@ class AnthropicAgentClient:
             raise RuntimeError(
                 f"{self.provider_name} API returned an unexpected response: {type(response).__name__}"
             )
+
+        emit_provider_usage(
+            self._model,
+            getattr(response, "usage", None),
+            input_key="input_tokens",
+            output_key="output_tokens",
+        )
 
         text_parts: list[str] = []
         tool_calls: list[ToolCall] = []
@@ -367,6 +375,13 @@ class BedrockConverseAgentClient:
         if response is None:
             raise RuntimeError("Bedrock invocation failed without a response") from last_err
 
+        emit_provider_usage(
+            self._model,
+            response.get("usage"),
+            input_key="inputTokens",
+            output_key="outputTokens",
+        )
+
         content, raw_tool_calls, stop_reason, raw_message = parse_converse_output(response)
         tool_calls = [
             ToolCall(id=tool_id, name=name, input=inputs)
@@ -523,6 +538,12 @@ class OpenAIAgentClient:
             raise RuntimeError(
                 f"OpenAI API returned an unexpected response: {type(response).__name__}"
             )
+        emit_provider_usage(
+            self._model,
+            getattr(response, "usage", None),
+            input_key="prompt_tokens",
+            output_key="completion_tokens",
+        )
         choice = response.choices[0]
         msg = choice.message
         content = msg.content or ""

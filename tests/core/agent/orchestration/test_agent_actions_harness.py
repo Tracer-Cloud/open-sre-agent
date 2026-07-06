@@ -4,13 +4,20 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
+import pytest
 from rich.console import Console
 
 import tools.interactive_shell.actions.slash as slash_tool
-from core.agent_harness.agents.action_agent import ToolCallingDeps, run_action_agent_turn
 from core.agent_harness.session import Session
+from core.agent_harness.turns.action_driver import (
+    ActionTurnPlan,
+    ToolCallingDeps,
+    _build_action_agent,
+    _turn_resolved_integrations,
+    run_action_agent_turn,
+)
 from core.tool_framework.registered_tool import RegisteredTool
-from surfaces.interactive_shell.runtime.shell_turn_execution import run_action_tool_turn
+from surfaces.interactive_shell.runtime.action_turn import run_action_tool_turn
 from tests.core.agent.orchestration.action_execution_test_harness import (
     ActionExecutionHarness,
     FakeActionLLM,
@@ -249,3 +256,50 @@ def test_execute_with_harness_handles_llm_unavailable() -> None:
     assert result.has_unhandled_clause is True
     assert result.planned_count == 0
     assert session.cli_agent_messages[-1] == ("assistant", "action agent unavailable")
+
+
+def test_build_action_agent_returns_action_turn_plan() -> None:
+    llm = FakeActionLLM([no_tool_response()])
+    deps = ToolCallingDeps(llm_factory=lambda: llm)
+    session = Session()
+
+    plan = _build_action_agent(
+        message="test message",
+        session=session,
+        agent_tools=[],
+        turn_snapshot=None,
+        resolved_integrations={},
+        deps=deps,
+        tool_hooks=None,
+        tool_resources={},
+        observer=lambda *_args, **_kwargs: None,
+    )
+
+    assert isinstance(plan, ActionTurnPlan)
+    assert "test message" in plan.user_message
+    assert plan.agent is not None
+
+
+def test_turn_resolved_integrations_trusts_plan_without_reresolving(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With a plan present, the resolved view is read from it — never re-resolved.
+
+    Pins the single-resolve contract for the empty-integrations edge: an empty
+    ``{}`` on the plan is authoritative, not a signal to resolve again.
+    """
+    from dataclasses import replace
+
+    from core.agent_harness.models.turn_snapshot import TurnSnapshot
+    from core.agent_harness.turns.turn_plan import TurnPlan
+
+    def _must_not_run(_session: object) -> dict:
+        raise AssertionError("must not re-resolve when the plan is present")
+
+    monkeypatch.setattr(
+        "core.agent_harness.turns.action_driver.resolve_and_cache_integrations", _must_not_run
+    )
+    snapshot = replace(TurnSnapshot.from_session("q", Session()), resolved_integrations={})
+    plan = TurnPlan(snapshot=snapshot)
+
+    assert _turn_resolved_integrations(Session(), plan) == {}

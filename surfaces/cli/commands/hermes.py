@@ -30,6 +30,7 @@ from integrations.hermes.investigation import run_incident_investigation
 from integrations.hermes.sinks import TelegramSink
 from integrations.telegram.alarms import AlarmDispatcher
 from integrations.telegram.credentials import load_credentials_from_env
+from tools.investigation.capability import run_investigation
 
 
 @click.group(name="hermes", invoke_without_command=True)
@@ -151,7 +152,11 @@ def hermes_watch(
     dispatcher = AlarmDispatcher(creds, cooldown_seconds=cooldown_seconds)
 
     investigate_enabled = _resolve_investigate_flag(investigate)
-    bridge = run_incident_investigation if investigate_enabled else None
+    bridge = (
+        (lambda incident: run_incident_investigation(incident, run_investigation))
+        if investigate_enabled
+        else None
+    )
     telegram_sink = TelegramSink(dispatcher, investigation_bridge=bridge)
 
     correlator: IncidentCorrelator | None = None

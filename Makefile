@@ -515,6 +515,7 @@ help:
 	@echo "  make format          - Format code with ruff"
 	@echo "  make typecheck       - Type check with mypy"
 	@echo "  make check-imports   - Import cycles, layers, and direct-edge checks"
+	@echo "  make check-layers-strict - Full transitive layer contracts (.importlinter.strict)"
 	@echo "  make check           - Run all checks"
 	@echo "  make benchmark		  - Run benchmark report generation"
 	@echo "  make benchmark-update-readme - Update README from cached benchmark results"

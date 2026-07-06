@@ -24,7 +24,7 @@ from platform.terminal.theme import (
 )
 
 if TYPE_CHECKING:
-    from integrations.github_mcp import GitHubMcpDisplayDetailLevel
+    from integrations.github.mcp import GitHubMcpDisplayDetailLevel
 
 from integrations.gitlab import DEFAULT_GITLAB_BASE_URL
 from integrations.openclaw import build_openclaw_config, validate_openclaw_config
@@ -51,6 +51,11 @@ from integrations.verify import (
     format_verification_results,
     verification_exit_code,
     verify_integrations,
+)
+from integrations.x_mcp import (
+    DEFAULT_X_MCP_URL,
+    build_x_mcp_config,
+    validate_x_mcp_config,
 )
 
 _B = ANSI_BOLD
@@ -120,7 +125,7 @@ def _prompt_github_repo_report_level() -> GitHubMcpDisplayDetailLevel:
     if sel is None:
         return "summary"
     if sel in ("summary", "standard", "full"):
-        from integrations.github_mcp import GitHubMcpDisplayDetailLevel as _Detail
+        from integrations.github.mcp import GitHubMcpDisplayDetailLevel as _Detail
 
         return cast(_Detail, sel)
     return "summary"
@@ -391,7 +396,7 @@ def _github_browser_authorize() -> str | None:
     Returns the access token, or ``None`` when the flow is unavailable so the
     caller can fall back to manual token entry.
     """
-    from integrations.github_mcp_oauth import (
+    from integrations.github.mcp_oauth import (
         GitHubDeviceCode,
         GitHubDeviceFlowError,
         authorize_github_via_device_flow,
@@ -464,7 +469,7 @@ def _github_advanced_setup(credentials: dict[str, Any]) -> tuple[str, str]:
 
     Mutates ``credentials`` in place with mode/url/command/args/auth_token/toolsets.
     """
-    from integrations.github_mcp import (
+    from integrations.github.mcp import (
         DEFAULT_GITHUB_MCP_TOOLSETS,
         DEFAULT_GITHUB_MCP_URL,
     )
@@ -519,7 +524,7 @@ def _setup_github() -> str | None:
     result carried no login), so callers like the first-launch gate can propagate
     the username. Exits the process on validation failure.
     """
-    from integrations.github_mcp import (
+    from integrations.github.mcp import (
         DEFAULT_GITHUB_MCP_MODE,
         DEFAULT_GITHUB_MCP_TOOLSETS,
         DEFAULT_GITHUB_MCP_URL,
@@ -934,6 +939,38 @@ def _setup_sentry_mcp() -> None:
     print("    - opensre integrations verify sentry_mcp")
 
 
+def _setup_x_mcp() -> None:
+    # X's MCP server (https://github.com/xdevplatform/xmcp) runs locally by
+    # default, optionally tunneled for remote access — it is not an
+    # always-on hosted endpoint like PostHog/Sentry's. Streamable HTTP is
+    # the transport used by both a bare local server and a tunneled one, so
+    # it stays the default here; do NOT add a transport prompt.
+    mode = "streamable-http"
+    credentials: dict[str, Any] = {"mode": mode}
+    url = _p("X MCP URL", default=DEFAULT_X_MCP_URL)
+    if not url:
+        _die("url is required for remote MCP modes.")
+    credentials["url"] = url
+    credentials["command"] = ""
+    credentials["args"] = []
+
+    credentials["auth_token"] = _p(
+        "Auth token for a tunneled/proxied endpoint (optional)", secret=True, default=""
+    )
+    credentials["bearer_token"] = ""
+
+    print("\n  Validating X MCP...")
+    config = build_x_mcp_config(credentials)
+    result = validate_x_mcp_config(config)
+    print(f"  {result.detail}")
+    if not result.ok:
+        sys.exit(1)
+
+    upsert_integration("x_mcp", {"credentials": credentials})
+    print("  Next:")
+    print("    - opensre integrations verify x_mcp")
+
+
 def _setup_postgresql() -> None:
     host = _p("Host (e.g. localhost or postgres.example.com)")
     database = _p("Database name")
@@ -1240,6 +1277,7 @@ _HANDLERS: dict[str, Any] = {
     "openclaw": _setup_openclaw,
     "posthog_mcp": _setup_posthog_mcp,
     "sentry_mcp": _setup_sentry_mcp,
+    "x_mcp": _setup_x_mcp,
     "postgresql": _setup_postgresql,
     "mysql": _setup_mysql,
     "redis": _setup_redis,

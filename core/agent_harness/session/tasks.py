@@ -2,7 +2,7 @@
 
 The task value types (:class:`TaskStatus`, :class:`TaskKind`,
 :class:`TaskRecord`) live in :mod:`platform.common.task_types` so non-CLI
-packages (e.g. ``tools.watch_dog``) can share the task contract without
+packages (e.g. ``tools.system.watch_dog``) can share the task contract without
 importing the CLI package. This module owns only the CLI-runtime registry
 that stores and persists those records across REPL sessions.
 """

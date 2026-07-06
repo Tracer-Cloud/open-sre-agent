@@ -1256,8 +1256,11 @@ class TestInvestigateFileCommand:
             captured.append(alert_text)
             return {"root_cause": "test cause"}
 
-        # Patch package re-export: slash handler does `from surfaces.cli.investigation import ...`.
-        monkeypatch.setattr("surfaces.cli.investigation.run_investigation_for_session", _fake)
+        # Patch REPL adapter used by slash handler lazy import.
+        monkeypatch.setattr(
+            "surfaces.interactive_shell.runtime.investigation_adapter.run_investigation_for_session",
+            _fake,
+        )
         session = Session()
         console, _ = _capture()
         dispatch_slash(f"/investigate {alert_file}", session, console)
@@ -1277,7 +1280,10 @@ class TestInvestigateFileCommand:
             captured.append(template_name)
             return {"root_cause": "sample cause"}
 
-        monkeypatch.setattr("surfaces.cli.investigation.run_sample_alert_for_session", _fake_sample)
+        monkeypatch.setattr(
+            "surfaces.interactive_shell.runtime.investigation_adapter.run_sample_alert_for_session",
+            _fake_sample,
+        )
 
         session = Session()
         console, _ = _capture()
@@ -1297,8 +1303,9 @@ class TestInvestigateFileCommand:
             session: Session,
             console: Console,
             display_command: str,
+            investigation_target: str = "",
         ) -> str:
-            _ = (session, console, display_command)
+            _ = (session, console, display_command, investigation_target)
             launches.append(template_name)
             return "bg123"
 
@@ -1335,7 +1342,7 @@ class TestInvestigateFileCommand:
 
         monkeypatch.setattr("platform.analytics.cli.track_investigation", _fake_track)
         monkeypatch.setattr(
-            "surfaces.cli.investigation.run_sample_alert_for_session",
+            "surfaces.interactive_shell.runtime.investigation_adapter.run_sample_alert_for_session",
             lambda **_kwargs: {"root_cause": "sample cause"},
         )
 
@@ -1362,7 +1369,10 @@ class TestInvestigateFileCommand:
             calls.append(template_name)
             return {"root_cause": "template-wins"}
 
-        monkeypatch.setattr("surfaces.cli.investigation.run_sample_alert_for_session", _fake_sample)
+        monkeypatch.setattr(
+            "surfaces.interactive_shell.runtime.investigation_adapter.run_sample_alert_for_session",
+            _fake_sample,
+        )
 
         session = Session()
         console, _ = _capture()
@@ -1393,7 +1403,10 @@ class TestInvestigateFileCommand:
 
         monkeypatch.setattr(investigation_cmd, "repl_tty_interactive", lambda: True)
         monkeypatch.setattr(investigation_cmd, "repl_choose_one", lambda **_: next(picks))
-        monkeypatch.setattr("surfaces.cli.investigation.run_sample_alert_for_session", _fake_sample)
+        monkeypatch.setattr(
+            "surfaces.interactive_shell.runtime.investigation_adapter.run_sample_alert_for_session",
+            _fake_sample,
+        )
 
         session = Session()
         console, buf = _capture()
@@ -1439,7 +1452,10 @@ class TestInvestigateFileCommand:
             "_prompt_investigate_path",
             lambda _console: str(alert_file),
         )
-        monkeypatch.setattr("surfaces.cli.investigation.run_investigation_for_session", _fake)
+        monkeypatch.setattr(
+            "surfaces.interactive_shell.runtime.investigation_adapter.run_investigation_for_session",
+            _fake,
+        )
 
         session = Session()
         console, _ = _capture()
@@ -1478,7 +1494,7 @@ class TestInvestigateFileCommand:
 
         monkeypatch.setattr("platform.analytics.cli.track_investigation", _fake_track)
         monkeypatch.setattr(
-            "surfaces.cli.investigation.run_investigation_for_session",
+            "surfaces.interactive_shell.runtime.investigation_adapter.run_investigation_for_session",
             lambda **_kwargs: {"root_cause": "test cause"},
         )
         session = Session()
@@ -1511,7 +1527,10 @@ class TestInvestigateFileCommand:
                 "region": "us-east-1",
             }
 
-        monkeypatch.setattr("surfaces.cli.investigation.run_investigation_for_session", _fake)
+        monkeypatch.setattr(
+            "surfaces.interactive_shell.runtime.investigation_adapter.run_investigation_for_session",
+            _fake,
+        )
 
         session = Session()
         console, _ = _capture()
@@ -1537,8 +1556,9 @@ class TestInvestigateFileCommand:
             session: Session,
             console: Console,
             display_command: str,
+            investigation_target: str = "",
         ) -> str:
-            _ = (session, console)
+            _ = (session, console, investigation_target)
             launches.append((alert_text, display_command))
             return "bg123"
 
@@ -1572,7 +1592,10 @@ class TestInvestigateFileCommand:
         ) -> dict[str, object]:
             raise OpenSREError("bad config")
 
-        monkeypatch.setattr("surfaces.cli.investigation.run_investigation_for_session", _raise)
+        monkeypatch.setattr(
+            "surfaces.interactive_shell.runtime.investigation_adapter.run_investigation_for_session",
+            _raise,
+        )
         session = Session()
         console, _ = _capture()
         dispatch_slash(f"/investigate {alert_file}", session, console)
@@ -1829,7 +1852,7 @@ class TestResumeCommand:
         """Action-agent LLM failures must be stored so /resume can show them."""
         from unittest.mock import patch
 
-        from surfaces.interactive_shell.runtime.shell_turn_execution import (
+        from surfaces.interactive_shell.runtime.action_turn import (
             run_action_tool_turn,
         )
 
@@ -1840,7 +1863,7 @@ class TestResumeCommand:
             raise RuntimeError("codex: quota or rate limit exceeded (exit 1)")
 
         with patch(
-            "surfaces.interactive_shell.runtime.shell_turn_execution._default_llm_factory",
+            "surfaces.interactive_shell.runtime.action_turn.default_llm_factory",
             side_effect=_raise,
         ):
             result = run_action_tool_turn("check cpu usage", session, console)

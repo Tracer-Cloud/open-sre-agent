@@ -479,6 +479,13 @@ RULES: tuple[PathRule, ...] = (
         ),
     ),
     PathRule(
+        "integrations/x_mcp/",
+        (
+            "tests/integrations/test_x_mcp.py",
+            "tests/tools/test_x_mcp_tool.py",
+        ),
+    ),
+    PathRule(
         "integrations/argocd/",
         (
             "tests/integrations/argocd/",
@@ -529,11 +536,11 @@ RULES: tuple[PathRule, ...] = (
         ),
     ),
     PathRule("integrations/", ("tests/integrations/",)),
-    PathRule("tools/fleet_monitoring/", ("tests/agent/", "tests/fleet_monitoring/")),
+    PathRule("tools/system/fleet_monitoring/", ("tests/agent/", "tests/fleet_monitoring/")),
     PathRule("surfaces/cli/", ("tests/cli/",)),
     PathRule("surfaces/interactive_shell/", ("tests/interactive_shell/",)),
     PathRule("gateway/", ("gateway/tests/",)),
-    PathRule("tools/watch_dog/", ("tests/watch_dog/",)),
+    PathRule("tools/system/watch_dog/", ("tests/watch_dog/",)),
     PathRule("tools/", ("tests/tools/",)),
     PathRule("platform/analytics/", ("tests/analytics/",)),
     PathRule("platform/guardrails/", ("tests/test_guardrails/",)),

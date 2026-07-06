@@ -1,17 +1,17 @@
 """Optional bridge from Hermes incidents into the OpenSRE investigation pipeline.
 
 The :func:`run_incident_investigation` helper turns a :class:`HermesIncident`
-into a Grafana-shaped alert payload, calls
-:func:`tools.investigation.capability.run_investigation`, and extracts a
-human-readable summary from the resulting :class:`AgentState`.
+into a Grafana-shaped alert payload, calls a supplied investigation runner,
+and extracts a human-readable summary from the resulting state.
 
 The investigation pipeline is heavy (LLM calls, integration
-resolution) so this module imports it lazily — callers that never invoke
-the bridge pay no import cost.
+resolution), so the concrete investigation runner is supplied by an
+outer layer rather than imported directly by this module.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from integrations.hermes.incident import HermesIncident, LogRecord
@@ -60,21 +60,18 @@ def build_alert_from_incident(incident: HermesIncident) -> dict[str, Any]:
     }
 
 
-def run_incident_investigation(incident: HermesIncident) -> str | None:
-    """Invoke the OpenSRE investigation pipeline for ``incident``.
+def run_incident_investigation(
+    incident: HermesIncident,
+    run_investigation: Callable[[dict[str, Any]], Any],
+) -> str | None:
+    """Invoke the supplied investigation pipeline for ``incident``.
 
     Returns the resulting summary string, or ``None`` if the pipeline ran
-    successfully but produced no usable output. If :func:`run_investigation`
-    raises, the exception propagates to the caller — :class:`TelegramSink`
-    maps that to an operator-visible "attempted (failed)" marker. Heavy
-    imports are deferred so the Hermes sink can be imported in environments
-    where heavy dependencies are not installed (e.g. unit tests).
+    successfully but produced no usable output. If ``run_investigation``
+    raises, the exception propagates to the caller, where
+    :class:`TelegramSink` maps it to an operator-visible "attempted (failed)"
+    marker.
     """
-    # Imported lazily — pulling tools.investigation.capability at module import
-    # time would force every Hermes consumer to pay the pipeline import
-    # cost even when no investigation ever runs.
-    from tools.investigation.capability import run_investigation
-
     alert = build_alert_from_incident(incident)
     state = run_investigation(alert)
     return _extract_summary(state)

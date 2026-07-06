@@ -3,7 +3,7 @@
 These are the seams that keep ``agent/`` decoupled from any concrete surface.
 The interactive shell implements them as adapters over its ``Session``,
 Rich console, tool registry, and grounding caches; the headless adapters in
-:mod:`core.agent_harness.agents.headless_agent` implement minimal in-memory versions for API / test runs.
+:mod:`core.agent_harness.turns.headless_dispatch` implement minimal in-memory versions for API / test runs.
 
 Nothing here imports ``interactive_shell``.
 """
@@ -56,7 +56,7 @@ class SessionStore(Protocol):
     action driver, the three-path engine, and the gather loop touch.
     """
 
-    # --- turn-context snapshot fields (see core.agent_harness.models.turn_context.TurnContextSource) ---
+    # --- turn-context snapshot fields (see core.agent_harness.models.turn_snapshot.TurnSnapshotSource) ---
     cli_agent_messages: list[tuple[str, str]]
     configured_integrations_known: bool
 
@@ -87,8 +87,19 @@ class SessionStore(Protocol):
 class ToolProvider(Protocol):
     """Supplies the action-agent tools and the per-turn tool-event observer."""
 
-    def action_tools(self, *, confirm_fn: ConfirmFn | None, is_tty: bool | None) -> list[Any]:
-        """Return the agent tools available for this turn."""
+    def action_tools(
+        self,
+        *,
+        confirm_fn: ConfirmFn | None,
+        is_tty: bool | None,
+        resolved_integrations: dict[str, Any] | None = None,
+    ) -> list[Any]:
+        """Return the agent tools available for this turn.
+
+        When ``resolved_integrations`` is supplied it is the turn's single
+        resolved-integration view (from ``TurnSnapshot``); the provider builds
+        tools from it instead of resolving again, so tools and the prompt agree.
+        """
 
     def tool_resources(self) -> dict[str, Any]:
         """Return non-serializable resources for tools that opt into runtime context."""
@@ -149,16 +160,16 @@ class RunRecordFactory(Protocol):
         raise NotImplementedError
 
 
-# Bound conversational-answer callable. Returns an opaque LLM-run record (or
-# None). The shell binds session/console/grounding; headless binds a simple
-# core-LLM call.
-AnswerAgent = Callable[..., Any]
+# Bound direct-answer callable (no tools):
+# ``answer(text, *, confirm_fn, is_tty, tool_observation, turn_plan) -> LLM-run record | None``.
+StreamAnswerFn = Callable[..., Any]
 
-# Bound evidence-gather callable: ``gather(text, *, is_tty) -> str | None``.
+# Bound evidence-gather callable:
+# ``gather(text, *, is_tty, turn_plan) -> str | None``.
 EvidenceGatherer = Callable[..., "str | None"]
 
 # Bound action tool-calling driver:
-# ``execute_actions(text, *, confirm_fn, is_tty, turn_ctx) -> ToolCallingTurnResult``.
+# ``execute_actions(text, *, confirm_fn, is_tty, turn_plan) -> ToolCallingTurnResult``.
 ExecuteActions = Callable[..., ToolCallingTurnResult]
 
 
@@ -174,7 +185,7 @@ class TurnAccounting(Protocol):
 
 
 __all__ = [
-    "AnswerAgent",
+    "StreamAnswerFn",
     "ConfirmFn",
     "ErrorReporter",
     "EvidenceGatherer",

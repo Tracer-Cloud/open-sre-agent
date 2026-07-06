@@ -11,8 +11,8 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
-from core.agent_harness.grounding.cli_reference import CliReference
 from core.agent_harness.grounding.docs_reference import DocsReference
+from surfaces.interactive_shell.grounding.cli_reference import CliReference
 
 
 def _timed(label: str, fn: Callable[[], object]) -> tuple[float, object]:
@@ -27,9 +27,8 @@ def main() -> None:
     docs_root = Path(__file__).resolve().parents[3] / "docs"
 
     cli = CliReference()
-    # The grounding cache no longer imports ``surfaces.cli`` (T-4 boundary
-    # fix); bind the CLI group here the same way the interactive shell does
-    # at startup so the benchmark inspects the real command surface.
+    # CLI catalog assembly lives in surfaces/ (T-05); bind the CLI group here
+    # the same way ShellPromptContextProvider does at turn time.
     from surfaces.cli.__main__ import cli as _cli_group
 
     cli.set_command_group_provider(lambda: _cli_group)

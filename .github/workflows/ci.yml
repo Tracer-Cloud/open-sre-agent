@@ -19,6 +19,7 @@ on:
       - "mypy.ini"
       - "Makefile"
       - ".importlinter"
+      - ".importlinter.strict"
       - ".github/ci/**"
       - ".github/workflows/ci.yml"
 
@@ -40,6 +41,7 @@ on:
       - "mypy.ini"
       - "Makefile"
       - ".importlinter"
+      - ".importlinter.strict"
       - ".github/ci/**"
       - ".github/workflows/ci.yml"
 

@@ -84,7 +84,7 @@ interactive:
 Separately from typed-command history, the interactive shell records each LLM turn — the full prompt sent and the full response received — for chat and follow-up routes. This log is richer than command history (it includes model output, not just what you typed) and is used for two purposes:
 
 1. **Local debugging / `/resume`**: appended as JSON Lines to `~/.opensre/prompt_log.jsonl`, and folded into the session file so `/resume` can restore conversation context.
-2. **Product analytics**: forwarded to PostHog as an `$ai_generation` event (model, provider, latency, token counts, and the prompt/response text) so we can track usage and quality of the AI features.
+2. **Product analytics**: forwarded to PostHog as an `$ai_generation` event (model, provider, latency, token counts, and the prompt/response text) so we can track usage and quality of the AI features. Investigation turns additionally include the model/provider/token usage of the investigation run and an `investigation_id` join key; failed turns carry structured error properties (`$ai_is_error`, `$ai_error`, `error_kind`).
 
 ### Defaults
 
@@ -101,7 +101,7 @@ Separately from typed-command history, the interactive shell records each LLM tu
 | --- | --- | --- |
 | `OPENSRE_PROMPT_LOG_DISABLED` | `0` | Set to `1` to disable prompt/response logging entirely (both local file and PostHog). |
 | `OPENSRE_PROMPT_LOG_LOCAL_DISABLED` | `0` | Set to `1` to skip the local JSONL file while leaving PostHog forwarding (if enabled) unaffected. |
-| `OPENSRE_PROMPT_LOG_REDACT` | `1` | Set to `0` to log/send raw, unredacted prompt and response text. |
+| `OPENSRE_PROMPT_LOG_REDACT` | `1` | Set to `0` to log/send raw prompt and response text without redaction. |
 | `OPENSRE_PROMPT_LOG_PATH` | `~/.opensre/prompt_log.jsonl` | Override the local JSONL file path. |
 
 PostHog forwarding for this event additionally honors the global telemetry opt-outs: set **`OPENSRE_NO_TELEMETRY=1`**, `OPENSRE_ANALYTICS_DISABLED=1`, or `DO_NOT_TRACK=1` to stop all PostHog traffic (including `$ai_generation`) without touching the local JSONL file. See [Environment Variables](/configuration/environment-variables#telemetry-monitoring).
@@ -117,7 +117,7 @@ interactive:
     path: ~/.opensre/prompt_log.jsonl
 ```
 
-Redaction here uses the same built-in pattern set as command history (see [Redaction patterns](#redaction-patterns) above) — it catches known secret shapes, not arbitrary sensitive content. Raw incident details, hostnames, or business context in a prompt are not redacted; only credential-shaped substrings are.
+Redaction here uses the same built-in pattern set as command history (see [Redaction patterns](#redaction-patterns) above) — it catches known secret shapes, not arbitrary sensitive content. Raw incident details, hostnames, or business context in a prompt are not redacted; only credential-shaped substring patterns are.
 
 ## Threat model
 

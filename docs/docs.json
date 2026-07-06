@@ -40,6 +40,7 @@
             "pages": [
               "quickstart",
               "investigation-overview",
+              "how-investigations-work",
               "interactive-shell-commands",
               "interactive-shell-assistant",
               "deployment",
@@ -139,7 +140,8 @@
               "signoz",
               "tempo",
               "splunk",
-              "victoria_logs"
+              "victoria_logs",
+              "x-mcp"
             ]
           },
           {

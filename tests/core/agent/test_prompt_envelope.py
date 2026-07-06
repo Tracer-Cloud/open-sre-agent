@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from core.agent_harness.models.turn_context import TurnContext
+from core.agent_harness.models.turn_snapshot import TurnSnapshot
 from core.agent_harness.prompts import (
     PromptBlock,
     PromptEnvelope,
@@ -11,8 +11,8 @@ from core.agent_harness.prompts import (
 )
 
 
-def _ctx() -> TurnContext:
-    return TurnContext(
+def _ctx() -> TurnSnapshot:
+    return TurnSnapshot(
         text="show connected integrations",
         conversation_messages=(("user", "hello"),),
         configured_integrations=("github",),

@@ -70,7 +70,7 @@ class BackgroundTaskManager:
             return
         # Imported lazily so base REPL startup does not pull the sampler +
         # psutil into the import path.
-        from tools.fleet_monitoring.sampler import start_sampler
+        from tools.system.fleet_monitoring.sampler import start_sampler
 
         self._sampler_started = True
         self.tasks.append(("sampler", start_sampler()))

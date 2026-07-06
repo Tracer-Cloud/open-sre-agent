@@ -15,7 +15,6 @@ from platform.terminal.theme import (
     HIGHLIGHT,
     SECONDARY,
     TEXT,
-    WARNING,
 )
 from surfaces.interactive_shell.ui.components.time_format import _elapsed_hms, _fmt_timing
 from surfaces.interactive_shell.ui.output.events import ProgressEvent
@@ -57,7 +56,7 @@ def _render_active_steps(
         elapsed_total = now - display._t0
         frame = _SPINNER_FRAMES[int(elapsed_step / _FRAME_SECS) % len(_SPINNER_FRAMES)]
         ev_type = _node_event_type(node_name)
-        badge_label, badge_color = BADGE_STYLES.get(ev_type, ("DIAG  ", WARNING))
+        badge_label, badge_color = BADGE_STYLES.get(ev_type, BADGE_STYLES["DIAG"])
         subtext: str | None = info.get("subtext")
         if subtext and now > info.get("subtext_until", 0.0):
             subtext = None
@@ -220,7 +219,7 @@ class _EventLogDisplay:
         with self._lock:
             self._active_steps.pop(node_name, None)
             ev_type = _node_event_type(node_name)
-            badge_label, badge_color = BADGE_STYLES.get(ev_type, ("DIAG  ", WARNING))
+            badge_label, badge_color = BADGE_STYLES.get(ev_type, BADGE_STYLES["DIAG"])
             err = event.status == "error"
             t = Text()
             t.append(f"{_elapsed_hms(elapsed_total)}  ", style=SECONDARY)

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Any, Protocol, runtime_checkable
 
-from core.context.state import MutableAgentState
+from core.state import MutableAgentState
 
 # Turn kinds that represent user-initiated chat messages. Session.record()
 # is called with the turn kind, not a normalized "chat" label, so this set must
@@ -53,6 +53,7 @@ class SessionStorage(Protocol):
         model: str | None = None,
         provider: str | None = None,
         latency_ms: int | None = None,
+        system_prompt: str | None = None,
     ) -> None:
         raise NotImplementedError
 

@@ -50,8 +50,8 @@ from integrations.dagster import classify as _classify_dagster
 from integrations.datadog import classify as _classify_datadog
 from integrations.discord import classify as _classify_discord
 from integrations.effective_models import EffectiveIntegrations
-from integrations.github_mcp import build_github_mcp_config
-from integrations.github_mcp import classify as _classify_github
+from integrations.github.mcp import build_github_mcp_config
+from integrations.github.mcp import classify as _classify_github
 from integrations.gitlab import DEFAULT_GITLAB_BASE_URL, build_gitlab_config
 from integrations.gitlab import classify as _classify_gitlab
 from integrations.grafana import classify as _classify_grafana
@@ -80,6 +80,7 @@ from integrations.postgresql import build_postgresql_config
 from integrations.postgresql import classify as _classify_postgresql
 from integrations.posthog_mcp import DEFAULT_POSTHOG_MCP_URL, build_posthog_mcp_config
 from integrations.posthog_mcp import classify as _classify_posthog_mcp
+from integrations.prefect import classify as _classify_prefect
 from integrations.rabbitmq import build_rabbitmq_config
 from integrations.rabbitmq import classify as _classify_rabbitmq
 from integrations.rds import classify as _classify_rds
@@ -114,6 +115,8 @@ from integrations.vercel import classify as _classify_vercel
 from integrations.vercel.client import VercelConfig
 from integrations.victoria_logs import classify as _classify_victoria_logs
 from integrations.whatsapp import classify as _classify_whatsapp
+from integrations.x_mcp import build_x_mcp_config
+from integrations.x_mcp import classify as _classify_x_mcp
 from platform.common.coercion import safe_int
 from platform.observability.errors import report_exception
 
@@ -256,6 +259,7 @@ _CLASSIFIERS: dict[str, _ClassifyFn] = {
     "openclaw": _classify_openclaw,
     "posthog_mcp": _classify_posthog_mcp,
     "sentry_mcp": _classify_sentry_mcp,
+    "x_mcp": _classify_x_mcp,
     "mysql": _classify_mysql,
     "dagster": _classify_dagster,
     "rabbitmq": _classify_rabbitmq,
@@ -278,6 +282,7 @@ _CLASSIFIERS: dict[str, _ClassifyFn] = {
     "tempo": _classify_tempo,
     "temporal": _classify_temporal,
     "smtp": _classify_smtp,
+    "prefect": _classify_prefect,
 }
 
 
@@ -1083,6 +1088,36 @@ def load_env_integrations() -> list[dict[str, Any]]:
             )
         except Exception as exc:
             _report_env_loader_failure(exc, integration="sentry_mcp")
+
+    x_mcp_mode = os.getenv("X_MCP_MODE", "streamable-http").strip().lower()
+    x_mcp_mode = x_mcp_mode or "streamable-http"
+    x_mcp_command = os.getenv("X_MCP_COMMAND", "").strip()
+    x_mcp_token = resolve_env_credential("X_MCP_AUTH_TOKEN")
+    x_mcp_bearer_token = resolve_env_credential("X_BEARER_TOKEN")
+    x_mcp_url = os.getenv("X_MCP_URL", "").strip()
+    if (x_mcp_mode == "stdio" and x_mcp_command) or (x_mcp_mode != "stdio" and x_mcp_url):
+        try:
+            x_mcp_config = build_x_mcp_config(
+                {
+                    "url": x_mcp_url,
+                    "mode": x_mcp_mode,
+                    "command": x_mcp_command,
+                    "args": [part for part in os.getenv("X_MCP_ARGS", "").strip().split() if part],
+                    "auth_token": x_mcp_token,
+                    "bearer_token": x_mcp_bearer_token,
+                }
+            )
+            integrations.append(
+                _active_env_record(
+                    "x_mcp",
+                    {
+                        **x_mcp_config.model_dump(exclude={"integration_id"}),
+                        "connection_verified": True,
+                    },
+                )
+            )
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="x_mcp")
 
     mariadb_host = os.getenv("MARIADB_HOST", "").strip()
     mariadb_database = os.getenv("MARIADB_DATABASE", "").strip()

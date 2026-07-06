@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from tools.fleet_monitoring.token_sources import NullTokenSource, null_token_source
-from tools.fleet_monitoring.token_sources.claude_code import ClaudeCodeJsonlSource
-from tools.fleet_monitoring.token_sources.codex import CodexRolloutSource
-from tools.fleet_monitoring.token_sources.registry import (
+from tools.system.fleet_monitoring.token_sources import NullTokenSource, null_token_source
+from tools.system.fleet_monitoring.token_sources.claude_code import ClaudeCodeJsonlSource
+from tools.system.fleet_monitoring.token_sources.codex import CodexRolloutSource
+from tools.system.fleet_monitoring.token_sources.registry import (
     TOKEN_SOURCE_REGISTRY,
     get_token_source,
 )
@@ -50,7 +50,7 @@ def test_registry_singletons_are_stable() -> None:
 def test_registry_provider_names_match_meter_registry() -> None:
     # The sampler resolves a provider once and uses the same string
     # against both registries; they must agree on every key.
-    from tools.fleet_monitoring.meters.registry import TOKEN_METER_REGISTRY
+    from tools.system.fleet_monitoring.meters.registry import TOKEN_METER_REGISTRY
 
     assert set(TOKEN_SOURCE_REGISTRY) == set(TOKEN_METER_REGISTRY)
 
@@ -62,6 +62,6 @@ def test_registry_keys_cover_known_providers() -> None:
     # while forgetting both registry tables would silently fall
     # through ``get_token_source`` to ``null_token_source`` — the
     # right behavior, but masks the wiring bug.
-    from tools.fleet_monitoring.providers import KNOWN_PROVIDERS
+    from tools.system.fleet_monitoring.providers import KNOWN_PROVIDERS
 
     assert set(TOKEN_SOURCE_REGISTRY) >= KNOWN_PROVIDERS

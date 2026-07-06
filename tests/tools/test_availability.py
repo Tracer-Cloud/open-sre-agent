@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from integrations.bitbucket.availability import bitbucket_available_or_backend
 from integrations.cloudwatch.availability import cloudwatch_is_available
 from integrations.datadog.availability import datadog_available_or_backend
 from integrations.eks.availability import eks_available_or_backend
@@ -100,6 +101,49 @@ class TestDatadogAvailableOrBackend:
     def test_datadog_backend_overrides_failed_verification(self) -> None:
         sources = {"datadog": {"connection_verified": False, "_backend": object()}}
         assert datadog_available_or_backend(sources) is True
+
+
+class TestBitbucketAvailableOrBackend:
+    def test_bitbucket_missing(self) -> None:
+        sources: dict[str, dict] = {}
+        assert bitbucket_available_or_backend(sources) is False
+
+    def test_bitbucket_empty(self) -> None:
+        sources = {"bitbucket": {}}
+        assert bitbucket_available_or_backend(sources) is False
+
+    def test_bitbucket_verified_with_credentials(self) -> None:
+        sources = {
+            "bitbucket": {
+                "connection_verified": True,
+                "workspace": "acme",
+                "username": "bb-user",
+                "app_password": "bb-pass",
+            }
+        }
+        assert bitbucket_available_or_backend(sources) is True
+
+    def test_bitbucket_missing_credentials(self) -> None:
+        sources = {"bitbucket": {"connection_verified": True, "workspace": "acme"}}
+        assert bitbucket_available_or_backend(sources) is False
+
+    def test_bitbucket_requires_connection_verification(self) -> None:
+        sources = {
+            "bitbucket": {
+                "workspace": "acme",
+                "username": "bb-user",
+                "app_password": "bb-pass",
+            }
+        }
+        assert bitbucket_available_or_backend(sources) is False
+
+    def test_bitbucket_backend(self) -> None:
+        sources = {"bitbucket": {"_backend": object()}}
+        assert bitbucket_available_or_backend(sources) is True
+
+    def test_bitbucket_backend_overrides_failed_verification(self) -> None:
+        sources = {"bitbucket": {"connection_verified": False, "_backend": object()}}
+        assert bitbucket_available_or_backend(sources) is True
 
 
 class TestCloudwatchIsAvailable:

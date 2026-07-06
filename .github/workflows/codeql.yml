@@ -5,6 +5,13 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+    # Skip CodeQL for docs-only PRs (Markdown/MDX and the docs site tree) to
+    # save CI minutes. Not a required check, so skipping cannot block merge.
+    # `push` to main and the weekly schedule keep full coverage regardless.
+    paths-ignore:
+      - '**/*.md'
+      - '**/*.mdx'
+      - 'docs/**'
   schedule:
     - cron: "0 6 * * 1"
 

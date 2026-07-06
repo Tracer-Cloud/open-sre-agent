@@ -252,6 +252,24 @@ class TestLoaderAutoDiscovery:
         after = sorted(list_verifiers())
         assert before == after
 
+    def test_loader_skips_shared_verification_package_but_registry_api_remains_available(
+        self, _isolated_registry: None
+    ) -> None:
+        import importlib
+
+        import integrations.aws.verifier as aws_verifier
+        from integrations._verifiers_loader import _SKIP_INTEGRATION_PACKAGES
+
+        _reset_for_testing()
+
+        assert "verification" in _SKIP_INTEGRATION_PACKAGES
+        assert get_verifier("aws") is None
+
+        importlib.reload(aws_verifier)
+        register_all_verifiers()
+
+        assert get_verifier("aws") is not None
+
 
 class TestVerifyWithValidationResult:
     """Direct tests for ``verify_with_validation_result`` — exercised

@@ -8,27 +8,17 @@ from typing import cast
 import yaml
 from typing_extensions import TypedDict
 
-from config.synthetic_paths import (
-    CLOUDOPSBENCH_DIR,
-    OPENCLAW_SYNTHETIC_SCENARIOS_DIR,
-    RCA_DIR,
-    REPO_ROOT,
-    SYNTHETIC_SCENARIOS_DIR,
-)
+from config import synthetic_paths
 from surfaces.cli.tests.catalog import TestCatalog, TestCatalogItem, TestRequirement
 
-MAKEFILE_PATH = REPO_ROOT / "Makefile"
+MAKEFILE_PATH = synthetic_paths.REPO_ROOT / "Makefile"
 
-# Re-exported so existing callers and ``unittest.mock.patch`` targets
-# ``surfaces.cli.tests.discover.<name>`` keep working after the constants
-# moved to :mod:`config.synthetic_paths` (T-4 layering fix, issue #3352).
 __all__ = (
-    "CLOUDOPSBENCH_DIR",
     "MAKEFILE_PATH",
-    "OPENCLAW_SYNTHETIC_SCENARIOS_DIR",
-    "RCA_DIR",
-    "REPO_ROOT",
-    "SYNTHETIC_SCENARIOS_DIR",
+    "discover_cli_commands",
+    "discover_make_targets",
+    "discover_rca_files",
+    "load_test_catalog",
 )
 
 _TARGETS_TO_INDEX = (
@@ -325,13 +315,13 @@ def discover_make_targets() -> list[TestCatalogItem]:
 
 def discover_rca_files() -> list[TestCatalogItem]:
     items: list[TestCatalogItem] = []
-    if not RCA_DIR.is_dir():
+    if not synthetic_paths.RCA_DIR.is_dir():
         # ``Path.glob`` on a missing parent returns an empty iterator on
         # CPython, so this isn't a crash today — but the explicit guard
         # documents the bundled-binary contract and matches the shape of
         # the other ``discover_*`` helpers below.
         return items
-    for path in sorted(RCA_DIR.glob("*.md")):
+    for path in sorted(synthetic_paths.RCA_DIR.glob("*.md")):
         title = path.stem.replace("_", " ").title()
         first_line = path.read_text(encoding="utf-8").splitlines()[0].strip()
         if first_line.startswith("# "):
@@ -362,10 +352,10 @@ def _discover_rds_synthetic_scenarios() -> list[TestCatalogItem]:
     only meaningful when the scenarios are on disk anyway.
     """
     items: list[TestCatalogItem] = []
-    if not SYNTHETIC_SCENARIOS_DIR.is_dir():
+    if not synthetic_paths.SYNTHETIC_SCENARIOS_DIR.is_dir():
         return items
     req = TestRequirement(env_vars=("ANTHROPIC_API_KEY",))
-    for scenario_dir in sorted(SYNTHETIC_SCENARIOS_DIR.iterdir()):
+    for scenario_dir in sorted(synthetic_paths.SYNTHETIC_SCENARIOS_DIR.iterdir()):
         if not scenario_dir.is_dir() or scenario_dir.name.startswith("_"):
             continue
         scenario_id = scenario_dir.name
@@ -397,11 +387,11 @@ def _discover_rds_synthetic_scenarios() -> list[TestCatalogItem]:
 
 def _discover_openclaw_synthetic_scenarios() -> list[TestCatalogItem]:
     items: list[TestCatalogItem] = []
-    if not OPENCLAW_SYNTHETIC_SCENARIOS_DIR.is_dir():
+    if not synthetic_paths.OPENCLAW_SYNTHETIC_SCENARIOS_DIR.is_dir():
         return items
 
     requirements = TestRequirement(notes=("Configured LLM provider",))
-    for scenario_dir in sorted(OPENCLAW_SYNTHETIC_SCENARIOS_DIR.iterdir()):
+    for scenario_dir in sorted(synthetic_paths.OPENCLAW_SYNTHETIC_SCENARIOS_DIR.iterdir()):
         if not scenario_dir.is_dir() or scenario_dir.name.startswith("_"):
             continue
         scenario_id = scenario_dir.name
@@ -437,7 +427,7 @@ def _discover_openclaw_synthetic_scenarios() -> list[TestCatalogItem]:
 
 
 def _discover_cloudopsbench_suite() -> list[TestCatalogItem]:
-    benchmark_dir = CLOUDOPSBENCH_DIR / "benchmark"
+    benchmark_dir = synthetic_paths.CLOUDOPSBENCH_DIR / "benchmark"
     if not benchmark_dir.is_dir():
         return []
     return [
@@ -448,7 +438,7 @@ def _discover_cloudopsbench_suite() -> list[TestCatalogItem]:
             description="Run the downloaded Cloud-OpsBench corpus through the OpenSRE runner.",
             command=("opensre", "tests", "cloudopsbench"),
             tags=("synthetic", "cloudopsbench", "k8s", "benchmark"),
-            source_path=str(CLOUDOPSBENCH_DIR),
+            source_path=str(synthetic_paths.CLOUDOPSBENCH_DIR),
             requirements=TestRequirement(env_vars=("ANTHROPIC_API_KEY",)),
         )
     ]

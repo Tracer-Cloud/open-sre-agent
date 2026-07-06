@@ -2,7 +2,7 @@
 
 ``TaskStatus`` / ``TaskKind`` / ``TaskRecord`` describe a single in-flight task
 (an investigation pipeline run, a subprocess-backed suite, or a watchdog loop).
-They live in ``platform/common`` so non-CLI packages (e.g. ``tools.watch_dog``)
+They live in ``platform/common`` so non-CLI packages (e.g. ``tools.system.watch_dog``)
 can depend on the task contract without importing the CLI package.
 
 The persistent registry that stores and rehydrates these records lives in

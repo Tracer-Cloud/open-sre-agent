@@ -93,6 +93,7 @@ class EffectiveIntegrations(StrictConfigModel):
     openclaw: EffectiveIntegrationEntry | None = None
     posthog_mcp: EffectiveIntegrationEntry | None = None
     sentry_mcp: EffectiveIntegrationEntry | None = None
+    x_mcp: EffectiveIntegrationEntry | None = None
     mysql: EffectiveIntegrationEntry | None = None
     snowflake: EffectiveIntegrationEntry | None = None
     azure: EffectiveIntegrationEntry | None = None

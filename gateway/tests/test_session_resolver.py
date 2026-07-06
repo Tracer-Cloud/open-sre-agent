@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from core.agent_harness.models.turn_context import TurnContext
+from core.agent_harness.models.turn_snapshot import TurnSnapshot
 from core.agent_harness.prompts import build_action_system_prompt
 from core.agent_harness.session import InMemorySessionStorage, Session, SessionManager
 from gateway.storage import SessionBindingStore, SessionResolver, connect_gateway_db
@@ -90,7 +90,7 @@ def test_resolved_telegram_context_is_visible_as_prior_action_facts(
     resolved = resolver.resolve(user_id="42", chat_id="99")
 
     prompt = build_action_system_prompt(
-        TurnContext.from_session(
+        TurnSnapshot.from_session(
             "No, compute those temperatures and send the nice comparison to Slack",
             resolved,
         )

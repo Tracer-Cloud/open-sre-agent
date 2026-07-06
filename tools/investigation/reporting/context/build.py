@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from core.context.state import InvestigationState
+from core.state import InvestigationState
 from tools.investigation.reporting.context.evidence_catalog import (
     attach_evidence_to_claims,
     build_evidence_catalog,

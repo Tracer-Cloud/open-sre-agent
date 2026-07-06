@@ -34,8 +34,13 @@ class TelegramBotClient:
         result = response.data.get("result")
         return True, dict(result) if isinstance(result, Mapping) else {}, ""
 
-    def send_message(self, chat_id: str, text: str) -> tuple[bool, str, str]:
-        ok, result, error = self._call("sendMessage", {"chat_id": chat_id, "text": text})
+    def send_message(
+        self, chat_id: str, text: str, *, parse_mode: str = ""
+    ) -> tuple[bool, str, str]:
+        payload: dict[str, Any] = {"chat_id": chat_id, "text": text}
+        if parse_mode:
+            payload["parse_mode"] = parse_mode
+        ok, result, error = self._call("sendMessage", payload)
         if not ok:
             logger.warning("[telegram-gateway] sendMessage failed: %s", error)
             return False, error, ""
@@ -46,11 +51,17 @@ class TelegramBotClient:
         chat_id: str,
         message_id: str,
         text: str,
+        *,
+        parse_mode: str = "",
     ) -> tuple[bool, str]:
-        ok, _, error = self._call(
-            "editMessageText",
-            {"chat_id": chat_id, "message_id": int(message_id), "text": text},
-        )
+        payload: dict[str, Any] = {
+            "chat_id": chat_id,
+            "message_id": int(message_id),
+            "text": text,
+        }
+        if parse_mode:
+            payload["parse_mode"] = parse_mode
+        ok, _, error = self._call("editMessageText", payload)
         if not ok:
             logger.debug("[telegram-gateway] editMessageText failed: %s", error)
         return ok, error

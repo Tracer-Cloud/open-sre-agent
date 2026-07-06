@@ -53,6 +53,18 @@ def coerce_usage_tokens(
     return inp, out
 
 
+def emit_provider_usage(
+    model: str,
+    usage: Any,
+    *,
+    input_key: str,
+    output_key: str,
+) -> None:
+    """Emit provider-reported usage from an arbitrary usage payload (agent clients)."""
+    inp, out = coerce_usage_tokens(usage, input_key=input_key, output_key=output_key)
+    emit_usage(model, inp, out)
+
+
 def llm_response_with_usage(
     content: str,
     model: str,

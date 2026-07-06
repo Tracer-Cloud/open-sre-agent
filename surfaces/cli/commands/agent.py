@@ -10,14 +10,14 @@ from rich.markup import escape
 
 from platform.terminal.theme import BOLD_BRAND, DIM, HIGHLIGHT
 from surfaces.interactive_shell.ui.components.rendering import repl_table
-from tools.fleet_monitoring.discovery import (
+from tools.system.fleet_monitoring.discovery import (
     classify_command_provider,
     discover_agent_processes,
     display_command,
     process_command,
     registered_and_discovered_agents,
 )
-from tools.fleet_monitoring.registry import AgentRecord, AgentRegistry
+from tools.system.fleet_monitoring.registry import AgentRecord, AgentRegistry
 
 
 @click.group(name="fleet")
@@ -27,7 +27,7 @@ def fleet() -> None:
 
 def _pid_exists(pid: int) -> bool:
     try:
-        from tools.fleet_monitoring.probe import pid_exists
+        from tools.system.fleet_monitoring.probe import pid_exists
     except ModuleNotFoundError as exc:
         if exc.name != "psutil":
             raise

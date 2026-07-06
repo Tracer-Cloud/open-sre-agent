@@ -12,7 +12,7 @@ Slack is treated as the primary channel — it renders the shared interactive
 action blocks the pipeline attaches to Slack messages and updates the
 investigation thread's status emoji. All other adapters are called
 opportunistically; each decides for itself whether the current
-:class:`~core.context.state.InvestigationState` carries enough context to
+:class:`~core.state.InvestigationState` carries enough context to
 deliver.
 """
 
@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import logging
 
-from core.context.state import InvestigationState
+from core.state import InvestigationState
 from platform.reporting.delivery_registry import (
     ReportDeliveryAdapter,
     get_delivery_adapter,

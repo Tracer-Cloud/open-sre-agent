@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from integrations.github_mcp import build_github_mcp_config, validate_github_mcp_config
+from integrations.github.mcp import build_github_mcp_config, validate_github_mcp_config
 from integrations.verification import register_verifier, result
 
 

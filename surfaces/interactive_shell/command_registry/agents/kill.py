@@ -12,8 +12,8 @@ from platform.analytics.events import Event
 from platform.analytics.provider import get_analytics
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui import DIM, ERROR, HIGHLIGHT, WARNING
-from tools.fleet_monitoring.lifecycle import TerminateResult, terminate
-from tools.fleet_monitoring.registry import AgentRegistry
+from tools.system.fleet_monitoring.lifecycle import TerminateResult, terminate
+from tools.system.fleet_monitoring.registry import AgentRegistry
 
 # Type alias for the optional confirmation callback (used for testing).
 _ConfirmFn = Callable[[str], str]

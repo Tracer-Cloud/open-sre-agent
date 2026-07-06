@@ -9,7 +9,7 @@ from typing import Any
 import httpx
 
 from config.config import get_tracer_base_url
-from core.context.state import InvestigationState
+from core.state import InvestigationState
 
 logger = logging.getLogger(__name__)
 

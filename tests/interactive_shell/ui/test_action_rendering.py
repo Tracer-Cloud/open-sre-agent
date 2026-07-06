@@ -11,10 +11,8 @@ from rich.console import Console
 import tools.interactive_shell.actions.slash as slash_tool
 from core.agent_harness.models.turn_results import ToolCallingTurnResult
 from core.agent_harness.session import Session
-from surfaces.interactive_shell.runtime.shell_turn_execution import (
-    execute_shell_turn,
-    run_action_tool_turn,
-)
+from surfaces.interactive_shell.runtime.action_turn import run_action_tool_turn
+from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 from surfaces.interactive_shell.ui.action_rendering import ActionRenderObserver
 from surfaces.interactive_shell.ui.input_prompt.rendering import _prompt_turn_number
 from tests.core.agent.orchestration.action_execution_test_harness import (

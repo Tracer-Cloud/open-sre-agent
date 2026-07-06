@@ -103,9 +103,18 @@ class ShellTurnAccounting:
         )
 
     def _flush_prompt_recorder(self, result: ShellTurnResult) -> None:
+        # Pending turn LLM/error state is consumed unconditionally so a turn
+        # that stages it can never leak it into a later turn's flush.
+        pending_run = self.session.pop_pending_turn_llm()
+        pending_error = self.session.pop_pending_turn_error()
         if self.recorder is None:
             return
-        self.recorder.set_response(result.assistant_response_text, result.llm_run)
+        if pending_error is not None:
+            self.recorder.set_error(pending_error[0], pending_error[1])
+        self.recorder.set_response(
+            result.assistant_response_text,
+            result.llm_run if result.llm_run is not None else pending_run,
+        )
         self.recorder.flush()
 
 
