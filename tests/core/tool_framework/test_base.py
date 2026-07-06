@@ -1,0 +1,175 @@
+"""Unit tests for core.tool_framework.base (BaseTool contract)."""
+
+from __future__ import annotations
+
+from typing import Any
+
+import pytest
+from pydantic import ValidationError
+
+import core.tool_framework.telemetry as telemetry_mod
+from core.tool_framework.base import BaseTool
+from core.tool_framework.metadata import ToolMetadata
+from core.tool_framework.registered_tool import REGISTERED_TOOL_ATTR
+from core.tool_framework.tool_decorator import tool
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+class _MinimalTool(BaseTool):
+    name = "minimal_tool"
+    description = "A minimal tool for testing."
+    input_schema = {"type": "object", "properties": {}}
+    source = "grafana"
+
+    def run(self) -> dict[str, Any]:
+        return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# __init_subclass__ validation
+# ---------------------------------------------------------------------------
+
+
+def test_base_tool_rejects_blank_name() -> None:
+    with pytest.raises(ValidationError, match="name"):
+        type(
+            "BlankNameTool",
+            (BaseTool,),
+            {
+                "name": "   ",
+                "description": "Valid description",
+                "input_schema": {"type": "object", "properties": {}},
+                "source": "grafana",
+                "run": lambda _self, **_kwargs: {},
+            },
+        )
+
+
+def test_base_tool_rejects_blank_description() -> None:
+    with pytest.raises(ValidationError, match="description"):
+        type(
+            "BlankDescriptionTool",
+            (BaseTool,),
+            {
+                "name": "valid_tool",
+                "description": "   ",
+                "input_schema": {"type": "object", "properties": {}},
+                "source": "grafana",
+                "run": lambda _self, **_kwargs: {},
+            },
+        )
+
+
+def test_init_subclass_normalises_and_writes_back_metadata() -> None:
+    class _Normalised(BaseTool):
+        name = "  padded_name  "
+        description = "  padded description  "
+        input_schema = {"type": "object", "properties": {}}
+        source = "grafana"
+
+        def run(self) -> dict[str, Any]:
+            return {}
+
+    assert _Normalised.name == "padded_name"
+    assert _Normalised.description == "padded description"
+
+
+# ---------------------------------------------------------------------------
+# metadata() classmethod
+# ---------------------------------------------------------------------------
+
+
+def test_metadata_classmethod_returns_tool_metadata() -> None:
+    meta = _MinimalTool.metadata()
+    assert isinstance(meta, ToolMetadata)
+    assert meta.name == "minimal_tool"
+    assert meta.description == "A minimal tool for testing."
+
+
+# ---------------------------------------------------------------------------
+# Default is_available / extract_params
+# ---------------------------------------------------------------------------
+
+
+def test_default_is_available_returns_true() -> None:
+    t = _MinimalTool()
+    assert t.is_available({}) is True
+
+
+def test_default_extract_params_returns_empty_dict() -> None:
+    t = _MinimalTool()
+    assert t.extract_params({}) == {}
+
+
+# ---------------------------------------------------------------------------
+# Exception capture via __call__ (telemetry path)
+# ---------------------------------------------------------------------------
+
+
+class _ExplodingTool(BaseTool):
+    name = "exploding_base_tool"
+    description = "Tool that raises for telemetry coverage."
+    input_schema = {"type": "object", "properties": {}}
+    source = "grafana"
+
+    def run(self) -> dict[str, Any]:
+        raise RuntimeError("base boom")
+
+
+def test_base_tool_exception_is_captured_with_tool_tag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: list[tuple[BaseException, dict[str, object]]] = []
+
+    def report_stub(exc: BaseException, **kwargs: object) -> None:
+        captured.append((exc, kwargs))
+
+    monkeypatch.setattr(telemetry_mod, "report_exception", report_stub)
+
+    result = _ExplodingTool()()
+
+    assert result == {"error": "base boom", "exception_type": "RuntimeError"}
+    assert len(captured) == 1
+    exc, kwargs = captured[0]
+    assert isinstance(exc, RuntimeError)
+    assert kwargs["tags"] == {
+        "surface": "tool",
+        "tool_name": "exploding_base_tool",
+        "source": "grafana",
+    }
+
+
+def test_decorated_function_tool_exception_is_captured_with_tool_tag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: list[tuple[BaseException, dict[str, object]]] = []
+
+    def report_stub(exc: BaseException, **kwargs: object) -> None:
+        captured.append((exc, kwargs))
+
+    monkeypatch.setattr(telemetry_mod, "report_exception", report_stub)
+
+    @tool(
+        name="decorated_failure",
+        description="Function tool that raises for telemetry coverage.",
+        input_schema={"type": "object", "properties": {}},
+        source="grafana",
+    )
+    def decorated_failure() -> dict[str, Any]:
+        raise ValueError("decorated boom")
+
+    registered = getattr(decorated_failure, REGISTERED_TOOL_ATTR)
+    result = registered()
+
+    assert result == {"error": "decorated boom", "exception_type": "ValueError"}
+    assert len(captured) == 1
+    exc, kwargs = captured[0]
+    assert isinstance(exc, ValueError)
+    assert kwargs["tags"] == {
+        "surface": "tool",
+        "tool_name": "decorated_failure",
+        "source": "grafana",
+    }

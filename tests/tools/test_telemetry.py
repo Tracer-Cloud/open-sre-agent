@@ -1,19 +1,19 @@
-"""Coverage for ``tools._telemetry`` and tool-level Sentry capture.
+"""Coverage for tool-level Sentry capture.
 
-Three layers:
+``test_tool_reports_exactly_one_sentry_event`` is the parameterised
+"every migrated tool reports a Sentry event when its underlying client
+raises" assertion called out in #1463 acceptance criteria. Each row
+forces the client used by the tool body to raise and verifies the helper
+produced exactly one event with the expected ``surface=tool``,
+``tool_name``, and ``source`` tags.
 
-1. ``test_report_run_error_*`` exercise the helper directly: tags, severity,
-   logger forwarding, and the fact that a Sentry capture is best-effort.
-2. ``test_tool_reports_exactly_one_sentry_event`` is the parameterised
-   "every migrated tool reports a Sentry event when its underlying client
-   raises" assertion called out in #1463 acceptance criteria. Each row
-   forces the client used by the tool body to raise and verifies the helper
-   produced exactly one event with the expected ``surface=tool``,
-   ``tool_name``, and ``source`` tags.
-3. ``test_eks_client_error_path_uses_warning_severity`` exercises the EKS
-   ``except ClientError`` branch (the whole reason for the severity split)
-   by patching the underlying client to raise ``botocore.exceptions.ClientError``
-   and asserting the helper logged at ``WARNING``, not ``ERROR``.
+``test_eks_client_error_path_uses_warning_severity`` exercises the EKS
+``except ClientError`` branch (the whole reason for the severity split)
+by patching the underlying client to raise ``botocore.exceptions.ClientError``
+and asserting the helper logged at ``WARNING``, not ``ERROR``.
+
+Direct ``report_run_error`` helper tests live in
+``tests/core/tool_framework/test_telemetry.py``.
 """
 
 from __future__ import annotations
@@ -27,8 +27,6 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-
-from core.tool_framework.telemetry import report_run_error
 
 
 @dataclass
@@ -101,74 +99,6 @@ def captured_sentry_events(
         SimpleNamespace(capture_exception=_capture, push_scope=_RecordingScope),
     )
     yield events
-
-
-def test_report_run_error_captures_with_expected_tags(
-    captured_sentry_events: list[CapturedSentryEvent],
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    boom = RuntimeError("boom")
-    with caplog.at_level(logging.ERROR, logger="tools"):
-        report_run_error(
-            boom,
-            tool_name="query_azure_monitor_logs",
-            source="azure",
-            component="integrations.azure.tools.azure_monitor_logs_tool",
-            method="httpx.post",
-            extras={"workspace_id": "w"},
-        )
-
-    assert len(captured_sentry_events) == 1
-    event = captured_sentry_events[0]
-    assert event.exc is boom
-    assert event.extras["tag.surface"] == "tool"
-    assert event.extras["tag.tool_name"] == "query_azure_monitor_logs"
-    assert event.extras["tag.source"] == "azure"
-    assert event.extras["tag.component"] == "integrations.azure.tools.azure_monitor_logs_tool"
-    assert event.extras["tag.method"] == "httpx.post"
-    assert event.extras["workspace_id"] == "w"
-    assert "Tool query_azure_monitor_logs failed" in caplog.text
-
-
-def test_report_run_error_supports_warning_severity(
-    captured_sentry_events: list[CapturedSentryEvent],
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    err = RuntimeError("recoverable")
-    with caplog.at_level(logging.WARNING, logger="tools"):
-        report_run_error(
-            err,
-            tool_name="describe_eks_cluster",
-            source="eks",
-            component="integrations.eks.tools",
-            severity="warning",
-        )
-
-    assert len(captured_sentry_events) == 1
-    assert captured_sentry_events[0].exc is err
-    error_records = [r for r in caplog.records if r.levelno >= logging.ERROR]
-    assert error_records == [], "warning severity must not log at error level"
-    warning_records = [r for r in caplog.records if r.levelno == logging.WARNING]
-    assert warning_records, "warning severity must produce a WARNING log record"
-
-
-def test_report_run_error_uses_provided_logger(
-    captured_sentry_events: list[CapturedSentryEvent],
-) -> None:
-    custom_logger = MagicMock(spec=logging.Logger)
-    err = ValueError("nope")
-
-    report_run_error(
-        err,
-        tool_name="list_eks_pods",
-        source="eks",
-        component="integrations.eks.tools",
-        logger=custom_logger,
-    )
-
-    custom_logger.error.assert_called_once()
-    assert len(captured_sentry_events) == 1
-    assert captured_sentry_events[0].exc is err
 
 
 # ---------------------------------------------------------------------------
