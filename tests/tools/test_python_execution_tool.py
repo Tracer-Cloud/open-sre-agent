@@ -6,8 +6,8 @@ from unittest.mock import patch
 
 from platform.sandbox.runner import SandboxResult
 from tests.tools.conftest import BaseToolContract
-from tools.python_execution_tool import execute_python_code
 from tools.registry import clear_tool_registry_cache, get_registered_tool_map
+from tools.system.python_execution_tool import execute_python_code
 
 
 class TestPythonExecutionToolContract(BaseToolContract):
@@ -72,7 +72,7 @@ class TestPythonExecutionToolExecution:
         assert "error" in result
 
     def test_timeout_capped_at_max(self) -> None:
-        with patch("tools.python_execution_tool.runner.run_python_sandbox") as mock_run:
+        with patch("tools.system.python_execution_tool.runner.run_python_sandbox") as mock_run:
             mock_run.return_value = SandboxResult(
                 code="pass",
                 inputs={},

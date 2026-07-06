@@ -3,8 +3,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any, cast
 
-from core.context.state import AgentState
 from core.domain.types.retrieval import RetrievalControls
+from core.state import AgentState
 from core.tool_framework.registered_tool import RegisteredTool
 from tools.investigation.stages.plan_evidence.node import plan_actions
 

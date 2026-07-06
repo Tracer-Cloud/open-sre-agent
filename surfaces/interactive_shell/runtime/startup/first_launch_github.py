@@ -1,9 +1,10 @@
-"""First-launch mandatory GitHub login gate.
+"""First-launch GitHub login gate.
 
-On the first interactive launch of ``opensre`` (all platforms), the user must
-sign in to GitHub via device flow unless they are in CI/CD, a test harness, or a
-non-interactive session. The sign-in runs the hosted GitHub MCP setup, persists
-the integration, and propagates the authenticated GitHub username to PostHog.
+On the first interactive launch of ``opensre`` (all platforms), the user is
+prompted to sign in to GitHub via device flow unless they skip, are in CI/CD, a
+test harness, or a non-interactive session. The sign-in runs the hosted GitHub
+MCP setup, persists the integration, and propagates the authenticated GitHub
+username to PostHog.
 
 Escape hatch: ``OPENSRE_SKIP_GITHUB_LOGIN=1`` bypasses the gate so a GitHub
 outage or a disabled device flow can never permanently lock anyone out. The gate
@@ -15,10 +16,12 @@ from __future__ import annotations
 import logging
 import os
 import sys
+import time
 
 from rich.console import Console
 from rich.markup import escape
 
+from config.repl_config import read_github_login_deferred, write_github_login_deferred
 from platform.analytics.cli import capture_github_login_completed
 from platform.analytics.source import is_test_run
 from platform.terminal.theme import DEVICE_CODE
@@ -26,6 +29,8 @@ from surfaces.interactive_shell.ui import repl_tty_interactive
 
 _SKIP_ENV_VAR = "OPENSRE_SKIP_GITHUB_LOGIN"
 _TRUTHY = frozenset({"1", "true", "yes", "on"})
+_SIGN_IN_CHOICE = "sign_in"
+_SKIP_CHOICE = "skip"
 
 
 def _skip_requested() -> bool:
@@ -60,8 +65,10 @@ def _github_already_configured() -> bool:
 
 
 def should_require_github_login() -> bool:
-    """Return True when the mandatory first-launch GitHub login must run now."""
+    """Return True when the first-launch GitHub login prompt must run now."""
     if _skip_requested():
+        return False
+    if read_github_login_deferred():
         return False
     if is_test_run():
         return False
@@ -73,6 +80,13 @@ def should_require_github_login() -> bool:
     # (e.g. via ``/integrations remove github``). Re-checking the store is cheap,
     # so the gate always re-runs when GitHub is not currently configured.
     return not _github_already_configured()
+
+
+def clear_github_login_deferral() -> None:
+    """Clear a saved skip so removing GitHub can re-prompt on the next launch."""
+    if not read_github_login_deferred():
+        return
+    write_github_login_deferred(False)
 
 
 def _propagate_username(username: str) -> None:
@@ -91,7 +105,8 @@ def _print_intro(console: Console) -> None:
         "incidents against your source. Sign in once with your browser."
     )
     console.print(
-        f"[dim](Set {_SKIP_ENV_VAR}=1 to skip this — e.g. if GitHub sign-in is unavailable.)[/dim]"
+        "[dim](Escape to skip for now, or set "
+        f"{_SKIP_ENV_VAR}=1 if GitHub sign-in is unavailable.)[/dim]"
     )
 
 
@@ -107,15 +122,86 @@ def _show_device_code(console: Console, code: object) -> None:
     console.print(f"  2. Enter this one-time code when GitHub asks: [{DEVICE_CODE}]{user_code}[/]")
     console.print("  3. Approve the request for OpenSRE.")
     console.print()
-    console.print("  [dim]Waiting for you to approve in the browser… (Ctrl-C to cancel)[/dim]")
+    console.print(
+        "  [dim]Waiting for you to approve in the browser… (Escape or Ctrl-C to skip)[/dim]"
+    )
 
 
-def _print_quit_guidance(console: Console) -> None:
+def _print_skip_guidance(console: Console) -> None:
     console.print()
     console.print(
-        "GitHub sign-in is required to use OpenSRE. You can try again by relaunching "
-        f"[bold]opensre[/bold], or set [bold]{_SKIP_ENV_VAR}=1[/bold] to bypass this step."
+        "[dim]Skipped GitHub sign-in. Connect later with "
+        "[bold]/integrations setup[/bold] or [bold]/mcp connect github[/bold].[/dim]"
     )
+
+
+def _defer_github_login() -> None:
+    write_github_login_deferred(True)
+
+
+def _sleep_until_or_cancel(seconds: float) -> None:
+    """Sleep up to ``seconds``, raising ``KeyboardInterrupt`` when the user skips."""
+    if seconds <= 0 or not sys.stdin.isatty():
+        time.sleep(seconds)
+        return
+
+    if os.name == "nt":
+        import msvcrt
+
+        from surfaces.interactive_shell.ui.components.key_reader import read_key_windows
+
+        deadline = time.monotonic() + seconds
+        while time.monotonic() < deadline:
+            if msvcrt.kbhit() and read_key_windows() == "cancel":  # type: ignore[attr-defined]
+                raise KeyboardInterrupt
+            time.sleep(0.05)
+        return
+
+    import select
+    import termios
+    import tty
+
+    from surfaces.interactive_shell.ui.components.key_reader import read_key_unix
+
+    fd = sys.stdin.fileno()
+    old_attrs = termios.tcgetattr(fd)  # type: ignore[attr-defined]
+    try:
+        tty.setraw(fd)  # type: ignore[attr-defined]
+        deadline = time.monotonic() + seconds
+        while time.monotonic() < deadline:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return
+            ready, _, _ = select.select([fd], [], [], min(remaining, 0.15))
+            if not ready:
+                continue
+            if read_key_unix() == "cancel":
+                raise KeyboardInterrupt
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_attrs)  # type: ignore[attr-defined]
+
+
+def _offer_github_login(_console: Console) -> bool:
+    """Return True when the user wants to start browser sign-in."""
+    import questionary
+
+    try:
+        choice = questionary.select(
+            "Connect GitHub now?",
+            choices=[
+                questionary.Choice(
+                    "Sign in with GitHub (opens browser)",
+                    value=_SIGN_IN_CHOICE,
+                ),
+                questionary.Choice("Skip for now", value=_SKIP_CHOICE),
+            ],
+            default=_SIGN_IN_CHOICE,
+        ).ask()
+    except (EOFError, KeyboardInterrupt):
+        return False
+    if choice is None:
+        return False
+    return bool(choice == _SIGN_IN_CHOICE)
 
 
 def _ask_retry(_console: Console) -> bool:
@@ -125,21 +211,24 @@ def _ask_retry(_console: Console) -> bool:
         answer = questionary.confirm("Try GitHub sign-in again?", default=True).ask()
     except (EOFError, KeyboardInterrupt):
         return False
+    if answer is None:
+        return False
     return bool(answer)
 
 
 def _attempt_login(console: Console) -> str:
-    """Run one login attempt. Returns ``"success"``, ``"failed"``, or ``"quit"``."""
+    """Run one login attempt. Returns ``"success"``, ``"failed"``, or ``"skipped"``."""
     from integrations.github.login import authenticate_and_configure_github
     from integrations.github.mcp_oauth import GitHubDeviceFlowError
 
     try:
         result = authenticate_and_configure_github(
             on_prompt=lambda code: _show_device_code(console, code),
+            poll_sleep=_sleep_until_or_cancel,
         )
     except (EOFError, KeyboardInterrupt):
-        console.print("\nCancelled.")
-        return "quit"
+        console.print("\nSkipped GitHub sign-in.")
+        return "skipped"
     except GitHubDeviceFlowError as err:
         console.print(f"[yellow]GitHub sign-in is unavailable:[/yellow] {err}")
         return "failed"
@@ -148,6 +237,7 @@ def _attempt_login(console: Console) -> str:
         return "failed"
 
     if result.ok:
+        clear_github_login_deferral()
         # Persisting the GitHub integration (done inside
         # ``authenticate_and_configure_github``) is what suppresses the gate on
         # subsequent launches — there is no separate completion marker to write.
@@ -161,29 +251,38 @@ def _attempt_login(console: Console) -> str:
 
 
 def require_github_login_on_first_launch(console: Console | None = None) -> bool:
-    """Run the mandatory first-launch GitHub login.
+    """Run the first-launch GitHub login prompt.
 
-    Returns True when the caller should proceed into the REPL (login succeeded),
-    and False when the user chose to quit (the caller should exit without
-    starting the REPL).
+    Returns True when the caller should proceed into the REPL (login succeeded or
+    the user skipped), and False only when startup must abort.
     """
     con = console or Console(highlight=False)
     _print_intro(con)
+    if not _offer_github_login(con):
+        _defer_github_login()
+        _print_skip_guidance(con)
+        return True
+
     while True:
         outcome = _attempt_login(con)
         if outcome == "success":
             return True
-        if outcome == "quit" or not _ask_retry(con):
-            _print_quit_guidance(con)
-            return False
+        if outcome == "skipped":
+            _defer_github_login()
+            _print_skip_guidance(con)
+            return True
+        if not _ask_retry(con):
+            _defer_github_login()
+            _print_skip_guidance(con)
+            return True
 
 
 def require_startup_github_login(console: Console) -> bool:
     """Return True when startup may proceed past the GitHub login gate.
 
     On an unexpected gate error we deliberately do NOT fail open into the REPL:
-    that would let a gate bug silently skip mandatory sign-in. Instead we only
-    allow startup when an explicit, documented bypass applies.
+    that would let a gate bug silently skip sign-in. Instead we only allow
+    startup when an explicit, documented bypass applies.
     """
     try:
         if not should_require_github_login():
@@ -197,7 +296,7 @@ def require_startup_github_login(console: Console) -> bool:
         if _github_login_explicitly_bypassed():
             return True
         console.print(
-            "GitHub sign-in is required to use OpenSRE, but the sign-in step could not run. "
+            "GitHub sign-in could not run. "
             f"Set [bold]{_SKIP_ENV_VAR}=1[/bold] to bypass this, then relaunch "
             "[bold]opensre[/bold]."
         )

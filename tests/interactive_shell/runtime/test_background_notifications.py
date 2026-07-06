@@ -36,7 +36,7 @@ def test_deliver_background_notifications_sends_email_when_smtp_is_configured(
         return True, ""
 
     monkeypatch.setattr(
-        "surfaces.interactive_shell.runtime.background.notifications.send_smtp_report",
+        "integrations.smtp.delivery.send_smtp_report",
         _fake_send_smtp_report,
     )
 

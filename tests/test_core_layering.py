@@ -25,7 +25,13 @@ _CORE_PACKAGES: tuple[Path, ...] = (
 _CORE_ONLY_PACKAGES: tuple[Path, ...] = (Path("core/domain"),)
 _CORE_RUNTIME_MODULES: tuple[Path, ...] = (
     Path("core/__init__.py"),
-    Path("core/agent.py"),
+    Path("core/agent/__init__.py"),
+    Path("core/agent/agent.py"),
+    Path("core/agent/react_loop.py"),
+    Path("core/agent/loop_host.py"),
+    Path("core/agent/provider_hooks.py"),
+    Path("core/agent/run_io.py"),
+    Path("core/agent/mixins.py"),
     Path("core/context_budget.py"),
     Path("core/events.py"),
     Path("core/execution.py"),
@@ -45,8 +51,8 @@ _CORE_RUNTIME_MODULES: tuple[Path, ...] = (
 #   needs CLI internals; if you think you do, file a new
 #   observability port instead.
 # - ``integrations.tracer`` — closed by #36
-#   (``integrations.port`` ``fetch_remote_integrations``). Hosted LLM
-#   provider code lives in ``core.llm`` and remains core runtime
+#   (``platform.harness_ports`` ``fetch_remote_integrations``).
+#   Hosted LLM provider code lives in ``core.llm`` and remains core runtime
 #   capability access rather than integration-coupled transport.
 _FORBIDDEN_PREFIXES: tuple[str, ...] = (
     "cli",
@@ -93,7 +99,7 @@ def test_core_module_does_not_import_forbidden_layers(module_path: Path) -> None
     """Core modules must avoid forbidden boundary packages.
 
     Use ports instead — ``platform.observability`` for progress/debug/display,
-    ``integrations.port`` for remote integrations — and register
+    ``platform.harness_ports`` for remote integrations — and register
     concrete adapters via ``install_product_adapters``.
     """
     source = module_path.read_text(encoding="utf-8")
@@ -105,7 +111,7 @@ def test_core_module_does_not_import_forbidden_layers(module_path: Path) -> None
     }
     assert not leaks, (
         f"{module_path} imports forbidden module(s) {sorted(leaks)} — route through a "
-        "port (``platform.observability.*`` or ``integrations.port``) and register "
+        "port (``platform.observability.*`` or ``platform.harness_ports.*``) and register "
         "adapters via ``install_product_adapters``."
     )
 

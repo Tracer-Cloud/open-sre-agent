@@ -27,16 +27,21 @@ def publish_investigation_outcome_analytics(outcome: InvestigationOutcome) -> No
             investigation_id=outcome.investigation_id,
             investigation_target=outcome.target,
         )
+    # Completed runs must not carry placeholder failure properties; consumers
+    # would otherwise have to special-case failure_category == "unknown".
+    not_completed = outcome.status != "completed"
     capture_investigation_outcome(
         investigation_id=outcome.investigation_id,
         status=outcome.status,
         investigation_target=outcome.target,
         root_cause_excerpt=_root_cause_excerpt(outcome.final_state),
-        error_excerpt=outcome.error_message,
-        failure_category=outcome.failure_category or None,
-        integration_involved=outcome.integration_involved or None,
-        integration_failure_message=outcome.integration_failure_message or None,
-        failure_detail=outcome.error_detail or None,
+        error_excerpt=outcome.error_message if not_completed else "",
+        failure_category=(outcome.failure_category or None) if not_completed else None,
+        integration_involved=(outcome.integration_involved or None) if not_completed else None,
+        integration_failure_message=(
+            (outcome.integration_failure_message or None) if not_completed else None
+        ),
+        failure_detail=(outcome.error_detail or None) if not_completed else None,
     )
 
 

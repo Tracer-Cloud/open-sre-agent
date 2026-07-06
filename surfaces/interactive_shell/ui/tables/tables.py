@@ -196,7 +196,10 @@ def print_command_output(console: Console, output: str, *, style: str | None = N
     if not output:
         return
     text = output.rstrip()
-    repl_print(console, Text(text) if style is None else Text(text, style=style))
+    # Parse any ANSI the captured child emitted so its Rich styling (bold, colour)
+    # survives being re-printed here instead of showing as raw escape codes.
+    rendered = Text.from_ansi(text) if style is None else Text.from_ansi(text, style=style)
+    repl_print(console, rendered)
 
 
 __all__ = [

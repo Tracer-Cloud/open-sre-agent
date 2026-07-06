@@ -40,6 +40,25 @@ _SETUP_GUIDANCE_RULE = (
     "<server>` for MCP servers. Do not emit JSON or claim you changed runtime state."
 )
 
+_HANDOFF_GUIDANCE: dict[str, str] = {
+    "provider:local_llama_connect": (
+        "The action planner handed off a vague local-model connection request. "
+        '"Local llama" is not an exact provider name. Answer with setup guidance:\n'
+        "- For first-time setup, recommend `opensre onboard local_llm` or "
+        "`/onboard local_llm` (installs and configures Ollama locally).\n"
+        "- After Ollama is installed, mention `/model set ollama` to switch the "
+        "active provider.\n"
+        "- Do NOT suggest `/integrations setup llama`, `/remote`, or claim you "
+        "switched providers.\n\n"
+    ),
+}
+
+
+def build_handoff_guidance_block(handoff_contents: tuple[str, ...]) -> str:
+    """Render topic-specific assistant guidance from action-planner handoff tags."""
+    blocks = [_HANDOFF_GUIDANCE[tag] for tag in handoff_contents if tag in _HANDOFF_GUIDANCE]
+    return "".join(blocks)
+
 
 def build_environment_block(
     *,
@@ -204,4 +223,5 @@ __all__ = [
     "_build_observation_block",
     "_build_system_prompt",
     "build_environment_block",
+    "build_handoff_guidance_block",
 ]

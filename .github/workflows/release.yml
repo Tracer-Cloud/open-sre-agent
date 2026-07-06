@@ -273,6 +273,7 @@ jobs:
           --noconfirm
           --collect-data surfaces.cli
           --collect-data config
+          --collect-data litellm
           --collect-submodules integrations
           --collect-submodules surfaces.interactive_shell
           --collect-submodules tools
@@ -313,6 +314,11 @@ jobs:
               ;;
           esac
           "$BINARY_PATH" -h >/dev/null
+          LITELLM_DATA="./dist/opensre/_internal/litellm/model_prices_and_context_window_backup.json"
+          if [ ! -f "$LITELLM_DATA" ]; then
+            echo "LiteLLM package data missing from Unix onedir bundle: ${LITELLM_DATA}" >&2
+            exit 1
+          fi
 
       - name: Check Linux binary glibc compatibility
         if: runner.os == 'Linux'

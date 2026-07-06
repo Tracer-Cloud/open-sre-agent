@@ -61,6 +61,22 @@ Add to `~/.opensre/integrations.json`:
 For Jira Data Center/Server, use a personal access token from **Profile** → **Personal Access Tokens** instead.
 </Info>
 
+## Verify
+
+```bash
+opensre integrations verify jira
+```
+
+Expected output on success:
+
+```
+Service: jira
+Status:  passed
+Detail:  Configured for Jira at https://your-org.atlassian.net.
+```
+
+This is a configuration-presence check (`base_url`, `email`, and `api_token` are all set) rather than a live API call.
+
 ## Troubleshooting
 
 | Symptom | Fix |

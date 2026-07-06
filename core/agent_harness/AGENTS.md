@@ -1,10 +1,12 @@
 # agent_harness/ package rules
 
-`agent_harness/` owns the **decoupled agent harness** around the shared
-`core.agent.Agent` loop: action tool-calling turns, three-path routing,
+`agent_harness/` owns the **decoupled agent harness** for two agent shapes:
+the tool-calling loop (`core.agent.Agent` via `build_agent`) and the
+direct-answer path (`stream_answer` via the `StreamAnswerFn` seam in
+`ports.py`, no tools). It orchestrates action tool-calling turns, three-path routing,
 conversational answers, evidence gather, and headless execution. It was
 extracted out of `interactive_shell` so the same harness can run the interactive
-terminal and be invoked headlessly via `agent_harness.agents.headless_agent`.
+terminal and be invoked headlessly via `agent_harness.turns.headless_dispatch`.
 
 ## Hard boundary (enforced by tests)
 
@@ -12,8 +14,12 @@ terminal and be invoked headlessly via `agent_harness.agents.headless_agent`.
   point of the package and is checked by
   `tests/core/agent/test_import_boundaries.py`. The dependency direction is strictly
   one-way: `interactive_shell -> agent_harness -> core`.
-- `agent_harness/` may depend on `core/`, `config/`, `platform/`, `integrations/`, and
-  `tools/`. It must not depend on terminal UI concerns (Rich rendering,
+- `agent_harness/` may depend on `core/`, `config/`, and `platform/`. It must not
+  import `integrations/`, `tools/`, `surfaces/`, or `gateway/`. Integration and tool
+  behavior reaches the harness through ports in `platform/harness_ports.py`, wired at
+  startup via `install_harness_ports()` in `surfaces/interactive_shell/ui/output/boundary.py`
+  (called from `install_product_adapters()`).
+  It must not depend on terminal UI concerns (Rich rendering,
   prompt-toolkit mutable UI state, slash dispatch, the shell `REGISTRY`). The
   reusable session model, prompt history, grounding cache contracts, and task
   records live here; `interactive_shell` supplies adapters and registry
@@ -31,23 +37,28 @@ responsibility-scoped subpackage.
 - `agent_builder.py` — `AgentConfig` dataclass + `build_agent(config)`. The
   single instantiation site for `core.agent.Agent` across all surfaces
   (action, evidence, gateway). See "Agent construction pattern" below.
-- `agents/` — the turn drivers that orchestrate `core.agent.Agent`:
-  - `action_agent.py` — `run_action_agent_turn`: one action tool-calling turn
+- `turns/` — the turn drivers that orchestrate `core.agent.Agent`:
+  - `action_driver.py` — `run_action_agent_turn`: one action tool-calling turn
     over the ports. Uses `_build_action_agent` factory that returns an
-    `AgentConfig` handed to `build_agent`.
-  - `turn_orchestrator.py` — `run_turn`: the three-path routing
+    `ActionTurnPlan`.
+  - `orchestrator.py` — `run_turn`: the three-path routing
     (summarize-observation / handled / gather+answer) and the conversational
-    answer.
-  - `evidence_agent.py` — bounded evidence-gather loop. Uses
+    answer. Resolves integrations **once** at the top of the turn and stores
+    them on the frozen `turn_snapshot`, so `turn_snapshot.resolved_integrations` is the
+    single source of truth for what the turn knows. Downstream components read
+    `turn_snapshot.resolved_integrations` (e.g. `action_driver._resolved_integrations_for_turn`
+    prefers it) rather than re-resolving. Do NOT reintroduce a per-component
+    integration resolution when `turn_snapshot` already carries it.
+  - `evidence_driver.py` — bounded evidence-gather loop. Uses
     `_build_evidence_agent` factory that returns an `AgentConfig` handed to
     `build_agent`.
-  - `headless_agent.py` — headless programmatic entry point
+  - `headless_dispatch.py` — headless programmatic entry point
     (`dispatch_message_to_headless_agent`) plus in-memory port adapters for
     API / test runs. `tools` is required — surfaces that want a text-only
     turn pass `NullToolProvider()` explicitly.
 - `models/` — neutral, surface-agnostic data shapes:
-  - `turn_context.py` — `TurnContext`, the immutable per-turn snapshot (built from any
-    object satisfying `TurnContextSource`, not `Session` directly).
+  - `turn_snapshot.py` — `TurnSnapshot`, the immutable per-turn snapshot (built from any
+    object satisfying `TurnSnapshotSource`, not `Session` directly).
   - `turn_results.py` — neutral turn-result models.
 - `providers/` — core-owned default port implementations and provider resolution
   (`default_providers.py`, `default_prompt_context.py`, `provider_models.py`).
@@ -84,11 +95,11 @@ to it instead of re-implementing bootstrap + persistence:
   `gateway/storage/session/resolver.py::SessionResolver` owns per-chat
   chat-id ↔ session-id binding + metadata; it delegates `create` / `resolve` /
   `rotate` to `SessionManager`. Turn dispatch uses
-  `Agent.dispatch_message_to_headless_agent` via `gateway/turn_handler.py` with
+  `dispatch_message_to_headless_agent` via `gateway/turn_handler.py` with
   :class:`~core.agent_harness.providers.default_providers.DefaultToolProvider`
   built from the **live per-chat session** each turn (same tool resolution as
   shell). There is no separate gateway-owned ``Agent`` instance.
-- **headless** — ephemeral in-memory sessions (``headless_agent.InMemorySessionStore``)
+- **headless** — ephemeral in-memory sessions (``headless_dispatch.InMemorySessionStore``)
   bypass ``SessionManager`` by design: they never persist to JSONL and do not
   need create/resolve/rotate/close. Tool-calling turns still run through the
   shared harness; only session lifecycle is skipped.
@@ -122,11 +133,11 @@ config = AgentConfig(
 agent = build_agent(config)
 ```
 
-Action (`agents/action_agent.py::_build_action_agent`) and evidence
-(`agents/evidence_agent.py::_build_evidence_agent`) assemble an
+Action (`turns/action_driver.py::_build_action_agent`) and evidence
+(`turns/evidence_driver.py::_build_evidence_agent`) assemble an
 ``AgentConfig`` and call ``build_agent``. The gateway turn path does not
 construct a persistent ``Agent`` — it uses
-``Agent.dispatch_message_to_headless_agent`` with per-turn
+``dispatch_message_to_headless_agent`` with per-turn
 :class:`~core.agent_harness.providers.default_providers.DefaultToolProvider`
 from the live chat session. When ``Agent.__init__``'s signature changes,
 ``agent_builder.py`` is the single edit site for harness surfaces that call
@@ -134,41 +145,104 @@ from the live chat session. When ``Agent.__init__``'s signature changes,
 
 ## Agent context and data stores
 
-See [`docs/agent-context-data-stores.md`](../../docs/agent-context-data-stores.md)
-for the four-store model (``Session``, ``MutableAgentState``, ``TurnContext``,
-JSONL), prompt debug paths, and the ``MutableAgentState`` production audit.
-Turn assembly starts with ``TurnContext.from_session`` in
-``agents/turn_orchestrator.py``; system prompts from ``Agent.run`` are persisted
-via ``core/agent_harness/debug/prompt_trace.py``.
+Turn assembly starts in ``turns/orchestrator.py`` with
+``TurnSnapshot.from_session``.
 
 **Do NOT** reintroduce per-surface `Agent` subclasses that override
 `build_llm` / `build_system_prompt` / `build_tools` / `resolved_integrations`
-hooks. Those hooks were removed for this reason: they let each surface hide
-per-turn configuration on `self`, which fragmented context loading and
-diverged the four surfaces (see issue #3347 and Vincent's 2026-07-01
-braindump).
+hooks. Those hooks were removed because they let each surface hide per-turn
+configuration on `self`, which diverged routing across surfaces.
 
-## Answer agent — categorical exception
+## Two agent shapes (not one pattern with an exception)
 
-`turn_orchestrator.answer_cli_agent` streams grounded text via
-`client.invoke_stream(prompt)` and does **not** use `core.agent.Agent`. Reason:
-`Agent.run()` is a tool-calling loop; streaming a no-tool text response is a
-different modality. If streaming is added to `Agent` in a future change,
-`answer_cli_agent` should be migrated onto it. Until then, treat this as an
-intentional gap, not a hook-pattern regression.
+The harness has **two** intentional agent shapes. This is a design, not a 4/4
+uniformity claim with an exception bolted on:
 
-## Investigation agent — extends Agent, custom run()
+- **Tool-calling agent** — `core.agent.Agent`, the ReAct loop (think → call
+  tools → observe) driven by `llm.invoke`. Built via `AgentConfig` +
+  `build_agent` (the construction pattern above). Used by the action,
+  evidence/gather, and investigation agents.
+- **Direct answer (no tools)** — `orchestrator.stream_answer`, one grounded
+  text answer streamed via `client.invoke_stream` (the `StreamAnswerFn` seam in
+  `ports.py`). It does **not** use `Agent`: there is no tool loop and no observe
+  step, and it streams on a different client method.
+
+A new agent is one shape or the other: if it calls tools it is the tool-calling
+shape; if it answers directly without tools it is the direct-answer shape.
+
+### Contributor checklist (agent changes)
+
+Before opening or merging an agent PR, confirm:
+
+1. **Shape** — State explicitly: tool-calling (`Agent` / `build_agent` /
+   `ExecuteActions`) or direct answer (`StreamAnswerFn` / `invoke_stream`, no tools).
+2. **Entrypoint docstring** — The public function or class documents which shape
+   it implements (three lines max; link here if helpful).
+3. **Docs** — Update this file when harness rules change (the assistant never
+   flows through `Agent.run()`; keep any routing description consistent with that).
+4. **Seams** — Inject through `ports.py` callables (`StreamAnswerFn`,
+   `ExecuteActions`, `EvidenceGatherer`); do not import surface code into
+   `agent_harness/`.
+5. **Tests** — Add or extend guards in
+   `tests/core/agent_harness/test_agent_shapes.py` when you introduce a new
+   entrypoint or rename a shape seam.
+
+**Read order for new code:** this file → `turns/orchestrator.py` (`run_turn`) →
+`core/agent/agent.py` (facade + wiring) → `core/agent/react_loop.py`
+(`run_react_loop`, the tool-calling algorithm).
+
+## Investigation agent — the tool-calling shape with a custom loop
 
 `tools/investigation/stages/gather_evidence/agent.py::ConnectedInvestigationAgent`
-extends `Agent[RegisteredTool]` to reuse the shared event-emission and
-`_filter_tools` infrastructure, then overrides `.run()` with a specialised
-ReAct loop (seed calls, evidence collection, duplicate detection, stagnation
-handling). This is a legitimate use of subclassing — the specialised loop
-cannot delegate to `Agent.run()`'s generic tool-calling loop. The class does
-**not** override the removed config hooks; it assembles its config inline at
-the top of `run()`.
+composes the shared `EventEmitterMixin` and `ToolFilterMixin` mixins
+(`core.agent.mixins`) instead of subclassing `Agent`, and owns a specialised
+ReAct `run()` (seed calls, evidence collection, duplicate detection, stagnation
+handling). It is still the tool-calling shape — a specialised loop that reuses
+the two agent hooks by composition rather than delegating to the generic
+`Agent.run()`. It assembles its config inline at the top of `run()`.
 
 ## Keep the loop primitive in core
 
 The ReAct loop primitive is `core.agent.Agent`. `agent_harness/` orchestrates it;
 it does not re-implement it. Do not fork the loop here.
+
+## core/agent package (Agent is a facade, not the algorithm owner)
+
+`core/agent/` is a package with one file per responsibility (see
+[docs/NAMING.md](../../docs/NAMING.md) for the naming convention). `Agent`
+(in `agent.py`) is a thin facade: `__init__` stores construction-time config and
+`run()` resolves per-run context (from `runtime_request=` or `initial_messages=`)
+and hands it to `core.agent.react_loop.run_react_loop`, which owns the actual
+think → call-tools → observe algorithm.
+
+- `core/agent/mixins.py` — `EventEmitterMixin` (event dispatch),
+  `ToolFilterMixin` (tool-narrowing hook), `SteeringMixin` (`steer`/`follow_up`
+  to nudge a run in progress). `Agent` composes all three;
+  `ConnectedInvestigationAgent`
+  (`tools/investigation/stages/gather_evidence/agent.py`) composes the first
+  two instead of subclassing `Agent`.
+- `core/agent/provider_hooks.py` — `ProviderHookDelegate`, a fail-open wrapper
+  around `core.provider.ProviderHooks` applied around each LLM call. A raised
+  hook exception is logged and swallowed; it never breaks the loop.
+- `core/agent/loop_host.py` — `LoopHost`, the `Protocol` `run_react_loop` calls
+  back into. `Agent` implements it via the mixins plus its own
+  `_transform_messages` / `_convert_to_llm` / `_before_request` /
+  `_after_response` forwarders. The concrete `ProviderHookDelegate` type is an
+  `Agent` implementation detail, not part of the host contract, so any host can
+  wire those four provider hooks however it likes.
+- `core/agent/run_io.py` — `AgentRunInput` (resolved per-run inputs) and
+  `AgentRunResult` (the loop's outcome). `core.agent` re-exports `AgentRunResult`
+  for the `from core.agent import AgentRunResult` path.
+- `core/agent/react_loop.py` — `ReactLoop` (the loop as a method-object, phases
+  `_think` / `_handle_conclusion` / `_observe`) and `run_react_loop` (its thin
+  functional entry).
+- `core/agent/agent.py` — the `Agent` facade: `__init__` (holds config), `run()`
+  (builds the per-run `AgentRunInput` via `_build_run_input` and hands it to
+  `run_react_loop`), and the `_should_accept_conclusion` override hook.
+
+Do not reintroduce hook-method overrides on `Agent` itself (e.g. a subclass
+overriding a private `_before_provider_request`-style method) — customize via
+`provider_hooks=ProviderHooks(...)` at construction instead, which
+`ProviderHookDelegate` applies. Subclassing remains the pattern for
+`_filter_tools` and `_should_accept_conclusion`, which are genuine per-agent
+overrides, not seams `ProviderHooks` covers.

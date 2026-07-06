@@ -6,17 +6,17 @@ from pathlib import Path
 
 import pytest
 
-from tools.fleet_monitoring.meters import TokenSample, TokenUsage
-from tools.fleet_monitoring.probe import ProcessSnapshot
-from tools.fleet_monitoring.registry import AgentRecord, AgentRegistry
-from tools.fleet_monitoring.sampler import (
+from tools.system.fleet_monitoring.meters import TokenSample, TokenUsage
+from tools.system.fleet_monitoring.probe import ProcessSnapshot
+from tools.system.fleet_monitoring.registry import AgentRecord, AgentRegistry
+from tools.system.fleet_monitoring.sampler import (
     _latest,
     get_snapshot,
     get_tokens_per_min,
     get_usd_per_hour,
     start_sampler,
 )
-from tools.fleet_monitoring.token_rate import TOKEN_RATE_TRACKER
+from tools.system.fleet_monitoring.token_rate import TOKEN_RATE_TRACKER
 
 
 @pytest.fixture
@@ -50,7 +50,7 @@ def _clear_sampler_state(monkeypatch: pytest.MonkeyPatch) -> None:
     for pid in list(TOKEN_RATE_TRACKER.known_pids()):
         TOKEN_RATE_TRACKER.forget(pid)
     monkeypatch.setattr(
-        "tools.fleet_monitoring.sampler._records_for_tick",
+        "tools.system.fleet_monitoring.sampler._records_for_tick",
         lambda registry: registry.list(),
     )
 
@@ -117,9 +117,9 @@ async def test_sampler_stores_snapshots(
             registered_at="2026-05-07T12:00:00+00:00",
         )
     )
-    monkeypatch.setattr("tools.fleet_monitoring.sampler.AgentRegistry", lambda: registry)
+    monkeypatch.setattr("tools.system.fleet_monitoring.sampler.AgentRegistry", lambda: registry)
 
-    monkeypatch.setattr("tools.fleet_monitoring.sampler.probe", lambda _pid: fake_snapshot)
+    monkeypatch.setattr("tools.system.fleet_monitoring.sampler.probe", lambda _pid: fake_snapshot)
 
     task = start_sampler(interval=0.01)
     await asyncio.sleep(0.05)
@@ -137,9 +137,9 @@ async def test_none_probe_does_not_store(
 ) -> None:
     """When probe returns None, no snapshot is stored."""
     registry.register(AgentRecord(name="dead-agent", pid=9999, command="bin"))
-    monkeypatch.setattr("tools.fleet_monitoring.sampler.AgentRegistry", lambda: registry)
+    monkeypatch.setattr("tools.system.fleet_monitoring.sampler.AgentRegistry", lambda: registry)
 
-    monkeypatch.setattr("tools.fleet_monitoring.sampler.probe", lambda _pid: None)
+    monkeypatch.setattr("tools.system.fleet_monitoring.sampler.probe", lambda _pid: None)
 
     task = start_sampler(interval=0.01)
     await asyncio.sleep(0.05)
@@ -159,14 +159,14 @@ async def test_one_pid_failure_does_not_crash_loop(
     """A failing probe for one PID doesn't prevent probing others."""
     registry.register(AgentRecord(name="crasher", pid=1111, command="bin"))
     registry.register(AgentRecord(name="healthy", pid=8421, command="claude"))
-    monkeypatch.setattr("tools.fleet_monitoring.sampler.AgentRegistry", lambda: registry)
+    monkeypatch.setattr("tools.system.fleet_monitoring.sampler.AgentRegistry", lambda: registry)
 
     def mock_probe(pid: int) -> ProcessSnapshot | None:
         if pid == 1111:
             raise RuntimeError("simulated psutil failure")
         return fake_snapshot
 
-    monkeypatch.setattr("tools.fleet_monitoring.sampler.probe", mock_probe)
+    monkeypatch.setattr("tools.system.fleet_monitoring.sampler.probe", mock_probe)
 
     task = start_sampler(interval=0.01)
     await asyncio.sleep(0.05)
@@ -187,9 +187,9 @@ async def test_sampler_cancels_cleanly(
 ) -> None:
     """Cancelling the sampler task raises CancelledError and nothing else."""
     registry.register(AgentRecord(name="agent", pid=1234, command="bin"))
-    monkeypatch.setattr("tools.fleet_monitoring.sampler.AgentRegistry", lambda: registry)
+    monkeypatch.setattr("tools.system.fleet_monitoring.sampler.AgentRegistry", lambda: registry)
 
-    monkeypatch.setattr("tools.fleet_monitoring.sampler.probe", lambda _pid: None)
+    monkeypatch.setattr("tools.system.fleet_monitoring.sampler.probe", lambda _pid: None)
 
     task = start_sampler(interval=0.01)
     await asyncio.sleep(0.02)
@@ -217,9 +217,9 @@ async def test_stale_snapshot_evicted_when_probe_returns_none(
             registered_at="2026-05-07T12:00:00+00:00",
         )
     )
-    monkeypatch.setattr("tools.fleet_monitoring.sampler.AgentRegistry", lambda: registry)
+    monkeypatch.setattr("tools.system.fleet_monitoring.sampler.AgentRegistry", lambda: registry)
 
-    monkeypatch.setattr("tools.fleet_monitoring.sampler.probe", lambda _pid: None)
+    monkeypatch.setattr("tools.system.fleet_monitoring.sampler.probe", lambda _pid: None)
 
     task = start_sampler(interval=0.01)
     await asyncio.sleep(0.02)
@@ -246,9 +246,15 @@ def _stub_token_pipeline(
     test can swap in a deterministic source/meter pair without
     touching the disk or psutil.
     """
-    monkeypatch.setattr("tools.fleet_monitoring.sampler.provider_for", lambda _record: provider)
-    monkeypatch.setattr("tools.fleet_monitoring.sampler.get_token_source", lambda _provider: source)
-    monkeypatch.setattr("tools.fleet_monitoring.sampler.get_token_meter", lambda _provider: meter)
+    monkeypatch.setattr(
+        "tools.system.fleet_monitoring.sampler.provider_for", lambda _record: provider
+    )
+    monkeypatch.setattr(
+        "tools.system.fleet_monitoring.sampler.get_token_source", lambda _provider: source
+    )
+    monkeypatch.setattr(
+        "tools.system.fleet_monitoring.sampler.get_token_meter", lambda _provider: meter
+    )
 
 
 @pytest.mark.asyncio
@@ -262,8 +268,8 @@ async def test_sampler_records_tokens_when_meter_returns_positive(
     returns the rate.
     """
     registry.register(AgentRecord(name="claude-code-8421", pid=8421, command="claude"))
-    monkeypatch.setattr("tools.fleet_monitoring.sampler.AgentRegistry", lambda: registry)
-    monkeypatch.setattr("tools.fleet_monitoring.sampler.probe", lambda _pid: fake_snapshot)
+    monkeypatch.setattr("tools.system.fleet_monitoring.sampler.AgentRegistry", lambda: registry)
+    monkeypatch.setattr("tools.system.fleet_monitoring.sampler.probe", lambda _pid: fake_snapshot)
 
     source = _FakeSource(chunks=["chunk-1"])
     meter = _FakeMeter({"chunk-1": TokenSample.from_tokens(200, model="claude-sonnet-4-5")})
@@ -311,11 +317,11 @@ async def test_sampler_records_tokens_for_auto_discovered_agents(
         source="discovered",
         provider="codex",
     )
-    monkeypatch.setattr("tools.fleet_monitoring.sampler.AgentRegistry", lambda: registry)
+    monkeypatch.setattr("tools.system.fleet_monitoring.sampler.AgentRegistry", lambda: registry)
     monkeypatch.setattr(
-        "tools.fleet_monitoring.sampler._records_for_tick", lambda _registry: [discovered]
+        "tools.system.fleet_monitoring.sampler._records_for_tick", lambda _registry: [discovered]
     )
-    monkeypatch.setattr("tools.fleet_monitoring.sampler.probe", lambda _pid: fake_snapshot)
+    monkeypatch.setattr("tools.system.fleet_monitoring.sampler.probe", lambda _pid: fake_snapshot)
 
     source = _FakeSource(chunks=["chunk-1"])
     meter = _FakeMeter({"chunk-1": TokenSample.from_tokens(123, model="gpt-5-codex")})
@@ -341,8 +347,8 @@ async def test_sampler_does_not_record_when_source_returns_none(
     the tracker must stay empty so the view renders ``-``, not ``0``.
     """
     registry.register(AgentRecord(name="claude-code-8421", pid=8421, command="claude"))
-    monkeypatch.setattr("tools.fleet_monitoring.sampler.AgentRegistry", lambda: registry)
-    monkeypatch.setattr("tools.fleet_monitoring.sampler.probe", lambda _pid: fake_snapshot)
+    monkeypatch.setattr("tools.system.fleet_monitoring.sampler.AgentRegistry", lambda: registry)
+    monkeypatch.setattr("tools.system.fleet_monitoring.sampler.probe", lambda _pid: fake_snapshot)
 
     source = _FakeSource(chunks=[None])
     meter = _FakeMeter({})
@@ -371,8 +377,8 @@ async def test_one_token_source_failure_does_not_crash_loop(
     """
     registry.register(AgentRecord(name="crasher", pid=1111, command="bin"))
     registry.register(AgentRecord(name="healthy", pid=8421, command="claude"))
-    monkeypatch.setattr("tools.fleet_monitoring.sampler.AgentRegistry", lambda: registry)
-    monkeypatch.setattr("tools.fleet_monitoring.sampler.probe", lambda _pid: fake_snapshot)
+    monkeypatch.setattr("tools.system.fleet_monitoring.sampler.AgentRegistry", lambda: registry)
+    monkeypatch.setattr("tools.system.fleet_monitoring.sampler.probe", lambda _pid: fake_snapshot)
 
     class _CrashingSource:
         def __init__(self) -> None:
@@ -414,8 +420,8 @@ async def test_disappeared_agent_state_is_garbage_collected(
     """
     record = AgentRecord(name="claude-code-8421", pid=8421, command="claude")
     registry.register(record)
-    monkeypatch.setattr("tools.fleet_monitoring.sampler.AgentRegistry", lambda: registry)
-    monkeypatch.setattr("tools.fleet_monitoring.sampler.probe", lambda _pid: fake_snapshot)
+    monkeypatch.setattr("tools.system.fleet_monitoring.sampler.AgentRegistry", lambda: registry)
+    monkeypatch.setattr("tools.system.fleet_monitoring.sampler.probe", lambda _pid: fake_snapshot)
 
     source = _FakeSource(chunks=["chunk-1"])
     meter = _FakeMeter({"chunk-1": TokenSample.from_tokens(100, model="claude-sonnet-4-5")})
@@ -448,9 +454,9 @@ async def test_provider_unknown_skips_token_path_without_crashing(
     leaves tokens/cost as ``-``.
     """
     registry.register(AgentRecord(name="my-custom-bot", pid=8421, command="bin"))
-    monkeypatch.setattr("tools.fleet_monitoring.sampler.AgentRegistry", lambda: registry)
-    monkeypatch.setattr("tools.fleet_monitoring.sampler.probe", lambda _pid: fake_snapshot)
-    monkeypatch.setattr("tools.fleet_monitoring.sampler.provider_for", lambda _record: None)
+    monkeypatch.setattr("tools.system.fleet_monitoring.sampler.AgentRegistry", lambda: registry)
+    monkeypatch.setattr("tools.system.fleet_monitoring.sampler.probe", lambda _pid: fake_snapshot)
+    monkeypatch.setattr("tools.system.fleet_monitoring.sampler.provider_for", lambda _record: None)
 
     task = start_sampler(interval=0.01)
     await asyncio.sleep(0.03)
@@ -478,13 +484,13 @@ async def test_schema_invalid_agents_yaml_does_not_crash_loop(
     from pydantic import ValidationError
 
     registry.register(AgentRecord(name="claude-code-8421", pid=8421, command="claude"))
-    monkeypatch.setattr("tools.fleet_monitoring.sampler.AgentRegistry", lambda: registry)
-    monkeypatch.setattr("tools.fleet_monitoring.sampler.probe", lambda _pid: fake_snapshot)
+    monkeypatch.setattr("tools.system.fleet_monitoring.sampler.AgentRegistry", lambda: registry)
+    monkeypatch.setattr("tools.system.fleet_monitoring.sampler.probe", lambda _pid: fake_snapshot)
 
     def _raise() -> None:
         raise ValidationError.from_exception_data("AgentsConfig", [])
 
-    monkeypatch.setattr("tools.fleet_monitoring.sampler.load_agents_config", _raise)
+    monkeypatch.setattr("tools.system.fleet_monitoring.sampler.load_agents_config", _raise)
 
     task = start_sampler(interval=0.01)
     await asyncio.sleep(0.03)

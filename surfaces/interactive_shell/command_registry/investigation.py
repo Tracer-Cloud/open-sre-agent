@@ -113,7 +113,7 @@ def _prompt_investigate_path(console: Console) -> str | None:
 
 def _cmd_template(session: Session, console: Console, args: list[str]) -> bool:
     from surfaces.cli.constants import ALERT_TEMPLATE_CHOICES
-    from surfaces.cli.investigation.alert_templates import build_alert_template
+    from tools.investigation.alert_templates import build_alert_template
 
     if not args and repl_tty_interactive():
         return _interactive_template_menu(session, console)
@@ -155,6 +155,35 @@ def _validate_save_args(args: list[str]) -> str | None:
     return None
 
 
+def _stage_investigation_turn_telemetry(session: Session, outcome: InvestigationOutcome) -> None:
+    """Stage LLM run metadata and structured errors for this turn's recorder flush."""
+    from core.agent_harness.accounting.token_accounting import LlmRunInfo, record_llm_turn
+
+    if outcome.llm_model or outcome.llm_input_tokens or outcome.llm_output_tokens:
+        session.set_pending_turn_llm(
+            LlmRunInfo(
+                model=outcome.llm_model or None,
+                provider=outcome.llm_provider or None,
+                latency_ms=outcome.duration_ms or None,
+                input_tokens=outcome.llm_input_tokens or None,
+                output_tokens=outcome.llm_output_tokens or None,
+            )
+        )
+        if outcome.llm_input_tokens or outcome.llm_output_tokens:
+            record_llm_turn(
+                session,
+                prompt="",
+                response="",
+                input_tokens=outcome.llm_input_tokens,
+                output_tokens=outcome.llm_output_tokens,
+            )
+    if outcome.status == "failed":
+        session.set_pending_turn_error(
+            outcome.failure_category or "unknown",
+            outcome.error_message or "investigation failed",
+        )
+
+
 def _record_investigation_turn(
     session: Session,
     *,
@@ -180,6 +209,7 @@ def _record_investigation_turn(
         session.mark_latest(ok=False, kind="slash")
     if outcome.investigation_id:
         session.last_investigation_id = outcome.investigation_id
+    _stage_investigation_turn_telemetry(session, outcome)
     publish_investigation_outcome_analytics(outcome)
 
 
@@ -187,11 +217,11 @@ def _cmd_investigate_file(session: Session, console: Console, args: list[str]) -
     from platform.analytics.cli import track_investigation
     from platform.analytics.source import EntrypointSource, TriggerMode
     from surfaces.cli.constants import ALERT_TEMPLATE_CHOICES
-    from surfaces.cli.investigation import (
+    from surfaces.cli.investigation.payload import resolve_alert_path
+    from surfaces.interactive_shell.runtime.investigation_adapter import (
         run_investigation_for_session,
         run_sample_alert_for_session,
     )
-    from surfaces.cli.investigation.payload import resolve_alert_path
 
     if not args and repl_tty_interactive():
         return _interactive_investigate_menu(session, console)

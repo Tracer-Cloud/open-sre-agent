@@ -16,8 +16,6 @@ from surfaces.interactive_shell.ui.output.tool_details import (
     build_tool_detail_text,
     make_tool_detail_record,
     tool_detail_body,
-    tool_short_label,
-    tool_source_label,
 )
 from surfaces.interactive_shell.ui.output.tool_details import (
     format_tool_summary as _format_tool_summary,
@@ -25,6 +23,7 @@ from surfaces.interactive_shell.ui.output.tool_details import (
 from surfaces.interactive_shell.ui.output.tool_details import (
     record_tool_summary as _record_tool_summary,
 )
+from surfaces.shared.tool_labels import tool_short_label, tool_source_label
 from tools.registry import resolve_tool_display_name
 
 

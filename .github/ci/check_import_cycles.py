@@ -152,6 +152,63 @@ def _top_level_imports(source: str, *, first_party_roots: frozenset[str]) -> set
     return names
 
 
+def _nested_imports(source: str, *, first_party_roots: frozenset[str]) -> list[tuple[str, int]]:
+    """Return ``(target_module, lineno)`` for imports inside function/class bodies.
+
+    Complements ``_top_level_imports``: catches lazy imports that bypass the
+    module-level direct-edge checker while still being layering violations.
+    """
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return []
+
+    results: list[tuple[str, int]] = []
+
+    def _add(module_path: str, lineno: int) -> None:
+        top = module_path.split(".", 1)[0]
+        if top in first_party_roots:
+            results.append((module_path, lineno))
+
+    def _walk_nested(body: Iterable[ast.stmt], *, nested: bool) -> None:
+        for node in body:
+            if isinstance(node, ast.Import):
+                if nested:
+                    for alias in node.names:
+                        _add(alias.name, node.lineno)
+            elif isinstance(node, ast.ImportFrom):
+                if nested and not node.level and node.module:
+                    _add(node.module, node.lineno)
+            elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+                _walk_nested(node.body, nested=True)
+            elif isinstance(node, ast.If):
+                _walk_nested(node.body, nested=nested)
+                _walk_nested(node.orelse, nested=nested)
+            elif isinstance(node, ast.Try | ast.TryStar):
+                _walk_nested(node.body, nested=nested)
+                for handler in node.handlers:
+                    _walk_nested(handler.body, nested=nested)
+                _walk_nested(node.orelse, nested=nested)
+                _walk_nested(node.finalbody, nested=nested)
+            elif isinstance(node, ast.With | ast.AsyncWith):
+                _walk_nested(node.body, nested=nested)
+            elif isinstance(node, ast.For | ast.AsyncFor | ast.While):
+                _walk_nested(node.body, nested=nested)
+                _walk_nested(node.orelse, nested=nested)
+            elif isinstance(node, ast.Match):
+                for case in node.cases:
+                    _walk_nested(case.body, nested=nested)
+
+    _walk_nested(tree.body, nested=False)
+    return results
+
+
+def module_from_path(root: Path, py: Path) -> str:
+    """Resolve a repo-relative ``.py`` path to its dotted module name."""
+    module = ".".join(py.with_suffix("").relative_to(root).parts)
+    return module.removesuffix(".__init__")
+
+
 def _build_graph(root: Path, first_party_roots: tuple[str, ...]) -> dict[str, set[str]]:
     """Build the first-party module-level import graph rooted at ``root``."""
     roots = frozenset(first_party_roots)
@@ -163,8 +220,7 @@ def _build_graph(root: Path, first_party_roots: tuple[str, ...]) -> dict[str, se
         for py in pkg_path.rglob("*.py"):
             if "__pycache__" in py.parts:
                 continue
-            module = ".".join(py.with_suffix("").relative_to(root).parts)
-            module = module.removesuffix(".__init__")
+            module = module_from_path(root, py)
             source = py.read_text(encoding="utf-8")
             graph[module].update(_top_level_imports(source, first_party_roots=roots))
     return graph

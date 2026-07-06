@@ -9,13 +9,13 @@ import httpx
 
 from integrations.pi import PiCodingResult
 from integrations.sentry import SentryConfig
-from tools.fix_sentry_issue import FixSentryIssueTool, fix_sentry_issue
-from tools.fix_sentry_issue.context import gather_issue_context
+from tools.cross_vendor.fix_sentry_issue import FixSentryIssueTool, fix_sentry_issue
+from tools.cross_vendor.fix_sentry_issue.context import gather_issue_context
 
-_CONFIG = "tools.fix_sentry_issue.context.sentry_config_from_env"
-_GET_ISSUE = "tools.fix_sentry_issue.context.get_sentry_issue"
-_VERIFY = "tools.fix_sentry_issue.runner.verify_pi_coding"
-_RUN = "tools.fix_sentry_issue.runner.run_pi_coding_task"
+_CONFIG = "tools.cross_vendor.fix_sentry_issue.context.sentry_config_from_env"
+_GET_ISSUE = "tools.cross_vendor.fix_sentry_issue.context.get_sentry_issue"
+_VERIFY = "tools.cross_vendor.fix_sentry_issue.runner.verify_pi_coding"
+_RUN = "tools.cross_vendor.fix_sentry_issue.runner.run_pi_coding_task"
 
 _ISSUE = {
     "title": "TypeError: 'NoneType' object is not subscriptable",

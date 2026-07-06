@@ -38,14 +38,7 @@ def _tool_input_preview(value: Any) -> str:
 
 
 def _llm_client_unavailable_message(exc: Exception) -> str:
-    """Render the reasoning-client import failure, hinting at the common cause.
-
-    An ``ImportError`` from the ``core.llm`` graph on a long-running process is
-    almost always a stale process: the code changed on disk while the process
-    kept running, so a lazily-imported new module can't find a symbol in a
-    boot-cached old one. Point the operator at a restart instead of leaving them
-    with a bare ``cannot import name …``.
-    """
+    """Render the reasoning-client import failure; on ImportError, hint at a restart."""
     base = f"LLM client unavailable: {escape(str(exc))}"
     if isinstance(exc, ImportError):
         return (
@@ -77,7 +70,13 @@ class DefaultToolProvider:
         self._tool_action_logger = tool_action_logger
         self._tool_context: ActionToolContext | None = None
 
-    def action_tools(self, *, confirm_fn: ConfirmFn | None, is_tty: bool | None) -> list[Any]:
+    def action_tools(
+        self,
+        *,
+        confirm_fn: ConfirmFn | None,
+        is_tty: bool | None,
+        resolved_integrations: dict[str, Any] | None = None,
+    ) -> list[Any]:
         ctx = ActionToolContext(
             session=self._session,
             console=self._console,
@@ -89,9 +88,12 @@ class DefaultToolProvider:
         self._tool_context = ctx
         if self._precomputed_action_tools is not None:
             return list(self._precomputed_action_tools)
-        return get_action_tools_from_integrations_context(
-            ctx, resolved_integrations=self._resolved_integrations()
+        resolved = (
+            resolved_integrations
+            if resolved_integrations is not None
+            else self._resolved_integrations()
         )
+        return get_action_tools_from_integrations_context(ctx, resolved_integrations=resolved)
 
     def tool_resources(self) -> dict[str, Any]:
         if self._tool_context is None:
@@ -124,14 +126,10 @@ class DefaultToolProvider:
         return _logging_observer
 
     def _resolved_integrations(self) -> dict[str, Any]:
-        get_integrations = getattr(self._session, "get_integrations", None)
-        if callable(get_integrations):
-            integrations = get_integrations()
-            resolved = getattr(integrations, "resolved_integrations", None)
-            if isinstance(resolved, dict):
-                return resolved
-        cached = getattr(self._session, "resolved_integrations_cache", None)
-        return dict(cached or {})
+        from core.agent_harness.integrations.resolution import resolve_and_cache_integrations
+
+        # resolve_and_cache_integrations returns a fresh dict.
+        return resolve_and_cache_integrations(self._session)
 
 
 class DefaultReasoningClientProvider:
@@ -142,23 +140,37 @@ class DefaultReasoningClientProvider:
         *,
         output: OutputSink | None = None,
         error_reporter: ErrorReporter | None = None,
+        session: Any | None = None,
     ) -> None:
         self._output = output
         self._error_reporter = error_reporter
+        self._session = session
 
     def get(self) -> Any | None:
         try:
             from core.llm.llm_client import get_llm_for_reasoning
         except Exception as exc:
-            if self._error_reporter is not None:
-                self._error_reporter.report(
-                    exc,
-                    context="core.agent_harness.default_reasoning_client.import",
-                )
-            if self._output is not None:
-                self._output.render_error(_llm_client_unavailable_message(exc))
+            self._handle_unavailable(
+                exc, context="core.agent_harness.default_reasoning_client.import"
+            )
             return None
-        return get_llm_for_reasoning()
+        try:
+            return get_llm_for_reasoning()
+        except Exception as exc:
+            self._handle_unavailable(
+                exc, context="core.agent_harness.default_reasoning_client.create"
+            )
+            return None
+
+    def _handle_unavailable(self, exc: Exception, *, context: str) -> None:
+        if self._error_reporter is not None:
+            self._error_reporter.report(exc, context=context)
+        if self._session is not None:
+            from core.agent_harness.turns.orchestrator import stage_turn_error
+
+            stage_turn_error(self._session, "llm_unavailable", str(exc))
+        if self._output is not None:
+            self._output.render_error(_llm_client_unavailable_message(exc))
 
 
 class DefaultRunRecordFactory:

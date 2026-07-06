@@ -85,6 +85,8 @@ class PromptRecorder:
         self._session = session
         self._response: str = ""
         self._scoped_investigation_id: str | None = None
+        self._error_kind: str = ""
+        self._error_message: str = ""
         self._model: str | None = None
         self._provider: str | None = None
         self._latency_ms: int | None = None
@@ -157,6 +159,20 @@ class PromptRecorder:
         cleaned = investigation_id.strip()
         if cleaned:
             self._scoped_investigation_id = cleaned
+
+    def set_error(self, kind: str, message: str) -> None:
+        """Attach a structured turn error emitted as ``$ai_error`` properties.
+
+        The human-readable response text is unaffected; these properties make
+        LLM/provider error detection exact instead of a regex over
+        ``$ai_output_choices``.
+        """
+        kind = kind.strip()
+        message = message.strip()
+        if not (kind or message):
+            return
+        self._error_kind = kind or "error"
+        self._error_message = _sanitize_text(message, config=self._config)
 
     def _resolve_investigation_id(self) -> str:
         if self._scoped_investigation_id:
@@ -258,6 +274,10 @@ class PromptRecorder:
                 investigation_id = self._resolve_investigation_id()
                 if investigation_id:
                     posthog_properties["investigation_id"] = investigation_id
+                if self._error_kind:
+                    posthog_properties["$ai_is_error"] = True
+                    posthog_properties["$ai_error"] = self._error_message or self._error_kind
+                    posthog_properties["error_kind"] = self._error_kind
                 capture_ai_generation(posthog_properties)
 
 

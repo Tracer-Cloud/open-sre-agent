@@ -4,11 +4,10 @@ Surfaces under test:
 
 * ``shell`` — ``execute_shell_turn`` (interactive REPL / CLI one-shot)
 * ``headless`` — ``dispatch_message_to_headless_agent``
-* ``agent_static`` — ``Agent.dispatch_message_to_headless_agent``
 * ``gateway_handler`` — ``build_gateway_turn_handler`` (Telegram/API gateway)
 
 Each test wires ONE tool registry and ONE pair of LLMs, drives the same message
-through all four entry points, and asserts identical routing + response shape.
+through all three entry points, and asserts identical routing + response shape.
 """
 
 from __future__ import annotations
@@ -58,9 +57,7 @@ def parity_env(monkeypatch: pytest.MonkeyPatch):
         wire_llms(monkeypatch, action_mode=action_mode, action_tool_name=action_tool_name)
 
     def _configure_with_slash(*, action_mode: str = "text") -> list[str]:
-        # Clear the registry cache so slash_invoke resolves from a fresh
-        # discovery pass, not a set another test warmed (project test convention).
-        clear_tool_registry_cache()
+        clear_tool_registry_cache()  # fresh registry (project test convention)
         slash = get_action_tool("slash_invoke")
         assert slash is not None
         dispatched: list[str] = []

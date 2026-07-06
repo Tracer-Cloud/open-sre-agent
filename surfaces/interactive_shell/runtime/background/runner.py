@@ -191,7 +191,9 @@ def start_background_text_investigation(
     display_command: str = "background free-text investigation",
     investigation_target: str = "",
 ) -> str:
-    from surfaces.cli.investigation import run_investigation_for_session_background
+    from surfaces.interactive_shell.runtime.investigation_adapter import (
+        run_investigation_for_session_background,
+    )
 
     return _start_background_investigation(
         session=session,
@@ -215,7 +217,9 @@ def start_background_template_investigation(
     display_command: str,
     investigation_target: str = "",
 ) -> str:
-    from surfaces.cli.investigation import run_sample_alert_for_session_background
+    from surfaces.interactive_shell.runtime.investigation_adapter import (
+        run_sample_alert_for_session_background,
+    )
 
     return _start_background_investigation(
         session=session,

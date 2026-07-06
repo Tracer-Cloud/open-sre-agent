@@ -9,7 +9,7 @@ informational question) is exercised by the live planning scenario
 ``chat_handoff/342-which-model-is-used-now``. These tests pin the *deterministic*
 half: given that the action agent picks ``/model``, the turn ends without
 answering the user, because ``/model`` records no ``last_command_observation`` and
-so the turn router (``core.agent_harness.agents.turn_orchestrator._route_turn``) takes the
+so the turn router (``core.agent_harness.turns.orchestrator._route_turn``) takes the
 ``handled_without_llm`` path instead of summarizing an observation.
 """
 
@@ -33,9 +33,7 @@ from tests.core.agent.orchestration.action_execution_test_harness import (
     tool_response,
 )
 
-_ACTION_LLM_FACTORY_PATCH = (
-    "surfaces.interactive_shell.runtime.shell_turn_execution._default_llm_factory"
-)
+_ACTION_LLM_FACTORY_PATCH = "surfaces.interactive_shell.runtime.action_turn.default_llm_factory"
 _PROMPT = "which model is being used now?"
 
 

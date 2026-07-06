@@ -6,8 +6,8 @@ from typing import Any
 
 from core.tool_framework.tool_decorator import tool
 from integrations.bitbucket import get_file_contents
+from integrations.bitbucket.availability import bitbucket_available_or_backend
 from integrations.bitbucket.tools.bitbucket_search_code_tool import (
-    _bb_available,
     _bb_creds,
     _resolve_config,
 )
@@ -25,7 +25,11 @@ def _get_bitbucket_file_contents_extract_params(sources: dict[str, dict]) -> dic
 
 def _get_bitbucket_file_contents_available(sources: dict[str, dict]) -> bool:
     bb = sources.get("bitbucket", {})
-    return bool(_bb_available(sources) and bb.get("repo_slug", bb.get("repo")) and bb.get("path"))
+    return bool(
+        bitbucket_available_or_backend(sources)
+        and bb.get("repo_slug", bb.get("repo"))
+        and bb.get("path")
+    )
 
 
 @tool(

@@ -41,6 +41,7 @@ EvidenceSource = Literal[
     "openclaw",
     "posthog_mcp",
     "sentry_mcp",
+    "x_mcp",
     "mysql",
     "rabbitmq",
     "betterstack",

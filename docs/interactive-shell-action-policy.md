@@ -38,7 +38,7 @@ recurring source of precedence drift.
    detection in `runtime/utils/input_policy._literal_slash_command_text` remains
    terminal-UI policy (spinner suppression and exclusive-stdin gating); the
    execution-side deterministic dispatch lives in
-   `core/agent_harness/agents/action_agent.py`.
+   `core/agent_harness/turns/action_driver.py`.
 
 ## What this means for changes
 - To change how a phrasing maps to a tool, edit the action-agent system prompt and/or
@@ -66,7 +66,7 @@ Addendum — Jun 18, 2026.
 Factual questions about live state (for example "is sentry installed?") are
 answered without adding keyword/regex rules. Two complementary mechanisms:
 
-1. Context grounding (not action planning). At REPL boot, `repl_main`
+1. Context grounding (not action planning). At REPL boot, `run_repl_async`
    (`surfaces/interactive_shell/main.py`) hydrates
    `session.configured_integrations` from the shared
    `configured_integration_services()` helper in `integrations/catalog.py`
@@ -231,7 +231,7 @@ verbatim. There is no inference. Free-form natural language ("log me in",
 is "explicit typed command" vs "natural language", identical to the line the
 terminal-UI policy (`_literal_slash_command_text`) already draws.
 
-**How it works.** `core/agent_harness/action_agent.run_agent_turn` recognizes
+**How it works.** `core/agent_harness/turns/action_driver.run_action_agent_turn` recognizes
 literal `/slash` input and emits a deterministic `slash_invoke` tool call through
 the same static-LLM path as the explicit `!cmd` shell escape
 (`_StaticToolCallLLM`). Execution then flows through the normal `slash_invoke`

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from core.domain.diagnosis import (
+    InvestigationResult,
     build_diagnosis_schema,
     extract_last_assistant_text,
+    result_to_state,
     taxonomy_categories_for_alert_source,
 )
 
@@ -51,3 +53,25 @@ def test_hermes_taxonomy_is_scoped_to_hermes_categories() -> None:
     description = str(schema.model_fields["root_cause_category"].description)
     assert "agent_hang" in description
     assert "connection_exhaustion" not in description
+
+
+def test_result_to_state_strips_internal_markers_from_agent_messages() -> None:
+    """Diagnose is the last stage to touch agent_messages — its eviction markers
+    must not leak into the persisted investigation state."""
+    result = InvestigationResult(
+        root_cause="disk full",
+        root_cause_category="disk_pressure",
+        agent_messages=[
+            {"role": "user", "content": "alert", "_opensre_seed": True},
+            {"role": "assistant", "content": "ok", "_opensre_duplicate_result": True},
+        ],
+    )
+
+    state = result_to_state(result)
+
+    assert state["agent_messages"] == [
+        {"role": "user", "content": "alert"},
+        {"role": "assistant", "content": "ok"},
+    ]
+    assert result.agent_messages[0]["_opensre_seed"] is True
+    assert result.agent_messages[1]["_opensre_duplicate_result"] is True

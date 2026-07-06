@@ -18,9 +18,9 @@ from rich.console import Console
 
 import core as runtime_module
 import core.llm.agent_llm_client as agent_llm_client
-import tools.investigation.stages.gather_evidence.tools as investigate_tools
-from core.agent_harness.agents.evidence_agent import EvidenceAgentFactory
+import platform.harness_ports as harness_ports
 from core.agent_harness.session import Session
+from core.agent_harness.turns.evidence_driver import GatherAgentFactory
 from core.llm.types import ToolCall
 from surfaces.interactive_shell.runtime.integration_tool_gathering import (
     _format_gathering_progress_line,
@@ -29,7 +29,7 @@ from surfaces.interactive_shell.runtime.integration_tool_gathering import (
     gather_integration_tool_evidence,
 )
 
-_FakeRun = Callable[[dict[str, Any], list[dict[str, Any]]], runtime_module.ToolLoopResult]
+_FakeRun = Callable[[dict[str, Any], list[dict[str, Any]]], runtime_module.AgentRunResult]
 
 
 def _console() -> Console:
@@ -42,14 +42,14 @@ class _DummyTool:
         self.source = source
 
 
-def _stub_agent_factory(run: _FakeRun) -> EvidenceAgentFactory:
+def _stub_agent_factory(run: _FakeRun) -> GatherAgentFactory:
     """Return a factory that runs real gather setup but stubs ``Agent.run``."""
 
     class _StubAgent:
         def __init__(self, on_runtime_event: Any) -> None:
             self._on_runtime_event = on_runtime_event
 
-        def run(self, initial_messages: list[dict[str, Any]]) -> runtime_module.ToolLoopResult:
+        def run(self, initial_messages: list[dict[str, Any]]) -> runtime_module.AgentRunResult:
             kwargs = {"on_runtime_event": self._on_runtime_event}
             return run(kwargs, initial_messages)
 
@@ -73,7 +73,7 @@ def test_no_tools_available_returns_none(monkeypatch: Any) -> None:
     session = Session()
     session.resolved_integrations_cache = {}
 
-    monkeypatch.setattr(investigate_tools, "get_available_tools", lambda _resolved: [])
+    monkeypatch.setattr(harness_ports, "get_investigation_tools", lambda _resolved: [])
 
     assert gather_integration_tool_evidence("any question", session, _console()) is None
 
@@ -83,8 +83,8 @@ def test_secondary_only_tools_return_none(monkeypatch: Any) -> None:
     session.resolved_integrations_cache = {}
 
     monkeypatch.setattr(
-        investigate_tools,
-        "get_available_tools",
+        harness_ports,
+        "get_investigation_tools",
         lambda _resolved: [_DummyTool("get_sre_guidance", source="knowledge")],
     )
 
@@ -101,8 +101,8 @@ def test_executed_results_return_formatted_observation(monkeypatch: Any) -> None
     session.resolved_integrations_cache = {}
 
     monkeypatch.setattr(
-        investigate_tools,
-        "get_available_tools",
+        harness_ports,
+        "get_investigation_tools",
         lambda _resolved: [_DummyTool("search_github_issues")],
     )
     monkeypatch.setattr(agent_llm_client, "get_agent_llm", object)
@@ -116,8 +116,8 @@ def test_executed_results_return_formatted_observation(monkeypatch: Any) -> None
 
     def _fake_run(
         _kwargs: dict[str, Any], _initial_messages: list[dict[str, Any]]
-    ) -> runtime_module.ToolLoopResult:
-        return runtime_module.ToolLoopResult(messages=[], final_text="", executed=executed)
+    ) -> runtime_module.AgentRunResult:
+        return runtime_module.AgentRunResult(messages=[], final_text="", executed=executed)
 
     observation = gather_integration_tool_evidence(
         "any open issues?",
@@ -137,16 +137,16 @@ def test_no_executed_returns_none(monkeypatch: Any) -> None:
     session.resolved_integrations_cache = {}
 
     monkeypatch.setattr(
-        investigate_tools,
-        "get_available_tools",
+        harness_ports,
+        "get_investigation_tools",
         lambda _resolved: [_DummyTool("search_github_issues")],
     )
     monkeypatch.setattr(agent_llm_client, "get_agent_llm", object)
 
     def _fake_run(
         _kwargs: dict[str, Any], _initial_messages: list[dict[str, Any]]
-    ) -> runtime_module.ToolLoopResult:
-        return runtime_module.ToolLoopResult(messages=[], final_text="nothing to do", executed=[])
+    ) -> runtime_module.AgentRunResult:
+        return runtime_module.AgentRunResult(messages=[], final_text="nothing to do", executed=[])
 
     assert (
         gather_integration_tool_evidence(
@@ -164,8 +164,8 @@ def test_exception_path_returns_none(monkeypatch: Any) -> None:
     session.resolved_integrations_cache = {}
 
     monkeypatch.setattr(
-        investigate_tools,
-        "get_available_tools",
+        harness_ports,
+        "get_investigation_tools",
         lambda _resolved: [_DummyTool("search_github_issues")],
     )
 
@@ -228,15 +228,15 @@ def test_gathering_progress_lines_print_on_tool_start(monkeypatch: Any) -> None:
     console = _console()
 
     monkeypatch.setattr(
-        investigate_tools,
-        "get_available_tools",
+        harness_ports,
+        "get_investigation_tools",
         lambda _resolved: [_DummyTool("query_grafana_metrics", source="grafana")],
     )
     monkeypatch.setattr(agent_llm_client, "get_agent_llm", object)
 
     def _fake_run(
         kwargs: dict[str, Any], _initial_messages: list[dict[str, Any]]
-    ) -> runtime_module.ToolLoopResult:
+    ) -> runtime_module.AgentRunResult:
         on_runtime_event = kwargs.get("on_runtime_event")
         if on_runtime_event is not None:
             on_runtime_event(
@@ -255,7 +255,7 @@ def test_gathering_progress_lines_print_on_tool_start(monkeypatch: Any) -> None:
                     iteration=0,
                 )
             )
-        return runtime_module.ToolLoopResult(messages=[], final_text="", executed=[])
+        return runtime_module.AgentRunResult(messages=[], final_text="", executed=[])
 
     gather_integration_tool_evidence(
         "check metrics",
@@ -302,6 +302,38 @@ def test_resolve_gather_integrations_uses_session_cache_on_follow_up() -> None:
     assert resolved["github"]["repo"] == "opensre"
 
 
+def test_resolve_gather_integrations_uses_passed_turn_view() -> None:
+    """When the turn's resolved view is supplied, it is the base — no session re-resolve."""
+    session = Session()
+    # The session cache holds a different integration than the turn resolved this turn.
+    session.resolved_integrations_cache = {"datadog": {"connection_verified": True}}
+    turn_resolved = {"slack": {"connection_verified": True}}
+
+    resolved = _resolve_gather_integrations(
+        session, "post an update", resolved_integrations=turn_resolved
+    )
+
+    assert resolved == {"slack": {"connection_verified": True}}
+
+
+def test_resolve_gather_integrations_applies_github_scope_over_passed_view() -> None:
+    """GitHub repo scope is still enriched on top of the passed turn view."""
+    session = Session()
+    session.resolved_integrations_cache = {}
+    turn_resolved = {
+        "github": {"connection_verified": True, "url": "https://api.githubcopilot.com/mcp/"}
+    }
+
+    resolved = _resolve_gather_integrations(
+        session,
+        "check github issues in https://github.com/Tracer-Cloud/opensre",
+        resolved_integrations=turn_resolved,
+    )
+
+    assert resolved["github"]["owner"] == "Tracer-Cloud"
+    assert resolved["github"]["repo"] == "opensre"
+
+
 def test_gather_enriches_github_before_selecting_tools(monkeypatch: Any) -> None:
     session = Session()
     session.resolved_integrations_cache = {
@@ -316,13 +348,13 @@ def test_gather_enriches_github_before_selecting_tools(monkeypatch: Any) -> None
             return [_DummyTool("search_github_issues")]
         return []
 
-    monkeypatch.setattr(investigate_tools, "get_available_tools", _capture_tools)
+    monkeypatch.setattr(harness_ports, "get_investigation_tools", _capture_tools)
     monkeypatch.setattr(agent_llm_client, "get_agent_llm", object)
 
     def _fake_run(
         _kwargs: dict[str, Any], _initial_messages: list[dict[str, Any]]
-    ) -> runtime_module.ToolLoopResult:
-        return runtime_module.ToolLoopResult(messages=[], final_text="", executed=[])
+    ) -> runtime_module.AgentRunResult:
+        return runtime_module.AgentRunResult(messages=[], final_text="", executed=[])
 
     gather_integration_tool_evidence(
         "check github issues in https://github.com/Tracer-Cloud/opensre",
@@ -343,17 +375,17 @@ def test_gather_user_message_includes_recent_conversation(monkeypatch: Any) -> N
     captured: dict[str, Any] = {}
 
     monkeypatch.setattr(
-        investigate_tools,
-        "get_available_tools",
+        harness_ports,
+        "get_investigation_tools",
         lambda _resolved: [_DummyTool("search_github_issues")],
     )
     monkeypatch.setattr(agent_llm_client, "get_agent_llm", object)
 
     def _fake_run(
         _kwargs: dict[str, Any], initial_messages: list[dict[str, Any]]
-    ) -> runtime_module.ToolLoopResult:
+    ) -> runtime_module.AgentRunResult:
         captured["messages"] = initial_messages
-        return runtime_module.ToolLoopResult(messages=[], final_text="", executed=[])
+        return runtime_module.AgentRunResult(messages=[], final_text="", executed=[])
 
     gather_integration_tool_evidence(
         "follow up",

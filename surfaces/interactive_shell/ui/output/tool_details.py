@@ -7,47 +7,19 @@ from rich.text import Text
 from platform.observability.tool_trace import format_json_preview
 from platform.terminal.theme import BRAND, DIM, HIGHLIGHT, SECONDARY, TEXT
 from surfaces.interactive_shell.ui.components.time_format import _elapsed_hms, _fmt_timing
-from tools.registry import get_registered_tool_map, resolve_tool_display_name
+from surfaces.shared.tool_labels import tool_short_label, tool_source_label
 
-
-def tool_source_label(tool_name: str) -> str:
-    tool = get_registered_tool_map().get(tool_name)
-    source = str(tool.source) if tool is not None else infer_tool_source(tool_name)
-    if source == "grafana":
-        return "Grafana"
-    if source == "knowledge":
-        return "SRE"
-    if source == "openclaw":
-        return "OpenClaw"
-    return source.replace("_", " ").title() if source else "Tools"
-
-
-def infer_tool_source(tool_name: str) -> str:
-    lowered = tool_name.lower()
-    for source in ("grafana", "datadog", "cloudwatch", "sentry", "honeycomb", "openclaw"):
-        if source in lowered:
-            return source
-    if lowered.startswith("get_sre_"):
-        return "knowledge"
-    return "tools"
-
-
-def tool_short_label(tool_name: str, source_label: str) -> str:
-    display = resolve_tool_display_name(tool_name)
-    label = display
-    for prefix in (
-        source_label,
-        source_label.lower(),
-        f"{source_label} ",
-        f"{source_label.lower()} ",
-        "query ",
-        "get ",
-    ):
-        if label.startswith(prefix):
-            label = label[len(prefix) :].strip()
-    if source_label == "Grafana" and label.lower().startswith("grafana "):
-        label = label[len("grafana ") :].strip()
-    return label or display
+__all__ = [
+    "build_live_tool_detail_rows",
+    "build_tool_call_line",
+    "build_tool_detail_text",
+    "format_tool_summary",
+    "make_tool_detail_record",
+    "record_tool_summary",
+    "tool_detail_body",
+    "tool_short_label",
+    "tool_source_label",
+]
 
 
 def record_tool_summary(

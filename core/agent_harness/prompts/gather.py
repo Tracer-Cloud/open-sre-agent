@@ -1,16 +1,11 @@
-"""System prompt for the evidence-gathering pass of the terminal assistant.
-
-This is the fourth harness-surface prompt builder. It lives here, in the single
-``core/agent_harness/prompts/`` home, alongside the action and assistant builders
-so every harness prompt is constructed in one place (issue #3434, Problem 2).
-"""
+"""Gather-pass system prompt builder."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from core.agent_harness.models.turn_context import TurnContext
+    from core.agent_harness.models.turn_snapshot import TurnSnapshot
     from core.agent_harness.ports import SessionStore
 
 
@@ -48,16 +43,12 @@ def build_gather_system_prompt(session: SessionStore) -> str:
     )
 
 
-def build_gather_system_prompt_from_turn_context(turn_ctx: TurnContext) -> str:
-    """Build the gather system prompt from a :class:`TurnContext` snapshot.
-
-    Uses the same integration list the action and assistant agents saw at
-    turn start. Prefer this when a ``TurnContext`` is already available.
-    """
+def build_gather_system_prompt_from_turn_snapshot(turn_snapshot: TurnSnapshot) -> str:
+    """Same as :func:`build_gather_system_prompt`, from a turn snapshot."""
 
     class _GatherSessionView:
         @property
         def configured_integrations(self) -> tuple[str, ...]:
-            return turn_ctx.configured_integrations
+            return turn_snapshot.configured_integrations
 
     return build_gather_system_prompt(_GatherSessionView())  # type: ignore[arg-type]

@@ -6,8 +6,8 @@ import click
 from pydantic import ValidationError
 
 from surfaces.interactive_shell.utils.error_handling.errors import OpenSREError
-from tools.watch_dog.config import WatchdogConfig
-from tools.watch_dog.runner import run_watchdog
+from tools.system.watch_dog.config import WatchdogConfig
+from tools.system.watch_dog.runner import run_watchdog
 
 
 @click.command(name="watchdog")

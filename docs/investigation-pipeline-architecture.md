@@ -19,7 +19,7 @@ pipeline and loop control flow around that.
 | ReAct loop (the agent)          | `tools/investigation/stages/gather_evidence/{agent,loop,tools,prompt}.py`                      |
 | Diagnosis parsing               | `tools/investigation/stages/diagnose/node.py`, `core/domain/diagnosis`                          |
 | Report delivery                 | `tools/investigation/reporting/`                                                                |
-| Shared state contract           | `core/context/state/` (`AgentState`, `InvestigationState`, `EvidenceEntry`)                    |
+| Shared state contract           | `core/state/` (`AgentState`, `InvestigationState`, `EvidenceEntry`)                    |
 | Context budget enforcement      | `core/context_budget.py`                                                                        |
 
 ## Pipeline overview

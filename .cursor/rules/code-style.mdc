@@ -23,17 +23,21 @@ alwaysApply: true
 ## Tooling
 
 - **Linter:** ruff (rules: E, W, F, I, B, C4, UP, ARG, SIM)
-- **Type checker:** mypy (Python 3.12 target, `warn_return_any`)
+- **Type checker:** mypy (Python 3.13 target, `warn_return_any`)
 - **Formatter:** ruff format (Black-compatible)
-- **Python version:** >=3.11, target 3.12
+- **Python version:** >=3.12 (tooling targets 3.13)
 
 ## Quality Commands
 
+Ruff and mypy run over the source packages (`config core gateway integrations
+platform surfaces tools`) plus `tests/`; the Makefile keeps the canonical path
+list in `PYTHON_SOURCE_PATHS`.
+
 ```bash
-make lint            # ruff check app/ tests/
-make format-check    # ruff format --check app/ tests/ (read-only; CI enforces this)
-make format          # ruff format app/ tests/ (write fixes locally)
-make typecheck       # mypy app/
+make lint            # ruff check
+make format-check    # ruff format --check (read-only; CI enforces this)
+make format          # ruff format (write fixes locally)
+make typecheck       # mypy
 make test-cov        # pytest with coverage
 make check           # lint + format-check + typecheck + test-full
 ```

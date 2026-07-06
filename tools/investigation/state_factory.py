@@ -5,8 +5,8 @@ from __future__ import annotations
 import time
 from typing import Any, cast
 
-from core.context.state.models import AgentState, AgentStateModel, model_default_payload
 from core.domain.alerts.normalization import normalize_alert_payload
+from core.state.models import AgentState, AgentStateModel, model_default_payload
 from integrations.opensre.hf_remote import (
     extract_scoring_points,
     strip_scoring_points_from_alert,

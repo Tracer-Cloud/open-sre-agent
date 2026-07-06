@@ -3,6 +3,17 @@
 from __future__ import annotations
 
 import os
+from typing import Any
+
+
+def default_llm_factory() -> Any:
+    """Return the default agent LLM client.
+
+    Uses a lazy import to avoid pulling in the full LLM stack at module load time.
+    """
+    from core.llm import agent_llm_client
+
+    return agent_llm_client.get_agent_llm()
 
 
 def resolve_provider_models(settings: object, provider: str) -> tuple[str, str]:
@@ -51,4 +62,4 @@ def resolve_provider_models(settings: object, provider: str) -> tuple[str, str]:
     return (reasoning_model or "default", toolcall_model or reasoning_model or "default")
 
 
-__all__ = ["resolve_provider_models"]
+__all__ = ["default_llm_factory", "resolve_provider_models"]

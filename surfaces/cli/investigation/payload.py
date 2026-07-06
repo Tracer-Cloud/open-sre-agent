@@ -201,7 +201,7 @@ def _choose_guided_target() -> str:
 
 
 def _choose_guided_payload() -> dict[str, Any]:
-    from surfaces.cli.investigation.alert_templates import build_alert_template
+    from tools.investigation.alert_templates import build_alert_template
 
     while True:
         target = _choose_guided_target()

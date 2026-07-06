@@ -15,7 +15,7 @@ from surfaces.interactive_shell.command_registry.suggestions import (
     resolve_literal_slash_typo,
     subcommand_hints,
 )
-from surfaces.interactive_shell.runtime.shell_turn_execution import run_action_tool_turn
+from surfaces.interactive_shell.runtime.action_turn import run_action_tool_turn
 
 
 def _capture() -> tuple[Console, io.StringIO]:

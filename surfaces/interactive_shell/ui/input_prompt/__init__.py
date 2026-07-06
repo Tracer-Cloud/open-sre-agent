@@ -20,7 +20,7 @@ def _install_prompt_frame(session: PromptSession[str]) -> PromptSession[str]:
     return session
 
 
-def _build_prompt_session(session: Session | None = None) -> PromptSession[str]:
+def build_prompt_session(session: Session | None = None) -> PromptSession[str]:
     placeholder = (
         (lambda: resolve_prompt_placeholder(session))
         if session is not None
@@ -43,6 +43,6 @@ def _build_prompt_session(session: Session | None = None) -> PromptSession[str]:
 
 
 __all__ = [
-    "_build_prompt_session",
     "_install_prompt_frame",
+    "build_prompt_session",
 ]

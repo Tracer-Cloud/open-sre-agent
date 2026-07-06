@@ -14,9 +14,12 @@ class TestElasticsearchLogsToolContract(BaseToolContract):
 
 
 def test_is_available_requires_connection_verified() -> None:
+    # Shares the "opensearch" source (same client, same credentials) — see
+    # docs/opensearch.mdx: configuring OpenSearch/Elasticsearch once enables
+    # both the analytics tool and this log-search tool.
     tool = ElasticsearchLogsTool()
-    assert tool.is_available({"elasticsearch": {"connection_verified": True}}) is True
-    assert tool.is_available({"elasticsearch": {}}) is False
+    assert tool.is_available({"opensearch": {"connection_verified": True}}) is True
+    assert tool.is_available({"opensearch": {}}) is False
     assert tool.is_available({}) is False
 
 
@@ -74,11 +77,11 @@ def test_run_api_error() -> None:
 
 
 def test_extract_params_includes_basic_auth_credentials() -> None:
-    """extract_params reads username/password from the elasticsearch source dict."""
+    """extract_params reads username/password from the opensearch source dict."""
     tool = ElasticsearchLogsTool()
     sources = mock_agent_state(
         overrides={
-            "elasticsearch": {
+            "opensearch": {
                 "connection_verified": True,
                 "url": "https://my-cluster.example.com",
                 "username": "admin",

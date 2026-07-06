@@ -7,7 +7,6 @@ import logging
 import time
 from typing import Any, cast
 
-from core.context.state import InvestigationState
 from core.domain.alerts.extraction import (
     AlertDetails,
     enrich_raw_alert,
@@ -17,6 +16,7 @@ from core.domain.alerts.extraction import (
 )
 from core.domain.types.incident_window import resolve_incident_window
 from core.llm.llm_client import get_llm_for_reasoning
+from core.state import InvestigationState
 from platform.observability import (
     debug_print,
     render_investigation_header,

@@ -17,8 +17,6 @@ from typing import Any
 _EXPORT_MODULES = {
     "Agent": "core.agent",
     "AgentRunResult": "core.agent",
-    "LoopEventCallback": "core.agent",
-    "ToolLoopResult": "core.agent",
     "context_budget_ceiling_for_model": "core.context_budget",
     "enforce_context_budget": "core.context_budget",
     "estimate_message_tokens": "core.context_budget",

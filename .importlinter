@@ -16,3 +16,4 @@ modules =
 
 # Full layered contracts (core ⊄ tools, integrations ⊄ cli, …) live in
 # ``.importlinter.strict`` for local burn-down. Run: ``make check-layers-strict``
+# Regenerate baselines: ``uv run lint-imports --config .importlinter.strict``

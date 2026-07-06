@@ -63,6 +63,13 @@ def test_binary_build_bundles_registry_discovered_tool_modules() -> None:
     assert "--collect-submodules integrations" in source
 
 
+def test_binary_build_collects_litellm_package_data() -> None:
+    source = _RELEASE_WORKFLOW.read_text()
+
+    assert "--collect-data litellm" in source
+    assert "model_prices_and_context_window_backup.json" in source
+
+
 def test_unix_binary_build_uses_onedir_and_pinned_ubuntu_22_runners() -> None:
     source = _RELEASE_WORKFLOW.read_text()
 

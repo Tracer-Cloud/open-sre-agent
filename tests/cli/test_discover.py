@@ -119,20 +119,19 @@ def _patch_discover_paths(
 ) -> None:
     """Helper: monkeypatch any subset of the discover module's path constants.
 
-    Reduces the ``monkeypatch.setattr("surfaces.cli.tests.discover.X", ...)`` ×4
-    repetition that tests in ``TestDiscoverGracefulOnMissingSource`` would
-    otherwise carry. Per @muddlebee's PR #952 review nit on duplicated test
-    setup."""
+    Corpus directories live in :mod:`config.synthetic_paths`; ``MAKEFILE_PATH``
+    remains discover-specific.
+    """
     if repo_root is not None:
-        monkeypatch.setattr("surfaces.cli.tests.discover.REPO_ROOT", repo_root)
+        monkeypatch.setattr("config.synthetic_paths.REPO_ROOT", repo_root)
     if makefile is not None:
         monkeypatch.setattr("surfaces.cli.tests.discover.MAKEFILE_PATH", makefile)
     if rca_dir is not None:
-        monkeypatch.setattr("surfaces.cli.tests.discover.RCA_DIR", rca_dir)
+        monkeypatch.setattr("config.synthetic_paths.RCA_DIR", rca_dir)
     if synthetic_dir is not None:
-        monkeypatch.setattr("surfaces.cli.tests.discover.SYNTHETIC_SCENARIOS_DIR", synthetic_dir)
+        monkeypatch.setattr("config.synthetic_paths.SYNTHETIC_SCENARIOS_DIR", synthetic_dir)
     if cloudopsbench_dir is not None:
-        monkeypatch.setattr("surfaces.cli.tests.discover.CLOUDOPSBENCH_DIR", cloudopsbench_dir)
+        monkeypatch.setattr("config.synthetic_paths.CLOUDOPSBENCH_DIR", cloudopsbench_dir)
 
 
 class TestDiscoverGracefulOnMissingSource:

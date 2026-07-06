@@ -1,14 +1,11 @@
-"""
-Runtime turn host for submitted interactive-shell prompts
-Comment Vincent (June 28th): This module basically collects state of agent actions in the interactive shell.
-Comment this file has 6 functions that essentially do the same thing
-We have:
-- run_agent_turn
-- run_agent_turn_queue
-- run_input_loop
-- _run_agent_turn_loop
-- _execute_agent_turn
+"""Runtime turn host for submitted interactive-shell prompts.
 
+Three public runtime functions live here:
+
+- ``run_agent_turn`` — set up shell presentation for one submitted turn and drive
+  its lifecycle (the injected ``run_turn`` callable for the queue).
+- ``run_input_loop`` — read prompt input events and dispatch them until exit.
+- ``run_agent_turn_queue`` — consume queued turns and run each one until exit.
 """
 
 from __future__ import annotations
@@ -42,7 +39,6 @@ from surfaces.interactive_shell.runtime.input.actions import (
     ShellInputSnapshot,
     decide_input_action,
 )
-from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 from surfaces.interactive_shell.runtime.utils.input_policy import (
     turn_needs_exclusive_stdin,
 )
@@ -134,14 +130,22 @@ async def _run_agent_turn_loop(
 
     await emit(AgentEvent(type="turn_start", text=text))
     try:
-        await _execute_agent_turn(
-            session=runtime.session,
-            text=text,
-            output=output,
-            recorder=recorder,
-            confirm=confirm,
-            request_exit=runtime.request_exit,
-        )
+        # Imported lazily so constructing the controller (and importing this
+        # module) does not pull the harness/turn-execution stack
+        # (``action_agent -> core.agent``) before the first turn is queued.
+        from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
+
+        with _bound_cli_session(runtime.session.session_id):
+            await asyncio.to_thread(
+                execute_shell_turn,
+                text,
+                runtime.session,
+                output,
+                recorder=recorder,
+                confirm_fn=confirm,
+                is_tty=None,
+                request_exit=runtime.request_exit,
+            )
     except asyncio.CancelledError:
         await emit(AgentEvent(type="turn_interrupted"))
         raise
@@ -155,92 +159,7 @@ async def _run_agent_turn_loop(
         await emit(AgentEvent(type="turn_end"))
 
 
-async def _execute_agent_turn(
-    *,
-    session: Session,
-    text: str,
-    output: StreamingConsole,
-    recorder: PromptRecorder | None,
-    confirm: Callable[[str], str],
-    request_exit: Callable[[], None] | None,
-) -> None:
-    with _bound_cli_session(session.session_id):
-        await asyncio.to_thread(
-            execute_shell_turn,
-            text,
-            session,
-            output,
-            recorder=recorder,
-            confirm_fn=confirm,
-            is_tty=None,
-            request_exit=request_exit,
-        )
-
-
-class AgentTurnRunner:
-    # This class is problematic because it handles spinners which is UI logic, in the core agentic flow.
-    """Stable class API over the functional ``run_agent_turn`` driver."""
-
-    def __init__(
-        self,
-        *,
-        session: Session,
-        state: ReplState,
-        spinner: SpinnerState,
-        invalidate_prompt: Callable[[], None],
-        request_exit: Callable[[], None] | None = None,
-    ) -> None:
-        self.runtime = AgentTurnRuntime(
-            session=session,
-            state=state,
-            spinner=spinner,
-            invalidate_prompt=invalidate_prompt,
-            request_exit=request_exit or state.request_exit,
-        )
-
-    @property
-    def session(self) -> Session:
-        return self.runtime.session
-
-    @property
-    def state(self) -> ReplState:
-        return self.runtime.state
-
-    @property
-    def spinner(self) -> SpinnerState:
-        return self.runtime.spinner
-
-    def steer(self, text: str) -> None:
-        """Queue text intended to steer the active or next shell turn."""
-        self._queue_shell_turn(text)
-
-    def follow_up(self, text: str) -> None:
-        """Queue a shell follow-up to run after the current submitted turn."""
-        self._queue_shell_turn(text)
-
-    def followUp(self, text: str) -> None:  # noqa: N802 - Pi-compatible alias
-        """CamelCase alias matching Pi's higher-level harness API."""
-        self.follow_up(text)
-
-    def next_turn(self, text: str) -> None:
-        """Queue text for the next prompt turn."""
-        self._queue_shell_turn(text)
-
-    def nextTurn(self, text: str) -> None:  # noqa: N802 - Pi-compatible alias
-        """CamelCase alias matching Pi's higher-level harness API."""
-        self.next_turn(text)
-
-    async def run_agent_turn(self, text: str) -> None:
-        await run_agent_turn(self.runtime, text)
-
-    def _queue_shell_turn(self, text: str) -> None:
-        stripped = text.strip()
-        if stripped:
-            self.runtime.state.queue.put_nowait(stripped)
-
-
 async def run_input_loop(
-    # This function is also problematic because it is not clear how from here, the state (i.e. prompt input text gets to the agent)
     *,
     state: ReplState,
     session: Session,
@@ -249,7 +168,19 @@ async def run_input_loop(
     echo_console: Console,
     handle_input_action: Callable[[InputAction], Awaitable[bool]],
 ) -> None:
-    """Read input events and dispatch them until exit or close is requested."""
+    """Run the interactive session's main input loop until exit or close.
+
+    This loop reads input; it does not run agent turns itself. Each raw input
+    event is classified into an ``InputAction`` by ``decide_input_action`` and
+    handed to ``handle_input_action``. For a submitted prompt that handler pushes
+    the text onto ``state.queue``; the queued text is then consumed
+    asynchronously by ``run_agent_turn_queue`` (started in the controller's
+    ``_start_runtime_services``), which runs each turn via ``run_agent_turn``.
+
+    Keeping input reading and turn execution as two separate loops joined only by
+    ``state.queue`` is deliberate: it lets the user keep typing, cancel, or
+    answer a confirmation while a turn is still in flight.
+    """
     while not state.exit_requested:
         if background is not None:
             background.drain_turn_start_output(echo_console)
@@ -301,7 +232,6 @@ async def run_agent_turn_queue(
 
 __all__ = [
     "AgentTurnRuntime",
-    "AgentTurnRunner",
     "run_agent_turn",
     "run_agent_turn_queue",
     "run_input_loop",

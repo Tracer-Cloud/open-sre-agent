@@ -184,6 +184,7 @@ def authorize_github_via_device_flow(
     scopes: Sequence[str] = DEFAULT_GITHUB_OAUTH_SCOPES,
     open_browser: bool = True,
     on_prompt: Callable[[GitHubDeviceCode], None] | None = None,
+    poll_sleep: Callable[[float], None] | None = None,
 ) -> GitHubDeviceToken:
     """Run the full browser device flow and return a user access token.
 
@@ -205,4 +206,8 @@ def authorize_github_via_device_flow(
             webbrowser.open(device_code.verification_uri)
         except Exception:  # pragma: no cover - headless/no-browser environments
             logger.debug("Could not open a browser for GitHub device authorization", exc_info=True)
-    return poll_github_device_token(client_id=resolved_client_id, device_code=device_code)
+    return poll_github_device_token(
+        client_id=resolved_client_id,
+        device_code=device_code,
+        sleep=poll_sleep or time.sleep,
+    )
