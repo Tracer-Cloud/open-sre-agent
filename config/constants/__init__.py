@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import os
 import tempfile
 from pathlib import Path
 
@@ -40,7 +41,15 @@ def get_store_path() -> Path:
     store path without importing from a surface. The wizard's
     ``surfaces.cli.wizard.store`` module re-exports this name for the
     callers that already import it from there.
+
+    Honors ``OPENSRE_WIZARD_STORE_PATH`` when set, mirroring the
+    ``OPENSRE_LLM_AUTH_METADATA_PATH`` override in
+    ``config.llm_auth.records``, so tests can redirect this store without
+    every call site remembering to monkeypatch this function individually.
     """
+    override = os.getenv("OPENSRE_WIZARD_STORE_PATH", "").strip()
+    if override:
+        return Path(override).expanduser()
     return OPENSRE_HOME_DIR / "opensre.json"
 
 
