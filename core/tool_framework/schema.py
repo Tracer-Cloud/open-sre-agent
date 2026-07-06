@@ -12,8 +12,8 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Callable
-from types import NoneType
-from typing import Any, get_args, get_origin, get_type_hints
+from types import NoneType, UnionType
+from typing import Any, Union, get_args, get_origin, get_type_hints
 
 from pydantic import BaseModel
 
@@ -55,6 +55,12 @@ def _annotation_to_json_schema(annotation: Any) -> dict[str, Any]:
         schema = {"type": "object"}
     elif base_annotation is list or origin in (list, set, tuple):
         schema = {"type": "array"}
+    elif origin is Union or isinstance(base_annotation, UnionType):  # noqa: UP007
+        # Non-optional union (e.g. int | str): emit oneOf over each member.
+        schema = {"oneOf": [_annotation_to_json_schema(a) for a in get_args(base_annotation)]}
+    elif isinstance(base_annotation, tuple):
+        # Residual tuple produced by _strip_optional for X | Y | None with >1 non-None arm.
+        schema = {"oneOf": [_annotation_to_json_schema(a) for a in base_annotation]}
     else:
         schema = {"type": "string"}
 

@@ -156,3 +156,27 @@ def test_tool_attaches_registered_tool_when_parallel_safe_overridden() -> None:
     tool(instance, parallel_safe=False)
     registered = getattr(instance, REGISTERED_TOOL_ATTR)
     assert registered.parallel_safe is False
+
+
+# ---------------------------------------------------------------------------
+# display_name registration
+# ---------------------------------------------------------------------------
+
+
+def test_tool_registers_function_with_display_name_and_source() -> None:
+    """@tool(display_name=..., source=...) must trigger registration."""
+
+    @tool(display_name="Pretty Name", source="grafana")
+    def display_name_source_fn() -> None:
+        """Does something useful."""
+
+    assert hasattr(display_name_source_fn, REGISTERED_TOOL_ATTR)
+    registered = getattr(display_name_source_fn, REGISTERED_TOOL_ATTR)
+    assert isinstance(registered, RegisteredTool)
+    assert registered.display_name == "Pretty Name"
+
+
+def test_tool_display_name_without_source_raises() -> None:
+    """display_name alone cannot form a valid RegisteredTool — source is required."""
+    with pytest.raises((ValueError, TypeError)):
+        tool(display_name="Pretty Name")(lambda: None)

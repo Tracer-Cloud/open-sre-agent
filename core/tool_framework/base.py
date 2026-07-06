@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from abc import ABC
+from collections.abc import Sequence
 from typing import Any, ClassVar
 
 from pydantic import BaseModel
 
+from config.constants.opensre import DEFAULT_APPROVAL_EXPIRY_SECONDS
 from core.domain.types.evidence import EvidenceSource
 from core.domain.types.retrieval import RetrievalControls
 from core.tool_framework.metadata import EvidenceType, SideEffectLevel, ToolMetadata
@@ -43,22 +45,20 @@ class BaseTool(ABC):
     source_id: ClassVar[str | None] = None
     evidence_type: ClassVar[EvidenceType | None] = None
     side_effect_level: ClassVar[SideEffectLevel | None] = None
-    use_cases: ClassVar[list[str]] = []
-    examples: ClassVar[list[str]] = []
-    anti_examples: ClassVar[list[str]] = []
-    requires: ClassVar[list[str]] = []
+    use_cases: ClassVar[Sequence[str]] = ()
+    examples: ClassVar[Sequence[str]] = ()
+    anti_examples: ClassVar[Sequence[str]] = ()
+    requires: ClassVar[Sequence[str]] = ()
     outputs: ClassVar[dict[str, str]] = {}  # Output field -> description (optional, for prompting)
     output_schema: ClassVar[dict[str, Any] | None] = None
     output_model: ClassVar[type[BaseModel] | None] = None
-    injected_params: ClassVar[list[str]] = []
+    injected_params: ClassVar[Sequence[str]] = ()
     retrieval_controls: ClassVar[RetrievalControls] = (
         RetrievalControls()
     )  # Declares supported controls
     requires_approval: ClassVar[bool] = False  # Whether this tool needs approval from messaging
     approval_reason: ClassVar[str] = ""  # Human-readable reason for requiring approval
-    approval_expiry_seconds: ClassVar[int] = (
-        300  # Approval auto-expires after N seconds (default 5 min)
-    )
+    approval_expiry_seconds: ClassVar[int] = DEFAULT_APPROVAL_EXPIRY_SECONDS
     accepts_runtime_context: ClassVar[bool] = False
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
@@ -72,13 +72,13 @@ class BaseTool(ABC):
         cls.source_id = metadata.source_id
         cls.evidence_type = metadata.evidence_type
         cls.side_effect_level = metadata.side_effect_level
-        cls.use_cases = metadata.use_cases
-        cls.examples = metadata.examples
-        cls.anti_examples = metadata.anti_examples
-        cls.requires = metadata.requires
+        cls.use_cases = tuple(metadata.use_cases)
+        cls.examples = tuple(metadata.examples)
+        cls.anti_examples = tuple(metadata.anti_examples)
+        cls.requires = tuple(metadata.requires)
         cls.outputs = metadata.outputs
         cls.output_schema = metadata.output_schema
-        cls.injected_params = metadata.injected_params
+        cls.injected_params = tuple(metadata.injected_params)
         cls.retrieval_controls = metadata.retrieval_controls
 
     @classmethod

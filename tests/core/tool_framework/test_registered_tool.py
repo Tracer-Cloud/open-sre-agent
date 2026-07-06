@@ -274,3 +274,35 @@ def test_normalize_surfaces_invalid_raises() -> None:
 def test_normalize_surfaces_empty_list_returns_investigation_default() -> None:
     result = _normalize_surfaces([])
     assert result == ("investigation",)
+
+
+# ---------------------------------------------------------------------------
+# approval_expiry_seconds edge cases
+# ---------------------------------------------------------------------------
+
+
+def test_from_function_approval_expiry_zero_is_preserved() -> None:
+    """approval_expiry_seconds=0 must not be coerced to the default by an 'or' fallback."""
+
+    def fn() -> None:
+        pass
+
+    rt = RegisteredTool.from_function(
+        fn,
+        source="grafana",
+        requires_approval=True,
+        approval_reason="Expires immediately",
+        approval_expiry_seconds=0,
+    )
+    assert rt.approval_expiry_seconds == 0
+
+
+def test_from_function_approval_expiry_none_uses_default() -> None:
+    """approval_expiry_seconds=None must fall back to DEFAULT_APPROVAL_EXPIRY_SECONDS."""
+    from config.constants.opensre import DEFAULT_APPROVAL_EXPIRY_SECONDS
+
+    def fn() -> None:
+        pass
+
+    rt = RegisteredTool.from_function(fn, source="grafana", approval_expiry_seconds=None)
+    assert rt.approval_expiry_seconds == DEFAULT_APPROVAL_EXPIRY_SECONDS

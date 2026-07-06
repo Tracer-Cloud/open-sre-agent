@@ -142,6 +142,67 @@ def test_base_tool_exception_is_captured_with_tool_tag(
     }
 
 
+# ---------------------------------------------------------------------------
+# ClassVar defaults are isolated per subclass
+# ---------------------------------------------------------------------------
+
+
+def test_subclass_use_cases_do_not_bleed_into_base() -> None:
+    """Mutating BaseTool.use_cases must not affect subclasses defined later."""
+
+    class _ToolA(BaseTool):
+        name = "tool_a"
+        description = "Tool A."
+        input_schema = {"type": "object", "properties": {}}
+        source = "grafana"
+        use_cases = ("case_a",)
+
+        def run(self) -> dict[str, Any]:
+            return {}
+
+    class _ToolB(BaseTool):
+        name = "tool_b"
+        description = "Tool B."
+        input_schema = {"type": "object", "properties": {}}
+        source = "grafana"
+
+        def run(self) -> dict[str, Any]:
+            return {}
+
+    assert _ToolA.use_cases == ("case_a",)
+    # ToolB has no use_cases declared; it must not inherit ToolA's
+    assert _ToolB.use_cases == ()
+
+
+def test_base_tool_mutable_defaults_are_distinct_between_subclasses() -> None:
+    """Each subclass gets its own copy of use_cases/examples/requires/outputs."""
+
+    class _ToolX(BaseTool):
+        name = "tool_x"
+        description = "Tool X."
+        input_schema = {"type": "object", "properties": {}}
+        source = "grafana"
+        examples = ("ex1",)
+        requires = ("req1",)
+
+        def run(self) -> dict[str, Any]:
+            return {}
+
+    class _ToolY(BaseTool):
+        name = "tool_y"
+        description = "Tool Y."
+        input_schema = {"type": "object", "properties": {}}
+        source = "grafana"
+
+        def run(self) -> dict[str, Any]:
+            return {}
+
+    assert _ToolX.examples == ("ex1",)
+    assert _ToolY.examples == ()
+    assert _ToolX.requires == ("req1",)
+    assert _ToolY.requires == ()
+
+
 def test_decorated_function_tool_exception_is_captured_with_tool_tag(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

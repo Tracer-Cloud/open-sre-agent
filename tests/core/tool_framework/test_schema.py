@@ -226,3 +226,50 @@ def test_type_as_list_matches_any() -> None:
 )
 def test_json_type_matching(type_name: str, value: Any, expected: bool) -> None:
     assert _value_matches_schema(value, {"type": type_name}) is expected
+
+
+# ---------------------------------------------------------------------------
+# Union type inference
+# ---------------------------------------------------------------------------
+
+
+def test_infer_union_param_emits_one_of() -> None:
+    """int | str must produce a oneOf schema, not fall back to string."""
+
+    def fn(value: int | str) -> None:
+        pass
+
+    schema = infer_input_schema(fn)
+    prop = schema["properties"]["value"]
+    assert "oneOf" in prop, f"Expected oneOf, got: {prop}"
+    types_in_one_of = [s.get("type") for s in prop["oneOf"]]
+    assert "integer" in types_in_one_of
+    assert "string" in types_in_one_of
+
+
+def test_infer_union_with_none_emits_one_of_and_nullable() -> None:
+    """int | str | None must produce oneOf with nullable=True."""
+
+    def fn(value: int | str | None) -> None:
+        pass
+
+    schema = infer_input_schema(fn)
+    prop = schema["properties"]["value"]
+    assert prop.get("nullable") is True
+    assert "oneOf" in prop
+    types_in_one_of = [s.get("type") for s in prop["oneOf"]]
+    assert "integer" in types_in_one_of
+    assert "string" in types_in_one_of
+
+
+def test_infer_optional_simple_type_not_one_of() -> None:
+    """str | None is still a simple nullable type, not a oneOf (regression guard)."""
+
+    def fn(value: str | None) -> None:
+        pass
+
+    schema = infer_input_schema(fn)
+    prop = schema["properties"]["value"]
+    assert prop.get("nullable") is True
+    assert prop.get("type") == "string"
+    assert "oneOf" not in prop

@@ -1,6 +1,10 @@
 """Unit tests for the data_validation utilities."""
 
-from core.tool_framework.utils.data_validation import MetricsValidator, validate_host_metrics
+from core.tool_framework.utils.data_validation import (
+    MetricsValidator,
+    _validate_data_list,
+    validate_host_metrics,
+)
 
 
 def test_impossible_percentages():
@@ -141,3 +145,41 @@ def test_invalid_format():
     result = validate_host_metrics("this is just a string, not a dict")
     assert result["validated"] is False
     assert result["data_quality_issues"][0]["issue"] == "invalid_format"
+
+
+# ---------------------------------------------------------------------------
+# _validate_data_list helper
+# ---------------------------------------------------------------------------
+
+
+def test_validate_data_list_strips_issues_from_each_point() -> None:
+    """_validate_data_list must strip data_quality_issues from each point and collect them."""
+    validator = MetricsValidator()
+    data = [
+        {"cpu": 95, "ram": 8589934592, "disk": 50},
+        {"cpu": 10, "ram": 45, "disk": 20},
+    ]
+    validated_points, all_issues = _validate_data_list(data, validator.validate_metrics)
+
+    assert len(validated_points) == 2
+    # Issues stripped from each point
+    assert "data_quality_issues" not in validated_points[0]
+    assert "data_quality_issues" not in validated_points[1]
+    # Issues collected at the top level
+    assert len(all_issues) >= 1
+    fields = [issue["field"] for issue in all_issues]
+    assert "ram" in fields
+
+
+def test_validate_data_list_passes_through_non_dict_items() -> None:
+    """Non-dict items in the list must be passed through unchanged."""
+    validated_points, issues = _validate_data_list(["plain string", 42], lambda x: x)  # type: ignore[arg-type]
+    assert validated_points == ["plain string", 42]
+    assert issues == []
+
+
+def test_validate_data_list_empty_input() -> None:
+    """Empty list produces empty outputs."""
+    validated_points, issues = _validate_data_list([], lambda x: x)
+    assert validated_points == []
+    assert issues == []

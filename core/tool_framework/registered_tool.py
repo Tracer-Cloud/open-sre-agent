@@ -10,6 +10,7 @@ from typing import Any, cast, get_args
 
 from pydantic import BaseModel
 
+from config.constants.opensre import DEFAULT_APPROVAL_EXPIRY_SECONDS
 from core.domain.types.evidence import EvidenceSource
 from core.domain.types.retrieval import RetrievalControls
 from core.domain.types.tools import ToolSurface
@@ -87,7 +88,7 @@ class RegisteredTool:
     tags: tuple[str, ...] = ()
     requires_approval: bool = False
     approval_reason: str = ""
-    approval_expiry_seconds: int = 300
+    approval_expiry_seconds: int = DEFAULT_APPROVAL_EXPIRY_SECONDS
     parallel_safe: bool = True
     accepts_runtime_context: bool = False
     origin_module: str = ""
@@ -266,7 +267,9 @@ class RegisteredTool:
             approval_expiry_seconds=int(
                 approval_expiry_seconds
                 if approval_expiry_seconds is not None
-                else getattr(tool.__class__, "approval_expiry_seconds", 300)
+                else getattr(
+                    tool.__class__, "approval_expiry_seconds", DEFAULT_APPROVAL_EXPIRY_SECONDS
+                )
             ),
             parallel_safe=bool(
                 parallel_safe
@@ -351,7 +354,11 @@ class RegisteredTool:
             tags=tags or (),
             requires_approval=bool(requires_approval),
             approval_reason=approval_reason or "",
-            approval_expiry_seconds=approval_expiry_seconds or 300,
+            approval_expiry_seconds=(
+                approval_expiry_seconds
+                if approval_expiry_seconds is not None
+                else DEFAULT_APPROVAL_EXPIRY_SECONDS
+            ),
             parallel_safe=True if parallel_safe is None else bool(parallel_safe),
             accepts_runtime_context=bool(accepts_runtime_context),
             origin_module=func.__module__,

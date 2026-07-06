@@ -162,6 +162,7 @@ def tool[F: Callable[..., Any]](
             [
                 name is not None,
                 description is not None,
+                display_name is not None,
                 input_schema is not None,
                 input_model is not None,
                 source is not None,
