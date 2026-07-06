@@ -109,9 +109,13 @@ _cache = _FactoryCache()
 
 
 @overload
-def get_llm(role: Literal[LLMRole.AGENT]) -> AgentLLMClient: ...
+def get_llm(role: Literal[LLMRole.AGENT]) -> AgentLLMClient:
+    pass
+
+
 @overload
-def get_llm(role: LLMRole) -> Any: ...
+def get_llm(role: LLMRole) -> Any:
+    pass
 
 
 def get_llm(role: LLMRole) -> Any:
