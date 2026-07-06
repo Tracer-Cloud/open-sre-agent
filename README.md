@@ -169,9 +169,13 @@ opensre uninstall   # remove opensre and all local data
 
 ## Deployment
 
-Deploy OpenSRE as a standard Python/FastAPI runtime using the repo `Dockerfile` or a managed app host such as Railway, EC2, ECS, or Vercel. Set `LLM_PROVIDER` plus the matching API key (see [`.env.example`](.env.example)); hosted layouts that need persistence should also configure `DATABASE_URI` and `REDIS_URI`.
+Two primary AWS EC2 paths and a general hosted option:
 
-**[Full deployment steps, Railway notes, and `opensre remote ops` → docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#deployment)**
+- **EC2 (Docker/ECR):** `make build-image` then `make deploy` — runs `opensre-web` and `opensre-gateway` containers on one instance.
+- **Gateway (AMI + systemd):** `make bake-gateway` then `make deploy-gateway` — Telegram gateway only, no Docker, baked into a custom AMI.
+- **Hosted (Railway / ECS / Vercel):** deploy with the repo `Dockerfile`; set `LLM_PROVIDER` and the matching API key (see [`.env.example`](.env.example)), plus `DATABASE_URI` and `REDIS_URI` if persistence is needed.
+
+**[Full deployment steps and prerequisites → DEPLOYMENT.md](DEPLOYMENT.md)**
 
 ---
 
