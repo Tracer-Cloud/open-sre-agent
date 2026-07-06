@@ -8,66 +8,27 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Protocol
 
 from core.domain.correlation.confidence import (
     EvidenceContribution,
-    SharedConfidence,
-    build_shared_confidence,
+    WeightedConfidence,
+    build_weighted_confidence,
 )
-from core.domain.types.upstream import MetricSeries, UpstreamCandidate
+from core.domain.types.upstream import (
+    HintEvidenceScore,
+    PeriodicityScore,
+    TimeSeries,
+    TimeWindowCorrelation,
+    TopologyCorrelation,
+    TopologyNode,
+    UpstreamCandidate,
+)
 
 # Evidence weights for candidate correlation (sum to 1.0).
 TIME_WINDOW_WEIGHT = 0.45
 TOPOLOGY_WEIGHT = 0.30
 PERIODICITY_WEIGHT = 0.10
 FEATURE_WORKFLOW_WEIGHT = 0.15
-
-
-@dataclass(frozen=True)
-class TimeSeries:
-    name: str
-    timestamps: tuple[str, ...]
-    values: tuple[float, ...]
-
-
-@dataclass(frozen=True)
-class TimeWindowCorrelation:
-    primary_signal: str
-    candidate_signal: str
-    aligned_points: int
-    direction_matches: int
-    score: float
-    rationale: str
-
-
-@dataclass(frozen=True)
-class TopologyNode:
-    name: str
-    node_type: str
-    upstream_of: tuple[str, ...]
-
-
-@dataclass(frozen=True)
-class TopologyCorrelation:
-    source: str
-    target: str
-    adjacency_score: float
-    rationale: str
-
-
-@dataclass(frozen=True)
-class PeriodicityScore:
-    signal_name: str
-    repeated_spikes: int
-    score: float
-    rationale: str
-
-
-class HintEvidenceScore(Protocol):
-    @property
-    def score(self) -> float:
-        raise NotImplementedError
 
 
 @dataclass(frozen=True)
@@ -78,7 +39,7 @@ class CandidateCorrelationScore:
     periodicity_score: float
     feature_workflow_score: float
     final_confidence: float
-    shared_confidence: SharedConfidence
+    weighted_confidence: WeightedConfidence
     rationale: str
 
 
@@ -96,14 +57,6 @@ def _trend(values: tuple[float, ...]) -> list[int]:
         else:
             trend.append(0)
     return trend
-
-
-def metric_to_time_series(metric: MetricSeries) -> TimeSeries:
-    return TimeSeries(
-        name=metric.name,
-        timestamps=metric.timestamps,
-        values=metric.values,
-    )
 
 
 def score_time_window_correlation(
@@ -217,11 +170,14 @@ def score_candidate_correlation(
     operator_hint: HintEvidenceScore | None = None,
 ) -> CandidateCorrelationScore:
     periodicity_score = periodicity.score if periodicity is not None else 0.0
-    feature_workflow_score = (
-        getattr(operator_hint, "score", 0.0) if operator_hint is not None else 0.0
+    feature_workflow_score = operator_hint.score if operator_hint is not None else 0.0
+    feature_workflow_rationale = (
+        operator_hint.rationale
+        if operator_hint is not None
+        else "No feature/workflow hint evidence."
     )
 
-    shared_confidence = build_shared_confidence(
+    weighted_confidence = build_weighted_confidence(
         (
             EvidenceContribution(
                 source="correlation",
@@ -247,11 +203,7 @@ def score_candidate_correlation(
                 source="feature_workflow",
                 score=feature_workflow_score,
                 weight=FEATURE_WORKFLOW_WEIGHT,
-                rationale=getattr(
-                    operator_hint,
-                    "rationale",
-                    "No feature/workflow hint evidence.",
-                ),
+                rationale=feature_workflow_rationale,
             ),
         )
     )
@@ -262,10 +214,10 @@ def score_candidate_correlation(
         topology_score=topology.adjacency_score,
         periodicity_score=periodicity_score,
         feature_workflow_score=feature_workflow_score,
-        final_confidence=shared_confidence.score,
-        shared_confidence=shared_confidence,
+        final_confidence=weighted_confidence.score,
+        weighted_confidence=weighted_confidence,
         rationale=(
-            f"confidence={shared_confidence.label}; "
+            f"confidence={weighted_confidence.label}; "
             f"correlation={time_window.score}, "
             f"topology={topology.adjacency_score}, "
             f"periodicity={periodicity_score}, "
@@ -290,3 +242,17 @@ def rank_upstream_candidates(
         return []
 
     return ranked[:top_n]
+
+
+__all__ = [
+    "CandidateCorrelationScore",
+    "FEATURE_WORKFLOW_WEIGHT",
+    "PERIODICITY_WEIGHT",
+    "TIME_WINDOW_WEIGHT",
+    "TOPOLOGY_WEIGHT",
+    "rank_upstream_candidates",
+    "score_candidate_correlation",
+    "score_periodic_spikes",
+    "score_time_window_correlation",
+    "score_topology_adjacency",
+]

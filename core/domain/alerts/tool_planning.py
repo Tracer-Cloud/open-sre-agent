@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, Protocol
 
 from core.domain.alerts.alert_source import (
     SECONDARY_TOOL_SOURCES,
@@ -16,9 +16,19 @@ from core.domain.types.planning import PlannedInvestigationAction
 FALLBACK_TOOL_NAMES: tuple[str, ...] = ("get_sre_guidance",)
 
 
+class PlannableTool(Protocol):
+    name: str
+    source: str
+    description: str
+    use_cases: list[str]
+    examples: list[str]
+    tags: list[str]
+    evidence_type: Any | None
+
+
 def score_tools(
     state: dict[str, Any],
-    tools: Sequence[Any],
+    tools: Sequence[PlannableTool],
 ) -> list[PlannedInvestigationAction]:
     primary_sources = set(primary_sources_for_alert(state))
     candidate_sources = {str(tool.source) for tool in tools}
@@ -46,7 +56,7 @@ def score_tools(
 
 
 def score_tool(
-    tool: Any,
+    tool: PlannableTool,
     *,
     alert_text: str,
     primary_sources: set[str],
@@ -122,6 +132,7 @@ def score_fallback_tool(
 
 __all__ = [
     "FALLBACK_TOOL_NAMES",
+    "PlannableTool",
     "metadata_matches_for_alert",
     "score_fallback_tool",
     "score_tool",
