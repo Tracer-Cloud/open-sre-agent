@@ -9,7 +9,8 @@ from pydantic import BaseModel
 
 from core.domain.types.evidence import EvidenceSource
 from core.domain.types.retrieval import RetrievalControls
-from core.tool_framework.base import BaseTool, EvidenceType, SideEffectLevel
+from core.tool_framework.base import BaseTool
+from core.tool_framework.metadata import EvidenceType, SideEffectLevel
 from core.tool_framework.registered_tool import REGISTERED_TOOL_ATTR, RegisteredTool
 
 

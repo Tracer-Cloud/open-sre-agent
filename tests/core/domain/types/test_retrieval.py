@@ -246,7 +246,7 @@ class TestToolMetadataRetrieval:
 
     def test_tool_metadata_default_retrieval_controls(self) -> None:
         """ToolMetadata defaults to no retrieval controls."""
-        from core.tool_framework.base import ToolMetadata
+        from core.tool_framework.metadata import ToolMetadata
 
         metadata = ToolMetadata(
             name="test_tool",
@@ -258,7 +258,7 @@ class TestToolMetadataRetrieval:
 
     def test_tool_metadata_with_retrieval_controls(self) -> None:
         """ToolMetadata with explicit retrieval controls."""
-        from core.tool_framework.base import ToolMetadata
+        from core.tool_framework.metadata import ToolMetadata
 
         controls = RetrievalControls(time_bounds=True, limit=True)
         metadata = ToolMetadata(

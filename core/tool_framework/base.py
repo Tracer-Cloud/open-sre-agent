@@ -1,62 +1,15 @@
-"""Base class for all investigation tool actions."""
+"""Abstract base class for all investigation tool actions."""
 
 from __future__ import annotations
 
 from abc import ABC
-from typing import Any, ClassVar, Literal
+from typing import Any, ClassVar
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel
 
-from config.strict_config import StrictConfigModel
 from core.domain.types.evidence import EvidenceSource
 from core.domain.types.retrieval import RetrievalControls
-
-EvidenceType = Literal[
-    "logs",
-    "metrics",
-    "traces",
-    "events",
-    "topology",
-    "deployment_metadata",
-    "query_stats",
-    "artifact",
-    "other",
-]
-SideEffectLevel = Literal["none", "read_only", "mutating", "external"]
-
-
-class ToolMetadata(StrictConfigModel):
-    """Strict schema for tool metadata declared on BaseTool subclasses."""
-
-    name: str
-    description: str
-    display_name: str | None = None
-    input_schema: dict[str, Any]
-    source: EvidenceSource
-    source_id: str | None = None
-    evidence_type: EvidenceType | None = None
-    side_effect_level: SideEffectLevel | None = None
-    use_cases: list[str] = Field(default_factory=list)
-    examples: list[str] = Field(default_factory=list)
-    anti_examples: list[str] = Field(default_factory=list)
-    requires: list[str] = Field(default_factory=list)
-    outputs: dict[str, str] = Field(default_factory=dict)
-    output_schema: dict[str, Any] | None = None
-    injected_params: list[str] = Field(default_factory=list)
-    retrieval_controls: RetrievalControls = Field(
-        default_factory=RetrievalControls,
-        description="Declares which structured retrieval controls this tool supports",
-    )
-
-    @field_validator("name", "description", "display_name")
-    @classmethod
-    def _require_non_empty_strings(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        normalized = value.strip()
-        if not normalized:
-            raise ValueError("must be a non-empty string")
-        return normalized
+from core.tool_framework.metadata import EvidenceType, SideEffectLevel, ToolMetadata
 
 
 class BaseTool(ABC):
