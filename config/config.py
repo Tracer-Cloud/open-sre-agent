@@ -191,6 +191,13 @@ LLMProvider = Literal[
 KEYLESS_LLM_PROVIDERS = KEYLESS_PROVIDER_VALUES
 LLM_PROVIDER_API_KEY_ENVS = API_KEY_PROVIDER_ENVS
 
+# Runtime identifiers for ``LLMProvider`` members. Branch on these instead of
+# bare string literals when routing on the active provider.
+PROVIDER_ANTHROPIC: LLMProvider = "anthropic"
+PROVIDER_OPENAI: LLMProvider = "openai"
+PROVIDER_BEDROCK: LLMProvider = "bedrock"
+PROVIDER_OLLAMA: LLMProvider = "ollama"
+
 
 def get_configured_llm_provider() -> str:
     """Return the active LLM provider from env/project .env."""

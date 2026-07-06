@@ -106,6 +106,7 @@ def _cli_provider_registration(provider: str) -> Any:
 
 def _build_agent_client(route: LLMRoute) -> AgentLLMClient:
     """Build the tool-calling client for the resolved route."""
+    from config.config import PROVIDER_BEDROCK, PROVIDER_OLLAMA, PROVIDER_OPENAI
     from core.llm.transports.sdk.agent_clients import (
         AnthropicAgentClient,
         BedrockAgentClient,
@@ -125,7 +126,7 @@ def _build_agent_client(route: LLMRoute) -> AgentLLMClient:
 
         return build_litellm_agent_client(settings, provider)
 
-    if provider == "openai":
+    if provider == PROVIDER_OPENAI:
         from config.config import OPENAI_LLM_CONFIG
 
         return OpenAIAgentClient(
@@ -140,7 +141,7 @@ def _build_agent_client(route: LLMRoute) -> AgentLLMClient:
 
     if is_openai_compat_provider(provider):
         resolved = resolve_openai_compat_provider(settings, provider, "reasoning")
-        max_tokens = 1024 if provider == "ollama" else resolved.config.max_tokens
+        max_tokens = 1024 if provider == PROVIDER_OLLAMA else resolved.config.max_tokens
         return OpenAIAgentClient(
             model=resolved.model,
             max_tokens=max_tokens,
@@ -149,7 +150,7 @@ def _build_agent_client(route: LLMRoute) -> AgentLLMClient:
             api_key_default=resolved.api_key_default,
         )
 
-    if provider == "bedrock":
+    if provider == PROVIDER_BEDROCK:
         from config.config import BEDROCK_LLM_CONFIG
         from core.llm.providers.bedrock_model_ids import is_anthropic_bedrock_model
 
@@ -168,6 +169,8 @@ def _build_agent_client(route: LLMRoute) -> AgentLLMClient:
 
 def _build_llm_client(route: LLMRoute, model_type: _ModelType) -> Any:
     """Build the streaming reasoning client for the resolved route and model tier."""
+    from config.config import PROVIDER_BEDROCK, PROVIDER_OPENAI
+
     settings, provider = route.settings, route.provider
 
     def _select_model(provider_prefix: str) -> str:
@@ -207,7 +210,7 @@ def _build_llm_client(route: LLMRoute, model_type: _ModelType) -> Any:
     )
     from core.llm.transports.sdk import llm_clients as sdk
 
-    if provider == "openai":
+    if provider == PROVIDER_OPENAI:
         from config.config import OPENAI_LLM_CONFIG
 
         return sdk.OpenAILLMClient(
@@ -226,7 +229,7 @@ def _build_llm_client(route: LLMRoute, model_type: _ModelType) -> Any:
             api_key_default=compat.api_key_default,
             temperature=compat.temperature,
         )
-    if provider == "bedrock":
+    if provider == PROVIDER_BEDROCK:
         from config.config import BEDROCK_LLM_CONFIG
 
         return sdk.BedrockLLMClient(

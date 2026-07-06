@@ -30,7 +30,9 @@ def _litellm_model_for_compat(model: str) -> str:
 
 def build_litellm_agent_client(settings: Any, provider: str) -> LiteLLMAgentClient:
     """Build a :class:`LiteLLMAgentClient` for the given provider and settings."""
-    if provider == "anthropic":
+    from config.config import PROVIDER_ANTHROPIC, PROVIDER_BEDROCK, PROVIDER_OLLAMA, PROVIDER_OPENAI
+
+    if provider == PROVIDER_ANTHROPIC:
         from config.config import ANTHROPIC_LLM_CONFIG
 
         return LiteLLMAgentClient(
@@ -39,7 +41,7 @@ def build_litellm_agent_client(settings: Any, provider: str) -> LiteLLMAgentClie
             api_key_env="ANTHROPIC_API_KEY",
         )
 
-    if provider == "openai":
+    if provider == PROVIDER_OPENAI:
         from config.config import OPENAI_LLM_CONFIG
 
         return LiteLLMAgentClient(
@@ -48,7 +50,7 @@ def build_litellm_agent_client(settings: Any, provider: str) -> LiteLLMAgentClie
             api_key_env="OPENAI_API_KEY",
         )
 
-    if provider == "bedrock":
+    if provider == PROVIDER_BEDROCK:
         from config.config import BEDROCK_LLM_CONFIG
 
         model = settings.bedrock_reasoning_model
@@ -71,7 +73,7 @@ def build_litellm_agent_client(settings: Any, provider: str) -> LiteLLMAgentClie
 
     if is_openai_compat_provider(provider):
         resolved = resolve_openai_compat_provider(settings, provider, "reasoning")
-        max_tokens = 1024 if provider == "ollama" else resolved.config.max_tokens
+        max_tokens = 1024 if provider == PROVIDER_OLLAMA else resolved.config.max_tokens
         return LiteLLMAgentClient(
             litellm_model=_litellm_model_for_compat(resolved.model),
             max_tokens=max_tokens,
@@ -96,13 +98,15 @@ def build_litellm_llm_client(
 ) -> LiteLLMLLMClient:
     """Build a :class:`LiteLLMLLMClient` for the given provider, model tier, and settings."""
 
+    from config.config import PROVIDER_ANTHROPIC, PROVIDER_BEDROCK, PROVIDER_OPENAI
+
     def _fallback(provider_prefix: str) -> str | None:
         if model_type == "toolcall":
             return None
         attr = f"{provider_prefix}_toolcall_model"
         return str(getattr(settings, attr, None) or "")
 
-    if provider == "anthropic":
+    if provider == PROVIDER_ANTHROPIC:
         from config.config import ANTHROPIC_LLM_CONFIG
 
         attr = f"anthropic_{model_type}_model"
@@ -116,7 +120,7 @@ def build_litellm_llm_client(
             usage_callback=usage_callback,
         )
 
-    if provider == "openai":
+    if provider == PROVIDER_OPENAI:
         from config.config import OPENAI_LLM_CONFIG
 
         attr = f"openai_{model_type}_model"
@@ -129,7 +133,7 @@ def build_litellm_llm_client(
             usage_callback=usage_callback,
         )
 
-    if provider == "bedrock":
+    if provider == PROVIDER_BEDROCK:
         from config.config import BEDROCK_LLM_CONFIG
 
         attr = f"bedrock_{model_type}_model"
