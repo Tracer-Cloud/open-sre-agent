@@ -63,7 +63,7 @@ def test_result_to_state_strips_internal_markers_from_agent_messages() -> None:
         root_cause_category="disk_pressure",
         agent_messages=[
             {"role": "user", "content": "alert", "_opensre_seed": True},
-            {"role": "assistant", "content": "ok"},
+            {"role": "assistant", "content": "ok", "_opensre_duplicate_result": True},
         ],
     )
 
@@ -74,3 +74,4 @@ def test_result_to_state_strips_internal_markers_from_agent_messages() -> None:
         {"role": "assistant", "content": "ok"},
     ]
     assert result.agent_messages[0]["_opensre_seed"] is True
+    assert result.agent_messages[1]["_opensre_duplicate_result"] is True
