@@ -49,9 +49,9 @@ def test_get_llm_routes_agent_and_non_agent_roles(monkeypatch: pytest.MonkeyPatc
         use_litellm=False,
     )
     monkeypatch.setattr("core.llm.factory.resolve_llm_route", lambda: route)
-    monkeypatch.setattr("core.llm.factory._build_agent_client", lambda _route: "AGENT_CLIENT")
+    monkeypatch.setattr("core.llm.client_builders.build_agent_client", lambda _route: "AGENT_CLIENT")
     monkeypatch.setattr(
-        "core.llm.factory._build_llm_client", lambda _route, model_type: f"LLM:{model_type}"
+        "core.llm.client_builders.build_reasoning_client", lambda _route, model_type: f"LLM:{model_type}"
     )
 
     assert get_llm(LLMRole.AGENT) == "AGENT_CLIENT"
@@ -67,8 +67,8 @@ def test_get_llm_caches_per_role_and_invalidates_on_config_change(monkeypatch: p
         "core.llm.factory.resolve_llm_route",
         lambda: LLMRoute(SimpleNamespace(), "anthropic", None, False),
     )
-    monkeypatch.setattr("core.llm.factory._build_agent_client", lambda _route: object())
-    monkeypatch.setattr("core.llm.factory._build_llm_client", lambda _route, _mt: object())
+    monkeypatch.setattr("core.llm.client_builders.build_agent_client", lambda _route: object())
+    monkeypatch.setattr("core.llm.client_builders.build_reasoning_client", lambda _route, _mt: object())
 
     first_agent = get_llm(LLMRole.AGENT)
     assert get_llm(LLMRole.AGENT) is first_agent  # cached per role
@@ -86,8 +86,8 @@ def test_reset_llm_clients_forces_rebuild(monkeypatch: pytest.MonkeyPatch):
         "core.llm.factory.resolve_llm_route",
         lambda: LLMRoute(SimpleNamespace(), "anthropic", None, False),
     )
-    monkeypatch.setattr("core.llm.factory._build_agent_client", lambda _route: object())
-    monkeypatch.setattr("core.llm.factory._build_llm_client", lambda _route, _mt: object())
+    monkeypatch.setattr("core.llm.client_builders.build_agent_client", lambda _route: object())
+    monkeypatch.setattr("core.llm.client_builders.build_reasoning_client", lambda _route, _mt: object())
 
     first = get_llm(LLMRole.AGENT)
     reset_llm_clients()

@@ -7,7 +7,7 @@ readability without changing what it produces.
 from __future__ import annotations
 
 from core.domain.types.root_cause_categories import VALID_ROOT_CAUSE_CATEGORIES
-from core.llm.root_cause import parse_root_cause
+from core.llm.parsers.root_cause import parse_root_cause
 
 _CATEGORY = sorted(VALID_ROOT_CAUSE_CATEGORIES)[0]  # a deterministic valid category
 

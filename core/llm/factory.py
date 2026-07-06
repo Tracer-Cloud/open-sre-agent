@@ -10,20 +10,19 @@ a tool-calling client (``tool_schemas`` / ``invoke``); the other roles build the
 streaming reasoning client (``invoke`` / ``invoke_stream`` / ``with_structured_output``)
 for a given model tier. ``get_llm(role)`` is the single entrypoint — callers pass an ``LLMRole``.
 
-Import discipline: construction imports (``sdk`` / ``litellm`` / ``config``) are
-done lazily inside functions, matching the rest of ``core.llm``. Keeping them lazy
-avoids pulling the full provider stack at module import time and holds the
-``importlinter`` contract.
+This module owns routing (:func:`resolve_llm_route`), the per-role cache, and the
+public entrypoint. Constructing the concrete client for a route lives in
+:mod:`core.llm.client_builders`.
 """
 
 from __future__ import annotations
 
-import os
 import re
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Literal, overload
 
+from core.llm import client_builders
 from core.llm.internal.client_cache_key import current_llm_client_cache_key
 from core.llm.transport_mode import use_litellm_for_provider
 from core.llm.types import AgentLLMClient
@@ -100,164 +99,6 @@ def _cli_provider_registration(provider: str) -> Any:
 
 
 # ---------------------------------------------------------------------------
-# Role-specific construction (shared route, different client family)
-# ---------------------------------------------------------------------------
-
-
-def _build_agent_client(route: LLMRoute) -> AgentLLMClient:
-    """Build the tool-calling client for the route: CLI or LiteLLM transport, else native SDK."""
-    if route.cli_provider_registration is not None:
-        return _cli_agent_client(route.cli_provider_registration)
-
-    if route.use_litellm:
-        from core.llm.transports.litellm.routing import build_litellm_agent_client
-
-        return build_litellm_agent_client(route.settings, route.provider)
-
-    return _native_sdk_agent_client(route)
-
-
-def _cli_agent_client(registration: Any) -> AgentLLMClient:
-    """Build the subprocess CLI-backed tool-calling client for a CLI provider registration."""
-    from core.llm.transports.sdk.agent_clients import CLIBackedAgentClient
-
-    model_name = os.getenv(registration.model_env_key, "").strip() or None
-    return CLIBackedAgentClient(registration.adapter_factory(), model=model_name)
-
-
-def _native_sdk_agent_client(route: LLMRoute) -> AgentLLMClient:
-    """Build the native vendor-SDK tool-calling client for the route's provider."""
-    from config.config import PROVIDER_BEDROCK, PROVIDER_OLLAMA, PROVIDER_OPENAI
-    from core.llm.transports.sdk.agent_clients import AnthropicAgentClient, OpenAIAgentClient
-
-    settings, provider = route.settings, route.provider
-
-    if provider == PROVIDER_OPENAI:
-        from config.config import OPENAI_LLM_CONFIG
-
-        return OpenAIAgentClient(
-            model=settings.openai_reasoning_model,
-            max_tokens=OPENAI_LLM_CONFIG.max_tokens,
-        )
-
-    from core.llm.providers.openai_compat_providers import (
-        is_openai_compat_provider,
-        resolve_openai_compat_provider,
-    )
-
-    if is_openai_compat_provider(provider):
-        resolved = resolve_openai_compat_provider(settings, provider, "reasoning")
-        max_tokens = 1024 if provider == PROVIDER_OLLAMA else resolved.config.max_tokens
-        return OpenAIAgentClient(
-            model=resolved.model,
-            max_tokens=max_tokens,
-            base_url=resolved.base_url,
-            api_key_env=resolved.api_key_env,
-            api_key_default=resolved.api_key_default,
-        )
-
-    if provider == PROVIDER_BEDROCK:
-        return _bedrock_agent_client(settings.bedrock_reasoning_model)
-
-    from config.config import ANTHROPIC_LLM_CONFIG
-
-    return AnthropicAgentClient(
-        model=settings.anthropic_reasoning_model,
-        max_tokens=ANTHROPIC_LLM_CONFIG.max_tokens,
-    )
-
-
-def _bedrock_agent_client(model: str) -> AgentLLMClient:
-    """Pick the Anthropic vs Converse Bedrock tool-calling client for the model id."""
-    from config.config import BEDROCK_LLM_CONFIG
-    from core.llm.providers.bedrock_model_ids import is_anthropic_bedrock_model
-    from core.llm.transports.sdk.agent_clients import BedrockAgentClient, BedrockConverseAgentClient
-
-    max_tokens = BEDROCK_LLM_CONFIG.max_tokens
-    if is_anthropic_bedrock_model(model):
-        return BedrockAgentClient(model=model, max_tokens=max_tokens)
-    return BedrockConverseAgentClient(model=model, max_tokens=max_tokens)
-
-
-def _build_llm_client(route: LLMRoute, model_type: _ModelType) -> Any:
-    """Build the streaming reasoning client for the resolved route and model tier."""
-    from config.config import PROVIDER_BEDROCK, PROVIDER_OPENAI
-
-    settings, provider = route.settings, route.provider
-
-    def _select_model(provider_prefix: str) -> str:
-        return str(getattr(settings, f"{provider_prefix}_{model_type}_model"))
-
-    def _fallback_model(provider_prefix: str) -> str | None:
-        if model_type == "toolcall":
-            return None
-        return str(getattr(settings, f"{provider_prefix}_toolcall_model"))
-
-    if route.cli_provider_registration is not None:
-        from config.config import DEFAULT_MAX_TOKENS
-        from integrations.llm_cli.runner import CLIBackedLLMClient
-
-        model_name = os.getenv(route.cli_provider_registration.model_env_key, "").strip() or None
-        return CLIBackedLLMClient(
-            route.cli_provider_registration.adapter_factory(),
-            model=model_name,
-            max_tokens=DEFAULT_MAX_TOKENS,
-            model_type=model_type,
-        )
-
-    if route.use_litellm:
-        from core.llm.shared.usage import emit_usage
-        from core.llm.transports.litellm.routing import build_litellm_llm_client
-
-        return build_litellm_llm_client(
-            settings,
-            provider,
-            model_type,
-            usage_callback=emit_usage,
-        )
-
-    from core.llm.providers.openai_compat_providers import (
-        is_openai_compat_provider,
-        resolve_openai_compat_provider,
-    )
-    from core.llm.transports.sdk import llm_clients as sdk
-
-    if provider == PROVIDER_OPENAI:
-        from config.config import OPENAI_LLM_CONFIG
-
-        return sdk.OpenAILLMClient(
-            model=_select_model("openai"),
-            model_fallback=_fallback_model("openai"),
-            max_tokens=OPENAI_LLM_CONFIG.max_tokens,
-        )
-    if is_openai_compat_provider(provider):
-        compat = resolve_openai_compat_provider(settings, provider, model_type)
-        return sdk.OpenAILLMClient(
-            model=compat.model,
-            model_fallback=_fallback_model(provider),
-            max_tokens=compat.config.max_tokens,
-            base_url=compat.base_url,
-            api_key_env=compat.api_key_env,
-            api_key_default=compat.api_key_default,
-            temperature=compat.temperature,
-        )
-    if provider == PROVIDER_BEDROCK:
-        from config.config import BEDROCK_LLM_CONFIG
-
-        return sdk.BedrockLLMClient(
-            model=_select_model("bedrock"),
-            max_tokens=BEDROCK_LLM_CONFIG.max_tokens,
-        )
-
-    from config.config import ANTHROPIC_LLM_CONFIG
-
-    return sdk.LLMClient(
-        model=_select_model("anthropic"),
-        max_tokens=ANTHROPIC_LLM_CONFIG.max_tokens,
-    )
-
-
-# ---------------------------------------------------------------------------
 # Unified cache + public entrypoint
 # ---------------------------------------------------------------------------
 
@@ -299,9 +140,9 @@ def get_llm(role: LLMRole) -> Any:
 
     route = resolve_llm_route()
     if role is LLMRole.AGENT:
-        client = _build_agent_client(route)
+        client = client_builders.build_agent_client(route)
     else:
-        client = _build_llm_client(route, _MODEL_TYPE_BY_ROLE[role])
+        client = client_builders.build_reasoning_client(route, _MODEL_TYPE_BY_ROLE[role])
     _cache.clients[role] = client
     return client
 
@@ -314,7 +155,7 @@ def reset_llm_clients() -> None:
 
 def build_llm_client(model_type: _ModelType) -> Any:
     """Build a fresh (uncached) reasoning-family client for the current config."""
-    return _build_llm_client(resolve_llm_route(), model_type)
+    return client_builders.build_reasoning_client(resolve_llm_route(), model_type)
 
 
 __all__ = [

@@ -13,7 +13,7 @@ def test_llm_singleton_invalidates_on_provider_change(monkeypatch) -> None:
         created.append(marker)
         return marker
 
-    monkeypatch.setattr("core.llm.factory._build_llm_client", fake_build)
+    monkeypatch.setattr("core.llm.client_builders.build_reasoning_client", fake_build)
     monkeypatch.setenv("LLM_PROVIDER", "anthropic")
     reset_llm_clients()
 
