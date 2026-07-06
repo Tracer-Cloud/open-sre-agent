@@ -157,9 +157,7 @@ def normalize_alert_payload(raw_alert: dict[str, Any]) -> dict[str, Any]:
         "pipeline_name": _to_text(
             pipeline_name_value(normalized, labels=labels, annotations=annotations)
         ),
-        "severity": _to_text(
-            severity_value(normalized, labels=labels)
-        ),
+        "severity": _to_text(severity_value(normalized, labels=labels)),
         "alert_source": _to_text(normalized.get("alert_source")),
         "labels": dict(labels),
         "annotations": dict(annotations),

@@ -123,6 +123,7 @@ def fallback_details(state: Mapping[str, Any], raw_alert: Any) -> AlertDetails:
         severity=severity or "unknown",
     )
 
+
 def make_problem_md(details: AlertDetails) -> str:
     """Build the operator-facing problem markdown header from extracted details."""
     parts = [
