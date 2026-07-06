@@ -1,3 +1,9 @@
+"""In-memory port adapters for headless agent runs.
+
+These adapters implement core.agent_harness.ports interfaces without
+external side effects (no IO, no network, no filesystem).
+"""
+
 from __future__ import annotations
 
 from collections.abc import Iterable
