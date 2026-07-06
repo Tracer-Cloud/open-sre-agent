@@ -1,6 +1,6 @@
 """Construct the concrete LLM client for a resolved route.
 
-Given an :class:`~core.llm.factory.LLMRoute`, build the client for the transport
+Given an :class:`~core.llm.types.LLMRoute`, build the client for the transport
 (CLI-backed, LiteLLM, or native vendor SDK) and provider the route resolved to.
 ``build_agent_client`` builds the tool-calling client; ``build_reasoning_client``
 builds the streaming reasoning client for a model tier. The routing decision itself
@@ -18,8 +18,7 @@ import os
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from core.llm.factory import LLMRoute, _ModelType
-    from core.llm.types import AgentLLMClient
+    from core.llm.types import AgentLLMClient, LLMRoute, ModelType
 
 __all__ = ["build_agent_client", "build_reasoning_client"]
 
@@ -92,7 +91,7 @@ def _native_sdk_agent_client(route: LLMRoute) -> AgentLLMClient:
 # ---------------------------------------------------------------------------
 
 
-def build_reasoning_client(route: LLMRoute, model_type: _ModelType) -> Any:
+def build_reasoning_client(route: LLMRoute, model_type: ModelType) -> Any:
     """Build the reasoning client for the route and model tier: CLI or LiteLLM, else native SDK."""
     if route.cli_provider_registration is not None:
         return _cli_llm_client(route.cli_provider_registration, model_type)
@@ -111,7 +110,7 @@ def build_reasoning_client(route: LLMRoute, model_type: _ModelType) -> Any:
     return _native_sdk_llm_client(route, model_type)
 
 
-def _cli_llm_client(registration: Any, model_type: _ModelType) -> Any:
+def _cli_llm_client(registration: Any, model_type: ModelType) -> Any:
     """Build the subprocess CLI-backed reasoning client for a CLI provider registration."""
     from config.config import DEFAULT_MAX_TOKENS
     from integrations.llm_cli.runner import CLIBackedLLMClient
@@ -125,7 +124,7 @@ def _cli_llm_client(registration: Any, model_type: _ModelType) -> Any:
     )
 
 
-def _native_sdk_llm_client(route: LLMRoute, model_type: _ModelType) -> Any:
+def _native_sdk_llm_client(route: LLMRoute, model_type: ModelType) -> Any:
     """Build the native vendor-SDK reasoning client for the route's provider and tier."""
     from config.config import PROVIDER_ANTHROPIC, PROVIDER_BEDROCK, PROVIDER_OPENAI
     from core.llm.providers.openai_compat_providers import (

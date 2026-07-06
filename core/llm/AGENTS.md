@@ -11,6 +11,7 @@ agent loop. Subprocess-backed LLM CLIs live under `integrations/llm_cli/`.
 | `config/llm_auth/provider_catalog.py` | Canonical `ProviderSpec` metadata shared by wizard, auth, and runtime checks. |
 | `core/llm/factory.py` | Single routing entrypoint: `resolve_llm_route()`, `get_llm(role)`, `reset_llm_clients()`. |
 | `core/llm/client_builders.py` | Construct the client for a resolved route: `build_agent_client()`, `build_reasoning_client()`. |
+| `core/llm/providers/provider_registry.py` | `FIRST_PARTY_PROVIDERS` table (models, max_tokens, LiteLLM prefix, api-key env) the builders read. |
 | `core/llm/transport_mode.py` | `OPENSRE_LLM_TRANSPORT` (`sdk` vs `litellm`) and `use_litellm_for_provider()`. |
 | `core/llm/internal/client_cache_key.py` | Singleton cache invalidation key `(transport, runtime_provider)`. |
 | `core/llm/providers/openai_compat_providers.py` | OpenAI-compatible provider catalog and model/base-URL resolution. |
@@ -61,10 +62,14 @@ and wizard env sync call `reset_llm_clients()` directly.
 1. Add the provider literal to `LLMProvider` and normalization/validation paths in `config/config.py`.
 2. Add `ProviderSpec` in `config/llm_auth/provider_catalog.py` and matching `ProviderOption` in
    `surfaces/cli/wizard/config.py` (model env vars, defaults, `endpoint_env` if needed).
-3. Add runtime routing (all in `core/llm/factory.py`):
-   - **SDK path:** the client class in `core/llm/transports/sdk/llm_clients.py` and/or `core/llm/transports/sdk/agent_clients.py`,
-     wired into `_build_llm_client` / `_build_agent_client` in `factory.py`.
-   - **LiteLLM path (optional or required):** branch in `core/llm/transports/litellm/routing.py`.
+3. Add runtime construction (routing itself stays in `core/llm/factory.py`; clients are built in `core/llm/client_builders.py`):
+   - **First-party provider** (its own SDK models + a LiteLLM prefix): add **one row** to
+     `FIRST_PARTY_PROVIDERS` in `core/llm/providers/provider_registry.py` — the SDK and LiteLLM
+     builders read the table, so no per-provider branch is needed unless the client class is new.
+   - **SDK path:** add the client class in `core/llm/transports/sdk/llm_clients.py` and/or
+     `core/llm/transports/sdk/agent_clients.py`; the builders in `client_builders.py` select it.
+   - **LiteLLM path (optional or required):** covered by the registry row; only add a branch in
+     `core/llm/transports/litellm/routing.py` for a non-standard case (e.g. Azure).
    - **OpenAI-compatible:** register in `providers/openai_compat_providers.py` (SDK compat path) and/or
      `transports/litellm/routing.py` (LiteLLM path).
 4. Update `surfaces/cli/wizard/env_sync.py` if you introduce new non-secret env keys; keep endpoint

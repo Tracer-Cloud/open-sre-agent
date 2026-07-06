@@ -18,16 +18,13 @@ public entrypoint. Constructing the concrete client for a route lives in
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Literal, overload
 
 from core.llm import client_builders
 from core.llm.internal.client_cache_key import current_llm_client_cache_key
 from core.llm.transport_mode import use_litellm_for_provider
-from core.llm.types import AgentLLMClient
-
-_ModelType = Literal["reasoning", "classification", "toolcall"]
+from core.llm.types import AgentLLMClient, LLMRoute, ModelType
 
 
 class LLMRole(Enum):
@@ -40,21 +37,11 @@ class LLMRole(Enum):
 
 
 # The non-agent roles map onto the model-tier attribute suffix used by settings.
-_MODEL_TYPE_BY_ROLE: dict[LLMRole, _ModelType] = {
+_MODEL_TYPE_BY_ROLE: dict[LLMRole, ModelType] = {
     LLMRole.REASONING: "reasoning",
     LLMRole.CLASSIFICATION: "classification",
     LLMRole.TOOLCALL: "toolcall",
 }
-
-
-@dataclass(frozen=True)
-class LLMRoute:
-    """The resolved provider/transport decision shared by every role this turn."""
-
-    settings: Any
-    provider: str  # runtime provider (after auth-method resolution)
-    cli_provider_registration: Any | None
-    use_litellm: bool
 
 
 def resolve_llm_route() -> LLMRoute:
@@ -153,7 +140,7 @@ def reset_llm_clients() -> None:
     _cache.cache_key = None
 
 
-def build_llm_client(model_type: _ModelType) -> Any:
+def build_llm_client(model_type: ModelType) -> Any:
     """Build a fresh (uncached) reasoning-family client for the current config."""
     return client_builders.build_reasoning_client(resolve_llm_route(), model_type)
 
