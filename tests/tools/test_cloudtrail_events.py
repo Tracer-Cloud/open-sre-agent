@@ -385,15 +385,22 @@ def test_realistic_page_shapes_every_event(mock_call) -> None:
     assert result["total_events"] == 3
     by_id = {event["event_id"]: event for event in result["events"]}
 
-    iam = by_id["8e3c6f2b-4a1d-4c8e-9f2a-1b7d3e5a9c01"]
-    assert iam["event_name"] == "PutRolePolicy"
-    assert iam["username"] == "deploy-bot"
-    assert iam["read_only"] is False
-    assert iam["access_key_id"] == "AKIAIOSFODNN7EXAMPLE"
-    assert iam["resources"] == [{"type": "AWS::IAM::Role", "name": "payments-service-role"}]
-    assert iam["aws_region"] == "us-east-1"
-    assert iam["source_ip_address"] == "203.0.113.24"
-    assert iam["error_code"] is None
+    # Full-dict equality: locks every key of the shaped-event contract,
+    # including the ISO EventTime passthrough and event_source.
+    assert by_id["8e3c6f2b-4a1d-4c8e-9f2a-1b7d3e5a9c01"] == {
+        "event_id": "8e3c6f2b-4a1d-4c8e-9f2a-1b7d3e5a9c01",
+        "event_name": "PutRolePolicy",
+        "event_time": "2026-07-03T09:12:41+00:00",
+        "event_source": "iam.amazonaws.com",
+        "username": "deploy-bot",
+        "read_only": False,
+        "access_key_id": "AKIAIOSFODNN7EXAMPLE",
+        "resources": [{"type": "AWS::IAM::Role", "name": "payments-service-role"}],
+        "resources_truncated": False,
+        "aws_region": "us-east-1",
+        "source_ip_address": "203.0.113.24",
+        "error_code": None,
+    }
 
     # A denied call surfaces its errorCode from the CloudTrailEvent record.
     denied = by_id["1f9a7c3e-6b2d-4a5f-8c1e-7d4b2a9f6e02"]
@@ -409,13 +416,7 @@ def test_realistic_page_shapes_every_event(mock_call) -> None:
     assert service["read_only"] is True
     assert service["resources"] == []
 
-
-@patch("integrations.cloudtrail.tools.cloudtrail_events_tool.execute_aws_sdk_call")
-def test_realistic_page_surfaces_pagination(mock_call) -> None:
-    mock_call.return_value = {"success": True, "data": _fixture_payload("lookup_events_page.json")}
-
-    result = lookup_cloudtrail_events()
-
+    # More matching events exist beyond this page — surfaced, not swallowed.
     assert result["truncated"] is True
     assert result["next_token"] == "AAAAfR3kNzXhCq9lEXAMPLEtokenXo1v"
 
@@ -426,10 +427,13 @@ def test_weird_page_survives_and_shapes_gracefully(mock_call) -> None:
 
     The weird fixture packs the §1 cases: CloudTrailEvent as valid-but-non-dict
     JSON (null / bare string / list) or invalid JSON, an event with only
-    EventId, ReadOnly as a real bool and as "True", a null plus a
-    _sanitize_response truncation marker inside Resources (one event CAN
-    reference >MAX_LIST_ITEMS resources, e.g. CreateTags across a fleet), and
-    the same marker as the final Events entry.
+    EventId, ReadOnly as a real bool and as "True", and a null plus a
+    _sanitize_response truncation marker inside Resources — the one place the
+    marker is genuinely reachable (a single event CAN reference >MAX_LIST_ITEMS
+    resources, e.g. CreateTags across a fleet). The marker as the final Events
+    entry is a purely defensive case (LookupEvents pages cap at 50 <
+    MAX_LIST_ITEMS, so the sanitizer cannot produce it there): it pins that
+    non-dict Events entries are tolerated, not that the transport emits them.
     """
     mock_call.return_value = {"success": True, "data": _fixture_payload("lookup_events_weird.json")}
 
@@ -456,11 +460,14 @@ def test_weird_page_survives_and_shapes_gracefully(mock_call) -> None:
     assert bare["username"] is None
     assert bare["read_only"] is None
     assert bare["resources"] == []
+    assert bare["resources_truncated"] is False
 
     # Non-dict Resources entries (null / truncation marker) are skipped; the
-    # real resource survives, and a bool ReadOnly passes through unchanged.
+    # real resource survives, a bool ReadOnly passes through unchanged, and the
+    # drop is surfaced so the planner knows the blast radius is understated.
     mixed = by_id["weird-resources-mixed"]
     assert mixed["resources"] == [{"type": "AWS::EC2::Instance", "name": "i-0abc123def456789a"}]
+    assert mixed["resources_truncated"] is True
     assert mixed["read_only"] is True
     assert mixed["aws_region"] == "eu-west-1"
 

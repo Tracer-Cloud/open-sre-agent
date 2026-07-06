@@ -61,15 +61,19 @@ def _shape_event(raw: dict[str, Any]) -> dict[str, Any]:
     # Skip non-dict Resources entries: the transport sanitizer replaces the tail
     # of an oversized list with a "... (N more items truncated)" string (one
     # event CAN reference >MAX_LIST_ITEMS resources, e.g. CreateTags across a
-    # fleet), and degraded payloads may carry nulls.
+    # fleet), and degraded payloads may carry nulls. Anything skipped is
+    # surfaced via resources_truncated so the planner knows the resource list
+    # understates the true blast radius instead of silently trusting it.
+    raw_resources = raw.get("Resources") or []
     resources = [
         {
             "type": resource.get("ResourceType"),
             "name": resource.get("ResourceName"),
         }
-        for resource in (raw.get("Resources") or [])
+        for resource in raw_resources
         if isinstance(resource, dict)
     ]
+    resources_truncated = len(resources) != len(raw_resources)
 
     # CloudTrailEvent is a JSON string carrying the full record; pull the
     # high-signal forensic fields out of it without dumping the whole blob.
@@ -108,6 +112,7 @@ def _shape_event(raw: dict[str, Any]) -> dict[str, Any]:
         "read_only": read_only,
         "access_key_id": raw.get("AccessKeyId"),
         "resources": resources,
+        "resources_truncated": resources_truncated,
         "aws_region": aws_region,
         "source_ip_address": source_ip,
         "error_code": error_code,
@@ -252,8 +257,10 @@ def lookup_cloudtrail_events(
 
     data = result.get("data") or {}
     raw_events = data.get("Events") or []
-    # Shape only dict entries: the transport sanitizer appends a string
-    # truncation marker to oversized lists, which must not crash the parse.
+    # Shape only dict entries. Defensive: the sanitizer's list-truncation marker
+    # cannot reach Events today (LookupEvents pages cap at 50 < MAX_LIST_ITEMS
+    # and the client never merges pages) — unlike per-event Resources, where it
+    # genuinely can — but degraded payloads must degrade, not crash the parse.
     events = [_shape_event(event) for event in raw_events if isinstance(event, dict)]
     # CloudTrail returns a NextToken when more matching events exist beyond this
     # page. Surface it so the agent knows the result is partial (and can paginate
