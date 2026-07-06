@@ -35,6 +35,7 @@ def answer_shell_question(
     is_tty: bool | None = None,
     tool_observation: str | None = None,
     tool_observation_on_screen: bool = True,
+    handoff_contents: tuple[str, ...] = (),
     turn_plan: TurnPlan | None = None,
     output: OutputSink | None = None,
 ) -> LlmRunInfo | None:
@@ -56,6 +57,7 @@ def answer_shell_question(
         is_tty=is_tty,
         tool_observation=tool_observation,
         tool_observation_on_screen=tool_observation_on_screen,
+        handoff_contents=handoff_contents,
         turn_plan=turn_plan,
     )
 

@@ -6,10 +6,10 @@ from __future__ import annotations
 import argparse
 import os
 import time
-from pathlib import Path
 
 from botocore.exceptions import ClientError
 
+from config.constants.paths import REPO_ROOT
 from platform.deployment.aws import ecr
 from platform.deployment.aws.client import DEFAULT_REGION
 from platform.deployment.aws.config import (
@@ -48,8 +48,6 @@ from platform.deployment.stack import (
 )
 
 REGION = DEFAULT_REGION
-REPO_ROOT = Path(__file__).resolve().parents[2]
-DOCKERFILE = REPO_ROOT / "Dockerfile"
 _ABORT_IF_EXISTS_ENV = "OPENSRE_DEPLOY_ABORT_IF_EXISTS"
 
 _CONTAINER_ENV_KEYS = (
@@ -135,7 +133,7 @@ def deploy() -> dict[str, str]:
     print("Building and pushing image to ECR...")
     repo = ecr.create_repository(stack.ecr_repo_name, stack.stack_name, REGION)
     image_uri = ecr.build_and_push(
-        dockerfile_path=DOCKERFILE,
+        dockerfile_path=REPO_ROOT / "Dockerfile",
         repository_uri=repo["uri"],
         tag=ECR_DEFAULT_IMAGE_TAG,
         platform=ECR_DOCKER_PLATFORM,

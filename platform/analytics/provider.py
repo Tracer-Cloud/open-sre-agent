@@ -24,7 +24,7 @@ import httpx
 import platform
 from config.constants import get_store_path
 from config.constants.posthog import POSTHOG_CAPTURE_API_KEY, POSTHOG_HOST
-from config.version import get_version
+from config.version import get_opensre_version
 from platform.analytics.events import Event
 
 _CONFIG_DIR = get_store_path().parent
@@ -321,7 +321,7 @@ def _touch_once(path: Path) -> bool:
 
 
 def _cli_version() -> str:
-    return get_version()
+    return get_opensre_version()
 
 
 def _normalized_fingerprint_value(value: object) -> str | None:

@@ -50,14 +50,14 @@ def _current_cli_signature(
     Bumps cache when subcommands change, slash-command metadata changes, or the
     installed package version changes.
     """
-    from config.version import get_version
+    from config.version import get_opensre_version
 
     if isinstance(cli_group, click.Group):
         cmd_names = ",".join(sorted(cli_group.commands.keys()))
     else:
         cmd_names = ""
     slash_names = ",".join(_slash_command_names(slash_provider))
-    return f"opensre={get_version()}|commands={cmd_names}|slash={slash_names}"
+    return f"opensre={get_opensre_version()}|commands={cmd_names}|slash={slash_names}"
 
 
 def _format_param(param: click.Parameter) -> str:

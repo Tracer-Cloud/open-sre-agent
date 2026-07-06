@@ -46,12 +46,11 @@ from typing import Any
 
 from filelock import FileLock, Timeout
 
-from config.constants import INTEGRATIONS_STORE_PATH, LEGACY_INTEGRATIONS_STORE_PATH
+from config.constants.paths import INTEGRATIONS_STORE_PATH
 
 logger = logging.getLogger(__name__)
 
 STORE_PATH = INTEGRATIONS_STORE_PATH
-LEGACY_STORE_PATH = LEGACY_INTEGRATIONS_STORE_PATH
 _VERSION = 2
 _LOCK_TIMEOUT_SECONDS = 10.0
 
@@ -107,21 +106,6 @@ def _migrate_if_needed(data: dict[str, Any]) -> tuple[dict[str, Any], bool]:
     return {"version": _VERSION, "integrations": migrated_records}, True
 
 
-def _read_json_store_at(path: Path) -> dict[str, Any] | None:
-    """Read integration store JSON from ``path`` when present and structurally valid."""
-    if not path.exists():
-        return None
-    try:
-        text = path.read_text(encoding="utf-8")
-        data = json.loads(text)
-    except (json.JSONDecodeError, OSError):
-        logger.warning("Failed to read integrations store at %s", path, exc_info=True)
-        return None
-    if not isinstance(data, dict) or "integrations" not in data:
-        return None
-    return data
-
-
 def _lock_path() -> Path:
     """Return the file lock path derived from the current STORE_PATH."""
     return STORE_PATH.with_suffix(".lock")
@@ -167,68 +151,6 @@ def _save_unlocked(data: dict[str, Any]) -> None:
     _atomic_write(STORE_PATH, data)
 
 
-def _migrate_legacy_store_unlocked() -> None:
-    """Move the legacy ~/.tracer integrations store into ``STORE_PATH`` on first access.
-
-    Must be called while holding the store lock.
-    """
-    if STORE_PATH.exists() or not LEGACY_STORE_PATH.exists():
-        return
-    # Tests often patch only STORE_PATH. If LEGACY_STORE_PATH still points at the
-    # real default location, skip the move so an isolated test cannot relocate a
-    # developer's actual legacy store into the patched destination.
-    if (
-        STORE_PATH != INTEGRATIONS_STORE_PATH
-        and LEGACY_STORE_PATH == LEGACY_INTEGRATIONS_STORE_PATH
-    ):
-        return
-
-    STORE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        LEGACY_STORE_PATH.replace(STORE_PATH)
-    except OSError:
-        # Fallback: atomic copy via temp file
-        try:
-            legacy_bytes = LEGACY_STORE_PATH.read_bytes()
-            fd: int | None = None
-            tmp_path_str: str | None = None
-            try:
-                fd, tmp_path_str = tempfile.mkstemp(
-                    dir=STORE_PATH.parent,
-                    prefix=STORE_PATH.name + ".tmp",
-                )
-                with os.fdopen(fd, "wb") as f:
-                    f.write(legacy_bytes)
-                    f.flush()
-                    os.fsync(f.fileno())
-                os.replace(tmp_path_str, STORE_PATH)
-            except Exception:
-                if tmp_path_str:
-                    with contextlib.suppress(OSError):
-                        os.unlink(tmp_path_str)
-                raise
-            with contextlib.suppress(OSError):
-                STORE_PATH.chmod(0o600)
-            LEGACY_STORE_PATH.unlink()
-        except OSError:
-            logger.warning(
-                "Failed to migrate legacy integrations store from %s to %s",
-                LEGACY_STORE_PATH,
-                STORE_PATH,
-                exc_info=True,
-            )
-            return
-
-    with contextlib.suppress(OSError):
-        STORE_PATH.chmod(0o600)
-
-    logger.info(
-        "Migrated legacy integrations store from %s to %s",
-        LEGACY_STORE_PATH,
-        STORE_PATH,
-    )
-
-
 def _load_raw_unlocked() -> tuple[dict[str, Any], bool]:
     """Read the store from disk and migrate in memory.
 
@@ -253,24 +175,8 @@ def _load_raw() -> dict[str, Any]:
     """Read the store, migrating on disk if necessary.
 
     Lock-free for the common v2 path; acquires the store lock only when a
-    legacy move or v1 migration needs to be persisted.
+    v1 migration needs to be persisted.
     """
-    # Legacy store migration check — cheap path when nothing to do
-    if not STORE_PATH.exists() and LEGACY_STORE_PATH.exists():
-        try:
-            with _acquire_lock():
-                _migrate_legacy_store_unlocked()
-        except Timeout:
-            logger.warning(
-                "Timed out acquiring integration store lock for legacy migration from %s",
-                LEGACY_STORE_PATH,
-                exc_info=True,
-            )
-            raw_legacy = _read_json_store_at(LEGACY_STORE_PATH)
-            if raw_legacy is not None:
-                migrated, _ = _migrate_if_needed(raw_legacy)
-                return migrated
-
     data, did_migrate = _load_raw_unlocked()
     if did_migrate:
         try:
@@ -315,7 +221,6 @@ def _locked_update(mutator: Callable[[dict[str, Any]], bool]) -> tuple[dict[str,
     """
     try:
         with _acquire_lock():
-            _migrate_legacy_store_unlocked()
             data, did_migrate = _load_raw_unlocked()
             changed = mutator(data)
             if changed or did_migrate:

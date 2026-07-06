@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 from core.agent_harness.prompts.assistant_agent_prompt import (
     _build_observation_block,
     _build_system_prompt,
+    build_handoff_guidance_block,
 )
 from core.agent_harness.prompts.conversation_memory import (
     format_prior_action_facts,
@@ -149,6 +150,22 @@ def _load_synthetic_observation_text(
     return raw
 
 
+def _assistant_context_blocks(
+    *,
+    turn_snapshot: TurnSnapshot,
+    handoff_contents: tuple[str, ...],
+    tool_observation: str | None,
+    tool_observation_on_screen: bool,
+    suggested_prompt: str = SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST,
+) -> str:
+    return (
+        f"{_build_integration_guard(turn_snapshot)}"
+        f"{build_handoff_guidance_block(handoff_contents)}"
+        f"{build_observation_block(tool_observation, on_screen=tool_observation_on_screen)}"
+        f"{_build_synthetic_failure_block(turn_snapshot, suggested_prompt=suggested_prompt)}"
+    )
+
+
 def _build_integration_guard(ctx: TurnSnapshot) -> str:
     """Render the no-integrations guidance block from the turn snapshot."""
     if not (ctx.configured_integrations_known and not ctx.configured_integrations):
@@ -198,6 +215,7 @@ def build_cli_agent_prompt_from_provider(
     prompts: AssistantPromptContextProvider,
     tool_observation: str | None,
     tool_observation_on_screen: bool,
+    handoff_contents: tuple[str, ...] = (),
     turn_snapshot: TurnSnapshot,
 ) -> str:
     """Render an assistant prompt from the core prompt-provider port."""
@@ -217,9 +235,7 @@ def build_cli_agent_prompt_from_provider(
     )
     return (
         f"{system}\n"
-        f"{_build_integration_guard(turn_snapshot)}"
-        f"{build_observation_block(tool_observation, on_screen=tool_observation_on_screen)}"
-        f"{_build_synthetic_failure_block(turn_snapshot, suggested_prompt=prompts.suggested_synthetic_prompt())}"
+        f"{_assistant_context_blocks(turn_snapshot=turn_snapshot, handoff_contents=handoff_contents, tool_observation=tool_observation, tool_observation_on_screen=tool_observation_on_screen, suggested_prompt=prompts.suggested_synthetic_prompt())}"
         f"--- User message ---\n{message}"
     )
 

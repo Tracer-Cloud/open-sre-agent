@@ -70,6 +70,7 @@ class AnswerKwargs(TypedDict, total=False):
     is_tty: bool | None
     tool_observation: str | None
     tool_observation_on_screen: bool
+    handoff_contents: tuple[str, ...]
     turn_plan: TurnPlan | None
 
 
@@ -86,6 +87,7 @@ class AnswerShellQuestion(Protocol):
         is_tty: bool | None = None,
         tool_observation: str | None = None,
         tool_observation_on_screen: bool = True,
+        handoff_contents: tuple[str, ...] = (),
         turn_plan: TurnPlan | None = None,
         output: OutputSink | None = None,
     ) -> LlmRunInfo | None:

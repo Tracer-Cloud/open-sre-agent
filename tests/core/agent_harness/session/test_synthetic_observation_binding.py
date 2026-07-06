@@ -10,13 +10,20 @@ from core.agent_harness.session.state import Session
 
 def test_suggest_synthetic_failure_follow_up_binds_observation_path(tmp_path: Path) -> None:
     scenario_id = "001-replication-lag"
-    scenarios_root = tmp_path / "rds_postgres"
-    latest = scenarios_root / "_observations" / scenario_id / "latest.json"
+    latest = (
+        tmp_path
+        / "tests"
+        / "synthetic"
+        / "rds_postgres"
+        / "_observations"
+        / scenario_id
+        / "latest.json"
+    )
     latest.parent.mkdir(parents=True)
     latest.write_text('{"status": "failed"}', encoding="utf-8")
 
     session = Session()
-    with unittest.mock.patch("config.synthetic_paths.SYNTHETIC_SCENARIOS_DIR", scenarios_root):
+    with unittest.mock.patch("config.constants.paths.REPO_ROOT", tmp_path):
         session.suggest_synthetic_failure_follow_up(
             label="opensre tests synthetic --scenario 001-replication-lag",
         )
@@ -36,12 +43,11 @@ def test_suggest_synthetic_failure_follow_up_invalid_scenario_clears_path() -> N
 def test_suggest_synthetic_failure_follow_up_missing_observation_clears_path(
     tmp_path: Path,
 ) -> None:
-    scenarios_root = tmp_path / "rds_postgres"
-    scenarios_root.mkdir()
+    (tmp_path / "tests" / "synthetic" / "rds_postgres").mkdir(parents=True)
 
     session = Session()
     with (
-        unittest.mock.patch("config.synthetic_paths.SYNTHETIC_SCENARIOS_DIR", scenarios_root),
+        unittest.mock.patch("config.constants.paths.REPO_ROOT", tmp_path),
         unittest.mock.patch("core.agent_harness.session.state.time.sleep"),
     ):
         session.suggest_synthetic_failure_follow_up(

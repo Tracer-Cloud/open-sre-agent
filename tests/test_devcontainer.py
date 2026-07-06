@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+from config.constants.paths import REPO_ROOT
 
 
 def test_devcontainer_config_matches_local_dev_workflow() -> None:

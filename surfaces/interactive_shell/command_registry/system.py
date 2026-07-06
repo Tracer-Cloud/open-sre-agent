@@ -71,12 +71,12 @@ def _cmd_doctor(_session: Session, console: Console, _args: list[str]) -> bool:
 
 
 def _cmd_version(_session: Session, console: Console, _args: list[str]) -> bool:
-    from config.version import get_version
+    from config.version import get_opensre_version
 
     table = repl_table(title="Version info\n", title_style=BOLD_BRAND, show_header=False)
     table.add_column("key", style="bold")
     table.add_column("value")
-    table.add_row("opensre", get_version())
+    table.add_row("opensre", get_opensre_version())
     table.add_row("python", platform.python_version())
     table.add_row("os", f"{platform.system().lower()} ({platform.machine()})")
     print_repl_table(console, table)

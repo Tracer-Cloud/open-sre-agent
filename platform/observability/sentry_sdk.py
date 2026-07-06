@@ -514,13 +514,13 @@ def init_sentry(entrypoint: str | None = None) -> None:
         return
 
     from config.config import get_environment
-    from config.version import get_version
+    from config.version import get_opensre_version
 
     try:
         _init_sentry_once(
             dsn=_resolved_dsn(),
             environment=get_environment().value,
-            release=f"opensre@{get_version()}",
+            release=f"opensre@{get_opensre_version()}",
             sample_rate=_sample_rate_from_env(
                 "SENTRY_ERROR_SAMPLE_RATE",
                 SENTRY_ERROR_SAMPLE_RATE,

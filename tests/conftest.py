@@ -2,17 +2,16 @@
 
 import os
 from collections.abc import Iterator
-from pathlib import Path
 
 import pytest
 
+from config.constants.paths import PROJECT_ROOT
 from config.grafana_cloud import load_env
 from config.platform_bootstrap import ensure_project_platform_package
 
 ensure_project_platform_package()
 
-_PROJECT_ROOT = Path(__file__).parent.parent
-_ENV_PATH = _PROJECT_ROOT / ".env"
+_ENV_PATH = PROJECT_ROOT / ".env"
 
 
 def _load_env() -> None:
