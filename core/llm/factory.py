@@ -11,9 +11,9 @@ streaming reasoning client (``invoke`` / ``invoke_stream`` / ``with_structured_o
 for a given model tier. ``get_llm(role)`` is the single entrypoint — callers pass an ``LLMRole``.
 
 Import discipline: construction imports (``sdk`` / ``litellm`` / ``config``) are
-done lazily inside functions, matching the rest of ``core.llm`` — ``sdk.llm_clients``
-imports back into ``llm_client`` at call time, so a module-level import here would
-reintroduce a cycle.
+done lazily inside functions, matching the rest of ``core.llm``. Keeping them lazy
+avoids pulling the full provider stack at module import time and holds the
+``importlinter`` contract.
 """
 
 from __future__ import annotations

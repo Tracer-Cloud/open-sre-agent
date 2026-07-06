@@ -139,7 +139,9 @@ def test_litellm_llm_client_invoke_stream_not_found_raises_without_retry(monkeyp
         attempts.append(True)
         raise NotFoundError("model not found")
 
-    monkeypatch.setattr("core.llm.shared.openai_chat_completions.time.sleep", lambda s: sleeps.append(s))
+    monkeypatch.setattr(
+        "core.llm.shared.openai_chat_completions.time.sleep", lambda s: sleeps.append(s)
+    )
 
     client = LiteLLMLLMClient(
         litellm_model="openai/missing-model",

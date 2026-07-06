@@ -523,7 +523,9 @@ def summarize_highlights(
 
     prompt = _build_summary_prompt(repository, window, pull_requests)
     try:
-        response = get_llm(LLMRole.REASONING).with_structured_output(HighlightResponse).invoke(prompt)
+        response = (
+            get_llm(LLMRole.REASONING).with_structured_output(HighlightResponse).invoke(prompt)
+        )
         highlights = tuple(item.strip() for item in response.highlights if item.strip())
         if highlights:
             return highlights, False

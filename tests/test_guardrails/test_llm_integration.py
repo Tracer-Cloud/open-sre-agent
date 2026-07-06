@@ -105,7 +105,9 @@ def _reset_engine() -> None:
 @pytest.fixture(autouse=True)
 def _fake_llm_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
     """These tests replace network clients and only need constructor-safe credentials."""
-    monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env_var: "fake-key")
+    monkeypatch.setattr(
+        "core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env_var: "fake-key"
+    )
 
 
 class TestLLMClientGuardrails:

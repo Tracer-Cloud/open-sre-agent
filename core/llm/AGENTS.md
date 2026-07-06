@@ -9,17 +9,16 @@ agent loop. Subprocess-backed LLM CLIs live under `integrations/llm_cli/`.
 | --- | --- |
 | `config/config.py` | Declares `LLMProvider`, provider env vars, defaults, and validation requirements. |
 | `config/llm_auth/provider_catalog.py` | Canonical `ProviderSpec` metadata shared by wizard, auth, and runtime checks. |
-| `core/llm/llm_client.py` | Routes `LLM_PROVIDER` to chat/reasoning/classification/toolcall clients. |
-| `core/llm/agent_llm_client.py` | Investigation ReAct loop: tool-calling clients (`get_agent_llm`). |
+| `core/llm/factory.py` | Single routing entrypoint: `resolve_llm_route()`, `get_llm(role)`, `reset_llm_clients()`. |
 | `core/llm/transport_mode.py` | `OPENSRE_LLM_TRANSPORT` (`sdk` vs `litellm`) and `use_litellm_for_provider()`. |
 | `core/llm/internal/client_cache_key.py` | Singleton cache invalidation key `(transport, runtime_provider)`. |
-| `core/llm/openai_compat_providers.py` | OpenAI-compatible provider catalog and model/base-URL resolution. |
-| `core/llm/azure_openai.py` | Azure OpenAI helpers: endpoint normalization, deployment selection, LiteLLM kwargs. |
+| `core/llm/providers/openai_compat_providers.py` | OpenAI-compatible provider catalog and model/base-URL resolution. |
+| `core/llm/providers/azure_openai.py` | Azure OpenAI helpers: endpoint normalization, deployment selection, LiteLLM kwargs. |
 | `core/llm/transports/litellm/routing.py` | Per-provider LiteLLM client construction (model prefix, `api_base`, `api_version`). |
 | `core/llm/transports/litellm/clients.py` | `LiteLLMAgentClient` / `LiteLLMLLMClient` wrappers around `litellm.completion`. |
 | `core/llm/transports/sdk/agent_clients.py` | Native SDK tool-calling clients (Anthropic, OpenAI, Bedrock, CLI-backed). |
 | `core/llm/transports/sdk/llm_clients.py` | Native SDK non-agent clients. |
-| `core/llm/tool_schema_normalize.py` | JSON Schema normalization shared by strict tool-calling adapters. |
+| `core/llm/shared/tool_schema_normalize.py` | JSON Schema normalization shared by strict tool-calling adapters. |
 | `surfaces/cli/wizard/config.py` | Onboarding metadata (`SUPPORTED_PROVIDERS`) and model choices. |
 | `surfaces/cli/wizard/env_sync.py` | `.env` synchronization when provider/model choices change. |
 
@@ -46,14 +45,12 @@ get_llm(role)  # role ∈ {AGENT, REASONING, CLASSIFICATION, TOOLCALL}
       else      → native SDK client in transports/sdk/agent_clients.py or transports/sdk/llm_clients.py
 ```
 
-`get_agent_llm()` and `get_llm_for_*()` are thin wrappers over `get_llm(role)`. When
-changing routing, edit only `resolve_llm_route` / the role builders in `factory.py` —
+When changing routing, edit only `resolve_llm_route` / the role builders in `factory.py` —
 there is no second copy to keep in sync.
 
 One cache in `factory.py` keyed by `(role, transport, runtime_provider)`, invalidated
 together on `(transport, runtime_provider)` change (not transport alone). REPL `/model`
-and wizard env sync call `reset_llm_clients()` (via `reset_llm_singletons()` /
-`reset_agent_client()`).
+and wizard env sync call `reset_llm_clients()` directly.
 
 ## Adding a Hosted API Provider
 
@@ -64,7 +61,7 @@ and wizard env sync call `reset_llm_clients()` (via `reset_llm_singletons()` /
    - **SDK path:** the client class in `core/llm/transports/sdk/llm_clients.py` and/or `core/llm/transports/sdk/agent_clients.py`,
      wired into `_build_llm_client` / `_build_agent_client` in `factory.py`.
    - **LiteLLM path (optional or required):** branch in `core/llm/transports/litellm/routing.py`.
-   - **OpenAI-compatible:** register in `openai_compat_providers.py` (SDK compat path) and/or
+   - **OpenAI-compatible:** register in `providers/openai_compat_providers.py` (SDK compat path) and/or
      `transports/litellm/routing.py` (LiteLLM path).
 4. Update `surfaces/cli/wizard/env_sync.py` if you introduce new non-secret env keys; keep endpoint
    keys in `active_non_secret` when the provider needs persisted URL/version settings.
@@ -79,7 +76,7 @@ Azure uses **deployment names** (not public OpenAI model IDs) and a resource **b
 - LiteLLM model string: `azure/<deployment>` via `azure_openai_litellm_model()`
 
 Do not add a separate Azure client class — extend `transports/litellm/routing.py` and helpers in
-`azure_openai.py`.
+`providers/azure_openai.py`.
 
 For investigation tool calling details, see
 [`docs/investigation-tool-calling.md`](../../docs/investigation-tool-calling.md).

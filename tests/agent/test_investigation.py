@@ -177,9 +177,7 @@ def test_run_gracefully_handles_model_not_found_runtime_error() -> None:
     mock_tracker = MagicMock()
 
     with (
-        patch(
-            "tools.investigation.stages.gather_evidence.agent.get_llm", return_value=mock_llm
-        ),
+        patch("tools.investigation.stages.gather_evidence.agent.get_llm", return_value=mock_llm),
         patch(
             "tools.investigation.stages.gather_evidence.agent.get_tracker",
             return_value=mock_tracker,
@@ -214,9 +212,7 @@ def test_run_re_raises_unmatched_runtime_error() -> None:
     mock_tracker = MagicMock()
 
     with (
-        patch(
-            "tools.investigation.stages.gather_evidence.agent.get_llm", return_value=mock_llm
-        ),
+        patch("tools.investigation.stages.gather_evidence.agent.get_llm", return_value=mock_llm),
         patch(
             "tools.investigation.stages.gather_evidence.agent.get_tracker",
             return_value=mock_tracker,
@@ -243,9 +239,7 @@ def test_run_gracefully_handles_cli_timeout() -> None:
     mock_tracker = MagicMock()
 
     with (
-        patch(
-            "tools.investigation.stages.gather_evidence.agent.get_llm", return_value=mock_llm
-        ),
+        patch("tools.investigation.stages.gather_evidence.agent.get_llm", return_value=mock_llm),
         patch(
             "tools.investigation.stages.gather_evidence.agent.get_tracker",
             return_value=mock_tracker,
@@ -279,9 +273,7 @@ def test_run_gracefully_handles_api_timeout_runtime_error() -> None:
     mock_tracker = MagicMock()
 
     with (
-        patch(
-            "tools.investigation.stages.gather_evidence.agent.get_llm", return_value=mock_llm
-        ),
+        patch("tools.investigation.stages.gather_evidence.agent.get_llm", return_value=mock_llm),
         patch(
             "tools.investigation.stages.gather_evidence.agent.get_tracker",
             return_value=mock_tracker,
@@ -321,9 +313,7 @@ def test_run_gracefully_handles_tool_unsupported_model(error_msg: str) -> None:
     mock_tracker = MagicMock()
 
     with (
-        patch(
-            "tools.investigation.stages.gather_evidence.agent.get_llm", return_value=mock_llm
-        ),
+        patch("tools.investigation.stages.gather_evidence.agent.get_llm", return_value=mock_llm),
         patch(
             "tools.investigation.stages.gather_evidence.agent.get_tracker",
             return_value=mock_tracker,
@@ -361,9 +351,7 @@ def test_run_gracefully_handles_single_tool_call_only_model() -> None:
     mock_tracker = MagicMock()
 
     with (
-        patch(
-            "tools.investigation.stages.gather_evidence.agent.get_llm", return_value=mock_llm
-        ),
+        patch("tools.investigation.stages.gather_evidence.agent.get_llm", return_value=mock_llm),
         patch(
             "tools.investigation.stages.gather_evidence.agent.get_tracker",
             return_value=mock_tracker,
@@ -920,9 +908,7 @@ def test_invalid_hook_return_false_none_raises_at_call_site() -> None:
     }
     agent = _BadAgent()
     with (
-        patch(
-            "tools.investigation.stages.gather_evidence.agent.get_llm", return_value=mock_llm
-        ),
+        patch("tools.investigation.stages.gather_evidence.agent.get_llm", return_value=mock_llm),
         patch(
             "tools.investigation.stages.gather_evidence.agent.get_tracker",
             return_value=mock_tracker,
@@ -1244,9 +1230,7 @@ def _run_agent_with_scripted_llm(
     }
 
     with (
-        patch(
-            "tools.investigation.stages.gather_evidence.agent.get_llm", return_value=mock_llm
-        ),
+        patch("tools.investigation.stages.gather_evidence.agent.get_llm", return_value=mock_llm),
         patch(
             "tools.investigation.stages.gather_evidence.agent.get_tracker", return_value=MagicMock()
         ),

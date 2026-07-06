@@ -841,7 +841,9 @@ def test_get_agent_llm_routes_deepseek_to_openai_compatible_client(
                 }
             )
 
-    monkeypatch.setattr("core.llm.transports.sdk.agent_clients.OpenAIAgentClient", _FakeOpenAIAgentClient)
+    monkeypatch.setattr(
+        "core.llm.transports.sdk.agent_clients.OpenAIAgentClient", _FakeOpenAIAgentClient
+    )
     monkeypatch.setenv("LLM_PROVIDER", "deepseek")
     monkeypatch.setenv("DEEPSEEK_API_KEY", "ds-test")
     monkeypatch.setenv("DEEPSEEK_REASONING_MODEL", "deepseek-v4-pro")

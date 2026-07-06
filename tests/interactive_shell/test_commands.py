@@ -818,7 +818,9 @@ class TestModelCommand:
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", tmp_path / ".env")
         store_path = self._redirect_wizard_store(monkeypatch, tmp_path)
         reset_calls: list[str] = []
-        monkeypatch.setattr("core.llm.factory.reset_llm_clients", lambda: reset_calls.append("reset"))
+        monkeypatch.setattr(
+            "core.llm.factory.reset_llm_clients", lambda: reset_calls.append("reset")
+        )
         # /model set now refuses to half-update .env when the target provider
         # has no usable credential; supply one so the happy path still runs.
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
@@ -1128,7 +1130,9 @@ class TestModelCommand:
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
         reset_calls: list[str] = []
-        monkeypatch.setattr("core.llm.factory.reset_llm_clients", lambda: reset_calls.append("reset"))
+        monkeypatch.setattr(
+            "core.llm.factory.reset_llm_clients", lambda: reset_calls.append("reset")
+        )
         monkeypatch.setenv("LLM_PROVIDER", "anthropic")
 
         console, buf = _capture()

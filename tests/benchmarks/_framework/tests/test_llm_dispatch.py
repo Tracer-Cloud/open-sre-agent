@@ -232,10 +232,9 @@ def test_llm_spec_is_frozen() -> None:
 def test_reset_opensre_singletons_clears_both_module_caches(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Both ``llm_client.reset_llm_singletons`` AND
-    ``agent_llm_client.reset_agent_client`` MUST be called on every
-    activation switch. Missing the second one re-uses the first
-    activation's agent client for the rest of the run."""
+    """``factory.reset_llm_clients`` MUST be called on every activation
+    switch. Skipping it re-uses the first activation's cached clients for
+    the rest of the run."""
     # Re-install the real method (the autouse fixture stubs it out)
     monkeypatch.undo()
 

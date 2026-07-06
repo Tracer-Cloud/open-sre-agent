@@ -211,7 +211,10 @@ def _coerce_runtime_message(message: RuntimeMessageLike) -> RuntimeMessage:
 
 def _is_litellm_agent_client(llm: Any) -> bool:
     cls = type(llm)
-    return cls.__module__ == "core.llm.transports.litellm.clients" and cls.__name__ == "LiteLLMAgentClient"
+    return (
+        cls.__module__ == "core.llm.transports.litellm.clients"
+        and cls.__name__ == "LiteLLMAgentClient"
+    )
 
 
 def _to_converse_text_blocks(content: RuntimeContent) -> RuntimeContent:

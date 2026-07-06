@@ -399,7 +399,6 @@ class TestAssistantOutputRendering:
                 raise RuntimeError("upstream 503")
                 yield  # pragma: no cover  -- generator marker
 
-
         monkeypatch.setattr("core.llm.factory.get_llm", lambda _role: _Boom())
         monkeypatch.setattr(
             "core.agent_harness.providers.default_providers.capture_exception",
@@ -433,7 +432,6 @@ class TestStreamingMigration:
             def invoke_stream(self, _prompt: str) -> Iterator[str]:
                 calls.append("invoke_stream")
                 yield "ok"
-
 
         monkeypatch.setattr("core.llm.factory.get_llm", lambda _role: _Recording())
 
