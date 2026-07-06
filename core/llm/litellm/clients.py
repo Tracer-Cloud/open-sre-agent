@@ -9,6 +9,7 @@ from typing import Any
 from litellm import completion
 from pydantic import BaseModel
 
+from core.context_budget import strip_internal_message_markers
 from core.llm.openai_chat_completions import (
     AGENT_CLIENT_TIMEOUT_SEC,
     LLM_CLIENT_TIMEOUT_SEC,
@@ -92,7 +93,7 @@ class LiteLLMAgentClient:
     ) -> dict[str, Any]:
         kwargs: dict[str, Any] = {
             "model": self._litellm_model,
-            "messages": prepend_system_message(messages, system),
+            "messages": prepend_system_message(strip_internal_message_markers(messages), system),
             "max_tokens": self._max_tokens,
             "timeout": AGENT_CLIENT_TIMEOUT_SEC,
         }

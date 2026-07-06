@@ -80,6 +80,38 @@ def test_litellm_agent_client_parses_tool_calls() -> None:
     assert response.raw_content["tool_calls"] == [tool_call]
 
 
+def test_litellm_agent_client_invoke_strips_internal_message_markers() -> None:
+    captured: dict[str, Any] = {}
+
+    def completion(**kwargs: Any) -> Any:
+        captured.update(kwargs)
+        return _fake_response(content="ok")
+
+    client = LiteLLMAgentClient(
+        litellm_model="anthropic/claude-sonnet-4-6",
+        api_key_env="ANTHROPIC_API_KEY",
+        credential_resolver=lambda _env: "test-key",
+        completion_func=completion,
+    )
+
+    messages = [
+        {"role": "user", "content": "alert"},
+        {
+            "role": "assistant",
+            "content": [{"type": "tool_use", "id": "seed", "name": "n", "input": {}}],
+            "_opensre_seed": True,
+        },
+    ]
+    client.invoke(messages)
+
+    api_messages = captured["messages"]
+    assert api_messages[1] == {
+        "role": "assistant",
+        "content": [{"type": "tool_use", "id": "seed", "name": "n", "input": {}}],
+    }
+    assert messages[1]["_opensre_seed"] is True
+
+
 def test_litellm_agent_client_emits_global_usage_hook() -> None:
     from core.llm.usage import set_usage_hook
 
