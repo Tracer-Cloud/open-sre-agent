@@ -261,7 +261,7 @@ class TestSyntheticAssistantToolCall:
                 client=lambda *_a, **_kw: types.SimpleNamespace(converse=lambda **_: {})
             ),
         )
-        from core.llm.agent_llm_client import BedrockConverseAgentClient
+        from core.llm.transports.sdk.agent_clients import BedrockConverseAgentClient
 
         llm = BedrockConverseAgentClient(model="mistral.mistral-large-3-675b-instruct")
         tc = ToolCall(id="abc12def3", name="query_logs", input={"query": "error"})

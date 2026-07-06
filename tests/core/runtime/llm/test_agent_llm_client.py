@@ -6,10 +6,12 @@ from typing import Any
 
 import pytest
 
-from core.llm.agent_llm_client import (
+from core.llm.factory import LLMRole, get_llm, reset_llm_clients
+from core.llm.transports.sdk.agent_clients import (
     AnthropicAgentClient,
     BedrockAgentClient,
     OpenAIAgentClient,
+    _try_parse_tool_call_json,
 )
 
 
@@ -770,7 +772,7 @@ def test_unrelated_type_error_is_retried_and_wrapped(
 
 
 def test_build_openai_tool_specs_preserves_additional_properties_false() -> None:
-    from core.llm.agent_llm_client import build_openai_tool_specs
+    from core.llm.shared.tool_schema_normalize import build_openai_tool_specs
 
     tool = types.SimpleNamespace(
         name="strict_object_tool",
@@ -788,7 +790,7 @@ def test_build_openai_tool_specs_preserves_additional_properties_false() -> None
 
 
 def test_build_openai_tool_specs_normalizes_anyof_optional_parameters() -> None:
-    from core.llm.agent_llm_client import build_openai_tool_specs
+    from core.llm.shared.tool_schema_normalize import build_openai_tool_specs
     from tests.core.runtime.llm.investigation_tool_schema_contract import (
         assert_strict_tool_schema_node,
     )
@@ -817,7 +819,6 @@ def test_build_openai_tool_specs_normalizes_anyof_optional_parameters() -> None:
 def test_get_agent_llm_routes_deepseek_to_openai_compatible_client(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from core.llm import agent_llm_client as alc
 
     captured: dict[str, object] = {}
 
@@ -846,8 +847,8 @@ def test_get_agent_llm_routes_deepseek_to_openai_compatible_client(
     monkeypatch.setenv("DEEPSEEK_REASONING_MODEL", "deepseek-v4-pro")
     monkeypatch.setenv("DEEPSEEK_TOOLCALL_MODEL", "deepseek-v4-flash")
 
-    alc.reset_agent_client()
-    client = alc.get_agent_llm()
+    reset_llm_clients()
+    client = get_llm(LLMRole.AGENT)
 
     assert isinstance(client, _FakeOpenAIAgentClient)
     assert captured["model"] == "deepseek-v4-pro"
@@ -858,7 +859,6 @@ def test_get_agent_llm_routes_deepseek_to_openai_compatible_client(
 def test_get_agent_llm_routes_deepseek_to_litellm_when_transport_enabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from core.llm import agent_llm_client as alc
     from core.llm.transports.litellm.clients import LiteLLMAgentClient
 
     monkeypatch.setenv("LLM_PROVIDER", "deepseek")
@@ -866,8 +866,8 @@ def test_get_agent_llm_routes_deepseek_to_litellm_when_transport_enabled(
     monkeypatch.setenv("DEEPSEEK_REASONING_MODEL", "deepseek-v4-pro")
     monkeypatch.setenv("OPENSRE_LLM_TRANSPORT", "litellm")
 
-    alc.reset_agent_client()
-    client = alc.get_agent_llm()
+    reset_llm_clients()
+    client = get_llm(LLMRole.AGENT)
 
     assert isinstance(client, LiteLLMAgentClient)
     assert client._litellm_model == "openai/deepseek-v4-pro"
@@ -878,15 +878,14 @@ def test_get_agent_llm_routes_deepseek_to_litellm_when_transport_enabled(
 def test_get_agent_llm_uses_sdk_without_transport_flag(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from core.llm import agent_llm_client as alc
 
     monkeypatch.setenv("LLM_PROVIDER", "deepseek")
     monkeypatch.setenv("DEEPSEEK_API_KEY", "ds-test")
     monkeypatch.setenv("DEEPSEEK_REASONING_MODEL", "deepseek-v4-pro")
     monkeypatch.delenv("OPENSRE_LLM_TRANSPORT", raising=False)
 
-    alc.reset_agent_client()
-    client = alc.get_agent_llm()
+    reset_llm_clients()
+    client = get_llm(LLMRole.AGENT)
 
     assert isinstance(client, OpenAIAgentClient)
 
@@ -907,25 +906,21 @@ def test_get_agent_llm_uses_sdk_without_transport_flag(
 def test_get_agent_llm_returns_cli_backed_client_for_cli_providers(
     provider: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from core.llm.agent_llm_client import (
+    from core.llm.transports.sdk.agent_clients import (
         CLIBackedAgentClient,
-        get_agent_llm,
-        reset_agent_client,
     )
 
     monkeypatch.setenv("LLM_PROVIDER", provider)
-    reset_agent_client()
-    client = get_agent_llm()
+    reset_llm_clients()
+    client = get_llm(LLMRole.AGENT)
     assert isinstance(client, CLIBackedAgentClient), (
         f"Expected CLIBackedAgentClient for provider={provider!r}, got {type(client).__name__}"
     )
 
 
 def test_get_agent_llm_openai_oauth_routes_to_codex_cli(monkeypatch: pytest.MonkeyPatch) -> None:
-    from core.llm.agent_llm_client import (
+    from core.llm.transports.sdk.agent_clients import (
         CLIBackedAgentClient,
-        get_agent_llm,
-        reset_agent_client,
     )
 
     monkeypatch.setenv("LLM_PROVIDER", "openai")
@@ -933,8 +928,8 @@ def test_get_agent_llm_openai_oauth_routes_to_codex_cli(monkeypatch: pytest.Monk
     monkeypatch.setenv("CODEX_MODEL", "gpt-5.5")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
-    reset_agent_client()
-    client = get_agent_llm()
+    reset_llm_clients()
+    client = get_llm(LLMRole.AGENT)
 
     assert isinstance(client, CLIBackedAgentClient)
     assert client._adapter.name == "codex"
@@ -944,10 +939,8 @@ def test_get_agent_llm_openai_oauth_routes_to_codex_cli(monkeypatch: pytest.Monk
 def test_get_agent_llm_anthropic_oauth_routes_to_claude_code_cli(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from core.llm.agent_llm_client import (
+    from core.llm.transports.sdk.agent_clients import (
         CLIBackedAgentClient,
-        get_agent_llm,
-        reset_agent_client,
     )
 
     monkeypatch.setenv("LLM_PROVIDER", "anthropic")
@@ -955,8 +948,8 @@ def test_get_agent_llm_anthropic_oauth_routes_to_claude_code_cli(
     monkeypatch.setenv("CLAUDE_CODE_MODEL", "claude-opus-4-7")
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
-    reset_agent_client()
-    client = get_agent_llm()
+    reset_llm_clients()
+    client = get_llm(LLMRole.AGENT)
 
     assert isinstance(client, CLIBackedAgentClient)
     assert client._adapter.name == "claude-code"
@@ -967,7 +960,7 @@ def test_cli_backed_agent_client_tool_call_parsing() -> None:
     """CLIBackedAgentClient correctly parses a JSON tool_calls response."""
     import types as _types
 
-    from core.llm.agent_llm_client import CLIBackedAgentClient
+    from core.llm.transports.sdk.agent_clients import CLIBackedAgentClient
 
     fake_adapter = _types.SimpleNamespace(
         name="codex",
@@ -1011,7 +1004,7 @@ def test_cli_backed_agent_client_tool_call_parsing() -> None:
 
 def test_cli_backed_agent_client_build_assistant_message_includes_tool_json() -> None:
     """Assistant history must retain tool_calls JSON for multi-turn CLI prompts."""
-    from core.llm.agent_llm_client import CLIBackedAgentClient
+    from core.llm.transports.sdk.agent_clients import CLIBackedAgentClient
     from core.llm.types import ToolCall
 
     msg = CLIBackedAgentClient.build_assistant_message(
@@ -1026,10 +1019,9 @@ def test_cli_backed_agent_client_build_assistant_message_includes_tool_json() ->
 
 def test_try_parse_tool_call_json_uses_raw_decode_not_greedy_brace_span() -> None:
     """Trailing brace-containing prose after valid JSON must not drop tool_calls."""
-    from core.llm import agent_llm_client as alc
 
     text = '{"tool_calls": [{"id": "a", "name": "t1", "input": {}}]} Here\'s context: {not json}'
-    parsed = alc._try_parse_tool_call_json(text)
+    parsed = _try_parse_tool_call_json(text)
     assert parsed is not None
     assert len(parsed["tool_calls"]) == 1
     assert parsed["tool_calls"][0]["name"] == "t1"
@@ -1037,10 +1029,9 @@ def test_try_parse_tool_call_json_uses_raw_decode_not_greedy_brace_span() -> Non
 
 def test_try_parse_tool_call_json_recovers_when_unfenced_preamble_precedes_json() -> None:
     """Unfenced prose before JSON should still allow tool_calls extraction."""
-    from core.llm import agent_llm_client as alc
 
     text = 'Reasoning preamble {draft}\n{"tool_calls": [{"id": "a", "name": "t1", "input": {}}]}'
-    parsed = alc._try_parse_tool_call_json(text)
+    parsed = _try_parse_tool_call_json(text)
     assert parsed is not None
     assert len(parsed["tool_calls"]) == 1
     assert parsed["tool_calls"][0]["name"] == "t1"
@@ -1051,7 +1042,7 @@ def test_cli_backed_agent_client_reuses_single_cli_llm_client() -> None:
     import types as _types
     import unittest.mock as mock
 
-    from core.llm.agent_llm_client import CLIBackedAgentClient
+    from core.llm.transports.sdk.agent_clients import CLIBackedAgentClient
     from core.llm.types import LLMResponse
     from integrations.llm_cli.runner import CLIBackedLLMClient
 
@@ -1093,7 +1084,7 @@ def test_cli_backed_agent_client_plain_text_response() -> None:
     import types as _types
     import unittest.mock as mock
 
-    from core.llm.agent_llm_client import CLIBackedAgentClient
+    from core.llm.transports.sdk.agent_clients import CLIBackedAgentClient
     from core.llm.types import LLMResponse
 
     fake_adapter = _types.SimpleNamespace(
@@ -1128,7 +1119,7 @@ def test_cli_backed_agent_client_invalid_tool_json_falls_back_to_text_response()
     import types as _types
     import unittest.mock as mock
 
-    from core.llm.agent_llm_client import CLIBackedAgentClient
+    from core.llm.transports.sdk.agent_clients import CLIBackedAgentClient
     from core.llm.types import LLMResponse
 
     fake_adapter = _types.SimpleNamespace(
@@ -1164,7 +1155,7 @@ def test_cli_backed_agent_client_filtered_tool_calls_fall_back_to_text_response(
     import types as _types
     import unittest.mock as mock
 
-    from core.llm.agent_llm_client import CLIBackedAgentClient
+    from core.llm.transports.sdk.agent_clients import CLIBackedAgentClient
     from core.llm.types import LLMResponse
 
     fake_adapter = _types.SimpleNamespace(
@@ -1328,7 +1319,7 @@ def test_bedrock_converse_requires_region_env(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.delenv("AWS_DEFAULT_REGION", raising=False)
     _stub_boto3_converse(monkeypatch)
 
-    from core.llm.agent_llm_client import BedrockConverseAgentClient
+    from core.llm.transports.sdk.agent_clients import BedrockConverseAgentClient
 
     with pytest.raises(RuntimeError, match="Bedrock requires AWS_REGION or AWS_DEFAULT_REGION"):
         BedrockConverseAgentClient(model=_MISTRAL_MODEL)
@@ -1345,7 +1336,7 @@ def test_bedrock_converse_invoke_parses_tool_use(monkeypatch: pytest.MonkeyPatch
         ),
     )
 
-    from core.llm.agent_llm_client import BedrockConverseAgentClient
+    from core.llm.transports.sdk.agent_clients import BedrockConverseAgentClient
 
     result = BedrockConverseAgentClient(model=_MISTRAL_MODEL).invoke(
         messages=[{"role": "user", "content": [{"text": "hi"}]}]
@@ -1364,14 +1355,12 @@ def test_get_agent_llm_routes_non_anthropic_bedrock_to_converse(
     monkeypatch.setenv("AWS_REGION", "us-east-1")
     _stub_boto3_converse(monkeypatch)
 
-    from core.llm.agent_llm_client import (
+    from core.llm.transports.sdk.agent_clients import (
         BedrockConverseAgentClient,
-        get_agent_llm,
-        reset_agent_client,
     )
 
-    reset_agent_client()
-    assert isinstance(get_agent_llm(), BedrockConverseAgentClient)
+    reset_llm_clients()
+    assert isinstance(get_llm(LLMRole.AGENT), BedrockConverseAgentClient)
 
 
 def test_get_agent_llm_routes_anthropic_bedrock_to_sdk(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1380,14 +1369,12 @@ def test_get_agent_llm_routes_anthropic_bedrock_to_sdk(monkeypatch: pytest.Monke
     monkeypatch.setenv("BEDROCK_REASONING_MODEL", "us.anthropic.claude-sonnet-4-6")
     monkeypatch.setenv("AWS_REGION", "us-east-1")
 
-    from core.llm.agent_llm_client import (
+    from core.llm.transports.sdk.agent_clients import (
         BedrockAgentClient,
-        get_agent_llm,
-        reset_agent_client,
     )
 
-    reset_agent_client()
-    assert isinstance(get_agent_llm(), BedrockAgentClient)
+    reset_llm_clients()
+    assert isinstance(get_llm(LLMRole.AGENT), BedrockAgentClient)
 
 
 def test_bedrock_converse_throttling_is_retried(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1418,7 +1405,7 @@ def test_bedrock_converse_throttling_is_retried(monkeypatch: pytest.MonkeyPatch)
         ),
     )
 
-    from core.llm.agent_llm_client import BedrockConverseAgentClient
+    from core.llm.transports.sdk.agent_clients import BedrockConverseAgentClient
 
     result = BedrockConverseAgentClient(model=_MISTRAL_MODEL).invoke(
         messages=[{"role": "user", "content": [{"text": "hi"}]}]
@@ -1452,7 +1439,7 @@ def test_bedrock_converse_throttling_all_retries_exhausted_raises(
         ),
     )
 
-    from core.llm.agent_llm_client import BedrockConverseAgentClient
+    from core.llm.transports.sdk.agent_clients import BedrockConverseAgentClient
 
     with pytest.raises(RuntimeError, match="rate limit"):
         BedrockConverseAgentClient(model=_MISTRAL_MODEL).invoke(
@@ -1515,7 +1502,7 @@ def test_bedrock_converse_emits_provider_usage(monkeypatch: pytest.MonkeyPatch) 
     response["usage"] = {"inputTokens": 200, "outputTokens": 30}
     _stub_boto3_converse(monkeypatch, converse_response=response)
 
-    from core.llm.agent_llm_client import BedrockConverseAgentClient
+    from core.llm.transports.sdk.agent_clients import BedrockConverseAgentClient
 
     usage: list[tuple[str, int, int]] = []
     set_usage_hook(

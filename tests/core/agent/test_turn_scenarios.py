@@ -421,9 +421,9 @@ def _assert_live_action_planning_once(case: ScenarioCase) -> None:
         session=session, console=Console(file=io.StringIO(), force_terminal=False)
     )
     tools = get_action_tools_from_integrations_context(ctx, resolved_integrations=resolved_override)
-    from core.llm import agent_llm_client
+    from core.llm.factory import LLMRole, get_llm
 
-    llm = agent_llm_client.get_agent_llm()
+    llm = get_llm(LLMRole.AGENT)
     from core.agent_harness.models.turn_snapshot import TurnSnapshot
 
     result = Agent(

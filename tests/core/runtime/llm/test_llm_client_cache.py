@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from core.llm import agent_llm_client, llm_client
+from core.llm.factory import LLMRole, get_llm, reset_llm_clients
 
 
 def test_llm_singleton_invalidates_on_provider_change(monkeypatch) -> None:
@@ -15,12 +15,12 @@ def test_llm_singleton_invalidates_on_provider_change(monkeypatch) -> None:
 
     monkeypatch.setattr("core.llm.factory._build_llm_client", fake_build)
     monkeypatch.setenv("LLM_PROVIDER", "anthropic")
-    llm_client.reset_llm_singletons()
+    reset_llm_clients()
 
-    first = llm_client.get_llm_for_reasoning()
+    first = get_llm(LLMRole.REASONING)
     monkeypatch.setenv("LLM_PROVIDER", "azure-openai")
     monkeypatch.setenv("AZURE_OPENAI_BASE_URL", "https://example.openai.azure.com")
-    second = llm_client.get_llm_for_reasoning()
+    second = get_llm(LLMRole.REASONING)
 
     assert first is not second
     assert len(created) == 2
@@ -43,13 +43,13 @@ def test_agent_singleton_invalidates_on_provider_change(monkeypatch) -> None:
     )
     monkeypatch.setenv("LLM_PROVIDER", "azure-openai")
     monkeypatch.setenv("AZURE_OPENAI_BASE_URL", "https://example.openai.azure.com")
-    agent_llm_client.reset_agent_client()
+    reset_llm_clients()
 
-    first = agent_llm_client.get_agent_llm()
+    first = get_llm(LLMRole.AGENT)
     monkeypatch.setenv("LLM_PROVIDER", "deepseek")
     monkeypatch.setenv("DEEPSEEK_REASONING_MODEL", "deepseek-v4-pro")
     monkeypatch.setenv("OPENSRE_LLM_TRANSPORT", "litellm")
-    second = agent_llm_client.get_agent_llm()
+    second = get_llm(LLMRole.AGENT)
 
     assert first is not second
     assert len(created) == 2

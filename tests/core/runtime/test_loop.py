@@ -156,7 +156,7 @@ def test_agent_exposes_headless_dispatch_entrypoint(monkeypatch: pytest.MonkeyPa
 
 def test_agent_defaults_to_agent_llm_without_tools(monkeypatch: pytest.MonkeyPatch) -> None:
     llm = FakeLLM(iter([_text_response("reasoned answer")]))
-    monkeypatch.setattr("core.llm.agent_llm_client.get_agent_llm", lambda: llm)
+    monkeypatch.setattr("core.llm.factory.get_llm", lambda _role: llm)
 
     agent = Agent(system="sys", tools=[], resolved_integrations={}, max_iterations=1)
     result = agent.run([{"role": "user", "content": "hello"}])
@@ -168,7 +168,7 @@ def test_agent_defaults_to_agent_llm_without_tools(monkeypatch: pytest.MonkeyPat
 
 def test_agent_default_agent_llm_receives_tools(monkeypatch: pytest.MonkeyPatch) -> None:
     llm = FakeLLM(iter([_text_response("unused")]))
-    monkeypatch.setattr("core.llm.agent_llm_client.get_agent_llm", lambda: llm)
+    monkeypatch.setattr("core.llm.factory.get_llm", lambda _role: llm)
 
     agent = Agent(
         system="sys",
@@ -372,7 +372,7 @@ def test_agent_excludes_unrecognized_provider_dict_roles_from_llm_context() -> N
 
 
 def test_legacy_text_blocks_convert_to_bedrock_converse_content() -> None:
-    from core.llm.agent_llm_client import BedrockConverseAgentClient
+    from core.llm.transports.sdk.agent_clients import BedrockConverseAgentClient
 
     llm = BedrockConverseAgentClient.__new__(BedrockConverseAgentClient)
     messages = [AppRuntimeMessage("custom", [{"type": "text", "text": "custom note"}])]

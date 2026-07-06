@@ -3,9 +3,15 @@ from __future__ import annotations
 import pytest
 from anthropic import AuthenticationError, NotFoundError, PermissionDeniedError
 from anthropic import BadRequestError as AnthropicBadRequestError
+from openai import APITimeoutError as OpenAITimeoutError
+from openai import BadRequestError as OpenAIBadRequestError
+from openai import RateLimitError as OpenAIRateLimitError
 
 import core.llm.transports.sdk.llm_clients as sdk_llm
-from core.llm import llm_client
+from core.llm import factory
+from core.llm.factory import reset_llm_clients
+from core.llm.shared import usage as usage_mod
+from core.llm.shared.openai_chat_completions import _RETRY_MAX_ATTEMPTS
 from core.llm.shared.structured_output import extract_json_payload
 
 
@@ -70,7 +76,7 @@ def test_openai_llm_client_defers_openai_until_ensure(monkeypatch) -> None:
     monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env_var: "")
     monkeypatch.setattr(sdk_llm, "OpenAI", _FakeOpenAI)
 
-    llm_client.OpenAILLMClient(model="gpt-4.1-mini")
+    sdk_llm.OpenAILLMClient(model="gpt-4.1-mini")
 
     assert _FakeOpenAI.last_api_key is None
     assert _FakeOpenAI.init_api_keys == []
@@ -83,7 +89,7 @@ def test_openai_llm_client_reads_secure_local_api_key(monkeypatch) -> None:
     )
     monkeypatch.setattr(sdk_llm, "OpenAI", _FakeOpenAI)
 
-    client = llm_client.OpenAILLMClient(model="gpt-5.4")
+    client = sdk_llm.OpenAILLMClient(model="gpt-5.4")
     client._ensure_client()
 
     assert _FakeOpenAI.last_api_key == "stored-openai-key"
@@ -98,7 +104,7 @@ def test_openai_llm_client_adds_reasoning_effort_for_reasoning_models(monkeypatc
     monkeypatch.setattr(sdk_llm, "OpenAI", _FakeOpenAI)
     monkeypatch.setenv("OPENSRE_REASONING_EFFORT", "xhigh")
 
-    client = llm_client.OpenAILLMClient(model="gpt-5.2")
+    client = sdk_llm.OpenAILLMClient(model="gpt-5.2")
     kwargs = client._build_request_kwargs("hello")
 
     assert kwargs["reasoning_effort"] == "xhigh"
@@ -112,7 +118,7 @@ def test_openai_llm_client_omits_reasoning_effort_for_non_reasoning_models(monke
     monkeypatch.setattr(sdk_llm, "OpenAI", _FakeOpenAI)
     monkeypatch.setenv("OPENSRE_REASONING_EFFORT", "high")
 
-    client = llm_client.OpenAILLMClient(model="gpt-4.1-mini")
+    client = sdk_llm.OpenAILLMClient(model="gpt-4.1-mini")
     kwargs = client._build_request_kwargs("hello")
 
     assert "reasoning_effort" not in kwargs
@@ -120,7 +126,7 @@ def test_openai_llm_client_omits_reasoning_effort_for_non_reasoning_models(monke
 
 def test_openai_llm_client_invoke_fails_when_key_missing(monkeypatch) -> None:
     monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env_var: "")
-    client = llm_client.OpenAILLMClient(model="gpt-4.1-mini")
+    client = sdk_llm.OpenAILLMClient(model="gpt-4.1-mini")
 
     with pytest.raises(RuntimeError, match="Missing OPENAI_API_KEY"):
         client.invoke("hello")
@@ -130,7 +136,7 @@ def test_openai_llm_client_rebuilds_client_when_key_rotates(monkeypatch) -> None
     state = {"key": "first-key"}
     monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env_var: state["key"])
     monkeypatch.setattr(sdk_llm, "OpenAI", _FakeOpenAI)
-    client = llm_client.OpenAILLMClient(model="gpt-4.1-mini")
+    client = sdk_llm.OpenAILLMClient(model="gpt-4.1-mini")
 
     client._ensure_client()
     state["key"] = "second-key"
@@ -158,7 +164,7 @@ class _RecordingBedrockRuntime:
 
 def _make_fake_anthropic_bad_request_error(message: str = "invalid request") -> Exception:
     """Return a minimal Anthropic BadRequestError without constructing an HTTP response."""
-    err = llm_client.AnthropicBadRequestError.__new__(llm_client.AnthropicBadRequestError)
+    err = AnthropicBadRequestError.__new__(AnthropicBadRequestError)
     Exception.__init__(err, message)
     err.status_code = 400  # type: ignore[attr-defined]
     err.message = message  # type: ignore[attr-defined]
@@ -170,7 +176,7 @@ def _make_fake_anthropic_bad_request_error(message: str = "invalid request") -> 
 
 def _make_fake_openai_bad_request_error(message: str = "invalid request") -> Exception:
     """Return a minimal OpenAI BadRequestError without constructing an HTTP response."""
-    err = llm_client.OpenAIBadRequestError.__new__(llm_client.OpenAIBadRequestError)
+    err = OpenAIBadRequestError.__new__(OpenAIBadRequestError)
     Exception.__init__(err, message)
     err.status_code = 400  # type: ignore[attr-defined]
     err.message = message  # type: ignore[attr-defined]
@@ -181,19 +187,19 @@ def _make_fake_openai_bad_request_error(message: str = "invalid request") -> Exc
 
 
 def test_is_anthropic_bedrock_model_claude_ids() -> None:
-    assert llm_client._is_anthropic_bedrock_model("anthropic.claude-3-haiku-20240307-v1:0")
-    assert llm_client._is_anthropic_bedrock_model(
+    assert sdk_llm._is_anthropic_bedrock_model("anthropic.claude-3-haiku-20240307-v1:0")
+    assert sdk_llm._is_anthropic_bedrock_model(
         "us.anthropic.claude-haiku-4-5-20251001-v1:0",
     )
 
 
 def test_is_anthropic_bedrock_model_foundation_model_arn() -> None:
     arn = "arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0"
-    assert llm_client._is_anthropic_bedrock_model(arn)
+    assert sdk_llm._is_anthropic_bedrock_model(arn)
 
 
 def test_is_anthropic_bedrock_model_non_anthropic() -> None:
-    assert not llm_client._is_anthropic_bedrock_model(
+    assert not sdk_llm._is_anthropic_bedrock_model(
         "mistral.mistral-large-2402-v1:0",
     )
 
@@ -202,7 +208,7 @@ def test_is_anthropic_bedrock_model_application_inference_profile_arn() -> None:
     profile_arn = (
         "arn:aws:bedrock:us-east-2:012345678901:application-inference-profile/a1b2c3profile"
     )
-    assert not llm_client._is_anthropic_bedrock_model(profile_arn)
+    assert not sdk_llm._is_anthropic_bedrock_model(profile_arn)
 
 
 def test_bedrock_client_routes_mistral_to_converse(monkeypatch) -> None:
@@ -215,7 +221,7 @@ def test_bedrock_client_routes_mistral_to_converse(monkeypatch) -> None:
     )
     monkeypatch.setattr(sdk_llm.boto3, "client", lambda *_a, **_k: runtime)
 
-    client = llm_client.BedrockLLMClient(model="mistral.mistral-large-2402-v1:0")
+    client = sdk_llm.BedrockLLMClient(model="mistral.mistral-large-2402-v1:0")
     assert client._use_anthropic is False
     resp = client.invoke([{"role": "user", "content": "hi"}])
     assert resp.content == "ok"
@@ -238,7 +244,7 @@ def test_invoke_converse_includes_optional_system_temperature(monkeypatch) -> No
     )
     monkeypatch.setattr(sdk_llm.boto3, "client", lambda *_a, **_k: runtime)
 
-    client = llm_client.BedrockLLMClient(model="mistral.mini", temperature=0.4)
+    client = sdk_llm.BedrockLLMClient(model="mistral.mini", temperature=0.4)
     client.invoke(
         [
             {"role": "system", "content": "context"},
@@ -264,7 +270,7 @@ def test_invoke_converse_raises_when_no_text_blocks(monkeypatch) -> None:
     )
     monkeypatch.setattr(sdk_llm.boto3, "client", lambda *_a, **_k: runtime)
 
-    client = llm_client.BedrockLLMClient(model="mistral.mini")
+    client = sdk_llm.BedrockLLMClient(model="mistral.mini")
     with pytest.raises(RuntimeError, match="no text content"):
         client.invoke("hello")
 
@@ -280,7 +286,7 @@ def test_bedrock_application_inference_profile_arn_uses_converse(monkeypatch) ->
     monkeypatch.setattr(sdk_llm.boto3, "client", lambda *_a, **_k: runtime)
 
     arn = "arn:aws:bedrock:us-west-2:123:application-inference-profile/p2"
-    client = llm_client.BedrockLLMClient(model=arn)
+    client = sdk_llm.BedrockLLMClient(model=arn)
 
     assert client._use_anthropic is False
     assert client.invoke("hi").content == "via-converse"
@@ -306,7 +312,7 @@ def test_bedrock_anthropic_bad_request_does_not_retry(monkeypatch) -> None:
     monkeypatch.setattr(sdk_llm, "AnthropicBedrock", _AnthropicBedrock)
     monkeypatch.setattr(sdk_llm.time, "sleep", lambda s: sleeps.append(s))
 
-    client = llm_client.BedrockLLMClient(model="anthropic.claude-test")
+    client = sdk_llm.BedrockLLMClient(model="anthropic.claude-test")
     with pytest.raises(RuntimeError, match="Bedrock Anthropic request rejected"):
         client.invoke("hello")
 
@@ -334,7 +340,7 @@ def test_bedrock_anthropic_stream_bad_request_does_not_retry(monkeypatch) -> Non
     monkeypatch.setattr(sdk_llm, "AnthropicBedrock", _AnthropicBedrock)
     monkeypatch.setattr(sdk_llm.time, "sleep", lambda s: sleeps.append(s))
 
-    client = llm_client.BedrockLLMClient(model="anthropic.claude-test")
+    client = sdk_llm.BedrockLLMClient(model="anthropic.claude-test")
     with pytest.raises(RuntimeError, match="Bedrock Anthropic request rejected"):
         list(client.invoke_stream("hello"))
 
@@ -349,7 +355,7 @@ def test_anthropic_llm_client_reads_secure_local_api_key(monkeypatch) -> None:
     )
     monkeypatch.setattr(sdk_llm, "Anthropic", _FakeAnthropic)
 
-    client = llm_client.LLMClient(model="claude-opus-4")
+    client = sdk_llm.LLMClient(model="claude-opus-4")
     client._ensure_client()
 
     assert _FakeAnthropic.last_api_key == "stored-anthropic-key"
@@ -362,7 +368,7 @@ def test_minimax_llm_client_reads_api_key_and_base_url(monkeypatch) -> None:
     )
     monkeypatch.setattr(sdk_llm, "OpenAI", _FakeOpenAI)
 
-    client = llm_client.OpenAILLMClient(
+    client = sdk_llm.OpenAILLMClient(
         model="MiniMax-M3",
         base_url="https://api.minimax.io/v1",
         api_key_env="MINIMAX_API_KEY",
@@ -381,7 +387,7 @@ def test_minimax_llm_client_temperature_is_set(monkeypatch) -> None:
     )
     monkeypatch.setattr(sdk_llm, "OpenAI", _FakeOpenAI)
 
-    client = llm_client.OpenAILLMClient(
+    client = sdk_llm.OpenAILLMClient(
         model="MiniMax-M3",
         base_url="https://api.minimax.io/v1",
         api_key_env="MINIMAX_API_KEY",
@@ -452,7 +458,7 @@ def test_anthropic_invoke_forwards_built_kwargs_to_messages_create(monkeypatch) 
     monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "Anthropic", fake)
 
-    client = llm_client.LLMClient(model="claude-test", max_tokens=64)
+    client = sdk_llm.LLMClient(model="claude-test", max_tokens=64)
     response = client.invoke("hi")
 
     assert response.content == "hello"
@@ -478,7 +484,7 @@ def test_anthropic_invoke_bad_request_does_not_retry(monkeypatch) -> None:
     monkeypatch.setattr(sdk_llm, "Anthropic", _Anthropic)
     monkeypatch.setattr(sdk_llm.time, "sleep", lambda s: sleeps.append(s))
 
-    client = llm_client.LLMClient(model="claude-test")
+    client = sdk_llm.LLMClient(model="claude-test")
     with pytest.raises(RuntimeError, match="Anthropic request rejected"):
         client.invoke("hello")
 
@@ -492,7 +498,7 @@ def test_anthropic_invoke_stream_yields_text_stream_chunks(monkeypatch) -> None:
     monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "Anthropic", fake)
 
-    client = llm_client.LLMClient(model="claude-test", max_tokens=64)
+    client = sdk_llm.LLMClient(model="claude-test", max_tokens=64)
     chunks = list(client.invoke_stream("hi"))
 
     assert chunks == ["Hel", "lo, ", "world"]
@@ -517,7 +523,7 @@ def test_anthropic_invoke_stream_bad_request_does_not_retry(monkeypatch) -> None
     monkeypatch.setattr(sdk_llm, "Anthropic", _Anthropic)
     monkeypatch.setattr(sdk_llm.time, "sleep", lambda s: sleeps.append(s))
 
-    client = llm_client.LLMClient(model="claude-test")
+    client = sdk_llm.LLMClient(model="claude-test")
     with pytest.raises(RuntimeError, match="Anthropic request rejected"):
         list(client.invoke_stream("hello"))
 
@@ -541,7 +547,7 @@ def test_anthropic_invoke_stream_applies_guardrails_to_input(monkeypatch) -> Non
 
     monkeypatch.setattr(engine_module, "get_guardrail_engine", lambda: _RedactingEngine())
 
-    client = llm_client.LLMClient(model="claude-test")
+    client = sdk_llm.LLMClient(model="claude-test")
     list(client.invoke_stream("share my secret"))
 
     assert captured["kwargs"]["messages"][0]["content"] == "share my [REDACTED]"
@@ -577,7 +583,7 @@ def test_anthropic_invoke_stream_retries_when_no_chunk_emitted(monkeypatch) -> N
     # Skip the real backoff sleep so the test is fast.
     monkeypatch.setattr(sdk_llm.time, "sleep", lambda _seconds: None)
 
-    client = llm_client.LLMClient(model="claude-test")
+    client = sdk_llm.LLMClient(model="claude-test")
     chunks = list(client.invoke_stream("hi"))
 
     assert chunks == ["recovered"]
@@ -615,7 +621,7 @@ def test_anthropic_invoke_stream_does_not_retry_after_yielding(monkeypatch) -> N
     monkeypatch.setattr(sdk_llm, "Anthropic", _Anthropic)
     monkeypatch.setattr(sdk_llm.time, "sleep", lambda _seconds: None)
 
-    client = llm_client.LLMClient(model="claude-test")
+    client = sdk_llm.LLMClient(model="claude-test")
     iterator = client.invoke_stream("hi")
 
     # First chunk reaches the caller — visible on the user's screen.
@@ -671,7 +677,7 @@ def test_anthropic_invoke_stream_overloaded_via_body_raises_friendly_error(
     monkeypatch.setattr(sdk_llm, "Anthropic", _Anthropic)
     monkeypatch.setattr(sdk_llm.time, "sleep", lambda _s: None)
 
-    client = llm_client.LLMClient(model="claude-test")
+    client = sdk_llm.LLMClient(model="claude-test")
     with pytest.raises(RuntimeError, match="overloaded"):
         list(client.invoke_stream("hi"))
 
@@ -683,7 +689,7 @@ def test_format_anthropic_retry_error_handles_non_dict_body_error() -> None:
         body = {"error": "overloaded_error"}
 
     assert (
-        llm_client._format_anthropic_retry_error(_ApiStatusError())
+        sdk_llm._format_anthropic_retry_error(_ApiStatusError())
         == "Anthropic API request failed after multiple retries: _ApiStatusError."
     )
 
@@ -759,7 +765,7 @@ def test_openai_invoke_forwards_built_kwargs_to_chat_completions_create(monkeypa
     monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "OpenAI", fake)
 
-    client = llm_client.OpenAILLMClient(model="gpt-test", max_tokens=64)
+    client = sdk_llm.OpenAILLMClient(model="gpt-test", max_tokens=64)
     response = client.invoke("hi")
 
     assert response.content == "hello"
@@ -790,7 +796,7 @@ def test_openai_invoke_bad_request_does_not_retry(monkeypatch) -> None:
     monkeypatch.setattr(sdk_llm, "OpenAI", _OpenAI)
     monkeypatch.setattr(sdk_llm.time, "sleep", lambda s: sleeps.append(s))
 
-    client = llm_client.OpenAILLMClient(model="gpt-test")
+    client = sdk_llm.OpenAILLMClient(model="gpt-test")
     with pytest.raises(RuntimeError, match="request rejected"):
         client.invoke("hello")
 
@@ -817,7 +823,7 @@ def test_openai_invoke_invalid_model_identifier_raises_not_found(monkeypatch) ->
     monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "OpenAI", _OpenAI)
 
-    client = llm_client.OpenAILLMClient(model="relay-ops-claude-opus-4-7")
+    client = sdk_llm.OpenAILLMClient(model="relay-ops-claude-opus-4-7")
     with pytest.raises(RuntimeError, match="Check your configured model name or endpoint"):
         client.invoke("hello")
 
@@ -841,7 +847,7 @@ def test_openai_invoke_stream_invalid_model_identifier_raises_not_found(monkeypa
     monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "OpenAI", _OpenAI)
 
-    client = llm_client.OpenAILLMClient(model="relay-ops-claude-opus-4-7")
+    client = sdk_llm.OpenAILLMClient(model="relay-ops-claude-opus-4-7")
     with pytest.raises(RuntimeError, match="Check your configured model name or endpoint"):
         list(client.invoke_stream("hello"))
 
@@ -877,7 +883,7 @@ def test_openai_invoke_invalid_reasoning_model_falls_back_to_toolcall(monkeypatc
     monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "OpenAI", _OpenAI)
 
-    client = llm_client.OpenAILLMClient(
+    client = sdk_llm.OpenAILLMClient(
         model="gpt-5.4 mini",
         model_fallback="gpt-5.4-mini",
     )
@@ -923,7 +929,7 @@ def test_openai_invoke_stream_invalid_reasoning_model_falls_back_to_toolcall(mon
     monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "OpenAI", _OpenAI)
 
-    client = llm_client.OpenAILLMClient(
+    client = sdk_llm.OpenAILLMClient(
         model="gpt-5.4 mini",
         model_fallback="gpt-5.4-mini",
     )
@@ -940,7 +946,7 @@ def test_openai_invoke_stream_yields_delta_content_chunks(monkeypatch) -> None:
     monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "OpenAI", fake)
 
-    client = llm_client.OpenAILLMClient(model="gpt-test", max_tokens=64)
+    client = sdk_llm.OpenAILLMClient(model="gpt-test", max_tokens=64)
     chunks = list(client.invoke_stream("hi"))
 
     assert chunks == ["Hel", "lo, ", "world"]
@@ -970,7 +976,7 @@ def test_openai_invoke_stream_bad_request_does_not_retry(monkeypatch) -> None:
     monkeypatch.setattr(sdk_llm, "OpenAI", _OpenAI)
     monkeypatch.setattr(sdk_llm.time, "sleep", lambda s: sleeps.append(s))
 
-    client = llm_client.OpenAILLMClient(model="gpt-test")
+    client = sdk_llm.OpenAILLMClient(model="gpt-test")
     with pytest.raises(RuntimeError, match="request rejected"):
         list(client.invoke_stream("hello"))
 
@@ -984,7 +990,7 @@ def test_openai_invoke_stream_skips_empty_deltas_and_choiceless_chunks(monkeypat
     monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "OpenAI", fake)
 
-    client = llm_client.OpenAILLMClient(model="gpt-test")
+    client = sdk_llm.OpenAILLMClient(model="gpt-test")
     chunks = list(client.invoke_stream("hi"))
 
     assert chunks == ["Hi", " there"]
@@ -1025,7 +1031,7 @@ def test_openai_invoke_stream_retries_when_no_chunk_emitted(monkeypatch) -> None
     monkeypatch.setattr(sdk_llm, "OpenAI", _OpenAI)
     monkeypatch.setattr(sdk_llm.time, "sleep", lambda _seconds: None)
 
-    client = llm_client.OpenAILLMClient(model="gpt-test")
+    client = sdk_llm.OpenAILLMClient(model="gpt-test")
     chunks = list(client.invoke_stream("hi"))
 
     assert chunks == ["recovered"]
@@ -1069,7 +1075,7 @@ def test_openai_invoke_stream_does_not_retry_after_yielding(monkeypatch) -> None
     monkeypatch.setattr(sdk_llm, "OpenAI", _OpenAI)
     monkeypatch.setattr(sdk_llm.time, "sleep", lambda _seconds: None)
 
-    client = llm_client.OpenAILLMClient(model="gpt-test")
+    client = sdk_llm.OpenAILLMClient(model="gpt-test")
     iterator = client.invoke_stream("hi")
 
     assert next(iterator) == "partial"
@@ -1096,51 +1102,51 @@ def test_create_llm_client_openai_reasoning_sets_toolcall_fallback(monkeypatch) 
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
     monkeypatch.setenv("OPENAI_REASONING_MODEL", "gpt-5.4 mini")
     monkeypatch.setenv("OPENAI_TOOLCALL_MODEL", "gpt-5.4-mini")
-    llm_client.reset_llm_singletons()
+    reset_llm_clients()
     try:
-        client = llm_client._create_llm_client("reasoning")
+        client = factory.build_llm_client("reasoning")
 
-        assert isinstance(client, llm_client.OpenAILLMClient)
+        assert isinstance(client, sdk_llm.OpenAILLMClient)
         assert client._model == "gpt-5.4 mini"
         assert client._model_fallback == "gpt-5.4-mini"
     finally:
-        llm_client.reset_llm_singletons()
+        reset_llm_clients()
 
 
 def test_create_llm_client_openai_oauth_routes_to_codex(monkeypatch) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "openai")
     monkeypatch.setenv("LLM_AUTH_METHOD", "oauth")
     monkeypatch.setenv("CODEX_MODEL", "gpt-5.5")
-    llm_client.reset_llm_singletons()
+    reset_llm_clients()
     try:
         from integrations.llm_cli.codex import CodexAdapter
         from integrations.llm_cli.runner import CLIBackedLLMClient
 
-        client = llm_client._create_llm_client("reasoning")
+        client = factory.build_llm_client("reasoning")
 
         assert isinstance(client, CLIBackedLLMClient)
         assert isinstance(client._adapter, CodexAdapter)
         assert client._model == "gpt-5.5"
     finally:
-        llm_client.reset_llm_singletons()
+        reset_llm_clients()
 
 
 def test_create_llm_client_anthropic_oauth_routes_to_claude_code(monkeypatch) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "anthropic")
     monkeypatch.setenv("LLM_AUTH_METHOD", "oauth")
     monkeypatch.setenv("CLAUDE_CODE_MODEL", "claude-opus-4-7")
-    llm_client.reset_llm_singletons()
+    reset_llm_clients()
     try:
         from integrations.llm_cli.claude_code import ClaudeCodeAdapter
         from integrations.llm_cli.runner import CLIBackedLLMClient
 
-        client = llm_client._create_llm_client("reasoning")
+        client = factory.build_llm_client("reasoning")
 
         assert isinstance(client, CLIBackedLLMClient)
         assert isinstance(client._adapter, ClaudeCodeAdapter)
         assert client._model == "claude-opus-4-7"
     finally:
-        llm_client.reset_llm_singletons()
+        reset_llm_clients()
 
 
 def test_create_llm_client_deepseek_reasoning_sets_toolcall_fallback(monkeypatch) -> None:
@@ -1148,74 +1154,74 @@ def test_create_llm_client_deepseek_reasoning_sets_toolcall_fallback(monkeypatch
     monkeypatch.setenv("DEEPSEEK_API_KEY", "ds-test")
     monkeypatch.setenv("DEEPSEEK_REASONING_MODEL", "deepseek-v4-pro")
     monkeypatch.setenv("DEEPSEEK_TOOLCALL_MODEL", "deepseek-v4-flash")
-    llm_client.reset_llm_singletons()
+    reset_llm_clients()
     try:
-        client = llm_client._create_llm_client("reasoning")
+        client = factory.build_llm_client("reasoning")
 
-        assert isinstance(client, llm_client.OpenAILLMClient)
+        assert isinstance(client, sdk_llm.OpenAILLMClient)
         assert client._model == "deepseek-v4-pro"
         assert client._model_fallback == "deepseek-v4-flash"
         assert client._base_url == "https://api.deepseek.com"
         assert client._api_key_env == "DEEPSEEK_API_KEY"
     finally:
-        llm_client.reset_llm_singletons()
+        reset_llm_clients()
 
 
 def test_create_llm_client_claude_code_wires_cli_adapter(monkeypatch) -> None:
     """Investigation uses ``_create_llm_client`` → registry → ``CLIBackedLLMClient``."""
     monkeypatch.setenv("LLM_PROVIDER", "claude-code")
     monkeypatch.delenv("CLAUDE_CODE_MODEL", raising=False)
-    llm_client.reset_llm_singletons()
+    reset_llm_clients()
     try:
         from integrations.llm_cli.claude_code import ClaudeCodeAdapter
         from integrations.llm_cli.runner import CLIBackedLLMClient
 
-        client = llm_client._create_llm_client("reasoning")
+        client = factory.build_llm_client("reasoning")
 
         assert isinstance(client, CLIBackedLLMClient)
         assert isinstance(client._adapter, ClaudeCodeAdapter)
     finally:
-        llm_client.reset_llm_singletons()
+        reset_llm_clients()
 
 
 def test_create_llm_client_claude_code_reads_optional_model_env(monkeypatch) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "claude-code")
     monkeypatch.setenv("CLAUDE_CODE_MODEL", "claude-opus-4-7")
-    llm_client.reset_llm_singletons()
+    reset_llm_clients()
     try:
-        client = llm_client._create_llm_client("reasoning")
+        client = factory.build_llm_client("reasoning")
 
         assert client._model == "claude-opus-4-7"
     finally:
-        llm_client.reset_llm_singletons()
+        reset_llm_clients()
 
 
 def test_create_llm_client_gemini_cli_wires_cli_adapter(monkeypatch) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "gemini-cli")
     monkeypatch.delenv("GEMINI_CLI_MODEL", raising=False)
-    llm_client.reset_llm_singletons()
+    reset_llm_clients()
     try:
         from integrations.llm_cli.gemini_cli import GeminiCLIAdapter
         from integrations.llm_cli.runner import CLIBackedLLMClient
 
-        client = llm_client._create_llm_client("reasoning")
+        client = factory.build_llm_client("reasoning")
 
         assert isinstance(client, CLIBackedLLMClient)
         assert isinstance(client._adapter, GeminiCLIAdapter)
     finally:
-        llm_client.reset_llm_singletons()
+        reset_llm_clients()
 
 
 def test_create_llm_client_gemini_cli_reads_optional_model_env(monkeypatch) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "gemini-cli")
     monkeypatch.setenv("GEMINI_CLI_MODEL", "gemini-2.5-pro")
-    llm_client.reset_llm_singletons()
+    reset_llm_clients()
     try:
-        client = llm_client._create_llm_client("reasoning")
+        client = factory.build_llm_client("reasoning")
 
         assert client._model == "gemini-2.5-pro"
     finally:
-        llm_client.reset_llm_singletons()
+        reset_llm_clients()
 
 
 # _create_llm_client — missing API key raises RuntimeError (not ValidationError)
@@ -1228,12 +1234,12 @@ def test_create_llm_client_missing_api_key_raises_runtime_error(monkeypatch) -> 
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setattr("config.llm_auth.credentials.resolve_api_key_env_for_request", lambda _: "")
-    llm_client.reset_llm_singletons()
+    reset_llm_clients()
     try:
         with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY"):
-            llm_client._create_llm_client("reasoning")
+            factory.build_llm_client("reasoning")
     finally:
-        llm_client.reset_llm_singletons()
+        reset_llm_clients()
 
 
 def test_create_llm_client_missing_api_key_omits_pydantic_boilerplate(monkeypatch) -> None:
@@ -1243,15 +1249,15 @@ def test_create_llm_client_missing_api_key_omits_pydantic_boilerplate(monkeypatc
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setattr("config.llm_auth.credentials.resolve_api_key_env_for_request", lambda _: "")
-    llm_client.reset_llm_singletons()
+    reset_llm_clients()
     try:
         with pytest.raises(RuntimeError) as exc_info:
-            llm_client._create_llm_client("reasoning")
+            factory.build_llm_client("reasoning")
         msg = str(exc_info.value)
         assert "1 validation error for LLMSettings" not in msg
         assert "MINIMAX_API_KEY" in msg
     finally:
-        llm_client.reset_llm_singletons()
+        reset_llm_clients()
 
 
 # ---------------------------------------------------------------------------
@@ -1261,7 +1267,7 @@ def test_create_llm_client_missing_api_key_omits_pydantic_boilerplate(monkeypatc
 
 def _make_not_found_error() -> Exception:
     """Return a minimal fake that looks like anthropic.NotFoundError."""
-    err = llm_client.NotFoundError.__new__(llm_client.NotFoundError)
+    err = NotFoundError.__new__(NotFoundError)
     # NotFoundError is an APIStatusError; bypass its __init__ by setting attrs directly.
     err.status_code = 404  # type: ignore[attr-defined]
     err.message = "model_not_found"  # type: ignore[attr-defined]
@@ -1295,7 +1301,7 @@ def test_anthropic_invoke_not_found_raises_friendly_runtime_error(monkeypatch) -
     monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "Anthropic", _NotFoundAnthropic)
 
-    client = llm_client.LLMClient(model="not-a-real-model-xyz")
+    client = sdk_llm.LLMClient(model="not-a-real-model-xyz")
 
     with pytest.raises(RuntimeError, match="not-a-real-model-xyz") as exc_info:
         client.invoke("hello")
@@ -1323,7 +1329,7 @@ def test_anthropic_invoke_not_found_does_not_retry(monkeypatch) -> None:
     monkeypatch.setattr(sdk_llm, "Anthropic", _CountingAnthropic)
     monkeypatch.setattr(sdk_llm.time, "sleep", lambda _: None)
 
-    client = llm_client.LLMClient(model="bad-model")
+    client = sdk_llm.LLMClient(model="bad-model")
 
     with pytest.raises(RuntimeError):
         client.invoke("hello")
@@ -1336,7 +1342,7 @@ def test_anthropic_invoke_stream_not_found_raises_friendly_runtime_error(monkeyp
     monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "Anthropic", _NotFoundAnthropic)
 
-    client = llm_client.LLMClient(model="not-a-real-model-xyz")
+    client = sdk_llm.LLMClient(model="not-a-real-model-xyz")
 
     with pytest.raises(RuntimeError, match="not-a-real-model-xyz") as exc_info:
         list(client.invoke_stream("hello"))
@@ -1354,7 +1360,7 @@ def test_anthropic_invoke_stream_not_found_raises_friendly_runtime_error(monkeyp
 # ---------------------------------------------------------------------------
 
 
-class _FakeRateLimitError(llm_client.OpenAIRateLimitError):
+class _FakeRateLimitError(OpenAIRateLimitError):
     """Minimal stand-in for openai.RateLimitError with a Google-style body.
 
     Inherits from the real class so it's caught by ``except OpenAIRateLimitError``.
@@ -1406,7 +1412,7 @@ def test_openai_invoke_rate_limit_retries_with_suggested_delay(monkeypatch) -> N
     monkeypatch.setattr(sdk_llm, "OpenAI", _OpenAI)
     monkeypatch.setattr(sdk_llm.time, "sleep", lambda s: sleeps.append(s))
 
-    client = llm_client.OpenAILLMClient(model="gemini-test", api_key_env="GEMINI_API_KEY")
+    client = sdk_llm.OpenAILLMClient(model="gemini-test", api_key_env="GEMINI_API_KEY")
     result = client.invoke("hi")
 
     assert result.content == "ok"
@@ -1435,7 +1441,7 @@ def test_openai_invoke_rate_limit_raises_quota_message_after_exhaustion(monkeypa
     monkeypatch.setattr(sdk_llm, "OpenAI", _OpenAI)
     monkeypatch.setattr(sdk_llm.time, "sleep", lambda s: sleeps.append(s))
 
-    client = llm_client.OpenAILLMClient(model="gemini-test", api_key_env="GEMINI_API_KEY")
+    client = sdk_llm.OpenAILLMClient(model="gemini-test", api_key_env="GEMINI_API_KEY")
 
     with pytest.raises(RuntimeError) as exc_info:
         client.invoke("hi")
@@ -1481,7 +1487,7 @@ def test_openai_invoke_stream_rate_limit_retries_before_emit(monkeypatch) -> Non
     monkeypatch.setattr(sdk_llm, "OpenAI", _OpenAI)
     monkeypatch.setattr(sdk_llm.time, "sleep", lambda s: sleeps.append(s))
 
-    client = llm_client.OpenAILLMClient(model="gemini-test", api_key_env="GEMINI_API_KEY")
+    client = sdk_llm.OpenAILLMClient(model="gemini-test", api_key_env="GEMINI_API_KEY")
     chunks = list(client.invoke_stream("hi"))
 
     assert chunks == ["recovered"]
@@ -1489,7 +1495,7 @@ def test_openai_invoke_stream_rate_limit_retries_before_emit(monkeypatch) -> Non
     assert sleeps == [7.0]
 
 
-class _FakeInsufficientQuotaError(llm_client.OpenAIRateLimitError):
+class _FakeInsufficientQuotaError(OpenAIRateLimitError):
     """Fake RateLimitError with ``insufficient_quota`` error code (billing limit)."""
 
     def __init__(self) -> None:
@@ -1527,7 +1533,7 @@ def test_openai_invoke_rate_limit_insufficient_quota_raises_immediately(monkeypa
     sleeps: list[float] = []
     monkeypatch.setattr(sdk_llm.time, "sleep", lambda s: sleeps.append(s))
 
-    client = llm_client.OpenAILLMClient(model="gpt-4", api_key_env="OPENAI_API_KEY")
+    client = sdk_llm.OpenAILLMClient(model="gpt-4", api_key_env="OPENAI_API_KEY")
     with pytest.raises(RuntimeError) as exc_info:
         client.invoke("hi")
 
@@ -1562,7 +1568,7 @@ def test_openai_invoke_stream_rate_limit_insufficient_quota_raises_immediately(
     sleeps: list[float] = []
     monkeypatch.setattr(sdk_llm.time, "sleep", lambda s: sleeps.append(s))
 
-    client = llm_client.OpenAILLMClient(model="gpt-4", api_key_env="OPENAI_API_KEY")
+    client = sdk_llm.OpenAILLMClient(model="gpt-4", api_key_env="OPENAI_API_KEY")
     with pytest.raises(RuntimeError) as exc_info:
         list(client.invoke_stream("hi"))
 
@@ -1614,7 +1620,7 @@ def test_openai_invoke_stream_rate_limit_insufficient_quota_after_emit_is_wrappe
     sleeps: list[float] = []
     monkeypatch.setattr(sdk_llm.time, "sleep", lambda s: sleeps.append(s))
 
-    client = llm_client.OpenAILLMClient(model="gpt-4", api_key_env="OPENAI_API_KEY")
+    client = sdk_llm.OpenAILLMClient(model="gpt-4", api_key_env="OPENAI_API_KEY")
     stream = client.invoke_stream("hi")
 
     assert next(stream) == "partial"
@@ -1632,7 +1638,7 @@ def test_openai_invoke_stream_rate_limit_insufficient_quota_after_emit_is_wrappe
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class _FakeTimeoutError(llm_client.OpenAITimeoutError):
+class _FakeTimeoutError(OpenAITimeoutError):
     """Minimal stand-in for openai.APITimeoutError."""
 
     def __init__(self) -> None:
@@ -1671,7 +1677,7 @@ def test_openai_invoke_timeout_retries_and_succeeds(monkeypatch) -> None:
     monkeypatch.setattr(sdk_llm, "OpenAI", _OpenAI)
     monkeypatch.setattr(sdk_llm.time, "sleep", lambda s: sleeps.append(s))
 
-    client = llm_client.OpenAILLMClient(model="gpt-4", api_key_env="OPENAI_API_KEY")
+    client = sdk_llm.OpenAILLMClient(model="gpt-4", api_key_env="OPENAI_API_KEY")
     result = client.invoke("hi")
 
     assert result.content == "ok"
@@ -1699,14 +1705,14 @@ def test_openai_invoke_timeout_raises_timeout_message_after_exhaustion(monkeypat
     monkeypatch.setattr(sdk_llm, "OpenAI", _OpenAI)
     monkeypatch.setattr(sdk_llm.time, "sleep", lambda s: sleeps.append(s))
 
-    client = llm_client.OpenAILLMClient(model="gpt-4", api_key_env="OPENAI_API_KEY")
+    client = sdk_llm.OpenAILLMClient(model="gpt-4", api_key_env="OPENAI_API_KEY")
     with pytest.raises(RuntimeError) as exc_info:
         client.invoke("hi")
 
     msg = str(exc_info.value).lower()
     assert "timed out" in msg or "timeout" in msg
     assert "network connection" not in msg
-    assert len(sleeps) == llm_client._RETRY_MAX_ATTEMPTS - 1
+    assert len(sleeps) == _RETRY_MAX_ATTEMPTS - 1
 
 
 def test_openai_invoke_stream_timeout_retries_before_emit(monkeypatch) -> None:
@@ -1749,7 +1755,7 @@ def test_openai_invoke_stream_timeout_retries_before_emit(monkeypatch) -> None:
     monkeypatch.setattr(sdk_llm, "OpenAI", _OpenAI)
     monkeypatch.setattr(sdk_llm.time, "sleep", lambda s: sleeps.append(s))
 
-    client = llm_client.OpenAILLMClient(model="gpt-4", api_key_env="OPENAI_API_KEY")
+    client = sdk_llm.OpenAILLMClient(model="gpt-4", api_key_env="OPENAI_API_KEY")
     chunks = list(client.invoke_stream("hi"))
 
     assert chunks == ["hello"]
@@ -1797,10 +1803,10 @@ def test_openai_invoke_stream_timeout_does_not_retry_after_emit(monkeypatch) -> 
     monkeypatch.setattr(sdk_llm, "OpenAI", _OpenAI)
     monkeypatch.setattr(sdk_llm.time, "sleep", lambda s: sleeps.append(s))
 
-    client = llm_client.OpenAILLMClient(model="gpt-4", api_key_env="OPENAI_API_KEY")
+    client = sdk_llm.OpenAILLMClient(model="gpt-4", api_key_env="OPENAI_API_KEY")
     stream = client.invoke_stream("hi")
     assert next(stream) == "partial"
-    with pytest.raises(llm_client.OpenAITimeoutError):
+    with pytest.raises(OpenAITimeoutError):
         next(stream)
 
     assert call_count == 1, "mid-stream timeout must not be retried"
@@ -1877,7 +1883,7 @@ def test_bedrock_invoke_anthropic_not_found_raises_immediately(monkeypatch) -> N
         sdk_llm, "AnthropicBedrock", lambda **_: _make_bedrock_anthropic_client(err)
     )
 
-    client = llm_client.BedrockLLMClient(model="anthropic.claude-old-v1:0")
+    client = sdk_llm.BedrockLLMClient(model="anthropic.claude-old-v1:0")
     with pytest.raises(RuntimeError, match="end-of-life"):
         client.invoke("hello")
 
@@ -1902,7 +1908,7 @@ def test_bedrock_invoke_anthropic_authentication_raises_immediately(monkeypatch)
         sdk_llm, "AnthropicBedrock", lambda **_: _make_bedrock_anthropic_client(err)
     )
 
-    client = llm_client.BedrockLLMClient(model="anthropic.claude-test")
+    client = sdk_llm.BedrockLLMClient(model="anthropic.claude-test")
     with pytest.raises(RuntimeError, match="authentication failed"):
         client.invoke("hello")
 
@@ -1934,7 +1940,7 @@ def test_bedrock_invoke_anthropic_bad_request_inference_profile(monkeypatch) -> 
         sdk_llm, "AnthropicBedrock", lambda **_: _make_bedrock_anthropic_client(err)
     )
 
-    client = llm_client.BedrockLLMClient(model="anthropic.claude-opus-4-1-20250805-v1:0")
+    client = sdk_llm.BedrockLLMClient(model="anthropic.claude-opus-4-1-20250805-v1:0")
     with pytest.raises(RuntimeError, match="inference profile"):
         client.invoke("hello")
 
@@ -1959,7 +1965,7 @@ def test_bedrock_invoke_anthropic_permission_denied_raises_immediately(monkeypat
         sdk_llm, "AnthropicBedrock", lambda **_: _make_bedrock_anthropic_client(err)
     )
 
-    client = llm_client.BedrockLLMClient(model="anthropic.claude-opus-4-7")
+    client = sdk_llm.BedrockLLMClient(model="anthropic.claude-opus-4-7")
     with pytest.raises(RuntimeError, match="not available for your account"):
         client.invoke("hello")
 
@@ -1993,7 +1999,7 @@ def test_bedrock_invoke_converse_validation_exception_raises_immediately(monkeyp
 
     monkeypatch.setattr(sdk_llm.boto3, "client", lambda *_a, **_k: _FailingRuntime())
 
-    client = llm_client.BedrockLLMClient(model="invalid-model-xyz")
+    client = sdk_llm.BedrockLLMClient(model="invalid-model-xyz")
     with pytest.raises(RuntimeError, match="invalid"):
         client.invoke("hello")
 
@@ -2034,7 +2040,7 @@ def test_bedrock_invoke_converse_hard_client_errors_raise_immediately(
 
     monkeypatch.setattr(sdk_llm.boto3, "client", lambda *_a, **_k: _FailingRuntime())
 
-    client = llm_client.BedrockLLMClient(model="mistral.some-model")
+    client = sdk_llm.BedrockLLMClient(model="mistral.some-model")
     with pytest.raises(RuntimeError):
         client.invoke("hello")
 
@@ -2070,7 +2076,7 @@ def test_bedrock_access_denied_surfaces_upstream_aws_message(monkeypatch) -> Non
 
     monkeypatch.setattr(sdk_llm.boto3, "client", lambda *_a, **_k: _FailingRuntime())
 
-    client = llm_client.BedrockLLMClient(model="some-model")
+    client = sdk_llm.BedrockLLMClient(model="some-model")
     with pytest.raises(RuntimeError) as excinfo:
         client.invoke("hello")
 
@@ -2104,7 +2110,7 @@ def test_bedrock_access_denied_without_payment_keywords_shows_iam_checklist(
 
     monkeypatch.setattr(sdk_llm.boto3, "client", lambda *_a, **_k: _FailingRuntime())
 
-    client = llm_client.BedrockLLMClient(model="some-model")
+    client = sdk_llm.BedrockLLMClient(model="some-model")
     with pytest.raises(RuntimeError) as excinfo:
         client.invoke("hello")
 
@@ -2120,7 +2126,7 @@ def test_format_openai_connection_error_ssl_via_cause() -> None:
     conn_err = Exception("Connection error.")
     conn_err.__cause__ = ssl_err
 
-    msg = llm_client._format_openai_connection_error(conn_err, "OpenAI")
+    msg = sdk_llm._format_openai_connection_error(conn_err, "OpenAI")
 
     assert "SSL/TLS" in msg
     assert "HTTPS" in msg
@@ -2133,7 +2139,7 @@ def test_format_openai_connection_error_ssl_via_context() -> None:
     conn_err.__cause__ = None
     conn_err.__context__ = ssl_err
 
-    msg = llm_client._format_openai_connection_error(conn_err, "Gemini")
+    msg = sdk_llm._format_openai_connection_error(conn_err, "Gemini")
 
     assert "SSL/TLS" in msg
     assert "Gemini" in msg
@@ -2143,7 +2149,7 @@ def test_format_openai_connection_error_non_ssl_returns_generic_message() -> Non
     """A plain connection-refused error lands on the generic network message."""
     conn_err = Exception("[WinError 10061] connection refused")
 
-    msg = llm_client._format_openai_connection_error(conn_err, "NVIDIA")
+    msg = sdk_llm._format_openai_connection_error(conn_err, "NVIDIA")
 
     assert "SSL" not in msg
     assert "network connection" in msg
@@ -2152,10 +2158,10 @@ def test_format_openai_connection_error_non_ssl_returns_generic_message() -> Non
 
 def test_format_openai_connection_error_timeout_returns_timeout_message() -> None:
     """APITimeoutError gets a specific timeout message, not the generic network-connection one."""
-    err = llm_client.OpenAITimeoutError.__new__(llm_client.OpenAITimeoutError)
+    err = OpenAITimeoutError.__new__(OpenAITimeoutError)
     Exception.__init__(err, "Request timed out.")
 
-    msg = llm_client._format_openai_connection_error(err, "Ollama")
+    msg = sdk_llm._format_openai_connection_error(err, "Ollama")
 
     assert "timed out" in msg.lower()
     assert "Ollama" in msg
@@ -2206,7 +2212,7 @@ _USAGE_LIMIT_BODY = {
 
 
 def _make_bad_request_error(body: dict | None = None) -> Exception:
-    err = llm_client.AnthropicBadRequestError.__new__(llm_client.AnthropicBadRequestError)
+    err = AnthropicBadRequestError.__new__(AnthropicBadRequestError)
     err.status_code = 400  # type: ignore[attr-defined]
     err.message = str(body)  # type: ignore[attr-defined]
     err.body = body or {}  # type: ignore[attr-defined]
@@ -2237,7 +2243,7 @@ def test_anthropic_invoke_usage_limit_raises_friendly_runtime_error(monkeypatch)
     monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "Anthropic", _UsageLimitAnthropic)
 
-    client = llm_client.LLMClient(model="claude-3-5-sonnet-20241022")
+    client = sdk_llm.LLMClient(model="claude-3-5-sonnet-20241022")
 
     with pytest.raises(RuntimeError) as exc_info:
         client.invoke("hello")
@@ -2265,7 +2271,7 @@ def test_anthropic_invoke_usage_limit_does_not_retry(monkeypatch) -> None:
     monkeypatch.setattr(sdk_llm, "Anthropic", _CountingAnthropic)
     monkeypatch.setattr(sdk_llm.time, "sleep", lambda _: None)
 
-    client = llm_client.LLMClient(model="claude-3-5-sonnet-20241022")
+    client = sdk_llm.LLMClient(model="claude-3-5-sonnet-20241022")
 
     with pytest.raises(RuntimeError):
         client.invoke("hello")
@@ -2278,7 +2284,7 @@ def test_anthropic_invoke_stream_usage_limit_raises_friendly_runtime_error(monke
     monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "Anthropic", _UsageLimitAnthropic)
 
-    client = llm_client.LLMClient(model="claude-3-5-sonnet-20241022")
+    client = sdk_llm.LLMClient(model="claude-3-5-sonnet-20241022")
 
     with pytest.raises(RuntimeError) as exc_info:
         list(client.invoke_stream("hello"))
@@ -2301,7 +2307,7 @@ def test_anthropic_invoke_bad_request_non_usage_limit_raises_generic_message(mon
 
     monkeypatch.setattr(sdk_llm, "Anthropic", _OtherBadRequestAnthropic)
 
-    client = llm_client.LLMClient(model="claude-3-5-sonnet-20241022")
+    client = sdk_llm.LLMClient(model="claude-3-5-sonnet-20241022")
 
     with pytest.raises(RuntimeError) as exc_info:
         client.invoke("hello")
@@ -2318,12 +2324,12 @@ def test_anthropic_invoke_bad_request_non_usage_limit_raises_generic_message(mon
 @pytest.fixture(autouse=True)
 def _reset_usage_hook():
     """Guard tests against hook leakage from other tests in the file."""
-    llm_client.set_usage_hook(None)
+    usage_mod.set_usage_hook(None)
     yield
-    llm_client.set_usage_hook(None)
+    usage_mod.set_usage_hook(None)
 
 
-def _make_recording_hook() -> tuple[list[tuple[str, int, int]], llm_client.UsageHook]:
+def _make_recording_hook() -> tuple[list[tuple[str, int, int]], usage_mod.UsageHook]:
     """Return (calls_list, hook). Closure-factory keeps state isolated per test."""
     calls: list[tuple[str, int, int]] = []
 
@@ -2359,9 +2365,9 @@ def test_usage_hook_anthropic_invoke_fires_with_correct_token_counts(monkeypatch
     monkeypatch.setattr(sdk_llm, "Anthropic", _FakeAnthropicWithUsage)
 
     calls, hook = _make_recording_hook()
-    llm_client.set_usage_hook(hook)
+    usage_mod.set_usage_hook(hook)
 
-    client = llm_client.LLMClient(model="claude-sonnet-4-5-20250929")
+    client = sdk_llm.LLMClient(model="claude-sonnet-4-5-20250929")
     client.invoke("hi")
 
     assert calls == [("claude-sonnet-4-5-20250929", 123, 45)]
@@ -2399,9 +2405,9 @@ def test_usage_hook_openai_invoke_fires_with_correct_token_counts(monkeypatch) -
     monkeypatch.setattr(sdk_llm, "OpenAI", _FakeOpenAIWithUsage)
 
     calls, hook = _make_recording_hook()
-    llm_client.set_usage_hook(hook)
+    usage_mod.set_usage_hook(hook)
 
-    client = llm_client.OpenAILLMClient(model="gpt-4o-2024-11-20")
+    client = sdk_llm.OpenAILLMClient(model="gpt-4o-2024-11-20")
     client.invoke("hi")
 
     assert calls == [("gpt-4o-2024-11-20", 200, 50)]
@@ -2417,9 +2423,9 @@ def test_usage_hook_bedrock_converse_fires_with_correct_token_counts(monkeypatch
     monkeypatch.setattr(sdk_llm.boto3, "client", lambda *_a, **_k: runtime)
 
     calls, hook = _make_recording_hook()
-    llm_client.set_usage_hook(hook)
+    usage_mod.set_usage_hook(hook)
 
-    client = llm_client.BedrockLLMClient(model="mistral.mistral-large-2402-v1:0")
+    client = sdk_llm.BedrockLLMClient(model="mistral.mistral-large-2402-v1:0")
     client.invoke([{"role": "user", "content": "hi"}])
 
     assert calls == [("mistral.mistral-large-2402-v1:0", 77, 11)]
@@ -2459,9 +2465,9 @@ def test_usage_hook_exception_propagates(monkeypatch) -> None:
     def hook(_model, _tin, _tout):
         raise _BudgetExceeded("over budget")
 
-    llm_client.set_usage_hook(hook)
+    usage_mod.set_usage_hook(hook)
 
-    client = llm_client.LLMClient(model="claude-sonnet-4-5-20250929")
+    client = sdk_llm.LLMClient(model="claude-sonnet-4-5-20250929")
     with pytest.raises(_BudgetExceeded):
         client.invoke("hi")
 
@@ -2493,7 +2499,7 @@ def test_usage_hook_unset_is_default_noop(monkeypatch) -> None:
     monkeypatch.setattr("core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(sdk_llm, "Anthropic", _FakeAnthropicWithUsage)
 
-    client = llm_client.LLMClient(model="claude-sonnet-4-5-20250929")
+    client = sdk_llm.LLMClient(model="claude-sonnet-4-5-20250929")
     response = client.invoke("hi")
     assert response.content == "ok"
 
@@ -2506,13 +2512,13 @@ def test_set_usage_hook_rejects_double_registration() -> None:
     calls_a, hook_a = _make_recording_hook()
     calls_b, hook_b = _make_recording_hook()
 
-    llm_client.set_usage_hook(hook_a)
+    usage_mod.set_usage_hook(hook_a)
     try:
         with pytest.raises(RuntimeError, match="already registered"):
-            llm_client.set_usage_hook(hook_b)
+            usage_mod.set_usage_hook(hook_b)
     finally:
         # Confirm the first hook is still the active one and clean up
-        llm_client.set_usage_hook(None)
+        usage_mod.set_usage_hook(None)
 
     assert calls_a == []
     assert calls_b == []
@@ -2524,13 +2530,13 @@ def test_set_usage_hook_allows_clear_then_set() -> None:
     _, hook_a = _make_recording_hook()
     _, hook_b = _make_recording_hook()
 
-    llm_client.set_usage_hook(hook_a)
-    llm_client.set_usage_hook(None)
-    llm_client.set_usage_hook(hook_b)  # should NOT raise
-    llm_client.set_usage_hook(None)
+    usage_mod.set_usage_hook(hook_a)
+    usage_mod.set_usage_hook(None)
+    usage_mod.set_usage_hook(hook_b)  # should NOT raise
+    usage_mod.set_usage_hook(None)
 
 
 def test_set_usage_hook_allows_redundant_clear() -> None:
     """Setting None over None is a no-op (idempotent clear). Must not raise."""
-    llm_client.set_usage_hook(None)
-    llm_client.set_usage_hook(None)  # should NOT raise
+    usage_mod.set_usage_hook(None)
+    usage_mod.set_usage_hook(None)  # should NOT raise

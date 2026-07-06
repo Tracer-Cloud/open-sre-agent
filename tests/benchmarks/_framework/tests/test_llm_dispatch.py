@@ -241,29 +241,16 @@ def test_reset_opensre_singletons_clears_both_module_caches(
 
     call_log: list[str] = []
 
-    # Import the real modules and replace the two reset functions with
-    # call-tracking stubs. This works regardless of which order
-    # _reset_opensre_singletons invokes them.
-    import core.llm.agent_llm_client as agent_llm_mod
-    import core.llm.llm_client as llm_mod
-
+    # The unified factory cache is cleared by one reset_llm_clients() call.
     monkeypatch.setattr(
-        llm_mod, "reset_llm_singletons", lambda: call_log.append("reset_llm_singletons")
-    )
-    monkeypatch.setattr(
-        agent_llm_mod, "reset_agent_client", lambda: call_log.append("reset_agent_client")
+        "core.llm.factory.reset_llm_clients", lambda: call_log.append("reset_llm_clients")
     )
 
     LLMDispatcher._reset_opensre_singletons()  # type: ignore[attr-defined]
 
-    assert "reset_llm_singletons" in call_log, (
-        "llm_client._client singleton was NOT cleared — opensre.core.llm.llm_client "
-        "would keep returning the previously-activated provider's client"
-    )
-    assert "reset_agent_client" in call_log, (
-        "agent_llm_client._agent_client singleton was NOT cleared — the investigation "
-        "agent's get_agent_llm() would silently reuse the first activation's model "
-        "for every subsequent cell (this is the 06-05 11:46 dispatcher bug)"
+    assert call_log == ["reset_llm_clients"], (
+        "the unified LLM client cache was NOT cleared — opensre would keep returning "
+        "the previously-activated provider's client for every subsequent LLM in the grid"
     )
 
 

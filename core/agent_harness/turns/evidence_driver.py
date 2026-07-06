@@ -177,7 +177,7 @@ def _load_gather_llm_or_none(error_reporter: ErrorReporter | None) -> Any | None
     from core.llm.factory import LLMRole, get_llm
 
     return _safe_execute(
-        get_agent_llm,
+        lambda: get_llm(LLMRole.AGENT),
         error_reporter=error_reporter,
         context="core.agent_harness.turns.evidence_driver.client",
         wrap_error=lambda exc: GatherLlmLoadError(

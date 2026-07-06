@@ -52,7 +52,7 @@ def anthropic_capture(monkeypatch: pytest.MonkeyPatch) -> tuple[Any, dict[str, A
     class _FakeClient:
         messages = _FakeMessages()
 
-    from core.llm.llm_client import LLMClient
+    from core.llm.transports.sdk.llm_clients import LLMClient
 
     client = LLMClient(model="test", max_tokens=10)
     monkeypatch.setattr(client, "_client", _FakeClient())
@@ -79,7 +79,7 @@ def openai_capture(monkeypatch: pytest.MonkeyPatch) -> tuple[Any, dict[str, Any]
     class _FakeClient:
         chat = _FakeChat()
 
-    from core.llm.llm_client import OpenAILLMClient
+    from core.llm.transports.sdk.llm_clients import OpenAILLMClient
 
     monkeypatch.setenv("TEST_KEY", "fake-key")
     client = OpenAILLMClient(model="test", max_tokens=10, api_key_env="TEST_KEY")
@@ -136,7 +136,7 @@ class TestLLMClientGuardrails:
         class _FakeClient:
             messages = _FakeMessages()
 
-        from core.llm.llm_client import LLMClient
+        from core.llm.transports.sdk.llm_clients import LLMClient
 
         client = LLMClient(model="test", max_tokens=10)
         monkeypatch.setattr(client, "_client", _FakeClient())
@@ -158,7 +158,7 @@ class TestLLMClientGuardrails:
         monkeypatch.setattr("platform.guardrails.engine.get_default_rules_path", lambda: config)
         monkeypatch.setattr("platform.guardrails.rules.get_default_rules_path", lambda: config)
 
-        from core.llm.llm_client import LLMClient
+        from core.llm.transports.sdk.llm_clients import LLMClient
 
         client = LLMClient(model="test", max_tokens=10)
         monkeypatch.setattr(client, "_ensure_client", lambda: None)
@@ -191,7 +191,7 @@ class TestLLMClientGuardrails:
         class _FakeClient:
             messages = _FakeMessages()
 
-        from core.llm.llm_client import LLMClient
+        from core.llm.transports.sdk.llm_clients import LLMClient
 
         client = LLMClient(model="test", max_tokens=10)
         monkeypatch.setattr(client, "_client", _FakeClient())
@@ -242,7 +242,7 @@ class TestOpenAIClientGuardrails:
         class _FakeClient:
             chat = _FakeChat()
 
-        from core.llm.llm_client import OpenAILLMClient
+        from core.llm.transports.sdk.llm_clients import OpenAILLMClient
 
         monkeypatch.setenv("TEST_KEY", "fake-key")
         client = OpenAILLMClient(model="test", max_tokens=10, api_key_env="TEST_KEY")

@@ -8,8 +8,7 @@ reasoning/classification/toolcall clients.
 Roles differ only in the *client family* they build: :data:`LLMRole.AGENT` builds
 a tool-calling client (``tool_schemas`` / ``invoke``); the other roles build the
 streaming reasoning client (``invoke`` / ``invoke_stream`` / ``with_structured_output``)
-for a given model tier. ``get_llm`` is the one entrypoint; the historical
-``get_agent_llm`` / ``get_llm_for_*`` names are thin wrappers over it.
+for a given model tier. ``get_llm(role)`` is the single entrypoint — callers pass an ``LLMRole``.
 
 Import discipline: construction imports (``sdk`` / ``litellm`` / ``config``) are
 done lazily inside functions, matching the rest of ``core.llm`` — ``sdk.llm_clients``

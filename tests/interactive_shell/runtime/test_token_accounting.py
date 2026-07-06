@@ -136,7 +136,7 @@ class _FakeLLMClient:
 
 def test_answer_shell_question_records_session_token_usage(monkeypatch: Any) -> None:
     client = _FakeLLMClient("assistant reply")
-    monkeypatch.setattr("core.llm.llm_client.get_llm_for_reasoning", lambda: client)
+    monkeypatch.setattr("core.llm.factory.get_llm", lambda _role: client)
     session = Session()
     console = Console(file=io.StringIO(), force_terminal=False)
     answer_shell_question("hello", session, console)
