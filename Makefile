@@ -1,7 +1,27 @@
 -include .env
 export
 
-.PHONY: install onboard benchmark benchmark-update-readme test test-full demo alert-template investigate-alert verify-integrations check-docker grafana-local-up grafana-local-down grafana-local-seed clean lint format deploy deploy-lambda deploy-prefect deploy-flink destroy destroy-lambda destroy-prefect destroy-flink test-deploy prefect-local-test simulate-k8s-alert test-k8s-local test-k8s test-k8s-datadog chaos-mesh-up chaos-mesh-down chaos-engineering-apply chaos-engineering-delete chaos-lab-up chaos-lab-down chaos-experiment-list chaos-experiment-up chaos-experiment-down deploy-dd-monitors cleanup-dd-monitors deploy-eks destroy-eks test-k8s-eks datadog-demo crashloop-demo regen-trigger-config test-rca test-rca-grafana test-synthetic test-rds-synthetic test-cli-smoke test-turn-live download-cloudopsbench-hf mirror-cloudopsbench-s3 validate-cloudopsbench test-openclaw test-openclaw-synthetic test-hermes test-hermes-synthetic test-hermes-synthetic-only refresh-hermes-tuples
+.PHONY: install build onboard demo benchmark benchmark-update-readme \
+	alert-template investigate-alert verify-integrations check-docker \
+	grafana-local-up grafana-local-down grafana-local-seed \
+	cloudwatch-demo datadog-demo crashloop-demo prefect-demo grafana-demo \
+	flink-demo upstream-downstream \
+	test-rca test-rca-grafana test-synthetic test-rds-synthetic test-k8s-synthetic \
+	test-cloudopsbench download-cloudopsbench-hf validate-cloudopsbench \
+	simulate-k8s-alert test-k8s-local test-k8s test-k8s-datadog test-k8s-eks \
+	chaos-mesh-up chaos-mesh-down chaos-engineering-apply chaos-engineering-delete \
+	chaos-lab-up chaos-lab-down chaos-experiment-list chaos-experiment-up chaos-experiment-down \
+	deploy-dd-monitors cleanup-dd-monitors deploy-eks destroy-eks \
+	trigger-alert trigger-alert-verify regen-trigger-config \
+	prefect-local-test run dev docs-dev \
+	deploy destroy test-deploy \
+	deploy-lambda deploy-prefect deploy-flink destroy-lambda destroy-prefect destroy-flink \
+	test test-full test-cov test-scope test-cli-smoke test-turn-live test-grafana \
+	rabbitmq-local-up rabbitmq-local-down test-rabbitmq-real \
+	test-openclaw test-openclaw-synthetic \
+	test-hermes test-hermes-synthetic test-hermes-synthetic-only refresh-hermes-tuples \
+	clean lint format-check format typecheck \
+	check-imports check-cycles check-layers check-imports-strict check-layers-strict check help
 
 
 ifneq ($(wildcard .venv/bin/python),)
