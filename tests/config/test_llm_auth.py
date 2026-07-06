@@ -259,7 +259,7 @@ class _ErroringKeyring(KeyringBackend):
 
 
 def test_resolve_for_request_does_not_stale_verified_record_on_keyring_error(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A backend hiccup (regression for #3721) must not downgrade a verified credential.
 
@@ -270,7 +270,8 @@ def test_resolve_for_request_does_not_stale_verified_record_on_keyring_error(
     """
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
-    monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
+    # OPENSRE_LLM_AUTH_METADATA_PATH is already redirected to this same tmp_path
+    # by the autouse ``_isolate_opensre_home_files`` fixture in tests/conftest.py.
     save_provider_auth_record(
         provider="deepseek",
         auth_name="deepseek",
@@ -299,12 +300,13 @@ def test_resolve_for_request_does_not_stale_verified_record_on_keyring_error(
 
 
 def test_resolve_for_request_still_stales_when_credential_is_genuinely_absent(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A clean (error-free) keychain miss is real evidence and should still stale."""
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
-    monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
+    # OPENSRE_LLM_AUTH_METADATA_PATH is already redirected by the autouse
+    # ``_isolate_opensre_home_files`` fixture in tests/conftest.py.
     save_provider_auth_record(
         provider="deepseek",
         auth_name="deepseek",

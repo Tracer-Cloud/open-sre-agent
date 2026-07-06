@@ -69,7 +69,7 @@ def _disable_system_keyring(request, monkeypatch) -> None:
 
 
 @pytest.fixture(autouse=True)
-def _isolate_opensre_home_files(monkeypatch, tmp_path) -> None:
+def _isolate_opensre_home_files(request, monkeypatch, tmp_path) -> None:
     """Default-redirect the wizard store and LLM auth metadata files to tmp_path.
 
     Regression guard for #3721: ``sync_provider_env``/``update_local_llm_selection``
@@ -82,7 +82,14 @@ def _isolate_opensre_home_files(monkeypatch, tmp_path) -> None:
     test-cov`` ran). Setting both overrides here makes every test safe by
     default; a test that needs a specific path can still override it via
     ``monkeypatch`` or by passing an explicit ``path=`` argument.
+
+    Mirrors the ``live_llm`` exemption on ``_disable_system_keyring`` above:
+    live LLM turn tests need the real ``~/.opensre/llm-auth.json`` metadata for
+    CLI-subscription providers, whose prompt-safe ``status()`` reads the
+    metadata record directly rather than an env var.
     """
+    if request.node.get_closest_marker("live_llm") is not None:
+        return
     monkeypatch.setenv("OPENSRE_WIZARD_STORE_PATH", str(tmp_path / "opensre.json"))
     monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
 
