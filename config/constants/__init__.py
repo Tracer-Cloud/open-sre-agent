@@ -8,6 +8,7 @@ import tempfile
 from pathlib import Path
 
 from config.constants.investigation import MAX_EXPANSIONS, MAX_INVESTIGATION_LOOPS
+from config.constants.paths import PROJECT_ROOT, REPO_ROOT
 from config.constants.platform import IS_WINDOWS
 from config.constants.posthog import (
     DEFAULT_POSTHOG_BOUNCE_THRESHOLD,
@@ -63,6 +64,8 @@ def ensure_opensre_tmp_dir() -> Path:
 __all__ = [
     "MAX_EXPANSIONS",
     "MAX_INVESTIGATION_LOOPS",
+    "PROJECT_ROOT",
+    "REPO_ROOT",
     "DEFAULT_POSTHOG_BOUNCE_THRESHOLD",
     "DEFAULT_POSTHOG_BOUNCE_WINDOW",
     "DEFAULT_POSTHOG_TIMEOUT_SECONDS",

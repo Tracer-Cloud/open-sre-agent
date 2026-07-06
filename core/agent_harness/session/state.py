@@ -370,11 +370,12 @@ class Session:
         # depend on; the constant used to live in ``surfaces.cli.tests.discover``
         # but that direct edge is a layering violation (T-06, issue #3539).
         try:
-            from config.synthetic_paths import SYNTHETIC_SCENARIOS_DIR
+            from config.constants.paths import REPO_ROOT
         except Exception:
             self.last_synthetic_observation_path = None
             return
-        latest = SYNTHETIC_SCENARIOS_DIR / "_observations" / scenario_id / "latest.json"
+        scenarios_dir = REPO_ROOT / "tests" / "synthetic" / "rds_postgres"
+        latest = scenarios_dir / "_observations" / scenario_id / "latest.json"
         for _ in range(8):
             if latest.is_file():
                 self.last_synthetic_observation_path = str(latest.resolve())

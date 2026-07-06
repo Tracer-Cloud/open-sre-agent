@@ -18,9 +18,9 @@ from threading import Thread
 
 import pytest
 
+from config.constants.paths import REPO_ROOT
 from config.version import get_opensre_version
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
 _SCRIPT_NAME = "opensre.exe" if os.name == "nt" else "opensre"
 _ANSI_RE = re.compile(r"\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 _CLEARED_ENV_KEYS = (

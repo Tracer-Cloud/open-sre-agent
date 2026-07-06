@@ -46,13 +46,10 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
 
+from config.constants.paths import REPO_ROOT
 from core.agent_harness.grounding._cache import excerpt
 from core.agent_harness.grounding.diagnostics import GroundingSource
 from core.agent_harness.grounding.models import CacheStats
-
-# Docs live at the repository root, three levels above this file
-# (.../core/agent_harness/grounding/docs_reference.py -> repo root).
-_DOCS_ROOT = Path(__file__).resolve().parents[3] / "docs"
 
 # Extensions we read for grounding. Mintlify content is .mdx; .md is included
 # for any plain-Markdown page the project may add later.
@@ -371,7 +368,7 @@ class DocsReference:
 
     def discover(self, root: Path | None = None) -> list[DocPage]:
         """Walk the docs root, parse each MDX page, return them as :class:`DocPage` records."""
-        target = root if root is not None else _DOCS_ROOT
+        target = root if root is not None else REPO_ROOT / "docs"
         resolved = target.resolve() if target.exists() else target
         root_key = str(resolved)
 

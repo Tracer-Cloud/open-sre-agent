@@ -17,6 +17,7 @@ from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, Field
 
+from config.constants.paths import REPO_ROOT
 from config.version import get_opensre_version
 from core.llm.llm_client import get_llm_for_reasoning
 from integrations._validation_helpers import report_validation_failure
@@ -616,19 +617,15 @@ def render_markdown(update: DailyUpdate) -> str:
     return "\n".join(lines)
 
 
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[2]
-
-
-def _docs_json_path() -> Path:
-    return _repo_root() / "docs" / "docs.json"
-
-
 def _output_dir() -> Path:
     configured = Path(_string(os.getenv("DAILY_UPDATE_OUTPUT_DIR")) or DEFAULT_OUTPUT_DIR)
     if configured.is_absolute():
         return configured
-    return _repo_root() / configured
+    return REPO_ROOT / configured
+
+
+def _docs_json_path() -> Path:
+    return REPO_ROOT / "docs" / "docs.json"
 
 
 def update_docs_navigation(_output_dir: Path) -> Path:
@@ -766,11 +763,11 @@ def main() -> int:
     update = build_daily_update(repository, window, pull_requests)
     archive_path = write_daily_archive(update)
 
-    relative_archive_path = archive_path.relative_to(_repo_root()).as_posix()
+    relative_archive_path = archive_path.relative_to(REPO_ROOT).as_posix()
     overview_path = archive_path.parent / "overview.mdx"
-    relative_overview_path = overview_path.relative_to(_repo_root()).as_posix()
+    relative_overview_path = overview_path.relative_to(REPO_ROOT).as_posix()
     docs_json = _docs_json_path()
-    relative_docs_json = docs_json.relative_to(_repo_root()).as_posix()
+    relative_docs_json = docs_json.relative_to(REPO_ROOT).as_posix()
     _append_github_output("archive_path", relative_archive_path)
     _append_github_output("overview_path", relative_overview_path)
     _append_github_output("docs_json_path", relative_docs_json)

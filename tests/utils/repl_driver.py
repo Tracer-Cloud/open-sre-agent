@@ -54,8 +54,9 @@ from typing import Any
 
 from dotenv import dotenv_values
 
+from config.constants.paths import PROJECT_ROOT, REPO_ROOT
+
 _ANSI_ESCAPE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
-_REPO_ROOT = Path(__file__).parent.parent.parent
 
 
 def _load_env(*, home: str | None = None) -> dict[str, str]:
@@ -64,7 +65,7 @@ def _load_env(*, home: str | None = None) -> dict[str, str]:
     if home is not None:
         env["HOME"] = home
     env.setdefault("OPENSRE_SKIP_GITHUB_LOGIN", "1")
-    env_file = _REPO_ROOT / ".env"
+    env_file = PROJECT_ROOT / ".env"
     if env_file.exists():
         env.update({k: v for k, v in dotenv_values(env_file).items() if v is not None})
     env.setdefault("OPENSRE_SKIP_GITHUB_LOGIN", "1")
@@ -82,7 +83,7 @@ class ReplDriver:
         home: Path | None = None,
     ) -> None:
         self._startup_wait = startup_wait
-        self._cwd = str(cwd or _REPO_ROOT)
+        self._cwd = str(cwd or REPO_ROOT)
         self._home = str(home) if home is not None else None
         self._master: int | None = None
         self._proc: subprocess.Popen[bytes] | None = None

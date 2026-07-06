@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from pathlib import Path
 from typing import Any
 
+from config.constants.paths import REPO_ROOT
 from core.agent_harness.tools.tool_context import (
     ActionToolContext,
     capability_available_from_sources,
@@ -18,26 +18,18 @@ from tools.interactive_shell.synthetic.runner import (
     run_synthetic_test,
 )
 
-
-def _repo_root() -> Path:
-    for parent in Path(__file__).resolve().parents:
-        if (parent / "pyproject.toml").is_file():
-            return parent
-    return Path(__file__).resolve().parents[2]
-
-
-_RDS_POSTGRES_SUITE_DIR = _repo_root() / "tests" / "synthetic" / "rds_postgres"
+_SYNTHETIC_SCENARIOS_DIR = REPO_ROOT / "tests" / "synthetic" / "rds_postgres"
 
 
 @lru_cache(maxsize=1)
 def list_rds_postgres_scenarios() -> tuple[str, ...]:
     """Enumerate available RDS Postgres synthetic scenario directory names."""
-    if not _RDS_POSTGRES_SUITE_DIR.is_dir():
+    if not _SYNTHETIC_SCENARIOS_DIR.is_dir():
         return ()
     return tuple(
         sorted(
             entry.name
-            for entry in _RDS_POSTGRES_SUITE_DIR.iterdir()
+            for entry in _SYNTHETIC_SCENARIOS_DIR.iterdir()
             if entry.is_dir()
             and len(entry.name) >= 5
             and entry.name[:3].isdigit()

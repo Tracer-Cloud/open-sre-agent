@@ -273,10 +273,8 @@ def run_synthetic_suite(
     #
     # We pre-check the data dir explicitly *and* catch a narrow
     # ``ModuleNotFoundError`` so users see one structured message regardless
-    # of which failure mode their bundle produces. The data-dir path is the
-    # ``SYNTHETIC_SCENARIOS_DIR`` constant from ``config.synthetic_paths`` — single
-    # source of truth shared with ``_discover_rds_synthetic_scenarios``.
-    from config.synthetic_paths import SYNTHETIC_SCENARIOS_DIR
+    # of which failure mode their bundle produces.
+    from surfaces.cli.tests.discover import SYNTHETIC_SCENARIOS_DIR
 
     if not SYNTHETIC_SCENARIOS_DIR.is_dir():
         raise _synthetic_suite_not_bundled_error()
@@ -318,7 +316,7 @@ def run_synthetic_suite(
 @click.option("--json", "output_json", is_flag=True, help="Print machine-readable JSON results.")
 def run_openclaw_synthetic_suite(scenario: str, output_json: bool) -> None:
     """Run the synthetic OpenClaw RCA suite through the fixture bridge backend."""
-    from config.synthetic_paths import OPENCLAW_SYNTHETIC_SCENARIOS_DIR
+    from surfaces.cli.tests.discover import OPENCLAW_SYNTHETIC_SCENARIOS_DIR
 
     if not OPENCLAW_SYNTHETIC_SCENARIOS_DIR.is_dir():
         raise _openclaw_synthetic_suite_not_bundled_error()

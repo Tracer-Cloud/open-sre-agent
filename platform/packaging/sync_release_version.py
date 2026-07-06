@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import argparse
 import re
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-PYPROJECT = ROOT / "pyproject.toml"
+from config.constants.paths import REPO_ROOT
+
 _VERSION_LINE = re.compile(r'(?m)^version = "[^"]+"')
 
 
@@ -19,13 +18,13 @@ def main() -> None:
     args = parser.parse_args()
 
     version = (args.version or args.tag).strip().removeprefix("v")
-    text = PYPROJECT.read_text(encoding="utf-8")
+    text = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
     updated, count = _VERSION_LINE.subn(f'version = "{version}"', text, count=1)
     if count != 1:
-        msg = f"Could not update version in {PYPROJECT}"
+        msg = f"Could not update version in {REPO_ROOT / 'pyproject.toml'}"
         raise RuntimeError(msg)
 
-    PYPROJECT.write_text(updated, encoding="utf-8")
+    (REPO_ROOT / "pyproject.toml").write_text(updated, encoding="utf-8")
     print(f"Set version to {version}")
 
 
