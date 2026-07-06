@@ -637,7 +637,7 @@ def test_openai_rate_limit_error_is_retried_then_raises(
     client._model = "gpt-4o"
     client._max_tokens = 512
 
-    with pytest.raises(RuntimeError, match="OpenAI rate limit exceeded"):
+    with pytest.raises(RuntimeError, match="Openai rate limit exceeded"):
         client.invoke(messages=[{"role": "user", "content": "hi"}])
 
     assert call_count == _RETRY_MAX_ATTEMPTS, (
@@ -674,7 +674,7 @@ def test_openai_rate_limit_honors_body_text_hint(
     client._model = "gpt-4o"
     client._max_tokens = 512
 
-    with pytest.raises(RuntimeError, match="OpenAI rate limit exceeded"):
+    with pytest.raises(RuntimeError, match="Openai rate limit exceeded"):
         client.invoke(messages=[{"role": "user", "content": "hi"}])
 
     assert len(sleeps) == 2
@@ -707,10 +707,37 @@ def test_openai_permission_denied_error_is_not_retried(
     client._model = "gpt-4o"
     client._max_tokens = 512
 
-    with pytest.raises(RuntimeError, match="OpenAI request forbidden"):
+    with pytest.raises(RuntimeError, match="Openai request forbidden"):
         client.invoke(messages=[{"role": "user", "content": "hi"}])
 
     assert call_count == 1, "403 should not retry"
+
+
+def test_openai_agent_client_reports_configured_provider_name_on_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Errors from an OpenAI-compatible provider (e.g. DeepSeek) must be
+    reported under that provider's name, not a hardcoded "OpenAI" prefix —
+    see GH issue #3753."""
+    fake_openai = _install_fake_openai(monkeypatch)
+
+    def raise_insufficient_balance(**_: object) -> object:
+        raise fake_openai.BadRequestError(
+            "Error code: 402 - {'error': {'message': 'Insufficient Balance'}}"
+        )
+
+    client = OpenAIAgentClient.__new__(OpenAIAgentClient)
+    client._client = types.SimpleNamespace(
+        chat=types.SimpleNamespace(
+            completions=types.SimpleNamespace(create=raise_insufficient_balance)
+        )
+    )
+    client._model = "deepseek-v4-pro"
+    client._max_tokens = 512
+    client._api_key_env = "DEEPSEEK_API_KEY"
+
+    with pytest.raises(RuntimeError, match="Deepseek request rejected"):
+        client.invoke(messages=[{"role": "user", "content": "hi"}])
 
 
 def test_sdk_type_error_for_missing_api_key_fails_fast(

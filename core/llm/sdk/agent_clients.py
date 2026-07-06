@@ -456,6 +456,11 @@ class OpenAIAgentClient:
     def model_id(self) -> str | None:
         return self._model
 
+    @property
+    def _provider_label(self) -> str:
+        api_key_env = str(getattr(self, "_api_key_env", "OPENAI_API_KEY"))
+        return api_key_env.removesuffix("_API_KEY").replace("_", " ").title()
+
     def tool_schemas(self, tools: list[Any]) -> list[dict[str, Any]]:
         return build_openai_tool_specs(tools)
 
@@ -498,19 +503,21 @@ class OpenAIAgentClient:
                 response = self._client.chat.completions.create(**kwargs)
                 break
             except AuthenticationError as err:
-                raise RuntimeError("OpenAI authentication failed.") from err
+                raise RuntimeError(f"{self._provider_label} authentication failed.") from err
             except NotFoundError as err:
-                raise RuntimeError(f"OpenAI model '{self._model}' not found.") from err
+                raise RuntimeError(
+                    f"{self._provider_label} model '{self._model}' not found."
+                ) from err
             except BadRequestError as err:
                 # Some providers (or proxies) surface insufficient_quota as
                 # 400 — distinguish before the generic wrap.
-                maybe_raise_credit_exhausted("OpenAI", err)
-                raise RuntimeError(f"OpenAI request rejected: {err}") from err
+                maybe_raise_credit_exhausted(self._provider_label, err)
+                raise RuntimeError(f"{self._provider_label} request rejected: {err}") from err
             except RateLimitError as err:
                 # OpenAI returns insufficient_quota as HTTP 429 with body
                 # text "You exceeded your current quota". Halt rather than
                 # burning retries on a dead account.
-                maybe_raise_credit_exhausted("OpenAI", err)
+                maybe_raise_credit_exhausted(self._provider_label, err)
                 # Transient by definition — back off and retry instead of
                 # failing the whole cell. OpenAI's body usually carries a
                 # tight hint like ``"Please try again in 94ms"``; honor it
@@ -519,24 +526,26 @@ class OpenAIAgentClient:
                 last_err = err
                 if attempt == _RETRY_MAX_ATTEMPTS - 1:
                     raise RuntimeError(
-                        f"OpenAI rate limit exceeded after {_RETRY_MAX_ATTEMPTS} attempts: {err}"
+                        f"{self._provider_label} rate limit exceeded after "
+                        f"{_RETRY_MAX_ATTEMPTS} attempts: {err}"
                     ) from err
                 time.sleep(rate_limit_sleep_seconds(err, backoff))
                 backoff *= 2
             except PermissionDeniedError as err:
-                raise RuntimeError(f"OpenAI request forbidden: {err}") from err
+                raise RuntimeError(f"{self._provider_label} request forbidden: {err}") from err
             except Exception as err:
                 last_err = err
                 if attempt == _RETRY_MAX_ATTEMPTS - 1:
-                    raise RuntimeError(f"OpenAI API failed: {err}") from err
+                    raise RuntimeError(f"{self._provider_label} API failed: {err}") from err
                 time.sleep(backoff)
                 backoff *= 2
         else:
-            raise RuntimeError("OpenAI invocation failed") from last_err
+            raise RuntimeError(f"{self._provider_label} invocation failed") from last_err
 
         if not hasattr(response, "choices") or not response.choices:
             raise RuntimeError(
-                f"OpenAI API returned an unexpected response: {type(response).__name__}"
+                f"{self._provider_label} API returned an unexpected response: "
+                f"{type(response).__name__}"
             )
         emit_provider_usage(
             self._model,
