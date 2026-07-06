@@ -9,6 +9,7 @@ priority, the time-window helper, response shaping, and the synthetic
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
@@ -357,3 +358,63 @@ def test_harness_shaped_aws_source_short_circuits_off_real_aws(mock_call) -> Non
     mock_call.assert_not_called()
     assert backend.calls and backend.calls[0]["region"] == "us-east-1"
     assert result["available"] is True
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Live payload fixtures (#3583) — real LookupEvents response shapes
+# ─────────────────────────────────────────────────────────────────────────────
+
+_FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "cloudtrail"
+
+
+def _fixture_payload(name: str) -> dict[str, Any]:
+    payload = json.loads((_FIXTURES / name).read_text(encoding="utf-8"))
+    payload.pop("_comment", None)
+    return payload
+
+
+@patch("integrations.cloudtrail.tools.cloudtrail_events_tool.execute_aws_sdk_call")
+def test_realistic_page_shapes_every_event(mock_call) -> None:
+    """A faithful LookupEvents page (mixed principals, an errored call, a
+    service event without Username) shapes into the exact per-event contract."""
+    mock_call.return_value = {"success": True, "data": _fixture_payload("lookup_events_page.json")}
+
+    result = lookup_cloudtrail_events(duration_minutes=120)
+
+    assert result["available"] is True
+    assert result["total_events"] == 3
+    by_id = {event["event_id"]: event for event in result["events"]}
+
+    iam = by_id["8e3c6f2b-4a1d-4c8e-9f2a-1b7d3e5a9c01"]
+    assert iam["event_name"] == "PutRolePolicy"
+    assert iam["username"] == "deploy-bot"
+    assert iam["read_only"] is False
+    assert iam["access_key_id"] == "AKIAIOSFODNN7EXAMPLE"
+    assert iam["resources"] == [{"type": "AWS::IAM::Role", "name": "payments-service-role"}]
+    assert iam["aws_region"] == "us-east-1"
+    assert iam["source_ip_address"] == "203.0.113.24"
+    assert iam["error_code"] is None
+
+    # A denied call surfaces its errorCode from the CloudTrailEvent record.
+    denied = by_id["1f9a7c3e-6b2d-4a5f-8c1e-7d4b2a9f6e02"]
+    assert denied["event_name"] == "DeleteSecurityGroup"
+    assert denied["error_code"] == "Client.UnauthorizedOperation"
+    assert denied["source_ip_address"] == "198.51.100.7"
+
+    # AWS service events carry no Username or AccessKeyId — shaped as None,
+    # never a KeyError, and ReadOnly "true" coerces to a real bool.
+    service = by_id["5d2b8e4a-9c1f-4d7b-a3e6-8f5c2d1b9a03"]
+    assert service["username"] is None
+    assert service["access_key_id"] is None
+    assert service["read_only"] is True
+    assert service["resources"] == []
+
+
+@patch("integrations.cloudtrail.tools.cloudtrail_events_tool.execute_aws_sdk_call")
+def test_realistic_page_surfaces_pagination(mock_call) -> None:
+    mock_call.return_value = {"success": True, "data": _fixture_payload("lookup_events_page.json")}
+
+    result = lookup_cloudtrail_events()
+
+    assert result["truncated"] is True
+    assert result["next_token"] == "AAAAfR3kNzXhCq9lEXAMPLEtokenXo1v"
