@@ -20,7 +20,7 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: automerge-${{ github.event.pull_request.number || github.event.workflow_run.head_branch || github.run_id }}
+  group: automerge-${{ github.event.pull_request.head.ref || github.event.workflow_run.head_branch || github.run_id }}
   cancel-in-progress: true
 
 jobs:
