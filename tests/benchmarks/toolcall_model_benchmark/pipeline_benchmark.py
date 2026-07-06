@@ -79,7 +79,7 @@ class InvestigationBenchmarkRun:
 
 
 def reset_llm_singletons() -> None:
-    """Reset Anthropic/OpenAI singletons; delegates to app llm_client."""
+    """Reset the cached LLM clients; delegates to core.llm.factory.reset_llm_clients."""
     reset_llm_clients()
 
 

@@ -257,7 +257,7 @@ def test_activation_round_trip_resets_singletons_on_enter_and_exit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The reset must run both BEFORE yield (clears stale client so the
-    new env's get_agent_llm rebuilds) AND on finally (restores prior
+    new env's get_llm(LLMRole.AGENT) rebuilds) AND on finally (restores prior
     state so the next activation isn't polluted)."""
     monkeypatch.undo()
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")

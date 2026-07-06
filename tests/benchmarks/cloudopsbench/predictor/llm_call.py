@@ -62,7 +62,7 @@ def emit_paper_predictions(
     """Ask the LLM to translate the investigation into paper-format predictions.
 
     ``llm`` is opensre's agent LLM client (typically the same one that ran
-    the investigation, obtained via ``get_agent_llm()``). We call
+    the investigation, obtained via ``get_llm(LLMRole.AGENT)``). We call
     ``llm.invoke`` with ``tools=None`` so the model produces plain text,
     then parse the response.
 
