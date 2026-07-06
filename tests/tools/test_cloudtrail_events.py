@@ -418,3 +418,54 @@ def test_realistic_page_surfaces_pagination(mock_call) -> None:
 
     assert result["truncated"] is True
     assert result["next_token"] == "AAAAfR3kNzXhCq9lEXAMPLEtokenXo1v"
+
+
+@patch("integrations.cloudtrail.tools.cloudtrail_events_tool.execute_aws_sdk_call")
+def test_weird_page_survives_and_shapes_gracefully(mock_call) -> None:
+    """Degenerate live payloads must degrade to partial events, never raise.
+
+    The weird fixture packs the §1 cases: CloudTrailEvent as valid-but-non-dict
+    JSON (null / bare string / list) or invalid JSON, an event with only
+    EventId, ReadOnly as a real bool and as "True", a null plus a
+    _sanitize_response truncation marker inside Resources (one event CAN
+    reference >MAX_LIST_ITEMS resources, e.g. CreateTags across a fleet), and
+    the same marker as the final Events entry.
+    """
+    mock_call.return_value = {"success": True, "data": _fixture_payload("lookup_events_weird.json")}
+
+    result = lookup_cloudtrail_events()
+
+    assert result["available"] is True
+    # The trailing Events truncation marker (a str) is dropped, not shaped.
+    assert result["total_events"] == 7
+    by_id = {event["event_id"]: event for event in result["events"]}
+
+    # Valid-but-non-dict CloudTrailEvent JSON -> detail fields None, no crash.
+    for event_id in ("weird-null-detail", "weird-string-detail", "weird-list-detail"):
+        event = by_id[event_id]
+        assert event["aws_region"] is None
+        assert event["source_ip_address"] is None
+        assert event["error_code"] is None
+
+    # Invalid JSON keeps its existing graceful path.
+    assert by_id["weird-invalid-json-detail"]["aws_region"] is None
+
+    # An event carrying only EventId shapes with every other field defaulted.
+    bare = by_id["weird-bare-event"]
+    assert bare["event_name"] is None
+    assert bare["username"] is None
+    assert bare["read_only"] is None
+    assert bare["resources"] == []
+
+    # Non-dict Resources entries (null / truncation marker) are skipped; the
+    # real resource survives, and a bool ReadOnly passes through unchanged.
+    mixed = by_id["weird-resources-mixed"]
+    assert mixed["resources"] == [{"type": "AWS::EC2::Instance", "name": "i-0abc123def456789a"}]
+    assert mixed["read_only"] is True
+    assert mixed["aws_region"] == "eu-west-1"
+
+    # ReadOnly arrives with inconsistent casing in live payloads.
+    assert by_id["weird-readonly-mixed-case"]["read_only"] is True
+
+    assert result["truncated"] is True
+    assert result["next_token"] == "AAAAweirdPageToken"

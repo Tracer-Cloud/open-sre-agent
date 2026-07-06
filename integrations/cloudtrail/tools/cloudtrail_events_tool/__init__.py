@@ -58,12 +58,17 @@ def _build_lookup_attribute(
 
 def _shape_event(raw: dict[str, Any]) -> dict[str, Any]:
     """Trim a raw CloudTrail event down to the fields RCA actually needs."""
+    # Skip non-dict Resources entries: the transport sanitizer replaces the tail
+    # of an oversized list with a "... (N more items truncated)" string (one
+    # event CAN reference >MAX_LIST_ITEMS resources, e.g. CreateTags across a
+    # fleet), and degraded payloads may carry nulls.
     resources = [
         {
             "type": resource.get("ResourceType"),
             "name": resource.get("ResourceName"),
         }
         for resource in (raw.get("Resources") or [])
+        if isinstance(resource, dict)
     ]
 
     # CloudTrailEvent is a JSON string carrying the full record; pull the
@@ -74,6 +79,11 @@ def _shape_event(raw: dict[str, Any]) -> dict[str, Any]:
         try:
             parsed = json.loads(detail)
         except (ValueError, TypeError):
+            parsed = {}
+        # The record should be a JSON object, but degraded payloads can carry
+        # valid-but-non-dict JSON ("null", a bare string, a list) — treat those
+        # as "no detail" rather than crashing on .get.
+        if not isinstance(parsed, dict):
             parsed = {}
         aws_region = parsed.get("awsRegion")
         source_ip = parsed.get("sourceIPAddress")
@@ -242,7 +252,9 @@ def lookup_cloudtrail_events(
 
     data = result.get("data") or {}
     raw_events = data.get("Events") or []
-    events = [_shape_event(event) for event in raw_events]
+    # Shape only dict entries: the transport sanitizer appends a string
+    # truncation marker to oversized lists, which must not crash the parse.
+    events = [_shape_event(event) for event in raw_events if isinstance(event, dict)]
     # CloudTrail returns a NextToken when more matching events exist beyond this
     # page. Surface it so the agent knows the result is partial (and can paginate
     # via the next_token param) instead of silently treating 50 events as "all".
