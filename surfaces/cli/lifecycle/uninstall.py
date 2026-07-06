@@ -5,7 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from config.constants import LEGACY_INTEGRATIONS_STORE_PATH, OPENSRE_HOME_DIR
+from config.constants.paths import OPENSRE_HOME_DIR
 
 
 def _is_windows() -> bool:
@@ -41,7 +41,6 @@ def _pip_uninstall() -> int:
 def _data_dirs() -> list[Path]:
     return [
         OPENSRE_HOME_DIR,
-        LEGACY_INTEGRATIONS_STORE_PATH.parent,
         Path.home() / ".config" / "opensre",
     ]
 

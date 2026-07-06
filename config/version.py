@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import importlib.metadata
 import tomllib
-
-from config.constants.paths import REPO_ROOT
+from pathlib import Path
 
 
 def get_opensre_version() -> str:
@@ -15,10 +14,9 @@ def get_opensre_version() -> str:
     except importlib.metadata.PackageNotFoundError:
         pass
 
+    pyproject = Path(__file__).resolve().parents[1] / "pyproject.toml"
     try:
-        project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")).get(
-            "project"
-        )
+        project = tomllib.loads(pyproject.read_text(encoding="utf-8")).get("project")
         if isinstance(project, dict):
             version = project.get("version")
             if isinstance(version, str) and version.strip():
