@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 from typing import Any
+from unittest.mock import call
 
 import pytest
 
 from core.tool_framework.base import BaseTool
 from core.tool_framework.registered_tool import REGISTERED_TOOL_ATTR
 from core.tool_framework.tool_decorator import tool
-from platform.observability import sentry_sdk as sentry_mod
+import core.tool_framework.telemetry as telemetry_mod
 
 
 class ExplodingBaseTool(BaseTool):
@@ -25,10 +26,10 @@ def test_base_tool_exception_is_captured_with_tool_tag(
 ) -> None:
     captured: list[tuple[BaseException, dict[str, object]]] = []
 
-    def capture_stub(exc: BaseException, **kwargs: object) -> None:
+    def report_stub(exc: BaseException, **kwargs: object) -> None:
         captured.append((exc, kwargs))
 
-    monkeypatch.setattr(sentry_mod, "capture_exception", capture_stub)
+    monkeypatch.setattr(telemetry_mod, "report_exception", report_stub)
 
     result = ExplodingBaseTool()()
 
@@ -36,8 +37,7 @@ def test_base_tool_exception_is_captured_with_tool_tag(
     assert len(captured) == 1
     exc, kwargs = captured[0]
     assert isinstance(exc, RuntimeError)
-    assert kwargs["context"] == "tool.exploding_base_tool"
-    assert kwargs["tags"] == {"surface": "tool", "tool": "exploding_base_tool"}
+    assert kwargs["tags"] == {"surface": "tool", "tool_name": "exploding_base_tool", "source": "grafana"}  # type: ignore[index]
 
 
 def test_decorated_function_tool_exception_is_captured_with_tool_tag(
@@ -45,10 +45,10 @@ def test_decorated_function_tool_exception_is_captured_with_tool_tag(
 ) -> None:
     captured: list[tuple[BaseException, dict[str, object]]] = []
 
-    def capture_stub(exc: BaseException, **kwargs: object) -> None:
+    def report_stub(exc: BaseException, **kwargs: object) -> None:
         captured.append((exc, kwargs))
 
-    monkeypatch.setattr(sentry_mod, "capture_exception", capture_stub)
+    monkeypatch.setattr(telemetry_mod, "report_exception", report_stub)
 
     @tool(
         name="decorated_failure",
@@ -66,5 +66,4 @@ def test_decorated_function_tool_exception_is_captured_with_tool_tag(
     assert len(captured) == 1
     exc, kwargs = captured[0]
     assert isinstance(exc, ValueError)
-    assert kwargs["context"] == "tool.decorated_failure"
-    assert kwargs["tags"] == {"surface": "tool", "tool": "decorated_failure"}
+    assert kwargs["tags"] == {"surface": "tool", "tool_name": "decorated_failure", "source": "grafana"}  # type: ignore[index]

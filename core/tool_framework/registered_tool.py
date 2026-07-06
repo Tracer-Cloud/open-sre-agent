@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Callable, Iterable
 from copy import deepcopy
 from dataclasses import dataclass, field
