@@ -512,10 +512,9 @@ OpenSRE does not silently switch LLM providers when the provider in `LLM_PROVIDE
 - **`opensre auth` and `/auth status`** show prompt-safe status from environment variables, provider metadata, CLI probes, or ambient/local config.
 - **`opensre auth verify <provider>`** intentionally checks request-time credentials and refreshes metadata.
 - **`opensre config llm` and `opensre doctor`** report the configured provider plus credential status without resolving secrets.
-- **Provider errors** are prefixed with the configured provider that served the request:
+- **Provider errors** name the provider that served the request in the message itself, so you can tell at a glance which backend failed:
 
   ```
-  [LLM provider: openai]
   Missing credential for LLM provider 'openai'. Set OPENAI_API_KEY or run `opensre auth login openai`.
   ```
 

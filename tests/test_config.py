@@ -9,7 +9,6 @@ from config.config import (
     LLMSettings,
     describe_llm_resolution,
     has_credentials_for_active_llm_provider,
-    llm_provider_error_context,
     resolve_llm_settings,
     resolve_llm_settings_verbose,
 )
@@ -366,23 +365,3 @@ def test_describe_llm_resolution_reports_missing_configured_credentials(
     assert "resolved provider   : openai" in report
     assert "credential status   : none" in report
     assert "OPENAI_API_KEY" in report
-
-
-def test_llm_provider_error_context_uses_configured_provider(monkeypatch) -> None:
-    monkeypatch.setenv("LLM_PROVIDER", "openai")
-
-    context = llm_provider_error_context()
-
-    assert context == "[LLM provider: openai]"
-
-
-def test_llm_provider_error_context_no_fallback(monkeypatch) -> None:
-    monkeypatch.setenv("LLM_PROVIDER", "openai")
-
-    assert llm_provider_error_context() == "[LLM provider: openai]"
-
-
-def test_llm_provider_error_context_never_raises(monkeypatch) -> None:
-    monkeypatch.setenv("LLM_PROVIDER", "not-a-real-provider")
-
-    assert llm_provider_error_context() == ""

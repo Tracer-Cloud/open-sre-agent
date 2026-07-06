@@ -564,22 +564,6 @@ def describe_llm_resolution(
     return "\n".join(lines)
 
 
-def llm_provider_error_context(
-    fallback_providers: Sequence[str] = (),
-) -> str:
-    """Return a short bracketed provider context for prefixing error messages.
-
-    Never raises — diagnostics must not mask the original error. Returns an
-    empty string when resolution itself fails so callers can fall back to the
-    raw provider error untouched.
-    """
-    try:
-        resolution = resolve_llm_settings_verbose(fallback_providers)
-    except Exception:
-        return ""
-    return f"[LLM provider: {resolution.resolved_provider}]"
-
-
 def has_credentials_for_active_llm_provider() -> bool:
     """Return prompt-safe auth availability for the configured LLM provider."""
     settings = resolve_llm_settings()
