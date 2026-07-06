@@ -9,6 +9,7 @@ from typing import Any
 from litellm import completion
 from pydantic import BaseModel
 
+from core.context_budget import strip_internal_message_markers
 from core.llm.openai_chat_completions import (
     AGENT_CLIENT_TIMEOUT_SEC,
     LLM_CLIENT_TIMEOUT_SEC,
@@ -92,7 +93,7 @@ class LiteLLMAgentClient:
     ) -> dict[str, Any]:
         kwargs: dict[str, Any] = {
             "model": self._litellm_model,
-            "messages": prepend_system_message(messages, system),
+            "messages": prepend_system_message(strip_internal_message_markers(messages), system),
             "max_tokens": self._max_tokens,
             "timeout": AGENT_CLIENT_TIMEOUT_SEC,
         }
@@ -210,7 +211,9 @@ class LiteLLMLLMClient:
     def _build_request_kwargs(self, prompt_or_messages: Any) -> dict[str, Any]:
         from platform.guardrails.apply import apply_guardrails_to_messages
 
-        messages = normalize_messages_openai(prompt_or_messages)
+        # normalize_messages_openai already keeps only role/content, but strip explicitly
+        # so this stays safe if a future caller ever routes marked agent-history dicts here.
+        messages = strip_internal_message_markers(normalize_messages_openai(prompt_or_messages))
         messages, _ = apply_guardrails_to_messages(messages)
         kwargs: dict[str, Any] = {
             "model": self._litellm_model,
