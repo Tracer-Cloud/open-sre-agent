@@ -292,9 +292,12 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
     ),
     "/tools": _mcp(
         "Explicit /tools command operation: list registered investigation/chat tools "
-        "wired into this OpenSRE build.",
+        "wired into this OpenSRE build. Subcommands: list (default), count "
+        "(per-surface totals), search <query> or a bare <query> to filter by "
+        "name/description substring.",
         "User explicitly types /tools or asks to run /tools",
         "User explicitly asks to list registered tools as a shell command",
+        "User asks to count how many tools are registered or filter them by keyword",
         anti_examples=(
             "User asks conversationally what tools or capabilities the assistant can use (assistant_handoff)",
         ),
