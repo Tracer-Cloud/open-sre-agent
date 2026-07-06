@@ -6,11 +6,11 @@ from typing import Any
 
 from core import public_tool_input
 from core.domain.alerts.alert_source import (
-    ALERT_SOURCE_TO_SEED_TOOL_SOURCES,
     SECONDARY_TOOL_SOURCES,
     primary_sources_for_alert,
     relevant_sources_for_alert,
     resolve_alert_source,
+    seed_tool_sources_for_alert,
 )
 from core.llm.types import ToolCall
 from core.tool_framework.registered_tool import RegisteredTool
@@ -191,11 +191,7 @@ def build_seed_calls(
     llm: Any,
 ) -> list[ToolCall]:
     """Return tool calls to run before the LLM loop based on the alert source."""
-    alert_source = get_alert_source(state)
-    if not alert_source:
-        return []
-
-    target_sources = set(ALERT_SOURCE_TO_SEED_TOOL_SOURCES.get(alert_source, ()))
+    target_sources = set(seed_tool_sources_for_alert(state))
     if not target_sources:
         return []
 
