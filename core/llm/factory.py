@@ -10,9 +10,17 @@ a tool-calling client (``tool_schemas`` / ``invoke``); the other roles build the
 streaming reasoning client (``invoke`` / ``invoke_stream`` / ``with_structured_output``)
 for a given model tier. ``get_llm(role)`` is the single entrypoint — callers pass an ``LLMRole``.
 
-This module owns routing (:func:`resolve_llm_route`), the per-role cache, and the
-public entrypoint. Constructing the concrete client for a route lives in
-:mod:`core.llm.client_builders`.
+Public interface:
+
+- ``get_llm(role)`` — the cached client for a role; the entrypoint every surface calls.
+- ``reset_llm_clients()`` — clear the cache after a ``/model`` switch or env change.
+
+``resolve_llm_route()`` (the routing decision) and ``build_llm_client(model_type)``
+(an uncached build) are exposed for tests and benchmarks, not day-to-day callers.
+
+This module owns routing and the public entrypoint. Constructing the concrete
+client for a route lives in :mod:`core.llm.client_builders`; the client cache lives
+in :mod:`core.llm.internal.client_cache`.
 """
 
 from __future__ import annotations
