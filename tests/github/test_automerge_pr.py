@@ -148,8 +148,3 @@ def test_ignores_mintlify_vale_spellcheck_failure() -> None:
     )
     assert green is True
     assert reason == "all checks green"
-
-
-def test_parse_pr_numbers_splits_and_trims() -> None:
-    assert automerge_pr._parse_pr_numbers("3756, 3715") == ["3756", "3715"]
-    assert automerge_pr._parse_pr_numbers("") == []

@@ -14,43 +14,22 @@ Greptile is **not** a GitHub check — the workflow does not wait for it. Add th
 
 | Trigger | What runs |
 | ------- | --------- |
-| `automerge` label added, push, or reopen | Evaluate **that PR** only |
-| Any other workflow's `check_suite` completes | Scan **all open PRs** with the `automerge` label |
+| `automerge` label added, push, or reopen | Try merge on **that PR** |
+| CI / CodeQL / synthetic / turn-check workflows finish on a PR branch | Look up the open PR for that branch and try merge again |
 
-The check-suite sweep exists so labeling while CI is still running still merges once checks go green. Without it, the label event can fire once (`check still running: …`) and never retry.
-
-Merge criteria (see [`.github/scripts/automerge_pr.py`](scripts/automerge_pr.py)):
-
-- Targets `main`, open, not draft, mergeable
-- Has the `automerge` label
-- Every reported check is green (`SUCCESS`, `SKIPPED`, or `NEUTRAL`), except this workflow's own check and Mintlify `vale-spellcheck`
+Labeling while CI is still running is fine: the label event may log `check still running`, then the PR's own workflow completion retries automerge.
 
 ## Fork PRs and first-time contributors
 
-GitHub requires maintainer approval before `pull_request` workflows run on fork PRs from users who have never contributed to the repo.
+GitHub requires maintainer approval before `pull_request` workflows run on fork PRs from first-time contributors.
 
-| Event type | Runs without approval? | Examples |
-| ---------- | ---------------------- | -------- |
-| `pull_request` | **No** | CI, CodeQL, synthetic tests, turn checks |
-| `pull_request_target` | **Yes** | Auto-merge, Greptile reminder |
-
-**Recommended order for fork / first-time PRs:**
-
-1. Approve workflows on the PR checks tab.
-2. Wait for CI + Greptile 5/5.
-3. Add the `automerge` label.
-
-If you label before approving workflows, automerge may log `no status checks reported yet` until CI starts.
+**Recommended order:** approve workflows → wait for CI + Greptile 5/5 → add `automerge`.
 
 ## If a labeled PR is stuck
-
-Re-fire manually:
 
 ```bash
 gh pr edit <n> --add-label automerge
 ```
-
-Or remove and re-add the label, or push an empty commit with the label still present.
 
 ## Limits
 

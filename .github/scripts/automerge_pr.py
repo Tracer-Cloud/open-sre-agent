@@ -110,41 +110,10 @@ def _run_gh(args: list[str]) -> Any:
     return json.loads(result.stdout)
 
 
-def _parse_pr_numbers(raw: str) -> list[str]:
-    return [part.strip() for part in raw.split(",") if part.strip()]
+def main() -> int:
+    repo = os.environ["GITHUB_REPOSITORY"]
+    pr_number = os.environ["PR_NUMBER"]
 
-
-def _list_open_automerge_prs(repo: str) -> list[str]:
-    prs = _run_gh(
-        [
-            "pr",
-            "list",
-            "--repo",
-            repo,
-            "--state",
-            "open",
-            "--label",
-            AUTOMERGE_LABEL,
-            "--json",
-            "number",
-            "--limit",
-            "50",
-        ]
-    )
-    return [str(pr["number"]) for pr in prs]
-
-
-def _resolve_target_pr_numbers(repo: str) -> list[str]:
-    if os.environ.get("SCAN_AUTOMERGE_LABEL", "").lower() in {"1", "true", "yes"}:
-        numbers = _list_open_automerge_prs(repo)
-        print(f"Scanning {len(numbers)} open PR(s) labeled {AUTOMERGE_LABEL}.")
-        return numbers
-
-    explicit = _parse_pr_numbers(os.environ.get("PR_NUMBERS", os.environ.get("PR_NUMBER", "")))
-    return explicit
-
-
-def _try_merge_pr(repo: str, pr_number: str) -> bool:
     pr = _run_gh(
         [
             "pr",
@@ -159,29 +128,29 @@ def _try_merge_pr(repo: str, pr_number: str) -> bool:
 
     if pr.get("baseRefName") != "main":
         print(f"PR #{pr_number} does not target main; skipping.")
-        return False
+        return 0
 
     if pr.get("state") != "OPEN":
         print(f"PR #{pr_number} is not open; skipping.")
-        return False
+        return 0
 
     if pr.get("isDraft"):
         print(f"PR #{pr_number} is a draft; skipping.")
-        return False
+        return 0
 
     label_names = {label["name"] for label in pr.get("labels", [])}
     if AUTOMERGE_LABEL not in label_names:
         print(f"PR #{pr_number} does not have the {AUTOMERGE_LABEL} label; skipping.")
-        return False
+        return 0
 
     if pr.get("mergeable") != "MERGEABLE":
         print(f"PR #{pr_number} is not mergeable ({pr.get('mergeStateStatus')}); skipping.")
-        return False
+        return 0
 
     green, reason = _checks_are_green(pr.get("statusCheckRollup") or [])
     if not green:
         print(f"PR #{pr_number} not ready to merge: {reason}")
-        return False
+        return 0
 
     title = pr["title"]
     print(f"Merging PR #{pr_number}: {title}")
@@ -201,23 +170,6 @@ def _try_merge_pr(repo: str, pr_number: str) -> bool:
         check=True,
     )
     print(f"Merged PR #{pr_number}.")
-    return True
-
-
-def main() -> int:
-    repo = os.environ["GITHUB_REPOSITORY"]
-    pr_numbers = _resolve_target_pr_numbers(repo)
-    if not pr_numbers:
-        print("No pull requests to evaluate for automerge.")
-        return 0
-
-    merged_any = False
-    for pr_number in pr_numbers:
-        if _try_merge_pr(repo, pr_number):
-            merged_any = True
-
-    if not merged_any:
-        print("No pull requests were merged.")
     return 0
 
 
