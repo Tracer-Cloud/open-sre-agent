@@ -6,9 +6,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from core.domain.alerts.alert_source import (
-    SECONDARY_TOOL_SOURCES as SECONDARY_SOURCES,
-)
-from core.domain.alerts.alert_source import (
+    SECONDARY_TOOL_SOURCES,
     collect_alert_text,
     primary_sources_for_alert,
     relevant_sources_for_alert,
@@ -43,7 +41,7 @@ def score_tools(
         scored = [score_fallback_tool(action) for action in scored]
 
     return sorted(
-        scored, key=lambda item: (-item.score, item.source in SECONDARY_SOURCES, item.name)
+        scored, key=lambda item: (-item.score, item.source in SECONDARY_TOOL_SOURCES, item.name)
     )
 
 
@@ -65,7 +63,7 @@ def score_tool(
     if source in relevant_sources:
         score += 70
         reasons.append(f"source '{source}' matches alert context")
-    if source in SECONDARY_SOURCES:
+    if source in SECONDARY_TOOL_SOURCES:
         score -= 10
         reasons.append("secondary source, used after integration-specific tools")
 

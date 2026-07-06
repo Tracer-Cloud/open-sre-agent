@@ -198,6 +198,12 @@ def relevant_sources_for_alert(
 
 
 def resolve_alert_source(state: dict[str, Any]) -> str:
+    """Return the alert vendor key used to look up tool-source routing.
+
+    Grafana managed alerts reuse the Alertmanager webhook schema, so
+    ``alert_source`` is often missing from the payload — we sniff
+    ``grafana_folder`` / ``datasource_uid`` labels and ``externalURL`` below.
+    """
     source = str(state.get("alert_source") or "").lower().strip()
     if source:
         return source

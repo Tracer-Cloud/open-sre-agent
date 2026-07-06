@@ -1,6 +1,19 @@
+"""Weighted confidence from scored evidence contributions.
+
+An ``EvidenceContribution`` is one scored signal (correlation, topology, etc.)
+with an explicit weight. ``build_shared_confidence`` returns the weighted
+average and a high/medium/low label consumed by upstream-correlation reporting.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
+
+__all__ = [
+    "EvidenceContribution",
+    "SharedConfidence",
+    "build_shared_confidence",
+]
 
 
 @dataclass(frozen=True)

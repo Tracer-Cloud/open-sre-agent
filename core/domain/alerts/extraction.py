@@ -22,6 +22,8 @@ RAW_ALERT_DETAIL_FIELDS = (
 
 
 class AlertDetails(BaseModel):
+    """Normalized alert fields produced by the extract_alert stage."""
+
     is_noise: bool = Field(default=False)
     alert_name: str = Field(default="unknown")
     pipeline_name: str = Field(default="unknown")
@@ -39,6 +41,7 @@ class AlertDetails(BaseModel):
 
 
 def format_raw_alert(raw_alert: Any) -> str:
+    """Render raw alert payload as prompt text for the extract_alert LLM call."""
     if isinstance(raw_alert, str):
         return raw_alert
     if isinstance(raw_alert, dict):
@@ -49,6 +52,7 @@ def format_raw_alert(raw_alert: Any) -> str:
 
 
 def needs_full_json_prompt(raw_alert: dict[str, Any]) -> bool:
+    """Return True when extract_alert should receive full JSON instead of text-only."""
     src = str(raw_alert.get("alert_source", "")).lower()
     if src in CANONICAL_ALERT_SOURCES:
         return True
@@ -72,6 +76,7 @@ def needs_full_json_prompt(raw_alert: dict[str, Any]) -> bool:
 
 
 def fallback_details(state: Mapping[str, Any], raw_alert: Any) -> AlertDetails:
+    """Best-effort field extraction when the LLM path is unavailable."""
     alert_name = state.get("alert_name", "unknown")
     pipeline_name = state.get("pipeline_name", "unknown")
     severity = state.get("severity", "unknown")
@@ -124,6 +129,7 @@ def first_value(*values: Any) -> Any:
 
 
 def make_problem_md(details: AlertDetails) -> str:
+    """Build the operator-facing problem markdown header from extracted details."""
     parts = [
         f"# {details.alert_name}",
         f"Pipeline: {details.pipeline_name} | Severity: {details.severity}",
@@ -136,6 +142,7 @@ def make_problem_md(details: AlertDetails) -> str:
 
 
 def enrich_raw_alert(raw_alert: Any, details: AlertDetails) -> Any:
+    """Merge extracted details back into the raw alert dict for downstream stages."""
     if not isinstance(raw_alert, dict):
         raw_alert = {}
     enriched = dict(raw_alert)

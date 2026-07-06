@@ -1,3 +1,9 @@
+"""Pure upstream-correlation scoring algorithms.
+
+Scores time-window, topology, and periodicity signals for upstream candidates.
+All functions are deterministic; output feeds upstream-correlation reporting.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -10,6 +16,12 @@ from core.domain.correlation.confidence import (
     build_shared_confidence,
 )
 from core.domain.types.upstream import MetricSeries, UpstreamCandidate
+
+# Evidence weights for candidate correlation (sum to 1.0).
+TIME_WINDOW_WEIGHT = 0.45
+TOPOLOGY_WEIGHT = 0.30
+PERIODICITY_WEIGHT = 0.10
+FEATURE_WORKFLOW_WEIGHT = 0.15
 
 
 @dataclass(frozen=True)
@@ -86,7 +98,7 @@ def _trend(values: tuple[float, ...]) -> list[int]:
     return trend
 
 
-def _to_time_series(metric: MetricSeries) -> TimeSeries:
+def metric_to_time_series(metric: MetricSeries) -> TimeSeries:
     return TimeSeries(
         name=metric.name,
         timestamps=metric.timestamps,
@@ -214,19 +226,19 @@ def score_candidate_correlation(
             EvidenceContribution(
                 source="correlation",
                 score=time_window.score,
-                weight=0.45,
+                weight=TIME_WINDOW_WEIGHT,
                 rationale=time_window.rationale,
             ),
             EvidenceContribution(
                 source="topology",
                 score=topology.adjacency_score,
-                weight=0.30,
+                weight=TOPOLOGY_WEIGHT,
                 rationale=topology.rationale,
             ),
             EvidenceContribution(
                 source="periodicity",
                 score=periodicity_score,
-                weight=0.10,
+                weight=PERIODICITY_WEIGHT,
                 rationale=(
                     periodicity.rationale if periodicity is not None else "No periodicity evidence."
                 ),
@@ -234,7 +246,7 @@ def score_candidate_correlation(
             EvidenceContribution(
                 source="feature_workflow",
                 score=feature_workflow_score,
-                weight=0.15,
+                weight=FEATURE_WORKFLOW_WEIGHT,
                 rationale=getattr(
                     operator_hint,
                     "rationale",
@@ -278,7 +290,3 @@ def rank_upstream_candidates(
         return []
 
     return ranked[:top_n]
-
-
-def metric_to_time_series(metric: MetricSeries) -> TimeSeries:
-    return _to_time_series(metric)
