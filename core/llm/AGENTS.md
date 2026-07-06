@@ -40,7 +40,7 @@ Dispatch entrypoints — all routing lives in **one** place, `core/llm/factory.p
 ```text
 get_llm(role)  # role ∈ {AGENT, REASONING, CLASSIFICATION, TOOLCALL}
   → resolve_llm_route()               # the single provider/transport decision
-      cli_reg?  → CLI-backed subprocess client
+      cli_provider_registration?  → CLI-backed subprocess client
       use_litellm_for_provider? → build_litellm_*_client(settings, provider)   # transports/litellm/routing.py
       else      → native SDK client in transports/sdk/agent_clients.py or transports/sdk/llm_clients.py
 ```

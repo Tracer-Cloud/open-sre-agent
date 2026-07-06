@@ -54,7 +54,7 @@ class LLMRoute:
 
     settings: Any
     provider: str  # runtime provider (after auth-method resolution)
-    cli_reg: Any | None  # CLI-backed provider registration, or None
+    cli_provider_registration: Any | None
     use_litellm: bool
 
 
@@ -72,7 +72,7 @@ def resolve_llm_route() -> LLMRoute:
     return LLMRoute(
         settings=settings,
         provider=runtime_provider,
-        cli_reg=_cli_provider_registration(runtime_provider),
+        cli_provider_registration=_cli_provider_registration(runtime_provider),
         use_litellm=use_litellm_for_provider(runtime_provider),
     )
 
@@ -117,9 +117,11 @@ def _build_agent_client(route: LLMRoute) -> AgentLLMClient:
 
     settings, provider = route.settings, route.provider
 
-    if route.cli_reg is not None:
-        model_name = os.getenv(route.cli_reg.model_env_key, "").strip() or None
-        return CLIBackedAgentClient(route.cli_reg.adapter_factory(), model=model_name)
+    if route.cli_provider_registration is not None:
+        model_name = os.getenv(route.cli_provider_registration.model_env_key, "").strip() or None
+        return CLIBackedAgentClient(
+            route.cli_provider_registration.adapter_factory(), model=model_name
+        )
 
     if route.use_litellm:
         from core.llm.transports.litellm.routing import build_litellm_agent_client
@@ -181,13 +183,13 @@ def _build_llm_client(route: LLMRoute, model_type: _ModelType) -> Any:
             return None
         return str(getattr(settings, f"{provider_prefix}_toolcall_model"))
 
-    if route.cli_reg is not None:
+    if route.cli_provider_registration is not None:
         from config.config import DEFAULT_MAX_TOKENS
         from integrations.llm_cli.runner import CLIBackedLLMClient
 
-        model_name = os.getenv(route.cli_reg.model_env_key, "").strip() or None
+        model_name = os.getenv(route.cli_provider_registration.model_env_key, "").strip() or None
         return CLIBackedLLMClient(
-            route.cli_reg.adapter_factory(),
+            route.cli_provider_registration.adapter_factory(),
             model=model_name,
             max_tokens=DEFAULT_MAX_TOKENS,
             model_type=model_type,

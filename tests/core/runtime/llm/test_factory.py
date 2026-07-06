@@ -26,7 +26,7 @@ def test_resolve_llm_route_reports_provider_and_sdk_transport(monkeypatch: pytes
 
     assert route.provider == "anthropic"
     assert route.use_litellm is False
-    assert route.cli_reg is None
+    assert route.cli_provider_registration is None
 
 
 def test_resolve_llm_route_azure_forces_litellm(monkeypatch: pytest.MonkeyPatch):
@@ -43,7 +43,7 @@ def test_resolve_llm_route_azure_forces_litellm(monkeypatch: pytest.MonkeyPatch)
 
 def test_get_llm_routes_agent_and_non_agent_roles(monkeypatch: pytest.MonkeyPatch):
     route = LLMRoute(
-        settings=SimpleNamespace(), provider="anthropic", cli_reg=None, use_litellm=False
+        settings=SimpleNamespace(), provider="anthropic", cli_provider_registration=None, use_litellm=False
     )
     monkeypatch.setattr("core.llm.factory.resolve_llm_route", lambda: route)
     monkeypatch.setattr("core.llm.factory._build_agent_client", lambda _route: "AGENT_CLIENT")
