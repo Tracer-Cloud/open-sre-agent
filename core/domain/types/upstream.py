@@ -74,8 +74,11 @@ class PeriodicityScore:
 
 
 class HintEvidenceScore(Protocol):
-    score: float
-    rationale: str
+    @property
+    def score(self) -> float: ...
+
+    @property
+    def rationale(self) -> str: ...
 
 
 @dataclass(frozen=True)

@@ -17,13 +17,28 @@ FALLBACK_TOOL_NAMES: tuple[str, ...] = ("get_sre_guidance",)
 
 
 class PlannableTool(Protocol):
-    name: str
-    source: str
-    description: str
-    use_cases: list[str]
-    examples: list[str]
-    tags: list[str]
-    evidence_type: Any | None
+    """Read-only view of the tool fields the alert planner scores against."""
+
+    @property
+    def name(self) -> str: ...
+
+    @property
+    def source(self) -> str: ...
+
+    @property
+    def description(self) -> str: ...
+
+    @property
+    def use_cases(self) -> Sequence[str]: ...
+
+    @property
+    def examples(self) -> Sequence[str]: ...
+
+    @property
+    def tags(self) -> Sequence[str]: ...
+
+    @property
+    def evidence_type(self) -> Any: ...
 
 
 def score_tools(
