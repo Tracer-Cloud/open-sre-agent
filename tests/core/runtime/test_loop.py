@@ -230,15 +230,15 @@ def test_transform_messages_hook_filters_context_sent_to_llm() -> None:
         tools=[],
         resolved_integrations={},
         max_iterations=1,
-        provider_hooks=ProviderHooks(
-            transform_messages=lambda messages: list(messages)[-1:]
-        ),
+        provider_hooks=ProviderHooks(transform_messages=lambda messages: list(messages)[-1:]),
     )
 
-    agent.run([
-        {"role": "user", "content": "first"},
-        {"role": "user", "content": "second"},
-    ])
+    agent.run(
+        [
+            {"role": "user", "content": "first"},
+            {"role": "user", "content": "second"},
+        ]
+    )
 
     assert llm.invocations == 1
     assert len(llm.seen_messages[0]) == 1
