@@ -23,7 +23,7 @@ from core.agent.react_loop import run_react_loop
 from core.agent.run_io import AgentRunInput, AgentRunResult
 from core.events import RuntimeEventCallback, TupleEventCallback
 from core.execution import ToolExecutionHooks
-from core.llm.factory import LLMRole, get_llm
+from core.llm.factory import LLMRole
 from core.messages import ProviderMessage, RuntimeMessage, RuntimeMessageLike
 from core.provider import ProviderHooks, ProviderRequest
 from core.types import RuntimeTool
@@ -113,7 +113,9 @@ class Agent[RuntimeToolT: RuntimeTool](EventEmitterMixin, ToolFilterMixin, Steer
     def _get_llm(self) -> Any:
         """Return the run's LLM: the instance given at construction, or the process-wide singleton."""
         if self._llm is None:
-            self._llm = get_llm(LLMRole.AGENT)
+            from core.llm import factory
+
+            self._llm = factory.get_llm(LLMRole.AGENT)
         if self._llm is None:
             raise RuntimeError("Agent.run: llm must be set before the loop")
         return self._llm
