@@ -367,7 +367,7 @@ def render_ready_box(
 def render_banner(console: Console | None = None) -> None:
     """Render splash + ready-state box in one call (legacy entry point).
 
-    Existing callers (main.repl_main) continue to work unchanged.
+    Existing callers (main.run_repl) continue to work unchanged.
     """
     _console = console or Console(
         highlight=False,

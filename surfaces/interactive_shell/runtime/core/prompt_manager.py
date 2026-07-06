@@ -50,7 +50,7 @@ class PromptManager:
 
     def setup(self) -> None:
         if self.pt_session is None:
-            self.pt_session = input_prompt._build_prompt_session(self.session)
+            self.pt_session = input_prompt.build_prompt_session(self.session)
             self.session.prompt_history_backend = self.pt_session.history
 
         cancel_kb = build_cancel_key_bindings(self.state)

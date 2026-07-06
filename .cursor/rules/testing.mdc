@@ -2,8 +2,9 @@
 description: Testing conventions and patterns
 globs:
   - tests/**
-  - app/**/*_test.py
-  - app/**/test_*.py
+  - gateway/tests/**
+  - "**/*_test.py"
+  - "**/test_*.py"
 ---
 
 # Testing Conventions

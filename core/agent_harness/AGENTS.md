@@ -14,8 +14,12 @@ terminal and be invoked headlessly via `agent_harness.turns.headless_dispatch`.
   point of the package and is checked by
   `tests/core/agent/test_import_boundaries.py`. The dependency direction is strictly
   one-way: `interactive_shell -> agent_harness -> core`.
-- `agent_harness/` may depend on `core/`, `config/`, `platform/`, `integrations/`, and
-  `tools/`. It must not depend on terminal UI concerns (Rich rendering,
+- `agent_harness/` may depend on `core/`, `config/`, and `platform/`. It must not
+  import `integrations/`, `tools/`, `surfaces/`, or `gateway/`. Integration and tool
+  behavior reaches the harness through ports in `platform/harness_ports.py`, wired at
+  startup via `install_harness_ports()` in `surfaces/interactive_shell/ui/output/boundary.py`
+  (called from `install_product_adapters()`).
+  It must not depend on terminal UI concerns (Rich rendering,
   prompt-toolkit mutable UI state, slash dispatch, the shell `REGISTRY`). The
   reusable session model, prompt history, grounding cache contracts, and task
   records live here; `interactive_shell` supplies adapters and registry

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from core.agent_harness.session.background import BackgroundInvestigationRecord
-from integrations.smtp.delivery import format_background_rca_email, send_smtp_report
 
 
 def deliver_background_notifications(
@@ -12,6 +11,10 @@ def deliver_background_notifications(
     channels: tuple[str, ...],
 ) -> dict[str, str]:
     """Send configured notifications for a completed background RCA."""
+    # Imported lazily: email delivery only fires on background-RCA completion, so
+    # the SMTP client must not load into the base REPL boot import path.
+    from integrations.smtp.delivery import format_background_rca_email, send_smtp_report
+
     results: dict[str, str] = {}
     from integrations.catalog import resolve_effective_integrations
 

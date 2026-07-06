@@ -14,7 +14,6 @@ from core.domain.alerts import inbox as _alert_inbox
 from surfaces.interactive_shell.runtime.background.runner import drain_background_notices
 from surfaces.interactive_shell.runtime.core.state import ReplState, SpinnerState
 from surfaces.interactive_shell.ui.alerts import drain_and_render_incoming
-from tools.system.fleet_monitoring.sampler import start_sampler
 
 log = logging.getLogger(__name__)
 
@@ -36,18 +35,45 @@ class BackgroundTaskManager:
         self.inbox = inbox
         self.prompt_invalidator = prompt_invalidator
         self.tasks: list[tuple[str, asyncio.Task[None]]] = []
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._sampler_started = False
 
     def start_all(
         self,
         processor_coro: Callable[[], Coroutine[Any, Any, None]],
     ) -> list[tuple[str, asyncio.Task[None]]]:
+        # The fleet sampler (and its psutil dependency) is intentionally NOT
+        # started here: local-agent monitoring only runs once the user actually
+        # opens /fleet, via ``ensure_fleet_sampler_started``.
+        self._loop = asyncio.get_running_loop()
         self.tasks = [
-            ("sampler", start_sampler()),
             ("processor", asyncio.create_task(processor_coro())),
             ("alert watcher", asyncio.create_task(self._alert_watcher())),
             ("spinner ticker", asyncio.create_task(self._spinner_ticker())),
         ]
         return self.tasks
+
+    def ensure_fleet_sampler_started(self) -> None:
+        """Start the fleet sampler on demand (first live ``/fleet`` use).
+
+        Safe to call from any thread: a shell turn (and thus the ``/fleet``
+        handler) runs in a worker thread via ``asyncio.to_thread``, so sampler
+        task creation is marshalled back onto the REPL event loop. Idempotent.
+        """
+        loop = self._loop
+        if loop is None:
+            return
+        loop.call_soon_threadsafe(self._start_sampler_task)
+
+    def _start_sampler_task(self) -> None:
+        if self._sampler_started:
+            return
+        # Imported lazily so base REPL startup does not pull the sampler +
+        # psutil into the import path.
+        from tools.system.fleet_monitoring.sampler import start_sampler
+
+        self._sampler_started = True
+        self.tasks.append(("sampler", start_sampler()))
 
     def drain_turn_start_output(self, console: Console) -> None:
         if self.inbox is not None:

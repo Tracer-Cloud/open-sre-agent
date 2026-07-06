@@ -1,5 +1,3 @@
-# Transitive layer contracts for OpenSRE (T-12, issue #3545).
-#
 # Counterpart to .github/ci/check_direct_imports.py (direct edges only).
 # Run: make check-layers-strict
 #
@@ -14,12 +12,6 @@ root_packages =
     integrations
     platform
     tools
-
-[importlinter:contract:config-independent]
-name = Config is independent
-type = independence
-modules =
-    config
 
 [importlinter:contract:opensre-layers]
 name = OpenSRE package layers (transitive)
@@ -38,6 +30,7 @@ ignore_imports =
     config.llm_keyring -> platform
     config.repl_config -> platform.terminal.theme
     config.webapp -> platform.observability.sentry_sdk
+<<<<<<< HEAD
     # core -> integrations/tools (T-4 debt — agent_harness / llm_cli)
     core.agent_harness.turns.action_driver -> integrations.llm_cli.failure_explain
     core.agent_harness.turns.evidence_driver -> integrations.github.repo_scope
@@ -51,6 +44,14 @@ ignore_imports =
     core.llm.factory -> integrations.llm_cli.runner
     core.llm.transports.sdk.agent_clients -> integrations.llm_cli.runner
     core.llm.transports.sdk.agent_clients -> integrations.llm_cli.text
+=======
+    # core -> integrations/tools (T-4 debt — llm_cli)
+    core.llm.agent_llm_client -> integrations.llm_cli.registry
+    core.llm.llm_client -> integrations.llm_cli.registry
+    core.llm.llm_client -> integrations.llm_cli.runner
+    core.llm.sdk.agent_clients -> integrations.llm_cli.runner
+    core.llm.sdk.agent_clients -> integrations.llm_cli.text
+>>>>>>> origin
     core.llm_invoke_errors -> integrations.llm_cli.errors
     # platform -> integrations (T-4 debt — scheduler / observability)
     platform.analytics.cli -> integrations.github.identity

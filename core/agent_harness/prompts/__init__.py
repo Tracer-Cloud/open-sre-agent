@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from core.agent_harness.prompts.action import ActionPlannerPrompt, build_action_planner_prompt
 from core.agent_harness.prompts.action_agent_prompt import (
     build_action_system_prompt,
     build_action_system_prompt_envelope,
@@ -34,11 +33,9 @@ __all__ = [
     "_SYSTEM_PROMPT_BASE",
     "_build_observation_block",
     "_build_system_prompt",
-    "ActionPlannerPrompt",
     "AssistantPromptContextProvider",
     "PromptBlock",
     "PromptEnvelope",
-    "build_action_planner_prompt",
     "build_action_system_prompt",
     "build_action_system_prompt_envelope",
     "build_action_user_message",

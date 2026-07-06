@@ -248,8 +248,10 @@ Other tools:
   target (e.g. "switch to anthropic", "use openai", "set provider to ollama").
   A vague local-model request that does NOT name an exact provider — e.g.
   "connect to local llama", "use a local model", "run locally" — is NOT a
-  provider switch: emit assistant_handoff so the assistant can clarify and
-  suggest "/model set ollama". Do NOT guess "ollama" from "local llama".
+  provider switch: emit assistant_handoff(content="provider:local_llama_connect")
+  so the assistant can clarify setup steps. Do NOT guess "ollama" from "local llama",
+  do NOT run llm_set_provider, do NOT use slash_invoke for /remote or
+  /integrations setup llama (llama is not an integration name).
 - alert_sample — run a sample alert (template="generic")
 - investigation_start — start an investigation ONLY when the user explicitly asks
   to investigate/analyze/diagnose/RCA/root-cause a pasted alert text or free-form
@@ -370,5 +372,7 @@ with a concise handoff content. Three exceptions take precedence over this hando
    NOT such a question — hand it off.
 When you do hand the whole request off, emit ONLY the assistant_handoff call. The
 planner only forwards actions emitted through tool calls, so always emit a tool
-call rather than relying on plain-text output.
+call rather than relying on plain-text output. Use concise structured content tags
+when the topic is known — for example docs:datadog_setup, chat:greeting, or
+provider:local_llama_connect for vague local-model connection requests.
 """

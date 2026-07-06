@@ -247,13 +247,13 @@ def wire_tool_registry(monkeypatch: Any, tools: list[RegisteredTool]) -> None:
     reset_probe_runs()
     reset_integrations_seen()
     monkeypatch.setattr(
-        "core.agent_harness.tools.action_tools.get_registered_tools",
-        lambda _surface=None: list(tools),
+        "core.agent_harness.tools.action_tools.get_surface_tools",
+        lambda _surface: list(tools),
     )
     by_name = {tool.name: tool for tool in tools}
     monkeypatch.setattr(
-        "core.agent_harness.tools.action_tools.get_registered_tool_map",
-        lambda _surface=None: dict(by_name),
+        "core.agent_harness.tools.action_tools.get_surface_tool_map",
+        lambda _surface: dict(by_name),
     )
 
     from core.agent_harness.tools.action_tools import _sources_for_context

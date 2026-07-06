@@ -27,6 +27,7 @@ class ToolCallingTurnResult:
     has_unhandled_clause: bool
     handled: bool
     response_text: str = ""
+    handoff_contents: tuple[str, ...] = ()
     accounting_status: ToolCallingAccountingStatus = "completed"
 
 

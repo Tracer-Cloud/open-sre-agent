@@ -128,6 +128,20 @@ class TestToProviderMessages:
         result = bus.to_provider_messages([msg])
         assert result == [payload]
 
+    def test_normalize_then_to_provider_messages_strips_internal_markers(self) -> None:
+        """A marked dict round-tripped through normalize -> to_provider_messages must not
+        leak ``_opensre_*`` keys back out, even though provider_payload retains them."""
+        bus = MessageFormatter(_FakeLLM())
+        raw = {
+            "role": "assistant",
+            "content": "ok",
+            "_opensre_seed": True,
+        }
+        normalized = MessageFormatter.normalize([raw])
+        result = bus.to_provider_messages(normalized)
+        assert result == [{"role": "assistant", "content": "ok"}]
+        assert raw["_opensre_seed"] is True
+
     def test_tool_result_without_payloads_builds_via_llm(self) -> None:
         bus = MessageFormatter(_FakeLLM())
         tc = ToolCall(id="t1", name="foo", input={})

@@ -39,7 +39,7 @@ ignore = [
 # Per-file ignores for legitimate patterns
 [lint.per-file-ignores]
 # Tests: pytest fixtures/parameters often appear unused — keep ignoring those.
-# F401 is enforced so unused imports surface in lint (and CI) like in app/.
+# F401 stays enforced everywhere so unused imports surface in lint (and CI).
 "tests/**/*.py" = ["ARG001", "E402"]
 # CLI entry points
 "surfaces/cli/__main__.py" = ["ARG001"]

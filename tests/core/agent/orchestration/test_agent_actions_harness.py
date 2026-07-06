@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from typing import Any
 
 import pytest
 from rich.console import Console
 
 import tools.interactive_shell.actions.slash as slash_tool
+from core.agent_harness.models.turn_results import ToolCallingTurnResult
+from core.agent_harness.providers.default_providers import DefaultTurnAccounting
 from core.agent_harness.session import Session
 from core.agent_harness.turns.action_driver import (
     ActionTurnPlan,
@@ -16,6 +19,7 @@ from core.agent_harness.turns.action_driver import (
     _turn_resolved_integrations,
     run_action_agent_turn,
 )
+from core.agent_harness.turns.orchestrator import run_turn
 from core.tool_framework.registered_tool import RegisteredTool
 from surfaces.interactive_shell.runtime.action_turn import run_action_tool_turn
 from tests.core.agent.orchestration.action_execution_test_harness import (
@@ -237,7 +241,111 @@ def test_execute_with_harness_hands_off_handoff_only_tool_call() -> None:
     assert result.handled is False
     assert result.has_unhandled_clause is False
     assert result.planned_count == 0
+    assert result.handoff_contents == ("docs:help",)
     assert "Requested actions" not in harness.console_buffer.getvalue()
+
+
+def test_local_llama_handoff_populates_handoff_contents() -> None:
+    harness = ActionExecutionHarness(
+        llm=FakeActionLLM(
+            [tool_response("assistant_handoff", {"content": "provider:local_llama_connect"})],
+        )
+    )
+
+    result = run_action_tool_turn(
+        "please connect to local llama",
+        Session(),
+        harness.console,
+        deps=harness.deps,
+    )
+
+    assert result.handled is False
+    assert result.handoff_contents == ("provider:local_llama_connect",)
+
+
+def test_route_handoff_skips_handled_without_llm() -> None:
+    from core.agent_harness.turns.orchestrator import TurnRoutingInput, _route_turn
+
+    routing = TurnRoutingInput(
+        action_handled=True,
+        executed_success_count=1,
+        has_observation=False,
+    )
+    route = _route_turn(routing, handoff_contents=("provider:local_llama_connect",))
+    assert route.intent == "gather_and_answer"
+
+
+def test_route_handled_without_handoff_stays_action_only() -> None:
+    from core.agent_harness.turns.orchestrator import TurnRoutingInput, _route_turn
+
+    routing = TurnRoutingInput(
+        action_handled=True,
+        executed_success_count=1,
+        has_observation=False,
+    )
+    route = _route_turn(routing)
+    assert route.intent == "handled_without_llm"
+
+
+def test_run_turn_passes_handoff_contents_to_assistant() -> None:
+    captured: list[tuple[str, ...]] = []
+
+    def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
+        return ToolCallingTurnResult(
+            planned_count=0,
+            executed_count=0,
+            executed_success_count=0,
+            has_unhandled_clause=False,
+            handled=False,
+            handoff_contents=("provider:local_llama_connect",),
+        )
+
+    def _answer(*_args: Any, handoff_contents: tuple[str, ...] = (), **_kwargs: Any) -> None:
+        captured.append(handoff_contents)
+        return None
+
+    run_turn(
+        "please connect to local llama",
+        Session(),
+        execute_actions=_execute,
+        gather=lambda *_args, **_kwargs: None,
+        answer=_answer,
+        accounting=DefaultTurnAccounting(Session(), "please connect to local llama"),
+    )
+
+    assert captured == [("provider:local_llama_connect",)]
+
+
+def test_run_turn_mixed_action_and_handoff_routes_to_assistant() -> None:
+    """Handled action plus handoff tags must not take the handled_without_llm path."""
+    captured: list[tuple[str, ...]] = []
+
+    def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
+        return ToolCallingTurnResult(
+            planned_count=1,
+            executed_count=1,
+            executed_success_count=1,
+            has_unhandled_clause=False,
+            handled=True,
+            response_text="ran /health",
+            handoff_contents=("provider:local_llama_connect",),
+        )
+
+    def _answer(*_args: Any, handoff_contents: tuple[str, ...] = (), **_kwargs: Any) -> None:
+        captured.append(handoff_contents)
+        return None
+
+    result = run_turn(
+        "check health and connect local llama",
+        Session(),
+        execute_actions=_execute,
+        gather=lambda *_args, **_kwargs: None,
+        answer=_answer,
+        accounting=DefaultTurnAccounting(Session(), "check health and connect local llama"),
+    )
+
+    assert captured == [("provider:local_llama_connect",)]
+    assert result.final_intent == "cli_agent_fallback"
 
 
 def test_execute_with_harness_handles_llm_unavailable() -> None:

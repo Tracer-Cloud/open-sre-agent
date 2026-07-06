@@ -15,8 +15,8 @@ from surfaces.interactive_shell.runtime.startup.first_launch_github import (
     require_startup_github_login,
 )
 from surfaces.interactive_shell.runtime.startup.initial_input import run_initial_input
-from surfaces.interactive_shell.ui import input_prompt as _input_prompt
-from surfaces.interactive_shell.ui import render_banner
+from surfaces.interactive_shell.ui.banner import render_banner
+from surfaces.interactive_shell.ui.input_prompt import build_prompt_session
 from tools.system.fleet_monitoring.sweep import run_startup_sweep
 
 _console = Console(
@@ -24,7 +24,7 @@ _console = Console(
 )
 
 
-async def repl_main(
+async def run_repl_async(
     initial_input: str | None = None,
     _config: ReplConfig | None = None,
     resume_session_id: str | None = None,
@@ -34,7 +34,7 @@ async def repl_main(
     identify_saved_github_username()
 
     cfg = _config or ReplConfig.load()
-    pt_session = _input_prompt._build_prompt_session()
+    pt_session = build_prompt_session()
     runtime_context = create_repl_runtime_context(pt_session=pt_session)
     session = runtime_context.session
 
@@ -92,7 +92,7 @@ def run_repl(
                 return 0
 
         return asyncio.run(
-            repl_main(
+            run_repl_async(
                 initial_input=initial_input,
                 _config=cfg,
                 resume_session_id=resume_session_id,
@@ -102,4 +102,4 @@ def run_repl(
         return 0
 
 
-__all__ = ["repl_main", "run_repl"]
+__all__ = ["run_repl", "run_repl_async"]

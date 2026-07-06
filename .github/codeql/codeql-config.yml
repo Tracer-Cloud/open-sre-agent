@@ -1,7 +1,7 @@
 name: "CodeQL config"
 
 paths-ignore:
-  # Vendored third-party pipeline code in test fixtures — not owned by this project
-  - tests/e2e/upstream_lambda/pipeline_code/**
-  - tests/e2e/upstream_apache_flink_ecs/pipeline_code/**
-  - tests/e2e/upstream_prefect_ecs_fargate/pipeline_code/**
+  # Vendored third-party pipeline code in test fixtures — not owned by this project.
+  # Covers every tests/e2e/<case>/pipeline_code/ fixture (lambda, flink, prefect,
+  # datadog, kubernetes, …) so new cases are ignored automatically.
+  - tests/e2e/**/pipeline_code/**

@@ -9,6 +9,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from core.context_budget import strip_internal_message_markers
 from core.domain.diagnosis.alignment import apply_category_alignment_adjustments
 from core.domain.types.root_cause_categories import (
     HERMES_ROOT_CAUSE_CATEGORIES,
@@ -89,7 +90,10 @@ def result_to_state(result: InvestigationResult) -> dict[str, Any]:
         "investigation_recommendations": result.investigation_recommendations,
         "evidence": result.evidence,
         "evidence_entries": result.evidence_entries,
-        "agent_messages": result.agent_messages,
+        # Diagnose is the last stage to read agent_messages — the context-budget
+        # eviction markers on it (_opensre_seed, _opensre_duplicate_result) have
+        # already served their purpose and must not leak into persisted state.
+        "agent_messages": strip_internal_message_markers(result.agent_messages),
     }
 
 

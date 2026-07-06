@@ -62,6 +62,17 @@ def test_core_agent_harness_does_not_import_surfaces_cli() -> None:
     assert not offenders, "\n".join(offenders)
 
 
+def test_core_agent_harness_does_not_import_integrations_or_tools() -> None:
+    root = _repo_root()
+    offenders = _collect_surface_import_offenders(
+        root,
+        package_root=root / "core" / "agent_harness",
+        forbidden_modules=frozenset({"integrations", "tools"}),
+        forbidden_prefixes=("integrations.", "tools."),
+    )
+    assert not offenders, "\n".join(offenders)
+
+
 def _type_checking_import_lines(tree: ast.Module) -> set[int]:
     """Line numbers of imports inside an ``if TYPE_CHECKING:`` block (typing-only)."""
     lines: set[int] = set()

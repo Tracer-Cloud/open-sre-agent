@@ -24,7 +24,7 @@ Before any push or PR creation follow **[CI.md](CI.md)** — lint, format, typec
 | `surfaces/interactive_shell/` | Interactive terminal (REPL) loop, slash commands, chat/help surfaces, action-planning harness, and terminal UI. |
 | `integrations/`       | Per-integration config normalization, verification, clients, helpers, store/catalog logic, the Hermes log pipeline, and per-vendor tool packages under `integrations/<vendor>/tools/`. |
 | `tools/`              | Tool registry, per-tool packages for cross-cutting tools that aren't vendor-specific (e.g. `tools/system/fleet_monitoring/`, `tools/system/watch_dog/`, `tools/system/sre_guidance_tool/`), and the interactive-shell action tools. Framework primitives (decorator, base class, utils) live in `core/tool_framework/`. |
-| `platform/`           | Cross-cutting platform services: guardrails, masking, sandbox, analytics, auth, notifications, observability, and EC2 deployment (`platform/deployment/`). |
+| `platform/`           | Cross-cutting platform services: guardrails, masking, sandbox, analytics, auth, notifications, observability, harness ports (`platform/harness_ports.py`), and EC2 deployment (`platform/deployment/`). |
 | `config/`             | Shared constants, prompts, UI theme, and the web app entrypoint (`config/webapp.py`).              |
 | `tests/`              | Unit, integration, synthetic, deployment, e2e, chaos engineering, and support tests.               |
 | `docs/`               | User-facing documentation, integration guides, and docs-site assets.                               |
@@ -54,6 +54,7 @@ Main packages one level deeper:
 - `platform/deployment/aws/` — Shared boto3 client factory, deployment constants (`config.py`), VPC/subnet/SG helpers, EC2/IAM provisioning, ECR build/push, and SSM run-command primitives. Import from here in deployment scripts instead of duplicating.
 - `platform/deployment/` — EC2 deploy/destroy: `opensre-web` and `opensre-gateway` on one instance. Makefile: `make deploy`.
 - `platform/guardrails/` — Guardrail rules, evaluation engine, audit helpers, and CLI bindings.
+- `platform/harness_ports.py` — Harness port layer (integration resolution, tool registry, investigation tools, GitHub repo scope). Real implementations are wired at startup via `integrations/harness_adapters.py` and `tools/harness_adapters.py` through `install_harness_ports()` in `surfaces/interactive_shell/ui/output/boundary.py`. See `core/agent_harness/AGENTS.md` for the import boundary.
 - `integrations/` — Integration config normalization, verification, selectors, clients, integration-local helpers, store, and catalog logic.
 - `integrations/hermes/` — Hermes log tailing, incident classification, correlator, sinks, and investigation bridge.
 - `integrations/llm_cli/` — Subprocess-backed LLM CLIs (e.g. Codex). Extension guide: `integrations/llm_cli/AGENTS.md`.
