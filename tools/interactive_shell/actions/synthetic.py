@@ -5,7 +5,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Any
 
-from config.constants.paths import REPO_ROOT
+from config.constants.paths import SYNTHETIC_SCENARIOS_DIR
 from core.agent_harness.tools.tool_context import (
     ActionToolContext,
     capability_available_from_sources,
@@ -18,18 +18,16 @@ from tools.interactive_shell.synthetic.runner import (
     run_synthetic_test,
 )
 
-_SYNTHETIC_SCENARIOS_DIR = REPO_ROOT / "tests" / "synthetic" / "rds_postgres"
-
 
 @lru_cache(maxsize=1)
 def list_rds_postgres_scenarios() -> tuple[str, ...]:
     """Enumerate available RDS Postgres synthetic scenario directory names."""
-    if not _SYNTHETIC_SCENARIOS_DIR.is_dir():
+    if not SYNTHETIC_SCENARIOS_DIR.is_dir():
         return ()
     return tuple(
         sorted(
             entry.name
-            for entry in _SYNTHETIC_SCENARIOS_DIR.iterdir()
+            for entry in SYNTHETIC_SCENARIOS_DIR.iterdir()
             if entry.is_dir()
             and len(entry.name) >= 5
             and entry.name[:3].isdigit()

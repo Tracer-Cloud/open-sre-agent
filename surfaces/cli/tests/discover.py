@@ -8,12 +8,11 @@ from typing import cast
 import yaml
 from typing_extensions import TypedDict
 
-from config.constants.paths import REPO_ROOT
+from config.constants.paths import REPO_ROOT, SYNTHETIC_SCENARIOS_DIR
 from surfaces.cli.tests.catalog import TestCatalog, TestCatalogItem, TestRequirement
 
 MAKEFILE_PATH = REPO_ROOT / "Makefile"
 RCA_DIR = REPO_ROOT / "tests" / "e2e" / "rca"
-SYNTHETIC_SCENARIOS_DIR = REPO_ROOT / "tests" / "synthetic" / "rds_postgres"
 OPENCLAW_SYNTHETIC_SCENARIOS_DIR = REPO_ROOT / "tests" / "synthetic" / "openclaw" / "scenarios"
 CLOUDOPSBENCH_DIR = REPO_ROOT / "tests" / "benchmarks" / "cloudopsbench"
 

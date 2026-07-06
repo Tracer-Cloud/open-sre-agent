@@ -8,6 +8,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PROJECT_ROOT = REPO_ROOT
 
+SYNTHETIC_SCENARIOS_DIR = REPO_ROOT / "tests" / "synthetic" / "rds_postgres"
+
 OPENSRE_HOME_DIR = Path.home() / ".opensre"
 INTEGRATIONS_STORE_PATH = OPENSRE_HOME_DIR / "integrations.json"
 OPENSRE_TMP_DIR = Path(tempfile.gettempdir()) / "opensre"
@@ -33,6 +35,7 @@ __all__ = [
     "OPENSRE_TMP_DIR",
     "PROJECT_ROOT",
     "REPO_ROOT",
+    "SYNTHETIC_SCENARIOS_DIR",
     "ensure_opensre_tmp_dir",
     "get_store_path",
 ]

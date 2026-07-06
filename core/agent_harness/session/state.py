@@ -366,16 +366,13 @@ class Session:
         if not scenario_id:
             self.last_synthetic_observation_path = None
             return
-        # ``config`` is the shared layer both ``core`` and ``surfaces`` can
-        # depend on; the constant used to live in ``surfaces.cli.tests.discover``
-        # but that direct edge is a layering violation (T-06, issue #3539).
+        # Shared path constant lives in config so core and surfaces stay decoupled.
         try:
-            from config.constants.paths import REPO_ROOT
+            from config.constants.paths import SYNTHETIC_SCENARIOS_DIR
         except Exception:
             self.last_synthetic_observation_path = None
             return
-        scenarios_dir = REPO_ROOT / "tests" / "synthetic" / "rds_postgres"
-        latest = scenarios_dir / "_observations" / scenario_id / "latest.json"
+        latest = SYNTHETIC_SCENARIOS_DIR / "_observations" / scenario_id / "latest.json"
         for _ in range(8):
             if latest.is_file():
                 self.last_synthetic_observation_path = str(latest.resolve())
