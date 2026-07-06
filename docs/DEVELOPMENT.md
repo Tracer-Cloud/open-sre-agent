@@ -48,7 +48,7 @@ The six-stage investigation pipeline (resolve integrations → extract alert →
 
 ## Investigation tool calling
 
-Tool schemas, provider adapters (`agent_llm_client.py`), and investigation message shapes are documented in [`docs/investigation-tool-calling.md`](investigation-tool-calling.md) (all LLM providers, not vendor-specific).
+Tool schemas, provider adapters (`transports/sdk/agent_clients.py`), and investigation message shapes are documented in [`docs/investigation-tool-calling.md`](investigation-tool-calling.md) (all LLM providers, not vendor-specific).
 
 ## Interactive shell: REPL watchdog demo
 

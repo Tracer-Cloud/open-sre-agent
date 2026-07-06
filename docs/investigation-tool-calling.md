@@ -9,7 +9,7 @@ CLI-backed, Bedrock, and future clients)—not one vendor.
 The investigation agent does **not** call integration APIs through the LLM. The flow is:
 
 1. **Tools** — `get_registered_tools("investigation")`, filtered with `tool.is_available(...)`.
-2. **Schemas** — `llm.tool_schemas(tools)` from `get_agent_llm()` in `core/llm/agent_llm_client.py`.
+2. **Schemas** — `llm.tool_schemas(tools)` from `get_llm(LLMRole.AGENT)` (built in `core/llm/client_builders.py`; client classes in `core/llm/transports/sdk/agent_clients.py`).
    Each client class shapes schemas for its API (function definitions, tool specs, CLI prompt JSON, etc.).
 3. **Invoke** — `llm.invoke(messages, system=..., tools=tool_schemas)`; the model returns tool calls.
 4. **Execute** — Tools run locally; results are appended as user/assistant turns the **same** client can read on the next invoke.
@@ -18,7 +18,7 @@ The investigation agent does **not** call integration APIs through the LLM. The 
    (`tools/investigation/stages/gather_evidence/agent.py`).
 
 ```text
-investigate/agent.py  →  get_agent_llm()  →  *AgentClient.tool_schemas / invoke
+investigate/agent.py  →  get_llm(LLMRole.AGENT)  →  *AgentClient.tool_schemas / invoke
                     ↓
               tools/*  (input_schema, extract_params, run)
 ```
@@ -27,10 +27,10 @@ investigate/agent.py  →  get_agent_llm()  →  *AgentClient.tool_schemas / inv
 
 | Concern | Location |
 | -------- | -------- |
-| Provider routing | `core/llm/agent_llm_client.py` (`get_agent_llm`) and `core/llm/llm_client.py` |
-| Native SDK clients | `core/llm/sdk/agent_clients.py`, `core/llm/sdk/llm_clients.py` |
-| LiteLLM transport | `core/llm/litellm/clients.py`, `core/llm/litellm/routing.py` (when `OPENSRE_LLM_TRANSPORT=litellm`) |
-| Chat / non-agent LLM | `core/llm/llm_client.py` (separate path—changes here do not fix investigation) |
+| Provider routing | `core/llm/factory.py` (`get_llm`, `resolve_llm_route`) and `core/llm/client_builders.py` |
+| Native SDK clients | `core/llm/transports/sdk/agent_clients.py`, `core/llm/transports/sdk/llm_clients.py` |
+| LiteLLM transport | `core/llm/transports/litellm/clients.py`, `core/llm/transports/litellm/routing.py` (when `OPENSRE_LLM_TRANSPORT=litellm`) |
+| Chat / non-agent LLM | `core/llm/transports/sdk/llm_clients.py` (separate client classes; routing shared via `factory.py`) |
 | Investigation loop & message dispatch | `tools/investigation/stages/gather_evidence/` and `core/` |
 | Provider-specific schema/message helpers | Next to the client implementing `tool_schemas()` (strict normalizers live beside that client) |
 | Tool definitions | `tools/` (`input_schema`, `public_input_schema`) |
@@ -50,9 +50,10 @@ already branches on (or extend those branches). Do not assume one vendor’s JSO
   `MAX_AGENT_TOOL_SCHEMAS`). It is still many schemas at once, so one invalid schema can fail the whole
   call (HTTP 400, “invalid tools”, etc.) even when the alert never uses that tool. Tool descriptions and
   parameters live **only** in these schemas — the alert-context user message no longer re-lists them.
-- **Multiple code paths** — Fixes in `llm_client.py`, chat, or routing do not apply to
-  `agent_llm_client.py` unless wired there. Provider-specific normalizers must run in `tool_schemas()`
-  (or shared helpers the client calls).
+- **Separate client classes** — The non-agent reasoning clients (`transports/sdk/llm_clients.py`) and
+  the tool-calling agent clients (`transports/sdk/agent_clients.py`) are distinct; a schema or
+  normalizer fix in one does not apply to the other. Provider-specific normalizers must run in
+  `tool_schemas()` (or shared helpers the client calls).
 - **Contract tests can lag APIs** — Registry-wide schema tests must encode the **strictest** rules your
   shipped adapters enforce. Extend assertions when production shows a new rejection reason.
 
@@ -82,7 +83,7 @@ stricter provider adapter, point `test_investigation_tool_schemas.py` at its nor
 the contract module if the API rejects new patterns. Bedrock-specific unit tests stay in
 `tests/core/runtime/llm/test_bedrock_converse.py` (no duplicate registry test there).
 
-## Provider adapters (`agent_llm_client.py`)
+## Provider adapters (`transports/sdk/agent_clients.py`)
 
 Each `*AgentClient` should own:
 
@@ -112,10 +113,10 @@ Route all API providers through LiteLLM with a global transport switch (no chang
 export OPENSRE_LLM_TRANSPORT=litellm
 ```
 
-When set to `litellm`, both investigation (`get_agent_llm()`) and non-agent LLM calls
-(`get_llm_for_reasoning`, `get_llm_for_classification`, `get_llm_for_tools`) use
-`core/llm/litellm/clients.py` via `litellm.completion`. Leave unset or set to `sdk` to use
-native vendor SDK clients under `core/llm/sdk/`.
+When set to `litellm`, both investigation (`get_llm(LLMRole.AGENT)`) and non-agent LLM calls
+(`get_llm(LLMRole.REASONING)`, `get_llm(LLMRole.CLASSIFICATION)`, `get_llm(LLMRole.TOOLCALL)`) use
+`core/llm/transports/litellm/clients.py` via `litellm.completion`. Leave unset or set to `sdk` to use
+native vendor SDK clients under `core/llm/transports/sdk/`.
 
 Supported providers: `anthropic`, `openai`, `bedrock`, and OpenAI-compatible providers
 (`deepseek`, `groq`, `openrouter`, `gemini`, `nvidia`, `minimax`, `ollama`), plus
