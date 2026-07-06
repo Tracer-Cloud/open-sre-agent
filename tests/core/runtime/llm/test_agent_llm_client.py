@@ -237,6 +237,50 @@ def test_anthropic_invoke_strips_internal_message_markers(
     assert messages[1]["_opensre_seed"] is True
 
 
+def test_openai_agent_client_invoke_strips_internal_message_markers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_openai(monkeypatch)
+
+    captured: dict[str, Any] = {}
+
+    def capture_create(**kwargs: object) -> object:
+        captured.update(kwargs)
+        return _make_fake_openai_response(content="ok")
+
+    client = OpenAIAgentClient.__new__(OpenAIAgentClient)
+    client._client = types.SimpleNamespace(
+        chat=types.SimpleNamespace(
+            completions=types.SimpleNamespace(create=capture_create)
+        )
+    )
+    client._model = "gpt-4o"
+    client._max_tokens = 1024
+
+    messages = [
+        {"role": "user", "content": "alert"},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {"id": "seed", "type": "function", "function": {"name": "n", "arguments": "{}"}},
+            ],
+            "_opensre_seed": True,
+        },
+    ]
+    client.invoke(messages=messages)
+
+    api_messages = captured["messages"]
+    assert api_messages[1] == {
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [
+            {"id": "seed", "type": "function", "function": {"name": "n", "arguments": "{}"}},
+        ],
+    }
+    assert messages[1]["_opensre_seed"] is True
+
+
 def test_anthropic_credit_balance_too_low_raises_LLMCreditExhaustedError(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

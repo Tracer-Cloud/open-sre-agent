@@ -494,7 +494,7 @@ class OpenAIAgentClient:
             RateLimitError,
         )
 
-        msgs = list(messages)
+        msgs = strip_internal_message_markers(messages)
         if system:
             msgs = [{"role": "system", "content": system}] + msgs
 
