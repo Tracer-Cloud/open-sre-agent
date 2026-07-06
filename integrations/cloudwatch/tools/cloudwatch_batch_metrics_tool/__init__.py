@@ -6,7 +6,7 @@ from typing import Any
 
 from core.tool_framework.telemetry import report_run_error
 from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.compaction import truncate_list
+from platform.common.evidence_compaction import truncate_list
 from integrations.aws.cloudwatch_client import get_metric_statistics
 from integrations.cloudwatch.availability import cloudwatch_is_available
 

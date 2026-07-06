@@ -10,7 +10,7 @@ import re
 from typing import Any
 
 from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.compaction import compact_logs, summarize_counts
+from platform.common.evidence_compaction import compact_logs, summarize_counts
 from integrations.datadog._client import make_async_client
 
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.compaction import compact_invocations, compact_logs, summarize_counts
+from platform.common.evidence_compaction import compact_invocations, compact_logs, summarize_counts
 from integrations.aws.lambda_client import (
     get_invocation_logs_by_request_id,
     get_recent_invocations,

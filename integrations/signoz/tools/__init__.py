@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import Any, cast
 
 from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.compaction import compact_logs, summarize_counts
+from platform.common.evidence_compaction import compact_logs, summarize_counts
 from integrations.signoz import SigNozConfig, signoz_extract_params
 from integrations.signoz.availability import signoz_available_or_backend
 from integrations.signoz.client import SigNozClient
