@@ -8,7 +8,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from config.version import get_version
+from config.version import get_opensre_version
 from core.agent_harness.accounting.token_accounting import LlmRunInfo
 from core.agent_harness.session.prompt_history.policy import redact_text
 from platform.analytics.provider import JsonValue
@@ -218,7 +218,7 @@ class PromptRecorder:
             "latency_ms": latency_ms,
             "input_tokens": self._input_tokens,
             "output_tokens": self._output_tokens,
-            "opensre_version": get_version(),
+            "opensre_version": get_opensre_version(),
         }
         if self._config.local_enabled:
             with contextlib.suppress(OSError):
@@ -265,7 +265,7 @@ class PromptRecorder:
                     "cli_turn_kind": self._turn_kind,
                     "cli_session_id": self._session_id,
                     "cli_turn_id": self._turn_id,
-                    "opensre_version": get_version(),
+                    "opensre_version": get_opensre_version(),
                     **integration_snapshot,
                 }
                 slash_outcome = _latest_slash_outcome(self._session)

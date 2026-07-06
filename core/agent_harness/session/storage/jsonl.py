@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from config.version import get_version
+from config.version import get_opensre_version
 from core.agent_harness.session.paths import session_path
 from core.agent_harness.session.types import CHAT_KINDS, SessionPersistenceSource
 
@@ -41,7 +41,7 @@ class JsonlSessionStorage:
                 "id": session.session_id,
                 "created_at": datetime.fromtimestamp(session.started_at, tz=UTC).isoformat(),
                 "cwd": str(Path.cwd()),
-                "opensre_version": get_version(),
+                "opensre_version": get_opensre_version(),
             }
             with path.open("w", encoding="utf-8") as fh:
                 fh.write(json.dumps(record, ensure_ascii=False) + "\n")

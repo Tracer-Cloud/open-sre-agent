@@ -8,7 +8,6 @@ import tempfile
 from pathlib import Path
 
 from config.constants.investigation import MAX_EXPANSIONS, MAX_INVESTIGATION_LOOPS
-from config.constants.opensre import DEFAULT_RELEASE_VERSION
 from config.constants.platform import IS_WINDOWS
 from config.constants.posthog import (
     DEFAULT_POSTHOG_BOUNCE_THRESHOLD,
@@ -62,7 +61,6 @@ def ensure_opensre_tmp_dir() -> Path:
 
 
 __all__ = [
-    "DEFAULT_RELEASE_VERSION",
     "MAX_EXPANSIONS",
     "MAX_INVESTIGATION_LOOPS",
     "DEFAULT_POSTHOG_BOUNCE_THRESHOLD",

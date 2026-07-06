@@ -5,7 +5,7 @@ import re
 import subprocess
 import sys
 
-from config.version import PACKAGE_NAME, get_version
+from config.version import get_opensre_version
 
 _MAIN_BUILD_RELEASE_API = (
     "https://api.github.com/repos/Tracer-Cloud/opensre/releases/tags/main-build"
@@ -87,7 +87,7 @@ def _is_editable_install() -> bool:
     import json
 
     try:
-        dist = importlib.metadata.distribution(PACKAGE_NAME)
+        dist = importlib.metadata.distribution("opensre")
         direct_url_text = dist.read_text("direct_url.json")
         if direct_url_text:
             info = json.loads(direct_url_text)
@@ -141,7 +141,7 @@ def _upgrade_via_install_script() -> int:
 
 def run_update(*, check_only: bool = False, yes: bool = False) -> int:
     # To skip this check in CI or automated environments, set OPENSRE_NO_UPDATE_CHECK=1.
-    current = get_version()
+    current = get_opensre_version()
 
     try:
         latest = _fetch_latest_version()

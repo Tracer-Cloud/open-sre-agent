@@ -17,7 +17,7 @@ from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, Field
 
-from config.version import get_version
+from config.version import get_opensre_version
 from core.llm.llm_client import get_llm_for_reasoning
 from integrations._validation_helpers import report_validation_failure
 
@@ -607,7 +607,7 @@ def render_markdown(update: DailyUpdate) -> str:
             "",
             "## Generation metadata",
             "",
-            f"- Generator version: `opensre {get_version()}`",
+            f"- Generator version: `opensre {get_opensre_version()}`",
             f"- Fallback summary used: `{'yes' if update.fallback_used else 'no'}`",
             f"- UTC window: `{update.window.start_utc.isoformat()}` to `{update.window.end_utc.isoformat()}`",
             "",

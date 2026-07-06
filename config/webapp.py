@@ -5,7 +5,7 @@ from pydantic import BaseModel, ValidationError
 
 from config.config import LLMSettings, get_environment
 from config.platform_bootstrap import ensure_project_platform_package
-from config.version import get_version
+from config.version import get_opensre_version
 
 ensure_project_platform_package()
 
@@ -37,7 +37,7 @@ def get_health_response() -> HealthResponse:
 
     return HealthResponse(
         ok=llm_configured,
-        version=get_version(),
+        version=get_opensre_version(),
         llm_configured=llm_configured,
         env=get_environment().value,
     )

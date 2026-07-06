@@ -1,77 +1,24 @@
 from __future__ import annotations
 
-import importlib.util
+import subprocess
+import sys
 from pathlib import Path
 
-import pytest
-
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-_SPEC = importlib.util.spec_from_file_location(
-    "opensre_sync_release_version",
-    _REPO_ROOT / "platform" / "packaging" / "sync_release_version.py",
-)
-assert _SPEC is not None and _SPEC.loader is not None
-_MODULE = importlib.util.module_from_spec(_SPEC)
-_SPEC.loader.exec_module(_MODULE)
-_normalize_release_version = _MODULE._normalize_release_version
-_normalize_explicit_version = _MODULE._normalize_explicit_version
+_SCRIPT = _REPO_ROOT / "platform" / "packaging" / "sync_release_version.py"
+_PYPROJECT = _REPO_ROOT / "pyproject.toml"
 
 
-def test_release_paths_resolve_from_platform_location() -> None:
-    assert _MODULE.ROOT == _REPO_ROOT
-    assert _MODULE.PYPROJECT_PATH == _REPO_ROOT / "pyproject.toml"
-    assert _MODULE.APP_CONSTANTS_OPENSRE_PATH == _REPO_ROOT / "config" / "constants" / "opensre.py"
-
-
-@pytest.mark.parametrize(
-    ("raw_value", "expected"),
-    [
-        ("v0.1.2026.6.26", "0.1.2026.6.26"),
-        ("0.1.2026.6.26", "0.1.2026.6.26"),
-        ("v2026.4.13", "2026.4.13"),
-        ("2026.4.13", "2026.4.13"),
-        ("v0.1", "0.1"),
-        ("0.1.0", "0.1.0"),
-    ],
-)
-def test_normalize_release_version_accepts_calendar_and_semver(
-    raw_value: str,
-    expected: str,
-) -> None:
-    assert _normalize_release_version(raw_value) == expected
-
-
-@pytest.mark.parametrize("raw_value", ["not-a-version", "v0.1.2026.99.99"])
-def test_normalize_release_version_rejects_unknown_shapes(raw_value: str) -> None:
-    with pytest.raises(ValueError, match="Release tag must look like"):
-        _normalize_release_version(raw_value)
-
-
-@pytest.mark.parametrize(
-    ("raw_value", "expected"),
-    [
-        ("0.1.2026.6.28+main.3c1879d", "0.1.2026.6.28+main.3c1879d"),
-        (" 0.1.2026.12.31+main.abcdef123456 ", "0.1.2026.12.31+main.abcdef123456"),
-        ("v0.1.2026.6.28", "0.1.2026.6.28"),
-    ],
-)
-def test_normalize_explicit_version_accepts_main_build_versions(
-    raw_value: str,
-    expected: str,
-) -> None:
-    assert _normalize_explicit_version(raw_value) == expected
-
-
-@pytest.mark.parametrize(
-    "raw_value",
-    [
-        "main-build",
-        "0.1.2026.6.28+main",
-        "0.1.2026.6.28+main.zzzzzzz",
-    ],
-)
-def test_normalize_explicit_version_rejects_invalid_main_build_versions(
-    raw_value: str,
-) -> None:
-    with pytest.raises(ValueError, match="Version must look like"):
-        _normalize_explicit_version(raw_value)
+def test_sync_release_version_updates_pyproject() -> None:
+    before = _PYPROJECT.read_text(encoding="utf-8")
+    try:
+        subprocess.run(
+            [sys.executable, str(_SCRIPT), "--version", "0.0.test-sync"],
+            cwd=_REPO_ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        assert 'version = "0.0.test-sync"' in _PYPROJECT.read_text(encoding="utf-8")
+    finally:
+        _PYPROJECT.write_text(before, encoding="utf-8")
