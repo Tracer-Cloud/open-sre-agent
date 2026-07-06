@@ -250,9 +250,7 @@ def test_openai_agent_client_invoke_strips_internal_message_markers(
 
     client = OpenAIAgentClient.__new__(OpenAIAgentClient)
     client._client = types.SimpleNamespace(
-        chat=types.SimpleNamespace(
-            completions=types.SimpleNamespace(create=capture_create)
-        )
+        chat=types.SimpleNamespace(completions=types.SimpleNamespace(create=capture_create))
     )
     client._model = "gpt-4o"
     client._max_tokens = 1024
