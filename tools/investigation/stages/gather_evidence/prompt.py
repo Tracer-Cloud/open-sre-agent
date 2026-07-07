@@ -160,8 +160,8 @@ def _build_extra_parts(state: dict[str, Any]) -> list[str]:
 
     incident_window = state.get("incident_window")
     if isinstance(incident_window, dict):
-        start = incident_window.get("start", "")
-        end = incident_window.get("end", "")
+        start = incident_window.get("since") or incident_window.get("start") or ""
+        end = incident_window.get("until") or incident_window.get("end") or ""
         if start and end:
             parts.append(f"Incident window: {start} → {end}")
 
