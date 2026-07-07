@@ -31,7 +31,7 @@ from platform.common.errors import OpenSREError as _OpenSREError
 from platform.terminal.errors import render_error
 
 
-class OpenSREError(_OpenSREError, click.ClickException):
+class OpenSREError(_OpenSREError, click.ClickException):  # type: ignore[misc]
     """A CLI error that renders with an optional suggestion and docs URL."""
 
     def __init__(

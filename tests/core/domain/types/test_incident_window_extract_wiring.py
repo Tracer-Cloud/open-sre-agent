@@ -79,6 +79,9 @@ def test_cli_load_path_anchors_k8s_fixture_envelope() -> None:
     state = make_initial_state(raw_alert=load_file(fixture_path))
     result = resolve_incident_window(state["raw_alert"], now=NOW)
     assert result.source == SOURCE_STARTS_AT
+    # Pin the exact anchor so a silent timestamp drift in the CLI load path
+    # (e.g. timezone coercion) fails loudly instead of passing on source alone.
+    assert result.until == datetime(2026, 2, 19, 0, 10, tzinfo=UTC)
 
 
 def test_grafana_payload_still_resolves_after_parser_removal() -> None:
