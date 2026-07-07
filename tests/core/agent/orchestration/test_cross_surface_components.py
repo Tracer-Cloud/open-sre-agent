@@ -11,9 +11,10 @@ from rich.console import Console
 
 from core.agent_harness.models.turn_results import ShellTurnResult, ToolCallingTurnResult
 from core.agent_harness.providers.default_providers import DefaultToolProvider
-from core.agent_harness.session import InMemorySessionStorage, Session
+from core.agent_harness.session import InMemorySessionStorage
 from core.agent_harness.turns.orchestrator import run_turn
 from gateway.turn_handler import build_gateway_turn_handler
+from surfaces.interactive_shell.session import Session
 
 
 def test_gateway_turn_handler_delegates_to_agent_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:

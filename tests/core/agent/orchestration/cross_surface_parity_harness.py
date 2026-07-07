@@ -21,7 +21,7 @@ from core.agent_harness.providers.default_providers import (
     DefaultReasoningClientProvider,
     DefaultToolProvider,
 )
-from core.agent_harness.session import InMemorySessionStorage, Session
+from core.agent_harness.session import InMemorySessionStorage
 from core.agent_harness.turns.headless_dispatch import (
     BufferOutputSink,
     NoopTurnAccounting,
@@ -31,6 +31,7 @@ from core.llm.types import AgentLLMResponse, ToolCall
 from core.tool_framework.registered_tool import RegisteredTool
 from gateway.turn_handler import build_gateway_turn_handler
 from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
+from surfaces.interactive_shell.session import Session
 
 Surface = Literal["shell", "headless", "gateway_handler"]
 

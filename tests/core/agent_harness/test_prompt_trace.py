@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from core.agent_harness.debug.prompt_trace import persist_turn_system_prompt
-from core.agent_harness.session import InMemorySessionStorage, Session
+from core.agent_harness.session import InMemorySessionStorage
+from surfaces.interactive_shell.session import Session
 
 
 def test_persist_turn_system_prompt_writes_system_message() -> None:
