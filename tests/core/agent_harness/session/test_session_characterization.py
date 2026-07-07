@@ -9,6 +9,8 @@ accounting. Behaviors already covered elsewhere (pending-turn staging in
 
 from __future__ import annotations
 
+import dataclasses
+
 from core.agent_harness.session.state import Session
 from core.agent_harness.session.storage.memory import InMemorySessionStorage
 from core.agent_harness.session.token_usage import TokenUsage
@@ -93,6 +95,20 @@ def test_alert_inbox_facet_holds_the_relocated_alert_state() -> None:
     inbox = _session().alerts
     assert hasattr(inbox, "entries")  # was Session.incoming_alerts
     assert hasattr(inbox, "_max")  # was Session._INCOMING_ALERTS_MAX
+
+
+def test_session_is_a_session_core_and_core_has_no_facets() -> None:
+    from core.agent_harness.session.session_core import SessionCore
+
+    assert issubclass(Session, SessionCore)
+    core_field_names = {f.name for f in dataclasses.fields(SessionCore)}
+    # The core base carries every core field and none of the shell facets.
+    assert set(_CORE_FIELDS) == core_field_names
+    assert "terminal" not in core_field_names
+    assert "alerts" not in core_field_names
+    core = SessionCore()
+    assert not hasattr(core, "terminal")
+    assert not hasattr(core, "alerts")
 
 
 def test_terminal_facet_holds_the_theme_cluster() -> None:
