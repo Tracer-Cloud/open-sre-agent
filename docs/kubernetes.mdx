@@ -54,6 +54,14 @@ A successful verification lists the namespaces visible to the configured credent
 | `kubernetes_get_pod_logs` | Fetch recent log lines from a pod container |
 | `kubernetes_list_deployments` | List deployments with desired/ready/available replica counts |
 | `kubernetes_get_events` | List cluster events — crash loops, OOM kills, scheduling failures |
+| `kubernetes_describe_pod` | Fetch full spec, status, and container states for a single pod |
+| `kubernetes_list_nodes` | List cluster nodes with conditions, capacity, and allocatable resources |
+| `kubernetes_list_services` | List services with their type, clusterIP, ports, and selector |
+| `kubernetes_list_statefulsets` | List StatefulSets with desired/ready/current/updated replica counts |
+| `kubernetes_list_daemonsets` | List DaemonSets with desired/current/ready/available counts |
+| `kubernetes_list_ingresses` | List Ingress resources with routing rules, host→service path mappings, and TLS config |
+| `kubernetes_list_configmaps` | List ConfigMaps with their key-value data |
+| `kubernetes_get_resource` | Fetch a single named resource by type and name (pods, deployments, statefulsets, daemonsets, services, ingresses, configmaps, replicasets, pvcs, nodes) |
 
 ## Configuration reference
 
@@ -82,9 +90,12 @@ The kubeconfig's service account or user needs these Kubernetes RBAC permissions
 ```yaml
 rules:
   - apiGroups: [""]
-    resources: ["pods", "pods/log", "events", "namespaces"]
+    resources: ["pods", "pods/log", "events", "namespaces", "nodes", "services", "configmaps", "persistentvolumeclaims"]
     verbs: ["get", "list"]
   - apiGroups: ["apps"]
-    resources: ["deployments"]
+    resources: ["deployments", "statefulsets", "daemonsets", "replicasets"]
+    verbs: ["get", "list"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
     verbs: ["get", "list"]
 ```

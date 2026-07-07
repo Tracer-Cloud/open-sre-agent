@@ -511,7 +511,7 @@ class KubernetesClient:
                         ),
                         "type": spec.type if spec else None,
                         "cluster_ip": spec.cluster_ip if spec else None,
-                        "external_ips": list(spec.external_i_ps or []) if spec else [],
+                        "external_ips": list(spec.external_ips or []) if spec else [],
                         "selector": dict(spec.selector or {}) if spec else {},
                         "ports": [
                             {
