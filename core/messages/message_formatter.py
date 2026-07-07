@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import json
 from collections.abc import Sequence
-from typing import Any, cast
+from typing import Any
 
 from core.context_budget import strip_internal_message_markers
 from core.llm.types import AgentLLMResponse, ToolCall
+from core.messages.provider_adapters import adapter_for
 from core.messages.runtime_message_types import (
     AppRuntimeMessage,
     AssistantRuntimeMessage,
@@ -50,20 +51,7 @@ class MessageFormatter:
 
     def assistant_from_response(self, response: AgentLLMResponse) -> ProviderMessage:
         """Build the provider assistant-message payload from an LLM response."""
-        from core.llm.transports.sdk.agent_clients import (
-            AnthropicAgentClient,
-            BedrockConverseAgentClient,
-        )
-
-        llm = self._llm
-        if isinstance(llm, (AnthropicAgentClient, BedrockConverseAgentClient)):
-            return cast("ProviderMessage", llm.build_assistant_message(response.raw_content))
-        # raw_content carries provider-specific extras (e.g. Gemini's thought_signature)
-        # that must be echoed back verbatim in the next request.
-        if response.raw_content is not None:
-            return response.raw_content  # type: ignore[no-any-return]
-        result: dict[str, Any] = llm.build_assistant_message(response.content, response.tool_calls)
-        return result
+        return adapter_for(self._llm).assistant_from_response(response)
 
     def tool_results_from_execution(
         self,
@@ -71,64 +59,14 @@ class MessageFormatter:
         results: list[Any],
     ) -> list[ProviderMessage]:
         """Build provider tool-result payloads for a batch of tool calls."""
-        from core.llm.transports.sdk.agent_clients import AnthropicAgentClient, OpenAIAgentClient
-
-        llm = self._llm
-        if isinstance(llm, AnthropicAgentClient):
-            return [cast("ProviderMessage", llm.build_tool_result_message(tool_calls, results))]
-        if isinstance(llm, OpenAIAgentClient) or _is_litellm_agent_client(llm):
-            return cast(
-                "list[ProviderMessage]", llm.build_tool_result_messages(tool_calls, results)
-            )
-        return [cast("ProviderMessage", llm.build_tool_result_message(tool_calls, results))]
+        return adapter_for(self._llm).tool_results_from_execution(tool_calls, results)
 
     def synthetic_assistant_tool_call(self, tool_calls: list[ToolCall]) -> ProviderMessage:
         """Build a synthetic assistant message that looks like the LLM requested these tool calls.
 
         Used to inject pre-seeded tool results into the conversation without special-casing.
         """
-        from core.llm.transports.sdk.agent_clients import (
-            AnthropicAgentClient,
-            BedrockConverseAgentClient,
-            CLIBackedAgentClient,
-            OpenAIAgentClient,
-        )
-
-        llm = self._llm
-
-        if isinstance(llm, BedrockConverseAgentClient):
-            from core.llm.transports.sdk.bedrock_converse import build_assistant_tool_use_message
-
-            return cast("ProviderMessage", build_assistant_tool_use_message(tool_calls))
-
-        if isinstance(llm, AnthropicAgentClient):
-            return {
-                "role": "assistant",
-                "content": [
-                    {"type": "tool_use", "id": tc.id, "name": tc.name, "input": tc.input}
-                    for tc in tool_calls
-                ],
-            }
-
-        if isinstance(llm, OpenAIAgentClient) or _is_litellm_agent_client(llm):
-            return {
-                "role": "assistant",
-                "content": None,
-                "tool_calls": [
-                    {
-                        "id": tc.id,
-                        "type": "function",
-                        "function": {"name": tc.name, "arguments": json.dumps(tc.input)},
-                    }
-                    for tc in tool_calls
-                ],
-            }
-
-        if isinstance(llm, CLIBackedAgentClient):
-            return cast("ProviderMessage", llm.build_assistant_message("", tool_calls))
-
-        names = ", ".join(tc.name for tc in tool_calls)
-        return {"role": "assistant", "content": f"I will start by querying: {names}"}
+        return adapter_for(self._llm).synthetic_assistant_tool_call(tool_calls)
 
     def to_assistant_runtime_message(self, response: AgentLLMResponse) -> AssistantRuntimeMessage:
         """Build a typed assistant transcript entry from an LLM response."""
@@ -142,15 +80,12 @@ class MessageFormatter:
         self,
         tool_calls: list[ToolCall],
         results: list[Any],
-        *,
-        metadata: MessageMetadata | None = None,
     ) -> ToolResultRuntimeMessage:
         """Build a typed tool-result transcript entry from executed tool calls."""
         return ToolResultRuntimeMessage(
             tool_calls=tuple(tool_calls),
             results=tuple(results),
             provider_payloads=tuple(self.tool_results_from_execution(tool_calls, results)),
-            metadata=dict(metadata or {}),
         )
 
     def _for_runtime_message(self, message: RuntimeMessage) -> list[ProviderMessage]:
@@ -173,11 +108,7 @@ class MessageFormatter:
         return []
 
     def _app_message_content(self, message: AppRuntimeMessage) -> RuntimeContent:
-        from core.llm.transports.sdk.agent_clients import BedrockConverseAgentClient
-
-        if isinstance(self._llm, BedrockConverseAgentClient):
-            return _to_converse_text_blocks(message.content)
-        return message.content
+        return adapter_for(self._llm).app_message_content(message.content)
 
 
 def _coerce_runtime_message(message: RuntimeMessageLike) -> RuntimeMessage:
@@ -213,26 +144,6 @@ def _coerce_runtime_message(message: RuntimeMessageLike) -> RuntimeMessage:
         details=dict(message),
         metadata=_metadata_from_provider_message(message),
     )
-
-
-def _is_litellm_agent_client(llm: Any) -> bool:
-    cls = type(llm)
-    return (
-        cls.__module__ == "core.llm.transports.litellm.clients"
-        and cls.__name__ == "LiteLLMAgentClient"
-    )
-
-
-def _to_converse_text_blocks(content: RuntimeContent) -> RuntimeContent:
-    if not isinstance(content, list):
-        return content
-    converted: list[dict[str, Any]] = []
-    for block in content:
-        if block.get("type") == "text" and "text" in block:
-            converted.append({"text": str(block["text"])})
-        else:
-            converted.append(dict(block))
-    return converted
 
 
 def _metadata_from_provider_message(message: ProviderMessage) -> MessageMetadata:
