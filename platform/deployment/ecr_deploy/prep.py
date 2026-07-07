@@ -82,9 +82,7 @@ def _collect_deploy_env_issues() -> tuple[list[DeployEnvIssue], list[DeployEnvIs
     else:
         api_key_env = get_llm_provider_api_key_env(provider)
         if api_key_env and not _env_set(api_key_env):
-            missing.append(
-                DeployEnvIssue("llm_api", env_vars=(api_key_env,), provider=provider)
-            )
+            missing.append(DeployEnvIssue("llm_api", env_vars=(api_key_env,), provider=provider))
         elif provider in KEYLESS_PROVIDER_VALUES:
             spec = provider_spec(provider)
             if spec is not None and spec.credential_kind in {"cli", "local"}:
@@ -122,10 +120,7 @@ def _format_issue_message(issue: DeployEnvIssue, *, warning: bool) -> str:
 
     if issue.code == "llm_api" and issue.env_vars:
         provider = issue.provider or "selected provider"
-        return (
-            f"{issue.env_vars[0]} — API key not set "
-            f"(required for LLM provider: {provider})"
-        )
+        return f"{issue.env_vars[0]} — API key not set (required for LLM provider: {provider})"
 
     if issue.code == "aws":
         return (
