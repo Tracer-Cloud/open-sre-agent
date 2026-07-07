@@ -2,12 +2,12 @@
 
 The shared agent loop owns a provider-agnostic transcript.  Provider-specific
 message dictionaries are produced only at the LLM invocation boundary via
-:class:`MessageFormatter`.
+:class:`MessageMapper`.
 """
 
 from __future__ import annotations
 
-from core.messages.message_formatter import MessageFormatter
+from core.messages.message_mapper import MessageMapper
 from core.messages.runtime_message_types import (
     AppRuntimeMessage,
     AssistantRuntimeMessage,
@@ -23,7 +23,7 @@ from core.messages.runtime_message_types import (
 __all__ = [
     "AppRuntimeMessage",
     "AssistantRuntimeMessage",
-    "MessageFormatter",
+    "MessageMapper",
     "MessageMetadata",
     "ProviderMessage",
     "RuntimeContent",

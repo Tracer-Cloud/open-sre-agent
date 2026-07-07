@@ -17,7 +17,7 @@ from core import (
 )
 from core.llm.transports.sdk.agent_clients import CLIBackedAgentClient
 from core.llm.types import ToolCall
-from core.messages import MessageFormatter
+from core.messages import MessageMapper
 from core.tool_framework.registered_tool import RegisteredTool
 from integrations.llm_cli.errors import CLITimeoutError
 from tools.investigation.stages.gather_evidence import (
@@ -158,7 +158,7 @@ def test_build_synthetic_assistant_json_for_cli_backed_client() -> None:
         explain_failure=lambda **_kw: "",
     )
     llm = CLIBackedAgentClient(fake_adapter, model=None)
-    msg = MessageFormatter(llm).synthetic_assistant_tool_call(
+    msg = MessageMapper(llm).to_synthetic_assistant_provider_message(
         [ToolCall(id="seed_t", name="query_eks", input={"cluster": "c"})]
     )
     assert msg["role"] == "assistant"
@@ -458,7 +458,7 @@ def test_build_synthetic_assistant_msg_for_bedrock_converse(
     calls = [
         ToolCall(id="abc12def3", name="query_logs", input={"query": "error"}),
     ]
-    msg = MessageFormatter(llm).synthetic_assistant_tool_call(calls)
+    msg = MessageMapper(llm).to_synthetic_assistant_provider_message(calls)
 
     assert msg["role"] == "assistant"
     assert msg["content"][0]["toolUse"]["toolUseId"] == "abc12def3"

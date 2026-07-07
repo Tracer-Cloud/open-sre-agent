@@ -18,7 +18,7 @@ from core.events import (
 from core.llm.types import AgentLLMResponse, ToolCall
 from core.messages import (
     AppRuntimeMessage,
-    MessageFormatter,
+    MessageMapper,
     ToolResultRuntimeMessage,
     UserRuntimeMessage,
 )
@@ -330,7 +330,7 @@ def test_generic_tool_result_conversion_does_not_import_litellm(
     call = ToolCall(id="c1", name="query_logs", input={})
     message = ToolResultRuntimeMessage(tool_calls=(call,), results=({"ok": True},))
 
-    assert MessageFormatter(llm).to_provider_messages([message]) == [
+    assert MessageMapper(llm).to_provider_messages([message]) == [
         {
             "role": "tool",
             "results": [{"id": "c1", "output": {"ok": True}}],
@@ -377,7 +377,7 @@ def test_legacy_text_blocks_convert_to_bedrock_converse_content() -> None:
     llm = BedrockConverseAgentClient.__new__(BedrockConverseAgentClient)
     messages = [AppRuntimeMessage("custom", [{"type": "text", "text": "custom note"}])]
 
-    assert MessageFormatter(llm).to_provider_messages(messages) == [
+    assert MessageMapper(llm).to_provider_messages(messages) == [
         {"role": "user", "content": [{"text": "custom note"}]}
     ]
 

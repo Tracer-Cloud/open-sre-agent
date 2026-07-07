@@ -6,7 +6,7 @@ from dataclasses import replace
 from typing import Any
 
 from core.agent.provider_hooks import ProviderHookDelegate
-from core.messages import MessageFormatter, UserRuntimeMessage
+from core.messages import MessageMapper, UserRuntimeMessage
 from core.provider import ProviderHooks, ProviderRequest
 
 
@@ -41,7 +41,7 @@ def test_convert_to_llm_falls_back_to_message_formatter() -> None:
     delegate = ProviderHookDelegate(ProviderHooks())
     message = UserRuntimeMessage(content="hi")
     result = delegate.convert_to_llm(object(), [message])
-    assert result == MessageFormatter(object()).to_provider_messages([message])
+    assert result == MessageMapper(object()).to_provider_messages([message])
 
 
 def test_convert_to_llm_swallows_hook_exception() -> None:
@@ -51,7 +51,7 @@ def test_convert_to_llm_swallows_hook_exception() -> None:
     delegate = ProviderHookDelegate(ProviderHooks(convert_to_llm=boom))
     message = UserRuntimeMessage(content="hi")
     result = delegate.convert_to_llm(object(), [message])
-    assert result == MessageFormatter(object()).to_provider_messages([message])
+    assert result == MessageMapper(object()).to_provider_messages([message])
 
 
 def test_before_request_passes_through_by_default() -> None:
