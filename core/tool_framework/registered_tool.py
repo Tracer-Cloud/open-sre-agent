@@ -212,7 +212,9 @@ class RegisteredTool:
             model_to_json_schema(output_model) if output_model else metadata.output_schema
         )
         registry = tool.registry_metadata()
-        resolved_surfaces = normalize_surfaces(surfaces) if surfaces is not None else registry.surfaces
+        resolved_surfaces = (
+            normalize_surfaces(surfaces) if surfaces is not None else registry.surfaces
+        )
         resolved_tags = tags if tags is not None else registry.tags
         return cls(
             name=metadata.name,
@@ -242,9 +244,7 @@ class RegisteredTool:
                 else tool.__class__.requires_approval
             ),
             approval_reason=str(
-                approval_reason
-                if approval_reason is not None
-                else tool.__class__.approval_reason
+                approval_reason if approval_reason is not None else tool.__class__.approval_reason
             ),
             approval_expiry_seconds=int(
                 approval_expiry_seconds
