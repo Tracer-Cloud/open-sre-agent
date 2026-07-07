@@ -121,7 +121,7 @@ def test_probe_access_passed_when_api_succeeds() -> None:
     mock_core = MagicMock()
     mock_core.list_namespace.return_value = mock_ns_list
 
-    with patch.object(client, "_get_clients", return_value=(mock_core, MagicMock())):
+    with patch.object(client, "_get_clients", return_value=(mock_core, MagicMock(), MagicMock())):
         result = client.probe_access()
 
     assert result.ok
@@ -139,7 +139,7 @@ def test_probe_access_failed_on_api_exception() -> None:
     mock_core = MagicMock()
     mock_core.list_namespace.side_effect = ApiException(status=401, reason="Unauthorized")
 
-    with patch.object(client, "_get_clients", return_value=(mock_core, MagicMock())):
+    with patch.object(client, "_get_clients", return_value=(mock_core, MagicMock(), MagicMock())):
         result = client.probe_access()
 
     assert result.status == "failed"
