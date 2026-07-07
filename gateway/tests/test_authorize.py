@@ -68,6 +68,7 @@ def test_unauthorized_user_cannot_rotate_session() -> None:
         env_allowed_user_ids=["42"],
     )
     assert decision.allowed is False
+    assert decision.reply_text
     assert decision.reply_text != "__ROTATE_SESSION__"
 @pytest.mark.usefixtures("mock_integration_store")
 def test_authorized_user_can_rotate_session() -> None:
