@@ -303,11 +303,34 @@ opensre messaging revoke -p telegram -u 123456789
 
 ### Long polling (local and production)
 
-No public HTTPS URL required. Run the gateway as a dedicated process (there is no interactive-shell slash command for this yet):
+No public HTTPS URL required. The gateway is OpenSRE's **background agent daemon** —
+one process that runs the Telegram chat worker, the web health app, and the
+cron task scheduler. It runs in the background by default:
+
+| Command                            | What it does                                          |
+| ---------------------------------- | ----------------------------------------------------- |
+| `opensre gateway start`            | Start the daemon (web, Telegram chat, task scheduler) |
+| `opensre gateway start -f`         | Run attached to the terminal instead                  |
+| `opensre gateway status`           | Show the daemon and each component's state            |
+| `opensre gateway logs [-n N] [-f]` | Print (or follow) the daemon logs                     |
+| `opensre gateway stop`             | Stop the daemon                                       |
 
 ```bash
 export TELEGRAM_BOT_TOKEN=<your-bot-token>
-uv run opensre gateway telegram
+uv run opensre gateway start
+```
+
+Starting prints the log location; logs are stored in `~/.opensre/gateway/gateway.log`.
+If Telegram is not configured the daemon still runs the other components and
+`opensre gateway status` shows `telegram: not configured`.
+
+The same controls are available inside the interactive shell via `/gateway`:
+
+```text
+/gateway start     # start the background daemon
+/gateway status    # daemon + per-component state
+/gateway logs 50   # last 50 log lines
+/gateway stop      # stop it
 ```
 
 Send a DM to your bot. Use `/new` to start a fresh session; `/help` for built-in commands.

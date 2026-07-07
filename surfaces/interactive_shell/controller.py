@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from collections.abc import Iterator
 from contextlib import contextmanager
 
@@ -60,20 +61,23 @@ def _alert_listener(
         yield None
         return
 
+    from gateway.web_server import WebAppServerHandle, serve_webapp_in_thread
+
     inbox: _alert_inbox.AlertInbox | None = None
-    handle: _alert_inbox.AlertListenerHandle | None = None
+    handle: WebAppServerHandle | None = None
     try:
         inbox = _alert_inbox.AlertInbox()
-        handle = _alert_inbox.start_alert_listener(
-            inbox,
+        _alert_inbox.set_current_inbox(inbox)
+        if cfg.alert_listener_token:
+            os.environ.setdefault("OPENSRE_ALERT_LISTENER_TOKEN", cfg.alert_listener_token)
+        handle = serve_webapp_in_thread(
             host=cfg.alert_listener_host,
             port=cfg.alert_listener_port,
-            token=cfg.alert_listener_token,
         )
-        _alert_inbox.set_current_inbox(inbox)
         console.print(f"[{DIM}]listening for alerts on http://{handle.bound_address}/alerts[/]")
     except Exception as exc:
         log.warning("Alert listener could not start: %s — continuing without it.", exc)
+        _alert_inbox.set_current_inbox(None)
     try:
         yield inbox
     finally:

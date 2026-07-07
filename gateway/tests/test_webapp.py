@@ -1,4 +1,4 @@
-"""Lightweight FastAPI smoke + telemetry coverage for ``config.webapp``."""
+"""Lightweight FastAPI smoke + telemetry coverage for ``gateway.webapp``."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi.testclient import TestClient
 
-from config import webapp
+from gateway import webapp
 
 
 def test_webapp_module_calls_init_sentry_on_import(monkeypatch: pytest.MonkeyPatch) -> None:

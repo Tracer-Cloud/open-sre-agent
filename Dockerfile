@@ -40,4 +40,4 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD if [ "$MODE" = "web" ]; then python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)" || exit 1; else exit 0; fi
 
-CMD ["sh", "-c", "if [ \"$MODE\" = \"gateway\" ]; then exec opensre gateway telegram; else exec uvicorn config.webapp:app --host 0.0.0.0 --port ${PORT:-8000}; fi"]
+CMD ["sh", "-c", "if [ \"$MODE\" = \"gateway\" ]; then exec opensre gateway start --foreground; else exec uvicorn gateway.webapp:app --host 0.0.0.0 --port ${PORT:-8000}; fi"]
