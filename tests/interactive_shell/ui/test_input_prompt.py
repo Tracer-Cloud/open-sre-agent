@@ -8,9 +8,9 @@ from dataclasses import dataclass
 import pytest
 from prompt_toolkit.completion import Completion
 
-from core.agent_harness.session import Session
 from platform.common.task_types import TaskKind
 from surfaces.interactive_shell.runtime.core import state as loop_state
+from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui.input_prompt import completion as prompt_completion
 from surfaces.interactive_shell.ui.input_prompt import rendering as prompt_rendering
 from surfaces.interactive_shell.ui.input_prompt.completion import completion_preview_hint_ansi

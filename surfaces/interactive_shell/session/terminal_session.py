@@ -2,7 +2,7 @@
 
 Groups the shell-surface-only session state (prompt-toolkit, theme, background jobs,
 metrics, per-turn analytics staging) that ``core``, ``gateway``, and ``tools``
-consumers never touch. Composed onto :class:`~core.agent_harness.session.session.Session`
+consumers never touch. Composed onto :class:`~surfaces.interactive_shell.session.session.Session`
 as ``session.terminal`` and always present (empty for non-shell sessions), so shell
 code accesses fields without a None-guard.
 
@@ -16,11 +16,11 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from core.agent_harness.session.background_investigations import (
+from surfaces.interactive_shell.session.background_investigations import (
     BackgroundInvestigationRecord,
     BackgroundNotificationPreferences,
 )
-from core.agent_harness.session.terminal_metrics import TerminalMetrics
+from surfaces.interactive_shell.session.terminal_metrics import TerminalMetrics
 
 if TYPE_CHECKING:
     from prompt_toolkit.history import History

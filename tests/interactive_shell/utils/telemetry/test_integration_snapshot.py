@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import MagicMock
 
-from core.agent_harness.session import Session
+from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.utils.telemetry.integration_snapshot import (
     build_turn_integration_snapshot,
 )

@@ -7,9 +7,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from core.agent_harness.session import Session
 from core.agent_harness.session.prompt_history import load_command_history_entries
 from surfaces.interactive_shell.command_registry import dispatch_slash
+from surfaces.interactive_shell.session import Session
 
 
 def _capture() -> tuple[object, object]:

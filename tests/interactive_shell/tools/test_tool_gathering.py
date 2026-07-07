@@ -18,7 +18,6 @@ from rich.console import Console
 
 import core as runtime_module
 import platform.harness_ports as harness_ports
-from core.agent_harness.session import Session
 from core.agent_harness.turns.evidence_driver import GatherAgentFactory
 from core.llm.types import ToolCall
 from surfaces.interactive_shell.runtime.integration_tool_gathering import (
@@ -27,6 +26,7 @@ from surfaces.interactive_shell.runtime.integration_tool_gathering import (
     _tool_input_hint,
     gather_integration_tool_evidence,
 )
+from surfaces.interactive_shell.session import Session
 
 _FakeRun = Callable[[dict[str, Any], list[dict[str, Any]]], runtime_module.AgentRunResult]
 

@@ -16,8 +16,8 @@ from typing import Literal, Protocol, runtime_checkable
 from rich.console import Console
 from rich.markup import escape
 
-from core.agent_harness.session import Session
 from platform.common.task_types import TaskRecord
+from surfaces.interactive_shell.session import Session
 from tools.interactive_shell.shared.execution_policy import (
     ExecutionPolicyResult,
     plan_foreground_tool,

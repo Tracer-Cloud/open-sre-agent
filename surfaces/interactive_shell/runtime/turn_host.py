@@ -20,7 +20,6 @@ from typing import Any
 
 from rich.console import Console
 
-from core.agent_harness.session import Session
 from platform.analytics.repl_context import bind_cli_session_id, reset_cli_session_id
 from surfaces.interactive_shell.runtime.agent_presentation import (
     AgentEvent,
@@ -42,6 +41,7 @@ from surfaces.interactive_shell.runtime.input.actions import (
 from surfaces.interactive_shell.runtime.utils.input_policy import (
     turn_needs_exclusive_stdin,
 )
+from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui.output.repl_progress import repl_safe_progress_scope
 from surfaces.interactive_shell.ui.streaming.console import StreamingConsole
 from surfaces.interactive_shell.utils.error_handling.exception_reporting import report_exception

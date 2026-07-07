@@ -15,11 +15,13 @@ from rich.console import Console
 
 from core.agent_harness.session import (
     SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST,
-    Session,
 )
 from core.agent_harness.session.task_registry import TaskRegistry
 from platform.common.task_types import TaskKind, TaskStatus
 from surfaces.interactive_shell.command_registry import dispatch_slash
+from surfaces.interactive_shell.session import (
+    Session,
+)
 from tools.interactive_shell.synthetic.runner import watch_synthetic_subprocess
 
 
@@ -208,9 +210,7 @@ class TestTaskRegistry:
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
         session = Session()
         session.task_registry = TaskRegistry.persistent()
-        task = session.task_registry.create(
-            TaskKind.SYNTHETIC_TEST, command="opensre tests"
-        )
+        task = session.task_registry.create(TaskKind.SYNTHETIC_TEST, command="opensre tests")
         task.mark_running()
         task.mark_completed(result="ok")
 

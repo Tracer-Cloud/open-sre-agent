@@ -5,11 +5,11 @@ from unittest.mock import MagicMock
 import pytest
 from rich.console import Console
 
-from core.agent_harness.session import Session
 from surfaces.interactive_shell.runtime.background.runner import (
     drain_background_notices,
     start_background_template_investigation,
 )
+from surfaces.interactive_shell.session import Session
 
 
 def test_enqueue_and_drain_background_notices() -> None:

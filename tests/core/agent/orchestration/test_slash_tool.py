@@ -14,10 +14,10 @@ import pytest
 from rich.console import Console
 
 import tools.interactive_shell.actions.slash as slash_tool
-from core.agent_harness.session import Session
 from core.agent_harness.tools.tool_context import (
     ActionToolContext,
 )
+from surfaces.interactive_shell.session import Session
 
 
 def _ctx() -> tuple[ActionToolContext, io.StringIO, Session]:

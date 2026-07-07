@@ -12,8 +12,6 @@ import pytest
 from prompt_toolkit.history import FileHistory
 from rich.console import Console
 
-from core.agent_harness.session import Session
-from core.agent_harness.session.background_investigations import BackgroundInvestigationRecord
 from platform.common.task_types import TaskKind, TaskStatus
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
 from surfaces.interactive_shell.command_registry import repl_data as repl_data_module
@@ -22,6 +20,10 @@ from surfaces.interactive_shell.command_registry.investigation import (
     _validate_save_args,
 )
 from surfaces.interactive_shell.command_registry.tasks_cmds import _validate_cancel_args
+from surfaces.interactive_shell.session import Session
+from surfaces.interactive_shell.session.background_investigations import (
+    BackgroundInvestigationRecord,
+)
 from surfaces.interactive_shell.ui.tables.tool_catalog import ToolCatalogEntry
 
 
@@ -1602,9 +1604,7 @@ class TestInvestigateFileCommand:
         console, _ = _capture()
         dispatch_slash(f"/investigate {alert_file}", session, console)
         inv_tasks = [
-            t
-            for t in session.task_registry.list_recent(10)
-            if t.kind == TaskKind.INVESTIGATION
+            t for t in session.task_registry.list_recent(10) if t.kind == TaskKind.INVESTIGATION
         ]
         assert len(inv_tasks) == 1
         assert inv_tasks[0].status == TaskStatus.FAILED

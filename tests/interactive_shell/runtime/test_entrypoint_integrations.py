@@ -15,8 +15,8 @@ from rich.console import Console
 
 import surfaces.interactive_shell.main as main_entrypoint
 from core.agent_harness.integrations.resolution import IntegrationResolutionResult
-from core.agent_harness.session import Session
 from surfaces.interactive_shell.runtime.startup import first_launch_github as flg
+from surfaces.interactive_shell.session import Session
 
 
 def _console() -> Console:

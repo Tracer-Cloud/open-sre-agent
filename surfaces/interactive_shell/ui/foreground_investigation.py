@@ -28,7 +28,7 @@ from surfaces.interactive_shell.utils.telemetry.investigation_llm_usage import (
 )
 
 if TYPE_CHECKING:
-    from core.agent_harness.session import Session
+    from surfaces.interactive_shell.session import Session
 
 
 def _render_credit_exhausted_recovery_hint(console: Console, message: str) -> None:

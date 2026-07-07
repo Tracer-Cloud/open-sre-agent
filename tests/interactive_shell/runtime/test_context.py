@@ -10,7 +10,6 @@ from prompt_toolkit.input import DummyInput
 from prompt_toolkit.output import DummyOutput
 from pydantic import ValidationError
 
-from core.agent_harness.session import Session
 from core.agent_harness.session.task_registry import TaskRegistry
 from surfaces.interactive_shell.controller import InteractiveShellController
 from surfaces.interactive_shell.runtime.context import (
@@ -23,6 +22,7 @@ from surfaces.interactive_shell.runtime.core.state import (
     SpinnerState,
     create_repl_mutable_state,
 )
+from surfaces.interactive_shell.session import Session
 
 
 def _prompt_session() -> PromptSession[str]:

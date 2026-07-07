@@ -27,9 +27,9 @@ from core.agent_harness.prompts.assistant_agent_prompt import (
 )
 from core.agent_harness.providers import default_prompt_context
 from core.agent_harness.providers.default_prompt_context import DefaultPromptContextProvider
-from core.agent_harness.session import Session
 from surfaces.interactive_shell.runtime import answer_turn as cli_agent
 from surfaces.interactive_shell.runtime.answer_turn import answer_shell_question
+from surfaces.interactive_shell.session import Session
 
 
 def _build_environment_block(session: Session) -> str:

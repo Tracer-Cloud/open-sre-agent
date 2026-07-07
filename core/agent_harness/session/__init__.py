@@ -1,13 +1,15 @@
-"""Canonical home for agent session state and persistence.
+"""Canonical home for surface-agnostic session state and persistence.
 
-This package centralizes reusable session state in one place:
+This package centralizes the core session in one place:
 
-- :class:`Session` — the in-memory session domain object (``state``).
+- :class:`SessionCore` — the surface-agnostic session domain object (``session_core``).
+  The interactive shell's ``Session`` subclass with UI facets lives in
+  ``surfaces/interactive_shell/session/``.
 - :class:`SessionStorage` / :class:`SessionRepo` protocols plus their JSONL and
   in-memory backends — persistence, split into per-session writes (storage) and
   cross-session queries (repo).
 
-``Session`` delegates all persistence to an injected ``SessionStorage`` so
+``SessionCore`` delegates all persistence to an injected ``SessionStorage`` so
 the on-disk format is swappable and tests can run without touching the
 filesystem. The module-level ``DEFAULT_SESSION_STORAGE`` / ``DEFAULT_SESSION_REPO``
 singletons provide the production JSONL backends used by agent surfaces.
@@ -22,19 +24,13 @@ from core.agent_harness.session.persistence_ports import (
     SessionRepo,
     SessionStorage,
 )
-from core.agent_harness.session.session import (
+from core.agent_harness.session.session_core import (
     SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST,
-    Session,
+    SessionCore,
 )
-from core.agent_harness.session.session_core import SessionCore
 from core.agent_harness.session.storage import (
     InMemorySessionStorage,
     JsonlSessionStorage,
-)
-from core.agent_harness.session.terminal_metrics import (
-    InterventionKind,
-    TerminalMetrics,
-    TerminalMetricsSnapshot,
 )
 
 # Production singletons. Both backends are stateless, so sharing one instance
@@ -63,18 +59,14 @@ __all__ = [
     "DEFAULT_SESSION_REPO",
     "DEFAULT_SESSION_STORAGE",
     "InMemorySessionStorage",
-    "InterventionKind",
     "JsonlSessionRepo",
     "JsonlSessionStorage",
-    "Session",
     "SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST",
     "SessionCore",
     "SessionManager",
     "SessionPersistenceSource",
     "SessionRepo",
     "SessionStorage",
-    "TerminalMetrics",
-    "TerminalMetricsSnapshot",
     "default_session_repo",
     "default_session_storage",
 ]

@@ -4,7 +4,7 @@ The surface-agnostic half of the REPL session: identity, persistence, integratio
 resolution, token accounting, conversational agent state, and grounding caches —
 everything ``core``, ``gateway``, and ``tools`` consumers depend on. The interactive
 shell extends this with its own UI state in
-:class:`~core.agent_harness.session.session.Session`.
+:class:`~surfaces.interactive_shell.session.session.Session`.
 """
 
 from __future__ import annotations
@@ -32,6 +32,11 @@ from core.agent_harness.session.storage.jsonl import JsonlSessionStorage
 from core.agent_harness.session.task_registry import TaskRegistry
 from core.agent_harness.session.token_usage import TokenUsage
 from core.state import MutableAgentState
+
+# Prefilled into the next prompt after a background synthetic test exits non-zero,
+# so the user can ask the CLI assistant for a quick RCA explanation. Lives in core
+# because the core prompt builders reference it (the shell only queues it).
+SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST = "why did it fail?"
 
 
 def _default_grounding() -> GroundingContext:
@@ -415,3 +420,56 @@ class SessionCore:
         self.last_state = state
         self.accumulate_from_state(state)
         self.storage.append_investigation_result(self.session_id, state, trigger=trigger)
+
+    def clear(self, *, rotate_identity: bool = True) -> None:
+        """Reset core session state to fresh (used by /new and /resume).
+
+        Shell subclasses override to also reset their facets; see
+        :meth:`~surfaces.interactive_shell.session.session.Session.clear`.
+        """
+        self.history.clear()
+        self.resumed_from_name = ""
+        self.last_state = None
+        self.last_assistant_intent = None
+        self.configured_integrations = ()
+        self.configured_integrations_known = False
+        with self._integration_warm_lock:
+            self._integration_warm_generation += 1
+            pending = self._integration_warm_task
+            self._integration_warm_task = None
+            self.resolved_integrations_cache = None
+            self.github_repo_scope = None
+        if pending is not None and not pending.done():
+            pending.cancel()
+        self.available_capabilities.clear()
+        self.accumulated_context.clear()
+        self.tokens.reset()
+        self.agent.clear()
+        # Keep persisted cross-session task history on disk intact.
+        # /new is session-scoped, so swap in a fresh in-memory registry
+        # that reuses the same backing store (if any) so /tasks still shows history.
+        persist_path = self.task_registry._persist_path
+        self.task_registry = (
+            TaskRegistry(persist_path=persist_path, load=False)
+            if persist_path is not None
+            else TaskRegistry()
+        )
+        self.last_synthetic_observation_path = None
+        if rotate_identity:
+            # Rotate session identity so the new post-reset session gets its own ID and file.
+            self.session_id = str(uuid.uuid4())
+            self.started_at = time.time()
+
+    def release_resources(self) -> None:
+        """Cancel background integration-warm work for teardown.
+
+        Called when the handle is discarded (see ``SessionManager.close``); the
+        session owns its own teardown. Thread-safe against a background warm
+        thread. Shell subclasses override to also drop loop-owned UI references.
+        """
+        with self._integration_warm_lock:
+            self._integration_warm_generation += 1
+            pending = self._integration_warm_task
+            self._integration_warm_task = None
+        if pending is not None and not pending.done():
+            pending.cancel()

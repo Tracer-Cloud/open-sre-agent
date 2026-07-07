@@ -8,20 +8,16 @@ the methods that drive them.
 from __future__ import annotations
 
 import re
-import time
-import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
-from core.agent_harness.session.alert_inbox import SessionAlertInbox
-from core.agent_harness.session.session_core import SessionCore
-from core.agent_harness.session.task_registry import TaskRegistry
-from core.agent_harness.session.terminal_session import TerminalSession
+from core.agent_harness.session.session_core import (
+    SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST,
+    SessionCore,
+)
 from core.domain.alerts.inbox import IncomingAlert
-
-# Prefilled into the next prompt after a background synthetic test exits non-zero,
-# so the user can ask the CLI assistant for a quick RCA explanation.
-SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST = "why did it fail?"
+from surfaces.interactive_shell.session.alert_inbox import SessionAlertInbox
+from surfaces.interactive_shell.session.terminal_session import TerminalSession
 
 _SCENARIO_FLAG_RE = re.compile(r"--scenario\s+(\S+)")
 _SYNTHETIC_SCENARIO_ID_RE = re.compile(r"^\d{3}-[a-z0-9][a-z0-9-]*$")
@@ -52,7 +48,7 @@ class Session(SessionCore):
 
     Always present (empty for non-shell sessions) so shell code needs no None-guard;
     ``core``/``gateway``/``tools`` consumers ignore it. Holds the theme, prompt-toolkit,
-    pending-prompt/stdin, background-jobs, and metrics/task-registry clusters (#3690)."""
+    pending-prompt/stdin, background-jobs, and metrics clusters (#3690)."""
 
     alerts: SessionAlertInbox = field(default_factory=SessionAlertInbox)
     """Inbox of externally-received alerts (shell alert listener → ``/status``).
@@ -162,43 +158,15 @@ class Session(SessionCore):
         return error
 
     def clear(self, *, rotate_identity: bool = True) -> None:
-        """Reset the session to a fresh state (used by /new and /resume)."""
+        """Reset the session — core state plus the shell facets — for /new and /resume."""
         self.terminal.history_generation += 1
-        self.history.clear()
-        self.resumed_from_name = ""
-        self.last_state = None
-        self.last_assistant_intent = None
-        self.configured_integrations = ()
-        self.configured_integrations_known = False
-        with self._integration_warm_lock:
-            self._integration_warm_generation += 1
-            pending = self._integration_warm_task
-            self._integration_warm_task = None
-            self.resolved_integrations_cache = None
-            self.github_repo_scope = None
-        if pending is not None and not pending.done():
-            pending.cancel()
-        self.available_capabilities.clear()
-        self.accumulated_context.clear()
-        self.tokens.reset()
-        self.agent.clear()
+        super().clear(rotate_identity=rotate_identity)
         self.alerts.clear()
-        # Keep persisted cross-session task history on disk intact.
-        # /new is session-scoped, so swap in a fresh in-memory registry
-        # that reuses the same backing store (if any) so /tasks still shows history.
-        persist_path = self.task_registry._persist_path
-        self.task_registry = (
-            TaskRegistry(persist_path=persist_path, load=False)
-            if persist_path is not None
-            else TaskRegistry()
-        )
-
         self.terminal.metrics.reset()
         self.terminal.pending_prompt_default = None
         self.terminal.pending_prompt_autosubmit = False
         self.terminal.exclusive_stdin_active = False
         self.terminal.agent_turn_executed_slashes.clear()
-        self.last_synthetic_observation_path = None
         self.terminal.background_mode_enabled = False
         self.terminal.background_investigations.clear()
         # Preserve notification channel prefs across /new like trust_mode.
@@ -206,26 +174,14 @@ class Session(SessionCore):
         with self.terminal._background_notices_lock:
             self.terminal.background_notices.clear()
         # trust_mode and reasoning_effort are intentionally preserved across /new
-        if rotate_identity:
-            # Rotate session identity so the new post-reset session gets its own ID and file.
-            self.session_id = str(uuid.uuid4())
-            self.started_at = time.time()
 
     def release_resources(self) -> None:
-        """Cancel background work and drop references for terminal teardown.
+        """Cancel background work and drop loop-owned UI references for teardown.
 
-        Called when this handle is being discarded (see ``SessionManager.close``),
-        so the session owns its own teardown instead of exposing internals to
-        callers. Uses the same locks as :meth:`clear`, so cancelling the
-        in-flight integration-warm task is thread-safe against a background
-        warm thread.
+        Extends :meth:`SessionCore.release_resources` (which cancels the
+        integration-warm task) with the shell facet's own teardown.
         """
-        with self._integration_warm_lock:
-            self._integration_warm_generation += 1
-            pending = self._integration_warm_task
-            self._integration_warm_task = None
-        if pending is not None and not pending.done():
-            pending.cancel()
+        super().release_resources()
         with self.terminal._background_notices_lock:
             self.terminal.background_notices.clear()
         self.terminal.prompt_refresh_fn = None

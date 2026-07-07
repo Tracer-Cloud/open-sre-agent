@@ -50,6 +50,9 @@ ignore_imports =
     tools.interactive_shell.actions.cli_command -> surfaces.interactive_shell.runtime.subprocess_runner
     tools.interactive_shell.actions.investigation -> surfaces.interactive_shell.runtime.background.runner
     tools.interactive_shell.actions.investigation -> surfaces.interactive_shell.runtime.investigation_adapter
+    tools.interactive_shell.actions.investigation -> surfaces.interactive_shell.session
+    tools.interactive_shell.actions.sample_alert -> surfaces.interactive_shell.session
+    tools.interactive_shell.shared.investigation_launch -> surfaces.interactive_shell.session
     tools.interactive_shell.actions.llm_provider -> surfaces.cli.wizard.config
     tools.interactive_shell.actions.llm_provider -> surfaces.interactive_shell.command_registry
     tools.interactive_shell.actions.llm_provider -> surfaces.interactive_shell.ui.execution_confirm

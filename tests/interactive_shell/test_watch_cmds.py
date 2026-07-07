@@ -10,7 +10,6 @@ from unittest.mock import MagicMock
 import pytest
 from rich.console import Console
 
-from core.agent_harness.session import Session
 from integrations.telegram.credentials import TelegramCredentials
 from platform.common.task_types import TaskKind, TaskStatus
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
@@ -18,6 +17,7 @@ from surfaces.interactive_shell.command_registry.watch_cmds import (
     WatchdogStartSpec,
     parse_watch_argv,
 )
+from surfaces.interactive_shell.session import Session
 
 
 def _capture() -> tuple[Console, io.StringIO]:
@@ -82,9 +82,7 @@ def test_dispatch_watch_creates_watchdog_task(
         is_tty=True,
     )
 
-    watchdogs = [
-        t for t in session.task_registry.list_recent(20) if t.kind == TaskKind.WATCHDOG
-    ]
+    watchdogs = [t for t in session.task_registry.list_recent(20) if t.kind == TaskKind.WATCHDOG]
     assert len(watchdogs) == 1
     assert watchdogs[0].status == TaskStatus.RUNNING
     assert "max_cpu=80" in (watchdogs[0].command or "")
@@ -125,9 +123,7 @@ def test_unwatch_marks_watchdog_cancelled(monkeypatch: pytest.MonkeyPatch) -> No
         is_tty=True,
     )
     assert barrier.wait(timeout=2.0), "watchdog thread should start"
-    task = next(
-        t for t in session.task_registry.list_recent(20) if t.kind == TaskKind.WATCHDOG
-    )
+    task = next(t for t in session.task_registry.list_recent(20) if t.kind == TaskKind.WATCHDOG)
     dispatch_slash(f"/unwatch {task.task_id}", session, console, is_tty=True)
     for _ in range(200):
         task.refresh_rehydrated_status()

@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 from rich.console import Console
 
 from core.agent_harness.models.turn_results import ShellTurnResult, ToolCallingTurnResult
-from core.agent_harness.session import Session
+from core.agent_harness.session import SessionCore
 from core.agent_harness.session.storage.memory import InMemorySessionStorage
 from gateway.turn_handler import build_gateway_turn_handler
 
@@ -53,7 +53,7 @@ def test_turn_handler_resolves_action_tools_from_live_session(monkeypatch: Any) 
         dispatch,
     )
 
-    session = Session(storage=InMemorySessionStorage())
+    session = SessionCore(storage=InMemorySessionStorage())
     chat_integrations = {"slack": {"webhook_url": "https://hooks.example/test"}}
     session.resolved_integrations_cache = chat_integrations
 
@@ -90,7 +90,7 @@ def test_turn_handler_finalizes_fallback_on_empty_response(monkeypatch: Any) -> 
     )
     sink = MagicMock()
     handler = build_gateway_turn_handler(console=Console(force_terminal=False))
-    handler("/", Session(storage=InMemorySessionStorage()), sink, logging.getLogger("test"))
+    handler("/", SessionCore(storage=InMemorySessionStorage()), sink, logging.getLogger("test"))
     sink.finalize.assert_called_once_with("I didn't have anything to add for that.")
 
 
@@ -103,5 +103,5 @@ def test_turn_handler_skips_finalize_when_answer_was_streamed(monkeypatch: Any) 
     )
     sink = MagicMock()
     handler = build_gateway_turn_handler(console=Console(force_terminal=False))
-    handler("hi", Session(storage=InMemorySessionStorage()), sink, logging.getLogger("test"))
+    handler("hi", SessionCore(storage=InMemorySessionStorage()), sink, logging.getLogger("test"))
     sink.finalize.assert_not_called()

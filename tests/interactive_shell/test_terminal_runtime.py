@@ -22,7 +22,6 @@ from prompt_toolkit.input.defaults import create_pipe_input
 from prompt_toolkit.keys import Keys
 from prompt_toolkit.output import DummyOutput
 
-from core.agent_harness.session import Session
 from platform.terminal import theme as ui_theme
 from platform.terminal.theme import (
     ANSI_RESET,
@@ -34,6 +33,7 @@ from surfaces.interactive_shell.runtime.core import confirmation as controller_r
 from surfaces.interactive_shell.runtime.core import state as loop_state
 from surfaces.interactive_shell.runtime.core import turn_detection as loop_turn_detection
 from surfaces.interactive_shell.runtime.startup import initial_input as startup_initial_input
+from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui import input_prompt
 from surfaces.interactive_shell.ui.components.cpr_stdin import (
     strip_cpr_escape_sequences,

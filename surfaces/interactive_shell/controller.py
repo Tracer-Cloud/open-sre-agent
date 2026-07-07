@@ -12,7 +12,6 @@ from prompt_toolkit.patch_stdout import patch_stdout
 from rich.console import Console
 
 from config.repl_config import ReplConfig
-from core.agent_harness.session import Session
 from core.domain.alerts import inbox as _alert_inbox
 from surfaces.interactive_shell.runtime.background.workers import BackgroundTaskManager
 from surfaces.interactive_shell.runtime.context import (
@@ -41,6 +40,7 @@ from surfaces.interactive_shell.runtime.turn_host import (
     run_agent_turn_queue,
     run_input_loop,
 )
+from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui import DIM
 
 log = logging.getLogger(__name__)

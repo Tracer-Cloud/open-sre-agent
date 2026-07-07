@@ -9,10 +9,10 @@ import pytest
 from prompt_toolkit.history import FileHistory, InMemoryHistory
 from rich.console import Console
 
-from core.agent_harness.session import Session
 from core.agent_harness.session import prompt_history as history_module
 from core.agent_harness.session.prompt_history.policy import RedactingFileHistory
 from surfaces.interactive_shell.command_registry import dispatch_slash
+from surfaces.interactive_shell.session import Session
 
 
 def _capture() -> tuple[Console, io.StringIO]:

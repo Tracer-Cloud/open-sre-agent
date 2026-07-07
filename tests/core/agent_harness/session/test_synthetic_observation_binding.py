@@ -5,7 +5,7 @@ from __future__ import annotations
 import unittest.mock
 from pathlib import Path
 
-from core.agent_harness.session.session import Session
+from surfaces.interactive_shell.session.session import Session
 
 
 def test_suggest_synthetic_failure_follow_up_binds_observation_path(tmp_path: Path) -> None:

@@ -6,14 +6,21 @@ from types import SimpleNamespace
 
 import pytest
 
-from core.agent_harness.session import InMemorySessionStorage, Session, SessionManager
+from core.agent_harness.session import (
+    InMemorySessionStorage,
+    SessionCore,
+    SessionManager,
+)
+from surfaces.interactive_shell.session import (
+    Session,
+)
 
 
 @pytest.fixture(autouse=True)
 def _no_real_integration_bootstrap(monkeypatch: pytest.MonkeyPatch) -> None:
     # Keep bootstrap from resolving real integrations during unit tests.
-    monkeypatch.setattr(Session, "warm_resolved_integrations", lambda _self, **_k: None)
-    monkeypatch.setattr(Session, "hydrate_configured_integrations", lambda _self: None)
+    monkeypatch.setattr(SessionCore, "warm_resolved_integrations", lambda _self, **_k: None)
+    monkeypatch.setattr(SessionCore, "hydrate_configured_integrations", lambda _self: None)
 
 
 def _manager(*, repo=None) -> SessionManager:
@@ -45,7 +52,7 @@ def test_create_opens_storage_and_returns_session() -> None:
 
     session = manager.create()
 
-    assert isinstance(session, Session)
+    assert isinstance(session, SessionCore)
     assert opened == [session.session_id]
 
 
@@ -142,7 +149,8 @@ def test_close_persists_and_releases_resources() -> None:
     storage.flush = lambda session: flushed.append(session.session_id)  # type: ignore[method-assign]
     manager = SessionManager(storage=storage, repo=SimpleNamespace(load_session=lambda _sid: None))
 
-    session = manager.create(session_id="s-close")
+    session = Session(session_id="s-close")
+    session.storage = storage
     session.terminal.background_notices.append("pending notice")
     session.terminal.prompt_refresh_fn = lambda: None
 
@@ -161,7 +169,8 @@ def test_close_flush_failure_does_not_crash_teardown() -> None:
 
     storage.flush = _boom  # type: ignore[method-assign]
     manager = SessionManager(storage=storage, repo=SimpleNamespace(load_session=lambda _sid: None))
-    session = manager.create(session_id="s-fail")
+    session = Session(session_id="s-fail")
+    session.storage = storage
     session.terminal.prompt_refresh_fn = lambda: None
 
     # Must not raise; resources still released.
@@ -243,7 +252,8 @@ def test_closed_session_is_garbage_collectable() -> None:
     import weakref
 
     manager = _manager()
-    session = manager.create(session_id="s-gc")
+    session = Session(session_id="s-gc")
+    session.storage = InMemorySessionStorage()
     session.terminal.prompt_refresh_fn = lambda: None
     session.terminal.background_notices.append("x")
     ref = weakref.ref(session)

@@ -11,7 +11,7 @@ import io
 
 from rich.console import Console
 
-from core.agent_harness.session import Session
+from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
 from tools.interactive_shell.shared import (
     ExecutionPolicyResult,

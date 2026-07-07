@@ -21,9 +21,9 @@ import tools.interactive_shell.actions.implementation as implementation_tool
 import tools.interactive_shell.actions.llm_provider as llm_provider_tool
 import tools.interactive_shell.actions.slash as slash_tool
 import tools.interactive_shell.shell.execution as shell_execution
-from core.agent_harness.session import Session
 from core.llm.types import AgentLLMResponse, ToolCall
 from platform.common.task_types import TaskKind, TaskStatus
+from surfaces.interactive_shell.session import Session
 from tests.core.agent._planned_action import (
     PlannedAction,
     default_target_surface,
@@ -719,9 +719,7 @@ def test_execute_cli_actions_runs_sample_alert(monkeypatch: object) -> None:
     }
     assert session.history[-1] == {"type": "alert", "text": "sample:generic", "ok": True}
     inv_tasks = [
-        t
-        for t in session.task_registry.list_recent(10)
-        if t.kind == TaskKind.INVESTIGATION
+        t for t in session.task_registry.list_recent(10) if t.kind == TaskKind.INVESTIGATION
     ]
     assert len(inv_tasks) == 1
     assert inv_tasks[0].status == TaskStatus.COMPLETED
@@ -755,9 +753,7 @@ def test_execute_cli_actions_sample_alert_opensre_error_marks_task_failed(
         is True
     )
     inv_tasks = [
-        t
-        for t in session.task_registry.list_recent(10)
-        if t.kind == TaskKind.INVESTIGATION
+        t for t in session.task_registry.list_recent(10) if t.kind == TaskKind.INVESTIGATION
     ]
     assert len(inv_tasks) == 1
     assert inv_tasks[0].status == TaskStatus.FAILED

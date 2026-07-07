@@ -9,11 +9,13 @@ import pytest
 import config.constants as const_module
 from core.agent_harness.session import (
     SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST,
-    Session,
 )
-from core.agent_harness.session.session import _scenario_id_from_synthetic_label
 from core.agent_harness.session.task_registry import TaskRegistry
 from platform.common.task_types import TaskKind
+from surfaces.interactive_shell.session import (
+    Session,
+)
+from surfaces.interactive_shell.session.session import _scenario_id_from_synthetic_label
 
 
 class TestSession:

@@ -13,9 +13,11 @@ import pytest
 from core.agent_harness.session import (
     JsonlSessionRepo,
     JsonlSessionStorage,
-    Session,
 )
 from core.agent_harness.session.storage_paths import sessions_dir as _sessions_dir
+from surfaces.interactive_shell.session import (
+    Session,
+)
 
 
 class _SessionStoreFacade(JsonlSessionStorage, JsonlSessionRepo):

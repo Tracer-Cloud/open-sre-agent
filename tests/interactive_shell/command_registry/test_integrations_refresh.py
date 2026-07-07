@@ -14,8 +14,8 @@ from typing import Any
 
 from rich.console import Console
 
-from core.agent_harness.session import Session
 from surfaces.interactive_shell.command_registry import integrations as _integrations
+from surfaces.interactive_shell.session import Session
 
 
 def _console() -> Console:

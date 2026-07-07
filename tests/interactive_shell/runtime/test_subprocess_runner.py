@@ -12,7 +12,6 @@ from unittest.mock import MagicMock
 import pytest
 from rich.console import Console
 
-from core.agent_harness.session import Session
 from integrations.llm_cli.base import CLIInvocation, CLIProbe
 from platform.common.task_types import TaskKind, TaskStatus
 from surfaces.interactive_shell.runtime.subprocess_runner import (
@@ -27,6 +26,7 @@ from surfaces.interactive_shell.runtime.subprocess_runner import (
     start_background_cli_task,
     terminate_child_process,
 )
+from surfaces.interactive_shell.session import Session
 from tools.interactive_shell.implementation.claude_code_executor import (
     run_claude_code_implementation,
 )

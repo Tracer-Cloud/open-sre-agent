@@ -8,10 +8,10 @@ from pathlib import Path
 from typing import Any
 
 import core.agent_harness.session.storage_paths as storage_paths
+from core.agent_harness.session.persistence_ports import CHAT_KINDS
 
 _ROOT_CAUSE_PREVIEW_CHARS = 80
 _DEFAULT_RCA_HISTORY_LIMIT = 50
-_CHAT_KINDS: frozenset[str] = frozenset({"chat", "cli_agent", "follow_up"})
 
 
 class JsonlSessionRepo:
@@ -368,7 +368,7 @@ def _count_chat_turns(entries: list[dict[str, Any]]) -> int:
         for rec in entries
         if rec.get("type") == "custom_message"
         and rec.get("custom_type") == "turn_stub"
-        and rec.get("kind") in _CHAT_KINDS
+        and rec.get("kind") in CHAT_KINDS
     )
 
 

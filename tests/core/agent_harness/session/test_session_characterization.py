@@ -11,10 +11,10 @@ from __future__ import annotations
 
 import dataclasses
 
-from core.agent_harness.session.session import Session
 from core.agent_harness.session.storage.memory import InMemorySessionStorage
 from core.agent_harness.session.token_usage import TokenUsage
 from core.domain.alerts.inbox import IncomingAlert
+from surfaces.interactive_shell.session.session import Session
 
 
 def _session() -> Session:

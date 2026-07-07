@@ -16,9 +16,9 @@ from typing import Any
 from rich.console import Console
 from rich.markup import escape
 
-from core.agent_harness.session import Session
 from core.agent_harness.turns import evidence_driver
 from core.agent_harness.turns.evidence_driver import GatherAgentFactory
+from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui import DIM
 from surfaces.interactive_shell.utils.error_handling.exception_reporting import report_exception
 from surfaces.shared.tool_labels import tool_short_label, tool_source_label

@@ -236,9 +236,7 @@ def _cmd_watch(session: Session, console: Console, args: list[str]) -> bool:
 
 
 def _cmd_watches(session: Session, console: Console, _args: list[str]) -> bool:
-    rows = [
-        t for t in session.task_registry.list_recent(n=100) if t.kind == TaskKind.WATCHDOG
-    ]
+    rows = [t for t in session.task_registry.list_recent(n=100) if t.kind == TaskKind.WATCHDOG]
     if not rows:
         console.print(f"[{DIM}]no watchdog tasks in this session.[/]")
         return True
