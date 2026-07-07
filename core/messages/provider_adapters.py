@@ -1,4 +1,4 @@
-"""Per-provider message-shaping adapters for :class:`MessageFormatter`.
+"""Per-provider message-shaping adapters for :class:`MessageMapper`.
 
 Each provider (Anthropic, Bedrock Converse, OpenAI-family, CLI-backed) shapes
 assistant messages, tool results, and synthetic tool-call turns differently.
@@ -53,12 +53,12 @@ class _OpenAIShapedClient(_ConstructAssistantClient, Protocol):
 
 
 class MessageAdapter[LLMT: _ToolResultClient]:
-    """Base shapes shared by every provider; ``assistant_from_response`` is provider-specific."""
+    """Base shapes shared by every provider; ``to_assistant_provider_message`` is provider-specific."""
 
     def __init__(self, llm: LLMT) -> None:
         self._llm = llm
 
-    def assistant_from_response(self, response: AgentLLMResponse) -> ProviderMessage:
+    def to_assistant_provider_message(self, response: AgentLLMResponse) -> ProviderMessage:
         raise NotImplementedError
 
     def tool_results_from_execution(
@@ -77,7 +77,7 @@ class MessageAdapter[LLMT: _ToolResultClient]:
 class _GenericAdapter[LLMT: _ConstructAssistantClient](MessageAdapter[LLMT]):
     """OpenAI-family / unknown clients that construct assistant messages from text."""
 
-    def assistant_from_response(self, response: AgentLLMResponse) -> ProviderMessage:
+    def to_assistant_provider_message(self, response: AgentLLMResponse) -> ProviderMessage:
         # raw_content carries provider-specific extras (e.g. Gemini's
         # thought_signature) that must be echoed back verbatim next request.
         if response.raw_content is not None:
@@ -86,7 +86,7 @@ class _GenericAdapter[LLMT: _ConstructAssistantClient](MessageAdapter[LLMT]):
 
 
 class _AnthropicAdapter[LLMT: _RawAssistantClient](MessageAdapter[LLMT]):
-    def assistant_from_response(self, response: AgentLLMResponse) -> ProviderMessage:
+    def to_assistant_provider_message(self, response: AgentLLMResponse) -> ProviderMessage:
         return self._llm.build_assistant_message(response.raw_content)
 
     def synthetic_assistant_tool_call(self, tool_calls: list[ToolCall]) -> ProviderMessage:
@@ -100,7 +100,7 @@ class _AnthropicAdapter[LLMT: _RawAssistantClient](MessageAdapter[LLMT]):
 
 
 class _BedrockConverseAdapter[LLMT: _RawAssistantClient](MessageAdapter[LLMT]):
-    def assistant_from_response(self, response: AgentLLMResponse) -> ProviderMessage:
+    def to_assistant_provider_message(self, response: AgentLLMResponse) -> ProviderMessage:
         return self._llm.build_assistant_message(response.raw_content)
 
     def synthetic_assistant_tool_call(self, tool_calls: list[ToolCall]) -> ProviderMessage:

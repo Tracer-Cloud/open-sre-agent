@@ -54,7 +54,7 @@ _EXPORT_MODULES = {
     "classify_llm_invoke_failure": "core.llm_invoke_errors",
     "AppRuntimeMessage": "core.messages",
     "AssistantRuntimeMessage": "core.messages",
-    "MessageFormatter": "core.messages",
+    "MessageMapper": "core.messages",
     "RuntimeMessage": "core.messages",
     "ToolResultRuntimeMessage": "core.messages",
     "UserRuntimeMessage": "core.messages",

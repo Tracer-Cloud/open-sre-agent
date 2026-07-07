@@ -22,10 +22,10 @@ from core.messages.runtime_message_types import (
 )
 
 
-class MessageFormatter:
+class MessageMapper:
     """Converts runtime messages to/from provider-specific dicts for LLM invocation.
 
-    ``normalize`` is a staticmethod — no llm needed.
+    ``to_runtime_messages`` is a staticmethod — no llm needed.
     All other methods require an llm instance.
     """
 
@@ -33,9 +33,9 @@ class MessageFormatter:
         self._llm = llm
 
     @staticmethod
-    def normalize(messages: Sequence[RuntimeMessageLike]) -> list[RuntimeMessage]:
+    def to_runtime_messages(messages: Sequence[RuntimeMessageLike]) -> list[RuntimeMessage]:
         """Convert legacy provider dicts and typed messages into RuntimeMessage objects."""
-        return [_coerce_runtime_message(m) for m in messages]
+        return [_to_runtime_message(m) for m in messages]
 
     def to_provider_messages(self, messages: Sequence[RuntimeMessage]) -> list[ProviderMessage]:
         """Render a RuntimeMessage sequence into provider dicts for llm.invoke.
@@ -49,9 +49,9 @@ class MessageFormatter:
             result.extend(self._for_runtime_message(message))
         return strip_internal_message_markers(result)
 
-    def assistant_from_response(self, response: AgentLLMResponse) -> ProviderMessage:
+    def to_assistant_provider_message(self, response: AgentLLMResponse) -> ProviderMessage:
         """Build the provider assistant-message payload from an LLM response."""
-        return adapter_for(self._llm).assistant_from_response(response)
+        return adapter_for(self._llm).to_assistant_provider_message(response)
 
     def tool_results_from_execution(
         self,
@@ -73,7 +73,7 @@ class MessageFormatter:
         return AssistantRuntimeMessage(
             content=response.content or "",
             tool_calls=tuple(response.tool_calls),
-            provider_payload=self.assistant_from_response(response),
+            provider_payload=self.to_assistant_provider_message(response),
         )
 
     def to_tool_result_runtime_message(
@@ -111,7 +111,7 @@ class MessageFormatter:
         return adapter_for(self._llm).app_message_content(message.content)
 
 
-def _coerce_runtime_message(message: RuntimeMessageLike) -> RuntimeMessage:
+def _to_runtime_message(message: RuntimeMessageLike) -> RuntimeMessage:
     if not isinstance(message, dict):
         return message
 
@@ -127,7 +127,10 @@ def _coerce_runtime_message(message: RuntimeMessageLike) -> RuntimeMessage:
             provider_payload=dict(message),
             metadata=_metadata_from_provider_message(message),
         )
+    # One tool-result turn, however the provider spelled the role:
+    # OpenAI "tool", Bedrock "toolResult", snake-case "tool_result".
     if role in {"tool", "toolResult", "tool_result"}:
+        # Field names likewise vary by provider: snake_case (OpenAI/Anthropic) vs camelCase (Bedrock).
         tool_name = str(message.get("name") or message.get("toolName") or "tool")
         tool_call_id = str(message.get("tool_call_id") or message.get("toolCallId") or tool_name)
         tool_call = ToolCall(id=tool_call_id, name=tool_name, input={})
@@ -150,4 +153,4 @@ def _metadata_from_provider_message(message: ProviderMessage) -> MessageMetadata
     return {key: value for key, value in message.items() if key.startswith("_opensre_")}
 
 
-__all__ = ["MessageFormatter"]
+__all__ = ["MessageMapper"]

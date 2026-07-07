@@ -15,7 +15,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from core.messages import MessageFormatter
+from core.messages import MessageMapper
 from core.provider import ProviderHooks, ProviderRequest
 
 if TYPE_CHECKING:
@@ -44,7 +44,7 @@ class ProviderHookDelegate:
             return self.hooks.apply_convert_to_llm(llm, messages)
         except Exception:  # noqa: BLE001 - fall back to the standard provider conversion
             logger.debug("[runtime] convert_to_llm raised; using default conversion", exc_info=True)
-            return MessageFormatter(llm).to_provider_messages(messages)
+            return MessageMapper(llm).to_provider_messages(messages)
 
     def before_request(self, request: ProviderRequest) -> ProviderRequest:
         try:
