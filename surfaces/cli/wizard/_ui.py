@@ -249,7 +249,7 @@ def _choose_model(
 ) -> str:
     """Prompt the user to pick a model from ``provider.models``.
 
-    Choices come from the curated config in ``cli/wizard/config.py``.
+    Choices come from the curated config in ``surfaces/cli/wizard/config.py``.
     A saved model that isn't in the curated list is preserved as ``current``
     so re-running the wizard never silently drops a user's prior pick, and an
     "Enter custom model ID" escape hatch is always available.
