@@ -1414,8 +1414,8 @@ class TestInvestigateFileCommand:
         console, buf = _capture()
         dispatch_slash("/investigate", session, console)
 
-        assert session.pending_prompt_default == "/investigate generic"
-        assert session.pending_prompt_autosubmit is True
+        assert session.terminal.pending_prompt_default == "/investigate generic"
+        assert session.terminal.pending_prompt_autosubmit is True
         assert captured == []
 
         dispatch_slash(session.take_pending_prompt_default(), session, console)

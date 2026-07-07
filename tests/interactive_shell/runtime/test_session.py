@@ -28,44 +28,44 @@ class TestSession:
         assert session.metrics.fallback_count == 0
         assert session.metrics.ctrl_c_intervention_count == 0
         assert session.metrics.correction_intervention_count == 0
-        assert session.pending_prompt_default is None
+        assert session.terminal.pending_prompt_default is None
         assert session.last_synthetic_observation_path is None
 
     def test_take_pending_prompt_default_returns_and_clears(self) -> None:
         session = Session()
-        session.pending_prompt_default = "why did it fail?"
+        session.terminal.pending_prompt_default = "why did it fail?"
         assert session.take_pending_prompt_default() == "why did it fail?"
-        assert session.pending_prompt_default is None
+        assert session.terminal.pending_prompt_default is None
         assert session.take_pending_prompt_default() == ""
 
     def test_clear_resets_pending_prompt_default(self) -> None:
         session = Session()
-        session.pending_prompt_default = "why did it fail?"
+        session.terminal.pending_prompt_default = "why did it fail?"
         session.clear()
-        assert session.pending_prompt_default is None
+        assert session.terminal.pending_prompt_default is None
 
     def test_queue_auto_command_sets_pending_and_notifies(self) -> None:
         session = Session()
         calls: list[bool] = []
         session.terminal.prompt_refresh_fn = lambda: calls.append(True)
         session.queue_auto_command("/integrations setup sentry")
-        assert session.pending_prompt_default == "/integrations setup sentry"
-        assert session.pending_prompt_autosubmit is True
+        assert session.terminal.pending_prompt_default == "/integrations setup sentry"
+        assert session.terminal.pending_prompt_autosubmit is True
         assert calls == [True]
 
     def test_take_pending_autosubmit_returns_and_clears(self) -> None:
         session = Session()
-        session.pending_prompt_autosubmit = True
+        session.terminal.pending_prompt_autosubmit = True
         assert session.take_pending_autosubmit() is True
-        assert session.pending_prompt_autosubmit is False
+        assert session.terminal.pending_prompt_autosubmit is False
         assert session.take_pending_autosubmit() is False
 
     def test_clear_resets_pending_autosubmit(self) -> None:
         session = Session()
         session.queue_auto_command("/integrations setup sentry")
         session.clear()
-        assert session.pending_prompt_autosubmit is False
-        assert session.pending_prompt_default is None
+        assert session.terminal.pending_prompt_autosubmit is False
+        assert session.terminal.pending_prompt_default is None
 
     def test_scenario_id_from_synthetic_label(self) -> None:
         assert (
@@ -85,7 +85,7 @@ class TestSession:
         session.suggest_synthetic_failure_follow_up(
             label="opensre tests synthetic --scenario 001-replication-lag",
         )
-        assert session.pending_prompt_default == SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
+        assert session.terminal.pending_prompt_default == SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
 
     def test_record_appends_entry(self) -> None:
         session = Session()

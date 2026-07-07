@@ -73,7 +73,7 @@ class TestPromptRefreshAutoSubmit:
         session = Session()
         app = _RefreshFakeApp()
         wire_prompt_refresh(session, app, _RefreshFakeLoop())
-        session.pending_prompt_default = "why did it fail?"
+        session.terminal.pending_prompt_default = "why did it fail?"
         session.notify_prompt_changed()
         assert app.current_buffer.text == "why did it fail?"
         assert app.current_buffer.submitted is False

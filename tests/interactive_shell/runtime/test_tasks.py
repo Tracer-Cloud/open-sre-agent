@@ -488,7 +488,7 @@ class TestSyntheticSubprocessWatcher:
         assert task.status == TaskStatus.FAILED
         assert "exit code 1" in (task.error or "")
         assert "ConnectionError" in (task.error or "")
-        assert session.pending_prompt_default == SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
+        assert session.terminal.pending_prompt_default == SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
 
     def test_watch_skips_synthetic_history_after_reset(
         self,

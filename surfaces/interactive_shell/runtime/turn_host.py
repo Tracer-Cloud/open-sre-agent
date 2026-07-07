@@ -96,7 +96,7 @@ async def run_agent_turn(runtime: AgentTurnRuntime, text: str) -> None:
     )
     exclusive_stdin = turn_needs_exclusive_stdin(text, runtime.session)
     progress_scope = contextlib.nullcontext() if exclusive_stdin else repl_safe_progress_scope()
-    runtime.session.exclusive_stdin_active = exclusive_stdin
+    runtime.session.terminal.exclusive_stdin_active = exclusive_stdin
     try:
         with progress_scope:
             await _run_agent_turn_loop(
@@ -109,7 +109,7 @@ async def run_agent_turn(runtime: AgentTurnRuntime, text: str) -> None:
                 dispatch_cancel=dispatch_cancel,
             )
     finally:
-        runtime.session.exclusive_stdin_active = False
+        runtime.session.terminal.exclusive_stdin_active = False
 
 
 async def _run_agent_turn_loop(

@@ -1041,7 +1041,7 @@ def test_start_background_cli_task_skips_follow_up_after_session_reset(
     assert len(_DeferredThread.pending) == 1
     session.clear()
     _DeferredThread.pending[0]()  # type: ignore[operator]
-    assert session.pending_prompt_default is None
+    assert session.terminal.pending_prompt_default is None
     _DeferredThread.pending.clear()
 
 

@@ -12,10 +12,6 @@ from typing import TYPE_CHECKING, Any
 from core.domain.alerts.inbox import IncomingAlert
 
 if TYPE_CHECKING:
-    # Type-only: the session stores the prompt-history backend as an opaque UI
-    # handle (surfaces access its interface). Importing it only under
-    # TYPE_CHECKING keeps core free of a runtime prompt_toolkit dependency.
-
     from core.agent_harness.grounding.context import GroundingContext
     from core.agent_harness.integrations.resolution import IntegrationResolutionResult
 else:
@@ -234,30 +230,6 @@ class Session:
     metrics: TerminalMetrics = field(default_factory=TerminalMetrics)
     """Interactive-shell turn/intervention analytics counters (see ``/status``)."""
 
-    pending_prompt_default: str | None = None
-    """When set, the next interactive prompt is pre-filled with this string (then cleared)."""
-
-    pending_prompt_autosubmit: bool = False
-    """When True alongside ``pending_prompt_default``, the prefilled prompt is
-    submitted automatically instead of waiting for the user to press Enter.
-
-    Used to auto-launch an interactive command the agent decided to run (e.g.
-    ``/integrations setup sentry``) so it flows through the normal
-    exclusive-stdin dispatch path — the only place an interactive child process
-    gets clean stdin."""
-
-    exclusive_stdin_active: bool = False
-    """True while a turn is running with exclusive stdin reserved (no live prompt).
-
-    Inline picker/wizard slash commands must dispatch immediately during these
-    turns instead of re-queueing via ``queue_auto_command``, which would loop."""
-
-    agent_turn_executed_slashes: set[str] = field(default_factory=set, repr=False)
-    """Slash command lines already executed during the current action-agent turn.
-
-    Prevents the tool-calling loop from re-dispatching the same literal slash
-    command when the model emits a duplicate ``slash_invoke`` on a later iteration."""
-
     last_synthetic_observation_path: str | None = None
     """Absolute path to ``latest.json`` for the last finished synthetic run (set on failure)."""
 
@@ -279,14 +251,14 @@ class Session:
 
     def take_pending_prompt_default(self) -> str:
         """Return pre-filled text for the next prompt line, if any, and clear it."""
-        value = self.pending_prompt_default
-        self.pending_prompt_default = None
+        value = self.terminal.pending_prompt_default
+        self.terminal.pending_prompt_default = None
         return value or ""
 
     def take_pending_autosubmit(self) -> bool:
         """Return whether the pending prefill should auto-submit, and clear the flag."""
-        value = self.pending_prompt_autosubmit
-        self.pending_prompt_autosubmit = False
+        value = self.terminal.pending_prompt_autosubmit
+        self.terminal.pending_prompt_autosubmit = False
         return value
 
     def queue_auto_command(self, command: str) -> None:
@@ -298,8 +270,8 @@ class Session:
         through the normal exclusive-stdin dispatch path rather than spawning it
         mid-turn, where it would fight the live prompt for stdin.
         """
-        self.pending_prompt_default = command
-        self.pending_prompt_autosubmit = True
+        self.terminal.pending_prompt_default = command
+        self.terminal.pending_prompt_autosubmit = True
         self.notify_prompt_changed()
 
     def notify_prompt_changed(self) -> None:
@@ -327,7 +299,7 @@ class Session:
 
     def suggest_synthetic_failure_follow_up(self, *, label: str = "") -> None:
         """Queue RCA prefill after a failed synthetic run and refresh the active prompt."""
-        self.pending_prompt_default = SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
+        self.terminal.pending_prompt_default = SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
         self.notify_prompt_changed()
         self._bind_last_synthetic_observation(_scenario_id_from_synthetic_label(label))
         self.notify_prompt_changed()
@@ -647,11 +619,10 @@ class Session:
         )
 
         self.metrics.reset()
-        self.pending_prompt_default = None
-        self.pending_prompt_autosubmit = False
-        self.exclusive_stdin_active = False
-        if hasattr(self, "agent_turn_executed_slashes"):
-            self.agent_turn_executed_slashes.clear()
+        self.terminal.pending_prompt_default = None
+        self.terminal.pending_prompt_autosubmit = False
+        self.terminal.exclusive_stdin_active = False
+        self.terminal.agent_turn_executed_slashes.clear()
         self.last_synthetic_observation_path = None
         self.background_mode_enabled = False
         self.background_investigations.clear()

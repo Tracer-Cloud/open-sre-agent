@@ -51,10 +51,6 @@ _CORE_FIELDS = (
     "_ACCUMULATED_KEYS",
 )
 _TERMINAL_FIELDS = (
-    "pending_prompt_default",
-    "pending_prompt_autosubmit",
-    "exclusive_stdin_active",
-    "agent_turn_executed_slashes",
     "task_registry",
     "metrics",
     "background_mode_enabled",
@@ -70,17 +66,20 @@ _TERMINAL_FIELDS = (
     "trust_mode",
 )
 # Extracted facets, each a single field on Session holding relocated state:
-#   Phase 1 (alert inbox): incoming_alerts + _INCOMING_ALERTS_MAX -> session.alerts (entries, _max)
-#   Phase 2 (terminal, theme cluster): active_theme_name + pending_theme_refresh -> session.terminal
+#   alert inbox: incoming_alerts + _INCOMING_ALERTS_MAX -> session.alerts (entries, _max)
+#   terminal, theme cluster: active_theme_name + pending_theme_refresh -> session.terminal
+#   terminal, prompt-toolkit cluster: prompt_history_backend, pt_style_app, main_loop,
+#       prompt_refresh_fn, fleet_sampler_starter -> session.terminal
+#   terminal, pending-prompt/stdin cluster: pending_prompt_default, pending_prompt_autosubmit,
+#       exclusive_stdin_active, agent_turn_executed_slashes -> session.terminal
 _FACET_FIELDS = ("alerts", "terminal")
 
 
-def test_field_inventory_is_exactly_41_top_level_fields() -> None:
+def test_field_inventory_is_exactly_37_top_level_fields() -> None:
     all_fields = _CORE_FIELDS + _TERMINAL_FIELDS + _FACET_FIELDS
-    assert (
-        len(all_fields) == 41
-    )  # 48 - 2 (alerts) - 2 (theme) - 5 (prompt-toolkit) + 2 facet fields
-    assert len(set(all_fields)) == 41  # no duplicates across buckets
+    # 48 - 2 (alerts) - 2 (theme) - 5 (prompt-toolkit) - 4 (pending-prompt/stdin) + 2 facet fields
+    assert len(all_fields) == 37
+    assert len(set(all_fields)) == 37  # no duplicates across buckets
 
 
 def test_every_inventoried_field_is_accessible_on_session() -> None:
@@ -111,6 +110,17 @@ def test_terminal_facet_holds_the_prompt_toolkit_cluster() -> None:
         "main_loop",
         "prompt_refresh_fn",
         "fleet_sampler_starter",
+    ):
+        assert hasattr(terminal, f)  # was Session.<f>
+
+
+def test_terminal_facet_holds_the_pending_prompt_cluster() -> None:
+    terminal = _session().terminal
+    for f in (
+        "pending_prompt_default",
+        "pending_prompt_autosubmit",
+        "exclusive_stdin_active",
+        "agent_turn_executed_slashes",
     ):
         assert hasattr(terminal, f)  # was Session.<f>
 

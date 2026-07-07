@@ -58,3 +58,27 @@ class TerminalSession:
     Set by the interactive-shell controller so the sampler (and its ``psutil`` dependency)
     stays out of base REPL startup and only runs when fleet monitoring is actually
     requested. Thread-safe: the starter marshals task creation onto the REPL event loop."""
+
+    pending_prompt_default: str | None = None
+    """When set, the next interactive prompt is pre-filled with this string (then cleared)."""
+
+    pending_prompt_autosubmit: bool = False
+    """When True alongside ``pending_prompt_default``, the prefilled prompt is
+    submitted automatically instead of waiting for the user to press Enter.
+
+    Used to auto-launch an interactive command the agent decided to run (e.g.
+    ``/integrations setup sentry``) so it flows through the normal
+    exclusive-stdin dispatch path — the only place an interactive child process
+    gets clean stdin."""
+
+    exclusive_stdin_active: bool = False
+    """True while a turn is running with exclusive stdin reserved (no live prompt).
+
+    Inline picker/wizard slash commands must dispatch immediately during these
+    turns instead of re-queueing via ``queue_auto_command``, which would loop."""
+
+    agent_turn_executed_slashes: set[str] = field(default_factory=set, repr=False)
+    """Slash command lines already executed during the current action-agent turn.
+
+    Prevents the tool-calling loop from re-dispatching the same literal slash
+    command when the model emits a duplicate ``slash_invoke`` on a later iteration."""
