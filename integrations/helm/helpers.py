@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
+from integrations._validation_helpers import report_validation_failure
 from integrations.config_models import HelmIntegrationConfig
 from integrations.helm.client import HelmClient
+
+logger = logging.getLogger(__name__)
 
 
 def helm_client_for_run(
@@ -25,7 +29,13 @@ def helm_client_for_run(
                 "integration_id": integration_id or "",
             }
         )
-    except Exception:
+    except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="helm",
+            method="helm_client_for_run",
+        )
         return None
     return HelmClient(cfg)
 
