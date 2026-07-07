@@ -65,7 +65,9 @@ class TestNormalize:
         assert result[0].provider_payload == payload
 
     def test_tool_role_dict(self) -> None:
-        result = MessageMapper.to_runtime_messages([{"role": "tool", "name": "my_tool", "content": "out"}])
+        result = MessageMapper.to_runtime_messages(
+            [{"role": "tool", "name": "my_tool", "content": "out"}]
+        )
         assert isinstance(result[0], ToolResultRuntimeMessage)
         assert result[0].tool_calls[0].name == "my_tool"
 
@@ -86,7 +88,9 @@ class TestNormalize:
         assert result[0].metadata == {"_opensre_tag": "seed"}
 
     def test_non_opensre_metadata_not_propagated(self) -> None:
-        result = MessageMapper.to_runtime_messages([{"role": "user", "content": "hi", "other_key": "val"}])
+        result = MessageMapper.to_runtime_messages(
+            [{"role": "user", "content": "hi", "other_key": "val"}]
+        )
         assert result[0].metadata == {}
 
 

@@ -27,21 +27,22 @@ class _ToolResultClient(Protocol):
 
     def build_tool_result_message(
         self, tool_calls: list[ToolCall], results: list[Any]
-    ) -> dict[str, Any]: ...
+    ) -> dict[str, Any]:
+        """Build one provider tool-result message for a batch of calls."""
 
 
 class _RawAssistantClient(_ToolResultClient, Protocol):
     """Clients that rebuild an assistant message from the provider's raw content."""
 
-    def build_assistant_message(self, raw_content: Any) -> dict[str, Any]: ...
+    def build_assistant_message(self, raw_content: Any) -> dict[str, Any]:
+        """Rebuild the assistant message from the provider's raw response content."""
 
 
 class _ConstructAssistantClient(_ToolResultClient, Protocol):
     """Clients that construct an assistant message from text + tool calls."""
 
-    def build_assistant_message(
-        self, content: str, tool_calls: list[ToolCall]
-    ) -> dict[str, Any]: ...
+    def build_assistant_message(self, content: str, tool_calls: list[ToolCall]) -> dict[str, Any]:
+        """Construct the assistant message from text content and tool calls."""
 
 
 class _OpenAIShapedClient(_ConstructAssistantClient, Protocol):
@@ -49,7 +50,8 @@ class _OpenAIShapedClient(_ConstructAssistantClient, Protocol):
 
     def build_tool_result_messages(
         self, tool_calls: list[ToolCall], results: list[Any]
-    ) -> list[dict[str, Any]]: ...
+    ) -> list[dict[str, Any]]:
+        """Build one provider tool-result message per tool call."""
 
 
 class MessageAdapter[LLMT: _ToolResultClient]:
