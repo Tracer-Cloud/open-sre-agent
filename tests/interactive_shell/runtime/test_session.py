@@ -22,7 +22,7 @@ class TestSession:
         assert session.history == []
         assert session.last_state is None
         assert session.accumulated_context == {}
-        assert session.trust_mode is False
+        assert session.terminal.trust_mode is False
         assert session.terminal.task_registry.list_recent() == []
         assert session.terminal.metrics.turn_count == 0
         assert session.terminal.metrics.fallback_count == 0
@@ -110,7 +110,7 @@ class TestSession:
 
     def test_clear_preserves_trust_mode(self) -> None:
         session = Session()
-        session.trust_mode = True
+        session.terminal.trust_mode = True
         session.terminal.background_notification_preferences.set_channels(["email"])
         session.accumulated_context["service"] = "api"
         session.record("alert", "something")
@@ -131,7 +131,7 @@ class TestSession:
         assert session.terminal.metrics.ctrl_c_intervention_count == 0
         assert session.terminal.metrics.correction_intervention_count == 0
         assert session.terminal.background_notification_preferences.channels == ("email",)
-        assert session.trust_mode is True  # preserved intentionally
+        assert session.terminal.trust_mode is True  # preserved intentionally
 
     def test_clear_keeps_persisted_task_history_file(
         self,

@@ -43,6 +43,7 @@ ignore_imports =
     platform.scheduler.executor -> integrations.discord.delivery
     platform.scheduler.executor -> integrations.slack.delivery
     platform.scheduler.executor -> integrations.telegram.delivery
+    platform.scheduler.executor -> integrations.telegram.formatting
     # surfaces -> gateway (cli gateway command)
     surfaces.cli.commands.gateway -> gateway.manager
     # tools.interactive_shell -> surfaces (T-4 debt — issue #3352)
@@ -95,6 +96,7 @@ ignore_imports =
     tools.investigation.reporting.delivery.bootstrap -> integrations.twilio.reporting_adapter
     tools.investigation.reporting.delivery.bootstrap -> integrations.whatsapp.reporting_adapter
     tools.investigation.reporting.evaluation -> integrations.opensre.llm_eval_judge
+    tools.investigation.reporting.formatters.report -> integrations.telegram.formatting
     tools.investigation.reporting.gitlab_writeback -> integrations.gitlab
     tools.investigation.reporting.upstream_correlation.registry -> integrations.datadog.correlation.registration
     tools.investigation.state_factory -> integrations.opensre.hf_remote

@@ -73,7 +73,7 @@ def test_dispatch_watch_creates_watchdog_task(
     )
 
     session = Session()
-    session.trust_mode = True
+    session.terminal.trust_mode = True
     console, buf = _capture()
     dispatch_slash(
         f"/watch {__import__('os').getpid()} --max-cpu 80",
@@ -116,7 +116,7 @@ def test_unwatch_marks_watchdog_cancelled(monkeypatch: pytest.MonkeyPatch) -> No
     )
 
     session = Session()
-    session.trust_mode = True
+    session.terminal.trust_mode = True
     console, _ = _capture()
     dispatch_slash(
         f"/watch {__import__('os').getpid()} --interval 1s",
@@ -139,7 +139,7 @@ def test_unwatch_marks_watchdog_cancelled(monkeypatch: pytest.MonkeyPatch) -> No
 
 def test_unwatch_rejects_non_watchdog_task() -> None:
     session = Session()
-    session.trust_mode = True
+    session.terminal.trust_mode = True
     inv = session.terminal.task_registry.create(TaskKind.INVESTIGATION, command="x")
     inv.mark_running()
     console, buf = _capture()

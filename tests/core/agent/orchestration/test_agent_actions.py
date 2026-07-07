@@ -861,7 +861,7 @@ def test_execute_cli_actions_runs_requested_synthetic_scenario(monkeypatch: obje
 
 def test_execute_cli_actions_cancels_single_running_synthetic_task() -> None:
     session = Session()
-    session.trust_mode = True
+    session.terminal.trust_mode = True
     task = session.terminal.task_registry.create(TaskKind.SYNTHETIC_TEST)
     task.mark_running()
     proc = MagicMock()

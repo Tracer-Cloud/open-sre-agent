@@ -234,7 +234,10 @@ def start_background_cli_task(
             if stdout_buf is not None:
                 stdout_buf.close()
             stderr_buf.close()
-            if suggest_follow_up and session.terminal.history_generation == history_gen_when_watch_started:
+            if (
+                suggest_follow_up
+                and session.terminal.history_generation == history_gen_when_watch_started
+            ):
                 session.suggest_synthetic_failure_follow_up(label=display_command)
             else:
                 session.notify_prompt_changed()

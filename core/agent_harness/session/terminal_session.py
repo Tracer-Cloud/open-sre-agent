@@ -37,6 +37,9 @@ class TerminalSession:
     pending_theme_refresh: bool = False
     """When True, apply the active palette to prompt-toolkit before the next prompt."""
 
+    trust_mode: bool = False
+    """When True, confirmation prompts for elevated REPL actions are skipped."""
+
     prompt_history_backend: History | None = None
     """The live ``prompt_toolkit.History`` object backing the input prompt.
 
@@ -117,3 +120,16 @@ class TerminalSession:
 
     metrics: TerminalMetrics = field(default_factory=TerminalMetrics)
     """Interactive-shell turn/intervention analytics counters (see ``/status``)."""
+
+    _turn_outcome_hint: str | None = field(default=None, repr=False, compare=False)
+    """Optional structured outcome set by a terminal handler for analytics."""
+
+    _pending_turn_llm: Any | None = field(default=None, repr=False, compare=False)
+    """LLM run metadata (an ``LlmRunInfo``) staged by a terminal handler for the
+    current turn's prompt-recorder flush. Consumed exactly once via
+    ``pop_pending_turn_llm`` so it cannot leak into later turns."""
+
+    _pending_turn_error: tuple[str, str] | None = field(default=None, repr=False, compare=False)
+    """Structured ``(error_kind, message)`` staged by a failing handler for the
+    current turn's prompt-recorder flush. Consumed exactly once via
+    ``pop_pending_turn_error`` so it cannot leak into later turns."""

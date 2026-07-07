@@ -35,6 +35,7 @@ _CORE_FIELDS = (
     "last_state",
     "last_investigation_id",
     "last_assistant_intent",
+    "last_synthetic_observation_path",
     "configured_integrations",
     "configured_integrations_known",
     "resolved_integrations_cache",
@@ -50,16 +51,13 @@ _CORE_FIELDS = (
     "grounding",
     "_ACCUMULATED_KEYS",
 )
-_TERMINAL_FIELDS = (
-    "_turn_outcome_hint",
-    "_pending_turn_llm",
-    "_pending_turn_error",
-    "last_synthetic_observation_path",
-    "trust_mode",
-)
+# Shell-only state that still sits flat on Session, awaiting relocation to the
+# terminal facet. Empty: every shell-only cluster now lives on session.terminal.
+_TERMINAL_FIELDS: tuple[str, ...] = ()
 # Extracted facets, each a single field on Session holding relocated state:
 #   alert inbox: incoming_alerts + _INCOMING_ALERTS_MAX -> session.alerts (entries, _max)
-#   terminal, theme cluster: active_theme_name + pending_theme_refresh -> session.terminal
+#   terminal, theme cluster: active_theme_name + pending_theme_refresh + trust_mode
+#       -> session.terminal
 #   terminal, prompt-toolkit cluster: prompt_history_backend, pt_style_app, main_loop,
 #       prompt_refresh_fn, fleet_sampler_starter -> session.terminal
 #   terminal, pending-prompt/stdin cluster: pending_prompt_default, pending_prompt_autosubmit,
@@ -69,15 +67,18 @@ _TERMINAL_FIELDS = (
 #       -> session.terminal
 #   terminal, metrics/task-registry cluster: task_registry, metrics, history_generation
 #       -> session.terminal
+#   terminal, analytics-staging cluster: _turn_outcome_hint, _pending_turn_llm,
+#       _pending_turn_error -> session.terminal
 _FACET_FIELDS = ("alerts", "terminal")
 
 
-def test_field_inventory_is_exactly_29_top_level_fields() -> None:
+def test_field_inventory_is_exactly_25_top_level_fields() -> None:
     all_fields = _CORE_FIELDS + _TERMINAL_FIELDS + _FACET_FIELDS
     # 48 - 2 (alerts) - 2 (theme) - 5 (prompt-toolkit) - 4 (pending-prompt/stdin)
-    #    - 5 (background) - 3 (metrics/task-registry/history) + 2 facet fields
-    assert len(all_fields) == 29
-    assert len(set(all_fields)) == 29  # no duplicates across buckets
+    #    - 5 (background) - 3 (metrics/task-registry/history) - 3 (analytics-staging)
+    #    - 1 (trust_mode) + 2 facet fields
+    assert len(all_fields) == 25
+    assert len(set(all_fields)) == 25  # no duplicates across buckets
 
 
 def test_every_inventoried_field_is_accessible_on_session() -> None:
@@ -98,6 +99,7 @@ def test_terminal_facet_holds_the_theme_cluster() -> None:
     terminal = _session().terminal
     assert hasattr(terminal, "active_theme_name")  # was Session.active_theme_name
     assert hasattr(terminal, "pending_theme_refresh")  # was Session.pending_theme_refresh
+    assert hasattr(terminal, "trust_mode")  # was Session.trust_mode
 
 
 def test_terminal_facet_holds_the_prompt_toolkit_cluster() -> None:
@@ -139,6 +141,20 @@ def test_terminal_facet_holds_the_metrics_and_task_registry_cluster() -> None:
     terminal = _session().terminal
     for f in ("task_registry", "metrics", "history_generation"):
         assert hasattr(terminal, f)  # was Session.<f>
+
+
+def test_terminal_facet_holds_the_analytics_staging_cluster() -> None:
+    terminal = _session().terminal
+    for f in ("_turn_outcome_hint", "_pending_turn_llm", "_pending_turn_error"):
+        assert hasattr(terminal, f)  # was Session.<f>
+
+
+def test_analytics_staging_pop_methods_delegate_to_the_facet() -> None:
+    session = _session()
+    session.set_turn_outcome_hint("queued")
+    assert session.terminal._turn_outcome_hint == "queued"
+    assert session.pop_turn_outcome_hint() == "queued"
+    assert session.terminal._turn_outcome_hint is None
 
 
 # --------------------------------------------------------------------------- #

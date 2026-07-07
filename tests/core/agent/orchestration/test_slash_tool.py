@@ -68,7 +68,7 @@ def test_interactive_picker_command_is_deferred_to_exclusive_stdin(
     assert session.terminal.pending_prompt_default == expected
     assert session.terminal.pending_prompt_autosubmit is True
     assert session.history == []
-    assert session._turn_outcome_hint == f"queued {expected} for exclusive stdin dispatch"
+    assert session.terminal._turn_outcome_hint == f"queued {expected} for exclusive stdin dispatch"
     assert "Launching" in buf.getvalue()
 
 

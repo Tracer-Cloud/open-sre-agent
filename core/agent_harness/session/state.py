@@ -132,25 +132,9 @@ class Session:
     available_capabilities: dict[str, tuple[str, ...]] = field(default_factory=dict)
     """Optional planning-time capability constraints (slash/cli/synthetic)."""
 
-    _turn_outcome_hint: str | None = field(default=None, repr=False, compare=False)
-    """Optional structured outcome set by a terminal handler for analytics."""
-
-    _pending_turn_llm: Any | None = field(default=None, repr=False, compare=False)
-    """LLM run metadata (an ``LlmRunInfo``) staged by a terminal handler for the
-    current turn's prompt-recorder flush. Consumed exactly once via
-    ``pop_pending_turn_llm`` so it cannot leak into later turns."""
-
-    _pending_turn_error: tuple[str, str] | None = field(default=None, repr=False, compare=False)
-    """Structured ``(error_kind, message)`` staged by a failing handler for the
-    current turn's prompt-recorder flush. Consumed exactly once via
-    ``pop_pending_turn_error`` so it cannot leak into later turns."""
-
     accumulated_context: dict[str, Any] = field(default_factory=dict)
     """Reusable infra context — service names, clusters, regions — learned from
     earlier investigations that should seed future ones."""
-
-    trust_mode: bool = False
-    """When True, confirmation prompts for elevated REPL actions are skipped."""
 
     reasoning_effort: ReasoningEffortChoice | None = None
     """Session-scoped reasoning effort preference for REPL-driven LLM calls."""
@@ -339,22 +323,24 @@ class Session:
 
     def set_turn_outcome_hint(self, hint: str | None) -> None:
         """Attach a structured outcome for the current terminal handler."""
-        self._turn_outcome_hint = hint.strip() if isinstance(hint, str) and hint.strip() else None
+        self.terminal._turn_outcome_hint = (
+            hint.strip() if isinstance(hint, str) and hint.strip() else None
+        )
 
     def pop_turn_outcome_hint(self) -> str | None:
         """Return and clear any structured outcome hint for this turn."""
-        hint = self._turn_outcome_hint
-        self._turn_outcome_hint = None
+        hint = self.terminal._turn_outcome_hint
+        self.terminal._turn_outcome_hint = None
         return hint
 
     def set_pending_turn_llm(self, run: Any | None) -> None:
         """Stage LLM run metadata for this turn's prompt-recorder flush."""
-        self._pending_turn_llm = run
+        self.terminal._pending_turn_llm = run
 
     def pop_pending_turn_llm(self) -> Any | None:
         """Return and clear staged LLM run metadata for this turn."""
-        run = self._pending_turn_llm
-        self._pending_turn_llm = None
+        run = self.terminal._pending_turn_llm
+        self.terminal._pending_turn_llm = None
         return run
 
     def set_pending_turn_error(self, kind: str, message: str) -> None:
@@ -362,12 +348,12 @@ class Session:
         kind = kind.strip()
         message = message.strip()
         if kind or message:
-            self._pending_turn_error = (kind or "error", message)
+            self.terminal._pending_turn_error = (kind or "error", message)
 
     def pop_pending_turn_error(self) -> tuple[str, str] | None:
         """Return and clear the staged structured turn error."""
-        error = self._pending_turn_error
-        self._pending_turn_error = None
+        error = self.terminal._pending_turn_error
+        self.terminal._pending_turn_error = None
         return error
 
     def complete_latest_record(

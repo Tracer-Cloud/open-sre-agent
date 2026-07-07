@@ -54,7 +54,7 @@ def _cmd_status(session: Session, console: Console, _args: list[str]) -> bool:
         table.add_row("incoming alerts", "0")
 
     table.add_row("last investigation", "yes" if session.last_state else "none")
-    table.add_row("trust mode", "on" if session.trust_mode else "off")
+    table.add_row("trust mode", "on" if session.terminal.trust_mode else "off")
     table.add_row("reasoning effort", display_reasoning_effort(session.reasoning_effort))
     table.add_row("provider", _status_provider_display())
     table.add_row(

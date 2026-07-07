@@ -119,7 +119,7 @@ class TestResolvePromptPlaceholder:
 
     def test_shows_trust_mode(self) -> None:
         session = Session()
-        session.trust_mode = True
+        session.terminal.trust_mode = True
         text = _placeholder_text(session)
         assert "trust on" in text
         assert _DEFAULT_PLACEHOLDER_TEXT not in text
@@ -142,7 +142,7 @@ class TestResolvePromptPlaceholder:
 
     def test_combines_multiple_state_segments(self) -> None:
         session = Session()
-        session.trust_mode = True
+        session.terminal.trust_mode = True
         session.resumed_from_name = "redis-incident"
         task = session.terminal.task_registry.create(TaskKind.WATCHDOG)
         task.mark_running()

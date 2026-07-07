@@ -111,11 +111,11 @@ class TestDispatchSlash:
     def test_trust_toggle(self) -> None:
         session = Session()
         console, _ = _capture()
-        assert session.trust_mode is False
+        assert session.terminal.trust_mode is False
         dispatch_slash("/trust", session, console)
-        assert session.trust_mode is True
+        assert session.terminal.trust_mode is True
         dispatch_slash("/trust off", session, console)
-        assert session.trust_mode is False
+        assert session.terminal.trust_mode is False
 
     def test_effort_sets_session_preference(self, monkeypatch: pytest.MonkeyPatch) -> None:
         class _FakeLLM:
@@ -163,14 +163,14 @@ class TestDispatchSlash:
         session = Session()
         session.record("alert", "test")
         session.last_state = {"x": 1}
-        session.trust_mode = True
+        session.terminal.trust_mode = True
         console, _ = _capture()
 
         dispatch_slash("/new", session, console)
 
         assert session.history == []
         assert session.last_state is None
-        assert session.trust_mode is True  # /new keeps trust mode
+        assert session.terminal.trust_mode is True  # /new keeps trust mode
 
     def test_status_shows_session_fields(self) -> None:
         session = Session()
@@ -2153,7 +2153,7 @@ class TestPrePolicyValidation:
             return "y"
 
         session = Session()
-        session.trust_mode = True
+        session.terminal.trust_mode = True
 
         console, buf = _capture()
         dispatch_slash("/investigate", session, console, confirm_fn=_confirm, is_tty=True)

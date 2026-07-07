@@ -79,7 +79,7 @@ def execution_allowed(
     When ``action_already_listed`` is True (e.g. assistant printed a numbered action plan),
     the TTY prompt omits repeating ``action_summary`` and shows only the policy reason.
     """
-    trust_mode = session.trust_mode
+    trust_mode = session.terminal.trust_mode
     tty = sys.stdin.isatty() if is_tty is None else is_tty
     confirm = confirm_fn or DEFAULT_CONFIRM_FN
 
