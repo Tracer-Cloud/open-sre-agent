@@ -126,11 +126,11 @@ class TestResolvePromptPlaceholder:
 
     def test_shows_running_task_count(self) -> None:
         session = Session()
-        task = session.task_registry.create(TaskKind.SYNTHETIC_TEST)
+        task = session.terminal.task_registry.create(TaskKind.SYNTHETIC_TEST)
         task.mark_running()
         assert "1 task running" in _placeholder_text(session)
 
-        second = session.task_registry.create(TaskKind.INVESTIGATION)
+        second = session.terminal.task_registry.create(TaskKind.INVESTIGATION)
         second.mark_running()
         assert "2 tasks running" in _placeholder_text(session)
 
@@ -144,7 +144,7 @@ class TestResolvePromptPlaceholder:
         session = Session()
         session.trust_mode = True
         session.resumed_from_name = "redis-incident"
-        task = session.task_registry.create(TaskKind.WATCHDOG)
+        task = session.terminal.task_registry.create(TaskKind.WATCHDOG)
         task.mark_running()
         text = _placeholder_text(session)
         assert "trust on" in text

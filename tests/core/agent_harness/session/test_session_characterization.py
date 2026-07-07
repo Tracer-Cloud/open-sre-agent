@@ -51,9 +51,6 @@ _CORE_FIELDS = (
     "_ACCUMULATED_KEYS",
 )
 _TERMINAL_FIELDS = (
-    "task_registry",
-    "metrics",
-    "history_generation",
     "_turn_outcome_hint",
     "_pending_turn_llm",
     "_pending_turn_error",
@@ -70,15 +67,17 @@ _TERMINAL_FIELDS = (
 #   terminal, background cluster: background_mode_enabled, background_investigations,
 #       background_notification_preferences, background_notices, _background_notices_lock
 #       -> session.terminal
+#   terminal, metrics/task-registry cluster: task_registry, metrics, history_generation
+#       -> session.terminal
 _FACET_FIELDS = ("alerts", "terminal")
 
 
-def test_field_inventory_is_exactly_32_top_level_fields() -> None:
+def test_field_inventory_is_exactly_29_top_level_fields() -> None:
     all_fields = _CORE_FIELDS + _TERMINAL_FIELDS + _FACET_FIELDS
     # 48 - 2 (alerts) - 2 (theme) - 5 (prompt-toolkit) - 4 (pending-prompt/stdin)
-    #    - 5 (background) + 2 facet fields
-    assert len(all_fields) == 32
-    assert len(set(all_fields)) == 32  # no duplicates across buckets
+    #    - 5 (background) - 3 (metrics/task-registry/history) + 2 facet fields
+    assert len(all_fields) == 29
+    assert len(set(all_fields)) == 29  # no duplicates across buckets
 
 
 def test_every_inventoried_field_is_accessible_on_session() -> None:
@@ -133,6 +132,12 @@ def test_terminal_facet_holds_the_background_cluster() -> None:
         "background_notices",
         "_background_notices_lock",
     ):
+        assert hasattr(terminal, f)  # was Session.<f>
+
+
+def test_terminal_facet_holds_the_metrics_and_task_registry_cluster() -> None:
+    terminal = _session().terminal
+    for f in ("task_registry", "metrics", "history_generation"):
         assert hasattr(terminal, f)  # was Session.<f>
 
 

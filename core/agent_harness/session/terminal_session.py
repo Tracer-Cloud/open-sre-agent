@@ -20,6 +20,8 @@ from core.agent_harness.session.background import (
     BackgroundInvestigationRecord,
     BackgroundNotificationPreferences,
 )
+from core.agent_harness.session.tasks import TaskRegistry
+from core.agent_harness.session.terminal_metrics import TerminalMetrics
 
 if TYPE_CHECKING:
     from prompt_toolkit.history import History
@@ -106,3 +108,12 @@ class TerminalSession:
     """Thread-safe queue of Rich markup messages drained by the REPL main loop."""
 
     _background_notices_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+
+    task_registry: TaskRegistry = field(default_factory=TaskRegistry)
+    """Recent in-flight and completed shell tasks for /tasks and /cancel."""
+
+    history_generation: int = 0
+    """Incremented on /new so background synthetic watchers can skip stale history writes."""
+
+    metrics: TerminalMetrics = field(default_factory=TerminalMetrics)
+    """Interactive-shell turn/intervention analytics counters (see ``/status``)."""

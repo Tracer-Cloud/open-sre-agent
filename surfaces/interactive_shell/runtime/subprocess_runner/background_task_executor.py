@@ -69,7 +69,7 @@ def start_background_cli_task(
 ) -> TaskRecord | None:
     """Start a subprocess as a REPL task while streaming output above the prompt."""
     console.print(f"[bold]$ {display_command}[/bold]")
-    task = session.task_registry.create(kind, command=display_command)
+    task = session.terminal.task_registry.create(kind, command=display_command)
     task.mark_running()
     # Created at launch so the flushed prompt-log latency spans the full task
     # duration; the watcher sets the response and flushes once the outcome
@@ -163,7 +163,7 @@ def start_background_cli_task(
         output_thread.start()
         output_threads = [output_thread]
 
-    history_gen_when_watch_started = session.history_generation
+    history_gen_when_watch_started = session.terminal.history_generation
 
     def _watch() -> None:
         terminated_by_watcher = False
@@ -234,7 +234,7 @@ def start_background_cli_task(
             if stdout_buf is not None:
                 stdout_buf.close()
             stderr_buf.close()
-            if suggest_follow_up and session.history_generation == history_gen_when_watch_started:
+            if suggest_follow_up and session.terminal.history_generation == history_gen_when_watch_started:
                 session.suggest_synthetic_failure_follow_up(label=display_command)
             else:
                 session.notify_prompt_changed()

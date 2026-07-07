@@ -57,7 +57,7 @@ def test_create_context_applies_canonical_session_bootstrap(
     assert session.configured_integrations == ("github",)
     assert session.configured_integrations_known is True
     assert hydrate_calls == [session.session_id]
-    assert session.task_registry is registry
+    assert session.terminal.task_registry is registry
     assert session.terminal.prompt_history_backend is prompt.history
 
 

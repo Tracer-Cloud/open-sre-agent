@@ -46,10 +46,10 @@ def watch_synthetic_subprocess(
     def _history_text() -> str:
         return f"{suite_name} task:{task.task_id}"
 
-    history_gen_when_watch_started = session.history_generation
+    history_gen_when_watch_started = session.terminal.history_generation
 
     def _record_synthetic_if_current_session(ok: bool) -> None:
-        if session.history_generation != history_gen_when_watch_started:
+        if session.terminal.history_generation != history_gen_when_watch_started:
             return
         session.record("synthetic_test", _history_text(), ok=ok)
 
@@ -127,7 +127,7 @@ def watch_synthetic_subprocess(
         finally:
             _join_task_output_streams(output_threads)
             stderr_buf.close()
-            if suggest_follow_up and session.history_generation == history_gen_when_watch_started:
+            if suggest_follow_up and session.terminal.history_generation == history_gen_when_watch_started:
                 session.suggest_synthetic_failure_follow_up(label=suite_name)
             else:
                 session.notify_prompt_changed()
@@ -188,7 +188,7 @@ def run_synthetic_test(
     )
     console.print(f"[bold]$ {display_command}[/bold]")
     session.last_synthetic_observation_path = None
-    task = session.task_registry.create(TaskKind.SYNTHETIC_TEST, command=display_command)
+    task = session.terminal.task_registry.create(TaskKind.SYNTHETIC_TEST, command=display_command)
     task.mark_running()
     # Lifetime managed by the watcher thread's finally block; SIM115 ignored
     # for this file in ruff.toml.

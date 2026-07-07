@@ -95,7 +95,7 @@ class SessionManager:
         wiring is layered by the surface after this returns.
         """
         if persistent_tasks:
-            session.task_registry = TaskRegistry.persistent()
+            session.terminal.task_registry = TaskRegistry.persistent()
         if hydrate_integrations:
             session.hydrate_configured_integrations()
         if warm_integrations:

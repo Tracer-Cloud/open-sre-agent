@@ -208,7 +208,7 @@ def _cmd_watch(session: Session, console: Console, args: list[str]) -> bool:
         return True
 
     summary = _watch_command_summary(parsed)
-    task = session.task_registry.create(TaskKind.WATCHDOG, command=summary)
+    task = session.terminal.task_registry.create(TaskKind.WATCHDOG, command=summary)
     task.mark_running()
     task.attach_pid(parsed.pid)
     dispatcher = AlarmDispatcher(creds, cooldown_seconds=parsed.cooldown_seconds)
@@ -236,7 +236,7 @@ def _cmd_watch(session: Session, console: Console, args: list[str]) -> bool:
 
 
 def _cmd_watches(session: Session, console: Console, _args: list[str]) -> bool:
-    rows = [t for t in session.task_registry.list_recent(n=100) if t.kind == TaskKind.WATCHDOG]
+    rows = [t for t in session.terminal.task_registry.list_recent(n=100) if t.kind == TaskKind.WATCHDOG]
     if not rows:
         console.print(f"[{DIM}]no watchdog tasks in this session.[/]")
         return True
@@ -283,7 +283,7 @@ def _validate_unwatch_args(args: list[str]) -> str | None:
 
 def _cmd_unwatch(session: Session, console: Console, args: list[str]) -> bool:
     needle = args[0]
-    candidates = session.task_registry.candidates(needle)
+    candidates = session.terminal.task_registry.candidates(needle)
     if not candidates:
         console.print(f"[{ERROR}]no task matches id:[/] {escape(needle)}")
         return True

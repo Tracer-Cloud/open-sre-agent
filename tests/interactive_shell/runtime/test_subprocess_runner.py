@@ -304,7 +304,7 @@ def test_run_claude_code_implementation_starts_tracked_task(
     assert kwargs["cwd"]
     assert stdin_seen and "Process auto-discovery" in stdin_seen[0]
     assert session.history[-1] == {"type": "implementation", "text": "implement", "ok": True}
-    task = session.task_registry.list_recent(1)[0]
+    task = session.terminal.task_registry.list_recent(1)[0]
     assert task.kind == TaskKind.CODE_AGENT
     assert task.status == TaskStatus.COMPLETED
     out = buf.getvalue()
@@ -327,7 +327,7 @@ def test_run_claude_code_implementation_rejects_vague_request_without_context() 
 
     assert "too vague" in buf.getvalue()
     assert session.history[-1] == {"type": "implementation", "text": "implement", "ok": False}
-    assert session.task_registry.list_recent(1) == []
+    assert session.terminal.task_registry.list_recent(1) == []
 
 
 def test_run_shell_command_silent_success_prints_checkmark(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -579,7 +579,7 @@ def test_run_opensre_agents_watch_runs_in_foreground(
     assert "started" not in out
     assert "timeout" not in popen_kwargs[0]
     assert popen_kwargs[0]["stderr"] is subprocess.STDOUT
-    assert session.task_registry.list_recent() == []
+    assert session.terminal.task_registry.list_recent() == []
     assert session.history[-1] == {
         "type": "cli_command",
         "text": "opensre fleet watch 1234",
@@ -845,7 +845,7 @@ def test_task_output_stream_reports_unexpected_failure(
     )
 
     session = Session()
-    task = session.task_registry.create(TaskKind.CLI_COMMAND, command="demo")
+    task = session.terminal.task_registry.create(TaskKind.CLI_COMMAND, command="demo")
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)
 
@@ -927,7 +927,7 @@ def test_start_background_cli_task_reports_spawn_failure(
     assert "failed to start" in buf.getvalue()
     assert len(captured_errors) == 1
     assert isinstance(captured_errors[0], RuntimeError)
-    assert session.task_registry.list_recent(1)[0].status == TaskStatus.FAILED
+    assert session.terminal.task_registry.list_recent(1)[0].status == TaskStatus.FAILED
 
 
 def test_start_background_cli_task_reports_watcher_failure(
@@ -1067,7 +1067,7 @@ def test_watch_synthetic_subprocess_reports_daemon_failure(
     )
 
     session = Session()
-    task = session.task_registry.create(TaskKind.SYNTHETIC_TEST, command="suite")
+    task = session.terminal.task_registry.create(TaskKind.SYNTHETIC_TEST, command="suite")
     task.mark_running()
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)
@@ -1149,7 +1149,7 @@ def test_run_synthetic_test_streams_subprocess_output(
     assert "collecting fixtures" in out
     assert "running investigation" in out
     assert "warning: slow cloudwatch response" in out
-    task = session.task_registry.list_recent(1)[0]
+    task = session.terminal.task_registry.list_recent(1)[0]
     assert task.status == TaskStatus.COMPLETED
 
 

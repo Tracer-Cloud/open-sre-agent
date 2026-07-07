@@ -1602,7 +1602,9 @@ class TestInvestigateFileCommand:
         console, _ = _capture()
         dispatch_slash(f"/investigate {alert_file}", session, console)
         inv_tasks = [
-            t for t in session.task_registry.list_recent(10) if t.kind == TaskKind.INVESTIGATION
+            t
+            for t in session.terminal.task_registry.list_recent(10)
+            if t.kind == TaskKind.INVESTIGATION
         ]
         assert len(inv_tasks) == 1
         assert inv_tasks[0].status == TaskStatus.FAILED

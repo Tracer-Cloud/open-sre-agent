@@ -82,7 +82,9 @@ def test_dispatch_watch_creates_watchdog_task(
         is_tty=True,
     )
 
-    watchdogs = [t for t in session.task_registry.list_recent(20) if t.kind == TaskKind.WATCHDOG]
+    watchdogs = [
+        t for t in session.terminal.task_registry.list_recent(20) if t.kind == TaskKind.WATCHDOG
+    ]
     assert len(watchdogs) == 1
     assert watchdogs[0].status == TaskStatus.RUNNING
     assert "max_cpu=80" in (watchdogs[0].command or "")
@@ -123,7 +125,9 @@ def test_unwatch_marks_watchdog_cancelled(monkeypatch: pytest.MonkeyPatch) -> No
         is_tty=True,
     )
     assert barrier.wait(timeout=2.0), "watchdog thread should start"
-    task = next(t for t in session.task_registry.list_recent(20) if t.kind == TaskKind.WATCHDOG)
+    task = next(
+        t for t in session.terminal.task_registry.list_recent(20) if t.kind == TaskKind.WATCHDOG
+    )
     dispatch_slash(f"/unwatch {task.task_id}", session, console, is_tty=True)
     for _ in range(200):
         task.refresh_rehydrated_status()
@@ -136,7 +140,7 @@ def test_unwatch_marks_watchdog_cancelled(monkeypatch: pytest.MonkeyPatch) -> No
 def test_unwatch_rejects_non_watchdog_task() -> None:
     session = Session()
     session.trust_mode = True
-    inv = session.task_registry.create(TaskKind.INVESTIGATION, command="x")
+    inv = session.terminal.task_registry.create(TaskKind.INVESTIGATION, command="x")
     inv.mark_running()
     console, buf = _capture()
     dispatch_slash(f"/unwatch {inv.task_id}", session, console, is_tty=True)

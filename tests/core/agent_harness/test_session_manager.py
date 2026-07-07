@@ -117,9 +117,9 @@ def test_rotate_without_old_id_skips_close() -> None:
 
 def test_bootstrap_sets_persistent_task_registry() -> None:
     session = Session(session_id="s")
-    before = session.task_registry
+    before = session.terminal.task_registry
     _manager().bootstrap(session)
-    assert session.task_registry is not before
+    assert session.terminal.task_registry is not before
 
 
 def test_created_session_persists_through_manager_storage() -> None:

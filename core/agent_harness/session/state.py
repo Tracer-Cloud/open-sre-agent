@@ -26,7 +26,6 @@ from core.agent_harness.session.integrations_cache import (
 )
 from core.agent_harness.session.storage.jsonl import JsonlSessionStorage
 from core.agent_harness.session.tasks import TaskRegistry
-from core.agent_harness.session.terminal_metrics import TerminalMetrics
 from core.agent_harness.session.terminal_session import TerminalSession
 from core.agent_harness.session.token_usage import TokenUsage
 from core.agent_harness.session.types import SessionStorage
@@ -196,17 +195,8 @@ class Session:
     """Interactive-shell (terminal) session facet — shell-only UI/theme/background state.
 
     Always present (empty for non-shell sessions) so shell code needs no None-guard;
-    ``core``/``gateway``/``tools`` consumers ignore it. Fields move here cluster-by-cluster
-    (#3690); the theme cluster (``active_theme_name``, ``pending_theme_refresh``) is here."""
-
-    task_registry: TaskRegistry = field(default_factory=TaskRegistry)
-    """Recent in-flight and completed shell tasks for /tasks and /cancel."""
-
-    history_generation: int = 0
-    """Incremented on /new so background synthetic watchers can skip stale history writes."""
-
-    metrics: TerminalMetrics = field(default_factory=TerminalMetrics)
-    """Interactive-shell turn/intervention analytics counters (see ``/status``)."""
+    ``core``/``gateway``/``tools`` consumers ignore it. Holds the theme, prompt-toolkit,
+    pending-prompt/stdin, background-jobs, and metrics/task-registry clusters (#3690)."""
 
     last_synthetic_observation_path: str | None = None
     """Absolute path to ``latest.json`` for the last finished synthetic run (set on failure)."""
@@ -566,7 +556,7 @@ class Session:
 
     def clear(self, *, rotate_identity: bool = True) -> None:
         """Reset the session to a fresh state (used by /new and /resume)."""
-        self.history_generation += 1
+        self.terminal.history_generation += 1
         self.history.clear()
         self.resumed_from_name = ""
         self.last_state = None
@@ -589,14 +579,14 @@ class Session:
         # Keep persisted cross-session task history on disk intact.
         # /new is session-scoped, so swap in a fresh in-memory registry
         # that reuses the same backing store (if any) so /tasks still shows history.
-        persist_path = self.task_registry._persist_path
-        self.task_registry = (
+        persist_path = self.terminal.task_registry._persist_path
+        self.terminal.task_registry = (
             TaskRegistry(persist_path=persist_path, load=False)
             if persist_path is not None
             else TaskRegistry()
         )
 
-        self.metrics.reset()
+        self.terminal.metrics.reset()
         self.terminal.pending_prompt_default = None
         self.terminal.pending_prompt_autosubmit = False
         self.terminal.exclusive_stdin_active = False

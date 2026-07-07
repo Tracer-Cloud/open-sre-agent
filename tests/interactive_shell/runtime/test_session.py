@@ -23,11 +23,11 @@ class TestSession:
         assert session.last_state is None
         assert session.accumulated_context == {}
         assert session.trust_mode is False
-        assert session.task_registry.list_recent() == []
-        assert session.metrics.turn_count == 0
-        assert session.metrics.fallback_count == 0
-        assert session.metrics.ctrl_c_intervention_count == 0
-        assert session.metrics.correction_intervention_count == 0
+        assert session.terminal.task_registry.list_recent() == []
+        assert session.terminal.metrics.turn_count == 0
+        assert session.terminal.metrics.fallback_count == 0
+        assert session.terminal.metrics.ctrl_c_intervention_count == 0
+        assert session.terminal.metrics.correction_intervention_count == 0
         assert session.terminal.pending_prompt_default is None
         assert session.last_synthetic_observation_path is None
 
@@ -85,7 +85,9 @@ class TestSession:
         session.suggest_synthetic_failure_follow_up(
             label="opensre tests synthetic --scenario 001-replication-lag",
         )
-        assert session.terminal.pending_prompt_default == SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
+        assert (
+            session.terminal.pending_prompt_default == SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
+        )
 
     def test_record_appends_entry(self) -> None:
         session = Session()
@@ -114,20 +116,20 @@ class TestSession:
         session.record("alert", "something")
         session.last_state = {"foo": "bar"}
         session.agent.messages.append(("user", "hey"))
-        session.metrics.record_intervention("ctrl_c")
-        session.metrics.record_intervention("correction")
+        session.terminal.metrics.record_intervention("ctrl_c")
+        session.terminal.metrics.record_intervention("correction")
 
-        assert session.history_generation == 0
+        assert session.terminal.history_generation == 0
         session.clear()
-        assert session.history_generation == 1
+        assert session.terminal.history_generation == 1
 
         assert session.history == []
         assert session.last_state is None
         assert session.accumulated_context == {}
         assert session.agent.messages == []
-        assert session.task_registry.list_recent() == []
-        assert session.metrics.ctrl_c_intervention_count == 0
-        assert session.metrics.correction_intervention_count == 0
+        assert session.terminal.task_registry.list_recent() == []
+        assert session.terminal.metrics.ctrl_c_intervention_count == 0
+        assert session.terminal.metrics.correction_intervention_count == 0
         assert session.terminal.background_notification_preferences.channels == ("email",)
         assert session.trust_mode is True  # preserved intentionally
 
@@ -138,8 +140,8 @@ class TestSession:
     ) -> None:
         session = Session()
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
-        session.task_registry = TaskRegistry.persistent()
-        task = session.task_registry.create(
+        session.terminal.task_registry = TaskRegistry.persistent()
+        task = session.terminal.task_registry.create(
             TaskKind.SYNTHETIC_TEST, command="opensre tests synthetic"
         )
         task.mark_running()
@@ -202,12 +204,12 @@ class TestSession:
     def test_record_terminal_turn_updates_aggregates(self) -> None:
         session = Session()
 
-        first = session.metrics.record_turn(
+        first = session.terminal.metrics.record_turn(
             executed_count=2,
             executed_success_count=1,
             fallback_to_llm=True,
         )
-        second = session.metrics.record_turn(
+        second = session.terminal.metrics.record_turn(
             executed_count=1,
             executed_success_count=1,
             fallback_to_llm=False,
@@ -226,29 +228,29 @@ class TestSession:
     def test_record_intervention_increments_per_kind(self) -> None:
         session = Session()
 
-        session.metrics.record_intervention("ctrl_c")
-        session.metrics.record_intervention("ctrl_c")
-        session.metrics.record_intervention("correction")
+        session.terminal.metrics.record_intervention("ctrl_c")
+        session.terminal.metrics.record_intervention("ctrl_c")
+        session.terminal.metrics.record_intervention("correction")
 
-        assert session.metrics.ctrl_c_intervention_count == 2
-        assert session.metrics.correction_intervention_count == 1
+        assert session.terminal.metrics.ctrl_c_intervention_count == 2
+        assert session.terminal.metrics.correction_intervention_count == 1
 
     def test_record_intervention_kinds_are_independent(self) -> None:
         """Incrementing one kind does not touch the other."""
         session = Session()
 
-        session.metrics.record_intervention("correction")
+        session.terminal.metrics.record_intervention("correction")
 
-        assert session.metrics.ctrl_c_intervention_count == 0
-        assert session.metrics.correction_intervention_count == 1
+        assert session.terminal.metrics.ctrl_c_intervention_count == 0
+        assert session.terminal.metrics.correction_intervention_count == 1
 
     def test_fresh_session_starts_with_zero_intervention_counts(self) -> None:
         """A new Session does not inherit any prior session's counters."""
         first = Session()
-        first.metrics.record_intervention("ctrl_c")
-        first.metrics.record_intervention("correction")
+        first.terminal.metrics.record_intervention("ctrl_c")
+        first.terminal.metrics.record_intervention("correction")
 
         second = Session()
 
-        assert second.metrics.ctrl_c_intervention_count == 0
-        assert second.metrics.correction_intervention_count == 0
+        assert second.terminal.metrics.ctrl_c_intervention_count == 0
+        assert second.terminal.metrics.correction_intervention_count == 0

@@ -485,7 +485,7 @@ def test_run_text_investigation_uses_background_launcher_when_mode_enabled(
     run_text_investigation("High CPU alert", session, console)
 
     assert launches == [("High CPU alert", "background free-text investigation")]
-    assert session.task_registry.list_recent(10) == []
+    assert session.terminal.task_registry.list_recent(10) == []
 
 
 def test_run_initial_input_dispatches_as_non_tty(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -191,9 +191,9 @@ def run_claude_code_implementation(
 
     display_command = "claude -p"
     console.print(f"[bold]$ {display_command}[/bold]")
-    task = session.task_registry.create(TaskKind.CODE_AGENT, command=display_command)
+    task = session.terminal.task_registry.create(TaskKind.CODE_AGENT, command=display_command)
     task.mark_running()
-    history_gen_when_started = session.history_generation
+    history_gen_when_started = session.terminal.history_generation
 
     try:
         # The argv is built by the Claude Code adapter from a detected absolute
@@ -236,7 +236,7 @@ def run_claude_code_implementation(
             code = proc.returncode
             if task.cancel_requested.is_set() and code != 0:
                 task.mark_cancelled()
-                if session.history_generation == history_gen_when_started:
+                if session.terminal.history_generation == history_gen_when_started:
                     session.mark_latest(ok=False, kind="implementation")
                 console.print(f"[{WARNING}]Claude Code task cancelled.[/]")
                 return
@@ -252,7 +252,7 @@ def run_claude_code_implementation(
             diag = (err or out).strip()[:_SYNTHETIC_DIAG_CHARS]
             error_msg = f"exit code {code}" + (f": {diag}" if diag else "")
             task.mark_failed(error_msg)
-            if session.history_generation == history_gen_when_started:
+            if session.terminal.history_generation == history_gen_when_started:
                 session.mark_latest(ok=False, kind="implementation")
             console.print(f"[{ERROR}]Claude Code failed (exit {code}):[/]")
             print_command_output(console, out)
@@ -260,7 +260,7 @@ def run_claude_code_implementation(
         except Exception as exc:  # noqa: BLE001
             task.mark_failed(str(exc))
             report_exception(exc, context="surfaces.interactive_shell.claude_code.watch")
-            if session.history_generation == history_gen_when_started:
+            if session.terminal.history_generation == history_gen_when_started:
                 session.mark_latest(ok=False, kind="implementation")
             console.print(f"[{ERROR}]Claude Code watcher failed:[/] {escape(str(exc))}")
 

@@ -75,7 +75,9 @@ def test_repl_watchdog_end_to_end_demo_script(monkeypatch: pytest.MonkeyPatch) -
     )
     assert "started" in buf.getvalue()
 
-    task = next(t for t in session.task_registry.list_recent(50) if t.kind == TaskKind.WATCHDOG)
+    task = next(
+        t for t in session.terminal.task_registry.list_recent(50) if t.kind == TaskKind.WATCHDOG
+    )
     task_id = task.task_id
 
     for _ in range(40):

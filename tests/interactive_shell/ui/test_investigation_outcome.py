@@ -56,7 +56,7 @@ def test_run_foreground_investigation_early_cancel_omits_stale_investigation_id(
     task = MagicMock(spec=TaskRecord)
     task.cancel_requested = False
     monkeypatch.setattr(
-        session.task_registry,
+        session.terminal.task_registry,
         "create",
         lambda *_args, **_kwargs: task,
     )
@@ -87,7 +87,7 @@ def test_run_foreground_investigation_credit_exhausted_shows_auth_login_hint(
     task = MagicMock(spec=TaskRecord)
     task.cancel_requested = False
     monkeypatch.setattr(
-        session.task_registry,
+        session.terminal.task_registry,
         "create",
         lambda *_args, **_kwargs: task,
     )
@@ -122,7 +122,7 @@ def test_run_foreground_investigation_opensre_error_does_not_duplicate_auth_hint
     task = MagicMock(spec=TaskRecord)
     task.cancel_requested = False
     monkeypatch.setattr(
-        session.task_registry,
+        session.terminal.task_registry,
         "create",
         lambda *_args, **_kwargs: task,
     )

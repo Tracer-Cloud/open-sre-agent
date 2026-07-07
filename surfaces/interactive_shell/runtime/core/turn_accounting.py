@@ -86,7 +86,7 @@ class ShellTurnAccounting:
 
     def _record_terminal_turn(self, action_result: ToolCallingTurnResult) -> None:
         fallback_to_llm = not action_result.handled
-        snapshot = self.session.metrics.record_turn(
+        snapshot = self.session.terminal.metrics.record_turn(
             executed_count=action_result.executed_count,
             executed_success_count=action_result.executed_success_count,
             fallback_to_llm=fallback_to_llm,
