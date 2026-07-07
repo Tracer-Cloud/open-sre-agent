@@ -34,6 +34,7 @@ from integrations.config_models import (
     HoneycombIntegrationConfig,
     IncidentIoIntegrationConfig,
     JiraIntegrationConfig,
+    KubernetesIntegrationConfig,
     OpsGenieIntegrationConfig,
     PagerDutyIntegrationConfig,
     SlackWebhookConfig,
@@ -62,6 +63,7 @@ from integrations.incident_io import classify as _classify_incident_io
 from integrations.jenkins import classify as _classify_jenkins
 from integrations.jenkins import jenkins_config_from_env
 from integrations.jira import classify as _classify_jira
+from integrations.kubernetes import classify as _classify_kubernetes
 from integrations.mariadb import build_mariadb_config
 from integrations.mariadb import classify as _classify_mariadb
 from integrations.mongodb import build_mongodb_config
@@ -268,6 +270,7 @@ _CLASSIFIERS: dict[str, _ClassifyFn] = {
     "betterstack": _classify_betterstack,
     "azure_sql": _classify_azure_sql,
     "alertmanager": _classify_alertmanager,
+    "kubernetes": _classify_kubernetes,
     "argocd": _classify_argocd,
     "helm": _classify_helm,
     "victoria_logs": _classify_victoria_logs,
@@ -1383,6 +1386,27 @@ def load_env_integrations() -> list[dict[str, Any]]:
             )
         except Exception as exc:
             _report_env_loader_failure(exc, integration="alertmanager")
+
+    _kubeconfig_path = os.getenv("KUBECONFIG", "").strip()
+    _kubeconfig_content = os.getenv("KUBECONFIG_CONTENT", "").strip()
+    if _kubeconfig_path or _kubeconfig_content:
+        try:
+            kubernetes_config = KubernetesIntegrationConfig.model_validate(
+                {
+                    "kubeconfig_path": _kubeconfig_path,
+                    "kubeconfig": _kubeconfig_content,
+                    "context": os.getenv("KUBECONFIG_CONTEXT", "").strip(),
+                    "namespace": os.getenv("KUBECONFIG_NAMESPACE", "default").strip() or "default",
+                }
+            )
+            integrations.append(
+                _active_env_record(
+                    "kubernetes",
+                    kubernetes_config.model_dump(exclude={"integration_id"}),
+                )
+            )
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="kubernetes")
 
     victoria_logs_url = os.getenv("VICTORIA_LOGS_URL", "").strip().rstrip("/")
     if victoria_logs_url:

@@ -1185,3 +1185,34 @@ class TemporalIntegrationConfig(StrictConfigModel):
             headers["Authorization"] = f"Bearer {self.api_key}"
 
         return headers
+
+
+class KubernetesIntegrationConfig(StrictConfigModel):
+    """Normalized Kubernetes credentials used by resolution and verification flows.
+
+    Supports two mutually compatible auth paths:
+    - ``kubeconfig_path``: path to a kubeconfig file on disk (preferred when
+      available — ``load_kube_config`` handles single-file and multi-file merged
+      configs via the standard KUBECONFIG env var semantics).
+    - ``kubeconfig``: raw kubeconfig YAML string stored inline (used when the
+      config is embedded, e.g. from a secrets manager or stored integration).
+
+    ``kubeconfig_path`` takes precedence over ``kubeconfig`` at connection time.
+    """
+
+    kubeconfig: str = ""
+    kubeconfig_path: str = ""
+    context: str = ""
+    namespace: str = "default"
+    integration_id: str = ""
+
+    _normalize_strs = field_validator(
+        "kubeconfig_path", "context", "integration_id", mode="before"
+    )(normalize_str())
+    _normalize_namespace = field_validator("namespace", mode="before")(
+        normalize_with_default("default")
+    )
+
+    @property
+    def is_configured(self) -> bool:
+        return bool(self.kubeconfig or self.kubeconfig_path)

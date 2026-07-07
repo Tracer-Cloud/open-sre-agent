@@ -59,7 +59,8 @@ Extract these fields from the message text:
   - "honeycomb" for Honeycomb or api.honeycomb.io
   - "coralogix" for Coralogix or DataPrime
   - "cloudwatch" for AWS CloudWatch alarms
-  - "eks" for EKS, CrashLoopBackOff, OOMKilled, Kubernetes pods, or kube_namespace
+  - "eks" for AWS EKS-managed clusters or AWS-specific Kubernetes alarms
+  - "kubernetes" for CrashLoopBackOff, OOMKilled, Kubernetes pods, kube_namespace, or any generic Kubernetes/k8s alert not tied to AWS EKS
   - "alertmanager" for Prometheus/Alertmanager-specific fields
   - "signoz" for SigNoz, signoz.io, or signoz_metrics
   Leave null if truly unknown.
