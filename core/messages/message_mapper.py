@@ -31,6 +31,8 @@ class MessageMapper:
 
     def __init__(self, llm: Any) -> None:
         self._llm = llm
+        # Resolve the provider dispatch once — the llm is fixed for this mapper's lifetime.
+        self._adapter = adapter_for(llm)
 
     @staticmethod
     def to_runtime_messages(messages: Sequence[RuntimeMessageLike]) -> list[RuntimeMessage]:
@@ -51,7 +53,7 @@ class MessageMapper:
 
     def to_assistant_provider_message(self, response: AgentLLMResponse) -> ProviderMessage:
         """Build the provider assistant-message payload from an LLM response."""
-        return adapter_for(self._llm).to_assistant_provider_message(response)
+        return self._adapter.to_assistant_provider_message(response)
 
     def to_tool_result_provider_messages(
         self,
@@ -59,7 +61,7 @@ class MessageMapper:
         results: list[Any],
     ) -> list[ProviderMessage]:
         """Build provider tool-result payloads for a batch of tool calls."""
-        return adapter_for(self._llm).to_tool_result_provider_messages(tool_calls, results)
+        return self._adapter.to_tool_result_provider_messages(tool_calls, results)
 
     def to_synthetic_assistant_provider_message(
         self, tool_calls: list[ToolCall]
@@ -68,7 +70,7 @@ class MessageMapper:
 
         Used to inject pre-seeded tool results into the conversation without special-casing.
         """
-        return adapter_for(self._llm).to_synthetic_assistant_provider_message(tool_calls)
+        return self._adapter.to_synthetic_assistant_provider_message(tool_calls)
 
     def to_assistant_runtime_message(self, response: AgentLLMResponse) -> AssistantRuntimeMessage:
         """Build a typed assistant transcript entry from an LLM response."""
@@ -112,7 +114,7 @@ class MessageMapper:
         return []
 
     def _app_message_content(self, message: AppRuntimeMessage) -> RuntimeContent:
-        return adapter_for(self._llm).app_message_content(message.content)
+        return self._adapter.app_message_content(message.content)
 
 
 def _to_runtime_message(message: RuntimeMessageLike) -> RuntimeMessage:

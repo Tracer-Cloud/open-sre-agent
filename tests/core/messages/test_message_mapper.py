@@ -13,6 +13,7 @@ from core.messages import MessageMapper
 from core.messages.runtime_message_types import (
     AppRuntimeMessage,
     AssistantRuntimeMessage,
+    RuntimeMessage,
     ToolResultRuntimeMessage,
     UserRuntimeMessage,
 )
@@ -288,3 +289,63 @@ class TestSyntheticAssistantToolCall:
         assert result["content"][0]["toolUse"]["toolUseId"] == "abc12def3"
         assert result["content"][0]["toolUse"]["name"] == "query_logs"
         assert "I will start by querying" not in str(result)
+
+
+# ---------------------------------------------------------------------------
+# Dispatch — the provider adapter is resolved once, at construction
+# ---------------------------------------------------------------------------
+
+
+class TestAdapterCaching:
+    @staticmethod
+    def _spy_adapter_for(monkeypatch: pytest.MonkeyPatch) -> dict[str, int]:
+        """Wrap ``adapter_for`` to count how many times dispatch is resolved."""
+        import core.messages.message_mapper as mm
+
+        calls = {"n": 0}
+        real = mm.adapter_for
+
+        def counting(llm: Any) -> Any:
+            calls["n"] += 1
+            return real(llm)
+
+        monkeypatch.setattr(mm, "adapter_for", counting)
+        return calls
+
+    def test_adapter_resolved_once_at_construction(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        calls = self._spy_adapter_for(monkeypatch)
+
+        mapper = MessageMapper(_FakeLLM())
+        assert calls["n"] == 1  # resolved eagerly at construction, not lazily per call
+
+        # Every delegating call reuses the cached adapter — no re-dispatch.
+        tc = ToolCall(id="t1", name="foo", input={})
+        mapper.to_tool_result_provider_messages([tc], ["r"])
+        mapper.to_synthetic_assistant_provider_message([tc])
+        mapper.to_assistant_provider_message(AgentLLMResponse(content="x"))
+        assert calls["n"] == 1
+
+    def test_provider_messages_loop_does_not_redispatch(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        calls = self._spy_adapter_for(monkeypatch)
+
+        mapper = MessageMapper(_FakeLLM())
+        # Each App message routes through the cached adapter once per message in the
+        # render loop; none of these re-resolve the adapter.
+        messages: list[RuntimeMessage] = [
+            UserRuntimeMessage(content="hi"),
+            AppRuntimeMessage(app_type="note", content="a"),
+            AppRuntimeMessage(app_type="note", content="b"),
+        ]
+        mapper.to_provider_messages(messages)
+        assert calls["n"] == 1
+
+    def test_cached_adapter_matches_the_client(self) -> None:
+        from core.llm.transports.sdk.agent_clients import AnthropicAgentClient
+        from core.messages.provider_adapters import MessageAdapter, adapter_for
+
+        mapper = MessageMapper(AnthropicAgentClient.__new__(AnthropicAgentClient))
+        assert isinstance(mapper._adapter, MessageAdapter)
+        # The cached adapter is the same kind adapter_for would resolve for this client.
+        assert type(mapper._adapter) is type(adapter_for(mapper._llm))
