@@ -43,12 +43,12 @@ class OpenSREError(_OpenSREError, click.ClickException):  # type: ignore[misc]
         docs_url: str | None = None,
         exit_code: int = 1,
     ) -> None:
-        # The platform base sets ``message``/``suggestion``/``docs_url``/
-        # ``exit_code`` — all Click needs to render and exit, so we don't call
-        # ``ClickException.__init__`` and avoid cooperative-MRO ambiguity.
-        _OpenSREError.__init__(
-            self, message, suggestion=suggestion, docs_url=docs_url, exit_code=exit_code
-        )
+        # Click 8.2+ marks ``message`` final on ``ClickException``; initialize
+        # through Click and set the platform fields without reassigning ``message``.
+        click.ClickException.__init__(self, message)
+        self.suggestion = suggestion
+        self.docs_url = docs_url
+        self.exit_code = exit_code
 
     def format_message(self) -> str:
         return _OpenSREError.format_message(self)
