@@ -22,13 +22,14 @@ else:
     GroundingContext = Any
 
 from config.llm_reasoning_effort import ReasoningEffortChoice
-from core.agent_harness.session.integrations_cache import (
+from core.agent_harness.integrations.resolution_cache import (
     has_only_runtime_metadata,
     has_resolved_integrations,
     merge_resolved_integrations,
 )
 from core.agent_harness.session.persistence_ports import SessionStorage
 from core.agent_harness.session.storage.jsonl import JsonlSessionStorage
+from core.agent_harness.session.task_registry import TaskRegistry
 from core.agent_harness.session.token_usage import TokenUsage
 from core.state import MutableAgentState
 
@@ -123,6 +124,12 @@ class SessionCore:
 
     tokens: TokenUsage = field(default_factory=TokenUsage)
     """Per-session token accounting (running totals + LLM call count) for ``/cost``."""
+
+    task_registry: TaskRegistry = field(default_factory=TaskRegistry)
+    """This session's in-flight and completed tasks (for /tasks and /cancel).
+
+    Session-scoped task state whose lifecycle the manager owns (bootstrap swaps in
+    a persistent registry); only the shell surface reads it today."""
 
     agent: MutableAgentState = field(default_factory=MutableAgentState)
     """Dedicated conversational-agent state (transcript + per-turn observation).

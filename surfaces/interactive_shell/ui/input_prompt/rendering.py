@@ -104,7 +104,7 @@ def resolve_prompt_placeholder(session: Session) -> ANSI:
     parts: list[str] = []
     if session.terminal.trust_mode:
         parts.append("trust on")
-    running = session.terminal.task_registry.running_count()
+    running = session.task_registry.running_count()
     if running:
         parts.append(f"{running} task{'s' if running != 1 else ''} running")
     if session.resumed_from_name:

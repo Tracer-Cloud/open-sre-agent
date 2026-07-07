@@ -107,7 +107,7 @@ def _start_background_investigation(
 ) -> str:
     investigation_id = str(uuid4())
     session.last_investigation_id = investigation_id
-    task = session.terminal.task_registry.create(TaskKind.INVESTIGATION, command=display_command)
+    task = session.task_registry.create(TaskKind.INVESTIGATION, command=display_command)
     task.mark_running()
     record = _build_record(
         task_id=task.task_id,

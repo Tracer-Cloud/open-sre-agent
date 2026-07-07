@@ -1603,7 +1603,7 @@ class TestInvestigateFileCommand:
         dispatch_slash(f"/investigate {alert_file}", session, console)
         inv_tasks = [
             t
-            for t in session.terminal.task_registry.list_recent(10)
+            for t in session.task_registry.list_recent(10)
             if t.kind == TaskKind.INVESTIGATION
         ]
         assert len(inv_tasks) == 1

@@ -720,7 +720,7 @@ def test_execute_cli_actions_runs_sample_alert(monkeypatch: object) -> None:
     assert session.history[-1] == {"type": "alert", "text": "sample:generic", "ok": True}
     inv_tasks = [
         t
-        for t in session.terminal.task_registry.list_recent(10)
+        for t in session.task_registry.list_recent(10)
         if t.kind == TaskKind.INVESTIGATION
     ]
     assert len(inv_tasks) == 1
@@ -756,7 +756,7 @@ def test_execute_cli_actions_sample_alert_opensre_error_marks_task_failed(
     )
     inv_tasks = [
         t
-        for t in session.terminal.task_registry.list_recent(10)
+        for t in session.task_registry.list_recent(10)
         if t.kind == TaskKind.INVESTIGATION
     ]
     assert len(inv_tasks) == 1
@@ -818,11 +818,11 @@ def test_execute_cli_actions_lists_all_actions_before_synthetic_rds(monkeypatch:
     }
 
     for _ in range(100):
-        recent = session.terminal.task_registry.list_recent(1)
+        recent = session.task_registry.list_recent(1)
         if recent and recent[0].status != TaskStatus.RUNNING:
             break
         time.sleep(0.01)
-    finished = session.terminal.task_registry.list_recent(1)[0]
+    finished = session.task_registry.list_recent(1)[0]
     assert finished.status == TaskStatus.COMPLETED
 
     synthetic_entry = session.history[-1]
@@ -862,7 +862,7 @@ def test_execute_cli_actions_runs_requested_synthetic_scenario(monkeypatch: obje
 def test_execute_cli_actions_cancels_single_running_synthetic_task() -> None:
     session = Session()
     session.terminal.trust_mode = True
-    task = session.terminal.task_registry.create(TaskKind.SYNTHETIC_TEST)
+    task = session.task_registry.create(TaskKind.SYNTHETIC_TEST)
     task.mark_running()
     proc = MagicMock()
     proc.poll.return_value = None

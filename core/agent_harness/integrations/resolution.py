@@ -25,7 +25,7 @@ __all__ = [
 
 def resolve_and_cache_integrations(session: SessionStore) -> dict[str, Any]:
     """Resolve a session's integration configs, using and updating its cache."""
-    from core.agent_harness.session import integrations_cache as cache
+    from core.agent_harness.integrations import resolution_cache as cache
 
     cached = session.resolved_integrations_cache
     if cached is not None and (

@@ -22,7 +22,7 @@ from tools.interactive_shell.shared import plan_foreground_tool
 def _running_task_matches(ctx: ActionToolContext, target: str) -> Sequence[object]:
     running = [
         task
-        for task in ctx.session.terminal.task_registry.list_recent(n=50)
+        for task in ctx.session.task_registry.list_recent(n=50)
         if task.status == TaskStatus.RUNNING
     ]
     if target == "synthetic_test":
@@ -51,7 +51,7 @@ def _resolve_task_cancel_target(ctx: ActionToolContext, target: str) -> str | No
             return None
         return str(getattr(matches[0], "task_id", ""))
 
-    candidates = ctx.session.terminal.task_registry.candidates(target)
+    candidates = ctx.session.task_registry.candidates(target)
     if not candidates:
         ctx.console.print(f"[red]no task matches id:[/] {escape(target)}")
         ctx.session.record("slash", f"/cancel {target}", ok=False)

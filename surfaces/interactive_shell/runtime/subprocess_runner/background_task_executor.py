@@ -69,7 +69,7 @@ def start_background_cli_task(
 ) -> TaskRecord | None:
     """Start a subprocess as a REPL task while streaming output above the prompt."""
     console.print(f"[bold]$ {display_command}[/bold]")
-    task = session.terminal.task_registry.create(kind, command=display_command)
+    task = session.task_registry.create(kind, command=display_command)
     task.mark_running()
     # Created at launch so the flushed prompt-log latency spans the full task
     # duration; the watcher sets the response and flushes once the outcome

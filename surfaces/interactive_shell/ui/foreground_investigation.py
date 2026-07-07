@@ -70,7 +70,7 @@ def run_foreground_investigation(
     """Run one foreground investigation with shared task and error handling."""
     normalized_target = normalize_investigation_target(target)
     session.last_investigation_id = ""
-    task = session.terminal.task_registry.create(TaskKind.INVESTIGATION, command=task_command)
+    task = session.task_registry.create(TaskKind.INVESTIGATION, command=task_command)
     task.mark_running()
     started = time.monotonic()
     try:

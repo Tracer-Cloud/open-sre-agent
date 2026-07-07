@@ -186,8 +186,8 @@ class Session(SessionCore):
         # Keep persisted cross-session task history on disk intact.
         # /new is session-scoped, so swap in a fresh in-memory registry
         # that reuses the same backing store (if any) so /tasks still shows history.
-        persist_path = self.terminal.task_registry._persist_path
-        self.terminal.task_registry = (
+        persist_path = self.task_registry._persist_path
+        self.task_registry = (
             TaskRegistry(persist_path=persist_path, load=False)
             if persist_path is not None
             else TaskRegistry()

@@ -98,8 +98,8 @@ class TestTaskRegistry:
 
         monkeypatch.setattr("core.agent_harness.session.task_registry.secrets.token_hex", _fake_hex)
         session = Session()
-        session.terminal.task_registry.create(TaskKind.INVESTIGATION)
-        session.terminal.task_registry.create(TaskKind.INVESTIGATION)
+        session.task_registry.create(TaskKind.INVESTIGATION)
+        session.task_registry.create(TaskKind.INVESTIGATION)
         console, buf = _capture()
         dispatch_slash("/cancel 1111", session, console)
         assert "ambiguous" in buf.getvalue().lower()
@@ -207,8 +207,8 @@ class TestTaskRegistry:
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
         session = Session()
-        session.terminal.task_registry = TaskRegistry.persistent()
-        task = session.terminal.task_registry.create(
+        session.task_registry = TaskRegistry.persistent()
+        task = session.task_registry.create(
             TaskKind.SYNTHETIC_TEST, command="opensre tests"
         )
         task.mark_running()
@@ -224,7 +224,7 @@ class TestTaskRegistry:
         [loaded] = reloaded.list_recent()
         assert loaded.task_id == task.task_id
         assert loaded.command == "opensre tests"
-        [visible_after_new] = session.terminal.task_registry.list_recent()
+        [visible_after_new] = session.task_registry.list_recent()
         assert visible_after_new.task_id == task.task_id
 
 
@@ -237,7 +237,7 @@ class TestSlashTaskCommands:
 
     def test_tasks_shows_recent_rows(self) -> None:
         session = Session()
-        t = session.terminal.task_registry.create(TaskKind.INVESTIGATION)
+        t = session.task_registry.create(TaskKind.INVESTIGATION)
         t.mark_running()
         t.mark_completed(result="rc")
         console, buf = _capture()
@@ -261,7 +261,7 @@ class TestSlashTaskCommands:
 
     def test_cancel_completed_task_message(self) -> None:
         session = Session()
-        t = session.terminal.task_registry.create(TaskKind.INVESTIGATION)
+        t = session.task_registry.create(TaskKind.INVESTIGATION)
         t.mark_running()
         t.mark_completed(result="x")
         console, buf = _capture()
@@ -270,7 +270,7 @@ class TestSlashTaskCommands:
 
     def test_cancel_running_investigation_signals(self) -> None:
         session = Session()
-        t = session.terminal.task_registry.create(TaskKind.INVESTIGATION)
+        t = session.task_registry.create(TaskKind.INVESTIGATION)
         t.mark_running()
         console, buf = _capture()
         dispatch_slash(f"/cancel {t.task_id}", session, console)
@@ -280,7 +280,7 @@ class TestSlashTaskCommands:
 
     def test_cancel_running_synthetic_signals_and_terminates_process(self) -> None:
         session = Session()
-        t = session.terminal.task_registry.create(TaskKind.SYNTHETIC_TEST)
+        t = session.task_registry.create(TaskKind.SYNTHETIC_TEST)
         t.mark_running()
         proc = MagicMock()
         proc.poll.return_value = None
@@ -355,7 +355,7 @@ class TestSyntheticSubprocessWatcher:
         proc.returncode = 0
 
         session = Session()
-        task = session.terminal.task_registry.create(TaskKind.SYNTHETIC_TEST)
+        task = session.task_registry.create(TaskKind.SYNTHETIC_TEST)
         task.mark_running()
         task.attach_process(proc)
         watch_synthetic_subprocess(task, proc, session, "rds_postgres", stderr_buf)
@@ -381,7 +381,7 @@ class TestSyntheticSubprocessWatcher:
         monkeypatch.setattr(ae.threading, "Thread", _ImmediateThread)
 
         session = Session()
-        task = session.terminal.task_registry.create(TaskKind.SYNTHETIC_TEST)
+        task = session.task_registry.create(TaskKind.SYNTHETIC_TEST)
         task.mark_running()
         proc = MagicMock()
 
@@ -419,7 +419,7 @@ class TestSyntheticSubprocessWatcher:
         monkeypatch.setattr(ae.threading, "Thread", _ImmediateThread)
 
         session = Session()
-        task = session.terminal.task_registry.create(TaskKind.SYNTHETIC_TEST)
+        task = session.task_registry.create(TaskKind.SYNTHETIC_TEST)
         task.mark_running()
         proc = MagicMock()
 
@@ -454,7 +454,7 @@ class TestSyntheticSubprocessWatcher:
         monkeypatch.setattr(ae.threading, "Thread", _ImmediateThread)
 
         session = Session()
-        task = session.terminal.task_registry.create(TaskKind.SYNTHETIC_TEST)
+        task = session.task_registry.create(TaskKind.SYNTHETIC_TEST)
         task.mark_running()
         proc = MagicMock()
         # Process already finished; poll returns non-None immediately so the
@@ -479,7 +479,7 @@ class TestSyntheticSubprocessWatcher:
         monkeypatch.setattr(ae.threading, "Thread", _ImmediateThread)
 
         session = Session()
-        task = session.terminal.task_registry.create(TaskKind.SYNTHETIC_TEST)
+        task = session.task_registry.create(TaskKind.SYNTHETIC_TEST)
         task.mark_running()
         proc = MagicMock()
         proc.poll.return_value = 1
@@ -509,7 +509,7 @@ class TestSyntheticSubprocessWatcher:
         proc.returncode = 0
 
         session = Session()
-        task = session.terminal.task_registry.create(TaskKind.SYNTHETIC_TEST)
+        task = session.task_registry.create(TaskKind.SYNTHETIC_TEST)
         task.mark_running()
         task.attach_process(proc)
         watch_synthetic_subprocess(task, proc, session, "rds_postgres", stderr_buf)
@@ -534,7 +534,7 @@ class TestSyntheticSubprocessWatcher:
         proc.returncode = 0
 
         session = Session()
-        task = session.terminal.task_registry.create(TaskKind.SYNTHETIC_TEST)
+        task = session.task_registry.create(TaskKind.SYNTHETIC_TEST)
         task.mark_running()
         task.attach_process(proc)
         watch_synthetic_subprocess(task, proc, session, "rds_postgres", stderr_buf)

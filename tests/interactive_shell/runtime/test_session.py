@@ -23,7 +23,7 @@ class TestSession:
         assert session.last_state is None
         assert session.accumulated_context == {}
         assert session.terminal.trust_mode is False
-        assert session.terminal.task_registry.list_recent() == []
+        assert session.task_registry.list_recent() == []
         assert session.terminal.metrics.turn_count == 0
         assert session.terminal.metrics.fallback_count == 0
         assert session.terminal.metrics.ctrl_c_intervention_count == 0
@@ -127,7 +127,7 @@ class TestSession:
         assert session.last_state is None
         assert session.accumulated_context == {}
         assert session.agent.messages == []
-        assert session.terminal.task_registry.list_recent() == []
+        assert session.task_registry.list_recent() == []
         assert session.terminal.metrics.ctrl_c_intervention_count == 0
         assert session.terminal.metrics.correction_intervention_count == 0
         assert session.terminal.background_notification_preferences.channels == ("email",)
@@ -140,8 +140,8 @@ class TestSession:
     ) -> None:
         session = Session()
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
-        session.terminal.task_registry = TaskRegistry.persistent()
-        task = session.terminal.task_registry.create(
+        session.task_registry = TaskRegistry.persistent()
+        task = session.task_registry.create(
             TaskKind.SYNTHETIC_TEST, command="opensre tests synthetic"
         )
         task.mark_running()

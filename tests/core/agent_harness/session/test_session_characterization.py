@@ -49,6 +49,7 @@ _CORE_FIELDS = (
     "accumulated_context",
     "reasoning_effort",
     "tokens",
+    "task_registry",
     "agent",
     "grounding",
     "_ACCUMULATED_KEYS",
@@ -67,20 +68,20 @@ _TERMINAL_FIELDS: tuple[str, ...] = ()
 #   terminal, background cluster: background_mode_enabled, background_investigations,
 #       background_notification_preferences, background_notices, _background_notices_lock
 #       -> session.terminal
-#   terminal, metrics/task-registry cluster: task_registry, metrics, history_generation
-#       -> session.terminal
+#   terminal, metrics cluster: metrics, history_generation -> session.terminal
+#     (task_registry stayed core — session task-state the manager owns; see _CORE_FIELDS)
 #   terminal, analytics-staging cluster: _turn_outcome_hint, _pending_turn_llm,
 #       _pending_turn_error -> session.terminal
 _FACET_FIELDS = ("alerts", "terminal")
 
 
-def test_field_inventory_is_exactly_25_top_level_fields() -> None:
+def test_field_inventory_is_exactly_26_top_level_fields() -> None:
     all_fields = _CORE_FIELDS + _TERMINAL_FIELDS + _FACET_FIELDS
     # 48 - 2 (alerts) - 2 (theme) - 5 (prompt-toolkit) - 4 (pending-prompt/stdin)
-    #    - 5 (background) - 3 (metrics/task-registry/history) - 3 (analytics-staging)
-    #    - 1 (trust_mode) + 2 facet fields
-    assert len(all_fields) == 25
-    assert len(set(all_fields)) == 25  # no duplicates across buckets
+    #    - 5 (background) - 2 (metrics/history) - 3 (analytics-staging)
+    #    - 1 (trust_mode) + 2 facet fields  (task_registry stayed core)
+    assert len(all_fields) == 26
+    assert len(set(all_fields)) == 26  # no duplicates across buckets
 
 
 def test_every_inventoried_field_is_accessible_on_session() -> None:
@@ -153,10 +154,17 @@ def test_terminal_facet_holds_the_background_cluster() -> None:
         assert hasattr(terminal, f)  # was Session.<f>
 
 
-def test_terminal_facet_holds_the_metrics_and_task_registry_cluster() -> None:
+def test_terminal_facet_holds_the_metrics_cluster() -> None:
     terminal = _session().terminal
-    for f in ("task_registry", "metrics", "history_generation"):
+    for f in ("metrics", "history_generation"):
         assert hasattr(terminal, f)  # was Session.<f>
+
+
+def test_task_registry_stayed_on_the_core_session() -> None:
+    from core.agent_harness.session.session_core import SessionCore
+
+    assert "task_registry" in {f.name for f in dataclasses.fields(SessionCore)}
+    assert not hasattr(_session().terminal, "task_registry")
 
 
 def test_terminal_facet_holds_the_analytics_staging_cluster() -> None:

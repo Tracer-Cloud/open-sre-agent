@@ -191,7 +191,7 @@ def run_claude_code_implementation(
 
     display_command = "claude -p"
     console.print(f"[bold]$ {display_command}[/bold]")
-    task = session.terminal.task_registry.create(TaskKind.CODE_AGENT, command=display_command)
+    task = session.task_registry.create(TaskKind.CODE_AGENT, command=display_command)
     task.mark_running()
     history_gen_when_started = session.terminal.history_generation
 

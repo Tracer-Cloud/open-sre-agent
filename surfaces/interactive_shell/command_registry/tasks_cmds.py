@@ -132,7 +132,7 @@ def _cmd_history(_session: Session, console: Console, _args: list[str]) -> bool:
 
 
 def _cmd_tasks(session: Session, console: Console, _args: list[str]) -> bool:
-    tasks = session.terminal.task_registry.list_recent(n=50)
+    tasks = session.task_registry.list_recent(n=50)
     if not tasks:
         console.print(f"[{DIM}]no tasks recorded this session.[/]")
         return True
@@ -183,7 +183,7 @@ def _validate_cancel_args(args: list[str]) -> str | None:
 
 def _cmd_cancel(session: Session, console: Console, args: list[str]) -> bool:
     needle = args[0]
-    candidates = session.terminal.task_registry.candidates(needle)
+    candidates = session.task_registry.candidates(needle)
     if not candidates:
         console.print(f"[{ERROR}]no task matches id:[/] {escape(needle)}")
         return True

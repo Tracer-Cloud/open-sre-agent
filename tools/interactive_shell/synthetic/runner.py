@@ -191,7 +191,7 @@ def run_synthetic_test(
     )
     console.print(f"[bold]$ {display_command}[/bold]")
     session.last_synthetic_observation_path = None
-    task = session.terminal.task_registry.create(TaskKind.SYNTHETIC_TEST, command=display_command)
+    task = session.task_registry.create(TaskKind.SYNTHETIC_TEST, command=display_command)
     task.mark_running()
     # Lifetime managed by the watcher thread's finally block; SIM115 ignored
     # for this file in ruff.toml.
