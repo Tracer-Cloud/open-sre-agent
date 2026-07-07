@@ -19,7 +19,7 @@ def use_litellm_transport() -> bool:
 
 def use_litellm_for_provider(provider: str) -> bool:
     """Return ``True`` when *provider* must route through LiteLLM."""
-    from core.llm.azure_openai import is_azure_openai_provider
+    from core.llm.providers.azure_openai import is_azure_openai_provider
 
     return use_litellm_transport() or is_azure_openai_provider(provider)
 

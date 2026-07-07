@@ -280,11 +280,14 @@ def wire_tool_registry(monkeypatch: Any, tools: list[RegisteredTool]) -> None:
 def wire_llms(
     monkeypatch: Any, *, action_mode: str, action_tool_name: str = "parity_probe"
 ) -> None:
-    monkeypatch.setattr("core.llm.llm_client.get_llm_for_reasoning", FakeReasoningClient)
-    monkeypatch.setattr(
-        "core.llm.agent_llm_client.get_agent_llm",
-        lambda: FakeActionLLM(action_mode, tool_name=action_tool_name),
-    )
+    from core.llm.factory import LLMRole
+
+    def _fake_get_llm(role: Any) -> Any:
+        if role == LLMRole.AGENT:
+            return FakeActionLLM(action_mode, tool_name=action_tool_name)
+        return FakeReasoningClient()
+
+    monkeypatch.setattr("core.llm.factory.get_llm", _fake_get_llm)
 
 
 def _dispatch_turn(

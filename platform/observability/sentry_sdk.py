@@ -65,7 +65,7 @@ _OPERATOR_ACTIONABLE_LLM_ERROR_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\brequires\s+[A-Z0-9_]+_API_KEY\s+to\s+be\s+set\b", re.I),
     re.compile(r"\brate limit exceeded\b.*\b(?:quota|billing)\b", re.I),
     re.compile(r"\bcredit balance is too low\b", re.I),
-    # llm_client.py uses "was not found"; agent_llm_client.py uses "not found" — cover both.
+    # llm_clients.py uses "was not found"; agent_clients.py uses "not found" — cover both.
     re.compile(r"\bmodel\s+['\"][^'\"]+['\"]\s+(?:was )?not found\b", re.I),
     re.compile(r"\bcheck your configured model name or endpoint\b", re.I),
     # Relay/proxy forwarding an invalid model group to Anthropic.

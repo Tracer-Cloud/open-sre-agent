@@ -13,13 +13,12 @@ from types import SimpleNamespace
 
 import pytest
 
-import core.llm.llm_client as llm_client
-from core.llm.litellm.clients import LiteLLMLLMClient
-from core.llm.openai_compat_providers import OPENAI_COMPATIBLE_PROVIDERS
+from core.llm.factory import build_llm_client as _create_llm_client
+from core.llm.providers.openai_compat_providers import OPENAI_COMPATIBLE_PROVIDERS
+from core.llm.transports.litellm.clients import LiteLLMLLMClient
+from core.llm.transports.sdk.llm_clients import OpenAILLMClient
 
 _OPENAI_COMPATIBLE_PROVIDERS = OPENAI_COMPATIBLE_PROVIDERS
-OpenAILLMClient = llm_client.OpenAILLMClient
-_create_llm_client = llm_client._create_llm_client
 
 
 def test_registry_entries_are_well_formed() -> None:
@@ -54,8 +53,10 @@ def test_create_llm_client_dispatches_registry_provider(
         ollama_host="http://localhost:11434",
         **{f"{provider}_toolcall_model": "stub-model"},
     )
-    monkeypatch.setattr(llm_client, "resolve_llm_settings", lambda: settings)
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env_var: "test-key")
+    monkeypatch.setattr("config.config.resolve_llm_settings", lambda: settings)
+    monkeypatch.setattr(
+        "core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env_var: "test-key"
+    )
 
     client = _create_llm_client("toolcall")
 
@@ -79,8 +80,10 @@ def test_create_llm_client_dispatches_registry_provider_to_litellm_when_transpor
         ollama_host="http://localhost:11434",
         **{f"{provider}_toolcall_model": "stub-model"},
     )
-    monkeypatch.setattr(llm_client, "resolve_llm_settings", lambda: settings)
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env_var: "test-key")
+    monkeypatch.setattr("config.config.resolve_llm_settings", lambda: settings)
+    monkeypatch.setattr(
+        "core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env_var: "test-key"
+    )
     monkeypatch.setenv("OPENSRE_LLM_TRANSPORT", "litellm")
 
     client = _create_llm_client("toolcall")
@@ -99,8 +102,10 @@ def test_create_llm_client_uses_sdk_without_transport_flag(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     settings = SimpleNamespace(provider="deepseek", deepseek_toolcall_model="deepseek-v4-flash")
-    monkeypatch.setattr(llm_client, "resolve_llm_settings", lambda: settings)
-    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env_var: "test-key")
+    monkeypatch.setattr("config.config.resolve_llm_settings", lambda: settings)
+    monkeypatch.setattr(
+        "core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env_var: "test-key"
+    )
     monkeypatch.delenv("OPENSRE_LLM_TRANSPORT", raising=False)
 
     client = _create_llm_client("toolcall")

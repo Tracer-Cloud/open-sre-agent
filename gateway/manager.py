@@ -16,7 +16,7 @@ import signal
 from rich.console import Console
 
 from core.agent_harness.harness import AgentHarness, HarnessConfig
-from core.llm.preload import preload_llm_clients
+from core.llm.internal.preload import preload_llm_clients
 from gateway.config.configure_gateway_logging import configure_gateway_logging
 from gateway.config.get_gateway_settings import GatewaySettings
 from gateway.polling.telegram_gateway_background import TelegramGatewayBackground

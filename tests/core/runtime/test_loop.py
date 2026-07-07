@@ -18,7 +18,7 @@ from core.events import (
 from core.llm.types import AgentLLMResponse, ToolCall
 from core.messages import (
     AppRuntimeMessage,
-    MessageFormatter,
+    MessageMapper,
     ToolResultRuntimeMessage,
     UserRuntimeMessage,
 )
@@ -156,7 +156,7 @@ def test_agent_exposes_headless_dispatch_entrypoint(monkeypatch: pytest.MonkeyPa
 
 def test_agent_defaults_to_agent_llm_without_tools(monkeypatch: pytest.MonkeyPatch) -> None:
     llm = FakeLLM(iter([_text_response("reasoned answer")]))
-    monkeypatch.setattr("core.llm.agent_llm_client.get_agent_llm", lambda: llm)
+    monkeypatch.setattr("core.llm.factory.get_llm", lambda _role: llm)
 
     agent = Agent(system="sys", tools=[], resolved_integrations={}, max_iterations=1)
     result = agent.run([{"role": "user", "content": "hello"}])
@@ -168,7 +168,7 @@ def test_agent_defaults_to_agent_llm_without_tools(monkeypatch: pytest.MonkeyPat
 
 def test_agent_default_agent_llm_receives_tools(monkeypatch: pytest.MonkeyPatch) -> None:
     llm = FakeLLM(iter([_text_response("unused")]))
-    monkeypatch.setattr("core.llm.agent_llm_client.get_agent_llm", lambda: llm)
+    monkeypatch.setattr("core.llm.factory.get_llm", lambda _role: llm)
 
     agent = Agent(
         system="sys",
@@ -321,7 +321,7 @@ def test_generic_tool_result_conversion_does_not_import_litellm(
     real_import = builtins.__import__
 
     def guarded_import(name: str, *args: Any, **kwargs: Any) -> Any:
-        if name == "core.llm.litellm.clients" or name.startswith("litellm"):
+        if name == "core.llm.transports.litellm.clients" or name.startswith("litellm"):
             raise AssertionError(f"unexpected LiteLLM import: {name}")
         return real_import(name, *args, **kwargs)
 
@@ -330,7 +330,7 @@ def test_generic_tool_result_conversion_does_not_import_litellm(
     call = ToolCall(id="c1", name="query_logs", input={})
     message = ToolResultRuntimeMessage(tool_calls=(call,), results=({"ok": True},))
 
-    assert MessageFormatter(llm).to_provider_messages([message]) == [
+    assert MessageMapper(llm).to_provider_messages([message]) == [
         {
             "role": "tool",
             "results": [{"id": "c1", "output": {"ok": True}}],
@@ -372,12 +372,12 @@ def test_agent_excludes_unrecognized_provider_dict_roles_from_llm_context() -> N
 
 
 def test_legacy_text_blocks_convert_to_bedrock_converse_content() -> None:
-    from core.llm.agent_llm_client import BedrockConverseAgentClient
+    from core.llm.transports.sdk.agent_clients import BedrockConverseAgentClient
 
     llm = BedrockConverseAgentClient.__new__(BedrockConverseAgentClient)
     messages = [AppRuntimeMessage("custom", [{"type": "text", "text": "custom note"}])]
 
-    assert MessageFormatter(llm).to_provider_messages(messages) == [
+    assert MessageMapper(llm).to_provider_messages(messages) == [
         {"role": "user", "content": [{"text": "custom note"}]}
     ]
 

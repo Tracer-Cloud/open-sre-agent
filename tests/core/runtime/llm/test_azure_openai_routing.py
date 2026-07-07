@@ -6,8 +6,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from core.llm.litellm.clients import LiteLLMAgentClient, LiteLLMLLMClient
-from core.llm.litellm.routing import build_litellm_agent_client, build_litellm_llm_client
+from core.llm.transports.litellm.clients import LiteLLMAgentClient, LiteLLMLLMClient
+from core.llm.transports.litellm.routing import build_litellm_agent_client, build_litellm_llm_client
 
 
 def _azure_settings() -> SimpleNamespace:

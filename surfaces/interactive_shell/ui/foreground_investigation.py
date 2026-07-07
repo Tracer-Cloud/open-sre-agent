@@ -9,9 +9,10 @@ from typing import TYPE_CHECKING, Any
 from rich.console import Console
 from rich.markup import escape
 
+from core.llm.shared.llm_retry import CREDIT_EXHAUSTED_MARKER
 from platform.common.errors import OpenSREError
 from platform.common.task_types import TaskKind, TaskRecord
-from platform.terminal.theme import ERROR, WARNING
+from platform.terminal.theme import DIM, ERROR, WARNING
 from surfaces.interactive_shell.ui.investigation_outcome import (
     InvestigationOutcome,
     classify_investigation_failure,
@@ -28,6 +29,21 @@ from surfaces.interactive_shell.utils.telemetry.investigation_llm_usage import (
 
 if TYPE_CHECKING:
     from core.agent_harness.session import Session
+
+
+def _render_credit_exhausted_recovery_hint(console: Console, message: str) -> None:
+    if CREDIT_EXHAUSTED_MARKER not in message:
+        return
+    console.print(f"[{DIM}]Run /model to switch to another provider.[/]")
+    console.print(
+        f"[{DIM}]Or run /auth login <provider> to re-authenticate or add a different provider.[/]"
+    )
+
+
+def _contains_auth_login_hint(message: str | None) -> bool:
+    if not message:
+        return False
+    return "auth login" in message
 
 
 def _llm_fields(usage: InvestigationLlmUsage, started: float) -> dict[str, Any]:
@@ -72,7 +88,10 @@ def run_foreground_investigation(
         )
     except OpenSREError as exc:
         task.mark_failed(str(exc))
-        console.print(f"[{ERROR}]investigation failed:[/] {escape(str(exc))}")
+        message = str(exc)
+        console.print(f"[{ERROR}]investigation failed:[/] {escape(message)}")
+        if not _contains_auth_login_hint(exc.suggestion):
+            _render_credit_exhausted_recovery_hint(console, message)
         if exc.suggestion:
             console.print(f"[{WARNING}]suggestion:[/] {escape(exc.suggestion)}")
         category, integration, integration_detail = classify_investigation_failure(exc)
@@ -90,7 +109,9 @@ def run_foreground_investigation(
     except Exception as exc:
         task.mark_failed(str(exc))
         report_exception(exc, context=exception_context)
-        console.print(f"[{ERROR}]investigation failed:[/] {escape(str(exc))}")
+        message = str(exc)
+        console.print(f"[{ERROR}]investigation failed:[/] {escape(message)}")
+        _render_credit_exhausted_recovery_hint(console, message)
         category, integration, integration_detail = classify_investigation_failure(exc)
         return InvestigationOutcome(
             status="failed",

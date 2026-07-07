@@ -117,22 +117,22 @@ class TestGetInvestigationAgentClass:
         assert issubclass(CLIBackedInvestigationAgent, ConnectedInvestigationAgent)
 
     def test_returns_cli_agent_class_for_cli_backed_llm(self, monkeypatch: Any) -> None:
-        from core.llm.agent_llm_client import CLIBackedAgentClient
+        from core.llm.transports.sdk.agent_clients import CLIBackedAgentClient
         from tools.investigation.stages.gather_evidence.agent import get_investigation_agent_class
 
         monkeypatch.setattr(
-            "tools.investigation.stages.gather_evidence.agent.get_agent_llm",
-            lambda: mock.MagicMock(spec=CLIBackedAgentClient),
+            "tools.investigation.stages.gather_evidence.agent.get_llm",
+            lambda _role: mock.MagicMock(spec=CLIBackedAgentClient),
         )
         assert get_investigation_agent_class() is CLIBackedInvestigationAgent
 
     def test_returns_base_agent_class_for_non_cli_llm(self, monkeypatch: Any) -> None:
-        from core.llm.agent_llm_client import AnthropicAgentClient
+        from core.llm.transports.sdk.agent_clients import AnthropicAgentClient
         from tools.investigation.stages.gather_evidence import ConnectedInvestigationAgent
         from tools.investigation.stages.gather_evidence.agent import get_investigation_agent_class
 
         monkeypatch.setattr(
-            "tools.investigation.stages.gather_evidence.agent.get_agent_llm",
-            lambda: mock.MagicMock(spec=AnthropicAgentClient),
+            "tools.investigation.stages.gather_evidence.agent.get_llm",
+            lambda _role: mock.MagicMock(spec=AnthropicAgentClient),
         )
         assert get_investigation_agent_class() is ConnectedInvestigationAgent

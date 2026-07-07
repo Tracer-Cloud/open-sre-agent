@@ -12,7 +12,7 @@ from typing import Any
 
 from core.execution import ToolExecutionResult
 from core.llm.types import ToolCall
-from core.messages import MessageFormatter, RuntimeMessage, RuntimeMessageLike
+from core.messages import MessageMapper, RuntimeMessage, RuntimeMessageLike
 from core.types import RuntimeTool
 
 
@@ -89,7 +89,7 @@ class AgentRunInput[RuntimeToolT: RuntimeTool]:
             resolved=dict(resolved) if resolved is not None else {},
             tool_resources=dict(tool_resources),
             max_iterations=max_iterations,
-            messages=MessageFormatter.normalize(messages),
+            messages=MessageMapper.to_runtime_messages(messages),
         )
 
 

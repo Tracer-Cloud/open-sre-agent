@@ -3,8 +3,8 @@
 Single source of truth for ``ROOT_CAUSE_CATEGORY`` values emitted by the
 diagnosis node and validated by the response parser.
 
-Why this lives in ``core/domain/types`` and not in ``core/llm/llm_client.py``
-or ``app/nodes/root_cause_diagnosis/``:
+Why this lives in ``core/domain/types`` and not in ``core/llm/``
+or ``tools/investigation/stages/diagnose/``:
 
 - The LLM transport layer must not own domain taxonomies; it ships strings.
 - The diagnosis node consumes the taxonomy but should not own it either —

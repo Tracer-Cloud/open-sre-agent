@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from core.tool_framework.utils.metric_summary import summarize_prometheus_metrics
 from integrations.grafana.tools import query_grafana_metrics
+from platform.common.metric_summary import summarize_prometheus_metrics
 from tests.synthetic.mock_grafana_backend.backend import FixtureGrafanaBackend
 from tests.synthetic.rds_postgres.scenario_loader import SUITE_DIR, load_scenario
 from tests.tools.conftest import BaseToolContract, mock_agent_state

@@ -351,7 +351,7 @@ def sync_provider_env(
     if provider.value == "azure-openai":
         values[LLM_TRANSPORT_ENV] = "litellm"
         if provider.api_version_env:
-            from core.llm.azure_openai import resolve_azure_openai_api_version
+            from core.llm.providers.azure_openai import resolve_azure_openai_api_version
 
             values[provider.api_version_env] = resolve_azure_openai_api_version()
         if provider.endpoint_env:

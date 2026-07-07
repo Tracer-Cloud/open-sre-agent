@@ -94,7 +94,7 @@ def test_summarize_highlights_falls_back_when_llm_fails(monkeypatch) -> None:
     def _raise() -> None:
         raise RuntimeError("boom")
 
-    monkeypatch.setattr("integrations.daily_update.get_llm_for_reasoning", _raise)
+    monkeypatch.setattr("integrations.daily_update.get_llm", lambda _role: _raise())
 
     highlights, fallback_used = summarize_highlights(
         "Tracer-Cloud/opensre",

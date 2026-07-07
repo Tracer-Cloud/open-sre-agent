@@ -3,7 +3,7 @@ title: "LLM Providers"
 description: "Supported LLM APIs and CLIs, environment variables, and how to switch between them."
 ---
 
-OpenSRE is provider-agnostic: bring your own model. Selection is controlled by the `LLM_PROVIDER` environment variable, with `LLM_AUTH_METHOD` selecting API-key or OAuth auth where both are supported. Defaults are tracked in [`config/config.py`](https://github.com/Tracer-Cloud/opensre/blob/main/config/config.py) and routing lives in [`core/llm/llm_client.py`](https://github.com/Tracer-Cloud/opensre/blob/main/core/llm/llm_client.py).
+OpenSRE is provider-agnostic: bring your own model. Selection is controlled by the `LLM_PROVIDER` environment variable, with `LLM_AUTH_METHOD` selecting API-key or OAuth auth where both are supported. Defaults are tracked in [`config/config.py`](https://github.com/Tracer-Cloud/opensre/blob/main/config/config.py) and routing lives in [`core/llm/factory.py`](https://github.com/Tracer-Cloud/opensre/blob/main/core/llm/factory.py).
 
 ## Quick reference
 
@@ -523,13 +523,13 @@ If credentials are missing, set the provider's API-key environment variable, run
 
 ## Switching providers at runtime
 
-OpenSRE caches LLM clients on first use. To switch providers within a single process (tests, benchmarks), call `reset_llm_singletons()` from `core.llm.llm_client` after updating the env vars; otherwise a fresh process picks up the new `LLM_PROVIDER` automatically.
+OpenSRE caches LLM clients on first use. To switch providers within a single process (tests, benchmarks), call `reset_llm_clients()` from `core.llm.factory` after updating the env vars; otherwise a fresh process picks up the new `LLM_PROVIDER` automatically.
 
 ## Where this lives in the code
 
 - Provider literals and defaults: [`config/config.py`](https://github.com/Tracer-Cloud/opensre/blob/main/config/config.py) (`LLMProvider`, `LLMSettings`).
-- Runtime routing: [`core/llm/llm_client.py`](https://github.com/Tracer-Cloud/opensre/blob/main/core/llm/llm_client.py) (`_create_llm_client`).
-- LiteLLM routing (when enabled): [`core/llm/litellm/routing.py`](https://github.com/Tracer-Cloud/opensre/blob/main/core/llm/litellm/routing.py).
+- Runtime routing: [`core/llm/factory.py`](https://github.com/Tracer-Cloud/opensre/blob/main/core/llm/factory.py) (`resolve_llm_route`, `get_llm`) and client construction in [`core/llm/client_builders.py`](https://github.com/Tracer-Cloud/opensre/blob/main/core/llm/client_builders.py).
+- LiteLLM routing (when enabled): [`core/llm/transports/litellm/routing.py`](https://github.com/Tracer-Cloud/opensre/blob/main/core/llm/transports/litellm/routing.py).
 - Investigation tool-calling adapters: [`docs/investigation-tool-calling.md`](/investigation-tool-calling).
 - API-backed provider guide: [`core/llm/AGENTS.md`](https://github.com/Tracer-Cloud/opensre/blob/main/core/llm/AGENTS.md).
 - CLI-backed provider guide: [`integrations/llm_cli/AGENTS.md`](https://github.com/Tracer-Cloud/opensre/blob/main/integrations/llm_cli/AGENTS.md).

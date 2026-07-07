@@ -134,7 +134,7 @@ def test_get_llm_caches_process_wide_client(monkeypatch: pytest.MonkeyPatch) -> 
         calls["count"] += 1
         return _NoToolLLM()
 
-    monkeypatch.setattr("core.llm.agent_llm_client.get_agent_llm", _factory)
+    monkeypatch.setattr("core.llm.factory.get_llm", lambda _role: _factory())
     agent = Agent(system="sys", tools=[], resolved_integrations={}, max_iterations=1)
 
     first = agent._get_llm()
@@ -149,7 +149,7 @@ def test_runtime_request_path_uses_explicit_construction_llm_not_process_default
 ) -> None:
     explicit = _NoToolLLM()
     default = _NoToolLLM()
-    monkeypatch.setattr("core.llm.agent_llm_client.get_agent_llm", lambda: default)
+    monkeypatch.setattr("core.llm.factory.get_llm", lambda _role: default)
 
     agent = Agent(
         llm=explicit,

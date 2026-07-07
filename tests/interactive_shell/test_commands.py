@@ -814,12 +814,13 @@ class TestModelCommand:
     ) -> None:
         self._patch_llm(monkeypatch)
         import surfaces.cli.wizard.env_sync as env_sync
-        from core.llm import llm_client
 
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", tmp_path / ".env")
         store_path = self._redirect_wizard_store(monkeypatch, tmp_path)
         reset_calls: list[str] = []
-        monkeypatch.setattr(llm_client, "reset_llm_singletons", lambda: reset_calls.append("reset"))
+        monkeypatch.setattr(
+            "core.llm.factory.reset_llm_clients", lambda: reset_calls.append("reset")
+        )
         # /model set now refuses to half-update .env when the target provider
         # has no usable credential; supply one so the happy path still runs.
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
@@ -1125,12 +1126,13 @@ class TestModelCommand:
         """`/model toolcall set <m>` must persist only the toolcall env var."""
         self._patch_llm(monkeypatch)
         import surfaces.cli.wizard.env_sync as env_sync
-        from core.llm import llm_client
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
         reset_calls: list[str] = []
-        monkeypatch.setattr(llm_client, "reset_llm_singletons", lambda: reset_calls.append("reset"))
+        monkeypatch.setattr(
+            "core.llm.factory.reset_llm_clients", lambda: reset_calls.append("reset")
+        )
         monkeypatch.setenv("LLM_PROVIDER", "anthropic")
 
         console, buf = _capture()

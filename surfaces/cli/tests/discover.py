@@ -46,7 +46,6 @@ _TARGETS_TO_INDEX = (
     "prefect-local-test",
     "upstream-downstream",
     "flink-demo",
-    "grafana-demo",
     "deploy",
     "destroy",
     "deploy-lambda",
@@ -179,11 +178,6 @@ _TARGET_METADATA: dict[str, _TargetMetadata] = {
         "display_name": "Apache Flink ECS Demo",
         "tags": ("aws", "demo"),
         "requirements": TestRequirement(notes=("AWS infra",)),
-    },
-    "grafana-demo": {
-        "display_name": "Grafana Demo",
-        "tags": ("demo", "grafana"),
-        "requirements": TestRequirement(),
     },
     "deploy": {
         "display_name": "Deploy All Test Stacks",

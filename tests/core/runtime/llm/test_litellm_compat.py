@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from core.llm.litellm.clients import LiteLLMAgentClient, LiteLLMLLMClient
+from core.llm.transports.litellm.clients import LiteLLMAgentClient, LiteLLMLLMClient
 
 
 class _FakeMessage:
@@ -113,7 +113,7 @@ def test_litellm_agent_client_invoke_strips_internal_message_markers() -> None:
 
 
 def test_litellm_agent_client_emits_global_usage_hook() -> None:
-    from core.llm.usage import set_usage_hook
+    from core.llm.shared.usage import set_usage_hook
 
     client = LiteLLMAgentClient(
         litellm_model="openai/deepseek-v4-pro",
@@ -192,7 +192,9 @@ def test_litellm_llm_client_invoke_stream_not_found_raises_without_retry(monkeyp
         attempts.append(True)
         raise NotFoundError("model not found")
 
-    monkeypatch.setattr("core.llm.openai_chat_completions.time.sleep", lambda s: sleeps.append(s))
+    monkeypatch.setattr(
+        "core.llm.shared.openai_chat_completions.time.sleep", lambda s: sleeps.append(s)
+    )
 
     client = LiteLLMLLMClient(
         litellm_model="openai/missing-model",
@@ -226,7 +228,7 @@ def test_litellm_llm_client_invoke_stream_retries_before_emit(monkeypatch) -> No
 
         return _chunks() if stream else _fake_response(content="ok")
 
-    monkeypatch.setattr("core.llm.openai_chat_completions.time.sleep", lambda _s: None)
+    monkeypatch.setattr("core.llm.shared.openai_chat_completions.time.sleep", lambda _s: None)
 
     client = LiteLLMLLMClient(
         litellm_model="openai/groq-model",

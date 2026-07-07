@@ -32,7 +32,7 @@ import logging
 import re
 from typing import Any
 
-from core.llm.llm_retry import LLMCreditExhaustedError, retry_on_rate_limit
+from core.llm.shared.llm_retry import LLMCreditExhaustedError, retry_on_rate_limit
 from tests.benchmarks.cloudopsbench.predictor.snapping import _snap_fault_object, _snap_root_cause
 from tests.benchmarks.cloudopsbench.predictor.vocabulary import (
     _FAULT_OBJECT_NAMESPACES,
@@ -62,7 +62,7 @@ def emit_paper_predictions(
     """Ask the LLM to translate the investigation into paper-format predictions.
 
     ``llm`` is opensre's agent LLM client (typically the same one that ran
-    the investigation, obtained via ``get_agent_llm()``). We call
+    the investigation, obtained via ``get_llm(LLMRole.AGENT)``). We call
     ``llm.invoke`` with ``tools=None`` so the model produces plain text,
     then parse the response.
 

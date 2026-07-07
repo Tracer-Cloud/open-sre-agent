@@ -12,13 +12,14 @@ from core.agent_harness.providers.default_providers import (
     DefaultReasoningClientProvider,
     _llm_client_unavailable_message,
 )
-from core.llm.preload import preload_llm_clients
+from core.llm.internal.preload import preload_llm_clients
 
 
 def test_preload_imports_the_llm_client_graph() -> None:
     preload_llm_clients()
-    assert "core.llm.agent_llm_client" in sys.modules
-    assert "core.llm.llm_client" in sys.modules
+    assert "core.llm.factory" in sys.modules
+    assert "core.llm.transports.sdk.agent_clients" in sys.modules
+    assert "core.llm.transports.sdk.llm_clients" in sys.modules
     # transport_mode is pulled in transitively — the whole graph is one snapshot.
     assert "core.llm.transport_mode" in sys.modules
 
@@ -49,7 +50,7 @@ def test_reasoning_provider_renders_actionable_message_on_import_error(monkeypat
             rendered.append(message)
 
     # Force the lazy import inside get() to fail like a stale process would.
-    monkeypatch.setitem(sys.modules, "core.llm.llm_client", None)
+    monkeypatch.setitem(sys.modules, "core.llm.factory", None)
 
     provider = DefaultReasoningClientProvider(output=FakeOutput())
     result = provider.get()

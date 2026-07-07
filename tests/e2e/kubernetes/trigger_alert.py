@@ -33,6 +33,13 @@ from tests.shared.infrastructure_sdk.trigger_config import (
 )
 from tests.shared.slack_polling import get_channel_id, poll_for_message
 
+DEFAULT_DD_MAX_WAIT = 300
+DEFAULT_SLACK_MAX_WAIT = 300
+DEFAULT_POST_TRIGGER_WAIT = 0
+POST_TRIGGER_WAIT_ON_504 = 90
+DD_LOG_QUERY = "kube_namespace:tracer-test PIPELINE_ERROR"
+DD_SINCE_EPOCH_BUFFER_SECONDS = 60
+
 
 def _trigger_via_api(trigger_api_url: str) -> dict:
     url = trigger_api_url.rstrip("/") + "/trigger?inject_error=true"
@@ -136,28 +143,61 @@ def _load_or_regen_trigger_config() -> dict:
 # ---------------------------------------------------------------------------
 
 
-def _poll_datadog_logs(max_wait: int = 90) -> bool:
+def datadog_log_search_window(
+    since_epoch: float | None,
+    *,
+    now_epoch: float | None = None,
+) -> tuple[str, str]:
+    """Build Datadog Logs API ``from``/``to`` bounds anchored on the trigger."""
+    if since_epoch is not None:
+        anchor = since_epoch - DD_SINCE_EPOCH_BUFFER_SECONDS
+        return str(int(anchor * 1000)), "now"
+    if now_epoch is not None:
+        from_ms = int((now_epoch - 15 * 60) * 1000)
+        return str(from_ms), "now"
+    return "now-15m", "now"
+
+
+def _build_datadog_search_payload(
+    since_epoch: float | None,
+    *,
+    now_epoch: float | None = None,
+) -> dict[str, object]:
+    from_value, to_value = datadog_log_search_window(since_epoch, now_epoch=now_epoch)
+    return {
+        "filter": {
+            "query": DD_LOG_QUERY,
+            "from": from_value,
+            "to": to_value,
+        },
+        "sort": "-timestamp",
+        "page": {"limit": 1},
+    }
+
+
+def _poll_datadog_logs(
+    max_wait: int = DEFAULT_DD_MAX_WAIT,
+    *,
+    since_epoch: float | None = None,
+) -> bool:
     api_key = os.environ.get("DD_API_KEY", "")
     app_key = os.environ.get("DD_APP_KEY", "")
     site = os.environ.get("DD_SITE", "datadoghq.com")
     if not api_key or not app_key:
         return False
 
+    search_payload = _build_datadog_search_payload(since_epoch)
+    from_value = search_payload["filter"]["from"]  # type: ignore[index]
+    to_value = search_payload["filter"]["to"]  # type: ignore[index]
     print("Polling Datadog Logs API...")
+    print(f"  query={DD_LOG_QUERY!r} from={from_value!r} to={to_value!r}")
+    if since_epoch is not None:
+        print(f"  since_epoch={since_epoch:.0f}")
+
     deadline = time.monotonic() + max_wait
     while time.monotonic() < deadline:
         try:
-            payload = json.dumps(
-                {
-                    "filter": {
-                        "query": "kube_namespace:tracer-test PIPELINE_ERROR",
-                        "from": "now-2m",
-                        "to": "now",
-                    },
-                    "sort": "-timestamp",
-                    "page": {"limit": 1},
-                }
-            ).encode()
+            payload = json.dumps(search_payload).encode()
             url = f"https://api.{site}/api/v2/logs/events/search"
             req = urllib.request.Request(
                 url,
@@ -192,7 +232,7 @@ _SLACK_KEYWORDS = ["PIPELINE_ERROR", "Pipeline error", "tracer"]
 
 
 def query_slack_alerts(
-    max_wait: int = 300,
+    max_wait: int = DEFAULT_SLACK_MAX_WAIT,
     channel_id: str | None = None,
     since_epoch: float | None = None,
 ) -> bool:
@@ -209,18 +249,36 @@ def query_slack_alerts(
 # ---------------------------------------------------------------------------
 
 
-def verify(since_epoch: float, *, dd_max_wait: int = 120, slack_max_wait: int = 300) -> int:
+def verify(
+    since_epoch: float,
+    *,
+    dd_max_wait: int = DEFAULT_DD_MAX_WAIT,
+    slack_max_wait: int = DEFAULT_SLACK_MAX_WAIT,
+    post_trigger_wait: int = DEFAULT_POST_TRIGGER_WAIT,
+) -> int:
     """Poll Datadog and Slack to confirm the pipeline failure was observed.
 
     Returns 0 on success, 1 if Datadog verification fails.
     """
     start = time.monotonic()
 
-    dd_found = _poll_datadog_logs(max_wait=dd_max_wait)
+    if post_trigger_wait > 0:
+        print(
+            f"Waiting {post_trigger_wait}s for pipeline + Datadog indexing "
+            "(post-trigger backoff)..."
+        )
+        time.sleep(post_trigger_wait)
+
+    dd_found = _poll_datadog_logs(max_wait=dd_max_wait, since_epoch=since_epoch)
     dd_elapsed = time.monotonic() - start
 
     if not dd_found:
+        from_value, to_value = datadog_log_search_window(since_epoch)
         print(f"\nFAIL: PIPELINE_ERROR not found in Datadog within {dd_max_wait}s")
+        print(f"  since_epoch={since_epoch:.0f}")
+        print(f"  datadog_query={DD_LOG_QUERY!r}")
+        print(f"  datadog_from={from_value!r} datadog_to={to_value!r}")
+        print(f"  post_trigger_wait={post_trigger_wait}s dd_max_wait={dd_max_wait}s")
         return 1
 
     print(f"\nLog confirmed in Datadog ({dd_elapsed:.1f}s)")
@@ -257,7 +315,19 @@ def main() -> int:
         "--since-epoch",
         type=float,
         default=None,
-        help="Unix timestamp to search Slack from (for --verify-only)",
+        help="Unix timestamp to anchor Datadog/Slack verification",
+    )
+    parser.add_argument(
+        "--dd-max-wait",
+        type=int,
+        default=DEFAULT_DD_MAX_WAIT,
+        help=f"Seconds to poll Datadog (default: {DEFAULT_DD_MAX_WAIT})",
+    )
+    parser.add_argument(
+        "--post-trigger-wait",
+        type=int,
+        default=DEFAULT_POST_TRIGGER_WAIT,
+        help="Seconds to wait before Datadog polling (for async Lambda after API 504)",
     )
     args = parser.parse_args()
 
@@ -273,7 +343,11 @@ def main() -> int:
     since_epoch = args.since_epoch or time.time()
 
     if args.verify_only:
-        return verify(since_epoch)
+        return verify(
+            since_epoch,
+            dd_max_wait=args.dd_max_wait,
+            post_trigger_wait=args.post_trigger_wait,
+        )
 
     start_epoch = time.time()
     try:
@@ -301,7 +375,16 @@ def main() -> int:
         print("Done. DD monitor will fire in ~1-2 min -> Slack alert follows.")
         return 0
 
-    return verify(start_epoch)
+    post_trigger_wait = args.post_trigger_wait
+    if response.get("status") == "accepted_timeout" and post_trigger_wait <= 0:
+        post_trigger_wait = POST_TRIGGER_WAIT_ON_504
+        print(f"Trigger returned 504; waiting {post_trigger_wait}s before verify")
+
+    return verify(
+        start_epoch,
+        dd_max_wait=args.dd_max_wait,
+        post_trigger_wait=post_trigger_wait,
+    )
 
 
 if __name__ == "__main__":

@@ -81,10 +81,9 @@ class _FakeLLMClient:
 def _patch_llm(monkeypatch: Any, content: Any) -> _FakeLLMClient:
     client = _FakeLLMClient(content)
     # ``answer_shell_question`` imports ``get_llm_for_reasoning`` lazily from
-    # ``core.llm.llm_client``, so we patch the symbol on that module.
-    import core.llm.llm_client as llm_module
+    # ``core.llm.factory.get_llm``, so we patch the symbol on that module.
 
-    monkeypatch.setattr(llm_module, "get_llm_for_reasoning", lambda: client)
+    monkeypatch.setattr("core.llm.factory.get_llm", lambda _role: client)
     return client
 
 
@@ -400,9 +399,7 @@ class TestAssistantOutputRendering:
                 raise RuntimeError("upstream 503")
                 yield  # pragma: no cover  -- generator marker
 
-        import core.llm.llm_client as llm_module
-
-        monkeypatch.setattr(llm_module, "get_llm_for_reasoning", lambda: _Boom())
+        monkeypatch.setattr("core.llm.factory.get_llm", lambda _role: _Boom())
         monkeypatch.setattr(
             "core.agent_harness.providers.default_providers.capture_exception",
             lambda exc, **_kwargs: captured_errors.append(exc),
@@ -436,9 +433,7 @@ class TestStreamingMigration:
                 calls.append("invoke_stream")
                 yield "ok"
 
-        import core.llm.llm_client as llm_module
-
-        monkeypatch.setattr(llm_module, "get_llm_for_reasoning", lambda: _Recording())
+        monkeypatch.setattr("core.llm.factory.get_llm", lambda _role: _Recording())
 
         console, _ = _capture()
         answer_shell_question("hi", Session(), console)

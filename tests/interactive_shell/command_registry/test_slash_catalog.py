@@ -21,8 +21,8 @@ def test_slash_catalog_covers_all_registered_commands() -> None:
     missing = sorted(registered - catalogued)
     stale = sorted(catalogued - registered)
     assert not missing, (
-        "Add _MCP_BY_COMMAND entries in interactive_shell/command_registry/"
-        f"slash_catalog.py for: {missing}. See interactive_shell/AGENTS.md "
+        "Add _MCP_BY_COMMAND entries in surfaces/interactive_shell/command_registry/"
+        f"slash_catalog.py for: {missing}. See surfaces/interactive_shell/AGENTS.md "
         "(Slash commands → REPL + CLI parity)."
     )
     assert not stale, (

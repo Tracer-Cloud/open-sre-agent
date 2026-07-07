@@ -148,14 +148,14 @@ class DefaultReasoningClientProvider:
 
     def get(self) -> Any | None:
         try:
-            from core.llm.llm_client import get_llm_for_reasoning
+            from core.llm.factory import LLMRole, get_llm
         except Exception as exc:
             self._handle_unavailable(
                 exc, context="core.agent_harness.default_reasoning_client.import"
             )
             return None
         try:
-            return get_llm_for_reasoning()
+            return get_llm(LLMRole.REASONING)
         except Exception as exc:
             self._handle_unavailable(
                 exc, context="core.agent_harness.default_reasoning_client.create"

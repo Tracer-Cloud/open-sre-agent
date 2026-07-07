@@ -11,9 +11,9 @@ def default_llm_factory() -> Any:
 
     Uses a lazy import to avoid pulling in the full LLM stack at module load time.
     """
-    from core.llm import agent_llm_client
+    from core.llm.factory import LLMRole, get_llm
 
-    return agent_llm_client.get_agent_llm()
+    return get_llm(LLMRole.AGENT)
 
 
 def resolve_provider_models(settings: object, provider: str) -> tuple[str, str]:

@@ -208,6 +208,33 @@ def _iso_utc(dt: datetime) -> str:
     return dt.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
+def _resolve_anchor_payload(
+    payload: dict[str, Any],
+) -> tuple[dict[str, Any], tuple[datetime, str] | None]:
+    """Return the payload to anchor on plus its pre-computed anchor.
+
+    E2E fixtures such as ``datadog_k8s_alert.json`` store captured evidence
+    beside the alert payload: ``{"_meta": ..., "alert": {...}, "evidence": ...}``.
+    Anchor parsers expect webhook timestamps at the top level. When the outer
+    dict has no anchor but the nested ``alert`` object does, resolve against
+    the inner payload.
+
+    The chosen anchor is returned alongside the payload so callers do not run
+    ``extract_anchor`` a second time — each call runs all four parsers,
+    including the recursive CloudWatch one.
+    """
+    outer_anchor = extract_anchor(payload)
+    if outer_anchor is not None:
+        return payload, outer_anchor
+    nested = payload.get("alert")
+    if not isinstance(nested, dict):
+        return payload, None
+    nested_anchor = extract_anchor(nested)
+    if nested_anchor is not None:
+        return nested, nested_anchor
+    return payload, None
+
+
 def resolve_incident_window(
     raw_alert: Any,
     *,
@@ -270,7 +297,7 @@ def resolve_incident_window(
     current = (now or datetime.now(UTC)).astimezone(UTC)
 
     payload = coerce_alert_dict(raw_alert)
-    anchor_result = extract_anchor(payload) if payload else None
+    anchor_result = _resolve_anchor_payload(payload)[1] if payload else None
 
     if anchor_result is not None:
         anchor, label = anchor_result

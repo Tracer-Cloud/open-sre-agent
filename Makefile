@@ -4,7 +4,7 @@ export
 .PHONY: install build onboard demo benchmark benchmark-update-readme \
 	alert-template investigate-alert verify-integrations check-docker \
 	grafana-local-up grafana-local-down grafana-local-seed \
-	cloudwatch-demo datadog-demo crashloop-demo prefect-demo grafana-demo \
+	cloudwatch-demo datadog-demo crashloop-demo prefect-demo \
 	flink-demo upstream-downstream \
 	test-rca test-rca-grafana test-synthetic test-rds-synthetic test-k8s-synthetic \
 	test-cloudopsbench download-cloudopsbench-hf validate-cloudopsbench \
@@ -265,9 +265,6 @@ upstream-downstream:
 # Run Apache Flink ECS E2E test
 flink-demo:
 	$(PYTHON) -m tests.e2e.upstream_apache_flink_ecs.test_agent_e2e
-
-grafana-demo:
-	$(PYTHON) -m tests.e2e.grafana.grafana_pipeline
 
 # Run the generic CLI (reads from stdin or --input)
 run:
