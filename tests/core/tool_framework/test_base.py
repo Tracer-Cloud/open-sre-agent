@@ -10,7 +10,7 @@ from pydantic import ValidationError
 import core.tool_framework.telemetry as telemetry_mod
 from core.tool_framework.base import BaseTool
 from core.tool_framework.metadata import ToolMetadata
-from core.tool_framework.registered_tool import REGISTERED_TOOL_ATTR
+from core.tool_framework.registered_tool import REGISTERED_TOOL_ATTR, RegisteredTool
 from core.tool_framework.tool_decorator import tool
 
 # ---------------------------------------------------------------------------
@@ -87,6 +87,66 @@ def test_metadata_classmethod_returns_tool_metadata() -> None:
     assert isinstance(meta, ToolMetadata)
     assert meta.name == "minimal_tool"
     assert meta.description == "A minimal tool for testing."
+
+
+def test_registry_metadata_classmethod_returns_defaults() -> None:
+    registry = _MinimalTool.registry_metadata()
+    assert registry.surfaces == ("investigation",)
+    assert registry.tags == ()
+    assert registry.parallel_safe is True
+
+
+def test_init_subclass_normalizes_registry_metadata() -> None:
+    class _RegistryTool(BaseTool):
+        name = "registry_tool"
+        description = "Registry metadata tool."
+        input_schema = {"type": "object", "properties": {}}
+        source = "grafana"
+        surfaces = ("chat", "investigation")
+        tags = ("metrics", " fast ", "metrics")
+        parallel_safe = False
+
+        def run(self) -> dict[str, Any]:
+            return {}
+
+    assert _RegistryTool.surfaces == ("chat", "investigation")
+    assert _RegistryTool.tags == ("metrics", "fast")
+    assert _RegistryTool.parallel_safe is False
+
+
+def test_init_subclass_rejects_invalid_surfaces() -> None:
+    with pytest.raises(ValidationError):
+        type(
+            "InvalidSurfaceTool",
+            (BaseTool,),
+            {
+                "name": "invalid_surface_tool",
+                "description": "Bad surfaces.",
+                "input_schema": {"type": "object", "properties": {}},
+                "source": "grafana",
+                "surfaces": ("not-a-surface",),
+                "run": lambda _self, **_kwargs: {},
+            },
+        )
+
+
+def test_from_base_tool_reads_registry_metadata_from_class() -> None:
+    class _ChatTool(BaseTool):
+        name = "chat_tool"
+        description = "Chat-facing tool."
+        input_schema = {"type": "object", "properties": {}}
+        source = "grafana"
+        surfaces = ("investigation", "chat")
+        tags = ("safe",)
+        parallel_safe = False
+
+        def run(self) -> dict[str, Any]:
+            return {}
+
+    registered = RegisteredTool.from_base_tool(_ChatTool())
+    assert registered.surfaces == ("investigation", "chat")
+    assert registered.tags == ("safe",)
+    assert registered.parallel_safe is False
 
 
 # ---------------------------------------------------------------------------

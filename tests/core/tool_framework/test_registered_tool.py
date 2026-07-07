@@ -98,6 +98,10 @@ class TestRequiresApprovalOnRegisteredTool:
         assert registered.requires_approval is False
         assert registered.approval_reason == ""
 
+    def test_from_base_tool_reads_parallel_safe_default(self) -> None:
+        registered = RegisteredTool.from_base_tool(_ReadOnlyTool())
+        assert registered.parallel_safe is True
+
     def test_from_function_carries_requires_approval_metadata(self) -> None:
         registered = approval_function_tool.__opensre_registered_tool__  # type: ignore[attr-defined]
         assert registered.requires_approval is True
@@ -274,6 +278,32 @@ def test_normalize_surfaces_invalid_raises() -> None:
 def test_normalize_surfaces_empty_list_returns_investigation_default() -> None:
     result = _normalize_surfaces([])
     assert result == ("investigation",)
+
+
+class _TaggedBaseTool(BaseTool):
+    name = "tagged_base_tool"
+    description = "Base tool with registry metadata."
+    input_schema: dict[str, Any] = {"type": "object", "properties": {}}
+    source: EvidenceSource = "grafana"
+    surfaces = ("investigation", "chat")
+    tags = ("logs", "observability")
+    parallel_safe = False
+
+    def run(self) -> dict[str, Any]:
+        return {}
+
+
+def test_from_base_tool_uses_class_registry_metadata() -> None:
+    registered = RegisteredTool.from_base_tool(_TaggedBaseTool())
+    assert registered.surfaces == ("investigation", "chat")
+    assert registered.tags == ("logs", "observability")
+    assert registered.parallel_safe is False
+
+
+def test_from_base_tool_explicit_surfaces_override_class_metadata() -> None:
+    registered = RegisteredTool.from_base_tool(_TaggedBaseTool(), surfaces=("action",))
+    assert registered.surfaces == ("action",)
+    assert registered.tags == ("logs", "observability")
 
 
 # ---------------------------------------------------------------------------

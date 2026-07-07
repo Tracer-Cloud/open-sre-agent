@@ -6,7 +6,7 @@ import inspect
 from collections.abc import Callable, Iterable
 from copy import deepcopy
 from dataclasses import dataclass, field
-from typing import Any, cast, get_args
+from typing import Any, cast
 
 from pydantic import BaseModel
 
@@ -16,6 +16,7 @@ from core.domain.types.retrieval import RetrievalControls
 from core.domain.types.tools import ToolSurface
 from core.tool_framework.base import BaseTool
 from core.tool_framework.metadata import EvidenceType, SideEffectLevel, ToolMetadata
+from core.tool_framework.registry_metadata import normalize_surfaces
 from core.tool_framework.schema import (
     _value_matches_schema,
     infer_input_schema,
@@ -25,7 +26,6 @@ from core.tool_framework.schema import (
 REGISTERED_TOOL_ATTR = "__opensre_registered_tool__"
 
 _DEFAULT_SURFACES: tuple[ToolSurface, ...] = ("investigation",)
-_VALID_SURFACES = set(get_args(ToolSurface))
 
 
 def _always_available(_sources: dict[str, dict]) -> bool:
@@ -37,20 +37,8 @@ def _extract_no_params(_sources: dict[str, dict]) -> dict[str, Any]:
 
 
 def _normalize_surfaces(surfaces: Iterable[str] | None) -> tuple[ToolSurface, ...]:
-    if surfaces is None:
-        return _DEFAULT_SURFACES
-
-    normalized: list[ToolSurface] = []
-    for raw_surface in surfaces:
-        surface = str(raw_surface).strip().lower()
-        if surface not in _VALID_SURFACES:
-            valid = ", ".join(sorted(_VALID_SURFACES))
-            raise ValueError(f"Unsupported tool surface '{surface}'. Expected one of: {valid}.")
-        typed_surface = cast(ToolSurface, surface)
-        if typed_surface not in normalized:
-            normalized.append(typed_surface)
-
-    return tuple(normalized) or _DEFAULT_SURFACES
+    """Backward-compatible alias for registry surface normalization."""
+    return normalize_surfaces(surfaces)
 
 
 @dataclass
@@ -223,15 +211,9 @@ class RegisteredTool:
         resolved_output_schema = (
             model_to_json_schema(output_model) if output_model else metadata.output_schema
         )
-        resolved_surfaces = (
-            surfaces or getattr(tool, "surfaces", None) or getattr(tool.__class__, "surfaces", None)
-        )
-        resolved_tags = tuple(
-            cast(
-                Iterable[str],
-                tags or getattr(tool, "tags", None) or getattr(tool.__class__, "tags", ()),
-            )
-        )
+        registry = tool.registry_metadata()
+        resolved_surfaces = normalize_surfaces(surfaces) if surfaces is not None else registry.surfaces
+        resolved_tags = tags if tags is not None else registry.tags
         return cls(
             name=metadata.name,
             description=metadata.description,
@@ -249,7 +231,7 @@ class RegisteredTool:
             output_schema=resolved_output_schema,
             injected_params=tuple(metadata.injected_params),
             retrieval_controls=retrieval_controls or metadata.retrieval_controls,
-            surfaces=_normalize_surfaces(resolved_surfaces),
+            surfaces=resolved_surfaces,
             run=tool.run,  # type: ignore[attr-defined]
             is_available=tool.is_available,
             extract_params=tool.extract_params,
@@ -257,29 +239,25 @@ class RegisteredTool:
             requires_approval=bool(
                 requires_approval
                 if requires_approval is not None
-                else getattr(tool.__class__, "requires_approval", False)
+                else tool.__class__.requires_approval
             ),
             approval_reason=str(
                 approval_reason
                 if approval_reason is not None
-                else getattr(tool.__class__, "approval_reason", "")
+                else tool.__class__.approval_reason
             ),
             approval_expiry_seconds=int(
                 approval_expiry_seconds
                 if approval_expiry_seconds is not None
-                else getattr(
-                    tool.__class__, "approval_expiry_seconds", DEFAULT_APPROVAL_EXPIRY_SECONDS
-                )
+                else tool.__class__.approval_expiry_seconds
             ),
             parallel_safe=bool(
-                parallel_safe
-                if parallel_safe is not None
-                else getattr(tool.__class__, "parallel_safe", True)
+                parallel_safe if parallel_safe is not None else tool.__class__.parallel_safe
             ),
             accepts_runtime_context=bool(
                 accepts_runtime_context
                 if accepts_runtime_context is not None
-                else getattr(tool.__class__, "accepts_runtime_context", False)
+                else tool.__class__.accepts_runtime_context
             ),
             origin_module=tool.__class__.__module__,
             origin_name=tool.__class__.__name__,

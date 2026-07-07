@@ -11,7 +11,9 @@ from pydantic import BaseModel
 from config.constants.investigation import DEFAULT_APPROVAL_EXPIRY_SECONDS
 from core.domain.types.evidence import EvidenceSource
 from core.domain.types.retrieval import RetrievalControls
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.metadata import EvidenceType, SideEffectLevel, ToolMetadata
+from core.tool_framework.registry_metadata import BaseToolRegistryMetadata
 
 
 class BaseTool(ABC):
@@ -56,6 +58,9 @@ class BaseTool(ABC):
     retrieval_controls: ClassVar[RetrievalControls] = (
         RetrievalControls()
     )  # Declares supported controls
+    surfaces: ClassVar[tuple[ToolSurface, ...]] = ("investigation",)
+    tags: ClassVar[Sequence[str]] = ()
+    parallel_safe: ClassVar[bool] = True
     requires_approval: ClassVar[bool] = False  # Whether this tool needs approval from messaging
     approval_reason: ClassVar[str] = ""  # Human-readable reason for requiring approval
     approval_expiry_seconds: ClassVar[int] = DEFAULT_APPROVAL_EXPIRY_SECONDS
@@ -80,6 +85,10 @@ class BaseTool(ABC):
         cls.output_schema = metadata.output_schema
         cls.injected_params = tuple(metadata.injected_params)
         cls.retrieval_controls = metadata.retrieval_controls
+        registry = cls.registry_metadata()
+        cls.surfaces = registry.surfaces
+        cls.tags = registry.tags
+        cls.parallel_safe = registry.parallel_safe
 
     @classmethod
     def metadata(cls) -> ToolMetadata:
@@ -102,6 +111,17 @@ class BaseTool(ABC):
                 "output_schema": getattr(cls, "output_schema", None),
                 "injected_params": list(getattr(cls, "injected_params", [])),
                 "retrieval_controls": getattr(cls, "retrieval_controls", RetrievalControls()),
+            }
+        )
+
+    @classmethod
+    def registry_metadata(cls) -> BaseToolRegistryMetadata:
+        """Return validated registry/runtime metadata for this subclass."""
+        return BaseToolRegistryMetadata.model_validate(
+            {
+                "surfaces": getattr(cls, "surfaces", ("investigation",)),
+                "tags": tuple(getattr(cls, "tags", ())),
+                "parallel_safe": getattr(cls, "parallel_safe", True),
             }
         )
 
