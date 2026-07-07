@@ -189,8 +189,8 @@ def test_repl_session_prompt_history_backend_matches_prompt_toolkit_history(
     with create_app_session(input=DummyInput(), output=DummyOutput()):
         session = Session()
         prompt = input_prompt.build_prompt_session()
-        session.prompt_history_backend = prompt.history
-    assert session.prompt_history_backend is prompt.history
+        session.terminal.prompt_history_backend = prompt.history
+    assert session.terminal.prompt_history_backend is prompt.history
 
 
 def test_prompt_message_uses_accent_glyph() -> None:
@@ -1763,7 +1763,7 @@ def test_refresh_prompt_theme_skips_invalidate_when_app_not_running() -> None:
             invalidated.append(True)
 
     session = Session()
-    session.pt_style_app = _App()
+    session.terminal.pt_style_app = _App()
     refresh_prompt_theme(session)
     assert invalidated == []
-    assert session.pt_style_app.style is not None
+    assert session.terminal.pt_style_app.style is not None

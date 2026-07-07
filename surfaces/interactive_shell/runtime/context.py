@@ -50,7 +50,7 @@ class SessionBootstrapSpec(BaseModel):
         )
         self.session.terminal.active_theme_name = self.active_theme_name or _current_theme_name()
         if self.pt_session is not None:
-            self.session.prompt_history_backend = self.pt_session.history
+            self.session.terminal.prompt_history_backend = self.pt_session.history
         return self
 
 
@@ -91,7 +91,7 @@ class ReplRuntimeContext(BaseModel):
     def bind_prompt_history_backend(self) -> Self:
         """Keep session prompt-history state aligned with the prompt session."""
         if self.pt_session is not None:
-            self.session.prompt_history_backend = self.pt_session.history
+            self.session.terminal.prompt_history_backend = self.pt_session.history
         return self
 
 

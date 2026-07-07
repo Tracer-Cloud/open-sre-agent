@@ -47,7 +47,7 @@ class TestSession:
     def test_queue_auto_command_sets_pending_and_notifies(self) -> None:
         session = Session()
         calls: list[bool] = []
-        session.prompt_refresh_fn = lambda: calls.append(True)
+        session.terminal.prompt_refresh_fn = lambda: calls.append(True)
         session.queue_auto_command("/integrations setup sentry")
         assert session.pending_prompt_default == "/integrations setup sentry"
         assert session.pending_prompt_autosubmit is True

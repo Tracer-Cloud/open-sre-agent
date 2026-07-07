@@ -201,7 +201,7 @@ class InteractiveShellController:
             )
         )
         # Fleet sampler is lazy: /fleet triggers it on first live use.
-        self.session.fleet_sampler_starter = self.background.ensure_fleet_sampler_started
+        self.session.terminal.fleet_sampler_starter = self.background.ensure_fleet_sampler_started
 
     async def _handle_input_action(self, action: InputAction) -> bool:
         match action:

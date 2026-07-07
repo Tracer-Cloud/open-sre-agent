@@ -50,5 +50,5 @@ def wire_prompt_refresh(
 
         loop.call_soon_threadsafe(_apply)
 
-    session.prompt_refresh_fn = refresh_active_prompt
+    session.terminal.prompt_refresh_fn = refresh_active_prompt
     return invalidate_prompt

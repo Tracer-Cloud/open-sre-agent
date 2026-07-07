@@ -6,7 +6,6 @@ import re
 import threading
 import time
 import uuid
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -16,7 +15,6 @@ if TYPE_CHECKING:
     # Type-only: the session stores the prompt-history backend as an opaque UI
     # handle (surfaces access its interface). Importing it only under
     # TYPE_CHECKING keeps core free of a runtime prompt_toolkit dependency.
-    from prompt_toolkit.history import History
 
     from core.agent_harness.grounding.context import GroundingContext
     from core.agent_harness.integrations.resolution import IntegrationResolutionResult
@@ -194,13 +192,6 @@ class Session:
     def last_command_observation(self, value: str | None) -> None:
         self.agent.last_observation = value
 
-    prompt_history_backend: History | None = None
-    """The live ``prompt_toolkit.History`` object backing the input prompt.
-
-    Stored here so ``/history`` and ``/privacy`` slash commands can mutate
-    its ``paused`` flag (when it is a ``RedactingFileHistory``) without
-    needing access to the ``PromptSession``."""
-
     grounding: GroundingContext = field(
         default_factory=_default_grounding, repr=False, compare=False
     )
@@ -208,19 +199,6 @@ class Session:
 
     Injected so the grounding caches have a process-scoped lifetime with no
     module-level mutable globals; tests can supply a fresh ``GroundingContext``."""
-
-    pt_style_app: Any = None
-    """The prompt-toolkit ``Application`` instance for this session.
-
-    Stored here (instead of accessed via ``get_app_or_none()``) so that
-    worker-thread slash commands (e.g. ``/theme``) can refresh styles via
-    ``call_soon_threadsafe`` on the main asyncio loop."""
-
-    main_loop: Any = None
-    """The asyncio event loop for the main REPL coroutine.
-
-    Set once by ``InteractiveShellController.start_interactive_shell`` so
-    worker-thread code can schedule prompt-toolkit updates on the main thread."""
 
     terminal: TerminalSession = field(default_factory=TerminalSession)
     """Interactive-shell (terminal) session facet — shell-only UI/theme/background state.
@@ -280,17 +258,6 @@ class Session:
     Prevents the tool-calling loop from re-dispatching the same literal slash
     command when the model emits a duplicate ``slash_invoke`` on a later iteration."""
 
-    prompt_refresh_fn: Callable[[], None] | None = field(default=None, repr=False)
-    """Loop-owned hook to apply pending prefill and redraw the active prompt."""
-
-    fleet_sampler_starter: Callable[[], None] | None = field(default=None, repr=False)
-    """Loop-owned hook to lazily start the fleet sampler on first live ``/fleet`` use.
-
-    Set by the interactive-shell controller so the sampler (and its ``psutil``
-    dependency) stays out of base REPL startup and only runs when fleet
-    monitoring is actually requested. Thread-safe: the starter marshals task
-    creation onto the REPL event loop."""
-
     last_synthetic_observation_path: str | None = None
     """Absolute path to ``latest.json`` for the last finished synthetic run (set on failure)."""
 
@@ -337,13 +304,13 @@ class Session:
 
     def notify_prompt_changed(self) -> None:
         """Redraw the active prompt (placeholder state and pending prefill)."""
-        if self.prompt_refresh_fn is not None:
-            self.prompt_refresh_fn()
+        if self.terminal.prompt_refresh_fn is not None:
+            self.terminal.prompt_refresh_fn()
 
     def ensure_fleet_sampler_started(self) -> None:
         """Request that the fleet sampler start (no-op if unwired or already running)."""
-        if self.fleet_sampler_starter is not None:
-            self.fleet_sampler_starter()
+        if self.terminal.fleet_sampler_starter is not None:
+            self.terminal.fleet_sampler_starter()
 
     def enqueue_background_notice(self, message: str) -> None:
         """Queue a background-thread status line for the main REPL loop to print."""
@@ -715,5 +682,5 @@ class Session:
             pending.cancel()
         with self._background_notices_lock:
             self.background_notices.clear()
-        self.prompt_refresh_fn = None
-        self.fleet_sampler_starter = None
+        self.terminal.prompt_refresh_fn = None
+        self.terminal.fleet_sampler_starter = None

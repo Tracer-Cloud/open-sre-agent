@@ -51,15 +51,10 @@ _CORE_FIELDS = (
     "_ACCUMULATED_KEYS",
 )
 _TERMINAL_FIELDS = (
-    "prompt_history_backend",
-    "pt_style_app",
-    "main_loop",
     "pending_prompt_default",
     "pending_prompt_autosubmit",
     "exclusive_stdin_active",
     "agent_turn_executed_slashes",
-    "prompt_refresh_fn",
-    "fleet_sampler_starter",
     "task_registry",
     "metrics",
     "background_mode_enabled",
@@ -80,10 +75,12 @@ _TERMINAL_FIELDS = (
 _FACET_FIELDS = ("alerts", "terminal")
 
 
-def test_field_inventory_is_exactly_46_top_level_fields() -> None:
+def test_field_inventory_is_exactly_41_top_level_fields() -> None:
     all_fields = _CORE_FIELDS + _TERMINAL_FIELDS + _FACET_FIELDS
-    assert len(all_fields) == 46  # 48 - 2 (alerts) - 2 (theme) + 2 facet fields
-    assert len(set(all_fields)) == 46  # no duplicates across buckets
+    assert (
+        len(all_fields) == 41
+    )  # 48 - 2 (alerts) - 2 (theme) - 5 (prompt-toolkit) + 2 facet fields
+    assert len(set(all_fields)) == 41  # no duplicates across buckets
 
 
 def test_every_inventoried_field_is_accessible_on_session() -> None:
@@ -104,6 +101,18 @@ def test_terminal_facet_holds_the_theme_cluster() -> None:
     terminal = _session().terminal
     assert hasattr(terminal, "active_theme_name")  # was Session.active_theme_name
     assert hasattr(terminal, "pending_theme_refresh")  # was Session.pending_theme_refresh
+
+
+def test_terminal_facet_holds_the_prompt_toolkit_cluster() -> None:
+    terminal = _session().terminal
+    for f in (
+        "prompt_history_backend",
+        "pt_style_app",
+        "main_loop",
+        "prompt_refresh_fn",
+        "fleet_sampler_starter",
+    ):
+        assert hasattr(terminal, f)  # was Session.<f>
 
 
 # --------------------------------------------------------------------------- #

@@ -63,7 +63,7 @@ def _history_clear(session: Session, console: Console) -> bool:  # noqa: ARG001
 
 
 def _history_pause(session: Session, console: Console, *, paused: bool) -> bool:
-    backend = session.prompt_history_backend
+    backend = session.terminal.prompt_history_backend
     if isinstance(backend, RedactingFileHistory):
         backend.paused = paused
         state = "off" if paused else "on"
@@ -109,7 +109,7 @@ def _history_retention(session: Session, console: Console, args: list[str]) -> b
         console.print(f"[{ERROR}]retention must be a non-negative integer[/]")
         return True
 
-    backend = session.prompt_history_backend
+    backend = session.terminal.prompt_history_backend
     if isinstance(backend, RedactingFileHistory):
         backend.set_max_entries(n, prune=True)
         console.print(
@@ -194,7 +194,7 @@ def _cmd_history(session: Session, console: Console, args: list[str]) -> bool:
 
 
 def _cmd_privacy(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
-    backend = session.prompt_history_backend
+    backend = session.terminal.prompt_history_backend
     table = repl_table(title="Privacy settings\n", title_style=BOLD_BRAND, show_header=False)
     table.add_column("setting", style="bold")
     table.add_column("value")

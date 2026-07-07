@@ -51,15 +51,15 @@ class PromptManager:
     def setup(self) -> None:
         if self.pt_session is None:
             self.pt_session = input_prompt.build_prompt_session(self.session)
-            self.session.prompt_history_backend = self.pt_session.history
+            self.session.terminal.prompt_history_backend = self.pt_session.history
 
         cancel_kb = build_cancel_key_bindings(self.state)
         install_session_key_bindings(self.pt_session, cancel_kb)
 
         self.pt_app = self.pt_session.app
         self.loop = asyncio.get_running_loop()
-        self.session.pt_style_app = self.pt_app
-        self.session.main_loop = self.loop
+        self.session.terminal.pt_style_app = self.pt_app
+        self.session.terminal.main_loop = self.loop
         self.state.bind_loop(self.loop)
         self._invalidate_prompt = wire_prompt_refresh(self.session, self.pt_app, self.loop)
 
