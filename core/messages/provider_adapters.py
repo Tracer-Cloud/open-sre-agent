@@ -2,7 +2,7 @@
 
 Each provider (Anthropic, Bedrock Converse, OpenAI-family, CLI-backed) shapes
 assistant messages, tool results, and synthetic tool-call turns differently.
-Rather than scatter ``isinstance`` ladders across the formatter, one adapter per
+Rather than scatter ``isinstance`` ladders across the mapper, one adapter per
 provider owns its shapes, and :func:`adapter_for` maps a client to its adapter in
 a single place.
 
@@ -63,12 +63,14 @@ class MessageAdapter[LLMT: _ToolResultClient]:
     def to_assistant_provider_message(self, response: AgentLLMResponse) -> ProviderMessage:
         raise NotImplementedError
 
-    def tool_results_from_execution(
+    def to_tool_result_provider_messages(
         self, tool_calls: list[ToolCall], results: list[Any]
     ) -> list[ProviderMessage]:
         return [self._llm.build_tool_result_message(tool_calls, results)]
 
-    def synthetic_assistant_tool_call(self, tool_calls: list[ToolCall]) -> ProviderMessage:
+    def to_synthetic_assistant_provider_message(
+        self, tool_calls: list[ToolCall]
+    ) -> ProviderMessage:
         names = ", ".join(tc.name for tc in tool_calls)
         return {"role": "assistant", "content": f"I will start by querying: {names}"}
 
@@ -91,7 +93,9 @@ class _AnthropicAdapter[LLMT: _RawAssistantClient](MessageAdapter[LLMT]):
     def to_assistant_provider_message(self, response: AgentLLMResponse) -> ProviderMessage:
         return self._llm.build_assistant_message(response.raw_content)
 
-    def synthetic_assistant_tool_call(self, tool_calls: list[ToolCall]) -> ProviderMessage:
+    def to_synthetic_assistant_provider_message(
+        self, tool_calls: list[ToolCall]
+    ) -> ProviderMessage:
         return {
             "role": "assistant",
             "content": [
@@ -105,7 +109,9 @@ class _BedrockConverseAdapter[LLMT: _RawAssistantClient](MessageAdapter[LLMT]):
     def to_assistant_provider_message(self, response: AgentLLMResponse) -> ProviderMessage:
         return self._llm.build_assistant_message(response.raw_content)
 
-    def synthetic_assistant_tool_call(self, tool_calls: list[ToolCall]) -> ProviderMessage:
+    def to_synthetic_assistant_provider_message(
+        self, tool_calls: list[ToolCall]
+    ) -> ProviderMessage:
         from core.llm.transports.sdk.bedrock_converse import build_assistant_tool_use_message
 
         result: dict[str, Any] = build_assistant_tool_use_message(tool_calls)
@@ -116,12 +122,14 @@ class _BedrockConverseAdapter[LLMT: _RawAssistantClient](MessageAdapter[LLMT]):
 
 
 class _OpenAIAdapter[LLMT: _OpenAIShapedClient](_GenericAdapter[LLMT]):
-    def tool_results_from_execution(
+    def to_tool_result_provider_messages(
         self, tool_calls: list[ToolCall], results: list[Any]
     ) -> list[ProviderMessage]:
         return list(self._llm.build_tool_result_messages(tool_calls, results))
 
-    def synthetic_assistant_tool_call(self, tool_calls: list[ToolCall]) -> ProviderMessage:
+    def to_synthetic_assistant_provider_message(
+        self, tool_calls: list[ToolCall]
+    ) -> ProviderMessage:
         # Reuse the canonical OpenAI tool_calls shape, then restore the
         # synthetic-turn convention of a null (not empty-string) content.
         from core.llm.shared.openai_chat_completions import build_assistant_message
@@ -132,7 +140,9 @@ class _OpenAIAdapter[LLMT: _OpenAIShapedClient](_GenericAdapter[LLMT]):
 
 
 class _CLIAdapter[LLMT: _ConstructAssistantClient](_GenericAdapter[LLMT]):
-    def synthetic_assistant_tool_call(self, tool_calls: list[ToolCall]) -> ProviderMessage:
+    def to_synthetic_assistant_provider_message(
+        self, tool_calls: list[ToolCall]
+    ) -> ProviderMessage:
         return self._llm.build_assistant_message("", tool_calls)
 
 

@@ -53,20 +53,22 @@ class MessageMapper:
         """Build the provider assistant-message payload from an LLM response."""
         return adapter_for(self._llm).to_assistant_provider_message(response)
 
-    def tool_results_from_execution(
+    def to_tool_result_provider_messages(
         self,
         tool_calls: list[ToolCall],
         results: list[Any],
     ) -> list[ProviderMessage]:
         """Build provider tool-result payloads for a batch of tool calls."""
-        return adapter_for(self._llm).tool_results_from_execution(tool_calls, results)
+        return adapter_for(self._llm).to_tool_result_provider_messages(tool_calls, results)
 
-    def synthetic_assistant_tool_call(self, tool_calls: list[ToolCall]) -> ProviderMessage:
+    def to_synthetic_assistant_provider_message(
+        self, tool_calls: list[ToolCall]
+    ) -> ProviderMessage:
         """Build a synthetic assistant message that looks like the LLM requested these tool calls.
 
         Used to inject pre-seeded tool results into the conversation without special-casing.
         """
-        return adapter_for(self._llm).synthetic_assistant_tool_call(tool_calls)
+        return adapter_for(self._llm).to_synthetic_assistant_provider_message(tool_calls)
 
     def to_assistant_runtime_message(self, response: AgentLLMResponse) -> AssistantRuntimeMessage:
         """Build a typed assistant transcript entry from an LLM response."""
@@ -85,7 +87,7 @@ class MessageMapper:
         return ToolResultRuntimeMessage(
             tool_calls=tuple(tool_calls),
             results=tuple(results),
-            provider_payloads=tuple(self.tool_results_from_execution(tool_calls, results)),
+            provider_payloads=tuple(self.to_tool_result_provider_messages(tool_calls, results)),
         )
 
     def _for_runtime_message(self, message: RuntimeMessage) -> list[ProviderMessage]:
@@ -100,7 +102,9 @@ class MessageMapper:
         if isinstance(message, ToolResultRuntimeMessage):
             if message.provider_payloads:
                 return [dict(payload) for payload in message.provider_payloads]
-            return self.tool_results_from_execution(list(message.tool_calls), list(message.results))
+            return self.to_tool_result_provider_messages(
+                list(message.tool_calls), list(message.results)
+            )
         if isinstance(message, AppRuntimeMessage):
             if not message.include_in_context:
                 return []

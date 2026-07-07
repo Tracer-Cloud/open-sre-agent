@@ -164,9 +164,9 @@ class ConnectedInvestigationAgent(EventEmitterMixin, ToolFilterMixin):
                 }
             )
             seed_results = execute_tools(seed_calls, tools, resolved)
-            seed_msgs = msg_mapper.tool_results_from_execution(seed_calls, seed_results)
+            seed_msgs = msg_mapper.to_tool_result_provider_messages(seed_calls, seed_results)
 
-            seed_assistant_msg = msg_mapper.synthetic_assistant_tool_call(seed_calls)
+            seed_assistant_msg = msg_mapper.to_synthetic_assistant_provider_message(seed_calls)
             _mark_messages([seed_assistant_msg, *seed_msgs], "_opensre_seed")
             messages.append(seed_assistant_msg)
             messages.extend(seed_msgs)
@@ -280,7 +280,7 @@ class ConnectedInvestigationAgent(EventEmitterMixin, ToolFilterMixin):
                 tool_call_cache.store(tool_call_signature(tc), output, loop_iteration=iteration)
                 results.append(output)
 
-            tool_result_messages = msg_mapper.tool_results_from_execution(
+            tool_result_messages = msg_mapper.to_tool_result_provider_messages(
                 response.tool_calls, results
             )
             if duplicate_flags and all(duplicate_flags):

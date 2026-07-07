@@ -203,7 +203,7 @@ class TestAssistantFromResponse:
 
 
 # ---------------------------------------------------------------------------
-# Post-layer — tool_results_from_execution
+# Post-layer — to_tool_result_provider_messages
 # ---------------------------------------------------------------------------
 
 
@@ -211,7 +211,7 @@ class TestToolResultsFromExecution:
     def test_generic_llm_single_result(self) -> None:
         bus = MessageMapper(_FakeLLM())
         tc = ToolCall(id="t1", name="foo", input={})
-        results = bus.tool_results_from_execution([tc], [{"data": 1}])
+        results = bus.to_tool_result_provider_messages([tc], [{"data": 1}])
         assert len(results) == 1
         assert results[0]["role"] == "tool"
 
@@ -222,12 +222,12 @@ class TestToolResultsFromExecution:
         bus = MessageMapper(llm)
         tc1 = ToolCall(id="t1", name="a", input={})
         tc2 = ToolCall(id="t2", name="b", input={})
-        results = bus.tool_results_from_execution([tc1, tc2], ["r1", "r2"])
+        results = bus.to_tool_result_provider_messages([tc1, tc2], ["r1", "r2"])
         assert len(results) == 2
 
 
 # ---------------------------------------------------------------------------
-# Post-layer — synthetic_assistant_tool_call
+# Post-layer — to_synthetic_assistant_provider_message
 # ---------------------------------------------------------------------------
 
 
@@ -235,7 +235,7 @@ class TestSyntheticAssistantToolCall:
     def test_generic_llm_fallback_plain_text(self) -> None:
         bus = MessageMapper(_FakeLLM())
         tc = ToolCall(id="t1", name="query_logs", input={})
-        result = bus.synthetic_assistant_tool_call([tc])
+        result = bus.to_synthetic_assistant_provider_message([tc])
         assert result["role"] == "assistant"
         assert "query_logs" in result["content"]
 
@@ -245,7 +245,7 @@ class TestSyntheticAssistantToolCall:
         llm = AnthropicAgentClient.__new__(AnthropicAgentClient)
         bus = MessageMapper(llm)
         tc = ToolCall(id="tc1", name="get_logs", input={"q": "err"})
-        result = bus.synthetic_assistant_tool_call([tc])
+        result = bus.to_synthetic_assistant_provider_message([tc])
         assert result["role"] == "assistant"
         block = result["content"][0]
         assert block["type"] == "tool_use"
@@ -258,7 +258,7 @@ class TestSyntheticAssistantToolCall:
         llm = OpenAIAgentClient.__new__(OpenAIAgentClient)
         bus = MessageMapper(llm)
         tc = ToolCall(id="tc2", name="query_k8s", input={"ns": "default"})
-        result = bus.synthetic_assistant_tool_call([tc])
+        result = bus.to_synthetic_assistant_provider_message([tc])
         assert result["role"] == "assistant"
         assert result["content"] is None
         fn_call = result["tool_calls"][0]
@@ -283,7 +283,7 @@ class TestSyntheticAssistantToolCall:
 
         llm = BedrockConverseAgentClient(model="mistral.mistral-large-3-675b-instruct")
         tc = ToolCall(id="abc12def3", name="query_logs", input={"query": "error"})
-        result = MessageMapper(llm).synthetic_assistant_tool_call([tc])
+        result = MessageMapper(llm).to_synthetic_assistant_provider_message([tc])
         assert result["role"] == "assistant"
         assert result["content"][0]["toolUse"]["toolUseId"] == "abc12def3"
         assert result["content"][0]["toolUse"]["name"] == "query_logs"
