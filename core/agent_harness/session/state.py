@@ -366,13 +366,14 @@ class Session:
         if not scenario_id:
             self.last_synthetic_observation_path = None
             return
-        # Shared path constant lives in config so core and surfaces stay decoupled.
+        # Shared path module lives in config so core and surfaces stay decoupled.
         try:
-            from config.constants.paths import SYNTHETIC_SCENARIOS_DIR
+            from config.constants import paths
         except Exception:
             self.last_synthetic_observation_path = None
             return
-        latest = SYNTHETIC_SCENARIOS_DIR / "_observations" / scenario_id / "latest.json"
+        synthetic_dir = paths.SYNTHETIC_SCENARIOS_DIR
+        latest = synthetic_dir / "_observations" / scenario_id / "latest.json"
         for _ in range(8):
             if latest.is_file():
                 self.last_synthetic_observation_path = str(latest.resolve())

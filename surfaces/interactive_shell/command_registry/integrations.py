@@ -40,7 +40,7 @@ _MAX_OBSERVATION_DETAIL_CHARS = 160
 
 
 def _record_integrations_observation(session: Session, results: list[dict[str, str]]) -> None:
-    """Stash a compact text view of verification results for agent summarization.
+    """Stash a compact text view of integration rows for agent summarization.
 
     Lets the agent answer questions like "is sentry installed?" by summarizing
     what ``/integrations`` actually found, instead of leaving the user with only
@@ -265,8 +265,7 @@ def _cmd_integrations(session: Session, console: Console, args: list[str]) -> bo
 
     if sub in ("list", "ls"):
         prepare_repl_output_line()
-        with console.status(f"[{DIM}]Verifying integrations…[/]", spinner="dots"):
-            results = repl_data.load_verified_integrations()
+        results = repl_data.load_configured_integrations()
         _record_integrations_observation(session, results)
         render_integrations_table(console, results)
         return True
@@ -363,7 +362,7 @@ def _cmd_mcp(session: Session, console: Console, args: list[str]) -> bool:
     sub = (args[0].lower() if args else "list").strip()
 
     if sub in ("list", "ls"):
-        render_mcp_table(console, repl_data.load_verified_integrations())
+        render_mcp_table(console, repl_data.load_configured_integrations())
         return True
 
     if sub == "connect":

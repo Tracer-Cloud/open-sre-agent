@@ -365,21 +365,21 @@ class TestSpecificListCommands:
     """Coverage for /integrations list, /mcp list, /model show, and /tools list."""
 
     _FAKE_INTEGRATIONS = [
-        {"service": "datadog", "source": "store", "status": "ok", "detail": "API ok"},
-        {"service": "slack", "source": "env", "status": "failed", "detail": "No bot token"},
-        {"service": "github", "source": "store", "status": "ok", "detail": "MCP ok"},
-        {"service": "openclaw", "source": "store", "status": "failed", "detail": "401 from server"},
+        {"service": "datadog", "source": "store", "status": "configured", "detail": "Configured"},
+        {"service": "slack", "source": "env", "status": "configured", "detail": "Configured"},
+        {"service": "github", "source": "store", "status": "configured", "detail": "Configured"},
+        {"service": "openclaw", "source": "store", "status": "configured", "detail": "Configured"},
     ]
 
-    def _patch_verify(self, monkeypatch: object) -> None:
+    def _patch_configured(self, monkeypatch: object) -> None:
         monkeypatch.setattr(
             repl_data_module,
-            "load_verified_integrations",
+            "load_configured_integrations",
             lambda: list(self._FAKE_INTEGRATIONS),
         )
 
     def test_integrations_list_includes_mcp_services(self, monkeypatch: object) -> None:
-        self._patch_verify(monkeypatch)
+        self._patch_configured(monkeypatch)
         console, buf = _capture()
         dispatch_slash("/integrations list", Session(), console)
         output = buf.getvalue()
@@ -389,7 +389,7 @@ class TestSpecificListCommands:
         assert "github" in output
 
     def test_mcp_list_shows_only_mcp_services(self, monkeypatch: object) -> None:
-        self._patch_verify(monkeypatch)
+        self._patch_configured(monkeypatch)
         console, buf = _capture()
         dispatch_slash("/mcp list", Session(), console)
         output = buf.getvalue()
@@ -439,7 +439,7 @@ class TestSpecificListCommands:
     def test_integrations_list_empty_prints_onboarding_hint(self, monkeypatch: object) -> None:
         monkeypatch.setattr(
             repl_data_module,
-            "load_verified_integrations",
+            "load_configured_integrations",
             list,  # callable returning []
         )
         console, buf = _capture()
@@ -477,21 +477,33 @@ class TestSpecificListCommands:
 
 
 class TestIntegrationsCommand:
-    _FAKE = [
+    _CONFIGURED = [
+        {"service": "datadog", "source": "env", "status": "configured", "detail": "Configured"},
+        {"service": "slack", "source": "env", "status": "configured", "detail": "Configured"},
+        {"service": "github", "source": "store", "status": "configured", "detail": "Configured"},
+    ]
+    _VERIFIED = [
         {"service": "datadog", "source": "env", "status": "ok", "detail": "ok"},
         {"service": "slack", "source": "env", "status": "missing", "detail": "no token"},
         {"service": "github", "source": "store", "status": "ok", "detail": "MCP ok"},
     ]
 
-    def _patch(self, monkeypatch: object) -> None:
+    def _patch_configured(self, monkeypatch: object) -> None:
+        monkeypatch.setattr(
+            repl_data_module,
+            "load_configured_integrations",
+            lambda: list(self._CONFIGURED),
+        )
+
+    def _patch_verified(self, monkeypatch: object) -> None:
         monkeypatch.setattr(
             repl_data_module,
             "load_verified_integrations",
-            lambda: list(self._FAKE),
+            lambda: list(self._VERIFIED),
         )
 
     def test_list_shows_all_services_including_github(self, monkeypatch: object) -> None:
-        self._patch(monkeypatch)
+        self._patch_configured(monkeypatch)
         console, buf = _capture()
         dispatch_slash("/integrations list", Session(), console)
         output = buf.getvalue()
@@ -499,13 +511,24 @@ class TestIntegrationsCommand:
         assert "github" in output
 
     def test_list_is_default_when_no_subcommand(self, monkeypatch: object) -> None:
-        self._patch(monkeypatch)
+        self._patch_configured(monkeypatch)
         console, buf = _capture()
         dispatch_slash("/integrations", Session(), console)
         assert "datadog" in buf.getvalue()
 
+    def test_list_does_not_run_live_verification(self, monkeypatch: object) -> None:
+        self._patch_configured(monkeypatch)
+        monkeypatch.setattr(
+            repl_data_module,
+            "load_verified_integrations",
+            lambda: pytest.fail("/integrations list should not verify live integrations"),
+        )
+        console, buf = _capture()
+        dispatch_slash("/integrations list", Session(), console)
+        assert "datadog" in buf.getvalue()
+
     def test_verify_reports_issues(self, monkeypatch: object) -> None:
-        self._patch(monkeypatch)
+        self._patch_verified(monkeypatch)
         console, buf = _capture()
         dispatch_slash("/integrations verify", Session(), console)
         assert "need attention" in buf.getvalue()
@@ -523,7 +546,7 @@ class TestIntegrationsCommand:
         assert "all integrations ok" in buf.getvalue()
 
     def test_verify_via_slash_command(self, monkeypatch: object) -> None:
-        self._patch(monkeypatch)
+        self._patch_verified(monkeypatch)
         console, buf = _capture()
         dispatch_slash("/verify", Session(), console)
         assert "need attention" in buf.getvalue()
@@ -612,13 +635,13 @@ class TestIntegrationsCommand:
         assert session.history[-1]["ok"] is False
 
     def test_show_missing_arg(self, monkeypatch: object) -> None:
-        self._patch(monkeypatch)
+        self._patch_configured(monkeypatch)
         console, buf = _capture()
         dispatch_slash("/integrations show", Session(), console)
         assert "usage" in buf.getvalue()
 
     def test_unknown_subcommand_prints_hint(self, monkeypatch: object) -> None:
-        self._patch(monkeypatch)
+        self._patch_configured(monkeypatch)
         console, buf = _capture()
         dispatch_slash("/integrations bogus", Session(), console)
         assert "unknown subcommand" in buf.getvalue()
@@ -658,14 +681,14 @@ class TestIntegrationsCommand:
 
 class TestMcpCommand:
     _FAKE = [
-        {"service": "github", "source": "store", "status": "ok", "detail": "MCP ok"},
-        {"service": "openclaw", "source": "store", "status": "ok", "detail": "ok"},
+        {"service": "github", "source": "store", "status": "configured", "detail": "Configured"},
+        {"service": "openclaw", "source": "store", "status": "configured", "detail": "Configured"},
     ]
 
     def _patch(self, monkeypatch: object) -> None:
         monkeypatch.setattr(
             repl_data_module,
-            "load_verified_integrations",
+            "load_configured_integrations",
             lambda: list(self._FAKE),
         )
 

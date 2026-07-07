@@ -73,6 +73,7 @@ _SKIP_DIRS = frozenset(
 _MAX_PER_DOC_CHARS = 4_000
 _DEFAULT_MAX_TOTAL_CHARS = 22_000
 _DEFAULT_TOP_N = 4
+_DOCS_ROOT = REPO_ROOT / "docs"
 
 # Stopwords stripped from a user's query before scoring. Without this,
 # common verbs and articles ("how", "do", "the") would dominate the match.
@@ -368,7 +369,7 @@ class DocsReference:
 
     def discover(self, root: Path | None = None) -> list[DocPage]:
         """Walk the docs root, parse each MDX page, return them as :class:`DocPage` records."""
-        target = root if root is not None else REPO_ROOT / "docs"
+        target = root if root is not None else _DOCS_ROOT
         resolved = target.resolve() if target.exists() else target
         root_key = str(resolved)
 
