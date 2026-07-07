@@ -127,7 +127,10 @@ def watch_synthetic_subprocess(
         finally:
             _join_task_output_streams(output_threads)
             stderr_buf.close()
-            if suggest_follow_up and session.terminal.history_generation == history_gen_when_watch_started:
+            if (
+                suggest_follow_up
+                and session.terminal.history_generation == history_gen_when_watch_started
+            ):
                 session.suggest_synthetic_failure_follow_up(label=suite_name)
             else:
                 session.notify_prompt_changed()
