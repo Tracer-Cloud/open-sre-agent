@@ -152,7 +152,9 @@ def datadog_log_search_window(
     if since_epoch is not None:
         anchor = since_epoch - DD_SINCE_EPOCH_BUFFER_SECONDS
         return str(int(anchor * 1000)), "now"
-    _ = now_epoch  # reserved for tests that pin wall clock without since_epoch
+    if now_epoch is not None:
+        from_ms = int((now_epoch - 15 * 60) * 1000)
+        return str(from_ms), "now"
     return "now-15m", "now"
 
 

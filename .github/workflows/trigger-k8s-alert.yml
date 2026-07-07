@@ -57,7 +57,7 @@ jobs:
           echo "trigger_epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
           set +e
           uv run python -m tests.e2e.kubernetes.trigger_alert | tee /tmp/trigger.log
-          trigger_exit=$?
+          trigger_exit=${PIPESTATUS[0]}
           set -e
           echo "trigger_completed_epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
           if grep -q '"status": "accepted_timeout"' /tmp/trigger.log; then

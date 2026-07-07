@@ -23,6 +23,14 @@ def test_datadog_log_search_window_without_since_epoch_uses_broader_relative_win
     assert to_value == "now"
 
 
+def test_datadog_log_search_window_without_since_epoch_honors_now_epoch() -> None:
+    now_epoch = 1_700_000_000.0
+    from_value, to_value = datadog_log_search_window(None, now_epoch=now_epoch)
+    expected_from = int((now_epoch - 15 * 60) * 1000)
+    assert from_value == str(expected_from)
+    assert to_value == "now"
+
+
 def test_build_datadog_search_payload_includes_pipeline_error_query() -> None:
     payload = _build_datadog_search_payload(1_700_000_000.0)
     assert payload["filter"]["query"] == "kube_namespace:tracer-test PIPELINE_ERROR"  # type: ignore[index]
