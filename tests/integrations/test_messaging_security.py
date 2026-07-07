@@ -125,7 +125,7 @@ class TestPairingCode:
             with patch.dict(os.environ, {}, clear=True):
                 os.environ.pop("OPENSRE_PAIRING_SECRET", None)
                 _get_hmac_key()
-        assert any("OPENSRE_PAIRING_SECRET" in r.message for r in caplog.records)
+        assert any("OPENSRE_PAIRING_SECRET" in msg for msg in caplog.messages)
 
 
 # ---------------------------------------------------------------------------
