@@ -61,7 +61,11 @@ def test_k8s_fixture_envelope_anchors_on_nested_starts_at() -> None:
     to the default wall-clock window instead of ``alert.startsAt``.
     """
     fixture_path = (
-        Path(__file__).resolve().parents[3] / "e2e" / "kubernetes" / "fixtures" / "datadog_k8s_alert.json"
+        Path(__file__).resolve().parents[3]
+        / "e2e"
+        / "kubernetes"
+        / "fixtures"
+        / "datadog_k8s_alert.json"
     )
     fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
     result = resolve_incident_window(fixture, now=NOW)
