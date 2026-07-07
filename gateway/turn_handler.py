@@ -20,7 +20,7 @@ from core.agent_harness.providers.default_providers import (
     DefaultToolProvider,
     DefaultTurnAccounting,
 )
-from core.agent_harness.session import Session
+from core.agent_harness.session import SessionCore
 from core.agent_harness.turns.headless_dispatch import dispatch_message_to_headless_agent
 from gateway.gateway_output_sink import GatewayOutputSink
 from gateway.polling.handle_polled_inbound_telegram_msg import GatewayAgentCallback
@@ -41,11 +41,11 @@ def build_gateway_turn_handler(
 
     def handle(
         text: str,
-        session: Session,
+        session: SessionCore,
         sink: GatewayOutputSink,
         logger: logging.Logger,
     ) -> None:
-        def _tool_observer_factory(_session: Session, _console: Console, _message: str):
+        def _tool_observer_factory(_session: SessionCore, _console: Console, _message: str):
             def observer(kind: str, data: dict[str, object]) -> None:
                 if kind != "tool_start":
                     return

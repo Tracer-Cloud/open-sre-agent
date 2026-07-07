@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 
-from core.agent_harness.session import Session, SessionManager
+from core.agent_harness.session import SessionCore, SessionManager
 from gateway.session.gateway_chat_context import inject_gateway_chat_context
 from gateway.storage.session.bindings import SessionBindingStore
 
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 _PLATFORM_TELEGRAM = "telegram"
 
 
-def _inject_chat_context(session: Session, *, chat_id: str) -> Session:
+def _inject_chat_context(session: SessionCore, *, chat_id: str) -> SessionCore:
     """Attach per-turn gateway chat metadata to the session's integration cache."""
     session.resolved_integrations_cache = inject_gateway_chat_context(
         dict(session.resolved_integrations_cache or {}),
@@ -41,7 +41,7 @@ class SessionResolver:
         self._bindings = bindings
         self._manager = manager or SessionManager()
 
-    def resolve(self, *, user_id: str, chat_id: str) -> Session:
+    def resolve(self, *, user_id: str, chat_id: str) -> SessionCore:
         """Return a hydrated session for the Telegram DM user id."""
         existing = self._bindings.get_session_id(platform=_PLATFORM_TELEGRAM, chat_id=user_id)
         if existing:
@@ -62,7 +62,7 @@ class SessionResolver:
         )
         return session
 
-    def rotate(self, *, user_id: str, chat_id: str) -> Session:
+    def rotate(self, *, user_id: str, chat_id: str) -> SessionCore:
         """Flush the current session file and start a new binding."""
         existing = self._bindings.get_session_id(platform=_PLATFORM_TELEGRAM, chat_id=user_id)
         new_id = self._bindings.rotate(platform=_PLATFORM_TELEGRAM, chat_id=user_id)
