@@ -115,8 +115,10 @@ def _deliver_telegram(task: ScheduledTask, message: str) -> tuple[bool, str, str
         post_telegram_message,
         truncate_for_telegram_html,
     )
+    from integrations.telegram.formatting import markdown_to_telegram_html
 
-    truncated = truncate_for_telegram_html(message, 4096, suffix="…")
+    html_message = markdown_to_telegram_html(message)
+    truncated = truncate_for_telegram_html(html_message, 4096, suffix="…")
     ok, error, msg_id = post_telegram_message(task.chat_id, truncated, bot_token, parse_mode="HTML")
     if ok:
         return True, "", msg_id

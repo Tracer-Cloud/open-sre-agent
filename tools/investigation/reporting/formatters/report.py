@@ -136,55 +136,11 @@ def _sanitize_for_slack(text: str) -> str:
     return result
 
 
-_SLACK_LINK_RE = re.compile(r"<(https?://[^|>]+)(?:\|([^>]+))?>")
-
-
-def _star_pairs_to_bold_placeholders(line: str, bold_ph: dict[str, str]) -> str:
-    """Replace only paired ``*inner*`` spans (inner has no ``*``); lone ``*`` stay literal."""
-    out = line
-    while True:
-        m = re.search(r"\*([^*\n]+)\*", out)
-        if not m:
-            break
-        tok = f"«B{len(bold_ph)}»"
-        bold_ph[tok] = "<b>" + html.escape(m.group(1)) + "</b>"
-        out = out[: m.start()] + tok + out[m.end() :]
-    return out
-
-
 def _to_telegram_html_body(text: str) -> str:
-    """Convert mixed Slack-style text (headers, *bold*, `code`, <url|label>) to Telegram HTML."""
-    placeholders: dict[str, str] = {}
+    """Convert mixed Slack-style text to Telegram HTML via the shared formatter."""
+    from integrations.telegram.formatting import markdown_to_telegram_html
 
-    def _put(chunk: str) -> str:
-        token = f"«{len(placeholders)}»"
-        placeholders[token] = chunk
-        return token
-
-    s = text
-    s = re.sub(r"`([^`]+)`", lambda m: _put("<code>" + html.escape(m.group(1)) + "</code>"), s)
-    s = _SLACK_LINK_RE.sub(
-        lambda m: _put(format_html_link(m.group(2) or m.group(1), m.group(1))),
-        s,
-    )
-
-    out_lines: list[str] = []
-    for line in s.splitlines():
-        hdr = re.match(r"^#{1,6}\s+(.+)$", line)
-        if hdr:
-            out_lines.append("<b>" + html.escape(hdr.group(1).strip()) + "</b>")
-            continue
-        bold_ph: dict[str, str] = {}
-        starred = _star_pairs_to_bold_placeholders(line, bold_ph)
-        escaped = html.escape(starred)
-        for token, inner in sorted(bold_ph.items(), key=lambda kv: -len(kv[0])):
-            escaped = escaped.replace(token, inner)
-        out_lines.append(escaped)
-
-    merged = "\n".join(out_lines)
-    for token, chunk in sorted(placeholders.items(), key=lambda kv: -len(kv[0])):
-        merged = merged.replace(token, chunk)
-    return merged
+    return markdown_to_telegram_html(text)
 
 
 def _norm_banner_key(text: str) -> str:

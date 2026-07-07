@@ -8,6 +8,11 @@ import time
 from collections.abc import Iterable
 
 from gateway.polling.telegram_poller.client import TelegramBotClient
+from gateway.status_messages import (
+    initial_status_message,
+    normalize_gateway_status,
+    status_from_response_label,
+)
 from integrations.telegram.formatting import markdown_to_telegram_html
 from platform.common.truncation import truncate
 from platform.notifications.limits import MAX_MESSAGE_SIZE
@@ -39,9 +44,9 @@ class GatewayOutputSink:
         self._message_id = ""
         self._last_edit = 0.0
         self._lock = threading.Lock()
-        self._status_text = "Working…"
-        self._client.send_chat_action(chat_id, "typing")
-        ok, _, message_id = self._client.send_message(chat_id, self._status_text)
+        self._status_text = initial_status_message()
+        self._client.send_chat_action(self._chat_id, "typing")
+        ok, _, message_id = self._client.send_message(self._chat_id, self._status_text)
         if ok:
             self._message_id = message_id
 
@@ -50,7 +55,7 @@ class GatewayOutputSink:
             self._set_status(message)
 
     def render_response_header(self, label: str) -> None:
-        self._set_status(f"{label}…")
+        self._set_status(status_from_response_label(label))
 
     def render_error(self, message: str) -> None:
         self._finalize(f"Error: {message}")
@@ -77,8 +82,9 @@ class GatewayOutputSink:
         self._set_status(text)
 
     def _set_status(self, text: str) -> None:
-        self._status_text = text
-        self._edit_preview(text)
+        self._status_text = normalize_gateway_status(text)
+        self._client.send_chat_action(self._chat_id, "typing")
+        self._edit_preview(self._status_text)
 
     def _edit_preview(self, text: str) -> None:
         if not self._message_id:

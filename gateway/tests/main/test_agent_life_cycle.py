@@ -197,7 +197,8 @@ def test_polled_telegram_message_reaches_start_gateway_agent_callback(monkeypatc
             executor.shutdown(wait=True, cancel_futures=True)
 
     asyncio.run(_run_message())
-    client.send_chat_action.assert_called_once_with("chat-1", "typing")
+    # Typing fires at sink creation and again on each status refresh.
+    client.send_chat_action.assert_called_with("chat-1", "typing")
 
 
 def test_start_gateway_wrapper_delegates_to_gateway_instance(monkeypatch) -> None:

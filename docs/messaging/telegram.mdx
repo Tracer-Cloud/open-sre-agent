@@ -5,6 +5,8 @@ description: "Deliver investigation findings to a Telegram chat or channel."
 
 OpenSRE's Telegram integration delivers investigation findings to any chat your bot has been added to — useful for mobile-first on-call rotations and personal alerting.
 
+Start the interactive shell with `opensre` (no subcommand). Slash commands below are run from that REPL.
+
 ---
 
 ## Prerequisites
@@ -86,6 +88,14 @@ If `getUpdates` returns an empty array, post a fresh message in the chat and rel
 
 ### Option A: Onboarding wizard (recommended)
 
+Interactive shell:
+
+```text
+/onboard
+```
+
+CLI:
+
 ```bash
 opensre onboard
 ```
@@ -98,6 +108,14 @@ Choose **Telegram** from the integration list. The wizard prompts for:
 Credentials are also saved to `~/.opensre/integrations.json` via `upsert_integration("telegram", ...)`.
 
 Non-interactive setup:
+
+Interactive shell:
+
+```text
+/integrations setup telegram
+```
+
+CLI:
 
 ```bash
 opensre integrations setup telegram
@@ -121,17 +139,29 @@ OpenSRE picks these up at startup and registers Telegram as an active integratio
 
 <Note>
 **Credential resolution.** Every Telegram delivery surface — investigations, the
-scheduler, `opensre watchdog`, `opensre hermes watch`, and the `/watch` REPL
-command — resolves the bot token in the same order: integration store →
-`TELEGRAM_BOT_TOKEN` env → system keyring; and the chat id as `--chat-id` →
-store `default_chat_id` → `TELEGRAM_DEFAULT_CHAT_ID` env. Either setup option
-above works for all of them — you do not need to export the token separately for
-the watchdog or Hermes.
+scheduler, `/watchdog`, `/hermes watch`, and `/watch` — resolves the bot token
+in the same order: integration store → `TELEGRAM_BOT_TOKEN` env → system keyring;
+and the chat id as `--chat-id` → store `default_chat_id` →
+`TELEGRAM_DEFAULT_CHAT_ID` env. Either setup option above works for all of them.
 </Note>
 
 ---
 
 ## Step 5: Verify
+
+Interactive shell:
+
+```text
+/integrations verify telegram
+```
+
+Or:
+
+```text
+/verify telegram
+```
+
+CLI:
 
 ```bash
 opensre integrations verify telegram
@@ -140,6 +170,14 @@ opensre integrations verify telegram
 This calls Telegram's [`getMe`](https://core.telegram.org/bots/api#getme) endpoint. On success it reports the bot `@username`. On failure it reports the Telegram API error message verbatim.
 
 You can also trigger a real investigation against a bundled fixture:
+
+Interactive shell:
+
+```text
+/investigate tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
+```
+
+CLI:
 
 ```bash
 opensre investigate --input tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
@@ -154,9 +192,9 @@ Findings should appear in the configured chat. Long reports are truncated to Tel
 When the Telegram integration is configured, OpenSRE exposes a
 `telegram_send_message` tool. The tool can send user-requested action messages,
 incident notifications, or follow-up updates to the configured default chat, or
-to an explicit `chat_id` when one is supplied. It uses plain text mode, so
-user-provided `<`, `>`, and `&` characters are sent as ordinary message text
-rather than Telegram HTML.
+to an explicit `chat_id` when one is supplied. Ask in plain language from the
+interactive shell (for example: "send a Telegram message to the team that DB CPU
+is back below 70%").
 
 ```json
 {
@@ -187,7 +225,15 @@ OpenSRE can also run a **Telegram messaging gateway** so you can chat with the a
 
 ### Allow your Telegram user
 
-Find your **numeric user id** with [@userinfobot](https://t.me/userinfobot), then either:
+Find your **numeric user id** with [@userinfobot](https://t.me/userinfobot), then:
+
+Interactive shell:
+
+```text
+/messaging allow -p telegram -u 123456789
+```
+
+CLI:
 
 ```bash
 opensre messaging allow -p telegram -u 123456789
@@ -201,19 +247,63 @@ or set `TELEGRAM_ALLOWED_USERS=123456789` in `.env`.
   `@handle` produces an allow-list entry that can never match a real sender — you
   will see `User <id> is not in the allowed users list` for every message. The CLI
   now rejects non-numeric Telegram ids, but older entries may still be wrong; check
-  with `opensre messaging status -p telegram` and re-add with the numeric id.
+  with `/messaging status -p telegram` (or `opensre messaging status -p telegram`)
+  and re-add with the numeric id.
 </Warning>
 
-Optional DM pairing (same policy as other messaging platforms):
+### DM pairing (optional)
+
+Same policy as other messaging platforms. Generate a code:
+
+Interactive shell:
+
+```text
+/messaging pair -p telegram
+```
+
+CLI:
 
 ```bash
 opensre messaging pair -p telegram
-# Send `/pair <code>` to your bot in Telegram
+```
+
+Then open Telegram, DM your bot, and send:
+
+```text
+/pair <code>
+```
+
+Check pairing status:
+
+Interactive shell:
+
+```text
+/messaging status -p telegram
+```
+
+CLI:
+
+```bash
+opensre messaging status -p telegram
+```
+
+Revoke access for a user:
+
+Interactive shell:
+
+```text
+/messaging revoke -p telegram -u 123456789
+```
+
+CLI:
+
+```bash
+opensre messaging revoke -p telegram -u 123456789
 ```
 
 ### Long polling (local and production)
 
-No public HTTPS URL required. Run the gateway as a dedicated process:
+No public HTTPS URL required. Run the gateway as a dedicated process (there is no interactive-shell slash command for this yet):
 
 ```bash
 export TELEGRAM_BOT_TOKEN=<your-bot-token>
@@ -253,11 +343,78 @@ why — copy the values into `.env` (or `.env.deploy.example`) for the deploy. A
 
 ---
 
+## Scheduled and watchdog delivery
+
+### Cron (recurring reports)
+
+Interactive shell:
+
+```text
+/cron add --kind daily_summary --cron "0 9 * * 1-5" --tz Asia/Kolkata --provider telegram --chat-id <chat_id>
+/cron list
+/cron run <task_id>
+/cron logs <task_id>
+```
+
+CLI:
+
+```bash
+opensre cron add --kind daily_summary --cron "0 9 * * 1-5" \
+  --tz Asia/Kolkata --provider telegram --chat-id <chat_id>
+opensre cron list
+opensre cron run <task_id>
+opensre cron logs <task_id>
+```
+
+See [Cron](/cron) for task kinds and scheduler daemon setup.
+
+### Watchdog (process threshold alarms)
+
+Configure Telegram first (Steps 4–5), then:
+
+Interactive shell:
+
+```text
+/watch <pid> [--max-cpu N] [--max-runtime D] [--max-rss S] [--cooldown D] [--interval N] [--once]
+/watches
+/unwatch <task_id>
+```
+
+Or:
+
+```text
+/watchdog --pid <pid> [--max-cpu N] [--max-runtime D] [--max-rss S]
+```
+
+CLI:
+
+```bash
+opensre watchdog --pid <pid> [--max-cpu N] [--max-runtime D] [--max-rss S]
+```
+
+### Hermes incident escalation
+
+Interactive shell:
+
+```text
+/hermes watch
+```
+
+CLI:
+
+```bash
+opensre hermes watch
+```
+
+See [Hermes](/hermes) for log tailing and incident classification setup.
+
+---
+
 ## Troubleshooting
 
-`opensre integrations verify telegram` only calls Telegram's `getMe` endpoint, so it surfaces token-validity errors but cannot detect chat-routing problems. Delivery-time errors only show up when an investigation actually posts.
+`/integrations verify telegram`, `/verify telegram`, and `opensre integrations verify telegram` only call Telegram's `getMe` endpoint, so they surface token-validity errors but cannot detect chat-routing problems. Delivery-time errors only show up when an investigation actually posts.
 
-### Errors from `opensre integrations verify telegram`
+### Errors from verify
 
 **`Missing bot_token`**
 
@@ -286,3 +443,7 @@ Re-add the bot. For channels, the bot must be an administrator with **Post Messa
 **Findings never arrive, but `verify` passes**
 
 `getMe` only confirms the token is valid; it does not test delivery. Send a fresh message in the destination chat and re-fetch `chat_id` from `getUpdates` — your `chat_id` may have changed (for example, if a group was upgraded and now uses a `-100` prefix).
+
+**Gateway: `User <id> is not in the allowed users list`**
+
+Run `/messaging status -p telegram` and confirm the sender's numeric user id is listed. Re-add with `/messaging allow -p telegram -u <user_id>` or complete `/messaging pair -p telegram` pairing.
