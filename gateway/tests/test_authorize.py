@@ -46,6 +46,18 @@ def test_unauthorized_user_gets_reason() -> None:
     assert decision.reply_text
 
 
+@pytest.mark.usefixtures("mock_integration_store")
+def test_unauthorized_user_cannot_rotate_session() -> None:
+    decision = enforce_inbound_telegram_message_security(
+        user_id="99",
+        chat_id="99",
+        text="/new",
+        env_allowed_user_ids=["42"],
+    )
+    assert decision.allowed is False
+    assert decision.reply_text
+
+
 def test_pair_attempt_persists_policy(mock_integration_store: pytest.MonkeyPatch) -> None:
     policy = MessagingIdentityPolicy(
         inbound_enabled=True,

@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import time
+from unittest.mock import patch
+
+import pytest
 
 from integrations.messaging_security import (
     _MAX_PAIRING_ATTEMPTS,
@@ -113,6 +116,19 @@ class TestPairingCode:
         code = "ABC123"
         stored = hash_pairing_code(code)
         assert verify_pairing_code("abc123", stored) is True
+
+    def test_get_hmac_key_warns_on_fallback(self, caplog: pytest.LogCaptureFixture) -> None:
+        import os
+
+        from integrations.messaging_security import _get_hmac_key
+
+        with caplog.at_level("WARNING", logger="integrations.messaging_security"):
+            with patch.dict(os.environ, {}, clear=True):
+                os.environ.pop("OPENSRE_PAIRING_SECRET", None)
+                key = _get_hmac_key()
+        assert isinstance(key, bytes)
+        assert len(caplog.records) >= 1
+        assert "OPENSRE_PAIRING_SECRET is not set" in caplog.text
 
 
 # ---------------------------------------------------------------------------

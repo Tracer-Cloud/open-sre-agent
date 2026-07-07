@@ -109,17 +109,6 @@ def enforce_inbound_telegram_message_security(
             ),
         )
 
-    if text.strip().lower() == "/new":
-        audit_log_inbound_message(
-            platform=MessagingPlatform.TELEGRAM.value,
-            user_id=user_id,
-            chat_id=chat_id,
-            message_hash=_message_hash(text),
-            authorized=True,
-            reason="session rotate",
-        )
-        return InboundDecision(allowed=True, reply_text="__ROTATE_SESSION__")
-
     result: AuthorizationResult = authorize_inbound_message(
         policy=policy,
         user_id=user_id,
@@ -134,9 +123,13 @@ def enforce_inbound_telegram_message_security(
         authorized=bool(result),
         reason=result.reason,
     )
-    if result:
-        return InboundDecision(allowed=True)
-    return InboundDecision(allowed=False, reply_text=result.reason)
+    if not result:
+        return InboundDecision(allowed=False, reply_text=result.reason)
+
+    if text.strip().lower() == "/new":
+        return InboundDecision(allowed=True, reply_text="__ROTATE_SESSION__")
+
+    return InboundDecision(allowed=True)
 
 
 def persist_policy_if_needed(decision: InboundDecision) -> None:
