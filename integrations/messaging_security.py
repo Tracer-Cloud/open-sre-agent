@@ -137,6 +137,13 @@ def _get_hmac_key() -> bytes:
     import platform
 
     machine_id = platform.node() or "opensre-default"
+    logger.warning(
+        "OPENSRE_PAIRING_SECRET is not set. Falling back to a hostname-derived "
+        "HMAC key (%r). This is insecure in production — if the stored pairing "
+        "hash is ever exposed, the 6-character code space can be brute-forced "
+        "offline. Set OPENSRE_PAIRING_SECRET to a strong random secret.",
+        machine_id,
+    )
     return f"opensre-pairing-{machine_id}".encode()
 
 

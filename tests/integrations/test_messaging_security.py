@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import os
 import time
+from unittest.mock import patch
 
 from integrations.messaging_security import (
     _MAX_PAIRING_ATTEMPTS,
@@ -113,6 +115,17 @@ class TestPairingCode:
         code = "ABC123"
         stored = hash_pairing_code(code)
         assert verify_pairing_code("abc123", stored) is True
+
+    def test_get_hmac_key_warns_without_secret(self, caplog) -> None:
+        import logging
+
+        from integrations.messaging_security import _get_hmac_key
+
+        with caplog.at_level(logging.WARNING, logger="integrations.messaging_security"):
+            with patch.dict(os.environ, {}, clear=True):
+                os.environ.pop("OPENSRE_PAIRING_SECRET", None)
+                _get_hmac_key()
+        assert any("OPENSRE_PAIRING_SECRET" in r.message for r in caplog.records)
 
 
 # ---------------------------------------------------------------------------
