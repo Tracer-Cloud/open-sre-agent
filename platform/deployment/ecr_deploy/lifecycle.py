@@ -32,7 +32,7 @@ from platform.deployment.ecr_deploy.instance import (
     provision_instance_via_ssm,
     wait_for_deployment_ready,
 )
-from platform.deployment.ecr_deploy.prep import validate_deploy_env
+from platform.deployment.ecr_deploy.prep import run_lifecycle_main, validate_deploy_env
 from platform.deployment.ecr_deploy.stack import (
     delete_outputs,
     get_stack,
@@ -392,4 +392,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    run_lifecycle_main(main)

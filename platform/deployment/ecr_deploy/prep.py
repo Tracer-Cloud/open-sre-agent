@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import boto3
@@ -28,11 +29,17 @@ _WARNING_LABELS: dict[str, str] = {
 }
 
 
+class DeployEnvValidationError(Exception):
+    """Raised after printing the deploy env validation report."""
+
+
 @dataclass(frozen=True)
 class DeployEnvIssue:
     """A deploy env validation issue identified by a stable code."""
 
     code: str
+    env_vars: tuple[str, ...] = ()
+    provider: str = ""
 
 
 def _env_set(name: str) -> bool:
@@ -64,18 +71,20 @@ def _collect_deploy_env_issues() -> tuple[list[DeployEnvIssue], list[DeployEnvIs
         missing.append(DeployEnvIssue("aws"))
 
     if not _env_set("TELEGRAM_BOT_TOKEN"):
-        missing.append(DeployEnvIssue("telegram_bot"))
+        missing.append(DeployEnvIssue("telegram_bot", env_vars=("TELEGRAM_BOT_TOKEN",)))
 
     if not _env_set("TELEGRAM_ALLOWED_USERS"):
-        warnings.append(DeployEnvIssue("telegram_users"))
+        warnings.append(DeployEnvIssue("telegram_users", env_vars=("TELEGRAM_ALLOWED_USERS",)))
 
     provider = get_configured_llm_provider()
     if provider not in SUPPORTED_PROVIDER_VALUES:
-        missing.append(DeployEnvIssue("llm_provider_invalid"))
+        missing.append(DeployEnvIssue("llm_provider_invalid", env_vars=("LLM_PROVIDER",)))
     else:
         api_key_env = get_llm_provider_api_key_env(provider)
         if api_key_env and not _env_set(api_key_env):
-            missing.append(DeployEnvIssue("llm_api"))
+            missing.append(
+                DeployEnvIssue("llm_api", env_vars=(api_key_env,), provider=provider)
+            )
         elif provider in KEYLESS_PROVIDER_VALUES:
             spec = provider_spec(provider)
             if spec is not None and spec.credential_kind in {"cli", "local"}:
@@ -105,6 +114,34 @@ def _label_for_issue(issue: DeployEnvIssue, *, warning: bool) -> str:
     return labels.get(issue.code, "Deploy environment configuration")
 
 
+def _format_issue_message(issue: DeployEnvIssue, *, warning: bool) -> str:
+    label = _label_for_issue(issue, warning=warning)
+
+    if issue.code == "telegram_bot" and issue.env_vars:
+        return f"{issue.env_vars[0]} — API key not set ({label})"
+
+    if issue.code == "llm_api" and issue.env_vars:
+        provider = issue.provider or "selected provider"
+        return (
+            f"{issue.env_vars[0]} — API key not set "
+            f"(required for LLM provider: {provider})"
+        )
+
+    if issue.code == "aws":
+        return (
+            "AWS credentials — not configured "
+            "(set AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY, AWS_ROLE_ARN, or AWS_PROFILE)"
+        )
+
+    if issue.code == "llm_provider_invalid" and issue.env_vars:
+        return f"{issue.env_vars[0]} — unsupported or missing value ({label})"
+
+    if issue.code == "telegram_users" and issue.env_vars:
+        return f"{issue.env_vars[0]} — not set ({label})"
+
+    return label
+
+
 def _print_deploy_env_report(missing: list[DeployEnvIssue], warnings: list[DeployEnvIssue]) -> None:
     env_path = get_project_env_path()
     print("=" * 60)
@@ -115,20 +152,27 @@ def _print_deploy_env_report(missing: list[DeployEnvIssue], warnings: list[Deplo
         print()
         print(_highlight("Missing required:", kind="label"))
         for issue in missing:
-            label = _label_for_issue(issue, warning=False)
-            print(f"  {_highlight('MISSING', kind='missing')}: {label}")
+            message = _format_issue_message(issue, warning=False)
+            print(f"  {_highlight('MISSING', kind='missing')}: {message}")
 
     if warnings:
         print()
         print(_highlight("Recommended:", kind="label"))
         for issue in warnings:
-            label = _label_for_issue(issue, warning=True)
-            print(f"  {_highlight('WARN', kind='warn')}: {label}")
+            message = _format_issue_message(issue, warning=True)
+            print(f"  {_highlight('WARN', kind='warn')}: {message}")
 
     if missing or warnings:
         print()
         print(f"Env file: {env_path}")
         print(f"Template: {_DEPLOY_ENV_EXAMPLE}")
+        print()
+
+    if missing:
+        print(
+            f"Deploy aborted: {len(missing)} required environment variable(s) missing. "
+            f"Fix the items above and retry."
+        )
         print()
 
 
@@ -141,7 +185,12 @@ def validate_deploy_env() -> None:
     _print_deploy_env_report(missing, warnings)
 
     if missing:
-        raise RuntimeError(
-            f"Deploy aborted: {len(missing)} required environment variable(s) missing. "
-            f"Fix the items above and retry."
-        )
+        raise DeployEnvValidationError
+
+
+def run_lifecycle_main(main: Callable[[], None]) -> None:
+    """Run a deploy lifecycle CLI entrypoint with clean env-validation exits."""
+    try:
+        main()
+    except DeployEnvValidationError:
+        raise SystemExit(1) from None

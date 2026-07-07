@@ -26,7 +26,7 @@ from platform.deployment.aws.ec2 import (
     wait_for_running,
 )
 from platform.deployment.aws.ssm import wait_for_ssm_registration
-from platform.deployment.ecr_deploy.prep import validate_deploy_env
+from platform.deployment.ecr_deploy.prep import run_lifecycle_main, validate_deploy_env
 from platform.deployment.gateway.bake import bake_ami
 from platform.deployment.gateway.direct_deploy import deploy_direct, destroy_direct
 from platform.deployment.gateway.provision import (
@@ -333,4 +333,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    run_lifecycle_main(main)
