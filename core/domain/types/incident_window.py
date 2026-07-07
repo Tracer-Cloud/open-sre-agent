@@ -254,6 +254,25 @@ def _coerce_alert_dict(raw_alert: Any) -> dict[str, Any]:
     return {}
 
 
+def _unwrap_nested_alert_envelope(payload: dict[str, Any]) -> dict[str, Any]:
+    """Unwrap E2E fixture envelopes that nest the webhook under ``alert``.
+
+    Files such as ``datadog_k8s_alert.json`` store captured evidence beside
+    the alert payload: ``{"_meta": ..., "alert": {...}, "evidence": ...}``.
+    Anchor parsers expect webhook timestamps at the top level. When the outer
+    dict has no anchor but the nested ``alert`` object does, resolve against
+    the inner payload.
+    """
+    if _extract_anchor(payload) is not None:
+        return payload
+    nested = payload.get("alert")
+    if not isinstance(nested, dict):
+        return payload
+    if _extract_anchor(nested) is not None:
+        return nested
+    return payload
+
+
 # ---------------------------------------------------------------------------
 # Anchor parsers — one per alert format
 # ---------------------------------------------------------------------------
@@ -503,6 +522,8 @@ def resolve_incident_window(
     current = (now or datetime.now(UTC)).astimezone(UTC)
 
     payload = _coerce_alert_dict(raw_alert)
+    if payload:
+        payload = _unwrap_nested_alert_envelope(payload)
     anchor_result = _extract_anchor(payload) if payload else None
 
     if anchor_result is not None:
