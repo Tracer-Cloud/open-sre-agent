@@ -10,7 +10,7 @@ from litellm import completion
 from pydantic import BaseModel
 
 from core.context_budget import strip_internal_message_markers
-from core.llm.openai_chat_completions import (
+from core.llm.shared.openai_chat_completions import (
     AGENT_CLIENT_TIMEOUT_SEC,
     LLM_CLIENT_TIMEOUT_SEC,
     agent_response_from_completion,
@@ -24,8 +24,8 @@ from core.llm.openai_chat_completions import (
     prepend_system_message,
     stream_with_litellm_retries,
 )
-from core.llm.structured_output import StructuredOutputClient
-from core.llm.tool_schema_normalize import build_openai_tool_specs
+from core.llm.shared.structured_output import StructuredOutputClient
+from core.llm.shared.tool_schema_normalize import build_openai_tool_specs
 from core.llm.types import AgentLLMResponse, LLMResponse, ToolCall
 
 logger = logging.getLogger(__name__)

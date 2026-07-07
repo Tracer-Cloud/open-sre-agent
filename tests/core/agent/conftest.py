@@ -141,12 +141,12 @@ def _resolve_live_llm_configuration(
                 f" provider={settings.provider!r}, env={spec.api_key_env}"
             )
 
-    from core.llm.llm_client import reset_llm_singletons
+    from core.llm.factory import reset_llm_clients
 
     monkeypatch.setenv("LLM_PROVIDER", settings.provider)
-    reset_llm_singletons()
+    reset_llm_clients()
     yield
-    reset_llm_singletons()
+    reset_llm_clients()
 
 
 @pytest.fixture(autouse=True)

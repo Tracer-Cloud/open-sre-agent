@@ -31,26 +31,20 @@ from openai import OpenAI
 from openai import RateLimitError as OpenAIRateLimitError
 from pydantic import BaseModel
 
-from core.llm.bedrock_model_ids import is_anthropic_bedrock_model
-from core.llm.llm_retry import extract_retry_after_seconds
-from core.llm.openai_chat_completions import (
+from core.llm.providers import provider_credentials
+from core.llm.providers.bedrock_model_ids import is_anthropic_bedrock_model
+from core.llm.shared.llm_retry import extract_retry_after_seconds
+from core.llm.shared.openai_chat_completions import (
     _RETRY_INITIAL_BACKOFF_SEC,
     _RETRY_MAX_ATTEMPTS,
     LLM_CLIENT_TIMEOUT_SEC,
     normalize_messages_openai,
 )
-from core.llm.structured_output import StructuredOutputClient
+from core.llm.shared.structured_output import StructuredOutputClient
+from core.llm.shared.usage import llm_response_with_usage
 from core.llm.types import LLMResponse
-from core.llm.usage import llm_response_with_usage
 
 logger = logging.getLogger(__name__)
-
-
-def _resolve_llm_api_key(env_name: str) -> str:
-    """Delegate to ``core.llm.llm_client.resolve_llm_api_key``."""
-    from core.llm.llm_client import resolve_llm_api_key
-
-    return resolve_llm_api_key(env_name)
 
 
 def _normalize_messages(prompt_or_messages: Any) -> tuple[str | None, list[dict[str, str]]]:
@@ -178,16 +172,11 @@ def _resolve_openai_reasoning_effort(*, model: str, api_key_env: str) -> str | N
     return get_active_reasoning_effort()
 
 
-def _is_anthropic_bedrock_model(model_id: str) -> bool:
-    """Backward-compatible alias for :func:`is_anthropic_bedrock_model`."""
-    return is_anthropic_bedrock_model(model_id)
-
-
 class LLMClient:
     def __init__(
         self, *, model: str, max_tokens: int = 1024, temperature: float | None = None
     ) -> None:
-        api_key = _resolve_llm_api_key("ANTHROPIC_API_KEY")
+        api_key = provider_credentials.resolve_llm_api_key("ANTHROPIC_API_KEY")
         self._api_key = api_key
         self._client = Anthropic(api_key=api_key, timeout=LLM_CLIENT_TIMEOUT_SEC)
         self._model = model
@@ -206,7 +195,7 @@ class LLMClient:
         return self
 
     def _ensure_client(self) -> None:
-        api_key = _resolve_llm_api_key("ANTHROPIC_API_KEY")
+        api_key = provider_credentials.resolve_llm_api_key("ANTHROPIC_API_KEY")
         if not api_key:
             raise RuntimeError(
                 "Missing ANTHROPIC_API_KEY. Set it in your environment, .env, or secure local keychain before running LLM steps."
@@ -367,7 +356,7 @@ class BedrockLLMClient:
         self._max_tokens = max_tokens
         self._temperature = temperature
         self._bound_tools: list[dict[str, Any]] = []
-        self._use_anthropic = _is_anthropic_bedrock_model(model)
+        self._use_anthropic = is_anthropic_bedrock_model(model)
         self._aws_region = os.getenv("AWS_REGION", os.getenv("AWS_DEFAULT_REGION", "us-east-1"))
 
         if self._use_anthropic:
@@ -642,7 +631,7 @@ class OpenAILLMClient:
         api_key_default: str = "",
         default_headers: dict[str, str] | None = None,
     ) -> None:
-        api_key = _resolve_llm_api_key(api_key_env) or api_key_default
+        api_key = provider_credentials.resolve_llm_api_key(api_key_env) or api_key_default
         self._api_key = api_key
         self._api_key_default = api_key_default
         self._base_url = base_url
@@ -691,7 +680,9 @@ class OpenAILLMClient:
         return self
 
     def _ensure_client(self) -> OpenAI:
-        api_key = _resolve_llm_api_key(self._api_key_env) or self._api_key_default
+        api_key = (
+            provider_credentials.resolve_llm_api_key(self._api_key_env) or self._api_key_default
+        )
         if not api_key:
             raise RuntimeError(
                 f"Missing {self._api_key_env}. Set it in your environment, .env, or secure local keychain before running LLM steps."

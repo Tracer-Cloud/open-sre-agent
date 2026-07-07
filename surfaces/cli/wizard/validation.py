@@ -89,7 +89,7 @@ def _check_azure_openai(
     api_version: str,
 ) -> ValidationResult:
     """Validate Azure OpenAI credentials with a tiny chat completion."""
-    from core.llm.azure_openai import normalize_azure_openai_base_url
+    from core.llm.providers.azure_openai import normalize_azure_openai_base_url
 
     normalized_base = normalize_azure_openai_base_url(base_url)
     if not normalized_base:
@@ -97,7 +97,7 @@ def _check_azure_openai(
             ok=False,
             detail="Azure OpenAI resource URL is missing. Set AZURE_OPENAI_BASE_URL.",
         )
-    from core.llm.azure_openai import resolve_azure_openai_api_version
+    from core.llm.providers.azure_openai import resolve_azure_openai_api_version
 
     resolved_api_version = resolve_azure_openai_api_version(api_version)
 

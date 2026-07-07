@@ -121,7 +121,7 @@ Every surface builds its runtime `Agent` the same way:
 from core.agent_harness.agent_builder import AgentConfig, build_agent
 
 config = AgentConfig(
-    llm=llm_client,                    # or None to fall back to get_agent_llm()
+    llm=llm_client,                    # or None to fall back to get_llm(LLMRole.AGENT)
     system=system_prompt,
     tools=tuple(agent_tools),
     resolved_integrations=resolved,

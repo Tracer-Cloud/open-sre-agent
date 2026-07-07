@@ -4,11 +4,23 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import dataclass, field
-from typing import Any, Protocol, TypeAlias, runtime_checkable
+from typing import Any, Literal, Protocol, TypeAlias, runtime_checkable
 
 from core.types import RuntimeTool
 
 ResolvedIntegrations: TypeAlias = dict[str, Any]  # noqa: UP040
+
+ModelType: TypeAlias = Literal["reasoning", "classification", "toolcall"]  # noqa: UP040
+
+
+@dataclass(frozen=True)
+class LLMRoute:
+    """The resolved provider/transport decision shared by every role this turn."""
+
+    settings: Any
+    provider: str  # runtime provider (after auth-method resolution)
+    cli_provider_registration: Any | None
+    use_litellm: bool
 
 
 @dataclass(frozen=True)
@@ -93,6 +105,8 @@ __all__ = [
     "AgentLLMClient",
     "AgentLLMResponse",
     "LLMResponse",
+    "LLMRoute",
+    "ModelType",
     "ResolvedIntegrations",
     "StreamingReasoningClient",
     "ToolCall",

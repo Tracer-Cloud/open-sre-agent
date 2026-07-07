@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Final, Literal
+from typing import Any, Final
 
 from config.config import (
     DEEPSEEK_BASE_URL,
@@ -21,8 +21,7 @@ from config.config import (
     OPENROUTER_LLM_CONFIG,
     LLMModelConfig,
 )
-
-ModelType = Literal["reasoning", "classification", "toolcall"]
+from core.llm.types import ModelType
 
 
 @dataclass(frozen=True)

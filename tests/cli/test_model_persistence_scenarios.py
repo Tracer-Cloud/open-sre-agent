@@ -123,9 +123,8 @@ class TestReplModelPersistence:
         persistence_paths: dict[str, Path],
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        from core.llm import llm_client
 
-        monkeypatch.setattr(llm_client, "reset_llm_singletons", lambda: None)
+        monkeypatch.setattr("core.llm.factory.reset_llm_clients", lambda: None)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
 
         console, buf = _capture()
@@ -146,9 +145,8 @@ class TestReplModelPersistence:
         persistence_paths: dict[str, Path],
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        from core.llm import llm_client
 
-        monkeypatch.setattr(llm_client, "reset_llm_singletons", lambda: None)
+        monkeypatch.setattr("core.llm.factory.reset_llm_clients", lambda: None)
         monkeypatch.setenv("LLM_PROVIDER", "anthropic")
         wizard_store.save_local_config(
             wizard_mode="quickstart",
@@ -176,9 +174,8 @@ class TestReplModelPersistence:
         persistence_paths: dict[str, Path],
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        from core.llm import llm_client
 
-        monkeypatch.setattr(llm_client, "reset_llm_singletons", lambda: None)
+        monkeypatch.setattr("core.llm.factory.reset_llm_clients", lambda: None)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
 
         console, buf = _capture()
@@ -202,9 +199,8 @@ class TestReplModelPersistence:
         persistence_paths: dict[str, Path],
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        from core.llm import llm_client
 
-        monkeypatch.setattr(llm_client, "reset_llm_singletons", lambda: None)
+        monkeypatch.setattr("core.llm.factory.reset_llm_clients", lambda: None)
         monkeypatch.setenv("LLM_PROVIDER", "anthropic")
         wizard_store.save_local_config(
             wizard_mode="quickstart",
@@ -230,9 +226,8 @@ class TestReplModelPersistence:
         persistence_paths: dict[str, Path],
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        from core.llm import llm_client
 
-        monkeypatch.setattr(llm_client, "reset_llm_singletons", lambda: None)
+        monkeypatch.setattr("core.llm.factory.reset_llm_clients", lambda: None)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
         monkeypatch.setenv("LLM_PROVIDER", "anthropic")
 

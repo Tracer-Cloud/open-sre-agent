@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from core.llm.llm_retry import CREDIT_EXHAUSTED_MARKER
+from core.llm.shared.llm_retry import CREDIT_EXHAUSTED_MARKER
 from surfaces.interactive_shell.runtime.agent_harness_adapters import ShellOutputSink
 
 

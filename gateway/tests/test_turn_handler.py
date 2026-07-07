@@ -83,7 +83,7 @@ def _empty_turn_result(*, llm_run: Any = None) -> ShellTurnResult:
 
 
 def test_turn_handler_finalizes_fallback_on_empty_response(monkeypatch: Any) -> None:
-    """An empty, non-answered turn still finalizes so the 'Working…' status can't hang."""
+    """An empty, non-answered turn still finalizes so the placeholder status can't hang."""
     monkeypatch.setattr(
         "gateway.turn_handler.dispatch_message_to_headless_agent",
         MagicMock(return_value=_empty_turn_result()),

@@ -191,6 +191,13 @@ LLMProvider = Literal[
 KEYLESS_LLM_PROVIDERS = KEYLESS_PROVIDER_VALUES
 LLM_PROVIDER_API_KEY_ENVS = API_KEY_PROVIDER_ENVS
 
+# Runtime identifiers for ``LLMProvider`` members. Branch on these instead of
+# bare string literals when routing on the active provider.
+PROVIDER_ANTHROPIC: LLMProvider = "anthropic"
+PROVIDER_OPENAI: LLMProvider = "openai"
+PROVIDER_BEDROCK: LLMProvider = "bedrock"
+PROVIDER_OLLAMA: LLMProvider = "ollama"
+
 
 def get_configured_llm_provider() -> str:
     """Return the active LLM provider from env/project .env."""
@@ -437,7 +444,7 @@ class LLMSettings(StrictConfigModel):
     @field_validator("azure_openai_base_url", mode="before")
     @classmethod
     def _normalize_azure_openai_base_url(cls, value: object) -> str:
-        from core.llm.azure_openai import normalize_azure_openai_base_url
+        from core.llm.providers.azure_openai import normalize_azure_openai_base_url
 
         return normalize_azure_openai_base_url(str(value or ""))
 

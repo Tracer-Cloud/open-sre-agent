@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import MagicMock
 
-from core.llm.llm_retry import LLMCreditExhaustedError
+from core.llm.shared.llm_retry import LLMCreditExhaustedError
 from surfaces.interactive_shell.runtime.agent_presentation import (
     AgentEvent,
     AgentPresentationState,

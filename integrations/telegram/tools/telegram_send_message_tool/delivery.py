@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from integrations.telegram.credentials import load_credentials_from_env
 from integrations.telegram.delivery import send_telegram_report
+from integrations.telegram.formatting import markdown_to_telegram_html
 from integrations.telegram.tools.telegram_send_message_tool.models import TelegramDeliveryTarget
 
 
@@ -27,11 +28,11 @@ def resolve_target(
 
 def dispatch_message(message: str, target: TelegramDeliveryTarget) -> tuple[bool, str]:
     return send_telegram_report(
-        message,
+        markdown_to_telegram_html(message),
         {
             "bot_token": target.bot_token,
             "chat_id": target.chat_id,
             "reply_to_message_id": target.reply_to_message_id,
         },
-        parse_mode="",
+        parse_mode="HTML",
     )

@@ -43,7 +43,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
-from core.llm.llm_retry import LLMCreditExhaustedError
+from core.llm.shared.llm_retry import LLMCreditExhaustedError
 from tests.benchmarks._framework.adapters import (
     BenchmarkAdapter,
     BenchmarkCase,
@@ -248,7 +248,7 @@ class BenchmarkRunner:
         # Register the cost-accounting hook so every successful LLM call
         # inside opensre's agent feeds CostTracker. Cleared in finally so
         # the hook doesn't leak into other test code that imports llm_client.
-        from core.llm.llm_client import set_usage_hook
+        from core.llm.shared.usage import set_usage_hook
 
         set_usage_hook(self.cost.add)
 

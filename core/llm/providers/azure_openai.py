@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from core.llm.openai_compat_providers import ModelType
+from core.llm.types import ModelType
 
 AZURE_OPENAI_PROVIDER = "azure-openai"
 

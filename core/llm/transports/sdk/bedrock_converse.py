@@ -8,7 +8,7 @@ import os
 import secrets
 from typing import Any
 
-from core.llm.tool_schema_normalize import (
+from core.llm.shared.tool_schema_normalize import (
     BEDROCK_UNSUPPORTED_SCHEMA_KEYS,
     normalize_object_tool_input_schema,
     sanitize_strict_tool_schema,

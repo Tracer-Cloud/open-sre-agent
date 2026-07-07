@@ -118,7 +118,7 @@ def test_run_resolves_credentials_internally_and_dispatches(
         "chat_id": "-100999",
         "reply_to_message_id": "42",
     }
-    assert captured["parse_mode"] == ""
+    assert captured["parse_mode"] == "HTML"
 
 
 def test_run_sends_user_requested_action_message(monkeypatch: pytest.MonkeyPatch) -> None:

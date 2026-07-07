@@ -14,24 +14,24 @@ from collections.abc import Callable
 from typing import Any
 
 from core.context_budget import strip_internal_message_markers
-from core.llm.llm_retry import (
+from core.llm.shared.llm_retry import (
     maybe_raise_credit_exhausted,
     rate_limit_sleep_seconds,
 )
-from core.llm.openai_chat_completions import (
+from core.llm.shared.openai_chat_completions import (
     _RETRY_INITIAL_BACKOFF_SEC,
     _RETRY_MAX_ATTEMPTS,
     AGENT_CLIENT_TIMEOUT_SEC,
 )
-from core.llm.openai_chat_completions import (
+from core.llm.shared.openai_chat_completions import (
     build_assistant_message as build_openai_compat_assistant_message,
 )
-from core.llm.openai_chat_completions import (
+from core.llm.shared.openai_chat_completions import (
     build_tool_result_messages as build_openai_compat_tool_result_messages,
 )
-from core.llm.tool_schema_normalize import build_openai_tool_specs
+from core.llm.shared.tool_schema_normalize import build_openai_tool_specs
+from core.llm.shared.usage import emit_provider_usage
 from core.llm.types import AgentLLMResponse, ToolCall
-from core.llm.usage import emit_provider_usage
 
 logger = logging.getLogger(__name__)
 
@@ -296,7 +296,7 @@ class BedrockConverseAgentClient:
     def __init__(self, model: str, max_tokens: int = 4096) -> None:
         import boto3
 
-        from core.llm.sdk.bedrock_converse import require_aws_region
+        from core.llm.transports.sdk.bedrock_converse import require_aws_region
 
         self._model = model
         self._max_tokens = max_tokens
@@ -308,7 +308,7 @@ class BedrockConverseAgentClient:
         return self._model
 
     def tool_schemas(self, tools: list[Any]) -> list[dict[str, Any]]:
-        from core.llm.sdk.bedrock_converse import build_converse_tool_specs
+        from core.llm.transports.sdk.bedrock_converse import build_converse_tool_specs
 
         return build_converse_tool_specs(tools)
 
@@ -321,7 +321,7 @@ class BedrockConverseAgentClient:
     ) -> AgentLLMResponse:
         import botocore.exceptions
 
-        from core.llm.sdk.bedrock_converse import (
+        from core.llm.transports.sdk.bedrock_converse import (
             is_non_retryable_bedrock_code,
             map_bedrock_client_error,
             parse_converse_output,
@@ -397,7 +397,7 @@ class BedrockConverseAgentClient:
 
     @staticmethod
     def build_tool_result_message(tool_calls: list[ToolCall], results: list[Any]) -> dict[str, Any]:
-        from core.llm.sdk.bedrock_converse import build_tool_result_message as _build
+        from core.llm.transports.sdk.bedrock_converse import build_tool_result_message as _build
 
         return _build(tool_calls, results)
 

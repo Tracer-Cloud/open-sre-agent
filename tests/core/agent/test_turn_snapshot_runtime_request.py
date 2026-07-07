@@ -100,7 +100,7 @@ def test_agent_context_falls_back_to_process_wide_llm(monkeypatch: pytest.Monkey
     the process-wide client via :func:`agent_llm_client.get_agent_llm`."""
     tool = _tool()
     built = _NoToolLLM()
-    monkeypatch.setattr("core.llm.agent_llm_client.get_agent_llm", lambda: built)
+    monkeypatch.setattr("core.llm.factory.get_llm", lambda _role: built)
 
     ctx = _turn_snapshot(
         system_prompt=PromptEnvelope.from_text("runtime system"),

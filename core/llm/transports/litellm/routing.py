@@ -2,8 +2,8 @@
 
 Maps each API provider (anthropic, openai, bedrock, openai-compat) to the
 correct LiteLLM model prefix, credential env var, and optional ``api_base``
-so the dispatch entrypoints can build a :class:`~core.llm.litellm.clients.LiteLLMAgentClient`
-or :class:`~core.llm.litellm.clients.LiteLLMLLMClient` without embedding
+so the dispatch entrypoints can build a :class:`~core.llm.transports.litellm.clients.LiteLLMAgentClient`
+or :class:`~core.llm.transports.litellm.clients.LiteLLMLLMClient` without embedding
 provider-specific knowledge.
 """
 
@@ -11,16 +11,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.llm.azure_openai import (
+from core.llm.providers.azure_openai import (
     is_azure_openai_provider,
     resolve_azure_openai_request_kwargs,
 )
-from core.llm.litellm.clients import LiteLLMAgentClient, LiteLLMLLMClient
-from core.llm.openai_compat_providers import (
-    ModelType,
+from core.llm.providers.openai_compat_providers import (
     is_openai_compat_provider,
     resolve_openai_compat_provider,
 )
+from core.llm.transports.litellm.clients import LiteLLMAgentClient, LiteLLMLLMClient
+from core.llm.types import ModelType
 
 
 def _litellm_model_for_compat(model: str) -> str:
@@ -30,31 +30,15 @@ def _litellm_model_for_compat(model: str) -> str:
 
 def build_litellm_agent_client(settings: Any, provider: str) -> LiteLLMAgentClient:
     """Build a :class:`LiteLLMAgentClient` for the given provider and settings."""
-    if provider == "anthropic":
-        from config.config import ANTHROPIC_LLM_CONFIG
+    from core.llm.providers.provider_registry import FIRST_PARTY_PROVIDERS
 
+    spec = FIRST_PARTY_PROVIDERS.get(provider)
+    if spec is not None:
+        model = getattr(settings, f"{spec.env_prefix}_reasoning_model")
         return LiteLLMAgentClient(
-            litellm_model=f"anthropic/{settings.anthropic_reasoning_model}",
-            max_tokens=ANTHROPIC_LLM_CONFIG.max_tokens,
-            api_key_env="ANTHROPIC_API_KEY",
-        )
-
-    if provider == "openai":
-        from config.config import OPENAI_LLM_CONFIG
-
-        return LiteLLMAgentClient(
-            litellm_model=f"openai/{settings.openai_reasoning_model}",
-            max_tokens=OPENAI_LLM_CONFIG.max_tokens,
-            api_key_env="OPENAI_API_KEY",
-        )
-
-    if provider == "bedrock":
-        from config.config import BEDROCK_LLM_CONFIG
-
-        model = settings.bedrock_reasoning_model
-        return LiteLLMAgentClient(
-            litellm_model=f"bedrock/{model}",
-            max_tokens=BEDROCK_LLM_CONFIG.max_tokens,
+            litellm_model=f"{spec.litellm_prefix}/{model}",
+            max_tokens=spec.max_tokens,
+            api_key_env=spec.api_key_env,
         )
 
     if is_azure_openai_provider(provider):
@@ -70,8 +54,10 @@ def build_litellm_agent_client(settings: Any, provider: str) -> LiteLLMAgentClie
         )
 
     if is_openai_compat_provider(provider):
+        from config.config import PROVIDER_OLLAMA
+
         resolved = resolve_openai_compat_provider(settings, provider, "reasoning")
-        max_tokens = 1024 if provider == "ollama" else resolved.config.max_tokens
+        max_tokens = 1024 if provider == PROVIDER_OLLAMA else resolved.config.max_tokens
         return LiteLLMAgentClient(
             litellm_model=_litellm_model_for_compat(resolved.model),
             max_tokens=max_tokens,
@@ -96,48 +82,23 @@ def build_litellm_llm_client(
 ) -> LiteLLMLLMClient:
     """Build a :class:`LiteLLMLLMClient` for the given provider, model tier, and settings."""
 
+    from core.llm.providers.provider_registry import FIRST_PARTY_PROVIDERS
+
     def _fallback(provider_prefix: str) -> str | None:
         if model_type == "toolcall":
             return None
         attr = f"{provider_prefix}_toolcall_model"
         return str(getattr(settings, attr, None) or "")
 
-    if provider == "anthropic":
-        from config.config import ANTHROPIC_LLM_CONFIG
-
-        attr = f"anthropic_{model_type}_model"
-        model = str(getattr(settings, attr))
+    spec = FIRST_PARTY_PROVIDERS.get(provider)
+    if spec is not None:
+        model = str(getattr(settings, f"{spec.env_prefix}_{model_type}_model"))
+        fallback = _fallback(spec.env_prefix)
         return LiteLLMLLMClient(
-            litellm_model=f"anthropic/{model}",
-            model_fallback=(_fallback("anthropic") and f"anthropic/{_fallback('anthropic')}")
-            or None,
-            max_tokens=ANTHROPIC_LLM_CONFIG.max_tokens,
-            api_key_env="ANTHROPIC_API_KEY",
-            usage_callback=usage_callback,
-        )
-
-    if provider == "openai":
-        from config.config import OPENAI_LLM_CONFIG
-
-        attr = f"openai_{model_type}_model"
-        model = str(getattr(settings, attr))
-        return LiteLLMLLMClient(
-            litellm_model=f"openai/{model}",
-            model_fallback=(_fallback("openai") and f"openai/{_fallback('openai')}") or None,
-            max_tokens=OPENAI_LLM_CONFIG.max_tokens,
-            api_key_env="OPENAI_API_KEY",
-            usage_callback=usage_callback,
-        )
-
-    if provider == "bedrock":
-        from config.config import BEDROCK_LLM_CONFIG
-
-        attr = f"bedrock_{model_type}_model"
-        model = str(getattr(settings, attr))
-        return LiteLLMLLMClient(
-            litellm_model=f"bedrock/{model}",
-            model_fallback=(_fallback("bedrock") and f"bedrock/{_fallback('bedrock')}") or None,
-            max_tokens=BEDROCK_LLM_CONFIG.max_tokens,
+            litellm_model=f"{spec.litellm_prefix}/{model}",
+            model_fallback=(fallback and f"{spec.litellm_prefix}/{fallback}") or None,
+            max_tokens=spec.max_tokens,
+            api_key_env=spec.api_key_env,
             usage_callback=usage_callback,
         )
 

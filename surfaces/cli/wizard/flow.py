@@ -226,7 +226,7 @@ def _credential_prompt_label(provider: ProviderOption) -> str:
 
 def _azure_openai_endpoint_env(provider: ProviderOption) -> dict[str, str]:
     """Return Azure endpoint env vars, using the default API version when unset."""
-    from core.llm.azure_openai import resolve_azure_openai_api_version
+    from core.llm.providers.azure_openai import resolve_azure_openai_api_version
 
     return {
         provider.endpoint_env: os.getenv(provider.endpoint_env, "").strip(),
@@ -236,7 +236,7 @@ def _azure_openai_endpoint_env(provider: ProviderOption) -> dict[str, str]:
 
 def _prompt_azure_openai_endpoint_settings(provider: ProviderOption) -> dict[str, str] | None:
     """Collect Azure OpenAI resource URL during onboarding."""
-    from core.llm.azure_openai import (
+    from core.llm.providers.azure_openai import (
         normalize_azure_openai_base_url,
         resolve_azure_openai_api_version,
     )
@@ -267,7 +267,7 @@ def _prompt_azure_openai_endpoint_settings(provider: ProviderOption) -> dict[str
 
 def _ensure_azure_openai_endpoint_settings(provider: ProviderOption) -> dict[str, str] | None:
     """Return Azure endpoint env vars, prompting when missing."""
-    from core.llm.azure_openai import azure_openai_endpoint_configured
+    from core.llm.providers.azure_openai import azure_openai_endpoint_configured
 
     if provider.value != "azure-openai":
         return {}

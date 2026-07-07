@@ -24,6 +24,7 @@ from core.agent_harness.session import Session
 from core.agent_harness.turns.headless_dispatch import dispatch_message_to_headless_agent
 from gateway.gateway_output_sink import GatewayOutputSink
 from gateway.polling.handle_polled_inbound_telegram_msg import GatewayAgentCallback
+from gateway.status_messages import status_from_tool_start
 
 
 def build_gateway_turn_handler(
@@ -44,6 +45,19 @@ def build_gateway_turn_handler(
         sink: GatewayOutputSink,
         logger: logging.Logger,
     ) -> None:
+        def _tool_observer_factory(_session: Session, _console: Console, _message: str):
+            def observer(kind: str, data: dict[str, object]) -> None:
+                if kind != "tool_start":
+                    return
+                tool_name = str(data.get("name") or "").strip()
+                if not tool_name or tool_name == "assistant_handoff":
+                    return
+                sink.set_tool_status(
+                    status_from_tool_start(tool_name, data.get("input")),
+                )
+
+            return observer
+
         error_reporter = DefaultErrorReporter(logger)
         turn_result = dispatch_message_to_headless_agent(
             text,
@@ -53,6 +67,7 @@ def build_gateway_turn_handler(
                 session,
                 console,
                 tool_action_logger=logger,
+                observer_factory=_tool_observer_factory,
             ),
             prompts=DefaultPromptContextProvider(session),
             reasoning=DefaultReasoningClientProvider(
@@ -68,7 +83,7 @@ def build_gateway_turn_handler(
         outbound_text = (
             turn_result.assistant_response_text or turn_result.action_result.response_text
         ).strip()
-        # A streamed answer (answered=True) already resolved the "Working…" status
+        # A streamed answer (answered=True) already resolved the placeholder status
         # via the sink. Otherwise always finalize so the placeholder never hangs —
         # even when the turn produced no text.
         if not turn_result.answered:
