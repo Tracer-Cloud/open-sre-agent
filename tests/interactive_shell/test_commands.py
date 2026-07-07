@@ -190,7 +190,7 @@ class TestDispatchSlash:
         console, buf = _capture()
 
         assert dispatch_slash("/background on", session, console) is True
-        assert session.background_mode_enabled is True
+        assert session.terminal.background_mode_enabled is True
 
         assert dispatch_slash("/background status", session, console) is True
         output = buf.getvalue()
@@ -207,7 +207,7 @@ class TestDispatchSlash:
 
     def test_background_show_and_use_completed_record(self) -> None:
         session = Session()
-        session.background_investigations["bg123"] = BackgroundInvestigationRecord(
+        session.terminal.background_investigations["bg123"] = BackgroundInvestigationRecord(
             task_id="bg123",
             status="completed",
             command="free-text investigation",
@@ -235,14 +235,14 @@ class TestDispatchSlash:
         assert dispatch_slash("/background notify set pagerduty", session, console) is True
         output = buf.getvalue()
         assert "invalid channel" in output
-        assert session.background_notification_preferences.channels == ()
+        assert session.terminal.background_notification_preferences.channels == ()
 
     def test_background_notify_set_updates_channels(self) -> None:
         session = Session()
         console, buf = _capture()
 
         assert dispatch_slash("/background notify set email", session, console)
-        assert session.background_notification_preferences.channels == ("email",)
+        assert session.terminal.background_notification_preferences.channels == ("email",)
         assert "background notify channels set" in buf.getvalue().lower()
 
     def test_unknown_command_does_not_exit(self) -> None:
@@ -1317,7 +1317,7 @@ class TestInvestigateFileCommand:
         )
 
         session = Session()
-        session.background_mode_enabled = True
+        session.terminal.background_mode_enabled = True
         console, _ = _capture()
         dispatch_slash("/investigate generic", session, console)
 
@@ -1570,7 +1570,7 @@ class TestInvestigateFileCommand:
         )
 
         session = Session()
-        session.background_mode_enabled = True
+        session.terminal.background_mode_enabled = True
         console, _ = _capture()
         dispatch_slash(f"/investigate {alert_file}", session, console)
 

@@ -479,7 +479,7 @@ def test_run_text_investigation_uses_background_launcher_when_mode_enabled(
     )
 
     session = Session()
-    session.background_mode_enabled = True
+    session.terminal.background_mode_enabled = True
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
 
     run_text_investigation("High CPU alert", session, console)

@@ -11,9 +11,15 @@ Populated cluster-by-cluster as the #3690 split lands; theme is the first cluste
 
 from __future__ import annotations
 
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
+
+from core.agent_harness.session.background import (
+    BackgroundInvestigationRecord,
+    BackgroundNotificationPreferences,
+)
 
 if TYPE_CHECKING:
     from prompt_toolkit.history import History
@@ -82,3 +88,21 @@ class TerminalSession:
 
     Prevents the tool-calling loop from re-dispatching the same literal slash
     command when the model emits a duplicate ``slash_invoke`` on a later iteration."""
+
+    background_mode_enabled: bool = False
+    """Whether new investigations should run as session-local background tasks."""
+
+    background_investigations: dict[str, BackgroundInvestigationRecord] = field(
+        default_factory=dict
+    )
+    """Completed or in-flight background RCA summaries, keyed by task id."""
+
+    background_notification_preferences: BackgroundNotificationPreferences = field(
+        default_factory=BackgroundNotificationPreferences
+    )
+    """Preferred notification channels for background RCA completion events."""
+
+    background_notices: list[str] = field(default_factory=list)
+    """Thread-safe queue of Rich markup messages drained by the REPL main loop."""
+
+    _background_notices_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)

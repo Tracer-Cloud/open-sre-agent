@@ -114,7 +114,7 @@ def _start_background_investigation(
         command=display_command,
         investigation_id=investigation_id,
     )
-    session.background_investigations[task.task_id] = record
+    session.terminal.background_investigations[task.task_id] = record
 
     def _worker() -> None:
         try:
@@ -137,7 +137,7 @@ def _start_background_investigation(
             record.final_state = dict(final_state)
             record.notification_results = deliver_background_notifications(
                 record=record,
-                channels=session.background_notification_preferences.channels,
+                channels=session.terminal.background_notification_preferences.channels,
             )
             task.mark_completed(result=root)
             session.enqueue_background_notice(

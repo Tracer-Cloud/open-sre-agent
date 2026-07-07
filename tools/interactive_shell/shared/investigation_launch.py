@@ -100,7 +100,7 @@ def launch_investigation(
 
     console.print(f"[bold]{announce_label}:[/bold] {escape(announce_value)}")
 
-    if session.background_mode_enabled:
+    if session.terminal.background_mode_enabled:
         start_background()
         session.record("alert", record_value)
         return

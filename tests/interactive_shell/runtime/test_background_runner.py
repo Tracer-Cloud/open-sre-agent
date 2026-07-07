@@ -67,5 +67,5 @@ def test_start_background_template_investigation_assigns_fresh_investigation_id(
 
     assert session.last_investigation_id
     assert session.last_investigation_id != "inv-stale"
-    record = session.background_investigations[task_id]
+    record = session.terminal.background_investigations[task_id]
     assert record.investigation_id == session.last_investigation_id

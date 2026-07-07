@@ -53,11 +53,6 @@ _CORE_FIELDS = (
 _TERMINAL_FIELDS = (
     "task_registry",
     "metrics",
-    "background_mode_enabled",
-    "background_investigations",
-    "background_notification_preferences",
-    "background_notices",
-    "_background_notices_lock",
     "history_generation",
     "_turn_outcome_hint",
     "_pending_turn_llm",
@@ -72,14 +67,18 @@ _TERMINAL_FIELDS = (
 #       prompt_refresh_fn, fleet_sampler_starter -> session.terminal
 #   terminal, pending-prompt/stdin cluster: pending_prompt_default, pending_prompt_autosubmit,
 #       exclusive_stdin_active, agent_turn_executed_slashes -> session.terminal
+#   terminal, background cluster: background_mode_enabled, background_investigations,
+#       background_notification_preferences, background_notices, _background_notices_lock
+#       -> session.terminal
 _FACET_FIELDS = ("alerts", "terminal")
 
 
-def test_field_inventory_is_exactly_37_top_level_fields() -> None:
+def test_field_inventory_is_exactly_32_top_level_fields() -> None:
     all_fields = _CORE_FIELDS + _TERMINAL_FIELDS + _FACET_FIELDS
-    # 48 - 2 (alerts) - 2 (theme) - 5 (prompt-toolkit) - 4 (pending-prompt/stdin) + 2 facet fields
-    assert len(all_fields) == 37
-    assert len(set(all_fields)) == 37  # no duplicates across buckets
+    # 48 - 2 (alerts) - 2 (theme) - 5 (prompt-toolkit) - 4 (pending-prompt/stdin)
+    #    - 5 (background) + 2 facet fields
+    assert len(all_fields) == 32
+    assert len(set(all_fields)) == 32  # no duplicates across buckets
 
 
 def test_every_inventoried_field_is_accessible_on_session() -> None:
@@ -121,6 +120,18 @@ def test_terminal_facet_holds_the_pending_prompt_cluster() -> None:
         "pending_prompt_autosubmit",
         "exclusive_stdin_active",
         "agent_turn_executed_slashes",
+    ):
+        assert hasattr(terminal, f)  # was Session.<f>
+
+
+def test_terminal_facet_holds_the_background_cluster() -> None:
+    terminal = _session().terminal
+    for f in (
+        "background_mode_enabled",
+        "background_investigations",
+        "background_notification_preferences",
+        "background_notices",
+        "_background_notices_lock",
     ):
         assert hasattr(terminal, f)  # was Session.<f>
 

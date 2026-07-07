@@ -143,13 +143,13 @@ def test_close_persists_and_releases_resources() -> None:
     manager = SessionManager(storage=storage, repo=SimpleNamespace(load_session=lambda _sid: None))
 
     session = manager.create(session_id="s-close")
-    session.background_notices.append("pending notice")
+    session.terminal.background_notices.append("pending notice")
     session.terminal.prompt_refresh_fn = lambda: None
 
     manager.close(session)
 
     assert flushed == ["s-close"]
-    assert session.background_notices == []
+    assert session.terminal.background_notices == []
     assert session.terminal.prompt_refresh_fn is None
 
 
@@ -245,7 +245,7 @@ def test_closed_session_is_garbage_collectable() -> None:
     manager = _manager()
     session = manager.create(session_id="s-gc")
     session.terminal.prompt_refresh_fn = lambda: None
-    session.background_notices.append("x")
+    session.terminal.background_notices.append("x")
     ref = weakref.ref(session)
 
     manager.close(session)
