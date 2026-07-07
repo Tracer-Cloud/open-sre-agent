@@ -98,6 +98,17 @@ class KubernetesClient:
             self._core_v1, self._apps_v1, self._networking_v1 = self._build_clients()
         return self._core_v1, self._apps_v1, self._networking_v1
 
+    def close(self) -> None:
+        """Close the underlying ApiClient connection pool."""
+        if self._api_client is not None:
+            self._api_client.close()
+
+    def __enter__(self) -> KubernetesClient:
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        self.close()
+
     @property
     def is_configured(self) -> bool:
         return self.config.is_configured
@@ -752,11 +763,8 @@ class KubernetesClient:
                 obj = method(name=name)
             else:
                 obj = method(name=name, namespace=namespace)
-            # Serialize via the api_client if available, else fall back to to_dict
-            if self._api_client is not None:
-                resource_dict: dict[str, Any] = self._api_client.sanitize_for_serialization(obj)
-            else:
-                resource_dict = obj.to_dict()
+            assert self._api_client is not None  # always set by _build_clients()
+            resource_dict: dict[str, Any] = self._api_client.sanitize_for_serialization(obj)
             return {
                 "success": True,
                 "resource_type": resource_type,

@@ -134,22 +134,25 @@ class KubernetesListPodsTool(BaseTool):
         )
         if client is None:
             return _missing_client_error({"pods": [], "total": 0})
-        result = client.list_pods(namespace=namespace, label_selector=label_selector, limit=limit)
-        if not result.get("success"):
+        with client:
+            result = client.list_pods(
+                namespace=namespace, label_selector=label_selector, limit=limit
+            )
+            if not result.get("success"):
+                return {
+                    "source": "kubernetes",
+                    "available": False,
+                    "error": result.get("error", "unknown error"),
+                    "pods": [],
+                    "total": 0,
+                }
             return {
                 "source": "kubernetes",
-                "available": False,
-                "error": result.get("error", "unknown error"),
-                "pods": [],
-                "total": 0,
+                "available": True,
+                "namespace": namespace,
+                "pods": result["pods"],
+                "total": result["total"],
             }
-        return {
-            "source": "kubernetes",
-            "available": True,
-            "namespace": namespace,
-            "pods": result["pods"],
-            "total": result["total"],
-        }
 
 
 kubernetes_list_pods = KubernetesListPodsTool()
@@ -232,26 +235,27 @@ class KubernetesGetPodLogsTool(BaseTool):
         )
         if client is None:
             return _missing_client_error({"lines": [], "total": 0})
-        result = client.get_pod_logs(
-            namespace=namespace, pod_name=pod_name, container=container, tail_lines=tail_lines
-        )
-        if not result.get("success"):
+        with client:
+            result = client.get_pod_logs(
+                namespace=namespace, pod_name=pod_name, container=container, tail_lines=tail_lines
+            )
+            if not result.get("success"):
+                return {
+                    "source": "kubernetes",
+                    "available": False,
+                    "error": result.get("error", "unknown error"),
+                    "lines": [],
+                    "total": 0,
+                }
             return {
                 "source": "kubernetes",
-                "available": False,
-                "error": result.get("error", "unknown error"),
-                "lines": [],
-                "total": 0,
+                "available": True,
+                "pod_name": pod_name,
+                "namespace": namespace,
+                "container": result.get("container"),
+                "lines": result["lines"],
+                "total": result["total"],
             }
-        return {
-            "source": "kubernetes",
-            "available": True,
-            "pod_name": pod_name,
-            "namespace": namespace,
-            "container": result.get("container"),
-            "lines": result["lines"],
-            "total": result["total"],
-        }
 
 
 kubernetes_get_pod_logs = KubernetesGetPodLogsTool()
@@ -324,22 +328,23 @@ class KubernetesListDeploymentsTool(BaseTool):
         )
         if client is None:
             return _missing_client_error({"deployments": [], "total": 0})
-        result = client.list_deployments(namespace=namespace, limit=limit)
-        if not result.get("success"):
+        with client:
+            result = client.list_deployments(namespace=namespace, limit=limit)
+            if not result.get("success"):
+                return {
+                    "source": "kubernetes",
+                    "available": False,
+                    "error": result.get("error", "unknown error"),
+                    "deployments": [],
+                    "total": 0,
+                }
             return {
                 "source": "kubernetes",
-                "available": False,
-                "error": result.get("error", "unknown error"),
-                "deployments": [],
-                "total": 0,
+                "available": True,
+                "namespace": namespace,
+                "deployments": result["deployments"],
+                "total": result["total"],
             }
-        return {
-            "source": "kubernetes",
-            "available": True,
-            "namespace": namespace,
-            "deployments": result["deployments"],
-            "total": result["total"],
-        }
 
 
 kubernetes_list_deployments = KubernetesListDeploymentsTool()
@@ -424,22 +429,25 @@ class KubernetesGetEventsTool(BaseTool):
         )
         if client is None:
             return _missing_client_error({"events": [], "total": 0})
-        result = client.get_events(namespace=namespace, field_selector=field_selector, limit=limit)
-        if not result.get("success"):
+        with client:
+            result = client.get_events(
+                namespace=namespace, field_selector=field_selector, limit=limit
+            )
+            if not result.get("success"):
+                return {
+                    "source": "kubernetes",
+                    "available": False,
+                    "error": result.get("error", "unknown error"),
+                    "events": [],
+                    "total": 0,
+                }
             return {
                 "source": "kubernetes",
-                "available": False,
-                "error": result.get("error", "unknown error"),
-                "events": [],
-                "total": 0,
+                "available": True,
+                "namespace": namespace,
+                "events": result["events"],
+                "total": result["total"],
             }
-        return {
-            "source": "kubernetes",
-            "available": True,
-            "namespace": namespace,
-            "events": result["events"],
-            "total": result["total"],
-        }
 
 
 kubernetes_get_events = KubernetesGetEventsTool()
@@ -510,20 +518,21 @@ class KubernetesDescribePodTool(BaseTool):
         )
         if client is None:
             return _missing_client_error({"spec": {}, "status": {}})
-        result = client.describe_pod(namespace=namespace, pod_name=pod_name)
-        if not result.get("success"):
+        with client:
+            result = client.describe_pod(namespace=namespace, pod_name=pod_name)
+            if not result.get("success"):
+                return {
+                    "source": "kubernetes",
+                    "available": False,
+                    "error": result.get("error", "unknown error"),
+                    "spec": {},
+                    "status": {},
+                }
             return {
                 "source": "kubernetes",
-                "available": False,
-                "error": result.get("error", "unknown error"),
-                "spec": {},
-                "status": {},
+                "available": True,
+                **{k: v for k, v in result.items() if k != "success"},
             }
-        return {
-            "source": "kubernetes",
-            "available": True,
-            **{k: v for k, v in result.items() if k != "success"},
-        }
 
 
 kubernetes_describe_pod = KubernetesDescribePodTool()
@@ -606,21 +615,22 @@ class KubernetesListNodesTool(BaseTool):
         )
         if client is None:
             return _missing_client_error({"nodes": [], "total": 0})
-        result = client.list_nodes(limit=limit)
-        if not result.get("success"):
+        with client:
+            result = client.list_nodes(limit=limit)
+            if not result.get("success"):
+                return {
+                    "source": "kubernetes",
+                    "available": False,
+                    "error": result.get("error", "unknown error"),
+                    "nodes": [],
+                    "total": 0,
+                }
             return {
                 "source": "kubernetes",
-                "available": False,
-                "error": result.get("error", "unknown error"),
-                "nodes": [],
-                "total": 0,
+                "available": True,
+                "nodes": result["nodes"],
+                "total": result["total"],
             }
-        return {
-            "source": "kubernetes",
-            "available": True,
-            "nodes": result["nodes"],
-            "total": result["total"],
-        }
 
 
 kubernetes_list_nodes = KubernetesListNodesTool()
@@ -702,24 +712,25 @@ class KubernetesListServicesTool(BaseTool):
         )
         if client is None:
             return _missing_client_error({"services": [], "total": 0})
-        result = client.list_services(
-            namespace=namespace, label_selector=label_selector, limit=limit
-        )
-        if not result.get("success"):
+        with client:
+            result = client.list_services(
+                namespace=namespace, label_selector=label_selector, limit=limit
+            )
+            if not result.get("success"):
+                return {
+                    "source": "kubernetes",
+                    "available": False,
+                    "error": result.get("error", "unknown error"),
+                    "services": [],
+                    "total": 0,
+                }
             return {
                 "source": "kubernetes",
-                "available": False,
-                "error": result.get("error", "unknown error"),
-                "services": [],
-                "total": 0,
+                "available": True,
+                "namespace": namespace,
+                "services": result["services"],
+                "total": result["total"],
             }
-        return {
-            "source": "kubernetes",
-            "available": True,
-            "namespace": namespace,
-            "services": result["services"],
-            "total": result["total"],
-        }
 
 
 kubernetes_list_services = KubernetesListServicesTool()
@@ -792,22 +803,23 @@ class KubernetesListStatefulSetsTool(BaseTool):
         )
         if client is None:
             return _missing_client_error({"statefulsets": [], "total": 0})
-        result = client.list_statefulsets(namespace=namespace, limit=limit)
-        if not result.get("success"):
+        with client:
+            result = client.list_statefulsets(namespace=namespace, limit=limit)
+            if not result.get("success"):
+                return {
+                    "source": "kubernetes",
+                    "available": False,
+                    "error": result.get("error", "unknown error"),
+                    "statefulsets": [],
+                    "total": 0,
+                }
             return {
                 "source": "kubernetes",
-                "available": False,
-                "error": result.get("error", "unknown error"),
-                "statefulsets": [],
-                "total": 0,
+                "available": True,
+                "namespace": namespace,
+                "statefulsets": result["statefulsets"],
+                "total": result["total"],
             }
-        return {
-            "source": "kubernetes",
-            "available": True,
-            "namespace": namespace,
-            "statefulsets": result["statefulsets"],
-            "total": result["total"],
-        }
 
 
 kubernetes_list_statefulsets = KubernetesListStatefulSetsTool()
@@ -881,22 +893,23 @@ class KubernetesListDaemonSetsTool(BaseTool):
         )
         if client is None:
             return _missing_client_error({"daemonsets": [], "total": 0})
-        result = client.list_daemonsets(namespace=namespace, limit=limit)
-        if not result.get("success"):
+        with client:
+            result = client.list_daemonsets(namespace=namespace, limit=limit)
+            if not result.get("success"):
+                return {
+                    "source": "kubernetes",
+                    "available": False,
+                    "error": result.get("error", "unknown error"),
+                    "daemonsets": [],
+                    "total": 0,
+                }
             return {
                 "source": "kubernetes",
-                "available": False,
-                "error": result.get("error", "unknown error"),
-                "daemonsets": [],
-                "total": 0,
+                "available": True,
+                "namespace": namespace,
+                "daemonsets": result["daemonsets"],
+                "total": result["total"],
             }
-        return {
-            "source": "kubernetes",
-            "available": True,
-            "namespace": namespace,
-            "daemonsets": result["daemonsets"],
-            "total": result["total"],
-        }
 
 
 kubernetes_list_daemonsets = KubernetesListDaemonSetsTool()
@@ -971,22 +984,23 @@ class KubernetesListIngressesTool(BaseTool):
         )
         if client is None:
             return _missing_client_error({"ingresses": [], "total": 0})
-        result = client.list_ingresses(namespace=namespace, limit=limit)
-        if not result.get("success"):
+        with client:
+            result = client.list_ingresses(namespace=namespace, limit=limit)
+            if not result.get("success"):
+                return {
+                    "source": "kubernetes",
+                    "available": False,
+                    "error": result.get("error", "unknown error"),
+                    "ingresses": [],
+                    "total": 0,
+                }
             return {
                 "source": "kubernetes",
-                "available": False,
-                "error": result.get("error", "unknown error"),
-                "ingresses": [],
-                "total": 0,
+                "available": True,
+                "namespace": namespace,
+                "ingresses": result["ingresses"],
+                "total": result["total"],
             }
-        return {
-            "source": "kubernetes",
-            "available": True,
-            "namespace": namespace,
-            "ingresses": result["ingresses"],
-            "total": result["total"],
-        }
 
 
 kubernetes_list_ingresses = KubernetesListIngressesTool()
@@ -1060,22 +1074,23 @@ class KubernetesListConfigMapsTool(BaseTool):
         )
         if client is None:
             return _missing_client_error({"configmaps": [], "total": 0})
-        result = client.list_configmaps(namespace=namespace, limit=limit)
-        if not result.get("success"):
+        with client:
+            result = client.list_configmaps(namespace=namespace, limit=limit)
+            if not result.get("success"):
+                return {
+                    "source": "kubernetes",
+                    "available": False,
+                    "error": result.get("error", "unknown error"),
+                    "configmaps": [],
+                    "total": 0,
+                }
             return {
                 "source": "kubernetes",
-                "available": False,
-                "error": result.get("error", "unknown error"),
-                "configmaps": [],
-                "total": 0,
+                "available": True,
+                "namespace": namespace,
+                "configmaps": result["configmaps"],
+                "total": result["total"],
             }
-        return {
-            "source": "kubernetes",
-            "available": True,
-            "namespace": namespace,
-            "configmaps": result["configmaps"],
-            "total": result["total"],
-        }
 
 
 kubernetes_list_configmaps = KubernetesListConfigMapsTool()
@@ -1162,23 +1177,26 @@ class KubernetesGetResourceTool(BaseTool):
             return _missing_client_error(
                 {"resource": {}, "resource_type": resource_type, "name": name}
             )
-        result = client.get_resource(resource_type=resource_type, name=name, namespace=namespace)
-        if not result.get("success"):
+        with client:
+            result = client.get_resource(
+                resource_type=resource_type, name=name, namespace=namespace
+            )
+            if not result.get("success"):
+                return {
+                    "source": "kubernetes",
+                    "available": False,
+                    "error": result.get("error", "unknown error"),
+                    "resource": {},
+                    "resource_type": resource_type,
+                    "name": name,
+                }
             return {
                 "source": "kubernetes",
-                "available": False,
-                "error": result.get("error", "unknown error"),
-                "resource": {},
-                "resource_type": resource_type,
-                "name": name,
+                "available": True,
+                "resource_type": result["resource_type"],
+                "name": result["name"],
+                "resource": result["resource"],
             }
-        return {
-            "source": "kubernetes",
-            "available": True,
-            "resource_type": result["resource_type"],
-            "name": result["name"],
-            "resource": result["resource"],
-        }
 
 
 kubernetes_get_resource = KubernetesGetResourceTool()
