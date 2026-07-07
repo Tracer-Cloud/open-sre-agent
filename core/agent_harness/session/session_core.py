@@ -4,7 +4,7 @@ The surface-agnostic half of the REPL session: identity, persistence, integratio
 resolution, token accounting, conversational agent state, and grounding caches —
 everything ``core``, ``gateway``, and ``tools`` consumers depend on. The interactive
 shell extends this with its own UI state in
-:class:`~core.agent_harness.session.state.Session`.
+:class:`~core.agent_harness.session.session.Session`.
 """
 
 from __future__ import annotations
@@ -27,9 +27,9 @@ from core.agent_harness.session.integrations_cache import (
     has_resolved_integrations,
     merge_resolved_integrations,
 )
+from core.agent_harness.session.persistence_ports import SessionStorage
 from core.agent_harness.session.storage.jsonl import JsonlSessionStorage
 from core.agent_harness.session.token_usage import TokenUsage
-from core.agent_harness.session.types import SessionStorage
 from core.state import MutableAgentState
 
 

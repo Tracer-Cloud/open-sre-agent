@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from core.agent_harness.session.background import BackgroundInvestigationRecord
+from core.agent_harness.session.background_investigations import BackgroundInvestigationRecord
 
 
 def deliver_background_notifications(

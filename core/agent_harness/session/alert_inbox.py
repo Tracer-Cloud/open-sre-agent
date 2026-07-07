@@ -1,6 +1,6 @@
 """The session's inbox of externally-received alerts.
 
-A surface facet composed onto :class:`~core.agent_harness.session.state.Session`:
+A surface facet composed onto :class:`~core.agent_harness.session.session.Session`:
 the interactive shell's alert listener appends externally-received alerts here, and
 ``/status`` reads them. Kept out of the core session so consumers that never touch
 alerts don't see the field.

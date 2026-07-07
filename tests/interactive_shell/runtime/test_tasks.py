@@ -17,7 +17,7 @@ from core.agent_harness.session import (
     SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST,
     Session,
 )
-from core.agent_harness.session.tasks import TaskRegistry
+from core.agent_harness.session.task_registry import TaskRegistry
 from platform.common.task_types import TaskKind, TaskStatus
 from surfaces.interactive_shell.command_registry import dispatch_slash
 from tools.interactive_shell.synthetic.runner import watch_synthetic_subprocess
@@ -96,7 +96,7 @@ class TestTaskRegistry:
         def _fake_hex(_nbytes: int) -> str:
             return next(_ids)
 
-        monkeypatch.setattr("core.agent_harness.session.tasks.secrets.token_hex", _fake_hex)
+        monkeypatch.setattr("core.agent_harness.session.task_registry.secrets.token_hex", _fake_hex)
         session = Session()
         session.terminal.task_registry.create(TaskKind.INVESTIGATION)
         session.terminal.task_registry.create(TaskKind.INVESTIGATION)

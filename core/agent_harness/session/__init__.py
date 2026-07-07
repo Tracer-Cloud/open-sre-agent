@@ -15,12 +15,18 @@ singletons provide the production JSONL backends used by agent surfaces.
 
 from __future__ import annotations
 
-from core.agent_harness.session.repo import JsonlSessionRepo
-from core.agent_harness.session.session_core import SessionCore
-from core.agent_harness.session.state import (
+from core.agent_harness.session.jsonl_repository import JsonlSessionRepo
+from core.agent_harness.session.persistence_ports import (
+    CHAT_KINDS,
+    SessionPersistenceSource,
+    SessionRepo,
+    SessionStorage,
+)
+from core.agent_harness.session.session import (
     SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST,
     Session,
 )
+from core.agent_harness.session.session_core import SessionCore
 from core.agent_harness.session.storage import (
     InMemorySessionStorage,
     JsonlSessionStorage,
@@ -29,12 +35,6 @@ from core.agent_harness.session.terminal_metrics import (
     InterventionKind,
     TerminalMetrics,
     TerminalMetricsSnapshot,
-)
-from core.agent_harness.session.types import (
-    CHAT_KINDS,
-    SessionPersistenceSource,
-    SessionRepo,
-    SessionStorage,
 )
 
 # Production singletons. Both backends are stateless, so sharing one instance

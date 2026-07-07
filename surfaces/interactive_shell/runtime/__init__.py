@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from core.agent_harness.session.background import (
+from core.agent_harness.session.background_investigations import (
     BackgroundInvestigationRecord,
     BackgroundNotificationPreferences,
 )
-from core.agent_harness.session.state import Session
-from core.agent_harness.session.tasks import TaskRegistry
+from core.agent_harness.session.session import Session
+from core.agent_harness.session.task_registry import TaskRegistry
 from platform.common.task_types import TaskKind, TaskRecord, TaskStatus
 from surfaces.interactive_shell.runtime.context import (
     ReplRuntimeContext,

@@ -34,11 +34,12 @@ import logging
 from datetime import datetime
 from typing import Any
 
+from core.agent_harness.session.persistence_ports import SessionRepo, SessionStorage
+
 # Import from submodules (not the package __init__) so the session package can
 # re-export SessionManager without a circular import.
-from core.agent_harness.session.state import Session
-from core.agent_harness.session.tasks import TaskRegistry
-from core.agent_harness.session.types import SessionRepo, SessionStorage
+from core.agent_harness.session.session import Session
+from core.agent_harness.session.task_registry import TaskRegistry
 
 logger = logging.getLogger(__name__)
 

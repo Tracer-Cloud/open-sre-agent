@@ -11,8 +11,8 @@ from core.agent_harness.session import (
     SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST,
     Session,
 )
-from core.agent_harness.session.state import _scenario_id_from_synthetic_label
-from core.agent_harness.session.tasks import TaskRegistry
+from core.agent_harness.session.session import _scenario_id_from_synthetic_label
+from core.agent_harness.session.task_registry import TaskRegistry
 from platform.common.task_types import TaskKind
 
 

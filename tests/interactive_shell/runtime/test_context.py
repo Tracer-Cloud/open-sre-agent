@@ -11,7 +11,7 @@ from prompt_toolkit.output import DummyOutput
 from pydantic import ValidationError
 
 from core.agent_harness.session import Session
-from core.agent_harness.session.tasks import TaskRegistry
+from core.agent_harness.session.task_registry import TaskRegistry
 from surfaces.interactive_shell.controller import InteractiveShellController
 from surfaces.interactive_shell.runtime.context import (
     ReplRuntimeContext,

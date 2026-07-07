@@ -10,8 +10,8 @@ from pathlib import Path
 from typing import Any
 
 from config.version import get_opensre_version
-from core.agent_harness.session.paths import session_path
-from core.agent_harness.session.types import CHAT_KINDS, SessionPersistenceSource
+from core.agent_harness.session.persistence_ports import CHAT_KINDS, SessionPersistenceSource
+from core.agent_harness.session.storage_paths import session_path
 
 _TRIGGER_MAX_CHARS = 200
 

@@ -13,7 +13,7 @@ from prompt_toolkit.history import FileHistory
 from rich.console import Console
 
 from core.agent_harness.session import Session
-from core.agent_harness.session.background import BackgroundInvestigationRecord
+from core.agent_harness.session.background_investigations import BackgroundInvestigationRecord
 from platform.common.task_types import TaskKind, TaskStatus
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
 from surfaces.interactive_shell.command_registry import repl_data as repl_data_module
@@ -1634,7 +1634,7 @@ class TestResumeCommand:
         target_id = "old-abc-1234567890"
 
         with patch(
-            "core.agent_harness.session.paths.sessions_dir",
+            "core.agent_harness.session.storage_paths.sessions_dir",
             return_value=tmp_path,
         ):
             SessionStore.open_session(session)
@@ -1806,7 +1806,7 @@ class TestResumeCommand:
         console, buf = _capture()
 
         with patch(
-            "core.agent_harness.session.paths.sessions_dir",
+            "core.agent_harness.session.storage_paths.sessions_dir",
             return_value=tmp_path,
         ):
             SessionStore.open_session(session)

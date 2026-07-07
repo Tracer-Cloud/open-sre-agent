@@ -8,7 +8,7 @@ from core.agent_harness.grounding.diagnostics import (
     log_grounding_cache_diagnostics,
 )
 from core.agent_harness.grounding.models import CacheStats
-from core.agent_harness.session.state import Session
+from core.agent_harness.session.session import Session
 from surfaces.interactive_shell.grounding.cli_reference import ShellPromptContextProvider
 
 

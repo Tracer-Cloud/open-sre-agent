@@ -150,7 +150,7 @@ def test_unwatch_rejects_non_watchdog_task() -> None:
 def test_run_watchdog_respects_cancel(monkeypatch: pytest.MonkeyPatch) -> None:
     from datetime import UTC, datetime, timedelta
 
-    from core.agent_harness.session.tasks import TaskRegistry
+    from core.agent_harness.session.task_registry import TaskRegistry
     from tools.system.fleet_monitoring.probe import ProcessSnapshot
     from tools.system.watch_dog.monitor import run_watchdog
 
@@ -199,7 +199,7 @@ def test_run_watchdog_once_without_thresholds_exits(monkeypatch: pytest.MonkeyPa
     """``--once`` with no threshold flags must finish after one sample (Greptile #1969)."""
     from datetime import UTC, datetime, timedelta
 
-    from core.agent_harness.session.tasks import TaskRegistry
+    from core.agent_harness.session.task_registry import TaskRegistry
     from tools.system.fleet_monitoring.probe import ProcessSnapshot
     from tools.system.watch_dog.monitor import run_watchdog
 

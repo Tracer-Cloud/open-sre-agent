@@ -8,7 +8,7 @@ from prompt_toolkit import PromptSession
 from pydantic import BaseModel, ConfigDict, Field, InstanceOf, field_validator, model_validator
 
 from core.agent_harness.session import SessionManager
-from core.agent_harness.session.state import Session
+from core.agent_harness.session.session import Session
 from core.domain.alerts import inbox as _alert_inbox
 from surfaces.interactive_shell.runtime.core.state import (
     ReplState,

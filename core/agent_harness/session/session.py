@@ -15,7 +15,7 @@ from typing import Any
 
 from core.agent_harness.session.alert_inbox import SessionAlertInbox
 from core.agent_harness.session.session_core import SessionCore
-from core.agent_harness.session.tasks import TaskRegistry
+from core.agent_harness.session.task_registry import TaskRegistry
 from core.agent_harness.session.terminal_session import TerminalSession
 from core.domain.alerts.inbox import IncomingAlert
 

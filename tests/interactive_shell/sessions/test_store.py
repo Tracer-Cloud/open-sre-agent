@@ -15,7 +15,7 @@ from core.agent_harness.session import (
     JsonlSessionStorage,
     Session,
 )
-from core.agent_harness.session.paths import sessions_dir as _sessions_dir
+from core.agent_harness.session.storage_paths import sessions_dir as _sessions_dir
 
 
 class _SessionStoreFacade(JsonlSessionStorage, JsonlSessionRepo):
@@ -75,7 +75,7 @@ def _write_v2_session(path: Path, sid: str, *, started_at: str, text: str = "hi"
 
 
 def _patch_dir(tmp_path: Path):
-    return patch("core.agent_harness.session.paths.sessions_dir", return_value=tmp_path)
+    return patch("core.agent_harness.session.storage_paths.sessions_dir", return_value=tmp_path)
 
 
 @pytest.fixture
@@ -116,7 +116,7 @@ def test_open_session_uses_session_id_as_filename(tmp_path: Path) -> None:
 def test_open_session_never_raises_on_bad_path() -> None:
     session = _make_session()
     with patch(
-        "core.agent_harness.session.paths.sessions_dir",
+        "core.agent_harness.session.storage_paths.sessions_dir",
         return_value=Path("/nonexistent/cannot/write"),
     ):
         SessionStore.open_session(session)  # must not raise
