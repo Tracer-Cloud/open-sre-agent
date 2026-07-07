@@ -24,6 +24,7 @@ else:
     GroundingContext = Any
 
 from config.llm_reasoning_effort import ReasoningEffortChoice
+from core.agent_harness.session.alert_inbox import SessionAlertInbox
 from core.agent_harness.session.background import (
     BackgroundInvestigationRecord,
     BackgroundNotificationPreferences,
@@ -36,6 +37,7 @@ from core.agent_harness.session.integrations_cache import (
 from core.agent_harness.session.storage.jsonl import JsonlSessionStorage
 from core.agent_harness.session.tasks import TaskRegistry
 from core.agent_harness.session.terminal_metrics import TerminalMetrics
+from core.agent_harness.session.terminal_session import TerminalSession
 from core.agent_harness.session.token_usage import TokenUsage
 from core.agent_harness.session.types import SessionStorage
 from core.state import MutableAgentState
@@ -220,11 +222,12 @@ class Session:
     Set once by ``InteractiveShellController.start_interactive_shell`` so
     worker-thread code can schedule prompt-toolkit updates on the main thread."""
 
-    active_theme_name: str = "green"
-    """Interactive shell palette name for this REPL session (``/theme``, prompts)."""
+    terminal: TerminalSession = field(default_factory=TerminalSession)
+    """Interactive-shell (terminal) session facet — shell-only UI/theme/background state.
 
-    pending_theme_refresh: bool = False
-    """When True, apply the active palette to prompt-toolkit before the next prompt."""
+    Always present (empty for non-shell sessions) so shell code needs no None-guard;
+    ``core``/``gateway``/``tools`` consumers ignore it. Fields move here cluster-by-cluster
+    (#3690); the theme cluster (``active_theme_name``, ``pending_theme_refresh``) is here."""
 
     task_registry: TaskRegistry = field(default_factory=TaskRegistry)
     """Recent in-flight and completed shell tasks for /tasks and /cancel."""
@@ -291,12 +294,12 @@ class Session:
     last_synthetic_observation_path: str | None = None
     """Absolute path to ``latest.json`` for the last finished synthetic run (set on failure)."""
 
-    incoming_alerts: list[IncomingAlert] = field(default_factory=list)
-    """Queued incoming alerts from the HTTP listener, capped at 256 entries.
-    Shows up in /status and /history for user visibility."""
+    alerts: SessionAlertInbox = field(default_factory=SessionAlertInbox)
+    """Inbox of externally-received alerts (shell alert listener → ``/status``).
 
-    _INCOMING_ALERTS_MAX: int = 256
-    """Maximum number of incoming alerts to keep in session history."""
+    A surface facet: the bounded alert list + cap live on ``SessionAlertInbox`` so
+    core-session consumers that never touch alerts don't see the field."""
+
     # the next investigation.  Kept as a class-level tuple so any caller that
     # wants to know "what counts as accumulated context" has a single source.
     _ACCUMULATED_KEYS: tuple[str, ...] = (
@@ -411,20 +414,13 @@ class Session:
     def record_incoming_alert(self, alert: IncomingAlert) -> None:
         """Append a full IncomingAlert with all metadata to session history.
 
-        Also appends to incoming_alerts list (capped at _INCOMING_ALERTS_MAX).
-        This preserves received_at, severity, source, and alert_name metadata
-        so that /status displays accurate timestamps and future uses have complete data.
+        Also stores the alert in the ``alerts`` inbox facet (bounded FIFO), preserving
+        received_at, severity, source, and alert_name so /status displays accurate
+        timestamps and future uses have complete data.
         """
-        # Record to history with alert text
         self.history.append({"type": "incoming_alert", "text": alert.text, "ok": True})
         self.storage.append_turn(self, "incoming_alert", alert.text)
-
-        # Store the full alert object to preserve all metadata
-        self.incoming_alerts.append(alert)
-
-        # Cap the list at _INCOMING_ALERTS_MAX
-        if len(self.incoming_alerts) > self._INCOMING_ALERTS_MAX:
-            self.incoming_alerts.pop(0)
+        self.alerts.add(alert)
 
     def mark_latest(self, *, ok: bool, kind: str | None = None) -> None:
         """Update the latest history entry, optionally scanning for a matching kind."""
@@ -672,7 +668,7 @@ class Session:
         self.accumulated_context.clear()
         self.tokens.reset()
         self.agent.clear()
-        self.incoming_alerts.clear()
+        self.alerts.clear()
         # Keep persisted cross-session task history on disk intact.
         # /new is session-scoped, so swap in a fresh in-memory registry
         # that reuses the same backing store (if any) so /tasks still shows history.

@@ -53,7 +53,7 @@ def test_create_context_applies_canonical_session_bootstrap(
         )
 
     assert context.session is session
-    assert session.active_theme_name == "pink"
+    assert session.terminal.active_theme_name == "pink"
     assert session.configured_integrations == ("github",)
     assert session.configured_integrations_known is True
     assert hydrate_calls == [session.session_id]
@@ -81,7 +81,7 @@ def test_context_supports_lightweight_bootstrap_for_unit_seams(
         persistent_tasks=False,
     )
 
-    assert context.session.active_theme_name == "green"
+    assert context.session.terminal.active_theme_name == "green"
     assert isinstance(context.state, ReplState)
     assert isinstance(context.spinner, SpinnerState)
 

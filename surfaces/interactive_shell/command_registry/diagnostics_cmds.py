@@ -44,12 +44,12 @@ def _cmd_status(session: Session, console: Console, _args: list[str]) -> bool:
     table.add_column("value")
     table.add_row("interactions", str(len(session.history)))
 
-    if session.incoming_alerts:
+    most_recent = session.alerts.most_recent
+    if most_recent is not None:
         from surfaces.interactive_shell.ui.alerts import time_ago
 
-        most_recent = session.incoming_alerts[-1]
         age_str = time_ago(most_recent.received_at)
-        table.add_row("incoming alerts", f"{len(session.incoming_alerts)} (last {age_str})")
+        table.add_row("incoming alerts", f"{len(session.alerts.entries)} (last {age_str})")
     else:
         table.add_row("incoming alerts", "0")
 

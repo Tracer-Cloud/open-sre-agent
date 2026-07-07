@@ -102,8 +102,8 @@ class PromptManager:
         if self.pt_session is None:
             raise RuntimeError("PromptManager.setup() must run before reading prompts")
 
-        if self.session.pending_theme_refresh:
-            self.session.pending_theme_refresh = False
+        if self.session.terminal.pending_theme_refresh:
+            self.session.terminal.pending_theme_refresh = False
             refresh_prompt_theme(self.session)
         await asyncio.sleep(0.05)
         drain_stale_cpr_bytes()

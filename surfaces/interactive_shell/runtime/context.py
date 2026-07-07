@@ -48,7 +48,7 @@ class SessionBootstrapSpec(BaseModel):
             hydrate_integrations=self.hydrate_integrations,
             persistent_tasks=self.persistent_tasks,
         )
-        self.session.active_theme_name = self.active_theme_name or _current_theme_name()
+        self.session.terminal.active_theme_name = self.active_theme_name or _current_theme_name()
         if self.pt_session is not None:
             self.session.prompt_history_backend = self.pt_session.history
         return self

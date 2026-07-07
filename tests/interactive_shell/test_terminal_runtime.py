@@ -1643,7 +1643,7 @@ class TestThemeCommand:
         monkeypatch.setattr(theme_cmd, "repl_choose_one", _fake_choose_one)
 
         session = Session()
-        session.active_theme_name = "pink"
+        session.terminal.active_theme_name = "pink"
         set_active_theme("pink")
         console, _buf = self._capture()
 
@@ -1745,7 +1745,7 @@ class TestThemeCommand:
         theme_cmd._persist_and_report_theme(session, console, "pink")
 
         assert drains == ["drain", "poster", "drain"]
-        assert session.pending_theme_refresh is True
+        assert session.terminal.pending_theme_refresh is True
 
 
 def test_refresh_prompt_theme_skips_invalidate_when_app_not_running() -> None:

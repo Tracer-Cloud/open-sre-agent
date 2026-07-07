@@ -54,8 +54,6 @@ _TERMINAL_FIELDS = (
     "prompt_history_backend",
     "pt_style_app",
     "main_loop",
-    "active_theme_name",
-    "pending_theme_refresh",
     "pending_prompt_default",
     "pending_prompt_autosubmit",
     "exclusive_stdin_active",
@@ -76,37 +74,52 @@ _TERMINAL_FIELDS = (
     "last_synthetic_observation_path",
     "trust_mode",
 )
-_GATEWAY_FIELDS = ("incoming_alerts", "_INCOMING_ALERTS_MAX")
+# Extracted facets, each a single field on Session holding relocated state:
+#   Phase 1 (alert inbox): incoming_alerts + _INCOMING_ALERTS_MAX -> session.alerts (entries, _max)
+#   Phase 2 (terminal, theme cluster): active_theme_name + pending_theme_refresh -> session.terminal
+_FACET_FIELDS = ("alerts", "terminal")
 
 
-def test_field_inventory_is_exactly_48_fields() -> None:
-    all_fields = _CORE_FIELDS + _TERMINAL_FIELDS + _GATEWAY_FIELDS
-    assert len(all_fields) == 48
-    assert len(set(all_fields)) == 48  # no duplicates across buckets
+def test_field_inventory_is_exactly_46_top_level_fields() -> None:
+    all_fields = _CORE_FIELDS + _TERMINAL_FIELDS + _FACET_FIELDS
+    assert len(all_fields) == 46  # 48 - 2 (alerts) - 2 (theme) + 2 facet fields
+    assert len(set(all_fields)) == 46  # no duplicates across buckets
 
 
 def test_every_inventoried_field_is_accessible_on_session() -> None:
     session = _session()
     missing = [
-        f for f in _CORE_FIELDS + _TERMINAL_FIELDS + _GATEWAY_FIELDS if not hasattr(session, f)
+        f for f in _CORE_FIELDS + _TERMINAL_FIELDS + _FACET_FIELDS if not hasattr(session, f)
     ]
     assert missing == []
 
 
+def test_alert_inbox_facet_holds_the_relocated_alert_state() -> None:
+    inbox = _session().alerts
+    assert hasattr(inbox, "entries")  # was Session.incoming_alerts
+    assert hasattr(inbox, "_max")  # was Session._INCOMING_ALERTS_MAX
+
+
+def test_terminal_facet_holds_the_theme_cluster() -> None:
+    terminal = _session().terminal
+    assert hasattr(terminal, "active_theme_name")  # was Session.active_theme_name
+    assert hasattr(terminal, "pending_theme_refresh")  # was Session.pending_theme_refresh
+
+
 # --------------------------------------------------------------------------- #
-# Gateway facet — incoming-alert cap                                          #
+# Alert-inbox facet — incoming-alert cap                                      #
 # --------------------------------------------------------------------------- #
 
 
 def test_incoming_alerts_are_capped_and_drop_oldest_first() -> None:
     session = _session()
-    cap = session._INCOMING_ALERTS_MAX
+    cap = session.alerts._max
     for i in range(cap + 5):
         session.record_incoming_alert(IncomingAlert(text=f"alert-{i}"))
-    assert len(session.incoming_alerts) == cap
+    assert len(session.alerts.entries) == cap
     # FIFO: the first 5 were dropped, newest retained.
-    assert session.incoming_alerts[0].text == "alert-5"
-    assert session.incoming_alerts[-1].text == f"alert-{cap + 4}"
+    assert session.alerts.entries[0].text == "alert-5"
+    assert session.alerts.entries[-1].text == f"alert-{cap + 4}"
 
 
 # --------------------------------------------------------------------------- #
