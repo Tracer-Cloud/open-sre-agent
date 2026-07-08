@@ -13,7 +13,7 @@ from pathlib import Path
 from rich.console import Console
 from rich.markup import escape
 
-from core.agent_harness.session.terminal_compat import (
+from core.agent_harness.session.terminal_access import (
     session_terminal,
     set_turn_outcome_hint,
 )

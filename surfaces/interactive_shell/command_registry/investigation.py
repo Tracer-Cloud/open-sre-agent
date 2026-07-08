@@ -9,7 +9,7 @@ from rich.console import Console
 from rich.markup import escape
 
 from config.llm_reasoning_effort import apply_reasoning_effort
-from core.agent_harness.session.terminal_compat import (
+from core.agent_harness.session.terminal_access import (
     background_mode_enabled,
     session_terminal,
 )

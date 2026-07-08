@@ -38,7 +38,7 @@ from core.agent_harness.ports import (
 )
 from core.agent_harness.prompts import build_cli_agent_prompt_from_provider
 from core.agent_harness.prompts.conversation_memory import MAX_CONVERSATION_MESSAGES
-from core.agent_harness.session.terminal_compat import agent_turn_executed_slashes
+from core.agent_harness.session.terminal_access import agent_turn_executed_slashes
 from core.agent_harness.turns.transcript_compaction import auto_compact_if_needed
 from core.agent_harness.turns.turn_plan import TurnPlan, build_turn_plan
 from core.llm_invoke_errors import is_cli_timeout_error

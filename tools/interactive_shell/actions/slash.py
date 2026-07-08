@@ -6,7 +6,7 @@ from typing import Any
 
 from rich.markup import escape
 
-from core.agent_harness.session.terminal_compat import (
+from core.agent_harness.session.terminal_access import (
     agent_turn_executed_slashes,
     exclusive_stdin_active,
     session_terminal,
@@ -118,9 +118,7 @@ def execute_slash_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
         slash_args,
         session=ctx.session,
         is_tty=ctx.is_tty,
-    ) and not exclusive_stdin_active(
-        ctx.session
-    ):
+    ) and not exclusive_stdin_active(ctx.session):
         # Hand the picker back to the REPL loop instead of running it against the
         # live prompt: set_auto_command re-submits it as a deterministic turn
         # the loop dispatches with exclusive stdin, so no CPR replies leak in.
