@@ -22,7 +22,7 @@ _CPR_SEQUENCE_RE = re.compile(
 _CPR_ESCAPED_SEQUENCE_RE = re.compile(r"(?:\x1b\[|\x9b)\d{1,4};\d{1,4}R")
 
 
-def drain_stale_cpr_bytes() -> None:
+def drain_stale_cpr_bytes(*, settle_seconds: float = 0.0) -> None:
     """Discard CPR escape-sequence bytes left in stdin after prompt teardown.
 
     When ``prompt_async`` returns, prompt_toolkit tears down its input-reader
@@ -30,15 +30,24 @@ def drain_stale_cpr_bytes() -> None:
     sent but that arrived just after the reader stopped sit in the OS stdin
     buffer and appear as literal keystrokes in the next prompt. This function
     non-blockingly drains stdin between ``prompt_async`` calls on POSIX TTYs.
+
+    ``settle_seconds`` blocks up to that long waiting for a first byte before
+    draining, so a CPR reply still in flight across a prompt handoff (e.g. the
+    raw investigation-feedback menu returning to the REPL prompt) is caught
+    rather than leaking into the next prompt. Once any byte arrives the rest is
+    drained non-blockingly. Only used at handoffs where the user has just made a
+    selection and is not mid-keystroke.
     """
     if os.name == "nt" or not sys.stdin.isatty():
         return
     try:
         fd = sys.stdin.fileno()
-        while select.select([fd], [], [], 0)[0]:
+        wait = settle_seconds
+        while select.select([fd], [], [], wait)[0]:
             chunk = os.read(fd, 256)
             if not chunk:
                 break
+            wait = 0.0  # first reply seen; drain any remainder without blocking
     except OSError:
         # Draining stdin is best-effort; ignore when the fd is not readable.
         pass

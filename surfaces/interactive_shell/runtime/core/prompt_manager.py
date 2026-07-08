@@ -29,6 +29,13 @@ from surfaces.interactive_shell.ui.input_prompt.key_bindings import (
 from surfaces.interactive_shell.ui.input_prompt.refresh import wire_prompt_refresh
 from surfaces.interactive_shell.ui.input_prompt.style import refresh_prompt_theme
 
+# A bottom-toolbar CPR reply can arrive a few ms after the prior prompt (or a raw
+# feedback menu) tears down, so the drain runs several passes over a short window
+# instead of once: PASSES drains spaced INTERVAL_SECONDS apart (~90 ms total) reliably
+# clear a reply in flight without a single fixed sleep that could still miss it.
+_CPR_DRAIN_PASSES = 3
+_CPR_DRAIN_INTERVAL_SECONDS = 0.03
+
 
 class PromptManager:
     """Own prompt-toolkit setup, prompt rendering, and prompt redraw hooks."""
@@ -105,7 +112,12 @@ class PromptManager:
         if self.session.terminal.pending_theme_refresh:
             self.session.terminal.pending_theme_refresh = False
             refresh_prompt_theme(self.session)
-        await asyncio.sleep(0.05)
+        # Drain CPR replies over a short window: a bottom-toolbar reply from the
+        # prior prompt (or a raw feedback menu) can arrive a few ms after teardown,
+        # so a single non-blocking drain can miss it and it leaks into this prompt.
+        for _ in range(_CPR_DRAIN_PASSES):
+            drain_stale_cpr_bytes()
+            await asyncio.sleep(_CPR_DRAIN_INTERVAL_SECONDS)
         drain_stale_cpr_bytes()
 
         prefilled = self.session.terminal.pop_pending_prompt_default()

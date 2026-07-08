@@ -96,7 +96,7 @@ def test_repl_choose_one_starts_at_initial_value(monkeypatch) -> None:
     monkeypatch.setattr(choice_menu, "repl_tty_interactive", lambda: True)
     monkeypatch.setattr(
         "surfaces.interactive_shell.ui.components.cpr_stdin.drain_stale_cpr_bytes",
-        lambda: None,
+        lambda **_kwargs: None,
     )
     monkeypatch.setattr(sys, "stdout", out)
     monkeypatch.setattr(choice_menu, "_cols", lambda: 80)
@@ -112,6 +112,23 @@ def test_repl_choose_one_starts_at_initial_value(monkeypatch) -> None:
     assert result == "blue"
     plain = _ANSI_RE.sub("", out.getvalue())
     assert "> blue (current)" in plain
+
+
+def test_repl_choose_one_settle_drains_cpr_after_selection(monkeypatch) -> None:
+    # After the raw menu returns, a settle drain runs so a bottom-toolbar CPR
+    # reply in flight from the interrupted prompt cannot leak into the REPL prompt.
+    calls: list[dict[str, float]] = []
+    monkeypatch.setattr(choice_menu, "repl_tty_interactive", lambda: True)
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.ui.components.cpr_stdin.drain_stale_cpr_bytes",
+        lambda **kwargs: calls.append(kwargs),
+    )
+    monkeypatch.setattr(choice_menu, "_pick", lambda **_kwargs: 0)
+
+    result = choice_menu.repl_choose_one(title="verdict", choices=[("yes", "yes"), ("no", "no")])
+
+    assert result == "yes"
+    assert {"settle_seconds": 0.12} in calls
 
 
 def test_read_action_ignores_left_arrow(monkeypatch) -> None:
