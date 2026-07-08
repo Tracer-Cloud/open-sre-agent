@@ -21,7 +21,7 @@ def _gateway_console() -> Console:
     return Console(file=io.StringIO(), force_terminal=False, highlight=False, width=100)
 
 
-def _run_gateway_slash(message: str, monkeypatch: pytest.MonkeyPatch) -> RecordingGatewaySink:
+def _run_gateway_slash(message: str) -> RecordingGatewaySink:
     session = SessionCore(storage=InMemorySessionStorage())
     sink = RecordingGatewaySink()
     handler = GatewayTurnHandler(console=_gateway_console())
@@ -36,9 +36,9 @@ def test_gateway_registers_slash_invoke_tool() -> None:
     assert slash.name == "slash_invoke"
 
 
-def test_gateway_status_slash_is_not_swallowed(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_gateway_status_slash_is_not_swallowed() -> None:
     """Literal /status must route through slash_invoke and return session diagnostics."""
-    sink = _run_gateway_slash("/status", monkeypatch)
+    sink = _run_gateway_slash("/status")
     assert sink.finalized is not None
     assert "I didn't have anything to add for that." not in sink.finalized
     assert "interactions" in sink.finalized.lower()
@@ -54,7 +54,7 @@ def test_gateway_investigate_slash_dispatches(monkeypatch: pytest.MonkeyPatch) -
         _fake_run_sample_alert_for_session,
     )
 
-    sink = _run_gateway_slash("/investigate generic", monkeypatch)
+    sink = _run_gateway_slash("/investigate generic")
     assert sink.finalized is not None
     assert "I didn't have anything to add for that." not in sink.finalized
     assert "generic" in sink.finalized.lower()
@@ -73,7 +73,7 @@ def test_gateway_onboard_slash_returns_headless_guidance(monkeypatch: pytest.Mon
         _fake_run_cli_command,
     )
 
-    sink = _run_gateway_slash("/onboard", monkeypatch)
+    sink = _run_gateway_slash("/onboard")
     assert recorded == []
     assert sink.finalized is not None
     assert "interactive wizard" in sink.finalized.lower()
@@ -99,7 +99,7 @@ def test_gateway_integrations_setup_returns_headless_guidance(
         _fake_run_cli_command,
     )
 
-    sink = _run_gateway_slash("/integrations setup grafana", monkeypatch)
+    sink = _run_gateway_slash("/integrations setup grafana")
     assert recorded == []
     assert sink.finalized is not None
     assert "grafana" in sink.finalized.lower()
@@ -132,7 +132,7 @@ def test_gateway_integrations_setup_runs_inline_when_stdin_is_tty(
         _fake_run_cli_command,
     )
 
-    sink = _run_gateway_slash("/integrations setup grafana", monkeypatch)
+    sink = _run_gateway_slash("/integrations setup grafana")
     assert recorded == []
     assert sink.finalized is not None
     assert "Launching" not in (sink.finalized or "")
