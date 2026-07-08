@@ -14,9 +14,9 @@ from platform.deployment.aws.client import DEFAULT_REGION, get_boto3_client, get
 from platform.deployment.aws.config import (
     AL2023_AMI_SSM_PARAMETER,
     BEDROCK_POLICY_ARN,
-    DEPLOYMENT_HEALTH_INGRESS_CIDR_DEFAULT,
-    DEPLOYMENT_HEALTH_INGRESS_CIDR_ENV,
-    DEPLOYMENT_HEALTH_PORT,
+    WEB_API_INGRESS_CIDR_DEFAULT,
+    WEB_API_INGRESS_CIDR_ENV,
+    WEB_API_PORT,
     EC2_INSTANCE_ROLE_DESCRIPTION,
     EC2_ROOT_DEVICE_NAME,
     EC2_VOLUME_SIZE_GB,
@@ -179,9 +179,9 @@ def stack_security_group_name(stack_name: str) -> str:
     return f"{stack_name}-sg"
 
 
-def deployment_health_ingress_cidr() -> str:
-    """Return the CIDR allowed to reach the deployment health/API port."""
-    return os.getenv(DEPLOYMENT_HEALTH_INGRESS_CIDR_ENV, DEPLOYMENT_HEALTH_INGRESS_CIDR_DEFAULT).strip()
+def web_api_ingress_cidr() -> str:
+    """Return the CIDR allowed to reach the web API port."""
+    return os.getenv(WEB_API_INGRESS_CIDR_ENV, WEB_API_INGRESS_CIDR_DEFAULT).strip()
 
 
 def get_default_vpc_id(*, region: str = DEFAULT_REGION) -> str:
@@ -225,7 +225,7 @@ def create_stack_security_group(
     *,
     region: str = DEFAULT_REGION,
 ) -> str:
-    """Create (or reuse) a stack security group with inbound TCP on the health/API port.
+    """Create (or reuse) a stack security group with inbound TCP on the web API port.
 
     Returns the security group id (e.g. ``sg-0abc123...``).
     """
@@ -254,12 +254,12 @@ def create_stack_security_group(
         group_id = str(created["GroupId"])
         logger.info("Created security group %s for stack %s", group_id, stack_name)
 
-    cidr = deployment_health_ingress_cidr()
+    cidr = web_api_ingress_cidr()
     _authorize_tcp_ingress(
         group_id=group_id,
-        port=DEPLOYMENT_HEALTH_PORT,
+        port=WEB_API_PORT,
         cidr=cidr,
-        description=f"OpenSRE health/API port {DEPLOYMENT_HEALTH_PORT}",
+        description=f"OpenSRE web API port {WEB_API_PORT}",
         region=region,
     )
     return group_id
@@ -320,7 +320,7 @@ def launch_instance(
 
     When ``security_group_ids`` is omitted, AWS assigns the default VPC security
     group. Pass a stack security group from :func:`create_stack_security_group` to
-    expose the deployment health/API port publicly.
+    expose the web API port publicly.
 
     ``root_device_name`` must match the AMI root block device (``/dev/xvda`` for
     Amazon Linux 2023, ``/dev/sda1`` for Ubuntu official AMIs) or the requested

@@ -7,17 +7,17 @@ from unittest.mock import MagicMock, patch
 import pytest
 from botocore.exceptions import ClientError
 
-from platform.deployment.aws.config import DEPLOYMENT_HEALTH_PORT
+from platform.deployment.aws.config import WEB_API_PORT
 from platform.deployment.aws.ec2 import (
     create_stack_security_group,
     delete_stack_security_group,
-    deployment_health_ingress_cidr,
+    web_api_ingress_cidr,
     stack_security_group_name,
 )
 
 
 @patch("platform.deployment.aws.ec2.get_boto3_client")
-def test_create_stack_security_group_creates_and_opens_health_port(
+def test_create_stack_security_group_creates_and_opens_web_api_port(
     mock_get_boto3_client: MagicMock,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -26,7 +26,7 @@ def test_create_stack_security_group_creates_and_opens_health_port(
     ec2.describe_vpcs.return_value = {"Vpcs": [{"VpcId": "vpc-123"}]}
     ec2.describe_security_groups.return_value = {"SecurityGroups": []}
     ec2.create_security_group.return_value = {"GroupId": "sg-new"}
-    monkeypatch.delenv("OPENSRE_DEPLOY_INGRESS_CIDR", raising=False)
+    monkeypatch.delenv("OPENSRE_WEB_API_INGRESS_CIDR", raising=False)
 
     group_id = create_stack_security_group("opensre-ec2", region="us-east-1")
 
@@ -34,8 +34,8 @@ def test_create_stack_security_group_creates_and_opens_health_port(
     ec2.create_security_group.assert_called_once()
     ec2.authorize_security_group_ingress.assert_called_once()
     permission = ec2.authorize_security_group_ingress.call_args.kwargs["IpPermissions"][0]
-    assert permission["FromPort"] == DEPLOYMENT_HEALTH_PORT
-    assert permission["ToPort"] == DEPLOYMENT_HEALTH_PORT
+    assert permission["FromPort"] == WEB_API_PORT
+    assert permission["ToPort"] == WEB_API_PORT
     assert permission["IpRanges"][0]["CidrIp"] == "0.0.0.0/0"
 
 
@@ -71,11 +71,11 @@ def test_create_stack_security_group_ignores_duplicate_ingress(
     assert create_stack_security_group("opensre-ec2", region="us-east-1") == "sg-existing"
 
 
-def test_deployment_health_ingress_cidr_reads_env(
+def test_web_api_ingress_cidr_reads_env(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("OPENSRE_DEPLOY_INGRESS_CIDR", "203.0.113.0/24")
-    assert deployment_health_ingress_cidr() == "203.0.113.0/24"
+    monkeypatch.setenv("OPENSRE_WEB_API_INGRESS_CIDR", "203.0.113.0/24")
+    assert web_api_ingress_cidr() == "203.0.113.0/24"
 
 
 def test_stack_security_group_name_is_deterministic() -> None:
