@@ -34,8 +34,15 @@ class GatewayManager:
 
     def start_gateway(self, *, wait: bool = True) -> GatewayManager:
         """Assemble the turn handler, start the worker, and own its lifecycle."""
+        from integrations.harness_adapters import register_harness_adapters as register_integrations
+        from tools.harness_adapters import register_harness_adapters as register_tools
+
         harness = AgentHarness(HarnessConfig(open_storage=False))
         harness.resolve_env_variables()
+        # Mirror the interactive shell boot path: register harness tool/integration
+        # adapters so action tools (including slash_invoke) are available on gateway turns.
+        register_integrations()
+        register_tools()
         logger = configure_gateway_logging()
 
         # Load the LLM client graph as one snapshot at boot (avoids a stale

@@ -10,6 +10,7 @@ from typing import Any
 
 from rich.console import Console
 
+from core.agent_harness.session.terminal_compat import pop_turn_outcome_hint
 from surfaces.interactive_shell.command_registry.agents import COMMANDS as AGENTS_COMMANDS
 from surfaces.interactive_shell.command_registry.alerts import COMMANDS as ALERTS_COMMANDS
 from surfaces.interactive_shell.command_registry.background_cmds import (
@@ -125,7 +126,7 @@ def _attach_slash_analytics(
             kind="slash",
             ok=ok,
             captured_output=captured_output,
-            outcome_hint=session.terminal.pop_turn_outcome_hint(),
+            outcome_hint=pop_turn_outcome_hint(session),
         )
     session.complete_latest_record(
         "slash",

@@ -13,6 +13,10 @@ from pathlib import Path
 from rich.console import Console
 from rich.markup import escape
 
+from core.agent_harness.session.terminal_compat import (
+    set_turn_outcome_hint,
+    session_terminal,
+)
 from surfaces.interactive_shell.command_registry.suggestions import closest_choice
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.runtime import Session, TaskKind
@@ -68,7 +72,8 @@ def run_cli_command(
     """
     console.print()
     cmd = build_opensre_cli_argv(args)
-    should_capture = capture_output or subprocess_timeout is not None
+    headless = session is not None and session_terminal(session) is None
+    should_capture = capture_output or subprocess_timeout is not None or headless
     child_env = os.environ.copy()
     child_env[_PARENT_INTERACTIVE_SHELL_ENV] = "1"
     if should_capture:
@@ -115,7 +120,7 @@ def run_cli_command(
         console.print(f"[{ERROR}]error running CLI command:[/] {exc}")
     console.print()
     if session is not None and not should_capture:
-        session.terminal.set_turn_outcome_hint(format_wizard_cli_outcome(args, exit_code=exit_code))
+        set_turn_outcome_hint(session, format_wizard_cli_outcome(args, exit_code=exit_code))
     return True
 
 
