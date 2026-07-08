@@ -228,6 +228,34 @@ class JsonlSessionStorage:
             {"custom_type": custom_type, "content": content, "display": display},
         )
 
+    def append_trace_span(
+        self,
+        session_id: str,
+        *,
+        span_kind: str,
+        name: str,
+        status: str = "ok",
+        duration_ms: int | None = None,
+        attributes: dict[str, Any] | None = None,
+        parent_id: str | None = None,
+    ) -> str:
+        """Append a product ``trace_span`` for ATM / debug (thread, route, stage, …)."""
+        payload: dict[str, Any] = {
+            "span_kind": span_kind,
+            "name": name,
+            "status": status,
+        }
+        if duration_ms is not None:
+            payload["duration_ms"] = duration_ms
+        if attributes:
+            payload["attributes"] = attributes
+        return self._append_entry(
+            session_id,
+            "trace_span",
+            payload,
+            parent_id=parent_id,
+        )
+
     def append_investigation_result(
         self,
         session_id: str,

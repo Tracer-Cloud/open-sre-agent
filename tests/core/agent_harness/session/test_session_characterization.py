@@ -38,13 +38,7 @@ _CORE_FIELDS = (
     "last_investigation_id",
     "last_assistant_intent",
     "last_synthetic_observation_path",
-    "configured_integrations",
-    "configured_integrations_known",
-    "resolved_integrations_cache",
-    "github_repo_scope",
-    "_integration_warm_lock",
-    "_integration_warm_generation",
-    "_integration_warm_task",
+    "integrations",
     "available_capabilities",
     "accumulated_context",
     "reasoning_effort",
@@ -75,13 +69,12 @@ _TERMINAL_FIELDS: tuple[str, ...] = ()
 _FACET_FIELDS = ("alerts", "terminal")
 
 
-def test_field_inventory_is_exactly_26_top_level_fields() -> None:
+def test_field_inventory_is_exactly_20_top_level_fields() -> None:
     all_fields = _CORE_FIELDS + _TERMINAL_FIELDS + _FACET_FIELDS
-    # 48 - 2 (alerts) - 2 (theme) - 5 (prompt-toolkit) - 4 (pending-prompt/stdin)
-    #    - 5 (background) - 2 (metrics/history) - 3 (analytics-staging)
-    #    - 1 (trust_mode) + 2 facet fields  (task_registry stayed core)
-    assert len(all_fields) == 26
-    assert len(set(all_fields)) == 26  # no duplicates across buckets
+    # The 7 integration fields collapsed into one composed ``integrations`` field
+    # (IntegrationState); its public fields are re-exposed as SessionCore properties.
+    assert len(all_fields) == 20
+    assert len(set(all_fields)) == 20  # no duplicates across buckets
 
 
 def test_every_inventoried_field_is_accessible_on_session() -> None:
@@ -205,19 +198,19 @@ def test_incoming_alerts_are_capped_and_drop_oldest_first() -> None:
 class TestWarmCacheGeneration:
     def test_stale_generation_is_ignored(self) -> None:
         session = _session()
-        session._integration_warm_generation = 5
-        session._store_warm_cache({"datadog": {"connection_verified": True}}, generation=3)
+        session.integrations._warm_generation = 5
+        session.integrations._store({"datadog": {"connection_verified": True}}, generation=3)
         assert session.resolved_integrations_cache is None
 
     def test_empty_resolve_is_not_cached(self) -> None:
         session = _session()
-        session._store_warm_cache({}, generation=session._integration_warm_generation)
+        session.integrations._store({}, generation=session.integrations._warm_generation)
         assert session.resolved_integrations_cache is None
 
     def test_current_generation_stores_the_cache(self) -> None:
         session = _session()
-        gen = session._integration_warm_generation
-        session._store_warm_cache({"datadog": {"connection_verified": True}}, generation=gen)
+        gen = session.integrations._warm_generation
+        session.integrations._store({"datadog": {"connection_verified": True}}, generation=gen)
         assert session.resolved_integrations_cache is not None
         assert "datadog" in session.resolved_integrations_cache
 

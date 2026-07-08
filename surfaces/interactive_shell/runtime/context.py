@@ -14,7 +14,9 @@ from surfaces.interactive_shell.runtime.core.state import (
     SpinnerState,
     create_repl_mutable_state,
 )
+from platform.observability.session_trace import set_session_trace_sink
 from surfaces.interactive_shell.session.session import Session
+from surfaces.interactive_shell.session.trace_sink import jsonl_trace_sink_for_session
 
 
 class SessionBootstrapSpec(BaseModel):
@@ -139,6 +141,7 @@ def create_repl_runtime_context(
         hydrate_integrations=hydrate_integrations,
         persistent_tasks=persistent_tasks,
     )
+    set_session_trace_sink(jsonl_trace_sink_for_session(prepared_session))
     mutable_state = create_repl_mutable_state(state=state, spinner=spinner)
     return ReplRuntimeContext(
         session=prepared_session,

@@ -154,10 +154,9 @@ def test_tools_hidden_when_capabilities_are_explicitly_empty() -> None:
 
 
 def test_telegram_send_message_offered_when_telegram_is_configured() -> None:
-    session = Session(
-        configured_integrations=("telegram",),
-        configured_integrations_known=True,
-    )
+    session = Session()
+    session.configured_integrations = ("telegram",)
+    session.configured_integrations_known = True
     names = {
         spec["name"]
         for spec in _tool_specs(

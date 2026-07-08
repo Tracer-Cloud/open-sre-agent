@@ -166,12 +166,12 @@ def test_get_integrations_warms_metadata_only_cache(monkeypatch: Any) -> None:
 
 def test_stale_background_warm_does_not_overwrite_refreshed_cache() -> None:
     session = Session()
-    stale_generation = session._integration_warm_generation
-    session._integration_warm_generation += 1
-    session._store_warm_cache(
-        {"fresh": {"token": "new"}}, generation=session._integration_warm_generation
+    stale_generation = session.integrations._warm_generation
+    session.integrations._warm_generation += 1
+    session.integrations._store(
+        {"fresh": {"token": "new"}}, generation=session.integrations._warm_generation
     )
-    session._store_warm_cache({"stale": {"token": "old"}}, generation=stale_generation)
+    session.integrations._store({"stale": {"token": "old"}}, generation=stale_generation)
     assert session.resolved_integrations_cache == {"fresh": {"token": "new"}}
 
 

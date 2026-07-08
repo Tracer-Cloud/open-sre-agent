@@ -9,7 +9,6 @@ shell extends this with its own UI state in
 
 from __future__ import annotations
 
-import threading
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -22,11 +21,7 @@ else:
     GroundingContext = Any
 
 from config.llm_reasoning_effort import ReasoningEffortChoice
-from core.agent_harness.integrations.resolution_cache import (
-    has_only_runtime_metadata,
-    has_resolved_integrations,
-    merge_resolved_integrations,
-)
+from core.agent_harness.session.integration_state import IntegrationState
 from core.agent_harness.session.persistence_ports import SessionStorage
 from core.agent_harness.session.storage.jsonl import JsonlSessionStorage
 from core.agent_harness.session.task_registry import TaskRegistry
@@ -91,27 +86,12 @@ class SessionCore:
     (nothing handled, gathered evidence and answered via LLM chat).
     """
 
-    configured_integrations: tuple[str, ...] = ()
-    """Session-scoped configured integration names for planning-time capability checks."""
-    configured_integrations_known: bool = False
-    """Whether configured_integrations reflects known state (vs default unknown)."""
-    resolved_integrations_cache: dict[str, Any] | None = None
-    """Resolved integration configs (env/store) shared across turns.
+    integrations: IntegrationState = field(default_factory=IntegrationState)
+    """Integration-resolution state: configured names, resolved-config cache, warm task.
 
-    Populated silently at REPL boot and again after integration mutations so the
-    conversational assistant and investigations can call registered tools without
-    waiting for the first user message to trigger a visible "Loading
-    integrations" pass. Cleared by ``refresh_integration_state`` when
-    integrations change."""
-    github_repo_scope: tuple[str, str] | None = None
-    """Sticky owner/repo inferred from chat, env, or git remote for GitHub tools."""
-    _integration_warm_lock: threading.Lock = field(
-        default_factory=threading.Lock,
-        repr=False,
-        compare=False,
-    )
-    _integration_warm_generation: int = field(default=0, repr=False, compare=False)
-    _integration_warm_task: Any = field(default=None, repr=False, compare=False)
+    The public fields are re-exposed as properties below for API stability; the
+    resolution logic and the coupling to the ``integrations`` domain live on
+    ``IntegrationState``."""
     available_capabilities: dict[str, tuple[str, ...]] = field(default_factory=dict)
     """Optional planning-time capability constraints (slash/cli/synthetic)."""
 
@@ -249,109 +229,59 @@ class SessionCore:
             if value:
                 self.accumulated_context[key] = value
 
+    # ── integration state: public fields re-exposed from the composed IntegrationState ──
+
+    @property
+    def configured_integrations(self) -> tuple[str, ...]:
+        """Session-scoped configured integration names for planning-time capability checks."""
+        return self.integrations.configured
+
+    @configured_integrations.setter
+    def configured_integrations(self, value: tuple[str, ...]) -> None:
+        self.integrations.configured = value
+
+    @property
+    def configured_integrations_known(self) -> bool:
+        """Whether ``configured_integrations`` reflects known state (vs default unknown)."""
+        return self.integrations.configured_known
+
+    @configured_integrations_known.setter
+    def configured_integrations_known(self, value: bool) -> None:
+        self.integrations.configured_known = value
+
+    @property
+    def resolved_integrations_cache(self) -> dict[str, Any] | None:
+        """Resolved integration configs (env/store) shared across turns."""
+        return self.integrations.resolved_cache
+
+    @resolved_integrations_cache.setter
+    def resolved_integrations_cache(self, value: dict[str, Any] | None) -> None:
+        self.integrations.resolved_cache = value
+
+    @property
+    def github_repo_scope(self) -> tuple[str, str] | None:
+        """Sticky owner/repo inferred from chat, env, or git remote for GitHub tools."""
+        return self.integrations.github_repo_scope
+
+    @github_repo_scope.setter
+    def github_repo_scope(self, value: tuple[str, str] | None) -> None:
+        self.integrations.github_repo_scope = value
+
     def hydrate_configured_integrations(self) -> None:
-        """Load configured integration names (env + local store) onto the session.
-
-        Run at REPL boot and again whenever an integration is added or removed
-        so capability checks and the tool-gathering pass reflect the current
-        store state instead of a stale boot-time snapshot. This startup path is
-        intentionally metadata-only: it must not resolve keyring-backed secrets.
-        Full integration configs are resolved on demand when a turn needs tools
-        or an investigation starts.
-        """
-        try:
-            from platform.harness_ports import configured_integration_services
-
-            self.configured_integrations = tuple(sorted(configured_integration_services()))
-            self.configured_integrations_known = True
-        except Exception:
-            # Best-effort: keep whatever state we already had (default unknown).
-            pass
+        """Load configured integration names (env + local store); metadata-only."""
+        self.integrations.hydrate()
 
     def warm_resolved_integrations(self, *, generation: int | None = None) -> None:
-        """Resolve full integration configs once, without progress UI.
-
-        The banner already shows configured integration names from
-        :meth:`hydrate_configured_integrations`; this loads the classified configs
-        the tool-gathering pass and investigation pipeline need so the first
-        conversational turn does not pay resolve cost or emit READ progress.
-
-        Empty resolves are not cached so a later turn can retry if boot-time
-        resolution raced store/env hydration. Failures leave the cache unset for
-        the same reason.
-        """
-        cached = self.resolved_integrations_cache
-        if cached is not None and not has_only_runtime_metadata(cached):
-            return
-        if generation is None:
-            with self._integration_warm_lock:
-                generation = self._integration_warm_generation
-
-        try:
-            from core.agent_harness.integrations.resolution import resolve_integrations
-
-            resolved = resolve_integrations()
-        except Exception:
-            # Best-effort warmup: leave cache unset so later turns can retry.
-            return
-
-        self._store_warm_cache(resolved, generation=generation)
-
-    def _store_warm_cache(self, resolved: dict[str, Any], *, generation: int) -> None:
-        if not resolved:
-            return
-        with self._integration_warm_lock:
-            if generation != self._integration_warm_generation:
-                return
-            if self.resolved_integrations_cache is not None and not has_only_runtime_metadata(
-                self.resolved_integrations_cache
-            ):
-                return
-            self.resolved_integrations_cache = merge_resolved_integrations(
-                self.resolved_integrations_cache,
-                resolved,
-            )
+        """Resolve full integration configs once, without progress UI."""
+        self.integrations.warm(generation=generation)
 
     def get_integrations(self) -> IntegrationResolutionResult:
-        """Return this REPL session's integration configs as a typed snapshot.
-
-        The accessor is cache-aware: an explicit empty cache is treated as
-        known state, metadata-only caches trigger one quiet warmup attempt, and
-        warmup results are merged through the same generation guard as startup.
-        """
-        from core.agent_harness.integrations.resolution import IntegrationResolutionResult
-
-        cached = self.resolved_integrations_cache
-        if cached is not None and (
-            has_resolved_integrations(cached) or not has_only_runtime_metadata(cached)
-        ):
-            return IntegrationResolutionResult(resolved_integrations=dict(cached))
-
-        self.warm_resolved_integrations()
-        return IntegrationResolutionResult(
-            resolved_integrations=dict(self.resolved_integrations_cache or {})
-        )
+        """Return the session's integration configs as a typed snapshot (cache-aware)."""
+        return self.integrations.get()
 
     def refresh_integration_state(self) -> None:
-        """Re-resolve integration state after the local store changes.
-
-        Drops the cached resolution (``resolved_integrations_cache``) and
-        re-hydrates ``configured_integrations`` from the current env + store
-        set. Call after a ``/integrations setup|remove`` or
-        ``/mcp connect|disconnect`` mutates the local store so the same REPL
-        session immediately reflects the change instead of answering from the
-        boot-time snapshot.
-        """
-        with self._integration_warm_lock:
-            self._integration_warm_generation += 1
-            pending = self._integration_warm_task
-            self._integration_warm_task = None
-            self.resolved_integrations_cache = None
-            self.github_repo_scope = None
-        if pending is not None and not pending.done():
-            pending.cancel()
-        self.hydrate_configured_integrations()
-        self.warm_resolved_integrations()
+        """Re-resolve integration state after the local store changes."""
+        self.integrations.refresh()
 
     def apply_investigation_result(
         self,
@@ -379,16 +309,7 @@ class SessionCore:
         self.resumed_from_name = ""
         self.last_state = None
         self.last_assistant_intent = None
-        self.configured_integrations = ()
-        self.configured_integrations_known = False
-        with self._integration_warm_lock:
-            self._integration_warm_generation += 1
-            pending = self._integration_warm_task
-            self._integration_warm_task = None
-            self.resolved_integrations_cache = None
-            self.github_repo_scope = None
-        if pending is not None and not pending.done():
-            pending.cancel()
+        self.integrations.reset()
         self.available_capabilities.clear()
         self.accumulated_context.clear()
         self.tokens.reset()
@@ -415,9 +336,4 @@ class SessionCore:
         session owns its own teardown. Thread-safe against a background warm
         thread. Shell subclasses override to also drop loop-owned UI references.
         """
-        with self._integration_warm_lock:
-            self._integration_warm_generation += 1
-            pending = self._integration_warm_task
-            self._integration_warm_task = None
-        if pending is not None and not pending.done():
-            pending.cancel()
+        self.integrations.release()

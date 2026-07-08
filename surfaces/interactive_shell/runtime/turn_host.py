@@ -46,6 +46,7 @@ from surfaces.interactive_shell.ui.output.console_state import set_investigation
 from surfaces.interactive_shell.ui.output.repl_progress import repl_safe_progress_scope
 from surfaces.interactive_shell.ui.streaming.console import StreamingConsole
 from surfaces.interactive_shell.utils.error_handling.exception_reporting import report_exception
+from platform.observability.session_trace import emit_thread_boundary
 from surfaces.interactive_shell.utils.telemetry import PromptRecorder
 
 _logger = logging.getLogger(__name__)
@@ -97,9 +98,13 @@ async def run_agent_turn(runtime: AgentTurnRuntime, text: str) -> None:
     exclusive_stdin = turn_needs_exclusive_stdin(text, runtime.session)
     progress_scope = contextlib.nullcontext() if exclusive_stdin else repl_safe_progress_scope()
     runtime.session.terminal.exclusive_stdin_active = exclusive_stdin
-    # Expose this turn's spinner so an investigation display can animate it with
-    # per-stage phase labels; /investigate never starts the "thinking" spinner.
+    # Expose this turn's spinner so investigation stages can animate phase labels.
     set_investigation_spinner(runtime.spinner)
+    emit_thread_boundary(
+        runtime.session.session_id,
+        name="turn_boundary",
+        phase="turn_start",
+    )
     try:
         with progress_scope:
             await _run_agent_turn_loop(
@@ -114,6 +119,11 @@ async def run_agent_turn(runtime: AgentTurnRuntime, text: str) -> None:
     finally:
         set_investigation_spinner(None)
         runtime.session.terminal.exclusive_stdin_active = False
+        emit_thread_boundary(
+            runtime.session.session_id,
+            name="turn_boundary",
+            phase="turn_end",
+        )
 
 
 async def _run_agent_turn_loop(

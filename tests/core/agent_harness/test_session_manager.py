@@ -280,9 +280,9 @@ def test_close_cancels_in_flight_warm_task() -> None:
             self.cancelled = True
 
     task = _FakeTask()
-    session._integration_warm_task = task
+    session.integrations._warm_task = task
 
     manager.close(session)
 
     assert task.cancelled is True
-    assert session._integration_warm_task is None
+    assert session.integrations._warm_task is None

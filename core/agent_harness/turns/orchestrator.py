@@ -300,7 +300,9 @@ def run_turn(
     # Clear any observation left by a prior turn so only this turn's discovery
     # output can trigger a summary pass.
     session.last_command_observation = None
-    executed_slashes = getattr(session, "agent_turn_executed_slashes", None)
+    # Slash dedup lives on the shell terminal facet; non-shell sessions have none.
+    terminal = getattr(session, "terminal", None)
+    executed_slashes = getattr(terminal, "agent_turn_executed_slashes", None)
     if executed_slashes is not None:
         executed_slashes.clear()
 
