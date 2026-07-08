@@ -17,15 +17,11 @@ from integrations.sentry_mcp import (
     SentryMCPConfig,
     SentryMCPToolCallResult,
     build_sentry_mcp_config,
+    call_sentry_mcp_tool as invoke_sentry_mcp_tool,
     describe_sentry_mcp_error,
+    list_sentry_mcp_tools as list_sentry_mcp_server_tools,
     sentry_mcp_config_from_env,
     sentry_mcp_runtime_unavailable_reason,
-)
-from integrations.sentry_mcp import (
-    call_sentry_mcp_tool as invoke_sentry_mcp_tool,
-)
-from integrations.sentry_mcp import (
-    list_sentry_mcp_tools as list_sentry_mcp_server_tools,
 )
 
 SentryMCPParams = dict[str, object]
