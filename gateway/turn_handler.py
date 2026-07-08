@@ -23,6 +23,7 @@ from core.agent_harness.providers.default_providers import (
 from core.agent_harness.session import SessionCore
 from core.agent_harness.turns.headless_dispatch import HeadlessAgent
 from gateway.gateway_output_sink import GatewayOutputSink
+from gateway.headless_subprocess_presenter import headless_subprocess_presenter_factory
 from gateway.status_messages import status_from_tool_start
 
 
@@ -98,6 +99,7 @@ class GatewayTurnHandler:
                 self._console,
                 tool_action_logger=logger,
                 observer_factory=lambda _message: observer,
+                subprocess_presenter_factory=headless_subprocess_presenter_factory,
             ),
             prompts=DefaultPromptContextProvider(session),
             reasoning=DefaultReasoningClientProvider(

@@ -24,6 +24,7 @@ from core.agent_harness.session.persistence.memory import InMemorySessionStorage
 from core.agent_harness.tools.action_tools import action_tool_names
 from core.agent_harness.turns.action_driver import ToolCallingDeps, run_action_agent_turn
 from core.llm.types import AgentLLMResponse, ToolCall
+from gateway.headless_subprocess_presenter import headless_subprocess_presenter_factory
 from tools.registry import clear_tool_registry_cache
 
 _USER_MESSAGE = (
@@ -180,7 +181,12 @@ def test_agent_computes_temperature_then_sends_it_to_slack(
     assert "shell_run" in tool_names
     assert "slack_send_message" in tool_names
 
-    provider = DefaultToolProvider(session, console, precomputed_action_tools=action_tools)
+    provider = DefaultToolProvider(
+        session,
+        console,
+        precomputed_action_tools=action_tools,
+        subprocess_presenter_factory=headless_subprocess_presenter_factory,
+    )
     llm = _ComputeThenSlackLLM()
 
     result = run_action_agent_turn(

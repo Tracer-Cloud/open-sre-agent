@@ -16,7 +16,8 @@ def test_wait_blocks_until_stop_not_telegram_thread_exit() -> None:
         def wait(self, *, timeout: float | None = None) -> bool:
             return telegram_wait(timeout=timeout)
 
-        def stop(self, *, _timeout: float = 8.0) -> bool:
+        def stop(self, *, timeout: float = 8.0) -> bool:
+            _ = timeout
             return True
 
     manager.telegram_background_worker = FakeTelegramWorker()
