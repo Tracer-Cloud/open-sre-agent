@@ -185,13 +185,94 @@ def web_api_ingress_cidr() -> str:
 
 
 def get_default_vpc_id(*, region: str = DEFAULT_REGION) -> str:
-    """Return the account default VPC id."""
+    """Return the account default VPC id.
+
+    Raises:
+        ClientError: When the region has no default VPC (``DefaultVpcNotFound``).
+    """
     ec2 = get_boto3_client("ec2", region)
     resp = ec2.describe_vpcs(Filters=[{"Name": "isDefault", "Values": ["true"]}])
     vpcs = resp.get("Vpcs", [])
     if not vpcs:
-        raise RuntimeError(f"No default VPC found in {region}")
+        raise ClientError(
+            {
+                "Error": {
+                    "Code": "DefaultVpcNotFound",
+                    "Message": (
+                        f"No default VPC found in {region}. Create a default VPC or "
+                        "deploy into an account/region with a default VPC."
+                    ),
+                }
+            },
+            "DescribeVpcs",
+        )
     return str(vpcs[0]["VpcId"])
+
+
+def _web_api_ingress_permission(
+    *,
+    port: int,
+    cidr: str,
+    description: str,
+) -> dict[str, object]:
+    return {
+        "IpProtocol": "tcp",
+        "FromPort": port,
+        "ToPort": port,
+        "IpRanges": [{"CidrIp": cidr, "Description": description}],
+    }
+
+
+def _revoke_stale_web_api_ingress(
+    *,
+    group_id: str,
+    port: int,
+    desired_cidr: str,
+    region: str = DEFAULT_REGION,
+) -> bool:
+    """Revoke web API ingress CIDRs that do not match ``desired_cidr``.
+
+    Returns True when ``desired_cidr`` is already authorized on ``port``.
+    """
+    ec2 = get_boto3_client("ec2", region)
+    response = ec2.describe_security_groups(GroupIds=[group_id])
+    security_groups = response.get("SecurityGroups", [])
+    if not security_groups:
+        return False
+    desired_present = False
+
+    for permission in security_groups[0].get("IpPermissions", []):
+        if permission.get("IpProtocol") != "tcp":
+            continue
+        if permission.get("FromPort") != port or permission.get("ToPort") != port:
+            continue
+
+        ip_ranges = permission.get("IpRanges") or []
+        stale_ranges = [
+            ip_range for ip_range in ip_ranges if ip_range.get("CidrIp") != desired_cidr
+        ]
+        if any(ip_range.get("CidrIp") == desired_cidr for ip_range in ip_ranges):
+            desired_present = True
+        if not stale_ranges:
+            continue
+
+        try:
+            ec2.revoke_security_group_ingress(
+                GroupId=group_id,
+                IpPermissions=[
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": port,
+                        "ToPort": port,
+                        "IpRanges": stale_ranges,
+                    }
+                ],
+            )
+        except ClientError as e:
+            if e.response["Error"]["Code"] != "InvalidPermission.NotFound":
+                raise
+
+    return desired_present
 
 
 def _authorize_tcp_ingress(
@@ -207,17 +288,37 @@ def _authorize_tcp_ingress(
         ec2.authorize_security_group_ingress(
             GroupId=group_id,
             IpPermissions=[
-                {
-                    "IpProtocol": "tcp",
-                    "FromPort": port,
-                    "ToPort": port,
-                    "IpRanges": [{"CidrIp": cidr, "Description": description}],
-                }
+                _web_api_ingress_permission(port=port, cidr=cidr, description=description)
             ],
         )
     except ClientError as e:
         if e.response["Error"]["Code"] != "InvalidPermission.Duplicate":
             raise
+
+
+def _sync_web_api_ingress(
+    *,
+    group_id: str,
+    cidr: str,
+    region: str = DEFAULT_REGION,
+) -> None:
+    """Ensure only ``cidr`` can reach the web API port on ``group_id``."""
+    description = f"OpenSRE web API port {WEB_API_PORT}"
+    desired_present = _revoke_stale_web_api_ingress(
+        group_id=group_id,
+        port=WEB_API_PORT,
+        desired_cidr=cidr,
+        region=region,
+    )
+    if desired_present:
+        return
+    _authorize_tcp_ingress(
+        group_id=group_id,
+        port=WEB_API_PORT,
+        cidr=cidr,
+        description=description,
+        region=region,
+    )
 
 
 def create_stack_security_group(
@@ -255,13 +356,7 @@ def create_stack_security_group(
         logger.info("Created security group %s for stack %s", group_id, stack_name)
 
     cidr = web_api_ingress_cidr()
-    _authorize_tcp_ingress(
-        group_id=group_id,
-        port=WEB_API_PORT,
-        cidr=cidr,
-        description=f"OpenSRE web API port {WEB_API_PORT}",
-        region=region,
-    )
+    _sync_web_api_ingress(group_id=group_id, cidr=cidr, region=region)
     return group_id
 
 

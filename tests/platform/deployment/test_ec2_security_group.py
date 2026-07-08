@@ -11,6 +11,7 @@ from platform.deployment.aws.config import WEB_API_PORT
 from platform.deployment.aws.ec2 import (
     create_stack_security_group,
     delete_stack_security_group,
+    get_default_vpc_id,
     stack_security_group_name,
     web_api_ingress_cidr,
 )
@@ -46,13 +47,70 @@ def test_create_stack_security_group_reuses_existing_group(
     ec2 = MagicMock()
     mock_get_boto3_client.return_value = ec2
     ec2.describe_vpcs.return_value = {"Vpcs": [{"VpcId": "vpc-123"}]}
-    ec2.describe_security_groups.return_value = {"SecurityGroups": [{"GroupId": "sg-existing"}]}
+    ec2.describe_security_groups.side_effect = [
+        {"SecurityGroups": [{"GroupId": "sg-existing"}]},
+        {
+            "SecurityGroups": [
+                {
+                    "GroupId": "sg-existing",
+                    "IpPermissions": [
+                        {
+                            "IpProtocol": "tcp",
+                            "FromPort": WEB_API_PORT,
+                            "ToPort": WEB_API_PORT,
+                            "IpRanges": [{"CidrIp": "0.0.0.0/0"}],
+                        }
+                    ],
+                }
+            ]
+        },
+    ]
 
     group_id = create_stack_security_group("opensre-ec2", region="us-east-1")
 
     assert group_id == "sg-existing"
     ec2.create_security_group.assert_not_called()
+    ec2.revoke_security_group_ingress.assert_not_called()
+    ec2.authorize_security_group_ingress.assert_not_called()
+
+
+@patch("platform.deployment.aws.ec2.get_boto3_client")
+def test_create_stack_security_group_revokes_stale_cidr_on_reuse(
+    mock_get_boto3_client: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ec2 = MagicMock()
+    mock_get_boto3_client.return_value = ec2
+    ec2.describe_vpcs.return_value = {"Vpcs": [{"VpcId": "vpc-123"}]}
+    ec2.describe_security_groups.side_effect = [
+        {"SecurityGroups": [{"GroupId": "sg-existing"}]},
+        {
+            "SecurityGroups": [
+                {
+                    "GroupId": "sg-existing",
+                    "IpPermissions": [
+                        {
+                            "IpProtocol": "tcp",
+                            "FromPort": WEB_API_PORT,
+                            "ToPort": WEB_API_PORT,
+                            "IpRanges": [{"CidrIp": "0.0.0.0/0"}],
+                        }
+                    ],
+                }
+            ]
+        },
+    ]
+    monkeypatch.setenv("OPENSRE_WEB_API_INGRESS_CIDR", "203.0.113.0/24")
+
+    group_id = create_stack_security_group("opensre-ec2", region="us-east-1")
+
+    assert group_id == "sg-existing"
+    ec2.revoke_security_group_ingress.assert_called_once()
+    revoked = ec2.revoke_security_group_ingress.call_args.kwargs["IpPermissions"][0]
+    assert revoked["IpRanges"] == [{"CidrIp": "0.0.0.0/0"}]
     ec2.authorize_security_group_ingress.assert_called_once()
+    authorized = ec2.authorize_security_group_ingress.call_args.kwargs["IpPermissions"][0]
+    assert authorized["IpRanges"][0]["CidrIp"] == "203.0.113.0/24"
 
 
 @patch("platform.deployment.aws.ec2.get_boto3_client")
@@ -62,13 +120,42 @@ def test_create_stack_security_group_ignores_duplicate_ingress(
     ec2 = MagicMock()
     mock_get_boto3_client.return_value = ec2
     ec2.describe_vpcs.return_value = {"Vpcs": [{"VpcId": "vpc-123"}]}
-    ec2.describe_security_groups.return_value = {"SecurityGroups": [{"GroupId": "sg-existing"}]}
-    ec2.authorize_security_group_ingress.side_effect = ClientError(
-        {"Error": {"Code": "InvalidPermission.Duplicate", "Message": "duplicate"}},
-        "AuthorizeSecurityGroupIngress",
-    )
+    ec2.describe_security_groups.side_effect = [
+        {"SecurityGroups": [{"GroupId": "sg-existing"}]},
+        {
+            "SecurityGroups": [
+                {
+                    "GroupId": "sg-existing",
+                    "IpPermissions": [
+                        {
+                            "IpProtocol": "tcp",
+                            "FromPort": WEB_API_PORT,
+                            "ToPort": WEB_API_PORT,
+                            "IpRanges": [{"CidrIp": "0.0.0.0/0"}],
+                        }
+                    ],
+                }
+            ]
+        },
+    ]
 
     assert create_stack_security_group("opensre-ec2", region="us-east-1") == "sg-existing"
+    ec2.revoke_security_group_ingress.assert_not_called()
+    ec2.authorize_security_group_ingress.assert_not_called()
+
+
+@patch("platform.deployment.aws.ec2.get_boto3_client")
+def test_get_default_vpc_id_raises_client_error_when_missing(
+    mock_get_boto3_client: MagicMock,
+) -> None:
+    ec2 = MagicMock()
+    mock_get_boto3_client.return_value = ec2
+    ec2.describe_vpcs.return_value = {"Vpcs": []}
+
+    with pytest.raises(ClientError) as exc_info:
+        get_default_vpc_id(region="us-east-1")
+
+    assert exc_info.value.response["Error"]["Code"] == "DefaultVpcNotFound"
 
 
 def test_web_api_ingress_cidr_reads_env(
