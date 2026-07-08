@@ -11,8 +11,8 @@ from __future__ import annotations
 import dataclasses
 
 from core.agent_harness.accounting.token_usage import TokenUsage
-from core.agent_harness.session.session_core import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStorage
+from core.agent_harness.session.session_core import SessionCore
 
 # Every surface-agnostic field on SessionCore. The 7 former integration fields collapsed
 # into one composed ``integrations`` (IntegrationState); its public fields are properties.

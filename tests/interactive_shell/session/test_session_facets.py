@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import dataclasses
 
-from core.agent_harness.session.session_core import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStorage
+from core.agent_harness.session.session_core import SessionCore
 from core.domain.alerts.inbox import IncomingAlert
 from surfaces.interactive_shell.session.session import Session
 
