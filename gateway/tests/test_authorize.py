@@ -1,12 +1,18 @@
 from __future__ import annotations
+
 from unittest.mock import patch
+
 import pytest
+
 from gateway.session.enforce_inbound_telegram_message_security import (
     enforce_inbound_telegram_message_security,
     persist_policy_if_needed,
 )
 from integrations.messaging_security import MessagingIdentityPolicy
+
 _SECURITY = "gateway.session.enforce_inbound_telegram_message_security"
+
+
 @pytest.fixture
 def mock_integration_store():
     with (
