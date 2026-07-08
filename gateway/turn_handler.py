@@ -27,7 +27,12 @@ from gateway.status_messages import status_from_tool_start
 
 
 class _ToolStatusObserver:
-    """Pushes a status line to the turn's sink when a tool starts."""
+    """Live tool-progress feedback for the gateway.
+
+    On each tool start it pushes a status line to the turn's sink — for Telegram
+    that surfaces the typing indicator and a ``running tool X`` preview, so the
+    user sees progress before the final answer instead of a silent wait.
+    """
 
     def __init__(self, sink: GatewayOutputSink) -> None:
         self._sink = sink
