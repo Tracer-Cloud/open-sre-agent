@@ -143,7 +143,7 @@ class DefaultToolProvider:
         return _logging_observer
 
     def _resolved_integrations(self) -> dict[str, Any]:
-        from core.agent_harness.session.integration.state import resolve_and_cache_integrations
+        from core.agent_harness.session.integration import resolve_and_cache_integrations
 
         # resolve_and_cache_integrations returns a fresh dict.
         return resolve_and_cache_integrations(self._session)
