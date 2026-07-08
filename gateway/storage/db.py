@@ -25,7 +25,9 @@ def connect_gateway_db(path: Path | None = None) -> sqlite3.Connection:
     db_path = path or _DEFAULT_DB_PATH
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db_path, check_same_thread=False)
-    conn.execute("PRAGMA journal_mode=WAL")
+    row = conn.execute("PRAGMA journal_mode=WAL").fetchone()
+    if row is None or row[0].lower() != "wal":
+        raise RuntimeError(f"Failed to enable WAL journal mode (got {row[0] if row else None!r})")
     conn.row_factory = sqlite3.Row
     conn.executescript(_SCHEMA)
     conn.commit()
