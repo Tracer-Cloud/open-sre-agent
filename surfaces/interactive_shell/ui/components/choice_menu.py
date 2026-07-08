@@ -249,9 +249,6 @@ def repl_choose_one(
                 initial_index = index
                 break
     picked = _pick(title=title, crumb=crumb, labels=labels, initial_index=initial_index)
-    # Catch a bottom-toolbar CPR reply still in flight from the prompt this menu
-    # interrupted, so it does not leak into the REPL prompt that resumes next.
-    drain_stale_cpr_bytes(settle_seconds=0.12)
     if picked is None:
         return None
     value = choices[picked][0]
