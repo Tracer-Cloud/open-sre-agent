@@ -1,5 +1,5 @@
 [Unit]
-Description=OpenSRE Telegram Gateway
+Description=OpenSRE Gateway Daemon
 After=network-online.target
 Wants=network-online.target
 StartLimitIntervalSec=120
@@ -17,7 +17,7 @@ Environment=HOME=/var/lib/opensre-gateway
 # Env file written by SSM provisioning (deploy step, not bake step)
 EnvironmentFile=/etc/opensre/gateway.env
 
-ExecStart=/opt/opensre/.venv/bin/opensre gateway telegram
+ExecStart=/opt/opensre/.venv/bin/opensre gateway start --foreground
 
 Restart=always
 RestartSec=5

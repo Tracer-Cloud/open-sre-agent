@@ -48,6 +48,24 @@ log = logging.getLogger(__name__)
 
 
 @contextmanager
+def _alert_listener_token(token: str | None) -> Iterator[None]:
+    """Install the configured alert token for this listener, restoring any prior value."""
+    key = "OPENSRE_ALERT_LISTENER_TOKEN"
+    previous = os.environ.get(key)
+    try:
+        if token:
+            os.environ[key] = token
+        else:
+            os.environ.pop(key, None)
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = previous
+
+
+@contextmanager
 def _alert_listener(
     cfg: ReplConfig | None,
     console: Console,
@@ -68,22 +86,22 @@ def _alert_listener(
     try:
         inbox = _alert_inbox.AlertInbox()
         _alert_inbox.set_current_inbox(inbox)
-        if cfg.alert_listener_token:
-            os.environ.setdefault("OPENSRE_ALERT_LISTENER_TOKEN", cfg.alert_listener_token)
-        handle = serve_webapp_in_thread(
-            host=cfg.alert_listener_host,
-            port=cfg.alert_listener_port,
-        )
-        console.print(f"[{DIM}]listening for alerts on http://{handle.bound_address}/alerts[/]")
+        with _alert_listener_token(cfg.alert_listener_token):
+            handle = serve_webapp_in_thread(
+                host=cfg.alert_listener_host,
+                port=cfg.alert_listener_port,
+            )
+            console.print(f"[{DIM}]listening for alerts on http://{handle.bound_address}/alerts[/]")
+            try:
+                yield inbox
+            finally:
+                if handle is not None:
+                    handle.stop()
+                _alert_inbox.set_current_inbox(None)
     except Exception as exc:
         log.warning("Alert listener could not start: %s — continuing without it.", exc)
         _alert_inbox.set_current_inbox(None)
-    try:
-        yield inbox
-    finally:
-        if handle is not None:
-            handle.stop()
-            _alert_inbox.set_current_inbox(None)
+        yield None
 
 
 def _resolve_runtime_context(

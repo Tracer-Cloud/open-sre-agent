@@ -138,7 +138,7 @@ async def receive_alert(request: Request) -> JSONResponse:
         if data.get("received_at") is None:
             data["received_at"] = datetime.now(UTC)
         alert = IncomingAlert.model_validate(data)
-    except Exception as exc:
+    except (TypeError, ValidationError, ValueError) as exc:
         return JSONResponse({"error": str(exc)}, status_code=400)
 
     inbox = _alert_inbox()

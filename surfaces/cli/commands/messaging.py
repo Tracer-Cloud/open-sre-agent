@@ -154,7 +154,7 @@ def pair_command(platform: str) -> None:
     )
     _console.print(
         f"[dim]The {platform} gateway must be running to receive it "
-        f"(e.g. `opensre gateway {platform}`).[/dim]"
+        f"(e.g. `opensre gateway start`).[/dim]"
     )
     _console.print("[dim]The code is single-use and will expire in 15 minutes.[/dim]\n")
 

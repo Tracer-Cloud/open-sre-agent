@@ -175,7 +175,7 @@ jobs:
               tests/test_state.py
               tests/test_upstream_correlation_provider.py
               tests/test_version.py
-              tests/test_webapp.py
+              gateway/tests
           - os: ubuntu-latest
             shard: e2e-general
             pytest_paths: >-

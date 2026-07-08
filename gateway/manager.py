@@ -90,9 +90,7 @@ class GatewayManager:
         return stopped
 
     def wait(self, *, timeout: float | None = None) -> bool:
-        """Wait for the gateway to shut down and return whether it has stopped."""
-        if self.telegram_background_worker is not None:
-            return self.telegram_background_worker.wait(timeout=timeout)
+        """Wait until shutdown is requested and return whether the gateway has stopped."""
         return self._stopped.wait(timeout)
 
     def _start_web(self, logger: logging.Logger) -> None:

@@ -68,7 +68,7 @@ _INSTALL_MAX_POLL_ATTEMPTS = 30
 # ExecStart points to /usr/local/bin/opensre (not the venv path used by bake).
 _SERVICE_UNIT = """\
 [Unit]
-Description=OpenSRE Telegram Gateway
+Description=OpenSRE Gateway Daemon
 After=network-online.target
 Wants=network-online.target
 StartLimitIntervalSec=120
@@ -86,7 +86,7 @@ Environment=HOME=/var/lib/opensre-gateway
 # Env file written by SSM provisioning (deploy step)
 EnvironmentFile=/etc/opensre/gateway.env
 
-ExecStart=/usr/local/bin/opensre gateway telegram
+ExecStart=/usr/local/bin/opensre gateway start --foreground
 
 Restart=always
 RestartSec=5
