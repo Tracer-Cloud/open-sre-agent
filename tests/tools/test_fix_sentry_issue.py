@@ -7,15 +7,15 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 
-from integrations.pi import PiCodingResult
+from integrations.coding_agent import CodingResult
 from integrations.sentry import SentryConfig
 from tools.cross_vendor.fix_sentry_issue import FixSentryIssueTool, fix_sentry_issue
 from tools.cross_vendor.fix_sentry_issue.context import gather_issue_context
 
 _CONFIG = "tools.cross_vendor.fix_sentry_issue.context.sentry_config_from_env"
 _GET_ISSUE = "tools.cross_vendor.fix_sentry_issue.context.get_sentry_issue"
-_VERIFY = "tools.cross_vendor.fix_sentry_issue.runner.verify_pi_coding"
-_RUN = "tools.cross_vendor.fix_sentry_issue.runner.run_pi_coding_task"
+_VERIFY = "tools.cross_vendor.fix_sentry_issue.runner.verify_coding_agent"
+_RUN = "tools.cross_vendor.fix_sentry_issue.runner.run_coding_task"
 
 _ISSUE = {
     "title": "TypeError: 'NoneType' object is not subscriptable",
@@ -159,7 +159,7 @@ def test_run_cli_unavailable(
 def test_run_success(
     _mock_cfg: MagicMock, _mock_issue: MagicMock, _mock_verify: MagicMock, mock_run: MagicMock
 ) -> None:
-    mock_run.return_value = PiCodingResult(
+    mock_run.return_value = CodingResult(
         success=True,
         summary="Guarded the None case in process_event.",
         changed_files=["app/handlers.py"],

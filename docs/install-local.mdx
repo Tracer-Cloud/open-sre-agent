@@ -34,7 +34,9 @@ curl -fsSL https://install.opensre.com | bash
 
 The macOS/Linux installer does not require `sudo`. It uses a writable bin directory already on your `PATH` when possible; otherwise it installs to `~/.local/bin` and prints the command to apply the PATH update in your shell.
 
-When you run the installer directly from an interactive terminal, it launches onboarding automatically once the install finishes. When the installer is piped (the `curl … | bash` form above), it skips the auto-launch and prints a "Next steps" hint instead — run `opensre onboard` yourself to start setup. To opt out of the auto-launch entirely:
+The installer makes `opensre` available on your PATH without sudo: it installs into (or links the binary from) a user-writable directory that is already on your PATH, so the command works in the current terminal right away. Only when no such directory exists does it fall back to updating your shell profile for new terminals.
+
+When you run the installer from an interactive terminal — including the piped `curl … | bash` form above — it launches `opensre onboard` automatically once the install finishes, so you can set up your LLM provider and integrations right away. In non-interactive environments (CI, scripts, provisioning) the auto-launch is skipped and a "Next steps" hint is printed instead. To opt out of the auto-launch entirely:
 
 ```bash
 curl -fsSL https://install.opensre.com | OPENSRE_AUTO_LAUNCH=0 bash

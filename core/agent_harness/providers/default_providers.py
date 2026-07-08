@@ -27,6 +27,11 @@ from platform.observability.sentry_sdk import capture_exception
 log = logging.getLogger(__name__)
 
 ActionObserverFactory = Callable[[Any, Any, str], ToolEventObserver]
+# Return value is tools.interactive_shell.subprocess.SubprocessPresenter (surface-injected).
+SubprocessPresenterFactory = Callable[
+    [Any, Any, ConfirmFn | None, bool | None, bool],
+    Any,
+]
 _TOOL_INPUT_LOG_PREVIEW_LIMIT = 500
 
 
@@ -61,6 +66,7 @@ class DefaultToolProvider:
         precomputed_action_tools: list[Any] | None = None,
         observer_factory: ActionObserverFactory | None = None,
         tool_action_logger: logging.Logger | None = None,
+        subprocess_presenter_factory: SubprocessPresenterFactory | None = None,
     ) -> None:
         self._session = session
         self._console = console
@@ -68,6 +74,7 @@ class DefaultToolProvider:
         self._precomputed_action_tools = precomputed_action_tools
         self._observer_factory = observer_factory
         self._tool_action_logger = tool_action_logger
+        self._subprocess_presenter_factory = subprocess_presenter_factory
         self._tool_context: ActionToolContext | None = None
 
     def action_tools(
@@ -77,6 +84,15 @@ class DefaultToolProvider:
         is_tty: bool | None,
         resolved_integrations: dict[str, Any] | None = None,
     ) -> list[Any]:
+        subprocess_presenter = None
+        if self._subprocess_presenter_factory is not None:
+            subprocess_presenter = self._subprocess_presenter_factory(
+                self._session,
+                self._console,
+                confirm_fn,
+                is_tty,
+                True,
+            )
         ctx = ActionToolContext(
             session=self._session,
             console=self._console,
@@ -84,6 +100,7 @@ class DefaultToolProvider:
             is_tty=is_tty,
             request_exit=self._request_exit,
             action_already_listed=True,
+            subprocess_presenter=subprocess_presenter,
         )
         self._tool_context = ctx
         if self._precomputed_action_tools is not None:

@@ -3,7 +3,6 @@ from __future__ import annotations
 from surfaces.interactive_shell.ui.components.time_format import _fmt_timing
 from surfaces.interactive_shell.ui.output.console_state import (
     set_live_console,
-    set_prompt_suppress_fn,
     stop_display,
     unregister_live_console,
 )
@@ -49,7 +48,6 @@ __all__ = [
     "render_investigation_header",
     # Console lifecycle
     "set_live_console",
-    "set_prompt_suppress_fn",
     "stop_display",
     "unregister_live_console",
     # Tool-detail toggle

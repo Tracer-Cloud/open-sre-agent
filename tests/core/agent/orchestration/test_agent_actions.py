@@ -17,7 +17,6 @@ import config.constants.platform as platform_module
 import surfaces.interactive_shell.runtime.action_turn as action_turn
 import surfaces.interactive_shell.runtime.shell_turn_execution as shell_turn_execution
 import surfaces.interactive_shell.runtime.subprocess_runner as subprocess_runner
-import tools.interactive_shell.actions.implementation as implementation_tool
 import tools.interactive_shell.actions.llm_provider as llm_provider_tool
 import tools.interactive_shell.actions.slash as slash_tool
 import tools.interactive_shell.shell.execution as shell_execution
@@ -485,19 +484,13 @@ def test_execute_cli_actions_sets_bare_model_for_active_provider(
 def test_execute_cli_actions_runs_implementation_action(monkeypatch: object) -> None:
     calls: list[str] = []
 
-    def _fake_run_implementation(
-        request: str,
-        session: Session,
-        console: Console,
-        **_kwargs: object,
-    ) -> None:
+    def _fake_run_implementation(request: str, presenter: object) -> None:
         calls.append(request)
-        session.record("implementation", request, ok=True)
-        console.print(f"implemented {request}")
+        presenter.session.record("implementation", request, ok=True)  # type: ignore[attr-defined]
+        presenter.console.print(f"implemented {request}")  # type: ignore[attr-defined]
 
     monkeypatch.setattr(
-        implementation_tool,
-        "run_claude_code_implementation",
+        "tools.interactive_shell.actions.implementation.run_claude_code_implementation",
         _fake_run_implementation,
     )
 
@@ -783,7 +776,10 @@ def test_execute_cli_actions_lists_all_actions_before_synthetic_rds(monkeypatch:
         return proc
 
     monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
-    monkeypatch.setattr(subprocess_runner.subprocess, "Popen", _fake_popen)
+    monkeypatch.setattr(
+        "tools.interactive_shell.synthetic.runner.subprocess.Popen",
+        _fake_popen,
+    )
 
     session = Session()
     console, buf = _capture()
@@ -800,7 +796,7 @@ def test_execute_cli_actions_lists_all_actions_before_synthetic_rds(monkeypatch:
         sys.executable,
         "-u",
         "-m",
-        "cli",
+        "surfaces.cli",
         "tests",
         "synthetic",
         "--scenario",
@@ -844,7 +840,10 @@ def test_execute_cli_actions_runs_requested_synthetic_scenario(monkeypatch: obje
         proc.returncode = 0
         return proc
 
-    monkeypatch.setattr(subprocess_runner.subprocess, "Popen", _fake_popen)
+    monkeypatch.setattr(
+        "tools.interactive_shell.synthetic.runner.subprocess.Popen",
+        _fake_popen,
+    )
 
     session = Session()
     console, buf = _capture()

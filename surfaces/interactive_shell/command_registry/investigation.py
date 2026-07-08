@@ -278,9 +278,6 @@ def _cmd_investigate_file(session: Session, console: Console, args: list[str]) -
                 ),
                 apply_reasoning_effort(session.reasoning_effort),
             ):
-                suppress = getattr(console, "suppress_prompt_spinner", None)
-                if callable(suppress):
-                    suppress()
                 return run_sample_alert_for_session(
                     template_name=template_name,
                     context_overrides=session.accumulated_context or None,
@@ -343,9 +340,6 @@ def _cmd_investigate_file(session: Session, console: Console, args: list[str]) -
             ),
             apply_reasoning_effort(session.reasoning_effort),
         ):
-            suppress = getattr(console, "suppress_prompt_spinner", None)
-            if callable(suppress):
-                suppress()
             return run_investigation_for_session(
                 alert_text=text,
                 context_overrides=session.accumulated_context or None,

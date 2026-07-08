@@ -42,6 +42,7 @@ from surfaces.interactive_shell.runtime.utils.input_policy import (
     turn_needs_exclusive_stdin,
 )
 from surfaces.interactive_shell.session import Session
+from surfaces.interactive_shell.ui.output.console_state import set_investigation_spinner
 from surfaces.interactive_shell.ui.output.repl_progress import repl_safe_progress_scope
 from surfaces.interactive_shell.ui.streaming.console import StreamingConsole
 from surfaces.interactive_shell.utils.error_handling.exception_reporting import report_exception
@@ -78,7 +79,6 @@ async def run_agent_turn(runtime: AgentTurnRuntime, text: str) -> None:
     console = StreamingConsole(
         runtime.spinner,
         dispatch_cancel,
-        prompt_invalidator=runtime.invalidate_prompt,
         highlight=False,
         force_terminal=True,
         color_system="truecolor",
@@ -97,6 +97,9 @@ async def run_agent_turn(runtime: AgentTurnRuntime, text: str) -> None:
     exclusive_stdin = turn_needs_exclusive_stdin(text, runtime.session)
     progress_scope = contextlib.nullcontext() if exclusive_stdin else repl_safe_progress_scope()
     runtime.session.terminal.exclusive_stdin_active = exclusive_stdin
+    # Expose this turn's spinner so an investigation display can animate it with
+    # per-stage phase labels; /investigate never starts the "thinking" spinner.
+    set_investigation_spinner(runtime.spinner)
     try:
         with progress_scope:
             await _run_agent_turn_loop(
@@ -109,6 +112,7 @@ async def run_agent_turn(runtime: AgentTurnRuntime, text: str) -> None:
                 dispatch_cancel=dispatch_cancel,
             )
     finally:
+        set_investigation_spinner(None)
         runtime.session.terminal.exclusive_stdin_active = False
 
 

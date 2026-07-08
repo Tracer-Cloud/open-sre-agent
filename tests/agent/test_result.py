@@ -3,10 +3,10 @@ from __future__ import annotations
 from core.domain.diagnosis import (
     InvestigationResult,
     build_diagnosis_schema,
-    extract_last_assistant_text,
     result_to_state,
     taxonomy_categories_for_alert_source,
 )
+from core.messages.transcript import extract_last_assistant_text
 
 
 class _TextBlock:

@@ -168,19 +168,124 @@ def test_install_sh_contains_auto_onboarding_launch_hook() -> None:
     assert '"$installed_binary" onboard' in source
 
 
-def test_install_sh_auto_onboarding_requires_interactive_stdin() -> None:
-    """Auto-launch must be gated on a real terminal on stdin (issue #3273).
+def test_install_sh_auto_onboarding_piped_installs_reattach_dev_tty() -> None:
+    """Piped ``curl … | bash`` installs auto-launch onboarding via /dev/tty.
 
-    The documented install path is ``curl … | bash``, where stdin is the curl
-    pipe rather than a terminal. Launching the full-screen wizard there fails
-    with a terminal I/O error mid-render, so the launch must be skipped unless
-    the installer itself is attached to an interactive terminal.
+    stdin is the curl pipe there, so the wizard's stdin is reattached to the
+    controlling terminal — but only when ``stty -g`` confirms the terminal can
+    actually be controlled. Where that tcgetattr fails, the full-screen wizard
+    would die with a terminal I/O error mid-render (issue #3273), so the
+    launch is skipped instead.
     """
     source = INSTALL_SH.read_text()
 
-    # Gate on stdin being a terminal, and no longer redirect from /dev/tty.
-    assert "[ ! -t 0 ]" in source
+    assert "controlling_tty_usable" in source
+    assert "stty -g </dev/tty" in source
+    assert "run_onboarding </dev/tty" in source
+    # Only stdin is reattached; redirecting stdout to /dev/tty as well was the
+    # original #3273 failure mode.
     assert "</dev/tty >/dev/tty 2>&1" not in source
+
+
+def test_install_sh_auto_onboarding_piped_install_launches_via_pty(tmp_path: Path) -> None:
+    """Simulate a piped install inside a real pty: onboarding must launch
+    with its stdin reattached to the terminal."""
+    import os
+    import pty
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    fake_binary = bin_dir / "opensre"
+    fake_binary.write_text(
+        "#!/usr/bin/env bash\n"
+        'if [ -t 0 ]; then echo "ONBOARD_STDIN_IS_TTY"; else echo "ONBOARD_STDIN_NOT_TTY"; fi\n'
+    )
+    fake_binary.chmod(0o755)
+
+    script = textwrap.dedent(f"""\
+        eval "$(awk '/^REPO=/{{exit}} {{print}}' {_INSTALL_SH_SHELL})"
+        eval "$(awk '
+            /^[a-z_][a-z_]*\\(\\)/ {{ in_fn=1 }}
+            in_fn {{ print }}
+            in_fn && /^\\}}$/ {{ in_fn=0 }}
+        ' {_INSTALL_SH_SHELL})"
+        INSTALL_DIR={shlex.quote(str(bin_dir))}
+        BIN_NAME="opensre"
+        platform="linux"
+        launch_onboarding_after_install </dev/null
+    """)
+
+    pid, controller_fd = pty.fork()
+    if pid == 0:  # pragma: no cover - child process replaced by bash
+        os.execvp("bash", ["bash", "-c", script])
+
+    chunks = []
+    try:
+        while True:
+            try:
+                chunk = os.read(controller_fd, 4096)
+            except OSError:  # Linux raises EIO once the child side closes
+                break
+            if not chunk:
+                break
+            chunks.append(chunk)
+    finally:
+        os.close(controller_fd)
+        _, wait_status = os.waitpid(pid, 0)
+
+    output = b"".join(chunks).decode(errors="replace")
+    assert os.waitstatus_to_exitcode(wait_status) == 0, output
+    assert "Launching opensre onboard" in output
+    assert "ONBOARD_STDIN_IS_TTY" in output
+
+
+def test_install_sh_auto_onboarding_skips_piped_install_on_windows(tmp_path: Path) -> None:
+    """Git Bash /dev/tty emulation is not trusted: piped installs on the
+    windows platform never auto-launch."""
+    import os
+    import pty
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    fake_binary = bin_dir / "opensre"
+    fake_binary.write_text('#!/usr/bin/env bash\necho "ONBOARD_RAN"\n')
+    fake_binary.chmod(0o755)
+
+    script = textwrap.dedent(f"""\
+        eval "$(awk '/^REPO=/{{exit}} {{print}}' {_INSTALL_SH_SHELL})"
+        eval "$(awk '
+            /^[a-z_][a-z_]*\\(\\)/ {{ in_fn=1 }}
+            in_fn {{ print }}
+            in_fn && /^\\}}$/ {{ in_fn=0 }}
+        ' {_INSTALL_SH_SHELL})"
+        INSTALL_DIR={shlex.quote(str(bin_dir))}
+        BIN_NAME="opensre"
+        platform="windows"
+        launch_onboarding_after_install </dev/null
+    """)
+
+    pid, controller_fd = pty.fork()
+    if pid == 0:  # pragma: no cover - child process replaced by bash
+        os.execvp("bash", ["bash", "-c", script])
+
+    chunks = []
+    try:
+        while True:
+            try:
+                chunk = os.read(controller_fd, 4096)
+            except OSError:
+                break
+            if not chunk:
+                break
+            chunks.append(chunk)
+    finally:
+        os.close(controller_fd)
+        _, wait_status = os.waitpid(pid, 0)
+
+    output = b"".join(chunks).decode(errors="replace")
+    assert os.waitstatus_to_exitcode(wait_status) == 0, output
+    assert "ONBOARD_RAN" not in output
+    assert "Launching opensre onboard" not in output
 
 
 def test_install_sh_auto_onboarding_noops_without_tty() -> None:
@@ -658,6 +763,79 @@ def test_onboarding_hint_shown_for_main_channel(tmp_path: Path) -> None:
     )
     assert result.returncode == 0, result.stderr
     assert "opensre onboard" in result.stdout + result.stderr
+
+
+def _run_ensure_on_path(
+    tmp_path: Path, path_dirs: list[str], platform: str = "linux"
+) -> tuple[subprocess.CompletedProcess[str], Path]:
+    """Call the real ensure_on_path() with INSTALL_DIR off PATH.
+
+    ``path_dirs`` becomes the PATH visible to the function; the returned Path
+    is the populated install dir (never on that PATH).
+    """
+    install_dir = tmp_path / "install-dir"
+    install_dir.mkdir()
+    binary = install_dir / "opensre"
+    binary.write_text("#!/usr/bin/env bash\necho opensre-ok\n")
+    binary.chmod(0o755)
+
+    path_value = ":".join([*path_dirs, "/usr/bin", "/bin"])
+    script = textwrap.dedent(f"""\
+        eval "$(awk '
+            /^[a-z_][a-z_]*\\(\\)/ {{ in_fn=1 }}
+            in_fn {{ print }}
+            in_fn && /^\\}}$/ {{ in_fn=0 }}
+        ' {_INSTALL_SH_SHELL})"
+        log()  {{ printf '%s\\n' "$*"; }}
+        warn() {{ printf 'Warning: %s\\n' "$*" >&2; }}
+        success() {{ printf 'Success: %s\\n' "$*"; }}
+        INSTALL_DIR={shlex.quote(str(install_dir))}
+        BIN_NAME="opensre"
+        platform="{platform}"
+        HOME={shlex.quote(str(tmp_path / "home"))}
+        SHELL="/bin/zsh"
+        PATH={shlex.quote(path_value)}
+        export HOME SHELL PATH
+        mkdir -p "$HOME"
+        ensure_on_path
+    """)
+    completed = subprocess.run(["bash", "-c", script], capture_output=True, text=True, cwd=tmp_path)
+    return completed, install_dir
+
+
+def test_ensure_on_path_links_into_writable_path_dir(tmp_path: Path) -> None:
+    """A writable dir already on PATH gets a symlink, so `opensre` works in
+    the current terminal immediately — no sudo, no rc-file edit needed."""
+    writable_dir = tmp_path / "on-path-bin"
+    writable_dir.mkdir()
+
+    result, install_dir = _run_ensure_on_path(tmp_path, [str(writable_dir)])
+
+    assert result.returncode == 0, result.stderr
+    link = writable_dir / "opensre"
+    assert link.is_symlink()
+    assert link.resolve() == (install_dir / "opensre").resolve()
+    assert "Linked opensre into" in result.stdout
+    assert not (tmp_path / "home" / ".zshrc").exists()
+
+
+def test_ensure_on_path_falls_back_to_rc_update_without_writable_dir(tmp_path: Path) -> None:
+    """With no writable dir on PATH, the shell rc fallback still runs."""
+    result, _ = _run_ensure_on_path(tmp_path, [])
+
+    assert result.returncode == 0, result.stderr
+    zshrc = tmp_path / "home" / ".zshrc"
+    assert zshrc.exists()
+    assert "install-dir" in zshrc.read_text()
+
+
+def test_ensure_on_path_ignores_relative_path_entries(tmp_path: Path) -> None:
+    """Relative PATH entries (e.g. ``.``) must never receive the symlink."""
+    result, _ = _run_ensure_on_path(tmp_path, ["."])
+
+    assert result.returncode == 0, result.stderr
+    assert not (tmp_path / "opensre").exists()
+    assert (tmp_path / "home" / ".zshrc").exists()
 
 
 def test_onboarding_hint_appears_after_version_line(tmp_path: Path) -> None:

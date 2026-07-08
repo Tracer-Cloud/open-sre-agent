@@ -112,10 +112,16 @@ class BackgroundTaskManager:
         # the LLM stream is writing rapidly. This task explicitly invalidates
         # the prompt at 100 ms intervals so the braille glyph cycles smoothly.
         tick_s = 0.1
+        was_streaming = False
         while not self.state.exit_requested:
             try:
                 await asyncio.sleep(tick_s)
             except asyncio.CancelledError:
                 return
-            if self.spinner.streaming:
+            streaming = self.spinner.streaming
+            # Invalidate while streaming, plus one extra tick on the
+            # streaming->idle edge so the prompt repaints without the stale
+            # spinner/phase label instead of waiting for unrelated I/O.
+            if streaming or was_streaming:
                 self.prompt_invalidator()
+            was_streaming = streaming

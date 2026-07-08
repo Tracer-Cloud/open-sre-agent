@@ -15,20 +15,14 @@ from core.tool_framework.registered_tool import RegisteredTool
 from tools.interactive_shell.implementation.claude_code_executor import (
     run_claude_code_implementation,
 )
+from tools.interactive_shell.subprocess import require_subprocess_presenter
 
 
 def execute_implementation_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
     task = str(args.get("task", "")).strip()
     if not task:
         return False
-    run_claude_code_implementation(
-        task,
-        ctx.session,
-        ctx.console,
-        confirm_fn=ctx.confirm_fn,
-        is_tty=ctx.is_tty,
-        action_already_listed=ctx.action_already_listed,
-    )
+    run_claude_code_implementation(task, require_subprocess_presenter(ctx))
     return True
 
 

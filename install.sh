@@ -611,7 +611,10 @@ select_writable_path_candidate_from_list() {
 
   IFS=':'
   for dir in $candidate_list; do
-    [ -n "$dir" ] || continue
+    case "$dir" in
+      /*) ;;
+      *) continue ;;
+    esac
     if path_has_dir "$dir" && is_candidate_dir_writable "$dir"; then
       printf '%s\n' "$dir"
       IFS="$old_ifs"
@@ -1020,6 +1023,25 @@ configure_path() {
   log "Or open a new terminal."
 }
 
+ensure_on_path() {
+  # A child process cannot edit the parent shell's PATH, so when the install
+  # dir is not already on PATH, link the binary into a user-writable directory
+  # that is — no sudo, and `opensre` works in this terminal immediately. Only
+  # when no PATH directory is writable fall back to the shell rc update.
+  local link_dir
+
+  if [ "$platform" != "windows" ] && ! path_has_dir "$INSTALL_DIR"; then
+    if link_dir="$(select_writable_path_candidate_from_list "$PATH")" \
+      && mkdir -p "$link_dir" 2>/dev/null \
+      && ln -sf "${INSTALL_DIR}/${BIN_NAME}" "${link_dir}/${BIN_NAME}" 2>/dev/null; then
+      success "Linked ${BIN_NAME} into ${link_dir} — ready to run in this terminal."
+      return
+    fi
+  fi
+
+  configure_path
+}
+
 print_success_screen() {
   local version="$1"
   local sep="────────────────────────────────────────────"
@@ -1064,31 +1086,45 @@ auto_launch_disabled() {
   esac
 }
 
+controlling_tty_usable() {
+  # The onboarding wizard needs a terminal it can actually control: it calls
+  # tcgetattr/tcsetattr on its stdin. `stty -g` performs the same tcgetattr,
+  # so where it fails, launching the wizard would die with a "terminal I/O
+  # error" mid-render (issue #3273). Only offer /dev/tty when it passes.
+  command -v stty >/dev/null 2>&1 || return 1
+  [ -r /dev/tty ] && [ -w /dev/tty ] || return 1
+  stty -g </dev/tty >/dev/null 2>&1
+}
+
+run_onboarding() {
+  # Uses the caller's `installed_binary` (bash dynamic scoping); any redirect
+  # on the call applies to the wizard.
+  log "Launching ${BIN_NAME} onboard..."
+  "$installed_binary" onboard || \
+    warn "Onboarding exited before completion. Run '${BIN_NAME} onboard' to retry."
+}
+
 launch_onboarding_after_install() {
-  if auto_launch_disabled; then
-    return
-  fi
-
-  # Only auto-launch the interactive wizard when the installer itself is
-  # attached to a real terminal on both stdin and stdout. When the installer is
-  # piped (the documented `curl … | bash`), stdin is the pipe rather than a
-  # terminal, so onboarding's full-screen prompt cannot reliably take control of
-  # the terminal and exits with a "terminal I/O error" mid-render (issue #3273).
-  # In that case we skip the launch; the "Next steps" hint already tells the user
-  # to run `${BIN_NAME} onboard` in their own terminal, where it works.
-  if [ ! -t 0 ] || [ ! -t 1 ]; then
-    return
-  fi
-
   local installed_binary="${INSTALL_DIR}/${BIN_NAME}"
+
+  # The full-screen wizard needs a real terminal on stdout to render.
+  if auto_launch_disabled || [ ! -t 1 ]; then
+    return
+  fi
   if [ ! -x "$installed_binary" ]; then
     warn "Could not auto-launch onboarding; ${installed_binary} is not executable."
     return
   fi
 
-  log "Launching ${BIN_NAME} onboard..."
-  "$installed_binary" onboard || \
-    warn "Onboarding exited before completion. Run '${BIN_NAME} onboard' to retry."
+  if [ -t 0 ]; then
+    run_onboarding
+  elif [ "$platform" != "windows" ] && controlling_tty_usable; then
+    # Piped install (the documented `curl … | bash`): stdin is the curl pipe,
+    # so hand the wizard the controlling terminal instead. Git Bash on Windows
+    # emulates /dev/tty in ways the wizard cannot control, so the piped
+    # auto-launch stays darwin/linux-only.
+    run_onboarding </dev/tty
+  fi
 }
 
 cleanup() {
@@ -1311,7 +1347,7 @@ print_install_confirmation() {
 
 finish_install() {
   print_install_confirmation
-  configure_path
+  ensure_on_path
   print_success_screen "$installed_version"
   launch_onboarding_after_install
 }

@@ -1,5 +1,12 @@
 """Execute planned opensre CLI actions.
 
+Pure subprocess execution, planning, and orchestration for shell / synthetic /
+Claude Code / opensre CLI action tools live under ``tools.interactive_shell``
+(``subprocess/``, ``shell/``, ``synthetic/``, ``implementation/``, ``cli/``).
+This package keeps Rich relay helpers in ``task_streaming``, the REPL presenter
+in ``repl_presenter``, and backward-compatible surface adapters such as
+``opensre_cli_runner`` for slash parity and legacy test monkeypatch paths.
+
 Shell command execution lives in ``tools.interactive_shell.shell`` (parsing,
 policy, ``execute_shell_command``, and the ``run_shell_command`` / ``run_cd`` /
 ``run_pwd`` runner); it is intentionally not re-exported here. Synthetic test
@@ -9,8 +16,9 @@ implementation execution lives in ``tools.interactive_shell.implementation.claud
 (``run_claude_code_implementation``), and sample-alert / free-text investigation
 execution lives in ``tools.interactive_shell.actions.sample_alert`` /
 ``tools.interactive_shell.actions.investigation`` (``run_sample_alert`` /
-``run_text_investigation``); none are re-exported here. All reuse the shared
-subprocess-streaming primitives in ``task_streaming``.
+``run_text_investigation``); none are re-exported here. Shared stdlib subprocess
+primitives live in ``tools.interactive_shell.subprocess``; Rich stream relay
+remains in ``task_streaming``.
 
 Public API is stable: all names exported below are importable directly from
 ``subprocess_runner`` and will remain so regardless of internal submodule changes.

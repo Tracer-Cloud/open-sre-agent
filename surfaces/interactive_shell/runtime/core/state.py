@@ -166,6 +166,7 @@ class SpinnerState:
         self.bytes_in: int = 0
         self._frame_idx: int = 0
         self._verb: str = self._THINKING_VERBS[0]
+        self.phase: str = ""
 
     def start(self) -> None:
         self.streaming = True
@@ -173,9 +174,25 @@ class SpinnerState:
         self.bytes_in = 0
         self._frame_idx = 0
         self._verb = random.choice(self._THINKING_VERBS)
+        self.phase = ""
+
+    def set_phase(self, label: str) -> None:
+        """Animate a caller-supplied phase label instead of a thinking verb.
+
+        Investigation stages (``/investigate``) dispatch deterministically, so
+        the turn-level "thinking" spinner never starts. The progress display
+        calls this to keep the prompt spinner cycling with the active pipeline
+        stage; it can be called repeatedly to advance the phase.
+        """
+        if not self.streaming:
+            self.started_at = time.monotonic()
+            self._frame_idx = 0
+        self.streaming = True
+        self.phase = label
 
     def stop(self) -> None:
         self.streaming = False
+        self.phase = ""
 
     def toolbar_ansi(self) -> str:
         # Always return an empty string so prompt_toolkit's ConditionalContainer
@@ -210,8 +227,9 @@ class SpinnerState:
             suffix = f" ({elapsed:.0f}s · ↓ {tokens_str} tokens)"
         else:
             suffix = f" ({elapsed:.0f}s)"
+        label = self.phase or f"{self._verb}…"
         return (
-            f"{ui_theme.PROMPT_ACCENT_ANSI}{glyph} {self._verb}…{ui_theme.ANSI_RESET}"
+            f"{ui_theme.PROMPT_ACCENT_ANSI}{glyph} {label}{ui_theme.ANSI_RESET}"
             f"{ui_theme.ANSI_DIM}{suffix}  esc to cancel{ui_theme.ANSI_RESET}"
         )
 

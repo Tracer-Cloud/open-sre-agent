@@ -336,8 +336,9 @@ TELEGRAM_ALLOWED_USERS=123456789        # numeric user id(s), comma-separated
 ANTHROPIC_API_KEY=...                    # or your provider's key env
 ```
 
-If `make deploy` reports `MISSING: Telegram gateway bot configuration` or
-`MISSING: LLM provider configuration` even though local setup succeeded, this is
+If `make deploy` reports `MISSING: TELEGRAM_BOT_TOKEN — API key not set` or
+`MISSING: OPENAI_API_KEY — API key not set` (or your provider's key env) even
+though local setup succeeded, this is
 why — copy the values into `.env` (or `.env.deploy.example`) for the deploy. A
 "missing" here means "not in the deploy env", not "not configured".
 

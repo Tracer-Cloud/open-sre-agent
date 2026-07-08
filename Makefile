@@ -14,7 +14,9 @@ export
 	deploy-dd-monitors cleanup-dd-monitors deploy-eks destroy-eks \
 	trigger-alert trigger-alert-verify regen-trigger-config \
 	prefect-local-test run dev docs-dev \
-	deploy destroy test-deploy \
+	build-image deploy destroy test-deploy \
+	bake-gateway deploy-gateway destroy-gateway \
+	deploy-gateway-direct destroy-gateway-direct \
 	deploy-lambda deploy-prefect deploy-flink destroy-lambda destroy-prefect destroy-flink \
 	test test-full test-cov test-scope test-cli-smoke test-turn-live test-grafana \
 	rabbitmq-local-up rabbitmq-local-down test-rabbitmq-real \
@@ -279,14 +281,38 @@ docs-dev:
 
 # Deploy all test case infrastructure in parallel (SDK - fast!)
 # EC2 deploy (web + gateway containers on one instance)
+# Step 1 — build once per code change, saves URI locally for reuse:
+build-image:
+	$(PYTHON) -m platform.deployment.ecr_deploy.lifecycle build-image
+
+# Step 2 — launch instance using the pre-built image (fast, no Docker build):
 deploy:
-	$(PYTHON) -m platform.deployment.lifecycle deploy
+	$(PYTHON) -m platform.deployment.ecr_deploy.lifecycle deploy
 
 destroy:
-	$(PYTHON) -m platform.deployment.lifecycle destroy
+	$(PYTHON) -m platform.deployment.ecr_deploy.lifecycle destroy
 
 test-deploy:
 	$(PYTHON) -m pytest tests/deployment/ec2/ -v -s
+
+# Gateway deploy (Telegram gateway only, no Docker/ECR)
+# Step 1 — bake once per code change (launches temp EC2, installs opensre, snapshots AMI):
+bake-gateway:
+	$(PYTHON) -m platform.deployment.gateway.lifecycle bake-ami
+
+# Step 2 — launch gateway instance from pre-baked AMI (fast):
+deploy-gateway:
+	$(PYTHON) -m platform.deployment.gateway.lifecycle deploy
+
+destroy-gateway:
+	$(PYTHON) -m platform.deployment.gateway.lifecycle destroy
+
+# Gateway direct deploy (no pre-baked AMI — installs inline via SSM)
+deploy-gateway-direct:
+	$(PYTHON) -m platform.deployment.gateway.lifecycle deploy-direct
+
+destroy-gateway-direct:
+	$(PYTHON) -m platform.deployment.gateway.lifecycle destroy-direct
 
 # Deploy Lambda test case
 deploy-lambda:
@@ -457,10 +483,16 @@ check: lint format-check typecheck check-imports test-full
 help:
 	@echo "Available commands:"
 	@echo ""
-	@echo "  EC2 DEPLOY"
-	@echo "  make deploy            - Build image and deploy web + gateway on EC2"
-	@echo "  make destroy           - Terminate EC2 instance and clean up"
+	@echo "  EC2 DEPLOY (Docker/ECR — web + gateway)"
+	@echo "  make build-image       - Build and push Docker image to ECR (run once per code change)"
+	@echo "  make deploy            - Launch EC2 instance using pre-built image (fast, no Docker build)"
+	@echo "  make destroy           - Terminate EC2 instance and clean up (keeps ECR image; OPENSRE_DESTROY_PURGE_ECR=1 to also delete it)"
 	@echo "  make test-deploy       - Run EC2 deployment e2e tests"
+	@echo ""
+	@echo "  GATEWAY DEPLOY (systemd, no Docker — gateway only)"
+	@echo "  make bake-gateway    - Bake a gateway AMI (run once per code change; saves AMI id locally)"
+	@echo "  make deploy-gateway  - Launch gateway EC2 instance from pre-baked AMI (fast)"
+	@echo "  make destroy-gateway - Terminate gateway instance and clean up (set OPENSRE_GATEWAY_DESTROY_PURGE_AMI=1 to also deregister AMI)"
 	@echo ""
 	@echo "  E2E TEST INFRA (AWS SDK)"
 	@echo "  make deploy-lambda     - Deploy Lambda stack (~50s)"

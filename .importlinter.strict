@@ -47,7 +47,6 @@ ignore_imports =
     # surfaces -> gateway (cli gateway command)
     surfaces.cli.commands.gateway -> gateway.manager
     # tools.interactive_shell -> surfaces (T-4 debt — issue #3352)
-    tools.interactive_shell.actions.cli_command -> surfaces.interactive_shell.runtime.subprocess_runner
     tools.interactive_shell.actions.investigation -> surfaces.interactive_shell.runtime.background.runner
     tools.interactive_shell.actions.investigation -> surfaces.interactive_shell.runtime.investigation_adapter
     tools.interactive_shell.actions.investigation -> surfaces.interactive_shell.session
@@ -66,21 +65,6 @@ ignore_imports =
     tools.interactive_shell.actions.task_cancel -> surfaces.interactive_shell.command_registry
     tools.interactive_shell.actions.task_cancel -> surfaces.interactive_shell.runtime
     tools.interactive_shell.actions.task_cancel -> surfaces.interactive_shell.ui.execution_confirm
-    tools.interactive_shell.implementation.claude_code_executor -> surfaces.interactive_shell.runtime
-    tools.interactive_shell.implementation.claude_code_executor -> surfaces.interactive_shell.runtime.subprocess_runner.task_streaming
-    tools.interactive_shell.implementation.claude_code_executor -> surfaces.interactive_shell.ui
-    tools.interactive_shell.implementation.claude_code_executor -> surfaces.interactive_shell.ui.execution_confirm
-    tools.interactive_shell.implementation.claude_code_executor -> surfaces.interactive_shell.utils.error_handling.exception_reporting
-    tools.interactive_shell.shell.runner -> surfaces.interactive_shell.runtime
-    tools.interactive_shell.shell.runner -> surfaces.interactive_shell.runtime.subprocess_runner.task_streaming
-    tools.interactive_shell.shell.runner -> surfaces.interactive_shell.ui
-    tools.interactive_shell.shell.runner -> surfaces.interactive_shell.ui.execution_confirm
-    tools.interactive_shell.shell.runner -> surfaces.interactive_shell.utils.error_handling.exception_reporting
-    tools.interactive_shell.synthetic.runner -> surfaces.interactive_shell.runtime
-    tools.interactive_shell.synthetic.runner -> surfaces.interactive_shell.runtime.subprocess_runner.task_streaming
-    tools.interactive_shell.synthetic.runner -> surfaces.interactive_shell.ui
-    tools.interactive_shell.synthetic.runner -> surfaces.interactive_shell.ui.execution_confirm
-    tools.interactive_shell.synthetic.runner -> surfaces.interactive_shell.utils.error_handling.exception_reporting
     # tools -> integrations (T-4 debt — vendor tools / reporting)
     tools.community_followup_tool -> integrations.github.client
     tools.community_followup_tool -> integrations.github.helpers

@@ -6,52 +6,9 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Literal, TypeAlias
 
+from config.constants.investigation import DEFAULT_APPROVAL_EXPIRY_SECONDS
 from core.tool_framework.registered_tool import RegisteredTool
-
-
-def _json_type_matches(value: Any, schema_type: str) -> bool:
-    if schema_type == "string":
-        return isinstance(value, str)
-    if schema_type == "integer":
-        return isinstance(value, int) and not isinstance(value, bool)
-    if schema_type == "number":
-        return isinstance(value, (int, float)) and not isinstance(value, bool)
-    if schema_type == "boolean":
-        return isinstance(value, bool)
-    if schema_type == "array":
-        return isinstance(value, list)
-    if schema_type == "object":
-        return isinstance(value, dict)
-    return True
-
-
-def _value_matches_schema(value: Any, schema: dict[str, Any]) -> bool:
-    if value is None and bool(schema.get("nullable")):
-        return True
-
-    if "enum" in schema and value not in schema.get("enum", []):
-        return False
-
-    one_of = schema.get("oneOf")
-    if isinstance(one_of, list) and one_of:
-        return any(
-            isinstance(option, dict) and _value_matches_schema(value, option) for option in one_of
-        )
-
-    any_of = schema.get("anyOf")
-    if isinstance(any_of, list) and any_of:
-        return any(
-            isinstance(option, dict) and _value_matches_schema(value, option) for option in any_of
-        )
-
-    schema_type = schema.get("type")
-    if isinstance(schema_type, str):
-        return _json_type_matches(value, schema_type)
-    if isinstance(schema_type, list):
-        return any(
-            isinstance(item, str) and _json_type_matches(value, item) for item in schema_type
-        )
-    return True
+from core.tool_framework.schema import _value_matches_schema
 
 
 @dataclass(frozen=True)
@@ -91,8 +48,7 @@ class AgentTool:
     execution_mode: ToolExecutionMode | None = None
     requires_approval: bool = False
     approval_reason: str = ""
-    approval_expiry_seconds: int = 300
-    approval_scope: str = "one_shot"
+    approval_expiry_seconds: int = DEFAULT_APPROVAL_EXPIRY_SECONDS
 
     @property
     def effective_execution_mode(self) -> ToolExecutionMode:

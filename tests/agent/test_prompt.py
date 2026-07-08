@@ -178,6 +178,42 @@ def test_relevant_sources_honors_explicit_context_sources() -> None:
     assert _relevant_sources(state, tools_by_source) == ["vercel"]
 
 
+def test_alert_context_includes_incident_window_since_until_keys() -> None:
+    context = format_alert_context(
+        {
+            "alert_name": "Kubernetes job failed",
+            "alert_source": "generic",
+            "pipeline_name": "kubernetes_etl_pipeline",
+            "severity": "critical",
+            "incident_window": {
+                "since": "2026-02-18T22:10:00Z",
+                "until": "2026-02-19T00:10:00Z",
+                "source": "alert.startsAt",
+                "confidence": 1.0,
+            },
+        }
+    )
+
+    assert "Incident window: 2026-02-18T22:10:00Z → 2026-02-19T00:10:00Z" in context
+
+
+def test_alert_context_accepts_legacy_incident_window_start_end_keys() -> None:
+    context = format_alert_context(
+        {
+            "alert_name": "Legacy window shape",
+            "alert_source": "generic",
+            "pipeline_name": "widgets",
+            "severity": "warning",
+            "incident_window": {
+                "start": "2026-01-01T00:00:00Z",
+                "end": "2026-01-01T02:00:00Z",
+            },
+        }
+    )
+
+    assert "Incident window: 2026-01-01T00:00:00Z → 2026-01-01T02:00:00Z" in context
+
+
 def test_alert_context_points_to_primary_source_without_duplicating_tool_metadata() -> None:
     context = format_alert_context(
         {

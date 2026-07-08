@@ -14,12 +14,15 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
+from pathlib import Path
 
 from core.domain.types.incident_window import (
     SOURCE_DEFAULT,
     SOURCE_STARTS_AT,
     resolve_incident_window,
 )
+from surfaces.cli.investigation.payload import load_file
+from tools.investigation.state_factory import make_initial_state
 
 NOW = datetime(2026, 4, 20, 12, 0, 0, tzinfo=UTC)
 
@@ -49,6 +52,36 @@ def test_string_payload_with_no_timestamp_falls_back_to_default() -> None:
     payload_str = json.dumps({"alertname": "noisy", "severity": "info"})
     result = resolve_incident_window(payload_str, now=NOW)
     assert result.source == SOURCE_DEFAULT
+
+
+def test_k8s_fixture_envelope_anchors_on_nested_starts_at() -> None:
+    """CLI ``-i datadog_k8s_alert.json`` loads the whole fixture envelope.
+
+    Regression for #3813: without unwrapping ``alert``, the resolver fell back
+    to the default wall-clock window instead of ``alert.startsAt``.
+    """
+    fixture_path = (
+        Path(__file__).resolve().parents[3]
+        / "e2e"
+        / "kubernetes"
+        / "fixtures"
+        / "datadog_k8s_alert.json"
+    )
+    fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
+    result = resolve_incident_window(fixture, now=NOW)
+    assert result.source == SOURCE_STARTS_AT
+    assert result.until == datetime(2026, 2, 19, 0, 10, tzinfo=UTC)
+
+
+def test_cli_load_path_anchors_k8s_fixture_envelope() -> None:
+    """``load_file`` + ``make_initial_state`` must still anchor the window."""
+    fixture_path = "tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json"
+    state = make_initial_state(raw_alert=load_file(fixture_path))
+    result = resolve_incident_window(state["raw_alert"], now=NOW)
+    assert result.source == SOURCE_STARTS_AT
+    # Pin the exact anchor so a silent timestamp drift in the CLI load path
+    # (e.g. timezone coercion) fails loudly instead of passing on source alone.
+    assert result.until == datetime(2026, 2, 19, 0, 10, tzinfo=UTC)
 
 
 def test_grafana_payload_still_resolves_after_parser_removal() -> None:

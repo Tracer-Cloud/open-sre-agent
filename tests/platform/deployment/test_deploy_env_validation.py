@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from platform.deployment import prep
+from platform.deployment.ecr_deploy import prep
 
 
 def test_validate_deploy_env_passes_with_required_vars(
@@ -36,14 +36,15 @@ def test_validate_deploy_env_lists_missing_required_vars(
     monkeypatch.setattr(prep, "get_configured_llm_provider", lambda: "openai")
     monkeypatch.setattr(prep, "get_project_env_path", lambda: "/tmp/.env")
 
-    with pytest.raises(RuntimeError, match="Deploy aborted"):
+    with pytest.raises(prep.DeployEnvValidationError):
         prep.validate_deploy_env()
 
     output = capsys.readouterr().out
-    assert "MISSING: AWS account access for EC2 provisioning" in output
-    assert "MISSING: Telegram gateway bot configuration" in output
-    assert "MISSING: LLM provider configuration for the selected provider" in output
-    assert "WARN: Telegram allowed-users configuration (recommended)" in output
+    assert "Deploy aborted: 3 required environment variable(s) missing" in output
+    assert "MISSING: AWS credentials — not configured" in output
+    assert "MISSING: TELEGRAM_BOT_TOKEN — API key not set" in output
+    assert "MISSING: OPENAI_API_KEY — API key not set" in output
+    assert "WARN: TELEGRAM_ALLOWED_USERS — not set" in output
 
 
 def test_validate_deploy_env_allows_bedrock_without_api_key(
@@ -56,3 +57,15 @@ def test_validate_deploy_env_allows_bedrock_without_api_key(
     monkeypatch.setattr(prep, "bootstrap_opensre_env", lambda **_kw: None)
 
     prep.validate_deploy_env()
+
+
+def test_run_lifecycle_main_exits_cleanly_on_deploy_env_validation_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _main() -> None:
+        raise prep.DeployEnvValidationError
+
+    with pytest.raises(SystemExit) as exc_info:
+        prep.run_lifecycle_main(_main)
+
+    assert exc_info.value.code == 1
