@@ -56,17 +56,31 @@ _RESOURCE_DISPATCH: dict[str, tuple[str, str, bool]] = {
 
 
 def _redact_env_values(resource_dict: dict[str, Any]) -> None:
-    """Strip env var values from a serialized pod dict in-place.
+    """Strip env var values from a serialized workload dict in-place.
 
-    sanitize_for_serialization() returns the full pod JSON including
-    spec.containers[].env[].value. Removing values here keeps credential
-    redaction consistent with describe_pod, which returns only key names.
+    sanitize_for_serialization() returns the full Kubernetes object JSON
+    including env[].value for literal env vars. Removing values keeps
+    credential redaction consistent with describe_pod (returns only key
+    names) and prevents tokens/DB URLs/API keys from reaching the LLM.
+
+    Handles two layouts:
+    - Pod: spec.containers[]/initContainers[]/ephemeralContainers[]
+    - Workload controllers (Deployment/StatefulSet/DaemonSet/ReplicaSet):
+      spec.template.spec.containers[]/initContainers[]/ephemeralContainers[]
     """
+
+    def _strip_env(spec: dict[str, Any]) -> None:
+        for key in ("containers", "initContainers", "ephemeralContainers"):
+            for container in spec.get(key) or []:
+                for env_entry in container.get("env") or []:
+                    env_entry.pop("value", None)
+
     spec = resource_dict.get("spec") or {}
-    for container_list_key in ("containers", "initContainers", "ephemeralContainers"):
-        for container in spec.get(container_list_key) or []:
-            for env_entry in container.get("env") or []:
-                env_entry.pop("value", None)
+    _strip_env(spec)
+    # Pod template inside workload controllers
+    template_spec = ((spec.get("template") or {}).get("spec")) or {}
+    if template_spec:
+        _strip_env(template_spec)
 
 
 class KubernetesClient:
@@ -778,9 +792,15 @@ class KubernetesClient:
                 obj = method(name=name, namespace=namespace)
             assert self._api_client is not None  # always set by _build_clients()
             resource_dict: dict[str, Any] = self._api_client.sanitize_for_serialization(obj)
-            # Redact env var values from pod resources to prevent credential leakage
-            # to the LLM. Consistent with describe_pod which returns only key names.
-            if rt in ("pod", "pods"):
+            # Redact env var values from pod and workload resources to prevent
+            # credential leakage to the LLM. Workload controllers (Deployment,
+            # StatefulSet, DaemonSet, ReplicaSet) embed a pod template that also
+            # carries env vars. Consistent with describe_pod (keys only).
+            _WORKLOAD_TYPES = frozenset(
+                {"pod", "pods", "deployment", "deployments", "statefulset", "statefulsets",
+                 "daemonset", "daemonsets", "replicaset", "replicasets"}
+            )
+            if rt in _WORKLOAD_TYPES:
                 _redact_env_values(resource_dict)
             return {
                 "success": True,
