@@ -18,12 +18,22 @@ def resolve_telegram_credentials(task_params: dict[str, str]) -> dict[str, str]:
 
     Priority: task.params > integration store > environment variable.
     """
-    return _resolve_credentials(
-        task_params,
-        service="telegram",
-        credential_key="bot_token",
-        env_vars=("TELEGRAM_BOT_TOKEN",),
-    )
+    try:
+        import keyring.errors
+
+        from integrations.telegram.credentials import resolve_telegram_bot_token
+
+        token = resolve_telegram_bot_token(task_params)
+        return {"bot_token": token} if token else {}
+    except (
+        ImportError,
+        KeyError,
+        TypeError,
+        ValueError,
+        keyring.errors.KeyringError,
+    ) as exc:
+        logger.debug("Failed to resolve Telegram credentials: %s", exc)
+        return {}
 
 
 def resolve_slack_credentials(task_params: dict[str, str]) -> dict[str, str]:
