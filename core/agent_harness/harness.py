@@ -112,7 +112,7 @@ class AgentHarness:
 
     def resolve_integrations(self, session: SessionCore) -> dict[str, Any]:
         """Return resolved integration configs for ``session``."""
-        from core.agent_harness.integrations.resolution import resolve_and_cache_integrations
+        from core.agent_harness.session.integration_resolution import resolve_and_cache_integrations
 
         return resolve_and_cache_integrations(session)
 

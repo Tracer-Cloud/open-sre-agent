@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 
-import core.agent_harness.integrations.resolution as resolution
+import core.agent_harness.session.integration_resolution as resolution
 import platform.harness_ports as harness_ports
 from surfaces.interactive_shell.ui.output.boundary import install_harness_ports
 

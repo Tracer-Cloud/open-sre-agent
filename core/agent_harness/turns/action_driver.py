@@ -20,7 +20,6 @@ from typing import Any
 
 from core.agent import Agent
 from core.agent_harness.agent_builder import AgentConfig, build_agent
-from core.agent_harness.integrations.resolution import resolve_and_cache_integrations
 from core.agent_harness.ports import (
     ConfirmFn,
     ErrorReporter,
@@ -31,6 +30,7 @@ from core.agent_harness.ports import (
 from core.agent_harness.prompts import build_action_system_prompt, build_action_user_message
 from core.agent_harness.prompts.conversation_memory import MAX_CONVERSATION_MESSAGES
 from core.agent_harness.providers.provider_models import default_llm_factory
+from core.agent_harness.session.integration_resolution import resolve_and_cache_integrations
 from core.agent_harness.turns.turn_plan import TurnPlan
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot

@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from core.agent_harness.grounding.context import GroundingContext
-    from core.agent_harness.integrations.resolution import IntegrationResolutionResult
+    from core.agent_harness.session.integration_resolution import IntegrationResolutionResult
 else:
     GroundingContext = Any
 

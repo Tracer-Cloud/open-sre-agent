@@ -14,14 +14,14 @@ import threading
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from core.agent_harness.integrations.resolution_cache import (
+from core.agent_harness.session.integration_resolution_cache import (
     has_only_runtime_metadata,
     has_resolved_integrations,
     merge_resolved_integrations,
 )
 
 if TYPE_CHECKING:
-    from core.agent_harness.integrations.resolution import IntegrationResolutionResult
+    from core.agent_harness.session.integration_resolution import IntegrationResolutionResult
 
 
 @dataclass
@@ -76,7 +76,7 @@ class IntegrationState:
             with self._warm_lock:
                 generation = self._warm_generation
         try:
-            from core.agent_harness.integrations.resolution import resolve_integrations
+            from core.agent_harness.session.integration_resolution import resolve_integrations
 
             resolved = resolve_integrations()
         except Exception:
@@ -102,7 +102,7 @@ class IntegrationState:
         An explicit empty cache is treated as known state; metadata-only caches
         trigger one quiet warmup, merged through the same generation guard as startup.
         """
-        from core.agent_harness.integrations.resolution import IntegrationResolutionResult
+        from core.agent_harness.session.integration_resolution import IntegrationResolutionResult
 
         cached = self.resolved_cache
         if cached is not None and (

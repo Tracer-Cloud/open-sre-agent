@@ -14,7 +14,7 @@ from typing import Any
 from rich.console import Console
 
 import surfaces.interactive_shell.main as main_entrypoint
-from core.agent_harness.integrations.resolution import IntegrationResolutionResult
+from core.agent_harness.session.integration_resolution import IntegrationResolutionResult
 from surfaces.interactive_shell.runtime.startup import first_launch_github as flg
 from surfaces.interactive_shell.session import Session
 
@@ -49,7 +49,7 @@ def test_hydrate_marks_known_even_when_none_configured(monkeypatch: Any) -> None
 def test_warm_resolved_integrations_populates_cache(monkeypatch: Any) -> None:
     resolved = {"datadog": {"site": "datadoghq.com"}, "grafana": {"url": "http://localhost"}}
     monkeypatch.setattr(
-        "core.agent_harness.integrations.resolution.resolve_integrations",
+        "core.agent_harness.session.integration_resolution.resolve_integrations",
         lambda: resolved,
     )
     session = Session()
@@ -65,7 +65,7 @@ def test_warm_resolved_integrations_is_idempotent(monkeypatch: Any) -> None:
         return {"github": {}}
 
     monkeypatch.setattr(
-        "core.agent_harness.integrations.resolution.resolve_integrations",
+        "core.agent_harness.session.integration_resolution.resolve_integrations",
         _resolve,
     )
     session = Session()
@@ -82,7 +82,7 @@ def test_warm_resolved_integrations_skips_empty_cache(monkeypatch: Any) -> None:
         return {}
 
     monkeypatch.setattr(
-        "core.agent_harness.integrations.resolution.resolve_integrations",
+        "core.agent_harness.session.integration_resolution.resolve_integrations",
         _resolve,
     )
     session = Session()
@@ -101,7 +101,7 @@ def test_warm_resolved_integrations_uses_quiet_resolve(monkeypatch: Any) -> None
         lambda _state: progress_calls.append("progress") or {"resolved_integrations": {}},
     )
     monkeypatch.setattr(
-        "core.agent_harness.integrations.resolution.resolve_integrations",
+        "core.agent_harness.session.integration_resolution.resolve_integrations",
         lambda: quiet_calls.append("quiet") or {"datadog": {}},
     )
 
@@ -118,7 +118,7 @@ def test_get_integrations_returns_pydantic_cached_result(monkeypatch: Any) -> No
         raise AssertionError("cached integrations should not re-resolve")
 
     monkeypatch.setattr(
-        "core.agent_harness.integrations.resolution.resolve_integrations",
+        "core.agent_harness.session.integration_resolution.resolve_integrations",
         _unexpected_resolve,
     )
     session = Session()
@@ -134,7 +134,7 @@ def test_get_integrations_returns_pydantic_cached_result(monkeypatch: Any) -> No
 def test_get_integrations_respects_explicit_empty_cache(monkeypatch: Any) -> None:
     calls: list[str] = []
     monkeypatch.setattr(
-        "core.agent_harness.integrations.resolution.resolve_integrations",
+        "core.agent_harness.session.integration_resolution.resolve_integrations",
         lambda: calls.append("resolve") or {"datadog": {}},
     )
     session = Session()
@@ -149,7 +149,7 @@ def test_get_integrations_respects_explicit_empty_cache(monkeypatch: Any) -> Non
 def test_get_integrations_warms_metadata_only_cache(monkeypatch: Any) -> None:
     calls: list[str] = []
     monkeypatch.setattr(
-        "core.agent_harness.integrations.resolution.resolve_integrations",
+        "core.agent_harness.session.integration_resolution.resolve_integrations",
         lambda: calls.append("resolve") or {"datadog": {"site": "datadoghq.com"}},
     )
     session = Session()
@@ -187,7 +187,7 @@ def test_hydrate_entrypoint_does_not_warm_before_prompt(monkeypatch: Any) -> Non
         return {"datadog": {"site": "datadoghq.com"}}
 
     monkeypatch.setattr(
-        "core.agent_harness.integrations.resolution.resolve_integrations",
+        "core.agent_harness.session.integration_resolution.resolve_integrations",
         _resolve,
     )
     session = Session()
