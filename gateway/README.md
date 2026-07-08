@@ -37,7 +37,7 @@ A person can already receive messages the agent *sends* to Slack, but cannot yet
 *chat to* the agent from Slack.
 
 **One core for every surface.** Shell, CLI, and the Telegram gateway all hand the
-message to the same place: `dispatch_message_to_headless_agent`. They differ
+message to the same place: a `HeadlessAgent` (`agent.dispatch(message)`). They differ
 only in *how they receive input and send output* — never in how the agent thinks.
 
 ## Quick start
