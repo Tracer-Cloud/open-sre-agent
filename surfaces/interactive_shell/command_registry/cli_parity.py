@@ -14,8 +14,8 @@ from rich.console import Console
 from rich.markup import escape
 
 from core.agent_harness.session.terminal_compat import (
-    set_turn_outcome_hint,
     session_terminal,
+    set_turn_outcome_hint,
 )
 from surfaces.interactive_shell.command_registry.suggestions import closest_choice
 from surfaces.interactive_shell.command_registry.types import SlashCommand
