@@ -29,6 +29,7 @@ class ToolCallingTurnResult:
     response_text: str = ""
     handoff_contents: tuple[str, ...] = ()
     accounting_status: ToolCallingAccountingStatus = "completed"
+    investigation_dispatched: bool = False
 
 
 @dataclass(frozen=True)

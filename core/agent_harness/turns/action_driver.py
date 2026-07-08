@@ -75,6 +75,9 @@ SELF_RECORDING_ACTION_TOOL_NAMES: frozenset[str] = frozenset(
         "task_cancel",
     }
 )
+INVESTIGATION_DISPATCH_TOOL_NAMES: frozenset[str] = frozenset(
+    {"investigation_start", "alert_sample"}
+)
 
 
 @dataclass(frozen=True)
@@ -440,6 +443,9 @@ def run_action_agent_turn(
     executed_success_count += generic_success_count
     planned_count = sum(1 for tc, _output in result.executed if tc.name != "assistant_handoff")
     handled = planned_count > 0
+    investigation_dispatched = any(
+        tc.name in INVESTIGATION_DISPATCH_TOOL_NAMES for tc, _output in result.executed
+    )
     handoff_contents = tuple(
         content
         for tc, _output in result.executed
@@ -468,6 +474,7 @@ def run_action_agent_turn(
         handled,
         response_text=response_text,
         handoff_contents=handoff_contents,
+        investigation_dispatched=investigation_dispatched,
     )
 
 
