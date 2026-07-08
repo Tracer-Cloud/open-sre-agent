@@ -191,6 +191,7 @@ class TestIncomingWebhook:
     def test_non_2xx_status_truncates_response_body(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from platform.notifications.delivery_transport import DeliveryResponse
 
+        assert slack_delivery._LOG_BODY_MAX_LEN == 200
         body = "x" * (slack_delivery._LOG_BODY_MAX_LEN + 20)
         messages: list[str] = []
 
@@ -271,6 +272,7 @@ class TestPostViaWebapp:
     def test_5xx_truncates_response_body(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from platform.notifications.delivery_transport import DeliveryResponse
 
+        assert slack_delivery._LOG_BODY_MAX_LEN == 200
         body = "x" * (slack_delivery._LOG_BODY_MAX_LEN + 20)
         messages: list[str] = []
 
