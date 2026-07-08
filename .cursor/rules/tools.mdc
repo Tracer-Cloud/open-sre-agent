@@ -85,5 +85,5 @@ my_tool_name = MyToolName()
 ## Valid `EvidenceSource` Values
 
 `storage`, `batch`, `tracer_web`, `cloudwatch`, `aws_sdk`, `knowledge`, `grafana`,
-`datadog`, `honeycomb`, `coralogix`, `eks`, `github`, `sentry`, `google_docs`,
+`datadog`, `honeycomb`, `coralogix`, `eks`, `kubernetes`, `github`, `sentry`, `google_docs`,
 `vercel`, `opsgenie`, `elasticsearch`
