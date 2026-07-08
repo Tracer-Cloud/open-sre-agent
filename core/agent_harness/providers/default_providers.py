@@ -26,7 +26,7 @@ from platform.observability.sentry_sdk import capture_exception
 
 log = logging.getLogger(__name__)
 
-ActionObserverFactory = Callable[[Any, Any, str], ToolEventObserver]
+ActionObserverFactory = Callable[[str], ToolEventObserver]
 # Return value is tools.interactive_shell.subprocess.SubprocessPresenter (surface-injected).
 SubprocessPresenterFactory = Callable[
     [Any, Any, ConfirmFn | None, bool | None, bool],
@@ -119,7 +119,7 @@ class DefaultToolProvider:
 
     def observer(self, *, message: str) -> ToolEventObserver:
         if self._observer_factory is not None:
-            observer = self._observer_factory(self._session, self._console, message)
+            observer = self._observer_factory(message)
         else:
 
             def observer(_kind: str, _data: dict[str, Any]) -> None:

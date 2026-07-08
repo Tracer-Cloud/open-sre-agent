@@ -14,6 +14,18 @@ from core.agent_harness.session.storage.memory import InMemorySessionStorage
 from gateway.turn_handler import build_gateway_turn_handler
 
 
+def _patch_headless_agent(monkeypatch: Any, result: ShellTurnResult) -> MagicMock:
+    """Patch the gateway's ``HeadlessAgent`` so construction is inert and dispatch returns ``result``.
+
+    Returns the patched class mock; ``mock.call_args.kwargs`` exposes the constructor
+    ports (e.g. ``tools``) the gateway wired for the turn.
+    """
+    agent_cls = MagicMock()
+    agent_cls.return_value.dispatch.return_value = result
+    monkeypatch.setattr("gateway.turn_handler.HeadlessAgent", agent_cls)
+    return agent_cls
+
+
 def test_turn_handler_resolves_action_tools_from_live_session(monkeypatch: Any) -> None:
     """Per-chat session integrations must drive the action tool list each turn.
 
@@ -36,8 +48,9 @@ def test_turn_handler_resolves_action_tools_from_live_session(monkeypatch: Any) 
         _fake_get_tools,
     )
 
-    dispatch = MagicMock(
-        return_value=ShellTurnResult(
+    agent_cls = _patch_headless_agent(
+        monkeypatch,
+        ShellTurnResult(
             final_intent="cli_agent_handled",
             action_result=ToolCallingTurnResult(
                 planned_count=1,
@@ -46,11 +59,7 @@ def test_turn_handler_resolves_action_tools_from_live_session(monkeypatch: Any) 
                 has_unhandled_clause=False,
                 handled=True,
             ),
-        )
-    )
-    monkeypatch.setattr(
-        "gateway.turn_handler.dispatch_message_to_headless_agent",
-        dispatch,
+        ),
     )
 
     session = Session(storage=InMemorySessionStorage())
@@ -60,7 +69,7 @@ def test_turn_handler_resolves_action_tools_from_live_session(monkeypatch: Any) 
     handler = build_gateway_turn_handler(console=Console(force_terminal=False))
     handler("send slack update", session, MagicMock(), logging.getLogger("test.turn_handler"))
 
-    tool_provider = dispatch.call_args.kwargs["tools"]
+    tool_provider = agent_cls.call_args.kwargs["tools"]
     tools = tool_provider.action_tools(confirm_fn=None, is_tty=False)
     assert len(tools) == 1
     assert recorded == [chat_integrations]
@@ -84,10 +93,7 @@ def _empty_turn_result(*, llm_run: Any = None) -> ShellTurnResult:
 
 def test_turn_handler_finalizes_fallback_on_empty_response(monkeypatch: Any) -> None:
     """An empty, non-answered turn still finalizes so the placeholder status can't hang."""
-    monkeypatch.setattr(
-        "gateway.turn_handler.dispatch_message_to_headless_agent",
-        MagicMock(return_value=_empty_turn_result()),
-    )
+    _patch_headless_agent(monkeypatch, _empty_turn_result())
     sink = MagicMock()
     handler = build_gateway_turn_handler(console=Console(force_terminal=False))
     handler("/", Session(storage=InMemorySessionStorage()), sink, logging.getLogger("test"))
@@ -97,10 +103,7 @@ def test_turn_handler_finalizes_fallback_on_empty_response(monkeypatch: Any) -> 
 def test_turn_handler_skips_finalize_when_answer_was_streamed(monkeypatch: Any) -> None:
     """A streamed answer (llm_run set) already resolved the status; do not re-finalize."""
     result = _empty_turn_result(llm_run=MagicMock())  # answered=True
-    monkeypatch.setattr(
-        "gateway.turn_handler.dispatch_message_to_headless_agent",
-        MagicMock(return_value=result),
-    )
+    _patch_headless_agent(monkeypatch, result)
     sink = MagicMock()
     handler = build_gateway_turn_handler(console=Console(force_terminal=False))
     handler("hi", Session(storage=InMemorySessionStorage()), sink, logging.getLogger("test"))

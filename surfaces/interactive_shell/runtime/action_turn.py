@@ -27,14 +27,6 @@ from surfaces.interactive_shell.runtime.subprocess_runner.repl_presenter import 
 from surfaces.interactive_shell.ui.action_rendering import ActionRenderObserver
 
 
-def _action_observer_factory(
-    session: Session,
-    console: Console,
-    message: str,
-) -> ActionRenderObserver:
-    return ActionRenderObserver(session=session, console=console, message=message)
-
-
 def _complete_literal_slash_typo_turn(
     message: str,
     session: Session,
@@ -103,7 +95,9 @@ def run_action_tool_turn(
             session,
             console,
             request_exit=request_exit,
-            observer_factory=_action_observer_factory,
+            observer_factory=lambda msg: ActionRenderObserver(
+                session=session, console=console, message=msg
+            ),
             subprocess_presenter_factory=_subprocess_presenter_factory,
         ),
         confirm_fn=confirm_fn,

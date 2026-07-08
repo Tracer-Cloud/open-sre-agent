@@ -9,7 +9,7 @@ from typing import Any, cast
 import pytest
 
 from core.agent import Agent, AgentRunResult
-from core.agent_harness.turns.headless_dispatch import dispatch_message_to_headless_agent
+from core.agent_harness.turns.headless_dispatch import HeadlessAgent
 from core.events import (
     MessageUpdateEvent,
     RuntimeEvent,
@@ -145,11 +145,11 @@ def test_agent_exposes_headless_dispatch_entrypoint(monkeypatch: pytest.MonkeyPa
         StaticReasoningClientProvider,
     )
 
-    result = dispatch_message_to_headless_agent(
-        "hello",
+    agent = HeadlessAgent(
         tools=NullToolProvider(),
         reasoning=StaticReasoningClientProvider(client=EchoReasoningClient()),
     )
+    result = agent.dispatch("hello")
 
     assert result.assistant_response_text == "hello from headless"
 
