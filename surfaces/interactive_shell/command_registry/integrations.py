@@ -264,7 +264,12 @@ def _render_integration_show(session: Session, console: Console, service: str) -
 def _run_integrations_setup(session: Session, console: Console, args: list[str]) -> bool:
     if len(args) < 2:
         repl_print(console, f"[{DIM}]usage:[/] /integrations setup <service>")
-        session.mark_latest(ok=False, kind="slash")
+        if session_terminal(session) is None:
+            publish_headless_slash_response(
+                session, message="Usage: /integrations setup <service>", ok=False
+            )
+        else:
+            session.mark_latest(ok=False, kind="slash")
         return True
 
     service = args[1]

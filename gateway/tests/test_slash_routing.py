@@ -110,10 +110,10 @@ def test_gateway_integrations_setup_returns_headless_guidance(
     assert "Launching" not in (sink.finalized or "")
 
 
-def test_gateway_integrations_setup_runs_inline_when_stdin_is_tty(
+def test_gateway_integrations_setup_returns_headless_guidance_even_with_tty(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Gateway SessionCore must not defer picker slashes when stdin is a TTY (tmux)."""
+    """Gateway SessionCore returns headless guidance even when stdin is a TTY (e.g. tmux)."""
     monkeypatch.setattr(
         "surfaces.interactive_shell.ui.components.choice_menu.repl_tty_interactive",
         lambda: True,
