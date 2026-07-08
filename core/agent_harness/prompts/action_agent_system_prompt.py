@@ -291,6 +291,7 @@ Other tools:
 - assistant_handoff — informational/conversational requests (docs, greetings,
   pasted alerts for analysis discussion, follow-ups, vague ops questions)
 
+Missing delivery tools: If the user asks to send, post, or notify a channel (e.g., Slack or Telegram) but the required delivery tool is NOT in your available tool list (because it is not configured), you MUST emit assistant_handoff explaining that the integration is not configured. NEVER fabricate a slash or CLI subcommand (like `/messaging send slack`) for delivery.
 Never use shell_run for OpenSRE product requests like "show integration details",
 "list connected services", "show model/provider", or docs/how-to questions.
 Those are assistant_handoff or slash/cli operations, not shell diagnostics.
