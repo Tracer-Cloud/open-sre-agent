@@ -85,7 +85,7 @@ class TerminalSession:
     """True while a turn is running with exclusive stdin reserved (no live prompt).
 
     Inline picker/wizard slash commands must dispatch immediately during these
-    turns instead of re-queueing via ``queue_auto_command``, which would loop."""
+    turns instead of re-queueing via ``set_auto_command``, which would loop."""
 
     agent_turn_executed_slashes: set[str] = field(default_factory=set, repr=False)
     """Slash command lines already executed during the current action-agent turn.
@@ -134,19 +134,19 @@ class TerminalSession:
 
     # ── behavior over the fields above (Session delegates via ``session.terminal``) ──
 
-    def take_pending_prompt_default(self) -> str:
+    def pop_pending_prompt_default(self) -> str:
         """Return pre-filled text for the next prompt line, if any, and clear it."""
         value = self.pending_prompt_default
         self.pending_prompt_default = None
         return value or ""
 
-    def take_pending_autosubmit(self) -> bool:
+    def pop_pending_autosubmit(self) -> bool:
         """Return whether the pending prefill should auto-submit, and clear the flag."""
         value = self.pending_prompt_autosubmit
         self.pending_prompt_autosubmit = False
         return value
 
-    def queue_auto_command(self, command: str) -> None:
+    def set_auto_command(self, command: str) -> None:
         """Queue a command to run automatically on the next prompt iteration.
 
         Prefills the input with ``command`` and marks it for auto-submit, then

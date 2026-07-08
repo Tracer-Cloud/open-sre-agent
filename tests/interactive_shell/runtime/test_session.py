@@ -34,9 +34,9 @@ class TestSession:
     def test_take_pending_prompt_default_returns_and_clears(self) -> None:
         session = Session()
         session.terminal.pending_prompt_default = "why did it fail?"
-        assert session.terminal.take_pending_prompt_default() == "why did it fail?"
+        assert session.terminal.pop_pending_prompt_default() == "why did it fail?"
         assert session.terminal.pending_prompt_default is None
-        assert session.terminal.take_pending_prompt_default() == ""
+        assert session.terminal.pop_pending_prompt_default() == ""
 
     def test_clear_resets_pending_prompt_default(self) -> None:
         session = Session()
@@ -48,7 +48,7 @@ class TestSession:
         session = Session()
         calls: list[bool] = []
         session.terminal.prompt_refresh_fn = lambda: calls.append(True)
-        session.terminal.queue_auto_command("/integrations setup sentry")
+        session.terminal.set_auto_command("/integrations setup sentry")
         assert session.terminal.pending_prompt_default == "/integrations setup sentry"
         assert session.terminal.pending_prompt_autosubmit is True
         assert calls == [True]
@@ -56,13 +56,13 @@ class TestSession:
     def test_take_pending_autosubmit_returns_and_clears(self) -> None:
         session = Session()
         session.terminal.pending_prompt_autosubmit = True
-        assert session.terminal.take_pending_autosubmit() is True
+        assert session.terminal.pop_pending_autosubmit() is True
         assert session.terminal.pending_prompt_autosubmit is False
-        assert session.terminal.take_pending_autosubmit() is False
+        assert session.terminal.pop_pending_autosubmit() is False
 
     def test_clear_resets_pending_autosubmit(self) -> None:
         session = Session()
-        session.terminal.queue_auto_command("/integrations setup sentry")
+        session.terminal.set_auto_command("/integrations setup sentry")
         session.clear()
         assert session.terminal.pending_prompt_autosubmit is False
         assert session.terminal.pending_prompt_default is None

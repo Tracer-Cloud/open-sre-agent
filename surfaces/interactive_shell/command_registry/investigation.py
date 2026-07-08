@@ -67,7 +67,7 @@ def _queue_investigate_target(session: Session, target: str) -> None:
     hold it — queue the resolved target so the loop auto-submits it on the next
     prompt iteration without ``queue.join()`` blocking.
     """
-    session.terminal.queue_auto_command(f"/investigate {target}")
+    session.terminal.set_auto_command(f"/investigate {target}")
 
 
 def _interactive_investigate_menu(session: Session, console: Console) -> bool:

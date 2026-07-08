@@ -1420,8 +1420,8 @@ class TestInvestigateFileCommand:
         assert session.terminal.pending_prompt_autosubmit is True
         assert captured == []
 
-        dispatch_slash(session.terminal.take_pending_prompt_default(), session, console)
-        assert session.terminal.take_pending_autosubmit() is True
+        dispatch_slash(session.terminal.pop_pending_prompt_default(), session, console)
+        assert session.terminal.pop_pending_autosubmit() is True
 
         assert captured == ["generic"]
         assert session.last_state == {"root_cause": "sample from menu"}
@@ -1465,8 +1465,8 @@ class TestInvestigateFileCommand:
         console, _ = _capture()
         dispatch_slash("/investigate", session, console)
 
-        assert session.terminal.take_pending_autosubmit() is True
-        queued = session.terminal.take_pending_prompt_default()
+        assert session.terminal.pop_pending_autosubmit() is True
+        queued = session.terminal.pop_pending_prompt_default()
         assert queued.startswith("/investigate ")
         assert captured == []
 

@@ -28,7 +28,7 @@ from tools.interactive_shell.shared import plan_foreground_tool
 # the turn — it only does so for deterministically-typed commands. Running the
 # picker inline then races the concurrently open prompt_async() for stdin and the
 # terminal's cursor-position replies (ESC[row;colR) leak into the input line as
-# literal keystrokes. Defer them through ``queue_auto_command`` so the loop
+# literal keystrokes. Defer them through ``set_auto_command`` so the loop
 # re-dispatches the command as a deterministic turn it runs with exclusive stdin.
 _INTERACTIVE_PICKER_MENUS: frozenset[str] = frozenset({"/auth", "/login", "/integrations", "/mcp"})
 _INTERACTIVE_PICKER_SUBCOMMANDS: frozenset[tuple[str, str]] = frozenset(
@@ -102,12 +102,12 @@ def execute_slash_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
         and not ctx.session.terminal.exclusive_stdin_active
     ):
         # Hand the picker back to the REPL loop instead of running it against the
-        # live prompt: queue_auto_command re-submits it as a deterministic turn
+        # live prompt: set_auto_command re-submits it as a deterministic turn
         # the loop dispatches with exclusive stdin, so no CPR replies leak in.
         # Do not record a slash history row here — dispatch_slash will record when
         # the queued command runs. Attach a turn hint for this turn's analytics.
         ctx.console.print(f"[{DIM}]Launching[/] [{BOLD_BRAND}]{escape(stripped)}[/]…")
-        ctx.session.terminal.queue_auto_command(stripped)
+        ctx.session.terminal.set_auto_command(stripped)
         ctx.session.terminal.set_turn_outcome_hint(
             f"queued {stripped} for exclusive stdin dispatch"
         )

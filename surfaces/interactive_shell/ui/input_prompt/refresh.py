@@ -36,7 +36,7 @@ def wire_prompt_refresh(
                 # genuinely not accepting input, leave the prefill in place so the
                 # next prompt iteration picks it up via the before-prompt path.
                 session.terminal.pending_prompt_default = None
-                session.terminal.take_pending_autosubmit()
+                session.terminal.pop_pending_autosubmit()
                 buffer.text = pending
                 try:
                     buffer.validate_and_handle()

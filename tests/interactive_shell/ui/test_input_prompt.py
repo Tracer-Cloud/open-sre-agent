@@ -64,7 +64,7 @@ class TestPromptRefreshAutoSubmit:
         session = Session()
         app = _RefreshFakeApp()
         wire_prompt_refresh(session, app, _RefreshFakeLoop())
-        session.terminal.queue_auto_command("/integrations setup sentry")
+        session.terminal.set_auto_command("/integrations setup sentry")
         assert app.current_buffer.text == "/integrations setup sentry"
         assert app.current_buffer.submitted is True
 

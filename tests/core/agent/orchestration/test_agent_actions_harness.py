@@ -343,6 +343,27 @@ def test_run_turn_clears_terminal_slash_dedup_at_turn_start() -> None:
     assert session.terminal.agent_turn_executed_slashes == set()
 
 
+def test_stage_turn_error_routes_to_terminal_facet() -> None:
+    """Structured error staging lives on session.terminal; stage_turn_error must reach it."""
+    from core.agent_harness.turns.orchestrator import stage_turn_error
+
+    session = Session()
+    stage_turn_error(session, "provider_error", "boom")
+
+    assert session.terminal.pop_pending_turn_error() == ("provider_error", "boom")
+
+
+def test_pop_turn_outcome_hint_reads_terminal_facet() -> None:
+    """Outcome hint lives on session.terminal; the driver helper must pop it from there."""
+    from core.agent_harness.turns.action_driver import _pop_turn_outcome_hint
+
+    session = Session()
+    session.terminal.set_turn_outcome_hint("handled")
+
+    assert _pop_turn_outcome_hint(session) == "handled"
+    assert _pop_turn_outcome_hint(session) == ""
+
+
 def test_run_turn_mixed_action_and_handoff_routes_to_assistant() -> None:
     """Handled action plus handoff tags must not take the handled_without_llm path."""
     captured: list[tuple[str, ...]] = []
