@@ -422,6 +422,30 @@ def test_realistic_page_shapes_every_event(mock_call) -> None:
 
 
 @patch("integrations.cloudtrail.tools.cloudtrail_events_tool.execute_aws_sdk_call")
+def test_success_payload_omits_error_key(mock_call) -> None:
+    """The success payload must NOT carry an "error" key.
+
+    The runtime tool loop (core.execution._normalize_result) flags a result as a
+    failure on the mere presence of an "error" key (is_error = "error" in raw) and
+    replaces the whole payload with {"error": ...} before the agent sees it. A
+    success dict with "error": None therefore hides every event from the
+    investigation — regression guard against reintroducing it.
+    """
+    mock_call.return_value = {"success": True, "data": _fixture_payload("lookup_events_page.json")}
+    result = lookup_cloudtrail_events(duration_minutes=60)
+
+    assert result["available"] is True
+    assert result["total_events"] == 3
+    assert "error" not in result
+
+    # Failure paths still carry a real message (correctly flagged as is_error).
+    mock_call.return_value = {"success": False, "error": "ThrottlingException"}
+    failed = lookup_cloudtrail_events()
+    assert failed["available"] is False
+    assert "error" in failed and failed["error"]
+
+
+@patch("integrations.cloudtrail.tools.cloudtrail_events_tool.execute_aws_sdk_call")
 def test_weird_page_survives_and_shapes_gracefully(mock_call) -> None:
     """Degenerate live payloads must degrade to partial events, never raise.
 
