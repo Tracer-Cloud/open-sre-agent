@@ -15,6 +15,16 @@ Token reference
   WARNING    warnings only — no auth, fallback store, config issues
   ERROR      errors only — missing required config, failures
   BG         terminal background, never used as foreground
+  INPUT_SURFACE  prompt/menu surface background
+
+Optional per-theme splash gradient (``CliTheme`` only)
+----------------------------------------------------
+  SPLASH_GRADIENT_START  left/start colour for splash ASCII art gradients
+  SPLASH_GRADIENT_END    right/end colour for splash ASCII art gradients
+
+When both gradient fields are set, the splash banner interpolates between
+them across each row of ``█`` block characters. Themes without these fields
+continue to use ``HIGHLIGHT`` for splash art.
 
 Usage
 -----
@@ -45,6 +55,8 @@ class CliTheme:
     ERROR: str
     BG: str
     INPUT_SURFACE: str
+    SPLASH_GRADIENT_START: str | None = None
+    SPLASH_GRADIENT_END: str | None = None
 
 
 THEME_REGISTRY: dict[str, CliTheme] = {
@@ -155,6 +167,94 @@ THEME_REGISTRY: dict[str, CliTheme] = {
         ERROR="#C45B52",
         BG="#0A0A0A",
         INPUT_SURFACE="#141414",
+    ),
+    "lime": CliTheme(
+        name="lime",
+        HIGHLIGHT="#D4FF7A",
+        BRAND="#94C845",
+        TEXT="#E0E0E0",
+        SECONDARY="#888888",
+        DIM="#444444",
+        WARNING="#CEA25C",
+        ERROR="#C45B52",
+        BG="#0A0A0A",
+        INPUT_SURFACE="#141414",
+    ),
+    "nord": CliTheme(
+        name="nord",
+        HIGHLIGHT="#88C0D0",
+        BRAND="#81A1C1",
+        TEXT="#E5E9F0",
+        SECONDARY="#9AA5B5",
+        DIM="#4C566A",
+        WARNING="#EBCB8B",
+        ERROR="#BF616A",
+        BG="#2E3440",
+        INPUT_SURFACE="#3B4252",
+    ),
+    "dracula": CliTheme(
+        name="dracula",
+        HIGHLIGHT="#BD93F9",
+        BRAND="#8BE9FD",
+        TEXT="#F8F8F2",
+        SECONDARY="#B4B7C5",
+        DIM="#6272A4",
+        WARNING="#F1FA8C",
+        ERROR="#FF5555",
+        BG="#282A36",
+        INPUT_SURFACE="#303443",
+    ),
+    "solarized": CliTheme(
+        name="solarized",
+        HIGHLIGHT="#2AA198",
+        BRAND="#268BD2",
+        TEXT="#EEE8D5",
+        SECONDARY="#93A1A1",
+        DIM="#586E75",
+        WARNING="#B58900",
+        ERROR="#DC322F",
+        BG="#002B36",
+        INPUT_SURFACE="#073642",
+    ),
+    "gruvbox": CliTheme(
+        name="gruvbox",
+        HIGHLIGHT="#FABD2F",
+        BRAND="#83A598",
+        TEXT="#EBDBB2",
+        SECONDARY="#A89984",
+        DIM="#665C54",
+        WARNING="#FE8019",
+        ERROR="#FB4934",
+        BG="#282828",
+        INPUT_SURFACE="#32302F",
+    ),
+    "webflux": CliTheme(
+        name="webflux",
+        HIGHLIGHT="#E23636",
+        BRAND="#2B63F5",
+        TEXT="#EAF0FF",
+        SECONDARY="#9CA8C6",
+        DIM="#4B587A",
+        WARNING="#FFC857",
+        ERROR="#FF4D4D",
+        BG="#0D1220",
+        INPUT_SURFACE="#151D33",
+        SPLASH_GRADIENT_START="#E23636",
+        SPLASH_GRADIENT_END="#2B63F5",
+    ),
+    "sunset": CliTheme(
+        name="sunset",
+        HIGHLIGHT="#FFB067",
+        BRAND="#FF6FA8",
+        TEXT="#FFE8D5",
+        SECONDARY="#C8A79B",
+        DIM="#6C4E4A",
+        WARNING="#FFD166",
+        ERROR="#FF5A5F",
+        BG="#22151A",
+        INPUT_SURFACE="#2B1C24",
+        SPLASH_GRADIENT_START="#FFB067",
+        SPLASH_GRADIENT_END="#FF6FA8",
     ),
 }
 

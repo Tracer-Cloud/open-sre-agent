@@ -20,7 +20,9 @@ from platform.deployment.aws.config import (
 )
 from platform.deployment.aws.ec2 import (
     create_instance_profile,
+    create_stack_security_group,
     delete_instance_profile,
+    delete_stack_security_group,
     find_stack_instance_ids,
     get_latest_al2023_ami,
     launch_instance,
@@ -228,12 +230,17 @@ def deploy() -> dict[str, str]:
     ami_id = get_latest_al2023_ami(REGION)
     print(f"  - AMI: {ami_id}")
 
+    print("Creating security group...")
+    security_group_id = create_stack_security_group(stack.stack_name, region=REGION)
+    print(f"  - Security group: {security_group_id}")
+
     print("Launching EC2 instance...")
     instance = launch_instance(
         ami_id=ami_id,
         instance_profile_arn=profile_info["ProfileArn"],
         stack_name=stack.stack_name,
         instance_type=INSTANCE_TYPE,
+        security_group_ids=[security_group_id],
         region=REGION,
     )
     print(f"  - Instance ID: {instance['InstanceId']}")
@@ -266,6 +273,7 @@ def deploy() -> dict[str, str]:
         "StackName": stack.stack_name,
         "InstanceId": instance["InstanceId"],
         "PublicIpAddress": public_ip,
+        "SecurityGroupId": security_group_id,
         "ProfileName": profile_info["ProfileName"],
         "RoleName": profile_info["RoleName"],
         "AmiId": ami_id,
@@ -313,6 +321,7 @@ def destroy() -> dict[str, list[str]]:
         outputs = {}
 
     instance_id = outputs.get("InstanceId", "")
+    security_group_id = outputs.get("SecurityGroupId", "")
     profile_name = outputs.get("ProfileName", f"{stack.stack_name}-profile")
     role_name = outputs.get("RoleName", f"{stack.stack_name}-role")
 
@@ -324,6 +333,17 @@ def destroy() -> dict[str, list[str]]:
             print("  - Instance terminated")
         except ClientError as e:
             msg = f"ec2-instance:{instance_id} - {e}"
+            results["failed"].append(msg)
+            print(f"  - Failed: {e}")
+
+    if security_group_id:
+        print(f"Deleting security group {security_group_id}...")
+        try:
+            delete_stack_security_group(security_group_id, region=DEFAULT_REGION)
+            results["deleted"].append(f"security-group:{security_group_id}")
+            print("  - Security group deleted")
+        except ClientError as e:
+            msg = f"security-group:{security_group_id} - {e}"
             results["failed"].append(msg)
             print(f"  - Failed: {e}")
 

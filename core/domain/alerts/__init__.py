@@ -5,6 +5,8 @@
 - ``extraction.py``    — deterministic field extraction for the extract_alert stage
 - ``normalization.py`` — canonical OpenSRE alert payload shape
 - ``inbox.py``         — in-process alert queue
-- ``alert_listener.py`` — local HTTP listener for pushed alerts
 - ``tool_planning.py`` — score and rank investigation tools for an alert
+
+Alert intake HTTP is served by :mod:`gateway.webapp` ``POST /alerts`` (started from
+the interactive shell when ``alert_listener_enabled`` is set in REPL config).
 """

@@ -89,6 +89,14 @@ sudo journalctl -u opensre-gateway -f
 
 Outputs are written to `~/.opensre/deployments/opensre-gateway.json`.
 
+After deploy, the web API is reachable publicly:
+
+```bash
+curl http://<PublicIpAddress>:8000/health
+```
+
+Restrict the allowed source CIDR with `OPENSRE_WEB_API_INGRESS_CIDR` (default `0.0.0.0/0`).
+
 ### Direct deploy (no pre-baked AMI)
 
 Installs OpenSRE inline on a fresh EC2 instance via SSM — slower but requires no bake step:

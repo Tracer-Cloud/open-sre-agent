@@ -287,6 +287,22 @@ def test_route_handled_without_handoff_stays_action_only() -> None:
     assert route.intent == "handled_without_llm"
 
 
+def test_route_investigation_dispatch_skips_gather_even_with_handoff() -> None:
+    from core.agent_harness.turns.orchestrator import TurnRoutingInput, _route_turn
+
+    routing = TurnRoutingInput(
+        action_handled=True,
+        executed_success_count=1,
+        has_observation=False,
+        investigation_dispatched=True,
+    )
+    route = _route_turn(
+        routing,
+        handoff_contents=("chat:non_actionable_literal",),
+    )
+    assert route.intent == "handled_without_llm"
+
+
 def test_run_turn_passes_handoff_contents_to_assistant() -> None:
     captured: list[tuple[str, ...]] = []
 

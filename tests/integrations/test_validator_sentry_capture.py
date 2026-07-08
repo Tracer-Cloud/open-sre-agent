@@ -44,7 +44,7 @@ class MigrationCase:
 CASES: tuple[MigrationCase, ...] = (
     # trello
     MigrationCase(
-        "integrations/trello/config.py",
+        "integrations/trello/verifier.py",
         "validate_trello_config",
         "trello",
         "validate_trello_config",

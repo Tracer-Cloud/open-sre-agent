@@ -14,6 +14,23 @@ from platform.deployment.aws.ec2 import launch_instance
 
 
 @patch("platform.deployment.aws.ec2.get_boto3_client")
+def test_launch_instance_passes_security_group_ids(mock_get_boto3_client: MagicMock) -> None:
+    ec2 = MagicMock()
+    ec2.run_instances.return_value = {"Instances": [{"InstanceId": "i-sg"}]}
+    mock_get_boto3_client.return_value = ec2
+
+    launch_instance(
+        "ami-al2023",
+        "arn:aws:iam::1:instance-profile/p",
+        "test-stack",
+        security_group_ids=["sg-abc123"],
+        region="us-east-1",
+    )
+
+    assert ec2.run_instances.call_args.kwargs["SecurityGroupIds"] == ["sg-abc123"]
+
+
+@patch("platform.deployment.aws.ec2.get_boto3_client")
 def test_launch_instance_defaults_to_al2023_root_device(mock_get_boto3_client: MagicMock) -> None:
     ec2 = MagicMock()
     ec2.run_instances.return_value = {"Instances": [{"InstanceId": "i-al2023"}]}

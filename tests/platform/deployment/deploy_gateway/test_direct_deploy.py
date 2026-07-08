@@ -26,6 +26,9 @@ def _stub_deploy(monkeypatch: pytest.MonkeyPatch) -> dict[str, list[str]]:
 
     monkeypatch.setattr(direct_module, "create_instance_profile", lambda *_a, **_kw: _FAKE_PROFILE)
     monkeypatch.setattr(direct_module, "get_latest_ubuntu2204_ami", lambda _region: _BASE_AMI)
+    monkeypatch.setattr(
+        direct_module, "create_stack_security_group", lambda *_a, **_kw: "sg-direct123"
+    )
 
     def fake_launch_instance(*_args: object, **kwargs: object) -> dict[str, str]:
         calls["launch_kwargs"].append(kwargs)
@@ -64,6 +67,7 @@ def test_deploy_direct_returns_all_required_keys(
     assert outputs["InstanceId"] == _INSTANCE_ID
     assert outputs["PublicIpAddress"] == _PUBLIC_IP
     assert outputs["BaseAmiId"] == _BASE_AMI
+    assert outputs["SecurityGroupId"] == "sg-direct123"
     assert "ProfileName" in outputs
     assert "RoleName" in outputs
     # GitRef is no longer in outputs (no git clone with curl installer)
@@ -224,7 +228,7 @@ def test_cleanup_existing_cleans_iam_when_no_outputs_file(
     monkeypatch.setattr(
         direct_module,
         "find_stack_instance_ids",
-        lambda _stack, _region: ["i-orphan01"],
+        lambda _stack, *, region: ["i-orphan01"],  # noqa: ARG005
     )
     monkeypatch.setattr(
         direct_module,

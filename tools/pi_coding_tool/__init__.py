@@ -12,7 +12,7 @@ Package layout (separation of concerns):
   and does not recurse into sub-modules.
 
 This is the first **mutating** agent-callable tool, so it is deliberately gated,
-mirroring how ``run_diagnostic_code`` ships disabled by default:
+mirroring how ``execute_python_code`` is gated by availability:
 
 - ``side_effect_level = "mutating"``.
 - ``is_available`` returns True only when ``PI_CODING_ENABLED`` is set, so it is
