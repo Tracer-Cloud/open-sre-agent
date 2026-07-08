@@ -14,9 +14,6 @@ from platform.deployment.aws.client import DEFAULT_REGION, get_boto3_client, get
 from platform.deployment.aws.config import (
     AL2023_AMI_SSM_PARAMETER,
     BEDROCK_POLICY_ARN,
-    WEB_API_INGRESS_CIDR_DEFAULT,
-    WEB_API_INGRESS_CIDR_ENV,
-    WEB_API_PORT,
     EC2_INSTANCE_ROLE_DESCRIPTION,
     EC2_ROOT_DEVICE_NAME,
     EC2_VOLUME_SIZE_GB,
@@ -27,6 +24,9 @@ from platform.deployment.aws.config import (
     IAM_PROFILE_PROPAGATION_SECONDS,
     INSTANCE_TYPE,
     STACK_TAG_KEY,
+    WEB_API_INGRESS_CIDR_DEFAULT,
+    WEB_API_INGRESS_CIDR_ENV,
+    WEB_API_PORT,
 )
 
 ACTIVE_EC2_INSTANCE_STATES = ("pending", "running", "stopping")

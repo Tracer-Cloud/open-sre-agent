@@ -11,8 +11,8 @@ from platform.deployment.aws.config import WEB_API_PORT
 from platform.deployment.aws.ec2 import (
     create_stack_security_group,
     delete_stack_security_group,
-    web_api_ingress_cidr,
     stack_security_group_name,
+    web_api_ingress_cidr,
 )
 
 
