@@ -39,7 +39,11 @@ def restore_stdin_terminal() -> None:
     with contextlib.suppress(Exception):
         fd = sys.stdin.fileno()
         attrs = termios.tcgetattr(fd)  # type: ignore[attr-defined]
-        attrs[3] |= termios.ICANON | termios.ECHO  # type: ignore[attr-defined]
+        # Restore cooked-mode flags a raw menu clears: ICRNL so Enter (CR) submits,
+        # OPOST for output newlines, ICANON/ECHO/ISIG for line editing and signals.
+        attrs[0] |= termios.BRKINT | termios.ICRNL | termios.IXON  # type: ignore[attr-defined]
+        attrs[1] |= termios.OPOST  # type: ignore[attr-defined]
+        attrs[3] |= termios.ICANON | termios.ECHO | termios.ISIG  # type: ignore[attr-defined]
         if hasattr(termios, "IEXTEN"):
             attrs[3] |= termios.IEXTEN  # type: ignore[attr-defined]
         termios.tcsetattr(fd, termios.TCSADRAIN, attrs)  # type: ignore[attr-defined]

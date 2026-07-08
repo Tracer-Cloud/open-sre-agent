@@ -1,7 +1,8 @@
 """Centralized session lifecycle owner for every surface.
 
 ``SessionManager`` is the single component that creates, resolves, rotates,
-restores, and flushes :class:`Session` objects. Surfaces (interactive
+restores, and flushes :class:`SessionCore` objects (surfaces subclass it).
+Surfaces (interactive
 shell, gateway, headless) delegate session lifecycle to it instead of each
 re-implementing bootstrap + persistence wiring:
 
@@ -32,15 +33,20 @@ from __future__ import annotations
 import contextlib
 import logging
 from datetime import datetime
-from typing import Any
+from typing import Any, TypeVar
+
+from core.agent_harness.session.persistence.ports import SessionRepo, SessionStorage
 
 # Import from submodules (not the package __init__) so the session package can
 # re-export SessionManager without a circular import.
-from core.agent_harness.session.state import Session
-from core.agent_harness.session.tasks import TaskRegistry
-from core.agent_harness.session.types import SessionRepo, SessionStorage
+from core.agent_harness.session.session_core import SessionCore
+from platform.common.task_registry import TaskRegistry
 
 logger = logging.getLogger(__name__)
+
+# In-place lifecycle methods return the caller's own session type (a surface's
+# ``Session`` subclass or a plain ``SessionCore``), so they preserve it.
+_S = TypeVar("_S", bound=SessionCore)
 
 
 class SessionManager:
@@ -69,7 +75,7 @@ class SessionManager:
         self._repo = repo
 
     @classmethod
-    def for_session(cls, session: Session) -> SessionManager:
+    def for_session(cls, session: SessionCore) -> SessionManager:
         """Build a manager bound to a live session's own storage backend.
 
         The single named construction point for the in-place lifecycle calls
@@ -82,12 +88,12 @@ class SessionManager:
 
     def bootstrap(
         self,
-        session: Session,
+        session: _S,
         *,
         hydrate_integrations: bool = True,
         warm_integrations: bool = False,
         persistent_tasks: bool = True,
-    ) -> Session:
+    ) -> _S:
         """Apply the surface-agnostic startup mutations to ``session``.
 
         This is the single definition of "a booted session": a persistent task
@@ -112,13 +118,13 @@ class SessionManager:
         warm_integrations: bool = False,
         persistent_tasks: bool = True,
         open_storage: bool = True,
-    ) -> Session:
+    ) -> SessionCore:
         """Build a fresh session, bootstrap it, and open its storage stream."""
-        session = Session(session_id=session_id) if session_id else Session()
+        session = SessionCore(session_id=session_id) if session_id else SessionCore()
         # Align the session's own persistence backend with the manager's, so
         # session.record()/append go through the same storage the manager opens
         # and flushes. Otherwise an injected backend is bypassed by the default
-        # JSONL field on Session.
+        # JSONL field on SessionCore.
         session.storage = self._storage
         self.bootstrap(
             session,
@@ -130,7 +136,7 @@ class SessionManager:
             self.open_storage(session)
         return session
 
-    def open_storage(self, session: Session) -> Session:
+    def open_storage(self, session: _S) -> _S:
         """Open the JSONL stream for an already-bootstrapped session handle.
 
         The interactive shell bootstraps via ``SessionBootstrapSpec`` first, then
@@ -148,7 +154,7 @@ class SessionManager:
         hydrate_integrations: bool = True,
         warm_integrations: bool = True,
         persistent_tasks: bool = True,
-    ) -> Session:
+    ) -> SessionCore:
         """Load a persisted session by id: bootstrap, restore context, reopen storage."""
         session = self.create(
             session_id=session_id,
@@ -168,17 +174,17 @@ class SessionManager:
         old_session_id: str | None = None,
         new_session_id: str | None = None,
         warm_integrations: bool = True,
-    ) -> Session:
+    ) -> SessionCore:
         """Close the outgoing session (if any) and create its replacement."""
         if old_session_id:
-            outgoing = Session(session_id=old_session_id)
+            outgoing = SessionCore(session_id=old_session_id)
             # Reconstructed handle: align its backend with the manager's so the
             # close flush lands on the same storage the manager owns.
             outgoing.storage = self._storage
             self.close(outgoing)
         return self.create(session_id=new_session_id, warm_integrations=warm_integrations)
 
-    def rotate_in_place(self, session: Session) -> Session:
+    def rotate_in_place(self, session: _S) -> _S:
         """Flush the outgoing session file, reset state, and open a new session id.
 
         Mutates the live ``session`` handle the REPL already holds (``/new``).
@@ -198,11 +204,11 @@ class SessionManager:
 
     def rebind_for_resume(
         self,
-        session: Session,
+        session: _S,
         *,
         session_id: str,
         started_at: Any | None = None,
-    ) -> Session:
+    ) -> _S:
         """Point the live session handle at a persisted id before :meth:`restore_context`.
 
         Used by the interactive shell ``/resume`` command on the in-process
@@ -225,7 +231,7 @@ class SessionManager:
             session.session_id = session_id
         return session
 
-    def restore_context(self, session: Session, data: dict[str, Any] | None) -> Session:
+    def restore_context(self, session: _S, data: dict[str, Any] | None) -> _S:
         """Rehydrate conversation messages, accumulated context, and history.
 
         ``data`` is the persisted session dict from ``SessionRepo.load_session``;
@@ -252,7 +258,7 @@ class SessionManager:
             session.history = [dict(item) for item in history if isinstance(item, dict)]
         return session
 
-    def close(self, session: Session) -> None:
+    def close(self, session: SessionCore) -> None:
         """Finalize a session for good: persist buffered state and release resources.
 
         This is the terminal teardown hook — the session handle is being
@@ -262,14 +268,17 @@ class SessionManager:
         which flush without releasing loop-owned UI state.
 
         Persisting is best-effort (a failed flush must not crash teardown);
-        the session releases its own resources (:meth:`Session.release_resources`)
+        the session releases its own resources (:meth:`SessionCore.release_resources`)
         to prevent per-session leaks.
         """
         self._flush(session)
+        from platform.observability.session_trace import emit_thread_boundary
+
+        emit_thread_boundary(session.session_id, name="session_end", phase="session_end")
         session.release_resources()
 
     @staticmethod
-    def _flush(session: Session) -> None:
+    def _flush(session: SessionCore) -> None:
         """Best-effort persist through the session's own backend.
 
         Flushes through ``session.storage`` — the backend it recorded turns

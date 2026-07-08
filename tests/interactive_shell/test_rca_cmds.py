@@ -9,8 +9,9 @@ from pathlib import Path
 import pytest
 from rich.console import Console
 
-from core.agent_harness.session import JsonlSessionStorage, Session
+from core.agent_harness.session import JsonlSessionStorage
 from surfaces.interactive_shell.command_registry import dispatch_slash
+from surfaces.interactive_shell.session import Session
 
 SessionStore = JsonlSessionStorage()
 

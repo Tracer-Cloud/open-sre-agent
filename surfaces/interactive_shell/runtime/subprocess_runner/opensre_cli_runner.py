@@ -6,8 +6,8 @@ from collections.abc import Callable
 
 from rich.console import Console
 
-from core.agent_harness.session import Session
 from surfaces.interactive_shell.runtime.subprocess_runner.repl_presenter import make_repl_presenter
+from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui import DIM, WARNING
 from tools.interactive_shell.cli import (
     INTERACTIVE_OPENSRE_COMMAND_PATHS,

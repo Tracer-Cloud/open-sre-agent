@@ -6,7 +6,7 @@ import click
 import pytest
 
 import surfaces.interactive_shell.grounding.cli_reference as cli_reference_module
-from core.agent_harness.session.state import Session
+from surfaces.interactive_shell.session.session import Session
 
 
 def _reference_with_cli() -> cli_reference_module.CliReference:

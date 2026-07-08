@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from core.agent_harness.session import Session
+from core.agent_harness.session import SessionCore
 from gateway.config.get_gateway_settings import TelegramInboundMessage
 from gateway.polling.telegram_poller.client import TelegramBotClient
 from gateway.session.enforce_inbound_telegram_message_security import (
@@ -18,7 +18,7 @@ def resolve_or_rotate_session(
     *,
     session_resolver: SessionResolver,
     client: TelegramBotClient,
-) -> Session | None:
+) -> SessionCore | None:
     """Apply inbound decision side effects, then resolve or rotate the REPL session."""
     persist_policy_if_needed(decision)
 

@@ -14,10 +14,10 @@ import pytest
 from rich.console import Console
 
 import tools.interactive_shell.actions.slash as slash_tool
-from core.agent_harness.session import Session
 from core.agent_harness.tools.tool_context import (
     ActionToolContext,
 )
+from surfaces.interactive_shell.session import Session
 
 
 def _ctx() -> tuple[ActionToolContext, io.StringIO, Session]:
@@ -65,10 +65,10 @@ def test_interactive_picker_command_is_deferred_to_exclusive_stdin(
 
     assert handled is True
     assert dispatched == []  # not run inline against the live prompt
-    assert session.pending_prompt_default == expected
-    assert session.pending_prompt_autosubmit is True
+    assert session.terminal.pending_prompt_default == expected
+    assert session.terminal.pending_prompt_autosubmit is True
     assert session.history == []
-    assert session._turn_outcome_hint == f"queued {expected} for exclusive stdin dispatch"
+    assert session.terminal._turn_outcome_hint == f"queued {expected} for exclusive stdin dispatch"
     assert "Launching" in buf.getvalue()
 
 
@@ -81,13 +81,13 @@ def test_interactive_picker_runs_inline_when_exclusive_stdin_active(
     dispatched = _record_dispatch(monkeypatch)
 
     ctx, buf, session = _ctx()
-    session.exclusive_stdin_active = True
+    session.terminal.exclusive_stdin_active = True
     handled = slash_tool.execute_slash_tool({"command": "/integrations", "args": []}, ctx)
 
     assert handled is True
     assert dispatched == ["/integrations"]
-    assert session.pending_prompt_default is None
-    assert session.pending_prompt_autosubmit is False
+    assert session.terminal.pending_prompt_default is None
+    assert session.terminal.pending_prompt_autosubmit is False
     assert "Launching" not in buf.getvalue()
 
 
@@ -102,8 +102,8 @@ def test_interactive_picker_runs_inline_when_not_a_tty(
     slash_tool.execute_slash_tool({"command": "/integrations", "args": ["remove", "github"]}, ctx)
 
     assert dispatched == ["/integrations remove github"]
-    assert session.pending_prompt_default is None
-    assert session.pending_prompt_autosubmit is False
+    assert session.terminal.pending_prompt_default is None
+    assert session.terminal.pending_prompt_autosubmit is False
 
 
 def test_duplicate_slash_invoke_in_same_turn_is_ignored(
@@ -150,8 +150,8 @@ def test_non_picker_slash_commands_run_inline_even_in_a_tty(
 
     expected = " ".join([command, *args]) if args else command
     assert dispatched == [expected]
-    assert session.pending_prompt_default is None
-    assert session.pending_prompt_autosubmit is False
+    assert session.terminal.pending_prompt_default is None
+    assert session.terminal.pending_prompt_autosubmit is False
 
 
 def test_exit_slash_requests_runtime_exit(monkeypatch: pytest.MonkeyPatch) -> None:

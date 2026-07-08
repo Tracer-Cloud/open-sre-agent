@@ -13,8 +13,8 @@ from rich.console import Console
 from rich.markup import escape
 from rich.text import Text
 
-from core.agent_harness.session import Session
 from platform.common.task_types import TaskKind
+from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui import DIM, ERROR, HIGHLIGHT, WARNING, print_command_output
 from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
 from surfaces.interactive_shell.utils.error_handling.exception_reporting import report_exception

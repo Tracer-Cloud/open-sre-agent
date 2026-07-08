@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from core.agent_harness.session.prompt_history.policy import (
+from surfaces.interactive_shell.prompt_history.policy import (
     DEFAULT_MAX_ENTRIES,
     DEFAULT_REDACTION_RULES,
     HistoryPolicy,
@@ -10,7 +10,7 @@ from core.agent_harness.session.prompt_history.policy import (
     RedactionRule,
     redact_text,
 )
-from core.agent_harness.session.prompt_history.storage import (
+from surfaces.interactive_shell.prompt_history.storage import (
     clear_persisted_history,
     load_command_history_entries,
     load_prompt_history,

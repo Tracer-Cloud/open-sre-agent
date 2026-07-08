@@ -38,7 +38,7 @@ def _safe_console_print(console: Console, message: str) -> None:
 
 def drain_background_notices(session: Session, console: Console) -> None:
     """Print queued background investigation status lines on the main REPL thread."""
-    for message in session.drain_background_notices():
+    for message in session.terminal.drain_background_notices():
         _safe_console_print(console, message)
 
 
@@ -114,7 +114,7 @@ def _start_background_investigation(
         command=display_command,
         investigation_id=investigation_id,
     )
-    session.background_investigations[task.task_id] = record
+    session.terminal.background_investigations[task.task_id] = record
 
     def _worker() -> None:
         try:
@@ -137,10 +137,10 @@ def _start_background_investigation(
             record.final_state = dict(final_state)
             record.notification_results = deliver_background_notifications(
                 record=record,
-                channels=session.background_notification_preferences.channels,
+                channels=session.terminal.background_notification_preferences.channels,
             )
             task.mark_completed(result=root)
-            session.enqueue_background_notice(
+            session.terminal.enqueue_background_notice(
                 f"[{HIGHLIGHT}]background investigation complete[/] "
                 f"[{DIM}]— task {escape(task.task_id)} ready; "
                 f"use[/] [{HIGHLIGHT}]/background show {escape(task.task_id)}[/]",
@@ -148,14 +148,14 @@ def _start_background_investigation(
         except KeyboardInterrupt:
             record.status = "cancelled"
             task.mark_cancelled()
-            session.enqueue_background_notice(
+            session.terminal.enqueue_background_notice(
                 f"[{WARNING}]background investigation cancelled[/] "
                 f"[{DIM}]for task {escape(task.task_id)}.[/]",
             )
         except OpenSREError as exc:
             record.status = "failed"
             task.mark_failed(str(exc))
-            session.enqueue_background_notice(
+            session.terminal.enqueue_background_notice(
                 f"[{ERROR}]background investigation failed[/] "
                 f"[{DIM}]for task {escape(task.task_id)}:[/] {escape(str(exc))}",
             )
@@ -163,7 +163,7 @@ def _start_background_investigation(
             record.status = "failed"
             task.mark_failed(str(exc))
             report_exception(exc, context="surfaces.interactive_shell.background_investigation")
-            session.enqueue_background_notice(
+            session.terminal.enqueue_background_notice(
                 f"[{ERROR}]background investigation failed[/] "
                 f"[{DIM}]for task {escape(task.task_id)}:[/] {escape(str(exc))}",
             )

@@ -13,13 +13,13 @@ from unittest.mock import MagicMock
 import pytest
 from rich.console import Console
 
-from core.agent_harness.session import (
-    SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST,
-    Session,
-)
-from core.agent_harness.session.tasks import TaskRegistry
+from config.constants.prompts import SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
+from platform.common.task_registry import TaskRegistry
 from platform.common.task_types import TaskKind, TaskStatus
 from surfaces.interactive_shell.command_registry import dispatch_slash
+from surfaces.interactive_shell.session import (
+    Session,
+)
 from tools.interactive_shell.synthetic.runner import watch_synthetic_subprocess
 
 
@@ -96,7 +96,7 @@ class TestTaskRegistry:
         def _fake_hex(_nbytes: int) -> str:
             return next(_ids)
 
-        monkeypatch.setattr("core.agent_harness.session.tasks.secrets.token_hex", _fake_hex)
+        monkeypatch.setattr("platform.common.task_registry.secrets.token_hex", _fake_hex)
         session = Session()
         session.task_registry.create(TaskKind.INVESTIGATION)
         session.task_registry.create(TaskKind.INVESTIGATION)
@@ -508,7 +508,9 @@ class TestSyntheticSubprocessWatcher:
         assert task.status == TaskStatus.FAILED
         assert "exit code 1" in (task.error or "")
         assert "ConnectionError" in (task.error or "")
-        assert session.pending_prompt_default == SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
+        assert (
+            session.terminal.pending_prompt_default == SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
+        )
 
     def test_watch_skips_synthetic_history_after_reset(
         self,

@@ -10,12 +10,12 @@ from prompt_toolkit.application import Application
 from prompt_toolkit.formatted_text import ANSI
 from rich.console import Console
 
-from core.agent_harness.session import Session
 from surfaces.interactive_shell.runtime.core.state import (
     PROMPT_REFRESH_INTERVAL_S,
     ReplState,
     SpinnerState,
 )
+from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui import input_prompt
 from surfaces.interactive_shell.ui.components.cpr_stdin import (
     drain_stale_cpr_bytes,
@@ -28,6 +28,10 @@ from surfaces.interactive_shell.ui.input_prompt.key_bindings import (
 )
 from surfaces.interactive_shell.ui.input_prompt.refresh import wire_prompt_refresh
 from surfaces.interactive_shell.ui.input_prompt.style import refresh_prompt_theme
+
+# Brief pause so a CPR reply still in flight lands in the stdin buffer before the
+# non-blocking drain runs; without it the reply leaks into this prompt as literal bytes.
+_CPR_SETTLE_SECONDS = 0.05
 
 
 class PromptManager:
@@ -51,15 +55,15 @@ class PromptManager:
     def setup(self) -> None:
         if self.pt_session is None:
             self.pt_session = input_prompt.build_prompt_session(self.session)
-            self.session.prompt_history_backend = self.pt_session.history
+            self.session.terminal.prompt_history_backend = self.pt_session.history
 
         cancel_kb = build_cancel_key_bindings(self.state)
         install_session_key_bindings(self.pt_session, cancel_kb)
 
         self.pt_app = self.pt_session.app
         self.loop = asyncio.get_running_loop()
-        self.session.pt_style_app = self.pt_app
-        self.session.main_loop = self.loop
+        self.session.terminal.pt_style_app = self.pt_app
+        self.session.terminal.main_loop = self.loop
         self.state.bind_loop(self.loop)
         self._invalidate_prompt = wire_prompt_refresh(self.session, self.pt_app, self.loop)
 
@@ -102,14 +106,14 @@ class PromptManager:
         if self.pt_session is None:
             raise RuntimeError("PromptManager.setup() must run before reading prompts")
 
-        if self.session.pending_theme_refresh:
-            self.session.pending_theme_refresh = False
+        if self.session.terminal.pending_theme_refresh:
+            self.session.terminal.pending_theme_refresh = False
             refresh_prompt_theme(self.session)
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(_CPR_SETTLE_SECONDS)
         drain_stale_cpr_bytes()
 
-        prefilled = self.session.take_pending_prompt_default()
-        if prefilled and self.session.take_pending_autosubmit():
+        prefilled = self.session.terminal.pop_pending_prompt_default()
+        if prefilled and self.session.terminal.pop_pending_autosubmit():
             return prefilled
 
         return await self.pt_session.prompt_async(

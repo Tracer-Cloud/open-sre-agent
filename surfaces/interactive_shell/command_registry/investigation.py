@@ -67,7 +67,7 @@ def _queue_investigate_target(session: Session, target: str) -> None:
     hold it — queue the resolved target so the loop auto-submits it on the next
     prompt iteration without ``queue.join()`` blocking.
     """
-    session.queue_auto_command(f"/investigate {target}")
+    session.terminal.set_auto_command(f"/investigate {target}")
 
 
 def _interactive_investigate_menu(session: Session, console: Console) -> bool:
@@ -160,7 +160,7 @@ def _stage_investigation_turn_telemetry(session: Session, outcome: Investigation
     from core.agent_harness.accounting.token_accounting import LlmRunInfo, record_llm_turn
 
     if outcome.llm_model or outcome.llm_input_tokens or outcome.llm_output_tokens:
-        session.set_pending_turn_llm(
+        session.terminal.set_pending_turn_llm(
             LlmRunInfo(
                 model=outcome.llm_model or None,
                 provider=outcome.llm_provider or None,
@@ -178,7 +178,7 @@ def _stage_investigation_turn_telemetry(session: Session, outcome: Investigation
                 output_tokens=outcome.llm_output_tokens,
             )
     if outcome.status == "failed":
-        session.set_pending_turn_error(
+        session.terminal.set_pending_turn_error(
             outcome.failure_category or "unknown",
             outcome.error_message or "investigation failed",
         )
@@ -248,7 +248,7 @@ def _cmd_investigate_file(session: Session, console: Console, args: list[str]) -
     # path form (for example: ``/investigate ./generic``).
     if template_name:
         target_slug = normalize_investigation_target(template_name)
-        if session.background_mode_enabled:
+        if session.terminal.background_mode_enabled:
             start_background_template_investigation(
                 template_name=template_name,
                 session=session,
@@ -310,7 +310,7 @@ def _cmd_investigate_file(session: Session, console: Console, args: list[str]) -
         session.mark_latest(ok=False, kind="slash")
         return True
 
-    if session.background_mode_enabled:
+    if session.terminal.background_mode_enabled:
         target_slug = normalize_investigation_target(raw_target, path=path)
         start_background_text_investigation(
             alert_text=text,

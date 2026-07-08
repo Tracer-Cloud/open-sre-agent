@@ -3,23 +3,22 @@
 from __future__ import annotations
 
 import contextlib
-import importlib
 import json
 from pathlib import Path
 from typing import Any
 
-paths = importlib.import_module("core.agent_harness.session.paths")
+import core.agent_harness.session.persistence.paths as storage_paths
+from core.agent_harness.session.persistence.ports import CHAT_KINDS
 
 _ROOT_CAUSE_PREVIEW_CHARS = 80
 _DEFAULT_RCA_HISTORY_LIMIT = 50
-_CHAT_KINDS: frozenset[str] = frozenset({"chat", "cli_agent", "follow_up"})
 
 
 class JsonlSessionRepo:
     """Read-only queries over v2 session files."""
 
     def load_recent(self, n: int = 20) -> list[dict[str, Any]]:
-        root = paths.sessions_dir()
+        root = storage_paths.sessions_dir()
         if not root.exists():
             return []
 
@@ -37,7 +36,7 @@ class JsonlSessionRepo:
         return results[:n]
 
     def count_prefix_matches(self, prefix: str) -> int:
-        root = paths.sessions_dir()
+        root = storage_paths.sessions_dir()
         if not root.exists():
             return 0
         session_prefix, _entry_id = _split_session_ref(prefix)
@@ -50,7 +49,7 @@ class JsonlSessionRepo:
         return count
 
     def load_session(self, session_id_prefix: str) -> dict[str, Any] | None:
-        root = paths.sessions_dir()
+        root = storage_paths.sessions_dir()
         if not root.exists():
             return None
 
@@ -83,7 +82,7 @@ class JsonlSessionRepo:
                 "session_id": str(header.get("id") or target_path.stem),
                 "entry_id": target_entry,
                 "leaf_id": _resolve_entry_id(entries, None),
-                "name": paths.derive_name(_records_to_lines([header, *entries])),
+                "name": storage_paths.derive_name(_records_to_lines([header, *entries])),
                 "started_at": header.get("created_at"),
                 "cli_agent_messages": messages,
                 "accumulated_context": context,
@@ -105,7 +104,7 @@ class JsonlSessionRepo:
                 return []
             header, entries = loaded
             session_id = str(header.get("id") or path.stem)
-            session_name = paths.derive_name(_records_to_lines([header, *entries]))
+            session_name = storage_paths.derive_name(_records_to_lines([header, *entries]))
             started_at = header.get("created_at")
             records: list[dict[str, Any]] = []
             for rec in entries:
@@ -137,7 +136,7 @@ class JsonlSessionRepo:
     def load_investigation_history(
         self, n: int = _DEFAULT_RCA_HISTORY_LIMIT
     ) -> list[dict[str, Any]]:
-        root = paths.sessions_dir()
+        root = storage_paths.sessions_dir()
         if not root.exists():
             return []
 
@@ -153,7 +152,7 @@ class JsonlSessionRepo:
 
     @staticmethod
     def _scan_investigation_prefix(normalized: str) -> tuple[dict[str, Any] | None, int]:
-        root = paths.sessions_dir()
+        root = storage_paths.sessions_dir()
         if not root.exists():
             return None, 0
 
@@ -194,7 +193,7 @@ class JsonlSessionRepo:
         total_turns = _count_turns(entries)
         return {
             "session_id": str(header.get("id") or path.stem),
-            "name": paths.derive_name(_records_to_lines([header, *entries])),
+            "name": storage_paths.derive_name(_records_to_lines([header, *entries])),
             "started_at": header.get("created_at"),
             "opensre_version": header.get("opensre_version"),
             "duration_secs": leaf.get("duration_secs") if leaf else None,
@@ -369,7 +368,7 @@ def _count_chat_turns(entries: list[dict[str, Any]]) -> int:
         for rec in entries
         if rec.get("type") == "custom_message"
         and rec.get("custom_type") == "turn_stub"
-        and rec.get("kind") in _CHAT_KINDS
+        and rec.get("kind") in CHAT_KINDS
     )
 
 

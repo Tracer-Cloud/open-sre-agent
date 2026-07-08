@@ -12,7 +12,6 @@ from prompt_toolkit.patch_stdout import patch_stdout
 from rich.console import Console
 
 from config.repl_config import ReplConfig
-from core.agent_harness.session import Session
 from core.domain.alerts import alert_listener as _alert_listener_module
 from core.domain.alerts import inbox as _alert_inbox
 from surfaces.interactive_shell.runtime.background.workers import BackgroundTaskManager
@@ -42,6 +41,7 @@ from surfaces.interactive_shell.runtime.turn_host import (
     run_agent_turn_queue,
     run_input_loop,
 )
+from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui import DIM
 
 log = logging.getLogger(__name__)
@@ -202,7 +202,7 @@ class InteractiveShellController:
             )
         )
         # Fleet sampler is lazy: /fleet triggers it on first live use.
-        self.session.fleet_sampler_starter = self.background.ensure_fleet_sampler_started
+        self.session.terminal.fleet_sampler_starter = self.background.ensure_fleet_sampler_started
 
     async def _handle_input_action(self, action: InputAction) -> bool:
         match action:

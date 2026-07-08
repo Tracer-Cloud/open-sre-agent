@@ -56,6 +56,12 @@ _BASELINE_IGNORES: frozenset[str] = frozenset(
         # "approval-required" sentinels instead of calling execution_confirm
         # directly) so the surface owns its own confirmation UX.
         "tools.interactive_shell.actions.cli_command -> surfaces.interactive_shell.runtime.subprocess_runner",
+        # These shell action tools type against the shell ``Session`` (investigation_launch
+        # reads session.terminal.background_mode_enabled). Clears when they are made
+        # session-core-agnostic so they no longer import the shell session type.
+        "tools.interactive_shell.actions.investigation -> surfaces.interactive_shell.session",
+        "tools.interactive_shell.actions.sample_alert -> surfaces.interactive_shell.session",
+        "tools.interactive_shell.shared.investigation_launch -> surfaces.interactive_shell.session",
         "tools.interactive_shell.actions.llm_provider -> surfaces.interactive_shell.command_registry",
         "tools.interactive_shell.actions.llm_provider -> surfaces.interactive_shell.ui.execution_confirm",
         "tools.interactive_shell.actions.slash -> surfaces.interactive_shell.command_registry",

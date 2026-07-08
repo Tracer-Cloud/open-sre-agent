@@ -7,7 +7,6 @@ from typing import Any
 
 from rich.console import Console
 
-from core.agent_harness.session import Session
 from core.agent_harness.tools.tool_context import (
     ActionToolContext,
     execute_with_action_context,
@@ -16,6 +15,7 @@ from core.agent_harness.tools.tool_context import (
 )
 from core.tool_framework.registered_tool import RegisteredTool
 from platform.common.task_types import TaskRecord
+from surfaces.interactive_shell.session import Session
 from tools.interactive_shell.shared.investigation_launch import launch_investigation
 
 

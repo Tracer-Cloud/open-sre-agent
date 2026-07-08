@@ -10,8 +10,7 @@ from prompt_toolkit.input import DummyInput
 from prompt_toolkit.output import DummyOutput
 from pydantic import ValidationError
 
-from core.agent_harness.session import Session
-from core.agent_harness.session.tasks import TaskRegistry
+from platform.common.task_registry import TaskRegistry
 from surfaces.interactive_shell.controller import InteractiveShellController
 from surfaces.interactive_shell.runtime.context import (
     ReplRuntimeContext,
@@ -23,6 +22,7 @@ from surfaces.interactive_shell.runtime.core.state import (
     SpinnerState,
     create_repl_mutable_state,
 )
+from surfaces.interactive_shell.session import Session
 
 
 def _prompt_session() -> PromptSession[str]:
@@ -53,12 +53,12 @@ def test_create_context_applies_canonical_session_bootstrap(
         )
 
     assert context.session is session
-    assert session.active_theme_name == "pink"
+    assert session.terminal.active_theme_name == "pink"
     assert session.configured_integrations == ("github",)
     assert session.configured_integrations_known is True
     assert hydrate_calls == [session.session_id]
     assert session.task_registry is registry
-    assert session.prompt_history_backend is prompt.history
+    assert session.terminal.prompt_history_backend is prompt.history
 
 
 def test_context_supports_lightweight_bootstrap_for_unit_seams(
@@ -81,7 +81,7 @@ def test_context_supports_lightweight_bootstrap_for_unit_seams(
         persistent_tasks=False,
     )
 
-    assert context.session.active_theme_name == "green"
+    assert context.session.terminal.active_theme_name == "green"
     assert isinstance(context.state, ReplState)
     assert isinstance(context.spinner, SpinnerState)
 

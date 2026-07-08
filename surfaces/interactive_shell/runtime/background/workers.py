@@ -9,10 +9,10 @@ from typing import Any
 
 from rich.console import Console
 
-from core.agent_harness.session import Session
 from core.domain.alerts import inbox as _alert_inbox
 from surfaces.interactive_shell.runtime.background.runner import drain_background_notices
 from surfaces.interactive_shell.runtime.core.state import ReplState, SpinnerState
+from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui.alerts import drain_and_render_incoming
 
 log = logging.getLogger(__name__)

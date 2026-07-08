@@ -5,9 +5,9 @@ from typing import Any, cast
 
 import pytest
 
-from core.agent_harness.session import Session
 from surfaces.interactive_shell.runtime.background.workers import BackgroundTaskManager
 from surfaces.interactive_shell.runtime.core.state import ReplState, SpinnerState
+from surfaces.interactive_shell.session import Session
 
 
 @pytest.mark.asyncio

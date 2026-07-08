@@ -22,7 +22,6 @@ from prompt_toolkit.input.defaults import create_pipe_input
 from prompt_toolkit.keys import Keys
 from prompt_toolkit.output import DummyOutput
 
-from core.agent_harness.session import Session
 from platform.terminal import theme as ui_theme
 from platform.terminal.theme import (
     ANSI_RESET,
@@ -34,6 +33,7 @@ from surfaces.interactive_shell.runtime.core import confirmation as controller_r
 from surfaces.interactive_shell.runtime.core import state as loop_state
 from surfaces.interactive_shell.runtime.core import turn_detection as loop_turn_detection
 from surfaces.interactive_shell.runtime.startup import initial_input as startup_initial_input
+from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui import input_prompt
 from surfaces.interactive_shell.ui.components.cpr_stdin import (
     strip_cpr_escape_sequences,
@@ -189,8 +189,8 @@ def test_repl_session_prompt_history_backend_matches_prompt_toolkit_history(
     with create_app_session(input=DummyInput(), output=DummyOutput()):
         session = Session()
         prompt = input_prompt.build_prompt_session()
-        session.prompt_history_backend = prompt.history
-    assert session.prompt_history_backend is prompt.history
+        session.terminal.prompt_history_backend = prompt.history
+    assert session.terminal.prompt_history_backend is prompt.history
 
 
 def test_prompt_message_uses_accent_glyph() -> None:
@@ -479,7 +479,7 @@ def test_run_text_investigation_uses_background_launcher_when_mode_enabled(
     )
 
     session = Session()
-    session.background_mode_enabled = True
+    session.terminal.background_mode_enabled = True
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
 
     run_text_investigation("High CPU alert", session, console)
@@ -1643,7 +1643,7 @@ class TestThemeCommand:
         monkeypatch.setattr(theme_cmd, "repl_choose_one", _fake_choose_one)
 
         session = Session()
-        session.active_theme_name = "pink"
+        session.terminal.active_theme_name = "pink"
         set_active_theme("pink")
         console, _buf = self._capture()
 
@@ -1745,7 +1745,7 @@ class TestThemeCommand:
         theme_cmd._persist_and_report_theme(session, console, "pink")
 
         assert drains == ["drain", "poster", "drain"]
-        assert session.pending_theme_refresh is True
+        assert session.terminal.pending_theme_refresh is True
 
 
 def test_refresh_prompt_theme_skips_invalidate_when_app_not_running() -> None:
@@ -1763,7 +1763,7 @@ def test_refresh_prompt_theme_skips_invalidate_when_app_not_running() -> None:
             invalidated.append(True)
 
     session = Session()
-    session.pt_style_app = _App()
+    session.terminal.pt_style_app = _App()
     refresh_prompt_theme(session)
     assert invalidated == []
-    assert session.pt_style_app.style is not None
+    assert session.terminal.pt_style_app.style is not None

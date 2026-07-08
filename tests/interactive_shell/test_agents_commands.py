@@ -9,12 +9,12 @@ import pytest
 from rich.console import Console
 from rich.table import Table
 
-from core.agent_harness.session import Session
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
 from surfaces.interactive_shell.command_registry.agents import core as agents_core
 from surfaces.interactive_shell.command_registry.agents import trace as agents_trace
 from surfaces.interactive_shell.command_registry.agents.conflicts_view import render_conflicts
 from surfaces.interactive_shell.command_registry.agents.trace import _slice_to_utf8_boundary
+from surfaces.interactive_shell.session import Session
 from tools.system.fleet_monitoring import config as config_mod
 from tools.system.fleet_monitoring.conflicts import DEFAULT_WINDOW_SECONDS, FileWriteConflict
 from tools.system.fleet_monitoring.registry import AgentRecord, AgentRegistry

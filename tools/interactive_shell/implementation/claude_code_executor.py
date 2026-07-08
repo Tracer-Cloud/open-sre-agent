@@ -221,7 +221,7 @@ def run_claude_code_implementation(request: str, presenter: SubprocessPresenter)
     presenter.print_bold_command(display_command)
     task = session.task_registry.create(TaskKind.CODE_AGENT, command=display_command)
     task.mark_running()
-    history_gen_when_started = session.history_generation
+    history_gen_when_started = session.terminal.history_generation
 
     try:
         proc = spawn_claude_code(invocation)
@@ -252,7 +252,7 @@ def run_claude_code_implementation(request: str, presenter: SubprocessPresenter)
 
             if result.cancelled:
                 task.mark_cancelled()
-                if session.history_generation == history_gen_when_started:
+                if session.terminal.history_generation == history_gen_when_started:
                     session.mark_latest(ok=False, kind="implementation")
                 presenter.print(f"[{_WARNING_STYLE}]Claude Code task cancelled.[/]")
                 return
@@ -268,7 +268,7 @@ def run_claude_code_implementation(request: str, presenter: SubprocessPresenter)
             diag = format_claude_failure_diag(result.stdout, result.stderr)
             error_msg = f"exit code {result.exit_code}" + (f": {diag}" if diag else "")
             task.mark_failed(error_msg)
-            if session.history_generation == history_gen_when_started:
+            if session.terminal.history_generation == history_gen_when_started:
                 session.mark_latest(ok=False, kind="implementation")
             presenter.print(f"[error]Claude Code failed (exit {result.exit_code}):[/]")
             presenter.print_command_output(result.stdout)
@@ -276,7 +276,7 @@ def run_claude_code_implementation(request: str, presenter: SubprocessPresenter)
         except Exception as exc:  # noqa: BLE001
             task.mark_failed(str(exc))
             presenter.report_exception(exc, context="surfaces.interactive_shell.claude_code.watch")
-            if session.history_generation == history_gen_when_started:
+            if session.terminal.history_generation == history_gen_when_started:
                 session.mark_latest(ok=False, kind="implementation")
             presenter.print_error(f"Claude Code watcher failed: {exc}")
 

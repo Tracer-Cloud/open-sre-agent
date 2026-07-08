@@ -67,10 +67,10 @@ def _cmd_trust(session: Session, console: Console, args: list[str]) -> bool:
         return _interactive_trust_menu(session, console)
 
     if args and args[0].lower() in ("off", "false", "disable"):
-        session.trust_mode = False
+        session.terminal.trust_mode = False
         console.print(f"[{DIM}]trust mode off[/]")
     else:
-        session.trust_mode = True
+        session.terminal.trust_mode = True
         console.print(f"[{WARNING}]trust mode on[/] — future approval prompts will be skipped")
     return True
 

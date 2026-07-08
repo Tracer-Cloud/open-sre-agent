@@ -6,14 +6,21 @@ from types import SimpleNamespace
 
 import pytest
 
-from core.agent_harness.session import InMemorySessionStorage, Session, SessionManager
+from core.agent_harness.session import (
+    InMemorySessionStorage,
+    SessionCore,
+    SessionManager,
+)
+from surfaces.interactive_shell.session import (
+    Session,
+)
 
 
 @pytest.fixture(autouse=True)
 def _no_real_integration_bootstrap(monkeypatch: pytest.MonkeyPatch) -> None:
     # Keep bootstrap from resolving real integrations during unit tests.
-    monkeypatch.setattr(Session, "warm_resolved_integrations", lambda _self, **_k: None)
-    monkeypatch.setattr(Session, "hydrate_configured_integrations", lambda _self: None)
+    monkeypatch.setattr(SessionCore, "warm_resolved_integrations", lambda _self, **_k: None)
+    monkeypatch.setattr(SessionCore, "hydrate_configured_integrations", lambda _self: None)
 
 
 def _manager(*, repo=None) -> SessionManager:
@@ -45,7 +52,7 @@ def test_create_opens_storage_and_returns_session() -> None:
 
     session = manager.create()
 
-    assert isinstance(session, Session)
+    assert isinstance(session, SessionCore)
     assert opened == [session.session_id]
 
 
@@ -142,15 +149,16 @@ def test_close_persists_and_releases_resources() -> None:
     storage.flush = lambda session: flushed.append(session.session_id)  # type: ignore[method-assign]
     manager = SessionManager(storage=storage, repo=SimpleNamespace(load_session=lambda _sid: None))
 
-    session = manager.create(session_id="s-close")
-    session.background_notices.append("pending notice")
-    session.prompt_refresh_fn = lambda: None
+    session = Session(session_id="s-close")
+    session.storage = storage
+    session.terminal.background_notices.append("pending notice")
+    session.terminal.prompt_refresh_fn = lambda: None
 
     manager.close(session)
 
     assert flushed == ["s-close"]
-    assert session.background_notices == []
-    assert session.prompt_refresh_fn is None
+    assert session.terminal.background_notices == []
+    assert session.terminal.prompt_refresh_fn is None
 
 
 def test_close_flush_failure_does_not_crash_teardown() -> None:
@@ -161,12 +169,13 @@ def test_close_flush_failure_does_not_crash_teardown() -> None:
 
     storage.flush = _boom  # type: ignore[method-assign]
     manager = SessionManager(storage=storage, repo=SimpleNamespace(load_session=lambda _sid: None))
-    session = manager.create(session_id="s-fail")
-    session.prompt_refresh_fn = lambda: None
+    session = Session(session_id="s-fail")
+    session.storage = storage
+    session.terminal.prompt_refresh_fn = lambda: None
 
     # Must not raise; resources still released.
     manager.close(session)
-    assert session.prompt_refresh_fn is None
+    assert session.terminal.prompt_refresh_fn is None
 
 
 def test_rotate_in_place_flushes_clears_and_opens_new_id() -> None:
@@ -183,7 +192,7 @@ def test_rotate_in_place_flushes_clears_and_opens_new_id() -> None:
     session.accumulated_context["svc"] = "checkout"
 
     refresh = lambda: None  # noqa: E731 — loop-owned prompt hook stand-in
-    session.prompt_refresh_fn = refresh
+    session.terminal.prompt_refresh_fn = refresh
 
     manager.rotate_in_place(session)
 
@@ -193,7 +202,7 @@ def test_rotate_in_place_flushes_clears_and_opens_new_id() -> None:
     assert session.agent.messages == []
     assert session.accumulated_context == {}
     # Regression: in-place reuse must NOT drop the loop-owned prompt hook.
-    assert session.prompt_refresh_fn is refresh
+    assert session.terminal.prompt_refresh_fn is refresh
 
 
 def test_rebind_for_resume_switches_id_and_reopens_storage() -> None:
@@ -207,7 +216,7 @@ def test_rebind_for_resume_switches_id_and_reopens_storage() -> None:
     session = Session(session_id="live-id")
     session.storage = storage
     refresh = lambda: None  # noqa: E731 — loop-owned prompt hook stand-in
-    session.prompt_refresh_fn = refresh
+    session.terminal.prompt_refresh_fn = refresh
 
     manager.rebind_for_resume(session, session_id="saved-id", started_at="2026-01-15T10:00:00")
 
@@ -215,7 +224,7 @@ def test_rebind_for_resume_switches_id_and_reopens_storage() -> None:
     assert session.session_id == "saved-id"
     assert reopened == ["saved-id"]
     # Regression: /resume reuses the live handle — keep the prompt hook.
-    assert session.prompt_refresh_fn is refresh
+    assert session.terminal.prompt_refresh_fn is refresh
 
 
 def test_rebind_for_resume_same_id_clears_without_flush() -> None:
@@ -243,9 +252,10 @@ def test_closed_session_is_garbage_collectable() -> None:
     import weakref
 
     manager = _manager()
-    session = manager.create(session_id="s-gc")
-    session.prompt_refresh_fn = lambda: None
-    session.background_notices.append("x")
+    session = Session(session_id="s-gc")
+    session.storage = InMemorySessionStorage()
+    session.terminal.prompt_refresh_fn = lambda: None
+    session.terminal.background_notices.append("x")
     ref = weakref.ref(session)
 
     manager.close(session)
@@ -270,9 +280,9 @@ def test_close_cancels_in_flight_warm_task() -> None:
             self.cancelled = True
 
     task = _FakeTask()
-    session._integration_warm_task = task
+    session.integrations._warm_task = task
 
     manager.close(session)
 
     assert task.cancelled is True
-    assert session._integration_warm_task is None
+    assert session.integrations._warm_task is None

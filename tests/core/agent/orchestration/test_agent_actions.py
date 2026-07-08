@@ -20,9 +20,9 @@ import surfaces.interactive_shell.runtime.subprocess_runner as subprocess_runner
 import tools.interactive_shell.actions.llm_provider as llm_provider_tool
 import tools.interactive_shell.actions.slash as slash_tool
 import tools.interactive_shell.shell.execution as shell_execution
-from core.agent_harness.session import Session
 from core.llm.types import AgentLLMResponse, ToolCall
 from platform.common.task_types import TaskKind, TaskStatus
+from surfaces.interactive_shell.session import Session
 from tests.core.agent._planned_action import (
     PlannedAction,
     default_target_surface,
@@ -856,7 +856,7 @@ def test_execute_cli_actions_runs_requested_synthetic_scenario(monkeypatch: obje
 
 def test_execute_cli_actions_cancels_single_running_synthetic_task() -> None:
     session = Session()
-    session.trust_mode = True
+    session.terminal.trust_mode = True
     task = session.task_registry.create(TaskKind.SYNTHETIC_TEST)
     task.mark_running()
     proc = MagicMock()

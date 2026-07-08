@@ -20,7 +20,7 @@ from core.agent_harness.providers.default_providers import (
     DefaultToolProvider,
     DefaultTurnAccounting,
 )
-from core.agent_harness.session import Session
+from core.agent_harness.session import SessionCore
 from core.agent_harness.turns.headless_dispatch import HeadlessAgent
 from gateway.gateway_output_sink import GatewayOutputSink
 from gateway.status_messages import status_from_tool_start
@@ -60,7 +60,7 @@ class GatewayTurnHandler:
     def __call__(
         self,
         text: str,
-        session: Session,
+        session: SessionCore,
         sink: GatewayOutputSink,
         logger: logging.Logger,
     ) -> None:
@@ -79,7 +79,7 @@ class GatewayTurnHandler:
         self,
         *,
         text: str,
-        session: Session,
+        session: SessionCore,
         sink: GatewayOutputSink,
         logger: logging.Logger,
     ) -> HeadlessAgent:

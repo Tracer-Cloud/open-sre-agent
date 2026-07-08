@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from core.agent_harness.session import Session
+from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.utils.telemetry.config import PromptLogConfig
 from surfaces.interactive_shell.utils.telemetry.recorder import LlmRunInfo, PromptRecorder
 

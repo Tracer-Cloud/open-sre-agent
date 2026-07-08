@@ -30,8 +30,8 @@ from core.agent_harness.providers.default_providers import (
     DefaultToolProvider,
     DefaultTurnAccounting,
 )
-from core.agent_harness.session import Session
-from core.agent_harness.session.storage.memory import InMemorySessionStorage
+from core.agent_harness.session import SessionCore
+from core.agent_harness.session.persistence.memory import InMemorySessionStorage
 from gateway.config.get_gateway_settings import GatewaySettings, TelegramInboundMessage
 from gateway.manager import GatewayManager, start_gateway
 from gateway.polling.handle_polled_inbound_telegram_msg import (
@@ -135,15 +135,15 @@ def test_polled_telegram_message_reaches_start_gateway_agent_callback(monkeypatc
     background_kwargs: dict[str, Any] = {}
 
     class FakeSessionResolver:
-        def __init__(self, session: Session) -> None:
+        def __init__(self, session: SessionCore) -> None:
             self._session = session
 
-        def resolve(self, *, user_id: str, chat_id: str) -> Session:
+        def resolve(self, *, user_id: str, chat_id: str) -> SessionCore:
             assert user_id == "user-1"
             assert chat_id == "chat-1"
             return self._session
 
-        def rotate(self, *, user_id: str, chat_id: str) -> Session:
+        def rotate(self, *, user_id: str, chat_id: str) -> SessionCore:
             assert user_id == "user-1"
             assert chat_id == "chat-1"
             return self._session
@@ -169,7 +169,7 @@ def test_polled_telegram_message_reaches_start_gateway_agent_callback(monkeypatc
 
     GatewayManager().start_gateway(wait=False)
     callback = background_kwargs["handle_callback_to_gateway_agent"]
-    session = Session(storage=InMemorySessionStorage())
+    session = SessionCore(storage=InMemorySessionStorage())
     client = MagicMock()
     client.send_message.return_value = (True, "", "message-1")
     client.edit_message_text.return_value = (True, "")

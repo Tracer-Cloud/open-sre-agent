@@ -25,8 +25,8 @@ import surfaces.interactive_shell.runtime.shell_turn_execution as shell_turn_exe
 import tools.interactive_shell.actions.slash as slash_tool
 from core.agent_harness.providers import default_prompt_context
 from core.agent_harness.providers.default_prompt_context import DefaultPromptContextProvider
-from core.agent_harness.session import Session
 from surfaces.interactive_shell.command_registry import dispatch_slash
+from surfaces.interactive_shell.session import Session
 from tests.core.agent.orchestration.action_execution_test_harness import (
     FakeActionLLM,
     tool_response,

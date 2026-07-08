@@ -28,7 +28,7 @@ from surfaces.interactive_shell.utils.telemetry.investigation_llm_usage import (
 )
 
 if TYPE_CHECKING:
-    from core.agent_harness.session import Session
+    from surfaces.interactive_shell.session import Session
 
 
 def _render_credit_exhausted_recovery_hint(console: Console, message: str) -> None:
@@ -132,7 +132,9 @@ def run_foreground_investigation(
     from surfaces.interactive_shell.ui.components.key_reader import restore_stdin_terminal
     from surfaces.interactive_shell.ui.feedback import prompt_investigation_feedback
 
-    pt_app = getattr(session, "pt_style_app", None)
+    # Skip feedback while the prompt-toolkit app is running: its cursor-position
+    # queries would race the raw feedback menu and leak bytes into the next prompt.
+    pt_app = session.terminal.pt_style_app
     pt_app_running = pt_app is not None and getattr(pt_app, "is_running", False)
     if not pt_app_running:
         restore_stdin_terminal()
