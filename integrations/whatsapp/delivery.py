@@ -5,9 +5,9 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-import httpx
-
 from platform.common.truncation import truncate
+from platform.notifications.delivery_errors import extract_http_error
+from platform.notifications.delivery_transport import post_form
 from platform.notifications.limits import MAX_MESSAGE_SIZE
 from platform.notifications.redaction import redact_token
 
@@ -37,42 +37,24 @@ def post_whatsapp_message_twilio(
         "To": twilio_to,
         "Body": text,
     }
-    try:
-        response = httpx.post(
-            url,
-            data=payload,
-            auth=(account_sid, auth_token),
-            timeout=15.0,
-            follow_redirects=False,
-        )
-    except Exception as exc:
-        error = redact_token(str(exc), auth_token)
+    response = post_form(
+        url,
+        payload,
+        auth=(account_sid, auth_token),
+        timeout=15.0,
+    )
+    if not response.ok:
+        error = redact_token(response.error, auth_token)
         logger.warning("[whatsapp] twilio post exception: %s", error)
         return False, error, ""
 
-    error_message = ""
-    parsed: dict[str, Any] = {}
-    try:
-        raw = response.json()
-        if isinstance(raw, dict):
-            parsed = raw
-    except Exception:
-        parsed = {}
-
     if response.status_code not in (200, 201):
-        if parsed:
-            error_message = str(
-                parsed.get("message")
-                or parsed.get("error_message")
-                or f"HTTP {response.status_code}"
-            )
-        else:
-            error_message = response.text or f"HTTP {response.status_code}"
+        error_message = extract_http_error(response.data, response.status_code, response.text)
         error_message = redact_token(error_message, auth_token)
         logger.warning("[whatsapp] twilio post failed: %s", error_message)
         return False, error_message, ""
 
-    message_id = str(parsed.get("sid") or "")
+    message_id = str(response.data.get("sid") or "")
     return True, "", message_id
 
 

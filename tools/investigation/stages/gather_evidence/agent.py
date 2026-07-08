@@ -17,10 +17,10 @@ from core import (
     tool_source,
 )
 from core.agent.mixins import EventEmitterMixin, ToolFilterMixin
-from core.llm.agent_llm_client import get_agent_llm
+from core.llm.factory import LLMRole, get_llm
 from core.llm.types import ToolCall
 from core.llm_invoke_errors import classify_llm_invoke_failure
-from core.messages import MessageFormatter
+from core.messages import MessageMapper
 from core.state import InvestigationState
 from core.state.evidence import EvidenceEntry
 from platform.observability import debug_print
@@ -120,8 +120,8 @@ class ConnectedInvestigationAgent(EventEmitterMixin, ToolFilterMixin):
         if not tools:
             logger.warning("No tools available for investigation")
 
-        llm = get_agent_llm()
-        msg_formatter = MessageFormatter(llm)
+        llm = get_llm(LLMRole.AGENT)
+        msg_mapper = MessageMapper(llm)
         tool_schemas = llm.tool_schemas(tools)
 
         prompt_state = {**state_dict, **tool_context}
@@ -164,9 +164,9 @@ class ConnectedInvestigationAgent(EventEmitterMixin, ToolFilterMixin):
                 }
             )
             seed_results = execute_tools(seed_calls, tools, resolved)
-            seed_msgs = msg_formatter.tool_results_from_execution(seed_calls, seed_results)
+            seed_msgs = msg_mapper.to_tool_result_provider_messages(seed_calls, seed_results)
 
-            seed_assistant_msg = msg_formatter.synthetic_assistant_tool_call(seed_calls)
+            seed_assistant_msg = msg_mapper.to_synthetic_assistant_provider_message(seed_calls)
             _mark_messages([seed_assistant_msg, *seed_msgs], "_opensre_seed")
             messages.append(seed_assistant_msg)
             messages.extend(seed_msgs)
@@ -230,7 +230,7 @@ class ConnectedInvestigationAgent(EventEmitterMixin, ToolFilterMixin):
                     tool_context=tool_context,
                 )
 
-            messages.append(msg_formatter.assistant_from_response(response))
+            messages.append(msg_mapper.to_assistant_provider_message(response))
 
             if not response.has_tool_calls:
                 accept, nudge = self._should_accept_conclusion(
@@ -280,7 +280,7 @@ class ConnectedInvestigationAgent(EventEmitterMixin, ToolFilterMixin):
                 tool_call_cache.store(tool_call_signature(tc), output, loop_iteration=iteration)
                 results.append(output)
 
-            tool_result_messages = msg_formatter.tool_results_from_execution(
+            tool_result_messages = msg_mapper.to_tool_result_provider_messages(
                 response.tool_calls, results
             )
             if duplicate_flags and all(duplicate_flags):
@@ -363,9 +363,9 @@ def get_investigation_agent_class() -> type[ConnectedInvestigationAgent]:
     Callers that need a fixed class (e.g. bench harness, integration tests) should
     pass an explicit ``agent_class`` to the pipeline rather than calling this.
     """
-    from core.llm.sdk.agent_clients import CLIBackedAgentClient
+    from core.llm.transports.sdk.agent_clients import CLIBackedAgentClient
 
-    if isinstance(get_agent_llm(), CLIBackedAgentClient):
+    if isinstance(get_llm(LLMRole.AGENT), CLIBackedAgentClient):
         return CLIBackedInvestigationAgent
     return ConnectedInvestigationAgent
 

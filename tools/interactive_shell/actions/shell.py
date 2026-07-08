@@ -12,23 +12,15 @@ from core.agent_harness.tools.tool_context import (
     string_property,
 )
 from core.tool_framework.registered_tool import RegisteredTool
-from tools.interactive_shell.shell.runner import (
-    run_shell_command,
-)
+from tools.interactive_shell.shell.runner import run_shell_command
+from tools.interactive_shell.subprocess import require_subprocess_presenter
 
 
 def execute_shell_tool(args: dict[str, Any], ctx: ActionToolContext) -> dict[str, Any]:
     command = str(args.get("command", "")).strip()
     if not command:
         return {"ok": False, "command": "", "response_text": "missing shell command"}
-    return run_shell_command(
-        command,
-        ctx.session,
-        ctx.console,
-        confirm_fn=ctx.confirm_fn,
-        is_tty=ctx.is_tty,
-        action_already_listed=ctx.action_already_listed,
-    )
+    return run_shell_command(command, require_subprocess_presenter(ctx))
 
 
 def run_shell(*, command: str, context: Any) -> dict[str, Any]:

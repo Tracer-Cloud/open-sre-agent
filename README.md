@@ -169,9 +169,13 @@ opensre uninstall   # remove opensre and all local data
 
 ## Deployment
 
-Deploy OpenSRE as a standard Python/FastAPI runtime using the repo `Dockerfile` or a managed app host such as Railway, EC2, ECS, or Vercel. Set `LLM_PROVIDER` plus the matching API key (see [`.env.example`](.env.example)); hosted layouts that need persistence should also configure `DATABASE_URI` and `REDIS_URI`.
+Two primary AWS EC2 paths and a general hosted option:
 
-**[Full deployment steps, Railway notes, and `opensre remote ops` → docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#deployment)**
+- **EC2 (Docker/ECR):** `make build-image` then `make deploy` — runs `opensre-web` and `opensre-gateway` containers on one instance.
+- **Gateway (AMI + systemd):** `make bake-gateway` then `make deploy-gateway` — Telegram gateway only, no Docker, baked into a custom AMI.
+- **Hosted (Railway / ECS / Vercel):** deploy with the repo `Dockerfile`; set `LLM_PROVIDER` and the matching API key (see [`.env.example`](.env.example)), plus `DATABASE_URI` and `REDIS_URI` if persistence is needed.
+
+**[Full deployment steps and prerequisites → DEPLOYMENT.md](DEPLOYMENT.md)**
 
 ---
 
@@ -258,8 +262,12 @@ OpenSRE is community-built. Looking for a safe first contribution? Browse [`good
 </p>
 
 <p align="center">
-  <a href="https://www.star-history.com/#Tracer-Cloud/opensre&Date">
-    <img src="https://api.star-history.com/svg?repos=Tracer-Cloud/opensre&type=Date" alt="Star History Chart">
+  <a href="https://www.star-history.com/?type=date&repos=Tracer-Cloud%2Fopensre">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=Tracer-Cloud/opensre&type=date&theme=dark&legend=top-left&sealed_token=LHlhQArnQVcZZDuHHjU19dJHIIzQx9WzB2xacqhOnA8REEAfcVO94FgGmjAMsR8iiPA3ELR-RmF_t2rtnLLj6ieZt6S4PGbFZ5Ev1HgIrg8KJNkJDYQob_BcV8MtWc2wQnahPyKX6B9PgqvoQxI7E6B6SkW7gXQEq1xLLGDZ2JHvv5b3kr7SYnUpq98y" />
+      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=Tracer-Cloud/opensre&type=date&legend=top-left&sealed_token=LHlhQArnQVcZZDuHHjU19dJHIIzQx9WzB2xacqhOnA8REEAfcVO94FgGmjAMsR8iiPA3ELR-RmF_t2rtnLLj6ieZt6S4PGbFZ5Ev1HgIrg8KJNkJDYQob_BcV8MtWc2wQnahPyKX6B9PgqvoQxI7E6B6SkW7gXQEq1xLLGDZ2JHvv5b3kr7SYnUpq98y" />
+      <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=Tracer-Cloud/opensre&type=date&legend=top-left&sealed_token=LHlhQArnQVcZZDuHHjU19dJHIIzQx9WzB2xacqhOnA8REEAfcVO94FgGmjAMsR8iiPA3ELR-RmF_t2rtnLLj6ieZt6S4PGbFZ5Ev1HgIrg8KJNkJDYQob_BcV8MtWc2wQnahPyKX6B9PgqvoQxI7E6B6SkW7gXQEq1xLLGDZ2JHvv5b3kr7SYnUpq98y" />
+    </picture>
   </a>
 </p>
 

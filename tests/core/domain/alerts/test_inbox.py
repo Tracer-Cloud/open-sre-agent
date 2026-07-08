@@ -11,12 +11,14 @@ from http.client import HTTPConnection
 
 import pytest
 
-from core.domain.alerts.inbox import (
+from core.domain.alerts.alert_listener import (
     _MAX_BODY_BYTES,
-    AlertInbox,
     AlertListenerHandle,
-    IncomingAlert,
     start_alert_listener,
+)
+from core.domain.alerts.inbox import (
+    AlertInbox,
+    IncomingAlert,
 )
 
 # A Content-Length value guaranteed to trip the listener's pre-auth

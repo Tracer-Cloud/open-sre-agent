@@ -43,7 +43,9 @@ assistant_handoff_tool = RegisteredTool(
             "content": string_property(
                 description=(
                     "Concise assistant handoff text for informational, ambiguous, "
-                    "or non-executable requests."
+                    "or non-executable requests. Prefer structured tags when the "
+                    "topic is known — e.g. docs:datadog_setup, chat:greeting, "
+                    "provider:local_llama_connect for vague local-model setup."
                 ),
                 min_length=1,
             )

@@ -17,9 +17,7 @@ from typing import Any
 from rich.console import Console
 
 import core as runtime_module
-import core.llm.agent_llm_client as agent_llm_client
-import tools.investigation.stages.gather_evidence.tools as investigate_tools
-from core.agent_harness.session import Session
+import platform.harness_ports as harness_ports
 from core.agent_harness.turns.evidence_driver import GatherAgentFactory
 from core.llm.types import ToolCall
 from surfaces.interactive_shell.runtime.integration_tool_gathering import (
@@ -28,6 +26,7 @@ from surfaces.interactive_shell.runtime.integration_tool_gathering import (
     _tool_input_hint,
     gather_integration_tool_evidence,
 )
+from surfaces.interactive_shell.session import Session
 
 _FakeRun = Callable[[dict[str, Any], list[dict[str, Any]]], runtime_module.AgentRunResult]
 
@@ -73,7 +72,7 @@ def test_no_tools_available_returns_none(monkeypatch: Any) -> None:
     session = Session()
     session.resolved_integrations_cache = {}
 
-    monkeypatch.setattr(investigate_tools, "get_available_tools", lambda _resolved: [])
+    monkeypatch.setattr(harness_ports, "get_investigation_tools", lambda _resolved: [])
 
     assert gather_integration_tool_evidence("any question", session, _console()) is None
 
@@ -83,15 +82,15 @@ def test_secondary_only_tools_return_none(monkeypatch: Any) -> None:
     session.resolved_integrations_cache = {}
 
     monkeypatch.setattr(
-        investigate_tools,
-        "get_available_tools",
+        harness_ports,
+        "get_investigation_tools",
         lambda _resolved: [_DummyTool("get_sre_guidance", source="knowledge")],
     )
 
     def _unexpected_llm() -> Any:
         raise AssertionError("knowledge-only tools should not invoke the gather loop")
 
-    monkeypatch.setattr(agent_llm_client, "get_agent_llm", _unexpected_llm)
+    monkeypatch.setattr("core.llm.factory.get_llm", lambda _role: _unexpected_llm())
 
     assert gather_integration_tool_evidence("why did it fail?", session, _console()) is None
 
@@ -101,11 +100,11 @@ def test_executed_results_return_formatted_observation(monkeypatch: Any) -> None
     session.resolved_integrations_cache = {}
 
     monkeypatch.setattr(
-        investigate_tools,
-        "get_available_tools",
+        harness_ports,
+        "get_investigation_tools",
         lambda _resolved: [_DummyTool("search_github_issues")],
     )
-    monkeypatch.setattr(agent_llm_client, "get_agent_llm", object)
+    monkeypatch.setattr("core.llm.factory.get_llm", lambda _role: object())
 
     executed = [
         (
@@ -137,11 +136,11 @@ def test_no_executed_returns_none(monkeypatch: Any) -> None:
     session.resolved_integrations_cache = {}
 
     monkeypatch.setattr(
-        investigate_tools,
-        "get_available_tools",
+        harness_ports,
+        "get_investigation_tools",
         lambda _resolved: [_DummyTool("search_github_issues")],
     )
-    monkeypatch.setattr(agent_llm_client, "get_agent_llm", object)
+    monkeypatch.setattr("core.llm.factory.get_llm", lambda _role: object())
 
     def _fake_run(
         _kwargs: dict[str, Any], _initial_messages: list[dict[str, Any]]
@@ -164,15 +163,15 @@ def test_exception_path_returns_none(monkeypatch: Any) -> None:
     session.resolved_integrations_cache = {}
 
     monkeypatch.setattr(
-        investigate_tools,
-        "get_available_tools",
+        harness_ports,
+        "get_investigation_tools",
         lambda _resolved: [_DummyTool("search_github_issues")],
     )
 
     def _boom() -> Any:
         raise RuntimeError("tool-calling client unavailable")
 
-    monkeypatch.setattr(agent_llm_client, "get_agent_llm", _boom)
+    monkeypatch.setattr("core.llm.factory.get_llm", lambda _role: _boom())
 
     assert gather_integration_tool_evidence("any question", session, _console()) is None
 
@@ -228,11 +227,11 @@ def test_gathering_progress_lines_print_on_tool_start(monkeypatch: Any) -> None:
     console = _console()
 
     monkeypatch.setattr(
-        investigate_tools,
-        "get_available_tools",
+        harness_ports,
+        "get_investigation_tools",
         lambda _resolved: [_DummyTool("query_grafana_metrics", source="grafana")],
     )
-    monkeypatch.setattr(agent_llm_client, "get_agent_llm", object)
+    monkeypatch.setattr("core.llm.factory.get_llm", lambda _role: object())
 
     def _fake_run(
         kwargs: dict[str, Any], _initial_messages: list[dict[str, Any]]
@@ -348,8 +347,8 @@ def test_gather_enriches_github_before_selecting_tools(monkeypatch: Any) -> None
             return [_DummyTool("search_github_issues")]
         return []
 
-    monkeypatch.setattr(investigate_tools, "get_available_tools", _capture_tools)
-    monkeypatch.setattr(agent_llm_client, "get_agent_llm", object)
+    monkeypatch.setattr(harness_ports, "get_investigation_tools", _capture_tools)
+    monkeypatch.setattr("core.llm.factory.get_llm", lambda _role: object())
 
     def _fake_run(
         _kwargs: dict[str, Any], _initial_messages: list[dict[str, Any]]
@@ -375,11 +374,11 @@ def test_gather_user_message_includes_recent_conversation(monkeypatch: Any) -> N
     captured: dict[str, Any] = {}
 
     monkeypatch.setattr(
-        investigate_tools,
-        "get_available_tools",
+        harness_ports,
+        "get_investigation_tools",
         lambda _resolved: [_DummyTool("search_github_issues")],
     )
-    monkeypatch.setattr(agent_llm_client, "get_agent_llm", object)
+    monkeypatch.setattr("core.llm.factory.get_llm", lambda _role: object())
 
     def _fake_run(
         _kwargs: dict[str, Any], initial_messages: list[dict[str, Any]]

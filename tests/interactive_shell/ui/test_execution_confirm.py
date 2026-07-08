@@ -11,7 +11,7 @@ import io
 
 from rich.console import Console
 
-from core.agent_harness.session import Session
+from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
 from tools.interactive_shell.shared import (
     ExecutionPolicyResult,
@@ -93,7 +93,7 @@ def test_deny_verdict_blocks() -> None:
 
 def test_explicit_ask_trust_mode_allows() -> None:
     session = Session()
-    session.trust_mode = True
+    session.terminal.trust_mode = True
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)
     assert execution_allowed(
@@ -108,7 +108,7 @@ def test_explicit_ask_trust_mode_allows() -> None:
 
 def test_explicit_ask_non_tty_blocks() -> None:
     session = Session()
-    session.trust_mode = False
+    session.terminal.trust_mode = False
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)
     assert not execution_allowed(

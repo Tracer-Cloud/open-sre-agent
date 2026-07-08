@@ -97,8 +97,8 @@ Notes:
 
 ### 3. Add or Update Tests
 
-- **Test Location:** New tests should be placed in the `tests/` directory, mirroring the structure of the `app/` directory (e.g., tests for `cli/` go in `tests/cli/`).
-- **No Inline Tests:** Avoid adding `*_test.py` files directly inside the `app/` directory. We are phasing out existing inline tests to keep the core logic clean.
+- **Test Location:** New tests should be placed in the `tests/` directory, mirroring the source package area when useful (e.g., tests for `surfaces/cli/` go in `tests/cli/`).
+- **No Inline Tests:** Avoid adding `*_test.py` files directly inside source packages. We are phasing out existing inline tests to keep the core logic clean.
 - Bug fixes should include a test that would have caught the bug
 - New features should have corresponding tests
 - Aim for >80% code coverage (run `make test-cov` to check)

@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 import requests
 
-from platform.deployment.instance import poll_deployment_health
+from platform.deployment.ecr_deploy.instance import poll_deployment_health
 
 
 class _Resp:

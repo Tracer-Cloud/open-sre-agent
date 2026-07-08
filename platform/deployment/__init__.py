@@ -1,1 +1,1 @@
-"""EC2 deployment: web and gateway containers on a single instance."""
+"""EC2 deployment paths: Docker/ECR (`ecr_deploy/`) and gateway (`gateway/`)."""

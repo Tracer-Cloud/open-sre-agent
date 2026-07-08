@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 
 from core.agent_harness.integrations.resolution import resolve_and_cache_integrations
-from core.agent_harness.session import Session
+from surfaces.interactive_shell.session import Session
 
 
 def test_resolve_integrations_returns_cached_configs_without_lookup(

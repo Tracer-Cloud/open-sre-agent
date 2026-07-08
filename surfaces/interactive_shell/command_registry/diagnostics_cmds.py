@@ -44,17 +44,17 @@ def _cmd_status(session: Session, console: Console, _args: list[str]) -> bool:
     table.add_column("value")
     table.add_row("interactions", str(len(session.history)))
 
-    if session.incoming_alerts:
+    most_recent = session.alerts.most_recent
+    if most_recent is not None:
         from surfaces.interactive_shell.ui.alerts import time_ago
 
-        most_recent = session.incoming_alerts[-1]
         age_str = time_ago(most_recent.received_at)
-        table.add_row("incoming alerts", f"{len(session.incoming_alerts)} (last {age_str})")
+        table.add_row("incoming alerts", f"{len(session.alerts.entries)} (last {age_str})")
     else:
         table.add_row("incoming alerts", "0")
 
     table.add_row("last investigation", "yes" if session.last_state else "none")
-    table.add_row("trust mode", "on" if session.trust_mode else "off")
+    table.add_row("trust mode", "on" if session.terminal.trust_mode else "off")
     table.add_row("reasoning effort", display_reasoning_effort(session.reasoning_effort))
     table.add_row("provider", _status_provider_display())
     table.add_row(

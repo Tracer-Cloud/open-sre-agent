@@ -10,9 +10,21 @@ class TestExtractHttpError:
         result = extract_http_error({"message": "Missing Permissions"}, 403, "html")
         assert result == "Missing Permissions"
 
+    def test_falls_back_to_error_message_field(self) -> None:
+        result = extract_http_error({"error_message": "Queue overflow"}, 400, "html body")
+        assert result == "Queue overflow"
+
     def test_falls_back_to_error_field(self) -> None:
         result = extract_http_error({"error": "channel_not_found"}, 400, "html body")
         assert result == "channel_not_found"
+
+    def test_message_takes_precedence_over_error_message(self) -> None:
+        result = extract_http_error({"message": "primary", "error_message": "secondary"}, 400, "")
+        assert result == "primary"
+
+    def test_error_message_takes_precedence_over_error(self) -> None:
+        result = extract_http_error({"error_message": "twilio err", "error": "generic"}, 400, "")
+        assert result == "twilio err"
 
     def test_falls_back_to_text_when_no_error_fields(self) -> None:
         result = extract_http_error({}, 502, "<html>Bad Gateway</html>")

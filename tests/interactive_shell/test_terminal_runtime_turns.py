@@ -8,7 +8,6 @@ import io
 import pytest
 from rich.console import Console
 
-from core.agent_harness.session import Session
 from core.llm.types import AgentLLMResponse, ToolCall
 from surfaces.interactive_shell.runtime.core.turn_accounting import (
     ToolCallingTurnResult,
@@ -16,6 +15,7 @@ from surfaces.interactive_shell.runtime.core.turn_accounting import (
 from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 from surfaces.interactive_shell.runtime.turn_host import run_agent_turn_queue
 from surfaces.interactive_shell.runtime.utils import input_policy as loop_input_policy
+from surfaces.interactive_shell.session import Session
 from tests.core.agent.orchestration.action_execution_test_harness import (
     FakeActionLLM,
 )

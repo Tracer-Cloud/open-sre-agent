@@ -18,9 +18,9 @@ from typing import Literal
 
 from rich.markup import escape
 
-from core.agent_harness.session import Session
 from surfaces.interactive_shell.runtime.core.state import SpinnerState
 from surfaces.interactive_shell.runtime.utils.input_policy import turn_should_show_spinner
+from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui import (
     DIM,
     ERROR,
@@ -78,13 +78,10 @@ async def _render_agent_presentation_transition(
     spinner: SpinnerState,
 ) -> None:
     """Perform the terminal side effects for one presentation transition."""
-    from surfaces.interactive_shell.ui.output import set_prompt_suppress_fn
-
     match event.type:
         case "turn_start":
             if current.show_spinner:
                 spinner.start()
-                set_prompt_suppress_fn(console.suppress_prompt_spinner)
         case "turn_interrupted":
             console.print(f"[{WARNING}]· interrupted[/]")
         case "turn_error":
@@ -93,12 +90,15 @@ async def _render_agent_presentation_transition(
                 raise ValueError("turn_error event requires an error")
             console.print(f"[{ERROR}]turn error:[/] {escape(str(exc))}")
             # On a credit/billing wall, add the in-tool recovery hint.
-            from core.llm.llm_retry import LLMCreditExhaustedError
+            from core.llm.shared.llm_retry import LLMCreditExhaustedError
 
             if isinstance(exc, LLMCreditExhaustedError):
                 console.print(f"[{DIM}]Run /model to switch to another provider.[/]")
+                console.print(
+                    f"[{DIM}]Or run /auth login <provider> to re-authenticate "
+                    f"or add a different provider.[/]"
+                )
         case "turn_end":
-            set_prompt_suppress_fn(None)
             if previous.show_spinner:
                 spinner.stop()
             await asyncio.sleep(0.05)

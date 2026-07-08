@@ -13,7 +13,9 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any
 
-from core.llm import llm_client as llm_mod
+from core.llm import factory
+from core.llm.factory import LLMRole, get_llm, reset_llm_clients
+from core.llm.transports.sdk.llm_clients import LLMClient, OpenAILLMClient
 from core.state import AgentState
 from tests.benchmarks.toolcall_model_benchmark.pricing import estimate_run_cost_usd
 from tests.synthetic.rds_postgres.run_suite import _build_resolved_integrations
@@ -77,22 +79,22 @@ class InvestigationBenchmarkRun:
 
 
 def reset_llm_singletons() -> None:
-    """Reset Anthropic/OpenAI singletons; delegates to app llm_client."""
-    llm_mod.reset_llm_singletons()
+    """Reset the cached LLM clients; delegates to core.llm.factory.reset_llm_clients."""
+    reset_llm_clients()
 
 
 def configure_split_models() -> None:
     """Production-style split: reasoning model + separate toolcall model."""
     reset_llm_singletons()
-    llm_mod.get_llm_for_reasoning()
-    llm_mod.get_llm_for_tools()
+    get_llm(LLMRole.REASONING)
+    get_llm(LLMRole.TOOLCALL)
 
 
 def configure_baseline_reasoning_for_tools() -> None:
     """Ablation: tool nodes use the same client instance as reasoning."""
     reset_llm_singletons()
-    reasoning = llm_mod.get_llm_for_reasoning()
-    llm_mod._llm_for_tools = reasoning
+    reasoning = get_llm(LLMRole.REASONING)
+    factory._cache.store(LLMRole.TOOLCALL, reasoning)
 
 
 def make_investigation_state(fixture: ScenarioFixture) -> AgentState:
@@ -121,8 +123,8 @@ def _track_llm_usage(
     llm_calls: list[LLMCallRecord],
 ) -> Any:
     """Count tokens and record one row per successful API completion (incl. latency)."""
-    orig_anthropic = llm_mod.LLMClient.invoke
-    orig_openai = llm_mod.OpenAILLMClient.invoke
+    orig_anthropic = LLMClient.invoke
+    orig_openai = OpenAILLMClient.invoke
 
     def anthropic_invoke(self: Any, prompt_or_messages: Any) -> Any:
         self._ensure_client()
@@ -186,13 +188,13 @@ def _track_llm_usage(
         finally:
             self._client.chat.completions.create = real_create  # type: ignore[method-assign]
 
-    llm_mod.LLMClient.invoke = anthropic_invoke  # type: ignore[assignment]
-    llm_mod.OpenAILLMClient.invoke = openai_invoke  # type: ignore[assignment]
+    LLMClient.invoke = anthropic_invoke  # type: ignore[assignment]
+    OpenAILLMClient.invoke = openai_invoke  # type: ignore[assignment]
     try:
         yield
     finally:
-        llm_mod.LLMClient.invoke = orig_anthropic  # type: ignore[assignment]
-        llm_mod.OpenAILLMClient.invoke = orig_openai  # type: ignore[assignment]
+        LLMClient.invoke = orig_anthropic  # type: ignore[assignment]
+        OpenAILLMClient.invoke = orig_openai  # type: ignore[assignment]
 
 
 def run_investigation_bench(

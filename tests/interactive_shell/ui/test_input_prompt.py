@@ -8,9 +8,9 @@ from dataclasses import dataclass
 import pytest
 from prompt_toolkit.completion import Completion
 
-from core.agent_harness.session import Session
 from platform.common.task_types import TaskKind
 from surfaces.interactive_shell.runtime.core import state as loop_state
+from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui.input_prompt import completion as prompt_completion
 from surfaces.interactive_shell.ui.input_prompt import rendering as prompt_rendering
 from surfaces.interactive_shell.ui.input_prompt.completion import completion_preview_hint_ansi
@@ -64,7 +64,7 @@ class TestPromptRefreshAutoSubmit:
         session = Session()
         app = _RefreshFakeApp()
         wire_prompt_refresh(session, app, _RefreshFakeLoop())
-        session.queue_auto_command("/integrations setup sentry")
+        session.terminal.set_auto_command("/integrations setup sentry")
         assert app.current_buffer.text == "/integrations setup sentry"
         assert app.current_buffer.submitted is True
 
@@ -73,8 +73,8 @@ class TestPromptRefreshAutoSubmit:
         session = Session()
         app = _RefreshFakeApp()
         wire_prompt_refresh(session, app, _RefreshFakeLoop())
-        session.pending_prompt_default = "why did it fail?"
-        session.notify_prompt_changed()
+        session.terminal.pending_prompt_default = "why did it fail?"
+        session.terminal.notify_prompt_changed()
         assert app.current_buffer.text == "why did it fail?"
         assert app.current_buffer.submitted is False
 
@@ -119,7 +119,7 @@ class TestResolvePromptPlaceholder:
 
     def test_shows_trust_mode(self) -> None:
         session = Session()
-        session.trust_mode = True
+        session.terminal.trust_mode = True
         text = _placeholder_text(session)
         assert "trust on" in text
         assert _DEFAULT_PLACEHOLDER_TEXT not in text
@@ -142,7 +142,7 @@ class TestResolvePromptPlaceholder:
 
     def test_combines_multiple_state_segments(self) -> None:
         session = Session()
-        session.trust_mode = True
+        session.terminal.trust_mode = True
         session.resumed_from_name = "redis-incident"
         task = session.task_registry.create(TaskKind.WATCHDOG)
         task.mark_running()

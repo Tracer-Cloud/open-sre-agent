@@ -8,11 +8,9 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from config.constants import OPENSRE_HOME_DIR
+from config.constants.paths import OPENSRE_HOME_DIR, PROJECT_ROOT
 
 OPENSRE_PROJECT_ENV_PATH_ENV = "OPENSRE_PROJECT_ENV_PATH"
-
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
 INSTALLED_ENV_PATH = OPENSRE_HOME_DIR / ".env"
 WIZARD_STORE_PATH = OPENSRE_HOME_DIR / "opensre.json"
 

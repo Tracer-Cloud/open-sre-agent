@@ -54,7 +54,6 @@ class AppRuntimeMessage:
     app_type: str
     content: RuntimeContent
     include_in_context: bool = True
-    display: bool = True
     details: Any = None
     metadata: MessageMetadata = field(default_factory=dict)
     role: Literal["app"] = "app"

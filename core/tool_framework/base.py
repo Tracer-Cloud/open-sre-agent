@@ -1,82 +1,41 @@
-"""Base class for all investigation tool actions."""
+"""Abstract base class for all investigation tool actions."""
 
 from __future__ import annotations
 
 from abc import ABC
-from typing import Any, ClassVar, Literal
+from collections.abc import Sequence
+from typing import Any, ClassVar
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel
 
-from config.strict_config import StrictConfigModel
+from config.constants.investigation import DEFAULT_APPROVAL_EXPIRY_SECONDS
 from core.domain.types.evidence import EvidenceSource
 from core.domain.types.retrieval import RetrievalControls
-
-EvidenceType = Literal[
-    "logs",
-    "metrics",
-    "traces",
-    "events",
-    "topology",
-    "deployment_metadata",
-    "query_stats",
-    "artifact",
-    "other",
-]
-SideEffectLevel = Literal["none", "read_only", "mutating", "external"]
-
-
-class ToolMetadata(StrictConfigModel):
-    """Strict schema for tool metadata declared on BaseTool subclasses."""
-
-    name: str
-    description: str
-    display_name: str | None = None
-    input_schema: dict[str, Any]
-    source: EvidenceSource
-    source_id: str | None = None
-    evidence_type: EvidenceType | None = None
-    side_effect_level: SideEffectLevel | None = None
-    use_cases: list[str] = Field(default_factory=list)
-    examples: list[str] = Field(default_factory=list)
-    anti_examples: list[str] = Field(default_factory=list)
-    requires: list[str] = Field(default_factory=list)
-    outputs: dict[str, str] = Field(default_factory=dict)
-    output_schema: dict[str, Any] | None = None
-    injected_params: list[str] = Field(default_factory=list)
-    retrieval_controls: RetrievalControls = Field(
-        default_factory=RetrievalControls,
-        description="Declares which structured retrieval controls this tool supports",
-    )
-
-    @field_validator("name", "description", "display_name")
-    @classmethod
-    def _require_non_empty_strings(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        normalized = value.strip()
-        if not normalized:
-            raise ValueError("must be a non-empty string")
-        return normalized
+from core.domain.types.tools import ToolSurface
+from core.tool_framework.metadata import EvidenceType, SideEffectLevel, ToolMetadata
+from core.tool_framework.registry_metadata import BaseToolRegistryMetadata
 
 
 class BaseTool(ABC):
-    """Abstract base for all investigation tool actions.
+    """Abstract base class for every investigation tool.
 
-    Each subclass declares metadata as ClassVars and implements ``run()``.
-    ``is_available()`` and ``extract_params()`` may be overridden to make the
-    tool self-describing — the investigation registry calls these instead of
-    the old ``availability_check`` / ``parameter_extractor`` lambdas.
-
-    Instances are directly callable; ``tool(**kwargs)`` delegates to ``run()``.
-
-    Subclasses define ``run()`` with their own explicit signatures for type
-    safety and readability.  The method is **not** declared here to avoid
-    forcing every subclass into a single ``**kwargs`` signature — the
-    ``__call__`` protocol provides the uniform dispatch contract instead.
-
-    Backward compatibility: ``retrieval_controls`` is optional. Tools that
-    don't declare it default to no supported controls. Existing tools continue
-    to work without modification.
+    Subclass contract
+    -----------------
+    * Declare all metadata as **ClassVars** (``name``, ``description``,
+      ``input_schema``, ``source``, etc.).  ``__init_subclass__`` validates
+      them through ``ToolMetadata`` on class creation, so missing or
+      ill-typed declarations fail at import time rather than at runtime.
+    * Implement ``run(**kwargs)`` — *not* declared here to avoid forcing a
+      fixed signature on every subclass.  The planner invokes the tool
+      through ``__call__``, which delegates to ``run`` via
+      ``telemetry.invoke_tool`` so exceptions are always captured and
+      converted to a structured ``{"error": ..., "exception_type": ...}``
+      dict rather than propagating to the agent loop.
+    * Override ``is_available`` and ``extract_params`` when the tool
+      requires specific data-source checks or needs to pull kwargs from the
+      investigation sources dict.
+    * Do **not** declare ``run`` with positional arguments — the call site
+      always uses keyword arguments: ``tool_instance.run(**kwargs)``.
     """
 
     name: ClassVar[str]
@@ -88,25 +47,23 @@ class BaseTool(ABC):
     source_id: ClassVar[str | None] = None
     evidence_type: ClassVar[EvidenceType | None] = None
     side_effect_level: ClassVar[SideEffectLevel | None] = None
-    use_cases: ClassVar[list[str]] = []
-    examples: ClassVar[list[str]] = []
-    anti_examples: ClassVar[list[str]] = []
-    requires: ClassVar[list[str]] = []
+    use_cases: ClassVar[Sequence[str]] = ()
+    examples: ClassVar[Sequence[str]] = ()
+    anti_examples: ClassVar[Sequence[str]] = ()
+    requires: ClassVar[Sequence[str]] = ()
     outputs: ClassVar[dict[str, str]] = {}  # Output field -> description (optional, for prompting)
     output_schema: ClassVar[dict[str, Any] | None] = None
     output_model: ClassVar[type[BaseModel] | None] = None
-    injected_params: ClassVar[list[str]] = []
+    injected_params: ClassVar[Sequence[str]] = ()
     retrieval_controls: ClassVar[RetrievalControls] = (
         RetrievalControls()
     )  # Declares supported controls
+    surfaces: ClassVar[tuple[ToolSurface, ...]] = ("investigation",)
+    tags: ClassVar[Sequence[str]] = ()
+    parallel_safe: ClassVar[bool] = True
     requires_approval: ClassVar[bool] = False  # Whether this tool needs approval from messaging
     approval_reason: ClassVar[str] = ""  # Human-readable reason for requiring approval
-    approval_expiry_seconds: ClassVar[int] = (
-        300  # Approval auto-expires after N seconds (default 5 min)
-    )
-    approval_scope: ClassVar[str] = (
-        "one_shot"  # "one_shot" (single call) or "session" (until disconnect)
-    )
+    approval_expiry_seconds: ClassVar[int] = DEFAULT_APPROVAL_EXPIRY_SECONDS
     accepts_runtime_context: ClassVar[bool] = False
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
@@ -120,14 +77,18 @@ class BaseTool(ABC):
         cls.source_id = metadata.source_id
         cls.evidence_type = metadata.evidence_type
         cls.side_effect_level = metadata.side_effect_level
-        cls.use_cases = metadata.use_cases
-        cls.examples = metadata.examples
-        cls.anti_examples = metadata.anti_examples
-        cls.requires = metadata.requires
+        cls.use_cases = tuple(metadata.use_cases)
+        cls.examples = tuple(metadata.examples)
+        cls.anti_examples = tuple(metadata.anti_examples)
+        cls.requires = tuple(metadata.requires)
         cls.outputs = metadata.outputs
         cls.output_schema = metadata.output_schema
-        cls.injected_params = metadata.injected_params
+        cls.injected_params = tuple(metadata.injected_params)
         cls.retrieval_controls = metadata.retrieval_controls
+        registry = cls.registry_metadata()
+        cls.surfaces = registry.surfaces
+        cls.tags = registry.tags
+        cls.parallel_safe = registry.parallel_safe
 
     @classmethod
     def metadata(cls) -> ToolMetadata:
@@ -153,27 +114,21 @@ class BaseTool(ABC):
             }
         )
 
-    @property
-    def inputs(self) -> dict[str, str]:
-        """Derived from input_schema for backward-compatibility with build_prompt.py."""
-        props = self.metadata().input_schema.get("properties", {})
-        return {
-            param: str(info.get("description", info.get("type", "")))
-            for param, info in props.items()
-        }
+    @classmethod
+    def registry_metadata(cls) -> BaseToolRegistryMetadata:
+        """Return validated registry/runtime metadata for this subclass."""
+        return BaseToolRegistryMetadata.model_validate(
+            {
+                "surfaces": getattr(cls, "surfaces", ("investigation",)),
+                "tags": tuple(getattr(cls, "tags", ())),
+                "parallel_safe": getattr(cls, "parallel_safe", True),
+            }
+        )
 
     def __call__(self, **kwargs: Any) -> dict[str, Any]:
-        try:
-            return self.run(**kwargs)  # type: ignore[attr-defined, no-any-return]
-        except Exception as exc:
-            from platform.observability.sentry_sdk import capture_exception
+        from core.tool_framework.telemetry import invoke_tool
 
-            capture_exception(
-                exc,
-                context=f"tool.{self.name}",
-                tags={"surface": "tool", "tool": self.name},
-            )
-            return {"error": str(exc), "exception_type": type(exc).__name__}
+        return invoke_tool(self.run, name=self.name, source=str(self.source), kwargs=kwargs)  # type: ignore[attr-defined, no-any-return]
 
     def is_available(self, _sources: dict[str, dict]) -> bool:
         """Return True when required data sources are present.

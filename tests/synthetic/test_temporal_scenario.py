@@ -27,12 +27,7 @@ from typing import Any
 import httpx
 import pytest
 
-from core.domain.alerts.alert_source import (
-    ALERT_SOURCE_TO_SEED_TOOL_SOURCES as _SEEDING_MAP,
-)
-from core.domain.alerts.alert_source import (
-    ALERT_SOURCE_TO_TOOL_SOURCES as _PROMPT_MAP,
-)
+from core.domain.alerts.alert_source import ALERT_SOURCE_ROUTING
 from integrations.temporal.client import TemporalClient, TemporalConfig
 from integrations.temporal.tools import (
     TemporalNamespaceInfoTool,
@@ -273,14 +268,13 @@ def patched_temporal_client(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_temporal_alert_source_seeds_temporal_tools() -> None:
     """A temporal-sourced alert pre-seeds temporal tools before the ReAct loop."""
-    assert "temporal" in _SEEDING_MAP
-    assert _SEEDING_MAP["temporal"] == ("temporal",)
+    assert "temporal" in ALERT_SOURCE_ROUTING
+    assert ALERT_SOURCE_ROUTING["temporal"].seed_tool_sources == ("temporal",)
 
 
 def test_temporal_alert_source_appears_in_prompt_map() -> None:
     """A temporal-sourced alert is treated as a primary temporal-tool source in the prompt."""
-    assert "temporal" in _PROMPT_MAP
-    assert _PROMPT_MAP["temporal"] == ("temporal",)
+    assert ALERT_SOURCE_ROUTING["temporal"].relevance_tool_sources == ("temporal",)
 
 
 # --- synthetic investigation scenario ----------------------------------------

@@ -9,6 +9,13 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any
 
+from core.domain.alerts.fields import (
+    alert_name_value,
+    first_present,
+    pipeline_name_value,
+    severity_value,
+)
+
 
 def _as_mapping(value: Any) -> dict[str, Any]:
     if isinstance(value, dict):
@@ -72,16 +79,6 @@ def _coerce_pid(value: Any) -> int | None:
     return pid if pid >= 0 else None
 
 
-def _first_present(*values: Any) -> Any:
-    for value in values:
-        if value is None:
-            continue
-        if isinstance(value, str) and not value.strip():
-            continue
-        return value
-    return None
-
-
 def normalize_alert_payload(raw_alert: dict[str, Any]) -> dict[str, Any]:
     """Normalize an alert payload to canonical OpenSRE alert format.
 
@@ -114,7 +111,7 @@ def normalize_alert_payload(raw_alert: dict[str, Any]) -> dict[str, Any]:
     normalized["commonAnnotations"] = annotations
 
     process_name = _to_text(
-        _first_present(
+        first_present(
             normalized.get("process_name"),
             normalized.get("processName"),
             normalized.get("process.name"),
@@ -125,7 +122,7 @@ def normalize_alert_payload(raw_alert: dict[str, Any]) -> dict[str, Any]:
         )
     )
     cmdline = _to_text(
-        _first_present(
+        first_present(
             normalized.get("cmdline"),
             normalized.get("command"),
             normalized.get("command_line"),
@@ -136,7 +133,7 @@ def normalize_alert_payload(raw_alert: dict[str, Any]) -> dict[str, Any]:
         )
     )
     pid = _coerce_pid(
-        _first_present(
+        first_present(
             normalized.get("pid"),
             normalized.get("process_id"),
             normalized.get("process.pid"),
@@ -155,28 +152,12 @@ def normalize_alert_payload(raw_alert: dict[str, Any]) -> dict[str, Any]:
     canonical_alert = {
         "schema": "opensre.alert.v1",
         "alert_name": _to_text(
-            _first_present(
-                normalized.get("alert_name"),
-                normalized.get("title"),
-                labels.get("alertname"),
-                labels.get("alert_name"),
-            )
+            alert_name_value(normalized, labels=labels, annotations=annotations)
         ),
         "pipeline_name": _to_text(
-            _first_present(
-                normalized.get("pipeline_name"),
-                labels.get("pipeline_name"),
-                labels.get("pipeline"),
-                labels.get("service"),
-            )
+            pipeline_name_value(normalized, labels=labels, annotations=annotations)
         ),
-        "severity": _to_text(
-            _first_present(
-                normalized.get("severity"),
-                labels.get("severity"),
-                labels.get("priority"),
-            )
-        ),
+        "severity": _to_text(severity_value(normalized, labels=labels)),
         "alert_source": _to_text(normalized.get("alert_source")),
         "labels": dict(labels),
         "annotations": dict(annotations),

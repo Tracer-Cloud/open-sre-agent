@@ -21,7 +21,7 @@ from core.agent_harness.providers.default_providers import (
     DefaultReasoningClientProvider,
     DefaultToolProvider,
 )
-from core.agent_harness.session import InMemorySessionStorage, Session
+from core.agent_harness.session import InMemorySessionStorage
 from core.agent_harness.turns.headless_dispatch import (
     BufferOutputSink,
     NoopTurnAccounting,
@@ -31,6 +31,7 @@ from core.llm.types import AgentLLMResponse, ToolCall
 from core.tool_framework.registered_tool import RegisteredTool
 from gateway.turn_handler import build_gateway_turn_handler
 from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
+from surfaces.interactive_shell.session import Session
 
 Surface = Literal["shell", "headless", "gateway_handler"]
 
@@ -247,13 +248,13 @@ def wire_tool_registry(monkeypatch: Any, tools: list[RegisteredTool]) -> None:
     reset_probe_runs()
     reset_integrations_seen()
     monkeypatch.setattr(
-        "core.agent_harness.tools.action_tools.get_registered_tools",
-        lambda _surface=None: list(tools),
+        "core.agent_harness.tools.action_tools.get_surface_tools",
+        lambda _surface: list(tools),
     )
     by_name = {tool.name: tool for tool in tools}
     monkeypatch.setattr(
-        "core.agent_harness.tools.action_tools.get_registered_tool_map",
-        lambda _surface=None: dict(by_name),
+        "core.agent_harness.tools.action_tools.get_surface_tool_map",
+        lambda _surface: dict(by_name),
     )
 
     from core.agent_harness.tools.action_tools import _sources_for_context
@@ -280,11 +281,14 @@ def wire_tool_registry(monkeypatch: Any, tools: list[RegisteredTool]) -> None:
 def wire_llms(
     monkeypatch: Any, *, action_mode: str, action_tool_name: str = "parity_probe"
 ) -> None:
-    monkeypatch.setattr("core.llm.llm_client.get_llm_for_reasoning", FakeReasoningClient)
-    monkeypatch.setattr(
-        "core.llm.agent_llm_client.get_agent_llm",
-        lambda: FakeActionLLM(action_mode, tool_name=action_tool_name),
-    )
+    from core.llm.factory import LLMRole
+
+    def _fake_get_llm(role: Any) -> Any:
+        if role == LLMRole.AGENT:
+            return FakeActionLLM(action_mode, tool_name=action_tool_name)
+        return FakeReasoningClient()
+
+    monkeypatch.setattr("core.llm.factory.get_llm", _fake_get_llm)
 
 
 def _dispatch_turn(

@@ -2,9 +2,24 @@ from __future__ import annotations
 
 import pytest
 
+from core.llm.shared.llm_retry import LLMCreditExhaustedError
 from integrations.llm_cli.errors import CLITimeoutError
 from surfaces.cli.error_mapping import reraise_cli_runtime_error
 from surfaces.interactive_shell.utils.error_handling.errors import OpenSREError
+
+
+def test_credit_exhausted_error_maps_to_opensre_error_with_auth_hint() -> None:
+    """LLMCreditExhaustedError must produce a structured CLI error with an auth login hint."""
+    exc = LLMCreditExhaustedError(
+        "Anthropic credit exhausted (provider billing/quota). Original error: 400"
+    )
+    with pytest.raises(OpenSREError) as exc_info:
+        reraise_cli_runtime_error(exc)
+
+    err = exc_info.value
+    assert "credit exhausted" in str(err).lower()
+    assert err.suggestion is not None
+    assert "opensre auth login" in err.suggestion
 
 
 def test_anthropic_model_not_found_raises_opensre_error() -> None:

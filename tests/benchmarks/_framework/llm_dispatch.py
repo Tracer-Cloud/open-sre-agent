@@ -192,7 +192,7 @@ class LLMDispatcher:
     LLM-client state. Activation:
       1. Snapshot current env vars
       2. Set provider + model-version env vars for the chosen LLM
-      3. Call opensre's ``reset_llm_singletons()`` to force re-creation
+      3. Call opensre's ``reset_llm_clients()`` to force re-creation
       4. Yield (runner executes cells)
       5. On exit: restore env, reset singletons again
 
@@ -316,24 +316,17 @@ class LLMDispatcher:
     def _reset_opensre_singletons() -> None:
         """Force opensre to rebuild its LLM clients from the new env on next call.
 
-        Both singleton caches must be cleared. ``reset_llm_singletons`` only
-        clears the reasoning/classification/toolcall clients in
-        ``core.llm.llm_client``; the investigation agent (and the
-        cloudopsbench predictor) call ``get_agent_llm`` in
-        ``core.llm.agent_llm_client``, which keeps a SEPARATE
-        ``_agent_client`` singleton. Without resetting it too, the agent
-        client built during the first LLM's cells is reused for every
-        subsequent LLM — so e.g. a ``gpt-5`` stratum silently runs on the
-        ``gpt-4o`` client activated first. This was an undetected bug that
-        made multi-LLM grids report the first model's results under every
-        model's name.
+        The unified factory cache holds one client per role (agent / reasoning /
+        classification / toolcall), all keyed by ``(transport, provider)``.
+        Clearing it forces every role to rebuild against the newly-activated LLM;
+        without it, the client built during the first LLM's cells would be reused
+        for every subsequent LLM — a ``gpt-5`` stratum silently running on the
+        ``gpt-4o`` client activated first.
         """
         # Late import — keeps llm_dispatch.py importable without opensre deps
-        from core.llm.agent_llm_client import reset_agent_client
-        from core.llm.llm_client import reset_llm_singletons
+        from core.llm.factory import reset_llm_clients
 
-        reset_llm_singletons()
-        reset_agent_client()
+        reset_llm_clients()
 
 
 # --------------------------------------------------------------------------- #

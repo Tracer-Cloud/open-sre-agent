@@ -38,9 +38,9 @@ from core.agent_harness.ports import (
 )
 from core.agent_harness.prompts import build_cli_agent_prompt_from_provider
 from core.agent_harness.prompts.conversation_memory import MAX_CONVERSATION_MESSAGES
-from core.agent_harness.session.compaction import auto_compact_if_needed
+from core.agent_harness.turns.transcript_compaction import auto_compact_if_needed
 from core.agent_harness.turns.turn_plan import TurnPlan, build_turn_plan
-from integrations.llm_cli.errors import CLITimeoutError
+from core.llm_invoke_errors import is_cli_timeout_error
 
 _ASSISTANT_LABEL = "assistant"
 
@@ -52,7 +52,9 @@ _ASSISTANT_LABEL = "assistant"
 
 def stage_turn_error(session: Any, kind: str, message: str) -> None:
     """Best-effort structured error staging for the turn's telemetry flush."""
-    setter = getattr(session, "set_pending_turn_error", None)
+    # Analytics staging lives on the shell terminal facet; other sessions have none.
+    terminal = getattr(session, "terminal", None)
+    setter = getattr(terminal, "set_pending_turn_error", None)
     if callable(setter):
         setter(kind, message)
 
@@ -80,10 +82,10 @@ def _stream_response(
             error_reporter.report(
                 exc,
                 context="core.agent_harness.turns.orchestrator.stream",
-                expected=isinstance(exc, CLITimeoutError),
+                expected=is_cli_timeout_error(exc),
             )
         if session is not None:
-            kind = "timeout" if isinstance(exc, CLITimeoutError) else "assistant_error"
+            kind = "timeout" if is_cli_timeout_error(exc) else "assistant_error"
             stage_turn_error(session, kind, str(exc))
         output.render_error(f"assistant failed: {exc}")
         return None
@@ -104,7 +106,7 @@ def _record_action_only_turn(session: SessionStore, message: str, assistant_text
     latest = session.cli_agent_messages[-2:]
     if latest == [("user", message), ("assistant", text)]:
         return
-    _record_answer_turn(session, message, text)
+    _record_answer_turn(session, message, assistant_text)
 
 
 def stream_answer(
@@ -121,6 +123,7 @@ def stream_answer(
     is_tty: bool | None = None,
     tool_observation: str | None = None,
     tool_observation_on_screen: bool = True,
+    handoff_contents: tuple[str, ...] = (),
     turn_plan: TurnPlan | None = None,
 ) -> Any | None:
     """Stream one grounded conversational answer (guidance only, no tools).
@@ -148,6 +151,7 @@ def stream_answer(
         prompts=prompts,
         tool_observation=tool_observation,
         tool_observation_on_screen=tool_observation_on_screen,
+        handoff_contents=handoff_contents,
         turn_snapshot=ctx,
     )
 
@@ -199,7 +203,12 @@ def _is_literal_slash_command(text: str) -> bool:
     return text.strip().startswith("/")
 
 
-def _route_turn(routing: TurnRoutingInput, *, user_text: str = "") -> TurnRoute:
+def _route_turn(
+    routing: TurnRoutingInput,
+    *,
+    user_text: str = "",
+    handoff_contents: tuple[str, ...] = (),
+) -> TurnRoute:
     """Decide the turn path from routing facts (pure)."""
     if (
         routing.action_handled
@@ -208,7 +217,7 @@ def _route_turn(routing: TurnRoutingInput, *, user_text: str = "") -> TurnRoute:
         and not _is_literal_slash_command(user_text)
     ):
         return TurnRoute(intent="summarize_observation")
-    if routing.action_handled:
+    if routing.action_handled and not handoff_contents:
         return TurnRoute(intent="handled_without_llm")
     return TurnRoute(intent="gather_and_answer")
 
@@ -230,6 +239,7 @@ def _gather_and_answer(
     gather: EvidenceGatherer,
     confirm_fn: ConfirmFn | None,
     is_tty: bool | None,
+    handoff_contents: tuple[str, ...],
     turn_plan: TurnPlan,
 ) -> Any | None:
     gathered = gather(text, is_tty=is_tty, turn_plan=turn_plan)
@@ -244,6 +254,7 @@ def _gather_and_answer(
         confirm_fn=confirm_fn,
         is_tty=is_tty,
         tool_observation=gathered or None,
+        handoff_contents=handoff_contents,
         turn_plan=turn_plan,
         **on_screen,
     )
@@ -291,7 +302,9 @@ def run_turn(
     # Clear any observation left by a prior turn so only this turn's discovery
     # output can trigger a summary pass.
     session.last_command_observation = None
-    executed_slashes = getattr(session, "agent_turn_executed_slashes", None)
+    # Slash dedup lives on the shell terminal facet; non-shell sessions have none.
+    terminal = getattr(session, "terminal", None)
+    executed_slashes = getattr(terminal, "agent_turn_executed_slashes", None)
     if executed_slashes is not None:
         executed_slashes.clear()
 
@@ -303,8 +316,13 @@ def run_turn(
     )
     accounting.record_action_result(action_result)
 
+    handoff_contents = action_result.handoff_contents
     observation = session.last_command_observation
-    route = _route_turn(_routing_input_from_result(action_result, observation), user_text=text)
+    route = _route_turn(
+        _routing_input_from_result(action_result, observation),
+        user_text=text,
+        handoff_contents=handoff_contents,
+    )
 
     if route.intent == "summarize_observation":
         with apply_reasoning_effort(turn_snapshot.reasoning_effort):
@@ -313,6 +331,7 @@ def run_turn(
                 confirm_fn=confirm_fn,
                 is_tty=is_tty,
                 tool_observation=observation,
+                handoff_contents=handoff_contents,
                 turn_plan=turn_plan,
             )
         result = ShellTurnResult(
@@ -336,6 +355,7 @@ def run_turn(
                 gather=gather,
                 confirm_fn=confirm_fn,
                 is_tty=is_tty,
+                handoff_contents=handoff_contents,
                 turn_plan=turn_plan,
             )
         result = ShellTurnResult(

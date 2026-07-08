@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import re
-import time
 from typing import Any
 
 import pytest
@@ -18,6 +17,7 @@ from surfaces.interactive_shell.ui.output import (
     suppress_stdin_watchers,
     toggle_active_tool_details,
 )
+from surfaces.interactive_shell.ui.output import console_state as output_repl_console_state
 from surfaces.interactive_shell.ui.output import environment as output_environment
 from surfaces.interactive_shell.ui.output import repl_display as output_repl
 from surfaces.interactive_shell.ui.output import toggles as output_toggles
@@ -594,7 +594,7 @@ def test_repl_tracker_skips_per_tool_call_lines(
 
 
 class TestReplHintAnimation:
-    """Tests for _ReplEventLogDisplay in-place hint animation."""
+    """Tests for _ReplEventLogDisplay lap hints and prompt-spinner phase drive."""
 
     def test_fit_hint_prefix_truncates_for_narrow_terminals(self) -> None:
         long_prefix = (
@@ -609,121 +609,34 @@ class TestReplHintAnimation:
         short = "Planning investigation (lap 1/20)"
         assert output_repl._fit_hint_prefix(short, cols=80) == short
 
-    def test_animate_hint_does_not_start_animation_thread(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """REPL lap hints print once; no background cursor-up spam."""
-        monkeypatch.setattr(output_repl, "_stdout_is_tty", lambda: True)
+    def test_animate_hint_dedupes_consecutive_identical_lines(self) -> None:
+        """Lap hints print once; a repeated hint is a no-op (append-only history)."""
         display = self._make_display()
+        emitted: list[str] = []
+        display._emit = lambda line: emitted.append(line.plain)  # type: ignore[method-assign]
+        display.animate_hint("Reviewing evidence (lap 2/20) after Datadog logs")
         display.animate_hint("Reviewing evidence (lap 2/20) after Datadog logs ·")
-        assert display._anim_thread is None
-        display.animate_hint("Reviewing evidence (lap 2/20) after Datadog logs ··")
-        assert display._anim_thread is None
+        assert len(emitted) == 1
+
+    def test_step_start_drives_prompt_spinner_phase(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The display animates the prompt spinner with the active stage label."""
+        from surfaces.interactive_shell.runtime.core.state import SpinnerState
+
+        spinner = SpinnerState()
+        monkeypatch.setattr(output_repl_console_state, "_investigation_spinner", spinner)
+        display = self._make_display()
+        display._emit = lambda _line: None  # type: ignore[method-assign]
+
+        display.step_start("investigation_agent")
+        assert spinner.streaming
+        assert spinner.phase == "Investigation"
+
+        display.stop()
+        assert not spinner.streaming
+        assert spinner.phase == ""
 
     def _make_display(self) -> output_repl._ReplEventLogDisplay:
         return output_repl._ReplEventLogDisplay(t0=0.0)
-
-    class _FakeStdout:
-        def __init__(self) -> None:
-            self.writes: list[str] = []
-
-        def write(self, s: str) -> None:
-            self.writes.append(s)
-
-        def flush(self) -> None:
-            pass
-
-        def fileno(self) -> int:
-            return 1
-
-    def test_no_ansi_when_not_tty(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Animation does not start and no \\r/ANSI codes are emitted when stdout is not a TTY."""
-        monkeypatch.setattr(output_repl, "_stdout_is_tty", lambda: False)
-        fake = self._FakeStdout()
-        monkeypatch.setattr(output_repl.sys, "stdout", fake)
-
-        display = self._make_display()
-        display._start_animation("analyzing alert")
-        time.sleep(0.1)  # give potential thread time to run
-
-        assert display._anim_thread is None, "no thread should start on non-TTY"
-        ansi_or_cr = [w for w in fake.writes if "\r" in w or "\x1b" in w]
-        assert not ansi_or_cr, f"unexpected cursor/ANSI codes in non-TTY output: {ansi_or_cr}"
-
-    def test_animation_advances_multiple_frames_over_time(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """Animation thread writes multiple distinct frames over wall-clock time."""
-        monkeypatch.setattr(output_repl, "_stdout_is_tty", lambda: True)
-        monkeypatch.setattr(output_repl, "_REPL_ANIM_INTERVAL", 0.05)  # fast for tests
-        fake = self._FakeStdout()
-        monkeypatch.setattr(output_repl.sys, "stdout", fake)
-
-        display = self._make_display()
-        display._start_animation("analyzing results")
-
-        # At 0.05s per frame, 0.3s gives ≥4 frames comfortably
-        time.sleep(0.3)
-        display._stop_animation()
-
-        frame_writes = [w for w in fake.writes if "analyzing results" in w]
-        assert len(frame_writes) >= 3, (
-            f"expected ≥3 animation frames, got {len(frame_writes)}: {frame_writes}"
-        )
-        for w in frame_writes:
-            # Frames use cursor-up + carriage-return, not bare \r
-            assert "\033[A\r" in w, "each frame must use cursor-up + \\r"
-            assert "\033[K" in w, "each frame must clear trailing chars with \\033[K"
-            assert w.endswith("\n"), "each frame must end with \\n to restore cursor position"
-        # Dots must cycle — collect the unique dot suffixes seen
-        import re as _re
-
-        dot_variants = {
-            _re.search(r"(·+)\x1b", w).group(1) for w in frame_writes if _re.search(r"(·+)\x1b", w)
-        }  # type: ignore[union-attr]
-        assert len(dot_variants) >= 2, f"expected cycling dots, got only: {dot_variants}"
-
-    def test_stop_animation_joins_thread_and_resets_state(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """_stop_animation signals the thread and joins it, leaving clean state."""
-        monkeypatch.setattr(output_repl, "_stdout_is_tty", lambda: True)
-        fake = self._FakeStdout()
-        monkeypatch.setattr(output_repl.sys, "stdout", fake)
-
-        display = self._make_display()
-        display._start_animation("analyzing")
-
-        assert display._anim_thread is not None
-        assert display._anim_thread.is_alive()
-
-        display._stop_animation()
-
-        assert display._anim_thread is None
-        assert display._anim_stop is None
-
-    def test_exception_during_synthesis_stops_animation_via_finally(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """Animation is guaranteed stopped even when the caller raises mid-synthesis."""
-        monkeypatch.setattr(output_repl, "_stdout_is_tty", lambda: True)
-        fake = self._FakeStdout()
-        monkeypatch.setattr(output_repl.sys, "stdout", fake)
-
-        display = self._make_display()
-        display._start_animation("analyzing results")
-        assert display._anim_thread is not None
-
-        def _synthesis_then_stop() -> None:
-            try:
-                raise RuntimeError("synthesis failed")
-            finally:
-                display._stop_animation()
-
-        with pytest.raises(RuntimeError, match="synthesis failed"):
-            _synthesis_then_stop()
-
-        assert display._anim_thread is None
 
 
 def test_active_tool_detail_toggle_uses_newest_registered_callback() -> None:

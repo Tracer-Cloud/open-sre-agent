@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from rich.console import Console
 
-from core.agent_harness.session import Session
 from platform.terminal.prompt_support import (
     print_session_resume_hint,
     repl_prompt_note_ctrl_c,
@@ -18,6 +17,7 @@ from surfaces.interactive_shell.runtime.input.events import (
     InputEvent,
     InputSubmitted,
 )
+from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui import DIM
 from surfaces.interactive_shell.ui.components.cpr_stdin import (
     contains_cpr_sequence,

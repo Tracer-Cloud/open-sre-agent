@@ -10,6 +10,8 @@ from core.agent_harness.prompts import (
     prior_action_facts_block,
     recent_conversation_block,
 )
+from core.agent_harness.prompts.assistant import build_cli_agent_prompt_from_provider
+from core.agent_harness.prompts.assistant_agent_prompt import build_handoff_guidance_block
 from core.agent_harness.prompts.conversation_memory import NO_HISTORY_PLACEHOLDER
 
 
@@ -155,3 +157,62 @@ def test_action_system_prompt_includes_context_blocks() -> None:
     )
     assert "CONNECTED INTEGRATIONS (this install, right now): github" in prompt
     assert "RECENT CONVERSATION" in prompt
+
+
+def test_system_prompt_requires_local_llama_handoff_tag() -> None:
+    prompt = _SYSTEM_PROMPT_BASE.lower()
+    assert 'assistant_handoff(content="provider:local_llama_connect")' in prompt
+    assert "/integrations setup llama" in prompt
+    assert "do not use slash_invoke for /remote" in prompt
+    assert "provider:local_llama_connect for vague local-model connection requests" in prompt
+
+
+class _FakePrompts:
+    def cli_reference(self) -> str:
+        return "cli reference"
+
+    def agents_md(self) -> str:
+        return ""
+
+    def investigation_flow(self) -> str:
+        return ""
+
+    def environment_block(self) -> str:
+        return ""
+
+    def suggested_synthetic_prompt(self) -> str:
+        return ""
+
+    def log_diagnostics(self, reason: str) -> None:
+        _ = reason
+
+
+def test_local_llama_handoff_guidance_block() -> None:
+    block = build_handoff_guidance_block(("provider:local_llama_connect",))
+    assert "opensre onboard local_llm" in block
+    assert "/model set ollama" in block
+    assert build_handoff_guidance_block(("docs:datadog_setup",)) == ""
+
+
+def test_local_llama_handoff_injects_setup_guidance_into_assistant_prompt() -> None:
+    turn_snapshot = TurnSnapshot(
+        text="please connect to local llama",
+        conversation_messages=(),
+        configured_integrations=(),
+        configured_integrations_known=True,
+        last_state=None,
+        last_synthetic_observation_path=None,
+        reasoning_effort=None,
+    )
+    prompt = build_cli_agent_prompt_from_provider(
+        message="please connect to local llama",
+        prompts=_FakePrompts(),
+        tool_observation=None,
+        tool_observation_on_screen=True,
+        handoff_contents=("provider:local_llama_connect",),
+        turn_snapshot=turn_snapshot,
+    )
+
+    assert "opensre onboard local_llm" in prompt
+    assert "/onboard local_llm" in prompt
+    assert "/model set ollama" in prompt

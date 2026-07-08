@@ -98,7 +98,7 @@ def test_tests_synthetic_cli_forwards_flags_to_run_suite_main(tmp_path: Path) ->
     fake_run_suite.main = _fake_main
 
     with (
-        unittest.mock.patch("config.synthetic_paths.SYNTHETIC_SCENARIOS_DIR", scenarios_dir),
+        unittest.mock.patch("surfaces.cli.tests.discover.SYNTHETIC_SCENARIOS_DIR", scenarios_dir),
         unittest.mock.patch.dict(
             sys.modules,
             {"tests.synthetic.rds_postgres.run_suite": fake_run_suite},
@@ -151,7 +151,7 @@ def test_tests_synthetic_cli_does_not_pass_observations_dir_when_unset(tmp_path:
     fake_run_suite.main = _fake_main
 
     with (
-        unittest.mock.patch("config.synthetic_paths.SYNTHETIC_SCENARIOS_DIR", scenarios_dir),
+        unittest.mock.patch("surfaces.cli.tests.discover.SYNTHETIC_SCENARIOS_DIR", scenarios_dir),
         unittest.mock.patch.dict(
             sys.modules,
             {"tests.synthetic.rds_postgres.run_suite": fake_run_suite},
@@ -186,7 +186,7 @@ def test_tests_synthetic_all_defaults_to_parallel_all_levels(tmp_path: Path) -> 
     fake_run_suite.main = _fake_main
 
     with (
-        unittest.mock.patch("config.synthetic_paths.SYNTHETIC_SCENARIOS_DIR", scenarios_dir),
+        unittest.mock.patch("surfaces.cli.tests.discover.SYNTHETIC_SCENARIOS_DIR", scenarios_dir),
         unittest.mock.patch.dict(
             sys.modules,
             {"tests.synthetic.rds_postgres.run_suite": fake_run_suite},
@@ -221,7 +221,7 @@ def test_tests_openclaw_synthetic_cli_forwards_flags_to_run_suite_main(tmp_path:
 
     with (
         unittest.mock.patch(
-            "config.synthetic_paths.OPENCLAW_SYNTHETIC_SCENARIOS_DIR",
+            "surfaces.cli.tests.discover.OPENCLAW_SYNTHETIC_SCENARIOS_DIR",
             scenarios_dir,
         ),
         unittest.mock.patch.dict(

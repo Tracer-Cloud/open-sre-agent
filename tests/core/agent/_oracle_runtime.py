@@ -19,9 +19,9 @@ import tools.interactive_shell.actions.shell as shell_tool
 import tools.interactive_shell.actions.slash as slash_tool
 import tools.interactive_shell.actions.synthetic as synthetic_tool
 import tools.interactive_shell.actions.task_cancel as task_cancel_tool
-from core.agent_harness.session import Session
 from platform.analytics.repl_context import bind_cli_session_id, reset_cli_session_id
 from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
+from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.utils.telemetry import PromptRecorder
 from tests.core.agent._oracle_normalize import (
     normalize_history_entry,

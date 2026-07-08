@@ -20,7 +20,7 @@ from config.llm_auth.auth_method import (
 from config.llm_auth.credentials import has_llm_api_key, save_api_key
 from config.llm_auth.provider_catalog import API_KEY_PROVIDER_ENVS
 from config.llm_credentials import get_keyring_setup_instructions, save_llm_api_key
-from config.version import get_version
+from config.version import get_opensre_version
 from integrations.store import get_integration
 from platform.terminal.theme import (
     BG,
@@ -249,7 +249,7 @@ def _choose_model(
 ) -> str:
     """Prompt the user to pick a model from ``provider.models``.
 
-    Choices come from the curated config in ``cli/wizard/config.py``.
+    Choices come from the curated config in ``surfaces/cli/wizard/config.py``.
     A saved model that isn't in the curated list is preserved as ``current``
     so re-running the wizard never silently drops a user's prior pick, and an
     "Enter custom model ID" escape hatch is always available.
@@ -455,7 +455,7 @@ def _render_header() -> None:
     from surfaces.interactive_shell.ui.components.banner_art import _render_art
 
     art = _render_art()
-    version = get_version()
+    version = get_opensre_version()
 
     _console.print()
     _console.print(Rule(style=DIM))

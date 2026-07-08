@@ -10,7 +10,6 @@ from unittest.mock import MagicMock
 import pytest
 from rich.console import Console
 
-from core.agent_harness.session import Session
 from integrations.telegram.credentials import TelegramCredentials
 from platform.common.task_types import TaskKind, TaskStatus
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
@@ -18,6 +17,7 @@ from surfaces.interactive_shell.command_registry.watch_cmds import (
     WatchdogStartSpec,
     parse_watch_argv,
 )
+from surfaces.interactive_shell.session import Session
 
 
 def _capture() -> tuple[Console, io.StringIO]:
@@ -73,7 +73,7 @@ def test_dispatch_watch_creates_watchdog_task(
     )
 
     session = Session()
-    session.trust_mode = True
+    session.terminal.trust_mode = True
     console, buf = _capture()
     dispatch_slash(
         f"/watch {__import__('os').getpid()} --max-cpu 80",
@@ -114,7 +114,7 @@ def test_unwatch_marks_watchdog_cancelled(monkeypatch: pytest.MonkeyPatch) -> No
     )
 
     session = Session()
-    session.trust_mode = True
+    session.terminal.trust_mode = True
     console, _ = _capture()
     dispatch_slash(
         f"/watch {__import__('os').getpid()} --interval 1s",
@@ -135,7 +135,7 @@ def test_unwatch_marks_watchdog_cancelled(monkeypatch: pytest.MonkeyPatch) -> No
 
 def test_unwatch_rejects_non_watchdog_task() -> None:
     session = Session()
-    session.trust_mode = True
+    session.terminal.trust_mode = True
     inv = session.task_registry.create(TaskKind.INVESTIGATION, command="x")
     inv.mark_running()
     console, buf = _capture()
@@ -146,7 +146,7 @@ def test_unwatch_rejects_non_watchdog_task() -> None:
 def test_run_watchdog_respects_cancel(monkeypatch: pytest.MonkeyPatch) -> None:
     from datetime import UTC, datetime, timedelta
 
-    from core.agent_harness.session.tasks import TaskRegistry
+    from platform.common.task_registry import TaskRegistry
     from tools.system.fleet_monitoring.probe import ProcessSnapshot
     from tools.system.watch_dog.monitor import run_watchdog
 
@@ -195,7 +195,7 @@ def test_run_watchdog_once_without_thresholds_exits(monkeypatch: pytest.MonkeyPa
     """``--once`` with no threshold flags must finish after one sample (Greptile #1969)."""
     from datetime import UTC, datetime, timedelta
 
-    from core.agent_harness.session.tasks import TaskRegistry
+    from platform.common.task_registry import TaskRegistry
     from tools.system.fleet_monitoring.probe import ProcessSnapshot
     from tools.system.watch_dog.monitor import run_watchdog
 

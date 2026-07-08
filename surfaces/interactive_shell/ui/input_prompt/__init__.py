@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from prompt_toolkit import PromptSession
 
-from core.agent_harness.session.prompt_history import load_prompt_history
+from surfaces.interactive_shell.prompt_history import load_prompt_history
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui.input_prompt.completion import ShellCompleter
 from surfaces.interactive_shell.ui.input_prompt.key_bindings import _build_prompt_key_bindings
@@ -20,7 +20,7 @@ def _install_prompt_frame(session: PromptSession[str]) -> PromptSession[str]:
     return session
 
 
-def _build_prompt_session(session: Session | None = None) -> PromptSession[str]:
+def build_prompt_session(session: Session | None = None) -> PromptSession[str]:
     placeholder = (
         (lambda: resolve_prompt_placeholder(session))
         if session is not None
@@ -43,6 +43,6 @@ def _build_prompt_session(session: Session | None = None) -> PromptSession[str]:
 
 
 __all__ = [
-    "_build_prompt_session",
     "_install_prompt_frame",
+    "build_prompt_session",
 ]

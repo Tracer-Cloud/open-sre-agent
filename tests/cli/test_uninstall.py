@@ -274,13 +274,12 @@ def test_uninstall_command_short_yes_flag() -> None:
     assert result.exit_code == 0
 
 
-def test_data_dirs_includes_legacy_config_opensre_path() -> None:
+def test_data_dirs_includes_config_opensre_path() -> None:
     from surfaces.cli.lifecycle.uninstall import _data_dirs
 
     paths = _data_dirs()
     path_strs = [str(p) for p in paths]
     assert any(".opensre" in s for s in path_strs), "main ~/.opensre path missing"
-    assert any(".tracer" in s for s in path_strs), "legacy ~/.tracer path missing"
     assert any(".config" in s and "opensre" in s for s in path_strs), (
         "~/.config/opensre cleanup path missing"
     )

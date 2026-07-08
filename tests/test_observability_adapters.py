@@ -6,8 +6,11 @@ from collections.abc import Iterator
 
 import pytest
 
-from integrations import port as integrations_port
-from integrations.port import set_remote_integrations_fetcher
+from platform.harness_ports import (
+    _default_fetch_remote,
+    reset_harness_ports,
+    set_remote_integrations_fetcher,
+)
 from platform.observability import (
     NoopProgressTracker,
     get_progress_tracker,
@@ -36,28 +39,18 @@ from surfaces.interactive_shell.ui.output.tracker import ProgressTracker, get_tr
 
 
 def _reset_all_ports() -> None:
-    """Restore every port + global to its no-op / default state."""
     set_progress_tracker(NoopProgressTracker())
     set_progress_tracker_factory(None)
     obs_progress._silenced = False
     set_debug_printer(obs_debug._default_debug_printer)
     set_investigation_header_renderer(obs_display._default_header_renderer)
     set_investigation_footer_renderer(obs_display._default_footer_renderer)
-    # ``install_product_adapters`` now also wires the integrations
-    # fetcher; reset it here so this file's tests don't leak the
-    # Tracer adapter into other tests in the session.
-    set_remote_integrations_fetcher(integrations_port._default_fetcher)
+    set_remote_integrations_fetcher(_default_fetch_remote)
+    reset_harness_ports()
 
 
 @pytest.fixture(autouse=True)
 def _reset_observability_ports(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    """Give each test a clean port state — setup AND teardown.
-
-    The teardown matters: without it, the final test in this file
-    leaves whatever adapters ``install_product_adapters()`` registered
-    in place for the rest of the pytest session, polluting any later
-    test that touches the observability or integrations ports.
-    """
     for name in ("TRACER_OUTPUT_FORMAT", "NO_COLOR", "SLACK_WEBHOOK_URL", "TRACER_VERBOSE"):
         monkeypatch.delenv(name, raising=False)
     _reset_all_ports()
@@ -89,7 +82,6 @@ def test_install_product_adapters_wires_debug_and_display() -> None:
 def test_sync_pipeline_path_records_progress_after_install(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Core ``get_progress_tracker()`` must drive the CLI tracker in sync runs."""
     monkeypatch.setenv("TRACER_OUTPUT_FORMAT", "text")
     output_boundary.install_product_adapters()
 

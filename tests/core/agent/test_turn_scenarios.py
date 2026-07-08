@@ -19,7 +19,7 @@ from core.agent_harness.prompts import (
 from core.agent_harness.tools.action_tools import get_action_tools_from_integrations_context
 from core.agent_harness.tools.tool_context import ActionToolContext
 from core.agent_harness.turns.action_driver import _MAX_TOOL_CALLING_ITERATIONS
-from core.llm.llm_retry import LLMCreditExhaustedError
+from core.llm.shared.llm_retry import LLMCreditExhaustedError
 from core.llm.types import ToolCall
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS
 from tests.core.agent._ci_gates import (
@@ -421,9 +421,9 @@ def _assert_live_action_planning_once(case: ScenarioCase) -> None:
         session=session, console=Console(file=io.StringIO(), force_terminal=False)
     )
     tools = get_action_tools_from_integrations_context(ctx, resolved_integrations=resolved_override)
-    from core.llm import agent_llm_client
+    from core.llm.factory import LLMRole, get_llm
 
-    llm = agent_llm_client.get_agent_llm()
+    llm = get_llm(LLMRole.AGENT)
     from core.agent_harness.models.turn_snapshot import TurnSnapshot
 
     result = Agent(

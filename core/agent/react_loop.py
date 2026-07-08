@@ -38,7 +38,7 @@ from core.execution import (
     public_tool_input,
 )
 from core.llm.types import ToolCall
-from core.messages import MessageFormatter, UserRuntimeMessage
+from core.messages import MessageMapper, UserRuntimeMessage
 from core.provider import ProviderRequest
 from core.types import RuntimeTool
 from platform.observability.tool_trace import redact_sensitive
@@ -67,7 +67,7 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
         self._tool_resources = run_input.tool_resources
         self._max_iterations = run_input.max_iterations
         self._messages = run_input.messages
-        self._msg_formatter = MessageFormatter(self._llm)
+        self._msg_formatter = MessageMapper(self._llm)
         self._runtime_tools = list(host._filter_tools(run_input.tools))
         self._tool_schemas = self._llm.tool_schemas(self._runtime_tools)
         self._ceiling = context_budget_ceiling_for_model(getattr(self._llm, "_model", None))

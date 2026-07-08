@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from core.agent_harness.session import InMemorySessionStorage, Session
+from core.agent_harness.session import InMemorySessionStorage
+from surfaces.interactive_shell.session import Session
 
 
 def _session(storage: InMemorySessionStorage) -> Session:

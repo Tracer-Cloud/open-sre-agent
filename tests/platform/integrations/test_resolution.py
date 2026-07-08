@@ -4,9 +4,21 @@ from __future__ import annotations
 
 import base64
 import json
+from collections.abc import Iterator
 from typing import Any
 
+import pytest
+
 import core.agent_harness.integrations.resolution as resolution
+import platform.harness_ports as harness_ports
+from surfaces.interactive_shell.ui.output import boundary as output_boundary
+
+
+@pytest.fixture(autouse=True)
+def _harness_ports() -> Iterator[None]:
+    output_boundary.install_harness_ports()
+    yield
+    harness_ports.reset_harness_ports()
 
 
 def _jwt(payload: dict[str, Any]) -> str:
@@ -44,8 +56,6 @@ def test_resolution_request_ignores_unrelated_runtime_state() -> None:
 
 
 def test_resolution_result_rejects_unknown_fields() -> None:
-    import pytest
-
     with pytest.raises(ValueError):
         resolution.IntegrationResolutionResult.model_validate(
             {
@@ -58,15 +68,15 @@ def test_resolution_result_rejects_unknown_fields() -> None:
 def test_resolve_local_store_sources_returns_progress_metadata(monkeypatch: Any) -> None:
     store_records = [{"service": "datadog", "status": "active", "credentials": {}}]
     monkeypatch.delenv("JWT_TOKEN", raising=False)
-    monkeypatch.setattr("integrations.store.load_integrations", lambda: store_records)
-    monkeypatch.setattr(resolution, "_load_env_integrations", lambda: [])
+    monkeypatch.setattr(harness_ports, "_load_integrations", lambda: store_records)
+    monkeypatch.setattr(harness_ports, "_load_env_integrations", lambda: [])
     monkeypatch.setattr(
-        resolution,
+        harness_ports,
         "_merge_local_integrations",
         lambda store, env: [*store, *env],
     )
     monkeypatch.setattr(
-        resolution,
+        harness_ports,
         "_classify_integrations",
         lambda _records: {"datadog": {"site": "datadoghq.com"}},
     )
@@ -122,12 +132,16 @@ def test_resolve_env_token_merges_remote_store_and_env(monkeypatch: Any) -> None
         return [*env_integrations, *store_integrations, *remote_integrations]
 
     monkeypatch.setenv("JWT_TOKEN", f"Bearer {_jwt({'organization': 'org-123'})}")
-    monkeypatch.setattr("integrations.port.fetch_remote_integrations", _fetch_remote_integrations)
-    monkeypatch.setattr("integrations.store.load_integrations", lambda: store_records)
-    monkeypatch.setattr(resolution, "_load_env_integrations", lambda: env_records)
-    monkeypatch.setattr(resolution, "_merge_integrations_by_service", _merge)
     monkeypatch.setattr(
-        resolution,
+        harness_ports,
+        "fetch_remote_integrations",
+        _fetch_remote_integrations,
+    )
+    monkeypatch.setattr(harness_ports, "_load_integrations", lambda: store_records)
+    monkeypatch.setattr(harness_ports, "_load_env_integrations", lambda: env_records)
+    monkeypatch.setattr(harness_ports, "_merge_integrations_by_service", _merge)
+    monkeypatch.setattr(
+        harness_ports,
         "_classify_integrations",
         lambda _records: {"datadog": {}, "grafana": {}, "sentry": {}},
     )
@@ -151,8 +165,8 @@ def test_resolve_env_token_merges_remote_store_and_env(monkeypatch: Any) -> None
 
 def test_resolve_without_sources_reports_empty_local_lookup(monkeypatch: Any) -> None:
     monkeypatch.delenv("JWT_TOKEN", raising=False)
-    monkeypatch.setattr("integrations.store.load_integrations", list)
-    monkeypatch.setattr(resolution, "_load_env_integrations", list)
+    monkeypatch.setattr(harness_ports, "_load_integrations", list)
+    monkeypatch.setattr(harness_ports, "_load_env_integrations", list)
 
     result = resolution.resolve_integrations_with_metadata()
 

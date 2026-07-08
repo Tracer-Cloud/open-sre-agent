@@ -1,6 +1,6 @@
 from core.domain.correlation.confidence import (
     EvidenceContribution,
-    build_shared_confidence,
+    build_weighted_confidence,
 )
 from core.domain.correlation.scoring import rank_upstream_candidates
 from core.domain.types.upstream import UpstreamCandidate
@@ -20,8 +20,8 @@ def test_feature_workflow_matches_hint() -> None:
     assert result.matched_hints
 
 
-def test_shared_confidence_builds_score() -> None:
-    confidence = build_shared_confidence(
+def test_weighted_confidence_builds_score() -> None:
+    confidence = build_weighted_confidence(
         (
             EvidenceContribution(
                 source="correlation",

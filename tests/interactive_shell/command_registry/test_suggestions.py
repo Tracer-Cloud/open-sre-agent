@@ -7,7 +7,6 @@ import io
 import pytest
 from rich.console import Console
 
-from core.agent_harness.session import Session
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
 from surfaces.interactive_shell.command_registry.suggestions import (
     format_invalid_subcommand_message,
@@ -16,6 +15,7 @@ from surfaces.interactive_shell.command_registry.suggestions import (
     subcommand_hints,
 )
 from surfaces.interactive_shell.runtime.action_turn import run_action_tool_turn
+from surfaces.interactive_shell.session import Session
 
 
 def _capture() -> tuple[Console, io.StringIO]:

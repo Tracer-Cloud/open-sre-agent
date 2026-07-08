@@ -5,8 +5,6 @@ from pathlib import Path
 from typing import Any
 
 from core.domain.correlation.scoring import (
-    TopologyNode,
-    metric_to_time_series,
     rank_upstream_candidates,
     score_candidate_correlation,
     score_periodic_spikes,
@@ -15,8 +13,10 @@ from core.domain.correlation.scoring import (
 )
 from core.domain.types.upstream import (
     CorrelatedSignal,
+    TopologyNode,
     UpstreamCandidate,
     UpstreamEvidenceBundle,
+    metric_to_time_series,
 )
 from tools.investigation.reporting.upstream_correlation.feature_config import (
     load_feature_workflow_config,
@@ -151,7 +151,7 @@ def build_runtime_correlation(
                 name=metric.name,
                 tier="application",
                 confidence=score.final_confidence,
-                confidence_label=score.shared_confidence.label,
+                confidence_label=score.weighted_confidence.label,
                 correlated_signals=(),
                 rationale=score.rationale,
                 evidence_breakdown=tuple(
@@ -161,7 +161,7 @@ def build_runtime_correlation(
                         "weight": contribution.weight,
                         "rationale": contribution.rationale,
                     }
-                    for contribution in score.shared_confidence.contributions
+                    for contribution in score.weighted_confidence.contributions
                 ),
             )
         )

@@ -12,8 +12,6 @@ import pytest
 from prompt_toolkit.history import FileHistory
 from rich.console import Console
 
-from core.agent_harness.session import Session
-from core.agent_harness.session.background import BackgroundInvestigationRecord
 from platform.common.task_types import TaskKind, TaskStatus
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
 from surfaces.interactive_shell.command_registry import repl_data as repl_data_module
@@ -22,6 +20,10 @@ from surfaces.interactive_shell.command_registry.investigation import (
     _validate_save_args,
 )
 from surfaces.interactive_shell.command_registry.tasks_cmds import _validate_cancel_args
+from surfaces.interactive_shell.session import Session
+from surfaces.interactive_shell.session.background_investigations import (
+    BackgroundInvestigationRecord,
+)
 from surfaces.interactive_shell.ui.tables.tool_catalog import ToolCatalogEntry
 
 
@@ -111,11 +113,11 @@ class TestDispatchSlash:
     def test_trust_toggle(self) -> None:
         session = Session()
         console, _ = _capture()
-        assert session.trust_mode is False
+        assert session.terminal.trust_mode is False
         dispatch_slash("/trust", session, console)
-        assert session.trust_mode is True
+        assert session.terminal.trust_mode is True
         dispatch_slash("/trust off", session, console)
-        assert session.trust_mode is False
+        assert session.terminal.trust_mode is False
 
     def test_effort_sets_session_preference(self, monkeypatch: pytest.MonkeyPatch) -> None:
         class _FakeLLM:
@@ -163,14 +165,14 @@ class TestDispatchSlash:
         session = Session()
         session.record("alert", "test")
         session.last_state = {"x": 1}
-        session.trust_mode = True
+        session.terminal.trust_mode = True
         console, _ = _capture()
 
         dispatch_slash("/new", session, console)
 
         assert session.history == []
         assert session.last_state is None
-        assert session.trust_mode is True  # /new keeps trust mode
+        assert session.terminal.trust_mode is True  # /new keeps trust mode
 
     def test_status_shows_session_fields(self) -> None:
         session = Session()
@@ -190,7 +192,7 @@ class TestDispatchSlash:
         console, buf = _capture()
 
         assert dispatch_slash("/background on", session, console) is True
-        assert session.background_mode_enabled is True
+        assert session.terminal.background_mode_enabled is True
 
         assert dispatch_slash("/background status", session, console) is True
         output = buf.getvalue()
@@ -207,7 +209,7 @@ class TestDispatchSlash:
 
     def test_background_show_and_use_completed_record(self) -> None:
         session = Session()
-        session.background_investigations["bg123"] = BackgroundInvestigationRecord(
+        session.terminal.background_investigations["bg123"] = BackgroundInvestigationRecord(
             task_id="bg123",
             status="completed",
             command="free-text investigation",
@@ -235,14 +237,14 @@ class TestDispatchSlash:
         assert dispatch_slash("/background notify set pagerduty", session, console) is True
         output = buf.getvalue()
         assert "invalid channel" in output
-        assert session.background_notification_preferences.channels == ()
+        assert session.terminal.background_notification_preferences.channels == ()
 
     def test_background_notify_set_updates_channels(self) -> None:
         session = Session()
         console, buf = _capture()
 
         assert dispatch_slash("/background notify set email", session, console)
-        assert session.background_notification_preferences.channels == ("email",)
+        assert session.terminal.background_notification_preferences.channels == ("email",)
         assert "background notify channels set" in buf.getvalue().lower()
 
     def test_unknown_command_does_not_exit(self) -> None:
@@ -814,12 +816,13 @@ class TestModelCommand:
     ) -> None:
         self._patch_llm(monkeypatch)
         import surfaces.cli.wizard.env_sync as env_sync
-        from core.llm import llm_client
 
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", tmp_path / ".env")
         store_path = self._redirect_wizard_store(monkeypatch, tmp_path)
         reset_calls: list[str] = []
-        monkeypatch.setattr(llm_client, "reset_llm_singletons", lambda: reset_calls.append("reset"))
+        monkeypatch.setattr(
+            "core.llm.factory.reset_llm_clients", lambda: reset_calls.append("reset")
+        )
         # /model set now refuses to half-update .env when the target provider
         # has no usable credential; supply one so the happy path still runs.
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
@@ -1125,12 +1128,13 @@ class TestModelCommand:
         """`/model toolcall set <m>` must persist only the toolcall env var."""
         self._patch_llm(monkeypatch)
         import surfaces.cli.wizard.env_sync as env_sync
-        from core.llm import llm_client
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
         reset_calls: list[str] = []
-        monkeypatch.setattr(llm_client, "reset_llm_singletons", lambda: reset_calls.append("reset"))
+        monkeypatch.setattr(
+            "core.llm.factory.reset_llm_clients", lambda: reset_calls.append("reset")
+        )
         monkeypatch.setenv("LLM_PROVIDER", "anthropic")
 
         console, buf = _capture()
@@ -1315,7 +1319,7 @@ class TestInvestigateFileCommand:
         )
 
         session = Session()
-        session.background_mode_enabled = True
+        session.terminal.background_mode_enabled = True
         console, _ = _capture()
         dispatch_slash("/investigate generic", session, console)
 
@@ -1412,12 +1416,12 @@ class TestInvestigateFileCommand:
         console, buf = _capture()
         dispatch_slash("/investigate", session, console)
 
-        assert session.pending_prompt_default == "/investigate generic"
-        assert session.pending_prompt_autosubmit is True
+        assert session.terminal.pending_prompt_default == "/investigate generic"
+        assert session.terminal.pending_prompt_autosubmit is True
         assert captured == []
 
-        dispatch_slash(session.take_pending_prompt_default(), session, console)
-        assert session.take_pending_autosubmit() is True
+        dispatch_slash(session.terminal.pop_pending_prompt_default(), session, console)
+        assert session.terminal.pop_pending_autosubmit() is True
 
         assert captured == ["generic"]
         assert session.last_state == {"root_cause": "sample from menu"}
@@ -1461,8 +1465,8 @@ class TestInvestigateFileCommand:
         console, _ = _capture()
         dispatch_slash("/investigate", session, console)
 
-        assert session.take_pending_autosubmit() is True
-        queued = session.take_pending_prompt_default()
+        assert session.terminal.pop_pending_autosubmit() is True
+        queued = session.terminal.pop_pending_prompt_default()
         assert queued.startswith("/investigate ")
         assert captured == []
 
@@ -1568,7 +1572,7 @@ class TestInvestigateFileCommand:
         )
 
         session = Session()
-        session.background_mode_enabled = True
+        session.terminal.background_mode_enabled = True
         console, _ = _capture()
         dispatch_slash(f"/investigate {alert_file}", session, console)
 
@@ -1630,7 +1634,7 @@ class TestResumeCommand:
         target_id = "old-abc-1234567890"
 
         with patch(
-            "core.agent_harness.session.paths.sessions_dir",
+            "core.agent_harness.session.persistence.paths.sessions_dir",
             return_value=tmp_path,
         ):
             SessionStore.open_session(session)
@@ -1802,7 +1806,7 @@ class TestResumeCommand:
         console, buf = _capture()
 
         with patch(
-            "core.agent_harness.session.paths.sessions_dir",
+            "core.agent_harness.session.persistence.paths.sessions_dir",
             return_value=tmp_path,
         ):
             SessionStore.open_session(session)
@@ -2071,22 +2075,27 @@ class TestVerboseCommand:
 class TestCompactCommand:
     def test_nothing_to_compact_when_small(self) -> None:
         session = Session()
-        for i in range(5):
-            session.record("slash", f"/cmd{i}")
+        session.agent.messages = [("user", f"m{i}") for i in range(4)]
         console, buf = _capture()
         dispatch_slash("/compact", session, console)
-        assert "nothing to compact" in buf.getvalue()
-        assert len(session.history) == 6
-        assert session.history[-1]["text"] == "/compact"
+        assert "Nothing to compact yet." in buf.getvalue()
+        assert len(session.agent.messages) == 4
 
-    def test_trims_to_20_when_over_limit(self) -> None:
+    def test_compacts_conversation_branch_when_over_keep_limit(self) -> None:
         session = Session()
-        for i in range(30):
-            session.record("slash", f"/cmd{i}")
+        session.agent.messages = [("user", f"message number {i}") for i in range(20)]
         console, buf = _capture()
         dispatch_slash("/compact", session, console)
-        assert len(session.history) == 20
-        assert "compacted" in buf.getvalue()
+        # compact_session_branch keeps the most recent 8 messages and prepends
+        # a single summary message.
+        assert len(session.agent.messages) == 9
+        assert session.agent.messages[0][0] == "assistant"
+        assert "Session summary" in session.agent.messages[0][1]
+        assert "compacted session context" in buf.getvalue()
+        assert any(
+            entry.get("type") == "slash" and entry.get("text") == "/compact"
+            for entry in session.history
+        )
 
 
 class TestCancelCommand:
@@ -2144,7 +2153,7 @@ class TestPrePolicyValidation:
             return "y"
 
         session = Session()
-        session.trust_mode = True
+        session.terminal.trust_mode = True
 
         console, buf = _capture()
         dispatch_slash("/investigate", session, console, confirm_fn=_confirm, is_tty=True)

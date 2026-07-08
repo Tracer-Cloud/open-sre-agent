@@ -6,22 +6,26 @@ import inspect
 from collections.abc import Callable, Iterable
 from copy import deepcopy
 from dataclasses import dataclass, field
-from types import NoneType
-from typing import Any, Literal, cast, get_args, get_origin, get_type_hints
+from typing import Any, cast
 
 from pydantic import BaseModel
 
+from config.constants.investigation import DEFAULT_APPROVAL_EXPIRY_SECONDS
 from core.domain.types.evidence import EvidenceSource
 from core.domain.types.retrieval import RetrievalControls
 from core.domain.types.tools import ToolSurface
-from core.tool_framework.base import BaseTool, EvidenceType, SideEffectLevel, ToolMetadata
+from core.tool_framework.base import BaseTool
+from core.tool_framework.metadata import EvidenceType, SideEffectLevel, ToolMetadata
+from core.tool_framework.registry_metadata import normalize_surfaces
+from core.tool_framework.schema import (
+    _value_matches_schema,
+    infer_input_schema,
+    model_to_json_schema,
+)
 
 REGISTERED_TOOL_ATTR = "__opensre_registered_tool__"
 
 _DEFAULT_SURFACES: tuple[ToolSurface, ...] = ("investigation",)
-_VALID_SURFACES = set(get_args(ToolSurface))
-CostTier = Literal["cheap", "moderate", "expensive"]
-_VALID_COST_TIERS = set(get_args(CostTier))
 
 
 def _always_available(_sources: dict[str, dict]) -> bool:
@@ -33,150 +37,8 @@ def _extract_no_params(_sources: dict[str, dict]) -> dict[str, Any]:
 
 
 def _normalize_surfaces(surfaces: Iterable[str] | None) -> tuple[ToolSurface, ...]:
-    if surfaces is None:
-        return _DEFAULT_SURFACES
-
-    normalized: list[ToolSurface] = []
-    for raw_surface in surfaces:
-        surface = str(raw_surface).strip().lower()
-        if surface not in _VALID_SURFACES:
-            valid = ", ".join(sorted(_VALID_SURFACES))
-            raise ValueError(f"Unsupported tool surface '{surface}'. Expected one of: {valid}.")
-        typed_surface = cast(ToolSurface, surface)
-        if typed_surface not in normalized:
-            normalized.append(typed_surface)
-
-    return tuple(normalized) or _DEFAULT_SURFACES
-
-
-def _strip_optional(annotation: Any) -> tuple[Any, bool]:
-    origin = get_origin(annotation)
-    if origin is None:
-        return annotation, False
-
-    args = tuple(arg for arg in get_args(annotation) if arg is not NoneType)
-    if len(args) != len(get_args(annotation)):
-        if len(args) == 1:
-            return args[0], True
-        return args, True
-
-    return annotation, False
-
-
-def _annotation_to_json_schema(annotation: Any) -> dict[str, Any]:
-    base_annotation, is_optional = _strip_optional(annotation)
-    origin = get_origin(base_annotation)
-
-    if base_annotation in (inspect.Signature.empty, Any):
-        schema: dict[str, Any] = {}
-    elif base_annotation is str:
-        schema = {"type": "string"}
-    elif base_annotation is int:
-        schema = {"type": "integer"}
-    elif base_annotation is float:
-        schema = {"type": "number"}
-    elif base_annotation is bool:
-        schema = {"type": "boolean"}
-    elif base_annotation is dict or origin is dict:
-        schema = {"type": "object"}
-    elif base_annotation is list or origin in (list, set, tuple):
-        schema = {"type": "array"}
-    else:
-        schema = {"type": "string"}
-
-    if is_optional:
-        schema["nullable"] = True
-    return schema
-
-
-def infer_input_schema(func: Callable[..., Any]) -> dict[str, Any]:
-    """Infer a minimal JSON schema from a function signature."""
-    properties: dict[str, Any] = {}
-    required: list[str] = []
-    type_hints = get_type_hints(func)
-
-    for param in inspect.signature(func).parameters.values():
-        if param.kind in (
-            inspect.Parameter.POSITIONAL_ONLY,
-            inspect.Parameter.VAR_POSITIONAL,
-            inspect.Parameter.VAR_KEYWORD,
-        ):
-            continue
-
-        if param.name.startswith("_"):
-            continue
-
-        resolved_annotation = type_hints.get(param.name, param.annotation)
-        schema = _annotation_to_json_schema(resolved_annotation)
-        properties[param.name] = schema
-
-        _, is_optional = _strip_optional(resolved_annotation)
-        if param.default is inspect.Signature.empty and not is_optional:
-            required.append(param.name)
-
-    return {
-        "type": "object",
-        "properties": properties,
-        "required": required,
-    }
-
-
-def model_to_json_schema(model: type[BaseModel]) -> dict[str, Any]:
-    """Convert a Pydantic model to a JSON object schema for tools."""
-    schema = model.model_json_schema()
-    if not isinstance(schema, dict):
-        return {"type": "object", "properties": {}, "required": [], "additionalProperties": False}
-    schema.setdefault("type", "object")
-    if schema.get("type") == "object":
-        schema.setdefault("properties", {})
-        schema.setdefault("required", [])
-        schema.setdefault("additionalProperties", False)
-    return schema
-
-
-def _json_type_matches(value: Any, schema_type: str) -> bool:
-    if schema_type == "string":
-        return isinstance(value, str)
-    if schema_type == "integer":
-        return isinstance(value, int) and not isinstance(value, bool)
-    if schema_type == "number":
-        return isinstance(value, (int, float)) and not isinstance(value, bool)
-    if schema_type == "boolean":
-        return isinstance(value, bool)
-    if schema_type == "array":
-        return isinstance(value, list)
-    if schema_type == "object":
-        return isinstance(value, dict)
-    return True
-
-
-def _value_matches_schema(value: Any, schema: dict[str, Any]) -> bool:
-    if value is None and bool(schema.get("nullable")):
-        return True
-
-    if "enum" in schema and value not in schema.get("enum", []):
-        return False
-
-    one_of = schema.get("oneOf")
-    if isinstance(one_of, list) and one_of:
-        return any(
-            isinstance(option, dict) and _value_matches_schema(value, option) for option in one_of
-        )
-
-    any_of = schema.get("anyOf")
-    if isinstance(any_of, list) and any_of:
-        return any(
-            isinstance(option, dict) and _value_matches_schema(value, option) for option in any_of
-        )
-
-    schema_type = schema.get("type")
-    if isinstance(schema_type, str):
-        return _json_type_matches(value, schema_type)
-    if isinstance(schema_type, list):
-        return any(
-            isinstance(item, str) and _json_type_matches(value, item) for item in schema_type
-        )
-    return True
+    """Backward-compatible alias for registry surface normalization."""
+    return normalize_surfaces(surfaces)
 
 
 @dataclass
@@ -212,11 +74,9 @@ class RegisteredTool:
         repr=False,
     )
     tags: tuple[str, ...] = ()
-    cost_tier: CostTier | None = None
     requires_approval: bool = False
     approval_reason: str = ""
-    approval_expiry_seconds: int = 300
-    approval_scope: str = "one_shot"
+    approval_expiry_seconds: int = DEFAULT_APPROVAL_EXPIRY_SECONDS
     parallel_safe: bool = True
     accepts_runtime_context: bool = False
     origin_module: str = ""
@@ -261,14 +121,6 @@ class RegisteredTool:
         self.injected_params = tuple(metadata.injected_params)
         self.retrieval_controls = metadata.retrieval_controls
         self.surfaces = _normalize_surfaces(self.surfaces)
-        if self.cost_tier is not None:
-            normalized_cost_tier = self.cost_tier.strip().lower()
-            if normalized_cost_tier not in _VALID_COST_TIERS:
-                valid = ", ".join(sorted(_VALID_COST_TIERS))
-                raise ValueError(
-                    f"Unsupported cost tier '{self.cost_tier}'. Expected one of: {valid}."
-                )
-            self.cost_tier = cast(CostTier, normalized_cost_tier)
 
         if not callable(self.run):
             raise TypeError("run must be callable")
@@ -332,17 +184,9 @@ class RegisteredTool:
         return None
 
     def __call__(self, **kwargs: Any) -> Any:
-        try:
-            return self.run(**kwargs)
-        except Exception as exc:
-            from platform.observability.sentry_sdk import capture_exception
+        from core.tool_framework.telemetry import invoke_tool
 
-            capture_exception(
-                exc,
-                context=f"tool.{self.name}",
-                tags={"surface": "tool", "tool": self.name},
-            )
-            return {"error": str(exc), "exception_type": type(exc).__name__}
+        return invoke_tool(self.run, name=self.name, source=str(self.source), kwargs=kwargs)
 
     @classmethod
     def from_base_tool(
@@ -352,10 +196,8 @@ class RegisteredTool:
         surfaces: Iterable[str] | None = None,
         retrieval_controls: RetrievalControls | None = None,
         tags: tuple[str, ...] | None = None,
-        cost_tier: CostTier | None = None,
         requires_approval: bool | None = None,
         approval_reason: str | None = None,
-        approval_scope: str | None = None,
         approval_expiry_seconds: int | None = None,
         parallel_safe: bool | None = None,
         accepts_runtime_context: bool | None = None,
@@ -369,21 +211,11 @@ class RegisteredTool:
         resolved_output_schema = (
             model_to_json_schema(output_model) if output_model else metadata.output_schema
         )
+        registry = tool.registry_metadata()
         resolved_surfaces = (
-            surfaces or getattr(tool, "surfaces", None) or getattr(tool.__class__, "surfaces", None)
+            normalize_surfaces(surfaces) if surfaces is not None else registry.surfaces
         )
-        resolved_tags = tuple(
-            cast(
-                Iterable[str],
-                tags or getattr(tool, "tags", None) or getattr(tool.__class__, "tags", ()),
-            )
-        )
-        resolved_cost_tier = cast(
-            CostTier | None,
-            cost_tier
-            or getattr(tool, "cost_tier", None)
-            or getattr(tool.__class__, "cost_tier", None),
-        )
+        resolved_tags = tags if tags is not None else registry.tags
         return cls(
             name=metadata.name,
             description=metadata.description,
@@ -401,41 +233,31 @@ class RegisteredTool:
             output_schema=resolved_output_schema,
             injected_params=tuple(metadata.injected_params),
             retrieval_controls=retrieval_controls or metadata.retrieval_controls,
-            surfaces=_normalize_surfaces(resolved_surfaces),
+            surfaces=resolved_surfaces,
             run=tool.run,  # type: ignore[attr-defined]
             is_available=tool.is_available,
             extract_params=tool.extract_params,
             tags=resolved_tags,
-            cost_tier=resolved_cost_tier,
             requires_approval=bool(
                 requires_approval
                 if requires_approval is not None
-                else getattr(tool.__class__, "requires_approval", False)
+                else tool.__class__.requires_approval
             ),
             approval_reason=str(
-                approval_reason
-                if approval_reason is not None
-                else getattr(tool.__class__, "approval_reason", "")
+                approval_reason if approval_reason is not None else tool.__class__.approval_reason
             ),
             approval_expiry_seconds=int(
                 approval_expiry_seconds
                 if approval_expiry_seconds is not None
-                else getattr(tool.__class__, "approval_expiry_seconds", 300)
-            ),
-            approval_scope=str(
-                approval_scope
-                if approval_scope is not None
-                else getattr(tool.__class__, "approval_scope", "one_shot")
+                else tool.__class__.approval_expiry_seconds
             ),
             parallel_safe=bool(
-                parallel_safe
-                if parallel_safe is not None
-                else getattr(tool.__class__, "parallel_safe", True)
+                parallel_safe if parallel_safe is not None else tool.__class__.parallel_safe
             ),
             accepts_runtime_context=bool(
                 accepts_runtime_context
                 if accepts_runtime_context is not None
-                else getattr(tool.__class__, "accepts_runtime_context", False)
+                else tool.__class__.accepts_runtime_context
             ),
             origin_module=tool.__class__.__module__,
             origin_name=tool.__class__.__name__,
@@ -468,10 +290,8 @@ class RegisteredTool:
         is_available: Callable[[dict[str, dict]], bool] | None = None,
         extract_params: Callable[[dict[str, dict]], dict[str, Any]] | None = None,
         tags: tuple[str, ...] | None = None,
-        cost_tier: CostTier | None = None,
         requires_approval: bool | None = None,
         approval_reason: str | None = None,
-        approval_scope: str | None = None,
         approval_expiry_seconds: int | None = None,
         parallel_safe: bool | None = None,
         accepts_runtime_context: bool | None = None,
@@ -510,11 +330,13 @@ class RegisteredTool:
             is_available=is_available or _always_available,
             extract_params=extract_params or _extract_no_params,
             tags=tags or (),
-            cost_tier=cost_tier,
             requires_approval=bool(requires_approval),
             approval_reason=approval_reason or "",
-            approval_scope=approval_scope or "one_shot",
-            approval_expiry_seconds=approval_expiry_seconds or 300,
+            approval_expiry_seconds=(
+                approval_expiry_seconds
+                if approval_expiry_seconds is not None
+                else DEFAULT_APPROVAL_EXPIRY_SECONDS
+            ),
             parallel_safe=True if parallel_safe is None else bool(parallel_safe),
             accepts_runtime_context=bool(accepts_runtime_context),
             origin_module=func.__module__,

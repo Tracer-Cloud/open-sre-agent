@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from core.llm.llm_client import LLMResponse
+    from core.llm.types import LLMResponse
 
 _CHARS_PER_TOKEN = 4
 

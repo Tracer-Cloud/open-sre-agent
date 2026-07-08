@@ -66,7 +66,7 @@ Addendum — Jun 18, 2026.
 Factual questions about live state (for example "is sentry installed?") are
 answered without adding keyword/regex rules. Two complementary mechanisms:
 
-1. Context grounding (not action planning). At REPL boot, `repl_main`
+1. Context grounding (not action planning). At REPL boot, `run_repl_async`
    (`surfaces/interactive_shell/main.py`) hydrates
    `session.configured_integrations` from the shared
    `configured_integration_services()` helper in `integrations/catalog.py`

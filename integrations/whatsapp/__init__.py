@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 def classify(
     credentials: dict[str, Any],
-    record_id: str,  # noqa: ARG001
+    _record_id: str,
 ) -> tuple[WhatsAppConfig | None, str | None]:
     try:
         cfg = WhatsAppConfig.model_validate(

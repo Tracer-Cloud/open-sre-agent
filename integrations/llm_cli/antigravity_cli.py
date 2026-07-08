@@ -244,7 +244,8 @@ class AntigravityCLIAdapter:
         # inside the REPL.
         # TODO(antigravity-cli): once agy supports ``--model`` in headless, replace
         # the ``del`` with a conditional ``argv.extend(["--model", model])`` block
-        # and lock the catalog into ``cli/wizard/config.py:ANTIGRAVITY_CLI_MODELS``.
+        # and lock the catalog into
+        # ``surfaces/cli/wizard/config.py:ANTIGRAVITY_CLI_MODELS``.
         del model, reasoning_effort
 
         binary = self._resolve_binary()

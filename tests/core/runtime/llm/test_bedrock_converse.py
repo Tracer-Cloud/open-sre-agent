@@ -7,7 +7,7 @@ from datetime import datetime
 
 import pytest
 
-from core.llm.sdk.bedrock_converse import (
+from core.llm.transports.sdk.bedrock_converse import (
     build_assistant_tool_use_message,
     build_converse_tool_specs,
     build_tool_result_message,

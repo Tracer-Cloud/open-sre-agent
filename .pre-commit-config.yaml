@@ -9,7 +9,7 @@ repos:
     hooks:
       - id: ruff-check
         args: [--no-fix]
-        files: ^(app|tests)/
+        files: ^(config|core|gateway|integrations|platform|surfaces|tools|tests)/
       - id: ruff-format
         args: [--check]
-        files: ^(app|tests)/
+        files: ^(config|core|gateway|integrations|platform|surfaces|tools|tests)/

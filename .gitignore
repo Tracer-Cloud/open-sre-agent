@@ -45,6 +45,7 @@ venv.bak/
 .venv/
 .venv-devcontainer/
 virtualenv/
+tracer_agent/
 
 # Testing
 .pytest_cache/
@@ -77,6 +78,12 @@ dmypy.json
 
 # ruff
 .ruff_cache/
+
+# import-linter
+.import_linter_cache/
+
+# PyInstaller build cache
+.pyinstaller-cache/
 
 # Pyre type checker
 .pyre/

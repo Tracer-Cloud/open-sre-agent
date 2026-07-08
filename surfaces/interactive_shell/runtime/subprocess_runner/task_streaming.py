@@ -5,7 +5,6 @@ from __future__ import annotations
 import contextlib
 import errno
 import os
-import re
 import subprocess
 import sys
 import tempfile
@@ -16,15 +15,38 @@ from rich.console import Console
 from rich.markup import escape
 from rich.text import Text
 
-from surfaces.interactive_shell.runtime import TaskRecord
+from platform.common.task_types import TaskRecord
 from surfaces.interactive_shell.ui import DIM, ERROR
 from surfaces.interactive_shell.utils.error_handling.exception_reporting import report_exception
+from tools.interactive_shell.subprocess import (
+    CLAUDE_CODE_IMPLEMENTATION_TIMEOUT_SECONDS,
+    MAX_COMMAND_OUTPUT_CHARS,
+    MIN_SUBPROCESS_TERMINAL_WIDTH,
+    SHELL_COMMAND_TIMEOUT_SECONDS,
+    SYNTHETIC_DIAG_CHARS,
+    SYNTHETIC_POLL_SECONDS,
+    SYNTHETIC_TEST_TIMEOUT_SECONDS,
+    TASK_OUTPUT_JOIN_TIMEOUT_SECONDS,
+    TASK_OUTPUT_PREFIX_WIDTH,
+    read_diag,
+    read_task_output,
+    subprocess_env_with_width,
+    terminate_child_process,
+)
 
 # Full dotted name of the ``subprocess_runner`` package. Submodules use this to
 # look up patchable names from the parent namespace at call time so that tests
 # using ``monkeypatch.setattr("…subprocess_runner.X", fake)`` take effect even
 # when the implementation lives in a submodule.
 _SUBPROCESS_RUNNER_MODULE = "surfaces.interactive_shell.runtime.subprocess_runner"
+
+# Backward-compatible aliases for tests and callers using underscore-prefixed names.
+_MAX_COMMAND_OUTPUT_CHARS = MAX_COMMAND_OUTPUT_CHARS
+_SYNTHETIC_POLL_SECONDS = SYNTHETIC_POLL_SECONDS
+_SYNTHETIC_DIAG_CHARS = SYNTHETIC_DIAG_CHARS
+_MIN_SUBPROCESS_TERMINAL_WIDTH = MIN_SUBPROCESS_TERMINAL_WIDTH
+_TASK_OUTPUT_PREFIX_WIDTH = TASK_OUTPUT_PREFIX_WIDTH
+_TASK_OUTPUT_JOIN_TIMEOUT_SECONDS = TASK_OUTPUT_JOIN_TIMEOUT_SECONDS
 
 
 def _sr_resolve(name: str, default: Any) -> Any:
@@ -35,70 +57,6 @@ def _sr_resolve(name: str, default: Any) -> Any:
     """
     sr = sys.modules.get(_SUBPROCESS_RUNNER_MODULE)
     return getattr(sr, name, default) if sr is not None else default
-
-
-SHELL_COMMAND_TIMEOUT_SECONDS = 120
-SYNTHETIC_TEST_TIMEOUT_SECONDS = 1800
-CLAUDE_CODE_IMPLEMENTATION_TIMEOUT_SECONDS = 1800
-_SYNTHETIC_POLL_SECONDS = 0.25
-_MAX_COMMAND_OUTPUT_CHARS = 24_000
-_SYNTHETIC_DIAG_CHARS = 2_000  # max stderr bytes captured from a failing synthetic run
-_SIGTERM_GRACE_SECONDS = 10  # wait for clean exit after SIGTERM before escalating to SIGKILL
-_TASK_OUTPUT_JOIN_TIMEOUT_SECONDS = 2
-_ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*[mA-Za-z]")
-
-# Width of the ``<task_id> <stream> │ `` prefix that ``_print_task_output_line``
-# prepends to every relayed subprocess line. Used to align the subprocess's own
-# Rich rendering width via ``COLUMNS`` so panels and tables don't wrap mid-row
-# in the user's narrower terminal once the prefix has been added.
-#   task_id (8 hex) + " " + stream ("stdout"/"stderr", 6) + " │ " (3) = 18
-_TASK_OUTPUT_PREFIX_WIDTH = 18
-
-# Below this many columns Rich panels and tables degrade past usefulness. We
-# keep the subprocess at this minimum even if the user's terminal is tiny —
-# wrapping the borders is no worse than crushing them.
-_MIN_SUBPROCESS_TERMINAL_WIDTH = 60
-
-
-def terminate_child_process(proc: subprocess.Popen[Any]) -> None:
-    """Best-effort SIGTERM → wait → SIGKILL → wait without blocking forever."""
-    if proc.poll() is not None:
-        return
-    with contextlib.suppress(OSError):
-        proc.terminate()
-    try:
-        proc.wait(timeout=_SIGTERM_GRACE_SECONDS)
-    except subprocess.TimeoutExpired:
-        with contextlib.suppress(OSError):
-            proc.kill()
-        with contextlib.suppress(subprocess.TimeoutExpired):
-            proc.wait(timeout=5)
-
-
-def read_task_output(
-    buf: tempfile.SpooledTemporaryFile[bytes] | None,  # type: ignore[type-arg]
-    *,
-    limit: int,
-) -> str:
-    """Read up to ``limit`` bytes from a captured output buffer, ANSI-stripped.
-
-    Tolerates a ``None`` buffer (e.g. the PTY path has no separate stdout
-    capture) and a closed/failed buffer, returning an empty string instead of
-    raising so callers in cleanup paths stay safe.
-    """
-    if buf is None:
-        return ""
-    try:
-        buf.seek(0)
-        raw = buf.read(limit).decode("utf-8", errors="replace").strip()
-    except (OSError, ValueError):
-        return ""
-    return _ANSI_ESCAPE.sub("", raw)
-
-
-def read_diag(buf: tempfile.SpooledTemporaryFile[bytes]) -> str:  # type: ignore[type-arg]
-    """Read up to ``_SYNTHETIC_DIAG_CHARS`` bytes from a captured stderr buffer."""
-    return read_task_output(buf, limit=_SYNTHETIC_DIAG_CHARS)
 
 
 def _print_task_output_line(
@@ -116,33 +74,12 @@ def _print_task_output_line(
 
 
 def _subprocess_env_with_aligned_width(console: Console) -> dict[str, str]:
-    """Return ``os.environ`` patched so a piped Rich subprocess wraps to fit.
-
-    Background: ``_print_task_output_line`` prepends ``<task_id> <stream> │ ``
-    (a fixed 18-char prefix) to every relayed subprocess line before printing
-    into the user's terminal. The subprocess itself sees a piped stdout, so
-    Rich inside the subprocess falls back to a default 80-column rendering.
-    The combined ``80 + 18 = 98`` chars then overflow narrower user terminals,
-    breaking Rich's panel borders and table headers mid-row.
-
-    We forward the user's actual terminal width minus the prefix overhead via
-    the ``COLUMNS`` env var (and ``LINES`` for completeness). Rich and most
-    POSIX tools honour ``COLUMNS`` via ``shutil.get_terminal_size``, so the
-    subprocess renders narrow enough that the relayed line fits inside the
-    user's terminal once the prefix is applied. A floor of 60 columns keeps
-    rendering usable when the user's terminal is unusually narrow.
-    """
+    """Return ``os.environ`` patched so a piped Rich subprocess wraps to fit."""
     user_width = console.size.width or _MIN_SUBPROCESS_TERMINAL_WIDTH + _TASK_OUTPUT_PREFIX_WIDTH
-    available = max(
-        _MIN_SUBPROCESS_TERMINAL_WIDTH,
-        user_width - _TASK_OUTPUT_PREFIX_WIDTH - 1,
+    return subprocess_env_with_width(
+        columns=user_width,
+        lines=console.size.height,
     )
-    env = dict(os.environ)
-    env["COLUMNS"] = str(available)
-    # LINES is less critical (Rich pagination is rare here) but we keep
-    # the pair consistent so ``shutil.get_terminal_size`` agrees with itself.
-    env.setdefault("LINES", str(max(20, console.size.height or 24)))
-    return env
 
 
 def _pump_task_stream(
@@ -202,7 +139,7 @@ def _start_task_output_streams(
 
 def _join_task_output_streams(threads: list[threading.Thread]) -> None:
     for thread in threads:
-        thread.join(timeout=_TASK_OUTPUT_JOIN_TIMEOUT_SECONDS)
+        thread.join(timeout=TASK_OUTPUT_JOIN_TIMEOUT_SECONDS)
 
 
 def _console_file_is_tty(console: Console) -> bool:
@@ -225,7 +162,6 @@ def _pump_task_pty(
             try:
                 chunk = os.read(master_fd, 4096)
             except OSError as exc:
-                # BSD/macOS PTYs raise EIO at EOF; Linux commonly returns b"".
                 if exc.errno == errno.EIO:
                     break
                 raise

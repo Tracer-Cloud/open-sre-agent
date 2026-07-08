@@ -34,22 +34,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from config.constants.paths import REPO_ROOT
 from core.domain.types.tools import ToolSurface
 from core.tool_framework.registered_tool import RegisteredTool
 from tools.registry import get_registered_tools
-
-
-def _detect_repo_root() -> Path:
-    """Resolve the workspace root reliably."""
-
-    here = Path(__file__).resolve()
-    for parent in here.parents:
-        if (parent / "pyproject.toml").is_file():
-            return parent
-    return here.parents[2]
-
-
-_REPO_ROOT = _detect_repo_root()
 
 # Cap one-line schema summaries so wide registries don't break terminal
 # wrapping or balloon prompt injection. The cap is generous — tools with
@@ -101,7 +89,7 @@ def _resolve_source_file(tool: RegisteredTool) -> str:
     if not file_attr:
         return ""
     try:
-        return Path(file_attr).resolve().relative_to(_REPO_ROOT).as_posix()
+        return Path(file_attr).resolve().relative_to(REPO_ROOT).as_posix()
     except ValueError:
         # Module lives outside the repo root (installed package, namespace
         # package). Fall back to the absolute path so users can still open

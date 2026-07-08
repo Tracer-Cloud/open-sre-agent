@@ -15,8 +15,8 @@ from core.agent_harness.accounting.token_accounting import (
     format_token_total,
     record_llm_turn,
 )
-from core.agent_harness.session import Session
 from surfaces.interactive_shell.runtime.answer_turn import answer_shell_question
+from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui.streaming import _CHARS_PER_TOKEN
 
 
@@ -108,7 +108,7 @@ def test_build_llm_run_info_records_tokens_and_metadata() -> None:
 
 
 def test_coerce_usage_tokens_accepts_float_counts() -> None:
-    from core.llm.usage import coerce_usage_tokens
+    from core.llm.shared.usage import coerce_usage_tokens
 
     assert coerce_usage_tokens(
         {"input_tokens": 512.0, "output_tokens": 64.0},
@@ -136,7 +136,7 @@ class _FakeLLMClient:
 
 def test_answer_shell_question_records_session_token_usage(monkeypatch: Any) -> None:
     client = _FakeLLMClient("assistant reply")
-    monkeypatch.setattr("core.llm.llm_client.get_llm_for_reasoning", lambda: client)
+    monkeypatch.setattr("core.llm.factory.get_llm", lambda _role: client)
     session = Session()
     console = Console(file=io.StringIO(), force_terminal=False)
     answer_shell_question("hello", session, console)

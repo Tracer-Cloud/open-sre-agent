@@ -37,8 +37,8 @@ from core.agent_harness.providers.provider_models import default_llm_factory
 from core.agent_harness.turns.turn_plan import TurnPlan
 from core.events import runtime_event_callback_from_observer
 from core.execution import ToolExecutionHooks, public_tool_input
+from core.llm.failure_classification import is_context_length_overflow
 from core.llm.types import AgentLLMResponse, ToolCall
-from integrations.llm_cli.failure_explain import is_context_length_overflow
 
 log = logging.getLogger(__name__)
 
@@ -163,7 +163,9 @@ def _history_entry_fallback(item: dict[str, Any]) -> str:
 
 
 def _pop_turn_outcome_hint(session: SessionStore) -> str:
-    pop_hint = getattr(session, "pop_turn_outcome_hint", None)
+    # Outcome hint lives on the shell terminal facet; other sessions have none.
+    terminal = getattr(session, "terminal", None)
+    pop_hint = getattr(terminal, "pop_turn_outcome_hint", None)
     if not callable(pop_hint):
         return ""
     hint = pop_hint()
@@ -438,6 +440,13 @@ def run_action_agent_turn(
     executed_success_count += generic_success_count
     planned_count = sum(1 for tc, _output in result.executed if tc.name != "assistant_handoff")
     handled = planned_count > 0
+    handoff_contents = tuple(
+        content
+        for tc, _output in result.executed
+        if tc.name == "assistant_handoff"
+        for content in (str(public_tool_input(tc.input).get("content", "")).strip(),)
+        if content
+    )
     response_chunks = [
         chunk
         for chunk in (
@@ -458,6 +467,7 @@ def run_action_agent_turn(
         False,
         handled,
         response_text=response_text,
+        handoff_contents=handoff_contents,
     )
 
 

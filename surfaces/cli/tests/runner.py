@@ -4,7 +4,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from config import synthetic_paths
+from config.constants.paths import REPO_ROOT
 from surfaces.cli.tests.catalog import TestCatalogItem
 from surfaces.cli.tests.discover import load_test_catalog
 
@@ -89,7 +89,7 @@ def run_catalog_item(
 
     result = subprocess.run(
         list(item.command),
-        cwd=working_directory or synthetic_paths.REPO_ROOT,
+        cwd=working_directory or REPO_ROOT,
         check=False,
     )
     return int(result.returncode)

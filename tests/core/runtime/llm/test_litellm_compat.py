@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from core.llm.litellm.clients import LiteLLMAgentClient, LiteLLMLLMClient
+from core.llm.transports.litellm.clients import LiteLLMAgentClient, LiteLLMLLMClient
 
 
 class _FakeMessage:
@@ -80,8 +80,40 @@ def test_litellm_agent_client_parses_tool_calls() -> None:
     assert response.raw_content["tool_calls"] == [tool_call]
 
 
+def test_litellm_agent_client_invoke_strips_internal_message_markers() -> None:
+    captured: dict[str, Any] = {}
+
+    def completion(**kwargs: Any) -> Any:
+        captured.update(kwargs)
+        return _fake_response(content="ok")
+
+    client = LiteLLMAgentClient(
+        litellm_model="anthropic/claude-sonnet-4-6",
+        api_key_env="ANTHROPIC_API_KEY",
+        credential_resolver=lambda _env: "test-key",
+        completion_func=completion,
+    )
+
+    messages = [
+        {"role": "user", "content": "alert"},
+        {
+            "role": "assistant",
+            "content": [{"type": "tool_use", "id": "seed", "name": "n", "input": {}}],
+            "_opensre_seed": True,
+        },
+    ]
+    client.invoke(messages)
+
+    api_messages = captured["messages"]
+    assert api_messages[1] == {
+        "role": "assistant",
+        "content": [{"type": "tool_use", "id": "seed", "name": "n", "input": {}}],
+    }
+    assert messages[1]["_opensre_seed"] is True
+
+
 def test_litellm_agent_client_emits_global_usage_hook() -> None:
-    from core.llm.usage import set_usage_hook
+    from core.llm.shared.usage import set_usage_hook
 
     client = LiteLLMAgentClient(
         litellm_model="openai/deepseek-v4-pro",
@@ -124,6 +156,27 @@ def test_litellm_llm_client_emits_usage_callback() -> None:
     assert usage == [("openai/groq-model", 11, 7)]
 
 
+def test_litellm_llm_client_invoke_strips_internal_message_markers() -> None:
+    captured: dict[str, Any] = {}
+
+    def completion(**kwargs: Any) -> Any:
+        captured.update(kwargs)
+        return _fake_response(content="ok")
+
+    client = LiteLLMLLMClient(
+        litellm_model="anthropic/claude-sonnet-4-6",
+        api_key_env="ANTHROPIC_API_KEY",
+        credential_resolver=lambda _env: "test-key",
+        completion_func=completion,
+    )
+
+    messages = [{"role": "assistant", "content": "ok", "_opensre_seed": True}]
+    client.invoke(messages)
+
+    assert captured["messages"] == [{"role": "assistant", "content": "ok"}]
+    assert messages[0]["_opensre_seed"] is True
+
+
 class NotFoundError(Exception):
     """Simulates LiteLLM/OpenAI NotFoundError by class name."""
 
@@ -139,7 +192,9 @@ def test_litellm_llm_client_invoke_stream_not_found_raises_without_retry(monkeyp
         attempts.append(True)
         raise NotFoundError("model not found")
 
-    monkeypatch.setattr("core.llm.openai_chat_completions.time.sleep", lambda s: sleeps.append(s))
+    monkeypatch.setattr(
+        "core.llm.shared.openai_chat_completions.time.sleep", lambda s: sleeps.append(s)
+    )
 
     client = LiteLLMLLMClient(
         litellm_model="openai/missing-model",
@@ -173,7 +228,7 @@ def test_litellm_llm_client_invoke_stream_retries_before_emit(monkeypatch) -> No
 
         return _chunks() if stream else _fake_response(content="ok")
 
-    monkeypatch.setattr("core.llm.openai_chat_completions.time.sleep", lambda _s: None)
+    monkeypatch.setattr("core.llm.shared.openai_chat_completions.time.sleep", lambda _s: None)
 
     client = LiteLLMLLMClient(
         litellm_model="openai/groq-model",

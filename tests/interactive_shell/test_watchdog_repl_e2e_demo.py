@@ -23,10 +23,10 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from rich.console import Console
 
-from core.agent_harness.session import Session
 from integrations.telegram.credentials import TelegramCredentials
 from platform.common.task_types import TaskKind, TaskStatus
 from surfaces.interactive_shell.command_registry import dispatch_slash
+from surfaces.interactive_shell.session import Session
 from tools.system.fleet_monitoring.probe import ProcessSnapshot
 
 

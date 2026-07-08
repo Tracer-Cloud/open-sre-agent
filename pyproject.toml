@@ -62,7 +62,7 @@ dependencies = [
     # MongoDB
     "pymongo>=4.6.0,<6.0.0",
     # Redis
-    "redis>=5.0.0,<6.0.0",
+    "redis>=5.0.0,<9.0.0",
     # Signature verfication for discord
     "PyNaCl>=1.5.0",
     # MariaDB

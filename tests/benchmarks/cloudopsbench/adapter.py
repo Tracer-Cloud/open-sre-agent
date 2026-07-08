@@ -556,7 +556,7 @@ class CloudOpsBenchAdapter(BenchmarkAdapter):
         honest opensre-vs-pure-LLM comparison.
         """
         # Late import — keeps tests/benchmarks importable without opensre.
-        from core.llm.agent_llm_client import get_agent_llm
+        from core.llm.factory import LLMRole, get_llm
 
         alert = self.build_alert(case)
         legacy = self._require_case(case)
@@ -569,7 +569,7 @@ class CloudOpsBenchAdapter(BenchmarkAdapter):
             metric_alerts = ""
 
         try:
-            llm = get_agent_llm()
+            llm = get_llm(LLMRole.AGENT)
         except Exception:  # noqa: BLE001 — best-effort hook; never block scoring
             return run
 

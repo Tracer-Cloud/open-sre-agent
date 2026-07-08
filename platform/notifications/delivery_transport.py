@@ -72,6 +72,63 @@ class DeliveryResponse:
             object.__setattr__(self, "data", MappingProxyType(dict(self.data)))
 
 
+def post_form(
+    url: str,
+    data: dict[str, str],
+    *,
+    auth: tuple[str, str] | None = None,
+    headers: dict[str, str] | None = None,
+    timeout: float = 15.0,
+    follow_redirects: bool = False,
+) -> DeliveryResponse:
+    """POST ``data`` as form-encoded to ``url`` and return a normalized result.
+
+    Mirrors :func:`post_json` but sends ``application/x-www-form-urlencoded``
+    bodies with optional HTTP Basic Auth — the shape required by Twilio and
+    WhatsApp delivery endpoints.
+
+    Args:
+        url: Absolute URL to post to.
+        data: Form fields to encode in the request body.
+        auth: Optional ``(username, password)`` tuple for HTTP Basic Auth.
+        headers: Optional extra headers.
+        timeout: Request timeout in seconds. Defaults to 15s.
+        follow_redirects: Whether to follow 3xx redirects.
+
+    Returns:
+        ``DeliveryResponse`` with ``ok``, ``status_code``, ``data``,
+        ``text``, and ``error`` populated.
+    """
+    try:
+        response = httpx.post(
+            url,
+            data=data,
+            auth=auth,
+            headers=headers or {},
+            timeout=timeout,
+            follow_redirects=follow_redirects,
+        )
+    except Exception as exc:
+        return DeliveryResponse(ok=False, error=str(exc), exc_type=type(exc).__name__)
+
+    text = response.text
+    parsed_data: dict[str, Any] = {}
+    try:
+        parsed = response.json()
+        if isinstance(parsed, dict):
+            parsed_data = parsed
+    except Exception:
+        # non-JSON body is permitted; fall through with empty data
+        pass
+
+    return DeliveryResponse(
+        ok=True,
+        status_code=response.status_code,
+        data=parsed_data,
+        text=text,
+    )
+
+
 def post_json(
     url: str,
     payload: dict[str, Any],

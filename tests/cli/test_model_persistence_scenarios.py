@@ -10,10 +10,10 @@ from rich.console import Console
 
 import surfaces.cli.wizard.env_sync as env_sync
 import surfaces.cli.wizard.store as wizard_store
-from core.agent_harness.session import Session
 from surfaces.cli.wizard.config import PROJECT_ENV_PATH, PROJECT_ROOT, PROVIDER_BY_VALUE
 from surfaces.interactive_shell.command_registry import dispatch_slash
 from surfaces.interactive_shell.command_registry import repl_data as repl_data_module
+from surfaces.interactive_shell.session import Session
 
 
 def _capture() -> tuple[Console, io.StringIO]:
@@ -123,9 +123,8 @@ class TestReplModelPersistence:
         persistence_paths: dict[str, Path],
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        from core.llm import llm_client
 
-        monkeypatch.setattr(llm_client, "reset_llm_singletons", lambda: None)
+        monkeypatch.setattr("core.llm.factory.reset_llm_clients", lambda: None)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
 
         console, buf = _capture()
@@ -146,9 +145,8 @@ class TestReplModelPersistence:
         persistence_paths: dict[str, Path],
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        from core.llm import llm_client
 
-        monkeypatch.setattr(llm_client, "reset_llm_singletons", lambda: None)
+        monkeypatch.setattr("core.llm.factory.reset_llm_clients", lambda: None)
         monkeypatch.setenv("LLM_PROVIDER", "anthropic")
         wizard_store.save_local_config(
             wizard_mode="quickstart",
@@ -176,9 +174,8 @@ class TestReplModelPersistence:
         persistence_paths: dict[str, Path],
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        from core.llm import llm_client
 
-        monkeypatch.setattr(llm_client, "reset_llm_singletons", lambda: None)
+        monkeypatch.setattr("core.llm.factory.reset_llm_clients", lambda: None)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
 
         console, buf = _capture()
@@ -202,9 +199,8 @@ class TestReplModelPersistence:
         persistence_paths: dict[str, Path],
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        from core.llm import llm_client
 
-        monkeypatch.setattr(llm_client, "reset_llm_singletons", lambda: None)
+        monkeypatch.setattr("core.llm.factory.reset_llm_clients", lambda: None)
         monkeypatch.setenv("LLM_PROVIDER", "anthropic")
         wizard_store.save_local_config(
             wizard_mode="quickstart",
@@ -230,9 +226,8 @@ class TestReplModelPersistence:
         persistence_paths: dict[str, Path],
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        from core.llm import llm_client
 
-        monkeypatch.setattr(llm_client, "reset_llm_singletons", lambda: None)
+        monkeypatch.setattr("core.llm.factory.reset_llm_clients", lambda: None)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
         monkeypatch.setenv("LLM_PROVIDER", "anthropic")
 

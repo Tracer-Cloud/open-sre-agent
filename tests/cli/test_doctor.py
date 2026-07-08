@@ -93,9 +93,10 @@ def test_check_llm_provider_hosted_keyring_key(monkeypatch) -> None:
 
 
 def test_check_llm_provider_non_secret_env_stays_env_only(monkeypatch) -> None:
+    monkeypatch.setenv("GRAFANA_CONFIG_SKIP_ENV_FILE", "1")
     monkeypatch.setenv("LLM_PROVIDER", "bedrock")
     monkeypatch.delenv("AWS_REGION", raising=False)
-    monkeypatch.setenv("AWS_DEFAULT_REGION", "")
+    monkeypatch.delenv("AWS_DEFAULT_REGION", raising=False)
 
     ok, detail = doctor._check_llm_provider()
 
@@ -218,7 +219,7 @@ def test_check_integrations_reports_configured_services(monkeypatch, tmp_path) -
 
 def test_check_version_freshness_skips_release_compare_for_local_dev(monkeypatch) -> None:
     fetch_latest_version = MagicMock(return_value="9.9.9")
-    monkeypatch.setattr(doctor, "get_version", lambda: "1.2.3")
+    monkeypatch.setattr(doctor, "get_opensre_version", lambda: "1.2.3")
     monkeypatch.setattr(
         "surfaces.cli.lifecycle.update.development_install_doctor_version_detail",
         lambda c: f"{c} (editable install; skipped comparing to latest main build)",
@@ -235,7 +236,7 @@ def test_check_version_freshness_skips_release_compare_for_local_dev(monkeypatch
 def test_check_version_freshness_up_to_date(monkeypatch) -> None:
     fetch_latest_version = MagicMock(return_value="1.2.3")
     is_update_available = MagicMock(return_value=False)
-    monkeypatch.setattr(doctor, "get_version", lambda: "1.2.3")
+    monkeypatch.setattr(doctor, "get_opensre_version", lambda: "1.2.3")
     monkeypatch.setattr(
         "surfaces.cli.lifecycle.update.development_install_doctor_version_detail",
         lambda _c: None,
@@ -254,7 +255,7 @@ def test_check_version_freshness_up_to_date(monkeypatch) -> None:
 def test_check_version_freshness_update_available(monkeypatch) -> None:
     fetch_latest_version = MagicMock(return_value="1.3.0")
     is_update_available = MagicMock(return_value=True)
-    monkeypatch.setattr(doctor, "get_version", lambda: "1.2.3")
+    monkeypatch.setattr(doctor, "get_opensre_version", lambda: "1.2.3")
     monkeypatch.setattr(
         "surfaces.cli.lifecycle.update.development_install_doctor_version_detail",
         lambda _c: None,
@@ -272,7 +273,7 @@ def test_check_version_freshness_update_available(monkeypatch) -> None:
 
 
 def test_check_version_freshness_soft_fails_on_fetch_error(monkeypatch) -> None:
-    monkeypatch.setattr(doctor, "get_version", lambda: "1.2.3")
+    monkeypatch.setattr(doctor, "get_opensre_version", lambda: "1.2.3")
     monkeypatch.setattr(
         "surfaces.cli.lifecycle.update.development_install_doctor_version_detail",
         lambda _c: None,

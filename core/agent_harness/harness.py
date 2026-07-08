@@ -1,38 +1,16 @@
-"""``AgentHarness`` — consolidated agent startup for every surface.
+"""``AgentHarness`` — one-call agent startup shared by every surface.
 
-Startup behavior for a turn-driving agent was previously scattered across
-surfaces: the interactive shell, the gateway, and the investigation pipeline
-each resolved integrations, loaded prior session history, and read env vars
-in their own way (see ``AGENTS.md`` "Large multi-surface refactors" and
-https://github.com/Tracer-Cloud/opensre/issues/3359). Session lifecycle
-itself — create / resolve / rotate / restore / integration hydration — is
-already owned by :class:`~core.agent_harness.session.manager.SessionManager`
-(issue #3357). ``AgentHarness`` sits one layer above that: it is the single
-call surfaces make to get a bootstrapped session *and* the other two startup
-concerns ``SessionManager`` does not own — env resolution and grounding
-context — in one call, instead of each surface sequencing
-``load_dotenv`` + ``SessionManager`` + its own prompt-context wiring itself.
+Before a surface can drive agent turns it needs three things set up, in order:
+env vars loaded, a session created or resumed, and the prompt context loaded.
+``AgentHarness`` runs those steps in one call so the shell, gateway, and
+investigation pipeline don't each wire them up their own way. Session lifecycle
+(create / resolve / rotate / restore) belongs to
+:class:`~core.agent_harness.session.lifecycle.SessionManager`; the harness sits
+one layer above and adds env resolution and prompt context.
 
-The four responsibilities from #3359:
-
-1. **Resolving integrations** — delegated to ``SessionManager``'s bootstrap
-   (``hydrate_integrations`` / ``warm_integrations`` on :meth:`HarnessConfig`),
-   plus :meth:`AgentHarness.resolve_integrations` for on-demand full resolution
-   once a session exists (thin wrapper over
-   :meth:`~core.agent_harness.session.state.Session.get_integrations`).
-2. **Loading context** — the surface's injected
-   :class:`~core.agent_harness.ports.PromptContextProvider`, if any. The
-   harness does not render grounding text itself (``ports.py`` already models
-   that as a per-surface concern); this step exists so surfaces get it from
-   the same call as everything else.
-3. **Loading previous session history from disk** — ``session_id`` +
-   ``SessionManager.resolve()``, which loads the persisted session and
-   restores its conversation context.
-4. **Resolving env variables** — a single ``load_dotenv`` call.
-
-This module must not import ``interactive_shell`` / ``surfaces.interactive_shell``
-(enforced by ``tests/core/agent/test_import_boundaries.py``) — surfaces build a
-:class:`HarnessConfig` from their own prompt-context provider and hand it in.
+Must not import ``surfaces.interactive_shell`` (enforced by
+``tests/core/agent/test_import_boundaries.py``): surfaces pass their own
+prompt-context provider in through :class:`HarnessConfig`.
 """
 
 from __future__ import annotations
@@ -46,7 +24,7 @@ from core.agent_harness.session import SessionManager
 
 if TYPE_CHECKING:
     from core.agent_harness.ports import PromptContextProvider
-    from core.agent_harness.session.state import Session
+    from core.agent_harness.session.session_core import SessionCore
 
 
 @dataclass(frozen=True)
@@ -75,7 +53,7 @@ class HarnessConfig:
 class HarnessStartupResult:
     """Outcome of :meth:`AgentHarness.startup`."""
 
-    session: Session
+    session: SessionCore
     prompts: PromptContextProvider | None
 
 
@@ -102,7 +80,7 @@ class AgentHarness:
         if self._config.load_env:
             load_dotenv(override=False)
 
-    def load_or_create_session(self) -> Session:
+    def load_or_create_session(self) -> SessionCore:
         """Resume a persisted session if ``session_id`` was given, else create one.
 
         Delegates entirely to :class:`SessionManager` — this method does not
@@ -132,7 +110,7 @@ class AgentHarness:
             open_storage=self._config.open_storage,
         )
 
-    def resolve_integrations(self, session: Session) -> dict[str, Any]:
+    def resolve_integrations(self, session: SessionCore) -> dict[str, Any]:
         """Return resolved integration configs for ``session``."""
         from core.agent_harness.integrations.resolution import resolve_and_cache_integrations
 

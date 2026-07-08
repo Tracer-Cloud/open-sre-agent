@@ -12,19 +12,16 @@ turn:
   expected_kind: agent
 policy:
   executes_terminal_action: false
-planned_actions: []
+planned_actions:
+- kind: assistant_handoff
+  content: provider:local_llama_connect
+  source: llm
 response_contract:
   must_contain_any:
-  - local llama
+  - ollama
   - local llm
-  - provider
-  - /model
   - /onboard
-  - local-model connection tool
-  - /integrations setup llama
-  - /integrations setup
-  - setup llama
-  - /integrations
+  - /model
   must_not_contain:
   - $ /
 history:

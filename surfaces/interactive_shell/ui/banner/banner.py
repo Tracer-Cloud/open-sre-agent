@@ -41,7 +41,7 @@ from rich.table import Table
 from rich.text import Text
 
 from config.repl_config import WHATS_NEW
-from config.version import get_version
+from config.version import get_opensre_version
 from platform.terminal.theme import (
     BRAND,
     DIM,
@@ -93,7 +93,7 @@ def render_splash(console: Console | None = None, *, first_run: bool | None = No
     if first_run is None:
         first_run = _is_first_run()
 
-    version = get_version()
+    version = get_opensre_version()
     art = _render_art(console.width)
 
     console.print()
@@ -291,7 +291,7 @@ def build_ready_panel(
         legacy_windows=False,
     )
     provider, model = detect_provider_model()
-    version = get_version()
+    version = get_opensre_version()
     trust_mode: bool = bool(getattr(session, "trust_mode", False))
 
     panel_title = Text()
@@ -367,7 +367,7 @@ def render_ready_box(
 def render_banner(console: Console | None = None) -> None:
     """Render splash + ready-state box in one call (legacy entry point).
 
-    Existing callers (main.repl_main) continue to work unchanged.
+    Existing callers (main.run_repl) continue to work unchanged.
     """
     _console = console or Console(
         highlight=False,

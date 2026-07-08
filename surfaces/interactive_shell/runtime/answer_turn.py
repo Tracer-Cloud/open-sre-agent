@@ -16,13 +16,13 @@ from core.agent_harness.providers.default_providers import (
     DefaultReasoningClientProvider,
     DefaultRunRecordFactory,
 )
-from core.agent_harness.session import Session
 from core.agent_harness.turns.orchestrator import (
     stream_answer as core_stream_answer,
 )
 from core.agent_harness.turns.turn_plan import TurnPlan
 from surfaces.interactive_shell.grounding.cli_reference import shell_prompt_context_provider
 from surfaces.interactive_shell.runtime.agent_harness_adapters import resolve_output_sink
+from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.utils.telemetry import LlmRunInfo
 
 
@@ -35,6 +35,7 @@ def answer_shell_question(
     is_tty: bool | None = None,
     tool_observation: str | None = None,
     tool_observation_on_screen: bool = True,
+    handoff_contents: tuple[str, ...] = (),
     turn_plan: TurnPlan | None = None,
     output: OutputSink | None = None,
 ) -> LlmRunInfo | None:
@@ -56,6 +57,7 @@ def answer_shell_question(
         is_tty=is_tty,
         tool_observation=tool_observation,
         tool_observation_on_screen=tool_observation_on_screen,
+        handoff_contents=handoff_contents,
         turn_plan=turn_plan,
     )
 
