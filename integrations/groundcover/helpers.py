@@ -14,8 +14,6 @@ from __future__ import annotations
 import logging
 from typing import Any, cast
 
-from pydantic import ValidationError
-
 from integrations.groundcover.client import (
     GroundcoverClient,
     GroundcoverConfig,
@@ -78,10 +76,12 @@ def make_client(creds: dict[str, Any]) -> GroundcoverClient | None:
         return None
     try:
         config = GroundcoverConfig.model_validate(creds)
-    except ValidationError:
-        raise
-    except Exception:
-        logger.debug("GroundcoverConfig validation failed unexpectedly", exc_info=True)
+    except Exception as exc:
+        # Log only the exception type, not str(exc)/exc_info: pydantic's
+        # ValidationError embeds the raw input value (including api_key) in
+        # its message, and this helper has no record_id to route through
+        # the redacted report_classify_failure path used by classify().
+        logger.debug("GroundcoverConfig validation failed: %s", type(exc).__name__)
         return None
     if not config.is_configured:
         return None
