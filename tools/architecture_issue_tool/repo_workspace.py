@@ -11,13 +11,14 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
+from config.constants.paths import PROJECT_ROOT
 from integrations.git.errors import GIT_UNAVAILABLE, GitCommandError
 from integrations.git.local import _token_auth_env
 
 _GITHUB_HTTPS_BASE = "https://github.com/"
 _GIT_CLONE_TIMEOUT_SEC = 120.0
 _GIT_REMOTE_TIMEOUT_SEC = 15.0
-_WORKSPACE_PREFIX = "opensre-arch-audit-"
+_ARCHITECTURE_SANDBOX_DIR = PROJECT_ROOT / ".temp" / "opensre" / "sandbox"
 
 _SKIP_SCAN_ROOT_DIRS = frozenset(
     {
@@ -56,6 +57,20 @@ class RepoWorkspace:
 def github_remote_url(owner: str, repo: str) -> str:
     """Return the HTTPS git remote URL for a GitHub repository."""
     return f"{_GITHUB_HTTPS_BASE}{owner.strip()}/{repo.strip()}.git"
+
+
+def architecture_sandbox_dir() -> Path:
+    """Return the fixed local directory used for architecture audit git clones."""
+    return _ARCHITECTURE_SANDBOX_DIR
+
+
+def _prepare_architecture_sandbox() -> Path:
+    """Reset and return the architecture audit clone directory."""
+    sandbox = architecture_sandbox_dir()
+    if sandbox.exists():
+        shutil.rmtree(sandbox, ignore_errors=True)
+    sandbox.mkdir(parents=True, exist_ok=True)
+    return sandbox
 
 
 def resolve_scan_roots(clone_root: Path) -> list[Path]:
@@ -180,8 +195,8 @@ def cloned_github_repo(
     """Yield a workspace for *owner*/*repo*, cloning when *local_path* is unset.
 
     When *local_path* is provided (tests/dev only), the path is yielded as-is and
-    never deleted. Otherwise a shallow clone is created under a temp directory and
-    removed on exit, including when the caller raises.
+    never deleted. Otherwise a shallow clone is created under
+    ``.temp/opensre/sandbox`` and removed on exit, including when the caller raises.
     """
     normalized_owner = owner.strip()
     normalized_repo = repo.strip()
@@ -200,8 +215,7 @@ def cloned_github_repo(
         )
         return
 
-    parent = Path(tempfile.mkdtemp(prefix=_WORKSPACE_PREFIX))
-    destination = parent / "repo"
+    destination = _prepare_architecture_sandbox()
     remote_url = github_remote_url(normalized_owner, normalized_repo)
     effective_ref = ref.strip() or _remote_default_branch(remote_url, token=token)
 
@@ -225,5 +239,5 @@ def cloned_github_repo(
             raise WorkspaceError(exc.message) from exc
         raise WorkspaceError(exc.message) from exc
     finally:
-        if parent.exists():
-            shutil.rmtree(parent, ignore_errors=True)
+        if destination.exists():
+            shutil.rmtree(destination, ignore_errors=True)

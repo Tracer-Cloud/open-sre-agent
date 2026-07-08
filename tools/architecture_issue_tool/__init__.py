@@ -18,8 +18,12 @@ from tools.architecture_issue_tool.repo_workspace import (
     github_remote_url,
     resolve_scan_roots,
 )
+from tools.architecture_issue_tool.tool import find_architecture_violations
+
+TOOL_MODULES = ("tool",)
 
 __all__ = [
+    "TOOL_MODULES",
     "ArchitectureViolation",
     "RefactorTask",
     "RepoWorkspace",
@@ -30,6 +34,7 @@ __all__ = [
     "build_error_result",
     "build_success_result",
     "cloned_github_repo",
+    "find_architecture_violations",
     "github_remote_url",
     "resolve_scan_roots",
 ]

@@ -324,6 +324,31 @@ def test_github_workflow_skill_guidance_does_not_attach_to_unrelated_github_tool
     assert tool_def.skill_guidance == ""
 
 
+def test_architecture_audit_skill_guidance_is_attached_to_chat_and_investigation() -> None:
+    marker = "Use this workflow when the user asks for an architecture audit"
+
+    for surface in ("chat", "investigation"):
+        tools_by_name = {
+            tool_def.name: tool_def for tool_def in registry_module.get_registered_tools(surface)
+        }
+        tool_def = tools_by_name["find_architecture_violations"]
+        assert marker in tool_def.description
+        assert "Workflow guidance:" in tool_def.description
+        assert marker in tool_def.skill_guidance
+
+
+def test_architecture_audit_skill_guidance_does_not_attach_to_unrelated_tools() -> None:
+    tools_by_name = {tool_def.name: tool_def for tool_def in registry_module.get_registered_tools()}
+
+    tool_def = tools_by_name["get_github_file_contents"]
+
+    assert (
+        "Use this workflow when the user asks for an architecture audit"
+        not in tool_def.skill_guidance
+    )
+    assert "Propose, do not execute" not in tool_def.skill_guidance
+
+
 def test_python_execution_skill_guidance_does_not_attach_to_unrelated_tools() -> None:
     tools_by_name = {tool_def.name: tool_def for tool_def in registry_module.get_registered_tools()}
 

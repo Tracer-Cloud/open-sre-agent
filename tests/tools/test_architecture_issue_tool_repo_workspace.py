@@ -9,6 +9,7 @@ import pytest
 
 from tools.architecture_issue_tool.repo_workspace import (
     WorkspaceError,
+    architecture_sandbox_dir,
     cloned_github_repo,
     github_remote_url,
     resolve_scan_roots,
@@ -16,7 +17,10 @@ from tools.architecture_issue_tool.repo_workspace import (
 
 
 def test_github_remote_url() -> None:
-    assert github_remote_url("Tracer-Cloud", "opensre") == "https://github.com/Tracer-Cloud/opensre.git"
+    assert (
+        github_remote_url("Tracer-Cloud", "opensre")
+        == "https://github.com/Tracer-Cloud/opensre.git"
+    )
 
 
 def test_resolve_scan_roots_skips_tests_and_docs(tmp_path: Path) -> None:
@@ -59,49 +63,56 @@ def test_cloned_github_repo_requires_owner_and_repo() -> None:
         pass
 
 
+def test_architecture_sandbox_dir_is_under_project_temp() -> None:
+    sandbox = architecture_sandbox_dir()
+    assert sandbox.name == "sandbox"
+    assert sandbox.parent.name == "opensre"
+    assert sandbox.parent.parent.name == ".temp"
+
+
 @patch("tools.architecture_issue_tool.repo_workspace._shallow_clone")
 @patch("tools.architecture_issue_tool.repo_workspace._remote_default_branch", return_value="main")
 @patch("tools.architecture_issue_tool.repo_workspace.shutil.rmtree")
-@patch("tools.architecture_issue_tool.repo_workspace.tempfile.mkdtemp")
+@patch("tools.architecture_issue_tool.repo_workspace._prepare_architecture_sandbox")
 def test_cloned_github_repo_clones_and_cleans_up(
-    mock_mkdtemp,
+    mock_prepare_sandbox,
     mock_rmtree,
     mock_default_branch,
     mock_shallow_clone,
     tmp_path: Path,
 ) -> None:
-    parent = tmp_path / "workspace-parent"
-    parent.mkdir()
-    mock_mkdtemp.return_value = str(parent)
+    sandbox = tmp_path / ".temp" / "opensre" / "sandbox"
+    sandbox.mkdir(parents=True)
+    mock_prepare_sandbox.return_value = sandbox
 
     def _clone(**kwargs: object) -> None:
         destination = kwargs["destination"]
         assert isinstance(destination, Path)
-        destination.mkdir(parents=True)
+        destination.mkdir(parents=True, exist_ok=True)
 
     mock_shallow_clone.side_effect = _clone
 
     with cloned_github_repo("Tracer-Cloud", "opensre", token="ghp_test") as workspace:
         assert workspace.ref == "main"
-        assert workspace.root == parent / "repo"
+        assert workspace.root == sandbox
         mock_default_branch.assert_called_once()
         mock_shallow_clone.assert_called_once()
 
-    mock_rmtree.assert_called_once_with(parent, ignore_errors=True)
+    mock_rmtree.assert_called_once_with(sandbox, ignore_errors=True)
 
 
 @patch("tools.architecture_issue_tool.repo_workspace._shallow_clone")
 @patch("tools.architecture_issue_tool.repo_workspace.shutil.rmtree")
-@patch("tools.architecture_issue_tool.repo_workspace.tempfile.mkdtemp")
+@patch("tools.architecture_issue_tool.repo_workspace._prepare_architecture_sandbox")
 def test_cloned_github_repo_cleans_up_on_clone_failure(
-    mock_mkdtemp,
+    mock_prepare_sandbox,
     mock_rmtree,
     mock_shallow_clone,
     tmp_path: Path,
 ) -> None:
-    parent = tmp_path / "workspace-parent"
-    parent.mkdir()
-    mock_mkdtemp.return_value = str(parent)
+    sandbox = tmp_path / ".temp" / "opensre" / "sandbox"
+    sandbox.mkdir(parents=True)
+    mock_prepare_sandbox.return_value = sandbox
     mock_shallow_clone.side_effect = WorkspaceError("git clone failed")
 
     with (
@@ -110,4 +121,4 @@ def test_cloned_github_repo_cleans_up_on_clone_failure(
     ):
         pass
 
-    mock_rmtree.assert_called_once_with(parent, ignore_errors=True)
+    mock_rmtree.assert_called_once_with(sandbox, ignore_errors=True)
