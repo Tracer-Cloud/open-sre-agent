@@ -1,33 +1,21 @@
-"""Characterization tests locking Session behavior before the #3690 god-object split.
+"""Core-session invariants: the ``SessionCore`` field surface and its owned behavior.
 
-These pin the behaviors the SessionCore/facet split must preserve but that had no
-direct coverage: the field inventory (guards the ~89 access sites), the incoming-alert
-cap, the integration warm-cache generation guard, turn-outcome-hint pop-once, and token
-accounting. Behaviors already covered elsewhere (pending-turn staging in
-``test_turn_accounting``, notice drain in ``test_background_runner``) are not duplicated.
+Pins that ``SessionCore`` carries exactly the surface-agnostic fields (no shell facets),
+that ``task_registry`` stays core, and the integration warm-cache generation guard and
+token accounting. Shell ``Session``/facet invariants live in
+``tests/interactive_shell/session/test_session_facets.py``.
 """
 
 from __future__ import annotations
 
 import dataclasses
 
+from core.agent_harness.session.session_core import SessionCore
 from core.agent_harness.session.storage.memory import InMemorySessionStorage
 from core.agent_harness.session.token_usage import TokenUsage
-from core.domain.alerts.inbox import IncomingAlert
-from surfaces.interactive_shell.session.session import Session
 
-
-def _session() -> Session:
-    return Session(storage=InMemorySessionStorage())
-
-
-# --------------------------------------------------------------------------- #
-# Field inventory — the god object's current surface (baseline for the split)  #
-# --------------------------------------------------------------------------- #
-
-# The 48 fields, by target bucket per the #3690 plan. When a field moves to a
-# facet, move its name here and assert it on the facet instead — this stays the
-# single inventory of "every Session field is accounted for".
+# Every surface-agnostic field on SessionCore. The 7 former integration fields collapsed
+# into one composed ``integrations`` (IntegrationState); its public fields are properties.
 _CORE_FIELDS = (
     "session_id",
     "started_at",
@@ -48,150 +36,27 @@ _CORE_FIELDS = (
     "grounding",
     "_ACCUMULATED_KEYS",
 )
-# Shell-only state that still sits flat on Session, awaiting relocation to the
-# terminal facet. Empty: every shell-only cluster now lives on session.terminal.
-_TERMINAL_FIELDS: tuple[str, ...] = ()
-# Extracted facets, each a single field on Session holding relocated state:
-#   alert inbox: incoming_alerts + _INCOMING_ALERTS_MAX -> session.alerts (entries, _max)
-#   terminal, theme cluster: active_theme_name + pending_theme_refresh + trust_mode
-#       -> session.terminal
-#   terminal, prompt-toolkit cluster: prompt_history_backend, pt_style_app, main_loop,
-#       prompt_refresh_fn, fleet_sampler_starter -> session.terminal
-#   terminal, pending-prompt/stdin cluster: pending_prompt_default, pending_prompt_autosubmit,
-#       exclusive_stdin_active, agent_turn_executed_slashes -> session.terminal
-#   terminal, background cluster: background_mode_enabled, background_investigations,
-#       background_notification_preferences, background_notices, _background_notices_lock
-#       -> session.terminal
-#   terminal, metrics cluster: metrics, history_generation -> session.terminal
-#     (task_registry stayed core — session task-state the manager owns; see _CORE_FIELDS)
-#   terminal, analytics-staging cluster: _turn_outcome_hint, _pending_turn_llm,
-#       _pending_turn_error -> session.terminal
-_FACET_FIELDS = ("alerts", "terminal")
 
 
-def test_field_inventory_is_exactly_20_top_level_fields() -> None:
-    all_fields = _CORE_FIELDS + _TERMINAL_FIELDS + _FACET_FIELDS
-    # The 7 integration fields collapsed into one composed ``integrations`` field
-    # (IntegrationState); its public fields are re-exposed as SessionCore properties.
-    assert len(all_fields) == 20
-    assert len(set(all_fields)) == 20  # no duplicates across buckets
+def _session() -> SessionCore:
+    return SessionCore(storage=InMemorySessionStorage())
 
 
-def test_every_inventoried_field_is_accessible_on_session() -> None:
-    session = _session()
-    missing = [
-        f for f in _CORE_FIELDS + _TERMINAL_FIELDS + _FACET_FIELDS if not hasattr(session, f)
-    ]
-    assert missing == []
+def test_session_core_carries_exactly_the_core_fields_and_no_facets() -> None:
+    field_names = {f.name for f in dataclasses.fields(SessionCore)}
+    assert field_names == set(_CORE_FIELDS)
+    assert "terminal" not in field_names
+    assert "alerts" not in field_names
+    assert not hasattr(SessionCore(), "terminal")
+    assert not hasattr(SessionCore(), "alerts")
 
 
-def test_alert_inbox_facet_holds_the_relocated_alert_state() -> None:
-    inbox = _session().alerts
-    assert hasattr(inbox, "entries")  # was Session.incoming_alerts
-    assert hasattr(inbox, "_max")  # was Session._INCOMING_ALERTS_MAX
-
-
-def test_session_is_a_session_core_and_core_has_no_facets() -> None:
-    from core.agent_harness.session.session_core import SessionCore
-
-    assert issubclass(Session, SessionCore)
-    core_field_names = {f.name for f in dataclasses.fields(SessionCore)}
-    # The core base carries every core field and none of the shell facets.
-    assert set(_CORE_FIELDS) == core_field_names
-    assert "terminal" not in core_field_names
-    assert "alerts" not in core_field_names
-    core = SessionCore()
-    assert not hasattr(core, "terminal")
-    assert not hasattr(core, "alerts")
-
-
-def test_terminal_facet_holds_the_theme_cluster() -> None:
-    terminal = _session().terminal
-    assert hasattr(terminal, "active_theme_name")  # was Session.active_theme_name
-    assert hasattr(terminal, "pending_theme_refresh")  # was Session.pending_theme_refresh
-    assert hasattr(terminal, "trust_mode")  # was Session.trust_mode
-
-
-def test_terminal_facet_holds_the_prompt_toolkit_cluster() -> None:
-    terminal = _session().terminal
-    for f in (
-        "prompt_history_backend",
-        "pt_style_app",
-        "main_loop",
-        "prompt_refresh_fn",
-        "fleet_sampler_starter",
-    ):
-        assert hasattr(terminal, f)  # was Session.<f>
-
-
-def test_terminal_facet_holds_the_pending_prompt_cluster() -> None:
-    terminal = _session().terminal
-    for f in (
-        "pending_prompt_default",
-        "pending_prompt_autosubmit",
-        "exclusive_stdin_active",
-        "agent_turn_executed_slashes",
-    ):
-        assert hasattr(terminal, f)  # was Session.<f>
-
-
-def test_terminal_facet_holds_the_background_cluster() -> None:
-    terminal = _session().terminal
-    for f in (
-        "background_mode_enabled",
-        "background_investigations",
-        "background_notification_preferences",
-        "background_notices",
-        "_background_notices_lock",
-    ):
-        assert hasattr(terminal, f)  # was Session.<f>
-
-
-def test_terminal_facet_holds_the_metrics_cluster() -> None:
-    terminal = _session().terminal
-    for f in ("metrics", "history_generation"):
-        assert hasattr(terminal, f)  # was Session.<f>
-
-
-def test_task_registry_stayed_on_the_core_session() -> None:
-    from core.agent_harness.session.session_core import SessionCore
-
+def test_task_registry_is_a_core_field() -> None:
     assert "task_registry" in {f.name for f in dataclasses.fields(SessionCore)}
-    assert not hasattr(_session().terminal, "task_registry")
-
-
-def test_terminal_facet_holds_the_analytics_staging_cluster() -> None:
-    terminal = _session().terminal
-    for f in ("_turn_outcome_hint", "_pending_turn_llm", "_pending_turn_error"):
-        assert hasattr(terminal, f)  # was Session.<f>
-
-
-def test_analytics_staging_pop_methods_delegate_to_the_facet() -> None:
-    session = _session()
-    session.terminal.set_turn_outcome_hint("queued")
-    assert session.terminal._turn_outcome_hint == "queued"
-    assert session.terminal.pop_turn_outcome_hint() == "queued"
-    assert session.terminal._turn_outcome_hint is None
 
 
 # --------------------------------------------------------------------------- #
-# Alert-inbox facet — incoming-alert cap                                      #
-# --------------------------------------------------------------------------- #
-
-
-def test_incoming_alerts_are_capped_and_drop_oldest_first() -> None:
-    session = _session()
-    cap = session.alerts._max
-    for i in range(cap + 5):
-        session.record_incoming_alert(IncomingAlert(text=f"alert-{i}"))
-    assert len(session.alerts.entries) == cap
-    # FIFO: the first 5 were dropped, newest retained.
-    assert session.alerts.entries[0].text == "alert-5"
-    assert session.alerts.entries[-1].text == f"alert-{cap + 4}"
-
-
-# --------------------------------------------------------------------------- #
-# Core — integration warm-cache generation guard                              #
+# Integration warm-cache generation guard                                     #
 # --------------------------------------------------------------------------- #
 
 
@@ -216,27 +81,7 @@ class TestWarmCacheGeneration:
 
 
 # --------------------------------------------------------------------------- #
-# Terminal — turn-outcome-hint staging (consumed exactly once)                #
-# --------------------------------------------------------------------------- #
-
-
-class TestTurnOutcomeHint:
-    def test_pop_returns_then_clears(self) -> None:
-        session = _session()
-        session.terminal.set_turn_outcome_hint("handled")
-        assert session.terminal.pop_turn_outcome_hint() == "handled"
-        assert session.terminal.pop_turn_outcome_hint() is None  # consumed once
-
-    def test_blank_hint_is_dropped(self) -> None:
-        session = _session()
-        session.terminal.set_turn_outcome_hint("   ")
-        assert session.terminal.pop_turn_outcome_hint() is None
-        session.terminal.set_turn_outcome_hint(None)
-        assert session.terminal.pop_turn_outcome_hint() is None
-
-
-# --------------------------------------------------------------------------- #
-# Core — token accounting (the /cost totals)                                  #
+# Token accounting (the /cost totals)                                         #
 # --------------------------------------------------------------------------- #
 
 
