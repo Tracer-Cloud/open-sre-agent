@@ -623,8 +623,8 @@ class CLIBackedAgentClient:
 
         self._adapter = adapter
         self._model = model
-        # Reuse one subprocess client so the 45s probe cache in the CLI client
-        # applies across ReAct iterations instead of re-probing every invoke.
+        # Reuse one client so any probe cache in the CLI backend applies across
+        # ReAct iterations instead of re-probing every invoke.
         self._cli_client = build_cli_client(adapter, model=self._model)
 
     @property

@@ -93,16 +93,21 @@ def classify_llm_invoke_failure(exc: BaseException) -> LLMInvokeFailure | None:
         return None
 
     if _is_llm_cli_error(exc, "CLIAuthenticationRequired"):
+        provider = getattr(exc, "provider", None) or "unknown"
         return LLMInvokeFailure(
             user_message=(
-                f"The {getattr(exc, 'provider', '')} CLI is not authenticated, so the "
+                f"The {provider} CLI is not authenticated, so the "
                 "investigation could not call the model."
             ),
             tracker_message="Failed: CLI not authenticated",
             remediation_steps=[
-                getattr(exc, "auth_hint", ""),
-                getattr(exc, "detail", ""),
-                "Run `opensre doctor` to verify CLI installation and auth.",
+                step
+                for step in (
+                    getattr(exc, "auth_hint", None),
+                    getattr(exc, "detail", None),
+                    "Run `opensre doctor` to verify CLI installation and auth.",
+                )
+                if step
             ],
         )
 

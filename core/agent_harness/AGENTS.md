@@ -73,7 +73,7 @@ responsibility-scoped subpackage.
   inject surface-owned command registries instead of being imported here.
 - `session/` — reusable agent session state (`SessionCore`), JSONL storage, prompt
   history, task registry, session-scoped background records, integration resolution
-  (:mod:`session.integration_state`), and `SessionManager` (the lifecycle owner).
+  (:mod:`session.integration_resolution`), and `SessionManager` (the lifecycle owner).
   See "Session lifecycle" below.
 
 ## Session lifecycle (owned by SessionManager)
