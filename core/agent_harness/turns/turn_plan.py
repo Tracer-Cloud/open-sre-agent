@@ -19,7 +19,7 @@ from dataclasses import dataclass, replace
 from typing import Any
 
 from core.agent_harness.ports import SessionStore
-from core.agent_harness.session.integration import resolve_and_cache_integrations
+from core.agent_harness.session.integration_resolution import resolve_and_cache_integrations
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 
 
