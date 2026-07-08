@@ -70,3 +70,19 @@ def test_install_harness_ports_wires_catalog_and_registry() -> None:
 
     assert harness_ports._load_integrations is not harness_ports._default_load_integrations
     assert isinstance(harness_ports.get_surface_tools("action"), list)
+
+
+def test_install_harness_ports_wires_cli_llm_adapters() -> None:
+    # Before wiring, the CLI-LLM backend fails loudly instead of silently no-op'ing.
+    harness_ports.reset_harness_ports()
+    with pytest.raises(RuntimeError, match="not registered"):
+        harness_ports.build_cli_client(object(), model="x")
+
+    output_boundary.install_harness_ports()
+
+    assert (
+        harness_ports._cli_provider_registration_fn
+        is not harness_ports._default_cli_provider_registration
+    )
+    assert harness_ports._build_cli_client_fn is not harness_ports._cli_llm_backend_unavailable
+    assert harness_ports._flatten_cli_messages_fn is not harness_ports._cli_llm_backend_unavailable
