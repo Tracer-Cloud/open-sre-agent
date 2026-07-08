@@ -27,7 +27,7 @@ from core.agent_harness.prompts.conversation_memory import (
     format_recent_conversation,
 )
 from core.agent_harness.prompts.gather import build_gather_system_prompt
-from core.agent_harness.session.integration_resolution import resolve_and_cache_integrations
+from core.agent_harness.session.integration.state import resolve_and_cache_integrations
 from core.domain.alerts.alert_source import SECONDARY_TOOL_SOURCES
 from core.events import runtime_event_callback_from_observer
 from platform.harness_ports import (

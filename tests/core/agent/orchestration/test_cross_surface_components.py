@@ -275,7 +275,7 @@ def test_action_tools_falls_back_to_session_resolve_when_none(
         _fake_build,
     )
     monkeypatch.setattr(
-        "core.agent_harness.session.integration_resolution.resolve_and_cache_integrations",
+        "core.agent_harness.session.integration.state.resolve_and_cache_integrations",
         lambda _session: dict(session_resolved),
     )
     provider = DefaultToolProvider(

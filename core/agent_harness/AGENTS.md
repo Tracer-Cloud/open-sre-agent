@@ -71,10 +71,10 @@ responsibility-scoped subpackage.
   `conversation_memory.py` (recent-conversation rendering shared by prompts) lives here.
 - `grounding/` — reusable grounding cache and rendering contracts; surfaces
   inject surface-owned command registries instead of being imported here.
-- `session/` — reusable agent session state (`Session`), JSONL storage, prompt
-  history, task registry, session-scoped background records, and
-  `SessionManager` (the lifecycle owner). See "Session lifecycle" below.
-- `integrations/` — integration resolution helpers for the harness.
+- `session/` — reusable agent session state (`SessionCore`), JSONL storage, prompt
+  history, task registry, session-scoped background records, integration resolution
+  (:mod:`session.integration_state`), and `SessionManager` (the lifecycle owner).
+  See "Session lifecycle" below.
 
 ## Session lifecycle (owned by SessionManager)
 

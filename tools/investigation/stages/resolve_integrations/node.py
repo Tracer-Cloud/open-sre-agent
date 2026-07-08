@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.agent_harness.session.integration_resolution import resolve_integrations_with_metadata
+from core.agent_harness.session.integration.state import resolve_integrations_with_metadata
 from core.state import InvestigationState
 from platform.observability import get_progress_tracker as get_tracker
 
