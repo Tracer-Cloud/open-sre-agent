@@ -20,7 +20,9 @@ from platform.deployment.aws.config import (
 )
 from platform.deployment.aws.ec2 import (
     create_instance_profile,
+    create_stack_security_group,
     delete_instance_profile,
+    delete_stack_security_group,
     find_stack_instance_ids,
     get_latest_ubuntu2204_ami,
     launch_instance,
@@ -262,6 +264,10 @@ def deploy_direct(
     base_ami = get_latest_ubuntu2204_ami(region)
     print(f"  - Base AMI: {base_ami}")
 
+    print("Creating security group...")
+    security_group_id = create_stack_security_group(stack_name, region=region)
+    print(f"  - Security group: {security_group_id}")
+
     print(f"Launching EC2 instance ({INSTANCE_TYPE})...")
     instance = launch_instance(
         ami_id=base_ami,
@@ -269,6 +275,7 @@ def deploy_direct(
         stack_name=stack_name,
         instance_type=INSTANCE_TYPE,
         root_device_name=EC2_UBUNTU_ROOT_DEVICE_NAME,
+        security_group_ids=[security_group_id],
         region=region,
     )
     instance_id = instance["InstanceId"]
@@ -309,6 +316,7 @@ def deploy_direct(
         "StackName": stack_name,
         "InstanceId": instance_id,
         "PublicIpAddress": public_ip,
+        "SecurityGroupId": security_group_id,
         "ProfileName": profile_info["ProfileName"],
         "RoleName": profile_info["RoleName"],
         "BaseAmiId": base_ami,
@@ -348,6 +356,7 @@ def destroy_direct(*, region: str = DEFAULT_REGION) -> dict[str, list[str]]:
         outputs = {}
 
     instance_id = outputs.get("InstanceId", "")
+    security_group_id = outputs.get("SecurityGroupId", "")
     profile_name = outputs.get("ProfileName", f"{stack_name}-profile")
     role_name = outputs.get("RoleName", f"{stack_name}-role")
 
@@ -359,6 +368,16 @@ def destroy_direct(*, region: str = DEFAULT_REGION) -> dict[str, list[str]]:
             print("  - Instance terminated")
         except ClientError as e:
             results["failed"].append(f"ec2-instance:{instance_id} - {e}")
+            print(f"  - Failed: {e}")
+
+    if security_group_id:
+        print(f"Deleting security group {security_group_id}...")
+        try:
+            delete_stack_security_group(security_group_id, region=region)
+            results["deleted"].append(f"security-group:{security_group_id}")
+            print("  - Security group deleted")
+        except ClientError as e:
+            results["failed"].append(f"security-group:{security_group_id} - {e}")
             print(f"  - Failed: {e}")
 
     print(f"Deleting IAM profile {profile_name} and role {role_name}...")

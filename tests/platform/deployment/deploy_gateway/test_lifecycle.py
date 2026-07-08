@@ -25,6 +25,9 @@ def _stub_deploy_dependencies(monkeypatch: pytest.MonkeyPatch) -> None:
         },
     )
     monkeypatch.setattr(
+        lifecycle_module, "create_stack_security_group", lambda *_a, **_kw: "sg-gateway123"
+    )
+    monkeypatch.setattr(
         lifecycle_module, "launch_instance", lambda *_a, **_kw: {"InstanceId": _FAKE_INSTANCE_ID}
     )
     monkeypatch.setattr(
@@ -48,6 +51,7 @@ def test_deploy_returns_required_keys(monkeypatch: pytest.MonkeyPatch) -> None:
     assert outputs["InstanceId"] == _FAKE_INSTANCE_ID
     assert outputs["PublicIpAddress"] == "1.2.3.4"
     assert outputs["AmiId"] == _FAKE_AMI_ID
+    assert outputs["SecurityGroupId"] == "sg-gateway123"
 
 
 def test_deploy_uses_saved_ami_id_when_env_not_set(

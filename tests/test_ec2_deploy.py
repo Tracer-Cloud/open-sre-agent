@@ -39,6 +39,9 @@ def test_deploy_returns_all_required_keys(
     monkeypatch.setattr(deploy_module, "cleanup_existing_deployment", lambda **_kw: False)
     monkeypatch.setattr(deploy_module, "create_instance_profile", fake_create_instance_profile)
     monkeypatch.setattr(deploy_module, "get_latest_al2023_ami", fake_get_latest_ami)
+    monkeypatch.setattr(
+        deploy_module, "create_stack_security_group", lambda *_a, **_kw: "sg-deploy123"
+    )
     monkeypatch.setattr(deploy_module, "launch_instance", fake_launch_instance)
     monkeypatch.setattr(deploy_module, "wait_for_running", fake_wait_for_running)
     monkeypatch.setattr(deploy_module, "wait_for_ssm_registration", lambda *_a, **_kw: None)
@@ -51,7 +54,7 @@ def test_deploy_returns_all_required_keys(
     assert outputs["PublicIpAddress"] == "54.1.2.3"
     assert outputs["InstanceId"] == "i-123"
     assert outputs["ImageUri"] == _FAKE_IMAGE_URI
-    assert "SecurityGroupId" not in outputs
+    assert outputs["SecurityGroupId"] == "sg-deploy123"
     assert "VpcId" not in outputs
     assert "SubnetId" not in outputs
 
@@ -81,6 +84,9 @@ def test_deploy_uses_saved_image_uri_when_env_not_set(
         },
     )
     monkeypatch.setattr(deploy_module, "get_latest_al2023_ami", lambda *_a, **_kw: "ami-x")
+    monkeypatch.setattr(
+        deploy_module, "create_stack_security_group", lambda *_a, **_kw: "sg-deploy123"
+    )
     monkeypatch.setattr(deploy_module, "launch_instance", lambda *_a, **_kw: {"InstanceId": "i-x"})
     monkeypatch.setattr(
         deploy_module,

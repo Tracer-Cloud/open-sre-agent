@@ -14,6 +14,9 @@ from platform.deployment.aws.client import DEFAULT_REGION, get_boto3_client, get
 from platform.deployment.aws.config import (
     AL2023_AMI_SSM_PARAMETER,
     BEDROCK_POLICY_ARN,
+    DEPLOYMENT_HEALTH_INGRESS_CIDR_DEFAULT,
+    DEPLOYMENT_HEALTH_INGRESS_CIDR_ENV,
+    DEPLOYMENT_HEALTH_PORT,
     EC2_INSTANCE_ROLE_DESCRIPTION,
     EC2_ROOT_DEVICE_NAME,
     EC2_VOLUME_SIZE_GB,
@@ -171,6 +174,114 @@ def delete_instance_profile(
             raise
 
 
+def stack_security_group_name(stack_name: str) -> str:
+    """Return the deterministic security group name for a deployment stack."""
+    return f"{stack_name}-sg"
+
+
+def deployment_health_ingress_cidr() -> str:
+    """Return the CIDR allowed to reach the deployment health/API port."""
+    return os.getenv(DEPLOYMENT_HEALTH_INGRESS_CIDR_ENV, DEPLOYMENT_HEALTH_INGRESS_CIDR_DEFAULT).strip()
+
+
+def get_default_vpc_id(*, region: str = DEFAULT_REGION) -> str:
+    """Return the account default VPC id."""
+    ec2 = get_boto3_client("ec2", region)
+    resp = ec2.describe_vpcs(Filters=[{"Name": "isDefault", "Values": ["true"]}])
+    vpcs = resp.get("Vpcs", [])
+    if not vpcs:
+        raise RuntimeError(f"No default VPC found in {region}")
+    return str(vpcs[0]["VpcId"])
+
+
+def _authorize_tcp_ingress(
+    *,
+    group_id: str,
+    port: int,
+    cidr: str,
+    description: str,
+    region: str = DEFAULT_REGION,
+) -> None:
+    ec2 = get_boto3_client("ec2", region)
+    try:
+        ec2.authorize_security_group_ingress(
+            GroupId=group_id,
+            IpPermissions=[
+                {
+                    "IpProtocol": "tcp",
+                    "FromPort": port,
+                    "ToPort": port,
+                    "IpRanges": [{"CidrIp": cidr, "Description": description}],
+                }
+            ],
+        )
+    except ClientError as e:
+        if e.response["Error"]["Code"] != "InvalidPermission.Duplicate":
+            raise
+
+
+def create_stack_security_group(
+    stack_name: str,
+    *,
+    region: str = DEFAULT_REGION,
+) -> str:
+    """Create (or reuse) a stack security group with inbound TCP on the health/API port.
+
+    Returns the security group id (e.g. ``sg-0abc123...``).
+    """
+    ec2 = get_boto3_client("ec2", region)
+    vpc_id = get_default_vpc_id(region=region)
+    group_name = stack_security_group_name(stack_name)
+    tags = get_standard_tags(stack_name)
+    tags.append({"Key": "Name", "Value": group_name})
+
+    response = ec2.describe_security_groups(
+        Filters=[
+            {"Name": "group-name", "Values": [group_name]},
+            {"Name": "vpc-id", "Values": [vpc_id]},
+        ]
+    )
+    existing = response.get("SecurityGroups", [])
+    if existing:
+        group_id = str(existing[0]["GroupId"])
+    else:
+        created = ec2.create_security_group(
+            GroupName=group_name,
+            Description=f"OpenSRE deployment security group for {stack_name}",
+            VpcId=vpc_id,
+            TagSpecifications=[{"ResourceType": "security-group", "Tags": tags}],
+        )
+        group_id = str(created["GroupId"])
+        logger.info("Created security group %s for stack %s", group_id, stack_name)
+
+    cidr = deployment_health_ingress_cidr()
+    _authorize_tcp_ingress(
+        group_id=group_id,
+        port=DEPLOYMENT_HEALTH_PORT,
+        cidr=cidr,
+        description=f"OpenSRE health/API port {DEPLOYMENT_HEALTH_PORT}",
+        region=region,
+    )
+    return group_id
+
+
+def delete_stack_security_group(
+    security_group_id: str,
+    *,
+    region: str = DEFAULT_REGION,
+) -> None:
+    """Delete a stack security group. Tolerates missing groups for idempotent destroy."""
+    if not security_group_id:
+        return
+    ec2 = get_boto3_client("ec2", region)
+    try:
+        ec2.delete_security_group(GroupId=security_group_id)
+        logger.info("Deleted security group %s", security_group_id)
+    except ClientError as e:
+        if e.response["Error"]["Code"] != "InvalidGroup.NotFound":
+            raise
+
+
 def find_stack_instance_ids(
     stack_name: str,
     *,
@@ -202,13 +313,14 @@ def launch_instance(
     user_data: str | None = None,
     instance_type: str = INSTANCE_TYPE,
     root_device_name: str = EC2_ROOT_DEVICE_NAME,
+    security_group_ids: list[str] | None = None,
     region: str = DEFAULT_REGION,
 ) -> dict[str, str]:
     """Launch an EC2 instance in the default VPC and return its InstanceId.
 
-    No subnet or security group is specified; AWS assigns the default VPC subnet
-    and default security group. SSM access is outbound-only and works without any
-    inbound rules.
+    When ``security_group_ids`` is omitted, AWS assigns the default VPC security
+    group. Pass a stack security group from :func:`create_stack_security_group` to
+    expose the deployment health/API port publicly.
 
     ``root_device_name`` must match the AMI root block device (``/dev/xvda`` for
     Amazon Linux 2023, ``/dev/sda1`` for Ubuntu official AMIs) or the requested
@@ -234,6 +346,8 @@ def launch_instance(
     }
     if user_data:
         launch_kwargs["UserData"] = user_data
+    if security_group_ids:
+        launch_kwargs["SecurityGroupIds"] = security_group_ids
     key_name = os.getenv("EC2_KEY_NAME")
     if key_name:
         launch_kwargs["KeyName"] = key_name
