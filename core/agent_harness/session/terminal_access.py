@@ -19,8 +19,9 @@ def session_terminal(session: Any) -> Any | None:
 def agent_turn_executed_slashes(session: Any) -> set[str]:
     terminal = session_terminal(session)
     if terminal is not None:
-        return terminal.agent_turn_executed_slashes
-    executed = getattr(session, "_headless_agent_turn_executed_slashes", None)
+        executed_slashes: set[str] = terminal.agent_turn_executed_slashes
+        return executed_slashes
+    executed: set[str] | None = getattr(session, "_headless_agent_turn_executed_slashes", None)
     if executed is None:
         executed = set()
         session._headless_agent_turn_executed_slashes = executed
