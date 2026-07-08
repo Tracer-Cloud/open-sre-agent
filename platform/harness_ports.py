@@ -303,12 +303,10 @@ InvestigationToolsFn = Callable[[dict[str, Any]], list[RegisteredTool]]
 class _EmptyToolRegistry:
     """Default tool registry that resolves nothing until one is injected."""
 
-    def tools_for_surface(self, surface: str) -> list[RegisteredTool]:
-        del surface
+    def tools_for_surface(self, _surface: str) -> list[RegisteredTool]:
         return []
 
-    def tool_map_for_surface(self, surface: str) -> dict[str, RegisteredTool]:
-        del surface
+    def tool_map_for_surface(self, _surface: str) -> dict[str, RegisteredTool]:
         return {}
 
 
