@@ -109,7 +109,9 @@ class TerminalSession:
     background_notices: list[str] = field(default_factory=list)
     """Thread-safe queue of Rich markup messages drained by the REPL main loop."""
 
-    _background_notices_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+    _background_notices_lock: threading.Lock = field(
+        default_factory=threading.Lock, repr=False, compare=False
+    )
 
     history_generation: int = 0
     """Incremented on /new so background synthetic watchers can skip stale history writes."""

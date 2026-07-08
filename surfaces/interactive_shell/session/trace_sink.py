@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from core.agent_harness.session.persistence.jsonl_storage import JsonlSessionStorage
+from platform.observability.session_trace import NoopSessionTraceSink, SessionTraceSink
 
 
 @dataclass
@@ -36,11 +37,12 @@ class JsonlSessionTraceSink:
         )
 
 
-def jsonl_trace_sink_for_session(session: Any) -> JsonlSessionTraceSink:
-    """Return a sink wired to ``session.storage`` (typically ``JsonlSessionStorage``)."""
+def jsonl_trace_sink_for_session(session: Any) -> SessionTraceSink:
+    """Return a JSONL sink wired to ``session.storage``, or a Noop sink for
+    non-JSONL (e.g. in-memory) sessions so tests don't leak trace files to disk."""
     storage = getattr(session, "storage", None)
     if not isinstance(storage, JsonlSessionStorage):
-        storage = JsonlSessionStorage()
+        return NoopSessionTraceSink()
     return JsonlSessionTraceSink(storage=storage)
 
 

@@ -29,7 +29,7 @@ class SessionAlertInbox:
         """Append an alert, dropping the oldest once the cap is exceeded."""
         self.entries.append(alert)
         if len(self.entries) > self._max:
-            self.entries.pop(0)
+            del self.entries[0]
 
     @property
     def most_recent(self) -> IncomingAlert | None:

@@ -163,7 +163,9 @@ def _history_entry_fallback(item: dict[str, Any]) -> str:
 
 
 def _pop_turn_outcome_hint(session: SessionStore) -> str:
-    pop_hint = getattr(session, "pop_turn_outcome_hint", None)
+    # Outcome hint lives on the shell terminal facet; other sessions have none.
+    terminal = getattr(session, "terminal", None)
+    pop_hint = getattr(terminal, "pop_turn_outcome_hint", None)
     if not callable(pop_hint):
         return ""
     hint = pop_hint()

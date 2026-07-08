@@ -52,7 +52,9 @@ _ASSISTANT_LABEL = "assistant"
 
 def stage_turn_error(session: Any, kind: str, message: str) -> None:
     """Best-effort structured error staging for the turn's telemetry flush."""
-    setter = getattr(session, "set_pending_turn_error", None)
+    # Analytics staging lives on the shell terminal facet; other sessions have none.
+    terminal = getattr(session, "terminal", None)
+    setter = getattr(terminal, "set_pending_turn_error", None)
     if callable(setter):
         setter(kind, message)
 
