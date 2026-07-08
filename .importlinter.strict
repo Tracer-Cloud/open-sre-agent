@@ -29,12 +29,6 @@ ignore_imports =
     config.llm_auth.credentials -> integrations.llm_cli.registry
     config.llm_keyring -> platform
     config.repl_config -> platform.terminal.theme
-    # core -> integrations/tools (T-4 debt — llm_cli)
-    core.llm.factory -> integrations.llm_cli.registry
-    core.llm.client_builders -> integrations.llm_cli.runner
-    core.llm.transports.sdk.agent_clients -> integrations.llm_cli.runner
-    core.llm.transports.sdk.agent_clients -> integrations.llm_cli.text
-    core.llm_invoke_errors -> integrations.llm_cli.errors
     # platform -> integrations (T-4 debt — scheduler / observability)
     platform.analytics.cli -> integrations.github.identity
     platform.observability.sentry_sdk -> integrations.llm_cli.errors

@@ -1,7 +1,7 @@
 """Agent-harness ports — integrations, tools, and GitHub scope without tier violations.
 
-Adapters register at startup via
-:func:`surfaces.interactive_shell.ui.output.boundary.install_harness_ports`.
+Adapters register at startup via :func:`surfaces.interactive_shell.ui.output.boundary.install_harness_ports`
+(shell/tests) or the gateway boot path in :mod:`gateway.manager` (duplicate wiring).
 """
 
 from __future__ import annotations
@@ -346,6 +346,63 @@ def set_investigation_tools_adapter(
 
 
 # ---------------------------------------------------------------------------
+# CLI-backed LLM (integrations.llm_cli)
+# ---------------------------------------------------------------------------
+
+CliProviderRegistrationFn = Callable[[str], Any]
+BuildCliClientFn = Callable[..., Any]
+FlattenCliMessagesFn = Callable[[list[dict[str, Any]]], str]
+
+
+def _default_cli_provider_registration(_provider: str) -> Any:
+    return None
+
+
+def _cli_llm_backend_unavailable(*_args: Any, **_kwargs: Any) -> Any:
+    raise RuntimeError(
+        "CLI LLM backend is not registered — call install_harness_ports() at startup."
+    )
+
+
+_cli_provider_registration_fn: CliProviderRegistrationFn = _default_cli_provider_registration
+_build_cli_client_fn: BuildCliClientFn = _cli_llm_backend_unavailable
+_flatten_cli_messages_fn: FlattenCliMessagesFn = _cli_llm_backend_unavailable
+
+
+def cli_provider_registration(provider: str) -> Any:
+    return _cli_provider_registration_fn(provider)
+
+
+def build_cli_client(
+    adapter: Any,
+    *,
+    model: str | None = None,
+    max_tokens: int | None = None,
+    model_type: Any = None,
+) -> Any:
+    return _build_cli_client_fn(adapter, model=model, max_tokens=max_tokens, model_type=model_type)
+
+
+def flatten_cli_messages_to_prompt(messages: list[dict[str, Any]]) -> str:
+    return _flatten_cli_messages_fn(messages)
+
+
+def set_cli_llm_adapters(
+    *,
+    cli_provider_registration: CliProviderRegistrationFn | None = None,
+    build_cli_client: BuildCliClientFn | None = None,
+    flatten_cli_messages: FlattenCliMessagesFn | None = None,
+) -> None:
+    global _cli_provider_registration_fn, _build_cli_client_fn, _flatten_cli_messages_fn
+    if cli_provider_registration is not None:
+        _cli_provider_registration_fn = cli_provider_registration
+    if build_cli_client is not None:
+        _build_cli_client_fn = build_cli_client
+    if flatten_cli_messages is not None:
+        _flatten_cli_messages_fn = flatten_cli_messages
+
+
+# ---------------------------------------------------------------------------
 # GitHub repo scope
 # ---------------------------------------------------------------------------
 
@@ -432,6 +489,11 @@ def reset_harness_ports() -> None:
     )
     set_tool_registry(_EmptyToolRegistry())
     set_investigation_tools_adapter(get_investigation_tools=_default_investigation_tools)
+    set_cli_llm_adapters(
+        cli_provider_registration=_default_cli_provider_registration,
+        build_cli_client=_cli_llm_backend_unavailable,
+        flatten_cli_messages=_cli_llm_backend_unavailable,
+    )
     set_github_repo_scope_adapters(
         infer_scope=_default_infer_github_scope,
         apply_scope=_default_apply_github_scope,

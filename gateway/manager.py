@@ -54,8 +54,8 @@ class GatewayManager:
 
         harness = AgentHarness(HarnessConfig(open_storage=False))
         harness.resolve_env_variables()
-        # Mirror the interactive shell boot path: register harness tool/integration
-        # adapters so action tools (including slash_invoke) are available on gateway turns.
+        # Mirror shell boot: register harness adapters here (gateway cannot import
+        # surfaces.boundary without a surfaces↔gateway peer import).
         register_integrations()
         register_tools()
         logger = self.logger = configure_gateway_logging()

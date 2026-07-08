@@ -208,5 +208,6 @@ __all__ = [
     "SessionStore",
     "ToolEventObserver",
     "ToolProvider",
+    "ToolRegistry",
     "TurnAccounting",
 ]

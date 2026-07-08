@@ -11,12 +11,12 @@ import pytest
 
 import core.agent_harness.integrations.resolution as resolution
 import platform.harness_ports as harness_ports
-from surfaces.interactive_shell.ui.output import boundary as output_boundary
+from surfaces.interactive_shell.ui.output.boundary import install_harness_ports
 
 
 @pytest.fixture(autouse=True)
 def _harness_ports() -> Iterator[None]:
-    output_boundary.install_harness_ports()
+    install_harness_ports()
     yield
     harness_ports.reset_harness_ports()
 

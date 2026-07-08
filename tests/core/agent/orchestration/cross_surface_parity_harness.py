@@ -247,15 +247,20 @@ def probe_run_count() -> int:
 def wire_tool_registry(monkeypatch: Any, tools: list[RegisteredTool]) -> None:
     reset_probe_runs()
     reset_integrations_seen()
-    monkeypatch.setattr(
-        "core.agent_harness.tools.action_tools.get_surface_tools",
-        lambda _surface: list(tools),
-    )
     by_name = {tool.name: tool for tool in tools}
-    monkeypatch.setattr(
-        "core.agent_harness.tools.action_tools.get_surface_tool_map",
-        lambda _surface: dict(by_name),
-    )
+
+    class _FixedToolRegistry:
+        def tools_for_surface(self, surface: str) -> list[RegisteredTool]:
+            del surface
+            return list(tools)
+
+        def tool_map_for_surface(self, surface: str) -> dict[str, RegisteredTool]:
+            del surface
+            return dict(by_name)
+
+    from platform.harness_ports import set_tool_registry
+
+    set_tool_registry(_FixedToolRegistry())
 
     from core.agent_harness.tools.action_tools import _sources_for_context
 
