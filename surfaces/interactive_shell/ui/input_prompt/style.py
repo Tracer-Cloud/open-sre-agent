@@ -40,7 +40,7 @@ def _build_prompt_style() -> Style:
 
 def refresh_prompt_theme(session: Session) -> None:
     """Apply the active palette to the running prompt (input text + placeholder)."""
-    app = session.terminal.pt_style_app
+    app = session.terminal.prompt_app
     if app is None:
         return
     app.style = _build_prompt_style()

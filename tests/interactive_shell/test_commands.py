@@ -39,6 +39,65 @@ class TestDispatchSlash:
         assert dispatch_slash("/exit", session, console) is False
         assert dispatch_slash("/quit", session, console) is False
 
+    def test_delegated_cli_failure_does_not_exit_repl(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Non-zero delegated CLI exit must not propagate False from dispatch_slash."""
+        from surfaces.interactive_shell.command_registry import cli_parity as m
+
+        def _fake_run(
+            cmd: list[str],
+            *,
+            check: bool,
+            timeout: float | None,
+            capture_output: bool,
+            text: bool,
+            encoding: str,
+            errors: str,
+            env: dict[str, str],
+        ) -> subprocess.CompletedProcess[str]:
+            del check, timeout, text, encoding, errors, env
+            assert capture_output is True
+            return subprocess.CompletedProcess(cmd, 1, stdout="not logged in\n", stderr="")
+
+        monkeypatch.setattr(m.subprocess, "run", _fake_run)
+        session = Session()
+        console, buf = _capture()
+        assert dispatch_slash("/auth status", session, console) is True
+        assert "non-zero code 1" in buf.getvalue()
+        latest = session.history[-1]
+        assert latest["type"] == "slash"
+        assert latest["text"] == "/auth status"
+        assert latest["ok"] is False
+
+    def test_delegated_cli_timeout_does_not_exit_repl(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Timed-out delegated CLI must not propagate False from dispatch_slash."""
+        from surfaces.interactive_shell.command_registry import cli_parity as m
+
+        def _fake_run(
+            cmd: list[str],
+            *,
+            check: bool,
+            timeout: float | None,
+            capture_output: bool,
+            text: bool,
+            encoding: str,
+            errors: str,
+            env: dict[str, str],
+        ) -> subprocess.CompletedProcess[str]:
+            del check, capture_output, text, encoding, errors, env
+            assert timeout == m._UPDATE_SUBPROCESS_TIMEOUT_SECONDS
+            raise subprocess.TimeoutExpired(cmd=cmd, timeout=timeout or 0.0)
+
+        monkeypatch.setattr(m.subprocess, "run", _fake_run)
+        session = Session()
+        console, buf = _capture()
+        assert dispatch_slash("/update", session, console) is True
+        assert "timed out" in buf.getvalue()
+        assert session.history[-1]["ok"] is False
+
     def test_help_lists_all_commands(self) -> None:
         session = Session()
         console, buf = _capture()
@@ -2359,6 +2418,76 @@ class TestRunCliCommand:
         assert replayed == [("partial stdout\n", None), ("partial stderr\n", ERROR)]
         assert "timed out" in buf.getvalue()
 
+    def test_interactive_session_keeps_repl_alive_on_subprocess_failure(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Delegated CLI failures must not return False to dispatch_slash on the REPL."""
+        from surfaces.interactive_shell.command_registry import cli_parity as m
+
+        def _fake_run(
+            cmd: list[str],
+            *,
+            check: bool,
+            timeout: float | None,
+            capture_output: bool,
+            text: bool,
+            encoding: str,
+            errors: str,
+            env: dict[str, str],
+        ) -> subprocess.CompletedProcess[str]:
+            del check, timeout, text, encoding, errors, env
+            assert capture_output is True
+            return subprocess.CompletedProcess(cmd, 1, stdout="auth failed\n", stderr="")
+
+        monkeypatch.setattr(m.subprocess, "run", _fake_run)
+        session = Session()
+        session.record("slash", "/auth status", ok=True)
+        console, buf = _capture()
+        assert (
+            m.run_cli_command(
+                console,
+                ["auth", "status"],
+                capture_output=True,
+                session=session,
+            )
+            is True
+        )
+        assert "non-zero code 1" in buf.getvalue()
+        assert session.history[-1]["ok"] is False
+
+    def test_headless_session_propagates_subprocess_failure(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Gateway/headless surfaces need the real exit status for slash analytics."""
+        from core.agent_harness.session import SessionCore
+        from core.agent_harness.session.persistence.memory import InMemorySessionStorage
+        from surfaces.interactive_shell.command_registry import cli_parity as m
+
+        def _fake_run(
+            cmd: list[str],
+            *,
+            check: bool,
+            timeout: float | None,
+            capture_output: bool,
+            text: bool,
+            encoding: str,
+            errors: str,
+            env: dict[str, str],
+        ) -> subprocess.CompletedProcess[str]:
+            del check, text, encoding, errors, env
+            assert capture_output is True
+            assert timeout == m._HEADLESS_CLI_SUBPROCESS_TIMEOUT_SECONDS
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="boom\n")
+
+        monkeypatch.setattr(m.subprocess, "run", _fake_run)
+        session = SessionCore(storage=InMemorySessionStorage())
+        session.record("slash", "/remote health", ok=True)
+        console, _buf = _capture()
+        assert m.run_cli_command(console, ["remote", "health"], session=session) is False
+        assert session.history[-1]["ok"] is False
+
     def test_frozen_binary_delegate_reexecs_opensre_without_module_flags(
         self,
         monkeypatch: pytest.MonkeyPatch,
@@ -2369,12 +2498,12 @@ class TestRunCliCommand:
         before slash commands like ``/onboard`` can run.
         """
         from surfaces.interactive_shell.command_registry import cli_parity as m
-        from surfaces.interactive_shell.runtime.subprocess_runner import opensre_cli_runner
+        from tools.interactive_shell import cli as opensre_cli
 
         captured: list[list[str]] = []
 
-        monkeypatch.setattr(opensre_cli_runner.sys, "executable", "/tmp/opensre")
-        monkeypatch.setattr(opensre_cli_runner.sys, "frozen", True, raising=False)
+        monkeypatch.setattr(opensre_cli.sys, "executable", "/tmp/opensre")
+        monkeypatch.setattr(opensre_cli.sys, "frozen", True, raising=False)
 
         def _fake_run(
             cmd: list[str],
@@ -2404,13 +2533,13 @@ class TestRunCliCommand:
         avoids turning ``/onboard`` into ``opensre -m cli onboard``.
         """
         from surfaces.interactive_shell.command_registry import cli_parity as m
-        from surfaces.interactive_shell.runtime.subprocess_runner import opensre_cli_runner
+        from tools.interactive_shell import cli as opensre_cli
 
         captured: list[list[str]] = []
 
-        monkeypatch.setattr(opensre_cli_runner.sys, "argv", ["/tmp/bin/opensre"])
-        monkeypatch.setattr(opensre_cli_runner.sys, "executable", "/tmp/bin/python3")
-        monkeypatch.setattr(opensre_cli_runner.sys, "frozen", False, raising=False)
+        monkeypatch.setattr(opensre_cli.sys, "argv", ["/tmp/bin/opensre"])
+        monkeypatch.setattr(opensre_cli.sys, "executable", "/tmp/bin/python3")
+        monkeypatch.setattr(opensre_cli.sys, "frozen", False, raising=False)
 
         def _fake_run(
             cmd: list[str],

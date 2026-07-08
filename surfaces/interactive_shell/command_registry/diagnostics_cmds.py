@@ -7,6 +7,7 @@ from rich.markup import escape
 
 from config.llm_reasoning_effort import display_reasoning_effort
 from core.agent_harness.accounting.token_accounting import format_token_total
+from core.agent_harness.session.terminal_access import trust_mode_enabled
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.grounding.cli_reference import session_cli_reference
 from surfaces.interactive_shell.runtime import Session
@@ -38,23 +39,31 @@ def _status_provider_display() -> str:
     return f"{resolution.resolved_provider} [{WARNING}]({note})[/]"
 
 
+def _incoming_alerts_status(session: Session) -> tuple[str, str]:
+    """Return (label, value) for the incoming-alerts row; headless sessions have no inbox."""
+    alerts = getattr(session, "alerts", None)
+    if alerts is None:
+        return "incoming alerts", "0"
+    most_recent = alerts.most_recent
+    if most_recent is not None:
+        from surfaces.interactive_shell.ui.alerts import time_ago
+
+        age_str = time_ago(most_recent.received_at)
+        return "incoming alerts", f"{len(alerts.entries)} (last {age_str})"
+    return "incoming alerts", "0"
+
+
 def _cmd_status(session: Session, console: Console, _args: list[str]) -> bool:
     table = repl_table(title="Session status\n", title_style=BOLD_BRAND, show_header=False)
     table.add_column("key", style="bold")
     table.add_column("value")
     table.add_row("interactions", str(len(session.history)))
 
-    most_recent = session.alerts.most_recent
-    if most_recent is not None:
-        from surfaces.interactive_shell.ui.alerts import time_ago
-
-        age_str = time_ago(most_recent.received_at)
-        table.add_row("incoming alerts", f"{len(session.alerts.entries)} (last {age_str})")
-    else:
-        table.add_row("incoming alerts", "0")
+    alert_key, alert_value = _incoming_alerts_status(session)
+    table.add_row(alert_key, alert_value)
 
     table.add_row("last investigation", "yes" if session.last_state else "none")
-    table.add_row("trust mode", "on" if session.terminal.trust_mode else "off")
+    table.add_row("trust mode", "on" if trust_mode_enabled(session) else "off")
     table.add_row("reasoning effort", display_reasoning_effort(session.reasoning_effort))
     table.add_row("provider", _status_provider_display())
     table.add_row(

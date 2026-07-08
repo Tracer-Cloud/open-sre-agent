@@ -46,7 +46,7 @@ class TerminalSession:
     ``paused`` flag (when it is a ``RedactingFileHistory``) without needing access to
     the ``PromptSession``."""
 
-    pt_style_app: Any = None
+    prompt_app: Any = None
     """The prompt-toolkit ``Application`` instance for this session.
 
     Stored here (instead of accessed via ``get_app_or_none()``) so that worker-thread

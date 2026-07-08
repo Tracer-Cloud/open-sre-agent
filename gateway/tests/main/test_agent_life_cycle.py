@@ -41,7 +41,7 @@ from gateway.manager import GatewayManager, start_gateway
 from gateway.polling.handle_polled_inbound_telegram_msg import (
     handle_polled_inbound_telegram_message,
 )
-from gateway.session.enforce_inbound_telegram_message_security import InboundDecision
+from gateway.session.inbound_message_security import InboundDecision
 
 
 def _patch_non_telegram_components(monkeypatch) -> None:

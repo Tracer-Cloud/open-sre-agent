@@ -38,6 +38,7 @@ from core.agent_harness.ports import (
 )
 from core.agent_harness.prompts import build_cli_agent_prompt_from_provider
 from core.agent_harness.prompts.conversation_memory import MAX_CONVERSATION_MESSAGES
+from core.agent_harness.session.terminal_access import agent_turn_executed_slashes
 from core.agent_harness.turns.transcript_compaction import auto_compact_if_needed
 from core.agent_harness.turns.turn_plan import TurnPlan, build_turn_plan
 from core.llm_invoke_errors import is_cli_timeout_error
@@ -302,11 +303,7 @@ def run_turn(
     # Clear any observation left by a prior turn so only this turn's discovery
     # output can trigger a summary pass.
     session.last_command_observation = None
-    # Slash dedup lives on the shell terminal facet; non-shell sessions have none.
-    terminal = getattr(session, "terminal", None)
-    executed_slashes = getattr(terminal, "agent_turn_executed_slashes", None)
-    if executed_slashes is not None:
-        executed_slashes.clear()
+    agent_turn_executed_slashes(session).clear()
 
     action_result = execute_actions(
         text,

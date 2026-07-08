@@ -48,7 +48,7 @@ def test_terminal_facet_holds_the_prompt_toolkit_cluster() -> None:
     terminal = _session().terminal
     for f in (
         "prompt_history_backend",
-        "pt_style_app",
+        "prompt_app",
         "main_loop",
         "prompt_refresh_fn",
         "fleet_sampler_starter",

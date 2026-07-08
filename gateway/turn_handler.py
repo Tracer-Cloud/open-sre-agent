@@ -111,6 +111,7 @@ class GatewayTurnHandler:
             accounting=DefaultTurnAccounting(session, text),
             error_reporter=error_reporter,
             gather_enabled=True,
+            is_tty=False,
         )
 
 

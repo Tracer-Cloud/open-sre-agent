@@ -153,9 +153,9 @@ def test_run_foreground_investigation_opensre_error_does_not_duplicate_auth_hint
 def test_run_foreground_investigation_skips_feedback_when_pt_app_running(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """#3690: pt_style_app is on session.terminal; must not run raw stdin menu while active."""
+    """#3690: prompt_app is on session.terminal; must not run raw stdin menu while active."""
     session = Session()
-    session.terminal.pt_style_app = MagicMock(is_running=True)
+    session.terminal.prompt_app = MagicMock(is_running=True)
     console = Console(force_terminal=False, color_system=None, highlight=False)
     task = MagicMock(spec=TaskRecord)
     task.cancel_requested = False
@@ -187,7 +187,7 @@ def test_run_foreground_investigation_prompts_feedback_when_pt_app_idle(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     session = Session()
-    session.terminal.pt_style_app = MagicMock(is_running=False)
+    session.terminal.prompt_app = MagicMock(is_running=False)
     console = Console(force_terminal=False, color_system=None, highlight=False)
     task = MagicMock(spec=TaskRecord)
     task.cancel_requested = False
@@ -212,3 +212,42 @@ def test_run_foreground_investigation_prompts_feedback_when_pt_app_idle(
     )
 
     feedback.assert_called_once_with({"root_cause": "sample"})
+
+
+def test_run_foreground_investigation_skips_feedback_on_headless_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Gateway SessionCore must not block on the RCA feedback picker."""
+    from core.agent_harness.session import SessionCore
+    from core.agent_harness.session.persistence.memory import InMemorySessionStorage
+
+    session = SessionCore(storage=InMemorySessionStorage())
+    console = Console(force_terminal=False, color_system=None, highlight=False)
+    task = MagicMock(spec=TaskRecord)
+    task.cancel_requested = False
+    monkeypatch.setattr(
+        session.task_registry,
+        "create",
+        lambda *_args, **_kwargs: task,
+    )
+    feedback = MagicMock()
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.ui.feedback.prompt_investigation_feedback",
+        feedback,
+    )
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.ui.components.choice_menu.repl_tty_interactive",
+        lambda: True,
+    )
+
+    outcome = run_foreground_investigation(
+        session=session,
+        console=console,
+        task_command="/investigate grafana",
+        run=lambda _task: {"root_cause": "sample"},
+        exception_context="test",
+        target="grafana",
+    )
+
+    assert outcome.status == "completed"
+    feedback.assert_not_called()

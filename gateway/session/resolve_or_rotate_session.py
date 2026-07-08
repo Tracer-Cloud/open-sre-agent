@@ -5,7 +5,7 @@ from __future__ import annotations
 from core.agent_harness.session import SessionCore
 from gateway.config.get_gateway_settings import TelegramInboundMessage
 from gateway.polling.telegram_poller.client import TelegramBotClient
-from gateway.session.enforce_inbound_telegram_message_security import (
+from gateway.session.inbound_message_security import (
     InboundDecision,
     persist_policy_if_needed,
 )

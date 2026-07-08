@@ -1774,7 +1774,7 @@ def test_refresh_prompt_theme_skips_invalidate_when_app_not_running() -> None:
             invalidated.append(True)
 
     session = Session()
-    session.terminal.pt_style_app = _App()
+    session.terminal.prompt_app = _App()
     refresh_prompt_theme(session)
     assert invalidated == []
-    assert session.terminal.pt_style_app.style is not None
+    assert session.terminal.prompt_app.style is not None

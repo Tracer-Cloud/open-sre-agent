@@ -16,6 +16,7 @@ from typing import Literal, Protocol, runtime_checkable
 from rich.console import Console
 from rich.markup import escape
 
+from core.agent_harness.session.terminal_access import background_mode_enabled
 from platform.common.task_types import TaskRecord
 from surfaces.interactive_shell.session import Session
 from tools.interactive_shell.shared.execution_policy import (
@@ -100,7 +101,7 @@ def launch_investigation(
 
     console.print(f"[bold]{announce_label}:[/bold] {escape(announce_value)}")
 
-    if session.terminal.background_mode_enabled:
+    if background_mode_enabled(session):
         start_background()
         session.record("alert", record_value)
         return
