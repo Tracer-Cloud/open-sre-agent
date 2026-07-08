@@ -29,5 +29,5 @@ def test_registered_commands_match_help_table() -> None:
     )
     assert not missing_from_registry, (
         f"Commands shown in the rendered help list but not registered in _COMMANDS: {missing_from_registry}. "
-        "Add the command to _COMMANDS in cli/commands/__init__.py."
+        "Add the command to _COMMANDS in surfaces/cli/commands/__init__.py."
     )

@@ -1,4 +1,4 @@
-"""Unit tests for cli/wizard/local_llm/hardware.py
+"""Unit tests for surfaces/cli/wizard/local_llm/hardware.py
 
 Covers:
 - _get_total_ram_gb()   — Linux /proc/meminfo, macOS sysctl, and fallback

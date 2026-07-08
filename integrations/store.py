@@ -240,7 +240,7 @@ def _record_with_flat_credentials_view(record: dict[str, Any]) -> dict[str, Any]
 
     v2 records store credentials inside ``instances[0].credentials``. Many
     existing callers (``azure_sql.py``, ``mysql.py``, ``postgresql.py``,
-    ``cli/wizard/flow.py``) read ``record["credentials"]`` directly. This
+    ``surfaces/cli/wizard/flow.py``) read ``record["credentials"]`` directly. This
     helper synthesises a top-level ``credentials`` view from the default
     (first) instance so those callers continue to work unchanged.
     """

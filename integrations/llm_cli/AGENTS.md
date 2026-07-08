@@ -33,7 +33,7 @@ Use this package when adding a new **non-interactive** LLM that shells out to a 
 1. **Adapter** — Implement `LLMCLIAdapter`: `detect()` must not raise; `build()` returns argv + optional stdin; `parse` / `explain_failure` for success and non-zero exits. Put prompt text on stdin and/or in argv as appropriate — the runner does not branch on a separate “delivery mode”; `CLIInvocation` carries what `build()` produced.
 2. **Registry** — Add an entry to `CLI_PROVIDER_REGISTRY` in `registry.py` (`adapter_factory`, `model_env_key`). The dict key must match `LLM_PROVIDER` / `ProviderOption.value` / `LLMProvider` in `config/config.py`. `resolve_llm_route` in `core/llm/factory.py` resolves registered CLI providers into a `cli_provider_registration`, and the builders in `core/llm/client_builders.py` construct the CLI-backed client automatically (no new branch for normal cases).
 3. **Config** — Add the provider literal to `LLMProvider` and validators in `config/config.py` (same string as the registry key).
-4. **Wizard (optional)** — If onboarding should offer the CLI: add a `ProviderOption` in `cli/wizard/config.py` with `credential_kind="cli"` and `adapter_factory`. `flow.py` already runs `_run_cli_llm_onboarding` for CLI providers and builds the saved-summary credential line from `provider.label` + `adapter.auth_hint`.
+4. **Wizard (optional)** — If onboarding should offer the CLI: add a `ProviderOption` in `surfaces/cli/wizard/config.py` with `credential_kind="cli"` and `adapter_factory`. `flow.py` already runs `_run_cli_llm_onboarding` for CLI providers and builds the saved-summary credential line from `provider.label` + `adapter.auth_hint`.
 5. **Typing** — Prefer `adapter_factory: Callable[[], LLMCLIAdapter]` on `ProviderOption` so wizard and client stay aligned.
 
 ## Binary resolution (recommended pattern)
@@ -159,7 +159,7 @@ CODEX_BIN=
 - Write `_classify_<name>_auth` — test against a real logged-in **and** logged-out session before merging.
 - If the CLI reads custom env vars (e.g. `GEMINI_*`), add the prefix to `_SAFE_SUBPROCESS_ENV_PREFIXES` in `subprocess_env.py`.
 - Register the provider in `registry.py` and add the same `LLM_PROVIDER` value in `config/config.py`.
-- (Optional) Add wizard onboarding option in `cli/wizard/config.py`.
+- (Optional) Add wizard onboarding option in `surfaces/cli/wizard/config.py`.
 - Add tests under `tests/integrations/llm_cli/` for detect/build/failure paths, including env forwarding.
 
 ## Tests

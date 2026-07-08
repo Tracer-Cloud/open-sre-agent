@@ -58,7 +58,7 @@ __all__ = [
     # Output config
     "debug_print",
     "get_output_format",
-    # Semi-public helpers used by cli/ui/renderer (underscore names are
+    # Semi-public helpers used by surfaces/cli/ui/renderer (underscore names are
     # intentional — they signal "reach in carefully" rather than stable API)
     "_fmt_timing",
     "_repl_progress_active",

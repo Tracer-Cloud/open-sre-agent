@@ -24,7 +24,7 @@ From the repo root:
 ```bash
 make lint          # ruff check
 make format-check  # ruff format --check (CI-enforced)
-make typecheck     # mypy app/
+make typecheck     # mypy config core gateway integrations platform surfaces tools
 make test-cov      # pytest + coverage (default unit suite)
 ```
 
