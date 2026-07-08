@@ -8,18 +8,32 @@ LLM credentials.
 from __future__ import annotations
 
 import json
+from collections.abc import Generator
 from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
+from core.domain.alerts.extraction import AlertDetails
 from core.domain.types.incident_window import SOURCE_STARTS_AT, resolve_incident_window
 from surfaces.cli.investigation.payload import load_file
 from tools.investigation.stages.gather_evidence.prompt import format_alert_context
 from tools.investigation.stages.intake.node import extract_alert
 from tools.investigation.state_factory import make_initial_state
+from tools.registry import clear_tool_registry_cache
+
+pytestmark = pytest.mark.e2e
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "datadog_k8s_alert.json"
 AGED_NOW = datetime(2026, 2, 19, 4, 0, 0, tzinfo=UTC)
+
+
+@pytest.fixture(autouse=True)
+def _reset_tool_registry() -> Generator[None]:
+    clear_tool_registry_cache()
+    yield
+    clear_tool_registry_cache()
 
 
 def _load_fixture() -> dict:
@@ -53,8 +67,6 @@ def test_extract_alert_populates_incident_window_from_fixture_envelope() -> None
     with patch(
         "tools.investigation.stages.intake.node._extract_alert_details",
     ) as extract_details:
-        from core.domain.alerts.extraction import AlertDetails
-
         extract_details.return_value = AlertDetails(
             alert_name="Kubernetes job etl-transform-error failed",
             pipeline_name="kubernetes_etl_pipeline",
