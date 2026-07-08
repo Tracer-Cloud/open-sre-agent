@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
+from pydantic import ValidationError
+
 from integrations.config_models import SMTPIntegrationConfig
+
+logger = logging.getLogger(__name__)
 
 
 def classify(
@@ -22,6 +27,9 @@ def classify(
                 "default_to": credentials.get("default_to"),
             }
         )
+    except ValidationError:
+        raise
     except Exception:
+        logger.debug("SMTPIntegrationConfig validation failed unexpectedly", exc_info=True)
         return None, None
     return cfg, "smtp"
