@@ -223,6 +223,12 @@ def main() -> int:
         build_image(PIPELINE_DIR, IMAGE_TAG)
         load_image(CLUSTER_NAME, IMAGE_TAG)
         apply_manifest(NAMESPACE_MANIFEST)
+        from tests.e2e.kubernetes.infrastructure_sdk.local import _run
+
+        _run(
+            ["kubectl", "create", "serviceaccount", "etl-pipeline-sa", "-n", NAMESPACE],
+            check=False,
+        )
         deploy_datadog_helm(DATADOG_VALUES, NAMESPACE)
 
         if not wait_for_datadog_agent(NAMESPACE):
