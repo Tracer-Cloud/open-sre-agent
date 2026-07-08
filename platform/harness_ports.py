@@ -12,12 +12,15 @@ import logging
 import os
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from config.strict_config import StrictConfigModel
 from core.tool_framework.registered_tool import RegisteredTool
+
+if TYPE_CHECKING:
+    from core.agent_harness.ports import ToolRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -294,50 +297,44 @@ def _strip_bearer(token: str) -> str:
 # Tool registry + investigation tools
 # ---------------------------------------------------------------------------
 
-SurfaceToolsFn = Callable[[str], list[RegisteredTool]]
-SurfaceToolMapFn = Callable[[str], dict[str, RegisteredTool]]
 InvestigationToolsFn = Callable[[dict[str, Any]], list[RegisteredTool]]
 
 
-def _default_surface_tools(_surface: str) -> list[RegisteredTool]:
-    return []
+class _EmptyToolRegistry:
+    """Default tool registry that resolves nothing until one is injected."""
 
+    def tools_for_surface(self, surface: str) -> list[RegisteredTool]:
+        del surface
+        return []
 
-def _default_surface_tool_map(_surface: str) -> dict[str, RegisteredTool]:
-    return {}
+    def tool_map_for_surface(self, surface: str) -> dict[str, RegisteredTool]:
+        del surface
+        return {}
 
 
 def _default_investigation_tools(_resolved: dict[str, Any]) -> list[RegisteredTool]:
     return []
 
 
-_get_surface_tools: SurfaceToolsFn = _default_surface_tools
-_get_surface_tool_map: SurfaceToolMapFn = _default_surface_tool_map
+_tool_registry: ToolRegistry = _EmptyToolRegistry()
 _get_investigation_tools: InvestigationToolsFn = _default_investigation_tools
 
 
 def get_surface_tools(surface: str) -> list[RegisteredTool]:
-    return _get_surface_tools(surface)
+    return _tool_registry.tools_for_surface(surface)
 
 
 def get_surface_tool_map(surface: str) -> dict[str, RegisteredTool]:
-    return _get_surface_tool_map(surface)
+    return _tool_registry.tool_map_for_surface(surface)
 
 
 def get_investigation_tools(resolved_integrations: dict[str, Any]) -> list[RegisteredTool]:
     return _get_investigation_tools(resolved_integrations)
 
 
-def set_tool_registry_adapters(
-    *,
-    get_surface_tools: SurfaceToolsFn | None = None,
-    get_surface_tool_map: SurfaceToolMapFn | None = None,
-) -> None:
-    global _get_surface_tools, _get_surface_tool_map
-    if get_surface_tools is not None:
-        _get_surface_tools = get_surface_tools
-    if get_surface_tool_map is not None:
-        _get_surface_tool_map = get_surface_tool_map
+def set_tool_registry(registry: ToolRegistry) -> None:
+    global _tool_registry
+    _tool_registry = registry
 
 
 def set_investigation_tools_adapter(
@@ -433,10 +430,7 @@ def reset_harness_ports() -> None:
         merge_integrations_by_service=_default_merge_by_service,
         configured_services=_default_configured_services,
     )
-    set_tool_registry_adapters(
-        get_surface_tools=_default_surface_tools,
-        get_surface_tool_map=_default_surface_tool_map,
-    )
+    set_tool_registry(_EmptyToolRegistry())
     set_investigation_tools_adapter(get_investigation_tools=_default_investigation_tools)
     set_github_repo_scope_adapters(
         infer_scope=_default_infer_github_scope,

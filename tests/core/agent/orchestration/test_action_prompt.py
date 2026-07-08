@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from core.agent_harness.models.turn_snapshot import TurnSnapshot
 from core.agent_harness.prompts import (
     _SYSTEM_PROMPT_BASE,
     build_action_system_prompt,
@@ -13,6 +12,7 @@ from core.agent_harness.prompts import (
 from core.agent_harness.prompts.assistant import build_cli_agent_prompt_from_provider
 from core.agent_harness.prompts.assistant_agent_prompt import build_handoff_guidance_block
 from core.agent_harness.prompts.conversation_memory import NO_HISTORY_PLACEHOLDER
+from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 
 
 def _ctx(

@@ -4,9 +4,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from core.agent_harness.models.turn_snapshot import TurnSnapshot
 from core.agent_harness.prompts import build_action_system_prompt
 from core.agent_harness.session import InMemorySessionStorage, SessionCore, SessionManager
+from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 from gateway.storage import SessionBindingStore, SessionResolver, connect_gateway_db
 
 

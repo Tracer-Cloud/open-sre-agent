@@ -15,7 +15,6 @@ from typing import Any, Literal
 
 from rich.console import Console
 
-from core.agent_harness.models.turn_results import ShellTurnResult
 from core.agent_harness.providers.default_prompt_context import DefaultPromptContextProvider
 from core.agent_harness.providers.default_providers import (
     DefaultReasoningClientProvider,
@@ -27,6 +26,7 @@ from core.agent_harness.turns.headless_dispatch import (
     HeadlessAgent,
     NoopTurnAccounting,
 )
+from core.agent_harness.turns.turn_results import ShellTurnResult
 from core.llm.types import AgentLLMResponse, ToolCall
 from core.tool_framework.registered_tool import RegisteredTool
 from gateway.turn_handler import GatewayTurnHandler

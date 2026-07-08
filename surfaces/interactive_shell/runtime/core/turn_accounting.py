@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 # The neutral "facts only" turn-result models live in the decoupled agent
 # package; this module owns only the shell's accounting side effects over them.
-from core.agent_harness.models.turn_results import (
+from core.agent_harness.turns.turn_results import (
     ShellTurnResult,
     ToolCallingAccountingStatus,
     ToolCallingTurnResult,

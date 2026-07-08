@@ -14,10 +14,10 @@ from typing import Unpack
 
 from rich.console import Console
 
-from core.agent_harness.models.turn_results import ShellTurnResult, ToolCallingTurnResult
 from core.agent_harness.ports import OutputSink
 from core.agent_harness.turns.orchestrator import run_turn
 from core.agent_harness.turns.turn_plan import TurnPlan
+from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
 from core.execution import ToolExecutionHooks
 from surfaces.interactive_shell.runtime.action_turn import run_action_tool_turn
 from surfaces.interactive_shell.runtime.agent_harness_adapters import resolve_output_sink

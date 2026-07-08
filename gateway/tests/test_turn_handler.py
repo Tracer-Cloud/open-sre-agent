@@ -8,9 +8,9 @@ from unittest.mock import MagicMock
 
 from rich.console import Console
 
-from core.agent_harness.models.turn_results import ShellTurnResult, ToolCallingTurnResult
 from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStorage
+from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
 from gateway.turn_handler import GatewayTurnHandler
 
 

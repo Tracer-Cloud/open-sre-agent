@@ -97,7 +97,7 @@ jobs:
         run: uv run python -m mypy $PYTHON_SOURCE_PATHS
 
       - name: Import graph
-        run: uv run python .github/ci/check_imports.py
+        run: uv run python .github/ci/check_imports.py --strict
 
   test:
     name: test (${{ matrix.shard }})

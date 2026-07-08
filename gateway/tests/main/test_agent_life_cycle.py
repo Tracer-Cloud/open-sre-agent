@@ -21,7 +21,6 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-from core.agent_harness.models.turn_results import ShellTurnResult, ToolCallingTurnResult
 from core.agent_harness.providers.default_prompt_context import DefaultPromptContextProvider
 from core.agent_harness.providers.default_providers import (
     DefaultErrorReporter,
@@ -32,6 +31,7 @@ from core.agent_harness.providers.default_providers import (
 )
 from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStorage
+from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
 from gateway.config.get_gateway_settings import (
     GatewayConfigurationError,
     GatewaySettings,

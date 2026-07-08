@@ -9,10 +9,10 @@ from unittest.mock import MagicMock
 import pytest
 from rich.console import Console
 
-from core.agent_harness.models.turn_results import ShellTurnResult, ToolCallingTurnResult
 from core.agent_harness.providers.default_providers import DefaultToolProvider
 from core.agent_harness.session import InMemorySessionStorage
 from core.agent_harness.turns.orchestrator import run_turn
+from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
 from gateway.turn_handler import GatewayTurnHandler
 from surfaces.interactive_shell.session import Session
 

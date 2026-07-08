@@ -10,7 +10,6 @@ from typing import Any
 from rich.markup import escape
 
 from core.agent_harness.accounting.token_accounting import build_llm_run_info
-from core.agent_harness.models.turn_results import ShellTurnResult, ToolCallingTurnResult
 from core.agent_harness.ports import (
     ConfirmFn,
     ErrorReporter,
@@ -22,6 +21,7 @@ from core.agent_harness.tools.tool_context import (
     ACTION_TOOL_CONTEXT_RESOURCE_KEY,
     ActionToolContext,
 )
+from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
 from platform.observability.sentry_sdk import capture_exception
 
 log = logging.getLogger(__name__)

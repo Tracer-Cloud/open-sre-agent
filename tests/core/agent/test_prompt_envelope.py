@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import pytest
 
-from core.agent_harness.models.turn_snapshot import TurnSnapshot
 from core.agent_harness.prompts import (
     PromptBlock,
     PromptEnvelope,
     build_action_system_prompt,
     build_action_system_prompt_envelope,
 )
+from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 
 
 def _ctx() -> TurnSnapshot:

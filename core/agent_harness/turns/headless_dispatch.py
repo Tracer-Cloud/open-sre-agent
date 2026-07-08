@@ -28,7 +28,6 @@ Example::
 
 from __future__ import annotations
 
-from core.agent_harness.models.turn_results import ShellTurnResult, ToolCallingTurnResult
 from core.agent_harness.ports import (
     ConfirmFn,
     ErrorReporter,
@@ -60,6 +59,7 @@ from core.agent_harness.turns.headless_adapters import (
 )
 from core.agent_harness.turns.orchestrator import run_turn, stream_answer
 from core.agent_harness.turns.turn_plan import TurnPlan
+from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
 from core.execution import ToolExecutionHooks
 
 

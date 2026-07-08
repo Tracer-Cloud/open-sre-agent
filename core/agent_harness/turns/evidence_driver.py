@@ -21,7 +21,6 @@ from typing import Any, Protocol
 
 from core.agent import Agent
 from core.agent_harness.agent_builder import AgentConfig, build_agent
-from core.agent_harness.debug.prompt_trace import persist_turn_system_prompt
 from core.agent_harness.integrations.resolution import resolve_and_cache_integrations
 from core.agent_harness.ports import ErrorReporter, SessionStore, ToolEventObserver
 from core.agent_harness.prompts.conversation_memory import (
@@ -35,6 +34,7 @@ from platform.harness_ports import (
     apply_github_repo_scope,
     infer_github_repo_scope,
 )
+from platform.observability.prompt_trace import persist_turn_system_prompt
 
 # Keep the gathering loop short: this runs inline on a turn, so it must stay
 # responsive. A handful of iterations is enough to fetch the data needed to

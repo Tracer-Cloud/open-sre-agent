@@ -21,8 +21,6 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from config.llm_reasoning_effort import apply_reasoning_effort
-from core.agent_harness.models.turn_results import ShellTurnResult, ToolCallingTurnResult
-from core.agent_harness.models.turn_snapshot import TurnSnapshot
 from core.agent_harness.ports import (
     ConfirmFn,
     ErrorReporter,
@@ -41,6 +39,8 @@ from core.agent_harness.prompts.conversation_memory import MAX_CONVERSATION_MESS
 from core.agent_harness.session.terminal_access import agent_turn_executed_slashes
 from core.agent_harness.turns.transcript_compaction import auto_compact_if_needed
 from core.agent_harness.turns.turn_plan import TurnPlan, build_turn_plan
+from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
+from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 from core.llm_invoke_errors import is_cli_timeout_error
 
 _ASSISTANT_LABEL = "assistant"
