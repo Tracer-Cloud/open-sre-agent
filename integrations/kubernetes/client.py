@@ -142,16 +142,26 @@ class KubernetesClient:
         return self.config.is_configured
 
     def probe_access(self) -> ProbeResult:
-        """Validate Kubernetes connectivity by listing namespaces."""
+        """Validate Kubernetes connectivity against the configured namespace.
+
+        Uses list_namespaced_pod (namespace-scoped) rather than list_namespace
+        (cluster-wide). Cluster-wide calls require a ClusterRole binding which
+        is unavailable on GKE Workload Identity, AKS Managed Identity, on-prem
+        Role bindings, and k3s restricted configs — all typical targets for this
+        integration. Every investigation tool is namespace-scoped, so a
+        namespace-scoped probe accurately reflects real access.
+        """
         if not self.is_configured:
             return ProbeResult.missing("Missing kubeconfig or kubeconfig_path.")
         try:
+            namespace = self.config.namespace or "default"
             core_v1, _, _ = self._get_clients()
-            ns_list = core_v1.list_namespace(limit=5)
-            names = [ns.metadata.name for ns in (ns_list.items or [])]
+            pod_list = core_v1.list_namespaced_pod(namespace=namespace, limit=1)
+            pod_count = len(pod_list.items or [])
             return ProbeResult.passed(
-                f"Connected to Kubernetes cluster; namespaces visible: {names}",
-                namespaces=names,
+                f"Connected to Kubernetes cluster; namespace '{namespace}' accessible "
+                f"({pod_count} pod(s) visible).",
+                namespace=namespace,
             )
         except ConfigException as exc:
             capture_service_error(
