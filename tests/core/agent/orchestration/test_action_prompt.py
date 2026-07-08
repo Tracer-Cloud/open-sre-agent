@@ -132,6 +132,7 @@ def test_system_prompt_hands_off_when_delivery_tool_unavailable() -> None:
     assert "that channel is not configured" in compact_prompt
     assert "do not invent or guess a slash/cli subcommand to deliver" in compact_prompt
     assert "`/messaging send slack …` is not a real command" in compact_prompt
+    assert "route the user to enable it" in compact_prompt
     assert "this applies even mid-chain" in compact_prompt
 
 

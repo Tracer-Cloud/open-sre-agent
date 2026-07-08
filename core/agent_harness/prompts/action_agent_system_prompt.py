@@ -292,13 +292,15 @@ Other tools:
 Delivery tool unavailable — never fabricate a command to deliver. When the user
 asks to send, post, notify, share, or message a channel (Slack, Telegram, etc.)
 but the matching send tool (slack_send_message, telegram_send_message, …) is NOT
-in your available tools, that channel is not configured. Emit assistant_handoff
-stating it is not configured and how to set it up (e.g. `/integrations setup
-slack`). Do NOT invent or guess a slash/CLI subcommand to deliver the message
-(e.g. `/messaging send slack …` is NOT a real command) and do NOT substitute a
-different channel. This applies even mid-chain: if a data-dependent lookup already
-ran and the delivery tool is missing, hand off with the looked-up value rather
-than fabricating a delivery command.
+in your available tools, that channel is not configured. Do NOT invent or guess a
+slash/CLI subcommand to deliver the message (e.g. `/messaging send slack …` is NOT
+a real command) and do NOT substitute a different channel. Instead do ONE of: emit
+assistant_handoff (report any value you already looked up and say the channel is
+not configured), OR route the user to enable it with the real integration command
+slash_invoke(command="/integrations", args=["setup", "<service>"]). This applies
+even mid-chain: if a data-dependent lookup already ran and the delivery tool is
+missing, hand off or route to setup with the looked-up value rather than
+fabricating a delivery command.
 
 Never use shell_run for OpenSRE product requests like "show integration details",
 "list connected services", "show model/provider", or docs/how-to questions.
