@@ -39,7 +39,9 @@ class TestDispatchSlash:
         assert dispatch_slash("/exit", session, console) is False
         assert dispatch_slash("/quit", session, console) is False
 
-    def test_delegated_cli_failure_does_not_exit_repl(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_delegated_cli_failure_does_not_exit_repl(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Non-zero delegated CLI exit must not propagate False from dispatch_slash."""
         from surfaces.interactive_shell.command_registry import cli_parity as m
 
@@ -68,7 +70,9 @@ class TestDispatchSlash:
         assert latest["text"] == "/auth status"
         assert latest["ok"] is False
 
-    def test_delegated_cli_timeout_does_not_exit_repl(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_delegated_cli_timeout_does_not_exit_repl(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Timed-out delegated CLI must not propagate False from dispatch_slash."""
         from surfaces.interactive_shell.command_registry import cli_parity as m
 
@@ -2440,12 +2444,15 @@ class TestRunCliCommand:
         session = Session()
         session.record("slash", "/auth status", ok=True)
         console, buf = _capture()
-        assert m.run_cli_command(
-            console,
-            ["auth", "status"],
-            capture_output=True,
-            session=session,
-        ) is True
+        assert (
+            m.run_cli_command(
+                console,
+                ["auth", "status"],
+                capture_output=True,
+                session=session,
+            )
+            is True
+        )
         assert "non-zero code 1" in buf.getvalue()
         assert session.history[-1]["ok"] is False
 
