@@ -8,8 +8,8 @@ from config.constants.prompts import SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TES
 from core.agent_harness.grounding.investigation_flow_reference import (
     build_investigation_flow_reference_text,
 )
+from core.agent_harness.llm_resolution import resolve_provider_models
 from core.agent_harness.prompts import build_environment_block
-from core.agent_harness.providers.provider_models import resolve_provider_models
 
 
 def load_llm_settings() -> Any | None:

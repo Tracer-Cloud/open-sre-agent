@@ -18,10 +18,10 @@ from unittest.mock import MagicMock
 import pytest
 from rich.console import Console
 
-from core.agent_harness.providers.default_providers import DefaultToolProvider
 from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStorage
 from core.agent_harness.tools.action_tools import action_tool_names
+from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.action_driver import ToolCallingDeps, run_action_agent_turn
 from core.llm.types import AgentLLMResponse, ToolCall
 from gateway.headless_subprocess_presenter import headless_subprocess_presenter_factory

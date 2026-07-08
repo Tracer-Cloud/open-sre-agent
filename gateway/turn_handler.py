@@ -12,15 +12,13 @@ import logging
 
 from rich.console import Console
 
-from core.agent_harness.providers.default_prompt_context import DefaultPromptContextProvider
-from core.agent_harness.providers.default_providers import (
-    DefaultErrorReporter,
-    DefaultReasoningClientProvider,
-    DefaultRunRecordFactory,
-    DefaultToolProvider,
-    DefaultTurnAccounting,
-)
+from core.agent_harness.accounting.run_record import DefaultRunRecordFactory
+from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
+from core.agent_harness.error_reporting import DefaultErrorReporter
+from core.agent_harness.prompts.prompt_context import DefaultPromptContextProvider
 from core.agent_harness.session import SessionCore
+from core.agent_harness.tools.tool_provider import DefaultToolProvider
+from core.agent_harness.turns.default_reasoning_client import DefaultReasoningClientProvider
 from core.agent_harness.turns.headless_dispatch import HeadlessAgent
 from gateway.gateway_output_sink import GatewayOutputSink
 from gateway.headless_subprocess_presenter import headless_subprocess_presenter_factory

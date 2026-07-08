@@ -193,7 +193,7 @@ def test_provided_accounting_is_reused_across_messages() -> None:
 
 
 def test_default_accounting_is_resolved_fresh_per_message() -> None:
-    from core.agent_harness.providers.default_providers import DefaultTurnAccounting
+    from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
     from core.agent_harness.turns.headless_dispatch import InMemorySessionStore, NullToolProvider
 
     class _PersistentStore(InMemorySessionStore):

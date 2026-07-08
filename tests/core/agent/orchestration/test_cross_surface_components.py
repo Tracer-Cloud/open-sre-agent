@@ -9,8 +9,8 @@ from unittest.mock import MagicMock
 import pytest
 from rich.console import Console
 
-from core.agent_harness.providers.default_providers import DefaultToolProvider
 from core.agent_harness.session import InMemorySessionStorage
+from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.orchestrator import run_turn
 from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
 from gateway.turn_handler import GatewayTurnHandler
@@ -246,7 +246,7 @@ def test_action_tools_uses_passed_resolved_integrations(
         return []
 
     monkeypatch.setattr(
-        "core.agent_harness.providers.default_providers.get_action_tools_from_integrations_context",
+        "core.agent_harness.tools.tool_provider.get_action_tools_from_integrations_context",
         _fake_build,
     )
     provider = DefaultToolProvider(
@@ -271,7 +271,7 @@ def test_action_tools_falls_back_to_session_resolve_when_none(
         return []
 
     monkeypatch.setattr(
-        "core.agent_harness.providers.default_providers.get_action_tools_from_integrations_context",
+        "core.agent_harness.tools.tool_provider.get_action_tools_from_integrations_context",
         _fake_build,
     )
     monkeypatch.setattr(

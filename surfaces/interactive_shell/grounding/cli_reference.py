@@ -14,7 +14,7 @@ from core.agent_harness.grounding.diagnostics import (
     log_grounding_cache_diagnostics,
 )
 from core.agent_harness.grounding.models import CacheStats
-from core.agent_harness.providers.default_prompt_context import DefaultPromptContextProvider
+from core.agent_harness.prompts.prompt_context import DefaultPromptContextProvider
 
 _logger = logging.getLogger(__name__)
 
@@ -323,7 +323,7 @@ class ShellPromptContextProvider:
 
     Owns CLI catalog assembly (``surfaces.cli`` + slash commands) and delegates
     repo-level grounding (AGENTS.md, environment block) to
-    :class:`~core.agent_harness.providers.default_prompt_context.DefaultPromptContextProvider`.
+    :class:`~core.agent_harness.prompts.prompt_context.DefaultPromptContextProvider`.
     """
 
     def __init__(self, session: Any) -> None:

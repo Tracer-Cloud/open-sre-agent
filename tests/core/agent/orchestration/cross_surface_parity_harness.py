@@ -15,12 +15,10 @@ from typing import Any, Literal
 
 from rich.console import Console
 
-from core.agent_harness.providers.default_prompt_context import DefaultPromptContextProvider
-from core.agent_harness.providers.default_providers import (
-    DefaultReasoningClientProvider,
-    DefaultToolProvider,
-)
+from core.agent_harness.prompts.prompt_context import DefaultPromptContextProvider
 from core.agent_harness.session import InMemorySessionStorage
+from core.agent_harness.tools.tool_provider import DefaultToolProvider
+from core.agent_harness.turns.default_reasoning_client import DefaultReasoningClientProvider
 from core.agent_harness.turns.headless_dispatch import (
     BufferOutputSink,
     HeadlessAgent,
@@ -274,7 +272,7 @@ def wire_tool_registry(monkeypatch: Any, tools: list[RegisteredTool]) -> None:
         return [tool for tool in tools if tool.is_available(sources)]
 
     monkeypatch.setattr(
-        "core.agent_harness.providers.default_providers.get_action_tools_from_integrations_context",
+        "core.agent_harness.tools.tool_provider.get_action_tools_from_integrations_context",
         _resolve_from_integrations,
     )
     monkeypatch.setattr(

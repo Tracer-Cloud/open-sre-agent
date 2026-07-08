@@ -10,12 +10,10 @@ from collections.abc import Callable
 
 from rich.console import Console
 
+from core.agent_harness.accounting.run_record import DefaultRunRecordFactory
+from core.agent_harness.error_reporting import DefaultErrorReporter
 from core.agent_harness.ports import OutputSink
-from core.agent_harness.providers.default_providers import (
-    DefaultErrorReporter,
-    DefaultReasoningClientProvider,
-    DefaultRunRecordFactory,
-)
+from core.agent_harness.turns.default_reasoning_client import DefaultReasoningClientProvider
 from core.agent_harness.turns.orchestrator import (
     stream_answer as core_stream_answer,
 )

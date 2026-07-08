@@ -9,7 +9,7 @@ import pytest
 from rich.console import Console
 
 import tools.interactive_shell.actions.slash as slash_tool
-from core.agent_harness.providers.default_providers import DefaultTurnAccounting
+from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
 from core.agent_harness.turns.action_driver import (
     ActionTurnPlan,
     ToolCallingDeps,
