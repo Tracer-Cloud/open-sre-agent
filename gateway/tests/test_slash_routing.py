@@ -46,6 +46,7 @@ def test_gateway_status_slash_is_not_swallowed() -> None:
 
 def test_gateway_investigate_slash_dispatches(monkeypatch: pytest.MonkeyPatch) -> None:
     """Literal /investigate <template> must run the investigation slash handler."""
+
     def _fake_run_sample_alert_for_session(**_kwargs: object) -> dict[str, object]:
         return {"status": "completed", "summary": "parity investigation ok"}
 
