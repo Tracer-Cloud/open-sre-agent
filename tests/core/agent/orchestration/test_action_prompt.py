@@ -124,6 +124,17 @@ def test_system_prompt_keeps_bare_alert_blob_as_handoff() -> None:
     assert "not such a question — hand it off" in prompt
 
 
+def test_system_prompt_hands_off_when_delivery_tool_unavailable() -> None:
+    prompt = _SYSTEM_PROMPT_BASE.lower()
+    compact_prompt = " ".join(prompt.split())
+    assert "delivery tool unavailable — never fabricate a command to deliver" in prompt
+    assert "matching send tool" in prompt
+    assert "that channel is not configured" in compact_prompt
+    assert "do not invent or guess a slash/cli subcommand to deliver" in compact_prompt
+    assert "`/messaging send slack …` is not a real command" in compact_prompt
+    assert "this applies even mid-chain" in compact_prompt
+
+
 def test_system_prompt_preserves_bare_numeric_synthetic_mapping() -> None:
     prompt = _SYSTEM_PROMPT_BASE.lower()
     assert "run synthetic test 005 now" in prompt
