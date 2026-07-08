@@ -271,14 +271,14 @@ def _run_integrations_setup(session: Session, console: Console, args: list[str])
     cli_cmd = " ".join(["uv run opensre integrations setup", service, *args[2:]]).strip()
     if session_terminal(session) is None:
         message = (
-            f"{service} setup collects credentials interactively "
-            f"(API keys, URLs, tokens). It cannot complete inside a Telegram chat.\n\n"
+            f"{escape(service)} setup needs interactive credentials (API keys, URLs, tokens) "
+            f"and cannot finish in Telegram.\n\n"
             f"Run on the server:\n  {cli_cmd}\n\n"
-            "Check status afterward with `/integrations list` or "
-            f"`/integrations verify {service}`."
+            "Then check status with `/integrations list` or "
+            f"`/integrations verify {escape(service)}`."
         )
         repl_print(console, message)
-        publish_headless_slash_response(session, message=message)
+        publish_headless_slash_response(session, message=message, ok=True)
         session.refresh_integration_state()
         return True
 

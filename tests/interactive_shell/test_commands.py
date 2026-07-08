@@ -2353,7 +2353,7 @@ class TestRunCliCommand:
         monkeypatch.setattr(m.subprocess, "run", _fake_run)
 
         console, buf = _capture()
-        assert m.run_cli_command(console, ["update"], subprocess_timeout=30.0) is True
+        assert m.run_cli_command(console, ["update"], subprocess_timeout=30.0) is False
         from platform.terminal.theme import ERROR
 
         assert replayed == [("partial stdout\n", None), ("partial stderr\n", ERROR)]

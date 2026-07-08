@@ -103,6 +103,8 @@ def test_gateway_integrations_setup_returns_headless_guidance(
     assert recorded == []
     assert sink.finalized is not None
     assert "grafana" in sink.finalized.lower()
+    assert "succeeded" not in sink.finalized.lower()
+    assert "timed out" not in sink.finalized.lower()
     assert "uv run opensre integrations setup grafana" in sink.finalized
     assert "Launching" not in (sink.finalized or "")
 

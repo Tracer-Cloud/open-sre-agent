@@ -59,6 +59,10 @@ def _decode_subprocess_stream(value: str | bytes | None) -> str:
     return value
 
 
+def _cli_command_succeeded(exit_code: int | None) -> bool:
+    return exit_code == 0
+
+
 def run_cli_command(
     console: Console,
     args: list[str],
@@ -139,7 +143,10 @@ def run_cli_command(
     console.print()
     if session is not None and not should_capture:
         set_turn_outcome_hint(session, format_wizard_cli_outcome(args, exit_code=exit_code))
-    return True
+    ok = _cli_command_succeeded(exit_code)
+    if session is not None and not ok:
+        session.mark_latest(ok=False, kind="slash")
+    return ok
 
 
 def _cmd_onboard(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
