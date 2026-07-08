@@ -217,10 +217,7 @@ def _route_turn(
         and routing.action_handled
         and not _is_literal_slash_command(user_text)
     ):
-        if (
-            routing.has_observation
-            and routing.executed_success_count > 0
-        ):
+        if routing.has_observation and routing.executed_success_count > 0:
             return TurnRoute(intent="summarize_observation")
         return TurnRoute(intent="handled_without_llm")
     if (
