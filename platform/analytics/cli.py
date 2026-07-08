@@ -22,7 +22,7 @@ from platform.analytics.source import (
 from platform.observability.sentry_sdk import capture_exception
 
 if TYPE_CHECKING:
-    from core.agent_harness.session import Session
+    from core.agent_harness.session import SessionCore
 
 EVAL_AND_TERMINAL_KPI_QUERIES: Final[dict[str, str]] = {
     "eval_pass_rate": """
@@ -533,7 +533,7 @@ def track_investigation(
     evaluate_requested: bool = False,
     investigation_id: str | None = None,
     investigation_target: str | None = None,
-    session: Session | None = None,
+    session: SessionCore | None = None,
 ) -> Generator[InvestigationTracker]:
     """Capture investigation lifecycle once, with nested-call dedupe."""
     depth = _INVESTIGATION_TRACKING_DEPTH.get()

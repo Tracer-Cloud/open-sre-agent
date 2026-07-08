@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-import io
-import os
 import shutil
-import sys
 import threading
 import time
 from typing import Any
@@ -15,13 +12,12 @@ from platform.terminal.theme import BRAND, DIM, SECONDARY
 from surfaces.interactive_shell.ui.components.time_format import _elapsed_hms
 from surfaces.interactive_shell.ui.output.events import ProgressEvent
 from surfaces.interactive_shell.ui.output.labels import (
+    _node_label,
     _node_phase_label,
     build_progress_step_text,
 )
 
-_REPL_ANIM_FRAMES = ("·", "··", "···", "··")
-_REPL_ANIM_INTERVAL = 0.35
-# Timestamp + indent + trailing dot animation; keep hints on one physical row.
+# Timestamp + indent; keep append-only hint lines on one physical row.
 _HINT_LINE_OVERHEAD = 20
 
 
@@ -34,7 +30,7 @@ def _terminal_columns() -> int:
 
 
 def _fit_hint_prefix(prefix: str, *, cols: int | None = None) -> str:
-    """Truncate hint text so cursor-up animation stays on a single terminal row."""
+    """Truncate hint text so an append-only lap line stays on a single row."""
     budget = max(16, (cols if cols is not None else _terminal_columns()) - _HINT_LINE_OVERHEAD)
     if len(prefix) <= budget:
         return prefix
@@ -43,15 +39,14 @@ def _fit_hint_prefix(prefix: str, *, cols: int | None = None) -> str:
     return f"{prefix[: budget - 3]}..."
 
 
-def _stdout_is_tty() -> bool:
-    try:
-        return os.isatty(sys.stdout.fileno())
-    except (AttributeError, io.UnsupportedOperation, OSError):
-        return False
-
-
 class _ReplEventLogDisplay:
-    """Append-only investigation progress for the interactive REPL."""
+    """Append-only investigation progress for the interactive REPL.
+
+    Live animation is delegated to the prompt spinner (``SpinnerState``): raw
+    cursor-up frames cannot rewrite a row under ``patch_stdout(raw=True)``, so
+    the display prints step/lap history append-only and drives the spinner with
+    per-stage phase labels via the ``console_state`` registration.
+    """
 
     def __init__(self, model: str = "", mode: str = "local", t0: float | None = None) -> None:
         self._model = model
@@ -61,71 +56,31 @@ class _ReplEventLogDisplay:
         self._current_phase = "LOAD"
         self._lock = threading.Lock()
         self._console = Console(highlight=False)
-        self._prompt_suppressed = False
-        self._anim_stop: threading.Event | None = None
-        self._anim_thread: threading.Thread | None = None
         self._last_emitted_hint: str | None = None
 
     def stop(self) -> None:
-        from surfaces.interactive_shell.ui.output.console_state import _capture_footer_snapshot
+        from surfaces.interactive_shell.ui.output.console_state import (
+            _capture_footer_snapshot,
+            get_investigation_spinner,
+        )
 
-        self._stop_animation()
+        spinner = get_investigation_spinner()
+        if spinner is not None:
+            spinner.stop()
         _capture_footer_snapshot(self)
 
     def _emit(self, line: Text | Any) -> None:
-        self._stop_animation()
         from surfaces.interactive_shell.ui.components.choice_menu import prepare_repl_output_line
 
         prepare_repl_output_line()
         self._console.print(line)
 
-    def _stop_animation(self) -> None:
-        stop = self._anim_stop
-        if stop is not None:
-            stop.set()
-            self._anim_stop = None
-        thread = self._anim_thread
-        if thread is not None:
-            thread.join(timeout=0.3)
-            self._anim_thread = None
-
-    def _start_animation(self, prefix: str) -> None:
-        if not _stdout_is_tty():
-            return
-        fitted_prefix = _fit_hint_prefix(prefix)
-        stop = threading.Event()
-        self._anim_stop = stop
-        t0 = self._t0
-
-        def _run() -> None:
-            from platform.terminal import theme
-
-            frame_idx = 0
-            while not stop.wait(_REPL_ANIM_INTERVAL):
-                frame_idx = (frame_idx + 1) % len(_REPL_ANIM_FRAMES)
-                dots = _REPL_ANIM_FRAMES[frame_idx]
-                ts = _elapsed_hms(time.monotonic() - t0)
-                frame_str = (
-                    f"\033[A\r"
-                    f"{theme.SECONDARY_ANSI}{ts}  {theme.ANSI_RESET}"
-                    f"{theme.ANSI_DIM}      ↳  {theme.ANSI_RESET}"
-                    f"{theme.SECONDARY_ANSI}{fitted_prefix} {dots}{theme.ANSI_RESET}"
-                    f"\033[K\n"
-                )
-                if not stop.is_set():
-                    sys.stdout.write(frame_str)
-                    sys.stdout.flush()
-
-        thread = threading.Thread(target=_run, daemon=True)
-        self._anim_thread = thread
-        thread.start()
-
     def animate_hint(self, text: str) -> None:
-        """Print one compact lap-status line; no cursor-up animation in the REPL.
+        """Print one compact append-only lap-status line.
 
-        Append-only output under prompt_toolkit cannot safely rewrite rows in
-        place — the old animation thread spammed stdout and looked like hundreds
-        of repeated API/tool lines when hints wrapped.
+        The live "still working" cue is the prompt spinner (driven from
+        ``step_start``); this only records lap hints as scrollback history and
+        dedupes consecutive identical lines.
         """
         prefix = _fit_hint_prefix(text.rstrip("· \t"))
         if prefix == self._last_emitted_hint:
@@ -139,12 +94,11 @@ class _ReplEventLogDisplay:
         self._emit(t)
 
     def step_start(self, node_name: str) -> None:
-        from surfaces.interactive_shell.ui.output.console_state import get_prompt_suppress_fn
+        from surfaces.interactive_shell.ui.output.console_state import get_investigation_spinner
 
-        prompt_suppress_fn = get_prompt_suppress_fn()
-        if not self._prompt_suppressed and prompt_suppress_fn is not None:
-            self._prompt_suppressed = True
-            prompt_suppress_fn()
+        spinner = get_investigation_spinner()
+        if spinner is not None:
+            spinner.set_phase(_node_label(node_name))
         with self._lock:
             self._active_steps[node_name] = {
                 "t0": time.monotonic(),
@@ -172,7 +126,6 @@ class _ReplEventLogDisplay:
         pass
 
     def step_complete(self, node_name: str, event: ProgressEvent) -> None:
-        self._stop_animation()
         self._last_emitted_hint = None
         with self._lock:
             info = self._active_steps.pop(node_name, {})

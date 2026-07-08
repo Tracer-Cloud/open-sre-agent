@@ -32,7 +32,7 @@ from gateway.daemon import (
 )
 from gateway.polling.telegram_gateway_background import TelegramGatewayBackground
 from gateway.telegram_gateway import start_telegram_worker
-from gateway.turn_handler import build_gateway_turn_handler
+from gateway.turn_handler import GatewayTurnHandler
 
 
 class GatewayManager:
@@ -60,7 +60,7 @@ class GatewayManager:
         # Compose the transport-agnostic turn handler. Action tools are resolved
         # per turn from each chat's live session inside the handler (not here).
         console = Console(force_terminal=False)
-        handler = build_gateway_turn_handler(console=console)
+        handler = GatewayTurnHandler(console=console)
 
         self._start_web(logger)
         self._start_telegram(logger, handler)

@@ -17,8 +17,8 @@ from core.agent_harness.models.turn_results import (
     ToolCallingAccountingStatus,
     ToolCallingTurnResult,
 )
-from core.agent_harness.session import Session
 from platform.analytics.cli import capture_terminal_turn_summarized
+from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.utils.telemetry import PromptRecorder
 
 
@@ -86,7 +86,7 @@ class ShellTurnAccounting:
 
     def _record_terminal_turn(self, action_result: ToolCallingTurnResult) -> None:
         fallback_to_llm = not action_result.handled
-        snapshot = self.session.metrics.record_turn(
+        snapshot = self.session.terminal.metrics.record_turn(
             executed_count=action_result.executed_count,
             executed_success_count=action_result.executed_success_count,
             fallback_to_llm=fallback_to_llm,
@@ -105,8 +105,8 @@ class ShellTurnAccounting:
     def _flush_prompt_recorder(self, result: ShellTurnResult) -> None:
         # Pending turn LLM/error state is consumed unconditionally so a turn
         # that stages it can never leak it into a later turn's flush.
-        pending_run = self.session.pop_pending_turn_llm()
-        pending_error = self.session.pop_pending_turn_error()
+        pending_run = self.session.terminal.pop_pending_turn_llm()
+        pending_error = self.session.terminal.pop_pending_turn_error()
         if self.recorder is None:
             return
         if pending_error is not None:

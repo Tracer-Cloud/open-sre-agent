@@ -22,7 +22,7 @@ from surfaces.interactive_shell.ui.components.choice_menu import (
 
 def _refresh_prompt_style(session: Session) -> None:
     """Defer prompt-toolkit style refresh until the next prompt_async turn."""
-    session.pending_theme_refresh = True
+    session.terminal.pending_theme_refresh = True
 
 
 def _settle_and_drain_cpr() -> None:
@@ -42,7 +42,7 @@ def _persist_and_report_theme(
     from surfaces.interactive_shell.ui.components.rendering import refresh_welcome_poster
 
     active = set_active_theme(selected)
-    session.active_theme_name = active.name
+    session.terminal.active_theme_name = active.name
 
     updated = _set_nested_key(_load_config(), "interactive.theme", active.name)
     _save_config(updated)
@@ -71,7 +71,7 @@ def _cmd_theme(session: Session, console: Console, args: list[str]) -> bool:
         return True
 
     current = get_active_theme_name()
-    session.active_theme_name = current
+    session.terminal.active_theme_name = current
     choices = [
         (name, f"{name}{' (current)' if name == current else ''}") for name in list_theme_names()
     ]

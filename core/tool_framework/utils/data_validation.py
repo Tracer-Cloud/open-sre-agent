@@ -1,5 +1,6 @@
 """Data validators - sanitize API responses before LLM sees them."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -41,14 +42,7 @@ class MetricsValidator:
 
         # Handle list structure (common in API responses)
         if "data" in normalized and isinstance(normalized["data"], list):
-            # Validate each data point in the list
-            validated_data = []
-            for data_point in normalized["data"]:
-                if isinstance(data_point, dict):
-                    validated_point = self._validate_flat_metrics(data_point.copy())
-                    validated_data.append(validated_point)
-                else:
-                    validated_data.append(data_point)
+            validated_data, _ = _validate_data_list(normalized["data"], self._validate_flat_metrics)
             normalized["data"] = validated_data
             # Also check aggregated values if present
             if "max_cpu" in normalized or "max_ram" in normalized:
@@ -347,6 +341,30 @@ class MetricsValidator:
             data[f"{field}_raw"] = value
 
 
+def _validate_data_list(
+    data_points: list[Any],
+    validate_fn: Callable[[dict], dict],
+) -> tuple[list[Any], list[dict]]:
+    """Iterate a list of data points, validate each dict entry, and collect issues.
+
+    Returns ``(validated_points, collected_issues)`` where issues are stripped
+    from each point's ``data_quality_issues`` key and merged into the returned list.
+    Points that are not dicts are passed through unchanged.
+    """
+    validated: list[Any] = []
+    issues: list[dict] = []
+    for point in data_points:
+        if isinstance(point, dict):
+            result = validate_fn(point.copy())
+            point_issues = result.pop("data_quality_issues", None)
+            if isinstance(point_issues, list):
+                issues.extend(point_issues)
+            validated.append(result)
+        else:
+            validated.append(point)
+    return validated, issues
+
+
 def validate_host_metrics(metrics: dict | Any) -> dict:
     """
     Validate host metrics data.
@@ -380,27 +398,13 @@ def validate_host_metrics(metrics: dict | Any) -> dict:
 
     # Handle list-based structure (common in API responses)
     if "data" in metrics and isinstance(metrics["data"], list):
-        validated_data = []
-        all_issues = []
-
-        for data_point in metrics["data"]:
-            if isinstance(data_point, dict):
-                validated_point = validator.validate_metrics(data_point.copy())
-
-                if "data_quality_issues" in validated_point:
-                    all_issues.extend(validated_point["data_quality_issues"])
-                    del validated_point["data_quality_issues"]
-
-                validated_data.append(validated_point)
-            else:
-                validated_data.append(data_point)
-
+        validated_data, all_issues = _validate_data_list(
+            metrics["data"], validator.validate_metrics
+        )
         result = metrics.copy()
         result["data"] = validated_data
-
         if all_issues:
             result["data_quality_issues"] = all_issues
-
         return result
 
     # Handle flat or nested structure

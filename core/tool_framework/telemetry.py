@@ -1,23 +1,18 @@
-"""Shared error-reporting helper for HTTP/cloud tool wrappers.
+"""Shared error-reporting helpers for tool call sites.
 
-Many tools under ``tools/`` deliberately catch broad exceptions and return
-a degraded ``{"available": False, "error": ..., <empty payload>}`` dict so the
-LLM planner can see the failure rather than crashing the graph. Without an
-explicit Sentry capture at those sites, the agent's experience of "available =
-False" is invisible to operators — the global tool wrapper (#1476) cannot help
-because the exception never escapes ``run()``.
+``report_run_error`` is for tools that deliberately swallow exceptions and
+return a degraded ``{"available": False, ...}`` dict. It turns a silent
+swallow into a structured log entry plus Sentry event.
 
-``report_run_error`` is the single place that turns one of these silent
-swallow sites into a structured log entry plus a Sentry event tagged with
-``surface=tool``, ``tool_name``, ``source``, and ``component``. Severity
-defaults to ``error``; pass ``severity="warning"`` for known-recoverable
-states (e.g. HTTP 4xx, "integration not configured") that are still worth
-tracking because they shape what the agent sees.
+``invoke_tool`` is the unified dispatch wrapper used by ``BaseTool.__call__``
+and ``RegisteredTool.__call__``. It owns the single try/except + error-capture
+contract so both call paths behave identically.
 """
 
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from typing import Any, Literal
 
 from platform.observability.errors import report_exception
@@ -64,4 +59,30 @@ def report_run_error(
     )
 
 
-__all__ = ["ToolErrorSeverity", "report_run_error"]
+def invoke_tool(
+    run_fn: Callable[..., Any],
+    *,
+    name: str,
+    source: str,
+    kwargs: dict[str, Any],
+) -> Any:
+    """Call ``run_fn(**kwargs)`` and capture any exception via ``report_exception``.
+
+    Returns the run result on success, or
+    ``{"error": ..., "exception_type": ...}`` on failure — the shape both
+    ``BaseTool.__call__`` and ``RegisteredTool.__call__`` have always returned.
+    """
+    try:
+        return run_fn(**kwargs)
+    except Exception as exc:
+        report_exception(
+            exc,
+            logger=_DEFAULT_LOGGER,
+            message=f"Tool {name} failed: {type(exc).__name__}: {exc}",
+            severity="error",
+            tags={"surface": "tool", "tool_name": name, "source": source},
+        )
+        return {"error": str(exc), "exception_type": type(exc).__name__}
+
+
+__all__ = ["ToolErrorSeverity", "invoke_tool", "report_run_error"]

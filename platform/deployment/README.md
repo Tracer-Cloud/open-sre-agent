@@ -7,7 +7,8 @@ AWS EC2 deployment and shared provisioning primitives for OpenSRE.
 | Path | Purpose |
 | --- | --- |
 | [`aws/`](aws/) | Shared AWS SDK primitives (`client`, `config`, VPC/SG, EC2/IAM, ECR, SSM). |
-| `lifecycle.py`, `prep.py`, `stack.py`, `instance.py` | EC2 provisioning: `opensre-web` + `opensre-gateway` on one instance. |
+| [`ecr_deploy/`](ecr_deploy/) | Docker/ECR EC2 provisioning: `opensre-web` + `opensre-gateway` on one instance. |
+| [`gateway/`](gateway/) | AMI + systemd deployment path for the Telegram gateway only (no Docker/ECR). See [gateway/README.md](gateway/README.md). |
 | `install-proxy/` | Install proxy utility (Cloudflare Worker). |
 
 ## EC2 deploy commands
@@ -23,8 +24,8 @@ Run from the **repo root**. Requires `make install` first.
 Equivalent Python entrypoints:
 
 ```bash
-uv run python -m platform.deployment.lifecycle deploy
-uv run python -m platform.deployment.lifecycle destroy
+uv run python -m platform.deployment.ecr_deploy.lifecycle deploy
+uv run python -m platform.deployment.ecr_deploy.lifecycle destroy
 ```
 
 ### Prerequisites

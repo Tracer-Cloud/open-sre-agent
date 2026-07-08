@@ -9,10 +9,10 @@ import pytest
 from prompt_toolkit.history import FileHistory, InMemoryHistory
 from rich.console import Console
 
-from core.agent_harness.session import Session
-from core.agent_harness.session import prompt_history as history_module
-from core.agent_harness.session.prompt_history.policy import RedactingFileHistory
+from surfaces.interactive_shell import prompt_history as history_module
 from surfaces.interactive_shell.command_registry import dispatch_slash
+from surfaces.interactive_shell.prompt_history.policy import RedactingFileHistory
+from surfaces.interactive_shell.session import Session
 
 
 def _capture() -> tuple[Console, io.StringIO]:
@@ -22,8 +22,8 @@ def _capture() -> tuple[Console, io.StringIO]:
 
 def _redirect_history_path(monkeypatch: pytest.MonkeyPatch, target: Path) -> None:
     """Point ``prompt_history_path()`` at a tmp file across all importers."""
-    from core.agent_harness.session.prompt_history import storage as history_storage
     from surfaces.interactive_shell.command_registry import privacy_cmds as privacy_cmds_module
+    from surfaces.interactive_shell.prompt_history import storage as history_storage
 
     monkeypatch.setattr(history_module, "prompt_history_path", lambda: target)
     monkeypatch.setattr(privacy_cmds_module, "prompt_history_path", lambda: target)
@@ -57,7 +57,7 @@ class TestHistoryToggle:
     def test_off_then_on_flips_paused_flag(self, tmp_path: Path) -> None:
         backend = RedactingFileHistory(str(tmp_path / "history"))
         session = Session()
-        session.prompt_history_backend = backend
+        session.terminal.prompt_history_backend = backend
 
         console, _ = _capture()
         dispatch_slash("/history off", session, console)
@@ -68,7 +68,7 @@ class TestHistoryToggle:
 
     def test_off_with_in_memory_backend_is_noop_message(self) -> None:
         session = Session()
-        session.prompt_history_backend = InMemoryHistory()
+        session.terminal.prompt_history_backend = InMemoryHistory()
         console, buf = _capture()
 
         dispatch_slash("/history off", session, console)
@@ -78,7 +78,7 @@ class TestHistoryToggle:
         self, tmp_path: Path
     ) -> None:
         session = Session()
-        session.prompt_history_backend = FileHistory(str(tmp_path / "history"))
+        session.terminal.prompt_history_backend = FileHistory(str(tmp_path / "history"))
         console, buf = _capture()
 
         dispatch_slash("/history off", session, console)
@@ -86,7 +86,7 @@ class TestHistoryToggle:
 
     def test_file_history_backend_reports_persistence_already_on(self, tmp_path: Path) -> None:
         session = Session()
-        session.prompt_history_backend = FileHistory(str(tmp_path / "history"))
+        session.terminal.prompt_history_backend = FileHistory(str(tmp_path / "history"))
         console, buf = _capture()
 
         dispatch_slash("/history on", session, console)
@@ -101,7 +101,7 @@ class TestHistoryRetention:
             backend.store_string(f"entry-{i}")
 
         session = Session()
-        session.prompt_history_backend = backend
+        session.terminal.prompt_history_backend = backend
         console, _ = _capture()
         dispatch_slash("/history retention 2", session, console)
 
@@ -112,7 +112,7 @@ class TestHistoryRetention:
     def test_rejects_non_integer(self, tmp_path: Path) -> None:
         backend = RedactingFileHistory(str(tmp_path / "history"))
         session = Session()
-        session.prompt_history_backend = backend
+        session.terminal.prompt_history_backend = backend
         console, buf = _capture()
 
         dispatch_slash("/history retention oops", session, console)
@@ -121,7 +121,7 @@ class TestHistoryRetention:
     def test_rejects_negative(self, tmp_path: Path) -> None:
         backend = RedactingFileHistory(str(tmp_path / "history"))
         session = Session()
-        session.prompt_history_backend = backend
+        session.terminal.prompt_history_backend = backend
         console, buf = _capture()
 
         dispatch_slash("/history retention -1", session, console)
@@ -134,7 +134,7 @@ class TestHistoryRetention:
             backend.store_string(f"entry-{i}")
 
         session = Session()
-        session.prompt_history_backend = backend
+        session.terminal.prompt_history_backend = backend
         console, buf = _capture()
 
         assert dispatch_slash("/history retention 0", session, console) is True
@@ -156,7 +156,7 @@ class TestPrivacyCommand:
     def test_shows_redacting_state(self, tmp_path: Path) -> None:
         backend = RedactingFileHistory(str(tmp_path / "history"))
         session = Session()
-        session.prompt_history_backend = backend
+        session.terminal.prompt_history_backend = backend
         console, buf = _capture()
 
         dispatch_slash("/privacy", session, console)
@@ -170,7 +170,7 @@ class TestPrivacyCommand:
         backend = RedactingFileHistory(str(tmp_path / "history"))
         backend.paused = True
         session = Session()
-        session.prompt_history_backend = backend
+        session.terminal.prompt_history_backend = backend
         console, buf = _capture()
 
         dispatch_slash("/privacy", session, console)
@@ -178,7 +178,7 @@ class TestPrivacyCommand:
 
     def test_in_memory_backend_reports_off(self) -> None:
         session = Session()
-        session.prompt_history_backend = InMemoryHistory()
+        session.terminal.prompt_history_backend = InMemoryHistory()
         console, buf = _capture()
 
         dispatch_slash("/privacy", session, console)
@@ -186,7 +186,7 @@ class TestPrivacyCommand:
 
     def test_file_history_backend_reports_no_redaction(self, tmp_path: Path) -> None:
         session = Session()
-        session.prompt_history_backend = FileHistory(str(tmp_path / "history"))
+        session.terminal.prompt_history_backend = FileHistory(str(tmp_path / "history"))
         console, buf = _capture()
 
         dispatch_slash("/privacy", session, console)

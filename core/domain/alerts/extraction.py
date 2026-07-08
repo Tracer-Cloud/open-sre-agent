@@ -8,6 +8,15 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from core.domain.alerts.fields import (
+    alert_annotations,
+    alert_labels,
+    alert_name_value,
+    canonical_alert,
+    pipeline_name_value,
+    severity_value,
+)
+
 CANONICAL_ALERT_SOURCES = frozenset({"opensre", "opensre_dataset"})
 
 RAW_ALERT_DETAIL_FIELDS = (
@@ -22,6 +31,8 @@ RAW_ALERT_DETAIL_FIELDS = (
 
 
 class AlertDetails(BaseModel):
+    """Normalized alert fields produced by the extract_alert stage."""
+
     is_noise: bool = Field(default=False)
     alert_name: str = Field(default="unknown")
     pipeline_name: str = Field(default="unknown")
@@ -39,6 +50,7 @@ class AlertDetails(BaseModel):
 
 
 def format_raw_alert(raw_alert: Any) -> str:
+    """Render raw alert payload as prompt text for the extract_alert LLM call."""
     if isinstance(raw_alert, str):
         return raw_alert
     if isinstance(raw_alert, dict):
@@ -49,6 +61,7 @@ def format_raw_alert(raw_alert: Any) -> str:
 
 
 def needs_full_json_prompt(raw_alert: dict[str, Any]) -> bool:
+    """Return True when extract_alert should receive full JSON instead of text-only."""
     src = str(raw_alert.get("alert_source", "")).lower()
     if src in CANONICAL_ALERT_SOURCES:
         return True
@@ -72,38 +85,35 @@ def needs_full_json_prompt(raw_alert: dict[str, Any]) -> bool:
 
 
 def fallback_details(state: Mapping[str, Any], raw_alert: Any) -> AlertDetails:
+    """Best-effort field extraction when the LLM path is unavailable."""
     alert_name = state.get("alert_name", "unknown")
     pipeline_name = state.get("pipeline_name", "unknown")
     severity = state.get("severity", "unknown")
 
     if isinstance(raw_alert, dict):
-        labels = dict_value(raw_alert, "commonLabels") or dict_value(raw_alert, "labels")
-        annotations = dict_value(raw_alert, "commonAnnotations") or dict_value(
-            raw_alert, "annotations"
-        )
-        canonical = dict_value(raw_alert, "canonical_alert")
+        labels = alert_labels(raw_alert)
+        annotations = alert_annotations(raw_alert)
+        canonical = canonical_alert(raw_alert)
 
-        alert_name = first_value(
-            raw_alert.get("alert_name"),
-            canonical.get("alert_name"),
-            labels.get("alertname"),
-            labels.get("alert_name"),
-            alert_name,
+        alert_name = alert_name_value(
+            raw_alert,
+            labels=labels,
+            annotations=annotations,
+            canonical=canonical,
+            fallback=alert_name,
         )
-        pipeline_name = first_value(
-            raw_alert.get("pipeline_name"),
-            canonical.get("pipeline_name"),
-            labels.get("pipeline_name"),
-            labels.get("pipeline"),
-            labels.get("service"),
-            annotations.get("pipeline_name"),
-            pipeline_name,
+        pipeline_name = pipeline_name_value(
+            raw_alert,
+            labels=labels,
+            annotations=annotations,
+            canonical=canonical,
+            fallback=pipeline_name,
         )
-        severity = first_value(
-            raw_alert.get("severity"),
-            canonical.get("severity"),
-            labels.get("severity"),
-            severity,
+        severity = severity_value(
+            raw_alert,
+            labels=labels,
+            canonical=canonical,
+            fallback=severity,
         )
 
     return AlertDetails(
@@ -114,16 +124,8 @@ def fallback_details(state: Mapping[str, Any], raw_alert: Any) -> AlertDetails:
     )
 
 
-def dict_value(source: Mapping[str, Any], key: str) -> dict[str, Any]:
-    value = source.get(key)
-    return value if isinstance(value, dict) else {}
-
-
-def first_value(*values: Any) -> Any:
-    return next((value for value in values if value), None)
-
-
 def make_problem_md(details: AlertDetails) -> str:
+    """Build the operator-facing problem markdown header from extracted details."""
     parts = [
         f"# {details.alert_name}",
         f"Pipeline: {details.pipeline_name} | Severity: {details.severity}",
@@ -136,6 +138,7 @@ def make_problem_md(details: AlertDetails) -> str:
 
 
 def enrich_raw_alert(raw_alert: Any, details: AlertDetails) -> Any:
+    """Merge extracted details back into the raw alert dict for downstream stages."""
     if not isinstance(raw_alert, dict):
         raw_alert = {}
     enriched = dict(raw_alert)

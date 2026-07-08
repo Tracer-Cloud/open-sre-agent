@@ -5,6 +5,15 @@ from __future__ import annotations
 import time
 from typing import Any, cast
 
+from core.domain.alerts.fields import (
+    alert_annotations,
+    alert_labels,
+    alert_name_value,
+    canonical_alert,
+    first_text,
+    pipeline_name_value,
+    severity_value,
+)
 from core.domain.alerts.normalization import normalize_alert_payload
 from core.state.models import AgentState, AgentStateModel, model_default_payload
 from integrations.opensre.hf_remote import (
@@ -66,53 +75,33 @@ def _resolve_alert_metadata(raw_alert: str | dict[str, Any]) -> tuple[str, str, 
     if not isinstance(raw_alert, dict):
         return ("Incident", "unknown", "warning")
 
-    labels = _dict_value(raw_alert, "commonLabels") or _dict_value(raw_alert, "labels")
-    annotations = _dict_value(raw_alert, "commonAnnotations") or _dict_value(
-        raw_alert, "annotations"
-    )
-    canonical = _dict_value(raw_alert, "canonical_alert")
+    labels = alert_labels(raw_alert)
+    annotations = alert_annotations(raw_alert)
+    canonical = canonical_alert(raw_alert)
 
-    alert_name = _first_text(
-        raw_alert.get("alert_name"),
-        raw_alert.get("title"),
-        canonical.get("alert_name"),
-        labels.get("alertname"),
-        labels.get("alert_name"),
-        annotations.get("summary"),
-        "Incident",
+    alert_name = first_text(
+        alert_name_value(
+            raw_alert,
+            labels=labels,
+            annotations=annotations,
+            canonical=canonical,
+        ),
+        default="Incident",
     )
-    pipeline_name = _first_text(
-        raw_alert.get("pipeline_name"),
-        canonical.get("pipeline_name"),
-        labels.get("pipeline_name"),
-        labels.get("pipeline"),
-        labels.get("service"),
-        raw_alert.get("service"),
-        "unknown",
+    pipeline_name = first_text(
+        pipeline_name_value(
+            raw_alert,
+            labels=labels,
+            annotations=annotations,
+            canonical=canonical,
+        ),
+        default="unknown",
     )
-    severity = _first_text(
-        raw_alert.get("severity"),
-        canonical.get("severity"),
-        labels.get("severity"),
-        labels.get("priority"),
-        "warning",
+    severity = first_text(
+        severity_value(raw_alert, labels=labels, canonical=canonical),
+        default="warning",
     )
     return alert_name, pipeline_name, severity
-
-
-def _dict_value(mapping: dict[str, Any], key: str) -> dict[str, Any]:
-    value = mapping.get(key)
-    return dict(value) if isinstance(value, dict) else {}
-
-
-def _first_text(*values: Any) -> str:
-    for value in values:
-        if value is None:
-            continue
-        text = str(value).strip()
-        if text:
-            return text
-    return ""
 
 
 def make_agent_incident_state(

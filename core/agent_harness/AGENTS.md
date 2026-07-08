@@ -53,7 +53,8 @@ responsibility-scoped subpackage.
     `_build_evidence_agent` factory that returns an `AgentConfig` handed to
     `build_agent`.
   - `headless_dispatch.py` — headless programmatic entry point
-    (`dispatch_message_to_headless_agent`) plus in-memory port adapters for
+    (`HeadlessAgent`, constructed with the ports then `.dispatch(message)` per turn)
+    plus in-memory port adapters for
     API / test runs. `tools` is required — surfaces that want a text-only
     turn pass `NullToolProvider()` explicitly.
 - `models/` — neutral, surface-agnostic data shapes:
@@ -94,8 +95,8 @@ to it instead of re-implementing bootstrap + persistence:
   :meth:`SessionManager.create` (``open_storage=False``).
   `gateway/storage/session/resolver.py::SessionResolver` owns per-chat
   chat-id ↔ session-id binding + metadata; it delegates `create` / `resolve` /
-  `rotate` to `SessionManager`. Turn dispatch uses
-  `dispatch_message_to_headless_agent` via `gateway/turn_handler.py` with
+  `rotate` to `SessionManager`. Turn dispatch uses `HeadlessAgent` via
+  `gateway/turn_handler.py`'s `GatewayTurnHandler` with
   :class:`~core.agent_harness.providers.default_providers.DefaultToolProvider`
   built from the **live per-chat session** each turn (same tool resolution as
   shell). There is no separate gateway-owned ``Agent`` instance.
@@ -136,8 +137,7 @@ agent = build_agent(config)
 Action (`turns/action_driver.py::_build_action_agent`) and evidence
 (`turns/evidence_driver.py::_build_evidence_agent`) assemble an
 ``AgentConfig`` and call ``build_agent``. The gateway turn path does not
-construct a persistent ``Agent`` — it uses
-``dispatch_message_to_headless_agent`` with per-turn
+construct a persistent ``Agent`` — it builds a fresh ``HeadlessAgent`` per turn with
 :class:`~core.agent_harness.providers.default_providers.DefaultToolProvider`
 from the live chat session. When ``Agent.__init__``'s signature changes,
 ``agent_builder.py`` is the single edit site for harness surfaces that call

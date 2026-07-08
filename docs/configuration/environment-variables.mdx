@@ -178,7 +178,7 @@ All configuration options for OpenSRE can be set via environment variables. This
 | Variable | Default | Description | Module |
 |----------|---------|-------------|--------|
 | `INVESTIGATIONS_DIR` | `~/.opensre/investigations` | Directory for saved investigations | `remote/server` |
-| `OPENSRE_PROJECT_ENV_PATH` | `PROJECT_ROOT/.env` | Path to project-level `.env` file | `cli/wizard/config` |
+| `OPENSRE_PROJECT_ENV_PATH` | `PROJECT_ROOT/.env` | Path to project-level `.env` file | `surfaces/cli/wizard/config` |
 | `OPENSRE_WIZARD_STORE_PATH` | `~/.opensre/opensre.json` | Path to the local wizard/provider selection store | `config/constants` |
 
 ## Feature Flags
@@ -187,7 +187,7 @@ All configuration options for OpenSRE can be set via environment variables. This
 |----------|---------|-------------|--------|
 | `OSRE_HELM_INTEGRATION` | | Enable Helm integration (1/true/yes) | `integrations/_catalog_impl` |
 | `GITLAB_MR_WRITEBACK` | | Enable GitLab merge request writeback (`true`, `1`, `yes`) | `tools/investigation/reporting/gitlab_writeback` |
-| `OPENSRE_RELEASES_API_URL` | GitHub releases API | Override releases API endpoint | `cli/support/update` |
+| `OPENSRE_RELEASES_API_URL` | GitHub releases API | Override releases API endpoint | `surfaces/cli/lifecycle/update` |
 
 ## Integration Credentials
 

@@ -19,6 +19,7 @@ TOOL_MODULES = (
     "actions.investigation",
     "actions.llm_provider",
     "actions.sample_alert",
+    "actions.sentry_fix",
     "actions.shell",
     "actions.slash",
     "actions.synthetic",

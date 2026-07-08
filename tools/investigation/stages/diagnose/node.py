@@ -12,10 +12,10 @@ from core.domain.diagnosis import (
     InvestigationResult,
     build_diagnosis_schema,
     build_investigation_result,
-    extract_last_assistant_text,
     result_to_state,
     taxonomy_categories_for_alert_source,
 )
+from core.messages.transcript import extract_last_assistant_text
 from core.state import InvestigationState
 
 logger = logging.getLogger(__name__)

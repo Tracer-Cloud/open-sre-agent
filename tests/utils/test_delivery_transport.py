@@ -19,7 +19,7 @@ from unittest.mock import MagicMock
 import httpx
 import pytest
 
-from platform.notifications.delivery_transport import DeliveryResponse, post_json
+from platform.notifications.delivery_transport import DeliveryResponse, post_form, post_json
 
 
 def _mock_response(status_code: int, json_body: Any = None, text: str = "") -> MagicMock:
@@ -274,3 +274,78 @@ class TestPostJsonErrorType:
         result = post_json("https://example.test", {})
         assert result.ok is True
         assert result.exc_type == ""
+
+
+class TestPostFormHappyPath:
+    """post_form sends form-encoded data with optional HTTP Basic Auth."""
+
+    def test_returns_ok_with_status_data_text(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        body = {"sid": "SM123"}
+        monkeypatch.setattr(
+            "platform.notifications.delivery_transport.httpx.post",
+            lambda *_a, **_kw: _mock_response(201, body, '{"sid":"SM123"}'),
+        )
+        result = post_form("https://api.twilio.com/test", {"To": "+1", "Body": "hi"})
+        assert result.ok is True
+        assert result.status_code == 201
+        assert result.data == body
+        assert result.error == ""
+
+    def test_passes_auth_and_data_through(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        captured: dict[str, Any] = {}
+
+        def _capture(url: str, **kwargs: Any) -> MagicMock:
+            captured["url"] = url
+            captured.update(kwargs)
+            return _mock_response(201, {"sid": "SM1"})
+
+        monkeypatch.setattr("platform.notifications.delivery_transport.httpx.post", _capture)
+        post_form(
+            "https://api.twilio.com/test",
+            {"To": "+1", "Body": "hi"},
+            auth=("AC1", "secret"),
+            timeout=10.0,
+        )
+        assert captured["url"] == "https://api.twilio.com/test"
+        assert captured["data"] == {"To": "+1", "Body": "hi"}
+        assert captured["auth"] == ("AC1", "secret")
+        assert captured["timeout"] == 10.0
+        assert captured["follow_redirects"] is False
+        # post_form must NOT send json=
+        assert "json" not in captured
+
+    def test_auth_none_by_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        captured: dict[str, Any] = {}
+        monkeypatch.setattr(
+            "platform.notifications.delivery_transport.httpx.post",
+            lambda *_a, **kw: captured.update(kw) or _mock_response(200, {}),
+        )
+        post_form("https://example.test", {"k": "v"})
+        assert captured["auth"] is None
+
+
+class TestPostFormTransportFailures:
+    """post_form must catch transport errors like post_json."""
+
+    def test_request_exception_becomes_ok_false(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        def _raise(*_a: Any, **_kw: Any) -> Any:
+            raise ConnectionError("refused")
+
+        monkeypatch.setattr("platform.notifications.delivery_transport.httpx.post", _raise)
+        result = post_form("https://example.test", {"k": "v"})
+        assert result.ok is False
+        assert result.status_code == 0
+        assert "refused" in result.error
+        assert result.exc_type == "ConnectionError"
+
+    def test_non_json_body_yields_empty_data(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            "platform.notifications.delivery_transport.httpx.post",
+            lambda *_a, **_kw: _mock_response(
+                200, ValueError("not json"), text="<html>oops</html>"
+            ),
+        )
+        result = post_form("https://example.test", {})
+        assert result.ok is True
+        assert result.data == {}
+        assert result.text == "<html>oops</html>"

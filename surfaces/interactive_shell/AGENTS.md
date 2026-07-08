@@ -61,7 +61,7 @@ owning area rather than adding more logic to the caller.
   - **New REPL-only slash command:** add `SlashCommand` in the owning
     `command_registry/*` module **and** `_mcp(...)` in `slash_catalog.py` (keep
     keys sorted alphabetically in `_MCP_BY_COMMAND`).
-  - **New CLI with REPL parity:** add the Click command under `cli/commands/`,
+  - **New CLI with REPL parity:** add the Click command under `surfaces/cli/commands/`,
     register a `SlashCommand` in `command_registry/cli_parity.py` (subprocess to
     `opensre …`), **and** add `_MCP_BY_COMMAND` in `slash_catalog.py` with
     `llm_description`, `use_cases`, and `anti_examples` aligned to the command’s
@@ -246,7 +246,7 @@ owning area rather than adding more logic to the caller.
 
 - Put tests under `tests/interactive_shell/`, mirroring the package area
   when useful (`orchestration/`, `ui/`, etc.). Never add tests under
-  `app/`.
+  source packages.
 - For focused changes, run the closest tests, for example:
   - `uv run python -m pytest tests/core/domain/alerts/test_inbox.py`
   - `uv run python -m pytest tests/interactive_shell/<area>/`

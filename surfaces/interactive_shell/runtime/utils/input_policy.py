@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from core.agent_harness.session import Session
+from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui.components.choice_menu import repl_tty_interactive
 
 

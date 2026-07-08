@@ -1,4 +1,7 @@
-"""Investigation feedback and miss-triage domain logic."""
+"""Investigation feedback and miss-triage domain logic.
+
+- ``misses/`` — miss taxonomy, JSONL store, and benchmark export helpers
+"""
 
 from core.domain.feedback.misses import (
     MissRecord,

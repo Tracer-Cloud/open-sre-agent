@@ -19,6 +19,7 @@ from core.messages.runtime_message_types import (
     ToolResultRuntimeMessage,
     UserRuntimeMessage,
 )
+from core.messages.transcript import extract_last_assistant_text
 
 __all__ = [
     "AppRuntimeMessage",
@@ -31,4 +32,5 @@ __all__ = [
     "RuntimeMessageLike",
     "ToolResultRuntimeMessage",
     "UserRuntimeMessage",
+    "extract_last_assistant_text",
 ]

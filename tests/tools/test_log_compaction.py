@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from core.tool_framework.utils.log_compaction import (
+from platform.common.log_compaction import (
     _classify_error_type,
     _extract_components,
     _normalize_message,

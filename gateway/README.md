@@ -37,7 +37,7 @@ A person can already receive messages the agent *sends* to Slack, but cannot yet
 *chat to* the agent from Slack.
 
 **One core for every surface.** Shell, CLI, and the Telegram gateway all hand the
-message to the same place: `dispatch_message_to_headless_agent`. They differ
+message to the same place: a `HeadlessAgent` (`agent.dispatch(message)`). They differ
 only in *how they receive input and send output* — never in how the agent thinks.
 
 ## Quick start
@@ -81,8 +81,8 @@ pieces, the same shape Telegram already has:
 
 Then wire it in the composition root (`GatewayManager` in `gateway/manager.py`):
 start the Slack listener next to (or instead of) Telegram. Reuse the handler from
-`build_gateway_turn_handler(...)` as-is.
+`GatewayTurnHandler(...)` as-is.
 
-**What you never change:** `build_gateway_turn_handler`, `Agent`, prompts, tools.
+**What you never change:** `GatewayTurnHandler`, `Agent`, prompts, tools.
 Keeping the handler transport-agnostic is exactly what makes a new platform a small,
 self-contained add.

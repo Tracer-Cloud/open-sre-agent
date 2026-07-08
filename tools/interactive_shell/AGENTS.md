@@ -25,12 +25,34 @@ Per the repo-root `AGENTS.md`, `tools/` owns every `@tool(...)` function and
 `RegisteredTool`/`BaseTool` class; this package is the interactive-shell slice of
 that ownership.
 
+## Subprocess runner decoupling (T-03)
+
+Subprocess runners must stay split into two layers:
+
+1. **Pure execution** under `tools/interactive_shell/` — spawn, communicate,
+   planning, structured results. No Rich, no `surfaces.interactive_shell.ui`,
+   no `execution_confirm`.
+2. **REPL presentation** under `surfaces/interactive_shell/runtime/subprocess_runner/`
+   — `ReplSubprocessPresenter` implements `SubprocessPresenter` and is injected
+   through `ActionToolContext.subprocess_presenter` from `action_turn.py`.
+
+Shared stdlib-only helpers live in `tools/interactive_shell/subprocess.py`.
+Rich stream relay stays in `surfaces/.../subprocess_runner/task_streaming.py`.
+
+**Do NOT reintroduce** `surfaces.interactive_shell.ui` or
+`surfaces.interactive_shell.runtime.subprocess_runner` imports in:
+
+- `shell/runner.py`
+- `synthetic/runner.py`
+- `implementation/claude_code_executor.py`
+- `actions/cli_command.py`
+
+Enforced by `tests/tools/interactive_shell/test_import_boundaries.py`.
+
 ## Dependency direction
 
-The one-way boundary is:
-
 ```text
-surfaces/interactive_shell (ui, dispatch)
+surfaces/interactive_shell (ui, dispatch, ReplSubprocessPresenter)
   -> tools/interactive_shell (action-tool implementations)
     -> core/agent_harness (session types, ports)
 ```
@@ -39,32 +61,22 @@ surfaces/interactive_shell (ui, dispatch)
 
 - `core.agent_harness.session` runtime types (`Session`, `TaskKind`,
   `TaskRecord`, `TaskStatus`) for session/task bookkeeping.
-- `surfaces.interactive_shell.runtime.subprocess_runner.*` for streamed
-  subprocess execution used by the shell / CLI / synthetic / implement tools.
+- `integrations/` when an action tool wraps an integration client (e.g. Claude
+  Code in `implementation/claude_code_executor.py`).
 
 It must **not**:
 
-- Be imported by `core/agent_harness/` (that boundary is enforced by
-  `tests/core/agent/test_import_boundaries.py`).
+- Be imported by `core/agent_harness/` (enforced by import-boundary tests).
+- Import `surfaces.interactive_shell.*` from subprocess runners (see T-03 list
+  above). Other action tools (`slash`, `investigation`, etc.) may still reach
+  into the surface temporarily — that is separate T-4 debt.
 - Grow eager submodule imports in `__init__.py` (keep the explicit-import
   discipline documented there; several tool modules import back into
   `command_registry`, so eager imports here reintroduce circular imports).
 
-### Known coupling to narrow (follow-up, not yet enforced)
+## Remaining surface coupling (T-4 debt, out of T-03 scope)
 
-Several tools currently reach into `surfaces.interactive_shell.ui`
-(theme constants, `execution_confirm.execution_allowed`, table/print helpers)
-and `surfaces.interactive_shell.command_registry` (`slash.py` /
-`task_cancel.py` / `llm_provider.py` dispatch a slash command as a tool). This
-is a deliberate short-term coupling, not the target shape:
-
-- UI rendering and slash dispatch are surface concerns. The intended direction
-  is for the surface to inject a narrow callback/port (status output,
-  confirmation, dispatch) that these tools call, so the tool layer does not
-  import `ui` or `command_registry` directly.
-- The clearest offender is `synthetic/runner.py`, which imports
-  `surfaces.interactive_shell.ui` only to print status. Prefer replacing that
-  with a surface-provided status callback when this module is next touched.
-
-Do not add *new* `surfaces.interactive_shell.ui` / `command_registry` imports
-here without a strong reason; prefer a port passed in from the surface.
+Several non-subprocess action tools still import `surfaces.interactive_shell.ui`
+or `command_registry` directly (`slash.py`, `investigation.py`, etc.). Do not
+add new surface imports there without a port; subprocess runners are the
+reference pattern going forward.

@@ -10,8 +10,8 @@ import re
 from typing import Any
 
 from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.compaction import compact_logs, summarize_counts
 from integrations.datadog._client import make_async_client
+from platform.common.evidence_compaction import compact_logs, summarize_counts
 
 
 def _run_in_thread(coro: Any) -> Any:
@@ -411,7 +411,6 @@ def _logs_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     display_name="Datadog logs",
     source="datadog",
     tags=("logs", "observability"),
-    cost_tier="moderate",
     description="Search Datadog logs for pipeline errors, exceptions, and application events.",
     use_cases=[
         "Investigating pipeline errors reported by Datadog monitors",

@@ -249,7 +249,7 @@ def _choose_model(
 ) -> str:
     """Prompt the user to pick a model from ``provider.models``.
 
-    Choices come from the curated config in ``cli/wizard/config.py``.
+    Choices come from the curated config in ``surfaces/cli/wizard/config.py``.
     A saved model that isn't in the curated list is preserved as ``current``
     so re-running the wizard never silently drops a user's prior pick, and an
     "Enter custom model ID" escape hatch is always available.
@@ -448,7 +448,7 @@ def _render_header() -> None:
         ___                    ____  ____  _____ [HIGHLIGHT art]
        / _ \\ ...
       opensre  ·  v<version>                     [SECONDARY name] [DIM ·] [BRAND version]
-      open-source SRE agent for automated …      [DIM description]
+      open-source SRE agent for automated …      [SECONDARY description]
       ─────────────────────────────────────────  [DIM rule]
       Setup — Configure your local AI stack …    [SECONDARY subtitle]
     """
@@ -479,7 +479,7 @@ def _render_header() -> None:
     desc = Text()
     desc.append(
         "  open-source SRE agent for automated incident investigation and root cause analysis",
-        style=DIM,
+        style=SECONDARY,
     )
     _console.print(desc)
     _console.print()

@@ -7,6 +7,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
 
+from config.constants.prompts import SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
 from core.agent_harness.prompts.assistant_agent_prompt import (
     _build_observation_block,
     _build_system_prompt,
@@ -16,7 +17,6 @@ from core.agent_harness.prompts.conversation_memory import (
     format_prior_action_facts,
     format_recent_conversation,
 )
-from core.agent_harness.session import SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
 
 if TYPE_CHECKING:
     from core.agent_harness.models.turn_snapshot import TurnSnapshot

@@ -30,8 +30,8 @@ from core.agent_harness.providers.default_providers import (
     DefaultToolProvider,
     DefaultTurnAccounting,
 )
-from core.agent_harness.session import Session
-from core.agent_harness.session.storage.memory import InMemorySessionStorage
+from core.agent_harness.session import SessionCore
+from core.agent_harness.session.persistence.memory import InMemorySessionStorage
 from gateway.config.get_gateway_settings import (
     GatewayConfigurationError,
     GatewaySettings,
@@ -55,7 +55,7 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
     settings = GatewaySettings(bot_token="tok", auto_start_enabled=False)
     logger = logging.getLogger("gateway.lifecycle.test")
     handle = MagicMock()
-    dispatch = MagicMock()
+    agent_cls = MagicMock()
     signal_calls: list[tuple[int, Any]] = []
     background_kwargs: dict[str, Any] = {}
 
@@ -67,8 +67,8 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
         "gateway.manager.signal.signal",
         lambda signum, handler: signal_calls.append((signum, handler)),
     )
-    # Dispatch is a static entry point; patch it on the class to spy the callback.
-    monkeypatch.setattr("gateway.turn_handler.dispatch_message_to_headless_agent", dispatch)
+    # Patch the agent class the gateway constructs so the turn callback is spyable.
+    monkeypatch.setattr("gateway.turn_handler.HeadlessAgent", agent_cls)
 
     def _start_telegram_gateway_background(**kwargs: Any) -> MagicMock:
         background_kwargs.update(kwargs)
@@ -93,7 +93,7 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
 
     sink = MagicMock()
     session = MagicMock()
-    dispatch.return_value = ShellTurnResult(
+    agent_cls.return_value.dispatch.return_value = ShellTurnResult(
         final_intent="cli_agent_handled",
         action_result=ToolCallingTurnResult(
             planned_count=1,
@@ -108,13 +108,13 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
     )
     callback = background_kwargs["handle_callback_to_gateway_agent"]
     callback("hello", session, sink, logger)
-    dispatch.assert_called_once()
+    agent_cls.return_value.dispatch.assert_called_once()
     sink.finalize.assert_called_once_with("Hawaii: +25C")
-    dispatch_args = dispatch.call_args
-    assert dispatch_args.args == ("hello",)
-    assert dispatch_args.kwargs["session"] is session
-    assert dispatch_args.kwargs["output"] is sink
-    tool_provider = dispatch_args.kwargs["tools"]
+    assert agent_cls.return_value.dispatch.call_args.args == ("hello",)
+    ctor = agent_cls.call_args
+    assert ctor.kwargs["session"] is session
+    assert ctor.kwargs["output"] is sink
+    tool_provider = ctor.kwargs["tools"]
     assert isinstance(tool_provider, DefaultToolProvider)
     assert tool_provider._precomputed_action_tools is None
     with patch.object(logger, "info") as mock_info:
@@ -127,12 +127,12 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
         "shell_run",
         "{'command': 'pwd'}",
     )
-    assert isinstance(dispatch_args.kwargs["prompts"], DefaultPromptContextProvider)
-    assert isinstance(dispatch_args.kwargs["reasoning"], DefaultReasoningClientProvider)
-    assert isinstance(dispatch_args.kwargs["run_factory"], DefaultRunRecordFactory)
-    assert isinstance(dispatch_args.kwargs["accounting"], DefaultTurnAccounting)
-    assert isinstance(dispatch_args.kwargs["error_reporter"], DefaultErrorReporter)
-    assert dispatch_args.kwargs["gather_enabled"] is True
+    assert isinstance(ctor.kwargs["prompts"], DefaultPromptContextProvider)
+    assert isinstance(ctor.kwargs["reasoning"], DefaultReasoningClientProvider)
+    assert isinstance(ctor.kwargs["run_factory"], DefaultRunRecordFactory)
+    assert isinstance(ctor.kwargs["accounting"], DefaultTurnAccounting)
+    assert isinstance(ctor.kwargs["error_reporter"], DefaultErrorReporter)
+    assert ctor.kwargs["gather_enabled"] is True
 
 
 def test_polled_telegram_message_reaches_start_gateway_agent_callback(monkeypatch) -> None:
@@ -147,15 +147,15 @@ def test_polled_telegram_message_reaches_start_gateway_agent_callback(monkeypatc
     background_kwargs: dict[str, Any] = {}
 
     class FakeSessionResolver:
-        def __init__(self, session: Session) -> None:
+        def __init__(self, session: SessionCore) -> None:
             self._session = session
 
-        def resolve(self, *, user_id: str, chat_id: str) -> Session:
+        def resolve(self, *, user_id: str, chat_id: str) -> SessionCore:
             assert user_id == "user-1"
             assert chat_id == "chat-1"
             return self._session
 
-        def rotate(self, *, user_id: str, chat_id: str) -> Session:
+        def rotate(self, *, user_id: str, chat_id: str) -> SessionCore:
             assert user_id == "user-1"
             assert chat_id == "chat-1"
             return self._session
@@ -182,7 +182,7 @@ def test_polled_telegram_message_reaches_start_gateway_agent_callback(monkeypatc
 
     GatewayManager().start_gateway(wait=False)
     callback = background_kwargs["handle_callback_to_gateway_agent"]
-    session = Session(storage=InMemorySessionStorage())
+    session = SessionCore(storage=InMemorySessionStorage())
     client = MagicMock()
     client.send_message.return_value = (True, "", "message-1")
     client.edit_message_text.return_value = (True, "")

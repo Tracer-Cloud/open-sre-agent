@@ -15,8 +15,8 @@ from rich.console import Console
 
 import surfaces.interactive_shell.main as main_entrypoint
 from core.agent_harness.integrations.resolution import IntegrationResolutionResult
-from core.agent_harness.session import Session
 from surfaces.interactive_shell.runtime.startup import first_launch_github as flg
+from surfaces.interactive_shell.session import Session
 
 
 def _console() -> Console:
@@ -166,12 +166,12 @@ def test_get_integrations_warms_metadata_only_cache(monkeypatch: Any) -> None:
 
 def test_stale_background_warm_does_not_overwrite_refreshed_cache() -> None:
     session = Session()
-    stale_generation = session._integration_warm_generation
-    session._integration_warm_generation += 1
-    session._store_warm_cache(
-        {"fresh": {"token": "new"}}, generation=session._integration_warm_generation
+    stale_generation = session.integrations._warm_generation
+    session.integrations._warm_generation += 1
+    session.integrations._store(
+        {"fresh": {"token": "new"}}, generation=session.integrations._warm_generation
     )
-    session._store_warm_cache({"stale": {"token": "old"}}, generation=stale_generation)
+    session.integrations._store({"stale": {"token": "old"}}, generation=stale_generation)
     assert session.resolved_integrations_cache == {"fresh": {"token": "new"}}
 
 
@@ -195,27 +195,6 @@ def test_hydrate_entrypoint_does_not_warm_before_prompt(monkeypatch: Any) -> Non
     assert session.configured_integrations_known is True
     assert session.resolved_integrations_cache is None
     assert resolve_calls == []
-
-
-def test_schedule_warm_resolved_integrations_runs_in_background(
-    monkeypatch: Any,
-) -> None:
-    import asyncio
-
-    warmed = asyncio.Event()
-
-    def _warm(self: Session, *, generation: int | None = None) -> None:
-        warmed.set()
-
-    monkeypatch.setattr(Session, "warm_resolved_integrations", _warm)
-
-    async def _run() -> None:
-        session = Session()
-        session.schedule_warm_resolved_integrations()
-        await asyncio.wait_for(warmed.wait(), timeout=1.0)
-        assert warmed.is_set()
-
-    asyncio.run(_run())
 
 
 def test_hydrate_leaves_unknown_on_failure(monkeypatch: Any) -> None:

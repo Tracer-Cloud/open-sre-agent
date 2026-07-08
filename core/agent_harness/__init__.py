@@ -3,7 +3,7 @@
 This package owns the surface-agnostic turn harness around the shared
 ``core.agent.Agent`` loop. It was extracted out of ``interactive_shell`` so the
 same harness can drive the interactive terminal **and** be executed headlessly via a plain API call
-(:func:`core.agent_harness.turns.headless_dispatch.dispatch_message_to_headless_agent`).
+(:class:`core.agent_harness.turns.headless_dispatch.HeadlessAgent`).
 
 Hard boundary: nothing under ``agent_harness/`` may import from
 ``interactive_shell``. The dependency direction is one-way:
@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     )
     from core.agent_harness.turns.evidence_driver import gather_tool_evidence
     from core.agent_harness.turns.evidence_driver import gather_tool_evidence as gather_evidence
-    from core.agent_harness.turns.headless_dispatch import dispatch_message_to_headless_agent
+    from core.agent_harness.turns.headless_dispatch import HeadlessAgent
     from core.agent_harness.turns.orchestrator import run_turn, stream_answer
 
 # Public name -> (owning submodule, attribute). Resolved lazily via PEP 562 so
@@ -52,9 +52,9 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     ),
     "gather_tool_evidence": ("core.agent_harness.turns.evidence_driver", "gather_tool_evidence"),
     "gather_evidence": ("core.agent_harness.turns.evidence_driver", "gather_tool_evidence"),
-    "dispatch_message_to_headless_agent": (
+    "HeadlessAgent": (
         "core.agent_harness.turns.headless_dispatch",
-        "dispatch_message_to_headless_agent",
+        "HeadlessAgent",
     ),
     "run_turn": ("core.agent_harness.turns.orchestrator", "run_turn"),
     "stream_answer": ("core.agent_harness.turns.orchestrator", "stream_answer"),
@@ -78,12 +78,12 @@ __all__ = [
     "AgentRuntimeRequest",
     "HarnessConfig",
     "HarnessStartupResult",
+    "HeadlessAgent",
     "ShellTurnResult",
     "ToolCallingDeps",
     "ToolCallingTurnResult",
     "TurnSnapshot",
     "TurnSnapshotSource",
-    "dispatch_message_to_headless_agent",
     "execute_action_agent_turn",
     "gather_evidence",
     "gather_tool_evidence",

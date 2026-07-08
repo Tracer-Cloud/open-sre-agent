@@ -28,6 +28,7 @@ from typing import Any
 
 import pytest
 
+from config.constants.prompts import SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
 from core.agent_harness.grounding.investigation_flow_reference import (
     build_investigation_flow_reference_text,
 )
@@ -38,7 +39,6 @@ from core.agent_harness.prompts import (
     build_cli_agent_prompt_from_provider,
     build_environment_block,
 )
-from core.agent_harness.session import SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
 
 _SNAPSHOT_PATH = Path(__file__).with_name("prompt_characterization_snapshot.json")
 

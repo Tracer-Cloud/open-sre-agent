@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from platform.deployment import instance as instance_module
 from platform.deployment.aws import ec2 as ec2_module
+from platform.deployment.ecr_deploy import instance as instance_module
 
 
 @patch("platform.deployment.aws.ec2.time.sleep", return_value=None)
@@ -46,7 +46,7 @@ def test_split_container_env_vars_excludes_telegram_from_web() -> None:
     assert gateway_env["TELEGRAM_BOT_TOKEN"] == "tg-token"
 
 
-@patch("platform.deployment.instance.run_ssm_shell_command")
+@patch("platform.deployment.ecr_deploy.instance.run_ssm_shell_command")
 def test_provision_instance_via_ssm_installs_pulls_and_starts_containers(
     mock_run_ssm: MagicMock,
 ) -> None:

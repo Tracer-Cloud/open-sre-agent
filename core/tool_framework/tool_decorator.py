@@ -9,8 +9,9 @@ from pydantic import BaseModel
 
 from core.domain.types.evidence import EvidenceSource
 from core.domain.types.retrieval import RetrievalControls
-from core.tool_framework.base import BaseTool, EvidenceType, SideEffectLevel
-from core.tool_framework.registered_tool import REGISTERED_TOOL_ATTR, CostTier, RegisteredTool
+from core.tool_framework.base import BaseTool
+from core.tool_framework.metadata import EvidenceType, SideEffectLevel
+from core.tool_framework.registered_tool import REGISTERED_TOOL_ATTR, RegisteredTool
 
 
 @overload
@@ -39,10 +40,8 @@ def tool(
     is_available: Callable[[dict[str, dict]], bool] | None = None,
     extract_params: Callable[[dict[str, dict]], dict[str, Any]] | None = None,
     tags: tuple[str, ...] | None = None,
-    cost_tier: CostTier | None = None,
     requires_approval: bool | None = None,
     approval_reason: str | None = None,
-    approval_scope: str | None = None,
     approval_expiry_seconds: int | None = None,
     parallel_safe: bool | None = None,
     accepts_runtime_context: bool | None = None,
@@ -76,10 +75,8 @@ def tool[F: Callable[..., Any]](
     is_available: Callable[[dict[str, dict]], bool] | None = None,
     extract_params: Callable[[dict[str, dict]], dict[str, Any]] | None = None,
     tags: tuple[str, ...] | None = None,
-    cost_tier: CostTier | None = None,
     requires_approval: bool | None = None,
     approval_reason: str | None = None,
-    approval_scope: str | None = None,
     approval_expiry_seconds: int | None = None,
     parallel_safe: bool | None = None,
     accepts_runtime_context: bool | None = None,
@@ -113,10 +110,8 @@ def tool[F: Callable[..., Any]](
     is_available: Callable[[dict[str, dict]], bool] | None = None,
     extract_params: Callable[[dict[str, dict]], dict[str, Any]] | None = None,
     tags: tuple[str, ...] | None = None,
-    cost_tier: CostTier | None = None,
     requires_approval: bool | None = None,
     approval_reason: str | None = None,
-    approval_scope: str | None = None,
     approval_expiry_seconds: int | None = None,
     parallel_safe: bool | None = None,
     accepts_runtime_context: bool | None = None,
@@ -149,10 +144,8 @@ def tool[F: Callable[..., Any]](
     is_available: Callable[[dict[str, dict]], bool] | None = None,
     extract_params: Callable[[dict[str, dict]], dict[str, Any]] | None = None,
     tags: tuple[str, ...] | None = None,
-    cost_tier: CostTier | None = None,
     requires_approval: bool | None = None,
     approval_reason: str | None = None,
-    approval_scope: str | None = None,
     approval_expiry_seconds: int | None = None,
     parallel_safe: bool | None = None,
     accepts_runtime_context: bool | None = None,
@@ -169,6 +162,7 @@ def tool[F: Callable[..., Any]](
             [
                 name is not None,
                 description is not None,
+                display_name is not None,
                 input_schema is not None,
                 input_model is not None,
                 source is not None,
@@ -188,10 +182,8 @@ def tool[F: Callable[..., Any]](
                 is_available is not None,
                 extract_params is not None,
                 bool(tags),
-                cost_tier is not None,
                 requires_approval is not None,
                 approval_reason is not None,
-                approval_scope is not None,
                 approval_expiry_seconds is not None,
                 parallel_safe is not None,
                 accepts_runtime_context is not None,
@@ -204,10 +196,8 @@ def tool[F: Callable[..., Any]](
                 surfaces is not None
                 or retrieval_controls is not None
                 or tags is not None
-                or cost_tier is not None
                 or requires_approval is not None
                 or approval_reason is not None
-                or approval_scope is not None
                 or approval_expiry_seconds is not None
                 or parallel_safe is not None
                 or accepts_runtime_context is not None
@@ -220,10 +210,8 @@ def tool[F: Callable[..., Any]](
                         surfaces=surfaces,
                         retrieval_controls=retrieval_controls,
                         tags=tags,
-                        cost_tier=cost_tier,
                         requires_approval=requires_approval,
                         approval_reason=approval_reason,
-                        approval_scope=approval_scope,
                         approval_expiry_seconds=approval_expiry_seconds,
                         parallel_safe=parallel_safe,
                         accepts_runtime_context=accepts_runtime_context,
@@ -259,10 +247,8 @@ def tool[F: Callable[..., Any]](
                     is_available=is_available,
                     extract_params=extract_params,
                     tags=tags,
-                    cost_tier=cost_tier,
                     requires_approval=requires_approval,
                     approval_reason=approval_reason,
-                    approval_scope=approval_scope,
                     approval_expiry_seconds=approval_expiry_seconds,
                     parallel_safe=parallel_safe,
                     accepts_runtime_context=accepts_runtime_context,

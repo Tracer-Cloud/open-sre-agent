@@ -6,15 +6,15 @@ import pytest
 
 from core.agent_harness.models.turn_snapshot import TurnSnapshot
 from core.agent_harness.prompts import build_action_system_prompt
-from core.agent_harness.session import InMemorySessionStorage, Session, SessionManager
+from core.agent_harness.session import InMemorySessionStorage, SessionCore, SessionManager
 from gateway.storage import SessionBindingStore, SessionResolver, connect_gateway_db
 
 
 @pytest.fixture
 def resolver(tmp_path, monkeypatch) -> SessionResolver:
     # Keep integration bootstrap a no-op so tests don't resolve real integrations.
-    monkeypatch.setattr(Session, "warm_resolved_integrations", lambda _self, **_k: None)
-    monkeypatch.setattr(Session, "hydrate_configured_integrations", lambda _self: None)
+    monkeypatch.setattr(SessionCore, "warm_resolved_integrations", lambda _self, **_k: None)
+    monkeypatch.setattr(SessionCore, "hydrate_configured_integrations", lambda _self: None)
 
     conn = connect_gateway_db(tmp_path / "state.db")
     store = SessionBindingStore(conn)

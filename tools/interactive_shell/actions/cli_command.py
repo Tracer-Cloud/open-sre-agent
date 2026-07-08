@@ -12,22 +12,15 @@ from core.agent_harness.tools.tool_context import (
     string_property,
 )
 from core.tool_framework.registered_tool import RegisteredTool
-from surfaces.interactive_shell.runtime.subprocess_runner import (
-    run_opensre_cli_command,
-)
+from tools.interactive_shell.cli import run_opensre_cli_command
+from tools.interactive_shell.subprocess import require_subprocess_presenter
 
 
 def execute_cli_command_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
     payload = str(args.get("payload", "")).strip()
     if not payload:
         return False
-    run_opensre_cli_command(
-        payload,
-        ctx.session,
-        ctx.console,
-        confirm_fn=ctx.confirm_fn,
-        is_tty=ctx.is_tty,
-    )
+    run_opensre_cli_command(payload, require_subprocess_presenter(ctx))
     return True
 
 

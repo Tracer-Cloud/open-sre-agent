@@ -67,7 +67,6 @@ def _dispatch(
     display_name="Grafana Tempo",
     source="tempo",
     tags=("traces", "observability"),
-    cost_tier="moderate",
     description=(
         "Query a standalone Grafana Tempo backend for distributed traces. "
         "Use 'action' to pick: search traces, fetch a trace by ID, or list "

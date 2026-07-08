@@ -21,7 +21,9 @@ modes.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Final
+from typing import Final, Literal
+
+RootCauseScope = Literal["general", "hermes"]
 
 
 @dataclass(frozen=True)
@@ -32,6 +34,7 @@ class RootCauseCategory:
     name: str
     group: str
     description: str
+    scope: RootCauseScope = "general"
 
 
 GROUP_DATABASE: Final[str] = "database"
@@ -509,81 +512,97 @@ _TAXONOMY: tuple[RootCauseCategory, ...] = (
         "agent_state_corruption",
         GROUP_CODE_AND_CONFIG,
         "Agent conversation/tool-call ordering invariants are violated by state corruption.",
+        scope="hermes",
     ),
     RootCauseCategory(
         "agent_hang",
         GROUP_WORKLOAD,
         "Agent runtime is blocked or makes no progress beyond hang threshold.",
+        scope="hermes",
     ),
     RootCauseCategory(
         "delivery_hang",
         GROUP_WORKLOAD,
         "Agent work completed but downstream delivery/dispatch remains stuck.",
+        scope="hermes",
     ),
     RootCauseCategory(
         "ghost_session",
         GROUP_CODE_AND_CONFIG,
         "Visible session diverged from actual continuation chain; output lands in hidden session.",
+        scope="hermes",
     ),
     RootCauseCategory(
         "performance_degradation",
         GROUP_WORKLOAD,
         "System remains up but materially slower due to cache-thrash/inefficiency regressions.",
+        scope="hermes",
     ),
     RootCauseCategory(
         "orchestration_missing",
         GROUP_CODE_AND_CONFIG,
         "Declared multi-agent orchestration/topology is missing or silently collapsed into a single-agent execution path.",
+        scope="hermes",
     ),
     RootCauseCategory(
         "protocol_unsupported",
         GROUP_CODE_AND_CONFIG,
         "Requested agent communication protocol is unsupported by the runtime/client implementation.",
+        scope="hermes",
     ),
     RootCauseCategory(
         "routing_ignored",
         GROUP_CODE_AND_CONFIG,
         "Capability-based model routing configuration exists but is ignored at runtime.",
+        scope="hermes",
     ),
     RootCauseCategory(
         "memory_unavailable",
         GROUP_CODE_AND_CONFIG,
         "External memory backend is unreachable and the runtime silently falls back to degraded local memory.",
+        scope="hermes",
     ),
     RootCauseCategory(
         "memory_corruption",
         GROUP_CODE_AND_CONFIG,
         "Persistent agent memory/filesystem state is corrupted without recovery or backup support.",
+        scope="hermes",
     ),
     RootCauseCategory(
         "memory_parse_failure",
         GROUP_CODE_AND_CONFIG,
         "Memory tool failed due to strict JSON parsing incompatibility with model output.",
+        scope="hermes",
     ),
     RootCauseCategory(
         "missing_determinism_control",
         GROUP_CODE_AND_CONFIG,
         "Workflow executions with identical inputs produce divergent outputs without determinism enforcement or replay guarantees.",
+        scope="hermes",
     ),
     RootCauseCategory(
         "missing_approval_gate",
         GROUP_CODE_AND_CONFIG,
         "Destructive or high-risk actions execute without explicit approval enforcement.",
+        scope="hermes",
     ),
     RootCauseCategory(
         "missing_audit_trail",
         GROUP_CODE_AND_CONFIG,
         "Critical actions lack tamper-evident audit logging or cryptographic traceability.",
+        scope="hermes",
     ),
     RootCauseCategory(
         "missing_rbac",
         GROUP_CODE_AND_CONFIG,
         "Tenant or user isolation boundaries are missing or bypassed during access checks.",
+        scope="hermes",
     ),
     RootCauseCategory(
         "missing_credential_isolation",
         GROUP_CODE_AND_CONFIG,
         "Credentials are exposed directly inside runtime memory/process space without isolated proxy handling.",
+        scope="hermes",
     ),
     # ── Generic fallbacks (kept for backward compatibility) ────────────
     # These exist so legacy answer keys, eval pipelines, and prior LLM
@@ -647,24 +666,7 @@ VALID_ROOT_CAUSE_CATEGORIES: frozenset[str] = frozenset(entry.name for entry in 
 # Hermes/runtime-specific categories. Keep these scoped in prompts so
 # non-Hermes investigations don't get steered toward agent-runtime labels.
 HERMES_ROOT_CAUSE_CATEGORIES: frozenset[str] = frozenset(
-    {
-        "agent_state_corruption",
-        "agent_hang",
-        "delivery_hang",
-        "ghost_session",
-        "performance_degradation",
-        "orchestration_missing",
-        "protocol_unsupported",
-        "routing_ignored",
-        "memory_unavailable",
-        "memory_corruption",
-        "memory_parse_failure",
-        "missing_determinism_control",
-        "missing_approval_gate",
-        "missing_audit_trail",
-        "missing_rbac",
-        "missing_credential_isolation",
-    }
+    entry.name for entry in _TAXONOMY if entry.scope == "hermes"
 )
 
 

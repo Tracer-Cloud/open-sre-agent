@@ -5,11 +5,11 @@ from unittest.mock import MagicMock
 import pytest
 from rich.console import Console
 
-from core.agent_harness.session import Session
 from surfaces.interactive_shell.runtime.background.runner import (
     drain_background_notices,
     start_background_template_investigation,
 )
+from surfaces.interactive_shell.session import Session
 
 
 def test_enqueue_and_drain_background_notices() -> None:
@@ -18,12 +18,12 @@ def test_enqueue_and_drain_background_notices() -> None:
     from rich.console import Console
 
     session = Session()
-    session.enqueue_background_notice("[bold]done[/bold]")
+    session.terminal.enqueue_background_notice("[bold]done[/bold]")
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
 
     drain_background_notices(session, console)
 
-    assert session.drain_background_notices() == []
+    assert session.terminal.drain_background_notices() == []
     assert "done" in console.file.getvalue()
 
 
@@ -67,5 +67,5 @@ def test_start_background_template_investigation_assigns_fresh_investigation_id(
 
     assert session.last_investigation_id
     assert session.last_investigation_id != "inv-stale"
-    record = session.background_investigations[task_id]
+    record = session.terminal.background_investigations[task_id]
     assert record.investigation_id == session.last_investigation_id

@@ -1,82 +1,87 @@
-"""Alert source resolution and tool-source routing helpers."""
+"""Alert source resolution and tool-source routing helpers.
+
+Naming convention:
+
+- ``alert_source`` — vendor/format key on the incoming alert payload (e.g.
+  ``"grafana"``, ``"eks"``). Keys ``ALERT_SOURCE_ROUTING``.
+- ``tool source`` — integration key matching ``tool.source`` (e.g.
+  ``"grafana"``, ``"ec2"``, ``"cloudtrail"``). Values in routing tuples.
+
+Each ``AlertSourceRouting`` entry carries two tool-source lists:
+
+- ``relevance_tool_sources`` — broad prioritization during tool planning.
+- ``seed_tool_sources`` — narrower subset auto-invoked before the LLM loop.
+  Expensive or context-dependent tools stay out of seeding.
+"""
 
 from __future__ import annotations
 
 from collections.abc import Iterable
+from dataclasses import dataclass
 from typing import Any
 
-# Maps alert_source values to integration source keys (tool `.source` field).
-# Used for broad prioritization/relevance, not automatic pre-seeding.
-ALERT_SOURCE_TO_TOOL_SOURCES: dict[str, tuple[str, ...]] = {
-    "grafana": ("grafana",),
-    "datadog": ("datadog",),
-    "cloudwatch": ("cloudwatch", "ec2", "rds", "cloudtrail"),
-    "eks": ("eks", "ec2", "cloudtrail"),
-    "alertmanager": ("eks", "cloudwatch", "grafana", "cloudtrail"),
-    "sentry": ("sentry",),
-    "honeycomb": ("honeycomb",),
-    "coralogix": ("coralogix",),
-    "airflow": ("airflow", "tracer_web"),
-    "hermes": ("hermes",),
-    "kafka": ("kafka",),
-    "postgresql": ("postgresql",),
-    "mysql": ("mysql",),
-    "mariadb": ("mariadb",),
-    "mongodb": ("mongodb", "mongodb_atlas"),
-    "redis": ("redis",),
-    "snowflake": ("snowflake",),
-    "clickhouse": ("clickhouse",),
-    "dagster": ("dagster",),
-    "rabbitmq": ("rabbitmq",),
-    "supabase": ("supabase",),
-    "opensearch": ("opensearch",),
-    "openobserve": ("openobserve",),
-    "betterstack": ("betterstack",),
-    "azure": ("azure", "azure_sql"),
-    "github": ("github",),
-    "gitlab": ("gitlab",),
-    "bitbucket": ("bitbucket",),
-    "argocd": ("eks",),
-    "splunk": ("splunk",),
-    "signoz": ("signoz",),
-    "jenkins": ("jenkins",),
-    "tempo": ("tempo",),
-    "temporal": ("temporal",),
-}
+from core.domain.alerts.fields import iter_alert_blocks
 
-# Auto-called before the LLM loop starts. Keep this narrower than
-# ALERT_SOURCE_TO_TOOL_SOURCES for expensive or context-dependent tools.
-ALERT_SOURCE_TO_SEED_TOOL_SOURCES: dict[str, tuple[str, ...]] = {
-    "grafana": ("grafana",),
-    "datadog": ("datadog",),
-    "cloudwatch": ("cloudwatch",),
-    "eks": ("eks",),
-    "alertmanager": ("grafana", "cloudwatch"),
-    "sentry": ("sentry",),
-    "honeycomb": ("honeycomb",),
-    "coralogix": ("coralogix",),
-    "airflow": ("airflow",),
-    "hermes": ("hermes",),
-    "kafka": ("kafka",),
-    "postgresql": ("postgresql",),
-    "mysql": ("mysql",),
-    "mariadb": ("mariadb",),
-    "mongodb": ("mongodb", "mongodb_atlas"),
-    "redis": ("redis",),
-    "snowflake": ("snowflake",),
-    "clickhouse": ("clickhouse",),
-    "dagster": ("dagster",),
-    "rabbitmq": ("rabbitmq",),
-    "supabase": ("supabase",),
-    "opensearch": ("opensearch",),
-    "openobserve": ("openobserve",),
-    "betterstack": ("betterstack",),
-    "azure": ("azure", "azure_sql"),
-    "splunk": ("splunk",),
-    "signoz": ("signoz",),
-    "jenkins": ("jenkins",),
-    "tempo": ("tempo",),
-    "temporal": ("temporal",),
+
+@dataclass(frozen=True)
+class AlertSourceRouting:
+    relevance_tool_sources: tuple[str, ...]
+    seed_tool_sources: tuple[str, ...]
+
+
+def _routing(
+    relevance_tool_sources: tuple[str, ...],
+    seed_tool_sources: tuple[str, ...],
+) -> AlertSourceRouting:
+    return AlertSourceRouting(
+        relevance_tool_sources=relevance_tool_sources,
+        seed_tool_sources=seed_tool_sources,
+    )
+
+
+# Single registry — relevance and seed lists are intentionally different per entry.
+ALERT_SOURCE_ROUTING: dict[str, AlertSourceRouting] = {
+    "grafana": _routing(("grafana",), ("grafana",)),
+    "datadog": _routing(("datadog",), ("datadog",)),
+    # ec2/rds/cloudtrail stay relevance-only — context-dependent pre-LLM seeding.
+    "cloudwatch": _routing(("cloudwatch", "ec2", "rds", "cloudtrail"), ("cloudwatch",)),
+    # ec2/cloudtrail stay relevance-only — seed only the cluster integration.
+    "eks": _routing(("eks", "ec2", "cloudtrail"), ("eks",)),
+    # eks/cloudtrail stay relevance-only — seed grafana + cloudwatch dashboards/logs.
+    "alertmanager": _routing(
+        ("eks", "cloudwatch", "grafana", "cloudtrail"),
+        ("grafana", "cloudwatch"),
+    ),
+    "sentry": _routing(("sentry",), ("sentry",)),
+    "honeycomb": _routing(("honeycomb",), ("honeycomb",)),
+    "coralogix": _routing(("coralogix",), ("coralogix",)),
+    # tracer_web stays relevance-only — secondary web context, not pre-LLM seed.
+    "airflow": _routing(("airflow", "tracer_web"), ("airflow",)),
+    "hermes": _routing(("hermes",), ("hermes",)),
+    "kafka": _routing(("kafka",), ("kafka",)),
+    "postgresql": _routing(("postgresql",), ("postgresql",)),
+    "mysql": _routing(("mysql",), ("mysql",)),
+    "mariadb": _routing(("mariadb",), ("mariadb",)),
+    "mongodb": _routing(("mongodb", "mongodb_atlas"), ("mongodb", "mongodb_atlas")),
+    "redis": _routing(("redis",), ("redis",)),
+    "snowflake": _routing(("snowflake",), ("snowflake",)),
+    "clickhouse": _routing(("clickhouse",), ("clickhouse",)),
+    "dagster": _routing(("dagster",), ("dagster",)),
+    "rabbitmq": _routing(("rabbitmq",), ("rabbitmq",)),
+    "supabase": _routing(("supabase",), ("supabase",)),
+    "opensearch": _routing(("opensearch",), ("opensearch",)),
+    "openobserve": _routing(("openobserve",), ("openobserve",)),
+    "betterstack": _routing(("betterstack",), ("betterstack",)),
+    "azure": _routing(("azure", "azure_sql"), ("azure", "azure_sql")),
+    "github": _routing(("github",), ("github",)),
+    "gitlab": _routing(("gitlab",), ("gitlab",)),
+    "bitbucket": _routing(("bitbucket",), ("bitbucket",)),
+    "argocd": _routing(("eks",), ("eks",)),
+    "splunk": _routing(("splunk",), ("splunk",)),
+    "signoz": _routing(("signoz",), ("signoz",)),
+    "jenkins": _routing(("jenkins",), ("jenkins",)),
+    "tempo": _routing(("tempo",), ("tempo",)),
+    "temporal": _routing(("temporal",), ("temporal",)),
 }
 
 # Generic fallback sources: useful, but never primary when incident-specific
@@ -122,9 +127,25 @@ SOURCE_ALIASES: dict[str, tuple[str, ...]] = {
 }
 
 
+def routing_for_alert_source(alert_source: str) -> AlertSourceRouting | None:
+    """Return routing config for a resolved alert vendor key, if known."""
+    return ALERT_SOURCE_ROUTING.get(alert_source.strip().lower())
+
+
 def primary_sources_for_alert(state: dict[str, Any]) -> tuple[str, ...]:
-    """Return source keys that directly match the parsed alert source."""
-    return ALERT_SOURCE_TO_TOOL_SOURCES.get(resolve_alert_source(state), ())
+    """Return the routing entry's ``relevance_tool_sources`` for this alert.
+
+    Used for broad alert-driven tool prioritization; callers surface these
+    as ``primary_sources`` in plan audits and prompts.
+    """
+    routing = routing_for_alert_source(resolve_alert_source(state))
+    return routing.relevance_tool_sources if routing is not None else ()
+
+
+def seed_tool_sources_for_alert(state: dict[str, Any]) -> tuple[str, ...]:
+    """Return tool sources auto-called before the investigation LLM loop."""
+    routing = routing_for_alert_source(resolve_alert_source(state))
+    return routing.seed_tool_sources if routing is not None else ()
 
 
 def declared_context_sources(state: dict[str, Any]) -> set[str]:
@@ -132,12 +153,10 @@ def declared_context_sources(state: dict[str, Any]) -> set[str]:
     raw = state.get("raw_alert")
     if not isinstance(raw, dict):
         return set()
-    for block_key in ("commonAnnotations", "annotations", "commonLabels", "labels"):
-        block = raw.get(block_key)
-        if isinstance(block, dict):
-            value = block.get("context_sources")
-            if isinstance(value, str) and value.strip():
-                return {item.strip().lower() for item in value.split(",") if item.strip()}
+    for block in iter_alert_blocks(raw):
+        value = block.get("context_sources")
+        if isinstance(value, str) and value.strip():
+            return {item.strip().lower() for item in value.split(",") if item.strip()}
     return set()
 
 
@@ -154,10 +173,8 @@ def collect_alert_text(state: dict[str, Any]) -> str:
             value = raw.get(key)
             if isinstance(value, str):
                 parts.append(value)
-        for block_key in ("commonAnnotations", "annotations", "commonLabels", "labels"):
-            block = raw.get(block_key)
-            if isinstance(block, dict):
-                parts.extend(str(v) for v in block.values() if isinstance(v, (str, int, float)))
+        for block in iter_alert_blocks(raw):
+            parts.extend(str(v) for v in block.values() if isinstance(v, (str, int, float)))
     elif isinstance(raw, str):
         parts.append(raw)
 
@@ -198,6 +215,12 @@ def relevant_sources_for_alert(
 
 
 def resolve_alert_source(state: dict[str, Any]) -> str:
+    """Return the alert vendor key used to look up tool-source routing.
+
+    Grafana managed alerts reuse the Alertmanager webhook schema, so
+    ``alert_source`` is often missing from the payload — we sniff
+    ``grafana_folder`` / ``datasource_uid`` labels and ``externalURL`` below.
+    """
     source = str(state.get("alert_source") or "").lower().strip()
     if source:
         return source
@@ -215,3 +238,18 @@ def resolve_alert_source(state: dict[str, Any]) -> str:
         if isinstance(ext_url, str) and "grafana" in ext_url.lower():
             return "grafana"
     return ""
+
+
+__all__ = [
+    "ALERT_SOURCE_ROUTING",
+    "AlertSourceRouting",
+    "SECONDARY_TOOL_SOURCES",
+    "SOURCE_ALIASES",
+    "collect_alert_text",
+    "declared_context_sources",
+    "primary_sources_for_alert",
+    "relevant_sources_for_alert",
+    "resolve_alert_source",
+    "routing_for_alert_source",
+    "seed_tool_sources_for_alert",
+]

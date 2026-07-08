@@ -15,9 +15,9 @@ from rich.console import Console
 
 from core.agent_harness.models.turn_results import ToolCallingTurnResult
 from core.agent_harness.ports import OutputSink
-from core.agent_harness.session import Session
 from core.agent_harness.turns.turn_plan import TurnPlan
 from core.execution import ToolExecutionHooks
+from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.utils.telemetry import LlmRunInfo
 
 

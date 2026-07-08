@@ -115,7 +115,7 @@ def run_cli_command(
         console.print(f"[{ERROR}]error running CLI command:[/] {exc}")
     console.print()
     if session is not None and not should_capture:
-        session.set_turn_outcome_hint(format_wizard_cli_outcome(args, exit_code=exit_code))
+        session.terminal.set_turn_outcome_hint(format_wizard_cli_outcome(args, exit_code=exit_code))
     return True
 
 

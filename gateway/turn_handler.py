@@ -20,54 +20,84 @@ from core.agent_harness.providers.default_providers import (
     DefaultToolProvider,
     DefaultTurnAccounting,
 )
-from core.agent_harness.session import Session
-from core.agent_harness.turns.headless_dispatch import dispatch_message_to_headless_agent
+from core.agent_harness.session import SessionCore
+from core.agent_harness.turns.headless_dispatch import HeadlessAgent
 from gateway.gateway_output_sink import GatewayOutputSink
-from gateway.polling.handle_polled_inbound_telegram_msg import GatewayAgentCallback
 from gateway.status_messages import status_from_tool_start
 
 
-def build_gateway_turn_handler(
-    *,
-    console: Console,
-) -> GatewayAgentCallback:
-    """Return a callback that services one inbound gateway message.
+class _ToolStatusObserver:
+    """Live tool-progress feedback for the gateway.
 
-    Action tools are resolved from the live per-chat ``session`` on every turn
-    (same as the interactive shell), so integration-scoped tools stay available
-    after ``SessionResolver`` hydrates the chat session. The callback drives the
-    shared headless dispatch — there is no persistent per-transport agent.
+    On each tool start it pushes a status line to the turn's sink — for Telegram
+    that surfaces the typing indicator and a ``running tool X`` preview, so the
+    user sees progress before the final answer instead of a silent wait.
     """
 
-    def handle(
+    def __init__(self, sink: GatewayOutputSink) -> None:
+        self._sink = sink
+
+    def __call__(self, kind: str, data: dict[str, object]) -> None:
+        if kind != "tool_start":
+            return
+        tool_name = str(data.get("name") or "").strip()
+        if not tool_name or tool_name == "assistant_handoff":
+            return
+        self._sink.set_tool_status(status_from_tool_start(tool_name, data.get("input")))
+
+
+class GatewayTurnHandler:
+    """Services one inbound gateway message per call (a :data:`GatewayAgentCallback`).
+
+    ``console`` is the only cross-turn state. The session, output sink, and
+    accounting are per-turn, so each call builds its own agent — there is no
+    persistent per-transport agent, and concurrent turns stay isolated.
+    """
+
+    def __init__(self, *, console: Console) -> None:
+        self._console = console
+
+    def __call__(
+        self,
         text: str,
-        session: Session,
+        session: SessionCore,
         sink: GatewayOutputSink,
         logger: logging.Logger,
     ) -> None:
-        def _tool_observer_factory(_session: Session, _console: Console, _message: str):
-            def observer(kind: str, data: dict[str, object]) -> None:
-                if kind != "tool_start":
-                    return
-                tool_name = str(data.get("name") or "").strip()
-                if not tool_name or tool_name == "assistant_handoff":
-                    return
-                sink.set_tool_status(
-                    status_from_tool_start(tool_name, data.get("input")),
-                )
+        agent = self._agent_for_turn(text=text, session=session, sink=sink, logger=logger)
+        turn_result = agent.dispatch(text)
+        outbound_text = (
+            turn_result.assistant_response_text or turn_result.action_result.response_text
+        ).strip()
+        # A streamed answer (answered=True) already resolved the placeholder status
+        # via the sink. Otherwise always finalize so the placeholder never hangs —
+        # even when the turn produced no text.
+        if not turn_result.answered:
+            sink.finalize(outbound_text or "I didn't have anything to add for that.")
 
-            return observer
+    def _agent_for_turn(
+        self,
+        *,
+        text: str,
+        session: SessionCore,
+        sink: GatewayOutputSink,
+        logger: logging.Logger,
+    ) -> HeadlessAgent:
+        """Build a fresh agent for a single gateway turn.
 
+        Action tools are resolved from the live session here so integration-scoped
+        tools stay available after ``SessionResolver`` hydrates the chat session.
+        """
         error_reporter = DefaultErrorReporter(logger)
-        turn_result = dispatch_message_to_headless_agent(
-            text,
+        observer = _ToolStatusObserver(sink)
+        return HeadlessAgent(
             session=session,
             output=sink,
             tools=DefaultToolProvider(
                 session,
-                console,
+                self._console,
                 tool_action_logger=logger,
-                observer_factory=_tool_observer_factory,
+                observer_factory=lambda _message: observer,
             ),
             prompts=DefaultPromptContextProvider(session),
             reasoning=DefaultReasoningClientProvider(
@@ -80,16 +110,6 @@ def build_gateway_turn_handler(
             error_reporter=error_reporter,
             gather_enabled=True,
         )
-        outbound_text = (
-            turn_result.assistant_response_text or turn_result.action_result.response_text
-        ).strip()
-        # A streamed answer (answered=True) already resolved the placeholder status
-        # via the sink. Otherwise always finalize so the placeholder never hangs —
-        # even when the turn produced no text.
-        if not turn_result.answered:
-            sink.finalize(outbound_text or "I didn't have anything to add for that.")
-
-    return handle
 
 
-__all__ = ["build_gateway_turn_handler"]
+__all__ = ["GatewayTurnHandler"]

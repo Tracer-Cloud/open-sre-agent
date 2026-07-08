@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
+from config.constants.prompts import SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
 from core.agent_harness.grounding.investigation_flow_reference import (
     build_investigation_flow_reference_text,
 )
 from core.agent_harness.prompts import build_environment_block
 from core.agent_harness.providers.provider_models import resolve_provider_models
-from core.agent_harness.session import SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
 
 
 def load_llm_settings() -> Any | None:

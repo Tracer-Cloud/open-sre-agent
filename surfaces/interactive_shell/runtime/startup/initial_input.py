@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from rich.console import Console
 
-from core.agent_harness.session import Session
 from platform.analytics.repl_context import bind_cli_session_id, reset_cli_session_id
+from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui.banner import render_banner
 from surfaces.interactive_shell.ui.input_prompt.rendering import render_submitted_prompt
 from surfaces.interactive_shell.utils.telemetry import PromptRecorder
