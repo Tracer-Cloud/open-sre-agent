@@ -188,6 +188,25 @@ class TestIncomingWebhook:
             slack_delivery._post_via_incoming_webhook("hi", "https://hooks.slack.test/abc") is False
         )
 
+    def test_non_2xx_status_truncates_response_body(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from platform.notifications.delivery_transport import DeliveryResponse
+
+        body = "x" * (slack_delivery._LOG_BODY_MAX_LEN + 20)
+        messages: list[str] = []
+
+        def _stub_post_json(*_a: Any, **_kw: Any) -> DeliveryResponse:
+            return DeliveryResponse(ok=True, status_code=500, data={}, text=body)
+
+        monkeypatch.setattr("integrations.slack.delivery.post_json", _stub_post_json)
+        monkeypatch.setattr("integrations.slack.delivery.debug_print", messages.append)
+
+        assert (
+            slack_delivery._post_via_incoming_webhook("hi", "https://hooks.slack.test/abc") is False
+        )
+        assert messages == [
+            f"Slack incoming webhook failed: HTTP 500: {body[: slack_delivery._LOG_BODY_MAX_LEN]}"
+        ]
+
     def test_transport_exception_returns_false(self, monkeypatch: pytest.MonkeyPatch) -> None:
         def _raise(*_a: Any, **_kw: Any) -> Any:
             raise ConnectionError("refused")
@@ -248,6 +267,24 @@ class TestPostViaWebapp:
             lambda *_a, **_kw: _mock_response(500, None, "boom"),
         )
         assert slack_delivery._post_via_webapp("hi", "C1", "1.0") is False
+
+    def test_5xx_truncates_response_body(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from platform.notifications.delivery_transport import DeliveryResponse
+
+        body = "x" * (slack_delivery._LOG_BODY_MAX_LEN + 20)
+        messages: list[str] = []
+
+        def _stub_post_json(*_a: Any, **_kw: Any) -> DeliveryResponse:
+            return DeliveryResponse(ok=True, status_code=500, data={}, text=body)
+
+        monkeypatch.setenv("TRACER_API_URL", "https://api.tracer.test")
+        monkeypatch.setattr("integrations.slack.delivery.post_json", _stub_post_json)
+        monkeypatch.setattr("integrations.slack.delivery.debug_print", messages.append)
+
+        assert slack_delivery._post_via_webapp("hi", "C1", "1.0") is False
+        assert messages == [
+            f"Slack delivery failed: HTTP 500: {body[: slack_delivery._LOG_BODY_MAX_LEN]}"
+        ]
 
 
 # ---------------------------------------------------------------------------

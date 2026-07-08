@@ -14,6 +14,9 @@ from platform.observability import debug_print
 
 logger = logging.getLogger(__name__)
 
+# Limit raw HTTP response bodies included in Slack delivery log messages.
+_LOG_BODY_MAX_LEN = 200
+
 
 def _slack_bearer_headers(token: str) -> dict[str, str]:
     # Slack explicitly recommends ``charset=utf-8`` on JSON POSTs — without
@@ -337,7 +340,10 @@ def _post_via_webapp(
         debug_print(f"Slack delivery failed: {response.error}")
         return False
     if not 200 <= response.status_code < 300:
-        debug_print(f"Slack delivery failed: HTTP {response.status_code}: {response.text[:200]}")
+        debug_print(
+            "Slack delivery failed: "
+            f"HTTP {response.status_code}: {response.text[:_LOG_BODY_MAX_LEN]}"
+        )
         return False
     debug_print(f"Slack delivery triggered via NextJS /api/slack (thread_ts={thread_ts}).")
     return True
@@ -363,7 +369,8 @@ def _post_via_incoming_webhook(
         return False
     if not 200 <= response.status_code < 300:
         debug_print(
-            f"Slack incoming webhook failed: HTTP {response.status_code}: {response.text[:200]}"
+            "Slack incoming webhook failed: "
+            f"HTTP {response.status_code}: {response.text[:_LOG_BODY_MAX_LEN]}"
         )
         return False
     debug_print("Slack report posted via incoming webhook.")
