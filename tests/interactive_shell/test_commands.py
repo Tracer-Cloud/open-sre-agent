@@ -1634,7 +1634,7 @@ class TestResumeCommand:
         target_id = "old-abc-1234567890"
 
         with patch(
-            "core.agent_harness.session.storage_paths.sessions_dir",
+            "core.agent_harness.session.persistence.paths.sessions_dir",
             return_value=tmp_path,
         ):
             SessionStore.open_session(session)
@@ -1806,7 +1806,7 @@ class TestResumeCommand:
         console, buf = _capture()
 
         with patch(
-            "core.agent_harness.session.storage_paths.sessions_dir",
+            "core.agent_harness.session.persistence.paths.sessions_dir",
             return_value=tmp_path,
         ):
             SessionStore.open_session(session)

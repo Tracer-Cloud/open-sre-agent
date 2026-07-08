@@ -7,8 +7,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-import core.agent_harness.session.storage_paths as storage_paths
-from core.agent_harness.session.persistence_ports import CHAT_KINDS
+import core.agent_harness.session.persistence.paths as storage_paths
+from core.agent_harness.session.persistence.ports import CHAT_KINDS
 
 _ROOT_CAUSE_PREVIEW_CHARS = 80
 _DEFAULT_RCA_HISTORY_LIMIT = 50

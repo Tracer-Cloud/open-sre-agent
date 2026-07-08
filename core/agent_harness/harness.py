@@ -5,7 +5,7 @@ env vars loaded, a session created or resumed, and the prompt context loaded.
 ``AgentHarness`` runs those steps in one call so the shell, gateway, and
 investigation pipeline don't each wire them up their own way. Session lifecycle
 (create / resolve / rotate / restore) belongs to
-:class:`~core.agent_harness.session.manager.SessionManager`; the harness sits
+:class:`~core.agent_harness.session.lifecycle.SessionManager`; the harness sits
 one layer above and adds env resolution and prompt context.
 
 Must not import ``surfaces.interactive_shell`` (enforced by

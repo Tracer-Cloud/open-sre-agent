@@ -8,6 +8,6 @@ turn detection).
 
 from __future__ import annotations
 
-from core.agent_harness.session.task_registry import TaskRegistry
+from platform.common.task_registry import TaskRegistry
 
 __all__ = ["TaskRegistry"]

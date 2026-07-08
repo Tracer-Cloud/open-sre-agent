@@ -31,7 +31,7 @@ from core.agent_harness.providers.default_providers import (
     DefaultTurnAccounting,
 )
 from core.agent_harness.session import SessionCore
-from core.agent_harness.session.storage.memory import InMemorySessionStorage
+from core.agent_harness.session.persistence.memory import InMemorySessionStorage
 from gateway.config.get_gateway_settings import GatewaySettings, TelegramInboundMessage
 from gateway.manager import GatewayManager, start_gateway
 from gateway.polling.handle_polled_inbound_telegram_msg import (

@@ -6,7 +6,7 @@ from pathlib import Path
 
 from prompt_toolkit.history import FileHistory, History, InMemoryHistory
 
-from core.agent_harness.session.prompt_history.policy import (
+from surfaces.interactive_shell.prompt_history.policy import (
     HistoryPolicy,
     RedactingFileHistory,
 )

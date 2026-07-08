@@ -10,7 +10,7 @@ from rich.console import Console
 
 from core.agent_harness.models.turn_results import ShellTurnResult, ToolCallingTurnResult
 from core.agent_harness.session import SessionCore
-from core.agent_harness.session.storage.memory import InMemorySessionStorage
+from core.agent_harness.session.persistence.memory import InMemorySessionStorage
 from gateway.turn_handler import build_gateway_turn_handler
 
 

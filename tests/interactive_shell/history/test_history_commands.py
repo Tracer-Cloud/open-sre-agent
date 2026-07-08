@@ -9,9 +9,9 @@ import pytest
 from prompt_toolkit.history import FileHistory, InMemoryHistory
 from rich.console import Console
 
-from core.agent_harness.session import prompt_history as history_module
-from core.agent_harness.session.prompt_history.policy import RedactingFileHistory
+from surfaces.interactive_shell import prompt_history as history_module
 from surfaces.interactive_shell.command_registry import dispatch_slash
+from surfaces.interactive_shell.prompt_history.policy import RedactingFileHistory
 from surfaces.interactive_shell.session import Session
 
 
@@ -22,8 +22,8 @@ def _capture() -> tuple[Console, io.StringIO]:
 
 def _redirect_history_path(monkeypatch: pytest.MonkeyPatch, target: Path) -> None:
     """Point ``prompt_history_path()`` at a tmp file across all importers."""
-    from core.agent_harness.session.prompt_history import storage as history_storage
     from surfaces.interactive_shell.command_registry import privacy_cmds as privacy_cmds_module
+    from surfaces.interactive_shell.prompt_history import storage as history_storage
 
     monkeypatch.setattr(history_module, "prompt_history_path", lambda: target)
     monkeypatch.setattr(privacy_cmds_module, "prompt_history_path", lambda: target)

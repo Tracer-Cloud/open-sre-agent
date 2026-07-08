@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from core.agent_harness.session.storage.jsonl import JsonlSessionStorage
+from core.agent_harness.session.persistence.jsonl_storage import JsonlSessionStorage
 
 
 @dataclass

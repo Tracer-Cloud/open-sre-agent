@@ -6,16 +6,16 @@ from prompt_toolkit.history import FileHistory, InMemoryHistory
 from rich.console import Console
 from rich.markup import escape
 
-from core.agent_harness.session.prompt_history import (
+from surfaces.interactive_shell.command_registry.types import SlashCommand
+from surfaces.interactive_shell.prompt_history import (
     clear_persisted_history,
     load_command_history_entries,
     prompt_history_path,
 )
-from core.agent_harness.session.prompt_history.policy import (
+from surfaces.interactive_shell.prompt_history.policy import (
     DEFAULT_REDACTION_RULES,
     RedactingFileHistory,
 )
-from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui import (
     BOLD_BRAND,

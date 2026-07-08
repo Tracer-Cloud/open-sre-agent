@@ -14,7 +14,7 @@ import pytest
 from rich.console import Console
 
 from config.constants.prompts import SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
-from core.agent_harness.session.task_registry import TaskRegistry
+from platform.common.task_registry import TaskRegistry
 from platform.common.task_types import TaskKind, TaskStatus
 from surfaces.interactive_shell.command_registry import dispatch_slash
 from surfaces.interactive_shell.session import (
@@ -96,7 +96,7 @@ class TestTaskRegistry:
         def _fake_hex(_nbytes: int) -> str:
             return next(_ids)
 
-        monkeypatch.setattr("core.agent_harness.session.task_registry.secrets.token_hex", _fake_hex)
+        monkeypatch.setattr("platform.common.task_registry.secrets.token_hex", _fake_hex)
         session = Session()
         session.task_registry.create(TaskKind.INVESTIGATION)
         session.task_registry.create(TaskKind.INVESTIGATION)

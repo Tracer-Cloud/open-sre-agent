@@ -21,12 +21,12 @@ else:
     GroundingContext = Any
 
 from config.llm_reasoning_effort import ReasoningEffortChoice
+from core.agent_harness.accounting.token_usage import TokenUsage
 from core.agent_harness.session.integration_state import IntegrationState
-from core.agent_harness.session.persistence_ports import SessionStorage
-from core.agent_harness.session.storage.jsonl import JsonlSessionStorage
-from core.agent_harness.session.task_registry import TaskRegistry
-from core.agent_harness.session.token_usage import TokenUsage
+from core.agent_harness.session.persistence.jsonl_storage import JsonlSessionStorage
+from core.agent_harness.session.persistence.ports import SessionStorage
 from core.state import MutableAgentState
+from platform.common.task_registry import TaskRegistry
 
 
 def _default_grounding() -> GroundingContext:

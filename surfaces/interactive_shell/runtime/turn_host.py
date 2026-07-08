@@ -21,6 +21,7 @@ from typing import Any
 from rich.console import Console
 
 from platform.analytics.repl_context import bind_cli_session_id, reset_cli_session_id
+from platform.observability.session_trace import emit_thread_boundary
 from surfaces.interactive_shell.runtime.agent_presentation import (
     AgentEvent,
     AgentEventSink,
@@ -46,7 +47,6 @@ from surfaces.interactive_shell.ui.output.console_state import set_investigation
 from surfaces.interactive_shell.ui.output.repl_progress import repl_safe_progress_scope
 from surfaces.interactive_shell.ui.streaming.console import StreamingConsole
 from surfaces.interactive_shell.utils.error_handling.exception_reporting import report_exception
-from platform.observability.session_trace import emit_thread_boundary
 from surfaces.interactive_shell.utils.telemetry import PromptRecorder
 
 _logger = logging.getLogger(__name__)

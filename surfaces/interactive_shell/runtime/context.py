@@ -9,12 +9,12 @@ from pydantic import BaseModel, ConfigDict, Field, InstanceOf, field_validator, 
 
 from core.agent_harness.session import SessionManager
 from core.domain.alerts import inbox as _alert_inbox
+from platform.observability.session_trace import set_session_trace_sink
 from surfaces.interactive_shell.runtime.core.state import (
     ReplState,
     SpinnerState,
     create_repl_mutable_state,
 )
-from platform.observability.session_trace import set_session_trace_sink
 from surfaces.interactive_shell.session.session import Session
 from surfaces.interactive_shell.session.trace_sink import jsonl_trace_sink_for_session
 

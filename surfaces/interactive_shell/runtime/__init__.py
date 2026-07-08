@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from core.agent_harness.session.task_registry import TaskRegistry
+from platform.common.task_registry import TaskRegistry
 from platform.common.task_types import TaskKind, TaskRecord, TaskStatus
 from surfaces.interactive_shell.runtime.context import (
     ReplRuntimeContext,

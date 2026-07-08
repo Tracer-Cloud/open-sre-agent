@@ -2,7 +2,7 @@
 
 Covers the startup responsibilities the harness consolidates: env
 resolution, session bootstrap/resume (delegated to
-:class:`~core.agent_harness.session.manager.SessionManager`), on-demand
+:class:`~core.agent_harness.session.lifecycle.SessionManager`), on-demand
 integration resolution, and context loading — plus the ordering
 ``startup()`` runs them in.
 """

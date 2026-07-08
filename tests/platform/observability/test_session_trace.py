@@ -6,6 +6,7 @@ import json
 import threading
 from pathlib import Path
 
+from core.agent_harness.session.persistence.jsonl_storage import JsonlSessionStorage
 from platform.observability.process_stats import sample_thread_snapshot
 from platform.observability.session_trace import (
     NoopSessionTraceSink,
@@ -14,7 +15,6 @@ from platform.observability.session_trace import (
     set_session_trace_sink,
 )
 from surfaces.interactive_shell.session.trace_sink import JsonlSessionTraceSink
-from core.agent_harness.session.storage.jsonl import JsonlSessionStorage
 
 
 def test_sample_thread_snapshot_lists_current_thread() -> None:
@@ -27,7 +27,7 @@ def test_sample_thread_snapshot_lists_current_thread() -> None:
 
 def test_jsonl_trace_sink_writes_trace_span(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(
-        "core.agent_harness.session.storage.jsonl.session_path",
+        "core.agent_harness.session.persistence.jsonl_storage.session_path",
         lambda session_id: tmp_path / f"{session_id}.jsonl",
     )
     storage = JsonlSessionStorage()

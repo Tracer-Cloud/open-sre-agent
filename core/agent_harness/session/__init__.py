@@ -1,34 +1,31 @@
-"""Canonical home for surface-agnostic session state and persistence.
+"""Surface-agnostic session state and persistence — the session package facade.
 
-This package centralizes the core session in one place:
-
-- :class:`SessionCore` — the surface-agnostic session domain object (``session_core``).
+- :class:`SessionCore` (``session_core``) — the surface-agnostic session domain object.
   The interactive shell's ``Session`` subclass with UI facets lives in
   ``surfaces/interactive_shell/session/``.
-- :class:`SessionStorage` / :class:`SessionRepo` protocols plus their JSONL and
-  in-memory backends — persistence, split into per-session writes (storage) and
-  cross-session queries (repo).
+- :class:`SessionManager` (``lifecycle``) — create / resolve / rotate / restore / flush.
+- :class:`SessionStorage` / :class:`SessionRepo` protocols + backends (``persistence``).
 
-``SessionCore`` delegates all persistence to an injected ``SessionStorage`` so
-the on-disk format is swappable and tests can run without touching the
-filesystem. The module-level ``DEFAULT_SESSION_STORAGE`` / ``DEFAULT_SESSION_REPO``
-singletons provide the production JSONL backends used by agent surfaces.
+``SessionCore`` delegates all persistence to an injected ``SessionStorage`` so the on-disk
+format is swappable and tests can run without touching the filesystem. The module-level
+``DEFAULT_SESSION_STORAGE`` / ``DEFAULT_SESSION_REPO`` singletons provide the production
+JSONL backends used by agent surfaces.
 """
 
 from __future__ import annotations
 
-from core.agent_harness.session.jsonl_repository import JsonlSessionRepo
-from core.agent_harness.session.persistence_ports import (
+from core.agent_harness.session.persistence import (
+    InMemorySessionStorage,
+    JsonlSessionStorage,
+)
+from core.agent_harness.session.persistence.jsonl_repo import JsonlSessionRepo
+from core.agent_harness.session.persistence.ports import (
     CHAT_KINDS,
     SessionPersistenceSource,
     SessionRepo,
     SessionStorage,
 )
 from core.agent_harness.session.session_core import SessionCore
-from core.agent_harness.session.storage import (
-    InMemorySessionStorage,
-    JsonlSessionStorage,
-)
 
 # Production singletons. Both backends are stateless, so sharing one instance
 # across the process is safe and avoids re-instantiation on every session.
@@ -47,9 +44,8 @@ def default_session_repo() -> SessionRepo:
 
 
 # Imported last: SessionManager reads the DEFAULT_* singletons above (lazily, in
-# its constructor), so this import must follow their definition. SessionManager
-# itself imports only session submodules, so there is no import cycle.
-from core.agent_harness.session.manager import SessionManager  # noqa: E402
+# its constructor), so this import must follow their definition.
+from core.agent_harness.session.lifecycle import SessionManager  # noqa: E402
 
 __all__ = [
     "CHAT_KINDS",
