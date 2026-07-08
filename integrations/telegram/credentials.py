@@ -48,7 +48,7 @@ def _telegram_store_config() -> dict[str, object]:
         entry = resolve_effective_integrations().get("telegram", {})
         config = entry.get("config", {}) if isinstance(entry, dict) else {}
         return config if isinstance(config, dict) else {}
-    except (ImportError, KeyError, TypeError, ValueError) as exc:
+    except (ImportError, KeyError, TypeError, ValueError, OSError, RuntimeError) as exc:
         logger.debug(
             "Failed to resolve Telegram credentials from the store: %s", exc, exc_info=True
         )
