@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import httpx
-from pydantic import Field
+from pydantic import Field, ValidationError
 
 from config.strict_config import StrictConfigModel
 from integrations._validation_helpers import report_validation_failure
@@ -162,7 +162,10 @@ def classify(credentials: dict[str, Any], record_id: str) -> tuple[TempoConfig |
                 "integration_id": record_id,
             }
         )
+    except ValidationError:
+        raise
     except Exception:
+        logger.debug("TempoConfig validation failed unexpectedly", exc_info=True)
         return None, None
     if cfg.is_configured:
         return cfg, "tempo"
