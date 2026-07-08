@@ -262,19 +262,23 @@ def _render_integration_show(session: Session, console: Console, service: str) -
 
 
 def _run_integrations_setup(session: Session, console: Console, args: list[str]) -> bool:
+    headless = session_terminal(session) is None
     if len(args) < 2:
+        # Bare setup delegates to the CLI service picker on the REPL; headless
+        # surfaces (Telegram) have no picker, so return usage guidance instead.
+        if not headless:
+            result = run_cli_command(console, ["integrations", "setup"])
+            session.refresh_integration_state()
+            return result
         repl_print(console, f"[{DIM}]usage:[/] /integrations setup <service>")
-        if session_terminal(session) is None:
-            publish_headless_slash_response(
-                session, message="Usage: /integrations setup <service>", ok=False
-            )
-        else:
-            session.mark_latest(ok=False, kind="slash")
+        publish_headless_slash_response(
+            session, message="Usage: /integrations setup <service>", ok=False
+        )
         return True
 
     service = args[1]
     cli_cmd = " ".join(["uv run opensre integrations setup", service, *args[2:]]).strip()
-    if session_terminal(session) is None:
+    if headless:
         message = (
             f"{escape(service)} setup needs interactive credentials (API keys, URLs, tokens) "
             f"and cannot finish in Telegram.\n\n"

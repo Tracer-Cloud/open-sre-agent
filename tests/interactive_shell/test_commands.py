@@ -2498,12 +2498,12 @@ class TestRunCliCommand:
         before slash commands like ``/onboard`` can run.
         """
         from surfaces.interactive_shell.command_registry import cli_parity as m
-        from surfaces.interactive_shell.runtime.subprocess_runner import opensre_cli_runner
+        from tools.interactive_shell import cli as opensre_cli
 
         captured: list[list[str]] = []
 
-        monkeypatch.setattr(opensre_cli_runner.sys, "executable", "/tmp/opensre")
-        monkeypatch.setattr(opensre_cli_runner.sys, "frozen", True, raising=False)
+        monkeypatch.setattr(opensre_cli.sys, "executable", "/tmp/opensre")
+        monkeypatch.setattr(opensre_cli.sys, "frozen", True, raising=False)
 
         def _fake_run(
             cmd: list[str],
@@ -2533,13 +2533,13 @@ class TestRunCliCommand:
         avoids turning ``/onboard`` into ``opensre -m cli onboard``.
         """
         from surfaces.interactive_shell.command_registry import cli_parity as m
-        from surfaces.interactive_shell.runtime.subprocess_runner import opensre_cli_runner
+        from tools.interactive_shell import cli as opensre_cli
 
         captured: list[list[str]] = []
 
-        monkeypatch.setattr(opensre_cli_runner.sys, "argv", ["/tmp/bin/opensre"])
-        monkeypatch.setattr(opensre_cli_runner.sys, "executable", "/tmp/bin/python3")
-        monkeypatch.setattr(opensre_cli_runner.sys, "frozen", False, raising=False)
+        monkeypatch.setattr(opensre_cli.sys, "argv", ["/tmp/bin/opensre"])
+        monkeypatch.setattr(opensre_cli.sys, "executable", "/tmp/bin/python3")
+        monkeypatch.setattr(opensre_cli.sys, "frozen", False, raising=False)
 
         def _fake_run(
             cmd: list[str],
