@@ -137,13 +137,13 @@ def run_foreground_investigation(
     # Skip feedback while the prompt-toolkit app is running: its cursor-position
     # queries would race the raw feedback menu and leak bytes into the next prompt.
     terminal = session_terminal(session)
-    pt_app_running = False
+    prompt_app_running = False
     if terminal is not None:
-        pt_app = terminal.pt_style_app
-        pt_app_running = pt_app is not None and getattr(pt_app, "is_running", False)
+        prompt_app = terminal.prompt_app
+        prompt_app_running = prompt_app is not None and getattr(prompt_app, "is_running", False)
     # RCA feedback is REPL-only: gateway/headless sessions have no terminal facet and
     # must not block on a raw-stdin picker (e.g. gateway running under tmux with TTY).
-    if terminal is not None and not pt_app_running and repl_tty_interactive():
+    if terminal is not None and not prompt_app_running and repl_tty_interactive():
         restore_stdin_terminal()
         prompt_investigation_feedback(final_state)
     return InvestigationOutcome(
