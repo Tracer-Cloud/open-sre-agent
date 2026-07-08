@@ -16,9 +16,8 @@ Pytest discovers these tests through `pytest.ini`; scoped CI maps changes under
 - `manager.py` — process composition root: builds the turn handler, starts the
   Telegram worker, owns signals and shutdown.
 - `turn_handler.py` — transport-agnostic turn callback: `GatewayTurnHandler`
-  (a `(text, session, sink, logger) -> None` callable, also built via
-  `build_gateway_turn_handler(console=...)`) builds a fresh `HeadlessAgent` per
-  turn and calls `agent.dispatch(text)`.
+  (a `(text, session, sink, logger) -> None` callable) builds a fresh
+  `HeadlessAgent` per turn and calls `agent.dispatch(text)`.
 - `telegram_gateway.py` — wires the handler into the Telegram polling worker.
 - `storage/session/resolver.py` — per-chat session binding; delegates
   create / resolve / rotate to `SessionManager`.

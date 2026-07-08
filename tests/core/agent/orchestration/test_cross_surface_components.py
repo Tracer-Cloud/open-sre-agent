@@ -13,7 +13,7 @@ from core.agent_harness.models.turn_results import ShellTurnResult, ToolCallingT
 from core.agent_harness.providers.default_providers import DefaultToolProvider
 from core.agent_harness.session import InMemorySessionStorage, Session
 from core.agent_harness.turns.orchestrator import run_turn
-from gateway.turn_handler import build_gateway_turn_handler
+from gateway.turn_handler import GatewayTurnHandler
 
 
 def test_gateway_turn_handler_delegates_to_agent_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -34,7 +34,7 @@ def test_gateway_turn_handler_delegates_to_agent_dispatch(monkeypatch: pytest.Mo
 
     session = Session(storage=InMemorySessionStorage())
     sink = MagicMock()
-    handler = build_gateway_turn_handler(console=Console(force_terminal=False))
+    handler = GatewayTurnHandler(console=Console(force_terminal=False))
     handler("hello gateway", session, sink, logging.getLogger("test.gateway.module"))
 
     # The message is dispatched per-turn; the ports are wired once at construction.
@@ -63,7 +63,7 @@ def test_gateway_turn_handler_does_not_finalize_answered_turn(
 
     session = Session(storage=InMemorySessionStorage())
     sink = MagicMock()
-    handler = build_gateway_turn_handler(console=Console(force_terminal=False))
+    handler = GatewayTurnHandler(console=Console(force_terminal=False))
     handler("why", session, sink, logging.getLogger("test.gateway.module.answer"))
 
     sink.finalize.assert_not_called()

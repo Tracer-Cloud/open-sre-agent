@@ -29,7 +29,7 @@ from core.agent_harness.turns.headless_dispatch import (
 )
 from core.llm.types import AgentLLMResponse, ToolCall
 from core.tool_framework.registered_tool import RegisteredTool
-from gateway.turn_handler import build_gateway_turn_handler
+from gateway.turn_handler import GatewayTurnHandler
 from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 
 Surface = Literal["shell", "headless", "gateway_handler"]
@@ -347,7 +347,7 @@ def snapshot_gateway_handler(
 
     monkeypatch.setattr("gateway.turn_handler.HeadlessAgent", _SpyAgent)
     before = probe_run_count()
-    handler = build_gateway_turn_handler(console=console())
+    handler = GatewayTurnHandler(console=console())
     handler(message, session, sink, logging.getLogger("test.parity.gateway"))
     assert len(captured) == 1, "gateway handler must dispatch exactly one headless turn"
     return TurnSnapshot.from_result(captured[0], probe_ran=probe_run_count() > before)
@@ -419,7 +419,7 @@ def run_gateway_turn_with_sink(
 
     monkeypatch.setattr("gateway.turn_handler.HeadlessAgent", _SpyAgent)
     before = probe_run_count()
-    handler = build_gateway_turn_handler(console=console())
+    handler = GatewayTurnHandler(console=console())
     handler(message, session, sink, logging.getLogger("test.parity.gateway.sink"))
     assert len(captured) == 1, "gateway handler must dispatch exactly one headless turn"
     snapshot = TurnSnapshot.from_result(captured[0], probe_ran=probe_run_count() > before)

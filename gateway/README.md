@@ -81,8 +81,8 @@ pieces, the same shape Telegram already has:
 
 Then wire it in the composition root (`GatewayManager` in `gateway/manager.py`):
 start the Slack listener next to (or instead of) Telegram. Reuse the handler from
-`build_gateway_turn_handler(...)` as-is.
+`GatewayTurnHandler(...)` as-is.
 
-**What you never change:** `build_gateway_turn_handler`, `Agent`, prompts, tools.
+**What you never change:** `GatewayTurnHandler`, `Agent`, prompts, tools.
 Keeping the handler transport-agnostic is exactly what makes a new platform a small,
 self-contained add.

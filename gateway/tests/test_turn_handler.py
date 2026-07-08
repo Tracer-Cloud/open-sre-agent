@@ -11,7 +11,7 @@ from rich.console import Console
 from core.agent_harness.models.turn_results import ShellTurnResult, ToolCallingTurnResult
 from core.agent_harness.session import Session
 from core.agent_harness.session.storage.memory import InMemorySessionStorage
-from gateway.turn_handler import build_gateway_turn_handler
+from gateway.turn_handler import GatewayTurnHandler
 
 
 def _patch_headless_agent(monkeypatch: Any, result: ShellTurnResult) -> MagicMock:
@@ -66,7 +66,7 @@ def test_turn_handler_resolves_action_tools_from_live_session(monkeypatch: Any) 
     chat_integrations = {"slack": {"webhook_url": "https://hooks.example/test"}}
     session.resolved_integrations_cache = chat_integrations
 
-    handler = build_gateway_turn_handler(console=Console(force_terminal=False))
+    handler = GatewayTurnHandler(console=Console(force_terminal=False))
     handler("send slack update", session, MagicMock(), logging.getLogger("test.turn_handler"))
 
     tool_provider = agent_cls.call_args.kwargs["tools"]
@@ -95,7 +95,7 @@ def test_turn_handler_finalizes_fallback_on_empty_response(monkeypatch: Any) -> 
     """An empty, non-answered turn still finalizes so the placeholder status can't hang."""
     _patch_headless_agent(monkeypatch, _empty_turn_result())
     sink = MagicMock()
-    handler = build_gateway_turn_handler(console=Console(force_terminal=False))
+    handler = GatewayTurnHandler(console=Console(force_terminal=False))
     handler("/", Session(storage=InMemorySessionStorage()), sink, logging.getLogger("test"))
     sink.finalize.assert_called_once_with("I didn't have anything to add for that.")
 
@@ -105,6 +105,6 @@ def test_turn_handler_skips_finalize_when_answer_was_streamed(monkeypatch: Any) 
     result = _empty_turn_result(llm_run=MagicMock())  # answered=True
     _patch_headless_agent(monkeypatch, result)
     sink = MagicMock()
-    handler = build_gateway_turn_handler(console=Console(force_terminal=False))
+    handler = GatewayTurnHandler(console=Console(force_terminal=False))
     handler("hi", Session(storage=InMemorySessionStorage()), sink, logging.getLogger("test"))
     sink.finalize.assert_not_called()

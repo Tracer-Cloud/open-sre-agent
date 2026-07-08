@@ -12,7 +12,6 @@ import logging
 
 from rich.console import Console
 
-from core.agent_harness.ports import ToolEventObserver
 from core.agent_harness.providers.default_prompt_context import DefaultPromptContextProvider
 from core.agent_harness.providers.default_providers import (
     DefaultErrorReporter,
@@ -24,8 +23,22 @@ from core.agent_harness.providers.default_providers import (
 from core.agent_harness.session import Session
 from core.agent_harness.turns.headless_dispatch import HeadlessAgent
 from gateway.gateway_output_sink import GatewayOutputSink
-from gateway.polling.handle_polled_inbound_telegram_msg import GatewayAgentCallback
 from gateway.status_messages import status_from_tool_start
+
+
+class _ToolStatusObserver:
+    """Pushes a status line to the turn's sink when a tool starts."""
+
+    def __init__(self, sink: GatewayOutputSink) -> None:
+        self._sink = sink
+
+    def __call__(self, kind: str, data: dict[str, object]) -> None:
+        if kind != "tool_start":
+            return
+        tool_name = str(data.get("name") or "").strip()
+        if not tool_name or tool_name == "assistant_handoff":
+            return
+        self._sink.set_tool_status(status_from_tool_start(tool_name, data.get("input")))
 
 
 class GatewayTurnHandler:
@@ -71,7 +84,7 @@ class GatewayTurnHandler:
         tools stay available after ``SessionResolver`` hydrates the chat session.
         """
         error_reporter = DefaultErrorReporter(logger)
-        observer = self._tool_status_observer(sink)
+        observer = _ToolStatusObserver(sink)
         return HeadlessAgent(
             session=session,
             output=sink,
@@ -93,24 +106,5 @@ class GatewayTurnHandler:
             gather_enabled=True,
         )
 
-    @staticmethod
-    def _tool_status_observer(sink: GatewayOutputSink) -> ToolEventObserver:
-        """Push a status line to ``sink`` whenever a tool starts during the turn."""
 
-        def observer(kind: str, data: dict[str, object]) -> None:
-            if kind != "tool_start":
-                return
-            tool_name = str(data.get("name") or "").strip()
-            if not tool_name or tool_name == "assistant_handoff":
-                return
-            sink.set_tool_status(status_from_tool_start(tool_name, data.get("input")))
-
-        return observer
-
-
-def build_gateway_turn_handler(*, console: Console) -> GatewayAgentCallback:
-    """Return a gateway turn callback backed by :class:`GatewayTurnHandler`."""
-    return GatewayTurnHandler(console=console)
-
-
-__all__ = ["GatewayTurnHandler", "build_gateway_turn_handler"]
+__all__ = ["GatewayTurnHandler"]
