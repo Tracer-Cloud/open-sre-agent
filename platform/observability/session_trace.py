@@ -29,15 +29,16 @@ class NoopSessionTraceSink:
 
     def emit(
         self,
-        _session_id: str,
+        session_id: str,
         *,
-        _span_kind: str,
-        _name: str,
-        _status: str = "ok",
-        _duration_ms: int | None = None,
-        _attributes: dict[str, Any] | None = None,
-        _parent_id: str | None = None,
+        span_kind: str,
+        name: str,
+        status: str = "ok",
+        duration_ms: int | None = None,
+        attributes: dict[str, Any] | None = None,
+        parent_id: str | None = None,
     ) -> str:
+        del session_id, span_kind, name, status, duration_ms, attributes, parent_id
         return ""
 
 
