@@ -53,8 +53,8 @@ THEME_REGISTRY: dict[str, CliTheme] = {
         HIGHLIGHT="#B9EDAF",
         BRAND="#66A17D",
         TEXT="#E0E0E0",
-        SECONDARY="#888888",
-        DIM="#444444",
+        SECONDARY="#A6A6A6",
+        DIM="#6E6E6E",
         WARNING="#CEA25C",
         ERROR="#C45B52",
         BG="#0A0A0A",
@@ -65,8 +65,8 @@ THEME_REGISTRY: dict[str, CliTheme] = {
         HIGHLIGHT="#A8D4FF",
         BRAND="#6FA5D8",
         TEXT="#E0E0E0",
-        SECONDARY="#888888",
-        DIM="#444444",
+        SECONDARY="#A6A6A6",
+        DIM="#6E6E6E",
         WARNING="#D8B06F",
         ERROR="#CF6B63",
         BG="#0A0A0A",
@@ -77,8 +77,8 @@ THEME_REGISTRY: dict[str, CliTheme] = {
         HIGHLIGHT="#F2D48A",
         BRAND="#C99944",
         TEXT="#E0E0E0",
-        SECONDARY="#888888",
-        DIM="#444444",
+        SECONDARY="#A6A6A6",
+        DIM="#6E6E6E",
         WARNING="#E0B466",
         ERROR="#CF6B63",
         BG="#0A0A0A",
@@ -89,8 +89,8 @@ THEME_REGISTRY: dict[str, CliTheme] = {
         HIGHLIGHT="#C6C6C6",
         BRAND="#A7A7A7",
         TEXT="#E0E0E0",
-        SECONDARY="#9A9A9A",
-        DIM="#4A4A4A",
+        SECONDARY="#A6A6A6",
+        DIM="#6E6E6E",
         WARNING="#B0B0B0",
         ERROR="#8E8E8E",
         BG="#0A0A0A",
@@ -101,8 +101,8 @@ THEME_REGISTRY: dict[str, CliTheme] = {
         HIGHLIGHT="#FF9E8A",
         BRAND="#C45B52",
         TEXT="#E0E0E0",
-        SECONDARY="#888888",
-        DIM="#444444",
+        SECONDARY="#A6A6A6",
+        DIM="#6E6E6E",
         WARNING="#E0B466",
         ERROR="#CF6B63",
         BG="#0A0A0A",
@@ -113,8 +113,8 @@ THEME_REGISTRY: dict[str, CliTheme] = {
         HIGHLIGHT="#FFB3D9",
         BRAND="#D4729A",
         TEXT="#E0E0E0",
-        SECONDARY="#888888",
-        DIM="#444444",
+        SECONDARY="#A6A6A6",
+        DIM="#6E6E6E",
         WARNING="#E0B466",
         ERROR="#CF6B63",
         BG="#0A0A0A",
@@ -125,8 +125,8 @@ THEME_REGISTRY: dict[str, CliTheme] = {
         HIGHLIGHT="#C8A8FF",
         BRAND="#9678C0",
         TEXT="#E0E0E0",
-        SECONDARY="#888888",
-        DIM="#444444",
+        SECONDARY="#A6A6A6",
+        DIM="#6E6E6E",
         WARNING="#D8B06F",
         ERROR="#CF6B63",
         BG="#0A0A0A",
@@ -137,8 +137,8 @@ THEME_REGISTRY: dict[str, CliTheme] = {
         HIGHLIGHT="#FFC08A",
         BRAND="#D4884A",
         TEXT="#E0E0E0",
-        SECONDARY="#888888",
-        DIM="#444444",
+        SECONDARY="#A6A6A6",
+        DIM="#6E6E6E",
         WARNING="#E0B466",
         ERROR="#CF6B63",
         BG="#0A0A0A",
@@ -149,8 +149,8 @@ THEME_REGISTRY: dict[str, CliTheme] = {
         HIGHLIGHT="#8AE2D6",
         BRAND="#5BA89D",
         TEXT="#E0E0E0",
-        SECONDARY="#888888",
-        DIM="#444444",
+        SECONDARY="#A6A6A6",
+        DIM="#6E6E6E",
         WARNING="#CEA25C",
         ERROR="#C45B52",
         BG="#0A0A0A",
@@ -199,6 +199,20 @@ class _LazyRichStyle(str):
 
     def __bool__(self) -> bool:
         return bool(self._resolve())
+
+    # Hash/compare as the resolved style string. The underlying str value is
+    # "" for every token, so without these overrides all tokens collide on
+    # the same key in caches keyed by style strings — Rich's lru_cached
+    # ``Style.parse`` then renders every ``style=TOKEN`` usage with whichever
+    # token happened to be parsed first.
+    def __eq__(self, other: object) -> bool:
+        return self._resolve() == other
+
+    def __ne__(self, other: object) -> bool:
+        return self._resolve() != other
+
+    def __hash__(self) -> int:
+        return hash(self._resolve())
 
     def lstrip(self, chars: str | None = None) -> str:
         resolved = self._resolve()

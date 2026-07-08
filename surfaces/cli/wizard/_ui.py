@@ -448,7 +448,7 @@ def _render_header() -> None:
         ___                    ____  ____  _____ [HIGHLIGHT art]
        / _ \\ ...
       opensre  ·  v<version>                     [SECONDARY name] [DIM ·] [BRAND version]
-      open-source SRE agent for automated …      [DIM description]
+      open-source SRE agent for automated …      [SECONDARY description]
       ─────────────────────────────────────────  [DIM rule]
       Setup — Configure your local AI stack …    [SECONDARY subtitle]
     """
@@ -479,7 +479,7 @@ def _render_header() -> None:
     desc = Text()
     desc.append(
         "  open-source SRE agent for automated incident investigation and root cause analysis",
-        style=DIM,
+        style=SECONDARY,
     )
     _console.print(desc)
     _console.print()
