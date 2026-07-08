@@ -24,6 +24,8 @@ def test_rotate_assigns_new_session(binding_store: SessionBindingStore) -> None:
     new_id = binding_store.rotate(platform="telegram", chat_id="123")
     assert new_id != "uuid-1"
     assert binding_store.get_session_id(platform="telegram", chat_id="123") == new_id
+
+
 def test_concurrent_writes_do_not_deadlock(tmp_path) -> None:
     import threading
     from gateway.storage import connect_gateway_db, SessionBindingStore
