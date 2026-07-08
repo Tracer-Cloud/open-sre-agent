@@ -33,6 +33,22 @@ _BACKGROUND_TEST_SUBCOMMANDS = frozenset({"run", "synthetic", "cloudopsbench"})
 _TEST_SUBCOMMANDS = ("list", "run", "synthetic", "cloudopsbench")
 _TEST_PICKER_SELECTION_FILE_ENV = "OPENSRE_TEST_PICKER_SELECTION_FILE"
 _PARENT_INTERACTIVE_SHELL_ENV = "OPENSRE_PARENT_INTERACTIVE_SHELL"
+_HEADLESS_CLI_SUBPROCESS_TIMEOUT_SECONDS = 90.0
+
+
+def publish_headless_slash_response(
+    session: Session,
+    *,
+    message: str,
+    ok: bool = True,
+) -> None:
+    """Pin an explicit slash reply for gateway/headless surfaces (wizards, setup)."""
+    session.complete_latest_record(
+        "slash",
+        response_text=message.strip(),
+        ok=ok,
+        slash_outcome="headless_guidance",
+    )
 
 
 def _decode_subprocess_stream(value: str | bytes | None) -> str:
@@ -74,6 +90,8 @@ def run_cli_command(
     cmd = build_opensre_cli_argv(args)
     headless = session is not None and session_terminal(session) is None
     should_capture = capture_output or subprocess_timeout is not None or headless
+    if headless and subprocess_timeout is None:
+        subprocess_timeout = _HEADLESS_CLI_SUBPROCESS_TIMEOUT_SECONDS
     child_env = os.environ.copy()
     child_env[_PARENT_INTERACTIVE_SHELL_ENV] = "1"
     if should_capture:
@@ -125,6 +143,19 @@ def run_cli_command(
 
 
 def _cmd_onboard(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+    if session_terminal(session) is None:
+        cli_cmd = " ".join(["uv run opensre onboard", *args]).strip()
+        message = (
+            "Onboarding is an interactive wizard (LLM provider, integrations, messaging). "
+            "It cannot run inside a Telegram chat.\n\n"
+            f"Run on the server:\n  {cli_cmd}\n\n"
+            "Or configure individual services with "
+            "`/integrations setup <service>`."
+        )
+        console.print()
+        console.print(message)
+        publish_headless_slash_response(session, message=message)
+        return True
     # The REPL loop treats ``/onboard`` as exclusive-stdin in
     # ``runtime.utils.input_policy`` so the prompt_toolkit Application is torn down before
     # this handler runs — the wizard subprocess therefore gets exclusive

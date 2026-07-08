@@ -60,21 +60,12 @@ def test_gateway_investigate_slash_dispatches(monkeypatch: pytest.MonkeyPatch) -
     assert "generic" in sink.finalized.lower()
 
 
-def test_gateway_onboard_slash_dispatches(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Literal /onboard must delegate to the CLI onboard command on headless sessions."""
+def test_gateway_onboard_slash_returns_headless_guidance(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Literal /onboard on SessionCore must not spawn a blocking interactive wizard."""
     recorded: list[list[str]] = []
 
-    def _fake_run_cli_command(
-        _console: Any,
-        args: list[str],
-        *,
-        session: Any = None,
-        subprocess_timeout: float | None = None,
-        capture_output: bool = False,
-    ) -> bool:
-        _ = (session, subprocess_timeout, capture_output)
-        recorded.append(list(args))
-        _console.print("onboard wizard started")
+    def _fake_run_cli_command(*_args: object, **_kwargs: object) -> bool:
+        recorded.append(["onboard"])
         return True
 
     monkeypatch.setattr(
@@ -83,27 +74,24 @@ def test_gateway_onboard_slash_dispatches(monkeypatch: pytest.MonkeyPatch) -> No
     )
 
     sink = _run_gateway_slash("/onboard", monkeypatch)
-    assert recorded == [["onboard"]]
+    assert recorded == []
     assert sink.finalized is not None
-    assert "I didn't have anything to add for that." not in sink.finalized
-    assert "onboard" in sink.finalized.lower()
+    assert "interactive wizard" in sink.finalized.lower()
+    assert "uv run opensre onboard" in sink.finalized
 
 
-def test_gateway_integrations_setup_slash_dispatches(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Literal /integrations setup <service> must run the integrations setup handler."""
+def test_gateway_integrations_setup_returns_headless_guidance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Literal /integrations setup must not spawn a blocking credential wizard on gateway."""
     recorded: list[list[str]] = []
 
     def _fake_run_cli_command(
         _console: Any,
         args: list[str],
-        *,
-        session: Any = None,
-        subprocess_timeout: float | None = None,
-        capture_output: bool = False,
+        **_kwargs: object,
     ) -> bool:
-        _ = (session, subprocess_timeout, capture_output)
         recorded.append(list(args))
-        _console.print("integrations setup grafana")
         return True
 
     monkeypatch.setattr(
@@ -112,10 +100,10 @@ def test_gateway_integrations_setup_slash_dispatches(monkeypatch: pytest.MonkeyP
     )
 
     sink = _run_gateway_slash("/integrations setup grafana", monkeypatch)
-    assert recorded == [["integrations", "setup", "grafana"]]
+    assert recorded == []
     assert sink.finalized is not None
-    assert "I didn't have anything to add for that." not in sink.finalized
     assert "grafana" in sink.finalized.lower()
+    assert "uv run opensre integrations setup grafana" in sink.finalized
     assert "Launching" not in (sink.finalized or "")
 
 
@@ -135,7 +123,6 @@ def test_gateway_integrations_setup_runs_inline_when_stdin_is_tty(
         **_kwargs: object,
     ) -> bool:
         recorded.append(list(args))
-        _console.print("integrations setup grafana")
         return True
 
     monkeypatch.setattr(
@@ -144,50 +131,9 @@ def test_gateway_integrations_setup_runs_inline_when_stdin_is_tty(
     )
 
     sink = _run_gateway_slash("/integrations setup grafana", monkeypatch)
-    assert recorded == [["integrations", "setup", "grafana"]]
+    assert recorded == []
     assert sink.finalized is not None
     assert "Launching" not in (sink.finalized or "")
-
-
-def test_gateway_integrations_setup_passes_session_for_headless_capture(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Setup must pass the live session so run_cli_command captures output for Telegram."""
-    captured: dict[str, object] = {}
-
-    def _fake_run_cli_command(
-        _console: Any,
-        args: list[str],
-        *,
-        session: Any = None,
-        subprocess_timeout: float | None = None,
-        capture_output: bool = False,
-    ) -> bool:
-        captured["args"] = list(args)
-        captured["session"] = session
-        captured["capture_output"] = capture_output
-        _console.print("Setting up grafana")
-        return True
-
-    monkeypatch.setattr(
-        "surfaces.interactive_shell.command_registry.integrations.run_cli_command",
-        _fake_run_cli_command,
-    )
-
-    session = SessionCore(storage=InMemorySessionStorage())
-    sink = RecordingGatewaySink()
-    handler = GatewayTurnHandler(console=_gateway_console())
-    handler(
-        "/integrations setup grafana",
-        session,
-        sink,
-        logging.getLogger("test.gateway.slash.session"),
-    )
-
-    assert captured["args"] == ["integrations", "setup", "grafana"]
-    assert captured["session"] is session
-    assert sink.finalized is not None
-    assert "grafana" in sink.finalized.lower()
 
 
 def test_gateway_manager_registers_harness_adapters(monkeypatch: pytest.MonkeyPatch) -> None:

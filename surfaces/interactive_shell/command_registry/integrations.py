@@ -7,7 +7,10 @@ from rich.markup import escape
 
 import surfaces.interactive_shell.command_registry.repl_data as repl_data
 from core.agent_harness.session.terminal_compat import session_terminal
-from surfaces.interactive_shell.command_registry.cli_parity import run_cli_command
+from surfaces.interactive_shell.command_registry.cli_parity import (
+    publish_headless_slash_response,
+    run_cli_command,
+)
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui import (
@@ -265,14 +268,19 @@ def _run_integrations_setup(session: Session, console: Console, args: list[str])
         return True
 
     service = args[1]
+    cli_cmd = " ".join(["uv run opensre integrations setup", service, *args[2:]]).strip()
     if session_terminal(session) is None:
-        repl_print(
-            console,
-            f"[{DIM}]Note:[/] [bold]{escape(service)}[/bold] setup asks for credentials "
-            f"interactively. Telegram cannot answer those prompts — if setup aborts, "
-            f"run on the server:\n"
-            f"  [bold]uv run opensre integrations setup {escape(service)}[/bold]",
+        message = (
+            f"{service} setup collects credentials interactively "
+            f"(API keys, URLs, tokens). It cannot complete inside a Telegram chat.\n\n"
+            f"Run on the server:\n  {cli_cmd}\n\n"
+            "Check status afterward with `/integrations list` or "
+            f"`/integrations verify {service}`."
         )
+        repl_print(console, message)
+        publish_headless_slash_response(session, message=message)
+        session.refresh_integration_state()
+        return True
 
     result = run_cli_command(
         console,
