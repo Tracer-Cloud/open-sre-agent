@@ -55,6 +55,20 @@ _RESOURCE_DISPATCH: dict[str, tuple[str, str, bool]] = {
 }
 
 
+def _redact_env_values(resource_dict: dict[str, Any]) -> None:
+    """Strip env var values from a serialized pod dict in-place.
+
+    sanitize_for_serialization() returns the full pod JSON including
+    spec.containers[].env[].value. Removing values here keeps credential
+    redaction consistent with describe_pod, which returns only key names.
+    """
+    spec = resource_dict.get("spec") or {}
+    for container_list_key in ("containers", "initContainers", "ephemeralContainers"):
+        for container in spec.get(container_list_key) or []:
+            for env_entry in container.get("env") or []:
+                env_entry.pop("value", None)
+
+
 class KubernetesClient:
     """Kubernetes API client built from a kubeconfig file path or inline YAML."""
 
@@ -764,6 +778,10 @@ class KubernetesClient:
                 obj = method(name=name, namespace=namespace)
             assert self._api_client is not None  # always set by _build_clients()
             resource_dict: dict[str, Any] = self._api_client.sanitize_for_serialization(obj)
+            # Redact env var values from pod resources to prevent credential leakage
+            # to the LLM. Consistent with describe_pod which returns only key names.
+            if rt in ("pod", "pods"):
+                _redact_env_values(resource_dict)
             return {
                 "success": True,
                 "resource_type": resource_type,
