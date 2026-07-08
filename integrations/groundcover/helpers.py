@@ -11,13 +11,18 @@ is shared infrastructure, not a registered tool.
 
 from __future__ import annotations
 
+import logging
 from typing import Any, cast
+
+from pydantic import ValidationError
 
 from integrations.groundcover.client import (
     GroundcoverClient,
     GroundcoverConfig,
     GroundcoverToolResult,
 )
+
+logger = logging.getLogger(__name__)
 
 # Default row cap embedded in seed/example queries. The model can override it,
 # but every gcQL example must carry an explicit ``| limit N``.
@@ -73,7 +78,10 @@ def make_client(creds: dict[str, Any]) -> GroundcoverClient | None:
         return None
     try:
         config = GroundcoverConfig.model_validate(creds)
+    except ValidationError:
+        raise
     except Exception:
+        logger.debug("GroundcoverConfig validation failed unexpectedly", exc_info=True)
         return None
     if not config.is_configured:
         return None
