@@ -107,8 +107,8 @@ def execute_slash_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
         # Do not record a slash history row here — dispatch_slash will record when
         # the queued command runs. Attach a turn hint for this turn's analytics.
         ctx.console.print(f"[{DIM}]Launching[/] [{BOLD_BRAND}]{escape(stripped)}[/]…")
-        ctx.session.queue_auto_command(stripped)
-        ctx.session.set_turn_outcome_hint(f"queued {stripped} for exclusive stdin dispatch")
+        ctx.session.terminal.queue_auto_command(stripped)
+        ctx.session.terminal.set_turn_outcome_hint(f"queued {stripped} for exclusive stdin dispatch")
         return True
 
     plan = plan_foreground_tool("slash", "slash")

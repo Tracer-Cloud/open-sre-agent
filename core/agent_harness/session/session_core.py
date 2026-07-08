@@ -33,11 +33,6 @@ from core.agent_harness.session.task_registry import TaskRegistry
 from core.agent_harness.session.token_usage import TokenUsage
 from core.state import MutableAgentState
 
-# Prefilled into the next prompt after a background synthetic test exits non-zero,
-# so the user can ask the CLI assistant for a quick RCA explanation. Lives in core
-# because the core prompt builders reference it (the shell only queues it).
-SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST = "why did it fail?"
-
 
 def _default_grounding() -> GroundingContext:
     """Build a fresh per-session grounding cache bundle.
@@ -182,24 +177,6 @@ class SessionCore:
     @last_command_observation.setter
     def last_command_observation(self, value: str | None) -> None:
         self.agent.last_observation = value
-
-    def _bind_last_synthetic_observation(self, scenario_id: str) -> None:
-        if not scenario_id:
-            self.last_synthetic_observation_path = None
-            return
-        # Shared path constant lives in config so core and surfaces stay decoupled.
-        try:
-            from config.constants.paths import SYNTHETIC_SCENARIOS_DIR
-        except Exception:
-            self.last_synthetic_observation_path = None
-            return
-        latest = SYNTHETIC_SCENARIOS_DIR / "_observations" / scenario_id / "latest.json"
-        for _ in range(8):
-            if latest.is_file():
-                self.last_synthetic_observation_path = str(latest.resolve())
-                return
-            time.sleep(0.06)
-        self.last_synthetic_observation_path = None
 
     def record(
         self,
@@ -354,35 +331,6 @@ class SessionCore:
         return IntegrationResolutionResult(
             resolved_integrations=dict(self.resolved_integrations_cache or {})
         )
-
-    def schedule_warm_resolved_integrations(self) -> None:
-        """Warm integration configs off the interactive prompt critical path."""
-        import asyncio
-
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            self.warm_resolved_integrations()
-            return
-
-        with self._integration_warm_lock:
-            if self._integration_warm_task is not None and not self._integration_warm_task.done():
-                return
-            generation = self._integration_warm_generation
-
-        async def _run_warm() -> None:
-            await asyncio.to_thread(self.warm_resolved_integrations, generation=generation)
-
-        task = loop.create_task(_run_warm())
-        with self._integration_warm_lock:
-            self._integration_warm_task = task
-
-        def _clear_warm_task(done_task: asyncio.Task[None]) -> None:
-            with self._integration_warm_lock:
-                if self._integration_warm_task is done_task:
-                    self._integration_warm_task = None
-
-        task.add_done_callback(_clear_warm_task)
 
     def refresh_integration_state(self) -> None:
         """Re-resolve integration state after the local store changes.

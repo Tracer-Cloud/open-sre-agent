@@ -24,10 +24,7 @@ from core.agent_harness.session.persistence_ports import (
     SessionRepo,
     SessionStorage,
 )
-from core.agent_harness.session.session_core import (
-    SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST,
-    SessionCore,
-)
+from core.agent_harness.session.session_core import SessionCore
 from core.agent_harness.session.storage import (
     InMemorySessionStorage,
     JsonlSessionStorage,
@@ -61,7 +58,6 @@ __all__ = [
     "InMemorySessionStorage",
     "JsonlSessionRepo",
     "JsonlSessionStorage",
-    "SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST",
     "SessionCore",
     "SessionManager",
     "SessionPersistenceSource",

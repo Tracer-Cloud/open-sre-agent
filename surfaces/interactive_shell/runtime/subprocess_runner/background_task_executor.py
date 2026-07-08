@@ -240,7 +240,7 @@ def start_background_cli_task(
             ):
                 session.suggest_synthetic_failure_follow_up(label=display_command)
             else:
-                session.notify_prompt_changed()
+                session.terminal.notify_prompt_changed()
 
     thread = threading.Thread(target=_watch, daemon=True)
     thread.start()

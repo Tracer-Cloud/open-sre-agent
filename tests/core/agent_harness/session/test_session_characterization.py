@@ -175,9 +175,9 @@ def test_terminal_facet_holds_the_analytics_staging_cluster() -> None:
 
 def test_analytics_staging_pop_methods_delegate_to_the_facet() -> None:
     session = _session()
-    session.set_turn_outcome_hint("queued")
+    session.terminal.set_turn_outcome_hint("queued")
     assert session.terminal._turn_outcome_hint == "queued"
-    assert session.pop_turn_outcome_hint() == "queued"
+    assert session.terminal.pop_turn_outcome_hint() == "queued"
     assert session.terminal._turn_outcome_hint is None
 
 
@@ -230,16 +230,16 @@ class TestWarmCacheGeneration:
 class TestTurnOutcomeHint:
     def test_pop_returns_then_clears(self) -> None:
         session = _session()
-        session.set_turn_outcome_hint("handled")
-        assert session.pop_turn_outcome_hint() == "handled"
-        assert session.pop_turn_outcome_hint() is None  # consumed once
+        session.terminal.set_turn_outcome_hint("handled")
+        assert session.terminal.pop_turn_outcome_hint() == "handled"
+        assert session.terminal.pop_turn_outcome_hint() is None  # consumed once
 
     def test_blank_hint_is_dropped(self) -> None:
         session = _session()
-        session.set_turn_outcome_hint("   ")
-        assert session.pop_turn_outcome_hint() is None
-        session.set_turn_outcome_hint(None)
-        assert session.pop_turn_outcome_hint() is None
+        session.terminal.set_turn_outcome_hint("   ")
+        assert session.terminal.pop_turn_outcome_hint() is None
+        session.terminal.set_turn_outcome_hint(None)
+        assert session.terminal.pop_turn_outcome_hint() is None
 
 
 # --------------------------------------------------------------------------- #

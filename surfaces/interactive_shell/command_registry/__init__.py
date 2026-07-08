@@ -125,7 +125,7 @@ def _attach_slash_analytics(
             kind="slash",
             ok=ok,
             captured_output=captured_output,
-            outcome_hint=session.pop_turn_outcome_hint(),
+            outcome_hint=session.terminal.pop_turn_outcome_hint(),
         )
     session.complete_latest_record(
         "slash",

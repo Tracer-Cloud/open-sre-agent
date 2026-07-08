@@ -7,9 +7,7 @@ from pathlib import Path
 import pytest
 
 import config.constants as const_module
-from core.agent_harness.session import (
-    SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST,
-)
+from config.constants.prompts import SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
 from core.agent_harness.session.task_registry import TaskRegistry
 from platform.common.task_types import TaskKind
 from surfaces.interactive_shell.session import (
@@ -36,9 +34,9 @@ class TestSession:
     def test_take_pending_prompt_default_returns_and_clears(self) -> None:
         session = Session()
         session.terminal.pending_prompt_default = "why did it fail?"
-        assert session.take_pending_prompt_default() == "why did it fail?"
+        assert session.terminal.take_pending_prompt_default() == "why did it fail?"
         assert session.terminal.pending_prompt_default is None
-        assert session.take_pending_prompt_default() == ""
+        assert session.terminal.take_pending_prompt_default() == ""
 
     def test_clear_resets_pending_prompt_default(self) -> None:
         session = Session()
@@ -50,7 +48,7 @@ class TestSession:
         session = Session()
         calls: list[bool] = []
         session.terminal.prompt_refresh_fn = lambda: calls.append(True)
-        session.queue_auto_command("/integrations setup sentry")
+        session.terminal.queue_auto_command("/integrations setup sentry")
         assert session.terminal.pending_prompt_default == "/integrations setup sentry"
         assert session.terminal.pending_prompt_autosubmit is True
         assert calls == [True]
@@ -58,13 +56,13 @@ class TestSession:
     def test_take_pending_autosubmit_returns_and_clears(self) -> None:
         session = Session()
         session.terminal.pending_prompt_autosubmit = True
-        assert session.take_pending_autosubmit() is True
+        assert session.terminal.take_pending_autosubmit() is True
         assert session.terminal.pending_prompt_autosubmit is False
-        assert session.take_pending_autosubmit() is False
+        assert session.terminal.take_pending_autosubmit() is False
 
     def test_clear_resets_pending_autosubmit(self) -> None:
         session = Session()
-        session.queue_auto_command("/integrations setup sentry")
+        session.terminal.queue_auto_command("/integrations setup sentry")
         session.clear()
         assert session.terminal.pending_prompt_autosubmit is False
         assert session.terminal.pending_prompt_default is None

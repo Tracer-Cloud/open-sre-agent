@@ -71,7 +71,14 @@ ignore_imports =
     tools.community_followup_tool -> integrations.github.tools.workflow
     tools.cross_vendor.fix_sentry_issue.context -> integrations.sentry
     tools.cross_vendor.fix_sentry_issue.context -> integrations.sentry.issue_url
-    tools.cross_vendor.fix_sentry_issue.runner -> integrations.pi
+    tools.cross_vendor.fix_sentry_issue.pr -> integrations.github.client
+    tools.cross_vendor.fix_sentry_issue.pr -> integrations.github.repo_scope
+    tools.cross_vendor.fix_sentry_issue.runner -> integrations.coding_agent
+    tools.cross_vendor.fix_sentry_issue.runner -> integrations.git
+    tools.cross_vendor.fix_sentry_issue.runner -> integrations.github.client
+    tools.cross_vendor.fix_sentry_issue.ship -> integrations.coding_agent
+    tools.cross_vendor.fix_sentry_issue.ship -> integrations.git
+    tools.cross_vendor.fix_sentry_issue.ship -> integrations.github.client
     tools.git_deploy_timeline_tool -> integrations.github.helpers
     tools.git_deploy_timeline_tool -> integrations.github.mcp
     tools.interactive_shell.implementation.claude_code_executor -> integrations.llm_cli.claude_code

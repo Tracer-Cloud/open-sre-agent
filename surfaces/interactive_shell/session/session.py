@@ -8,13 +8,11 @@ the methods that drive them.
 from __future__ import annotations
 
 import re
+import time
 from dataclasses import dataclass, field
-from typing import Any
 
-from core.agent_harness.session.session_core import (
-    SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST,
-    SessionCore,
-)
+from config.constants.prompts import SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
+from core.agent_harness.session.session_core import SessionCore
 from core.domain.alerts.inbox import IncomingAlert
 from surfaces.interactive_shell.session.alert_inbox import SessionAlertInbox
 from surfaces.interactive_shell.session.terminal_session import TerminalSession
@@ -56,60 +54,34 @@ class Session(SessionCore):
     A surface facet: the bounded alert list + cap live on ``SessionAlertInbox`` so
     core-session consumers that never touch alerts don't see the field."""
 
-    def take_pending_prompt_default(self) -> str:
-        """Return pre-filled text for the next prompt line, if any, and clear it."""
-        value = self.terminal.pending_prompt_default
-        self.terminal.pending_prompt_default = None
-        return value or ""
-
-    def take_pending_autosubmit(self) -> bool:
-        """Return whether the pending prefill should auto-submit, and clear the flag."""
-        value = self.terminal.pending_prompt_autosubmit
-        self.terminal.pending_prompt_autosubmit = False
-        return value
-
-    def queue_auto_command(self, command: str) -> None:
-        """Queue a command to run automatically on the next prompt iteration.
-
-        Prefills the input with ``command`` and marks it for auto-submit, then
-        refreshes the active prompt so the loop submits it without waiting for
-        Enter. Lets the agent launch an interactive command (setup/connect)
-        through the normal exclusive-stdin dispatch path rather than spawning it
-        mid-turn, where it would fight the live prompt for stdin.
-        """
-        self.terminal.pending_prompt_default = command
-        self.terminal.pending_prompt_autosubmit = True
-        self.notify_prompt_changed()
-
-    def notify_prompt_changed(self) -> None:
-        """Redraw the active prompt (placeholder state and pending prefill)."""
-        if self.terminal.prompt_refresh_fn is not None:
-            self.terminal.prompt_refresh_fn()
-
-    def ensure_fleet_sampler_started(self) -> None:
-        """Request that the fleet sampler start (no-op if unwired or already running)."""
-        if self.terminal.fleet_sampler_starter is not None:
-            self.terminal.fleet_sampler_starter()
-
-    def enqueue_background_notice(self, message: str) -> None:
-        """Queue a background-thread status line for the main REPL loop to print."""
-        with self.terminal._background_notices_lock:
-            self.terminal.background_notices.append(message)
-        self.notify_prompt_changed()
-
-    def drain_background_notices(self) -> list[str]:
-        """Return and clear any queued background status lines."""
-        with self.terminal._background_notices_lock:
-            notices = list(self.terminal.background_notices)
-            self.terminal.background_notices.clear()
-        return notices
-
     def suggest_synthetic_failure_follow_up(self, *, label: str = "") -> None:
         """Queue RCA prefill after a failed synthetic run and refresh the active prompt."""
         self.terminal.pending_prompt_default = SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
-        self.notify_prompt_changed()
+        self.terminal.notify_prompt_changed()
         self._bind_last_synthetic_observation(_scenario_id_from_synthetic_label(label))
-        self.notify_prompt_changed()
+        self.terminal.notify_prompt_changed()
+
+    def _bind_last_synthetic_observation(self, scenario_id: str) -> None:
+        """Point ``last_synthetic_observation_path`` (a core field) at the run's latest.json.
+
+        Synthetic-run UX, so it lives on the shell session rather than the core.
+        """
+        if not scenario_id:
+            self.last_synthetic_observation_path = None
+            return
+        # Shared path constant lives in config so core and surfaces stay decoupled.
+        try:
+            from config.constants.paths import SYNTHETIC_SCENARIOS_DIR
+        except Exception:
+            self.last_synthetic_observation_path = None
+            return
+        latest = SYNTHETIC_SCENARIOS_DIR / "_observations" / scenario_id / "latest.json"
+        for _ in range(8):
+            if latest.is_file():
+                self.last_synthetic_observation_path = str(latest.resolve())
+                return
+            time.sleep(0.06)
+        self.last_synthetic_observation_path = None
 
     def record_incoming_alert(self, alert: IncomingAlert) -> None:
         """Append a full IncomingAlert with all metadata to session history.
@@ -121,41 +93,6 @@ class Session(SessionCore):
         self.history.append({"type": "incoming_alert", "text": alert.text, "ok": True})
         self.storage.append_turn(self, "incoming_alert", alert.text)
         self.alerts.add(alert)
-
-    def set_turn_outcome_hint(self, hint: str | None) -> None:
-        """Attach a structured outcome for the current terminal handler."""
-        self.terminal._turn_outcome_hint = (
-            hint.strip() if isinstance(hint, str) and hint.strip() else None
-        )
-
-    def pop_turn_outcome_hint(self) -> str | None:
-        """Return and clear any structured outcome hint for this turn."""
-        hint = self.terminal._turn_outcome_hint
-        self.terminal._turn_outcome_hint = None
-        return hint
-
-    def set_pending_turn_llm(self, run: Any | None) -> None:
-        """Stage LLM run metadata for this turn's prompt-recorder flush."""
-        self.terminal._pending_turn_llm = run
-
-    def pop_pending_turn_llm(self) -> Any | None:
-        """Return and clear staged LLM run metadata for this turn."""
-        run = self.terminal._pending_turn_llm
-        self.terminal._pending_turn_llm = None
-        return run
-
-    def set_pending_turn_error(self, kind: str, message: str) -> None:
-        """Stage a structured turn error for this turn's prompt-recorder flush."""
-        kind = kind.strip()
-        message = message.strip()
-        if kind or message:
-            self.terminal._pending_turn_error = (kind or "error", message)
-
-    def pop_pending_turn_error(self) -> tuple[str, str] | None:
-        """Return and clear the staged structured turn error."""
-        error = self.terminal._pending_turn_error
-        self.terminal._pending_turn_error = None
-        return error
 
     def clear(self, *, rotate_identity: bool = True) -> None:
         """Reset the session — core state plus the shell facets — for /new and /resume."""

@@ -174,7 +174,7 @@ def watch_synthetic_subprocess(
             ):
                 session.suggest_synthetic_failure_follow_up(label=suite_name)
             else:
-                session.notify_prompt_changed()
+                session.terminal.notify_prompt_changed()
 
     threading.Thread(target=_run, daemon=True, name=f"synthetic-{task.task_id}").start()
 

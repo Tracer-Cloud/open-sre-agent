@@ -197,27 +197,6 @@ def test_hydrate_entrypoint_does_not_warm_before_prompt(monkeypatch: Any) -> Non
     assert resolve_calls == []
 
 
-def test_schedule_warm_resolved_integrations_runs_in_background(
-    monkeypatch: Any,
-) -> None:
-    import asyncio
-
-    warmed = asyncio.Event()
-
-    def _warm(self: Session, *, generation: int | None = None) -> None:
-        warmed.set()
-
-    monkeypatch.setattr(Session, "warm_resolved_integrations", _warm)
-
-    async def _run() -> None:
-        session = Session()
-        session.schedule_warm_resolved_integrations()
-        await asyncio.wait_for(warmed.wait(), timeout=1.0)
-        assert warmed.is_set()
-
-    asyncio.run(_run())
-
-
 def test_hydrate_leaves_unknown_on_failure(monkeypatch: Any) -> None:
     def _boom() -> list[str]:
         raise RuntimeError("catalog blew up")

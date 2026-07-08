@@ -56,7 +56,7 @@ def test_suggest_synthetic_failure_follow_up_missing_observation_clears_path(
             "config.constants.paths.SYNTHETIC_SCENARIOS_DIR",
             tmp_path / "tests" / "synthetic" / "rds_postgres",
         ),
-        unittest.mock.patch("core.agent_harness.session.session_core.time.sleep"),
+        unittest.mock.patch("surfaces.interactive_shell.session.session.time.sleep"),
     ):
         session.suggest_synthetic_failure_follow_up(
             label="opensre tests synthetic --scenario 001-replication-lag",

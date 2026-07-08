@@ -108,8 +108,8 @@ class PromptManager:
         await asyncio.sleep(0.05)
         drain_stale_cpr_bytes()
 
-        prefilled = self.session.take_pending_prompt_default()
-        if prefilled and self.session.take_pending_autosubmit():
+        prefilled = self.session.terminal.take_pending_prompt_default()
+        if prefilled and self.session.terminal.take_pending_autosubmit():
             return prefilled
 
         return await self.pt_session.prompt_async(
