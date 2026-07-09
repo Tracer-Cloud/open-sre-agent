@@ -179,9 +179,11 @@ def test_timed_span_marks_error_on_exception(
     # Outer raises so the exception still propagates through timed_span's
     # finally (status=error); inner span must not be wrapped by pytest.raises
     # or the exception would be swallowed before the span exits.
-    with pytest.raises(RuntimeError, match="boom"):
-        with timed_span(span_kind="component", name="failing", session_id=session_id):
-            _raise_runtime_error()
+    with (
+        pytest.raises(RuntimeError, match="boom"),
+        timed_span(span_kind="component", name="failing", session_id=session_id),
+    ):
+        _raise_runtime_error()
     rec = _trace_spans(path)[-1]
     assert rec["name"] == "failing"
     assert rec["status"] == SPAN_STATUS_ERROR
@@ -199,11 +201,38 @@ def test_timed_span_marks_error_on_base_exception(
 
     session_id = "sess-cancel"
     path = _activate_jsonl_sink(tmp_path, session_id, monkeypatch)
-    with pytest.raises(KeyboardInterrupt):
-        with timed_span(span_kind="tool", name="cancelled", session_id=session_id):
-            _raise_keyboard_interrupt()
+    with (
+        pytest.raises(KeyboardInterrupt),
+        timed_span(span_kind="tool", name="cancelled", session_id=session_id),
+    ):
+        _raise_keyboard_interrupt()
     rec = _trace_spans(path)[-1]
     assert rec["name"] == "cancelled"
+    assert rec["status"] == SPAN_STATUS_ERROR
+
+
+def test_timed_span_exception_status_beats_preset_override(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A pre-set "ok" override must not mask an exception that propagates out.
+    from platform.observability.trace.spans import (
+        SPAN_STATUS_ATTR,
+        SPAN_STATUS_ERROR,
+        SPAN_STATUS_OK,
+    )
+
+    def _boom() -> None:
+        raise RuntimeError("boom")
+
+    session_id = "sess-override-race"
+    path = _activate_jsonl_sink(tmp_path, session_id, monkeypatch)
+    with (
+        pytest.raises(RuntimeError, match="boom"),
+        timed_span(span_kind="tool", name="racing", session_id=session_id) as attrs,
+    ):
+        attrs[SPAN_STATUS_ATTR] = SPAN_STATUS_OK
+        _boom()
+    rec = _trace_spans(path)[-1]
     assert rec["status"] == SPAN_STATUS_ERROR
 
 
