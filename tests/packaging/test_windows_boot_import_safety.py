@@ -12,6 +12,7 @@ there — so this test simulates their absence.
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import textwrap
@@ -45,14 +46,25 @@ def test_harness_boot_imports_without_posix_only_modules() -> None:
         """
     ).format(blocked=list(_POSIX_ONLY_MODULES), boot_call=_BOOT_CALL)
 
+    # A subprocess inherits os.environ but not this process's runtime sys.path
+    # (e.g. a conftest injection), so pass the current import roots through
+    # PYTHONPATH — otherwise 'surfaces' may be unimportable and the failure would
+    # look like a POSIX-only-module problem when it is really a path problem.
+    env = {**os.environ, "PYTHONPATH": os.pathsep.join(sys.path)}
     result = subprocess.run(
         [sys.executable, "-c", script],
         capture_output=True,
         text=True,
+        env=env,
+        timeout=60,
     )
 
-    assert "BOOT_OK" in result.stdout, (
-        "harness boot failed to import with POSIX-only modules "
-        f"{_POSIX_ONLY_MODULES} absent (Windows):\n{result.stderr}"
+    assert result.returncode == 0, (
+        f"harness boot subprocess exited {result.returncode} with POSIX-only "
+        f"modules {_POSIX_ONLY_MODULES} absent (Windows):\n"
+        f"--- stdout ---\n{result.stdout}\n--- stderr ---\n{result.stderr}"
     )
-    assert result.returncode == 0, result.stderr
+    assert "BOOT_OK" in result.stdout, (
+        f"boot did not reach BOOT_OK:\n"
+        f"--- stdout ---\n{result.stdout}\n--- stderr ---\n{result.stderr}"
+    )

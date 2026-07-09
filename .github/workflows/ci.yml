@@ -245,25 +245,34 @@ jobs:
         env:
           COVERAGE_FILE: .coverage.${{ matrix.shard }}
           # Fork PRs do not receive repository secrets; skip live_llm contracts
-          # (see interactive-shell-live.yml). Use a job env var so the marker
-          # expression is always one quoted token (shell `and` would otherwise
-          # split `-m not synthetic and not live_llm` into separate commands).
-          PYTEST_MARKER_EXPR: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) && 'not (synthetic or live_llm)' || 'not synthetic' }}
-        run: >
-          uv run python -m pytest -n auto -v
-          ${{ matrix.pytest_paths }}
-          --cov=config
-          --cov=core
-          --cov=platform.deployment.aws --cov=platform.deployment
-          --cov=integrations
-          --cov=platform
-          --cov=surfaces
-          --cov=tools
-          --cov-report=
-          --ignore=tests/e2e/kubernetes_local_alert_simulation
-          --ignore=tests/synthetic
-          ${{ matrix.extra_pytest_args }}
-          -m "${PYTEST_MARKER_EXPR}"
+          # (see interactive-shell-live.yml). Index a JSON string array so the
+          # value is always a marker string — never a bare boolean `false`
+          # (GHA `a && 'x' || 'y'` can yield boolean false; pytest -m false
+          # then collects 0 tests → xdist "N workers [0 items]").
+          PYTEST_MARKER_EXPR: ${{ fromJSON('["not synthetic", "not (synthetic or live_llm)"]')[github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == true] }}
+        run: |
+          echo "PYTEST_MARKER_EXPR=${PYTEST_MARKER_EXPR}"
+          case "${PYTEST_MARKER_EXPR}" in
+            "not synthetic"|"not (synthetic or live_llm)") ;;
+            *)
+              echo "Refusing unexpected PYTEST_MARKER_EXPR: '${PYTEST_MARKER_EXPR}'" >&2
+              exit 1
+              ;;
+          esac
+          uv run python -m pytest -n auto -v \
+            ${{ matrix.pytest_paths }} \
+            --cov=config \
+            --cov=core \
+            --cov=platform.deployment.aws --cov=platform.deployment \
+            --cov=integrations \
+            --cov=platform \
+            --cov=surfaces \
+            --cov=tools \
+            --cov-report= \
+            --ignore=tests/e2e/kubernetes_local_alert_simulation \
+            --ignore=tests/synthetic \
+            ${{ matrix.extra_pytest_args }} \
+            -m "${PYTEST_MARKER_EXPR}"
 
       - name: Upload shard coverage data
         if: >-
