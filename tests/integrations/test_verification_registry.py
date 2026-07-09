@@ -108,7 +108,7 @@ class TestRegistryCatalogSync:
         """Every CLI/catalog service has a registered verifier."""
         assert set(list_verifiers()) == set(SUPPORTED_VERIFY_SERVICES)
 
-    @pytest.mark.parametrize("service", ("aws", "datadog", "slack"))
+    @pytest.mark.parametrize("service", ("aws", "datadog", "gitlab", "slack"))
     def test_loader_discovers_integration_local_verifier_modules(self, service: str) -> None:
         """Verifier discovery loads ``integrations.<name>.verifier`` modules."""
         verifier = get_verifier(service)
