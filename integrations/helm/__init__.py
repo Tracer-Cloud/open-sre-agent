@@ -34,11 +34,6 @@ def classify(
         report_classify_failure(exc, logger=logger, integration="helm", record_id=record_id)
         return None, None
     except Exception as exc:
-        logger.warning(
-            "classify_failed: integration=helm record_id=%s unexpected error",
-            record_id,
-            exc_info=True,
-        )
         report_classify_failure(exc, logger=logger, integration="helm", record_id=record_id)
         return None, None
     return cfg, "helm"

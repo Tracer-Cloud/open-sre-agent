@@ -359,11 +359,6 @@ def classify(credentials: dict[str, Any], record_id: str) -> tuple[SentryConfig 
         report_classify_failure(exc, logger=logger, integration="sentry", record_id=record_id)
         return None, None
     except Exception as exc:
-        logger.warning(
-            "classify_failed: integration=sentry record_id=%s unexpected error",
-            record_id,
-            exc_info=True,
-        )
         report_classify_failure(exc, logger=logger, integration="sentry", record_id=record_id)
         return None, None
     if cfg.organization_slug and cfg.auth_token:

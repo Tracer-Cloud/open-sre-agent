@@ -152,11 +152,6 @@ def classify(credentials: dict[str, Any], record_id: str) -> tuple[SigNozConfig 
         report_classify_failure(exc, logger=logger, integration="signoz", record_id=record_id)
         return None, None
     except Exception as exc:
-        logger.warning(
-            "classify_failed: integration=signoz record_id=%s unexpected error",
-            record_id,
-            exc_info=True,
-        )
         report_classify_failure(exc, logger=logger, integration="signoz", record_id=record_id)
         return None, None
     if cfg.is_configured:

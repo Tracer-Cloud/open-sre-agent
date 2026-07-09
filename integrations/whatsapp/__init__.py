@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 def classify(
     credentials: dict[str, Any],
-    _record_id: str,
+    record_id: str,
 ) -> tuple[WhatsAppConfig | None, str | None]:
     try:
         cfg = WhatsAppConfig.model_validate(
@@ -27,14 +27,9 @@ def classify(
             }
         )
     except ValidationError as exc:
-        report_classify_failure(exc, logger=logger, integration="whatsapp", record_id=_record_id)
+        report_classify_failure(exc, logger=logger, integration="whatsapp", record_id=record_id)
         return None, None
     except Exception as exc:
-        logger.warning(
-            "classify_failed: integration=whatsapp record_id=%s unexpected error",
-            _record_id,
-            exc_info=True,
-        )
-        report_classify_failure(exc, logger=logger, integration="whatsapp", record_id=_record_id)
+        report_classify_failure(exc, logger=logger, integration="whatsapp", record_id=record_id)
         return None, None
     return cfg, "whatsapp"

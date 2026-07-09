@@ -37,11 +37,6 @@ def classify(
         report_classify_failure(exc, logger=logger, integration="snowflake", record_id=record_id)
         return None, None
     except Exception as exc:
-        logger.warning(
-            "classify_failed: integration=snowflake record_id=%s unexpected error",
-            record_id,
-            exc_info=True,
-        )
         report_classify_failure(exc, logger=logger, integration="snowflake", record_id=record_id)
         return None, None
     if cfg.account_identifier and cfg.token:
