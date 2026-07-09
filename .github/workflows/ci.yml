@@ -230,16 +230,6 @@ jobs:
               ;;
           esac
 
-      - name: Diagnose collection (TEMPORARY — remove once the 0-items cause is found)
-        continue-on-error: true
-        env:
-          PYTEST_MARKER_EXPR: ${{ fromJSON('["not synthetic", "not (synthetic or live_llm)"]')[github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == true] }}
-        run: |
-          echo "===== serial collect (no -n auto) — surfaces import/collection tracebacks ====="
-          uv run python -m pytest --collect-only -q -p no:cacheprovider ${{ matrix.pytest_paths }} ${{ matrix.extra_pytest_args }} -m "${PYTEST_MARKER_EXPR}" || echo "serial collect exit=$?"
-          echo "===== xdist collect (-n auto) — matches the failing run's collection phase ====="
-          uv run python -m pytest -n auto --collect-only -q -p no:cacheprovider ${{ matrix.pytest_paths }} ${{ matrix.extra_pytest_args }} -m "${PYTEST_MARKER_EXPR}" || echo "xdist collect exit=$?"
-
       - name: Run tests
         env:
           COVERAGE_FILE: .coverage.${{ matrix.shard }}
