@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from integrations.gitlab.tools.gitlab_commits_tool import list_gitlab_commits
+import pytest
+
+from integrations.gitlab.tools.gitlab_commits_tool import _resolve_config, list_gitlab_commits
 from tests.tools.conftest import BaseToolContract, mock_agent_state
 
 
@@ -49,6 +51,48 @@ def test_extract_params_defaults_ref_name_to_main() -> None:
     sources = mock_agent_state({"gitlab": {"connection_verified": True, "project_id": "42"}})
     params = rt.extract_params(sources)
     assert params["ref_name"] == "main"
+
+
+def test_schema_does_not_expose_gitlab_credentials_as_model_inputs() -> None:
+    rt = list_gitlab_commits.__opensre_registered_tool__
+
+    assert "gitlab_url" not in rt.input_schema["properties"]
+    assert "gitlab_token" not in rt.input_schema["properties"]
+
+
+def test_resolve_config_uses_env_config_when_no_overrides(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("GITLAB_ACCESS_TOKEN", "env-token")
+    monkeypatch.setenv("GITLAB_BASE_URL", "https://env.gitlab.example.com/api/v4")
+
+    config = _resolve_config(None, None)
+
+    assert config is not None
+    assert config.auth_token == "env-token"
+    assert config.api_base_url == "https://env.gitlab.example.com/api/v4"
+
+
+def test_resolve_config_rejects_url_override_without_matching_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("GITLAB_ACCESS_TOKEN", "env-token")
+    monkeypatch.setenv("GITLAB_BASE_URL", "https://env.gitlab.example.com/api/v4")
+
+    assert _resolve_config("https://source.gitlab.example.com", "") is None
+
+
+def test_resolve_config_uses_paired_url_and_token_overrides(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("GITLAB_ACCESS_TOKEN", "env-token")
+    monkeypatch.setenv("GITLAB_BASE_URL", "https://env.gitlab.example.com/api/v4")
+
+    config = _resolve_config("https://source.gitlab.example.com", "source-token")
+
+    assert config is not None
+    assert config.auth_token == "source-token"
+    assert config.api_base_url == "https://source.gitlab.example.com/api/v4"
 
 
 def test_run_returns_unavailable_when_config_missing() -> None:

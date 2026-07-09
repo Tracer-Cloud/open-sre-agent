@@ -30,11 +30,18 @@ def _gitlab_available(sources: dict) -> bool:
 
 def _resolve_config(gitlab_url: str | None, gitlab_token: str | None) -> GitlabConfig | None:
     env_config = gitlab_config_from_env()
-    base_url = _clean_optional(gitlab_url) or (env_config.base_url if env_config else "")
-    auth_token = _clean_optional(gitlab_token) or (env_config.auth_token if env_config else "")
-    if not auth_token:
-        return None
-    return build_gitlab_config({"base_url": base_url, "auth_token": auth_token})
+    base_url = _clean_optional(gitlab_url)
+    auth_token = _clean_optional(gitlab_token)
+    if base_url or auth_token:
+        if not auth_token:
+            return None
+        return build_gitlab_config(
+            {
+                "base_url": base_url or (env_config.base_url if env_config else ""),
+                "auth_token": auth_token,
+            }
+        )
+    return env_config
 
 
 def _list_gitlab_commits_extract_params(sources: dict[str, dict]) -> dict[str, Any]:

@@ -73,6 +73,13 @@ def test_extract_params_defaults_updated_after_to_empty_string() -> None:
     assert params["updated_after"] == ""
 
 
+def test_schema_does_not_expose_gitlab_credentials_as_model_inputs() -> None:
+    rt = list_gitlab_mrs.__opensre_registered_tool__
+
+    assert "gitlab_url" not in rt.input_schema["properties"]
+    assert "gitlab_token" not in rt.input_schema["properties"]
+
+
 def test_run_returns_unavailable_when_config_missing() -> None:
     with patch("integrations.gitlab.tools.gitlab_mrs_tool._resolve_config", return_value=None):
         result = list_gitlab_mrs(project_id="42")

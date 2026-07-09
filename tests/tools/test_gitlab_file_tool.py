@@ -6,9 +6,6 @@ import base64
 from typing import Any, cast
 from unittest.mock import MagicMock, patch
 
-import pytest
-
-from integrations.gitlab.tools.gitlab_commits_tool import _resolve_config
 from integrations.gitlab.tools.gitlab_file_tool import get_gitlab_file_contents
 from tests.tools.conftest import BaseToolContract, mock_agent_state
 
@@ -80,28 +77,6 @@ def test_schema_does_not_expose_gitlab_credentials_as_model_inputs() -> None:
 
     assert "gitlab_url" not in rt.input_schema["properties"]
     assert "gitlab_token" not in rt.input_schema["properties"]
-
-
-def test_resolve_config_treats_empty_token_as_missing(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.delenv("GITLAB_ACCESS_TOKEN", raising=False)
-    monkeypatch.delenv("GITLAB_BASE_URL", raising=False)
-
-    assert _resolve_config("https://gitlab.example.com", "") is None
-
-
-def test_resolve_config_uses_env_token_when_input_token_is_empty(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("GITLAB_ACCESS_TOKEN", "env-token")
-    monkeypatch.setenv("GITLAB_BASE_URL", "https://gitlab.example.com/api/v4")
-
-    config = _resolve_config("https://gitlab.example.com", "")
-
-    assert config is not None
-    assert config.auth_token == "env-token"
-    assert config.api_base_url == "https://gitlab.example.com/api/v4"
 
 
 def test_run_returns_unavailable_when_config_missing() -> None:

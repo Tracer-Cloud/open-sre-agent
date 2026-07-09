@@ -25,7 +25,7 @@ def _normalize_gitlab_base_url(value: Any) -> str:
         return DEFAULT_GITLAB_BASE_URL
 
     parsed = urlsplit(normalized)
-    if parsed.scheme and parsed.netloc and parsed.path in {"", "/"}:
+    if parsed.scheme and parsed.netloc and parsed.path == "":
         return f"{normalized}/api/v4"
     return normalized
 
