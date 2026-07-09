@@ -25,6 +25,34 @@ def test_build_investigation_system_prompt_includes_dependency_traversal_rule() 
     assert "does not bias localization" in prompt
 
 
+def test_build_investigation_system_prompt_includes_incident_command_phases() -> None:
+    prompt = build_investigation_system_prompt({"alert_source": "grafana"})
+
+    assert "incident commander" in prompt
+    assert "Investigation phases" in prompt
+    assert "Phase 1 — Triage" in prompt
+    assert "Phase 2 — Hypothesis" in prompt
+    assert "Phase 3 — Verification" in prompt
+    assert "Phase 4 — Mitigation" in prompt
+
+
+def test_build_investigation_system_prompt_includes_missing_context_rule() -> None:
+    prompt = build_investigation_system_prompt({"alert_source": "grafana"})
+
+    assert "MISSING CONTEXT" in prompt
+    assert "Recent deploys" in prompt
+    assert "Do not stall waiting for answers" in prompt
+
+
+def test_build_investigation_system_prompt_includes_alignment_and_tradeoffs() -> None:
+    prompt = build_investigation_system_prompt({"alert_source": "grafana"})
+
+    assert "Keeping the team aligned" in prompt
+    assert "Remediation trade-offs" in prompt
+    assert "blast radius" in prompt
+    assert "reversibility" in prompt
+
+
 def test_build_investigation_system_prompt_hermes_includes_hermes_taxonomy_only() -> None:
     prompt = build_investigation_system_prompt({"alert_source": "hermes"})
 

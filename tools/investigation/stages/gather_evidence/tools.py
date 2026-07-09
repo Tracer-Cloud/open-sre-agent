@@ -39,7 +39,8 @@ STAGNATION_NUDGE = (
     "information and the investigation is not progressing. Stop calling tools and "
     "write your final diagnosis from the evidence already gathered: root cause, "
     "root cause category, supporting evidence, validated and non-validated claims, "
-    "remediation steps, and a validity score. If the evidence is insufficient to "
+    "remediation steps (with trade-offs when more than one viable fix path exists), "
+    "and a validity score. If the evidence is insufficient to "
     "determine a root cause, say so explicitly and use a low validity score."
 )
 
