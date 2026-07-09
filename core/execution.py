@@ -325,7 +325,10 @@ def _requires_sequential_execution(
 def _normalize_result(raw: Any, *, tool_name: str) -> ToolExecutionResult:
     if isinstance(raw, ToolExecutionResult):
         return raw
-    is_error = isinstance(raw, dict) and "error" in raw
+    # Flag failure on a truthy "error", not the mere presence of the key: a
+    # success payload carrying "error": None must reach the agent, not be
+    # replaced with {"error": "None"}. Matches bedrock_converse's convention.
+    is_error = isinstance(raw, dict) and bool(raw.get("error"))
     content = _content_from_payload(raw)
     if is_error:
         content = str(raw.get("error", content))

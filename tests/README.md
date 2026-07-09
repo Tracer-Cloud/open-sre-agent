@@ -1,4 +1,4 @@
-# Tests Catalog Naming Conventions
+# Tests
 
 ## Quick-start commands
 
@@ -11,22 +11,25 @@
 | Run the full suite including e2e | `make test-full` | Pre-release or CI; requires live infrastructure. |
 | Run synthetic scenarios (no live infra) | `make test-synthetic` | When testing scenario logic without external service dependencies. |
 
-This document defines semantic naming for the test catalog so test type and environment boundaries are obvious at a glance.
+## Layout
 
-## Top-level taxonomy
+Keep tests under domain directories — not loose files at the `tests/` root.
 
-- `tests/synthetic/`: synthetic RCA simulations with scored fixtures and deterministic scenario assets.
-- `tests/e2e/`: real end-to-end scenarios that execute against real services and infrastructure.
-- `tests/deployment/`: deployment validation and infrastructure deployment tests.
-- `tests/<domain>/`: unit and integration tests for product modules (for example `cli/`, `tools/`, `integrations/`, `core/`, `platform/`).
+| Path | What it covers |
+|---|---|
+| `tests/<domain>/` | Unit and integration tests for product modules (`cli/`, `tools/`, `integrations/`, `core/`, `platform/`, …). |
+| `tests/synthetic/` | Synthetic RCA simulations with scored fixtures and deterministic scenario assets. |
+| `tests/e2e/` | Real end-to-end scenarios against live services and infrastructure. See [e2e/AGENTS.md](e2e/AGENTS.md) for scenario design principles. |
+| `tests/deployment/` | Deployment validation and infrastructure deployment tests. |
+| `tests/github_ci/` | Repo hygiene guards (naming, import boundaries, architecture references). |
+| `tests/conftest.py` | Shared pytest fixtures for the whole tree. |
 
 ## E2E naming rules
 
-- Directory name format: `tests/e2e/<scenario_name>/` where `<scenario_name>` describes system and workload (example: `upstream_lambda`, `kubernetes`).
+- Directory format: `tests/e2e/<scenario_name>/` where `<scenario_name>` describes system and workload (example: `upstream_lambda`, `kubernetes`).
 - Environment-specific test files use explicit filenames:
   - `test_local.py` for local environments.
   - `test_<cloud>.py` for cloud environments (example: `test_eks.py`).
-- Use explicit environment-oriented filenames when possible: `test_local.py`, `test_aws.py`, or `test_cloud.py`.
 
 ## Synthetic naming rules
 

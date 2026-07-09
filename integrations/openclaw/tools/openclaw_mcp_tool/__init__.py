@@ -10,15 +10,11 @@ from integrations.openclaw import (
     OpenClawConfig,
     OpenClawToolCallResult,
     build_openclaw_config,
+    call_openclaw_tool as invoke_openclaw_mcp_tool,
     describe_openclaw_error,
+    list_openclaw_tools as list_openclaw_mcp_tools,
     openclaw_config_from_env,
     openclaw_runtime_unavailable_reason,
-)
-from integrations.openclaw import (
-    call_openclaw_tool as invoke_openclaw_mcp_tool,
-)
-from integrations.openclaw import (
-    list_openclaw_tools as list_openclaw_mcp_tools,
 )
 
 OpenClawParams = dict[str, object]

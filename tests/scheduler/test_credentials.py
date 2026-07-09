@@ -19,8 +19,8 @@ class TestTelegramCredentials:
     def test_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "from_env")
         monkeypatch.setattr(
-            "platform.scheduler.credentials._get_integration_credential",
-            lambda *_: "",
+            "integrations.telegram.credentials._telegram_store_config",
+            lambda: {},
         )
         creds = resolve_telegram_credentials({})
         assert creds == {"bot_token": "from_env"}
@@ -28,11 +28,25 @@ class TestTelegramCredentials:
     def test_empty_when_nothing_configured(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
         monkeypatch.setattr(
-            "platform.scheduler.credentials._get_integration_credential",
-            lambda *_: "",
+            "integrations.telegram.credentials._telegram_store_config",
+            lambda: {},
         )
         creds = resolve_telegram_credentials({})
         assert creds == {}
+
+    def test_from_keyring(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
+        monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
+        monkeypatch.setattr(
+            "integrations.telegram.credentials._telegram_store_config",
+            lambda: {},
+        )
+        monkeypatch.setattr(
+            "keyring.get_password",
+            lambda _service, username: "from_keyring" if username == "TELEGRAM_BOT_TOKEN" else "",
+        )
+        creds = resolve_telegram_credentials({})
+        assert creds == {"bot_token": "from_keyring"}
 
 
 class TestSlackCredentials:

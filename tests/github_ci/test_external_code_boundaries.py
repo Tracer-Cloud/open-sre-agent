@@ -7,7 +7,9 @@ import subprocess
 import tomllib
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+from config.constants.paths import REPO_ROOT
+
+ROOT = REPO_ROOT
 FORBIDDEN_TOP_LEVEL_PACKAGES = frozenset({"services", "vendors"})
 
 

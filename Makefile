@@ -366,7 +366,7 @@ test-scope:
 
 # Run the CLI smoke suite against the installed opensre entrypoint.
 test-cli-smoke:
-	$(PYTHON) -m pytest -v tests/cli_smoke_test.py
+	$(PYTHON) -m pytest -v tests/cli/test_smoke.py
 
 # Run the live-LLM turn scenario suite sharded across local processes, mirroring
 # the CI turn-live job. The suite is IO-bound on LLM calls, so running all shards
@@ -400,7 +400,7 @@ rabbitmq-local-down:
 
 # Run OpenClaw integration + tool E2E tests (mocked transport, no live OpenClaw needed)
 test-openclaw:
-	$(PYTHON) -m pytest tests/e2e/openclaw/ tests/test_openclaw_integration.py tests/tools/test_openclaw_mcp_tool.py tests/utils/test_openclaw_delivery.py -v
+	$(PYTHON) -m pytest tests/e2e/openclaw/ tests/integrations/openclaw/test_integration.py tests/tools/test_openclaw_mcp_tool.py tests/utils/test_openclaw_delivery.py -v
 
 # Run synthetic OpenClaw investigation scenarios (FixtureOpenClawBackend, no live OpenClaw)
 test-openclaw-synthetic:

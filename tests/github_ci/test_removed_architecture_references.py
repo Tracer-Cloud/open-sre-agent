@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+from config.constants.paths import REPO_ROOT
+from tests.utils.tracked_sources import tracked_files, tracked_python_files
+
+ROOT = REPO_ROOT
 SKIP_DIRS = {
     ".git",
     ".mypy_cache",
@@ -35,7 +38,7 @@ TEXT_SUFFIXES = {
 
 def _iter_repo_text_files() -> list[Path]:
     files: list[Path] = []
-    for path in ROOT.rglob("*"):
+    for path in tracked_files(str(ROOT)):
         parts = path.parts
         if any(part in SKIP_DIRS for part in parts):
             continue
@@ -64,14 +67,12 @@ def test_deleted_app_nodes_package_is_not_referenced_by_python_code() -> None:
     deleted_package = "app." + "nodes"
     offenders: list[str] = []
 
-    for path in (ROOT / "app").rglob("*.py"):
+    for path in tracked_python_files(str(ROOT)):
+        rel = path.relative_to(ROOT)
+        if not rel.parts or rel.parts[0] not in {"app", "tests"}:
+            continue
         text = path.read_text(encoding="utf-8", errors="ignore")
         if deleted_package in text:
-            offenders.append(str(path.relative_to(ROOT)))
-
-    for path in (ROOT / "tests").rglob("*.py"):
-        text = path.read_text(encoding="utf-8", errors="ignore")
-        if deleted_package in text:
-            offenders.append(str(path.relative_to(ROOT)))
+            offenders.append(str(rel))
 
     assert offenders == []

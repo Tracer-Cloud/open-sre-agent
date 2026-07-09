@@ -13,17 +13,33 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+try:
+    from keyring.errors import KeyringError as _KeyringError
+except ImportError:
+
+    class _KeyringError(Exception):  # type: ignore[no-redef]
+        """Fallback when keyring is not installed."""
+
+
 def resolve_telegram_credentials(task_params: dict[str, str]) -> dict[str, str]:
     """Resolve Telegram bot_token from task params, integration store, or env.
 
     Priority: task.params > integration store > environment variable.
     """
-    return _resolve_credentials(
-        task_params,
-        service="telegram",
-        credential_key="bot_token",
-        env_vars=("TELEGRAM_BOT_TOKEN",),
-    )
+    try:
+        from integrations.telegram.credentials import resolve_telegram_bot_token
+
+        token = resolve_telegram_bot_token(task_params)
+        return {"bot_token": token} if token else {}
+    except (
+        ImportError,
+        KeyError,
+        TypeError,
+        ValueError,
+        _KeyringError,
+    ) as exc:
+        logger.debug("Failed to resolve Telegram credentials: %s", exc)
+        return {}
 
 
 def resolve_slack_credentials(task_params: dict[str, str]) -> dict[str, str]:

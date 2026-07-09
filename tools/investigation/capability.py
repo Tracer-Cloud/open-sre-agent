@@ -15,6 +15,7 @@ from core.domain.stream import StreamEvent
 from core.state import AgentState
 from platform.observability.errors.boundary import report_and_reraise
 from platform.observability.errors.sentry import init_sentry
+from platform.observability.trace.spans import stage_span
 from tools.investigation.state_factory import make_initial_state
 from tools.investigation.streaming import resolved_integrations_stream_payload
 
@@ -53,15 +54,16 @@ def _capture_exception_once(
 
 
 def _traced_node(node_name: str, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
-    try:
-        return fn(*args, **kwargs)
-    except Exception as exc:
-        _capture_exception_once(
-            exc,
-            context=f"node.{node_name}",
-            tags={"surface": "node", "node": node_name},
-        )
-        raise
+    with stage_span(node_name):
+        try:
+            return fn(*args, **kwargs)
+        except Exception as exc:
+            _capture_exception_once(
+                exc,
+                context=f"node.{node_name}",
+                tags={"surface": "node", "node": node_name},
+            )
+            raise
 
 
 def run_investigation(

@@ -1,12 +1,20 @@
-"""Process-level snapshots for session trace spans (memory, threads, asyncio tasks)."""
+"""Process-level snapshots for session trace spans (memory, threads, asyncio tasks).
+
+``resource`` is POSIX-only. On Windows (and frozen Windows builds) RSS sampling
+is skipped so importing this module — and therefore ``trace.spans`` — stays safe.
+"""
 
 from __future__ import annotations
 
 import gc
-import resource
 import sys
 import threading
 from typing import Any
+
+try:
+    import resource as _resource
+except ImportError:  # Windows / non-POSIX
+    _resource = None  # type: ignore[assignment]
 
 #: Cap thread rows embedded in a turn-boundary snapshot (ATM thread map).
 _MAX_THREADS_IN_SNAPSHOT = 40
@@ -28,15 +36,17 @@ def _normalize_rss_mb(ru_maxrss: int) -> float:
 
 
 def sample_resource_snapshot() -> dict[str, Any]:
-    """RSS + GC generation counts (cheap; safe on turn boundaries)."""
-    rss_kb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    """RSS (when available) + GC generation counts (cheap; safe on turn boundaries)."""
     gen0, gen1, gen2 = gc.get_count()
-    return {
-        "rss_mb": _normalize_rss_mb(rss_kb),
+    out: dict[str, Any] = {
         "gc_gen0": gen0,
         "gc_gen1": gen1,
         "gc_gen2": gen2,
     }
+    if _resource is not None:
+        ru_maxrss = _resource.getrusage(_resource.RUSAGE_SELF).ru_maxrss
+        out["rss_mb"] = _normalize_rss_mb(ru_maxrss)
+    return out
 
 
 def sample_thread_snapshot(*, asyncio_tasks: int | None = None) -> dict[str, Any]:
