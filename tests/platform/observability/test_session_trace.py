@@ -426,7 +426,7 @@ def test_trace_span_append_skips_leaf_scan(tmp_path: Path, monkeypatch: pytest.M
     monkeypatch.setattr(JsonlSessionStorage, "_read_records", staticmethod(_counting_read))
     storage.append_trace_span(session_id, span_kind="tool", name="probe", duration_ms=1)
     assert calls["n"] == 0, "trace_span append should not re-read the session file"
-    assert path.read_text(encoding="utf-8").strip().splitlines()[-1].find('"trace_span"') != -1
+    assert '"trace_span"' in path.read_text(encoding="utf-8").strip().splitlines()[-1]
 
 
 def test_trace_span_never_becomes_conversation_parent(
