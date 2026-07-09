@@ -21,6 +21,7 @@ def _is_transient_vendor_error(exc: BaseException) -> bool:
     sc = exc.response.status_code
     return sc == _HTTP_TOO_MANY_REQUESTS or sc >= _HTTP_SERVER_ERROR_FLOOR
 
+
 def capture_service_error(
     exc: BaseException,
     *,

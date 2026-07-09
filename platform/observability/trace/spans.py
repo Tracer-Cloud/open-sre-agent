@@ -31,9 +31,6 @@ SPAN_STATUS_ATTR = "_status"
 SPAN_STATUS_OK = "ok"
 SPAN_STATUS_ERROR = "error"
 
-# Reserved attrs key: callers set it to override span status; stripped before persist.
-_STATUS_ATTR = "_status"
-
 
 class SessionTraceSink(Protocol):
     """Append-only session trace spans (routes, stages, threads, resources)."""

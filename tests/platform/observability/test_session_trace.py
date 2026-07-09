@@ -71,6 +71,11 @@ def _trace_spans(path: Path) -> list[dict[str, Any]]:
     ]
 
 
+def _raise(exc: BaseException) -> None:
+    """Raise ``exc`` from inside a ``with`` body."""
+    raise exc
+
+
 def test_sample_thread_snapshot_lists_current_thread() -> None:
     snap = sample_thread_snapshot()
     assert snap["thread_count"] >= 1
@@ -177,7 +182,7 @@ def test_timed_span_marks_error_on_exception(
         pytest.raises(RuntimeError, match="boom"),
         timed_span(span_kind="component", name="failing", session_id=session_id),
     ):
-        raise RuntimeError("boom")
+        _raise(RuntimeError("boom"))
     rec = _trace_spans(path)[-1]
     assert rec["name"] == "failing"
     assert rec["status"] == SPAN_STATUS_ERROR
@@ -196,7 +201,7 @@ def test_timed_span_marks_error_on_base_exception(
         pytest.raises(KeyboardInterrupt),
         timed_span(span_kind="tool", name="cancelled", session_id=session_id),
     ):
-        raise KeyboardInterrupt
+        _raise(KeyboardInterrupt())
     rec = _trace_spans(path)[-1]
     assert rec["name"] == "cancelled"
     assert rec["status"] == SPAN_STATUS_ERROR

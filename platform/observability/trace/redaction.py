@@ -49,9 +49,7 @@ def redact_sensitive(value: Any) -> Any:
     return value
 
 
-def format_json_preview(
-    value: Any, *, max_chars: int = DEFAULT_JSON_PREVIEW_MAX_CHARS
-) -> str:
+def format_json_preview(value: Any, *, max_chars: int = DEFAULT_JSON_PREVIEW_MAX_CHARS) -> str:
     """Pretty-print a redacted JSON-ish value, bounded for terminal output."""
     redacted = redact_sensitive(value)
     try:
@@ -71,9 +69,7 @@ def format_tool_trace_entry(
     tool_name = str(entry.get("tool_name") or entry.get("key") or "tool")
     loop = entry.get("loop_iteration")
     loop_label = "seed" if loop == _SEED_LOOP_ITERATION else f"iteration {loop}"
-    args = format_json_preview(
-        entry.get("tool_args") or {}, max_chars=_TOOL_TRACE_ARGS_MAX_CHARS
-    )
+    args = format_json_preview(entry.get("tool_args") or {}, max_chars=_TOOL_TRACE_ARGS_MAX_CHARS)
     output = format_json_preview(entry.get("data"), max_chars=max_output_chars)
     return f"- `{tool_name}` ({loop_label})\n  input: `{_one_line(args)}`\n  output: `{_one_line(output)}`"
 

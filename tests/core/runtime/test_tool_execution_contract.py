@@ -563,9 +563,7 @@ def test_execute_tool_calls_noop_sink_does_not_require_session_binding() -> None
     assert result.details == {"value": "ok"}
 
 
-def _activate_tool_trace(
-    tmp_path, monkeypatch: pytest.MonkeyPatch, session_id: str
-) -> Any:
+def _activate_tool_trace(tmp_path, monkeypatch: pytest.MonkeyPatch, session_id: str) -> Any:
     import json
     from pathlib import Path
 
@@ -624,9 +622,7 @@ def test_execute_tool_calls_span_marks_validation_error(
         set_session_trace_sink(NoopSessionTraceSink())
 
 
-def test_execute_tool_calls_span_marks_blocked(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_execute_tool_calls_span_marks_blocked(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     from platform.observability.trace.spans import (
         NoopSessionTraceSink,
         bind_session_trace,

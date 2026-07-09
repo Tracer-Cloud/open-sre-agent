@@ -24,6 +24,7 @@ DEFAULT_SKIP_THRESHOLD: float = 0.10
 #: Decimal places for ``skip_ratio`` in Sentry extras.
 _SKIP_RATIO_DECIMAL_PLACES = 3
 
+
 @dataclass
 class StreamingParseStats:
     """Counters for one streaming-parse pass over a vendor response."""

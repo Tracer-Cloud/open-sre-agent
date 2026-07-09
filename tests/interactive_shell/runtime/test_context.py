@@ -20,7 +20,6 @@ from surfaces.interactive_shell.runtime.context import (
 from surfaces.interactive_shell.runtime.core.state import (
     ReplState,
     SpinnerState,
-    create_repl_mutable_state,
 )
 from surfaces.interactive_shell.session import Session
 
@@ -106,7 +105,7 @@ def test_create_context_registers_jsonl_session_trace_sink(
     monkeypatch.setattr(
         TaskRegistry,
         "persistent",
-        staticmethod(lambda: TaskRegistry()),
+        staticmethod(TaskRegistry),
     )
     set_session_trace_sink(NoopSessionTraceSink())
     try:
