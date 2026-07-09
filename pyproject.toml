@@ -205,3 +205,6 @@ dev = [
     "types-PyYAML>=6.0.12",
     "import-linter>=2.0",
 ]
+
+[tool.pyrefly]
+python-interpreter-path = ".venv/bin/python"

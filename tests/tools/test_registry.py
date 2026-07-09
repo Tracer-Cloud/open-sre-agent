@@ -133,11 +133,11 @@ def test_function_and_class_tools_share_the_same_runtime_contract() -> None:
         }
         outputs = {"incident_id": "Incident identifier"}
 
-        def is_available(self, sources: dict[str, dict[str, str]]) -> bool:
-            return _available(sources)
+        def is_available(self, _sources: dict[str, dict[str, str]]) -> bool:
+            return _available(_sources)
 
-        def extract_params(self, sources: dict[str, dict[str, str]]) -> dict[str, str]:
-            return _extract(sources)
+        def extract_params(self, _sources: dict[str, dict[str, str]]) -> dict[str, str]:
+            return _extract(_sources)
 
         def run(self, incident_id: str) -> dict[str, str]:
             return {"incident_id": incident_id}
@@ -572,6 +572,12 @@ def test_resolve_tool_display_name_falls_back_for_unknown_tools() -> None:
 def test_real_registry_discovers_migrated_sre_guidance_tool() -> None:
     action_names = {tool_def.name for tool_def in get_available_actions()}
     assert "get_sre_guidance" in action_names
+
+
+def test_real_registry_discovers_agent_regression_tool() -> None:
+    action_names = {tool_def.name for tool_def in get_available_actions()}
+    assert "summarize_agent_test_status" in action_names
+    assert "create_agent_regression_scenario" in action_names
 
 
 def test_real_registry_discovers_honeycomb_and_coralogix_tools() -> None:
