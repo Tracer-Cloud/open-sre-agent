@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import gc
-import resource
 import sys
 import threading
 from typing import Any
+
+try:
+    import resource
+except ImportError:  # ``resource`` is POSIX-only; absent on Windows.
+    resource = None  # type: ignore[assignment]
 
 #: Cap thread rows embedded in a turn-boundary snapshot (ATM thread map).
 _MAX_THREADS_IN_SNAPSHOT = 40
@@ -28,11 +32,18 @@ def _normalize_rss_mb(ru_maxrss: int) -> float:
 
 
 def sample_resource_snapshot() -> dict[str, Any]:
-    """RSS + GC generation counts (cheap; safe on turn boundaries)."""
-    rss_kb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    """RSS + GC generation counts (cheap; safe on turn boundaries).
+
+    ``rss_mb`` is ``None`` on platforms without the POSIX ``resource``
+    module (Windows); the GC counts stay cross-platform.
+    """
     gen0, gen1, gen2 = gc.get_count()
+    rss_mb: float | None = None
+    if resource is not None:
+        ru_maxrss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        rss_mb = _normalize_rss_mb(ru_maxrss)
     return {
-        "rss_mb": _normalize_rss_mb(rss_kb),
+        "rss_mb": rss_mb,
         "gc_gen0": gen0,
         "gc_gen1": gen1,
         "gc_gen2": gen2,
