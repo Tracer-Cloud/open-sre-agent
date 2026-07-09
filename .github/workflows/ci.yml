@@ -245,11 +245,11 @@ jobs:
         env:
           COVERAGE_FILE: .coverage.${{ matrix.shard }}
           # Fork PRs do not receive repository secrets; skip live_llm contracts
-          # (see interactive-shell-live.yml). Index a JSON string array so the
-          # value is always a marker string — never a bare boolean `false`
-          # (GHA `a && 'x' || 'y'` can yield boolean false; pytest -m false
-          # then collects 0 tests → xdist "N workers [0 items]").
-          PYTEST_MARKER_EXPR: ${{ fromJSON('["not synthetic", "not (synthetic or live_llm)"]')[github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == true] }}
+          # (see interactive-shell-live.yml). Prefer ``case()`` over ``a && x || y``
+          # so the env value is always a marker string (never a bare boolean).
+          # A boolean ``false`` becomes ``-m false`` → xdist "N workers [0 items]"
+          # and pytest-xdist can still exit 0.
+          PYTEST_MARKER_EXPR: ${{ case(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == true, 'not (synthetic or live_llm)', 'not synthetic') }}
         run: |
           echo "PYTEST_MARKER_EXPR=${PYTEST_MARKER_EXPR}"
           case "${PYTEST_MARKER_EXPR}" in
