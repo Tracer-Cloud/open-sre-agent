@@ -48,7 +48,8 @@ def test_build_investigation_system_prompt_includes_alignment_and_tradeoffs() ->
     prompt = build_investigation_system_prompt({"alert_source": "grafana"})
 
     assert "Keeping the team aligned" in prompt
-    assert "Remediation trade-offs" in prompt
+    assert "Incident command summary (required" in prompt
+    assert "Remediation trade-offs:" in prompt
     assert "blast radius" in prompt
     assert "reversibility" in prompt
 

@@ -41,6 +41,10 @@ def build_report_context(state: InvestigationState) -> ReportContext:
         "validated_claims": validated_claims,
         "non_validated_claims": non_validated_claims,
         "remediation_steps": state.get("remediation_steps", []),
+        "triage_summary": state.get("triage_summary", ""),
+        "incident_status": state.get("incident_status", ""),
+        "missing_context_flags": state.get("missing_context_flags", []),
+        "remediation_tradeoffs": state.get("remediation_tradeoffs", ""),
         "correlation": state.get("correlation", {}),
         # S3 verification
         "s3_marker_exists": ns.s3.get("marker_exists", False),

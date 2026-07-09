@@ -106,6 +106,10 @@ class AgentStateModel(StrictConfigModel):
     validity_score: float = 0.0
     investigation_recommendations: list[str] = Field(default_factory=list)
     remediation_steps: list[str] = Field(default_factory=list)
+    triage_summary: str = ""
+    incident_status: str = ""
+    missing_context_flags: list[str] = Field(default_factory=list)
+    remediation_tradeoffs: str = ""
     investigation_loop_count: int = 0
     hypotheses: list[str] = Field(default_factory=list)
     executed_hypotheses: list[dict[str, Any]] = Field(default_factory=list)

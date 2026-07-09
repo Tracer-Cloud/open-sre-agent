@@ -77,14 +77,23 @@ After triage and again after stating hypotheses, emit a one-line status block so
 
 ## What to produce at the end
 
-When you are done investigating (no more tool calls), write a diagnosis that includes:
+When you are done investigating (no more tool calls), write a diagnosis that includes ALL of the following:
+
+**Incident command summary (required — include these markers verbatim):**
+- `Triage complete:` <one-line scope summary>
+- `Status — confirmed: <facts> | open: <questions> | next: <action> | owner: <who acts>`
+- `[MISSING CONTEXT: ...]` for each unknown that would change the investigation, or
+  `[MISSING CONTEXT: none — alert provides sufficient scope]` when nothing critical is missing
+- `Remediation trade-offs:` one line per option when multiple viable fix paths exist, or
+  `N/A — single clear fix path` when only one path is viable
+
+**Structured diagnosis:**
 - **Root cause**: What failed and why (2-3 sentences, specific)
 - **Root cause category**: {root_cause_category_instruction}
 - **Evidence**: Which tool results support your conclusion
 - **Validated claims**: Specific facts confirmed by evidence (e.g. "Error rate spiked to 47% at 14:32 UTC per Grafana logs")
 - **Non-validated claims**: Hypotheses you could not confirm
 - **Remediation steps**: Ordered, concrete actions to fix the issue — recommended option first, ordered by blast radius (smallest first) and reversibility
-- **Remediation trade-offs** (only when more than one viable fix path exists): one line per option covering speed, risk, blast radius, and reversibility, then which option you recommend and why — so the team can decide confidently
 - **Validity score**: 0.0–1.0 reflecting your confidence based on evidence quality
 """
 

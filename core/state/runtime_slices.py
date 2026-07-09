@@ -95,6 +95,10 @@ class DiagnosisSlice(TypedDict, total=False):
     validity_score: float
     investigation_recommendations: list[str]
     remediation_steps: list[str]
+    triage_summary: str
+    incident_status: str
+    missing_context_flags: list[str]
+    remediation_tradeoffs: str
 
 
 class MaskingSlice(TypedDict, total=False):

@@ -105,6 +105,12 @@ Investigation conclusion:
 {last_text}
 
 Evidence keys collected: {", ".join(evidence.keys()) if evidence else "none"}
+
+Extract incident-command fields when present:
+- triage_summary: the one-line scope after "Triage complete"
+- incident_status: the full "Status — ..." block
+- missing_context_flags: each "[MISSING CONTEXT: ...]" item (without the brackets prefix)
+- remediation_tradeoffs: the remediation trade-offs section, or "N/A — single clear fix path"
 """
 
     class _DiagnosisPayload(TypedDict):
@@ -114,6 +120,10 @@ Evidence keys collected: {", ".join(evidence.keys()) if evidence else "none"}
         validated_claims: list[str]
         non_validated_claims: list[str]
         remediation_steps: list[str]
+        triage_summary: str
+        incident_status: str
+        missing_context_flags: list[str]
+        remediation_tradeoffs: str
         validity_score: float
 
     llm = get_llm(LLMRole.REASONING)
@@ -136,6 +146,10 @@ Evidence keys collected: {", ".join(evidence.keys()) if evidence else "none"}
         non_validated_claims=schema["non_validated_claims"],
         remediation_steps=schema["remediation_steps"],
         validity_score=schema["validity_score"],
+        triage_summary=schema.get("triage_summary", ""),
+        incident_status=schema.get("incident_status", ""),
+        missing_context_flags=schema.get("missing_context_flags", []),
+        remediation_tradeoffs=schema.get("remediation_tradeoffs", ""),
         alert_source=alert_source,
     )
 
