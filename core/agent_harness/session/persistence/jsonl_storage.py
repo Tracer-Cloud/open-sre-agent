@@ -354,7 +354,17 @@ class JsonlSessionStorage:
             if not path.exists():
                 return ""
             entry_id = _new_id()
-            parent = parent_id if parent_id is not None else self._current_leaf_id(path)
+            # ``trace_span`` rows are side-channel telemetry (ATM / debug) and
+            # never join the conversation parent chain, so they skip the leaf
+            # lookup every other append pays. They are emitted once per LLM and
+            # per tool call, so resolving the leaf here would re-read the whole
+            # session file on every span -- O(n) per span, O(n^2) per session.
+            if parent_id is not None:
+                parent = parent_id
+            elif entry_type == "trace_span":
+                parent = None
+            else:
+                parent = self._current_leaf_id(path)
             record = {
                 "id": entry_id,
                 "parent_id": parent,
@@ -383,6 +393,10 @@ class JsonlSessionStorage:
         for rec in reversed(records):
             if rec.get("type") == "leaf":
                 return str(rec.get("parent_id") or "") or None
+            # Side-channel telemetry, not a tree node: a ``trace_span`` must
+            # never become the parent of the next real entry.
+            if rec.get("type") == "trace_span":
+                continue
             if rec.get("type") != "session":
                 return str(rec.get("id") or "") or None
         return None

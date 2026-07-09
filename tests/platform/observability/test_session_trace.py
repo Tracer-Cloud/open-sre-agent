@@ -402,3 +402,48 @@ def test_set_session_trace_sink_none_restores_noop() -> None:
     set_session_trace_sink(None)
     assert not is_session_trace_active()
     assert isinstance(get_session_trace_sink(), NoopSessionTraceSink)
+
+
+def test_trace_span_append_skips_leaf_scan(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A trace_span is side-channel: appending one must not read the session
+    file to resolve a leaf (the source of the per-span O(n) rescan)."""
+    session_id = "sess-trace-perf"
+    monkeypatch.setattr(
+        "core.agent_harness.session.persistence.jsonl_storage.session_path",
+        lambda sid: tmp_path / f"{sid}.jsonl",
+    )
+    path = _seed_session_jsonl(tmp_path, session_id)
+    storage = JsonlSessionStorage()
+    storage.append_message(session_id, role="user", content="hi")
+
+    calls = {"n": 0}
+    original = JsonlSessionStorage._read_records
+
+    def _counting_read(p: Path) -> list[dict[str, Any]]:
+        calls["n"] += 1
+        return original(p)
+
+    monkeypatch.setattr(JsonlSessionStorage, "_read_records", staticmethod(_counting_read))
+    storage.append_trace_span(session_id, span_kind="tool", name="probe", duration_ms=1)
+    assert calls["n"] == 0, "trace_span append should not re-read the session file"
+    assert path.read_text(encoding="utf-8").strip().splitlines()[-1].find('"trace_span"') != -1
+
+
+def test_trace_span_never_becomes_conversation_parent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A message appended after a trace_span must chain to the previous real
+    entry, not onto the telemetry span."""
+    session_id = "sess-trace-chain"
+    monkeypatch.setattr(
+        "core.agent_harness.session.persistence.jsonl_storage.session_path",
+        lambda sid: tmp_path / f"{sid}.jsonl",
+    )
+    _seed_session_jsonl(tmp_path, session_id)
+    storage = JsonlSessionStorage()
+    user_id = storage.append_message(session_id, role="user", content="hi")
+    storage.append_trace_span(session_id, span_kind="llm", name="invoke", duration_ms=2)
+    assistant_id = storage.append_message(session_id, role="assistant", content="hello")
+
+    records = {r["id"]: r for r in storage._read_records(tmp_path / f"{session_id}.jsonl")}
+    assert records[assistant_id]["parent_id"] == user_id
