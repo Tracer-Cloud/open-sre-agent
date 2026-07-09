@@ -25,7 +25,7 @@ from core.state import InvestigationState
 from core.state.evidence import EvidenceEntry
 from platform.observability import debug_print
 from platform.observability import get_progress_tracker as get_tracker
-from platform.observability.tool_trace import redact_sensitive
+from platform.observability.trace.redaction import redact_sensitive
 from tools.investigation.stages.gather_evidence.loop import (
     InvestigationToolCallCache,
     degraded_investigation_from_llm_failure,

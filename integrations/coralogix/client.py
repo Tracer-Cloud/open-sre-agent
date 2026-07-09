@@ -11,7 +11,7 @@ import httpx
 
 from integrations.config_models import CoralogixIntegrationConfig
 from integrations.probes import ProbeResult
-from platform.observability.service_errors import capture_service_error
+from platform.observability.errors.service import capture_service_error
 from platform.observability.streaming import StreamingParseStats
 
 logger = logging.getLogger(__name__)

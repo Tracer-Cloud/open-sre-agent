@@ -42,12 +42,12 @@ def install_product_adapters() -> None:
         fetch_tracer_remote_integrations,
     )
     from platform.harness_ports import set_remote_integrations_fetcher
-    from platform.observability.debug import set_debug_printer
-    from platform.observability.display import (
+    from platform.observability.render.debug import set_debug_printer
+    from platform.observability.render.display import (
         set_investigation_footer_renderer,
         set_investigation_header_renderer,
     )
-    from platform.observability.progress import set_progress_tracker_factory
+    from platform.observability.render.progress import set_progress_tracker_factory
     from surfaces.interactive_shell.ui.output.environment import debug_print
     from surfaces.interactive_shell.ui.output.renderers import (
         render_completed_investigation_footer,

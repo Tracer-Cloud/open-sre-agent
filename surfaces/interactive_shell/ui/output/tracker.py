@@ -158,6 +158,8 @@ class ProgressTracker(ToolTrackingMixin):
         )
         event = ProgressEvent(node_name, elapsed_ms, fields_updated, status, message)
         self.events.append(event)
+        # Stage spans are owned by tools/investigation/lifecycle.py timed_span —
+        # do not emit here (avoids duplicate stage records + UI-name drift).
         if self._silent:
             return
         if self._rich:
@@ -184,12 +186,12 @@ def _register_with_observability(tracker: ProgressTracker) -> None:
     """Tell the observability port which tracker core code should see.
 
     The Rich tracker structurally satisfies the
-    :class:`platform.observability.progress.ProgressTracker` Protocol;
+    :class:`platform.observability.render.progress.ProgressTracker` Protocol;
     registering it here means any module that imports
     ``get_progress_tracker`` from core gets the same instance the CLI
     is driving.
     """
-    from platform.observability.progress import set_progress_tracker
+    from platform.observability.render.progress import set_progress_tracker
 
     set_progress_tracker(tracker)
     from surfaces.interactive_shell.ui.output.console_state import set_tracker_toggle_stop_fn

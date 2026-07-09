@@ -14,15 +14,15 @@ high-level modules depend on abstractions, not concretions.
 
 from __future__ import annotations
 
-from platform.observability.debug import debug_print, set_debug_printer
-from platform.observability.display import (
+from platform.observability.render.debug import debug_print, set_debug_printer
+from platform.observability.render.display import (
     render_completed_investigation_footer,
     render_investigation_header,
     set_investigation_footer_renderer,
     set_investigation_header_renderer,
 )
-from platform.observability.output_format import get_output_format
-from platform.observability.progress import (
+from platform.observability.render.output_format import get_output_format
+from platform.observability.render.progress import (
     NoopProgressTracker,
     ProgressTracker,
     get_progress_tracker,

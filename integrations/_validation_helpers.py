@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from platform.observability.errors import report_exception
+from platform.observability.errors.boundary import report_exception
 
 
 def report_validation_failure(

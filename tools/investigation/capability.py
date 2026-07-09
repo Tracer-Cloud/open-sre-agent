@@ -12,8 +12,8 @@ from typing import TYPE_CHECKING, Any, cast
 
 from core.domain.stream import StreamEvent
 from core.state import AgentState
-from platform.observability.errors import report_and_reraise
-from platform.observability.sentry_sdk import init_sentry
+from platform.observability.errors.boundary import report_and_reraise
+from platform.observability.errors.sentry import init_sentry
 from tools.investigation.state_factory import make_initial_state
 from tools.investigation.streaming import resolved_integrations_stream_payload
 
@@ -45,7 +45,7 @@ def _capture_exception_once(
 ) -> None:
     if _exception_was_captured(exc):
         return
-    from platform.observability.sentry_sdk import capture_exception
+    from platform.observability.errors.sentry import capture_exception
 
     capture_exception(exc, context=context, tags=tags)
     _mark_exception_captured(exc)

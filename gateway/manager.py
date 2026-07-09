@@ -58,6 +58,10 @@ class GatewayManager:
         # surfaces.boundary without a surfaces↔gateway peer import).
         register_integrations()
         register_tools()
+        # Env-gated (OPENSRE_NO_TELEMETRY / DO_NOT_TRACK / missing DSN) — free when off.
+        from platform.observability.errors.sentry import init_sentry
+
+        init_sentry(entrypoint="gateway")
         logger = self.logger = configure_gateway_logging()
 
         # Load the LLM client graph as one snapshot at boot (avoids a stale

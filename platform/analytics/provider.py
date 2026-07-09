@@ -582,7 +582,7 @@ def _log_failure(stage: str, error: BaseException, **extra: object) -> None:
 def _capture_sentry_failure(error: BaseException) -> None:
     """Report telemetry failures without making analytics depend on Sentry imports."""
     try:
-        from platform.observability.sentry_sdk import capture_exception
+        from platform.observability.errors.sentry import capture_exception
     except Exception:
         return
     capture_exception(error)

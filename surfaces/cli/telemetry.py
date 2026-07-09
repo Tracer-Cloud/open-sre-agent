@@ -75,13 +75,13 @@ def should_report_exception(exc: click.ClickException) -> bool:
 
 
 def init_sentry(*, entrypoint: str | None = None) -> None:
-    from platform.observability.sentry_sdk import init_sentry as _init_sentry
+    from platform.observability.errors.sentry import init_sentry as _init_sentry
 
     _init_sentry(entrypoint=entrypoint)
 
 
 def capture_exception(exc: BaseException, *, context: str) -> None:
-    from platform.observability.sentry_sdk import capture_exception as _capture_exception
+    from platform.observability.errors.sentry import capture_exception as _capture_exception
 
     _capture_exception(exc, context=context)
 

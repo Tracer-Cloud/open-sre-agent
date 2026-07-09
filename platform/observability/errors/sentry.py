@@ -56,7 +56,7 @@ _SENSITIVE_HEADERS: frozenset[str] = frozenset(
 )
 _QUERY_SCRUBBING_CATEGORIES: frozenset[str] = frozenset({"http", "httpx"})
 _HEADER_SCRUBBING_CATEGORIES: frozenset[str] = frozenset({"http", "httpx", "aiohttp"})
-_HOSTED_ENTRYPOINTS: frozenset[str] = frozenset({"webapp", "remote", "mcp", "pipeline"})
+_HOSTED_ENTRYPOINTS: frozenset[str] = frozenset({"webapp", "remote", "mcp", "pipeline", "gateway"})
 _OPERATOR_ACTIONABLE_LLM_ERROR_PATTERNS: tuple[re.Pattern[str], ...] = (
     # Any provider auth failure: "Openrouter authentication failed. Check OPENROUTER_API_KEY …"
     re.compile(r"\bauthentication failed\.\s+Check\s+\S+_API_KEY\b", re.I),
@@ -470,9 +470,9 @@ def _apply_scope_tags(entrypoint: str | None) -> None:
     runtime, e.g. ``CPython 3.12``, and is flattened into a tag of the same
     name by Sentry's event processor — overriding any plain ``runtime`` tag
     set on the scope). Server-side surfaces (``webapp``/``remote``/``mcp``/
-    ``pipeline``) map to ``hosted``; everything else maps to ``cli`` —
-    this matches the surface, not the ``ENV`` setting, so a webapp running
-    locally still reports as ``hosted``.
+    ``pipeline``/``gateway``) map to ``hosted``; everything else maps to
+    ``cli`` — this matches the surface, not the ``ENV`` setting, so a
+    webapp running locally still reports as ``hosted``.
     """
     if _ScopeTagsState.applied:
         return
@@ -504,10 +504,10 @@ def init_sentry(entrypoint: str | None = None) -> None:
     ``OPENSRE_ANALYTICS_DISABLED=1`` disables PostHog only.
 
     ``entrypoint`` identifies the calling surface (``cli``, ``webapp``,
-    ``remote``, ``mcp``, ``integrations``, ``wizard``, ``pipeline``)
-    and is attached as a scope tag for grouping in Sentry. The first
-    non-no-op call wins — inner callers cannot overwrite the outer
-    entrypoint's tags.
+    ``remote``, ``mcp``, ``integrations``, ``wizard``, ``pipeline``,
+    ``gateway``) and is attached as a scope tag for grouping in Sentry.
+    The first non-no-op call wins — inner callers cannot overwrite the
+    outer entrypoint's tags.
     """
     if _is_sentry_disabled():
         _capture_sentry_init_skipped("telemetry_disabled")

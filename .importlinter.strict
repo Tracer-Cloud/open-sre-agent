@@ -31,7 +31,7 @@ ignore_imports =
     config.repl_config -> platform.terminal.theme
     # platform -> integrations (T-4 debt — scheduler / observability)
     platform.analytics.cli -> integrations.github.identity
-    platform.observability.sentry_sdk -> integrations.llm_cli.errors
+    platform.observability.errors.sentry -> integrations.llm_cli.errors
     platform.scheduler.credentials -> integrations.catalog
     platform.scheduler.executor -> integrations.discord.delivery
     platform.scheduler.executor -> integrations.slack.delivery

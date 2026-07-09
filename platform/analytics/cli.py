@@ -19,7 +19,7 @@ from platform.analytics.source import (
     TriggerMode,
     build_source_properties,
 )
-from platform.observability.sentry_sdk import capture_exception
+from platform.observability.errors.sentry import capture_exception
 
 if TYPE_CHECKING:
     from core.agent_harness.session import SessionCore

@@ -9,7 +9,7 @@ from typing import Any
 
 import requests
 
-from platform.observability.sentry_sdk import init_sentry
+from platform.observability.errors.sentry import init_sentry
 
 LOCAL_LOKI_URL = "http://localhost:3100"
 SERVICE_NAME = "prefect-etl-pipeline-local"

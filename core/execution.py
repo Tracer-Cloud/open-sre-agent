@@ -12,7 +12,8 @@ from typing import Any
 from core.llm.types import ToolCall
 from core.tool_framework.utils.integration_sources import availability_view
 from core.types import AgentTool, AgentToolContext, RuntimeTool
-from platform.observability.tool_trace import redact_sensitive
+from platform.observability.trace.redaction import redact_sensitive
+from platform.observability.trace.spans import mark_span_outcome, tool_span
 
 logger = logging.getLogger(__name__)
 
@@ -119,62 +120,17 @@ def execute_tool_calls(
     runtime_resources = dict(tool_resources or {})
 
     def _call(tc: ToolCall) -> ToolExecutionResult:
-        tool = tool_map.get(tc.name)
-        if tool is None:
-            return _error_result(f"unknown tool: {tc.name}", metadata={"tool_name": tc.name})
-
-        try:
-            validation_error = tool.validate_public_input(tc.input)
-            if validation_error:
-                return _error_result(validation_error, metadata={"tool_name": tc.name})
-
-            request = ToolExecutionRequest(
-                tool_call=tc,
-                tool=tool,
-                arguments=dict(tc.input),
-                source=tool_source(tools, tc.name),
+        with tool_span(tc.name, tool_call_id=tc.id) as span_attrs:
+            return _execute_one_tool_call(
+                tc,
+                tool_map=tool_map,
+                tools=tools,
+                tool_sources=tool_sources,
                 resolved_integrations=resolved_integrations,
+                runtime_resources=runtime_resources,
+                hooks=hooks,
+                span_attrs=span_attrs,
             )
-            before = _run_before_hook(hooks, request)
-            if before is not None and before.blocked:
-                return ToolExecutionResult(
-                    content=before.reason or f"{tc.name} blocked by before_tool_call hook.",
-                    details=before.details,
-                    is_error=True,
-                    terminate=before.terminate,
-                    metadata={"tool_name": tc.name, **before.metadata},
-                )
-
-            if isinstance(tool, AgentTool):
-                context = AgentToolContext(
-                    resolved_integrations=resolved_integrations,
-                    resources=runtime_resources,
-                    _emit_update=lambda update: _run_update_hook(hooks, request, update),
-                )
-                raw = tool.execute(tc.input, context)
-            else:
-                injected = tool.extract_params(tool_sources)
-                kwargs = {**injected, **tc.input}
-                for key, value in injected.items():
-                    if key in _INJECTED_CREDENTIAL_KEYS and value not in (None, "", []):
-                        kwargs[key] = value
-                if getattr(tool, "accepts_runtime_context", False):
-                    context = AgentToolContext(
-                        resolved_integrations=resolved_integrations,
-                        resources=runtime_resources,
-                        _emit_update=lambda update: _run_update_hook(hooks, request, update),
-                    )
-                    raw = tool.run(**kwargs, context=context)
-                else:
-                    raw = tool.run(**kwargs)
-            result = _normalize_result(raw, tool_name=tc.name)
-            patch = _run_after_hook(hooks, request, result)
-            if patch is not None:
-                result = _apply_patch(result, patch)
-            return result
-        except Exception as exc:
-            logger.warning("[tool:%s] failed: %s", tc.name, exc)
-            return _error_result(str(exc), metadata={"tool_name": tc.name})
 
     if len(tool_calls) == 1 or _requires_sequential_execution(tool_calls, tool_map):
         return [_call(tc) for tc in tool_calls]
@@ -233,6 +189,120 @@ def execute_tools(
             tool_resources=None,
         )
     ]
+
+
+def _execute_one_tool_call(
+    tc: ToolCall,
+    *,
+    tool_map: dict[str, RuntimeTool],
+    tools: Sequence[RuntimeTool],
+    tool_sources: dict[str, Any],
+    resolved_integrations: dict[str, Any],
+    runtime_resources: dict[str, Any],
+    hooks: ToolExecutionHooks,
+    span_attrs: dict[str, Any],
+) -> ToolExecutionResult:
+    """Run one validated tool call; record outcome on ``span_attrs``."""
+    tool = tool_map.get(tc.name)
+    if tool is None:
+        mark_span_outcome(span_attrs, "unknown_tool", error=True)
+        logger.debug("tool_call unknown name=%s id=%s", tc.name, tc.id)
+        return _error_result(f"unknown tool: {tc.name}", metadata={"tool_name": tc.name})
+
+    try:
+        validation_error = tool.validate_public_input(tc.input)
+        if validation_error:
+            mark_span_outcome(span_attrs, "validation_error", error=True)
+            logger.debug("tool_call validation_error name=%s id=%s", tc.name, tc.id)
+            return _error_result(validation_error, metadata={"tool_name": tc.name})
+
+        source = tool_source(tools, tc.name)
+        span_attrs["source"] = source
+        request = ToolExecutionRequest(
+            tool_call=tc,
+            tool=tool,
+            arguments=dict(tc.input),
+            source=source,
+            resolved_integrations=resolved_integrations,
+        )
+        before = _run_before_hook(hooks, request)
+        if before is not None and before.blocked:
+            mark_span_outcome(span_attrs, "blocked", error=True)
+            logger.debug("tool_call blocked name=%s id=%s", tc.name, tc.id)
+            return ToolExecutionResult(
+                content=before.reason or f"{tc.name} blocked by before_tool_call hook.",
+                details=before.details,
+                is_error=True,
+                terminate=before.terminate,
+                metadata={"tool_name": tc.name, **before.metadata},
+            )
+
+        logger.debug("tool_call start name=%s id=%s source=%s", tc.name, tc.id, source)
+        raw = _invoke_runtime_tool(
+            tool,
+            tc,
+            request=request,
+            tool_sources=tool_sources,
+            resolved_integrations=resolved_integrations,
+            runtime_resources=runtime_resources,
+            hooks=hooks,
+        )
+        result = _normalize_result(raw, tool_name=tc.name)
+        patch = _run_after_hook(hooks, request, result)
+        if patch is not None:
+            result = _apply_patch(result, patch)
+        mark_span_outcome(
+            span_attrs,
+            "tool_error" if result.is_error else "ok",
+            error=result.is_error,
+            is_error=result.is_error,
+            terminate=result.terminate,
+        )
+        logger.debug(
+            "tool_call done name=%s id=%s outcome=%s",
+            tc.name,
+            tc.id,
+            span_attrs["outcome"],
+        )
+        return result
+    except Exception as exc:
+        mark_span_outcome(span_attrs, "exception", error=True)
+        logger.warning("[tool:%s] failed: %s", tc.name, exc)
+        return _error_result(str(exc), metadata={"tool_name": tc.name})
+
+
+def _invoke_runtime_tool(
+    tool: RuntimeTool,
+    tc: ToolCall,
+    *,
+    request: ToolExecutionRequest,
+    tool_sources: dict[str, Any],
+    resolved_integrations: dict[str, Any],
+    runtime_resources: dict[str, Any],
+    hooks: ToolExecutionHooks,
+) -> Any:
+    """Dispatch to AgentTool.execute or RegisteredTool.run."""
+    if isinstance(tool, AgentTool):
+        context = AgentToolContext(
+            resolved_integrations=resolved_integrations,
+            resources=runtime_resources,
+            _emit_update=lambda update: _run_update_hook(hooks, request, update),
+        )
+        return tool.execute(tc.input, context)
+
+    injected = tool.extract_params(tool_sources)
+    kwargs = {**injected, **tc.input}
+    for key, value in injected.items():
+        if key in _INJECTED_CREDENTIAL_KEYS and value not in (None, "", []):
+            kwargs[key] = value
+    if getattr(tool, "accepts_runtime_context", False):
+        context = AgentToolContext(
+            resolved_integrations=resolved_integrations,
+            resources=runtime_resources,
+            _emit_update=lambda update: _run_update_hook(hooks, request, update),
+        )
+        return tool.run(**kwargs, context=context)
+    return tool.run(**kwargs)
 
 
 def _requires_sequential_execution(

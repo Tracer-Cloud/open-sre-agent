@@ -9,30 +9,26 @@ from __future__ import annotations
 
 from typing import Any
 
+# OTLP/JSON scalar value kinds, in the order an attribute's single-key value dict
+# may carry them (int64 arrives as a string per the OTLP spec — kept as-is).
+_OTLP_SCALAR_KINDS = ("stringValue", "intValue", "boolValue", "doubleValue")
+
 
 def extract_span_attributes(span: dict[str, Any]) -> dict[str, Any]:
     """Flatten an OTLP attribute list into a plain key -> value mapping.
 
-    Handles the common OTLP/JSON value kinds (string, int, bool, double).
-    Attributes without a key or with an unsupported value kind are skipped.
+    Handles the common OTLP/JSON scalar value kinds. Attributes without a key or
+    with an unsupported value kind are skipped.
     """
     attributes: dict[str, Any] = {}
-
     for attr in span.get("attributes", []):
         key = attr.get("key", "")
         if not key:
             continue
         value = attr.get("value", {})
-
-        if "stringValue" in value:
-            attributes[key] = value["stringValue"]
-        elif "intValue" in value:
-            attributes[key] = value["intValue"]
-        elif "boolValue" in value:
-            attributes[key] = value["boolValue"]
-        elif "doubleValue" in value:
-            attributes[key] = value["doubleValue"]
-
+        scalar = next((value[kind] for kind in _OTLP_SCALAR_KINDS if kind in value), None)
+        if scalar is not None:
+            attributes[key] = scalar
     return attributes
 
 

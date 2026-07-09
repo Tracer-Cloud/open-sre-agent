@@ -21,7 +21,7 @@ from typing import Any
 from rich.console import Console
 
 from platform.analytics.repl_context import bind_cli_session_id, reset_cli_session_id
-from platform.observability.session_trace import emit_thread_boundary
+from platform.observability.trace.spans import bind_session_trace, emit_thread_boundary
 from surfaces.interactive_shell.runtime.agent_presentation import (
     AgentEvent,
     AgentEventSink,
@@ -106,7 +106,10 @@ async def run_agent_turn(runtime: AgentTurnRuntime, text: str) -> None:
         phase="turn_start",
     )
     try:
-        with progress_scope:
+        with (
+            bind_session_trace(runtime.session.session_id),
+            progress_scope,
+        ):
             await _run_agent_turn_loop(
                 runtime=runtime,
                 text=text,

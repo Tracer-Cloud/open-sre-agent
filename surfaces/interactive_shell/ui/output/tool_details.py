@@ -4,7 +4,7 @@ from typing import Any
 
 from rich.text import Text
 
-from platform.observability.tool_trace import format_json_preview
+from platform.observability.trace.redaction import format_json_preview
 from platform.terminal.theme import BRAND, DIM, HIGHLIGHT, SECONDARY, TEXT
 from surfaces.interactive_shell.ui.components.time_format import _elapsed_hms, _fmt_timing
 from surfaces.shared.tool_labels import tool_short_label, tool_source_label

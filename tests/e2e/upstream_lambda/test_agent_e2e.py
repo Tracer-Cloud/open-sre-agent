@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 import boto3
 import requests
 
-from platform.observability.tracing import traceable
+from platform.observability.trace.hook import traceable
 from surfaces.cli.investigation import run_investigation_cli
 from tests.utils.alert_factory import create_alert
 from tests.utils.conftest import UPSTREAM_DOWNSTREAM_CONFIG
