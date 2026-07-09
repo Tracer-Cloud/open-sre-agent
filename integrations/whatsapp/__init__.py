@@ -5,6 +5,9 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from pydantic import ValidationError
+
+from integrations._validation_helpers import report_classify_failure
 from integrations.config_models import WhatsAppConfig
 
 logger = logging.getLogger(__name__)
@@ -23,6 +26,9 @@ def classify(
                 "default_to": credentials.get("default_to"),
             }
         )
-    except Exception:
+    except ValidationError:
+        return None, None
+    except Exception as exc:
+        report_classify_failure(exc, logger=logger, integration="whatsapp", record_id=_record_id)
         return None, None
     return cfg, "whatsapp"
