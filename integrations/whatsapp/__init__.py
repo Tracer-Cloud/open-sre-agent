@@ -28,6 +28,7 @@ def classify(
     except ValidationError:
         return None, None
     except Exception:
-        logger.debug("Unexpected error validating WhatsApp config", exc_info=True)
+        logger.exception("Unexpected error validating WhatsApp config")
         return None, None
+    
     return cfg, "whatsapp"
