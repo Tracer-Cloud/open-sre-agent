@@ -5,8 +5,8 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from integrations.datadog.client import DatadogAsyncClient
 from integrations.config_models import DatadogIntegrationConfig
+from integrations.datadog.client import DatadogAsyncClient
 
 _DD_CONFIG = DatadogIntegrationConfig(
     api_key="fake-api-key",
