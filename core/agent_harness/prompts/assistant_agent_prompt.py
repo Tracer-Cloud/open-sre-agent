@@ -194,22 +194,26 @@ def _build_observation_block(tool_observation: str | None, *, on_screen: bool = 
     if on_screen:
         framing = (
             "A read-only discovery command was just run to answer the user's question; "
-            "its output is below. Summarize it to answer the user's question directly "
-            "and concisely (for example, whether a specific integration is configured), "
-            "citing the relevant status. The output is already on screen, so keep it "
-            "short."
+            "its output is below. Summarize it to answer the user's question directly, "
+            "citing the relevant status. The output is already on screen, so keep "
+            "**Here's what that looks like:** brief or omit it when it would repeat "
+            "what the user just saw. Still end with **Want me to:** and a specific "
+            "next step tied to the finding (for integration questions: connect another "
+            "integration, verify a failed service, or set up a missing one)."
         )
     else:
         framing = (
             "Live data was just gathered from the connected integrations to answer the "
             "user's question; the tool results are below and are NOT otherwise shown to "
-            "the user. Answer the user's question directly using these results, citing "
-            "the concrete findings (e.g. relevant issues, log lines, or metrics). If the "
-            "data does not contain the answer, say so plainly. You have ALREADY queried "
-            "the connected sources, so do NOT tell the user to paste an alert or to run "
-            "`opensre investigate`; instead report what each source returned and, if you "
-            "need more signal, ask for the specific detail (error string, service, "
-            "version, or time window) that would let you narrow it down here."
+            "the user. Answer using the three-part response shape from the system "
+            "prompt: **I found:**, **Here's what that looks like:**, and **Want me to:** "
+            "with a specific next step. Cite concrete findings (issues, log lines, or "
+            "metrics). If the data does not contain the answer, say so plainly. You have "
+            "ALREADY queried the connected sources, so do NOT tell the user to paste an "
+            "alert or to run `opensre investigate`; instead report what each source "
+            "returned and, if you need more signal, ask for the specific detail (error "
+            "string, service, version, or time window) that would let you narrow it down "
+            "here."
         )
     return (
         f"{framing} Do NOT request, plan, or emit any further actions — just answer in "

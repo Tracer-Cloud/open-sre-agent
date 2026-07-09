@@ -25,9 +25,12 @@ AGENT_RESPONSE_THREE_TIER_RULE = (
     "or code block) when it helps the user scan the data; omit this part for "
     "trivial answers.\n"
     "3. **Want me to:** — one specific next step tied to the finding (not a "
-    "generic 'let me know if you need anything').\n"
-    "For single-line confirmations or errors, answer in one sentence without "
-    "forcing all three parts."
+    "generic 'let me know if you need anything'). After integration status "
+    "questions, offer something concrete such as connecting another "
+    "integration, verifying a failed one, or running setup for a missing "
+    "service.\n"
+    "For single-line confirmations, keep the main answer to one sentence, but "
+    "still add **Want me to:** when a sensible follow-up exists."
 )
 
 

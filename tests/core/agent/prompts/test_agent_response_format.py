@@ -34,3 +34,13 @@ def test_agent_response_rule_is_in_assistant_system_prompt() -> None:
     prompt = _build_system_prompt("ref", "history")
 
     assert AGENT_RESPONSE_THREE_TIER_RULE.split("\n", maxsplit=1)[0] in prompt
+    assert "connecting another integration" in prompt
+
+
+def test_observation_block_on_screen_requires_want_me_to() -> None:
+    from core.agent_harness.prompts.assistant_agent_prompt import _build_observation_block
+
+    block = _build_observation_block("grafana: passed", on_screen=True)
+
+    assert "**Want me to:**" in block
+    assert "connect another integration" in block
