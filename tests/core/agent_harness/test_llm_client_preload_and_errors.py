@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import sys
 
-from core.agent_harness.providers.default_providers import (
+from core.agent_harness.turns.default_reasoning_client import (
     DefaultReasoningClientProvider,
     _llm_client_unavailable_message,
 )

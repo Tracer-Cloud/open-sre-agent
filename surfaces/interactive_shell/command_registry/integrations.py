@@ -6,7 +6,11 @@ from rich.console import Console
 from rich.markup import escape
 
 import surfaces.interactive_shell.command_registry.repl_data as repl_data
-from surfaces.interactive_shell.command_registry.cli_parity import run_cli_command
+from core.agent_harness.session.terminal_access import session_terminal
+from surfaces.interactive_shell.command_registry.cli_parity import (
+    publish_headless_slash_response,
+    run_cli_command,
+)
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui import (
@@ -257,6 +261,45 @@ def _render_integration_show(session: Session, console: Console, service: str) -
     return True
 
 
+def _run_integrations_setup(session: Session, console: Console, args: list[str]) -> bool:
+    headless = session_terminal(session) is None
+    if len(args) < 2:
+        # Bare setup delegates to the CLI service picker on the REPL; headless
+        # surfaces (Telegram) have no picker, so return usage guidance instead.
+        if not headless:
+            result = run_cli_command(console, ["integrations", "setup"])
+            session.refresh_integration_state()
+            return result
+        repl_print(console, f"[{DIM}]usage:[/] /integrations setup <service>")
+        publish_headless_slash_response(
+            session, message="Usage: /integrations setup <service>", ok=False
+        )
+        return True
+
+    service = args[1]
+    cli_cmd = " ".join(["uv run opensre integrations setup", service, *args[2:]]).strip()
+    if headless:
+        message = (
+            f"{escape(service)} setup needs interactive credentials (API keys, URLs, tokens) "
+            f"and cannot finish in Telegram.\n\n"
+            f"Run on the server:\n  {cli_cmd}\n\n"
+            "Then check status with `/integrations list` or "
+            f"`/integrations verify {escape(service)}`."
+        )
+        repl_print(console, message)
+        publish_headless_slash_response(session, message=message, ok=True)
+        session.refresh_integration_state()
+        return True
+
+    result = run_cli_command(
+        console,
+        ["integrations", "setup", service, *args[2:]],
+        session=session,
+    )
+    session.refresh_integration_state()
+    return result
+
+
 def _cmd_integrations(session: Session, console: Console, args: list[str]) -> bool:
     if not args and repl_tty_interactive():
         return _interactive_integrations_menu(session, console)
@@ -283,9 +326,7 @@ def _cmd_integrations(session: Session, console: Console, args: list[str]) -> bo
         return _run_verify(session, console, args[1] if len(args) == 2 else None)
 
     if sub == "setup":
-        result = run_cli_command(console, ["integrations", "setup", *args[1:]])
-        session.refresh_integration_state()
-        return result
+        return _run_integrations_setup(session, console, args)
 
     if sub == "remove":
         return _handle_remove(session, console, args[1] if len(args) > 1 else None)
@@ -367,9 +408,7 @@ def _cmd_mcp(session: Session, console: Console, args: list[str]) -> bool:
         return True
 
     if sub == "connect":
-        result = run_cli_command(console, ["integrations", "setup", *args[1:]])
-        session.refresh_integration_state()
-        return result
+        return _run_integrations_setup(session, console, ["setup", *args[1:]])
 
     if sub == "disconnect":
         return _handle_remove(session, console, args[1] if len(args) > 1 else None)

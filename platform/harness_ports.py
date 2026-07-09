@@ -1,7 +1,7 @@
 """Agent-harness ports — integrations, tools, and GitHub scope without tier violations.
 
-Adapters register at startup via
-:func:`surfaces.interactive_shell.ui.output.boundary.install_harness_ports`.
+Adapters register at startup via :func:`surfaces.interactive_shell.ui.output.boundary.install_harness_ports`
+(shell/tests) or the gateway boot path in :mod:`gateway.manager` (duplicate wiring).
 """
 
 from __future__ import annotations
@@ -12,12 +12,15 @@ import logging
 import os
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from config.strict_config import StrictConfigModel
 from core.tool_framework.registered_tool import RegisteredTool
+
+if TYPE_CHECKING:
+    from core.agent_harness.ports import ToolRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -294,50 +297,42 @@ def _strip_bearer(token: str) -> str:
 # Tool registry + investigation tools
 # ---------------------------------------------------------------------------
 
-SurfaceToolsFn = Callable[[str], list[RegisteredTool]]
-SurfaceToolMapFn = Callable[[str], dict[str, RegisteredTool]]
 InvestigationToolsFn = Callable[[dict[str, Any]], list[RegisteredTool]]
 
 
-def _default_surface_tools(_surface: str) -> list[RegisteredTool]:
-    return []
+class _EmptyToolRegistry:
+    """Default tool registry that resolves nothing until one is injected."""
 
+    def tools_for_surface(self, _surface: str) -> list[RegisteredTool]:
+        return []
 
-def _default_surface_tool_map(_surface: str) -> dict[str, RegisteredTool]:
-    return {}
+    def tool_map_for_surface(self, _surface: str) -> dict[str, RegisteredTool]:
+        return {}
 
 
 def _default_investigation_tools(_resolved: dict[str, Any]) -> list[RegisteredTool]:
     return []
 
 
-_get_surface_tools: SurfaceToolsFn = _default_surface_tools
-_get_surface_tool_map: SurfaceToolMapFn = _default_surface_tool_map
+_tool_registry: ToolRegistry = _EmptyToolRegistry()
 _get_investigation_tools: InvestigationToolsFn = _default_investigation_tools
 
 
 def get_surface_tools(surface: str) -> list[RegisteredTool]:
-    return _get_surface_tools(surface)
+    return _tool_registry.tools_for_surface(surface)
 
 
 def get_surface_tool_map(surface: str) -> dict[str, RegisteredTool]:
-    return _get_surface_tool_map(surface)
+    return _tool_registry.tool_map_for_surface(surface)
 
 
 def get_investigation_tools(resolved_integrations: dict[str, Any]) -> list[RegisteredTool]:
     return _get_investigation_tools(resolved_integrations)
 
 
-def set_tool_registry_adapters(
-    *,
-    get_surface_tools: SurfaceToolsFn | None = None,
-    get_surface_tool_map: SurfaceToolMapFn | None = None,
-) -> None:
-    global _get_surface_tools, _get_surface_tool_map
-    if get_surface_tools is not None:
-        _get_surface_tools = get_surface_tools
-    if get_surface_tool_map is not None:
-        _get_surface_tool_map = get_surface_tool_map
+def set_tool_registry(registry: ToolRegistry) -> None:
+    global _tool_registry
+    _tool_registry = registry
 
 
 def set_investigation_tools_adapter(
@@ -346,6 +341,63 @@ def set_investigation_tools_adapter(
     global _get_investigation_tools
     if get_investigation_tools is not None:
         _get_investigation_tools = get_investigation_tools
+
+
+# ---------------------------------------------------------------------------
+# CLI-backed LLM (integrations.llm_cli)
+# ---------------------------------------------------------------------------
+
+CliProviderRegistrationFn = Callable[[str], Any]
+BuildCliClientFn = Callable[..., Any]
+FlattenCliMessagesFn = Callable[[list[dict[str, Any]]], str]
+
+
+def _default_cli_provider_registration(_provider: str) -> Any:
+    return None
+
+
+def _cli_llm_backend_unavailable(*_args: Any, **_kwargs: Any) -> Any:
+    raise RuntimeError(
+        "CLI LLM backend is not registered — call install_harness_ports() at startup."
+    )
+
+
+_cli_provider_registration_fn: CliProviderRegistrationFn = _default_cli_provider_registration
+_build_cli_client_fn: BuildCliClientFn = _cli_llm_backend_unavailable
+_flatten_cli_messages_fn: FlattenCliMessagesFn = _cli_llm_backend_unavailable
+
+
+def cli_provider_registration(provider: str) -> Any:
+    return _cli_provider_registration_fn(provider)
+
+
+def build_cli_client(
+    adapter: Any,
+    *,
+    model: str | None = None,
+    max_tokens: int | None = None,
+    model_type: Any = None,
+) -> Any:
+    return _build_cli_client_fn(adapter, model=model, max_tokens=max_tokens, model_type=model_type)
+
+
+def flatten_cli_messages_to_prompt(messages: list[dict[str, Any]]) -> str:
+    return _flatten_cli_messages_fn(messages)
+
+
+def set_cli_llm_adapters(
+    *,
+    cli_provider_registration: CliProviderRegistrationFn | None = None,
+    build_cli_client: BuildCliClientFn | None = None,
+    flatten_cli_messages: FlattenCliMessagesFn | None = None,
+) -> None:
+    global _cli_provider_registration_fn, _build_cli_client_fn, _flatten_cli_messages_fn
+    if cli_provider_registration is not None:
+        _cli_provider_registration_fn = cli_provider_registration
+    if build_cli_client is not None:
+        _build_cli_client_fn = build_cli_client
+    if flatten_cli_messages is not None:
+        _flatten_cli_messages_fn = flatten_cli_messages
 
 
 # ---------------------------------------------------------------------------
@@ -433,11 +485,13 @@ def reset_harness_ports() -> None:
         merge_integrations_by_service=_default_merge_by_service,
         configured_services=_default_configured_services,
     )
-    set_tool_registry_adapters(
-        get_surface_tools=_default_surface_tools,
-        get_surface_tool_map=_default_surface_tool_map,
-    )
+    set_tool_registry(_EmptyToolRegistry())
     set_investigation_tools_adapter(get_investigation_tools=_default_investigation_tools)
+    set_cli_llm_adapters(
+        cli_provider_registration=_default_cli_provider_registration,
+        build_cli_client=_cli_llm_backend_unavailable,
+        flatten_cli_messages=_cli_llm_backend_unavailable,
+    )
     set_github_repo_scope_adapters(
         infer_scope=_default_infer_github_scope,
         apply_scope=_default_apply_github_scope,

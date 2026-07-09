@@ -619,13 +619,13 @@ class CLIBackedAgentClient:
     )
 
     def __init__(self, adapter: Any, *, model: str | None = None) -> None:
-        from integrations.llm_cli.runner import CLIBackedLLMClient
+        from platform.harness_ports import build_cli_client
 
         self._adapter = adapter
         self._model = model
-        # Reuse one subprocess client so the 45s probe cache in CLIBackedLLMClient
-        # applies across ReAct iterations instead of re-probing every invoke.
-        self._cli_client = CLIBackedLLMClient(adapter, model=self._model)
+        # Reuse one client so any probe cache in the CLI backend applies across
+        # ReAct iterations instead of re-probing every invoke.
+        self._cli_client = build_cli_client(adapter, model=self._model)
 
     @property
     def model_id(self) -> str | None:
@@ -645,7 +645,7 @@ class CLIBackedAgentClient:
         system: str | None = None,
         tools: list[dict[str, Any]] | None = None,
     ) -> AgentLLMResponse:
-        from integrations.llm_cli.text import flatten_messages_to_prompt
+        from platform.harness_ports import flatten_cli_messages_to_prompt
 
         tool_block = ""
         if tools:
@@ -654,7 +654,7 @@ class CLIBackedAgentClient:
 
         system_block = f"System: {system}\n" if system else ""
         instruction = self._TOOL_CALL_INSTRUCTION + tool_block
-        prompt = f"{system_block}{instruction}\n\n{flatten_messages_to_prompt(messages)}"
+        prompt = f"{system_block}{instruction}\n\n{flatten_cli_messages_to_prompt(messages)}"
 
         response = self._cli_client.invoke(prompt)
         text = response.content.strip()

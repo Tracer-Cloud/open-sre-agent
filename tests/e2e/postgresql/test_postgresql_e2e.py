@@ -199,7 +199,7 @@ class TestPostgreSQLToolsAvailability:
 
     def test_postgresql_integration_config_has_required_fields(self):
         """PostgreSQL integration provides required fields in resolved config."""
-        from integrations.models import PostgreSQLIntegrationConfig
+        from integrations.config_models import PostgreSQLIntegrationConfig
 
         config = PostgreSQLIntegrationConfig(
             host="localhost",

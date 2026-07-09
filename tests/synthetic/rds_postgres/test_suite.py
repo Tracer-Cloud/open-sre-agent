@@ -7,13 +7,14 @@ from pathlib import Path
 import pytest
 
 from config.config import has_credentials_for_active_llm_provider
-from tests.synthetic.rds_postgres.run_suite import run_scenario, score_result
+from tests.synthetic.rds_postgres.run_suite import run_scenario
 from tests.synthetic.rds_postgres.scenario_loader import (
     SUITE_DIR,
     GoldenTrajectoryConfig,
     load_all_scenarios,
     load_scenario,
 )
+from tests.synthetic.rds_postgres.scoring import score_result
 from tests.synthetic.schemas import VALID_EVIDENCE_SOURCES
 
 

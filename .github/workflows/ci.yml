@@ -97,7 +97,7 @@ jobs:
         run: uv run python -m mypy $PYTHON_SOURCE_PATHS
 
       - name: Import graph
-        run: uv run python .github/ci/check_imports.py
+        run: uv run python .github/ci/check_imports.py --strict
 
   test:
     name: test (${{ matrix.shard }})
@@ -175,7 +175,7 @@ jobs:
               tests/test_state.py
               tests/test_upstream_correlation_provider.py
               tests/test_version.py
-              tests/test_webapp.py
+              gateway/tests
           - os: ubuntu-latest
             shard: e2e-general
             pytest_paths: >-

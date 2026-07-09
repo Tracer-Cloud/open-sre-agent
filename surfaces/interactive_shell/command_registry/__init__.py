@@ -10,6 +10,7 @@ from typing import Any
 
 from rich.console import Console
 
+from core.agent_harness.session.terminal_access import pop_turn_outcome_hint, session_terminal
 from surfaces.interactive_shell.command_registry.agents import COMMANDS as AGENTS_COMMANDS
 from surfaces.interactive_shell.command_registry.alerts import COMMANDS as ALERTS_COMMANDS
 from surfaces.interactive_shell.command_registry.background_cmds import (
@@ -20,6 +21,9 @@ from surfaces.interactive_shell.command_registry.cli_parity import (
 )
 from surfaces.interactive_shell.command_registry.diagnostics_cmds import (
     COMMANDS as DIAGNOSTICS_COMMANDS,
+)
+from surfaces.interactive_shell.command_registry.gateway_cmds import (
+    COMMANDS as GATEWAY_COMMANDS,
 )
 from surfaces.interactive_shell.command_registry.help import COMMANDS as HELP_COMMANDS
 from surfaces.interactive_shell.command_registry.integrations import (
@@ -79,6 +83,7 @@ _MERGED_SEQUENCE = tuple(
         RCA_COMMANDS,
         TASK_COMMANDS,
         WATCH_COMMANDS,
+        GATEWAY_COMMANDS,
         PRIVACY_COMMANDS,
         AGENTS_COMMANDS,
         ALERTS_COMMANDS,
@@ -125,7 +130,8 @@ def _attach_slash_analytics(
             kind="slash",
             ok=ok,
             captured_output=captured_output,
-            outcome_hint=session.terminal.pop_turn_outcome_hint(),
+            outcome_hint=pop_turn_outcome_hint(session),
+            include_captured_on_summary_only=session_terminal(session) is None,
         )
     session.complete_latest_record(
         "slash",

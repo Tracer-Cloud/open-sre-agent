@@ -62,7 +62,7 @@ class PromptManager:
 
         self.pt_app = self.pt_session.app
         self.loop = asyncio.get_running_loop()
-        self.session.terminal.pt_style_app = self.pt_app
+        self.session.terminal.prompt_app = self.pt_app
         self.session.terminal.main_loop = self.loop
         self.state.bind_loop(self.loop)
         self._invalidate_prompt = wire_prompt_refresh(self.session, self.pt_app, self.loop)

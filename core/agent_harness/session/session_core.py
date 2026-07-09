@@ -16,13 +16,13 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from core.agent_harness.grounding.context import GroundingContext
-    from core.agent_harness.integrations.resolution import IntegrationResolutionResult
+    from core.agent_harness.session.integration_resolution import IntegrationResolutionResult
 else:
     GroundingContext = Any
 
 from config.llm_reasoning_effort import ReasoningEffortChoice
 from core.agent_harness.accounting.token_usage import TokenUsage
-from core.agent_harness.session.integration_state import IntegrationState
+from core.agent_harness.session.integration_resolution import IntegrationState
 from core.agent_harness.session.persistence.jsonl_storage import JsonlSessionStorage
 from core.agent_harness.session.persistence.ports import SessionStorage
 from core.state import MutableAgentState

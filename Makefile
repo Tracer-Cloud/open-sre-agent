@@ -273,7 +273,7 @@ run:
 	opensre investigate
 
 dev:
-	@echo "Run the health app with: uv run uvicorn config.webapp:app --reload --host 0.0.0.0 --port 8000"
+	@echo "Run the health app with: uv run uvicorn gateway.webapp:app --reload --host 0.0.0.0 --port 8000"
 
 docs-dev:
 	cd docs && mint dev

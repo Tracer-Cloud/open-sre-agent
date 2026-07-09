@@ -8,11 +8,11 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
+from integrations.config_models import CoralogixIntegrationConfig
 from integrations.coralogix.client import (
     CoralogixClient,
     build_coralogix_logs_query,
 )
-from integrations.models import CoralogixIntegrationConfig
 
 # -------------------------
 # Fixtures

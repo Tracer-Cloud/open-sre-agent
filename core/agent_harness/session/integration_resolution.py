@@ -1,11 +1,13 @@
-"""Per-session integration-resolution state and the logic that warms it.
+"""Per-session integration state, cache helpers, and turn-time resolution.
 
-Groups the integration concern that ``SessionCore`` used to carry inline: the
-configured integration names, the resolved-config cache, the GitHub repo scope,
-and the background warm task (with its generation guard). ``SessionCore`` composes
-this as ``session.integrations`` and re-exposes the public fields through properties
-for API stability, so this module is the single owner of the coupling to the
-``integrations`` domain.
+Owns everything session-scoped for integration discovery: configured service
+names, the resolved-config cache, GitHub repo scope, background warm tasks, and
+``resolve_and_cache_integrations`` for the turn engine.
+
+``SessionCore`` composes :class:`IntegrationState` as ``session.integrations`` and
+re-exposes public fields via properties for API stability. Port-level fetch/classify
+logic lives in :mod:`platform.harness_ports` (wired at startup from
+``integrations/harness_adapters``).
 """
 
 from __future__ import annotations
@@ -14,14 +16,76 @@ import threading
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from core.agent_harness.integrations.resolution_cache import (
-    has_only_runtime_metadata,
-    has_resolved_integrations,
-    merge_resolved_integrations,
+from platform.harness_ports import (
+    IntegrationResolutionResult,
+    resolve_integrations,
 )
 
 if TYPE_CHECKING:
-    from core.agent_harness.integrations.resolution import IntegrationResolutionResult
+    from core.agent_harness.ports import SessionStore
+
+__all__ = [
+    "IntegrationResolutionResult",
+    "IntegrationState",
+    "has_only_runtime_metadata",
+    "has_resolved_integrations",
+    "merge_resolved_integrations",
+    "resolve_and_cache_integrations",
+    "resolve_integrations",
+]
+
+
+# ---------------------------------------------------------------------------
+# Cache helpers (shared by IntegrationState and resolve_and_cache_integrations)
+# ---------------------------------------------------------------------------
+
+
+def has_resolved_integrations(cache: dict[str, Any] | None) -> bool:
+    """Return True when the cache holds at least one integration config."""
+    if not cache:
+        return False
+    return any(not str(key).startswith("_") for key in cache)
+
+
+def has_only_runtime_metadata(cache: dict[str, Any] | None) -> bool:
+    """Return True when the cache holds only runtime metadata keys."""
+    if not cache:
+        return False
+    return all(str(key).startswith("_") for key in cache)
+
+
+def merge_resolved_integrations(
+    base: dict[str, Any] | None,
+    updates: dict[str, Any],
+) -> dict[str, Any]:
+    """Merge integration configs while preserving gateway/runtime metadata keys."""
+    merged = dict(base or {})
+    merged.update(updates)
+    return merged
+
+
+def _has_usable_cache(cache: dict[str, Any] | None) -> bool:
+    """True when a cache holds resolved configs and need not be re-resolved."""
+    return cache is not None and (
+        has_resolved_integrations(cache) or not has_only_runtime_metadata(cache)
+    )
+
+
+def resolve_and_cache_integrations(session: SessionStore) -> dict[str, Any]:
+    """Resolve a session's integration configs, using and updating its cache."""
+    cached = session.resolved_integrations_cache
+    if _has_usable_cache(cached):
+        return dict(cached or {})
+
+    resolved = resolve_integrations()
+    if resolved:
+        session.resolved_integrations_cache = merge_resolved_integrations(cached, resolved)
+    return dict(session.resolved_integrations_cache or {})
+
+
+# ---------------------------------------------------------------------------
+# Session integration facet
+# ---------------------------------------------------------------------------
 
 
 @dataclass
@@ -76,8 +140,6 @@ class IntegrationState:
             with self._warm_lock:
                 generation = self._warm_generation
         try:
-            from core.agent_harness.integrations.resolution import resolve_integrations
-
             resolved = resolve_integrations()
         except Exception:
             # Best-effort warmup: leave cache unset so later turns can retry.
@@ -102,13 +164,9 @@ class IntegrationState:
         An explicit empty cache is treated as known state; metadata-only caches
         trigger one quiet warmup, merged through the same generation guard as startup.
         """
-        from core.agent_harness.integrations.resolution import IntegrationResolutionResult
-
         cached = self.resolved_cache
-        if cached is not None and (
-            has_resolved_integrations(cached) or not has_only_runtime_metadata(cached)
-        ):
-            return IntegrationResolutionResult(resolved_integrations=dict(cached))
+        if _has_usable_cache(cached):
+            return IntegrationResolutionResult(resolved_integrations=dict(cached or {}))
         self.warm()
         return IntegrationResolutionResult(resolved_integrations=dict(self.resolved_cache or {}))
 

@@ -21,8 +21,6 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from config.llm_reasoning_effort import apply_reasoning_effort
-from core.agent_harness.models.turn_results import ShellTurnResult, ToolCallingTurnResult
-from core.agent_harness.models.turn_snapshot import TurnSnapshot
 from core.agent_harness.ports import (
     ConfirmFn,
     ErrorReporter,
@@ -38,8 +36,11 @@ from core.agent_harness.ports import (
 )
 from core.agent_harness.prompts import build_cli_agent_prompt_from_provider
 from core.agent_harness.prompts.conversation_memory import MAX_CONVERSATION_MESSAGES
+from core.agent_harness.session.terminal_access import agent_turn_executed_slashes
 from core.agent_harness.turns.transcript_compaction import auto_compact_if_needed
 from core.agent_harness.turns.turn_plan import TurnPlan, build_turn_plan
+from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
+from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 from core.llm_invoke_errors import is_cli_timeout_error
 
 _ASSISTANT_LABEL = "assistant"
@@ -189,6 +190,7 @@ class TurnRoutingInput:
     action_handled: bool
     executed_success_count: int
     has_observation: bool
+    investigation_dispatched: bool = False
 
 
 @dataclass(frozen=True)
@@ -211,6 +213,14 @@ def _route_turn(
 ) -> TurnRoute:
     """Decide the turn path from routing facts (pure)."""
     if (
+        routing.investigation_dispatched
+        and routing.action_handled
+        and not _is_literal_slash_command(user_text)
+    ):
+        if routing.has_observation and routing.executed_success_count > 0:
+            return TurnRoute(intent="summarize_observation")
+        return TurnRoute(intent="handled_without_llm")
+    if (
         routing.action_handled
         and routing.has_observation
         and routing.executed_success_count > 0
@@ -229,6 +239,7 @@ def _routing_input_from_result(
         action_handled=action_result.handled,
         executed_success_count=action_result.executed_success_count,
         has_observation=observation is not None,
+        investigation_dispatched=action_result.investigation_dispatched,
     )
 
 
@@ -302,11 +313,7 @@ def run_turn(
     # Clear any observation left by a prior turn so only this turn's discovery
     # output can trigger a summary pass.
     session.last_command_observation = None
-    # Slash dedup lives on the shell terminal facet; non-shell sessions have none.
-    terminal = getattr(session, "terminal", None)
-    executed_slashes = getattr(terminal, "agent_turn_executed_slashes", None)
-    if executed_slashes is not None:
-        executed_slashes.clear()
+    agent_turn_executed_slashes(session).clear()
 
     action_result = execute_actions(
         text,

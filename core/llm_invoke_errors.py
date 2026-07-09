@@ -63,18 +63,17 @@ def _looks_like_timeout(exc: BaseException) -> bool:
     return False
 
 
-def is_cli_timeout_error(exc: BaseException) -> bool:
-    """Return True when *exc* is a CLI subprocess timeout (expected on slow turns).
-
-    Uses duck typing so callers in ``core/agent_harness`` need not import
-    ``integrations.llm_cli`` (T-13). ``classify_llm_invoke_failure`` below
-    still imports ``CLITimeoutError`` directly (T-4 debt; baselined in
-    ``.importlinter.strict``).
-    """
+def _is_llm_cli_error(exc: BaseException, class_name: str) -> bool:
+    """True when *exc* is ``integrations.llm_cli.errors.<class_name>`` (matched by name)."""
     exc_type = type(exc)
-    return exc_type.__name__ == "CLITimeoutError" and exc_type.__module__.endswith(
+    return exc_type.__name__ == class_name and exc_type.__module__.endswith(
         "integrations.llm_cli.errors"
     )
+
+
+def is_cli_timeout_error(exc: BaseException) -> bool:
+    """Return True when *exc* is a CLI subprocess timeout (expected on slow turns)."""
+    return _is_llm_cli_error(exc, "CLITimeoutError")
 
 
 def classify_llm_invoke_failure(exc: BaseException) -> LLMInvokeFailure | None:
@@ -86,11 +85,6 @@ def classify_llm_invoke_failure(exc: BaseException) -> LLMInvokeFailure | None:
     on, not wrap into a degraded result.
     """
     from core.llm.shared.llm_retry import LLMCreditExhaustedError
-    from integrations.llm_cli.errors import (
-        CLIAuthenticationRequired,
-        CLIInterruptedError,
-        CLITimeoutError,
-    )
 
     # Fatal — propagate to the runner / operator. Do NOT wrap into the
     # generic "rate-limited" classification (which the text branch below
@@ -98,21 +92,26 @@ def classify_llm_invoke_failure(exc: BaseException) -> LLMInvokeFailure | None:
     if isinstance(exc, LLMCreditExhaustedError):
         return None
 
-    if isinstance(exc, CLIAuthenticationRequired):
+    if _is_llm_cli_error(exc, "CLIAuthenticationRequired"):
+        provider = getattr(exc, "provider", None) or "unknown"
         return LLMInvokeFailure(
             user_message=(
-                f"The {exc.provider} CLI is not authenticated, so the investigation "
-                "could not call the model."
+                f"The {provider} CLI is not authenticated, so the "
+                "investigation could not call the model."
             ),
             tracker_message="Failed: CLI not authenticated",
             remediation_steps=[
-                exc.auth_hint,
-                exc.detail,
-                "Run `opensre doctor` to verify CLI installation and auth.",
+                step
+                for step in (
+                    getattr(exc, "auth_hint", None),
+                    getattr(exc, "detail", None),
+                    "Run `opensre doctor` to verify CLI installation and auth.",
+                )
+                if step
             ],
         )
 
-    if isinstance(exc, CLITimeoutError):
+    if is_cli_timeout_error(exc):
         detail = str(exc).strip() or "The CLI subprocess exceeded its time limit."
         return LLMInvokeFailure(
             user_message=f"Investigation stopped: {detail}",
@@ -121,7 +120,7 @@ def classify_llm_invoke_failure(exc: BaseException) -> LLMInvokeFailure | None:
             root_cause_category="Investigation Error",
         )
 
-    if isinstance(exc, CLIInterruptedError):
+    if _is_llm_cli_error(exc, "CLIInterruptedError"):
         return LLMInvokeFailure(
             user_message="Investigation was interrupted while waiting for the LLM CLI.",
             tracker_message="Failed: LLM interrupted",

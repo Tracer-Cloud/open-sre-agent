@@ -10,12 +10,13 @@ from collections.abc import Callable
 
 from rich.console import Console
 
-from core.agent_harness.models.turn_results import ToolCallingTurnResult
+from core.agent_harness.error_reporting import DefaultErrorReporter
+from core.agent_harness.llm_resolution import default_llm_factory
 from core.agent_harness.ports import OutputSink
-from core.agent_harness.providers.default_providers import DefaultErrorReporter, DefaultToolProvider
-from core.agent_harness.providers.provider_models import default_llm_factory
+from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.action_driver import ToolCallingDeps, run_action_agent_turn
 from core.agent_harness.turns.turn_plan import TurnPlan
+from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 from core.execution import ToolExecutionHooks
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS
 from surfaces.interactive_shell.command_registry.suggestions import resolve_literal_slash_typo

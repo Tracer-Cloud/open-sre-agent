@@ -13,7 +13,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Sequence
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
-from core.agent_harness.models.turn_results import ShellTurnResult, ToolCallingTurnResult
+from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
 
 if TYPE_CHECKING:
     pass
@@ -56,7 +56,7 @@ class SessionStore(Protocol):
     action driver, the three-path engine, and the gather loop touch.
     """
 
-    # --- turn-context snapshot fields (see core.agent_harness.models.turn_snapshot.TurnSnapshotSource) ---
+    # --- turn-context snapshot fields (see core.agent_harness.turns.turn_snapshot.TurnSnapshotSource) ---
     cli_agent_messages: list[tuple[str, str]]
     configured_integrations_known: bool
 
@@ -106,6 +106,17 @@ class ToolProvider(Protocol):
 
     def observer(self, *, message: str) -> ToolEventObserver:
         """Return a tool-event observer for this turn (e.g. terminal renderer)."""
+
+
+@runtime_checkable
+class ToolRegistry(Protocol):
+    """Resolves the registered tools available to a named surface."""
+
+    def tools_for_surface(self, surface: str) -> list[Any]:
+        """Return the registered tools for ``surface`` (e.g. ``"action"``)."""
+
+    def tool_map_for_surface(self, surface: str) -> dict[str, Any]:
+        """Return the registered tools for ``surface`` keyed by tool name."""
 
 
 @runtime_checkable
@@ -197,5 +208,6 @@ __all__ = [
     "SessionStore",
     "ToolEventObserver",
     "ToolProvider",
+    "ToolRegistry",
     "TurnAccounting",
 ]

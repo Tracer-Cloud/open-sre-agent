@@ -424,7 +424,7 @@ def _assert_live_action_planning_once(case: ScenarioCase) -> None:
     from core.llm.factory import LLMRole, get_llm
 
     llm = get_llm(LLMRole.AGENT)
-    from core.agent_harness.models.turn_snapshot import TurnSnapshot
+    from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 
     result = Agent(
         llm=llm,

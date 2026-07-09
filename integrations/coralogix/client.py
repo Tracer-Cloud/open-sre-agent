@@ -9,7 +9,7 @@ from typing import Any
 
 import httpx
 
-from integrations.models import CoralogixIntegrationConfig
+from integrations.config_models import CoralogixIntegrationConfig
 from integrations.probes import ProbeResult
 from platform.observability.service_errors import capture_service_error
 from platform.observability.streaming import StreamingParseStats

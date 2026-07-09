@@ -11,7 +11,12 @@ from __future__ import annotations
 
 
 def install_harness_ports() -> None:
-    """Register integrations/tools adapters into :mod:`platform.harness_ports`."""
+    """Register integrations/tools adapters into :mod:`platform.harness_ports`.
+
+    Harness composition root for the interactive shell and tests. Lives in
+    ``surfaces`` (not ``tools``) because ``tools`` and ``integrations`` are
+    sibling layers and must not import each other — see ``.importlinter.strict``.
+    """
     from integrations.harness_adapters import register_harness_adapters as register_integrations
     from tools.harness_adapters import register_harness_adapters as register_tools
 

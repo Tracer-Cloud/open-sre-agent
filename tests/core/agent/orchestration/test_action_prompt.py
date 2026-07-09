@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from core.agent_harness.models.turn_snapshot import TurnSnapshot
 from core.agent_harness.prompts import (
     _SYSTEM_PROMPT_BASE,
     build_action_system_prompt,
@@ -18,6 +17,7 @@ from core.agent_harness.prompts.skills_loader import (
     load_skills_block,
     skills_dir,
 )
+from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 
 
 def _ctx(

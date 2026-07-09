@@ -29,7 +29,7 @@ from core.provider import ProviderHooks, ProviderRequest
 from core.types import RuntimeTool
 
 if TYPE_CHECKING:
-    from core.agent_harness.models.turn_snapshot import AgentRuntimeRequest
+    from core.agent_harness.turns.turn_snapshot import AgentRuntimeRequest
 
 
 class Agent[RuntimeToolT: RuntimeTool](EventEmitterMixin, ToolFilterMixin, SteeringMixin):

@@ -28,7 +28,7 @@ Example::
 
 from __future__ import annotations
 
-from core.agent_harness.models.turn_results import ShellTurnResult, ToolCallingTurnResult
+from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
 from core.agent_harness.ports import (
     ConfirmFn,
     ErrorReporter,
@@ -40,11 +40,10 @@ from core.agent_harness.ports import (
     ToolProvider,
     TurnAccounting,
 )
-from core.agent_harness.providers.default_prompt_context import (
+from core.agent_harness.prompts.prompt_context import (
     DefaultPromptContextProvider,
     supports_default_prompt_context,
 )
-from core.agent_harness.providers.default_providers import DefaultTurnAccounting
 from core.agent_harness.turns.action_driver import run_action_agent_turn
 from core.agent_harness.turns.evidence_driver import gather_tool_evidence
 from core.agent_harness.turns.headless_adapters import (
@@ -60,6 +59,7 @@ from core.agent_harness.turns.headless_adapters import (
 )
 from core.agent_harness.turns.orchestrator import run_turn, stream_answer
 from core.agent_harness.turns.turn_plan import TurnPlan
+from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
 from core.execution import ToolExecutionHooks
 
 

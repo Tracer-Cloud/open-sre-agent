@@ -46,8 +46,8 @@ only in *how they receive input and send output* — never in how the agent thin
 # Allow your Telegram user id (from @userinfobot)
 uv run opensre messaging allow -p telegram -u 123456789
 
-# Run the gateway as a dedicated process
-uv run opensre gateway telegram
+# Start the gateway daemon (web app + Telegram chat + task scheduler)
+uv run opensre gateway start
 ```
 
 DM your bot from Telegram.

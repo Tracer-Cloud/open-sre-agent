@@ -32,13 +32,13 @@ from config.constants.prompts import SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TES
 from core.agent_harness.grounding.investigation_flow_reference import (
     build_investigation_flow_reference_text,
 )
-from core.agent_harness.models.turn_snapshot import TurnSnapshot
 from core.agent_harness.prompts import (
     build_action_system_prompt,
     build_action_user_message,
     build_cli_agent_prompt_from_provider,
     build_environment_block,
 )
+from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 
 _SNAPSHOT_PATH = Path(__file__).with_name("prompt_characterization_snapshot.json")
 

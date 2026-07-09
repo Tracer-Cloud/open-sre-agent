@@ -9,8 +9,7 @@ import pytest
 from rich.console import Console
 
 import tools.interactive_shell.actions.slash as slash_tool
-from core.agent_harness.models.turn_results import ToolCallingTurnResult
-from core.agent_harness.providers.default_providers import DefaultTurnAccounting
+from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
 from core.agent_harness.turns.action_driver import (
     ActionTurnPlan,
     ToolCallingDeps,
@@ -19,6 +18,7 @@ from core.agent_harness.turns.action_driver import (
     run_action_agent_turn,
 )
 from core.agent_harness.turns.orchestrator import run_turn
+from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 from core.tool_framework.registered_tool import RegisteredTool
 from surfaces.interactive_shell.runtime.action_turn import run_action_tool_turn
 from surfaces.interactive_shell.session import Session
@@ -287,6 +287,22 @@ def test_route_handled_without_handoff_stays_action_only() -> None:
     assert route.intent == "handled_without_llm"
 
 
+def test_route_investigation_dispatch_skips_gather_even_with_handoff() -> None:
+    from core.agent_harness.turns.orchestrator import TurnRoutingInput, _route_turn
+
+    routing = TurnRoutingInput(
+        action_handled=True,
+        executed_success_count=1,
+        has_observation=False,
+        investigation_dispatched=True,
+    )
+    route = _route_turn(
+        routing,
+        handoff_contents=("chat:non_actionable_literal",),
+    )
+    assert route.intent == "handled_without_llm"
+
+
 def test_run_turn_passes_handoff_contents_to_assistant() -> None:
     captured: list[tuple[str, ...]] = []
 
@@ -446,8 +462,8 @@ def test_turn_resolved_integrations_trusts_plan_without_reresolving(
     """
     from dataclasses import replace
 
-    from core.agent_harness.models.turn_snapshot import TurnSnapshot
     from core.agent_harness.turns.turn_plan import TurnPlan
+    from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 
     def _must_not_run(_session: object) -> dict:
         raise AssertionError("must not re-resolve when the plan is present")

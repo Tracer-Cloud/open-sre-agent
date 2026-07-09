@@ -1,0 +1,148 @@
+name: Docker Publish
+
+on:
+  release:
+    types: [published]
+  schedule:
+    - cron: "30 2 * * *"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to build (e.g. v0.1.2026.7.8). Defaults to the latest release."
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: docker-publish
+  cancel-in-progress: false
+
+jobs:
+  build-and-push:
+    if: github.repository == 'Tracer-Cloud/opensre'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve release tag and image tags
+        id: meta
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
+          DISPATCH_TAG: ${{ inputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          latest_tag="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name)"
+
+          case "$EVENT_NAME" in
+            release)
+              if [ "$RELEASE_PRERELEASE" = "true" ]; then
+                echo "Skipping prerelease $RELEASE_TAG (rolling main builds are not published to GHCR)."
+                echo "build=false" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+              tag="$RELEASE_TAG"
+              ;;
+            workflow_dispatch)
+              tag="${DISPATCH_TAG:-$latest_tag}"
+              gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null
+              ;;
+            *)
+              tag="$latest_tag"
+              ;;
+          esac
+
+          version="${tag#v}"
+
+          # The scheduled run rebuilds the newest release; skip it when that
+          # version is already in the registry (e.g. the release event or a
+          # dispatch already published it).
+          if [ "$EVENT_NAME" = "schedule" ] \
+            && docker manifest inspect "${image}:${version}" >/dev/null 2>&1; then
+            echo "Image ${image}:${version} already published; nothing to do."
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          tags="${image}:${version}"
+          if [ "$tag" = "$latest_tag" ]; then
+            tags="${tags}"$'\n'"${image}:latest"
+          else
+            echo "Tag $tag is older than latest release $latest_tag; not moving :latest."
+          fi
+
+          {
+            echo "build=true"
+            echo "tag=${tag}"
+            echo "version=${version}"
+            echo "image=${image}"
+            echo "tags<<EOF"
+            echo "$tags"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v5
+        if: steps.meta.outputs.build == 'true'
+        with:
+          ref: ${{ steps.meta.outputs.tag }}
+
+      - name: Sync release version into pyproject.toml
+        if: steps.meta.outputs.build == 'true'
+        shell: bash
+        run: python3 platform/packaging/sync_release_version.py --tag "${{ steps.meta.outputs.tag }}"
+
+      - name: Set up QEMU
+        if: steps.meta.outputs.build == 'true'
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        if: steps.meta.outputs.build == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image
+        if: steps.meta.outputs.build == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: |
+            org.opencontainers.image.title=opensre
+            org.opencontainers.image.description=OpenSRE unified image (MODE=web FastAPI health app, MODE=gateway Telegram gateway)
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.meta.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke test published image
+        if: steps.meta.outputs.build == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          image="${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}"
+          docker pull "$image"
+          version_output="$(docker run --rm --entrypoint opensre "$image" --version)"
+          printf '%s\n' "$version_output"
+          case "$version_output" in
+            *"${{ steps.meta.outputs.version }}"*) ;;
+            *)
+              echo "Image version mismatch: expected ${{ steps.meta.outputs.version }}" >&2
+              exit 1
+              ;;
+          esac

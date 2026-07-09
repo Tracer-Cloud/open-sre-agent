@@ -402,6 +402,16 @@ def get_registered_tool_map(surface: ToolSurface | None = None) -> dict[str, Reg
     return {tool.name: tool for tool in get_registered_tools(surface)}
 
 
+class RegisteredToolRegistry:
+    """:class:`~core.agent_harness.ports.ToolRegistry` backed by discovered tool packages."""
+
+    def tools_for_surface(self, surface: str) -> list[RegisteredTool]:
+        return get_registered_tools(surface)  # type: ignore[arg-type]
+
+    def tool_map_for_surface(self, surface: str) -> dict[str, RegisteredTool]:
+        return get_registered_tool_map(surface)  # type: ignore[arg-type]
+
+
 def resolve_tool_display_name(tool_name: str) -> str:
     """Return a human-friendly label for a tool name."""
     tool = _load_registry_tool_map().get(tool_name)

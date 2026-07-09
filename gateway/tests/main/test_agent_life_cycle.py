@@ -21,23 +21,32 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-from core.agent_harness.models.turn_results import ShellTurnResult, ToolCallingTurnResult
-from core.agent_harness.providers.default_prompt_context import DefaultPromptContextProvider
-from core.agent_harness.providers.default_providers import (
-    DefaultErrorReporter,
-    DefaultReasoningClientProvider,
-    DefaultRunRecordFactory,
-    DefaultToolProvider,
-    DefaultTurnAccounting,
-)
+from core.agent_harness.accounting.run_record import DefaultRunRecordFactory
+from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
+from core.agent_harness.error_reporting import DefaultErrorReporter
+from core.agent_harness.prompts.prompt_context import DefaultPromptContextProvider
 from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStorage
-from gateway.config.get_gateway_settings import GatewaySettings, TelegramInboundMessage
+from core.agent_harness.tools.tool_provider import DefaultToolProvider
+from core.agent_harness.turns.default_reasoning_client import DefaultReasoningClientProvider
+from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
+from gateway.config.get_gateway_settings import (
+    GatewayConfigurationError,
+    GatewaySettings,
+    TelegramInboundMessage,
+)
 from gateway.manager import GatewayManager, start_gateway
 from gateway.polling.handle_polled_inbound_telegram_msg import (
     handle_polled_inbound_telegram_message,
 )
-from gateway.session.enforce_inbound_telegram_message_security import InboundDecision
+from gateway.session.inbound_message_security import InboundDecision
+
+
+def _patch_non_telegram_components(monkeypatch) -> None:
+    """Keep lifecycle tests focused on the Telegram worker: skip web/scheduler/pidfile."""
+    monkeypatch.setattr(GatewayManager, "_start_web", lambda *_args: None)
+    monkeypatch.setattr(GatewayManager, "_start_scheduler", lambda *_args: None)
+    monkeypatch.setattr(GatewayManager, "_publish_status", lambda *_args: None)
 
 
 def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
@@ -50,6 +59,7 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
 
     monkeypatch.setattr("core.agent_harness.harness.load_dotenv", lambda **_kwargs: None)
     monkeypatch.setattr("gateway.manager.configure_gateway_logging", lambda: logger)
+    _patch_non_telegram_components(monkeypatch)
     monkeypatch.setattr("gateway.telegram_gateway.load_gateway_settings", lambda: settings)
     monkeypatch.setattr(
         "gateway.manager.signal.signal",
@@ -150,6 +160,7 @@ def test_polled_telegram_message_reaches_start_gateway_agent_callback(monkeypatc
 
     monkeypatch.setattr("core.agent_harness.harness.load_dotenv", lambda **_kwargs: None)
     monkeypatch.setattr("gateway.manager.configure_gateway_logging", lambda: logger)
+    _patch_non_telegram_components(monkeypatch)
     monkeypatch.setattr("gateway.telegram_gateway.load_gateway_settings", lambda: settings)
     monkeypatch.setattr("gateway.manager.signal.signal", lambda *_args: None)
 
@@ -199,6 +210,27 @@ def test_polled_telegram_message_reaches_start_gateway_agent_callback(monkeypatc
     asyncio.run(_run_message())
     # Typing fires at sink creation and again on each status refresh.
     client.send_chat_action.assert_called_with("chat-1", "typing")
+
+
+def test_gateway_start_continues_without_telegram_configuration(monkeypatch) -> None:
+    """The unified daemon keeps its other components when Telegram is unconfigured."""
+    logger = logging.getLogger("gateway.lifecycle.test")
+    monkeypatch.setattr("core.agent_harness.harness.load_dotenv", lambda **_kwargs: None)
+    monkeypatch.setattr("gateway.manager.configure_gateway_logging", lambda: logger)
+    monkeypatch.setattr("gateway.manager.signal.signal", lambda *_args: None)
+    monkeypatch.setattr("gateway.manager.clear_component_status", lambda: None)
+    _patch_non_telegram_components(monkeypatch)
+
+    def _unconfigured() -> GatewaySettings:
+        raise GatewayConfigurationError("TELEGRAM_BOT_TOKEN is not set")
+
+    monkeypatch.setattr("gateway.telegram_gateway.load_gateway_settings", _unconfigured)
+
+    gateway = GatewayManager().start_gateway(wait=False)
+
+    assert gateway.telegram_background_worker is None
+    assert gateway.components["telegram"].startswith("not configured")
+    assert gateway.stop() is True
 
 
 def test_start_gateway_wrapper_delegates_to_gateway_instance(monkeypatch) -> None:

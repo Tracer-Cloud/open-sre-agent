@@ -8,9 +8,9 @@ from unittest.mock import MagicMock
 
 from rich.console import Console
 
-from core.agent_harness.models.turn_results import ShellTurnResult, ToolCallingTurnResult
 from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStorage
+from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
 from gateway.turn_handler import GatewayTurnHandler
 
 
@@ -44,7 +44,7 @@ def test_turn_handler_resolves_action_tools_from_live_session(monkeypatch: Any) 
         return [MagicMock(name="slack_send_message")]
 
     monkeypatch.setattr(
-        "core.agent_harness.providers.default_providers.get_action_tools_from_integrations_context",
+        "core.agent_harness.tools.tool_provider.get_action_tools_from_integrations_context",
         _fake_get_tools,
     )
 

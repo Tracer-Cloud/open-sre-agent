@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from core.agent_harness.providers.provider_models import resolve_provider_models
+from core.agent_harness.llm_resolution import resolve_provider_models
 from surfaces.interactive_shell.ui.tables import provider as ui_provider
 
 

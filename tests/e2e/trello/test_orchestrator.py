@@ -32,7 +32,7 @@ def test_trello_validation_and_card_creation_e2e(monkeypatch: pytest.MonkeyPatch
 
         raise AssertionError(f"Unexpected request: {method} {path}")
 
-    monkeypatch.setattr("integrations.trello.config._request_json", fake_request_json)
+    monkeypatch.setattr("integrations.trello.client._request_json", fake_request_json)
 
     validation = validate_trello_config(config)
     assert validation.ok is True
@@ -70,7 +70,7 @@ def test_trello_validation_failure_e2e(monkeypatch: pytest.MonkeyPatch) -> None:
             )
         raise AssertionError(f"Unexpected request: {method} {path}")
 
-    monkeypatch.setattr("integrations.trello.config._request_json", fake_request_json)
+    monkeypatch.setattr("integrations.trello.client._request_json", fake_request_json)
 
     validation = validate_trello_config(config)
     assert validation.ok is False
