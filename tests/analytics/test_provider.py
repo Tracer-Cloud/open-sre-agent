@@ -878,7 +878,7 @@ def test_analytics_needs_flush_true_when_events_pending(
         def __exit__(self, _exc_type, _exc, _tb) -> None:
             return None
 
-        def post(self, url: str, json: dict[str, object]) -> object:
+        def post(self, _url: str, **_kwargs: object) -> object:
             time.sleep(1.0)
 
             class _Resp:
@@ -928,7 +928,7 @@ def test_shutdown_flush_false_returns_without_waiting_on_slow_worker(
         def __exit__(self, _exc_type, _exc, _tb) -> None:
             return None
 
-        def post(self, url: str, json: dict[str, object]) -> _SlowResponse:
+        def post(self, _url: str, **_kwargs: object) -> _SlowResponse:
             time.sleep(2.0)
             return _SlowResponse()
 
@@ -966,7 +966,7 @@ def test_atexit_registers_non_blocking_shutdown(
         def __exit__(self, _exc_type, _exc, _tb) -> None:
             return None
 
-        def post(self, url: str, json: dict[str, object]) -> object:
+        def post(self, _url: str, **_kwargs: object) -> object:
             time.sleep(2.0)
 
             class _Resp:
