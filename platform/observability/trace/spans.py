@@ -23,6 +23,17 @@ from platform.observability.trace.process_stats import sample_turn_boundary_stat
 
 _session_id: ContextVar[str | None] = ContextVar("session_trace_session_id", default=None)
 
+#: Convert ``time.monotonic()`` seconds to integer milliseconds for span duration.
+_MS_PER_SECOND = 1000
+
+#: Reserved attrs key: callers set this to override the span status on exit.
+SPAN_STATUS_ATTR = "_status"
+SPAN_STATUS_OK = "ok"
+SPAN_STATUS_ERROR = "error"
+
+# Reserved attrs key: callers set it to override span status; stripped before persist.
+_STATUS_ATTR = "_status"
+
 
 class SessionTraceSink(Protocol):
     """Append-only session trace spans (routes, stages, threads, resources)."""
@@ -33,7 +44,7 @@ class SessionTraceSink(Protocol):
         *,
         span_kind: str,
         name: str,
-        status: str = "ok",
+        status: str = SPAN_STATUS_OK,
         duration_ms: int | None = None,
         attributes: dict[str, Any] | None = None,
         parent_id: str | None = None,
@@ -50,7 +61,7 @@ class NoopSessionTraceSink:
         *,
         span_kind: str,
         name: str,
-        status: str = "ok",
+        status: str = SPAN_STATUS_OK,
         duration_ms: int | None = None,
         attributes: dict[str, Any] | None = None,
         parent_id: str | None = None,
@@ -97,7 +108,7 @@ def emit_span(
     *,
     span_kind: str,
     name: str,
-    status: str = "ok",
+    status: str = SPAN_STATUS_OK,
     duration_ms: int | None = None,
     attributes: dict[str, Any] | None = None,
     parent_id: str | None = None,
@@ -143,15 +154,15 @@ def timed_span(
         yield attrs
         return
     started = time.monotonic()
-    status = "ok"
+    status = SPAN_STATUS_OK
     try:
         yield attrs
     except BaseException:
-        status = "error"
+        status = SPAN_STATUS_ERROR
         raise
     finally:
-        duration_ms = int((time.monotonic() - started) * 1000)
-        override = attrs.pop("_status", None)
+        duration_ms = int((time.monotonic() - started) * _MS_PER_SECOND)
+        override = attrs.pop(SPAN_STATUS_ATTR, None)
         if isinstance(override, str) and override:
             status = override
         _sink.emit(
@@ -276,10 +287,10 @@ def mark_span_outcome(
     error: bool = False,
     **extra: Any,
 ) -> None:
-    """Enrich a timed-span attrs dict; set ``_status=error`` when ``error``."""
+    """Enrich a timed-span attrs dict; set ``SPAN_STATUS_ATTR=error`` when ``error``."""
     attrs["outcome"] = outcome
     if error:
-        attrs["_status"] = "error"
+        attrs[SPAN_STATUS_ATTR] = SPAN_STATUS_ERROR
     for key, value in extra.items():
         if value is not None:
             attrs[key] = value
@@ -287,6 +298,9 @@ def mark_span_outcome(
 
 __all__ = [
     "NoopSessionTraceSink",
+    "SPAN_STATUS_ATTR",
+    "SPAN_STATUS_ERROR",
+    "SPAN_STATUS_OK",
     "SessionTraceSink",
     "bind_session_trace",
     "component_span",

@@ -9,14 +9,17 @@ import httpx
 
 from platform.observability.errors.boundary import report_exception
 
+#: HTTP status for vendor rate-limit (transient throttling, not a config error).
+_HTTP_TOO_MANY_REQUESTS = 429
+#: HTTP statuses at or above this are treated as transient vendor failures.
+_HTTP_SERVER_ERROR_FLOOR = 500
+
 
 def _is_transient_vendor_error(exc: BaseException) -> bool:
     if not isinstance(exc, httpx.HTTPStatusError):
         return False
     sc = exc.response.status_code
-    # 429 = vendor rate-limit (transient throttling, not a config error)
-    return sc == 429 or sc >= 500
-
+    return sc == _HTTP_TOO_MANY_REQUESTS or sc >= _HTTP_SERVER_ERROR_FLOOR
 
 def capture_service_error(
     exc: BaseException,

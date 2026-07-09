@@ -13,6 +13,13 @@ from typing import Any
 # may carry them (int64 arrives as a string per the OTLP spec — kept as-is).
 _OTLP_SCALAR_KINDS = ("stringValue", "intValue", "boolValue", "doubleValue")
 
+#: Nanoseconds → milliseconds for OTLP span duration.
+_NANOSECONDS_PER_MILLISECOND = 1_000_000
+#: Decimal places kept on parsed OTLP durations (ms).
+_OTLP_DURATION_MS_DECIMAL_PLACES = 4
+_EMPTY_DURATION_MS = 0.0
+_UNKNOWN_SPAN_NAME = "unknown"
+
 
 def extract_span_attributes(span: dict[str, Any]) -> dict[str, Any]:
     """Flatten an OTLP attribute list into a plain key -> value mapping.
@@ -39,10 +46,13 @@ def _duration_ms(start_unix_nano: Any, end_unix_nano: Any) -> float:
         start = int(start_unix_nano)
         end = int(end_unix_nano)
     except (TypeError, ValueError):
-        return 0.0
+        return _EMPTY_DURATION_MS
     if end <= start:
-        return 0.0
-    return round((end - start) / 1_000_000, 4)
+        return _EMPTY_DURATION_MS
+    return round(
+        (end - start) / _NANOSECONDS_PER_MILLISECOND,
+        _OTLP_DURATION_MS_DECIMAL_PLACES,
+    )
 
 
 def parse_otlp_trace(trace_data: dict[str, Any]) -> list[dict[str, Any]]:
@@ -68,7 +78,7 @@ def parse_otlp_trace(trace_data: dict[str, Any]) -> list[dict[str, Any]]:
                 status = span.get("status") or {}
                 spans.append(
                     {
-                        "name": span.get("name", "unknown"),
+                        "name": span.get("name", _UNKNOWN_SPAN_NAME),
                         "span_id": span.get("spanId", ""),
                         "parent_span_id": span.get("parentSpanId", ""),
                         "trace_id": span.get("traceId", ""),

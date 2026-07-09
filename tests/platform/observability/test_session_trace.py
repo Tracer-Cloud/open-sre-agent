@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextvars
 import json
 import threading
 import time
@@ -151,35 +152,98 @@ def test_emit_span_writes_route_when_sink_active(
     assert stage["attributes"]["fields_updated"] == ["alert"]
 
 
-def test_timed_span_honors_status_override(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_timed_span_honors_status_override(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from platform.observability.trace.spans import SPAN_STATUS_ATTR, SPAN_STATUS_ERROR
+
     session_id = "sess-status"
     path = _activate_jsonl_sink(tmp_path, session_id, monkeypatch)
     with timed_span(span_kind="component", name="investigation", session_id=session_id) as attrs:
-        attrs["_status"] = "error"
+        attrs[SPAN_STATUS_ATTR] = SPAN_STATUS_ERROR
         attrs["failure_category"] = "user_cancelled"
     rec = _trace_spans(path)[-1]
-    assert rec["status"] == "error"
-    assert "_status" not in rec.get("attributes", {})
+    assert rec["status"] == SPAN_STATUS_ERROR
+    assert SPAN_STATUS_ATTR not in rec.get("attributes", {})
     assert rec["attributes"]["failure_category"] == "user_cancelled"
 
 
 def test_timed_span_marks_error_on_exception(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    from platform.observability.trace.spans import SPAN_STATUS_ERROR
+
     session_id = "sess-exc"
     path = _activate_jsonl_sink(tmp_path, session_id, monkeypatch)
-    with pytest.raises(RuntimeError, match="boom"):
-        with timed_span(span_kind="component", name="failing", session_id=session_id):
-            raise RuntimeError("boom")
+    with (
+        pytest.raises(RuntimeError, match="boom"),
+        timed_span(span_kind="component", name="failing", session_id=session_id),
+    ):
+        raise RuntimeError("boom")
     rec = _trace_spans(path)[-1]
     assert rec["name"] == "failing"
-    assert rec["status"] == "error"
+    assert rec["status"] == SPAN_STATUS_ERROR
     assert rec["duration_ms"] >= 0
 
 
+def test_timed_span_marks_error_on_base_exception(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # KeyboardInterrupt / CancelledError derive from BaseException, not Exception.
+    from platform.observability.trace.spans import SPAN_STATUS_ERROR
+
+    session_id = "sess-cancel"
+    path = _activate_jsonl_sink(tmp_path, session_id, monkeypatch)
+    with (
+        pytest.raises(KeyboardInterrupt),
+        timed_span(span_kind="tool", name="cancelled", session_id=session_id),
+    ):
+        raise KeyboardInterrupt
+    rec = _trace_spans(path)[-1]
+    assert rec["name"] == "cancelled"
+    assert rec["status"] == SPAN_STATUS_ERROR
+
+
+def test_stage_span_emits_from_thread_with_copied_context(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The investigation pipeline runs stages in a worker thread; a copied context
+    # carries the bound session id across the thread boundary so the span emits.
+    session_id = "sess-thread"
+    path = _activate_jsonl_sink(tmp_path, session_id, monkeypatch)
+
+    def _emit_stage() -> None:
+        with stage_span("gather_evidence"):
+            pass
+
+    with bind_session_trace(session_id):
+        thread = threading.Thread(target=contextvars.copy_context().run, args=(_emit_stage,))
+        thread.start()
+        thread.join()
+
+    assert "gather_evidence" in {rec["name"] for rec in _trace_spans(path)}
+
+
+def test_stage_span_drops_in_plain_thread_without_context(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A plain thread starts with a fresh context, so the bound session id is unseen.
+    session_id = "sess-thread-plain"
+    path = _activate_jsonl_sink(tmp_path, session_id, monkeypatch)
+
+    def _emit_stage() -> None:
+        with stage_span("gather_evidence"):
+            pass
+
+    with bind_session_trace(session_id):
+        thread = threading.Thread(target=_emit_stage)
+        thread.start()
+        thread.join()
+
+    assert _trace_spans(path) == []
+
+
 def test_mark_span_outcome_sets_status_and_extra_attrs() -> None:
+    from platform.observability.trace.spans import SPAN_STATUS_ATTR, SPAN_STATUS_ERROR
+
     attrs: dict[str, Any] = {}
     mark_span_outcome(attrs, "ok", source="agent")
     assert attrs == {"outcome": "ok", "source": "agent"}
@@ -187,14 +251,12 @@ def test_mark_span_outcome_sets_status_and_extra_attrs() -> None:
     attrs = {}
     mark_span_outcome(attrs, "blocked", error=True, reason="deny", ignored=None)
     assert attrs["outcome"] == "blocked"
-    assert attrs["_status"] == "error"
+    assert attrs[SPAN_STATUS_ATTR] == SPAN_STATUS_ERROR
     assert attrs["reason"] == "deny"
     assert "ignored" not in attrs
 
 
-def test_semantic_helpers_match_span_kinds(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_semantic_helpers_match_span_kinds(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     session_id = "sess-helpers"
     path = _activate_jsonl_sink(tmp_path, session_id, monkeypatch)
     with traced_session(session_id, component="gateway_turn") as attrs:
