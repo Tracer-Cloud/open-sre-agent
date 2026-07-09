@@ -1,0 +1,41 @@
+{
+  "_comment": "Realistic CloudTrail LookupEvents response page as it reaches the tool after integrations/aws/aws_sdk_client._sanitize_response (datetimes already ISO strings, ResponseMetadata stripped). Mirrors the documented LookupEvents shape: top-level Events + NextToken; each event carries EventId/EventName/ReadOnly(string!)/AccessKeyId/EventTime/EventSource/Username/Resources plus the full record serialized as the CloudTrailEvent JSON string. Uses the AWS documentation account 123456789012.",
+  "Events": [
+    {
+      "EventId": "8e3c6f2b-4a1d-4c8e-9f2a-1b7d3e5a9c01",
+      "EventName": "PutRolePolicy",
+      "ReadOnly": "false",
+      "AccessKeyId": "AKIAIOSFODNN7EXAMPLE",
+      "EventTime": "2026-07-03T09:12:41+00:00",
+      "EventSource": "iam.amazonaws.com",
+      "Username": "deploy-bot",
+      "Resources": [
+        {"ResourceType": "AWS::IAM::Role", "ResourceName": "payments-service-role"}
+      ],
+      "CloudTrailEvent": "{\"eventVersion\":\"1.09\",\"userIdentity\":{\"type\":\"IAMUser\",\"principalId\":\"AIDA2EXAMPLE9XLZQW\",\"arn\":\"arn:aws:iam::123456789012:user/deploy-bot\",\"accountId\":\"123456789012\",\"accessKeyId\":\"AKIAIOSFODNN7EXAMPLE\",\"userName\":\"deploy-bot\"},\"eventTime\":\"2026-07-03T09:12:41Z\",\"eventSource\":\"iam.amazonaws.com\",\"eventName\":\"PutRolePolicy\",\"awsRegion\":\"us-east-1\",\"sourceIPAddress\":\"203.0.113.24\",\"userAgent\":\"aws-cli/2.17.0\",\"requestParameters\":{\"roleName\":\"payments-service-role\",\"policyName\":\"inline-s3-write\"},\"responseElements\":null,\"requestID\":\"b4f1c9d2-8a3e-4f6b-b2d1-9c8e7a6f5d40\",\"eventID\":\"8e3c6f2b-4a1d-4c8e-9f2a-1b7d3e5a9c01\",\"readOnly\":false,\"eventType\":\"AwsApiCall\",\"managementEvent\":true,\"recipientAccountId\":\"123456789012\"}"
+    },
+    {
+      "EventId": "1f9a7c3e-6b2d-4a5f-8c1e-7d4b2a9f6e02",
+      "EventName": "DeleteSecurityGroup",
+      "ReadOnly": "false",
+      "AccessKeyId": "ASIA6EXAMPLETEMPKEY",
+      "EventTime": "2026-07-03T09:05:17+00:00",
+      "EventSource": "ec2.amazonaws.com",
+      "Username": "intern-sandbox",
+      "Resources": [
+        {"ResourceType": "AWS::EC2::SecurityGroup", "ResourceName": "sg-0a1b2c3d4e5f6a7b8"}
+      ],
+      "CloudTrailEvent": "{\"eventVersion\":\"1.09\",\"userIdentity\":{\"type\":\"AssumedRole\",\"principalId\":\"AROA4EXAMPLE:intern-sandbox\",\"arn\":\"arn:aws:sts::123456789012:assumed-role/sandbox/intern-sandbox\",\"accountId\":\"123456789012\",\"accessKeyId\":\"ASIA6EXAMPLETEMPKEY\",\"sessionContext\":{\"sessionIssuer\":{\"type\":\"Role\",\"principalId\":\"AROA4EXAMPLE\",\"arn\":\"arn:aws:iam::123456789012:role/sandbox\",\"accountId\":\"123456789012\",\"userName\":\"sandbox\"},\"attributes\":{\"creationDate\":\"2026-07-03T08:59:00Z\",\"mfaAuthenticated\":\"false\"}}},\"eventTime\":\"2026-07-03T09:05:17Z\",\"eventSource\":\"ec2.amazonaws.com\",\"eventName\":\"DeleteSecurityGroup\",\"awsRegion\":\"us-east-1\",\"sourceIPAddress\":\"198.51.100.7\",\"userAgent\":\"console.ec2.amazonaws.com\",\"errorCode\":\"Client.UnauthorizedOperation\",\"errorMessage\":\"You are not authorized to perform this operation.\",\"requestParameters\":{\"groupId\":\"sg-0a1b2c3d4e5f6a7b8\"},\"responseElements\":null,\"requestID\":\"2c7e9f1a-5d3b-4e8c-a6f2-1b9d8c7e6a51\",\"eventID\":\"1f9a7c3e-6b2d-4a5f-8c1e-7d4b2a9f6e02\",\"readOnly\":false,\"eventType\":\"AwsApiCall\",\"managementEvent\":true,\"recipientAccountId\":\"123456789012\"}"
+    },
+    {
+      "EventId": "5d2b8e4a-9c1f-4d7b-a3e6-8f5c2d1b9a03",
+      "EventName": "DescribeScalingActivities",
+      "ReadOnly": "true",
+      "EventTime": "2026-07-03T08:58:02+00:00",
+      "EventSource": "autoscaling.amazonaws.com",
+      "Resources": [],
+      "CloudTrailEvent": "{\"eventVersion\":\"1.09\",\"userIdentity\":{\"type\":\"AWSService\",\"invokedBy\":\"autoscaling.amazonaws.com\"},\"eventTime\":\"2026-07-03T08:58:02Z\",\"eventSource\":\"autoscaling.amazonaws.com\",\"eventName\":\"DescribeScalingActivities\",\"awsRegion\":\"us-east-1\",\"sourceIPAddress\":\"autoscaling.amazonaws.com\",\"userAgent\":\"autoscaling.amazonaws.com\",\"requestParameters\":null,\"responseElements\":null,\"requestID\":\"7a4c1e9b-2f8d-4b6a-9e3c-5d1f8b7a2c62\",\"eventID\":\"5d2b8e4a-9c1f-4d7b-a3e6-8f5c2d1b9a03\",\"readOnly\":true,\"eventType\":\"AwsApiCall\",\"managementEvent\":true,\"recipientAccountId\":\"123456789012\"}"
+    }
+  ],
+  "NextToken": "AAAAfR3kNzXhCq9lEXAMPLEtokenXo1v"
+}

@@ -6,7 +6,6 @@ from typing import Any
 
 import pytest
 
-import core.execution
 from core.agent import Agent
 from core.execution import (
     BeforeToolCallResult,
@@ -280,7 +279,7 @@ def _record_pool_constructions(monkeypatch: pytest.MonkeyPatch) -> list[int]:
             constructions.append(1)
             super().__init__(*args, **kwargs)
 
-    monkeypatch.setattr(core.execution, "ThreadPoolExecutor", _RecordingPool)
+    monkeypatch.setattr("core.execution.ThreadPoolExecutor", _RecordingPool)
     return constructions
 
 

@@ -39,11 +39,9 @@ def observe_investigation_llm_usage() -> Iterator[InvestigationLlmUsage]:
         usage.output_tokens += tokens_out
 
     registered = False
-    try:
+    with contextlib.suppress(RuntimeError):
         set_usage_hook(_hook)
         registered = True
-    except RuntimeError:
-        pass
     try:
         yield usage
     finally:

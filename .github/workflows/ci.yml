@@ -119,7 +119,6 @@ jobs:
               tests/utils
               tests/masking
               tests/watch_dog
-              tests/test_core_layering.py
           - os: ubuntu-latest
             shard: cli-runtime
             # Live shell action-agent contracts are validated on openai,
@@ -156,33 +155,6 @@ jobs:
               tests/github_ci
               tests/packaging
               tests/scheduler
-              tests/test_guardrails
-              tests/cli_smoke_test.py
-              tests/test_aws_urls.py
-              tests/test_bug_fixes_e2e.py
-              tests/test_chaos_engineering_paths.py
-              tests/test_config.py
-              tests/test_datadog_adapter.py
-              tests/test_datadog_provider.py
-              tests/test_deployment_health.py
-              tests/test_devcontainer.py
-              tests/test_dockerfile.py
-              tests/test_ec2_deploy.py
-              tests/test_ec2_instance.py
-              tests/test_google_docs.py
-              tests/test_kill_switch_matrix.py
-              tests/test_llm_credentials.py
-              tests/test_llm_reasoning_effort.py
-              tests/test_mariadb_integration.py
-              tests/test_mongodb_atlas_integration.py
-              tests/test_mongodb_integration.py
-              tests/test_naming_conventions.py
-              tests/test_openclaw_integration.py
-              tests/test_removed_architecture_references.py
-              tests/test_sentry_init.py
-              tests/test_state.py
-              tests/test_upstream_correlation_provider.py
-              tests/test_version.py
               gateway/tests
           - os: ubuntu-latest
             shard: e2e-general

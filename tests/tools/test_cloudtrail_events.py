@@ -9,6 +9,7 @@ priority, the time-window helper, response shaping, and the synthetic
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
@@ -353,3 +354,145 @@ def test_harness_shaped_aws_source_short_circuits_off_real_aws(mock_call) -> Non
     mock_call.assert_not_called()
     assert backend.calls and backend.calls[0]["region"] == "us-east-1"
     assert result["available"] is True
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Live payload fixtures (#3583) — real LookupEvents response shapes
+# ─────────────────────────────────────────────────────────────────────────────
+
+_FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "cloudtrail"
+
+
+def _fixture_payload(name: str) -> dict[str, Any]:
+    payload = json.loads((_FIXTURES / name).read_text(encoding="utf-8"))
+    payload.pop("_comment", None)
+    return payload
+
+
+@patch("integrations.cloudtrail.tools.cloudtrail_events_tool.execute_aws_sdk_call")
+def test_realistic_page_shapes_every_event(mock_call) -> None:
+    """A faithful LookupEvents page (mixed principals, an errored call, a
+    service event without Username) shapes into the exact per-event contract."""
+    mock_call.return_value = {"success": True, "data": _fixture_payload("lookup_events_page.json")}
+
+    result = lookup_cloudtrail_events(duration_minutes=120)
+
+    assert result["available"] is True
+    assert result["total_events"] == 3
+    by_id = {event["event_id"]: event for event in result["events"]}
+
+    # Full-dict equality: locks every key of the shaped-event contract,
+    # including the ISO EventTime passthrough and event_source.
+    assert by_id["8e3c6f2b-4a1d-4c8e-9f2a-1b7d3e5a9c01"] == {
+        "event_id": "8e3c6f2b-4a1d-4c8e-9f2a-1b7d3e5a9c01",
+        "event_name": "PutRolePolicy",
+        "event_time": "2026-07-03T09:12:41+00:00",
+        "event_source": "iam.amazonaws.com",
+        "username": "deploy-bot",
+        "read_only": False,
+        "access_key_id": "AKIAIOSFODNN7EXAMPLE",
+        "resources": [{"type": "AWS::IAM::Role", "name": "payments-service-role"}],
+        "resources_truncated": False,
+        "aws_region": "us-east-1",
+        "source_ip_address": "203.0.113.24",
+        "error_code": None,
+    }
+
+    # A denied call surfaces its errorCode from the CloudTrailEvent record.
+    denied = by_id["1f9a7c3e-6b2d-4a5f-8c1e-7d4b2a9f6e02"]
+    assert denied["event_name"] == "DeleteSecurityGroup"
+    assert denied["error_code"] == "Client.UnauthorizedOperation"
+    assert denied["source_ip_address"] == "198.51.100.7"
+
+    # AWS service events carry no Username or AccessKeyId — shaped as None,
+    # never a KeyError, and ReadOnly "true" coerces to a real bool.
+    service = by_id["5d2b8e4a-9c1f-4d7b-a3e6-8f5c2d1b9a03"]
+    assert service["username"] is None
+    assert service["access_key_id"] is None
+    assert service["read_only"] is True
+    assert service["resources"] == []
+
+    # More matching events exist beyond this page — surfaced, not swallowed.
+    assert result["truncated"] is True
+    assert result["next_token"] == "AAAAfR3kNzXhCq9lEXAMPLEtokenXo1v"
+
+
+@patch("integrations.cloudtrail.tools.cloudtrail_events_tool.execute_aws_sdk_call")
+def test_success_payload_omits_error_key(mock_call) -> None:
+    """The success payload must NOT carry an "error" key.
+
+    The runtime tool loop (core.execution._normalize_result) flags a result as a
+    failure on the mere presence of an "error" key (is_error = "error" in raw) and
+    replaces the whole payload with {"error": ...} before the agent sees it. A
+    success dict with "error": None therefore hides every event from the
+    investigation — regression guard against reintroducing it.
+    """
+    mock_call.return_value = {"success": True, "data": _fixture_payload("lookup_events_page.json")}
+    result = lookup_cloudtrail_events(duration_minutes=60)
+
+    assert result["available"] is True
+    assert result["total_events"] == 3
+    assert "error" not in result
+
+    # Failure paths still carry a real message (correctly flagged as is_error).
+    mock_call.return_value = {"success": False, "error": "ThrottlingException"}
+    failed = lookup_cloudtrail_events()
+    assert failed["available"] is False
+    assert "error" in failed and failed["error"]
+
+
+@patch("integrations.cloudtrail.tools.cloudtrail_events_tool.execute_aws_sdk_call")
+def test_weird_page_survives_and_shapes_gracefully(mock_call) -> None:
+    """Degenerate live payloads must degrade to partial events, never raise.
+
+    The weird fixture packs the §1 cases: CloudTrailEvent as valid-but-non-dict
+    JSON (null / bare string / list) or invalid JSON, an event with only
+    EventId, ReadOnly as a real bool and as "True", and a null plus a
+    _sanitize_response truncation marker inside Resources — the one place the
+    marker is genuinely reachable (a single event CAN reference >MAX_LIST_ITEMS
+    resources, e.g. CreateTags across a fleet). The marker as the final Events
+    entry is a purely defensive case (LookupEvents pages cap at 50 <
+    MAX_LIST_ITEMS, so the sanitizer cannot produce it there): it pins that
+    non-dict Events entries are tolerated, not that the transport emits them.
+    """
+    mock_call.return_value = {"success": True, "data": _fixture_payload("lookup_events_weird.json")}
+
+    result = lookup_cloudtrail_events()
+
+    assert result["available"] is True
+    # The trailing Events truncation marker (a str) is dropped, not shaped.
+    assert result["total_events"] == 7
+    by_id = {event["event_id"]: event for event in result["events"]}
+
+    # Valid-but-non-dict CloudTrailEvent JSON -> detail fields None, no crash.
+    for event_id in ("weird-null-detail", "weird-string-detail", "weird-list-detail"):
+        event = by_id[event_id]
+        assert event["aws_region"] is None
+        assert event["source_ip_address"] is None
+        assert event["error_code"] is None
+
+    # Invalid JSON keeps its existing graceful path.
+    assert by_id["weird-invalid-json-detail"]["aws_region"] is None
+
+    # An event carrying only EventId shapes with every other field defaulted.
+    bare = by_id["weird-bare-event"]
+    assert bare["event_name"] is None
+    assert bare["username"] is None
+    assert bare["read_only"] is None
+    assert bare["resources"] == []
+    assert bare["resources_truncated"] is False
+
+    # Non-dict Resources entries (null / truncation marker) are skipped; the
+    # real resource survives, a bool ReadOnly passes through unchanged, and the
+    # drop is surfaced so the planner knows the blast radius is understated.
+    mixed = by_id["weird-resources-mixed"]
+    assert mixed["resources"] == [{"type": "AWS::EC2::Instance", "name": "i-0abc123def456789a"}]
+    assert mixed["resources_truncated"] is True
+    assert mixed["read_only"] is True
+    assert mixed["aws_region"] == "eu-west-1"
+
+    # ReadOnly arrives with inconsistent casing in live payloads.
+    assert by_id["weird-readonly-mixed-case"]["read_only"] is True
+
+    assert result["truncated"] is True
+    assert result["next_token"] == "AAAAweirdPageToken"

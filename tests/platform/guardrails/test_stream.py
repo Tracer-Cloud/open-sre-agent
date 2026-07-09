@@ -40,7 +40,7 @@ def _rule(
     keywords: tuple[str, ...] = (),
     replacement: str = "",
 ) -> GuardrailRule:
-    """Mirror tests/test_guardrails/test_engine.py's helper. Kept local so the
+    """Mirror tests/platform/guardrails/test_engine.py's helper. Kept local so the
     tests do not import the engine test module."""
     compiled = tuple(re.compile(p, re.IGNORECASE) for p in patterns)
     return GuardrailRule(

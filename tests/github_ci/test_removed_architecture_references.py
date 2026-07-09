@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from config.constants.paths import REPO_ROOT
+
 from tests.utils.tracked_sources import tracked_files, tracked_python_files
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = REPO_ROOT
 SKIP_DIRS = {
     ".git",
     ".mypy_cache",

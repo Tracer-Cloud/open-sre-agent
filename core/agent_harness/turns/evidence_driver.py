@@ -66,7 +66,8 @@ class GatherAgentFactory(Protocol):
         gather_tools: list[Any],
         resolved: dict[str, Any],
         on_progress: ToolEventObserver | None,
-    ) -> Agent[Any]: ...
+    ) -> Agent[Any]:
+        """Build and return the evidence-gather agent for one turn."""
 
 
 class AgentExecutionError(RuntimeError):
