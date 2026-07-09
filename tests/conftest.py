@@ -118,7 +118,14 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
 
     Reproduces as ``N workers [0 items]`` under ``-n`` when ``-m`` deselects
     everything (e.g. a mangled CI marker that becomes ``false``). Without this,
-    CI can go green while running zero tests.
+    CI can go green while running zero tests — especially on large path sets
+    where xdist reports warnings and exits 0 instead of NO_TESTS_COLLECTED.
     """
-    if session.testscollected == 0 and exitstatus in (0, pytest.ExitCode.OK):
+    if session.testscollected != 0:
+        return
+    if exitstatus in (
+        0,
+        pytest.ExitCode.OK,
+        pytest.ExitCode.NO_TESTS_COLLECTED,
+    ):
         session.exitstatus = pytest.ExitCode.NO_TESTS_COLLECTED
