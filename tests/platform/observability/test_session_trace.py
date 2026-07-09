@@ -12,7 +12,12 @@ from typing import Any
 import pytest
 
 from core.agent_harness.session.persistence.jsonl_storage import JsonlSessionStorage
-from platform.observability.trace.process_stats import sample_thread_snapshot
+from platform.observability.trace import process_stats
+from platform.observability.trace.process_stats import (
+    sample_resource_snapshot,
+    sample_thread_snapshot,
+    sample_turn_boundary_stats,
+)
 from platform.observability.trace.spans import (
     NoopSessionTraceSink,
     bind_session_trace,
@@ -77,6 +82,28 @@ def test_sample_thread_snapshot_lists_current_thread() -> None:
     names = {row["name"] for row in snap["threads"]}
     assert threading.current_thread().name in names
     assert "main_thread_ident" in snap
+
+
+def test_sample_resource_snapshot_includes_gc_counts() -> None:
+    snap = sample_resource_snapshot()
+    assert {"gc_gen0", "gc_gen1", "gc_gen2"} <= snap.keys()
+    # POSIX: rss_mb present; Windows (no ``resource``): omitted.
+    if process_stats._resource is not None:
+        assert "rss_mb" in snap
+        assert isinstance(snap["rss_mb"], float)
+
+
+def test_sample_resource_snapshot_skips_rss_without_resource(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Windows / non-POSIX: ``resource`` is absent; snapshot must still succeed."""
+    monkeypatch.setattr(process_stats, "_resource", None)
+    snap = sample_resource_snapshot()
+    assert "rss_mb" not in snap
+    assert {"gc_gen0", "gc_gen1", "gc_gen2"} <= snap.keys()
+    combined = sample_turn_boundary_stats()
+    assert "rss_mb" not in combined
+    assert "thread_count" in combined
 
 
 def test_emit_span_and_thread_boundary_are_free_when_noop() -> None:
