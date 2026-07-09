@@ -13,6 +13,10 @@ from integrations.gitlab import (
 )
 
 
+def _clean_optional(value: str | None) -> str:
+    return str(value or "").strip()
+
+
 def _gl_creds(gl: dict) -> dict:
     return {
         "gitlab_url": gl.get("gitlab_url"),
@@ -26,14 +30,11 @@ def _gitlab_available(sources: dict) -> bool:
 
 def _resolve_config(gitlab_url: str | None, gitlab_token: str | None) -> GitlabConfig | None:
     env_config = gitlab_config_from_env()
-    if any([gitlab_url, gitlab_token]):
-        return build_gitlab_config(
-            {
-                "base_url": gitlab_url or (env_config.base_url if env_config else ""),
-                "auth_token": gitlab_token or (env_config.auth_token if env_config else ""),
-            }
-        )
-    return env_config
+    base_url = _clean_optional(gitlab_url) or (env_config.base_url if env_config else "")
+    auth_token = _clean_optional(gitlab_token) or (env_config.auth_token if env_config else "")
+    if not auth_token:
+        return None
+    return build_gitlab_config({"base_url": base_url, "auth_token": auth_token})
 
 
 def _list_gitlab_commits_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
@@ -69,8 +70,6 @@ def _list_gitlab_commits_available(sources: dict[str, dict]) -> bool:
             "ref_name": {"type": "string", "default": ""},
             "since": {"type": "string"},
             "per_page": {"type": "integer", "default": 10},
-            "gitlab_url": {"type": "string"},
-            "gitlab_token": {"type": "string"},
         },
         "required": ["project_id"],
     },

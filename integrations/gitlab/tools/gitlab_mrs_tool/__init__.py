@@ -49,8 +49,6 @@ def _list_gitlab_mrs_available(sources: dict[str, dict]) -> bool:
             "target_branch": {"type": "string", "default": "main"},
             "updated_after": {"type": "string"},
             "per_page": {"type": "integer", "default": 10},
-            "gitlab_url": {"type": "string"},
-            "gitlab_token": {"type": "string"},
         },
         "required": ["project_id"],
     },

@@ -51,8 +51,6 @@ def _list_gitlab_pipelines_available(sources: dict[str, dict]) -> bool:
             "updated_after": {"type": "string"},
             "status": {"type": "string", "default": "failed"},
             "per_page": {"type": "integer", "default": 10},
-            "gitlab_url": {"type": "string"},
-            "gitlab_token": {"type": "string"},
         },
         "required": ["project_id"],
     },

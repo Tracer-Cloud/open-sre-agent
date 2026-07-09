@@ -53,6 +53,11 @@ The wizard validates your token by calling the GitLab API and writes the followi
 | `GITLAB_ACCESS_TOKEN` | Token used for all GitLab API calls |
 | `GITLAB_BASE_URL` | API base URL (defaults to `https://gitlab.com/api/v4`) |
 
+GitLab tools use this configured integration for the base URL and token. Do not
+pass `gitlab_url` or `gitlab_token` as tool arguments; those values are
+resolved from the integration configuration. A self-hosted instance host such as
+`https://gitlab.example.com` is normalized to `https://gitlab.example.com/api/v4`.
+
 ---
 
 ## What the Agent Can Do
