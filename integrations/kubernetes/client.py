@@ -807,8 +807,18 @@ class KubernetesClient:
             # StatefulSet, DaemonSet, ReplicaSet) embed a pod template that also
             # carries env vars. Consistent with describe_pod (keys only).
             _WORKLOAD_TYPES = frozenset(
-                {"pod", "pods", "deployment", "deployments", "statefulset", "statefulsets",
-                 "daemonset", "daemonsets", "replicaset", "replicasets"}
+                {
+                    "pod",
+                    "pods",
+                    "deployment",
+                    "deployments",
+                    "statefulset",
+                    "statefulsets",
+                    "daemonset",
+                    "daemonsets",
+                    "replicaset",
+                    "replicasets",
+                }
             )
             if rt in _WORKLOAD_TYPES:
                 _redact_env_values(resource_dict)

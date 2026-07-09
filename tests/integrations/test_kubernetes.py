@@ -113,13 +113,12 @@ def test_probe_access_passed_when_api_succeeds() -> None:
     cfg = KubernetesIntegrationConfig.model_validate({"kubeconfig": _MINIMAL_KUBECONFIG})
     client = KubernetesClient(cfg)
 
-    mock_ns = MagicMock()
-    mock_ns.metadata.name = "default"
-    mock_ns_list = MagicMock()
-    mock_ns_list.items = [mock_ns]
+    mock_pod = MagicMock()
+    mock_pod_list = MagicMock()
+    mock_pod_list.items = [mock_pod]
 
     mock_core = MagicMock()
-    mock_core.list_namespace.return_value = mock_ns_list
+    mock_core.list_namespaced_pod.return_value = mock_pod_list
 
     with patch.object(client, "_get_clients", return_value=(mock_core, MagicMock(), MagicMock())):
         result = client.probe_access()
@@ -137,7 +136,7 @@ def test_probe_access_failed_on_api_exception() -> None:
     client = KubernetesClient(cfg)
 
     mock_core = MagicMock()
-    mock_core.list_namespace.side_effect = ApiException(status=401, reason="Unauthorized")
+    mock_core.list_namespaced_pod.side_effect = ApiException(status=401, reason="Unauthorized")
 
     with patch.object(client, "_get_clients", return_value=(mock_core, MagicMock(), MagicMock())):
         result = client.probe_access()
