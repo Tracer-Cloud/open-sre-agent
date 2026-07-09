@@ -1,12 +1,14 @@
 """System prompt building for the terminal assistant."""
 
 from core.agent_harness.prompts.rules import (
+    AGENT_RESPONSE_THREE_TIER_RULE,
     CLI_ASSISTANT_MARKDOWN_RULE,
     INTERACTIVE_SHELL_TERMINOLOGY_RULE,
 )
 
 _TERMINOLOGY_RULE = INTERACTIVE_SHELL_TERMINOLOGY_RULE
 _MARKDOWN_RULE = CLI_ASSISTANT_MARKDOWN_RULE
+_RESPONSE_SHAPE_RULE = AGENT_RESPONSE_THREE_TIER_RULE
 
 _SOURCE_SCOPED_INVESTIGATION_RULE = (
     "Source-scoped investigation requests: when the user asks you to find or "
@@ -173,6 +175,7 @@ def _build_system_prompt(
         f"{_PRIOR_INVESTIGATION_FOLLOW_UP_RULE}\n\n"
         f"{_SETUP_GUIDANCE_RULE}\n\n"
         f"{_SOURCE_SCOPED_INVESTIGATION_RULE}\n\n"
+        f"{_RESPONSE_SHAPE_RULE}\n\n"
         f"{_TERMINOLOGY_RULE}\n{_MARKDOWN_RULE}\n\n"
         f"{environment}"
         f"--- CLI reference ---\n{reference}\n\n"
