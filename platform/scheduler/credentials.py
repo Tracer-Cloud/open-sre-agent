@@ -22,24 +22,27 @@ except ImportError:
 
 
 def resolve_telegram_credentials(task_params: dict[str, str]) -> dict[str, str]:
-    """Resolve Telegram bot_token from task params, integration store, or env.
+    """Resolve Telegram bot_token from task params, integration store, env, or keyring.
 
-    Priority: task.params > integration store > environment variable.
+    Priority: task.params > integration store > environment variable > system keyring.
     """
-    try:
-        from integrations.telegram.credentials import resolve_telegram_bot_token
+    token = task_params.get("bot_token", "").strip()
+    if token:
+        return {"bot_token": token}
 
-        token = resolve_telegram_bot_token(task_params)
-        return {"bot_token": token} if token else {}
-    except (
-        ImportError,
-        KeyError,
-        TypeError,
-        ValueError,
-        _KeyringError,
-    ) as exc:
-        logger.debug("Failed to resolve Telegram credentials: %s", exc)
-        return {}
+    token = _get_integration_credential("telegram", "bot_token")
+    if token:
+        return {"bot_token": token}
+
+    try:
+        from config.llm_credentials import resolve_env_credential
+
+        token = resolve_env_credential("TELEGRAM_BOT_TOKEN").strip()
+    except (ImportError, _KeyringError) as exc:
+        logger.debug("Failed to resolve Telegram credentials from keyring: %s", exc)
+        token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+
+    return {"bot_token": token} if token else {}
 
 
 def resolve_slack_credentials(task_params: dict[str, str]) -> dict[str, str]:
