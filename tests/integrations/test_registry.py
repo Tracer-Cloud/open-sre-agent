@@ -72,6 +72,12 @@ def test_registry_preserves_aliases_and_special_case_buckets() -> None:
     assert "bitbucket" not in DIRECT_CLASSIFIED_EFFECTIVE_SERVICES
 
 
+def test_gitlab_is_setup_and_verify_capable() -> None:
+    assert "gitlab" in SUPPORTED_SETUP_SERVICES
+    assert "gitlab" in SUPPORTED_VERIFY_SERVICES
+    assert "gitlab" in list_verifiers()
+
+
 def test_resolve_management_service_maps_posthog_to_posthog_mcp() -> None:
     # The bare `posthog` integration has no interactive setup/verify flow, so
     # management commands should treat "posthog" as the PostHog MCP integration.

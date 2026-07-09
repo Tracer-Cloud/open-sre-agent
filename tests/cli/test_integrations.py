@@ -68,6 +68,25 @@ def test_integrations_setup_accepts_vercel() -> None:
     mock_capture.assert_not_called()
 
 
+def test_integrations_setup_accepts_gitlab() -> None:
+    runner = CliRunner()
+
+    with (
+        patch("surfaces.cli.commands.integrations.capture_integration_setup_started"),
+        patch("surfaces.cli.commands.integrations.capture_integration_setup_completed"),
+        patch("surfaces.cli.commands.integrations.capture_integration_verified") as mock_capture,
+        patch("integrations.cli.cmd_setup") as mock_setup,
+        patch("integrations.cli.cmd_verify", return_value=0) as mock_verify,
+    ):
+        mock_setup.return_value = "gitlab"
+        result = runner.invoke(cli, ["integrations", "setup", "gitlab"])
+
+    assert result.exit_code == 0
+    mock_setup.assert_called_once_with("gitlab")
+    mock_verify.assert_called_once_with("gitlab")
+    mock_capture.assert_called_once_with("gitlab")
+
+
 def test_integrations_setup_accepts_openclaw() -> None:
     runner = CliRunner()
 
@@ -302,6 +321,23 @@ def test_integrations_verify_accepts_github() -> None:
     mock_capture.assert_called_once_with("github")
 
 
+def test_integrations_verify_accepts_gitlab() -> None:
+    runner = CliRunner()
+
+    with (
+        patch("surfaces.cli.commands.integrations.capture_integration_verified") as mock_capture,
+        patch("integrations.cli.cmd_verify", return_value=0) as mock_verify,
+    ):
+        result = runner.invoke(cli, ["integrations", "verify", "gitlab"])
+
+    assert result.exit_code == 0
+    mock_verify.assert_called_once_with(
+        "gitlab",
+        send_slack_test=False,
+    )
+    mock_capture.assert_called_once_with("gitlab")
+
+
 def test_integrations_verify_accepts_openclaw() -> None:
     runner = CliRunner()
 
@@ -393,6 +429,12 @@ def test_verify_services_includes_previously_missing_integrations() -> None:
         "supabase",
     }
     assert previously_missing <= set(VERIFY_SERVICES)
+
+
+def test_verify_services_includes_gitlab() -> None:
+    # #3882: GitLab had setup/catalog/tool support but no verifier, so Click
+    # rejected `opensre integrations verify gitlab` before dispatch.
+    assert "gitlab" in VERIFY_SERVICES
 
 
 def test_setup_services_includes_previously_missing_integrations() -> None:

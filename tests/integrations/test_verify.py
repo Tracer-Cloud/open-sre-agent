@@ -9,6 +9,7 @@ from integrations.aws.verifier import verify_aws as _verify_aws
 from integrations.coralogix.verifier import verify_coralogix as _verify_coralogix
 from integrations.datadog.verifier import verify_datadog as _verify_datadog
 from integrations.github.verifier import verify_github as _verify_github
+from integrations.gitlab.verifier import verify_gitlab as _verify_gitlab
 from integrations.grafana.verifier import verify_grafana as _verify_grafana
 from integrations.honeycomb.verifier import verify_honeycomb as _verify_honeycomb
 from integrations.sentry.verifier import verify_sentry as _verify_sentry
@@ -540,6 +541,90 @@ def test_verify_github_reports_credential_less_store_record_as_missing() -> None
     assert verdict["service"] == "github"
     assert verdict["status"] == "missing"
     assert "without an auth token" in verdict["detail"]
+
+
+def test_verify_gitlab_passes_with_user_probe(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _fake_httpx_request(
+        method: str,
+        url: str,
+        *_args: Any,
+        headers: dict[str, str],
+        **_kwargs: Any,
+    ) -> _FakeResponse:
+        assert method == "GET"
+        assert url == "https://gitlab.example.com/api/v4/user"
+        assert headers["Authorization"] == "Bearer glpat_test"
+        return _FakeResponse({"username": "opensre-user"})
+
+    monkeypatch.setattr("integrations.gitlab.httpx.request", _fake_httpx_request)
+
+    result = _verify_gitlab(
+        "local env",
+        {
+            "base_url": "https://gitlab.example.com/api/v4",
+            "auth_token": "glpat_test",
+        },
+    )
+
+    assert result["service"] == "gitlab"
+    assert result["status"] == "passed"
+    assert "@opensre-user" in result["detail"]
+
+
+def test_verify_gitlab_reports_missing_token_without_network(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _fail_request(*_args: Any, **_kwargs: Any) -> None:
+        raise AssertionError("GitLab verifier should not call the API without a token")
+
+    monkeypatch.setattr("integrations.gitlab.httpx.request", _fail_request)
+
+    result = _verify_gitlab("local store", {"base_url": "https://gitlab.example.com/api/v4"})
+
+    assert result["service"] == "gitlab"
+    assert result["status"] == "missing"
+    assert "auth token is required" in result["detail"].lower()
+
+
+def test_verify_integrations_dispatches_to_gitlab(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _fake_httpx_request(
+        method: str,
+        url: str,
+        *_args: Any,
+        headers: dict[str, str],
+        **_kwargs: Any,
+    ) -> _FakeResponse:
+        assert method == "GET"
+        assert url == "https://gitlab.example.com/api/v4/user"
+        assert headers["Authorization"] == "Bearer glpat_store"
+        return _FakeResponse({"username": "store-user"})
+
+    monkeypatch.setattr("integrations.gitlab.httpx.request", _fake_httpx_request)
+    monkeypatch.setattr(
+        "integrations.catalog.load_integrations",
+        lambda: [
+            {
+                "id": "gitlab-local",
+                "service": "gitlab",
+                "status": "active",
+                "credentials": {
+                    "base_url": "https://gitlab.example.com/api/v4",
+                    "auth_token": "glpat_store",
+                },
+            }
+        ],
+    )
+
+    results = verify_integrations("gitlab")
+
+    assert results == [
+        {
+            "service": "gitlab",
+            "source": "local store",
+            "status": "passed",
+            "detail": "GitLab connectivity successful. Authenticated as @store-user",
+        }
+    ]
 
 
 def test_verify_sentry_passes_with_valid_config(monkeypatch: pytest.MonkeyPatch) -> None:
