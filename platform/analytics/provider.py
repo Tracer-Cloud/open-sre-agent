@@ -861,13 +861,15 @@ def shutdown_analytics(*, flush: bool = False, timeout: float = _SHUTDOWN_WAIT) 
 
 
 def analytics_needs_flush() -> bool:
-    """True when a best-effort drain would wait on queued or in-flight events."""
+    """True when a best-effort drain would wait on queued or in-flight events.
+
+    ``_pending`` is raised in ``capture`` before enqueue and lowered in
+    ``_mark_done`` only after the POST completes, so it already covers both
+    queued and in-flight events; an idle-but-alive worker does not need a drain.
+    """
     if _instance is None or _instance._disabled or _instance._shutdown:
         return False
-    if _instance._pending > 0:
-        return True
-    worker = _instance._worker
-    return worker is not None and worker.is_alive()
+    return _instance._pending > 0
 
 
 def capture_install_detected_if_needed(properties: Properties | None = None) -> bool:

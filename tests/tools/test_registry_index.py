@@ -70,11 +70,23 @@ def test_descriptor_module_is_dotted_import_path() -> None:
 
 
 def test_surface_scoped_load_equals_full_filtered() -> None:
-    """The fast surface path must return exactly the full snapshot filtered by surface."""
+    """The fast surface path must return exactly the full snapshot filtered by surface.
+
+    Compares by ``(name, origin_module)`` so a duplicate tool name that resolves to
+    a different module in the surface path (alphabetical) than the full path
+    (package-declaration order) fails here rather than silently diverging.
+    """
     full = registry_module.get_registered_tools()
     for surface in ("action", "chat", "investigation"):
-        scoped = {tool.name for tool in registry_module.get_registered_tools(surface)}
-        expected = {tool.name for tool in full if surface in (getattr(tool, "surfaces", ()) or ())}
+        scoped = {
+            (tool.name, tool.origin_module)
+            for tool in registry_module.get_registered_tools(surface)
+        }
+        expected = {
+            (tool.name, tool.origin_module)
+            for tool in full
+            if surface in (getattr(tool, "surfaces", ()) or ())
+        }
         assert scoped == expected, surface
 
 
