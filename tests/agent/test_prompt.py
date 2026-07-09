@@ -5,6 +5,7 @@ from tools.investigation.stages.gather_evidence.prompt import (
     build_investigation_system_prompt,
     format_alert_context,
 )
+from tools.investigation.stages.gather_evidence.tools import STAGNATION_NUDGE
 
 
 def test_build_investigation_system_prompt_non_hermes_uses_generic_category_instruction() -> None:
@@ -34,6 +35,7 @@ def test_build_investigation_system_prompt_includes_incident_command_phases() ->
     assert "Phase 2 — Hypothesis" in prompt
     assert "Phase 3 — Verification" in prompt
     assert "Phase 4 — Mitigation" in prompt
+    assert "## How to work" not in prompt
 
 
 def test_build_investigation_system_prompt_includes_missing_context_rule() -> None:
@@ -55,6 +57,17 @@ def test_build_investigation_system_prompt_includes_alignment_and_tradeoffs() ->
     assert "Remediation trade-offs:" in prompt
     assert "blast radius" in prompt
     assert "reversibility" in prompt
+
+
+def test_stagnation_nudge_matches_incident_command_output_contract() -> None:
+    nudge = STAGNATION_NUDGE.lower()
+
+    assert "triage complete" in nudge
+    assert "status block" in nudge
+    assert "hypotheses" in nudge
+    assert "verification" in nudge
+    assert "follow-up questions" in nudge
+    assert "remediation trade-offs" in nudge
 
 
 def test_build_investigation_system_prompt_hermes_includes_hermes_taxonomy_only() -> None:
