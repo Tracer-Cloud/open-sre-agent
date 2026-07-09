@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import contextvars
 import logging
 import queue
 import threading
@@ -459,7 +460,10 @@ async def astream_investigation(
             with contextlib.suppress(RuntimeError):
                 loop.call_soon_threadsafe(event_queue.put_nowait, None)
 
-    thread = threading.Thread(target=_run_pipeline, daemon=True)
+    # Copy the caller's context so ContextVar bindings (session trace) reach the thread.
+    thread = threading.Thread(
+        target=contextvars.copy_context().run, args=(_run_pipeline,), daemon=True
+    )
     thread.start()
 
     while True:

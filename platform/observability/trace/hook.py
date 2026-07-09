@@ -4,9 +4,6 @@ When a real :class:`~platform.observability.trace.spans.SessionTraceSink` is
 registered (REPL JSONL), wraps the callable in :func:`timed_span`. When the
 default noop sink is active, the wrapper is a near-zero-cost pass-through
 (``isinstance`` check only — no clock, no I/O).
-
-This is **not** OpenTelemetry export. Product OTLP emission is intentionally
-out of scope; ``otlp_trace.py`` parses vendor traces for investigation tools.
 """
 
 from __future__ import annotations
@@ -18,13 +15,13 @@ from typing import Any, TypeVar
 _F = TypeVar("_F", bound=Callable[..., Any])
 
 
-def traceable(name: str = "", **_kw: Any) -> Callable[[_F], _F]:
+def traceable(name: str = "", **_kwargs: Any) -> Callable[[_F], _F]:
     """Wrap ``fn`` in a session-trace component span when tracing is active.
 
     Extra keyword arguments are accepted for forward compatibility with
     call sites that pass metadata; they are ignored.
     """
-    del _kw
+    del _kwargs
 
     def decorator(fn: _F) -> _F:
         span_name = name or getattr(fn, "__qualname__", getattr(fn, "__name__", "callable"))

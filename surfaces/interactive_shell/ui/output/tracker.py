@@ -158,8 +158,7 @@ class ProgressTracker(ToolTrackingMixin):
         )
         event = ProgressEvent(node_name, elapsed_ms, fields_updated, status, message)
         self.events.append(event)
-        # Stage spans are owned by tools/investigation/lifecycle.py timed_span —
-        # do not emit here (avoids duplicate stage records + UI-name drift).
+        # UI progress tracking only; stage spans are emitted in the investigation lifecycle.
         if self._silent:
             return
         if self._rich:

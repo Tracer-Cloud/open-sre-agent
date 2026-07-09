@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import contextvars
 import logging
 import queue
 import threading
@@ -138,7 +139,10 @@ def run_session_alert_payload(
             event_queue.put(None)
             loop.close()
 
-    thread = threading.Thread(target=_run_async, daemon=True)
+    # Copy the caller's context so ContextVar bindings (session trace) reach the thread.
+    thread = threading.Thread(
+        target=contextvars.copy_context().run, args=(_run_async,), daemon=True
+    )
     thread.start()
 
     def _cancel_pump() -> None:

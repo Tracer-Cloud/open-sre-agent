@@ -95,8 +95,7 @@ class ToolTrackingMixin:
         start = self._tool_start_times.pop(key, None)
         elapsed_ms = int((time.monotonic() - start) * 1000) if start is not None else None
         stored_input = self._tool_inputs.pop(key, None)
-        # Tool spans are emitted once in core.execution.execute_tool_calls (all
-        # surfaces). UI tracking here is display-only — do not double-emit.
+        # UI tool tracking only; tool spans are emitted in core.execution.
         if self._silent:
             return
         self._update_tool_summary_subtext()

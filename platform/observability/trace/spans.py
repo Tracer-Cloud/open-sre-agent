@@ -146,7 +146,7 @@ def timed_span(
     status = "ok"
     try:
         yield attrs
-    except Exception:
+    except BaseException:
         status = "error"
         raise
     finally:
