@@ -152,15 +152,18 @@ def timed_span(
         return
     started = time.monotonic()
     status = SPAN_STATUS_OK
+    body_raised = False
     try:
         yield attrs
     except BaseException:
         status = SPAN_STATUS_ERROR
+        body_raised = True
         raise
     finally:
         duration_ms = int((time.monotonic() - started) * _MS_PER_SECOND)
         override = attrs.pop(SPAN_STATUS_ATTR, None)
-        if isinstance(override, str) and override:
+        # Only honor a caller override when the body did not raise.
+        if not body_raised and isinstance(override, str) and override:
             status = override
         _sink.emit(
             sid,

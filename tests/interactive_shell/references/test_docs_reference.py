@@ -172,23 +172,13 @@ class TestFindRelevantDocs:
 
 
 class TestBuildDocsReferenceText:
-    def test_returns_empty_when_no_docs_present(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        tmp_path: Path,
-    ) -> None:
-        # Point the module at a non-existent docs root.
-        monkeypatch.setattr(docs_reference, "_DOCS_ROOT", tmp_path / "missing")
-        assert DocsReference().build_text("anything") == ""
+    def test_returns_empty_when_no_docs_present(self, tmp_path: Path) -> None:
+        # Point at a non-existent docs root.
+        assert DocsReference().build_text("anything", root=tmp_path / "missing") == ""
 
-    def test_includes_relevant_doc_excerpt_and_index(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        tmp_path: Path,
-    ) -> None:
+    def test_includes_relevant_doc_excerpt_and_index(self, tmp_path: Path) -> None:
         _seed_docs(tmp_path)
-        monkeypatch.setattr(docs_reference, "_DOCS_ROOT", tmp_path)
-        text = DocsReference().build_text("how do I configure Datadog?")
+        text = DocsReference().build_text("how do I configure Datadog?", root=tmp_path)
         assert "datadog.mdx" in text
         assert "API Key" in text
         # The compact index of all pages must always be appended so the LLM
@@ -196,14 +186,9 @@ class TestBuildDocsReferenceText:
         assert "docs index" in text
         assert "deployment.mdx" in text
 
-    def test_truncates_to_max_chars(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        tmp_path: Path,
-    ) -> None:
+    def test_truncates_to_max_chars(self, tmp_path: Path) -> None:
         _seed_docs(tmp_path)
-        monkeypatch.setattr(docs_reference, "_DOCS_ROOT", tmp_path)
-        text = DocsReference().build_text("Datadog", max_chars=120)
+        text = DocsReference().build_text("Datadog", max_chars=120, root=tmp_path)
         assert len(text) <= 200
         assert "truncated" in text
 

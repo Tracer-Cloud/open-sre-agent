@@ -71,11 +71,6 @@ def _trace_spans(path: Path) -> list[dict[str, Any]]:
     ]
 
 
-def _raise(exc: BaseException) -> None:
-    """Raise ``exc`` from inside a ``with`` body."""
-    raise exc
-
-
 def test_sample_thread_snapshot_lists_current_thread() -> None:
     snap = sample_thread_snapshot()
     assert snap["thread_count"] >= 1
@@ -176,13 +171,17 @@ def test_timed_span_marks_error_on_exception(
 ) -> None:
     from platform.observability.trace.spans import SPAN_STATUS_ERROR
 
+    def _raise_runtime_error() -> None:
+        raise RuntimeError("boom")
+
     session_id = "sess-exc"
     path = _activate_jsonl_sink(tmp_path, session_id, monkeypatch)
-    with (
-        pytest.raises(RuntimeError, match="boom"),
-        timed_span(span_kind="component", name="failing", session_id=session_id),
-    ):
-        _raise(RuntimeError("boom"))
+    # Outer raises so the exception still propagates through timed_span's
+    # finally (status=error); inner span must not be wrapped by pytest.raises
+    # or the exception would be swallowed before the span exits.
+    with pytest.raises(RuntimeError, match="boom"):
+        with timed_span(span_kind="component", name="failing", session_id=session_id):
+            _raise_runtime_error()
     rec = _trace_spans(path)[-1]
     assert rec["name"] == "failing"
     assert rec["status"] == SPAN_STATUS_ERROR
@@ -195,13 +194,14 @@ def test_timed_span_marks_error_on_base_exception(
     # KeyboardInterrupt / CancelledError derive from BaseException, not Exception.
     from platform.observability.trace.spans import SPAN_STATUS_ERROR
 
+    def _raise_keyboard_interrupt() -> None:
+        raise KeyboardInterrupt
+
     session_id = "sess-cancel"
     path = _activate_jsonl_sink(tmp_path, session_id, monkeypatch)
-    with (
-        pytest.raises(KeyboardInterrupt),
-        timed_span(span_kind="tool", name="cancelled", session_id=session_id),
-    ):
-        _raise(KeyboardInterrupt())
+    with pytest.raises(KeyboardInterrupt):
+        with timed_span(span_kind="tool", name="cancelled", session_id=session_id):
+            _raise_keyboard_interrupt()
     rec = _trace_spans(path)[-1]
     assert rec["name"] == "cancelled"
     assert rec["status"] == SPAN_STATUS_ERROR

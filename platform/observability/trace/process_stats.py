@@ -13,17 +13,18 @@ _MAX_THREADS_IN_SNAPSHOT = 40
 
 #: ``resource.getrusage`` units differ by platform; convert to mebibytes.
 _BYTES_PER_KIBIBYTE = 1024
-_BYTES_PER_MEBIBYTE = _BYTES_PER_KIBIBYTE * _BYTES_PER_KIBIBYTE
+_KIB_PER_MIB = _BYTES_PER_KIBIBYTE
+_BYTES_PER_MEBIBYTE = _BYTES_PER_KIBIBYTE * _KIB_PER_MIB
 _RSS_MB_DECIMAL_PLACES = 2
 
 
 def _normalize_rss_mb(ru_maxrss: int) -> float:
-    """Normalize ``resource.getrusage`` RSS to megabytes (macOS vs Linux)."""
+    """Normalize ``resource.getrusage`` RSS to mebibytes (macOS vs Linux)."""
     if sys.platform == "darwin":
         # Darwin reports ``ru_maxrss`` in bytes.
         return round(ru_maxrss / _BYTES_PER_MEBIBYTE, _RSS_MB_DECIMAL_PLACES)
-    # Linux reports ``ru_maxrss`` in kibibytes.
-    return round(ru_maxrss / _BYTES_PER_KIBIBYTE, _RSS_MB_DECIMAL_PLACES)
+    # Linux reports ``ru_maxrss`` in kibibytes → divide by KiB/MiB.
+    return round(ru_maxrss / _KIB_PER_MIB, _RSS_MB_DECIMAL_PLACES)
 
 
 def sample_resource_snapshot() -> dict[str, Any]:
