@@ -397,6 +397,7 @@ class TestResumeScenarioMatrix:
             '"type": "leaf"'
         ) != -1
 
+
 @pytest.mark.integration
 @pytest.mark.live_llm
 class TestResumeLiveRepl:
