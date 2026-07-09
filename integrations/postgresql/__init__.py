@@ -12,7 +12,7 @@ import os
 from dataclasses import dataclass
 from typing import Any
 
-from pydantic import Field, field_validator
+from pydantic import Field, ValidationError, field_validator
 
 from integrations._relational import (
     RelationalConfigBase,
@@ -820,7 +820,15 @@ def classify(
                 "ssl_mode": credentials.get("ssl_mode", "prefer"),
             }
         )
+    except ValidationError as exc:
+        report_classify_failure(exc, logger=logger, integration="postgresql", record_id=record_id)
+        return None, None
     except Exception as exc:
+        logger.warning(
+            "classify_failed: integration=postgresql record_id=%s unexpected error",
+            record_id,
+            exc_info=True,
+        )
         report_classify_failure(exc, logger=logger, integration="postgresql", record_id=record_id)
         return None, None
     if cfg.host and cfg.database:

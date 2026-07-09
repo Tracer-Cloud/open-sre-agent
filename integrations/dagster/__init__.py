@@ -13,6 +13,8 @@ from collections import deque
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from pydantic import ValidationError
+
 from config.strict_config import StrictConfigModel
 from integrations._validation_helpers import report_classify_failure
 
@@ -322,7 +324,15 @@ def classify(
                 "integration_id": record_id,
             }
         )
+    except ValidationError as exc:
+        report_classify_failure(exc, logger=logger, integration="dagster", record_id=record_id)
+        return None, None
     except Exception as exc:
+        logger.warning(
+            "classify_failed: integration=dagster record_id=%s unexpected error",
+            record_id,
+            exc_info=True,
+        )
         report_classify_failure(exc, logger=logger, integration="dagster", record_id=record_id)
         return None, None
     if cfg.endpoint:

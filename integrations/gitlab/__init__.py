@@ -9,7 +9,7 @@ from typing import Any
 from urllib.parse import quote
 
 import httpx
-from pydantic import Field, field_validator
+from pydantic import Field, ValidationError, field_validator
 
 from config.strict_config import StrictConfigModel
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
@@ -254,7 +254,15 @@ def classify(credentials: dict[str, Any], record_id: str) -> tuple[GitlabConfig 
                 "auth_token": credentials.get("auth_token", ""),
             }
         )
+    except ValidationError as exc:
+        report_classify_failure(exc, logger=logger, integration="gitlab", record_id=record_id)
+        return None, None
     except Exception as exc:
+        logger.warning(
+            "classify_failed: integration=gitlab record_id=%s unexpected error",
+            record_id,
+            exc_info=True,
+        )
         report_classify_failure(exc, logger=logger, integration="gitlab", record_id=record_id)
         return None, None
     return cfg, "gitlab"

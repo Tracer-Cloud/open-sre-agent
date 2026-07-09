@@ -29,7 +29,7 @@ import httpx
 from mcp import ClientSession, StdioServerParameters, types  # type: ignore[import-not-found]
 from mcp.client.sse import sse_client  # type: ignore[import-not-found]
 from mcp.client.stdio import stdio_client  # type: ignore[import-not-found]
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, ValidationError, field_validator, model_validator
 from typing_extensions import TypedDict
 
 from config.strict_config import StrictConfigModel
@@ -642,7 +642,15 @@ def classify(
                 "integration_id": record_id,
             }
         )
+    except ValidationError as exc:
+        report_classify_failure(exc, logger=logger, integration="openclaw", record_id=record_id)
+        return None, None
     except Exception as exc:
+        logger.warning(
+            "classify_failed: integration=openclaw record_id=%s unexpected error",
+            record_id,
+            exc_info=True,
+        )
         report_classify_failure(exc, logger=logger, integration="openclaw", record_id=record_id)
         return None, None
     if cfg.is_configured:
