@@ -110,8 +110,9 @@ jobs:
             shard: tools-runtime
             pytest_paths: >-
               tests/tools
-              tests/core/runtime/llm
+              tests/core/runtime
               tests/platform/observability
+              tests/platform/terminal
               tests/utils
               tests/masking
               tests/core/domain/types
@@ -131,6 +132,7 @@ jobs:
             llm_provider: openai
             pytest_paths: >-
               tests/cli
+              tests/interactive_shell
               tests/agent
               tests/core/agent
               tests/fleet_monitoring
