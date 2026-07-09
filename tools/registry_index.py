@@ -198,8 +198,16 @@ def _module_dotted(path: Path) -> str:
 
 def _descriptors_in_file(path: Path) -> list[ToolDescriptor]:
     try:
-        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    except (SyntaxError, UnicodeDecodeError):
+        text = path.read_text(encoding="utf-8")
+    except (UnicodeDecodeError, OSError):
+        return []
+    # Skip the AST parse for files that can't declare a tool. The
+    # ``index == registry`` contract test guarantees this never drops a tool.
+    if "@tool" not in text and "BaseTool" not in text:
+        return []
+    try:
+        tree = ast.parse(text, filename=str(path))
+    except SyntaxError:
         return []
     module = _module_dotted(path)
     descriptors: list[ToolDescriptor] = []

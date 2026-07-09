@@ -15,7 +15,7 @@ from typing import Any
 import pytest
 
 import tools.registry as registry_module
-from tools.registry import get_registered_tools
+from tools.registry import get_registered_tools, get_tool_descriptors, load_tool
 from tools.registry_index import build_descriptor_index
 
 
@@ -77,3 +77,19 @@ def test_surface_scoped_load_equals_full_filtered() -> None:
         scoped = {tool.name for tool in get_registered_tools(surface)}
         expected = {tool.name for tool in full if surface in (getattr(tool, "surfaces", ()) or ())}
         assert scoped == expected, surface
+
+
+def test_get_tool_descriptors_match_surface_load() -> None:
+    assert {d.name for d in get_tool_descriptors()} == set(build_descriptor_index())
+    for surface in ("action", "chat", "investigation"):
+        descriptor_names = {d.name for d in get_tool_descriptors(surface)}
+        tool_names = {tool.name for tool in get_registered_tools(surface)}
+        assert descriptor_names == tool_names, surface
+
+
+def test_load_tool_materializes_the_executor() -> None:
+    # @tool-decorated (AST-indexed) and RegisteredTool-constructed (pinned) both load.
+    for name in ("query_datadog_all", "shell_run"):
+        descriptor = next(d for d in get_tool_descriptors() if d.name == name)
+        tool = load_tool(descriptor)
+        assert tool is not None and tool.name == name

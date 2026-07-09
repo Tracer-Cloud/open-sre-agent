@@ -11,12 +11,16 @@ from dataclasses import replace
 from functools import lru_cache
 from pathlib import Path
 from types import ModuleType
+from typing import TYPE_CHECKING
 
 import tools as tools_package
 from config.constants.paths import REPO_ROOT
 from core.tool_framework.base import BaseTool
 from core.tool_framework.registered_tool import REGISTERED_TOOL_ATTR, RegisteredTool, ToolSurface
 from core.tool_framework.skill_guidance import format_tool_skill_guidance, load_tool_skill_guidance
+
+if TYPE_CHECKING:
+    from tools.registry_index import ToolDescriptor
 
 # Per-vendor tool packages — when a vendor consolidates its tool code under
 # ``integrations/<vendor>/tools/``, list the dotted package path here so the
@@ -445,6 +449,37 @@ def get_registered_tool_map(surface: ToolSurface | None = None) -> dict[str, Reg
     if surface is None:
         return dict(_load_registry_tool_map())
     return {tool.name: tool for tool in get_registered_tools(surface)}
+
+
+def get_tool_descriptors(surface: ToolSurface | None = None) -> list[ToolDescriptor]:
+    """Cheap tool metadata for ``surface`` — reads the static index, imports no
+    executor (see #3686). Use for listing/availability; call :func:`load_tool`
+    to materialize an executor only when a tool must run.
+    """
+    from tools.registry_index import build_descriptor_index
+
+    descriptors = build_descriptor_index().values()
+    if surface is not None:
+        descriptors = [d for d in descriptors if surface in d.surfaces]  # type: ignore[assignment]
+    return sorted(descriptors, key=lambda descriptor: descriptor.name)
+
+
+def load_tool(descriptor: ToolDescriptor) -> RegisteredTool | None:
+    """Import a descriptor's module and return its executor — the lazy step.
+
+    Returns ``None`` if the module fails to import or no longer defines the tool.
+    """
+    try:
+        module = importlib.import_module(descriptor.module)
+    except Exception as exc:
+        logger.warning(
+            "[tools] Failed to load %r from %s: %s", descriptor.name, descriptor.module, exc
+        )
+        return None
+    for tool in _collect_registered_tools_from_module(module):
+        if tool.name == descriptor.name:
+            return tool
+    return None
 
 
 class RegisteredToolRegistry:
