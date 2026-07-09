@@ -3,7 +3,7 @@
 The canonical ``tools/`` tree and each per-vendor ``integrations/<vendor>/tools``
 package are walked here; the registry facade (:mod:`tools.registry`) caches the
 result. Kept separate so both the facade and the static descriptor index
-(:mod:`tools.registry_index`) share ``_INTEGRATION_TOOL_PACKAGES`` without a
+(:mod:`tools.registry_index`) share ``INTEGRATION_TOOL_PACKAGES`` without a
 circular import.
 """
 
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 # ``integrations/<vendor>/tools/``, list the dotted package path here so the
 # registry walks it alongside the canonical ``tools/`` package. New vendors get
 # one entry each as they migrate.
-_INTEGRATION_TOOL_PACKAGES: tuple[str, ...] = (
+INTEGRATION_TOOL_PACKAGES: tuple[str, ...] = (
     "integrations.alertmanager.tools",
     "integrations.argocd.tools",
     "integrations.aws.tools",

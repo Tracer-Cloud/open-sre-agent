@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 import tools as tools_package
 from core.tool_framework.registered_tool import RegisteredTool, ToolSurface
 from tools.registry_discovery import (
-    _INTEGRATION_TOOL_PACKAGES,
+    INTEGRATION_TOOL_PACKAGES,
     _collect_registered_tools_from_module,
     _iter_discovered_tool_modules,
 )
@@ -74,7 +74,7 @@ def _load_registry_snapshot() -> tuple[RegisteredTool, ...]:
     # packages, then any externally-registered packages in registration order.
     # First definition of a given tool name wins; duplicates are logged and skipped.
     integration_packages: list[ModuleType] = []
-    for dotted in _INTEGRATION_TOOL_PACKAGES:
+    for dotted in INTEGRATION_TOOL_PACKAGES:
         try:
             integration_packages.append(importlib.import_module(dotted))
         except ImportError as exc:

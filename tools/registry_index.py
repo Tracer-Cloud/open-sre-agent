@@ -20,7 +20,7 @@ from pathlib import Path
 
 from config.constants.paths import REPO_ROOT
 from core.tool_framework.registry_metadata import normalize_surfaces
-from tools.registry_discovery import _INTEGRATION_TOOL_PACKAGES
+from tools.registry_discovery import INTEGRATION_TOOL_PACKAGES
 
 _SKIP_FILE_SUFFIXES = ("_test.py",)
 _TOOL_DECORATOR_NAME = "tool"
@@ -244,7 +244,7 @@ def _descriptors_in_file(path: Path) -> list[ToolDescriptor]:
 
 def _scan_roots() -> list[Path]:
     roots = [REPO_ROOT / "tools"]
-    for dotted in _INTEGRATION_TOOL_PACKAGES:
+    for dotted in INTEGRATION_TOOL_PACKAGES:
         directory = REPO_ROOT / Path(*dotted.split("."))
         if directory.is_dir():
             roots.append(directory)

@@ -240,7 +240,7 @@ def test_auto_discovery_populates_investigation_and_chat_surfaces(
         registry_discovery, "_iter_tool_module_names", lambda _pkg: ["fake_discovered_tool"]
     )
     monkeypatch.setattr(registry_module, "_external_tool_packages", [])
-    monkeypatch.setattr(registry_module, "_INTEGRATION_TOOL_PACKAGES", ())
+    monkeypatch.setattr(registry_module, "INTEGRATION_TOOL_PACKAGES", ())
     monkeypatch.setattr(registry_discovery, "_import_tool_module", lambda _pkg, _name: module)
 
     # Surface-scoped loads read the on-disk descriptor index; assert surface
@@ -274,7 +274,7 @@ def test_action_surface_is_filtered_separately(monkeypatch: pytest.MonkeyPatch) 
         registry_discovery, "_iter_tool_module_names", lambda _pkg: ["fake_action_tool"]
     )
     monkeypatch.setattr(registry_module, "_external_tool_packages", [])
-    monkeypatch.setattr(registry_module, "_INTEGRATION_TOOL_PACKAGES", ())
+    monkeypatch.setattr(registry_module, "INTEGRATION_TOOL_PACKAGES", ())
     monkeypatch.setattr(registry_discovery, "_import_tool_module", lambda _pkg, _name: module)
 
     # Surface-scoped loads read the on-disk descriptor index; assert surface
@@ -371,7 +371,7 @@ def test_manifest_discovery_imports_nested_tool_modules(
     nested_module.lookup_nested_incident = lookup_nested_incident
 
     monkeypatch.setattr(registry_module, "_external_tool_packages", [])
-    monkeypatch.setattr(registry_module, "_INTEGRATION_TOOL_PACKAGES", ())
+    monkeypatch.setattr(registry_module, "INTEGRATION_TOOL_PACKAGES", ())
     monkeypatch.setattr(
         registry_discovery,
         "_iter_tool_module_names",
@@ -416,7 +416,7 @@ def test_manifest_discovery_logs_nested_import_failure_with_full_module_path(
     valid_module.valid_nested_tool = valid_nested_tool
 
     monkeypatch.setattr(registry_module, "_external_tool_packages", [])
-    monkeypatch.setattr(registry_module, "_INTEGRATION_TOOL_PACKAGES", ())
+    monkeypatch.setattr(registry_module, "INTEGRATION_TOOL_PACKAGES", ())
     monkeypatch.setattr(
         registry_discovery,
         "_iter_tool_module_names",
@@ -476,7 +476,7 @@ def test_manifest_discovery_preserves_duplicate_name_first_wins(
     nested_module.nested_tool = nested_tool
 
     monkeypatch.setattr(registry_module, "_external_tool_packages", [])
-    monkeypatch.setattr(registry_module, "_INTEGRATION_TOOL_PACKAGES", ())
+    monkeypatch.setattr(registry_module, "INTEGRATION_TOOL_PACKAGES", ())
     monkeypatch.setattr(
         registry_discovery,
         "_iter_tool_module_names",
@@ -521,7 +521,7 @@ def test_top_level_discovery_unchanged_without_manifest(
     import_calls: list[tuple[str, str]] = []
 
     monkeypatch.setattr(registry_module, "_external_tool_packages", [])
-    monkeypatch.setattr(registry_module, "_INTEGRATION_TOOL_PACKAGES", ())
+    monkeypatch.setattr(registry_module, "INTEGRATION_TOOL_PACKAGES", ())
     monkeypatch.setattr(
         registry_discovery,
         "_iter_tool_module_names",
