@@ -10,7 +10,7 @@ from collections.abc import Generator
 from typing import Any, NoReturn
 
 from core.domain.stream import StreamEvent
-from platform.observability.tracing import traceable
+from platform.observability.trace.hook import traceable
 from surfaces.cli.error_mapping import reraise_cli_runtime_error
 from tools.investigation.session_runner import InvestigationPumpCancelled, check_llm_settings
 

@@ -14,7 +14,7 @@ from gateway import webapp
 
 def test_webapp_module_calls_init_sentry_on_import(monkeypatch: pytest.MonkeyPatch) -> None:
     init_mock = MagicMock()
-    monkeypatch.setattr("platform.observability.sentry_sdk.init_sentry", init_mock)
+    monkeypatch.setattr("platform.observability.errors.sentry.init_sentry", init_mock)
 
     importlib.reload(webapp)
 

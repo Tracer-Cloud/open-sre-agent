@@ -1,8 +1,8 @@
 """Unit tests for the enriched metric summary helper.
 
 Pins the agent-facing fields (`mean`, `p95`, `delta`, `delta_pct`,
-`window_minutes`) added to address the metrics-interpretation risk flagged
-in tests/TEST_CASES_README.md (LLMs struggle to summarize raw series).
+`window_minutes`) added so agents can summarize raw Prometheus series
+without misreading spikes and baselines.
 """
 
 from __future__ import annotations

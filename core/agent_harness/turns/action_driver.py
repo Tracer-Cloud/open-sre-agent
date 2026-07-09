@@ -38,7 +38,8 @@ from core.events import runtime_event_callback_from_observer
 from core.execution import ToolExecutionHooks, public_tool_input
 from core.llm.failure_classification import is_context_length_overflow
 from core.llm.types import AgentLLMResponse, ToolCall
-from platform.observability.prompt_trace import persist_turn_system_prompt
+from platform.observability.trace.prompts import persist_turn_system_prompt
+from platform.observability.trace.spans import component_span
 
 log = logging.getLogger(__name__)
 
@@ -379,6 +380,34 @@ def run_action_agent_turn(
     (potentially mid-mutation) session, and its resolved integrations build the
     action tools so prompt and tools agree.
     """
+    with component_span("action_turn", session_id=getattr(session, "session_id", None)):
+        return _run_action_agent_turn_body(
+            message,
+            session,
+            output=output,
+            tools=tools,
+            confirm_fn=confirm_fn,
+            is_tty=is_tty,
+            deps=deps,
+            turn_plan=turn_plan,
+            error_reporter=error_reporter,
+            tool_hooks=tool_hooks,
+        )
+
+
+def _run_action_agent_turn_body(
+    message: str,
+    session: SessionStore,
+    *,
+    output: OutputSink,
+    tools: ToolProvider,
+    confirm_fn: ConfirmFn | None = None,
+    is_tty: bool | None = None,
+    deps: ToolCallingDeps | None = None,
+    turn_plan: TurnPlan | None = None,
+    error_reporter: ErrorReporter | None = None,
+    tool_hooks: ToolExecutionHooks | None = None,
+) -> ToolCallingTurnResult:
     turn_snapshot = turn_plan.snapshot if turn_plan is not None else None
     # Read the turn's resolved integrations once, so the action tools and the
     # AgentConfig are built from the same view (single source, no re-resolve).
@@ -393,6 +422,11 @@ def run_action_agent_turn(
     tool_resources_provider = getattr(tools, "tool_resources", None)
     tool_resources = tool_resources_provider() if callable(tool_resources_provider) else {}
     observer = tools.observer(message=message)
+    log.debug(
+        "action_turn start tools=%s integrations=%s",
+        len(agent_tools),
+        len(resolved_integrations),
+    )
 
     try:
         # LLM selection inside _build_action_agent is inside the try so a factory
@@ -466,6 +500,13 @@ def run_action_agent_turn(
     if handled:
         output.print()
 
+    log.debug(
+        "action_turn done planned=%s executed=%s handled=%s investigation=%s",
+        planned_count,
+        executed_count,
+        handled,
+        investigation_dispatched,
+    )
     return ToolCallingTurnResult(
         planned_count,
         executed_count,

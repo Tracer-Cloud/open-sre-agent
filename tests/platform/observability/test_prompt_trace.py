@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from core.agent_harness.session import InMemorySessionStorage
-from platform.observability.prompt_trace import persist_turn_system_prompt
+from platform.observability.trace.prompts import persist_turn_system_prompt
 from surfaces.interactive_shell.session import Session
 
 

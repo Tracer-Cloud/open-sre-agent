@@ -126,7 +126,7 @@ def _persist_tool_calls(session: Session, executed: list[tuple[Any, Any]]) -> No
     swallowed so logging never breaks the turn.
     """
     from core.agent_harness.session import default_session_storage
-    from platform.observability.tool_trace import redact_sensitive
+    from platform.observability.trace.redaction import redact_sensitive
 
     storage = default_session_storage()
     for tc, output in executed:

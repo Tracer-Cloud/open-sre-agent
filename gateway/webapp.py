@@ -31,7 +31,7 @@ from core.domain.alerts.inbox import (
 
 ensure_project_platform_package()
 
-from platform.observability.sentry_sdk import init_sentry  # noqa: E402
+from platform.observability.errors.sentry import init_sentry  # noqa: E402
 
 init_sentry(entrypoint="webapp")
 

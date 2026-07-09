@@ -41,7 +41,8 @@ from core.llm.types import ToolCall
 from core.messages import MessageMapper, UserRuntimeMessage
 from core.provider import ProviderRequest
 from core.types import RuntimeTool
-from platform.observability.tool_trace import redact_sensitive
+from platform.observability.trace.redaction import redact_sensitive
+from platform.observability.trace.spans import llm_span
 
 logger = logging.getLogger(__name__)
 
@@ -141,11 +142,13 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
                 message_count=len(provider_request.messages),
             )
         )
-        response = self._llm.invoke(
-            provider_request.messages,
-            system=provider_request.system,
-            tools=provider_request.tools,
-        )
+        model_name = str(getattr(self._llm, "model_id", None) or "invoke")
+        with llm_span(model_name, iteration=iteration):
+            response = self._llm.invoke(
+                provider_request.messages,
+                system=provider_request.system,
+                tools=provider_request.tools,
+            )
         response = self._host._after_response(provider_request, response)
         self._host._emit_runtime(
             ProviderRequestEndEvent(

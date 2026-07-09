@@ -272,7 +272,7 @@ class SessionManager:
         to prevent per-session leaks.
         """
         self._flush(session)
-        from platform.observability.session_trace import emit_thread_boundary
+        from platform.observability.trace.spans import emit_thread_boundary
 
         emit_thread_boundary(session.session_id, name="session_end", phase="session_end")
         session.release_resources()

@@ -15,7 +15,7 @@ import logging
 from collections.abc import Callable
 from typing import Any, Literal
 
-from platform.observability.errors import report_exception
+from platform.observability.errors.boundary import report_exception
 
 ToolErrorSeverity = Literal["error", "warning"]
 

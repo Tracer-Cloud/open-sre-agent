@@ -23,6 +23,7 @@ from core.agent_harness.turns.headless_dispatch import HeadlessAgent
 from gateway.gateway_output_sink import GatewayOutputSink
 from gateway.headless_subprocess_presenter import headless_subprocess_presenter_factory
 from gateway.status_messages import status_from_tool_start
+from platform.observability.trace.spans import traced_session
 
 
 class _ToolStatusObserver:
@@ -63,16 +64,23 @@ class GatewayTurnHandler:
         sink: GatewayOutputSink,
         logger: logging.Logger,
     ) -> None:
-        agent = self._agent_for_turn(text=text, session=session, sink=sink, logger=logger)
-        turn_result = agent.dispatch(text)
-        outbound_text = (
-            turn_result.assistant_response_text or turn_result.action_result.response_text
-        ).strip()
-        # A streamed answer (answered=True) already resolved the placeholder status
-        # via the sink. Otherwise always finalize so the placeholder never hangs —
-        # even when the turn produced no text.
-        if not turn_result.answered:
-            sink.finalize(outbound_text or "I didn't have anything to add for that.")
+        with traced_session(getattr(session, "session_id", None), component="gateway_turn"):
+            agent = self._agent_for_turn(text=text, session=session, sink=sink, logger=logger)
+            turn_result = agent.dispatch(text)
+            outbound_text = (
+                turn_result.assistant_response_text or turn_result.action_result.response_text
+            ).strip()
+            logger.debug(
+                "gateway_turn done intent=%s answered=%s outbound_chars=%s",
+                turn_result.final_intent,
+                turn_result.answered,
+                len(outbound_text),
+            )
+            # A streamed answer (answered=True) already resolved the placeholder status
+            # via the sink. Otherwise always finalize so the placeholder never hangs —
+            # even when the turn produced no text.
+            if not turn_result.answered:
+                sink.finalize(outbound_text or "I didn't have anything to add for that.")
 
     def _agent_for_turn(
         self,

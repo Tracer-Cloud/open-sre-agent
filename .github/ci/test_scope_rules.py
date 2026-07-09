@@ -72,7 +72,6 @@ RULES: tuple[PathRule, ...] = (
         "integrations/google_docs/",
         (
             "tests/integrations/google_docs/",
-            "tests/test_google_docs.py",
             "tests/tools/test_google_docs_create_report_tool.py",
             "tests/tools/test_telemetry.py",
         ),
@@ -543,11 +542,14 @@ RULES: tuple[PathRule, ...] = (
     PathRule("tools/system/watch_dog/", ("tests/watch_dog/",)),
     PathRule("tools/", ("tests/tools/",)),
     PathRule("platform/analytics/", ("tests/analytics/",)),
-    PathRule("platform/guardrails/", ("tests/test_guardrails/",)),
+    PathRule("platform/guardrails/", ("tests/platform/guardrails/",)),
     PathRule("platform/masking/", ("tests/masking/",)),
     PathRule("platform/packaging/", ("tests/packaging/",)),
     PathRule("platform/sandbox/", ("tests/sandbox/",)),
-    PathRule("platform/deployment/", ("tests/deployment/", "tests/test_deployment_health.py")),
+    PathRule(
+        "platform/deployment/",
+        ("tests/deployment/", "tests/platform/deployment/test_deployment_health.py"),
+    ),
     PathRule("platform/auth/", ("tests/platform/auth/",)),
     PathRule("gateway/webapp.py", ("gateway/tests/test_webapp.py",)),
     # Repo-wide config

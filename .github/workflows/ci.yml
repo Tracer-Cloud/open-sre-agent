@@ -108,15 +108,17 @@ jobs:
         include:
           - os: ubuntu-latest
             shard: tools-runtime
+            # ``tests/core/agent`` is excluded here; it runs in cli-runtime,
+            # which pins openai for its live action-planning oracles.
+            extra_pytest_args: >-
+              --ignore=tests/core/agent
             pytest_paths: >-
               tests/tools
-              tests/core/runtime/llm
-              tests/platform/observability
+              tests/core
+              tests/platform
               tests/utils
               tests/masking
-              tests/core/domain/types
               tests/watch_dog
-              tests/test_core_layering.py
           - os: ubuntu-latest
             shard: cli-runtime
             # Live shell action-agent contracts are validated on openai,
@@ -131,6 +133,7 @@ jobs:
             llm_provider: openai
             pytest_paths: >-
               tests/cli
+              tests/interactive_shell
               tests/agent
               tests/core/agent
               tests/fleet_monitoring
@@ -139,7 +142,6 @@ jobs:
               tests/delivery
               tests/sandbox
               tests/hermes
-              tests/github
           - os: ubuntu-latest
             shard: integrations-and-misc
             pytest_paths: >-
@@ -148,33 +150,10 @@ jobs:
               tests/benchmarks
               tests/chaos_engineering
               tests/shared
-              tests/test_guardrails
-              tests/cli_smoke_test.py
-              tests/test_aws_urls.py
-              tests/test_bug_fixes_e2e.py
-              tests/test_chaos_engineering_paths.py
-              tests/test_config.py
-              tests/test_datadog_adapter.py
-              tests/test_datadog_provider.py
-              tests/test_deployment_health.py
-              tests/test_devcontainer.py
-              tests/test_dockerfile.py
-              tests/test_ec2_deploy.py
-              tests/test_ec2_instance.py
-              tests/test_google_docs.py
-              tests/test_kill_switch_matrix.py
-              tests/test_llm_credentials.py
-              tests/test_llm_reasoning_effort.py
-              tests/test_mariadb_integration.py
-              tests/test_mongodb_atlas_integration.py
-              tests/test_mongodb_integration.py
-              tests/test_naming_conventions.py
-              tests/test_openclaw_integration.py
-              tests/test_removed_architecture_references.py
-              tests/test_sentry_init.py
-              tests/test_state.py
-              tests/test_upstream_correlation_provider.py
-              tests/test_version.py
+              tests/config
+              tests/github_ci
+              tests/packaging
+              tests/scheduler
               gateway/tests
           - os: ubuntu-latest
             shard: e2e-general
@@ -233,14 +212,31 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen --extra dev
 
+      - name: Validate pytest marker
+        env:
+          # Fork PRs do not receive repository secrets; skip live_llm contracts
+          # (see interactive-shell-live.yml). Index a JSON string array so the
+          # value is always a marker string — never a bare boolean from
+          # ``a && 'x' || 'y'`` (boolean false → ``-m false`` → xdist
+          # ``N workers [0 items]``, which can still exit 0).
+          PYTEST_MARKER_EXPR: ${{ fromJSON('["not synthetic", "not (synthetic or live_llm)"]')[github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == true] }}
+        run: |
+          echo "PYTEST_MARKER_EXPR=${PYTEST_MARKER_EXPR}"
+          case "${PYTEST_MARKER_EXPR}" in
+            "not synthetic"|"not (synthetic or live_llm)") ;;
+            *)
+              echo "Refusing unexpected PYTEST_MARKER_EXPR: '${PYTEST_MARKER_EXPR}'" >&2
+              exit 1
+              ;;
+          esac
+
       - name: Run tests
         env:
           COVERAGE_FILE: .coverage.${{ matrix.shard }}
-          # Fork PRs do not receive repository secrets; skip live_llm contracts
-          # (see interactive-shell-live.yml). Use a job env var so the marker
-          # expression is always one quoted token (shell `and` would otherwise
-          # split `-m not synthetic and not live_llm` into separate commands).
-          PYTEST_MARKER_EXPR: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) && 'not (synthetic or live_llm)' || 'not synthetic' }}
+          PYTEST_MARKER_EXPR: ${{ fromJSON('["not synthetic", "not (synthetic or live_llm)"]')[github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == true] }}
+        # Keep ``run: >`` (folded) so ``matrix.pytest_paths`` stays one argv list.
+        # A ``run: |`` + ``\`` rewrite can drop/split those paths and yield
+        # ``N workers [0 items]`` even when the marker is correct.
         run: >
           uv run python -m pytest -n auto -v
           ${{ matrix.pytest_paths }}

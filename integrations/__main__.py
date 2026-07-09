@@ -23,7 +23,7 @@ from integrations.cli import (
 from integrations.verify import SUPPORTED_VERIFY_SERVICES
 from platform.analytics.cli import build_cli_invoked_properties, capture_cli_invoked
 from platform.analytics.provider import capture_first_run_if_needed, shutdown_analytics
-from platform.observability.sentry_sdk import init_sentry
+from platform.observability.errors.sentry import init_sentry
 from platform.terminal.prompt_support import install_questionary_escape_cancel
 
 _ENTRYPOINT = "python -m integrations"

@@ -201,6 +201,14 @@ def test_run_foreground_investigation_prompts_feedback_when_pt_app_idle(
         "surfaces.interactive_shell.ui.feedback.prompt_investigation_feedback",
         feedback,
     )
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.ui.components.choice_menu.repl_tty_interactive",
+        lambda: True,
+    )
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.ui.components.key_reader.restore_stdin_terminal",
+        lambda: None,
+    )
 
     run_foreground_investigation(
         session=session,

@@ -7,7 +7,7 @@ import click
 from config.local_env import bootstrap_opensre_env_once
 from platform.analytics.cli import build_cli_invoked_properties, capture_cli_invoked
 from platform.analytics.provider import capture_first_run_if_needed, shutdown_analytics
-from platform.observability.sentry_sdk import init_sentry
+from platform.observability.errors.sentry import init_sentry
 from platform.terminal.prompt_support import install_questionary_escape_cancel
 from surfaces.cli.wizard.flow import run_wizard
 

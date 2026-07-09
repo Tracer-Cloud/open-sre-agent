@@ -12,7 +12,7 @@ from rich.text import Text
 from core.domain.stream import StreamEvent
 from platform.analytics.events import Event
 from platform.analytics.provider import get_analytics
-from platform.observability.tool_trace import format_json_preview
+from platform.observability.trace.redaction import format_json_preview
 from surfaces.cli.ui.renderer.constants import (
     _DIAGNOSE_NODE,
     _HIDDEN_PROGRESS_NODES,

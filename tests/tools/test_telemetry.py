@@ -53,7 +53,7 @@ def captured_sentry_events(
       * ``conftest`` sets ``OPENSRE_SENTRY_DISABLED=1`` to keep the suite
         offline — we re-enable it here.
       * ``capture_exception`` and ``push_scope`` both need to be present
-        for the contextual-tag path inside ``platform.observability.sentry_sdk``.
+        for the contextual-tag path inside ``platform.observability.errors.sentry``.
 
     The mock ``push_scope`` returns a per-call ``_Scope`` instance that
     records every ``set_extra`` and ``set_tag`` call. ``capture_exception``
