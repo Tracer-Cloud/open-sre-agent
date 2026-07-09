@@ -178,9 +178,9 @@ def get_tool_descriptors(surface: ToolSurface | None = None) -> list[ToolDescrip
     """
     from tools.registry_index import build_descriptor_index
 
-    descriptors = build_descriptor_index().values()
+    descriptors = list(build_descriptor_index().values())
     if surface is not None:
-        descriptors = [d for d in descriptors if surface in d.surfaces]  # type: ignore[assignment]
+        descriptors = [d for d in descriptors if surface in d.surfaces]
     return sorted(descriptors, key=lambda descriptor: descriptor.name)
 
 
