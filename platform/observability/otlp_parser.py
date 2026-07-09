@@ -26,9 +26,10 @@ def extract_span_attributes(span: dict[str, Any]) -> dict[str, Any]:
         if not key:
             continue
         value = attr.get("value", {})
-        scalar = next((value[kind] for kind in _OTLP_SCALAR_KINDS if kind in value), None)
-        if scalar is not None:
-            attributes[key] = scalar
+        for kind in _OTLP_SCALAR_KINDS:
+            if kind in value:
+                attributes[key] = value[kind]
+                break
     return attributes
 
 

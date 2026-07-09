@@ -16,9 +16,9 @@ from platform.observability import (
     get_progress_tracker,
     silence_progress_tracker,
 )
-from platform.observability import debug as obs_debug
-from platform.observability import display as obs_display
-from platform.observability import progress as obs_progress
+from platform.observability.render import debug as obs_debug
+from platform.observability.render import display as obs_display
+from platform.observability.render import progress as obs_progress
 from platform.observability.render.debug import set_debug_printer
 from platform.observability.render.display import (
     set_investigation_footer_renderer,
