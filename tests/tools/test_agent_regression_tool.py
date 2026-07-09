@@ -27,8 +27,8 @@ class TestCreateScenarioContract(BaseToolContract):
 
 
 def test_summarize_agent_test_status_no_running_processes() -> None:
-    # Mock psutil.process_iter to return no processes
-    with patch("psutil.process_iter") as mock_iter:
+    # Mock monitor.process_iter to return no processes
+    with patch("tools.system.agent_regression_tool.monitor.process_iter") as mock_iter:
         mock_iter.return_value = []
         result = summarize_agent_test_status()
 
@@ -74,7 +74,7 @@ def test_summarize_agent_test_status_with_running_processes() -> None:
         ],
     }
 
-    with patch("psutil.process_iter") as mock_iter:
+    with patch("tools.system.agent_regression_tool.monitor.process_iter") as mock_iter:
         mock_iter.return_value = [mock_proc1, mock_proc2, mock_proc3]
         result = summarize_agent_test_status()
 

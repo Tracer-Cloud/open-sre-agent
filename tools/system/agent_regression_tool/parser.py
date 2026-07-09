@@ -99,7 +99,7 @@ def parse_transcript(transcript: str) -> tuple[str, list[dict[str, Any]], list[s
         if (
             line_lower.startswith("opensre ")
             or "integrations verify" in line_lower
-            or "investigate" in line_lower
+            or line_lower.startswith("opensre investigate")
         ):
             cmd_text = line
             if cmd_text.lower().startswith("opensre "):
