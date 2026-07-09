@@ -39,12 +39,17 @@ def format_agent_response(
     display: str = "",
     next_action: str = "",
 ) -> str:
-    """Format assistant findings as the standard three-tier Markdown block."""
+    """Format assistant findings as the standard three-tier Markdown block.
+
+    ``found`` is required when ``display`` or ``next_action`` is supplied.
+    """
     finding = found.strip()
-    if not finding:
-        return ""
     detail = display.strip()
     offer = next_action.strip()
+    if not finding:
+        if detail or offer:
+            raise ValueError("found is required when display or next_action is set")
+        return ""
     if not detail and not offer:
         return finding
     sections = [f"**I found:** {finding}"]

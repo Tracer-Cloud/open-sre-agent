@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from core.agent_harness.prompts.rules import (
     AGENT_RESPONSE_THREE_TIER_RULE,
     format_agent_response,
@@ -35,6 +37,11 @@ def test_agent_response_rule_is_in_assistant_system_prompt() -> None:
 
     assert AGENT_RESPONSE_THREE_TIER_RULE.split("\n", maxsplit=1)[0] in prompt
     assert "connecting another integration" in prompt
+
+
+def test_format_agent_response_rejects_empty_found_with_detail() -> None:
+    with pytest.raises(ValueError, match="found is required"):
+        format_agent_response("", "Host: prod-api-3  CPU: 94%", "restart the pod?")
 
 
 def test_observation_block_on_screen_requires_want_me_to() -> None:

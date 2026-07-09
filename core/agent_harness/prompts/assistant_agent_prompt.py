@@ -216,8 +216,9 @@ def _build_observation_block(tool_observation: str | None, *, on_screen: bool = 
             "here."
         )
     return (
-        f"{framing} Do NOT request, plan, or emit any further actions — just answer in "
-        "plain Markdown.\n\n"
+        f"{framing} Do NOT request, plan, or emit any further tool calls or "
+        "actions in this turn — phrase next steps only as prose in "
+        "**Want me to:**.\n\n"
         f"--- tool_results ---\n{tool_observation}\n\n"
     )
 
