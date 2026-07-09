@@ -313,6 +313,23 @@ def test_flush_writes_session_end(tmp_path: Path) -> None:
     assert leaf["investigation_turns"] == 1
 
 
+def test_flush_is_idempotent_after_trailing_trace_span(tmp_path: Path) -> None:
+    """A side-channel trace_span written after a leaf must not let a second leaf
+    slip past flush()'s idempotency guard."""
+    session = _make_session()
+    with _patch_dir(tmp_path):
+        SessionStore.open_session(session)
+        SessionStore.append_turn(session, "chat", "q1")
+        SessionStore.flush(session)
+        SessionStore.append_trace_span(
+            session.session_id, span_kind="tool", name="late", duration_ms=1
+        )
+        SessionStore.flush(session)
+
+    records = _read_lines(tmp_path / f"{session.session_id}.jsonl")
+    assert [r["type"] for r in records].count("leaf") == 1
+
+
 def test_flush_counts_cli_agent_turns_as_chat(tmp_path: Path) -> None:
     """Chat turns recorded as kind='cli_agent' must count as chat_turns."""
     session = _make_session()

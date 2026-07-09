@@ -289,7 +289,14 @@ class JsonlSessionStorage:
             records = self._read_records(path)
             if not records:
                 return
-            if records[-1].get("type") == "leaf":
+            # Ignore trailing side-channel trace_span rows when checking for an
+            # existing leaf, so a span written after a leaf can't slip a second
+            # leaf past this guard (consistent with _current_leaf_id's skip).
+            last_meaningful = next(
+                (rec for rec in reversed(records) if rec.get("type") != "trace_span"),
+                None,
+            )
+            if last_meaningful is not None and last_meaningful.get("type") == "leaf":
                 return
             if not self._has_turns(records):
                 path.unlink(missing_ok=True)
