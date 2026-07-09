@@ -170,7 +170,7 @@ def _import_tool_module_or_none(package: ModuleType, module_name: str) -> Module
         return None
 
 
-def _iter_discovered_tool_modules(package: ModuleType) -> list[ModuleType]:
+def iter_discovered_tool_modules(package: ModuleType) -> list[ModuleType]:
     modules: list[ModuleType] = []
     for module_name in _iter_tool_module_names(package):
         module = _import_tool_module_or_none(package, module_name)
@@ -214,7 +214,7 @@ def _registered_tool_from_candidate(candidate: object) -> RegisteredTool | None:
     return None
 
 
-def _collect_registered_tools_from_module(module: ModuleType) -> list[RegisteredTool]:
+def collect_registered_tools_from_module(module: ModuleType) -> list[RegisteredTool]:
     tools_by_name: dict[str, RegisteredTool] = {}
     seen_candidate_ids: set[int] = set()
 

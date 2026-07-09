@@ -33,11 +33,31 @@ def _capture() -> tuple[Console, io.StringIO]:
 
 
 class TestDispatchSlash:
-    def test_exit_returns_false(self) -> None:
+    def test_exit_returns_false(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            "surfaces.interactive_shell.command_registry.system._flush_analytics_on_exit",
+            lambda _console: None,
+        )
         session = Session()
         console, _ = _capture()
         assert dispatch_slash("/exit", session, console) is False
         assert dispatch_slash("/quit", session, console) is False
+
+    def test_exit_flushes_analytics_before_goodbye(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        calls: list[str] = []
+
+        def _flush(console: Console) -> None:
+            calls.append("flush")
+
+        monkeypatch.setattr(
+            "surfaces.interactive_shell.command_registry.system._flush_analytics_on_exit",
+            _flush,
+        )
+        session = Session()
+        console, buf = _capture()
+        assert dispatch_slash("/quit", session, console) is False
+        assert calls == ["flush"]
+        assert "goodbye." in buf.getvalue()
 
     def test_delegated_cli_failure_does_not_exit_repl(
         self, monkeypatch: pytest.MonkeyPatch

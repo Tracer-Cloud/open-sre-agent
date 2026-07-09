@@ -19,10 +19,10 @@ import tools as tools_package
 from core.tool_framework.registered_tool import RegisteredTool, ToolSurface
 from tools.registry_discovery import (
     INTEGRATION_TOOL_PACKAGES,
-    _collect_registered_tools_from_module,
-    _iter_discovered_tool_modules,
+    collect_registered_tools_from_module,
+    iter_discovered_tool_modules,
 )
-from tools.registry_skill_guidance import _apply_skill_guidance
+from tools.registry_skill_guidance import apply_skill_guidance
 
 if TYPE_CHECKING:
     from tools.registry_index import ToolDescriptor
@@ -96,9 +96,9 @@ def _load_registry_snapshot() -> tuple[RegisteredTool, ...]:
         modules_to_scan: list[ModuleType] = []
         if id(package) in integration_module_ids:
             modules_to_scan.append(package)
-        modules_to_scan.extend(_iter_discovered_tool_modules(package))
+        modules_to_scan.extend(iter_discovered_tool_modules(package))
         for module in modules_to_scan:
-            for tool in _collect_registered_tools_from_module(module):
+            for tool in collect_registered_tools_from_module(module):
                 if tool.name in tools_by_name:
                     logger.warning(
                         "[tools] Duplicate tool name '%s' across modules; keeping first definition",
@@ -107,7 +107,7 @@ def _load_registry_snapshot() -> tuple[RegisteredTool, ...]:
                     continue
                 tools_by_name[tool.name] = tool
 
-    _apply_skill_guidance(tools_by_name)
+    apply_skill_guidance(tools_by_name)
     return tuple(sorted(tools_by_name.values(), key=lambda tool: tool.name))
 
 
@@ -136,17 +136,17 @@ def _load_surface_snapshot(surface: str) -> tuple[RegisteredTool, ...]:
         except Exception as exc:
             logger.warning("[tools] Skipping %s for surface %r: %s", dotted, surface, exc)
             continue
-        for tool in _collect_registered_tools_from_module(module):
+        for tool in collect_registered_tools_from_module(module):
             if surface in tool.surfaces:
                 tools_by_name.setdefault(tool.name, tool)
 
     for package in _external_tool_packages:
-        for module in _iter_discovered_tool_modules(package):
-            for tool in _collect_registered_tools_from_module(module):
+        for module in iter_discovered_tool_modules(package):
+            for tool in collect_registered_tools_from_module(module):
                 if surface in tool.surfaces:
                     tools_by_name.setdefault(tool.name, tool)
 
-    _apply_skill_guidance(tools_by_name, known_tool_names=frozenset(index))
+    apply_skill_guidance(tools_by_name, known_tool_names=frozenset(index))
     return tuple(sorted(tools_by_name.values(), key=lambda tool: tool.name))
 
 
@@ -196,7 +196,7 @@ def load_tool(descriptor: ToolDescriptor) -> RegisteredTool | None:
             "[tools] Failed to load %r from %s: %s", descriptor.name, descriptor.module, exc
         )
         return None
-    for tool in _collect_registered_tools_from_module(module):
+    for tool in collect_registered_tools_from_module(module):
         if tool.name == descriptor.name:
             return tool
     return None

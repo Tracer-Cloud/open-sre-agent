@@ -50,7 +50,7 @@ def test_tool_decorator_registers_function_tool_with_inferred_schema() -> None:
     lookup_incident.__module__ = module.__name__
     module.lookup_incident = lookup_incident
 
-    tools = registry_discovery._collect_registered_tools_from_module(module)
+    tools = registry_discovery.collect_registered_tools_from_module(module)
 
     assert [tool_def.name for tool_def in tools] == ["lookup_incident"]
     registered = tools[0]
@@ -72,7 +72,7 @@ def test_tool_decorator_supports_minimal_single_file_function_tool() -> None:
     check_status.__module__ = module.__name__
     module.check_status = check_status
 
-    tools = registry_discovery._collect_registered_tools_from_module(module)
+    tools = registry_discovery.collect_registered_tools_from_module(module)
 
     assert [tool_def.name for tool_def in tools] == ["check_status"]
     registered = tools[0]

@@ -1,6 +1,6 @@
 """Attach SKILL.md workflow guidance to discovered tools.
 
-The registry facade (:mod:`tools.registry`) calls :func:`_apply_skill_guidance`
+The registry facade (:mod:`tools.registry`) calls :func:`apply_skill_guidance`
 after collecting tools so a tool's description carries the workflow guidance the
 matching SKILL.md declares for it.
 """
@@ -46,7 +46,7 @@ def _with_skill_guidance(tool: RegisteredTool, guidance: str) -> RegisteredTool:
     )
 
 
-def _apply_skill_guidance(
+def apply_skill_guidance(
     tools_by_name: dict[str, RegisteredTool],
     *,
     known_tool_names: frozenset[str] | None = None,
