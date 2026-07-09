@@ -95,6 +95,11 @@ class PromptRecorder:
         self._start = time.monotonic()
         self._flushed = False
 
+    @property
+    def turn_id(self) -> str:
+        """Stable correlation id for this prompt turn."""
+        return self._turn_id
+
     @classmethod
     def start(
         cls,

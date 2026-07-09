@@ -641,6 +641,7 @@ def test_always_tool_call_hits_iteration_cap() -> None:
     )
 
     assert result.hit_iteration_cap is True
+    assert result.llm_iterations_used == max_iterations
     assert len(result.executed) == max_iterations
     assert result.final_text == ""
     assert llm.invocations == max_iterations

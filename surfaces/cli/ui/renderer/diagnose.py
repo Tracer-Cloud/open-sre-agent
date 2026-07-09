@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 import time
+from collections.abc import Callable, Mapping
 from typing import Any
 
 from rich.console import Console
@@ -13,8 +14,8 @@ from rich.spinner import Spinner
 from rich.text import Text
 
 from core.domain.stream import StreamEvent
+from platform.analytics.cli import capture_investigation_lifecycle_event
 from platform.analytics.events import Event
-from platform.analytics.provider import get_analytics
 from surfaces.cli.ui.renderer.constants import (
     _BOLD,
     _DIAGNOSE_LIVE_REFRESH,
@@ -58,6 +59,7 @@ class _DiagnoseStreamRenderer:
         tracker: ProgressTracker | None = None,
         *,
         local: bool = False,
+        state_provider: Callable[[], Mapping[str, object]] | None = None,
     ) -> None:
         self.buffer: list[str] = []
         self._live: Live | None = None
@@ -69,6 +71,7 @@ class _DiagnoseStreamRenderer:
         self._console: Console | None = console
         self._tracker: ProgressTracker | None = tracker
         self._local = local
+        self._state_provider = state_provider
 
     @property
     def streamed(self) -> bool:
@@ -142,13 +145,15 @@ class _DiagnoseStreamRenderer:
         self.buffer.append(text)
         if len(self.buffer) == 1:
             latency_ms = (time.monotonic() - self._started) * 1000
-            get_analytics().capture(
+            state = dict(self._state_provider()) if self._state_provider is not None else None
+            capture_investigation_lifecycle_event(
                 Event.INVESTIGATION_FIRST_HYPOTHESIS_RENDERED,
                 {
                     "latency_ms": int(latency_ms),
                     "stage": _DIAGNOSE_NODE,
                     "source": _render_source(local=self._local),
                 },
+                state=state,
             )
         if self._live is None:
             if _repl_progress_active() and self._tracker is not None:

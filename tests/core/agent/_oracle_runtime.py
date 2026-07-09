@@ -19,7 +19,7 @@ import tools.interactive_shell.actions.shell as shell_tool
 import tools.interactive_shell.actions.slash as slash_tool
 import tools.interactive_shell.actions.synthetic as synthetic_tool
 import tools.interactive_shell.actions.task_cancel as task_cancel_tool
-from platform.analytics.repl_context import bind_cli_session_id, reset_cli_session_id
+from platform.analytics.repl_context import bound_repl_turn_context
 from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.utils.telemetry import PromptRecorder
@@ -407,9 +407,12 @@ def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> Orac
     prompt = case.scenario.input.prompt
     history_start = len(session.history)
 
-    session_token = bind_cli_session_id(session.session_id)
-    try:
-        recorder = PromptRecorder.start(session=session, text=prompt, turn_kind=_AGENT_TURN_KIND)
+    recorder = PromptRecorder.start(session=session, text=prompt, turn_kind=_AGENT_TURN_KIND)
+    with bound_repl_turn_context(
+        session_id=session.session_id,
+        turn_kind=_AGENT_TURN_KIND,
+        prompt_turn_id=recorder.turn_id if recorder is not None else None,
+    ):
         execute_shell_turn(
             prompt,
             session,
@@ -418,8 +421,6 @@ def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> Orac
             confirm_fn=lambda _prompt: "y",
             is_tty=None,
         )
-    finally:
-        reset_cli_session_id(session_token)
     answer = case.answer
     normalized_response = normalize_response_text(console_buffer.getvalue())
     history_delta = [normalize_history_entry(entry) for entry in session.history[history_start:]]

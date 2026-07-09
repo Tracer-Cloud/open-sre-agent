@@ -78,6 +78,7 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
         self._final_system_prompt = self._system
         self._hit_cap = True
         self._terminated_by_tool = False
+        self._iterations_used = 0
 
     def run(self) -> AgentRunResult:
         """Drive the loop to completion and return its outcome."""
@@ -91,6 +92,7 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
             )
         )
         for iteration in range(self._max_iterations):
+            self._iterations_used = iteration + 1
             if self._run_iteration(iteration):
                 break
         return self._finalize()
@@ -300,6 +302,7 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
             tool_results=self._tool_results,
             terminated_by_tool=self._terminated_by_tool,
             hit_iteration_cap=self._hit_cap,
+            llm_iterations_used=self._iterations_used,
             final_system_prompt=self._final_system_prompt,
         )
         self._host._emit_runtime(

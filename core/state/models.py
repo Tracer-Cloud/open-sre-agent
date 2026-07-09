@@ -113,6 +113,7 @@ class AgentStateModel(StrictConfigModel):
     follow_up_questions: list[str] = Field(default_factory=list)
     remediation_tradeoffs: str = ""
     investigation_loop_count: int = 0
+    investigation_iteration_cap: int = 0
     hypotheses: list[str] = Field(default_factory=list)
     executed_hypotheses: list[dict[str, Any]] = Field(default_factory=list)
     evidence_entries: list[dict[str, Any]] = Field(default_factory=list)

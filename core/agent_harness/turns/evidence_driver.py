@@ -31,6 +31,7 @@ from core.agent_harness.prompts.gather import build_gather_system_prompt
 from core.agent_harness.session.integration_resolution import resolve_and_cache_integrations
 from core.domain.alerts.alert_source import SECONDARY_TOOL_SOURCES
 from core.events import runtime_event_callback_from_observer
+from platform.analytics.react_turn import run_react_agent_with_telemetry
 from platform.harness_ports import (
     apply_github_repo_scope,
     infer_github_repo_scope,
@@ -261,8 +262,13 @@ def gather_tool_evidence(
             resolved=resolved,
             on_progress=on_progress,
         )
-        result = agent.run(
-            [{"role": "user", "content": _build_gather_user_message(session, message)}]
+        result = run_react_agent_with_telemetry(
+            agent,
+            [{"role": "user", "content": _build_gather_user_message(session, message)}],
+            phase="gather",
+            iteration_cap=_MAX_GATHER_ITERATIONS,
+            llm=llm,
+            session=session,
         )
         persist_turn_system_prompt(
             session,

@@ -126,8 +126,9 @@ def _start_background_investigation(
                 investigation_id=investigation_id,
                 investigation_target=investigation_target or None,
                 session=session,
-            ):
+            ) as tracker:
                 final_state = run_fn(cancel_requested=task.cancel_requested, **kwargs)
+                tracker.record_loop_metrics_from_state(final_state)
             root = str(final_state.get("root_cause") or "")
             record.status = "completed"
             record.root_cause = root

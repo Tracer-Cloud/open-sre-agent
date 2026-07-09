@@ -223,6 +223,7 @@ class ConnectedInvestigationAgent(EventEmitterMixin, ToolFilterMixin):
         self._last_assistant_text = ""
         self._conclusion_format_nudged = False
         self._post_triage_checkpoint_sent = False
+        loops_completed = 0
         for iteration in range(MAX_INVESTIGATION_LOOPS):
             logger.debug("[agent] iteration=%d", iteration)
             self._emit("llm_start", {"iteration": iteration})
@@ -247,7 +248,10 @@ class ConnectedInvestigationAgent(EventEmitterMixin, ToolFilterMixin):
                     messages=messages,
                     executed_hypotheses=executed_hypotheses,
                     tool_context=tool_context,
+                    investigation_loop_count=iteration + 1,
                 )
+
+            loops_completed = iteration + 1
 
             messages.append(msg_mapper.to_assistant_provider_message(response))
             self._last_assistant_text = str(getattr(response, "content", "") or "")
@@ -359,6 +363,8 @@ class ConnectedInvestigationAgent(EventEmitterMixin, ToolFilterMixin):
             {
                 "evidence_count": len(evidence_entries),
                 "message_count": len(messages),
+                "investigation_loop_count": loops_completed,
+                "investigation_iteration_cap": MAX_INVESTIGATION_LOOPS,
             },
         )
 
@@ -373,6 +379,8 @@ class ConnectedInvestigationAgent(EventEmitterMixin, ToolFilterMixin):
             "evidence_entries": [e.model_dump() for e in evidence_entries],
             "agent_messages": messages,
             "executed_hypotheses": executed_hypotheses,
+            "investigation_loop_count": loops_completed,
+            "investigation_iteration_cap": MAX_INVESTIGATION_LOOPS,
         }
         updates.update(tool_context)
         return updates
