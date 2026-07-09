@@ -115,7 +115,13 @@ def test_format_slack_message_shows_incident_command_section() -> None:
     state["incident_status"] = (
         "Status — confirmed: alert critical | open: deploy time | next: verify DB | owner: on-call"
     )
-    state["missing_context_flags"] = ["recent deploy time/SHA for payments_etl"]
+    state["investigation_hypotheses"] = [
+        "H1: Database outage — confirm: DB error logs; rule out: caller-only misconfig"
+    ]
+    state["verification_summary"] = ["Datadog logs (H1): connection refused errors in payments_etl"]
+    state["follow_up_questions"] = [
+        "Was there a deploy of payments_etl around 14:32 UTC?",
+    ]
     state["remediation_tradeoffs"] = (
         "Rollback is fastest; scaling DB is slower but safer. Recommend rollback first."
     )
@@ -123,7 +129,9 @@ def test_format_slack_message_shows_incident_command_section() -> None:
 
     assert "## Incident Command" in message
     assert "Triage complete: Critical errors isolated to payments_etl." in message
-    assert "Missing context:" in message
+    assert "*Hypotheses:*" in message
+    assert "*Verification:*" in message
+    assert "*Follow-up questions:*" in message
     assert "Remediation trade-offs:" in message
 
 

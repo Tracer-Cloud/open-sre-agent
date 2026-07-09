@@ -325,11 +325,7 @@ class ConnectedInvestigationAgent(EventEmitterMixin, ToolFilterMixin):
                 self._record_tool_end(tc, output)
                 debug_print(f"[{tc.name}] → {summarise(output)}")
 
-            if (
-                iteration == 0
-                and fresh_calls
-                and not self._post_triage_checkpoint_sent
-            ):
+            if iteration == 0 and fresh_calls and not self._post_triage_checkpoint_sent:
                 messages.append({"role": "user", "content": POST_TRIAGE_CHECKPOINT})
                 self._post_triage_checkpoint_sent = True
 

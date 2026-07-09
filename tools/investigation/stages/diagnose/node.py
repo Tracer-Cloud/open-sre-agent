@@ -109,7 +109,9 @@ Evidence keys collected: {", ".join(evidence.keys()) if evidence else "none"}
 Extract incident-command fields when present:
 - triage_summary: the one-line scope after "Triage complete"
 - incident_status: the full "Status — ..." block
-- missing_context_flags: each "[MISSING CONTEXT: ...]" item (without the brackets prefix)
+- investigation_hypotheses: each hypothesis from the "Hypotheses:" section
+- verification_summary: each verification line from the "Verification:" section
+- follow_up_questions: each direct question from the "Follow-up questions:" section
 - remediation_tradeoffs: the remediation trade-offs section, or "N/A — single clear fix path"
 """
 
@@ -122,7 +124,9 @@ Extract incident-command fields when present:
         remediation_steps: list[str]
         triage_summary: str
         incident_status: str
-        missing_context_flags: list[str]
+        investigation_hypotheses: list[str]
+        verification_summary: list[str]
+        follow_up_questions: list[str]
         remediation_tradeoffs: str
         validity_score: float
 
@@ -148,7 +152,9 @@ Extract incident-command fields when present:
         validity_score=schema["validity_score"],
         triage_summary=schema.get("triage_summary", ""),
         incident_status=schema.get("incident_status", ""),
-        missing_context_flags=schema.get("missing_context_flags", []),
+        investigation_hypotheses=schema.get("investigation_hypotheses", []),
+        verification_summary=schema.get("verification_summary", []),
+        follow_up_questions=schema.get("follow_up_questions", []),
         remediation_tradeoffs=schema.get("remediation_tradeoffs", ""),
         alert_source=alert_source,
     )

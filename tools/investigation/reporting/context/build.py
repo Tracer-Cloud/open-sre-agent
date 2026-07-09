@@ -43,7 +43,9 @@ def build_report_context(state: InvestigationState) -> ReportContext:
         "remediation_steps": state.get("remediation_steps", []),
         "triage_summary": state.get("triage_summary", ""),
         "incident_status": state.get("incident_status", ""),
-        "missing_context_flags": state.get("missing_context_flags", []),
+        "investigation_hypotheses": state.get("investigation_hypotheses", []),
+        "verification_summary": state.get("verification_summary", []),
+        "follow_up_questions": state.get("follow_up_questions", []),
         "remediation_tradeoffs": state.get("remediation_tradeoffs", ""),
         "correlation": state.get("correlation", {}),
         # S3 verification

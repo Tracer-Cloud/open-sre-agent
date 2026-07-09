@@ -38,11 +38,11 @@ STAGNATION_NUDGE = (
     "You are repeating tool calls you already made, so they return no new "
     "information and the investigation is not progressing. Stop calling tools and "
     "write your final diagnosis from the evidence already gathered, including the "
-    "required incident-command markers (Triage complete, Status block, MISSING CONTEXT, "
-    "Remediation trade-offs), plus root cause, root cause category, supporting evidence, "
-    "validated and non-validated claims, remediation steps, and a validity score. "
-    "If the evidence is insufficient to determine a root cause, say so explicitly and "
-    "use a low validity score."
+    "required incident-command markers (Triage complete, Status block, Hypotheses, "
+    "Verification, Follow-up questions, Remediation trade-offs), plus root cause, "
+    "root cause category, supporting evidence, validated and non-validated claims, "
+    "remediation steps, and a validity score. If the evidence is insufficient to "
+    "determine a root cause, say so explicitly and use a low validity score."
 )
 
 

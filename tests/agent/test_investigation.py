@@ -861,7 +861,12 @@ def test_should_accept_conclusion_production_default_accepts_complete_text() -> 
     agent._last_assistant_text = (
         "Triage complete: payments_etl only.\n"
         "Status — confirmed: alert critical | open: deploy | next: verify | owner: on-call\n"
-        "[MISSING CONTEXT: recent deploy]\n"
+        "Hypotheses:\n"
+        "1. Database outage — confirm: DB error logs; rule out: caller-only misconfig\n"
+        "Verification:\n"
+        "1. Datadog logs (H1): connection refused errors\n"
+        "Follow-up questions:\n"
+        "1. Was there a recent deploy?\n"
         "Remediation trade-offs: N/A — single clear fix path\n"
         "Root cause: database connection errors."
     )
@@ -1226,7 +1231,12 @@ def _incident_command_diagnosis(summary: str) -> str:
     return (
         "Triage complete: test scope.\n"
         "Status — confirmed: ok | open: none | next: done | owner: on-call\n"
-        "[MISSING CONTEXT: none — alert provides sufficient scope]\n"
+        "Hypotheses:\n"
+        "1. Database outage — confirm: DB error logs; rule out: caller-only misconfig\n"
+        "Verification:\n"
+        "1. Grafana Loki (H1): no logs returned for the window\n"
+        "Follow-up questions:\n"
+        "1. Was there a recent deploy of the affected service?\n"
         "Remediation trade-offs: N/A — single clear fix path\n"
         f"{summary}"
     )
@@ -1309,7 +1319,9 @@ def test_run_does_not_suppress_calls_with_different_args() -> None:
 
     result = _run_agent_with_scripted_llm(invoke=responses, tools=[tool])[0]
     assert tool.run.call_count == 2
-    assert result["agent_messages"][-1]["content"] == _incident_command_diagnosis("Final diagnosis.")
+    assert result["agent_messages"][-1]["content"] == _incident_command_diagnosis(
+        "Final diagnosis."
+    )
 
 
 def test_run_forces_conclusion_when_stuck_repeating() -> None:

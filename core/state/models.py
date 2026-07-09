@@ -108,7 +108,9 @@ class AgentStateModel(StrictConfigModel):
     remediation_steps: list[str] = Field(default_factory=list)
     triage_summary: str = ""
     incident_status: str = ""
-    missing_context_flags: list[str] = Field(default_factory=list)
+    investigation_hypotheses: list[str] = Field(default_factory=list)
+    verification_summary: list[str] = Field(default_factory=list)
+    follow_up_questions: list[str] = Field(default_factory=list)
     remediation_tradeoffs: str = ""
     investigation_loop_count: int = 0
     hypotheses: list[str] = Field(default_factory=list)

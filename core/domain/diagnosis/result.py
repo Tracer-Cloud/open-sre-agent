@@ -58,7 +58,9 @@ class InvestigationResult:
     validity_score: float = 0.0
     triage_summary: str = ""
     incident_status: str = ""
-    missing_context_flags: list[str] = field(default_factory=list)
+    investigation_hypotheses: list[str] = field(default_factory=list)
+    verification_summary: list[str] = field(default_factory=list)
+    follow_up_questions: list[str] = field(default_factory=list)
     remediation_tradeoffs: str = ""
     evidence: dict[str, Any] = field(default_factory=dict)
     evidence_entries: list[dict] = field(default_factory=list)
@@ -93,7 +95,9 @@ def result_to_state(result: InvestigationResult) -> dict[str, Any]:
         "validity_score": result.validity_score,
         "triage_summary": result.triage_summary,
         "incident_status": result.incident_status,
-        "missing_context_flags": result.missing_context_flags,
+        "investigation_hypotheses": result.investigation_hypotheses,
+        "verification_summary": result.verification_summary,
+        "follow_up_questions": result.follow_up_questions,
         "remediation_tradeoffs": result.remediation_tradeoffs,
         "investigation_recommendations": result.investigation_recommendations,
         "evidence": result.evidence,
@@ -182,9 +186,17 @@ def build_diagnosis_schema(include_categories: set[str]) -> type[BaseModel]:
             default="",
             description="Status block: confirmed | open | next | owner",
         )
-        missing_context_flags: list[str] = Field(
+        investigation_hypotheses: list[str] = Field(
             default_factory=list,
-            description="Missing context items flagged during investigation",
+            description="Numbered hypotheses with confirm/rule-out criteria",
+        )
+        verification_summary: list[str] = Field(
+            default_factory=list,
+            description="Which verification tools/results tested which hypothesis",
+        )
+        follow_up_questions: list[str] = Field(
+            default_factory=list,
+            description="Direct follow-up questions for responders (each ending with ?)",
         )
         remediation_tradeoffs: str = Field(
             default="",
@@ -213,7 +225,9 @@ def build_investigation_result(
     alert_source: str = "",
     triage_summary: str = "",
     incident_status: str = "",
-    missing_context_flags: list[str] | None = None,
+    investigation_hypotheses: list[str] | None = None,
+    verification_summary: list[str] | None = None,
+    follow_up_questions: list[str] | None = None,
     remediation_tradeoffs: str = "",
 ) -> InvestigationResult:
     normalized_category = normalize_root_cause_category(
@@ -236,7 +250,9 @@ def build_investigation_result(
         validity_score=score,
         triage_summary=triage_summary,
         incident_status=incident_status,
-        missing_context_flags=list(missing_context_flags or []),
+        investigation_hypotheses=list(investigation_hypotheses or []),
+        verification_summary=list(verification_summary or []),
+        follow_up_questions=list(follow_up_questions or []),
         remediation_tradeoffs=remediation_tradeoffs,
         investigation_recommendations=recommendations,
         category_text_mismatch=mismatch,

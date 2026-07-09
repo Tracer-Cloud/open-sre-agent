@@ -405,11 +405,19 @@ def _format_incident_command_block(ctx: ReportContext) -> str:
     """Render incident-command summary fields when diagnose extracted them."""
     triage = str(ctx.get("triage_summary") or "").strip()
     status = str(ctx.get("incident_status") or "").strip()
-    missing = [
-        str(item).strip() for item in (ctx.get("missing_context_flags") or []) if str(item).strip()
+    hypotheses = [
+        str(item).strip()
+        for item in (ctx.get("investigation_hypotheses") or [])
+        if str(item).strip()
+    ]
+    verification = [
+        str(item).strip() for item in (ctx.get("verification_summary") or []) if str(item).strip()
+    ]
+    follow_ups = [
+        str(item).strip() for item in (ctx.get("follow_up_questions") or []) if str(item).strip()
     ]
     tradeoffs = str(ctx.get("remediation_tradeoffs") or "").strip()
-    if not any((triage, status, missing, tradeoffs)):
+    if not any((triage, status, hypotheses, verification, follow_ups, tradeoffs)):
         return ""
 
     lines = ["\n## Incident Command\n"]
@@ -417,10 +425,22 @@ def _format_incident_command_block(ctx: ReportContext) -> str:
         lines.append(f"Triage complete: {_sanitize_for_slack(triage)}\n")
     if status:
         lines.append(f"{_sanitize_for_slack(status)}\n")
-    if missing:
+    if hypotheses:
         lines.append(
-            "*Missing context:*\n"
-            + "\n".join(f"• {_sanitize_for_slack(item)}" for item in missing)
+            "*Hypotheses:*\n"
+            + "\n".join(f"• {_sanitize_for_slack(item)}" for item in hypotheses)
+            + "\n"
+        )
+    if verification:
+        lines.append(
+            "*Verification:*\n"
+            + "\n".join(f"• {_sanitize_for_slack(item)}" for item in verification)
+            + "\n"
+        )
+    if follow_ups:
+        lines.append(
+            "*Follow-up questions:*\n"
+            + "\n".join(f"• {_sanitize_for_slack(item)}" for item in follow_ups)
             + "\n"
         )
     if tradeoffs:
@@ -546,11 +566,19 @@ def format_telegram_message(ctx: ReportContext) -> str:
 
     triage = str(ctx.get("triage_summary") or "").strip()
     status = str(ctx.get("incident_status") or "").strip()
-    missing = [
-        str(item).strip() for item in (ctx.get("missing_context_flags") or []) if str(item).strip()
+    hypotheses = [
+        str(item).strip()
+        for item in (ctx.get("investigation_hypotheses") or [])
+        if str(item).strip()
+    ]
+    verification = [
+        str(item).strip() for item in (ctx.get("verification_summary") or []) if str(item).strip()
+    ]
+    follow_ups = [
+        str(item).strip() for item in (ctx.get("follow_up_questions") or []) if str(item).strip()
     ]
     tradeoffs = str(ctx.get("remediation_tradeoffs") or "").strip()
-    if any((triage, status, missing, tradeoffs)):
+    if any((triage, status, hypotheses, verification, follow_ups, tradeoffs)):
         ic_parts: list[str] = ["<b>Incident Command</b>"]
         if triage:
             ic_parts.append(
@@ -558,11 +586,26 @@ def format_telegram_message(ctx: ReportContext) -> str:
             )
         if status:
             ic_parts.append(_to_telegram_html_body(_sanitize_for_slack(status)))
-        if missing:
+        if hypotheses:
             ic_parts.append(
-                "<b>Missing context</b>\n"
+                "<b>Hypotheses</b>\n"
                 + "\n".join(
-                    "• " + _to_telegram_html_body(_sanitize_for_slack(item)) for item in missing
+                    "• " + _to_telegram_html_body(_sanitize_for_slack(item)) for item in hypotheses
+                )
+            )
+        if verification:
+            ic_parts.append(
+                "<b>Verification</b>\n"
+                + "\n".join(
+                    "• " + _to_telegram_html_body(_sanitize_for_slack(item))
+                    for item in verification
+                )
+            )
+        if follow_ups:
+            ic_parts.append(
+                "<b>Follow-up questions</b>\n"
+                + "\n".join(
+                    "• " + _to_telegram_html_body(_sanitize_for_slack(item)) for item in follow_ups
                 )
             )
         if tradeoffs:

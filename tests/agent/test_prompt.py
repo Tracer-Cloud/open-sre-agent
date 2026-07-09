@@ -39,8 +39,9 @@ def test_build_investigation_system_prompt_includes_incident_command_phases() ->
 def test_build_investigation_system_prompt_includes_missing_context_rule() -> None:
     prompt = build_investigation_system_prompt({"alert_source": "grafana"})
 
-    assert "MISSING CONTEXT" in prompt
+    assert "Follow-up questions" in prompt
     assert "Recent deploys" in prompt
+    assert "ending with `?`" in prompt
     assert "Do not stall waiting for answers" in prompt
 
 
@@ -48,7 +49,9 @@ def test_build_investigation_system_prompt_includes_alignment_and_tradeoffs() ->
     prompt = build_investigation_system_prompt({"alert_source": "grafana"})
 
     assert "Keeping the team aligned" in prompt
-    assert "Incident command summary (required" in prompt
+    assert "Hypotheses:" in prompt
+    assert "Verification:" in prompt
+    assert "Follow-up questions:" in prompt
     assert "Remediation trade-offs:" in prompt
     assert "blast radius" in prompt
     assert "reversibility" in prompt

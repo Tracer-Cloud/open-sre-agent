@@ -24,7 +24,9 @@ class ReportContext(TypedDict, total=False):
     remediation_steps: list[str]
     triage_summary: str
     incident_status: str
-    missing_context_flags: list[str]
+    investigation_hypotheses: list[str]
+    verification_summary: list[str]
+    follow_up_questions: list[str]
     remediation_tradeoffs: str
     correlation: dict[str, Any]
 

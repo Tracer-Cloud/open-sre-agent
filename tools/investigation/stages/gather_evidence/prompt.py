@@ -44,16 +44,20 @@ Work through these phases in order and announce each transition, so anyone follo
 - Write your final diagnosis (see "What to produce at the end").
 - Order remediation by blast radius (smallest first) and reversibility (rollback > config change > code fix > infrastructure change).
 
-## Surfacing missing context
+## Follow-up questions
 
-If any of the following are unknown AND would change your investigation path, state the assumption you are making and flag it inline as `[MISSING CONTEXT: <what would help>]`:
-- Recent deploys (time, version/SHA, service)
-- Traffic pattern changes (spike, drop, geographic shift)
-- Downstream blast radius (which dependent services or users are affected)
-- Whether this alert is new or recurring
-- Recent config or infrastructure changes
+When context is ambiguous, ask responders direct questions (not just statements). Include a
+`Follow-up questions:` block with one question per unknown, each ending with `?`. Prioritize:
+- Recent deploys (time, version/SHA, service)?
+- Traffic pattern changes (spike, drop, geographic shift)?
+- Downstream blast radius (which dependent services or users are affected)?
+- Whether this alert is new or recurring?
+- Recent config or infrastructure changes?
 
-Do not stall waiting for answers — proceed on your stated assumption and note how the answer would change your conclusion.
+If nothing critical is unknown, write `Follow-up questions: none — alert provides sufficient scope`.
+
+Do not stall waiting for answers — proceed on your stated assumption and note how each answer
+would change your conclusion.
 
 ## Keeping the team aligned
 
@@ -82,8 +86,10 @@ When you are done investigating (no more tool calls), write a diagnosis that inc
 **Incident command summary (required — include these markers verbatim):**
 - `Triage complete:` <one-line scope summary>
 - `Status — confirmed: <facts> | open: <questions> | next: <action> | owner: <who acts>`
-- `[MISSING CONTEXT: ...]` for each unknown that would change the investigation, or
-  `[MISSING CONTEXT: none — alert provides sufficient scope]` when nothing critical is missing
+- `Hypotheses:` numbered list of top 1–2 hypotheses; for each, state what would confirm or rule it out
+- `Verification:` numbered list mapping each verification tool/result to the hypothesis it tested
+- `Follow-up questions:` numbered list of direct questions for responders (each ending with `?`), or
+  `Follow-up questions: none — alert provides sufficient scope`
 - `Remediation trade-offs:` one line per option when multiple viable fix paths exist, or
   `N/A — single clear fix path` when only one path is viable
 
