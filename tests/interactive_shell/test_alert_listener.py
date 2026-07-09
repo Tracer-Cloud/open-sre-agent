@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 from unittest.mock import MagicMock
 
-import pytest
 from rich.console import Console
 
 from config.repl_config import ReplConfig
@@ -77,14 +76,20 @@ def test_alert_listener_propagates_body_exception_without_masking(monkeypatch) -
     class _BodyError(RuntimeError):
         pass
 
-    with (
-        pytest.raises(_BodyError, match="boom"),
-        _alert_listener(cfg, Console(force_terminal=False)) as inbox,
-    ):
-        assert inbox is not None
-        raise _BodyError("boom")
+    # Explicit try/except (rather than pytest.raises) so the assertions after
+    # the block are unambiguously reachable to static analysis.
+    raised: _BodyError | None = None
+    try:
+        with _alert_listener(cfg, Console(force_terminal=False)) as inbox:
+            assert inbox is not None
+            raise _BodyError("boom")
+    except _BodyError as exc:
+        raised = exc
 
-    # cleanup still ran: server stopped, inbox cleared, token restored
+    # The body's own exception propagated unchanged (not masked by a
+    # RuntimeError from a second yield), and cleanup still ran.
+    assert raised is not None
+    assert str(raised) == "boom"
     handle.stop.assert_called_once()
     assert _alert_inbox.get_current_inbox() is None
     assert os.environ.get("OPENSRE_ALERT_LISTENER_TOKEN") is None
