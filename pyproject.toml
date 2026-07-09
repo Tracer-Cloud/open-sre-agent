@@ -150,6 +150,7 @@ include = [
 
 [tool.setuptools.package-data]
 "surfaces.cli" = ["investigation/sample_alerts/*.json"]
+"core.agent_harness.prompts" = ["skills/*.md"]
 
 # With pytest-xdist (-n auto), each worker writes a fragment; put them under
 # .pytest_cache/ (already gitignored) instead of .coverage.<hostname>.* at repo root.
