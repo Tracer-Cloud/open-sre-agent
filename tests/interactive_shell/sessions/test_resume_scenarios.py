@@ -397,7 +397,8 @@ class TestResumeScenarioMatrix:
             '"type": "leaf"'
         ) != -1
 
-
+@pytest.mark.integration
+@pytest.mark.live_llm
 class TestResumeLiveRepl:
     """Live REPL smoke test via ReplDriver with isolated HOME and real planner."""
 
