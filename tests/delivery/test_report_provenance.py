@@ -111,7 +111,7 @@ def test_format_telegram_message_uses_html_and_severity_header() -> None:
 
 def test_format_slack_message_shows_incident_command_section() -> None:
     state = _make_state()
-    state["triage_summary"] = "Critical errors isolated to payments_etl."
+    state["triage_summary"] = "Triage complete: Critical errors isolated to payments_etl."
     state["incident_status"] = (
         "Status — confirmed: alert critical | open: deploy time | next: verify DB | owner: on-call"
     )
@@ -129,6 +129,7 @@ def test_format_slack_message_shows_incident_command_section() -> None:
 
     assert "## Incident Command" in message
     assert "Triage complete: Critical errors isolated to payments_etl." in message
+    assert "Triage complete: Triage complete:" not in message
     assert "*Hypotheses:*" in message
     assert "*Verification:*" in message
     assert "*Follow-up questions:*" in message

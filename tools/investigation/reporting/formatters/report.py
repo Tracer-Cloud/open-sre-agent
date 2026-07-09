@@ -401,9 +401,14 @@ def _derive_root_cause_sentence(ctx: ReportContext) -> str:
     return ""
 
 
+def _normalize_triage_summary(summary: str) -> str:
+    """Remove the marker when the model included it inside the parsed summary."""
+    return re.sub(r"^(?i:triage complete:)\s*", "", summary).strip()
+
+
 def _format_incident_command_block(ctx: ReportContext) -> str:
     """Render incident-command summary fields when diagnose extracted them."""
-    triage = str(ctx.get("triage_summary") or "").strip()
+    triage = _normalize_triage_summary(str(ctx.get("triage_summary") or "").strip())
     status = str(ctx.get("incident_status") or "").strip()
     hypotheses = [
         str(item).strip()
@@ -564,7 +569,7 @@ def format_telegram_message(ctx: ReportContext) -> str:
             rc += "\n<code>" + html.escape(top_log) + "</code>"
         parts.append(rc)
 
-    triage = str(ctx.get("triage_summary") or "").strip()
+    triage = _normalize_triage_summary(str(ctx.get("triage_summary") or "").strip())
     status = str(ctx.get("incident_status") or "").strip()
     hypotheses = [
         str(item).strip()
