@@ -20,7 +20,7 @@ from pathlib import Path
 
 from config.constants.paths import REPO_ROOT
 from core.tool_framework.registry_metadata import normalize_surfaces
-from tools.registry import _INTEGRATION_TOOL_PACKAGES
+from tools.registry_discovery import _INTEGRATION_TOOL_PACKAGES
 
 _SKIP_FILE_SUFFIXES = ("_test.py",)
 _TOOL_DECORATOR_NAME = "tool"

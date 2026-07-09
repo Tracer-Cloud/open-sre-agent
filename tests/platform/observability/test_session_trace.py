@@ -87,7 +87,7 @@ def test_sample_thread_snapshot_lists_current_thread() -> None:
 def test_sample_resource_snapshot_includes_gc_counts() -> None:
     snap = sample_resource_snapshot()
     assert {"gc_gen0", "gc_gen1", "gc_gen2"} <= snap.keys()
-    # Prefer current RSS (psutil /proc); peak watermark is separate.
+    # Prefer current RSS (Linux /proc); peak watermark is separate.
     if "rss_mb" in snap:
         assert isinstance(snap["rss_mb"], float)
         assert snap["rss_mb"] > 0
@@ -96,24 +96,11 @@ def test_sample_resource_snapshot_includes_gc_counts() -> None:
         assert isinstance(snap["rss_peak_mb"], float)
 
 
-def test_sample_resource_snapshot_current_rss_not_peak_when_psutil(
+def test_sample_resource_snapshot_current_rss_not_peak(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """``rss_mb`` must be current RSS; ``rss_peak_mb`` is the high-water mark."""
-
-    class _Mem:
-        rss = 50 * 1024 * 1024  # 50 MiB current
-
-    class _Proc:
-        def memory_info(self) -> _Mem:
-            return _Mem()
-
-    class _FakePsutil:
-        @staticmethod
-        def Process() -> _Proc:
-            return _Proc()
-
-    monkeypatch.setattr(process_stats, "_psutil", _FakePsutil)
+    monkeypatch.setattr(process_stats, "_current_rss_mb", lambda: 50.0)
 
     class _FakeResource:
         RUSAGE_SELF = 0
@@ -134,9 +121,8 @@ def test_sample_resource_snapshot_current_rss_not_peak_when_psutil(
 def test_sample_resource_snapshot_skips_rss_without_backends(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """No psutil / resource /proc → snapshot still succeeds without rss_mb."""
+    """No resource / no Linux /proc → snapshot still succeeds without rss_mb."""
     monkeypatch.setattr(process_stats, "_resource", None)
-    monkeypatch.setattr(process_stats, "_psutil", None)
     monkeypatch.setattr(process_stats.sys, "platform", "win32")
     snap = sample_resource_snapshot()
     assert "rss_mb" not in snap

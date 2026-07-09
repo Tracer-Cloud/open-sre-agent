@@ -15,7 +15,6 @@ from typing import Any
 import pytest
 
 import tools.registry as registry_module
-from tools.registry import get_registered_tools, get_tool_descriptors, load_tool
 from tools.registry_index import build_descriptor_index
 
 
@@ -32,7 +31,7 @@ def _isolated_registry() -> Iterator[None]:
 
 
 def _registered_by_name() -> dict[str, Any]:
-    return {tool.name: tool for tool in get_registered_tools()}
+    return {tool.name: tool for tool in registry_module.get_registered_tools()}
 
 
 def test_index_tool_set_matches_registry_exactly() -> None:
@@ -72,24 +71,24 @@ def test_descriptor_module_is_dotted_import_path() -> None:
 
 def test_surface_scoped_load_equals_full_filtered() -> None:
     """The fast surface path must return exactly the full snapshot filtered by surface."""
-    full = get_registered_tools()
+    full = registry_module.get_registered_tools()
     for surface in ("action", "chat", "investigation"):
-        scoped = {tool.name for tool in get_registered_tools(surface)}
+        scoped = {tool.name for tool in registry_module.get_registered_tools(surface)}
         expected = {tool.name for tool in full if surface in (getattr(tool, "surfaces", ()) or ())}
         assert scoped == expected, surface
 
 
 def test_get_tool_descriptors_match_surface_load() -> None:
-    assert {d.name for d in get_tool_descriptors()} == set(build_descriptor_index())
+    assert {d.name for d in registry_module.get_tool_descriptors()} == set(build_descriptor_index())
     for surface in ("action", "chat", "investigation"):
-        descriptor_names = {d.name for d in get_tool_descriptors(surface)}
-        tool_names = {tool.name for tool in get_registered_tools(surface)}
+        descriptor_names = {d.name for d in registry_module.get_tool_descriptors(surface)}
+        tool_names = {tool.name for tool in registry_module.get_registered_tools(surface)}
         assert descriptor_names == tool_names, surface
 
 
 def test_load_tool_materializes_the_executor() -> None:
     # @tool-decorated (AST-indexed) and RegisteredTool-constructed (pinned) both load.
     for name in ("query_datadog_all", "shell_run"):
-        descriptor = next(d for d in get_tool_descriptors() if d.name == name)
-        tool = load_tool(descriptor)
+        descriptor = next(d for d in registry_module.get_tool_descriptors() if d.name == name)
+        tool = registry_module.load_tool(descriptor)
         assert tool is not None and tool.name == name

@@ -1,9 +1,9 @@
 """Process-level snapshots for session trace spans (memory, threads, asyncio tasks).
 
-``rss_mb`` is **current** resident set size (via ``psutil`` when available), so
-turn-boundary series can rise *and fall*. ``rss_peak_mb`` is the POSIX
-``ru_maxrss`` high-water mark (never decreases) — useful context, not a leak
-signal by itself.
+``rss_mb`` is **current** resident set size (Linux ``/proc``), so turn-boundary
+series can rise *and fall*; elsewhere it falls back to the peak watermark.
+``rss_peak_mb`` is the POSIX ``ru_maxrss`` high-water mark (never decreases) —
+useful context, not a leak signal by itself.
 """
 
 from __future__ import annotations
@@ -17,11 +17,6 @@ try:
     import resource as _resource
 except ImportError:  # Windows / non-POSIX
     _resource = None  # type: ignore[assignment]
-
-try:
-    import psutil as _psutil
-except ImportError:  # optional at import time; declared in pyproject
-    _psutil = None  # type: ignore[assignment]
 
 #: Cap thread rows embedded in a turn-boundary snapshot (ATM thread map).
 _MAX_THREADS_IN_SNAPSHOT = 40
@@ -43,16 +38,7 @@ def _normalize_ru_maxrss_mb(ru_maxrss: int) -> float:
 
 
 def _current_rss_mb() -> float | None:
-    """Current process RSS in MiB, or ``None`` if unavailable."""
-    if _psutil is not None:
-        try:
-            return round(
-                _psutil.Process().memory_info().rss / _BYTES_PER_MEBIBYTE,
-                _RSS_MB_DECIMAL_PLACES,
-            )
-        except Exception:  # noqa: BLE001 — never break turn boundaries
-            pass
-    # Fallback: Linux /proc (no psutil). Still current RSS, not peak.
+    """Current process RSS in MiB from Linux ``/proc``, or ``None`` elsewhere."""
     if sys.platform.startswith("linux"):
         try:
             with open("/proc/self/status", encoding="utf-8") as fh:
@@ -62,7 +48,8 @@ def _current_rss_mb() -> float | None:
                         kib = int(line.split()[1])
                         return round(kib / _KIB_PER_MIB, _RSS_MB_DECIMAL_PLACES)
         except (OSError, ValueError, IndexError):
-            pass
+            # /proc unavailable or malformed: treat current RSS as unknown.
+            return None
     return None
 
 
