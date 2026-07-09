@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextvars
 import json
 import logging
 from collections.abc import Callable, Sequence
@@ -140,7 +141,12 @@ def execute_tool_calls(
     try:
         with ThreadPoolExecutor(max_workers=min(_TOOL_EXECUTOR_WORKERS, len(tool_calls))) as pool:
             for i, tc in enumerate(tool_calls):
-                submitted[pool.submit(_call, tc)] = i
+                # Run each call inside a copy of the submitting thread's context
+                # so contextvars (notably the session-trace binding read by
+                # tool_span) propagate into the worker thread. Without this,
+                # parallel tool calls emit no trace spans. Mirrors the
+                # copy_context().run pattern in tools/investigation/capability.py.
+                submitted[pool.submit(contextvars.copy_context().run, _call, tc)] = i
             for fut in as_completed(submitted):
                 try:
                     results[submitted[fut]] = fut.result()

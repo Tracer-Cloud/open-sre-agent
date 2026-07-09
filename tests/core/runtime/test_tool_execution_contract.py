@@ -713,3 +713,30 @@ def test_execute_tool_calls_span_marks_tool_error_and_exception(
         assert by_name["hard"]["status"] == "error"
     finally:
         set_session_trace_sink(NoopSessionTraceSink())
+
+
+def test_parallel_tool_calls_emit_spans_in_worker_threads(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression: a multi-tool batch runs in ThreadPoolExecutor workers that do
+    not inherit contextvars, so tool_span saw no bound trace session and emitted
+    nothing. The executor must propagate the submitting context to each worker."""
+    from platform.observability.trace.spans import (
+        NoopSessionTraceSink,
+        bind_session_trace,
+        set_session_trace_sink,
+    )
+
+    session_id = "sess-parallel-spans"
+    path = _activate_tool_trace(tmp_path, monkeypatch, session_id)
+    try:
+        calls = [_call("echo", "a"), _call("echo2", "b")]
+        tools = [_tool("echo"), _tool("echo2")]
+        with bind_session_trace(session_id):
+            results = execute_tool_calls(calls, tools, {})
+        assert all(not r.is_error for r in results)
+        spans = _tool_spans_from(path)
+        assert {s["name"] for s in spans} == {"echo", "echo2"}
+        assert all(s["status"] == "ok" for s in spans)
+    finally:
+        set_session_trace_sink(NoopSessionTraceSink())
