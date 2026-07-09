@@ -108,14 +108,16 @@ jobs:
         include:
           - os: ubuntu-latest
             shard: tools-runtime
+            # ``tests/core/agent`` is excluded here; it runs in cli-runtime,
+            # which pins openai for its live action-planning oracles.
+            extra_pytest_args: >-
+              --ignore=tests/core/agent
             pytest_paths: >-
               tests/tools
-              tests/core/runtime
-              tests/platform/observability
-              tests/platform/terminal
+              tests/core
+              tests/platform
               tests/utils
               tests/masking
-              tests/core/domain/types
               tests/watch_dog
               tests/test_core_layering.py
           - os: ubuntu-latest
@@ -150,6 +152,10 @@ jobs:
               tests/benchmarks
               tests/chaos_engineering
               tests/shared
+              tests/config
+              tests/github_ci
+              tests/packaging
+              tests/scheduler
               tests/test_guardrails
               tests/cli_smoke_test.py
               tests/test_aws_urls.py
