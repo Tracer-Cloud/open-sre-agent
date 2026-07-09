@@ -307,12 +307,20 @@ def _with_skill_guidance(tool: RegisteredTool, guidance: str) -> RegisteredTool:
     )
 
 
-def _apply_skill_guidance(tools_by_name: dict[str, RegisteredTool]) -> None:
-    known_tool_names = frozenset(tools_by_name)
+def _apply_skill_guidance(
+    tools_by_name: dict[str, RegisteredTool],
+    *,
+    known_tool_names: frozenset[str] | None = None,
+) -> None:
+    # Diagnostics validate against the full tool set (a surface load holds only a
+    # subset); guidance still attaches only to tools present in ``tools_by_name``.
+    diagnostic_names = (
+        known_tool_names if known_tool_names is not None else frozenset(tools_by_name)
+    )
     guidance_by_tool: dict[str, list[str]] = {}
 
     for skill_path in _skill_guidance_files():
-        result = load_tool_skill_guidance(skill_path, known_tool_names=known_tool_names)
+        result = load_tool_skill_guidance(skill_path, known_tool_names=diagnostic_names)
         for diagnostic in result.diagnostics:
             logger.warning(
                 "[tools] Skill guidance %s (%s): %s",
@@ -384,16 +392,53 @@ def _load_registry_tool_map() -> dict[str, RegisteredTool]:
     return {tool.name: tool for tool in _load_registry_snapshot()}
 
 
+@lru_cache(maxsize=8)
+def _load_surface_snapshot(surface: str) -> tuple[RegisteredTool, ...]:
+    """Import only the modules that statically declare a tool for ``surface``.
+
+    Resolved from the descriptor index so a surface load never imports the other
+    surfaces' vendor executors (see #3686). Runtime-registered external packages
+    are already imported, so they are collected directly. Equivalent to the full
+    snapshot filtered by ``surface`` (pinned by the registry-index contract test).
+    """
+    from tools.registry_index import build_descriptor_index
+
+    index = build_descriptor_index()
+    modules = sorted({d.module for d in index.values() if surface in d.surfaces})
+    tools_by_name: dict[str, RegisteredTool] = {}
+    for dotted in modules:
+        try:
+            module = importlib.import_module(dotted)
+        except Exception as exc:
+            logger.warning("[tools] Skipping %s for surface %r: %s", dotted, surface, exc)
+            continue
+        for tool in _collect_registered_tools_from_module(module):
+            if surface in tool.surfaces:
+                tools_by_name.setdefault(tool.name, tool)
+
+    for package in _external_tool_packages:
+        for module in _iter_discovered_tool_modules(package):
+            for tool in _collect_registered_tools_from_module(module):
+                if surface in tool.surfaces:
+                    tools_by_name.setdefault(tool.name, tool)
+
+    _apply_skill_guidance(tools_by_name, known_tool_names=frozenset(index))
+    return tuple(sorted(tools_by_name.values(), key=lambda tool: tool.name))
+
+
 def clear_tool_registry_cache() -> None:
     _load_registry_snapshot.cache_clear()
     _load_registry_tool_map.cache_clear()
+    _load_surface_snapshot.cache_clear()
+    from tools.registry_index import clear_descriptor_index_cache
+
+    clear_descriptor_index_cache()
 
 
 def get_registered_tools(surface: ToolSurface | None = None) -> list[RegisteredTool]:
-    tools = list(_load_registry_snapshot())
     if surface is None:
-        return tools
-    return [tool for tool in tools if surface in tool.surfaces]
+        return list(_load_registry_snapshot())
+    return list(_load_surface_snapshot(surface))
 
 
 def get_registered_tool_map(surface: ToolSurface | None = None) -> dict[str, RegisteredTool]:

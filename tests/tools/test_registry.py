@@ -242,15 +242,16 @@ def test_auto_discovery_populates_investigation_and_chat_surfaces(
     monkeypatch.setattr(registry_module, "_INTEGRATION_TOOL_PACKAGES", ())
     monkeypatch.setattr(registry_module, "_import_tool_module", lambda _pkg, _name: module)
 
-    assert [
-        tool_def.name for tool_def in registry_module.get_registered_tools("investigation")
-    ] == ["get_incident_metadata"]
-    assert [tool_def.name for tool_def in registry_module.get_registered_tools("chat")] == [
+    # Surface-scoped loads read the on-disk descriptor index; assert surface
+    # assignment on the mocked full snapshot instead.
+    snapshot = registry_module.get_registered_tools()
+    assert [t.name for t in snapshot if "investigation" in (t.surfaces or ())] == [
         "get_incident_metadata"
     ]
-    assert registry_module.get_registered_tool_map("chat")["get_incident_metadata"].run(
-        "inc-1"
-    ) == {"incident_id": "inc-1"}
+    assert [t.name for t in snapshot if "chat" in (t.surfaces or ())] == ["get_incident_metadata"]
+    assert registry_module.get_registered_tool_map()["get_incident_metadata"].run("inc-1") == {
+        "incident_id": "inc-1"
+    }
 
 
 def test_action_surface_is_filtered_separately(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -275,11 +276,12 @@ def test_action_surface_is_filtered_separately(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr(registry_module, "_INTEGRATION_TOOL_PACKAGES", ())
     monkeypatch.setattr(registry_module, "_import_tool_module", lambda _pkg, _name: module)
 
-    assert [tool_def.name for tool_def in registry_module.get_registered_tools("action")] == [
-        "perform_action"
-    ]
-    assert registry_module.get_registered_tools("investigation") == []
-    assert registry_module.get_registered_tools("chat") == []
+    # Surface-scoped loads read the on-disk descriptor index; assert surface
+    # filtering on the mocked full snapshot instead.
+    snapshot = registry_module.get_registered_tools()
+    assert [t.name for t in snapshot if "action" in (t.surfaces or ())] == ["perform_action"]
+    assert [t.name for t in snapshot if "investigation" in (t.surfaces or ())] == []
+    assert [t.name for t in snapshot if "chat" in (t.surfaces or ())] == []
 
 
 def test_github_workflow_skill_guidance_is_attached_to_chat_and_investigation_tools() -> None:
