@@ -76,6 +76,10 @@ class ScanSummary:
     tasks: int = 0
     warnings: list[str] = field(default_factory=list)
     categories_scanned: list[ViolationKind] = field(default_factory=list)
+    categories_skipped: list[ViolationKind] = field(default_factory=list)
+    severity_counts: dict[str, int] = field(default_factory=dict)
+    kind_counts: dict[str, int] = field(default_factory=dict)
+    coverage_complete: bool = True
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -83,6 +87,10 @@ class ScanSummary:
             "tasks": self.tasks,
             "warnings": list(self.warnings),
             "categories_scanned": list(self.categories_scanned),
+            "categories_skipped": list(self.categories_skipped),
+            "severity_counts": dict(self.severity_counts),
+            "kind_counts": dict(self.kind_counts),
+            "coverage_complete": self.coverage_complete,
         }
 
 
@@ -108,6 +116,10 @@ def build_success_result(
             tasks=len(refactor_tasks),
             warnings=list(summary.warnings),
             categories_scanned=list(summary.categories_scanned),
+            categories_skipped=list(summary.categories_skipped),
+            severity_counts=dict(summary.severity_counts),
+            kind_counts=dict(summary.kind_counts),
+            coverage_complete=summary.coverage_complete,
         )
 
     payload: dict[str, Any] = {
@@ -143,7 +155,10 @@ def build_error_result(
         "repo": repo,
         "ref": ref,
         "error": error,
-        "scan_summary": ScanSummary(warnings=list(warnings or [])).to_dict(),
+        "scan_summary": ScanSummary(
+            warnings=list(warnings or []),
+            coverage_complete=False,
+        ).to_dict(),
         "violations": [],
         "refactor_tasks": [],
         "side_effects": [],

@@ -335,6 +335,7 @@ def test_architecture_audit_skill_guidance_is_attached_to_chat_and_investigation
         assert marker in tool_def.description
         assert "Workflow guidance:" in tool_def.description
         assert marker in tool_def.skill_guidance
+        assert "AUDIT_REPORT.md" in tool_def.skill_guidance
 
 
 def test_architecture_audit_skill_guidance_does_not_attach_to_unrelated_tools() -> None:

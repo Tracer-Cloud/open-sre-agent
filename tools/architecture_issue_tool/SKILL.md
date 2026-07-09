@@ -11,20 +11,20 @@ Use this workflow when the user asks for an architecture audit, layer violations
 tech-debt scan, or refactor task breakdown on a specific GitHub repository.
 
 1. Read before reporting. Call `find_architecture_violations` with `owner` and
-   `repo` from GitHub sources or user input. Use `include_baselines=True` for a
-   full debt inventory (including import-linter baselines); use `False` for
+   `repo`. Use `include_baselines=True` for full debt inventory; `False` for
    actionable-only findings outside baselines.
-2. Interpret results. Summarize by severity (`p0`, `p1`, `p2`). Cite repo-relative
-   paths from each violation's `evidence`. Treat `scan_summary.warnings` as
-   incomplete coverage, not proof of a clean repo.
-3. Propose, do not execute. Return `refactor_tasks` to the user. Never auto-apply
-   code changes or batch unrelated violations into one mega-refactor.
-4. GitHub issues are separate. To file tasks, build proposals from
-   `suggested_issue_body` and call `execute_github_issue_mutation` (or
-   `propose_github_issue_mutation_from_slack`) only after explicit user approval.
-   Pass the same `owner`/`repo` as the audit.
-5. Limitations. Layer and direct-import checks require import-linter config (or
-   `.github/ci/check_direct_imports.py`) in the target repo. Oversized-file,
-   compatibility-shim, and placement heuristics run when relevant directories
-   exist in the clone. Repos without import-linter config still get local scans;
-   layer checks are skipped with a warning in `scan_summary`.
+2. Interpret results. Use `scan_summary.severity_counts`, `kind_counts`,
+   `categories_skipped`, and `coverage_complete`. Cite repo-relative paths from
+   each violation's `evidence`. Warnings and skipped categories mean incomplete
+   coverage, not a clean repo.
+3. Write the Markdown report. The tool returns JSON only. Your user-facing reply
+   must be a Markdown audit report following `AUDIT_REPORT.md` in this directory.
+   Synthesize themes from `violations` and `refactor_tasks`. Do not echo raw JSON
+   or say the repo looks clean when `coverage_complete` is false.
+4. Propose, do not execute. `refactor_tasks` support issue filing; the main
+   deliverable is the Markdown report. Never auto-apply code changes.
+5. GitHub issues are separate. Use `suggested_issue_body` and
+   `execute_github_issue_mutation` only after explicit user approval.
+6. Limitations. Layer checks need import-linter config in the target repo;
+   direct-import checks need `.github/ci/check_direct_imports.py`. Other scanners
+   run when relevant directories exist in the clone.

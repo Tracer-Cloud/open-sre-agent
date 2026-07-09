@@ -135,9 +135,28 @@ def test_scan_summary_to_dict() -> None:
         tasks=2,
         warnings=["skipped layer checks"],
         categories_scanned=["oversized_file", "compatibility_shim"],
+        categories_skipped=["layer_import"],
+        severity_counts={"p0": 1, "p1": 1, "p2": 1},
+        kind_counts={"layer_import": 1, "oversized_file": 2},
+        coverage_complete=False,
     )
 
     payload = summary.to_dict()
 
     assert payload["violations"] == 3
     assert payload["categories_scanned"] == ["oversized_file", "compatibility_shim"]
+    assert payload["categories_skipped"] == ["layer_import"]
+    assert payload["severity_counts"] == {"p0": 1, "p1": 1, "p2": 1}
+    assert payload["kind_counts"] == {"layer_import": 1, "oversized_file": 2}
+    assert payload["coverage_complete"] is False
+
+
+def test_build_error_result_marks_incomplete_coverage() -> None:
+    result = build_error_result(
+        owner="Tracer-Cloud",
+        repo="opensre",
+        error="clone failed",
+        warnings=["lint-imports not available"],
+    )
+
+    assert result["scan_summary"]["coverage_complete"] is False

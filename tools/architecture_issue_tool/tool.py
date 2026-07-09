@@ -48,7 +48,7 @@ def _github_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     use_cases=[
         "Auditing layer/import violations in a GitHub repository",
         "Finding oversized files and compatibility shims before a refactor sprint",
-        "Producing atomic refactor task suggestions for GitHub issue filing",
+        "Producing a Markdown audit summary and atomic refactor task suggestions",
     ],
     anti_examples=[
         "Executing refactors automatically",

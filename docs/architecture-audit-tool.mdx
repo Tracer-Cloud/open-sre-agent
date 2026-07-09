@@ -1,0 +1,63 @@
+---
+title: "Architecture audit tool"
+description: "Scan a GitHub repository for architecture violations and get a Markdown audit summary with atomic refactor tasks"
+---
+
+The `find_architecture_violations` tool shallow-clones a GitHub repository, runs
+architecture scanners, and returns structured findings. The assistant writes the
+user-facing **Markdown audit report** in chat from that JSON — the tool does not
+return pre-rendered Markdown.
+
+## Tool
+
+| Tool | Role | Side effects |
+| --- | --- | --- |
+| `find_architecture_violations` | Clone and scan `owner`/`repo` for layer imports, direct imports, oversized files, compatibility shims, and misplaced modules | None (ephemeral local clone) |
+
+## Typical workflow
+
+1. Ask the assistant to audit a repository, for example: "Scan Tracer-Cloud/opensre
+   for architecture issues."
+2. The assistant calls `find_architecture_violations` with `owner` and `repo`.
+3. The tool returns `violations`, `refactor_tasks`, and `scan_summary` (counts,
+   warnings, skipped categories, `coverage_complete`).
+4. The assistant replies with a Markdown report: executive summary, findings by
+   severity, thematic patterns, and recommended sequencing.
+
+## Parameters
+
+| Parameter | Default | Purpose |
+| --- | --- | --- |
+| `owner` | required | GitHub organization or user |
+| `repo` | required | Repository name |
+| `ref` | remote default branch | Branch, tag, or SHA to clone |
+| `include_baselines` | `false` | When `true`, include import-linter baselined debt |
+| `strict_layers` | `true` | Prefer `.importlinter.strict` when present |
+| `max_lines` | `500` | Oversized-file threshold |
+| `categories` | all scanners | Limit to specific violation kinds |
+
+## Coverage and limitations
+
+- **Layer import checks** require import-linter config (`.importlinter` or
+  `.importlinter.strict`) in the target repository.
+- **Direct import checks** run when the clone includes
+  `.github/ci/check_direct_imports.py`.
+- **Oversized files, shims, and placement** heuristics run when relevant Python
+  packages exist in the clone.
+- When `scan_summary.coverage_complete` is `false`, some categories were skipped or
+  warnings were raised — treat results as partial coverage, not proof of a clean repo.
+
+## GitHub issues
+
+The tool proposes atomic `refactor_tasks` but does not create GitHub issues. To
+file issues, ask explicitly; the assistant can use approved GitHub mutation tools
+after you confirm.
+
+## Example
+
+```text
+Audit Tracer-Cloud/opensre for architecture violations and summarize the top themes.
+```
+
+The assistant scans the repo, then returns a Markdown report grouped by severity with
+evidence paths and suggested fix order.
