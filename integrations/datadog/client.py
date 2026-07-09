@@ -564,12 +564,20 @@ class DatadogAsyncClient:
             headers=self.config.headers,
             timeout=_DEFAULT_TIMEOUT,
         ) as client:
-            logs_result, monitors_result, events_result = await asyncio.gather(
+            def _unwrap(result, source):
+                if isinstance(result, BaseException):
+                    return {'success': False, 'error': str(result), 'source': source}
+                return result
+
+            _results = await asyncio.gather(
                 self._search_logs(client, logs_query, time_range_minutes, logs_limit),
                 self._list_monitors(client, monitor_query),
                 self._get_events(client, events_query, time_range_minutes),
-                return_exceptions=False,
+                return_exceptions=True,
             )
+            logs_result = _unwrap(_results[0], 'logs')
+            monitors_result = _unwrap(_results[1], 'monitors')
+            events_result = _unwrap(_results[2], 'events')
 
         return {
             "logs": logs_result,
