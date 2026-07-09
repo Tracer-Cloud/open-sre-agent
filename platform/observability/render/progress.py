@@ -17,7 +17,7 @@ from collections.abc import Callable
 from typing import Any, Protocol
 
 
-class ProgressTracker(Protocol):
+class ProgressReporter(Protocol):
     """Stage-progress reporting contract for core code.
 
     The default in a process that hasn't registered an adapter is
@@ -79,7 +79,7 @@ class ProgressTracker(Protocol):
 class NoopProgressTracker:
     """Drop-on-floor implementation used when no adapter is registered.
 
-    Conforms to :class:`ProgressTracker` structurally. Headless
+    Conforms to :class:`ProgressReporter` structurally. Headless
     contexts (tests, non-TTY runs, scripted invocations) get this by
     default, so core code can call tracker methods unconditionally
     without checking for ``None``.
@@ -122,16 +122,16 @@ class NoopProgressTracker:
         return None
 
 
-_tracker: ProgressTracker = NoopProgressTracker()
-_tracker_factory: Callable[[], ProgressTracker] | None = None
+_tracker: ProgressReporter = NoopProgressTracker()
+_tracker_factory: Callable[[], ProgressReporter] | None = None
 _silenced: bool = False
 
 
-def get_progress_tracker() -> ProgressTracker:
+def get_progress_tracker() -> ProgressReporter:
     """Return the currently-registered tracker (or the Noop default).
 
     When a CLI factory is registered and progress has not been silenced,
-    the first call materializes the adapter lazily so ``ProgressTracker``
+    the first call materializes the adapter lazily so ``ProgressReporter``
     is constructed after REPL boot (when ``_repl_progress_active()`` is
     accurate) rather than at process start-up.
     """
@@ -141,7 +141,7 @@ def get_progress_tracker() -> ProgressTracker:
     return _tracker
 
 
-def set_progress_tracker_factory(factory: Callable[[], ProgressTracker] | None) -> None:
+def set_progress_tracker_factory(factory: Callable[[], ProgressReporter] | None) -> None:
     """Register a lazy factory for the CLI progress tracker.
 
     Boundary code (typically ``install_product_adapters``)
@@ -152,7 +152,7 @@ def set_progress_tracker_factory(factory: Callable[[], ProgressTracker] | None) 
     _tracker_factory = factory
 
 
-def set_progress_tracker(tracker: ProgressTracker) -> None:
+def set_progress_tracker(tracker: ProgressReporter) -> None:
     """Install ``tracker`` as the active implementation. Called by the
     CLI boundary (or any other adapter) at startup so subsequent
     ``get_progress_tracker()`` calls return the real implementation.

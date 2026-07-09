@@ -24,7 +24,7 @@ from platform.observability.render.display import (
 from platform.observability.render.output_format import get_output_format
 from platform.observability.render.progress import (
     NoopProgressTracker,
-    ProgressTracker,
+    ProgressReporter,
     get_progress_tracker,
     set_progress_tracker,
     set_progress_tracker_factory,
@@ -33,7 +33,7 @@ from platform.observability.render.progress import (
 
 __all__ = [
     "NoopProgressTracker",
-    "ProgressTracker",
+    "ProgressReporter",
     "debug_print",
     "get_output_format",
     "get_progress_tracker",
