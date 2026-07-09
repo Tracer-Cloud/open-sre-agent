@@ -213,9 +213,8 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen --extra dev
 
-      - name: Run tests
+      - name: Validate pytest marker
         env:
-          COVERAGE_FILE: .coverage.${{ matrix.shard }}
           # Fork PRs do not receive repository secrets; skip live_llm contracts
           # (see interactive-shell-live.yml). Index a JSON string array so the
           # value is always a marker string — never a bare boolean from
@@ -231,20 +230,29 @@ jobs:
               exit 1
               ;;
           esac
-          uv run python -m pytest -n auto -v \
-            ${{ matrix.pytest_paths }} \
-            --cov=config \
-            --cov=core \
-            --cov=platform.deployment.aws --cov=platform.deployment \
-            --cov=integrations \
-            --cov=platform \
-            --cov=surfaces \
-            --cov=tools \
-            --cov-report= \
-            --ignore=tests/e2e/kubernetes_local_alert_simulation \
-            --ignore=tests/synthetic \
-            ${{ matrix.extra_pytest_args }} \
-            -m "${PYTEST_MARKER_EXPR}"
+
+      - name: Run tests
+        env:
+          COVERAGE_FILE: .coverage.${{ matrix.shard }}
+          PYTEST_MARKER_EXPR: ${{ fromJSON('["not synthetic", "not (synthetic or live_llm)"]')[github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == true] }}
+        # Keep ``run: >`` (folded) so ``matrix.pytest_paths`` stays one argv list.
+        # A ``run: |`` + ``\`` rewrite can drop/split those paths and yield
+        # ``N workers [0 items]`` even when the marker is correct.
+        run: >
+          uv run python -m pytest -n auto -v
+          ${{ matrix.pytest_paths }}
+          --cov=config
+          --cov=core
+          --cov=platform.deployment.aws --cov=platform.deployment
+          --cov=integrations
+          --cov=platform
+          --cov=surfaces
+          --cov=tools
+          --cov-report=
+          --ignore=tests/e2e/kubernetes_local_alert_simulation
+          --ignore=tests/synthetic
+          ${{ matrix.extra_pytest_args }}
+          -m "${PYTEST_MARKER_EXPR}"
 
       - name: Upload shard coverage data
         if: >-
