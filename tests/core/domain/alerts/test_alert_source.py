@@ -54,7 +54,12 @@ def test_resolve_alert_source_empty_when_unresolved() -> None:
 
 
 def test_primary_sources_for_alert_known_source() -> None:
-    assert primary_sources_for_alert({"alert_source": "eks"}) == ("eks", "ec2", "cloudtrail", "kubernetes")
+    assert primary_sources_for_alert({"alert_source": "eks"}) == (
+        "eks",
+        "ec2",
+        "cloudtrail",
+        "kubernetes",
+    )
 
 
 def test_seed_tool_sources_for_alert_known_source() -> None:

@@ -404,7 +404,7 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         direct_effective=True,
         core_verify=True,
         setup_order=51,
-        verify_order=52,
+        verify_order=53,
     ),
 )
 
