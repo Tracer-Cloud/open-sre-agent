@@ -197,3 +197,41 @@ def test_investigate_auth_runs_before_body_parse(
     resp = remote.post("/investigate", json={"alert_name": "x"})
 
     assert resp.status_code == 403
+
+
+def test_investigate_malformed_json_returns_400(client: TestClient) -> None:
+    """Malformed JSON is a decode error (400), distinct from a schema violation (422)."""
+    resp = client.post(
+        "/investigate",
+        content=b"{not valid json",
+        headers={"content-type": "application/json"},
+    )
+    assert resp.status_code == 400
+
+
+def test_investigate_chunked_over_cap_returns_413(
+    monkeypatch: pytest.MonkeyPatch, client: TestClient
+) -> None:
+    """A chunked body (no Content-Length) over the cap is caught by the
+    post-read len(body) guard, not just the Content-Length header check."""
+    monkeypatch.setattr(webapp, "MAX_ALERT_BODY_BYTES", 100)
+    called = False
+
+    def _should_not_run(**_: Any) -> dict[str, Any]:
+        nonlocal called
+        called = True
+        return _fake_payload()
+
+    monkeypatch.setattr(webapp, "run_investigation_payload", _should_not_run)
+
+    def _chunks() -> Iterator[bytes]:
+        # A generator body makes httpx use chunked transfer encoding, so no
+        # Content-Length header is sent and the first guard is bypassed.
+        yield b'{"raw_alert": {"blob": "'
+        yield b"x" * 500
+        yield b'"}}'
+
+    resp = client.post("/investigate", content=_chunks())
+
+    assert resp.status_code == 413
+    assert called is False

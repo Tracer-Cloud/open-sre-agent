@@ -210,8 +210,14 @@ async def investigate(request: Request) -> InvestigateResponse | JSONResponse:
     if len(body) > MAX_ALERT_BODY_BYTES:
         return JSONResponse({"error": "payload too large"}, status_code=413)
 
+    # Split decode from validation so malformed JSON returns 400 and a
+    # well-formed body that violates the schema returns 422, matching /alerts.
     try:
-        req = InvestigateRequest.model_validate_json(body)
+        data = json.loads(body)
+    except ValueError:
+        return JSONResponse({"error": "invalid json"}, status_code=400)
+    try:
+        req = InvestigateRequest.model_validate(data)
     except ValidationError:
         return JSONResponse({"error": "invalid request"}, status_code=422)
 
