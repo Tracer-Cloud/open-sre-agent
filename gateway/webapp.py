@@ -1,16 +1,18 @@
-"""The gateway's single FastAPI app: health probes plus alert intake.
+"""The gateway's single FastAPI app: health probes, alert intake, investigations.
 
 Every HTTP endpoint OpenSRE serves lives here, on one port — ``/`` ``/health``
-``/ok`` (health probes), ``/healthz`` (liveness), and ``POST /alerts`` (external
-alert pushes into the process-wide :class:`AlertInbox`). Hosted by the gateway
-daemon and the interactive shell via :mod:`gateway.web_server`, or standalone
-via ``uvicorn gateway.webapp:app``.
+``/ok`` (health probes), ``/healthz`` (liveness), ``POST /alerts`` (external
+alert pushes into the process-wide :class:`AlertInbox`), and ``POST /investigate``
+(run an investigation synchronously and return the RCA report). Hosted by the
+gateway daemon and the interactive shell via :mod:`gateway.web_server`, or
+standalone via ``uvicorn gateway.webapp:app``.
 """
 
 from __future__ import annotations
 
 import hmac
 import json
+import logging
 import os
 from datetime import UTC, datetime
 from typing import Any
@@ -31,9 +33,15 @@ from core.domain.alerts.inbox import (
 
 ensure_project_platform_package()
 
-from platform.observability.errors.sentry import init_sentry  # noqa: E402
+from platform.observability.errors.sentry import capture_exception, init_sentry  # noqa: E402
+from tools.investigation.capability import (  # noqa: E402
+    resolve_investigation_context,
+    run_investigation_payload,
+)
 
 init_sentry(entrypoint="webapp")
+
+logger = logging.getLogger(__name__)
 
 # Cap on POST body size accepted from any caller (authed or not). Realistic
 # alert payloads top out around 50 KB, so 1 MiB is ~20× headroom.
@@ -92,8 +100,12 @@ def _alert_inbox() -> AlertInbox:
     return inbox
 
 
-def _alert_auth_error(request: Request) -> JSONResponse | None:
-    """Bearer-token auth when configured; otherwise loopback callers only."""
+def _gateway_auth_error(request: Request) -> JSONResponse | None:
+    """Bearer-token auth when configured; otherwise loopback callers only.
+
+    Shared by every mutating gateway route (``/alerts``, ``/investigate``) since
+    they sit behind the same trust boundary: local callers or a configured token.
+    """
     token = os.environ.get("OPENSRE_ALERT_LISTENER_TOKEN")
     if token:
         supplied = request.headers.get("authorization", "")
@@ -104,14 +116,14 @@ def _alert_auth_error(request: Request) -> JSONResponse | None:
     if client_host in _LOOPBACK_HOSTS:
         return None
     return JSONResponse(
-        {"error": "set OPENSRE_ALERT_LISTENER_TOKEN to accept non-loopback alerts"},
+        {"error": "set OPENSRE_ALERT_LISTENER_TOKEN to accept non-loopback callers"},
         status_code=403,
     )
 
 
 @app.post("/alerts")
 async def receive_alert(request: Request) -> JSONResponse:
-    if (auth_error := _alert_auth_error(request)) is not None:
+    if (auth_error := _gateway_auth_error(request)) is not None:
         return auth_error
 
     try:
@@ -148,3 +160,57 @@ async def receive_alert(request: Request) -> JSONResponse:
         payload["dropped"] = inbox.dropped
         payload["warning"] = "inbox full, oldest alert dropped"
     return JSONResponse(payload, status_code=202)
+
+
+class InvestigateRequest(BaseModel):
+    raw_alert: dict[str, Any]
+    alert_name: str | None = None
+    pipeline_name: str | None = None
+    severity: str | None = None
+
+
+class InvestigateResponse(BaseModel):
+    report: str
+    problem_md: str
+    root_cause: str
+    is_noise: bool = False
+    validity_score: float = 0.0
+    tool_calls: list[dict[str, Any]] | None = None
+
+
+@app.post("/investigate", response_model=InvestigateResponse)
+def investigate(req: InvestigateRequest, request: Request) -> InvestigateResponse | JSONResponse:
+    """Run an investigation synchronously and return the RCA report.
+
+    Lets external systems (CI pipelines, custom webhooks, chat integrations
+    without a native tool) trigger the same investigation pipeline the CLI and
+    interactive shell use, over HTTP. FastAPI runs this sync handler in a
+    threadpool, so a long investigation does not block ``/health`` or ``/alerts``.
+    """
+    if (auth_error := _gateway_auth_error(request)) is not None:
+        return auth_error
+
+    investigation_metadata = resolve_investigation_context(
+        raw_alert=req.raw_alert,
+        alert_name=req.alert_name,
+        pipeline_name=req.pipeline_name,
+        severity=req.severity,
+    )
+    try:
+        result = run_investigation_payload(
+            raw_alert=req.raw_alert,
+            investigation_metadata=investigation_metadata,
+        )
+        return InvestigateResponse(**result)
+    except Exception as exc:
+        # Full detail (which may include internal paths, stack context, or
+        # upstream error bodies) goes to logs/Sentry only. The HTTP response
+        # carries just the exception type so it stays actionable without
+        # exposing internals to the caller (CodeQL: information exposure
+        # through an exception).
+        logger.exception("Investigation failed")
+        capture_exception(exc, context="gateway.webapp.investigate")
+        return JSONResponse(
+            {"error": f"investigation failed: {type(exc).__name__}"},
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )

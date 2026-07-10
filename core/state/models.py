@@ -17,6 +17,7 @@ from typing import Any, cast
 
 from pydantic import ConfigDict, Field
 
+from config.constants.investigation import MAX_INVESTIGATION_LOOPS
 from config.strict_config import StrictConfigModel
 from core.domain.types.retrieval import RetrievalControlsMap
 from core.state.runtime_slices import (
@@ -113,6 +114,7 @@ class AgentStateModel(StrictConfigModel):
     follow_up_questions: list[str] = Field(default_factory=list)
     remediation_tradeoffs: str = ""
     investigation_loop_count: int = 0
+    investigation_iteration_cap: int = MAX_INVESTIGATION_LOOPS
     hypotheses: list[str] = Field(default_factory=list)
     executed_hypotheses: list[dict[str, Any]] = Field(default_factory=list)
     evidence_entries: list[dict[str, Any]] = Field(default_factory=list)

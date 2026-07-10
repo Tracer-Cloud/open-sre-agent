@@ -11,7 +11,16 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 from uuid import uuid4
 
+from config.constants.investigation import MAX_INVESTIGATION_LOOPS
 from platform.analytics.events import Event
+from platform.analytics.investigation_loop import (
+    begin_investigation_loop_metrics_scope,
+    bind_investigation_loop_metrics_from_state,
+    bound_loop_metrics,
+    loop_metrics_from_state,
+    merge_loop_properties,
+    reset_investigation_loop_metrics,
+)
 from platform.analytics.provider import Properties, get_analytics
 from platform.analytics.repl_context import get_cli_session_id
 from platform.analytics.source import (
@@ -141,6 +150,15 @@ class InvestigationTracker:
     enabled: bool
     completed: bool = False
     failed: bool = False
+    investigation_loop_count: int | None = None
+    investigation_iteration_cap: int = MAX_INVESTIGATION_LOOPS
+
+    def record_loop_metrics_from_state(self, state: Mapping[str, object] | None) -> None:
+        """Capture canonical loop metrics from the investigation final state."""
+        loop_count, iteration_cap = loop_metrics_from_state(state)
+        self.investigation_loop_count = loop_count
+        self.investigation_iteration_cap = iteration_cap
+        bind_investigation_loop_metrics_from_state(state)
 
 
 def _string_value(value: object) -> str | None:
@@ -149,6 +167,51 @@ def _string_value(value: object) -> str | None:
 
 def _mapping_value(mapping: Mapping[str, object], key: str) -> str | None:
     return _string_value(mapping.get(key))
+
+
+def _resolve_investigation_loop_metrics(
+    *,
+    loop_count: int | None = None,
+    iteration_cap: int | None = None,
+    state: Mapping[str, object] | None = None,
+    tracker: InvestigationTracker | None = None,
+) -> tuple[int, int]:
+    if loop_count is not None:
+        resolved_cap = (
+            iteration_cap
+            if iteration_cap is not None
+            else (
+                tracker.investigation_iteration_cap
+                if tracker is not None
+                else MAX_INVESTIGATION_LOOPS
+            )
+        )
+        return max(0, int(loop_count)), max(1, int(resolved_cap))
+    bound = bound_loop_metrics()
+    if bound is not None:
+        return bound
+    if state is not None:
+        return loop_metrics_from_state(state)
+    if tracker is not None and tracker.investigation_loop_count is not None:
+        return tracker.investigation_loop_count, tracker.investigation_iteration_cap
+    return 0, MAX_INVESTIGATION_LOOPS
+
+
+def _with_investigation_loop_metrics(
+    properties: Properties,
+    *,
+    loop_count: int | None = None,
+    iteration_cap: int | None = None,
+    state: Mapping[str, object] | None = None,
+    tracker: InvestigationTracker | None = None,
+) -> Properties:
+    count, cap = _resolve_investigation_loop_metrics(
+        loop_count=loop_count,
+        iteration_cap=iteration_cap,
+        state=state,
+        tracker=tracker,
+    )
+    return merge_loop_properties(properties, loop_count=count, iteration_cap=cap)
 
 
 def _onboard_completed_properties(config: Mapping[str, object]) -> Properties:
@@ -200,11 +263,24 @@ def _investigation_started_properties(
         properties["llm_provider"] = llm_provider
     if llm_model is not None:
         properties["llm_model"] = llm_model
-    return properties
+    return _with_investigation_loop_metrics(
+        properties,
+        loop_count=0,
+        iteration_cap=MAX_INVESTIGATION_LOOPS,
+    )
 
 
-def _investigation_completed_properties(*, shared_properties: Properties) -> Properties:
-    return {**shared_properties}
+def _investigation_completed_properties(
+    *,
+    shared_properties: Properties,
+    tracker: InvestigationTracker | None = None,
+    state: Mapping[str, object] | None = None,
+) -> Properties:
+    return _with_investigation_loop_metrics(
+        {**shared_properties},
+        state=state,
+        tracker=tracker,
+    )
 
 
 def _investigation_failed_properties(
@@ -217,6 +293,8 @@ def _investigation_failed_properties(
     integration_involved: str | None = None,
     integration_failure_message: str | None = None,
     investigation_target: str | None = None,
+    state: Mapping[str, object] | None = None,
+    tracker: InvestigationTracker | None = None,
 ) -> Properties:
     properties: Properties = {**shared_properties}
     if failure_type:
@@ -233,7 +311,7 @@ def _investigation_failed_properties(
         properties["integration_failure_message"] = integration_failure_message
     if investigation_target:
         properties["investigation_target"] = investigation_target
-    return properties
+    return _with_investigation_loop_metrics(properties, state=state, tracker=tracker)
 
 
 def _investigation_outcome_properties(
@@ -247,6 +325,7 @@ def _investigation_outcome_properties(
     integration_involved: str | None = None,
     integration_failure_message: str | None = None,
     failure_detail: str | None = None,
+    state: Mapping[str, object] | None = None,
 ) -> Properties:
     properties: Properties = {
         "investigation_id": investigation_id,
@@ -268,7 +347,29 @@ def _investigation_outcome_properties(
     session_id = get_cli_session_id()
     if session_id:
         properties["cli_session_id"] = session_id
-    return properties
+    return _with_investigation_loop_metrics(properties, state=state)
+
+
+def capture_investigation_lifecycle_event(
+    event: Event,
+    properties: Properties,
+    *,
+    state: Mapping[str, object] | None = None,
+    tracker: InvestigationTracker | None = None,
+    loop_count: int | None = None,
+    iteration_cap: int | None = None,
+) -> None:
+    """Capture an investigation lifecycle event with canonical loop metrics."""
+    _capture(
+        event,
+        _with_investigation_loop_metrics(
+            properties,
+            loop_count=loop_count,
+            iteration_cap=iteration_cap,
+            state=state,
+            tracker=tracker,
+        ),
+    )
 
 
 def _capture(event: Event, properties: Properties | None = None) -> None:
@@ -437,7 +538,10 @@ def capture_investigation_completed(*, tracker: InvestigationTracker | None = No
         return
     _capture(
         Event.INVESTIGATION_COMPLETED,
-        _investigation_completed_properties(shared_properties=tracker.shared_properties),
+        _investigation_completed_properties(
+            shared_properties=tracker.shared_properties,
+            tracker=tracker,
+        ),
     )
     tracker.completed = True
 
@@ -463,6 +567,7 @@ def capture_investigation_failed(
         integration_involved=integration_involved,
         integration_failure_message=integration_failure_message,
         investigation_target=investigation_target,
+        tracker=tracker,
     )
     if tracker is None:
         _capture(Event.INVESTIGATION_FAILED, props)
@@ -479,6 +584,7 @@ def capture_investigation_cancelled(
     investigation_id: str,
     investigation_target: str = "",
     tracker: InvestigationTracker | None = None,
+    state: Mapping[str, object] | None = None,
 ) -> None:
     shared = tracker.shared_properties if tracker is not None and tracker.enabled else {}
     if investigation_id and not shared.get("investigation_id"):
@@ -489,7 +595,12 @@ def capture_investigation_cancelled(
     }
     if investigation_target:
         properties["investigation_target"] = investigation_target
-    _capture(Event.INVESTIGATION_CANCELLED, properties)
+    capture_investigation_lifecycle_event(
+        Event.INVESTIGATION_CANCELLED,
+        properties,
+        state=state,
+        tracker=tracker,
+    )
 
 
 def capture_investigation_outcome(
@@ -503,6 +614,7 @@ def capture_investigation_outcome(
     integration_involved: str | None = None,
     integration_failure_message: str | None = None,
     failure_detail: str | None = None,
+    state: Mapping[str, object] | None = None,
 ) -> None:
     if not investigation_id:
         return
@@ -518,6 +630,7 @@ def capture_investigation_outcome(
             integration_involved=integration_involved,
             integration_failure_message=integration_failure_message,
             failure_detail=failure_detail,
+            state=state,
         ),
     )
 
@@ -538,6 +651,7 @@ def track_investigation(
     """Capture investigation lifecycle once, with nested-call dedupe."""
     depth = _INVESTIGATION_TRACKING_DEPTH.get()
     token = _INVESTIGATION_TRACKING_DEPTH.set(depth + 1)
+    loop_metrics_token = begin_investigation_loop_metrics_scope() if depth == 0 else None
     tracker: InvestigationTracker
     if depth > 0:
         tracker = InvestigationTracker(shared_properties={}, enabled=False)
@@ -583,6 +697,8 @@ def track_investigation(
             capture_investigation_completed(tracker=yielded)
     finally:
         _INVESTIGATION_TRACKING_DEPTH.reset(token)
+        if depth == 0 and loop_metrics_token is not None:
+            reset_investigation_loop_metrics(loop_metrics_token)
 
 
 def capture_integration_setup_started(service: str) -> None:
@@ -794,6 +910,45 @@ def capture_terminal_actions_executed(
             "success_rate_bucket": _bucket_percentage(success_percent),
         },
     )
+
+
+def capture_react_turn_completed(
+    *,
+    phase: str,
+    llm_iterations_used: int,
+    llm_iteration_cap: int,
+    hit_iteration_cap: bool,
+    stop_reason: str,
+    tool_calls_executed: int,
+    duration_ms: int,
+    cli_session_id: str,
+    cli_turn_kind: str,
+    llm_provider: str,
+    llm_model: str,
+    investigation_id: str | None = None,
+    investigation_loop_count: int | None = None,
+    prompt_turn_id: str | None = None,
+) -> None:
+    properties: Properties = {
+        "phase": phase,
+        "llm_iterations_used": llm_iterations_used,
+        "llm_iteration_cap": llm_iteration_cap,
+        "hit_iteration_cap": hit_iteration_cap,
+        "stop_reason": stop_reason,
+        "tool_calls_executed": tool_calls_executed,
+        "duration_ms": duration_ms,
+        "cli_session_id": cli_session_id,
+        "cli_turn_kind": cli_turn_kind,
+        "llm_provider": llm_provider,
+        "llm_model": llm_model,
+    }
+    if investigation_id:
+        properties["investigation_id"] = investigation_id
+    if investigation_loop_count is not None:
+        properties["investigation_loop_count"] = investigation_loop_count
+    if prompt_turn_id:
+        properties["prompt_turn_id"] = prompt_turn_id
+    _capture(Event.REACT_TURN_COMPLETED, properties)
 
 
 def capture_terminal_turn_summarized(

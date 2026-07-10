@@ -67,6 +67,9 @@ class Agent[RuntimeToolT: RuntimeTool](EventEmitterMixin, ToolFilterMixin, Steer
         self._hooks = ProviderHookDelegate(provider_hooks or ProviderHooks())
         self._steering_messages: deque[str] = deque()
         self._follow_up_messages: deque[str] = deque()
+        self._react_iterations_used = 0
+        self._react_executed: list[tuple[Any, Any]] = []
+        self._react_hit_iteration_cap = False
 
     def run(
         self,
@@ -75,8 +78,23 @@ class Agent[RuntimeToolT: RuntimeTool](EventEmitterMixin, ToolFilterMixin, Steer
         runtime_request: AgentRuntimeRequest | None = None,
     ) -> AgentRunResult:
         """Assemble the resolved per-run input and hand it to ``run_react_loop``."""
+        self._react_iterations_used = 0
+        self._react_executed = []
+        self._react_hit_iteration_cap = False
         run_input = self._build_run_input(initial_messages, runtime_request)
         return run_react_loop(run_input, self)
+
+    def _note_react_run_progress(
+        self,
+        *,
+        iterations_used: int,
+        executed: list[tuple[Any, Any]],
+        hit_iteration_cap: bool,
+    ) -> None:
+        """Record partial loop progress for telemetry when ``run`` aborts early."""
+        self._react_iterations_used = iterations_used
+        self._react_executed = executed
+        self._react_hit_iteration_cap = hit_iteration_cap
 
     def _build_run_input(
         self,

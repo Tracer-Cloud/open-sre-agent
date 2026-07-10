@@ -292,6 +292,9 @@ async def astream_investigation(
     def _run_pipeline() -> None:
         try:
             from core.state.updates import apply_state_updates
+            from platform.analytics.investigation_loop import (
+                bind_investigation_loop_metrics_from_state,
+            )
             from tools.investigation.reporting.node import generate_report
             from tools.investigation.stages.diagnose import diagnose
             from tools.investigation.stages.gather_evidence import ConnectedInvestigationAgent
@@ -453,6 +456,8 @@ async def astream_investigation(
                     },
                 )
             )
+
+            bind_investigation_loop_metrics_from_state(state)
 
         except Exception as exc:
             _capture_exception_once(exc, context="pipeline.astream_investigation")

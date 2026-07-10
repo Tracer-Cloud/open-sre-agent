@@ -38,6 +38,7 @@ from core.events import runtime_event_callback_from_observer
 from core.execution import ToolExecutionHooks, public_tool_input
 from core.llm.failure_classification import is_context_length_overflow
 from core.llm.types import AgentLLMResponse, ToolCall
+from platform.analytics.react_turn import run_react_agent_with_telemetry
 from platform.observability.trace.prompts import persist_turn_system_prompt
 from platform.observability.trace.spans import component_span
 
@@ -85,7 +86,8 @@ INVESTIGATION_DISPATCH_TOOL_NAMES: frozenset[str] = frozenset(
 class ActionTurnPlan:
     agent: Agent[Any]
     user_message: str
-    llm_client: Any | None = None
+    llm: Any
+    max_iterations: int
 
 
 @dataclass(frozen=True)
@@ -384,7 +386,8 @@ def _build_action_agent(
     return ActionTurnPlan(
         agent=build_agent(config),
         user_message=user_message,
-        llm_client=None if isinstance(llm, _StaticToolCallLLM) else llm,
+        llm=llm,
+        max_iterations=_MAX_TOOL_CALLING_ITERATIONS,
     )
 
 
@@ -473,7 +476,14 @@ def _run_action_agent_turn_body(
             tool_resources=tool_resources,
             observer=observer,
         )
-        result = plan.agent.run([{"role": "user", "content": plan.user_message}])
+        result = run_react_agent_with_telemetry(
+            plan.agent,
+            [{"role": "user", "content": plan.user_message}],
+            phase="action",
+            iteration_cap=plan.max_iterations,
+            llm=plan.llm,
+            session=session,
+        )
         persist_turn_system_prompt(
             session,
             phase="action_agent",
@@ -487,10 +497,15 @@ def _run_action_agent_turn_body(
         error_text = str(exc)
         if error_reporter is not None:
             error_reporter.report(exc, context="core.agent_harness.action_driver", expected=True)
+        llm_client = (
+            None
+            if plan is None or isinstance(plan.llm, _StaticToolCallLLM)
+            else plan.llm
+        )
         _stage_action_llm_failure(
             message,
             session,
-            client=plan.llm_client if plan is not None else None,
+            client=llm_client,
             error_text=error_text,
         )
         _render_tool_calling_error(output, error_text)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from rich.console import Console
 
-from platform.analytics.repl_context import bind_cli_session_id, reset_cli_session_id
+from platform.analytics.repl_context import bound_repl_turn_context
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui.banner import render_banner
 from surfaces.interactive_shell.ui.input_prompt.rendering import render_submitted_prompt
@@ -34,9 +34,12 @@ def run_initial_input(
         if not stripped:
             continue
         render_submitted_prompt(console, session, stripped)
-        session_token = bind_cli_session_id(session.session_id)
-        try:
-            recorder = PromptRecorder.start(session=session, text=stripped, turn_kind=_TURN_KIND)
+        recorder = PromptRecorder.start(session=session, text=stripped, turn_kind=_TURN_KIND)
+        with bound_repl_turn_context(
+            session_id=session.session_id,
+            turn_kind=_TURN_KIND,
+            prompt_turn_id=recorder.turn_id if recorder is not None else None,
+        ):
             execute_shell_turn(
                 stripped,
                 session,
@@ -45,8 +48,6 @@ def run_initial_input(
                 confirm_fn=None,
                 is_tty=False,
             )
-        finally:
-            reset_cli_session_id(session_token)
     return 0
 
 

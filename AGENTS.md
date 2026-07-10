@@ -15,6 +15,8 @@
 
 Before any push or PR creation follow **[CI.md](CI.md)** — lint, format, typecheck, and test commands all live there.
 
+When opening a PR, fill out the **[PR template](.github/PULL_REQUEST_TEMPLATE.md)** — it is not optional boilerplate; it has a required AI-usage disclosure section.
+
 ## 1. Repo Map
 
 | Path                                          | What it does                                                                                                                                                                                                                                                                                                                           |

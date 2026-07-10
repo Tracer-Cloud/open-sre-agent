@@ -77,6 +77,7 @@ class InvestigationRuntimeSlice(TypedDict, total=False):
     evidence: dict[str, Any]
     correlation: dict[str, Any]
     investigation_loop_count: int
+    investigation_iteration_cap: int
     hypotheses: list[str]
     executed_hypotheses: list[dict[str, Any]]
     evidence_entries: list[dict[str, Any]]

@@ -14,6 +14,8 @@ def _assert_investigation_events_have_source(
         Event.INVESTIGATION_STARTED,
         Event.INVESTIGATION_COMPLETED,
         Event.INVESTIGATION_FAILED,
+        Event.INVESTIGATION_OUTCOME,
+        Event.INVESTIGATION_CANCELLED,
     }
     for event, properties in events:
         if event not in investigation_events:
@@ -22,6 +24,12 @@ def _assert_investigation_events_have_source(
         source = properties.get("source")
         assert isinstance(source, str), f"{event.value} must include a string source"
         assert source.strip(), f"{event.value} source must be non-empty"
+        assert properties.get("investigation_loop_count") is not None, (
+            f"{event.value} must include investigation_loop_count"
+        )
+        assert properties.get("investigation_iteration_cap") is not None, (
+            f"{event.value} must include investigation_iteration_cap"
+        )
 
 
 class _StubAnalytics:
@@ -287,6 +295,8 @@ def test_track_investigation_emits_lifecycle_once(monkeypatch: pytest.MonkeyPatc
     assert started_props["trigger_mode"] == "file"
     assert started_props["is_test"] is True
     assert started_props["investigation_id"] == completed_props["investigation_id"]
+    assert started_props["investigation_loop_count"] == 0
+    assert completed_props["investigation_loop_count"] == 0
 
 
 def test_track_investigation_emits_failed_on_exception(
@@ -328,10 +338,12 @@ def test_capture_investigation_outcome_and_cancelled(monkeypatch: pytest.MonkeyP
         investigation_target="generic",
         error_excerpt="boom",
         failure_category="unknown",
+        state={"investigation_loop_count": 5, "investigation_iteration_cap": 20},
     )
     cli.capture_investigation_cancelled(
         investigation_id="inv-456",
         investigation_target="alert.json",
+        state={"investigation_loop_count": 2, "investigation_iteration_cap": 20},
     )
 
     assert stub.events[0][0] == Event.INVESTIGATION_OUTCOME
@@ -340,10 +352,31 @@ def test_capture_investigation_outcome_and_cancelled(monkeypatch: pytest.MonkeyP
     assert outcome_props["status"] == "failed"
     assert outcome_props["investigation_target"] == "generic"
     assert outcome_props["error_excerpt"] == "boom"
+    assert outcome_props["investigation_loop_count"] == 5
     assert stub.events[1][0] == Event.INVESTIGATION_CANCELLED
     cancelled_props = stub.events[1][1] or {}
     assert cancelled_props["investigation_id"] == "inv-456"
     assert cancelled_props["failure_category"] == "user_cancelled"
+    assert cancelled_props["investigation_loop_count"] == 2
+
+
+def test_track_investigation_records_loop_metrics_on_completion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stub = _StubAnalytics()
+    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
+
+    with cli.track_investigation(
+        entrypoint=EntrypointSource.CLI_COMMAND,
+        trigger_mode=TriggerMode.FILE,
+    ) as tracker:
+        tracker.record_loop_metrics_from_state(
+            {"investigation_loop_count": 8, "investigation_iteration_cap": 20}
+        )
+
+    completed_props = stub.events[1][1] or {}
+    assert completed_props["investigation_loop_count"] == 8
+    assert completed_props["investigation_iteration_cap"] == 20
 
 
 def test_track_investigation_nested_context_dedupes(monkeypatch: pytest.MonkeyPatch) -> None:

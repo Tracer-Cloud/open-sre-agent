@@ -70,22 +70,24 @@ Use the built-in gateway command when you want a local HTTP server for investiga
 
 | Command | What it does |
 | --- | --- |
-| `uv run opensre gateway` | Starts the local gateway on `127.0.0.1:2024`. |
-| `uv run opensre gateway --host 0.0.0.0 --port 8080` | Binds the gateway to a custom host/port. |
-| `uv run opensre gateway --api-key local-dev-key` | Enables API key auth for non-exempt routes. |
-| `uv run opensre gateway --investigations-dir ./investigations` | Writes investigation reports to a custom directory. |
+| `uv run opensre gateway start` | Starts the gateway daemon in the background (web app, Telegram chat, task scheduler). |
+| `uv run opensre gateway start --foreground` | Runs the gateway attached to this terminal. |
+| `uv run opensre gateway stop` | Stops the background daemon. |
+| `uv run opensre gateway status` | Shows daemon and component status. |
+
+The web app binds `0.0.0.0` on the port from the `PORT` environment variable
+(default `8000`).
 
 Quick local checks:
 
 ```bash
-curl http://127.0.0.1:2024/ok
-curl http://127.0.0.1:2024/version
+curl http://127.0.0.1:8000/ok
 ```
 
 Example investigation request:
 
 ```bash
-curl -X POST http://127.0.0.1:2024/investigate \
+curl -X POST http://127.0.0.1:8000/investigate \
   -H "Content-Type: application/json" \
   -d '{
     "raw_alert": {
@@ -97,12 +99,13 @@ curl -X POST http://127.0.0.1:2024/investigate \
   }'
 ```
 
-When `--api-key` is set, include it for protected endpoints:
+By default, `/investigate` (like `/alerts`) accepts only loopback callers. Set
+`OPENSRE_ALERT_LISTENER_TOKEN` to allow remote callers with a bearer token:
 
 ```bash
-curl -X POST http://127.0.0.1:2024/investigate \
+curl -X POST http://127.0.0.1:8000/investigate \
   -H "Content-Type: application/json" \
-  -H "X-API-Key: local-dev-key" \
+  -H "Authorization: Bearer $OPENSRE_ALERT_LISTENER_TOKEN" \
   -d '{"raw_alert":{"alert_name":"test"}}'
 ```
 

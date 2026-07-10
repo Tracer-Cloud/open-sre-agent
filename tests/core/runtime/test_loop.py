@@ -641,6 +641,22 @@ def test_always_tool_call_hits_iteration_cap() -> None:
     )
 
     assert result.hit_iteration_cap is True
+    assert result.llm_iterations_used == max_iterations
     assert len(result.executed) == max_iterations
     assert result.final_text == ""
     assert llm.invocations == max_iterations
+
+
+def test_react_loop_records_partial_iterations_when_llm_raises() -> None:
+    def responses() -> Iterator[AgentLLMResponse]:
+        yield _tool_call_response("c1", "query_logs")
+        yield _tool_call_response("c2", "query_logs")
+        raise RuntimeError("provider down")
+
+    llm = FakeLLM(responses())
+    agent = _agent(llm, _tools(FakeTool("query_logs")), max_iterations=5)
+
+    with pytest.raises(RuntimeError, match="provider down"):
+        agent.run([{"role": "user", "content": "hello"}])
+
+    assert agent._react_iterations_used == 3
