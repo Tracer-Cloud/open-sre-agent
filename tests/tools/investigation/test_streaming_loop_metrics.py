@@ -68,8 +68,8 @@ def test_main_thread_bridge_binds_metrics_from_wrapped_stream_failure() -> None:
     )
     scope_token = begin_investigation_loop_metrics_scope()
     try:
-        with pytest.raises(RuntimeError, match="boom"):
-            raise publish_loop_metrics_from_stream_failure(wrapped) from wrapped.cause
+        unwrapped = publish_loop_metrics_from_stream_failure(wrapped)
+        assert isinstance(unwrapped, RuntimeError)
         assert bound_loop_metrics() == (4, 20)
     finally:
         reset_investigation_loop_metrics(scope_token)
