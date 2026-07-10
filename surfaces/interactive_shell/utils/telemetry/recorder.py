@@ -10,6 +10,7 @@ from typing import Any
 
 from config.version import get_opensre_version
 from core.agent_harness.accounting.token_accounting import LlmRunInfo
+from core.llm_invoke_errors import LLM_PROVIDER_FAILURE_KINDS, classify_provider_error_kind
 from platform.analytics.provider import JsonValue
 from surfaces.interactive_shell.prompt_history.policy import redact_text
 from surfaces.interactive_shell.utils.telemetry.config import PromptLogConfig
@@ -26,6 +27,12 @@ _SUPPORTED_TURN_KINDS = frozenset({"agent", "follow_up", "new_alert", "backgroun
 # Sentinel for turns handled by terminal tools/slash commands without the
 # conversational assistant LLM (PostHog ``$ai_model`` / ``$ai_provider``).
 NO_CONVERSATIONAL_AGENT = "no_conversational_agent"
+
+# Sentinel for turns where the conversational LLM was attempted but failed
+# before the model/provider identity could be resolved (missing key, bad
+# config). Distinct from ``NO_CONVERSATIONAL_AGENT`` so provider failures are
+# never mislabeled as terminal-action turns in analytics.
+UNKNOWN_LLM = "unknown"
 
 # Maps PromptRecorder turn_kind to session turn kind stored in turn_detail records.
 _TURN_TO_SESSION_KIND: dict[str, str] = {
@@ -190,7 +197,9 @@ class PromptRecorder:
     def set_response(self, text: str, run: LlmRunInfo | None = None) -> None:
         cleaned = _sanitize_text(text, config=self._config)
         if not cleaned.strip():
-            cleaned = _fallback_terminal_response(prompt=self._prompt)
+            # A failed turn may produce no assistant text; surface the error
+            # message as the assistant content so analytics can display it.
+            cleaned = self._error_message or _fallback_terminal_response(prompt=self._prompt)
         self._response = cleaned
         if run is None:
             self._latency_ms = int((time.monotonic() - self._start) * 1000)
@@ -242,14 +251,20 @@ class PromptRecorder:
 
         if self._config.posthog_enabled:
             with contextlib.suppress(Exception):
+                # When the conversational LLM was attempted but the provider
+                # failed, the turn is a failed LLM call — never a terminal
+                # action. Fall back to "unknown" instead of the terminal
+                # sentinel when the attempted model could not be resolved.
+                llm_provider_failed = self._error_kind in LLM_PROVIDER_FAILURE_KINDS
+                fallback_label = UNKNOWN_LLM if llm_provider_failed else NO_CONVERSATIONAL_AGENT
                 integration_snapshot = build_turn_integration_snapshot(self._session)
                 posthog_properties: dict[str, JsonValue] = {
                     "$ai_trace_id": self._turn_id,
                     "$ai_session_id": self._session_id,
                     "$ai_span_id": self._turn_id,
                     "$ai_span_name": f"surfaces.interactive_shell.{self._turn_kind}",
-                    "$ai_model": self._model or NO_CONVERSATIONAL_AGENT,
-                    "$ai_provider": self._provider or NO_CONVERSATIONAL_AGENT,
+                    "$ai_model": self._model or fallback_label,
+                    "$ai_provider": self._provider or fallback_label,
                     "$ai_input": [{"role": "user", "content": self._prompt}],
                     "$ai_output_choices": [
                         {
@@ -278,6 +293,10 @@ class PromptRecorder:
                     posthog_properties["$ai_is_error"] = True
                     posthog_properties["$ai_error"] = self._error_message or self._error_kind
                     posthog_properties["error_kind"] = self._error_kind
+                    if llm_provider_failed:
+                        posthog_properties["ai_error_kind"] = classify_provider_error_kind(
+                            self._error_message or self._error_kind
+                        )
                 capture_ai_generation(posthog_properties)
 
 

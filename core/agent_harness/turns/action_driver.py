@@ -251,6 +251,37 @@ def _render_tool_calling_error(output: OutputSink, message: str) -> None:
     output.render_error(message)
 
 
+def _stage_action_llm_failure(
+    message: str,
+    session: SessionStore,
+    *,
+    deps: ToolCallingDeps | None,
+    error_text: str,
+) -> None:
+    """Stage telemetry for an action-agent LLM failure on conversational input.
+
+    Explicit ``!shell`` / literal ``/slash`` turns never invoke the hosted LLM
+    (they run through ``_StaticToolCallLLM``), so a failure there stays a
+    terminal-action outcome. For conversational input the LLM was the intended
+    route, so the turn must be reported as a failed LLM call — not a terminal
+    turn tagged ``no_conversational_agent``.
+    """
+    if _bang_shell_command(message) is not None or message.strip().startswith("/"):
+        return
+    from core.agent_harness.turns.orchestrator import stage_turn_error, stage_turn_llm_failure
+
+    stage_turn_error(session, "action_agent_error", error_text)
+    factory = deps.llm_factory if deps is not None and deps.llm_factory else default_llm_factory
+    try:
+        # A build-time failure (missing key, bad config) raises again here and
+        # leaves the model unresolved; an invoke-time failure returns the same
+        # (cached) client so the attempted model/provider can be reported.
+        client = factory()
+    except Exception:
+        client = None
+    stage_turn_llm_failure(session, client=client)
+
+
 def _bang_shell_command(message: str) -> str | None:
     # Explicit `!cmd` shell escape: a deterministic bypass for input the user
     # typed verbatim as a shell command. This is NOT natural-language intent
@@ -458,6 +489,7 @@ def _run_action_agent_turn_body(
         error_text = str(exc)
         if error_reporter is not None:
             error_reporter.report(exc, context="core.agent_harness.action_driver", expected=True)
+        _stage_action_llm_failure(message, session, deps=deps, error_text=error_text)
         _render_tool_calling_error(output, error_text)
         _persist_tool_calling_error(session, message, error_text)
         session.record("cli_agent", message, ok=False)
