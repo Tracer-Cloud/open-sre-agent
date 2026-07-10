@@ -297,17 +297,22 @@ async def astream_investigation(
             )
 
     def _run_pipeline() -> None:
+        # Bind the two symbols the ``except`` handler needs BEFORE the try, so a
+        # failure in the deferred stage imports below can't leave them unbound
+        # and make the handler itself raise -- which would skip Sentry capture
+        # and the error-queue delivery, leaving the consumer to see a clean
+        # (empty) stream end instead of the real failure.
+        from platform.analytics.investigation_loop import loop_metrics_from_state
+
+        state = initial
         try:
             from core.state.updates import apply_state_updates
-            from platform.analytics.investigation_loop import loop_metrics_from_state
             from tools.investigation.reporting.node import generate_report
             from tools.investigation.stages.diagnose import diagnose
             from tools.investigation.stages.gather_evidence import ConnectedInvestigationAgent
             from tools.investigation.stages.intake import extract_alert
             from tools.investigation.stages.plan_evidence import plan_actions
             from tools.investigation.stages.resolve_integrations import resolve_integrations
-
-            state = initial
 
             # --- resolve_integrations ---
             _put(_make_node_event("on_chain_start", "resolve_integrations", {}))

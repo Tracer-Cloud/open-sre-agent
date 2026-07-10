@@ -73,3 +73,24 @@ def test_main_thread_bridge_binds_metrics_from_wrapped_stream_failure() -> None:
         assert bound_loop_metrics() == (4, 20)
     finally:
         reset_investigation_loop_metrics(scope_token)
+
+
+@pytest.mark.anyio
+async def test_astream_surfaces_error_when_deferred_import_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A deferred stage import failing inside _run_pipeline must still surface a
+    wrapped stream error. The except handler reads loop metrics + state, so both
+    must be bound before the try -- otherwise the handler raises and the consumer
+    sees a clean, empty stream end with the real failure lost."""
+    import core.state.updates as _updates
+
+    # Simulate one of _run_pipeline's `from ... import ...` lines failing at
+    # runtime (e.g. a stage transitively importing a missing/broken SDK).
+    monkeypatch.delattr(_updates, "apply_state_updates")
+
+    with pytest.raises(InvestigationPipelineStreamError) as exc_info:
+        async for _event in astream_investigation("alert text"):
+            pass
+
+    assert isinstance(exc_info.value.cause, ImportError)
