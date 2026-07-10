@@ -497,11 +497,7 @@ def _run_action_agent_turn_body(
         error_text = str(exc)
         if error_reporter is not None:
             error_reporter.report(exc, context="core.agent_harness.action_driver", expected=True)
-        llm_client = (
-            None
-            if plan is None or isinstance(plan.llm, _StaticToolCallLLM)
-            else plan.llm
-        )
+        llm_client = None if plan is None or isinstance(plan.llm, _StaticToolCallLLM) else plan.llm
         _stage_action_llm_failure(
             message,
             session,
