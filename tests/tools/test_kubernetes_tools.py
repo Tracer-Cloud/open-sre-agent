@@ -418,6 +418,32 @@ def test_describe_pod_run_returns_unavailable_when_no_client() -> None:
     assert result["available"] is False
 
 
+def test_describe_pod_run_includes_valuefrom_env_names_without_values() -> None:
+    literal_env = MagicMock()
+    literal_env.name = "LOG_LEVEL"
+    literal_env.value = "debug"
+    secret_env = MagicMock()
+    secret_env.name = "DB_PASSWORD"
+    secret_env.value = None
+
+    pod = _make_mock_pod_detail("web-abc")
+    pod.spec.containers[0].env = [literal_env, secret_env]
+
+    mock_core = MagicMock()
+    mock_core.read_namespaced_pod.return_value = pod
+
+    tool = KubernetesDescribePodTool()
+    with patch(
+        "integrations.kubernetes.tools._make_client",
+        return_value=_make_client_with_core(mock_core),
+    ):
+        result = tool.run(kubeconfig=_MINIMAL_KUBECONFIG, pod_name="web-abc", namespace="default")
+
+    env_names = result["spec"]["containers"][0]["env"]
+    assert env_names == ["LOG_LEVEL", "DB_PASSWORD"]
+    assert "debug" not in env_names
+
+
 # ---------------------------------------------------------------------------
 # list_nodes run()
 # ---------------------------------------------------------------------------

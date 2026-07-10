@@ -379,10 +379,12 @@ class KubernetesClient:
                         "requests": dict(c.resources.requests or {}) if c.resources else {},
                         "limits": dict(c.resources.limits or {}) if c.resources else {},
                     },
-                    # Return only env var names, not values. Literal values may
-                    # contain credentials (tokens, DB URLs, API keys) that must
-                    # not be forwarded to the LLM or stored in investigation reports.
-                    "env": [e.name for e in (c.env or []) if e.value is not None],
+                    # Return only env var names, not values, regardless of source
+                    # (literal value vs. valueFrom secretKeyRef/configMapKeyRef).
+                    # Literal values may contain credentials (tokens, DB URLs, API
+                    # keys) that must not be forwarded to the LLM or stored in
+                    # investigation reports.
+                    "env": [e.name for e in (c.env or [])],
                 }
 
             def _container_status(cs: Any) -> dict[str, Any]:
