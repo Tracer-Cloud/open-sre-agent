@@ -17,15 +17,11 @@ from integrations.posthog_mcp import (
     PostHogMCPConfig,
     PostHogMCPToolCallResult,
     build_posthog_mcp_config,
+    call_posthog_mcp_tool as invoke_posthog_mcp_tool,
     describe_posthog_mcp_error,
+    list_posthog_mcp_tools as list_posthog_mcp_server_tools,
     posthog_mcp_config_from_env,
     posthog_mcp_runtime_unavailable_reason,
-)
-from integrations.posthog_mcp import (
-    call_posthog_mcp_tool as invoke_posthog_mcp_tool,
-)
-from integrations.posthog_mcp import (
-    list_posthog_mcp_tools as list_posthog_mcp_server_tools,
 )
 
 PostHogMCPParams = dict[str, object]
