@@ -94,14 +94,22 @@ def bind_investigation_loop_metrics(*, loop_count: int, iteration_cap: int) -> N
 
 def publish_loop_metrics_from_stream_failure(exc: BaseException) -> BaseException:
     """Bind loop metrics on this thread when *exc* carries them, then unwrap."""
-    from tools.investigation.streaming import InvestigationPipelineStreamError
-
-    if isinstance(exc, InvestigationPipelineStreamError):
+    loop_count = getattr(exc, "loop_count", None)
+    iteration_cap = getattr(exc, "iteration_cap", None)
+    cause = getattr(exc, "cause", None)
+    if (
+        cause is not None
+        and isinstance(cause, BaseException)
+        and loop_count is not None
+        and iteration_cap is not None
+        and not isinstance(loop_count, bool)
+        and not isinstance(iteration_cap, bool)
+    ):
         bind_investigation_loop_metrics(
-            loop_count=exc.loop_count,
-            iteration_cap=exc.iteration_cap,
+            loop_count=int(loop_count),
+            iteration_cap=int(iteration_cap),
         )
-        return exc.cause
+        return cause
     return exc
 
 
