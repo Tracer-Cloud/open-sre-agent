@@ -10,6 +10,7 @@ standalone via ``uvicorn gateway.webapp:app``.
 
 from __future__ import annotations
 
+import functools
 import hmac
 import json
 import logging
@@ -17,6 +18,7 @@ import os
 from datetime import UTC, datetime
 from typing import Any
 
+import anyio
 from fastapi import FastAPI, Request, Response, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ValidationError
@@ -179,16 +181,39 @@ class InvestigateResponse(BaseModel):
 
 
 @app.post("/investigate", response_model=InvestigateResponse)
-def investigate(req: InvestigateRequest, request: Request) -> InvestigateResponse | JSONResponse:
+async def investigate(request: Request) -> InvestigateResponse | JSONResponse:
     """Run an investigation synchronously and return the RCA report.
 
     Lets external systems (CI pipelines, custom webhooks, chat integrations
     without a native tool) trigger the same investigation pipeline the CLI and
-    interactive shell use, over HTTP. FastAPI runs this sync handler in a
-    threadpool, so a long investigation does not block ``/health`` or ``/alerts``.
+    interactive shell use, over HTTP. The blocking pipeline is offloaded to a
+    worker thread so it does not block the event loop / ``/health``.
+
+    The body is read manually (not via a Pydantic parameter) so authentication
+    and the size cap run *before* the request body is buffered and parsed --
+    otherwise an unauthenticated caller could force parsing of an arbitrarily
+    large body. Mirrors ``/alerts``.
     """
     if (auth_error := _gateway_auth_error(request)) is not None:
         return auth_error
+
+    try:
+        declared_length = int(request.headers.get("content-length", 0))
+    except ValueError:
+        return JSONResponse({"error": "invalid Content-Length"}, status_code=400)
+    if declared_length < 0:
+        return JSONResponse({"error": "invalid Content-Length"}, status_code=400)
+    if declared_length > MAX_ALERT_BODY_BYTES:
+        return JSONResponse({"error": "payload too large"}, status_code=413)
+
+    body = await request.body()
+    if len(body) > MAX_ALERT_BODY_BYTES:
+        return JSONResponse({"error": "payload too large"}, status_code=413)
+
+    try:
+        req = InvestigateRequest.model_validate_json(body)
+    except ValidationError:
+        return JSONResponse({"error": "invalid request"}, status_code=422)
 
     investigation_metadata = resolve_investigation_context(
         raw_alert=req.raw_alert,
@@ -197,9 +222,12 @@ def investigate(req: InvestigateRequest, request: Request) -> InvestigateRespons
         severity=req.severity,
     )
     try:
-        result = run_investigation_payload(
-            raw_alert=req.raw_alert,
-            investigation_metadata=investigation_metadata,
+        result = await anyio.to_thread.run_sync(
+            functools.partial(
+                run_investigation_payload,
+                raw_alert=req.raw_alert,
+                investigation_metadata=investigation_metadata,
+            )
         )
         return InvestigateResponse(**result)
     except Exception as exc:

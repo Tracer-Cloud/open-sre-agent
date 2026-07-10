@@ -158,3 +158,42 @@ def test_investigate_token_auth(monkeypatch: pytest.MonkeyPatch) -> None:
         ).status_code
         == 200
     )
+
+
+def test_investigate_body_over_cap_returns_413(
+    monkeypatch: pytest.MonkeyPatch, client: TestClient
+) -> None:
+    """A body larger than the cap is rejected before the pipeline runs."""
+    monkeypatch.setattr(webapp, "MAX_ALERT_BODY_BYTES", 100)
+    called = False
+
+    def _should_not_run(**_: Any) -> dict[str, Any]:
+        nonlocal called
+        called = True
+        return _fake_payload()
+
+    monkeypatch.setattr(webapp, "run_investigation_payload", _should_not_run)
+
+    resp = client.post("/investigate", json={"raw_alert": {"blob": "x" * 500}})
+
+    assert resp.status_code == 413
+    assert called is False
+
+
+def test_investigate_auth_runs_before_body_parse(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unauthenticated caller is rejected by auth *before* the body is parsed.
+
+    A remote caller sending an invalid body must get 403 (auth), not 422 (body
+    validation). With the body bound as a Pydantic parameter the framework
+    parsed and rejected it (422) before the handler's auth check ever ran --
+    the pre-auth parse this fix closes.
+    """
+    monkeypatch.setattr(webapp, "run_investigation_payload", lambda **_: _fake_payload())
+    remote = TestClient(webapp.app, client=_REMOTE)
+
+    # Body is missing the required raw_alert field.
+    resp = remote.post("/investigate", json={"alert_name": "x"})
+
+    assert resp.status_code == 403
