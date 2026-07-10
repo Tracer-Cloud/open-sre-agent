@@ -11,9 +11,10 @@ from core.agent_harness.prompts.conversation_memory import (
     format_recent_conversation,
 )
 from core.agent_harness.prompts.envelope import PromptBlock, PromptEnvelope
+from core.agent_harness.prompts.skills_loader import load_skills_block
 
 if TYPE_CHECKING:
-    from core.agent_harness.models.turn_snapshot import TurnSnapshot
+    from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 
 _MAX_TEXT_LEN = 512
 _USER_TEMPLATE = "USER MESSAGE (literal): <<<{text}>>>"
@@ -31,17 +32,29 @@ def build_action_system_prompt_envelope(turn_snapshot: TurnSnapshot) -> PromptEn
             content=_SYSTEM_PROMPT_BASE + "\n\n",
             provenance="core.agent_harness.prompts.action_agent_system_prompt",
         ),
+    ]
+    skills = load_skills_block()
+    if skills:
+        blocks.append(
+            PromptBlock(
+                id="action-agent-skills",
+                kind="rule",
+                content=skills + "\n\n",
+                provenance="core.agent_harness.prompts.skills",
+            )
+        )
+    blocks += [
         PromptBlock(
             id="connected-integrations",
             kind="context",
             content=connected_integrations_block(turn_snapshot),
-            provenance="core.agent_harness.models.turn_snapshot",
+            provenance="core.agent_harness.turns.turn_snapshot",
         ),
         PromptBlock(
             id="recent-conversation",
             kind="conversation",
             content=recent_conversation_block(turn_snapshot),
-            provenance="core.agent_harness.models.turn_snapshot",
+            provenance="core.agent_harness.turns.turn_snapshot",
         ),
     ]
     action_facts = prior_action_facts_block(turn_snapshot)
@@ -51,7 +64,7 @@ def build_action_system_prompt_envelope(turn_snapshot: TurnSnapshot) -> PromptEn
                 id="prior-action-facts",
                 kind="context",
                 content=action_facts,
-                provenance="core.agent_harness.models.turn_snapshot",
+                provenance="core.agent_harness.turns.turn_snapshot",
             )
         )
     return PromptEnvelope.from_blocks(

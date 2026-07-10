@@ -99,7 +99,7 @@ COMMANDS: list[SlashCommand] = [
         "Choose and persist the interactive shell color theme.",
         _cmd_theme,
         usage=("/theme", "/theme <name>"),
-        examples=("/theme blue", "/theme green"),
+        examples=("/theme webflux", "/theme sunset", "/theme gruvbox"),
         first_arg_completions=_THEME_FIRST_ARGS,
     )
 ]

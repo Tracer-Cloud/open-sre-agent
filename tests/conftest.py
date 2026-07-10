@@ -110,3 +110,22 @@ def pytest_configure(config):
     _load_env()
     _disable_sentry()
     _mark_tests_for_analytics()
+
+
+@pytest.hookimpl(trylast=True)
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
+    """Fail hard when nothing was selected (pytest-xdist can still exit 0).
+
+    Reproduces as ``N workers [0 items]`` under ``-n`` when ``-m`` deselects
+    everything (e.g. a mangled CI marker that becomes ``false``). Without this,
+    CI can go green while running zero tests — especially on large path sets
+    where xdist reports warnings and exits 0 instead of NO_TESTS_COLLECTED.
+    """
+    if session.testscollected != 0:
+        return
+    if exitstatus in (
+        0,
+        pytest.ExitCode.OK,
+        pytest.ExitCode.NO_TESTS_COLLECTED,
+    ):
+        session.exitstatus = pytest.ExitCode.NO_TESTS_COLLECTED

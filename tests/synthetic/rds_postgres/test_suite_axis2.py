@@ -30,8 +30,9 @@ import pytest
 
 from config.config import has_credentials_for_active_llm_provider
 from tests.synthetic.mock_grafana_backend.selective_backend import SelectiveGrafanaBackend
-from tests.synthetic.rds_postgres.run_suite import run_scenario, score_reasoning
+from tests.synthetic.rds_postgres.run_suite import run_scenario
 from tests.synthetic.rds_postgres.scenario_loader import load_all_scenarios
+from tests.synthetic.rds_postgres.scoring import score_reasoning
 
 _ALL_SCENARIOS = load_all_scenarios()
 _LLM_ATTEMPTS = 2

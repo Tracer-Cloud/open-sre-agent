@@ -125,6 +125,12 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "User asks to list, scan, or manage local coding agents",
         anti_examples=("User asks about remote/hosted agents only",),
     ),
+    "/gateway": _mcp(
+        "Control the background OpenSRE gateway daemon (web health app, Telegram chat, "
+        "task scheduler). Subcommands: start, stop, status, logs [lines].",
+        "User asks to start, stop, check, or read logs of the gateway daemon",
+        anti_examples=("User asks to send a single Telegram message (use messaging tools)",),
+    ),
     "/guardrails": _mcp(
         "Manage sensitive-information guardrail rules. Subcommands: audit, init, rules, test.",
         "User asks about guardrails, PII rules, or sensitive-data masking configuration",

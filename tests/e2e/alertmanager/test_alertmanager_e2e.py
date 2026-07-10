@@ -496,7 +496,7 @@ class TestAlertmanagerIntegrationConfig:
 
     def test_alertmanager_config_creation(self):
         """AlertmanagerIntegrationConfig validates correctly with all fields."""
-        from integrations.models import AlertmanagerIntegrationConfig
+        from integrations.config_models import AlertmanagerIntegrationConfig
 
         config = AlertmanagerIntegrationConfig(
             base_url="http://alertmanager.monitoring.svc:9093",
@@ -512,7 +512,7 @@ class TestAlertmanagerIntegrationConfig:
 
     def test_alertmanager_config_url_normalization(self):
         """AlertmanagerIntegrationConfig strips whitespace and trailing slash from base_url."""
-        from integrations.models import AlertmanagerIntegrationConfig
+        from integrations.config_models import AlertmanagerIntegrationConfig
 
         config = AlertmanagerIntegrationConfig(
             base_url="  http://alertmanager.example.com:9093/  ",
@@ -522,7 +522,7 @@ class TestAlertmanagerIntegrationConfig:
 
     def test_alertmanager_config_basic_auth(self):
         """AlertmanagerIntegrationConfig stores basic auth credentials."""
-        from integrations.models import AlertmanagerIntegrationConfig
+        from integrations.config_models import AlertmanagerIntegrationConfig
 
         config = AlertmanagerIntegrationConfig(
             base_url="http://alertmanager.example.com:9093",

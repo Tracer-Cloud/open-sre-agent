@@ -44,6 +44,26 @@ ANTHROPIC_API_KEY=...
 
 The complete list of provider keys and optional model overrides is documented in `.env.example`.
 
+## Prebuilt Docker image
+
+Public images are published to GitHub Container Registry for every release
+(`linux/amd64` and `linux/arm64`), so you can skip building from source.
+
+| Tag | What it is |
+| --- | --- |
+| `ghcr.io/tracer-cloud/opensre:latest` | Most recent release |
+| `ghcr.io/tracer-cloud/opensre:<version>` | A specific release, e.g. `0.1.2026.7.8` (matches the GitHub release tag without the `v`) |
+
+```bash
+docker pull ghcr.io/tracer-cloud/opensre:latest
+
+# Web mode (FastAPI health app, default)
+docker run -p 8000:8000 --env-file .env ghcr.io/tracer-cloud/opensre:latest
+
+# Gateway mode (Telegram two-way messaging gateway)
+docker run -e MODE=gateway --env-file .env ghcr.io/tracer-cloud/opensre:latest
+```
+
 ## Run local gateway
 
 Use the built-in gateway command when you want a local HTTP server for investigations.

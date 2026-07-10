@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.agent_harness.accounting.token_accounting import LlmRunInfo
-from core.agent_harness.models.turn_results import ShellTurnResult, ToolCallingTurnResult
+from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
 from surfaces.interactive_shell.runtime.core.turn_accounting import ShellTurnAccounting
 from surfaces.interactive_shell.session import Session
 

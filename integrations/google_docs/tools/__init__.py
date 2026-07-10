@@ -8,8 +8,8 @@ from typing import Any
 
 from core.tool_framework.telemetry import report_run_error
 from core.tool_framework.tool_decorator import tool
+from integrations.config_models import GoogleDocsIntegrationConfig
 from integrations.google_docs.client import GoogleDocsClient
-from integrations.models import GoogleDocsIntegrationConfig
 
 
 def _is_available(sources: dict[str, dict]) -> bool:

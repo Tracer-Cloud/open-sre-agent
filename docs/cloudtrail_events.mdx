@@ -42,6 +42,10 @@ CloudTrail's `LookupEvents` API accepts **only one filter attribute per call**. 
 CloudTrail returns at most 50 events per page. When more matching events exist, the response sets **`truncated: true`** and returns a **`next_token`** — pass it back via the `next_token` parameter to fetch the next page, so a busy account or wide window never silently drops events.
 </Note>
 
+<Note>
+A single event can touch more resources than the transport layer returns inline (for example `CreateTags` across a fleet). When the affected-resources list for an event is trimmed, that event carries **`resources_truncated: true`**, signalling that the real blast radius is wider than the resources shown — so a large fan-out change is never silently understated.
+</Note>
+
 ### Use cases
 
 - Finding who modified an IAM policy, role, or security group just before an incident

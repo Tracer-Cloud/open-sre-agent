@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import contextvars
 import logging
 import queue
 import threading
@@ -12,8 +13,9 @@ from typing import TYPE_CHECKING, Any, cast
 
 from core.domain.stream import StreamEvent
 from core.state import AgentState
-from platform.observability.errors import report_and_reraise
-from platform.observability.sentry_sdk import init_sentry
+from platform.observability.errors.boundary import report_and_reraise
+from platform.observability.errors.sentry import init_sentry
+from platform.observability.trace.spans import stage_span
 from tools.investigation.state_factory import make_initial_state
 from tools.investigation.streaming import resolved_integrations_stream_payload
 
@@ -45,22 +47,23 @@ def _capture_exception_once(
 ) -> None:
     if _exception_was_captured(exc):
         return
-    from platform.observability.sentry_sdk import capture_exception
+    from platform.observability.errors.sentry import capture_exception
 
     capture_exception(exc, context=context, tags=tags)
     _mark_exception_captured(exc)
 
 
 def _traced_node(node_name: str, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
-    try:
-        return fn(*args, **kwargs)
-    except Exception as exc:
-        _capture_exception_once(
-            exc,
-            context=f"node.{node_name}",
-            tags={"surface": "node", "node": node_name},
-        )
-        raise
+    with stage_span(node_name):
+        try:
+            return fn(*args, **kwargs)
+        except Exception as exc:
+            _capture_exception_once(
+                exc,
+                context=f"node.{node_name}",
+                tags={"surface": "node", "node": node_name},
+            )
+            raise
 
 
 def run_investigation(
@@ -459,7 +462,10 @@ async def astream_investigation(
             with contextlib.suppress(RuntimeError):
                 loop.call_soon_threadsafe(event_queue.put_nowait, None)
 
-    thread = threading.Thread(target=_run_pipeline, daemon=True)
+    # Copy the caller's context so ContextVar bindings (session trace) reach the thread.
+    thread = threading.Thread(
+        target=contextvars.copy_context().run, args=(_run_pipeline,), daemon=True
+    )
     thread.start()
 
     while True:

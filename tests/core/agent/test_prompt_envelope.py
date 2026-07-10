@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import pytest
 
-from core.agent_harness.models.turn_snapshot import TurnSnapshot
 from core.agent_harness.prompts import (
     PromptBlock,
     PromptEnvelope,
     build_action_system_prompt,
     build_action_system_prompt_envelope,
 )
+from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 
 
 def _ctx() -> TurnSnapshot:
@@ -57,9 +57,11 @@ def test_action_system_prompt_envelope_matches_legacy_rendering() -> None:
 
     assert [block.id for block in envelope.blocks] == [
         "action-agent-system-base",
+        "action-agent-skills",
         "connected-integrations",
         "recent-conversation",
     ]
+    assert envelope.require_block("action-agent-skills").kind == "rule"
     assert envelope.require_block("connected-integrations").kind == "context"
     assert envelope.require_block("recent-conversation").kind == "conversation"
     assert envelope.render() == build_action_system_prompt(ctx)

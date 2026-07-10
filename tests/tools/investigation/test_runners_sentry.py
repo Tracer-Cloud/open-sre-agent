@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from platform.observability import errors
+from platform.observability.errors import boundary
 from tools.investigation import capability as runners
 
 
@@ -22,7 +22,7 @@ def test_run_investigation_initializes_sentry_and_captures_unhandled_errors(
     import tools.investigation.lifecycle as pipeline_module
 
     monkeypatch.setattr(runners, "init_sentry", lambda **_kw: sentry_init_calls.append(None))
-    monkeypatch.setattr(errors, "capture_exception", capture_stub)
+    monkeypatch.setattr(boundary, "capture_exception", capture_stub)
     monkeypatch.setattr(pipeline_module, "run_connected_investigation", failing_run)
 
     with pytest.raises(RuntimeError, match="investigation failed"):
@@ -44,7 +44,7 @@ def test_traced_node_exception_is_captured_once_with_node_tag(
     def capture_stub(exc: BaseException, **kwargs: object) -> None:
         captured.append((exc, kwargs))
 
-    monkeypatch.setattr("platform.observability.sentry_sdk.capture_exception", capture_stub)
+    monkeypatch.setattr("platform.observability.errors.sentry.capture_exception", capture_stub)
 
     with pytest.raises(RuntimeError, match="node failed") as raised:
         runners._traced_node("extract_alert", failing_node)

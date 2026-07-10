@@ -146,6 +146,12 @@ class SpinnerState:
     """Mutable state read by prompt callbacks for toolbar + inline spinner."""
 
     _SPINNER_FRAMES = ("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
+    # One glyph advance per interval of *elapsed time*. The frame must be a
+    # pure function of the clock, never of how often the prompt message
+    # callback runs: prompt_toolkit evaluates the message several times per
+    # render pass (layout measurement + paint), so a per-call counter can land
+    # on the same frame every visible render and freeze the animation.
+    _FRAME_INTERVAL_S = 0.1
     _THINKING_VERBS = (
         "thinking",
         "pondering",
@@ -164,7 +170,6 @@ class SpinnerState:
         self.streaming: bool = False
         self.started_at: float = 0.0
         self.bytes_in: int = 0
-        self._frame_idx: int = 0
         self._verb: str = self._THINKING_VERBS[0]
         self.phase: str = ""
 
@@ -172,7 +177,6 @@ class SpinnerState:
         self.streaming = True
         self.started_at = time.monotonic()
         self.bytes_in = 0
-        self._frame_idx = 0
         self._verb = random.choice(self._THINKING_VERBS)
         self.phase = ""
 
@@ -220,8 +224,8 @@ class SpinnerState:
             return ""
         elapsed = time.monotonic() - self.started_at
         token_count = self.bytes_in // _CHARS_PER_TOKEN
-        glyph = self._SPINNER_FRAMES[self._frame_idx % len(self._SPINNER_FRAMES)]
-        self._frame_idx += 1
+        frame_idx = int(elapsed / self._FRAME_INTERVAL_S)
+        glyph = self._SPINNER_FRAMES[frame_idx % len(self._SPINNER_FRAMES)]
         if token_count > 0:
             tokens_str = format_token_count_short(token_count)
             suffix = f" ({elapsed:.0f}s · ↓ {tokens_str} tokens)"

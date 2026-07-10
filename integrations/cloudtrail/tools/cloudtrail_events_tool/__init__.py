@@ -58,13 +58,22 @@ def _build_lookup_attribute(
 
 def _shape_event(raw: dict[str, Any]) -> dict[str, Any]:
     """Trim a raw CloudTrail event down to the fields RCA actually needs."""
+    # Skip non-dict Resources entries: the transport sanitizer replaces the tail
+    # of an oversized list with a "... (N more items truncated)" string (one
+    # event CAN reference >MAX_LIST_ITEMS resources, e.g. CreateTags across a
+    # fleet), and degraded payloads may carry nulls. Anything skipped is
+    # surfaced via resources_truncated so the planner knows the resource list
+    # understates the true blast radius instead of silently trusting it.
+    raw_resources = raw.get("Resources") or []
     resources = [
         {
             "type": resource.get("ResourceType"),
             "name": resource.get("ResourceName"),
         }
-        for resource in (raw.get("Resources") or [])
+        for resource in raw_resources
+        if isinstance(resource, dict)
     ]
+    resources_truncated = len(resources) != len(raw_resources)
 
     # CloudTrailEvent is a JSON string carrying the full record; pull the
     # high-signal forensic fields out of it without dumping the whole blob.
@@ -74,6 +83,11 @@ def _shape_event(raw: dict[str, Any]) -> dict[str, Any]:
         try:
             parsed = json.loads(detail)
         except (ValueError, TypeError):
+            parsed = {}
+        # The record should be a JSON object, but degraded payloads can carry
+        # valid-but-non-dict JSON ("null", a bare string, a list) — treat those
+        # as "no detail" rather than crashing on .get.
+        if not isinstance(parsed, dict):
             parsed = {}
         aws_region = parsed.get("awsRegion")
         source_ip = parsed.get("sourceIPAddress")
@@ -98,6 +112,7 @@ def _shape_event(raw: dict[str, Any]) -> dict[str, Any]:
         "read_only": read_only,
         "access_key_id": raw.get("AccessKeyId"),
         "resources": resources,
+        "resources_truncated": resources_truncated,
         "aws_region": aws_region,
         "source_ip_address": source_ip,
         "error_code": error_code,
@@ -242,12 +257,22 @@ def lookup_cloudtrail_events(
 
     data = result.get("data") or {}
     raw_events = data.get("Events") or []
-    events = [_shape_event(event) for event in raw_events]
+    # Shape only dict entries. Defensive: the sanitizer's list-truncation marker
+    # cannot reach Events today (LookupEvents pages cap at 50 < MAX_LIST_ITEMS
+    # and the client never merges pages) — unlike per-event Resources, where it
+    # genuinely can — but degraded payloads must degrade, not crash the parse.
+    events = [_shape_event(event) for event in raw_events if isinstance(event, dict)]
     # CloudTrail returns a NextToken when more matching events exist beyond this
     # page. Surface it so the agent knows the result is partial (and can paginate
     # via the next_token param) instead of silently treating 50 events as "all".
     returned_token = data.get("NextToken") or None
 
+    # NOTE: the success payload must NOT carry an "error" key. The runtime tool
+    # loop (core.execution._normalize_result) treats the mere presence of an
+    # "error" key as a failure (is_error = "error" in raw) and replaces the whole
+    # payload with {"error": ...} before the agent sees it — so a success dict
+    # with "error": None would hide every event from the investigation. Only the
+    # failure paths above set "error".
     return {
         "source": "cloudtrail",
         "available": True,
@@ -258,5 +283,4 @@ def lookup_cloudtrail_events(
         "truncated": bool(returned_token),
         "next_token": returned_token,
         "events": events,
-        "error": None,
     }

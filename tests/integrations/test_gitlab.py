@@ -21,6 +21,7 @@ from integrations.gitlab import (
     validate_gitlab_config,
     validate_gitlab_connection,
 )
+from integrations.gitlab.verifier import verify_gitlab
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -217,6 +218,23 @@ def test_validate_gitlab_config_handles_generic_exception(
 
     assert result.ok is False
     assert "connection refused" in result.detail
+
+
+def test_verify_gitlab_wraps_validation_result(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _ok(*, config: GitlabConfig) -> dict[str, str]:
+        del config
+        return {"username": "gl-user"}
+
+    monkeypatch.setattr("integrations.gitlab.validate_gitlab_connection", _ok)
+
+    result = verify_gitlab("local store", {"auth_token": "test-token"})
+
+    assert result == {
+        "service": "gitlab",
+        "source": "local store",
+        "status": "passed",
+        "detail": "GitLab connectivity successful. Authenticated as @gl-user",
+    }
 
 
 # ---------------------------------------------------------------------------

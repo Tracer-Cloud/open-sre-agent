@@ -13,6 +13,10 @@ from pathlib import Path
 from rich.console import Console
 from rich.markup import escape
 
+from core.agent_harness.session.terminal_access import (
+    session_terminal,
+    set_turn_outcome_hint,
+)
 from surfaces.interactive_shell.command_registry.suggestions import closest_choice
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.runtime import Session, TaskKind
@@ -29,6 +33,22 @@ _BACKGROUND_TEST_SUBCOMMANDS = frozenset({"run", "synthetic", "cloudopsbench"})
 _TEST_SUBCOMMANDS = ("list", "run", "synthetic", "cloudopsbench")
 _TEST_PICKER_SELECTION_FILE_ENV = "OPENSRE_TEST_PICKER_SELECTION_FILE"
 _PARENT_INTERACTIVE_SHELL_ENV = "OPENSRE_PARENT_INTERACTIVE_SHELL"
+_HEADLESS_CLI_SUBPROCESS_TIMEOUT_SECONDS = 90.0
+
+
+def publish_headless_slash_response(
+    session: Session,
+    *,
+    message: str,
+    ok: bool = True,
+) -> None:
+    """Pin an explicit slash reply for gateway/headless surfaces (wizards, setup)."""
+    session.complete_latest_record(
+        "slash",
+        response_text=message.strip(),
+        ok=ok,
+        slash_outcome="headless_guidance",
+    )
 
 
 def _decode_subprocess_stream(value: str | bytes | None) -> str:
@@ -37,6 +57,10 @@ def _decode_subprocess_stream(value: str | bytes | None) -> str:
     if isinstance(value, bytes):
         return value.decode("utf-8", errors="replace")
     return value
+
+
+def _cli_command_succeeded(exit_code: int | None) -> bool:
+    return exit_code == 0
 
 
 def run_cli_command(
@@ -62,13 +86,22 @@ def run_cli_command(
     must leave this ``False`` so the child's prompts stay attached to the real
     TTY. Capture is also enabled automatically whenever a timeout is set.
 
+    **Return value:** Reports subprocess success for headless/gateway sessions
+    (``session`` with no terminal facet) so slash analytics can show failure.
+    On the interactive REPL, always returns ``True`` so delegated CLI failures
+    do not propagate to :func:`dispatch_slash` and exit the shell — failures
+    are still recorded via :meth:`Session.mark_latest`.
+
     Ctrl+C sends :exc:`KeyboardInterrupt`, which subclasses :exc:`BaseException`
     rather than :exc:`Exception`; it is handled here so the REPL survives and the
     child process exits on SIGINT alongside the interrupted ``run`` call.
     """
     console.print()
     cmd = build_opensre_cli_argv(args)
-    should_capture = capture_output or subprocess_timeout is not None
+    headless = session is not None and session_terminal(session) is None
+    should_capture = capture_output or subprocess_timeout is not None or headless
+    if headless and subprocess_timeout is None:
+        subprocess_timeout = _HEADLESS_CLI_SUBPROCESS_TIMEOUT_SECONDS
     child_env = os.environ.copy()
     child_env[_PARENT_INTERACTIVE_SHELL_ENV] = "1"
     if should_capture:
@@ -115,11 +148,30 @@ def run_cli_command(
         console.print(f"[{ERROR}]error running CLI command:[/] {exc}")
     console.print()
     if session is not None and not should_capture:
-        session.terminal.set_turn_outcome_hint(format_wizard_cli_outcome(args, exit_code=exit_code))
-    return True
+        set_turn_outcome_hint(session, format_wizard_cli_outcome(args, exit_code=exit_code))
+    ok = _cli_command_succeeded(exit_code)
+    if session is not None and not ok:
+        session.mark_latest(ok=False, kind="slash")
+    # Headless/gateway surfaces need the real exit status for slash analytics.
+    # Interactive REPL handlers must not return False to dispatch_slash on CLI
+    # failure — that would exit the shell (/exit is the only intentional False).
+    return ok if headless else True
 
 
 def _cmd_onboard(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+    if session_terminal(session) is None:
+        cli_cmd = " ".join(["uv run opensre onboard", *args]).strip()
+        message = (
+            "Onboarding is an interactive wizard (LLM provider, integrations, messaging). "
+            "It cannot run inside a Telegram chat.\n\n"
+            f"Run on the server:\n  {cli_cmd}\n\n"
+            "Or configure individual services with "
+            "`/integrations setup <service>`."
+        )
+        console.print()
+        console.print(message)
+        publish_headless_slash_response(session, message=message)
+        return True
     # The REPL loop treats ``/onboard`` as exclusive-stdin in
     # ``runtime.utils.input_policy`` so the prompt_toolkit Application is torn down before
     # this handler runs — the wizard subprocess therefore gets exclusive
@@ -138,7 +190,7 @@ def _cmd_login(session: Session, console: Console, args: list[str]) -> bool:  # 
 
 
 def _cmd_remote(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
-    return run_cli_command(console, ["remote", *args])
+    return run_cli_command(console, ["remote", *args], session=session)
 
 
 def _catalog_task_kind(command: list[str]) -> TaskKind:
@@ -271,6 +323,7 @@ def _cmd_update(session: Session, console: Console, args: list[str]) -> bool:  #
         console,
         ["update", *args],
         subprocess_timeout=_UPDATE_SUBPROCESS_TIMEOUT_SECONDS,
+        session=session,
     )
 
 

@@ -18,9 +18,9 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Any
 
-from core.agent_harness.integrations.resolution import resolve_and_cache_integrations
-from core.agent_harness.models.turn_snapshot import TurnSnapshot
 from core.agent_harness.ports import SessionStore
+from core.agent_harness.session.integration_resolution import resolve_and_cache_integrations
+from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 
 
 @dataclass(frozen=True)

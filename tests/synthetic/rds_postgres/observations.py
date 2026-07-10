@@ -13,20 +13,10 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-# Re-exported for backward compatibility — canonical definitions live in trajectory_policy.py
 from tests.synthetic.rds_postgres.trajectory_policy import (
     TrajectoryMetrics,
-    TrajectoryPolicy,
     TrajectoryPolicyResult,
-    evaluate_trajectory_policy,
 )
-
-__all__ = [
-    "TrajectoryMetrics",
-    "TrajectoryPolicy",
-    "TrajectoryPolicyResult",
-    "evaluate_trajectory_policy",
-]
 
 
 @dataclass(frozen=True)

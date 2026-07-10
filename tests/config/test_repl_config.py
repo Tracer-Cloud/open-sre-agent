@@ -295,6 +295,13 @@ class TestThemeRegistry:
             "purple",
             "orange",
             "teal",
+            "lime",
+            "nord",
+            "dracula",
+            "solarized",
+            "gruvbox",
+            "webflux",
+            "sunset",
         )
 
     def test_theme_registry_entries_include_required_semantic_tokens(self) -> None:

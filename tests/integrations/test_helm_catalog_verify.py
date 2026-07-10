@@ -5,8 +5,8 @@ from __future__ import annotations
 import pytest
 
 from integrations.catalog import classify_integrations, resolve_effective_integrations
+from integrations.config_models import HelmIntegrationConfig
 from integrations.helm.verifier import verify_helm as _verify_helm
-from integrations.models import HelmIntegrationConfig
 from integrations.verify import verify_integrations
 
 

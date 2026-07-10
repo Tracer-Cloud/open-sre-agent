@@ -15,7 +15,7 @@ import httpx
 from pydantic import ValidationError
 
 from integrations.jenkins import JenkinsConfig
-from platform.observability.service_errors import capture_service_error
+from platform.observability.errors.service import capture_service_error
 
 logger = logging.getLogger(__name__)
 

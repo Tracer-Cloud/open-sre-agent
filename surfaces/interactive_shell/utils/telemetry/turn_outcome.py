@@ -161,6 +161,7 @@ def format_terminal_turn_outcome(
     ok: bool,
     captured_output: str = "",
     outcome_hint: str | None = None,
+    include_captured_on_summary_only: bool = False,
 ) -> str:
     """Build the analytics payload for one handled terminal turn."""
     if outcome_hint and outcome_hint.strip():
@@ -169,7 +170,8 @@ def format_terminal_turn_outcome(
     status = "succeeded" if ok else "failed"
     prefix = f"{kind} {command_line.strip()} ({status})"
 
-    if kind == "slash" and slash_command_is_summary_only(command_line):
+    summary_only = kind == "slash" and slash_command_is_summary_only(command_line)
+    if summary_only and not include_captured_on_summary_only:
         return prefix
 
     if captured_output:

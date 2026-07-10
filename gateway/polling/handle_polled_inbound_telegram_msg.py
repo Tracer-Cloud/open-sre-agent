@@ -11,7 +11,7 @@ from core.agent_harness.session import SessionCore
 from gateway.config.get_gateway_settings import GatewaySettings, TelegramInboundMessage
 from gateway.gateway_output_sink import GatewayOutputSink
 from gateway.polling.telegram_poller.client import TelegramBotClient
-from gateway.session.enforce_inbound_telegram_message_security import (
+from gateway.session.inbound_message_security import (
     enforce_inbound_telegram_message_security,
 )
 from gateway.session.resolve_or_rotate_session import resolve_or_rotate_session

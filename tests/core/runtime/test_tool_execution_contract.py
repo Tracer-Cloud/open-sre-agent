@@ -6,7 +6,6 @@ from typing import Any
 
 import pytest
 
-import core.execution
 from core.agent import Agent
 from core.execution import (
     BeforeToolCallResult,
@@ -74,6 +73,27 @@ def test_execute_tool_calls_validates_arguments_before_execution() -> None:
     assert execute_tools([ToolCall(id="c1", name="echo", input={})], [_tool()], {}) == [
         {"error": result.content}
     ]
+
+
+def test_success_payload_with_error_none_reaches_agent() -> None:
+    """A success dict carrying ``"error": None`` must reach the agent unchanged,
+    not be flagged as a failure on the mere presence of the key (#3889)."""
+    payload = {"available": True, "events": [{"id": 1}], "error": None}
+
+    result = execute_tool_calls([_call()], [_tool(execute=lambda _a, _c: payload)], {})[0]
+
+    assert result.is_error is False
+    assert result.details == payload
+    # compat_payload returns the full payload for old call sites, not {"error": ...}.
+    assert execute_tools([_call()], [_tool(execute=lambda _a, _c: payload)], {}) == [payload]
+
+
+def test_truthy_error_still_flagged_as_failure() -> None:
+    """A real error message is still surfaced as a failure (#3889)."""
+    result = execute_tool_calls([_call()], [_tool(execute=lambda _a, _c: {"error": "boom"})], {})[0]
+
+    assert result.is_error is True
+    assert result.content == "boom"
 
 
 def test_before_hook_can_block_with_structured_result() -> None:
@@ -280,7 +300,7 @@ def _record_pool_constructions(monkeypatch: pytest.MonkeyPatch) -> list[int]:
             constructions.append(1)
             super().__init__(*args, **kwargs)
 
-    monkeypatch.setattr(core.execution, "ThreadPoolExecutor", _RecordingPool)
+    monkeypatch.setattr("core.execution.ThreadPoolExecutor", _RecordingPool)
     return constructions
 
 
@@ -460,3 +480,236 @@ def test_provider_boundary_hooks_transform_convert_and_observe() -> None:
     assert requests[0].messages == [{"role": "user", "content": "converted:second"}]
     assert hooks.get_api_key is not None
     assert hooks.get_api_key("OPENAI_API_KEY") == "fake:OPENAI_API_KEY"
+
+
+def test_execute_tool_calls_emits_tool_span_without_tool_author_hooks(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Community tools stay untouched: spans come from the shared executor."""
+    import json
+    from pathlib import Path
+
+    from core.agent_harness.session.persistence.jsonl_storage import JsonlSessionStorage
+    from platform.observability.trace.spans import (
+        NoopSessionTraceSink,
+        bind_session_trace,
+        set_session_trace_sink,
+    )
+    from surfaces.interactive_shell.session.trace_sink import JsonlSessionTraceSink
+
+    monkeypatch.setattr(
+        "core.agent_harness.session.persistence.jsonl_storage.session_path",
+        lambda session_id: Path(tmp_path) / f"{session_id}.jsonl",
+    )
+    storage = JsonlSessionStorage()
+    session_id = "sess-tool-exec"
+    path = Path(tmp_path) / f"{session_id}.jsonl"
+    path.write_text(
+        json.dumps({"type": "session", "version": 2, "id": session_id}) + "\n",
+        encoding="utf-8",
+    )
+    set_session_trace_sink(JsonlSessionTraceSink(storage=storage))
+    try:
+        with bind_session_trace(session_id):
+            result = execute_tool_calls([_call()], [_tool()], {})[0]
+        assert result.is_error is False
+        lines = [json.loads(line) for line in path.read_text(encoding="utf-8").strip().splitlines()]
+        tool_spans = [
+            rec
+            for rec in lines
+            if rec.get("type") == "trace_span" and rec.get("span_kind") == "tool"
+        ]
+        assert len(tool_spans) == 1
+        assert tool_spans[0]["name"] == "echo"
+        assert tool_spans[0]["status"] == "ok"
+        assert tool_spans[0]["attributes"]["outcome"] == "ok"
+        assert tool_spans[0]["attributes"]["source"] == "agent"
+        assert tool_spans[0]["attributes"]["tool_call_id"] == "echo-1"
+    finally:
+        set_session_trace_sink(NoopSessionTraceSink())
+
+
+def test_execute_tool_calls_span_marks_error_on_unknown_tool(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import json
+    from pathlib import Path
+
+    from core.agent_harness.session.persistence.jsonl_storage import JsonlSessionStorage
+    from platform.observability.trace.spans import (
+        NoopSessionTraceSink,
+        bind_session_trace,
+        set_session_trace_sink,
+    )
+    from surfaces.interactive_shell.session.trace_sink import JsonlSessionTraceSink
+
+    monkeypatch.setattr(
+        "core.agent_harness.session.persistence.jsonl_storage.session_path",
+        lambda session_id: Path(tmp_path) / f"{session_id}.jsonl",
+    )
+    storage = JsonlSessionStorage()
+    session_id = "sess-tool-unknown"
+    path = Path(tmp_path) / f"{session_id}.jsonl"
+    path.write_text(
+        json.dumps({"type": "session", "version": 2, "id": session_id}) + "\n",
+        encoding="utf-8",
+    )
+    set_session_trace_sink(JsonlSessionTraceSink(storage=storage))
+    try:
+        with bind_session_trace(session_id):
+            result = execute_tool_calls([_call("missing")], [], {})[0]
+        assert result.is_error is True
+        lines = [json.loads(line) for line in path.read_text(encoding="utf-8").strip().splitlines()]
+        tool_spans = [
+            rec
+            for rec in lines
+            if rec.get("type") == "trace_span" and rec.get("span_kind") == "tool"
+        ]
+        assert len(tool_spans) == 1
+        assert tool_spans[0]["name"] == "missing"
+        assert tool_spans[0]["status"] == "error"
+        assert tool_spans[0]["attributes"]["outcome"] == "unknown_tool"
+    finally:
+        set_session_trace_sink(NoopSessionTraceSink())
+
+
+def test_execute_tool_calls_noop_sink_does_not_require_session_binding() -> None:
+    """Prod default: tool execution must not depend on a registered trace sink."""
+    from platform.observability.trace.spans import NoopSessionTraceSink, set_session_trace_sink
+
+    set_session_trace_sink(NoopSessionTraceSink())
+    result = execute_tool_calls([_call()], [_tool()], {})[0]
+    assert result.is_error is False
+    assert result.details == {"value": "ok"}
+
+
+def _activate_tool_trace(tmp_path, monkeypatch: pytest.MonkeyPatch, session_id: str) -> Any:
+    import json
+    from pathlib import Path
+
+    from core.agent_harness.session.persistence.jsonl_storage import JsonlSessionStorage
+    from platform.observability.trace.spans import set_session_trace_sink
+    from surfaces.interactive_shell.session.trace_sink import JsonlSessionTraceSink
+
+    monkeypatch.setattr(
+        "core.agent_harness.session.persistence.jsonl_storage.session_path",
+        lambda sid: Path(tmp_path) / f"{sid}.jsonl",
+    )
+    path = Path(tmp_path) / f"{session_id}.jsonl"
+    path.write_text(
+        json.dumps({"type": "session", "version": 2, "id": session_id}) + "\n",
+        encoding="utf-8",
+    )
+    set_session_trace_sink(JsonlSessionTraceSink(storage=JsonlSessionStorage()))
+    return path
+
+
+def _tool_spans_from(path: Any) -> list[dict[str, Any]]:
+    import json
+
+    return [
+        rec
+        for line in path.read_text(encoding="utf-8").strip().splitlines()
+        for rec in [json.loads(line)]
+        if rec.get("type") == "trace_span" and rec.get("span_kind") == "tool"
+    ]
+
+
+def test_execute_tool_calls_span_marks_validation_error(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from platform.observability.trace.spans import (
+        NoopSessionTraceSink,
+        bind_session_trace,
+        set_session_trace_sink,
+    )
+
+    session_id = "sess-tool-validation"
+    path = _activate_tool_trace(tmp_path, monkeypatch, session_id)
+    try:
+        with bind_session_trace(session_id):
+            result = execute_tool_calls(
+                [ToolCall(id="c1", name="echo", input={})],
+                [_tool()],
+                {},
+            )[0]
+        assert result.is_error is True
+        spans = _tool_spans_from(path)
+        assert len(spans) == 1
+        assert spans[0]["status"] == "error"
+        assert spans[0]["attributes"]["outcome"] == "validation_error"
+    finally:
+        set_session_trace_sink(NoopSessionTraceSink())
+
+
+def test_execute_tool_calls_span_marks_blocked(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from platform.observability.trace.spans import (
+        NoopSessionTraceSink,
+        bind_session_trace,
+        set_session_trace_sink,
+    )
+
+    session_id = "sess-tool-blocked"
+    path = _activate_tool_trace(tmp_path, monkeypatch, session_id)
+
+    def before(_request: ToolExecutionRequest) -> BeforeToolCallResult:
+        return BeforeToolCallResult(blocked=True, reason="policy deny")
+
+    try:
+        with bind_session_trace(session_id):
+            result = execute_tool_calls(
+                [_call()],
+                [_tool()],
+                {},
+                hooks=ToolExecutionHooks(before_tool_call=before),
+            )[0]
+        assert result.is_error is True
+        spans = _tool_spans_from(path)
+        assert len(spans) == 1
+        assert spans[0]["status"] == "error"
+        assert spans[0]["attributes"]["outcome"] == "blocked"
+        assert spans[0]["attributes"]["source"] == "agent"
+    finally:
+        set_session_trace_sink(NoopSessionTraceSink())
+
+
+def test_execute_tool_calls_span_marks_tool_error_and_exception(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from platform.observability.trace.spans import (
+        NoopSessionTraceSink,
+        bind_session_trace,
+        set_session_trace_sink,
+    )
+
+    session_id = "sess-tool-err"
+    path = _activate_tool_trace(tmp_path, monkeypatch, session_id)
+
+    def soft_fail(_args: dict[str, Any], _ctx: AgentToolContext) -> dict[str, Any]:
+        return {"error": "soft fail"}
+
+    def hard_fail(_args: dict[str, Any], _ctx: AgentToolContext) -> dict[str, Any]:
+        raise RuntimeError("hard fail")
+
+    try:
+        with bind_session_trace(session_id):
+            soft = execute_tool_calls(
+                [_call(name="soft")],
+                [_tool(name="soft", execute=soft_fail)],
+                {},
+            )[0]
+            hard = execute_tool_calls(
+                [_call(name="hard")],
+                [_tool(name="hard", execute=hard_fail)],
+                {},
+            )[0]
+        assert soft.is_error is True
+        assert hard.is_error is True
+        spans = _tool_spans_from(path)
+        by_name = {s["name"]: s for s in spans}
+        assert by_name["soft"]["attributes"]["outcome"] == "tool_error"
+        assert by_name["soft"]["status"] == "error"
+        assert by_name["hard"]["attributes"]["outcome"] == "exception"
+        assert by_name["hard"]["status"] == "error"
+    finally:
+        set_session_trace_sink(NoopSessionTraceSink())

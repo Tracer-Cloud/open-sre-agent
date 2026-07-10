@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
-from integrations.models import SplunkIntegrationConfig
+from integrations.config_models import SplunkIntegrationConfig
 from integrations.splunk.client import SplunkClient, SplunkConfig, build_splunk_spl_query
 
 # ── SplunkIntegrationConfig ───────────────────────────────────────────────────

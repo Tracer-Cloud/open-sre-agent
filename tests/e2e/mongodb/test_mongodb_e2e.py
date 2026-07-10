@@ -171,7 +171,7 @@ class TestMongoDBToolsAvailability:
 
     def test_mongodb_integration_config_has_required_fields(self):
         """MongoDB integration provides required fields in resolved config."""
-        from integrations.models import MongoDBIntegrationConfig
+        from integrations.config_models import MongoDBIntegrationConfig
 
         config = MongoDBIntegrationConfig(
             connection_string="mongodb://localhost",

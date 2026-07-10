@@ -17,6 +17,9 @@ MANAGED_TAG_VALUE = "sdk"
 
 # ─── EC2 instance ─────────────────────────────────────────────────────────────
 INSTANCE_TYPE = "t3.micro"
+WEB_API_PORT = 8000
+WEB_API_INGRESS_CIDR_ENV = "OPENSRE_WEB_API_INGRESS_CIDR"
+WEB_API_INGRESS_CIDR_DEFAULT = "0.0.0.0/0"
 AL2023_AMI_SSM_PARAMETER = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
 # Ubuntu 22.04 LTS (Jammy) — ships glibc 2.35, required by the pre-built opensre
 # PyInstaller binary.  AL2023 only ships glibc 2.34 so the binary fails there.

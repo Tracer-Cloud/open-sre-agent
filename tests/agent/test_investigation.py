@@ -855,17 +855,36 @@ def testenforce_context_budget_noop_when_under_ceiling() -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_should_accept_conclusion_production_default_accepts() -> None:
-    """Production default: the agent ALWAYS accepts the LLM's choice to stop.
-    Returning (True, None) is the no-op path; subclasses override to enforce
-    floors or other termination policies."""
+def test_should_accept_conclusion_production_default_accepts_complete_text() -> None:
+    """Production default accepts conclusions that include incident-command markers."""
     agent = ConnectedInvestigationAgent()
-    accept, nudge = agent._should_accept_conclusion(evidence_count=0, iteration=0)
+    agent._last_assistant_text = (
+        "Triage complete: payments_etl only.\n"
+        "Status — confirmed: alert critical | open: deploy | next: verify | owner: on-call\n"
+        "Hypotheses:\n"
+        "1. Database outage — confirm: DB error logs; rule out: caller-only misconfig\n"
+        "Verification:\n"
+        "1. Datadog logs (H1): connection refused errors\n"
+        "Follow-up questions:\n"
+        "1. Was there a recent deploy?\n"
+        "Remediation trade-offs: N/A — single clear fix path\n"
+        "Root cause: database connection errors."
+    )
+    accept, nudge = agent._should_accept_conclusion(evidence_count=3, iteration=4)
     assert accept is True
     assert nudge is None
-    # Behavior independent of how many tool calls happened — production
-    # agents trust the LLM.
-    accept, nudge = agent._should_accept_conclusion(evidence_count=100, iteration=15)
+
+
+def test_should_accept_conclusion_production_default_rejects_incomplete_once() -> None:
+    agent = ConnectedInvestigationAgent()
+    agent._last_assistant_text = "Root cause: database connection errors."
+    accept, nudge = agent._should_accept_conclusion(evidence_count=3, iteration=4)
+    assert accept is False
+    assert nudge is not None
+    assert "incident-command sections" in nudge
+
+    agent._conclusion_format_nudged = True
+    accept, nudge = agent._should_accept_conclusion(evidence_count=3, iteration=5)
     assert accept is True
     assert nudge is None
 
@@ -1208,6 +1227,21 @@ def _text_response(text: str) -> MagicMock:
     return response
 
 
+def _incident_command_diagnosis(summary: str) -> str:
+    return (
+        "Triage complete: test scope.\n"
+        "Status — confirmed: ok | open: none | next: done | owner: on-call\n"
+        "Hypotheses:\n"
+        "1. Database outage — confirm: DB error logs; rule out: caller-only misconfig\n"
+        "Verification:\n"
+        "1. Grafana Loki (H1): no logs returned for the window\n"
+        "Follow-up questions:\n"
+        "1. Was there a recent deploy of the affected service?\n"
+        "Remediation trade-offs: N/A — single clear fix path\n"
+        f"{summary}"
+    )
+
+
 def _run_agent_with_scripted_llm(
     *,
     invoke: Any,
@@ -1250,7 +1284,7 @@ def test_run_suppresses_duplicate_tool_calls() -> None:
         _tool_call_response([ToolCall(id="c1", name="list_posthog_tools", input={})]),
         # identical call — must be suppressed, not re-run
         _tool_call_response([ToolCall(id="c2", name="list_posthog_tools", input={})]),
-        _text_response("Final diagnosis."),
+        _text_response(_incident_command_diagnosis("Final diagnosis.")),
     ]
 
     result, mock_llm = _run_agent_with_scripted_llm(invoke=responses, tools=[tool])
@@ -1280,12 +1314,14 @@ def test_run_does_not_suppress_calls_with_different_args() -> None:
     responses = [
         _tool_call_response([ToolCall(id="c1", name="query_logs", input={"svc": "a"})]),
         _tool_call_response([ToolCall(id="c2", name="query_logs", input={"svc": "b"})]),
-        _text_response("Final diagnosis."),
+        _text_response(_incident_command_diagnosis("Final diagnosis.")),
     ]
 
     result = _run_agent_with_scripted_llm(invoke=responses, tools=[tool])[0]
     assert tool.run.call_count == 2
-    assert result["agent_messages"][-1]["content"] == "Final diagnosis."
+    assert result["agent_messages"][-1]["content"] == _incident_command_diagnosis(
+        "Final diagnosis."
+    )
 
 
 def test_run_forces_conclusion_when_stuck_repeating() -> None:
@@ -1297,7 +1333,9 @@ def test_run_forces_conclusion_when_stuck_repeating() -> None:
     def invoke(messages: Any, system: Any, tools: Any) -> MagicMock:  # noqa: ARG001
         # No tools offered → forced conclusion turn → return text.
         if not tools:
-            return _text_response("Final diagnosis: insufficient evidence.")
+            return _text_response(
+                _incident_command_diagnosis("Final diagnosis: insufficient evidence.")
+            )
         # Stubborn model: always re-requests the same call.
         return _tool_call_response([ToolCall(id="c", name="get_sre_guidance", input={})])
 
@@ -1309,7 +1347,9 @@ def test_run_forces_conclusion_when_stuck_repeating() -> None:
     assert mock_llm.invoke.call_count < 6
     # The final forced turn was invoked with NO tools.
     assert mock_llm.invoke.call_args_list[-1].kwargs["tools"] == []
-    assert result["agent_messages"][-1]["content"] == "Final diagnosis: insufficient evidence."
+    assert result["agent_messages"][-1]["content"] == _incident_command_diagnosis(
+        "Final diagnosis: insufficient evidence."
+    )
 
 
 def test_truncate_content_distributes_across_multiple_blocks() -> None:

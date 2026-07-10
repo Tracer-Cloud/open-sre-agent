@@ -13,7 +13,7 @@ import httpx
 
 from integrations.config_models import OpsGenieIntegrationConfig
 from integrations.probes import ProbeResult
-from platform.observability.service_errors import capture_service_error
+from platform.observability.errors.service import capture_service_error
 
 logger = logging.getLogger(__name__)
 

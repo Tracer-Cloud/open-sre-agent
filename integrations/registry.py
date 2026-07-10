@@ -94,9 +94,10 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
     ),
     IntegrationSpec(
         service="gitlab",
+        has_verifier=True,
         direct_effective=True,
         setup_order=15,
-        verify_order=None,
+        verify_order=52,
     ),
     IntegrationSpec(
         service="jenkins",

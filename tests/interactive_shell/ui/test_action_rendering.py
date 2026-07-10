@@ -9,7 +9,7 @@ import pytest
 from rich.console import Console
 
 import tools.interactive_shell.actions.slash as slash_tool
-from core.agent_harness.models.turn_results import ToolCallingTurnResult
+from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 from surfaces.interactive_shell.runtime.action_turn import run_action_tool_turn
 from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 from surfaces.interactive_shell.session import Session

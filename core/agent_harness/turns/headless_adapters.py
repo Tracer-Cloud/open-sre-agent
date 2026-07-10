@@ -10,13 +10,13 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
-from core.agent_harness.models.turn_results import (
-    ShellTurnResult,
-    ToolCallingTurnResult,
-)
 from core.agent_harness.ports import (
     ConfirmFn,
     ToolEventObserver,
+)
+from core.agent_harness.turns.turn_results import (
+    ShellTurnResult,
+    ToolCallingTurnResult,
 )
 
 

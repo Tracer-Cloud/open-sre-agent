@@ -769,15 +769,26 @@ class TestSpinnerState:
                     break
         assert len(verbs_seen) == 1, f"verb changed mid-turn — saw {verbs_seen}"
 
-    def test_inline_spinner_glyph_animates_across_calls(self) -> None:
-        """Each render advances the frame index — animation in place."""
+    def test_inline_spinner_glyph_animates_with_elapsed_time(self) -> None:
+        """The frame is a function of elapsed time, not of render-call count.
+
+        prompt_toolkit evaluates the prompt message several times per render
+        pass, so a per-call counter freezes the on-screen glyph (it advances a
+        whole number of cycles between visible renders). Repeated calls at one
+        instant must render one frame; advancing the clock must animate.
+        """
         spinner = loop_state.SpinnerState()
         spinner.start()
-        seen = {
+        same_instant = {
             _extract_glyph(spinner.inline_spinner_ansi(), spinner._SPINNER_FRAMES)
             for _ in range(len(spinner._SPINNER_FRAMES) * 2)
         }
-        # Over two full rotations we should see every frame.
+        assert len(same_instant) == 1
+
+        seen = set()
+        for step in range(len(spinner._SPINNER_FRAMES)):
+            spinner.started_at = time.monotonic() - step * spinner._FRAME_INTERVAL_S * 1.001
+            seen.add(_extract_glyph(spinner.inline_spinner_ansi(), spinner._SPINNER_FRAMES))
         assert seen == set(spinner._SPINNER_FRAMES)
 
     def test_stop_returns_to_idle_state(self) -> None:
@@ -1763,7 +1774,7 @@ def test_refresh_prompt_theme_skips_invalidate_when_app_not_running() -> None:
             invalidated.append(True)
 
     session = Session()
-    session.terminal.pt_style_app = _App()
+    session.terminal.prompt_app = _App()
     refresh_prompt_theme(session)
     assert invalidated == []
-    assert session.terminal.pt_style_app.style is not None
+    assert session.terminal.prompt_app.style is not None

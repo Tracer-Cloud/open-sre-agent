@@ -13,6 +13,7 @@ from core.tool_framework.base import BaseTool
 from core.tool_framework.registered_tool import REGISTERED_TOOL_ATTR, RegisteredTool
 from core.tool_framework.tool_decorator import tool
 from tools import registry as registry_module
+from tools import registry_discovery
 from tools.investigation_registry.actions import get_available_actions
 
 _V2_TOOL_CONTRACT_NAMES = frozenset(
@@ -49,7 +50,7 @@ def test_tool_decorator_registers_function_tool_with_inferred_schema() -> None:
     lookup_incident.__module__ = module.__name__
     module.lookup_incident = lookup_incident
 
-    tools = registry_module._collect_registered_tools_from_module(module)
+    tools = registry_discovery.collect_registered_tools_from_module(module)
 
     assert [tool_def.name for tool_def in tools] == ["lookup_incident"]
     registered = tools[0]
@@ -71,7 +72,7 @@ def test_tool_decorator_supports_minimal_single_file_function_tool() -> None:
     check_status.__module__ = module.__name__
     module.check_status = check_status
 
-    tools = registry_module._collect_registered_tools_from_module(module)
+    tools = registry_discovery.collect_registered_tools_from_module(module)
 
     assert [tool_def.name for tool_def in tools] == ["check_status"]
     registered = tools[0]
@@ -236,21 +237,22 @@ def test_auto_discovery_populates_investigation_and_chat_surfaces(
     module.get_incident_metadata = get_incident_metadata
 
     monkeypatch.setattr(
-        registry_module, "_iter_tool_module_names", lambda _pkg: ["fake_discovered_tool"]
+        registry_discovery, "_iter_tool_module_names", lambda _pkg: ["fake_discovered_tool"]
     )
     monkeypatch.setattr(registry_module, "_external_tool_packages", [])
-    monkeypatch.setattr(registry_module, "_INTEGRATION_TOOL_PACKAGES", ())
-    monkeypatch.setattr(registry_module, "_import_tool_module", lambda _pkg, _name: module)
+    monkeypatch.setattr(registry_module, "INTEGRATION_TOOL_PACKAGES", ())
+    monkeypatch.setattr(registry_discovery, "_import_tool_module", lambda _pkg, _name: module)
 
-    assert [
-        tool_def.name for tool_def in registry_module.get_registered_tools("investigation")
-    ] == ["get_incident_metadata"]
-    assert [tool_def.name for tool_def in registry_module.get_registered_tools("chat")] == [
+    # Surface-scoped loads read the on-disk descriptor index; assert surface
+    # assignment on the mocked full snapshot instead.
+    snapshot = registry_module.get_registered_tools()
+    assert [t.name for t in snapshot if "investigation" in (t.surfaces or ())] == [
         "get_incident_metadata"
     ]
-    assert registry_module.get_registered_tool_map("chat")["get_incident_metadata"].run(
-        "inc-1"
-    ) == {"incident_id": "inc-1"}
+    assert [t.name for t in snapshot if "chat" in (t.surfaces or ())] == ["get_incident_metadata"]
+    assert registry_module.get_registered_tool_map()["get_incident_metadata"].run("inc-1") == {
+        "incident_id": "inc-1"
+    }
 
 
 def test_action_surface_is_filtered_separately(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -269,17 +271,18 @@ def test_action_surface_is_filtered_separately(monkeypatch: pytest.MonkeyPatch) 
     module.perform_action = perform_action
 
     monkeypatch.setattr(
-        registry_module, "_iter_tool_module_names", lambda _pkg: ["fake_action_tool"]
+        registry_discovery, "_iter_tool_module_names", lambda _pkg: ["fake_action_tool"]
     )
     monkeypatch.setattr(registry_module, "_external_tool_packages", [])
-    monkeypatch.setattr(registry_module, "_INTEGRATION_TOOL_PACKAGES", ())
-    monkeypatch.setattr(registry_module, "_import_tool_module", lambda _pkg, _name: module)
+    monkeypatch.setattr(registry_module, "INTEGRATION_TOOL_PACKAGES", ())
+    monkeypatch.setattr(registry_discovery, "_import_tool_module", lambda _pkg, _name: module)
 
-    assert [tool_def.name for tool_def in registry_module.get_registered_tools("action")] == [
-        "perform_action"
-    ]
-    assert registry_module.get_registered_tools("investigation") == []
-    assert registry_module.get_registered_tools("chat") == []
+    # Surface-scoped loads read the on-disk descriptor index; assert surface
+    # filtering on the mocked full snapshot instead.
+    snapshot = registry_module.get_registered_tools()
+    assert [t.name for t in snapshot if "action" in (t.surfaces or ())] == ["perform_action"]
+    assert [t.name for t in snapshot if "investigation" in (t.surfaces or ())] == []
+    assert [t.name for t in snapshot if "chat" in (t.surfaces or ())] == []
 
 
 def test_github_workflow_skill_guidance_is_attached_to_chat_and_investigation_tools() -> None:
@@ -368,9 +371,9 @@ def test_manifest_discovery_imports_nested_tool_modules(
     nested_module.lookup_nested_incident = lookup_nested_incident
 
     monkeypatch.setattr(registry_module, "_external_tool_packages", [])
-    monkeypatch.setattr(registry_module, "_INTEGRATION_TOOL_PACKAGES", ())
+    monkeypatch.setattr(registry_module, "INTEGRATION_TOOL_PACKAGES", ())
     monkeypatch.setattr(
-        registry_module,
+        registry_discovery,
         "_iter_tool_module_names",
         lambda package: ["fake_provider"] if package is registry_module.tools_package else [],
     )
@@ -382,7 +385,7 @@ def test_manifest_discovery_imports_nested_tool_modules(
             return nested_module
         raise AssertionError(f"unexpected import: {package.__name__}.{name}")
 
-    monkeypatch.setattr(registry_module, "_import_tool_module", mock_import)
+    monkeypatch.setattr(registry_discovery, "_import_tool_module", mock_import)
 
     tools = registry_module.get_registered_tools()
 
@@ -413,9 +416,9 @@ def test_manifest_discovery_logs_nested_import_failure_with_full_module_path(
     valid_module.valid_nested_tool = valid_nested_tool
 
     monkeypatch.setattr(registry_module, "_external_tool_packages", [])
-    monkeypatch.setattr(registry_module, "_INTEGRATION_TOOL_PACKAGES", ())
+    monkeypatch.setattr(registry_module, "INTEGRATION_TOOL_PACKAGES", ())
     monkeypatch.setattr(
-        registry_module,
+        registry_discovery,
         "_iter_tool_module_names",
         lambda package: ["fake_provider"] if package is registry_module.tools_package else [],
     )
@@ -429,7 +432,7 @@ def test_manifest_discovery_logs_nested_import_failure_with_full_module_path(
             return valid_module
         raise AssertionError(f"unexpected import: {package.__name__}.{name}")
 
-    monkeypatch.setattr(registry_module, "_import_tool_module", mock_import)
+    monkeypatch.setattr(registry_discovery, "_import_tool_module", mock_import)
 
     with caplog.at_level(logging.WARNING, logger="tools.registry"):
         tools = registry_module.get_registered_tools()
@@ -473,14 +476,14 @@ def test_manifest_discovery_preserves_duplicate_name_first_wins(
     nested_module.nested_tool = nested_tool
 
     monkeypatch.setattr(registry_module, "_external_tool_packages", [])
-    monkeypatch.setattr(registry_module, "_INTEGRATION_TOOL_PACKAGES", ())
+    monkeypatch.setattr(registry_module, "INTEGRATION_TOOL_PACKAGES", ())
     monkeypatch.setattr(
-        registry_module,
+        registry_discovery,
         "_iter_tool_module_names",
         lambda package: ["fake_provider"] if package is registry_module.tools_package else [],
     )
     monkeypatch.setattr(
-        registry_module,
+        registry_discovery,
         "_import_tool_module",
         lambda package, name: (
             provider_pkg
@@ -518,9 +521,9 @@ def test_top_level_discovery_unchanged_without_manifest(
     import_calls: list[tuple[str, str]] = []
 
     monkeypatch.setattr(registry_module, "_external_tool_packages", [])
-    monkeypatch.setattr(registry_module, "_INTEGRATION_TOOL_PACKAGES", ())
+    monkeypatch.setattr(registry_module, "INTEGRATION_TOOL_PACKAGES", ())
     monkeypatch.setattr(
-        registry_module,
+        registry_discovery,
         "_iter_tool_module_names",
         lambda package: ["fake_top_level_tool"] if package is registry_module.tools_package else [],
     )
@@ -529,7 +532,7 @@ def test_top_level_discovery_unchanged_without_manifest(
         import_calls.append((package.__name__, name))
         return top_level_module
 
-    monkeypatch.setattr(registry_module, "_import_tool_module", mock_import)
+    monkeypatch.setattr(registry_discovery, "_import_tool_module", mock_import)
 
     tools = registry_module.get_registered_tools()
 
@@ -555,9 +558,9 @@ def test_resolve_tool_display_name_prefers_registered_metadata(
     module.get_incident_metadata = get_incident_metadata
 
     monkeypatch.setattr(
-        registry_module, "_iter_tool_module_names", lambda _pkg: ["fake_display_name_tool"]
+        registry_discovery, "_iter_tool_module_names", lambda _pkg: ["fake_display_name_tool"]
     )
-    monkeypatch.setattr(registry_module, "_import_tool_module", lambda _pkg, _name: module)
+    monkeypatch.setattr(registry_discovery, "_import_tool_module", lambda _pkg, _name: module)
 
     assert registry_module.resolve_tool_display_name("get_incident_metadata") == "Incident metadata"
 
@@ -628,12 +631,12 @@ def test_registry_regression_duplicate_tool_names_across_modules(
     module2.shared_tool_second = second_tool
 
     monkeypatch.setattr(
-        registry_module,
+        registry_discovery,
         "_iter_tool_module_names",
         lambda _pkg: ["first_module", "second_module"],
     )
     monkeypatch.setattr(
-        registry_module,
+        registry_discovery,
         "_import_tool_module",
         lambda _pkg, name: module1 if name == "first_module" else module2,
     )
@@ -677,12 +680,12 @@ def test_registry_regression_import_failures(
         return module
 
     monkeypatch.setattr(
-        registry_module,
+        registry_discovery,
         "_iter_tool_module_names",
         lambda _pkg: ["broken_module", "valid_tool"],
     )
     monkeypatch.setattr(
-        registry_module,
+        registry_discovery,
         "_import_tool_module",
         mock_import,
     )
@@ -967,8 +970,8 @@ def test_registry_canonical_tool_wins_when_external_package_redefines_name(
     fake_pkg.__path__ = []  # type: ignore[attr-defined]
 
     # Inject the fake by patching the walk + import.
-    real_iter = registry_module._iter_tool_module_names
-    real_import = registry_module._import_tool_module
+    real_iter = registry_discovery._iter_tool_module_names
+    real_import = registry_discovery._import_tool_module
 
     def fake_iter(package: ModuleType) -> list[str]:
         if package is fake_pkg:
@@ -980,8 +983,8 @@ def test_registry_canonical_tool_wins_when_external_package_redefines_name(
             return fake_module
         return real_import(package, name)
 
-    monkeypatch.setattr(registry_module, "_iter_tool_module_names", fake_iter)
-    monkeypatch.setattr(registry_module, "_import_tool_module", fake_import)
+    monkeypatch.setattr(registry_discovery, "_iter_tool_module_names", fake_iter)
+    monkeypatch.setattr(registry_discovery, "_import_tool_module", fake_import)
 
     saved = list(registry_module._external_tool_packages)
     try:

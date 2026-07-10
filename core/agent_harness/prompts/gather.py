@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from core.agent_harness.models.turn_snapshot import TurnSnapshot
     from core.agent_harness.ports import SessionStore
+    from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 
 
 def build_gather_system_prompt(session: SessionStore) -> str:

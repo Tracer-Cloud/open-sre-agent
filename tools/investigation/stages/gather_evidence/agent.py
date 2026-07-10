@@ -25,7 +25,12 @@ from core.state import InvestigationState
 from core.state.evidence import EvidenceEntry
 from platform.observability import debug_print
 from platform.observability import get_progress_tracker as get_tracker
-from platform.observability.tool_trace import redact_sensitive
+from platform.observability.trace.redaction import redact_sensitive
+from tools.investigation.stages.gather_evidence.incident_command import (
+    CONCLUSION_FORMAT_NUDGE,
+    POST_TRIAGE_CHECKPOINT,
+    incident_command_conclusion_complete,
+)
 from tools.investigation.stages.gather_evidence.loop import (
     InvestigationToolCallCache,
     degraded_investigation_from_llm_failure,
@@ -73,9 +78,20 @@ class ConnectedInvestigationAgent(EventEmitterMixin, ToolFilterMixin):
     ) -> tuple[bool, str | None]:
         """Decide what to do when the LLM stops requesting tools.
 
+        Reject once when the final text omits required incident-command markers,
+        so the model reformats before diagnose parses the conclusion.
+
         Override in subclasses (e.g. :class:`CLIBackedInvestigationAgent`) to
         nudge the model back into tool calls before accepting a conclusion.
         """
+        last_text = getattr(self, "_last_assistant_text", "") or ""
+        if (
+            last_text.strip()
+            and not incident_command_conclusion_complete(last_text)
+            and not getattr(self, "_conclusion_format_nudged", False)
+        ):
+            self._conclusion_format_nudged = True
+            return False, CONCLUSION_FORMAT_NUDGE
         return True, None
 
     def _build_system_prompt(self, state: dict[str, Any]) -> str:
@@ -204,6 +220,9 @@ class ConnectedInvestigationAgent(EventEmitterMixin, ToolFilterMixin):
         context_ceiling = context_budget_ceiling_for_model(getattr(llm, "_model", None))
         stagnant_iterations = 0
         force_conclusion = False
+        self._last_assistant_text = ""
+        self._conclusion_format_nudged = False
+        self._post_triage_checkpoint_sent = False
         for iteration in range(MAX_INVESTIGATION_LOOPS):
             logger.debug("[agent] iteration=%d", iteration)
             self._emit("llm_start", {"iteration": iteration})
@@ -231,6 +250,7 @@ class ConnectedInvestigationAgent(EventEmitterMixin, ToolFilterMixin):
                 )
 
             messages.append(msg_mapper.to_assistant_provider_message(response))
+            self._last_assistant_text = str(getattr(response, "content", "") or "")
 
             if not response.has_tool_calls:
                 accept, nudge = self._should_accept_conclusion(
@@ -304,6 +324,10 @@ class ConnectedInvestigationAgent(EventEmitterMixin, ToolFilterMixin):
                 )
                 self._record_tool_end(tc, output)
                 debug_print(f"[{tc.name}] → {summarise(output)}")
+
+            if iteration == 0 and fresh_calls and not self._post_triage_checkpoint_sent:
+                messages.append({"role": "user", "content": POST_TRIAGE_CHECKPOINT})
+                self._post_triage_checkpoint_sent = True
 
             if fresh_calls:
                 stagnant_iterations = 0
@@ -393,15 +417,24 @@ class CLIBackedInvestigationAgent(ConnectedInvestigationAgent):
         evidence = getattr(self, "_current_evidence", None)
 
         if not planned or evidence is None:
-            return True, None
+            return super()._should_accept_conclusion(
+                evidence_count=evidence_count,
+                iteration=iteration,
+            )
 
         # Leave room for a final text-only iteration after the nudge fires.
         if iteration >= MAX_INVESTIGATION_LOOPS - 2:
-            return True, None
+            return super()._should_accept_conclusion(
+                evidence_count=evidence_count,
+                iteration=iteration,
+            )
 
         uncalled = [name for name in planned if name not in evidence]
         if not uncalled:
-            return True, None
+            return super()._should_accept_conclusion(
+                evidence_count=evidence_count,
+                iteration=iteration,
+            )
 
         tool_list = ", ".join(uncalled)
         return False, (

@@ -24,6 +24,9 @@ from platform.deployment.aws.config import (
     IAM_PROFILE_PROPAGATION_SECONDS,
     INSTANCE_TYPE,
     STACK_TAG_KEY,
+    WEB_API_INGRESS_CIDR_DEFAULT,
+    WEB_API_INGRESS_CIDR_ENV,
+    WEB_API_PORT,
 )
 
 ACTIVE_EC2_INSTANCE_STATES = ("pending", "running", "stopping")
@@ -171,6 +174,209 @@ def delete_instance_profile(
             raise
 
 
+def stack_security_group_name(stack_name: str) -> str:
+    """Return the deterministic security group name for a deployment stack."""
+    return f"{stack_name}-sg"
+
+
+def web_api_ingress_cidr() -> str:
+    """Return the CIDR allowed to reach the web API port."""
+    return os.getenv(WEB_API_INGRESS_CIDR_ENV, WEB_API_INGRESS_CIDR_DEFAULT).strip()
+
+
+def get_default_vpc_id(*, region: str = DEFAULT_REGION) -> str:
+    """Return the account default VPC id.
+
+    Raises:
+        ClientError: When the region has no default VPC (``DefaultVpcNotFound``).
+    """
+    ec2 = get_boto3_client("ec2", region)
+    resp = ec2.describe_vpcs(Filters=[{"Name": "isDefault", "Values": ["true"]}])
+    vpcs = resp.get("Vpcs", [])
+    if not vpcs:
+        raise ClientError(
+            {
+                "Error": {
+                    "Code": "DefaultVpcNotFound",
+                    "Message": (
+                        f"No default VPC found in {region}. Create a default VPC or "
+                        "deploy into an account/region with a default VPC."
+                    ),
+                }
+            },
+            "DescribeVpcs",
+        )
+    return str(vpcs[0]["VpcId"])
+
+
+def _web_api_ingress_permission(
+    *,
+    port: int,
+    cidr: str,
+    description: str,
+) -> dict[str, object]:
+    return {
+        "IpProtocol": "tcp",
+        "FromPort": port,
+        "ToPort": port,
+        "IpRanges": [{"CidrIp": cidr, "Description": description}],
+    }
+
+
+def _revoke_stale_web_api_ingress(
+    *,
+    group_id: str,
+    port: int,
+    desired_cidr: str,
+    region: str = DEFAULT_REGION,
+) -> bool:
+    """Revoke web API ingress CIDRs that do not match ``desired_cidr``.
+
+    Returns True when ``desired_cidr`` is already authorized on ``port``.
+    """
+    ec2 = get_boto3_client("ec2", region)
+    response = ec2.describe_security_groups(GroupIds=[group_id])
+    security_groups = response.get("SecurityGroups", [])
+    if not security_groups:
+        return False
+    desired_present = False
+
+    for permission in security_groups[0].get("IpPermissions", []):
+        if permission.get("IpProtocol") != "tcp":
+            continue
+        if permission.get("FromPort") != port or permission.get("ToPort") != port:
+            continue
+
+        ip_ranges = permission.get("IpRanges") or []
+        stale_ranges = [
+            ip_range for ip_range in ip_ranges if ip_range.get("CidrIp") != desired_cidr
+        ]
+        if any(ip_range.get("CidrIp") == desired_cidr for ip_range in ip_ranges):
+            desired_present = True
+        if not stale_ranges:
+            continue
+
+        try:
+            ec2.revoke_security_group_ingress(
+                GroupId=group_id,
+                IpPermissions=[
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": port,
+                        "ToPort": port,
+                        "IpRanges": stale_ranges,
+                    }
+                ],
+            )
+        except ClientError as e:
+            if e.response["Error"]["Code"] != "InvalidPermission.NotFound":
+                raise
+
+    return desired_present
+
+
+def _authorize_tcp_ingress(
+    *,
+    group_id: str,
+    port: int,
+    cidr: str,
+    description: str,
+    region: str = DEFAULT_REGION,
+) -> None:
+    ec2 = get_boto3_client("ec2", region)
+    try:
+        ec2.authorize_security_group_ingress(
+            GroupId=group_id,
+            IpPermissions=[
+                _web_api_ingress_permission(port=port, cidr=cidr, description=description)
+            ],
+        )
+    except ClientError as e:
+        if e.response["Error"]["Code"] != "InvalidPermission.Duplicate":
+            raise
+
+
+def _sync_web_api_ingress(
+    *,
+    group_id: str,
+    cidr: str,
+    region: str = DEFAULT_REGION,
+) -> None:
+    """Ensure only ``cidr`` can reach the web API port on ``group_id``."""
+    description = f"OpenSRE web API port {WEB_API_PORT}"
+    desired_present = _revoke_stale_web_api_ingress(
+        group_id=group_id,
+        port=WEB_API_PORT,
+        desired_cidr=cidr,
+        region=region,
+    )
+    if desired_present:
+        return
+    _authorize_tcp_ingress(
+        group_id=group_id,
+        port=WEB_API_PORT,
+        cidr=cidr,
+        description=description,
+        region=region,
+    )
+
+
+def create_stack_security_group(
+    stack_name: str,
+    *,
+    region: str = DEFAULT_REGION,
+) -> str:
+    """Create (or reuse) a stack security group with inbound TCP on the web API port.
+
+    Returns the security group id (e.g. ``sg-0abc123...``).
+    """
+    ec2 = get_boto3_client("ec2", region)
+    vpc_id = get_default_vpc_id(region=region)
+    group_name = stack_security_group_name(stack_name)
+    tags = get_standard_tags(stack_name)
+    tags.append({"Key": "Name", "Value": group_name})
+
+    response = ec2.describe_security_groups(
+        Filters=[
+            {"Name": "group-name", "Values": [group_name]},
+            {"Name": "vpc-id", "Values": [vpc_id]},
+        ]
+    )
+    existing = response.get("SecurityGroups", [])
+    if existing:
+        group_id = str(existing[0]["GroupId"])
+    else:
+        created = ec2.create_security_group(
+            GroupName=group_name,
+            Description=f"OpenSRE deployment security group for {stack_name}",
+            VpcId=vpc_id,
+            TagSpecifications=[{"ResourceType": "security-group", "Tags": tags}],
+        )
+        group_id = str(created["GroupId"])
+        logger.info("Created security group %s for stack %s", group_id, stack_name)
+
+    cidr = web_api_ingress_cidr()
+    _sync_web_api_ingress(group_id=group_id, cidr=cidr, region=region)
+    return group_id
+
+
+def delete_stack_security_group(
+    security_group_id: str,
+    *,
+    region: str = DEFAULT_REGION,
+) -> None:
+    """Delete a stack security group. Tolerates missing groups for idempotent destroy."""
+    if not security_group_id:
+        return
+    ec2 = get_boto3_client("ec2", region)
+    try:
+        ec2.delete_security_group(GroupId=security_group_id)
+        logger.info("Deleted security group %s", security_group_id)
+    except ClientError as e:
+        if e.response["Error"]["Code"] != "InvalidGroup.NotFound":
+            raise
+
+
 def find_stack_instance_ids(
     stack_name: str,
     *,
@@ -202,13 +408,14 @@ def launch_instance(
     user_data: str | None = None,
     instance_type: str = INSTANCE_TYPE,
     root_device_name: str = EC2_ROOT_DEVICE_NAME,
+    security_group_ids: list[str] | None = None,
     region: str = DEFAULT_REGION,
 ) -> dict[str, str]:
     """Launch an EC2 instance in the default VPC and return its InstanceId.
 
-    No subnet or security group is specified; AWS assigns the default VPC subnet
-    and default security group. SSM access is outbound-only and works without any
-    inbound rules.
+    When ``security_group_ids`` is omitted, AWS assigns the default VPC security
+    group. Pass a stack security group from :func:`create_stack_security_group` to
+    expose the web API port publicly.
 
     ``root_device_name`` must match the AMI root block device (``/dev/xvda`` for
     Amazon Linux 2023, ``/dev/sda1`` for Ubuntu official AMIs) or the requested
@@ -234,6 +441,8 @@ def launch_instance(
     }
     if user_data:
         launch_kwargs["UserData"] = user_data
+    if security_group_ids:
+        launch_kwargs["SecurityGroupIds"] = security_group_ids
     key_name = os.getenv("EC2_KEY_NAME")
     if key_name:
         launch_kwargs["KeyName"] = key_name

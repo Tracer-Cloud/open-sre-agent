@@ -31,8 +31,26 @@ class TestTelegramCredentials:
             "platform.scheduler.credentials._get_integration_credential",
             lambda *_: "",
         )
+        monkeypatch.setattr(
+            "config.llm_credentials.resolve_env_credential",
+            lambda *_args, **_kwargs: "",
+        )
         creds = resolve_telegram_credentials({})
         assert creds == {}
+
+    def test_from_keyring(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
+        monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
+        monkeypatch.setattr(
+            "platform.scheduler.credentials._get_integration_credential",
+            lambda *_: "",
+        )
+        monkeypatch.setattr(
+            "config.llm_credentials.resolve_env_credential",
+            lambda *_args, **_kwargs: "from_keyring",
+        )
+        creds = resolve_telegram_credentials({})
+        assert creds == {"bot_token": "from_keyring"}
 
 
 class TestSlackCredentials:

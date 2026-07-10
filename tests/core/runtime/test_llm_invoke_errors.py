@@ -39,3 +39,35 @@ def test_classify_returns_none_for_credit_exhausted_so_it_propagates() -> None:
 
     err = LLMCreditExhaustedError("OpenAI credit exhausted: insufficient_quota")
     assert classify_llm_invoke_failure(err) is None
+
+
+def test_cli_auth_required_uses_unknown_provider_when_attr_missing() -> None:
+    CLIAuthenticationRequired = type(
+        "CLIAuthenticationRequired",
+        (Exception,),
+        {},
+    )
+    CLIAuthenticationRequired.__module__ = "integrations.llm_cli.errors"
+
+    failure = classify_llm_invoke_failure(CLIAuthenticationRequired())
+    assert failure is not None
+    assert "unknown CLI is not authenticated" in failure.user_message
+    assert failure.remediation_steps == [
+        "Run `opensre doctor` to verify CLI installation and auth.",
+    ]
+
+
+def test_cli_auth_required_filters_none_remediation_fields() -> None:
+    CLIAuthenticationRequired = type(
+        "CLIAuthenticationRequired",
+        (Exception,),
+        {"provider": "codex", "auth_hint": None, "detail": ""},
+    )
+    CLIAuthenticationRequired.__module__ = "integrations.llm_cli.errors"
+
+    failure = classify_llm_invoke_failure(CLIAuthenticationRequired())
+    assert failure is not None
+    assert "codex CLI is not authenticated" in failure.user_message
+    assert failure.remediation_steps == [
+        "Run `opensre doctor` to verify CLI installation and auth.",
+    ]

@@ -366,6 +366,13 @@ def test_detect_when_binary_not_found(
     _mock_which: MagicMock, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _clean_copilot_env(monkeypatch)
+    # resolve_cli_binary falls back to known install dirs (e.g. /opt/homebrew/bin)
+    # after the PATH lookup. Mocking shutil.which alone still finds a real copilot
+    # install on a dev machine, so force nothing to resolve as runnable — this also
+    # overrides the autouse fixture that treats real fallback paths as runnable.
+    import integrations.llm_cli.binary_resolver as br
+
+    monkeypatch.setattr(br, "is_runnable_binary", lambda _path: False)
     probe = CopilotAdapter().detect()
     assert probe.installed is False
     assert probe.logged_in is None

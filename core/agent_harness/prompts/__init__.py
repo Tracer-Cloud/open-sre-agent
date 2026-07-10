@@ -28,9 +28,15 @@ from core.agent_harness.prompts.gather import (
     build_gather_system_prompt,
     build_gather_system_prompt_from_turn_snapshot,
 )
+from core.agent_harness.prompts.skills_loader import (
+    SKILLS_HEADER,
+    load_skills_block,
+    skills_dir,
+)
 
 __all__ = [
     "_SYSTEM_PROMPT_BASE",
+    "SKILLS_HEADER",
     "_build_observation_block",
     "_build_system_prompt",
     "AssistantPromptContextProvider",
@@ -46,7 +52,9 @@ __all__ = [
     "build_environment_block",
     "build_observation_block",
     "connected_integrations_block",
+    "load_skills_block",
     "prior_action_facts_block",
     "recent_conversation_block",
     "sanitize_action_text",
+    "skills_dir",
 ]

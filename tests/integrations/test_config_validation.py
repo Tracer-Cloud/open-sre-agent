@@ -3,21 +3,21 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from integrations.config_models import SnowflakeIntegrationConfig
+from integrations.config_models import (
+    AWSIntegrationConfig,
+    BetterStackIntegrationConfig,
+    CoralogixIntegrationConfig,
+    HoneycombIntegrationConfig,
+    SlackWebhookConfig,
+    SnowflakeIntegrationConfig,
+    TracerIntegrationConfig,
+)
 from integrations.datadog.client import DatadogConfig
 from integrations.github.mcp import (
     _remote_github_mcp_session_url,
     build_github_mcp_config,
 )
 from integrations.grafana.config import GrafanaAccountConfig
-from integrations.models import (
-    AWSIntegrationConfig,
-    BetterStackIntegrationConfig,
-    CoralogixIntegrationConfig,
-    HoneycombIntegrationConfig,
-    SlackWebhookConfig,
-    TracerIntegrationConfig,
-)
 from integrations.sentry import build_sentry_config
 from integrations.snowflake import classify as classify_snowflake
 

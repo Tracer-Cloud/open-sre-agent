@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from pydantic import ValidationError
+
 from integrations.config_models import WhatsAppConfig
 
 logger = logging.getLogger(__name__)
@@ -23,6 +25,9 @@ def classify(
                 "default_to": credentials.get("default_to"),
             }
         )
+    except ValidationError:
+        return None, None
     except Exception:
+        logger.exception("Unexpected error validating WhatsApp config")
         return None, None
     return cfg, "whatsapp"

@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import pytest
 
 from integrations.config_models import SMTPIntegrationConfig
+from integrations.smtp import classify
 from integrations.smtp.verifier import verify_smtp as _verify_smtp
 
 
@@ -54,6 +57,27 @@ def test_verify_smtp_reports_validation_errors() -> None:
     result = _verify_smtp("local env", {"host": "smtp.example.com"})
     assert result["status"] == "missing"
     assert "from_address" in result["detail"]
+
+
+def test_classify_validation_failure_reports_without_secret_value() -> None:
+    secret = "smtp-secret-password"
+
+    with patch("integrations._validation_helpers.report_exception") as mock_report:
+        result = classify(
+            {
+                "host": "smtp.example.com",
+                "username": "mailer",
+                "password": secret,
+                "from_address": "not-an-email",
+            },
+            "smtp-record",
+        )
+
+    assert result == (None, None)
+    mock_report.assert_called_once()
+    reported_exc = mock_report.call_args.args[0]
+    assert secret not in str(reported_exc)
+    assert "SMTPIntegrationConfig validation failed" in str(reported_exc)
 
 
 def test_catalog_bootstraps_smtp_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
