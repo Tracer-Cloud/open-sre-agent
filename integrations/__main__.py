@@ -94,7 +94,7 @@ def main() -> None:
                 )
             )
     finally:
-        shutdown_analytics(flush=True)
+        shutdown_analytics(flush=False)
 
 
 if __name__ == "__main__":

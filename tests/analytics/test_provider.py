@@ -845,12 +845,149 @@ def test_analytics_post_shutdown_capture_is_safe_noop(
     assert analytics._pending == 0
 
 
+def test_analytics_needs_flush_false_when_idle_or_disabled(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("OPENSRE_NO_TELEMETRY", "1")
+    monkeypatch.setattr(provider, "_CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(provider, "_ANONYMOUS_ID_PATH", tmp_path / "anonymous_id")
+    monkeypatch.setattr(provider.atexit, "register", lambda *_a, **_k: None)
+
+    assert provider.analytics_needs_flush() is False
+    analytics = provider.Analytics()
+    provider._instance = analytics
+    assert provider.analytics_needs_flush() is False
+
+
+def test_analytics_needs_flush_true_when_events_pending(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.delenv("OPENSRE_ANALYTICS_DISABLED", raising=False)
+    monkeypatch.delenv("DO_NOT_TRACK", raising=False)
+    monkeypatch.setattr(provider, "_CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(provider, "_ANONYMOUS_ID_PATH", tmp_path / "anonymous_id")
+    monkeypatch.setattr(provider.atexit, "register", lambda *_a, **_k: None)
+
+    class _SlowClient:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def __enter__(self) -> _SlowClient:
+            return self
+
+        def __exit__(self, _exc_type, _exc, _tb) -> None:
+            return None
+
+        def post(self, _url: str, **_kwargs: object) -> object:
+            time.sleep(1.0)
+
+            class _Resp:
+                def raise_for_status(self) -> None:
+                    return None
+
+            return _Resp()
+
+    monkeypatch.setattr(provider.httpx, "Client", _SlowClient)
+    analytics = provider.Analytics()
+    provider._instance = analytics
+    analytics.capture(Event.CLI_INVOKED)
+    assert provider.analytics_needs_flush() is True
+    analytics.shutdown(flush=False)
+    assert provider.analytics_needs_flush() is False
+
+
 def test_shutdown_analytics_is_noop_when_singleton_not_initialized(monkeypatch) -> None:
     monkeypatch.setattr(provider, "_instance", None)
 
     provider.shutdown_analytics(flush=False)
 
     assert provider._instance is None
+
+
+def test_shutdown_flush_false_returns_without_waiting_on_slow_worker(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """flush=False must return immediately even when the worker is slow."""
+    monkeypatch.delenv("OPENSRE_ANALYTICS_DISABLED", raising=False)
+    monkeypatch.delenv("DO_NOT_TRACK", raising=False)
+    monkeypatch.setattr(provider, "_CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(provider, "_ANONYMOUS_ID_PATH", tmp_path / "anonymous_id")
+    monkeypatch.setattr(provider.atexit, "register", lambda *_a, **_k: None)
+
+    class _SlowResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+    class _SlowClient:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def __enter__(self) -> _SlowClient:
+            return self
+
+        def __exit__(self, _exc_type, _exc, _tb) -> None:
+            return None
+
+        def post(self, _url: str, **_kwargs: object) -> _SlowResponse:
+            time.sleep(2.0)
+            return _SlowResponse()
+
+    monkeypatch.setattr(provider.httpx, "Client", _SlowClient)
+
+    analytics = provider.Analytics()
+    analytics.capture(Event.CLI_INVOKED, {"interactive": True})
+
+    started = time.perf_counter()
+    analytics.shutdown(flush=False)
+    elapsed = time.perf_counter() - started
+
+    assert analytics._shutdown is True
+    assert elapsed < 0.2
+
+
+def test_atexit_registers_non_blocking_shutdown(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.delenv("OPENSRE_ANALYTICS_DISABLED", raising=False)
+    monkeypatch.delenv("DO_NOT_TRACK", raising=False)
+    monkeypatch.setattr(provider, "_CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(provider, "_ANONYMOUS_ID_PATH", tmp_path / "anonymous_id")
+
+    registered: list[object] = []
+    monkeypatch.setattr(provider.atexit, "register", registered.append)
+
+    class _SlowClient:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def __enter__(self) -> _SlowClient:
+            return self
+
+        def __exit__(self, _exc_type, _exc, _tb) -> None:
+            return None
+
+        def post(self, _url: str, **_kwargs: object) -> object:
+            time.sleep(2.0)
+
+            class _Resp:
+                def raise_for_status(self) -> None:
+                    return None
+
+            return _Resp()
+
+    monkeypatch.setattr(provider.httpx, "Client", _SlowClient)
+
+    analytics = provider.Analytics()
+    analytics.capture(Event.CLI_INVOKED)
+
+    assert len(registered) == 1
+    started = time.perf_counter()
+    registered[0]()
+    elapsed = time.perf_counter() - started
+
+    assert analytics._shutdown is True
+    assert elapsed < 0.2
+    analytics.shutdown(flush=False)
 
 
 def test_analytics_is_disabled_when_no_telemetry_env_var_is_set(

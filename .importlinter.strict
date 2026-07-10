@@ -33,6 +33,7 @@ ignore_imports =
     platform.analytics.cli -> integrations.github.identity
     platform.observability.errors.sentry -> integrations.llm_cli.errors
     platform.scheduler.credentials -> integrations.catalog
+    platform.scheduler.credentials -> integrations.telegram.credentials
     platform.scheduler.executor -> integrations.discord.delivery
     platform.scheduler.executor -> integrations.slack.delivery
     platform.scheduler.executor -> integrations.telegram.delivery

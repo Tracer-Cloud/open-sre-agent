@@ -33,7 +33,9 @@ _FIRST_RUN_PATH = _CONFIG_DIR / "installed"
 
 _QUEUE_SIZE = 128
 _SEND_TIMEOUT = 2.0
-_SHUTDOWN_WAIT = 1.0
+# Bound how long an explicit flush=True shutdown may block the process.
+# Interactive /quit drains under a spinner with this budget; atexit stays non-blocking.
+_SHUTDOWN_WAIT = 0.5
 
 _EVENT_LOG_ENV_VAR: Final[str] = "OPENSRE_ANALYTICS_LOG_EVENTS"
 _EVENT_LOG_FILENAME: Final[str] = "posthog_events.txt"
@@ -674,7 +676,12 @@ class Analytics:
         self._persistent_properties: Properties = {}
 
         if not self._disabled:
-            atexit.register(self.shutdown)
+            # Never block interpreter exit on PostHog; callers that need a
+            # best-effort drain (e.g. install) pass flush=True explicitly.
+            def _atexit_shutdown() -> None:
+                self.shutdown(flush=False)
+
+            atexit.register(_atexit_shutdown)
             for properties in _pop_user_id_load_failures():
                 self.capture(Event.USER_ID_LOAD_FAILED, properties)
 
@@ -741,7 +748,14 @@ class Analytics:
             _log_failure("capture", exc, event=envelope.event)
             _capture_sentry_failure(exc)
 
-    def shutdown(self, *, flush: bool = True, timeout: float = _SHUTDOWN_WAIT) -> None:
+    def shutdown(self, *, flush: bool = False, timeout: float = _SHUTDOWN_WAIT) -> None:
+        """Stop accepting events and signal the worker to exit.
+
+        By default ``flush=False``: enqueue a sentinel and return immediately so
+        interactive exit (``/quit``) is not blocked on network I/O. Pass
+        ``flush=True`` only when a short best-effort drain is worth waiting for
+        (e.g. one-shot install telemetry).
+        """
         if self._shutdown:
             return
         self._shutdown = True
@@ -841,9 +855,21 @@ def get_analytics() -> Analytics:
     return _instance
 
 
-def shutdown_analytics(*, flush: bool = True) -> None:
+def shutdown_analytics(*, flush: bool = False, timeout: float = _SHUTDOWN_WAIT) -> None:
     if _instance is not None:
-        _instance.shutdown(flush=flush)
+        _instance.shutdown(flush=flush, timeout=timeout)
+
+
+def analytics_needs_flush() -> bool:
+    """True when a best-effort drain would wait on queued or in-flight events.
+
+    ``_pending`` is raised in ``capture`` before enqueue and lowered in
+    ``_mark_done`` only after the POST completes, so it already covers both
+    queued and in-flight events; an idle-but-alive worker does not need a drain.
+    """
+    if _instance is None or _instance._disabled or _instance._shutdown:
+        return False
+    return _instance._pending > 0
 
 
 def capture_install_detected_if_needed(properties: Properties | None = None) -> bool:

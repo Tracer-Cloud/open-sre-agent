@@ -42,6 +42,17 @@ The seven first-party packages, the four-tier layering (which package may
 import which), the folder diagram, per-layer responsibilities, and cross-layer
 flows are documented in [`docs/ARCHITECTURE.md`](ARCHITECTURE.md).
 
+## Tool registry — surface-scoped, lazy loading
+
+Loading every vendor tool at startup was slow. A static index
+(`tools/registry_index.py`) reads tool metadata by scanning the source, without importing executors, so a turn loads only the tools it needs.
+
+- `get_registered_tools(surface)` imports only that surface's tool modules.
+- `get_tool_descriptors(surface)` returns metadata with no executor import.
+- `load_tool(descriptor)` imports the executor, only when a tool runs.
+
+Adding a vendor tool is a `@tool`/`BaseTool` module; the index finds it and no other vendor is imported. `tests/tools/test_registry_index.py` checks the index matches the imported registry exactly, so they cannot drift.
+
 ## Investigation pipeline architecture
 
 The six-stage investigation pipeline (resolve integrations → extract alert → plan → ReAct evidence loop → diagnose → deliver), the loop's guardrails (tool cap, stagnation breaker, context budget, duplicate detection), and diagrams are documented in [`docs/investigation-pipeline-architecture.md`](investigation-pipeline-architecture.md).

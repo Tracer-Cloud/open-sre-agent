@@ -13,10 +13,14 @@ _INSTALL_PROPERTIES: Properties = {
     "entrypoint": "make install",
 }
 
+# One-shot install exit has no interactive spinner to keep snappy, so it can wait
+# a full send-timeout for the install_detected POST to land (a conversion signal).
+_INSTALL_FLUSH_TIMEOUT_SECONDS = 2.0
+
 
 def main() -> int:
     capture_install_detected_if_needed(_INSTALL_PROPERTIES)
-    shutdown_analytics(flush=True)
+    shutdown_analytics(flush=True, timeout=_INSTALL_FLUSH_TIMEOUT_SECONDS)
     return 0
 
 
