@@ -6,7 +6,9 @@ from typing import Any
 
 from core.tool_framework.base import BaseTool
 from integrations.config_models import KubernetesIntegrationConfig
-from integrations.kubernetes.client import KubernetesClient
+from integrations.kubernetes.client import KubernetesClient, _RESOURCE_DISPATCH
+
+_RESOURCE_TYPE_ENUM: list[str] = sorted(_RESOURCE_DISPATCH.keys())
 
 
 def _make_client(sources: dict[str, Any]) -> KubernetesClient | None:
@@ -74,6 +76,7 @@ class KubernetesListPodsTool(BaseTool):
         "Filtering pods by label selector to scope investigation",
         "Verifying that a deployment's pods are running after a rollout",
     ]
+    surfaces = ("investigation", "chat")
     requires = ["kubeconfig"]
     injected_params = ["kubeconfig", "kubeconfig_path", "context", "namespace"]
     input_schema = {
@@ -172,6 +175,7 @@ class KubernetesGetPodLogsTool(BaseTool):
         "Diagnosing startup failures and misconfigurations via container logs",
         "Collecting evidence of OOM kills, panics, or stack traces",
     ]
+    surfaces = ("investigation", "chat")
     requires = ["pod_name"]
     injected_params = ["kubeconfig", "kubeconfig_path", "context", "namespace"]
     input_schema = {
@@ -223,6 +227,14 @@ class KubernetesGetPodLogsTool(BaseTool):
         tail_lines: int = 100,
         **_kwargs: Any,
     ) -> dict[str, Any]:
+        if not pod_name:
+            return {
+                "source": "kubernetes",
+                "available": False,
+                "error": "pod_name is required; call kubernetes_list_pods first to find the pod name.",
+                "lines": [],
+                "total": 0,
+            }
         client = _make_client(
             {
                 "kubernetes": {
@@ -275,6 +287,7 @@ class KubernetesListDeploymentsTool(BaseTool):
         "Verifying deployment replica health across a namespace",
         "Identifying deployments stuck in a partial-rollout state",
     ]
+    surfaces = ("investigation", "chat")
     requires = []
     injected_params = ["kubeconfig", "kubeconfig_path", "context", "namespace"]
     input_schema = {
@@ -366,6 +379,7 @@ class KubernetesGetEventsTool(BaseTool):
         "Understanding scheduling failures (Insufficient CPU/Memory)",
         "Correlating event timestamps with incident timeline",
     ]
+    surfaces = ("investigation", "chat")
     requires = []
     injected_params = ["kubeconfig", "kubeconfig_path", "context", "namespace"]
     input_schema = {
@@ -467,8 +481,9 @@ class KubernetesDescribePodTool(BaseTool):
         "Inspecting container image versions and resource limits on a specific pod",
         "Diagnosing why a pod is stuck in Pending or Init state via detailed conditions",
         "Identifying owner (Deployment, StatefulSet, Job) of a pod",
-        "Checking environment variable values injected into a container",
+        "Checking environment variable names (keys only) injected into a container — values are redacted",
     ]
+    surfaces = ("investigation", "chat")
     requires = ["pod_name"]
     injected_params = ["kubeconfig", "kubeconfig_path", "context", "namespace"]
     input_schema = {
@@ -554,6 +569,7 @@ class KubernetesListNodesTool(BaseTool):
         "Identifying nodes with taints that prevent pod scheduling",
         "Correlating pod scheduling failures with node capacity",
     ]
+    surfaces = ("investigation", "chat")
     requires = []
     injected_params = ["kubeconfig", "kubeconfig_path", "context"]
     input_schema = {
@@ -652,6 +668,7 @@ class KubernetesListServicesTool(BaseTool):
         "Diagnosing port mismatches between services and pods",
         "Finding services exposed via NodePort for debugging",
     ]
+    surfaces = ("investigation", "chat")
     requires = []
     injected_params = ["kubeconfig", "kubeconfig_path", "context", "namespace"]
     input_schema = {
@@ -750,6 +767,7 @@ class KubernetesListStatefulSetsTool(BaseTool):
         "Diagnosing stuck StatefulSet rolling updates",
         "Verifying database or stateful service replica health",
     ]
+    surfaces = ("investigation", "chat")
     requires = []
     injected_params = ["kubeconfig", "kubeconfig_path", "context", "namespace"]
     input_schema = {
@@ -840,6 +858,7 @@ class KubernetesListDaemonSetsTool(BaseTool):
         "Diagnosing nodes where a DaemonSet pod is not scheduled or not ready",
         "Verifying a DaemonSet update has rolled out to all nodes",
     ]
+    surfaces = ("investigation", "chat")
     requires = []
     injected_params = ["kubeconfig", "kubeconfig_path", "context", "namespace"]
     input_schema = {
@@ -931,6 +950,7 @@ class KubernetesListIngressesTool(BaseTool):
         "Finding load balancer IPs or hostnames assigned to an ingress",
         "Diagnosing 404 or routing issues in HTTP-based services",
     ]
+    surfaces = ("investigation", "chat")
     requires = []
     injected_params = ["kubeconfig", "kubeconfig_path", "context", "namespace"]
     input_schema = {
@@ -1021,6 +1041,7 @@ class KubernetesListConfigMapsTool(BaseTool):
         "Verifying a ConfigMap has the expected keys and values after a deploy",
         "Diagnosing misconfigured endpoints, feature flags, or environment settings",
     ]
+    surfaces = ("investigation", "chat")
     requires = []
     injected_params = ["kubeconfig", "kubeconfig_path", "context", "namespace"]
     input_schema = {
@@ -1113,6 +1134,7 @@ class KubernetesGetResourceTool(BaseTool):
         "Inspecting a PVC's storage class, capacity, and bound status",
         "Getting the full node spec to check kubelet version and OS image",
     ]
+    surfaces = ("investigation", "chat")
     requires = ["resource_type", "name"]
     injected_params = ["kubeconfig", "kubeconfig_path", "context", "namespace"]
     input_schema = {
@@ -1121,10 +1143,8 @@ class KubernetesGetResourceTool(BaseTool):
             **_SHARED_KUBECONFIG_PROPS,
             "resource_type": {
                 "type": "string",
-                "description": (
-                    "Kubernetes resource type to fetch. One of: pod, deployment, statefulset, "
-                    "daemonset, service, ingress, configmap, replicaset, persistentvolumeclaim, pvc, node."
-                ),
+                "enum": _RESOURCE_TYPE_ENUM,
+                "description": "Kubernetes resource type to fetch.",
             },
             "name": {
                 "type": "string",

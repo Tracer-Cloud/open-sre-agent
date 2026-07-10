@@ -1,8 +1,10 @@
 """Kubernetes API client.
 
 Supports two auth paths:
-- File path (``kubeconfig_path``): uses ``load_kube_config`` which handles single
-  files and the standard multi-file KUBECONFIG merge semantics correctly.
+- File path (``kubeconfig_path``): uses ``load_kube_config`` for a single file.
+  For colon-separated multi-file values (e.g. ``~/.kube/config:~/.kube/dev``),
+  ``config_file=`` is omitted so the SDK reads ``KUBECONFIG`` from the
+  environment and performs the merge natively.
 - Inline YAML (``kubeconfig``): uses ``load_kube_config_from_dict`` for configs
   stored as strings (e.g. from a secrets manager).
 
@@ -28,6 +30,22 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_TAIL_LINES = 100
 _DEFAULT_LIMIT = 50
+
+# Resource types that carry env vars and require value redaction before returning to the LLM.
+_WORKLOAD_TYPES: frozenset[str] = frozenset(
+    {
+        "pod",
+        "pods",
+        "deployment",
+        "deployments",
+        "statefulset",
+        "statefulsets",
+        "daemonset",
+        "daemonsets",
+        "replicaset",
+        "replicasets",
+    }
+)
 
 # Maps resource_type string -> (api_key, method_name, is_cluster_scoped)
 _RESOURCE_DISPATCH: dict[str, tuple[str, str, bool]] = {
@@ -99,8 +117,17 @@ class KubernetesClient:
         api_config = k8s_client.Configuration()
         context = self.config.context or None
         if self.config.kubeconfig_path:
+            # load_kube_config(config_file=) only accepts a single path. A
+            # colon-separated value (the standard KUBECONFIG merge idiom, e.g.
+            # ~/.kube/config:~/.kube/dev) would be treated as a literal filename
+            # and raise FileNotFoundError. When the value contains ":", omit
+            # config_file= so the SDK reads KUBECONFIG from the environment
+            # natively (kube_config.py:48) and performs the merge itself.
+            config_file = (
+                None if ":" in self.config.kubeconfig_path else self.config.kubeconfig_path
+            )
             k8s_config.load_kube_config(
-                config_file=self.config.kubeconfig_path,
+                config_file=config_file,
                 client_configuration=api_config,
                 context=context,
             )
@@ -808,20 +835,6 @@ class KubernetesClient:
             # credential leakage to the LLM. Workload controllers (Deployment,
             # StatefulSet, DaemonSet, ReplicaSet) embed a pod template that also
             # carries env vars. Consistent with describe_pod (keys only).
-            _WORKLOAD_TYPES = frozenset(
-                {
-                    "pod",
-                    "pods",
-                    "deployment",
-                    "deployments",
-                    "statefulset",
-                    "statefulsets",
-                    "daemonset",
-                    "daemonsets",
-                    "replicaset",
-                    "replicasets",
-                }
-            )
             if rt in _WORKLOAD_TYPES:
                 _redact_env_values(resource_dict)
             return {

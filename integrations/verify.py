@@ -73,13 +73,13 @@ def verify_integrations(
 
 def format_verification_results(results: list[dict[str, str]]) -> str:
     """Render verification results as a compact terminal table."""
-    lines = ["", "  SERVICE    SOURCE       STATUS      DETAIL"]
+    lines = ["", "  SERVICE         SOURCE       STATUS      DETAIL"]
     for row in results:
         service = row.get("service", "?")
         source = row.get("source", "-")
         status = row.get("status", "?")
         detail = row.get("detail", "")
-        lines.append(f"  {service:<10}{source:<13}{status:<12}{detail}")
+        lines.append(f"  {service:<16}{source:<13}{status:<12}{detail}")
     lines.append("")
     return "\n".join(lines)
 

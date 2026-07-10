@@ -102,7 +102,7 @@ SOURCE_ALIASES: dict[str, tuple[str, ...]] = {
     "coralogix": ("coralogix",),
     "splunk": ("splunk",),
     "cloudwatch": ("cloudwatch", "lambda", "log group"),
-    "eks": ("eks",),
+    "eks": ("eks", "kubernetes", "k8s", "kubectl", "pod"),
     "kubernetes": (
         "kubernetes",
         "k8s",
