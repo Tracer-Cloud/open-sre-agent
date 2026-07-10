@@ -8,7 +8,7 @@ Seed tool calls before the loop are not counted.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from contextvars import ContextVar
+from contextvars import ContextVar, Token
 from typing import Any
 
 from config.constants.investigation import MAX_INVESTIGATION_LOOPS
@@ -76,15 +76,22 @@ def merge_loop_properties(
     return {**properties, **loop_properties(loop_count=loop_count, iteration_cap=iteration_cap)}
 
 
-def bind_investigation_loop_metrics_from_state(state: Mapping[str, Any] | None) -> None:
+def begin_investigation_loop_metrics_scope() -> Token[tuple[int, int] | None]:
+    """Isolate loop metrics for one outer investigation tracking scope."""
+    return _loop_metrics.set(None)
+
+
+def bind_investigation_loop_metrics_from_state(
+    state: Mapping[str, Any] | None,
+) -> Token[tuple[int, int] | None]:
     """Publish loop metrics for the active investigation tracking context."""
     count, cap = loop_metrics_from_state(state)
-    _loop_metrics.set((count, cap))
+    return _loop_metrics.set((count, cap))
 
 
-def clear_investigation_loop_metrics() -> None:
-    """Reset loop metrics after an investigation tracking scope ends."""
-    _loop_metrics.set(None)
+def reset_investigation_loop_metrics(token: Token[tuple[int, int] | None]) -> None:
+    """Restore loop metrics from a prior bind or scope token."""
+    _loop_metrics.reset(token)
 
 
 def bound_loop_metrics() -> tuple[int, int] | None:
@@ -93,12 +100,13 @@ def bound_loop_metrics() -> tuple[int, int] | None:
 
 
 __all__ = [
+    "begin_investigation_loop_metrics_scope",
     "bind_investigation_loop_metrics_from_state",
     "bound_loop_metrics",
-    "clear_investigation_loop_metrics",
     "investigation_iteration_cap_from_state",
     "investigation_loop_count_from_state",
     "loop_metrics_from_state",
     "loop_properties",
     "merge_loop_properties",
+    "reset_investigation_loop_metrics",
 ]

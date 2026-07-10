@@ -91,11 +91,20 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
                 }
             )
         )
-        for iteration in range(self._max_iterations):
-            self._iterations_used = iteration + 1
-            if self._run_iteration(iteration):
-                break
-        return self._finalize()
+        try:
+            for iteration in range(self._max_iterations):
+                self._iterations_used = iteration + 1
+                if self._run_iteration(iteration):
+                    break
+            return self._finalize()
+        finally:
+            note_progress = getattr(self._host, "_note_react_run_progress", None)
+            if callable(note_progress):
+                note_progress(
+                    iterations_used=self._iterations_used,
+                    executed=list(self._executed),
+                    hit_iteration_cap=self._hit_cap,
+                )
 
     def _run_iteration(self, iteration: int) -> bool:
         """Run one think -> observe step. Return True when the loop should stop."""

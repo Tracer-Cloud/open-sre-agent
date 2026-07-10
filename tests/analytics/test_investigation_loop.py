@@ -4,11 +4,15 @@ from __future__ import annotations
 
 from config.constants.investigation import MAX_INVESTIGATION_LOOPS
 from platform.analytics.investigation_loop import (
+    begin_investigation_loop_metrics_scope,
+    bind_investigation_loop_metrics_from_state,
+    bound_loop_metrics,
     investigation_iteration_cap_from_state,
     investigation_loop_count_from_state,
     loop_metrics_from_state,
     loop_properties,
     merge_loop_properties,
+    reset_investigation_loop_metrics,
 )
 
 
@@ -41,3 +45,16 @@ def test_merge_loop_properties_preserves_existing_fields() -> None:
     assert merged["investigation_id"] == "inv-1"
     assert merged["investigation_loop_count"] == 3
     assert merged["investigation_iteration_cap"] == 20
+
+
+def test_reset_investigation_loop_metrics_restores_prior_binding() -> None:
+    outer_token = begin_investigation_loop_metrics_scope()
+    try:
+        bind_token = bind_investigation_loop_metrics_from_state(
+            {"investigation_loop_count": 4, "investigation_iteration_cap": 20}
+        )
+        assert bound_loop_metrics() == (4, 20)
+        reset_investigation_loop_metrics(bind_token)
+        assert bound_loop_metrics() is None
+    finally:
+        reset_investigation_loop_metrics(outer_token)

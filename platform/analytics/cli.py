@@ -14,11 +14,12 @@ from uuid import uuid4
 from config.constants.investigation import MAX_INVESTIGATION_LOOPS
 from platform.analytics.events import Event
 from platform.analytics.investigation_loop import (
+    begin_investigation_loop_metrics_scope,
     bind_investigation_loop_metrics_from_state,
     bound_loop_metrics,
-    clear_investigation_loop_metrics,
     loop_metrics_from_state,
     merge_loop_properties,
+    reset_investigation_loop_metrics,
 )
 from platform.analytics.provider import Properties, get_analytics
 from platform.analytics.repl_context import get_cli_session_id
@@ -650,6 +651,7 @@ def track_investigation(
     """Capture investigation lifecycle once, with nested-call dedupe."""
     depth = _INVESTIGATION_TRACKING_DEPTH.get()
     token = _INVESTIGATION_TRACKING_DEPTH.set(depth + 1)
+    loop_metrics_token = begin_investigation_loop_metrics_scope() if depth == 0 else None
     tracker: InvestigationTracker
     if depth > 0:
         tracker = InvestigationTracker(shared_properties={}, enabled=False)
@@ -695,8 +697,8 @@ def track_investigation(
             capture_investigation_completed(tracker=yielded)
     finally:
         _INVESTIGATION_TRACKING_DEPTH.reset(token)
-        if depth == 0:
-            clear_investigation_loop_metrics()
+        if depth == 0 and loop_metrics_token is not None:
+            reset_investigation_loop_metrics(loop_metrics_token)
 
 
 def capture_integration_setup_started(service: str) -> None:

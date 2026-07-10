@@ -82,6 +82,23 @@ def _resolve_cli_session_id(session: SessionStore | None) -> str:
     return session_id if isinstance(session_id, str) and session_id else ""
 
 
+def _partial_result_from_agent(agent: Agent[Any]) -> AgentRunResult | None:
+    """Build a partial run result when Agent.run aborts before finalize."""
+    iterations_used = int(getattr(agent, "_react_iterations_used", 0) or 0)
+    executed = getattr(agent, "_react_executed", None)
+    if not isinstance(executed, list):
+        executed = []
+    if iterations_used == 0 and not executed:
+        return None
+    return AgentRunResult(
+        messages=[],
+        final_text="",
+        executed=executed,
+        hit_iteration_cap=bool(getattr(agent, "_react_hit_iteration_cap", False)),
+        llm_iterations_used=iterations_used,
+    )
+
+
 def emit_react_turn_completed(
     *,
     phase: ReactPhase,
@@ -143,7 +160,7 @@ def run_react_agent_with_telemetry(
     except KeyboardInterrupt:
         emit_react_turn_completed(
             phase=phase,
-            result=None,
+            result=_partial_result_from_agent(agent),
             iteration_cap=iteration_cap,
             duration_ms=int((time.monotonic() - started) * 1000),
             llm=llm,
@@ -154,7 +171,7 @@ def run_react_agent_with_telemetry(
     except Exception as exc:
         emit_react_turn_completed(
             phase=phase,
-            result=None,
+            result=_partial_result_from_agent(agent),
             iteration_cap=iteration_cap,
             duration_ms=int((time.monotonic() - started) * 1000),
             llm=llm,
