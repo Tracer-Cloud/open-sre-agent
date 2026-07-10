@@ -493,23 +493,9 @@ async def astream_investigation(
             continue
 
         if item is None:
-            from platform.analytics.investigation_loop import (
-                bind_investigation_loop_metrics_from_state,
-            )
-
-            bind_investigation_loop_metrics_from_state(initial)
             break
         if isinstance(item, InvestigationPipelineStreamError):
-            from platform.analytics.investigation_loop import (
-                bind_investigation_loop_metrics,
-                publish_loop_metrics_from_stream_failure,
-            )
-
-            bind_investigation_loop_metrics(
-                loop_count=item.loop_count,
-                iteration_cap=item.iteration_cap,
-            )
-            raise publish_loop_metrics_from_stream_failure(item) from item.cause
+            raise item
         if isinstance(item, BaseException):
             raise item
         yield item
