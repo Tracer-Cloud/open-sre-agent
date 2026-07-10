@@ -84,7 +84,25 @@ def begin_investigation_loop_metrics_scope() -> Token[tuple[int, int] | None]:
 def bind_investigation_loop_metrics_from_state(state: Mapping[str, Any] | None) -> None:
     """Publish loop metrics for the active investigation tracking context."""
     count, cap = loop_metrics_from_state(state)
-    _loop_metrics.set((count, cap))
+    bind_investigation_loop_metrics(loop_count=count, iteration_cap=cap)
+
+
+def bind_investigation_loop_metrics(*, loop_count: int, iteration_cap: int) -> None:
+    """Publish explicit loop metrics for the active investigation tracking context."""
+    _loop_metrics.set((max(0, int(loop_count)), max(1, int(iteration_cap))))
+
+
+def publish_loop_metrics_from_stream_failure(exc: BaseException) -> BaseException:
+    """Bind loop metrics on this thread when *exc* carries them, then unwrap."""
+    from tools.investigation.streaming import InvestigationPipelineStreamError
+
+    if isinstance(exc, InvestigationPipelineStreamError):
+        bind_investigation_loop_metrics(
+            loop_count=exc.loop_count,
+            iteration_cap=exc.iteration_cap,
+        )
+        return exc.cause
+    return exc
 
 
 def reset_investigation_loop_metrics(token: Token[tuple[int, int] | None]) -> None:
@@ -99,6 +117,7 @@ def bound_loop_metrics() -> tuple[int, int] | None:
 
 __all__ = [
     "begin_investigation_loop_metrics_scope",
+    "bind_investigation_loop_metrics",
     "bind_investigation_loop_metrics_from_state",
     "bound_loop_metrics",
     "investigation_iteration_cap_from_state",
@@ -106,5 +125,6 @@ __all__ = [
     "loop_metrics_from_state",
     "loop_properties",
     "merge_loop_properties",
+    "publish_loop_metrics_from_stream_failure",
     "reset_investigation_loop_metrics",
 ]

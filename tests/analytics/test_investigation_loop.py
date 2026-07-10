@@ -12,6 +12,7 @@ from platform.analytics.investigation_loop import (
     loop_metrics_from_state,
     loop_properties,
     merge_loop_properties,
+    publish_loop_metrics_from_stream_failure,
     reset_investigation_loop_metrics,
 )
 
@@ -55,3 +56,20 @@ def test_reset_investigation_loop_metrics_restores_prior_binding() -> None:
     assert bound_loop_metrics() == (4, 20)
     reset_investigation_loop_metrics(outer_token)
     assert bound_loop_metrics() is None
+
+
+def test_publish_loop_metrics_from_stream_failure_binds_on_caller_thread() -> None:
+    from tools.investigation.streaming import InvestigationPipelineStreamError
+
+    outer_token = begin_investigation_loop_metrics_scope()
+    wrapped = InvestigationPipelineStreamError(
+        cause=RuntimeError("boom"),
+        loop_count=3,
+        iteration_cap=20,
+    )
+    unwrapped = publish_loop_metrics_from_stream_failure(wrapped)
+    try:
+        assert isinstance(unwrapped, RuntimeError)
+        assert bound_loop_metrics() == (3, 20)
+    finally:
+        reset_investigation_loop_metrics(outer_token)

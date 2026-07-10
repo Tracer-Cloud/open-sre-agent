@@ -17,7 +17,10 @@ from platform.observability.errors.boundary import report_and_reraise
 from platform.observability.errors.sentry import init_sentry
 from platform.observability.trace.spans import stage_span
 from tools.investigation.state_factory import make_initial_state
-from tools.investigation.streaming import resolved_integrations_stream_payload
+from tools.investigation.streaming import (
+    InvestigationPipelineStreamError,
+    resolved_integrations_stream_payload,
+)
 
 if TYPE_CHECKING:
     # Type-only — avoids paying the agent module's heavy import cost at
@@ -296,9 +299,7 @@ async def astream_investigation(
     def _run_pipeline() -> None:
         try:
             from core.state.updates import apply_state_updates
-            from platform.analytics.investigation_loop import (
-                bind_investigation_loop_metrics_from_state,
-            )
+            from platform.analytics.investigation_loop import loop_metrics_from_state
             from tools.investigation.reporting.node import generate_report
             from tools.investigation.stages.diagnose import diagnose
             from tools.investigation.stages.gather_evidence import ConnectedInvestigationAgent
@@ -461,13 +462,18 @@ async def astream_investigation(
                 )
             )
 
-            bind_investigation_loop_metrics_from_state(state)
-
         except Exception as exc:
-            bind_investigation_loop_metrics_from_state(state)
+            loop_count, iteration_cap = loop_metrics_from_state(state)
             _capture_exception_once(exc, context="pipeline.astream_investigation")
             with contextlib.suppress(RuntimeError):
-                loop.call_soon_threadsafe(event_queue.put_nowait, exc)
+                loop.call_soon_threadsafe(
+                    event_queue.put_nowait,
+                    InvestigationPipelineStreamError(
+                        cause=exc,
+                        loop_count=loop_count,
+                        iteration_cap=iteration_cap,
+                    ),
+                )
         finally:
             with contextlib.suppress(RuntimeError):
                 loop.call_soon_threadsafe(event_queue.put_nowait, None)
@@ -487,7 +493,23 @@ async def astream_investigation(
             continue
 
         if item is None:
+            from platform.analytics.investigation_loop import (
+                bind_investigation_loop_metrics_from_state,
+            )
+
+            bind_investigation_loop_metrics_from_state(initial)
             break
+        if isinstance(item, InvestigationPipelineStreamError):
+            from platform.analytics.investigation_loop import (
+                bind_investigation_loop_metrics,
+                publish_loop_metrics_from_stream_failure,
+            )
+
+            bind_investigation_loop_metrics(
+                loop_count=item.loop_count,
+                iteration_cap=item.iteration_cap,
+            )
+            raise publish_loop_metrics_from_stream_failure(item) from item.cause
         if isinstance(item, BaseException):
             raise item
         yield item
