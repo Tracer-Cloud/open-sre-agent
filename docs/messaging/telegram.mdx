@@ -169,7 +169,11 @@ opensre integrations verify telegram
 
 This calls Telegram's [`getMe`](https://core.telegram.org/bots/api#getme) endpoint. On success it reports the bot `@username`. On failure it reports the Telegram API error message verbatim.
 
-You can also trigger a real investigation against a bundled fixture:
+<Note>
+**Verify only checks that your bot token is valid.** It does not start a listening process and does not test two-way communication. If you DM your bot at this point, it will appear online but not reply. To receive and respond to messages from Telegram, complete Step 6 below.
+</Note>
+
+You can also trigger a real delivery test against a bundled fixture:
 
 Interactive shell:
 
@@ -184,6 +188,52 @@ opensre investigate --input tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
 ```
 
 Findings should appear in the configured chat. Long reports are truncated to Telegram's 4,096-character message limit.
+
+---
+
+## Step 6: Enable two-way chat (DM the agent from Telegram)
+
+> **Skip this step if you only need outbound delivery** (alerts, cron reports, investigation findings posted to a chat). Steps 1–5 are sufficient for that.
+
+After verify succeeds, you have outbound delivery but the bot will not reply to your messages yet. Two extra steps are required:
+
+### 6a — Allow your Telegram user
+
+Find your **numeric user id** with [@userinfobot](https://t.me/userinfobot), then run:
+
+```bash
+opensre messaging allow -p telegram -u 123456789
+```
+
+Or set in `.env`:
+
+```bash
+TELEGRAM_ALLOWED_USERS=123456789   # comma-separated for multiple users
+```
+
+<Warning>
+Use the numeric user id (Telegram's `from.id`), not a `@username`. Only numeric ids can match inbound messages; a handle will silently never match.
+</Warning>
+
+### 6b — Start the gateway daemon
+
+```bash
+opensre gateway start
+```
+
+This runs the background daemon that listens for inbound Telegram DMs and routes them to the OpenSRE agent. Once it is running, DM your bot from Telegram — use `/new` for a fresh session or `/help` for built-in commands.
+
+Useful follow-up commands:
+
+| Command | What it does |
+|---|---|
+| `opensre gateway status` | Show daemon and component state |
+| `opensre gateway logs -f` | Follow live gateway logs |
+| `opensre gateway stop` | Stop the daemon |
+
+<Note>
+The gateway uses long polling — no public HTTPS URL or port forwarding is required for local use. See the Two-way chat gateway section below for deployment and remote-host setup.
+</Note>
 
 ---
 
