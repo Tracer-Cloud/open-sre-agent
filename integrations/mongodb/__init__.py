@@ -12,7 +12,7 @@ import os
 from dataclasses import dataclass
 from typing import Any
 
-from pydantic import Field, field_validator
+from pydantic import Field, ValidationError, field_validator
 
 from config.strict_config import StrictConfigModel
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
@@ -477,7 +477,11 @@ def classify(
                 "tls": credentials.get("tls", True),
             }
         )
+    except ValidationError as exc:
+        report_classify_failure(exc, logger=logger, integration="mongodb", record_id=record_id)
+        return None, None
     except Exception as exc:
+        logger.warning("unexpected error classifying mongodb config", exc_info=True)
         report_classify_failure(exc, logger=logger, integration="mongodb", record_id=record_id)
         return None, None
     if cfg.connection_string:

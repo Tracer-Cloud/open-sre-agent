@@ -21,7 +21,7 @@ import httpx
 from mcp import ClientSession, StdioServerParameters, types  # type: ignore[import-not-found]
 from mcp.client.sse import sse_client  # type: ignore[import-not-found]
 from mcp.client.stdio import stdio_client  # type: ignore[import-not-found]
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, ValidationError, field_validator, model_validator
 from rich.console import Console, Group
 from rich.panel import Panel
 from rich.table import Table
@@ -1405,7 +1405,11 @@ def classify(
                 "integration_id": record_id,
             }
         )
+    except ValidationError as exc:
+        report_classify_failure(exc, logger=logger, integration="github", record_id=record_id)
+        return None, None
     except Exception as exc:
+        logger.warning("unexpected error classifying github config", exc_info=True)
         report_classify_failure(exc, logger=logger, integration="github", record_id=record_id)
         return None, None
     return cfg, "github"
