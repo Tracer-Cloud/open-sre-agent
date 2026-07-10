@@ -89,8 +89,14 @@ async def test_astream_surfaces_error_when_deferred_import_fails(
     # runtime (e.g. a stage transitively importing a missing/broken SDK).
     monkeypatch.delattr(_updates, "apply_state_updates")
 
+    # The `async for` only terminates once the pipeline delivers its None
+    # sentinel; if the handler raised or skipped the finally, this would hang.
     with pytest.raises(InvestigationPipelineStreamError) as exc_info:
         async for _event in astream_investigation("alert text"):
             pass
 
     assert isinstance(exc_info.value.cause, ImportError)
+    # Metrics could not be read (import failed before any stage ran), so the
+    # handler falls back to the 0/0 defaults rather than raising.
+    assert exc_info.value.loop_count == 0
+    assert exc_info.value.iteration_cap == 0

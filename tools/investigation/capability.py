@@ -297,16 +297,15 @@ async def astream_investigation(
             )
 
     def _run_pipeline() -> None:
-        # Bind the two symbols the ``except`` handler needs BEFORE the try, so a
-        # failure in the deferred stage imports below can't leave them unbound
-        # and make the handler itself raise -- which would skip Sentry capture
-        # and the error-queue delivery, leaving the consumer to see a clean
-        # (empty) stream end instead of the real failure.
-        from platform.analytics.investigation_loop import loop_metrics_from_state
-
+        # Pure bindings before the try so nothing that can raise sits outside the
+        # try/finally: if it did and it raised, the finally sentinel below would
+        # never run and the consumer's poll loop would hang. Every import stays
+        # inside the try; the handler tolerates them not having run yet (below).
         state = initial
+        loop_count, iteration_cap = 0, 0
         try:
             from core.state.updates import apply_state_updates
+            from platform.analytics.investigation_loop import loop_metrics_from_state
             from tools.investigation.reporting.node import generate_report
             from tools.investigation.stages.diagnose import diagnose
             from tools.investigation.stages.gather_evidence import ConnectedInvestigationAgent
@@ -468,7 +467,11 @@ async def astream_investigation(
             )
 
         except Exception as exc:
-            loop_count, iteration_cap = loop_metrics_from_state(state)
+            # loop_metrics_from_state may be unbound if the failure was its own
+            # (or an earlier) import; fall back to the 0/0 defaults so the error
+            # is still captured and delivered rather than the handler raising.
+            with contextlib.suppress(Exception):
+                loop_count, iteration_cap = loop_metrics_from_state(state)
             _capture_exception_once(exc, context="pipeline.astream_investigation")
             with contextlib.suppress(RuntimeError):
                 loop.call_soon_threadsafe(
