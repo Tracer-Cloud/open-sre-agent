@@ -29,10 +29,13 @@ def capture_cli_invoked(properties: Properties | None = None) -> None:
     _capture(properties)
 
 
-def shutdown_analytics(*, flush: bool = True) -> None:
+def shutdown_analytics(*, flush: bool = False, timeout: float | None = None) -> None:
     from platform.analytics.provider import shutdown_analytics as _shutdown
 
-    _shutdown(flush=flush)
+    if timeout is None:
+        _shutdown(flush=flush)
+    else:
+        _shutdown(flush=flush, timeout=timeout)
 
 
 def build_cli_invoked_properties(

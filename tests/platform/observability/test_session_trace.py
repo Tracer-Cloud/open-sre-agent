@@ -87,17 +87,43 @@ def test_sample_thread_snapshot_lists_current_thread() -> None:
 def test_sample_resource_snapshot_includes_gc_counts() -> None:
     snap = sample_resource_snapshot()
     assert {"gc_gen0", "gc_gen1", "gc_gen2"} <= snap.keys()
-    # POSIX: rss_mb present; Windows (no ``resource``): omitted.
-    if process_stats._resource is not None:
-        assert "rss_mb" in snap
+    # Prefer current RSS (Linux /proc); peak watermark is separate.
+    if "rss_mb" in snap:
         assert isinstance(snap["rss_mb"], float)
+        assert snap["rss_mb"] > 0
+    if process_stats._resource is not None:
+        assert "rss_peak_mb" in snap
+        assert isinstance(snap["rss_peak_mb"], float)
 
 
-def test_sample_resource_snapshot_skips_rss_without_resource(
+def test_sample_resource_snapshot_current_rss_not_peak(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Windows / non-POSIX: ``resource`` is absent; snapshot must still succeed."""
+    """``rss_mb`` must be current RSS; ``rss_peak_mb`` is the high-water mark."""
+    monkeypatch.setattr(process_stats, "_current_rss_mb", lambda: 50.0)
+
+    class _FakeResource:
+        RUSAGE_SELF = 0
+
+        @staticmethod
+        def getrusage(_who: int) -> object:
+            # Peak higher than current (bytes on darwin path via normalize)
+            return type("RU", (), {"ru_maxrss": 200 * 1024 * 1024})()
+
+    monkeypatch.setattr(process_stats, "_resource", _FakeResource)
+    monkeypatch.setattr(process_stats.sys, "platform", "darwin")
+    snap = sample_resource_snapshot()
+    assert snap["rss_mb"] == 50.0
+    assert snap["rss_peak_mb"] == 200.0
+    assert snap.get("rss_is_peak") is not True
+
+
+def test_sample_resource_snapshot_skips_rss_without_backends(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No resource / no Linux /proc → snapshot still succeeds without rss_mb."""
     monkeypatch.setattr(process_stats, "_resource", None)
+    monkeypatch.setattr(process_stats.sys, "platform", "win32")
     snap = sample_resource_snapshot()
     assert "rss_mb" not in snap
     assert {"gc_gen0", "gc_gen1", "gc_gen2"} <= snap.keys()

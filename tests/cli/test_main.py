@@ -357,6 +357,10 @@ def test_main_emits_first_run_install_before_cli_invoked(
 
     assert exit_code == 0
     assert "OpenSRE is in Public Beta" in capsys.readouterr().err
+    # CLI exit is non-blocking; wait for the daemon worker to finish posts.
+    analytics = provider._instance
+    if analytics is not None and analytics._worker is not None:
+        analytics._worker.join(timeout=2.0)
     assert [payload["json"]["event"] for payload in posted_payloads] == [
         Event.INSTALL_DETECTED.value,
         Event.CLI_INVOKED.value,
