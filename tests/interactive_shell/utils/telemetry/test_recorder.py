@@ -542,6 +542,18 @@ def test_prompt_recorder_llm_provider_failure_reports_attempted_model(
     assert captured[0]["$ai_output_choices"][0]["content"] == "Anthropic authentication failed."
 
 
+def test_prompt_recorder_flush_resolves_error_message_after_empty_set_response(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """Flush-time fallback tolerates set_response before set_error."""
+    captured: list[dict[str, object]] = []
+    recorder = _posthog_recorder(monkeypatch, tmp_path, text="hi", captured=captured)
+    recorder.set_response("")
+    recorder.set_error("assistant_error", "provider failed")
+    recorder.flush()
+    assert captured[0]["$ai_output_choices"][0]["content"] == "provider failed"
+
+
 def test_prompt_recorder_terminal_error_kinds_keep_terminal_sentinel(
     monkeypatch, tmp_path: Path
 ) -> None:

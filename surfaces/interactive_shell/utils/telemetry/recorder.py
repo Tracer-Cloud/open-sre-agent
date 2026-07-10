@@ -197,9 +197,7 @@ class PromptRecorder:
     def set_response(self, text: str, run: LlmRunInfo | None = None) -> None:
         cleaned = _sanitize_text(text, config=self._config)
         if not cleaned.strip():
-            # A failed turn may produce no assistant text; surface the error
-            # message as the assistant content so analytics can display it.
-            cleaned = self._error_message or _fallback_terminal_response(prompt=self._prompt)
+            cleaned = ""
         self._response = cleaned
         if run is None:
             self._latency_ms = int((time.monotonic() - self._start) * 1000)
@@ -210,10 +208,19 @@ class PromptRecorder:
         self._input_tokens = run.input_tokens
         self._output_tokens = run.output_tokens
 
+    def _response_for_emit(self) -> str:
+        """Resolve the assistant text written to sinks at flush time."""
+        if self._response.strip():
+            return self._response
+        if self._error_message.strip():
+            return self._error_message
+        return _fallback_terminal_response(prompt=self._prompt)
+
     def flush(self) -> None:
         if self._flushed:
             return
         self._flushed = True
+        response_text = self._response_for_emit()
         latency_ms = self._latency_ms or int((time.monotonic() - self._start) * 1000)
         record = {
             "ts": datetime.now(UTC).isoformat(),
@@ -221,7 +228,7 @@ class PromptRecorder:
             "turn_id": self._turn_id,
             "turn_kind": self._turn_kind,
             "prompt": self._prompt,
-            "response": self._response,
+            "response": response_text,
             "model": self._model or "",
             "provider": self._provider or "",
             "latency_ms": latency_ms,
@@ -242,7 +249,7 @@ class PromptRecorder:
                 self._session_id,
                 session_kind,
                 self._prompt,
-                response=self._response or None,
+                response=response_text or None,
                 turn_id=self._turn_id,
                 model=self._model or None,
                 provider=self._provider or None,
@@ -269,7 +276,7 @@ class PromptRecorder:
                     "$ai_output_choices": [
                         {
                             "role": "assistant",
-                            "content": self._response,
+                            "content": response_text,
                         }
                     ],
                     "$ai_latency": (

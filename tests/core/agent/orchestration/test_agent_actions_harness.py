@@ -481,13 +481,49 @@ def test_llm_invoke_failure_on_conversational_input_stages_attempted_model() -> 
     assert staged.provider == "bedrock"
 
 
+def test_llm_invoke_failure_uses_built_client_without_second_factory_call() -> None:
+    """Invoke-time failure must stage identity from the client that actually failed."""
+    error = "Bedrock model unavailable"
+    factory_calls = 0
+
+    class _FailingInvokeLLM:
+        _model = "us.anthropic.claude-sonnet-4-6"
+        _provider_label = "Bedrock"
+
+        def tool_schemas(self, _tools: list[Any]) -> list[dict[str, Any]]:
+            return []
+
+        def invoke(self, *_args: Any, **_kwargs: Any) -> Any:
+            raise RuntimeError(error)
+
+    client = _FailingInvokeLLM()
+
+    def _factory() -> _FailingInvokeLLM:
+        nonlocal factory_calls
+        factory_calls += 1
+        return client
+
+    session = Session()
+    run_action_tool_turn(
+        "hi",
+        session,
+        Console(force_terminal=False),
+        deps=ToolCallingDeps(llm_factory=_factory),
+    )
+
+    assert factory_calls == 1
+    staged = session.terminal.pop_pending_turn_llm()
+    assert staged is not None
+    assert staged.model == client._model
+
+
 def test_llm_failure_on_literal_slash_input_stays_terminal() -> None:
     """Explicit /slash and !shell turns must keep the terminal-action telemetry shape."""
     from core.agent_harness.turns.action_driver import _stage_action_llm_failure
 
     for terminal_input in ("/help", "!ls -la"):
         session = Session()
-        _stage_action_llm_failure(terminal_input, session, deps=None, error_text="boom")
+        _stage_action_llm_failure(terminal_input, session, client=None, error_text="boom")
         assert session.terminal.pop_pending_turn_error() is None
         assert session.terminal.pop_pending_turn_llm() is None
 

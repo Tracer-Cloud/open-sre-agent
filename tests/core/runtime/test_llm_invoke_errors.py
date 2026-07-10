@@ -83,6 +83,8 @@ def test_cli_auth_required_uses_unknown_provider_when_attr_missing() -> None:
         ("Anthropic authentication failed.", "auth"),
         ("openai request forbidden: 403", "auth"),
         ("invalid api key provided", "auth"),
+        ("Incorrect api_key value provided", "auth"),
+        ("Your api_key is invalid", "auth"),
         ("anthropic CLI timed out after 300s.", "provider_error"),
         ("something unexpected exploded", "provider_error"),
     ],

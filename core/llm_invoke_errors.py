@@ -93,7 +93,7 @@ LLM_PROVIDER_FAILURE_KINDS = frozenset(
 )
 
 _NOT_CONFIGURED_PATTERNS = (
-    "api_key",  # env-var style, e.g. "requires ANTHROPIC_API_KEY to be set"
+    "_api_key",  # env-var style, e.g. "requires ANTHROPIC_API_KEY to be set"
     "api key is not set",
     "missing api key",
     "not available for your account",
@@ -113,6 +113,9 @@ _AUTH_PATTERNS = (
     "forbidden",
     "invalid api key",
     "incorrect api key",
+    "invalid api_key",
+    "incorrect api_key",
+    "api_key is invalid",
     "x-api-key",
 )
 
@@ -125,14 +128,14 @@ def classify_provider_error_kind(message: str) -> str:
     without regexing over response text.
     """
     text = message.lower()
+    if any(pattern in text for pattern in _AUTH_PATTERNS):
+        return "auth"
+    if any(pattern in text for pattern in _QUOTA_PATTERNS):
+        return "quota"
     if any(pattern in text for pattern in _NOT_CONFIGURED_PATTERNS) or (
         "model" in text and "not found" in text
     ):
         return "not_configured"
-    if any(pattern in text for pattern in _QUOTA_PATTERNS):
-        return "quota"
-    if any(pattern in text for pattern in _AUTH_PATTERNS):
-        return "auth"
     return "provider_error"
 
 

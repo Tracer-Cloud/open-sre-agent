@@ -85,6 +85,7 @@ INVESTIGATION_DISPATCH_TOOL_NAMES: frozenset[str] = frozenset(
 class ActionTurnPlan:
     agent: Agent[Any]
     user_message: str
+    llm_client: Any | None = None
 
 
 @dataclass(frozen=True)
@@ -255,7 +256,7 @@ def _stage_action_llm_failure(
     message: str,
     session: SessionStore,
     *,
-    deps: ToolCallingDeps | None,
+    client: Any | None,
     error_text: str,
 ) -> None:
     """Stage telemetry for an action-agent LLM failure on conversational input.
@@ -271,14 +272,6 @@ def _stage_action_llm_failure(
     from core.agent_harness.turns.orchestrator import stage_turn_error, stage_turn_llm_failure
 
     stage_turn_error(session, "action_agent_error", error_text)
-    factory = deps.llm_factory if deps is not None and deps.llm_factory else default_llm_factory
-    try:
-        # A build-time failure (missing key, bad config) raises again here and
-        # leaves the model unresolved; an invoke-time failure returns the same
-        # (cached) client so the attempted model/provider can be reported.
-        client = factory()
-    except Exception:
-        client = None
     stage_turn_llm_failure(session, client=client)
 
 
@@ -388,7 +381,11 @@ def _build_action_agent(
         tool_hooks=tool_hooks,
         on_runtime_event=runtime_event_callback_from_observer(observer),
     )
-    return ActionTurnPlan(agent=build_agent(config), user_message=user_message)
+    return ActionTurnPlan(
+        agent=build_agent(config),
+        user_message=user_message,
+        llm_client=None if isinstance(llm, _StaticToolCallLLM) else llm,
+    )
 
 
 def run_action_agent_turn(
@@ -459,6 +456,7 @@ def _run_action_agent_turn_body(
         len(resolved_integrations),
     )
 
+    plan: ActionTurnPlan | None = None
     try:
         # LLM selection inside _build_action_agent is inside the try so a factory
         # raise (e.g. provider unavailable) is caught and rendered like a run-loop
@@ -489,7 +487,12 @@ def _run_action_agent_turn_body(
         error_text = str(exc)
         if error_reporter is not None:
             error_reporter.report(exc, context="core.agent_harness.action_driver", expected=True)
-        _stage_action_llm_failure(message, session, deps=deps, error_text=error_text)
+        _stage_action_llm_failure(
+            message,
+            session,
+            client=plan.llm_client if plan is not None else None,
+            error_text=error_text,
+        )
         _render_tool_calling_error(output, error_text)
         _persist_tool_calling_error(session, message, error_text)
         session.record("cli_agent", message, ok=False)
