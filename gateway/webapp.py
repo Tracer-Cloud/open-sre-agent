@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hmac
 import json
+import logging
 import os
 from datetime import UTC, datetime
 from typing import Any
@@ -39,6 +40,8 @@ from tools.investigation.capability import (  # noqa: E402
 )
 
 init_sentry(entrypoint="webapp")
+
+logger = logging.getLogger(__name__)
 
 # Cap on POST body size accepted from any caller (authed or not). Realistic
 # alert payloads top out around 50 KB, so 1 MiB is ~20× headroom.
@@ -198,11 +201,16 @@ def investigate(req: InvestigateRequest, request: Request) -> InvestigateRespons
             raw_alert=req.raw_alert,
             investigation_metadata=investigation_metadata,
         )
+        return InvestigateResponse(**result)
     except Exception as exc:
+        # Full detail (which may include internal paths, stack context, or
+        # upstream error bodies) goes to logs/Sentry only. The HTTP response
+        # carries just the exception type so it stays actionable without
+        # exposing internals to the caller (CodeQL: information exposure
+        # through an exception).
+        logger.exception("Investigation failed")
         capture_exception(exc, context="gateway.webapp.investigate")
         return JSONResponse(
-            {"error": f"{type(exc).__name__}: {exc}"},
+            {"error": f"investigation failed: {type(exc).__name__}"},
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         )
-
-    return InvestigateResponse(**result)

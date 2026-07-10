@@ -100,18 +100,37 @@ def test_investigate_missing_raw_alert_returns_422(client: TestClient) -> None:
     assert resp.status_code == 422
 
 
-def test_investigate_pipeline_failure_returns_503(
+def test_investigate_pipeline_failure_returns_503_without_leaking_exception_text(
     monkeypatch: pytest.MonkeyPatch, client: TestClient
 ) -> None:
     def _boom(**_: Any) -> dict[str, Any]:
-        raise RuntimeError("llm unavailable")
+        raise RuntimeError("llm unavailable at s3://internal-bucket/creds.json")
 
     monkeypatch.setattr(webapp, "run_investigation_payload", _boom)
 
     resp = client.post("/investigate", json={"raw_alert": {"alert_name": "x"}})
 
     assert resp.status_code == 503
-    assert "llm unavailable" in resp.json()["error"]
+    body = resp.json()
+    assert body["error"] == "investigation failed: RuntimeError"
+    assert "llm unavailable" not in body["error"]
+    assert "s3://internal-bucket" not in body["error"]
+
+
+def test_investigate_malformed_pipeline_result_returns_503(
+    monkeypatch: pytest.MonkeyPatch, client: TestClient
+) -> None:
+    """A result dict that fails InvestigateResponse validation is caught too."""
+
+    def _malformed(**_: Any) -> dict[str, Any]:
+        return {"report": None, "problem_md": "p", "root_cause": "c"}
+
+    monkeypatch.setattr(webapp, "run_investigation_payload", _malformed)
+
+    resp = client.post("/investigate", json={"raw_alert": {"alert_name": "x"}})
+
+    assert resp.status_code == 503
+    assert resp.json()["error"] == "investigation failed: ValidationError"
 
 
 def test_investigate_non_loopback_without_token_returns_403(
