@@ -199,7 +199,15 @@ After verify succeeds, you have outbound delivery but the bot will not reply to 
 
 ### 6a — Allow your Telegram user
 
-Find your **numeric user id** with [@userinfobot](https://t.me/userinfobot), then run:
+Find your **numeric user id** with [@userinfobot](https://t.me/userinfobot), then:
+
+Interactive shell:
+
+```text
+/messaging allow -p telegram -u 123456789
+```
+
+CLI:
 
 ```bash
 opensre messaging allow -p telegram -u 123456789
@@ -212,7 +220,13 @@ TELEGRAM_ALLOWED_USERS=123456789   # comma-separated for multiple users
 ```
 
 <Warning>
-Use the numeric user id (Telegram's `from.id`), not a `@username`. Only numeric ids can match inbound messages; a handle will silently never match.
+  Use the **numeric user id** (Telegram's `from.id`), not a `@username` and not
+  the bot handle. Inbound authorization only ever matches the numeric id, so a
+  `@handle` produces an allow-list entry that can never match a real sender — you
+  will see `User <id> is not in the allowed users list` for every message. The CLI
+  now rejects non-numeric Telegram ids, but older entries may still be wrong; check
+  with `/messaging status -p telegram` (or `opensre messaging status -p telegram`)
+  and re-add with the numeric id.
 </Warning>
 
 ### 6b — Start the gateway daemon
