@@ -169,9 +169,7 @@ def run_session_alert_payload(
                     )
 
                     thread.join(timeout=5)
-                    reraise_investigation_failure(
-                        publish_loop_metrics_from_stream_failure(item)
-                    )
+                    reraise_investigation_failure(publish_loop_metrics_from_stream_failure(item))
                 if item is None:
                     return
                 yield item
