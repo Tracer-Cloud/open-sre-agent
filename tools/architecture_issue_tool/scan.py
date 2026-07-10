@@ -14,6 +14,7 @@ from tools.architecture_issue_tool.models import (
 )
 from tools.architecture_issue_tool.refactor_tasks import build_refactor_tasks, dedupe_violations
 from tools.architecture_issue_tool.repo_workspace import RepoWorkspace
+from tools.architecture_issue_tool.scanners._paths import iter_py_files
 from tools.architecture_issue_tool.scanners.compatibility_shims import scan_compatibility_shims
 from tools.architecture_issue_tool.scanners.import_checks import scan_import_violations
 from tools.architecture_issue_tool.scanners.module_placement import scan_module_placement
@@ -27,9 +28,9 @@ _DEFAULT_CATEGORIES: tuple[ViolationKind, ...] = (
     "misplaced_module",
 )
 
-_LAYER_SKIP_MARKERS = (
-    "no import-linter config found",
-    "lint-imports is not installed",
+_IMPORT_SKIP_MARKERS = (
+    "no supported source files found",
+    "import graph build failed",
 )
 
 
@@ -50,20 +51,44 @@ def _kind_counts(violations: list[ArchitectureViolation]) -> dict[str, int]:
     return dict(Counter(violation.kind for violation in violations))
 
 
+def _has_python_files(clone_root: Path) -> bool:
+    return any(iter_py_files(clone_root, [clone_root]))
+
+
+def _has_opensre_layout(clone_root: Path) -> bool:
+    return (clone_root / "tools").is_dir() or (clone_root / "integrations").is_dir()
+
+
 def _import_categories_skipped(
-    clone_root: Path,
     selected: list[ViolationKind],
     import_warnings: list[str],
 ) -> list[ViolationKind]:
     skipped: list[ViolationKind] = []
-    if "layer_import" in selected and any(
-        any(marker in warning for marker in _LAYER_SKIP_MARKERS) for warning in import_warnings
-    ):
+    if not any(marker in warning for marker in _IMPORT_SKIP_MARKERS for warning in import_warnings):
+        return skipped
+    if "layer_import" in selected:
         skipped.append("layer_import")
     if "direct_import" in selected:
-        script = clone_root / ".github" / "ci" / "check_direct_imports.py"
-        if not script.is_file():
-            skipped.append("direct_import")
+        skipped.append("direct_import")
+    return skipped
+
+
+def _python_only_categories_skipped(
+    clone_root: Path,
+    selected: list[ViolationKind],
+    warnings: list[str],
+) -> list[ViolationKind]:
+    skipped: list[ViolationKind] = []
+    has_python = _has_python_files(clone_root)
+    if "oversized_file" in selected and not has_python:
+        skipped.append("oversized_file")
+        warnings.append("oversized_file checks skipped: no Python files found")
+    if "compatibility_shim" in selected and not has_python:
+        skipped.append("compatibility_shim")
+        warnings.append("compatibility_shim checks skipped: no Python files found")
+    if "misplaced_module" in selected and not _has_opensre_layout(clone_root):
+        skipped.append("misplaced_module")
+        warnings.append("misplaced_module checks skipped: OpenSRE layout markers not found")
     return skipped
 
 
@@ -115,18 +140,21 @@ def run_architecture_scan(
             violations.extend(v for v in import_violations if v.kind == "direct_import")
         warnings.extend(import_warnings)
 
-    if "oversized_file" in selected:
+    python_only_skipped = _python_only_categories_skipped(clone_root, selected, warnings)
+
+    if "oversized_file" in selected and "oversized_file" not in python_only_skipped:
         violations.extend(scan_oversized_files(clone_root, max_lines=max_lines))
 
-    if "compatibility_shim" in selected:
+    if "compatibility_shim" in selected and "compatibility_shim" not in python_only_skipped:
         violations.extend(scan_compatibility_shims(clone_root))
 
-    if "misplaced_module" in selected:
+    if "misplaced_module" in selected and "misplaced_module" not in python_only_skipped:
         violations.extend(scan_module_placement(clone_root))
 
     deduped = dedupe_violations(violations)
     tasks = build_refactor_tasks(deduped)
-    categories_skipped = _import_categories_skipped(clone_root, selected, import_warnings)
+    categories_skipped = _import_categories_skipped(selected, import_warnings)
+    categories_skipped.extend(python_only_skipped)
     summary = _build_scan_summary(
         violations=deduped,
         tasks=len(tasks),

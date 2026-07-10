@@ -17,6 +17,8 @@ invent findings.
 
 - List `scan_summary.warnings` and `scan_summary.categories_skipped`.
 - Explain which checks did not run and what that means for confidence.
+- Import/layer checks use polyglot tree-sitter extraction; oversized/shim/placement
+  checks are Python/OpenSRE-specific when those categories are selected.
 - Never call the repo "clean" when `coverage_complete` is false.
 
 ### Findings by severity

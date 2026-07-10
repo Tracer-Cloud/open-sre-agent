@@ -6,53 +6,21 @@ from pathlib import Path
 from unittest.mock import patch
 
 from tools.architecture_issue_tool.scanners.compatibility_shims import scan_compatibility_shims
-from tools.architecture_issue_tool.scanners.import_checks import (
-    parse_direct_imports_output,
-    parse_lint_imports_output,
-    scan_import_violations,
-)
+from tools.architecture_issue_tool.scanners.import_checks import scan_import_violations
 from tools.architecture_issue_tool.scanners.module_placement import scan_module_placement
 from tools.architecture_issue_tool.scanners.oversized_files import scan_oversized_files
 
-_LINT_IMPORTS_FIXTURE = """
-Broken contracts
-----------------
-
-OpenSRE package layers (transitive)
------------------------------------
-
-core is not allowed to import integrations:
-
-- core.llm.factory -> integrations.llm_cli.registry (l.92)
-
-tools is not allowed to import surfaces:
-
-- tools.interactive_shell.actions.slash -> surfaces.interactive_shell.ui (l.20)
-"""
+_FIXTURE_ROOT = (
+    Path(__file__).resolve().parents[1] / "fixtures" / "architecture_audit" / "polyglot_repo"
+)
 
 
-def test_parse_lint_imports_output_extracts_edges() -> None:
-    edges = parse_lint_imports_output(_LINT_IMPORTS_FIXTURE)
+def test_scan_import_violations_uses_tree_sitter_graph() -> None:
+    violations, warnings = scan_import_violations(_FIXTURE_ROOT)
 
-    assert len(edges) == 2
-    assert edges[0].source_module == "core.llm.factory"
-    assert edges[0].target_module == "integrations.llm_cli.registry"
-    assert edges[0].line == 92
-    assert "core is not allowed to import integrations" in edges[0].rule
-
-
-def test_parse_direct_imports_output_extracts_edges() -> None:
-    stdout = (
-        "FAIL: 1 forbidden module-level direct import edge(s):\n"
-        "  core.agent.foo -> surfaces.interactive_shell.ui\n\n"
-        "FAIL: 1 forbidden nested direct import edge(s):\n"
-        "  tools.interactive_shell.actions.slash -> surfaces.interactive_shell.ui (line 16)\n"
-    )
-
-    edges = parse_direct_imports_output(stdout)
-
-    assert len(edges) == 2
-    assert edges[1].line == 16
+    assert any(violation.kind == "layer_import" for violation in violations)
+    assert any(violation.kind == "direct_import" for violation in violations)
+    assert warnings == []
 
 
 def test_scan_oversized_files_flags_large_python_file(tmp_path: Path) -> None:
@@ -100,15 +68,11 @@ def test_scan_module_placement_flags_legacy_vendors_import(tmp_path: Path) -> No
     assert any(v.evidence.get("package") == "vendors" for v in violations)
 
 
-@patch("tools.architecture_issue_tool.scanners.import_checks._scan_direct_imports")
-@patch("tools.architecture_issue_tool.scanners.import_checks._scan_layer_imports")
-def test_scan_import_violations_combines_results(
-    mock_layer,
-    mock_direct,
-) -> None:
+@patch("tools.architecture_issue_tool.scanners.import_checks.scan_import_graph")
+def test_scan_import_violations_delegates_to_import_graph(mock_scan) -> None:
     from tools.architecture_issue_tool.models import ArchitectureViolation
 
-    mock_layer.return_value = (
+    mock_scan.return_value = (
         [
             ArchitectureViolation(
                 id="v-1",
@@ -119,23 +83,15 @@ def test_scan_import_violations_combines_results(
                 fix_direction="fix",
             )
         ],
-        ["layer warning"],
-    )
-    mock_direct.return_value = (
-        [
-            ArchitectureViolation(
-                id="v-2",
-                kind="direct_import",
-                severity="p1",
-                title="direct",
-                evidence={"edge": "c -> d"},
-                fix_direction="fix",
-            )
-        ],
-        [],
+        ["warning"],
     )
 
-    violations, warnings = scan_import_violations(Path("/tmp/repo"))
+    violations, warnings = scan_import_violations(Path("/tmp/repo"), strict_layers=False)
 
-    assert len(violations) == 2
-    assert warnings == ["layer warning"]
+    mock_scan.assert_called_once_with(
+        Path("/tmp/repo"),
+        strict_layers=False,
+        include_baselines=False,
+    )
+    assert len(violations) == 1
+    assert warnings == ["warning"]

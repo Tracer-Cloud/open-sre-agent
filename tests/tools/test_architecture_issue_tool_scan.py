@@ -9,20 +9,27 @@ from tools.architecture_issue_tool.models import ArchitectureViolation
 from tools.architecture_issue_tool.repo_workspace import RepoWorkspace
 from tools.architecture_issue_tool.scan import run_architecture_scan
 
+_FIXTURE_ROOT = (
+    Path(__file__).resolve().parents[1] / "fixtures" / "architecture_audit" / "polyglot_repo"
+)
+
 
 def test_run_architecture_scan_marks_skipped_import_categories(tmp_path: Path) -> None:
     workspace = RepoWorkspace(owner="org", repo="repo", ref="main", root=tmp_path)
 
     with patch(
         "tools.architecture_issue_tool.scan.scan_import_violations",
-        return_value=([], ["no import-linter config found in cloned repository"]),
+        return_value=([], ["no supported source files found in cloned repository"]),
     ):
-        result = run_architecture_scan(workspace)
+        result = run_architecture_scan(
+            workspace,
+            categories=["layer_import", "direct_import"],
+        )
 
     summary = result["scan_summary"]
     assert summary["categories_skipped"] == ["layer_import", "direct_import"]
     assert summary["coverage_complete"] is False
-    assert "no import-linter config found" in summary["warnings"][0]
+    assert "no supported source files found" in summary["warnings"][0]
 
 
 def test_run_architecture_scan_populates_severity_and_kind_counts(tmp_path: Path) -> None:
@@ -48,9 +55,6 @@ def test_run_architecture_scan_populates_severity_and_kind_counts(tmp_path: Path
 
 def test_run_architecture_scan_includes_import_violation_counts(tmp_path: Path) -> None:
     workspace = RepoWorkspace(owner="org", repo="repo", ref="main", root=tmp_path)
-    ci_dir = tmp_path / ".github" / "ci"
-    ci_dir.mkdir(parents=True)
-    (ci_dir / "check_direct_imports.py").write_text("# stub\n", encoding="utf-8")
 
     layer_violation = ArchitectureViolation(
         id="v-layer",
@@ -80,3 +84,20 @@ def test_run_architecture_scan_includes_import_violation_counts(tmp_path: Path) 
     assert summary["kind_counts"] == {"layer_import": 1, "direct_import": 1}
     assert summary["categories_skipped"] == []
     assert summary["coverage_complete"] is True
+
+
+def test_run_architecture_scan_on_polyglot_fixture() -> None:
+    workspace = RepoWorkspace(
+        owner="fixture",
+        repo="polyglot",
+        ref="main",
+        root=_FIXTURE_ROOT,
+    )
+
+    result = run_architecture_scan(workspace, categories=["layer_import", "direct_import"])
+
+    summary = result["scan_summary"]
+    assert summary["categories_skipped"] == []
+    assert summary["coverage_complete"] is True
+    assert summary["kind_counts"].get("layer_import", 0) > 0
+    assert summary["kind_counts"].get("direct_import", 0) > 0

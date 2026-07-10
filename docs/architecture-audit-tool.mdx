@@ -31,21 +31,25 @@ return pre-rendered Markdown.
 | `owner` | required | GitHub organization or user |
 | `repo` | required | Repository name |
 | `ref` | remote default branch | Branch, tag, or SHA to clone |
-| `include_baselines` | `false` | When `true`, include import-linter baselined debt |
-| `strict_layers` | `true` | Prefer `.importlinter.strict` when present |
+| `include_baselines` | `false` | When `true`, report allowlisted import edges instead of suppressing them |
+| `strict_layers` | `true` | When `true`, evaluate transitive cross-layer reachability; when `false`, direct edges only |
 | `max_lines` | `500` | Oversized-file threshold |
 | `categories` | all scanners | Limit to specific violation kinds |
 
 ## Coverage and limitations
 
-- **Layer import checks** require import-linter config (`.importlinter` or
-  `.importlinter.strict`) in the target repository.
-- **Direct import checks** run when the clone includes
-  `.github/ci/check_direct_imports.py`.
-- **Oversized files, shims, and placement** heuristics run when relevant Python
-  packages exist in the clone.
+- **Layer and direct import checks** use tree-sitter import extraction across supported
+  languages (Python, Go, TypeScript/JavaScript, Rust, Java, and more). No import-linter
+  config or Python-only layout is required in the target repository.
+- **Oversized files, shims, and placement** heuristics are Python/OpenSRE-specific and
+  are skipped gracefully when the clone has no relevant Python packages or layout markers.
 - When `scan_summary.coverage_complete` is `false`, some categories were skipped or
   warnings were raised — treat results as partial coverage, not proof of a clean repo.
+- Layer tiers for unknown repositories are inferred from directory layout; resolution
+  quality varies by language and is syntax-level, not type-aware.
+- Java/Scala/Kotlin repos use Maven-style `module/src/main/java/...` layout for module
+  and package mapping; other JVM layouts may resolve fewer cross-module edges.
+- When import resolution is very low, `scan_summary.warnings` notes under-reporting risk.
 
 ## GitHub issues
 

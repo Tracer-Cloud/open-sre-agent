@@ -42,8 +42,8 @@ def _github_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     name="find_architecture_violations",
     source="github",
     description=(
-        "Clone and scan a GitHub repository for architecture violations; "
-        "propose atomic refactor tasks."
+        "Clone and scan a GitHub repository for architecture violations using "
+        "polyglot tree-sitter import graphs; propose atomic refactor tasks."
     ),
     use_cases=[
         "Auditing layer/import violations in a GitHub repository",

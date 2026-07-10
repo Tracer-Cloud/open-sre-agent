@@ -13,10 +13,45 @@ _SKIP_PATH_PARTS = frozenset(
         ".pytest_cache",
         ".ruff_cache",
         ".venv",
+        "build",
+        "dist",
         "node_modules",
         "opensre.egg-info",
         "packaging",
+        "target",
+        "vendor",
         "venv",
+    }
+)
+
+_SOURCE_EXTENSIONS = frozenset(
+    {
+        ".py",
+        ".js",
+        ".mjs",
+        ".cjs",
+        ".ts",
+        ".tsx",
+        ".go",
+        ".rs",
+        ".java",
+        ".c",
+        ".h",
+        ".cpp",
+        ".cc",
+        ".cxx",
+        ".hpp",
+        ".cs",
+        ".rb",
+        ".php",
+        ".kt",
+        ".kts",
+        ".swift",
+        ".scala",
+        ".sc",
+        ".sh",
+        ".bash",
+        ".lua",
     }
 )
 
@@ -31,13 +66,19 @@ def should_skip_path(path: Path) -> bool:
     return any(part in _SKIP_PATH_PARTS for part in path.parts)
 
 
-def iter_py_files(_clone_root: Path, scan_roots: list[Path]) -> Iterator[Path]:
-    """Yield Python files under *scan_roots*, excluding common noise paths."""
+def _iter_files_with_suffixes(
+    scan_roots: list[Path],
+    suffixes: frozenset[str],
+) -> Iterator[Path]:
     seen: set[Path] = set()
     for root in scan_roots:
         if not root.is_dir():
             continue
-        for path in sorted(root.rglob("*.py")):
+        for path in sorted(root.rglob("*")):
+            if not path.is_file():
+                continue
+            if path.suffix.lower() not in suffixes:
+                continue
             if should_skip_path(path):
                 continue
             resolved = path.resolve()
@@ -45,3 +86,14 @@ def iter_py_files(_clone_root: Path, scan_roots: list[Path]) -> Iterator[Path]:
                 continue
             seen.add(resolved)
             yield path
+
+
+def iter_py_files(_clone_root: Path, scan_roots: list[Path]) -> Iterator[Path]:
+    """Yield Python files under *scan_roots*, excluding common noise paths."""
+    yield from _iter_files_with_suffixes(scan_roots, frozenset({".py"}))
+
+
+def iter_source_files(clone_root: Path, scan_roots: list[Path] | None = None) -> Iterator[Path]:
+    """Yield supported polyglot source files under *clone_root*."""
+    roots = scan_roots if scan_roots is not None else [clone_root]
+    yield from _iter_files_with_suffixes(roots, _SOURCE_EXTENSIONS)

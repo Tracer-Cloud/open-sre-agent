@@ -1,0 +1,3 @@
+package app
+
+func Handle() {}

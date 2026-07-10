@@ -25,6 +25,7 @@ tech-debt scan, or refactor task breakdown on a specific GitHub repository.
    deliverable is the Markdown report. Never auto-apply code changes.
 5. GitHub issues are separate. Use `suggested_issue_body` and
    `execute_github_issue_mutation` only after explicit user approval.
-6. Limitations. Layer checks need import-linter config in the target repo;
-   direct-import checks need `.github/ci/check_direct_imports.py`. Other scanners
-   run when relevant directories exist in the clone.
+6. Limitations. Import/layer checks are polyglot tree-sitter scans with tool-owned
+   contracts — no import-linter config or Python requirement in the target repo.
+   Oversized-file, shim, and placement checks are Python/OpenSRE-specific and skip
+   gracefully when the clone lacks relevant files or layout markers.
