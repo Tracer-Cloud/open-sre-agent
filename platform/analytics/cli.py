@@ -912,6 +912,45 @@ def capture_terminal_actions_executed(
     )
 
 
+def capture_react_turn_completed(
+    *,
+    phase: str,
+    llm_iterations_used: int,
+    llm_iteration_cap: int,
+    hit_iteration_cap: bool,
+    stop_reason: str,
+    tool_calls_executed: int,
+    duration_ms: int,
+    cli_session_id: str,
+    cli_turn_kind: str,
+    llm_provider: str,
+    llm_model: str,
+    investigation_id: str | None = None,
+    investigation_loop_count: int | None = None,
+    prompt_turn_id: str | None = None,
+) -> None:
+    properties: Properties = {
+        "phase": phase,
+        "llm_iterations_used": llm_iterations_used,
+        "llm_iteration_cap": llm_iteration_cap,
+        "hit_iteration_cap": hit_iteration_cap,
+        "stop_reason": stop_reason,
+        "tool_calls_executed": tool_calls_executed,
+        "duration_ms": duration_ms,
+        "cli_session_id": cli_session_id,
+        "cli_turn_kind": cli_turn_kind,
+        "llm_provider": llm_provider,
+        "llm_model": llm_model,
+    }
+    if investigation_id:
+        properties["investigation_id"] = investigation_id
+    if investigation_loop_count is not None:
+        properties["investigation_loop_count"] = investigation_loop_count
+    if prompt_turn_id:
+        properties["prompt_turn_id"] = prompt_turn_id
+    _capture(Event.REACT_TURN_COMPLETED, properties)
+
+
 def capture_terminal_turn_summarized(
     *,
     planned_count: int,

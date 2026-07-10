@@ -38,6 +38,7 @@ from core.events import runtime_event_callback_from_observer
 from core.execution import ToolExecutionHooks, public_tool_input
 from core.llm.failure_classification import is_context_length_overflow
 from core.llm.types import AgentLLMResponse, ToolCall
+from platform.analytics.react_turn import run_react_agent_with_telemetry
 from platform.observability.trace.prompts import persist_turn_system_prompt
 from platform.observability.trace.spans import component_span
 
@@ -85,6 +86,8 @@ INVESTIGATION_DISPATCH_TOOL_NAMES: frozenset[str] = frozenset(
 class ActionTurnPlan:
     agent: Agent[Any]
     user_message: str
+    llm: Any
+    max_iterations: int
 
 
 @dataclass(frozen=True)
@@ -357,7 +360,12 @@ def _build_action_agent(
         tool_hooks=tool_hooks,
         on_runtime_event=runtime_event_callback_from_observer(observer),
     )
-    return ActionTurnPlan(agent=build_agent(config), user_message=user_message)
+    return ActionTurnPlan(
+        agent=build_agent(config),
+        user_message=user_message,
+        llm=llm,
+        max_iterations=_MAX_TOOL_CALLING_ITERATIONS,
+    )
 
 
 def run_action_agent_turn(
@@ -444,7 +452,14 @@ def _run_action_agent_turn_body(
             tool_resources=tool_resources,
             observer=observer,
         )
-        result = plan.agent.run([{"role": "user", "content": plan.user_message}])
+        result = run_react_agent_with_telemetry(
+            plan.agent,
+            [{"role": "user", "content": plan.user_message}],
+            phase="action",
+            iteration_cap=plan.max_iterations,
+            llm=plan.llm,
+            session=session,
+        )
         persist_turn_system_prompt(
             session,
             phase="action_agent",
