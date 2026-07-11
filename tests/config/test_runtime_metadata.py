@@ -1,4 +1,4 @@
-"""Tests for session runtime metadata injection (#3946)."""
+"""Tests for session runtime metadata injection."""
 
 from __future__ import annotations
 
