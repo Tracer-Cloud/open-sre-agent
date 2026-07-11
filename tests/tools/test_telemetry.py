@@ -579,7 +579,7 @@ def _posthog_mcp_list_case() -> ToolFailureCase:
         from integrations.posthog_mcp.tools import posthog_mcp_tool as mod
 
         _patch_posthog_mcp_runtime(mp)
-        mp.setattr(mod, "list_posthog_mcp_server_tools", MagicMock(side_effect=RuntimeError("mcp")))
+        mp.setattr(mod, "list_posthog_mcp_tools", MagicMock(side_effect=RuntimeError("mcp")))
 
     def invoke() -> dict[str, Any]:
         from integrations.posthog_mcp.tools.posthog_mcp_tool import list_posthog_tools
@@ -600,7 +600,7 @@ def _posthog_mcp_call_tool_case() -> ToolFailureCase:
         from integrations.posthog_mcp.tools import posthog_mcp_tool as mod
 
         _patch_posthog_mcp_runtime(mp)
-        mp.setattr(mod, "invoke_posthog_mcp_tool", MagicMock(side_effect=RuntimeError("mcp")))
+        mp.setattr(mod, "call_posthog_mcp_tool", MagicMock(side_effect=RuntimeError("mcp")))
 
     def invoke() -> dict[str, Any]:
         from integrations.posthog_mcp.tools.posthog_mcp_tool import call_posthog_tool
