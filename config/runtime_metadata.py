@@ -21,49 +21,104 @@ RUNTIME_INPUTS_KEY = "opensre_runtime"
 _RELEASE_TAG_PATTERN = re.compile(r"^v\d+\.\d+(\.\d+){2,}$")
 
 
-def _repo_root_from_here() -> Path | None:
-    """Walk up from this file looking for a ``.git`` directory.
+def _resolve_gitdir(candidate: Path) -> Path | None:
+    """Resolve a candidate ``.git`` entry to the actual git directory.
+
+    In a normal checkout ``.git`` is a directory. In a linked worktree or a
+    submodule ``.git`` is a *file* containing a ``gitdir: <absolute path>``
+    line pointing to the real git dir under the primary repo. Both shapes
+    need to work so build metadata surfaces correctly for worktree devs too.
+    """
+    if candidate.is_dir():
+        return candidate
+    if candidate.is_file():
+        try:
+            content = candidate.read_text(encoding="utf-8")
+        except OSError:
+            return None
+        for line in content.splitlines():
+            line = line.strip()
+            if line.startswith("gitdir:"):
+                target = Path(line[len("gitdir:") :].strip())
+                if not target.is_absolute():
+                    target = (candidate.parent / target).resolve()
+                if target.is_dir():
+                    return target
+                return None
+    return None
+
+
+def _repo_root_from_here() -> tuple[Path, Path] | None:
+    """Walk up from this file looking for a ``.git`` directory or file.
 
     Filesystem-only — no subprocess. Used to enrich metadata when opensre is
     imported from a git checkout (local dev). Returns ``None`` in installed
     wheels where ``.git`` doesn't exist alongside the package.
+
+    Returns a tuple of ``(worktree_root, gitdir)`` — the worktree root is
+    where ``.git`` lives (a checkout or a linked worktree); the gitdir is the
+    resolved directory that actually contains ``HEAD``, ``refs/``, etc. Under
+    a normal checkout the two point at the same physical directory
+    (``<repo>/.git``); under a linked worktree they differ.
     """
     here = Path(__file__).resolve().parent
     while here.parent != here:
-        if (here / ".git").is_dir():
-            return here
+        gitdir = _resolve_gitdir(here / ".git")
+        if gitdir is not None:
+            return here, gitdir
         here = here.parent
     return None
 
 
-def _read_git_head_sha(repo: Path) -> str | None:
+def _read_git_head_sha(gitdir: Path) -> str | None:
     """Return the short SHA the working tree currently points at, or None."""
-    head_file = repo / ".git" / "HEAD"
+    head_file = gitdir / "HEAD"
     if not head_file.is_file():
         return None
     head = head_file.read_text(encoding="utf-8").strip()
     if head.startswith("ref: "):
-        ref_path = repo / ".git" / head[5:].strip()
+        ref_path = gitdir / head[5:].strip()
         if ref_path.is_file():
             return ref_path.read_text(encoding="utf-8").strip()[:7] or None
         return None
     return head[:7] or None
 
 
-def _read_latest_release_tag(repo: Path) -> str | None:
-    """Return the highest-sorted release tag (v0.1.YYYY.M.D shape) present.
+def _release_tag_sort_key(name: str) -> tuple[int, ...]:
+    """Return a tuple sort key for a release tag like ``v0.1.2026.9.30``.
 
-    Filesystem-only: reads ``.git/refs/tags/``. Sorts lexicographically —
-    correct for the date-suffixed tag shape opensre uses.
+    Sorts by (major, minor, year, month, day...) numerically so
+    ``v0.1.2026.10.1`` correctly outranks ``v0.1.2026.9.30`` — a naive
+    lexicographic sort would pick the older tag because ``'9' > '1'`` as
+    ASCII, flipping September-30 above October-1.
     """
-    tags_dir = repo / ".git" / "refs" / "tags"
+    parts = name.removeprefix("v").split(".")
+    numeric: list[int] = []
+    for part in parts:
+        try:
+            numeric.append(int(part))
+        except ValueError:
+            # Any non-numeric component (unexpected for this tag shape) sorts
+            # this tag below any tag whose components are all-numeric.
+            return ()
+    return tuple(numeric)
+
+
+def _read_latest_release_tag(gitdir: Path) -> str | None:
+    """Return the highest release tag (``v0.1.YYYY.M.D`` shape) present.
+
+    Filesystem-only: reads ``<gitdir>/refs/tags/``. Sorts using a numeric
+    tuple key so month/day boundary crossings (e.g. ``9.30`` vs ``10.1``)
+    order correctly, unlike lexicographic sort.
+    """
+    tags_dir = gitdir / "refs" / "tags"
     if not tags_dir.is_dir():
         return None
-    matches = sorted(
-        (t.name for t in tags_dir.iterdir() if _RELEASE_TAG_PATTERN.match(t.name)),
-        reverse=True,
-    )
-    return matches[0] if matches else None
+    candidates = [t.name for t in tags_dir.iterdir() if _RELEASE_TAG_PATTERN.match(t.name)]
+    if not candidates:
+        return None
+    candidates.sort(key=_release_tag_sort_key, reverse=True)
+    return candidates[0]
 
 
 def _detect_build_info() -> str:
@@ -76,11 +131,12 @@ def _detect_build_info() -> str:
       so the LLM can quote the latest tag AND the current SHA without shelling
       out. Both are filesystem reads only.
     """
-    repo = _repo_root_from_here()
-    if repo is None:
+    located = _repo_root_from_here()
+    if located is None:
         return ""
-    latest_tag = _read_latest_release_tag(repo)
-    sha = _read_git_head_sha(repo)
+    _, gitdir = located
+    latest_tag = _read_latest_release_tag(gitdir)
+    sha = _read_git_head_sha(gitdir)
     if latest_tag and sha:
         return f"dev, {latest_tag} @ {sha}"
     if latest_tag:

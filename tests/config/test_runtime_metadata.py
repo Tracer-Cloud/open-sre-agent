@@ -6,8 +6,12 @@ from types import SimpleNamespace
 
 import pytest
 
+from pathlib import Path
+
 from config.runtime_metadata import (
     RUNTIME_INPUTS_KEY,
+    _read_latest_release_tag,
+    _resolve_gitdir,
     build_runtime_metadata,
     merge_runtime_into_inputs,
 )
@@ -127,6 +131,35 @@ def test_environment_block_instructs_verbatim_quoting_not_field_names() -> None:
     assert "verbatim" in block
     assert "Do NOT invent field names" in block
     assert "build marker" not in block, "the 'build marker' phrase was a hallucination sink"
+
+
+def test_resolve_gitdir_follows_linked_worktree_pointer_file(tmp_path: Path) -> None:
+    """Linked worktrees (and submodules) store ``.git`` as a *file* that points
+    at the real gitdir under the primary repo. Build metadata must resolve
+    through it instead of returning ``None``."""
+    real_gitdir = tmp_path / "primary" / ".git" / "worktrees" / "wt1"
+    real_gitdir.mkdir(parents=True)
+    pointer = tmp_path / "wt" / ".git"
+    pointer.parent.mkdir(parents=True)
+    pointer.write_text(f"gitdir: {real_gitdir}\n", encoding="utf-8")
+    assert _resolve_gitdir(pointer) == real_gitdir
+
+
+def test_resolve_gitdir_returns_none_for_pointer_to_missing_dir(tmp_path: Path) -> None:
+    pointer = tmp_path / ".git"
+    pointer.write_text("gitdir: /does/not/exist\n", encoding="utf-8")
+    assert _resolve_gitdir(pointer) is None
+
+
+def test_latest_release_tag_sorts_numerically_not_lexicographically(tmp_path: Path) -> None:
+    """``v0.1.YYYY.M.D`` uses non-padded month/day, so a lexicographic sort
+    would pick ``v0.1.2026.9.30`` over the later ``v0.1.2026.10.1`` (because
+    ``'9' > '1'`` as ASCII). Regression guard: numeric tuple sort."""
+    tags_dir = tmp_path / "refs" / "tags"
+    tags_dir.mkdir(parents=True)
+    for name in ("v0.1.2026.9.30", "v0.1.2026.10.1", "v0.1.2026.7.11"):
+        (tags_dir / name).write_text("sha\n", encoding="utf-8")
+    assert _read_latest_release_tag(tmp_path) == "v0.1.2026.10.1"
 
 
 def test_python_tool_reports_version_via_injected_runtime_inputs() -> None:
