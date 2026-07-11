@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import cast
@@ -121,6 +122,7 @@ def _local_defaults() -> dict[str, str | bool | None]:
         local.get("api_key_env"), api_key_provider.api_key_env if api_key_provider else ""
     )
     is_cli = bool(raw_provider_option and raw_provider_option.credential_kind == "cli")
+    is_host = bool(api_key_provider and api_key_provider.credential_kind == "host")
     is_oauth_backend = bool(raw_provider_value and raw_provider_value != provider_value)
     raw_auth_method = local.get("auth_method")
     auth_method = (
@@ -136,7 +138,15 @@ def _local_defaults() -> dict[str, str | bool | None]:
         "auth_method": auth_method,
         "model": _string_value(local.get("model")),
         "api_key_env": api_key_env,
-        "has_api_key": True if is_cli else bool(api_key_env and has_llm_api_key(api_key_env)),
+        # A ``host`` credential (e.g. the Ollama host) is only real when the
+        # runtime can see it — the environment — never the keyring.
+        "has_api_key": True
+        if is_cli
+        else (
+            bool(api_key_env and os.getenv(api_key_env, "").strip())
+            if is_host
+            else bool(api_key_env and has_llm_api_key(api_key_env))
+        ),
         "legacy_api_key": _string_value(local.get("api_key")),
     }
 

@@ -2369,3 +2369,59 @@ def test_run_wizard_telegram_retries_on_validation_failure(monkeypatch, tmp_path
     assert validation_call_count == 2
     assert saved_integrations[0][0] == "telegram"
     assert saved_integrations[0][1]["credentials"]["bot_token"] == "123:GOOD"
+
+
+def test_persist_llm_credential_host_kind_writes_env_not_keyring(monkeypatch, tmp_path) -> None:
+    """#3291: a host credential lands where the runtime reads it (.env), never the keyring."""
+    from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
+
+    synced: dict[str, str] = {}
+    monkeypatch.setattr(
+        flow, "sync_env_values", lambda values: synced.update(values) or tmp_path / ".env"
+    )
+    keyring_calls: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        flow,
+        "_persist_llm_api_key",
+        lambda env, val: keyring_calls.append((env, val)) or True,
+    )
+    monkeypatch.setenv("OLLAMA_HOST", "sentinel-before")
+
+    assert flow._persist_llm_credential(PROVIDER_BY_VALUE["ollama"], "http://10.0.0.5:11434")
+
+    assert synced == {"OLLAMA_HOST": "http://10.0.0.5:11434"}
+    assert keyring_calls == []
+    assert os.environ["OLLAMA_HOST"] == "http://10.0.0.5:11434"
+
+
+def test_persist_llm_credential_secret_kind_keeps_keyring(monkeypatch, tmp_path) -> None:
+    from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
+
+    monkeypatch.setattr(
+        flow, "sync_env_values", lambda _values: pytest.fail("secret must not hit .env")
+    )
+    keyring_calls: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        flow,
+        "_persist_llm_api_key",
+        lambda env, val: keyring_calls.append((env, val)) or True,
+    )
+
+    assert flow._persist_llm_credential(PROVIDER_BY_VALUE["anthropic"], "sk-test")
+
+    assert keyring_calls == [("ANTHROPIC_API_KEY", "sk-test")]
+
+
+def test_local_defaults_host_kind_ignores_stale_keyring_entry(monkeypatch, tmp_path) -> None:
+    """#3291 trap half: a keyring-only host must NOT read as configured — the runtime
+    cannot see it, so the wizard must re-prompt instead of skipping."""
+    store = tmp_path / "opensre.json"
+    store.write_text(json.dumps({"targets": {"local": {"provider": "ollama"}}}))
+    monkeypatch.setattr(_ui, "get_store_path", lambda: store)
+    monkeypatch.setattr(_ui, "has_llm_api_key", lambda _env: True)  # stale keyring entry
+
+    monkeypatch.delenv("OLLAMA_HOST", raising=False)
+    assert _ui._local_defaults()["has_api_key"] is False
+
+    monkeypatch.setenv("OLLAMA_HOST", "http://10.0.0.5:11434")
+    assert _ui._local_defaults()["has_api_key"] is True
