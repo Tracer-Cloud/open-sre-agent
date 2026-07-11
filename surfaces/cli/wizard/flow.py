@@ -831,7 +831,11 @@ def run_wizard(_argv: list[str] | None = None) -> int:
             ):
                 has_api_key = bool(defaults["has_api_key"])
                 legacy_api_key = str(defaults["legacy_api_key"] or "").strip()
-                if not has_api_key and legacy_api_key:
+                # A ``host`` credential (e.g. the Ollama host) is not a secret api key: never
+                # migrate a stale legacy ``api_key`` value into it — that would leak a
+                # secret-shaped value into .env and point the runtime at a bogus host. Fall
+                # through to the host prompt instead (#3291).
+                if not has_api_key and legacy_api_key and provider.credential_kind != "host":
                     if not _persist_llm_credential(provider, legacy_api_key):
                         return 1
                     has_api_key = True

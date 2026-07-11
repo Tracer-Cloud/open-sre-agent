@@ -2425,3 +2425,67 @@ def test_local_defaults_host_kind_ignores_stale_keyring_entry(monkeypatch, tmp_p
 
     monkeypatch.setenv("OLLAMA_HOST", "http://10.0.0.5:11434")
     assert _ui._local_defaults()["has_api_key"] is True
+
+
+def test_run_wizard_host_kind_does_not_migrate_legacy_api_key(monkeypatch, tmp_path) -> None:
+    """#3291 (Greptile P1): a saved Ollama config carrying a stale legacy ``api_key`` must NOT
+    have that value migrated into ``OLLAMA_HOST`` — a host is not a secret api key, and writing a
+    secret-shaped legacy value to ``.env`` would both leak it in plaintext and point the runtime
+    at a bogus host. The wizard must fall through to the host-URL prompt instead."""
+    store = tmp_path / "opensre.json"
+    store.write_text(
+        json.dumps(
+            {
+                "targets": {
+                    "local": {
+                        "provider": "ollama",
+                        "model": "llama3.1",
+                        "auth_method": "api_key",
+                        "api_key": "sk-stale-legacy-secret",
+                    }
+                }
+            }
+        )
+    )
+    monkeypatch.setattr(_ui, "get_store_path", lambda: store)
+    monkeypatch.setattr(flow, "get_store_path", lambda: store)
+    monkeypatch.delenv("OLLAMA_HOST", raising=False)
+    monkeypatch.setattr(flow, "probe_local_target", lambda _p: ProbeResult("local", True, "ok"))
+
+    def _mock_select(*_args, **_kwargs):  # quickstart setup mode
+        m = MagicMock()
+        m.ask.return_value = "quickstart"
+        return m
+
+    def _mock_confirm(*_args, **_kwargs):  # "Change provider?" -> No: keep the saved ollama
+        m = MagicMock()
+        m.ask.return_value = False
+        return m
+
+    monkeypatch.setattr(_ui, "select_prompt", _mock_select)
+    monkeypatch.setattr(flow.questionary, "confirm", _mock_confirm)
+
+    prompted: list[str] = []
+
+    def _fake_prompt(label, *_args, **_kwargs):
+        prompted.append(label)
+        return "http://10.0.0.9:11434"  # the host the user actually enters
+
+    monkeypatch.setattr(flow, "_prompt_value", _fake_prompt)
+
+    persisted: list[tuple[str, str]] = []
+
+    def _fake_persist(provider, value):
+        persisted.append((provider.value, value))
+        return False  # stop the wizard right after the credential decision
+
+    monkeypatch.setattr(flow, "_persist_llm_credential", _fake_persist)
+
+    exit_code = flow.run_wizard()
+
+    # The stale legacy api_key was never routed into OLLAMA_HOST; the wizard prompted for the
+    # host and would persist the entered value, not the legacy secret.
+    assert prompted, "a host-kind provider must fall through to the host-URL prompt"
+    assert ("ollama", "sk-stale-legacy-secret") not in persisted
+    assert persisted == [("ollama", "http://10.0.0.9:11434")]
+    assert exit_code == 1  # _fake_persist returned False to short-circuit the run
