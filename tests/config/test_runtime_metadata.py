@@ -9,6 +9,7 @@ import pytest
 
 from config.runtime_metadata import (
     RUNTIME_INPUTS_KEY,
+    _GitLayout,
     _read_git_head_sha,
     _read_latest_release_tag,
     _resolve_gitdir,
@@ -173,7 +174,37 @@ def test_head_sha_reads_packed_refs_when_loose_ref_missing(tmp_path: Path) -> No
         "abc1234abc1234abc1234abc1234abc1234abcd refs/heads/main\n",
         encoding="utf-8",
     )
-    assert _read_git_head_sha(tmp_path) == "abc1234"
+    layout = _GitLayout(gitdir=tmp_path, commondir=tmp_path)
+    assert _read_git_head_sha(layout) == "abc1234"
+
+
+def test_head_sha_resolves_branch_from_commondir_in_linked_worktree(tmp_path: Path) -> None:
+    """In a linked worktree ``HEAD`` sits in the per-worktree gitdir but the
+    branch ref lives in the shared commondir. Reading only the per-worktree
+    gitdir would miss the sha and drop it from the build marker."""
+    commondir = tmp_path / "primary" / ".git"
+    (commondir / "refs" / "heads").mkdir(parents=True)
+    (commondir / "refs" / "heads" / "main").write_text(
+        "abc1234abc1234abc1234abc1234abc1234abcd\n", encoding="utf-8"
+    )
+    per_worktree = commondir / "worktrees" / "wt1"
+    per_worktree.mkdir(parents=True)
+    (per_worktree / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
+
+    layout = _GitLayout(gitdir=per_worktree, commondir=commondir)
+    assert _read_git_head_sha(layout) == "abc1234"
+
+
+def test_latest_release_tag_reads_from_commondir_in_linked_worktree(tmp_path: Path) -> None:
+    """Tags are a shared ref: only the commondir's ``refs/tags/`` sees them.
+    A worktree-local read would return ``None`` and drop the tag from the
+    build marker."""
+    commondir = tmp_path / "primary" / ".git"
+    tags_dir = commondir / "refs" / "tags"
+    tags_dir.mkdir(parents=True)
+    (tags_dir / "v0.1.2026.7.11").write_text("sha\n", encoding="utf-8")
+
+    assert _read_latest_release_tag(commondir) == "v0.1.2026.7.11"
 
 
 def test_latest_release_tag_sorts_numerically_not_lexicographically(tmp_path: Path) -> None:
