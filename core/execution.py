@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextvars
 import json
 import logging
 from collections.abc import Callable, Sequence
@@ -140,7 +141,12 @@ def execute_tool_calls(
     try:
         with ThreadPoolExecutor(max_workers=min(_TOOL_EXECUTOR_WORKERS, len(tool_calls))) as pool:
             for i, tc in enumerate(tool_calls):
-                submitted[pool.submit(_call, tc)] = i
+                # Copy the caller's context so ContextVar bindings (session
+                # trace) reach the pool worker; ThreadPoolExecutor threads are
+                # reused across submissions and otherwise start with an empty
+                # context, which silently drops tool trace spans (#3939).
+                ctx = contextvars.copy_context()
+                submitted[pool.submit(ctx.run, _call, tc)] = i
             for fut in as_completed(submitted):
                 try:
                     results[submitted[fut]] = fut.result()

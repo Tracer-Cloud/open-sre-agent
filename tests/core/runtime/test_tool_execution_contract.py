@@ -21,6 +21,11 @@ from core.llm.types import AgentLLMResponse, ToolCall
 from core.provider import ProviderHooks, ProviderRequest
 from core.tool_framework.registered_tool import RegisteredTool
 from core.types import AgentTool, AgentToolContext
+from platform.observability.trace.spans import (
+    NoopSessionTraceSink,
+    bind_session_trace,
+    set_session_trace_sink,
+)
 
 
 def _schema(required: list[str] | None = None) -> dict[str, Any]:
@@ -279,6 +284,59 @@ def test_parallel_batch_preserves_provider_order() -> None:
     results = execute_tool_calls(calls, tools, {})
 
     assert [result.details for result in results] == [{"order": 2}, {"order": 1}]
+
+
+class _RecordingTraceSink:
+    """Minimal in-memory session-trace sink for asserting emitted spans."""
+
+    def __init__(self) -> None:
+        self.spans: list[dict[str, Any]] = []
+
+    def emit(
+        self,
+        session_id: str,
+        *,
+        span_kind: str,
+        name: str,
+        status: str = "ok",
+        duration_ms: int | None = None,
+        attributes: dict[str, Any] | None = None,
+        parent_id: str | None = None,
+    ) -> str:
+        del status, duration_ms, parent_id
+        self.spans.append(
+            {
+                "session_id": session_id,
+                "span_kind": span_kind,
+                "name": name,
+                "attributes": attributes or {},
+            }
+        )
+        return str(len(self.spans))
+
+
+def test_parallel_tool_calls_emit_tool_trace_spans() -> None:
+    """Regression for #3939: tool calls dispatched via the ThreadPoolExecutor
+    branch must still emit a ``tool`` trace span each, matching the
+    single-tool path. Pool workers previously started with an empty
+    ``contextvars`` context, so the ``bind_session_trace`` binding set on the
+    calling thread never reached ``tool_span``/``timed_span``, and every
+    parallel tool call silently produced zero spans."""
+    sink = _RecordingTraceSink()
+    set_session_trace_sink(sink)  # type: ignore[arg-type]
+    try:
+        tools = [_tool("first"), _tool("second")]
+        calls = [_call("first", "a"), _call("second", "b")]
+
+        with bind_session_trace("sess-3939"):
+            results = execute_tool_calls(calls, tools, {})
+    finally:
+        set_session_trace_sink(NoopSessionTraceSink())
+
+    assert [r.is_error for r in results] == [False, False]
+    tool_spans = [s for s in sink.spans if s["span_kind"] == "tool"]
+    assert sorted(s["name"] for s in tool_spans) == ["first", "second"]
+    assert all(s["session_id"] == "sess-3939" for s in tool_spans)
 
 
 def _registered_echo(name: str, *, parallel_safe: bool = True) -> RegisteredTool:
