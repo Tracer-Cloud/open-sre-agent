@@ -48,14 +48,7 @@ def has_resolved_integrations(cache: dict[str, Any] | None) -> bool:
 
 
 def has_only_underscore_prefixed_keys(cache: dict[str, Any] | None) -> bool:
-    """Return True when every cache key starts with an underscore.
-
-    Used to distinguish a cache holding only internal book-keeping entries
-    (``_``-prefixed) from one that has resolved integration configs. The name
-    was previously ``has_only_runtime_metadata`` which invited confusion with
-    session ``runtime_metadata`` (an unrelated concept from #3946); renamed
-    to describe what the check actually does.
-    """
+    """True when every cache key starts with ``_`` (book-keeping only, no configs)."""
     if not cache:
         return False
     return all(str(key).startswith("_") for key in cache)

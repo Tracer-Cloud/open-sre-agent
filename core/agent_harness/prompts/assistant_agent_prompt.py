@@ -62,6 +62,40 @@ def build_handoff_guidance_block(handoff_contents: tuple[str, ...]) -> str:
     return "".join(blocks)
 
 
+def _render_runtime_facts(
+    opensre_version: str | None,
+    opensre_build: str | None,
+    runtime_env: str | None,
+) -> str:
+    """Runtime section of the environment block, or ``""`` when nothing to say.
+
+    Phrased for quote-verbatim recall: earlier prompt wording ("including the
+    build marker if present") caused the LLM to treat "build marker" as a slot
+    name and hallucinate a value like ``0`` when the marker was empty.
+    """
+    version = (opensre_version or "").strip()
+    build_marker = (opensre_build or "").strip()
+    env_name = (runtime_env or "").strip()
+    if not version and not env_name:
+        return ""
+    bits: list[str] = []
+    if version:
+        display = f"{version} ({build_marker})" if build_marker else version
+        bits.append(f"OpenSRE version is {display}")
+    if env_name:
+        bits.append(f"runtime environment is {env_name}")
+    return (
+        "Runtime facts (quote the strings below EXACTLY when asked; do not "
+        "paraphrase them into other field names): "
+        + "; ".join(bits)
+        + ". When the user asks which OpenSRE version is running, reply with the "
+        "full version string above verbatim — including any parenthetical suffix. "
+        "Do NOT invent field names, values, or numbers not present above. Do NOT "
+        "shell out, call `opensre --version`, or use subprocess — the Python "
+        "execution sandbox blocks process spawning."
+    )
+
+
 def build_environment_block(
     *,
     integrations: tuple[str, ...],
@@ -114,26 +148,9 @@ def build_environment_block(
             "instead of guessing or telling them to run another command."
         )
 
-    version = (opensre_version or "").strip()
-    build_marker = (opensre_build or "").strip()
-    env_name = (runtime_env or "").strip()
-    if version or env_name:
-        runtime_bits: list[str] = []
-        if version:
-            version_display = f"{version} ({build_marker})" if build_marker else version
-            runtime_bits.append(f"OpenSRE version is {version_display}")
-        if env_name:
-            runtime_bits.append(f"runtime environment is {env_name}")
-        facts.append(
-            "Runtime facts (quote the strings below EXACTLY when asked; do not "
-            "paraphrase them into other field names): "
-            + "; ".join(runtime_bits)
-            + ". When the user asks which OpenSRE version is running, reply with the "
-            "full version string above verbatim — including any parenthetical suffix. "
-            "Do NOT invent field names, values, or numbers not present above. Do NOT "
-            "shell out, call `opensre --version`, or use subprocess — the Python "
-            "execution sandbox blocks process spawning."
-        )
+    runtime_fact = _render_runtime_facts(opensre_version, opensre_build, runtime_env)
+    if runtime_fact:
+        facts.append(runtime_fact)
 
     if not facts:
         return ""

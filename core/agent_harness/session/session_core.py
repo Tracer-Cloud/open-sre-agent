@@ -100,8 +100,7 @@ class SessionCore:
     earlier investigations that should seed future ones."""
 
     runtime_metadata: dict[str, Any] = field(default_factory=dict)
-    """Safe read-only process facts (version, env, feature flags) for agent prompts
-    and sandboxed tools — populated at session bootstrap, never via subprocess."""
+    """Read-only process facts (version, build, env) exposed to prompts and sandboxed tools."""
 
     reasoning_effort: ReasoningEffortChoice | None = None
     """Session-scoped reasoning effort preference for REPL-driven LLM calls."""
@@ -272,7 +271,7 @@ class SessionCore:
         self.integrations.github_repo_scope = value
 
     def refresh_runtime_metadata(self) -> None:
-        """Inject safe read-only process metadata (version/env) without subprocess."""
+        """Repopulate :attr:`runtime_metadata` from current process facts."""
         from config.runtime_metadata import build_runtime_metadata
 
         self.runtime_metadata = build_runtime_metadata()
@@ -324,7 +323,6 @@ class SessionCore:
         self.accumulated_context.clear()
         self.tokens.reset()
         self.agent.clear()
-        # Re-inject process metadata after wipe so /new and /resume keep version facts.
         self.refresh_runtime_metadata()
         # Keep persisted cross-session task history on disk intact.
         # /new is session-scoped, so swap in a fresh in-memory registry

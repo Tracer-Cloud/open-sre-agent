@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-from pathlib import Path
-
 from config.runtime_metadata import (
     RUNTIME_INPUTS_KEY,
+    _read_git_head_sha,
     _read_latest_release_tag,
     _resolve_gitdir,
     build_runtime_metadata,
@@ -149,6 +149,31 @@ def test_resolve_gitdir_returns_none_for_pointer_to_missing_dir(tmp_path: Path) 
     pointer = tmp_path / ".git"
     pointer.write_text("gitdir: /does/not/exist\n", encoding="utf-8")
     assert _resolve_gitdir(pointer) is None
+
+
+def test_latest_release_tag_reads_packed_refs_when_loose_missing(tmp_path: Path) -> None:
+    """After ``git pack-refs`` there is no ``refs/tags/<name>`` file — the tag
+    lives only in ``packed-refs``. Build metadata must fall back so packed
+    repos still surface a build marker."""
+    (tmp_path / "packed-refs").write_text(
+        "# pack-refs with: peeled fully-peeled sorted \n"
+        "abc1234abc1234abc1234abc1234abc1234abcd refs/tags/v0.1.2026.7.11\n"
+        "def5678def5678def5678def5678def5678def56 refs/heads/main\n",
+        encoding="utf-8",
+    )
+    assert _read_latest_release_tag(tmp_path) == "v0.1.2026.7.11"
+
+
+def test_head_sha_reads_packed_refs_when_loose_ref_missing(tmp_path: Path) -> None:
+    """A packed branch has no loose ``refs/heads/<name>`` file; the sha is in
+    ``packed-refs``. Falling through instead of following packed-refs would
+    drop the SHA from the build marker."""
+    (tmp_path / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
+    (tmp_path / "packed-refs").write_text(
+        "abc1234abc1234abc1234abc1234abc1234abcd refs/heads/main\n",
+        encoding="utf-8",
+    )
+    assert _read_git_head_sha(tmp_path) == "abc1234"
 
 
 def test_latest_release_tag_sorts_numerically_not_lexicographically(tmp_path: Path) -> None:
