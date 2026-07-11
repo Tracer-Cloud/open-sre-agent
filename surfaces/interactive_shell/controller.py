@@ -6,7 +6,7 @@ import asyncio
 import logging
 import os
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.patch_stdout import patch_stdout
@@ -79,29 +79,31 @@ def _alert_listener(
         yield None
         return
 
-    from gateway.web_server import WebAppServerHandle, serve_webapp_in_thread
+    from gateway.web_server import serve_webapp_in_thread
 
-    inbox: _alert_inbox.AlertInbox | None = None
-    handle: WebAppServerHandle | None = None
-    try:
-        inbox = _alert_inbox.AlertInbox()
-        _alert_inbox.set_current_inbox(inbox)
-        with _alert_listener_token(cfg.alert_listener_token):
+    inbox = _alert_inbox.AlertInbox()
+    with ExitStack() as stack:
+        try:
+            # Bring-up only. This ``except`` must not see exceptions from the
+            # REPL body that runs during ``yield inbox``: a body error caught
+            # here would be mislogged as "could not start", and the following
+            # ``yield None`` would make ``@contextmanager`` raise "generator
+            # didn't stop after throw()", masking the real error (#3940).
+            _alert_inbox.set_current_inbox(inbox)
+            stack.callback(_alert_inbox.set_current_inbox, None)
+            stack.enter_context(_alert_listener_token(cfg.alert_listener_token))
             handle = serve_webapp_in_thread(
                 host=cfg.alert_listener_host,
                 port=cfg.alert_listener_port,
             )
-            console.print(f"[{DIM}]listening for alerts on http://{handle.bound_address}/alerts[/]")
-            try:
-                yield inbox
-            finally:
-                if handle is not None:
-                    handle.stop()
-                _alert_inbox.set_current_inbox(None)
-    except Exception as exc:
-        log.warning("Alert listener could not start: %s — continuing without it.", exc)
-        _alert_inbox.set_current_inbox(None)
-        yield None
+            stack.callback(handle.stop)
+        except Exception as exc:
+            log.warning("Alert listener could not start: %s — continuing without it.", exc)
+            yield None
+            return
+
+        console.print(f"[{DIM}]listening for alerts on http://{handle.bound_address}/alerts[/]")
+        yield inbox
 
 
 def _resolve_runtime_context(
