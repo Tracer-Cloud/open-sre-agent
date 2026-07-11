@@ -9,6 +9,7 @@ import pytest
 from rich.console import Console
 
 from config.repl_config import ReplConfig
+from core.domain.alerts import inbox as _alert_inbox
 from surfaces.interactive_shell.controller import _alert_listener
 
 
@@ -100,3 +101,23 @@ def test_startup_failure_yields_none_without_masking(monkeypatch) -> None:
 
     with _alert_listener(cfg, Console(force_terminal=False)) as inbox:
         assert inbox is None
+
+
+def test_startup_failure_clears_global_inbox_before_body_runs(monkeypatch) -> None:
+    """Regression: on the startup-failure fallback path, the listener's
+    partially-acquired resources (the process-wide current inbox, in
+    particular) must be torn down *before* the REPL body runs with
+    ``inbox=None`` — otherwise ``get_current_inbox()`` would still return the
+    never-started listener's inbox while callers were told there is none."""
+
+    def _boom(**_kwargs: object) -> MagicMock:
+        raise OSError("port already in use")
+
+    monkeypatch.setattr("gateway.web_server.serve_webapp_in_thread", _boom)
+    cfg = ReplConfig(alert_listener_enabled=True, alert_listener_token="tok")
+
+    with _alert_listener(cfg, Console(force_terminal=False)) as inbox:
+        assert inbox is None
+        assert _alert_inbox.get_current_inbox() is None
+
+    assert _alert_inbox.get_current_inbox() is None

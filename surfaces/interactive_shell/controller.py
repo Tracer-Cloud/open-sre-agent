@@ -99,6 +99,7 @@ def _alert_listener(
             stack.callback(handle.stop)
         except Exception as exc:
             log.warning("Alert listener could not start: %s — continuing without it.", exc)
+            stack.close()
             yield None
             return
 
