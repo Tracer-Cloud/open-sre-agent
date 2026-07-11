@@ -99,6 +99,10 @@ class SessionCore:
     """Reusable infra context — service names, clusters, regions — learned from
     earlier investigations that should seed future ones."""
 
+    runtime_metadata: dict[str, Any] = field(default_factory=dict)
+    """Safe read-only process facts (version, env, feature flags) for agent prompts
+    and sandboxed tools — populated at session bootstrap, never via subprocess."""
+
     reasoning_effort: ReasoningEffortChoice | None = None
     """Session-scoped reasoning effort preference for REPL-driven LLM calls."""
 
@@ -267,6 +271,12 @@ class SessionCore:
     def github_repo_scope(self, value: tuple[str, str] | None) -> None:
         self.integrations.github_repo_scope = value
 
+    def refresh_runtime_metadata(self) -> None:
+        """Inject safe read-only process metadata (version/env) without subprocess."""
+        from config.runtime_metadata import build_runtime_metadata
+
+        self.runtime_metadata = build_runtime_metadata()
+
     def hydrate_configured_integrations(self) -> None:
         """Load configured integration names (env + local store); metadata-only."""
         self.integrations.hydrate()
@@ -314,6 +324,8 @@ class SessionCore:
         self.accumulated_context.clear()
         self.tokens.reset()
         self.agent.clear()
+        # Re-inject process metadata after wipe so /new and /resume keep version facts.
+        self.refresh_runtime_metadata()
         # Keep persisted cross-session task history on disk intact.
         # /new is session-scoped, so swap in a fresh in-memory registry
         # that reuses the same backing store (if any) so /tasks still shows history.

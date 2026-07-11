@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 __all__ = [
     "IntegrationResolutionResult",
     "IntegrationState",
-    "has_only_runtime_metadata",
+    "has_only_underscore_prefixed_keys",
     "has_resolved_integrations",
     "merge_resolved_integrations",
     "resolve_and_cache_integrations",
@@ -47,8 +47,15 @@ def has_resolved_integrations(cache: dict[str, Any] | None) -> bool:
     return any(not str(key).startswith("_") for key in cache)
 
 
-def has_only_runtime_metadata(cache: dict[str, Any] | None) -> bool:
-    """Return True when the cache holds only runtime metadata keys."""
+def has_only_underscore_prefixed_keys(cache: dict[str, Any] | None) -> bool:
+    """Return True when every cache key starts with an underscore.
+
+    Used to distinguish a cache holding only internal book-keeping entries
+    (``_``-prefixed) from one that has resolved integration configs. The name
+    was previously ``has_only_runtime_metadata`` which invited confusion with
+    session ``runtime_metadata`` (an unrelated concept from #3946); renamed
+    to describe what the check actually does.
+    """
     if not cache:
         return False
     return all(str(key).startswith("_") for key in cache)
@@ -67,7 +74,7 @@ def merge_resolved_integrations(
 def _has_usable_cache(cache: dict[str, Any] | None) -> bool:
     """True when a cache holds resolved configs and need not be re-resolved."""
     return cache is not None and (
-        has_resolved_integrations(cache) or not has_only_runtime_metadata(cache)
+        has_resolved_integrations(cache) or not has_only_underscore_prefixed_keys(cache)
     )
 
 
@@ -134,7 +141,7 @@ class IntegrationState:
         resolution raced store/env hydration. Failures leave the cache unset.
         """
         cached = self.resolved_cache
-        if cached is not None and not has_only_runtime_metadata(cached):
+        if cached is not None and not has_only_underscore_prefixed_keys(cached):
             return
         if generation is None:
             with self._warm_lock:
@@ -152,7 +159,7 @@ class IntegrationState:
         with self._warm_lock:
             if generation != self._warm_generation:
                 return
-            if self.resolved_cache is not None and not has_only_runtime_metadata(
+            if self.resolved_cache is not None and not has_only_underscore_prefixed_keys(
                 self.resolved_cache
             ):
                 return

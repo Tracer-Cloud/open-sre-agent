@@ -70,6 +70,9 @@ def build_environment_block(
     reasoning_model: str | None = None,
     toolcall_model: str | None = None,
     llm_settings_available: bool | None = None,
+    opensre_version: str | None = None,
+    opensre_build: str | None = None,
+    runtime_env: str | None = None,
 ) -> str:
     """Render shell-state facts so the assistant can answer directly.
 
@@ -109,6 +112,27 @@ def build_environment_block(
             "Active LLM settings are unavailable in this session. If the user asks "
             "which model/provider is being used, say the settings could not be read "
             "instead of guessing or telling them to run another command."
+        )
+
+    version = (opensre_version or "").strip()
+    build_marker = (opensre_build or "").strip()
+    env_name = (runtime_env or "").strip()
+    if version or env_name:
+        runtime_bits: list[str] = []
+        if version:
+            version_display = f"{version} ({build_marker})" if build_marker else version
+            runtime_bits.append(f"OpenSRE version is {version_display}")
+        if env_name:
+            runtime_bits.append(f"runtime environment is {env_name}")
+        facts.append(
+            "Runtime facts (quote the strings below EXACTLY when asked; do not "
+            "paraphrase them into other field names): "
+            + "; ".join(runtime_bits)
+            + ". When the user asks which OpenSRE version is running, reply with the "
+            "full version string above verbatim — including any parenthetical suffix. "
+            "Do NOT invent field names, values, or numbers not present above. Do NOT "
+            "shell out, call `opensre --version`, or use subprocess — the Python "
+            "execution sandbox blocks process spawning."
         )
 
     if not facts:
