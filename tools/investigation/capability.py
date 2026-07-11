@@ -297,6 +297,9 @@ async def astream_investigation(
             )
 
     def _run_pipeline() -> None:
+        state = initial
+        loop_count = 0
+        iteration_cap = None
         try:
             from core.state.updates import apply_state_updates
             from platform.analytics.investigation_loop import loop_metrics_from_state
@@ -307,7 +310,7 @@ async def astream_investigation(
             from tools.investigation.stages.plan_evidence import plan_actions
             from tools.investigation.stages.resolve_integrations import resolve_integrations
 
-            state = initial
+
 
             # --- resolve_integrations ---
             _put(_make_node_event("on_chain_start", "resolve_integrations", {}))
@@ -463,7 +466,8 @@ async def astream_investigation(
             )
 
         except Exception as exc:
-            loop_count, iteration_cap = loop_metrics_from_state(state)
+            if "loop_metrics_from_state" in locals():
+                loop_count, iteration_cap = loop_metrics_from_state(state)
             _capture_exception_once(exc, context="pipeline.astream_investigation")
             with contextlib.suppress(RuntimeError):
                 loop.call_soon_threadsafe(

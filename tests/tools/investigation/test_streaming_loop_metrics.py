@@ -73,3 +73,28 @@ def test_main_thread_bridge_binds_metrics_from_wrapped_stream_failure() -> None:
         assert bound_loop_metrics() == (4, 20)
     finally:
         reset_investigation_loop_metrics(scope_token)
+
+
+
+@pytest.mark.anyio
+async def test_astream_deferred_import_failure_is_wrapped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import builtins
+
+    real_import = builtins.__import__
+
+    def failing_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "tools.investigation.stages.gather_evidence":
+            raise ImportError("simulated deferred import failure")
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", failing_import)
+
+    with pytest.raises(InvestigationPipelineStreamError) as exc_info:
+        async for _ in astream_investigation("alert text"):
+            pass
+
+    wrapped = exc_info.value
+    assert isinstance(wrapped.cause, ImportError)
+    assert str(wrapped.cause) == "simulated deferred import failure"
