@@ -127,6 +127,7 @@
               "datadog",
               "grafana",
               "grafana_annotations",
+              "grafana-log-sink",
               "groundcover",
               "hermes",
               "honeycomb",
