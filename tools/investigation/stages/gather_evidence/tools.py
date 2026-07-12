@@ -281,3 +281,30 @@ def merge_tool_evidence(
 
     if tool_name == "query_grafana_service_names":
         evidence["grafana_service_names"] = output.get("service_names", [])
+        return
+
+    if tool_name == "query_datadog_all":
+        evidence["datadog_logs"] = output.get("logs", [])
+        evidence["datadog_error_logs"] = output.get("error_logs", [])
+        evidence["datadog_logs_query"] = output.get("query", "")
+        evidence["datadog_monitors"] = output.get("monitors", [])
+        evidence["datadog_events"] = output.get("events", [])
+        evidence["datadog_fetch_ms"] = output.get("fetch_duration_ms", {})
+        evidence["datadog_pod_name"] = output.get("pod_name", "")
+        evidence["datadog_container_name"] = output.get("container_name", "")
+        evidence["datadog_kube_namespace"] = output.get("kube_namespace", "")
+        evidence["datadog_failed_pods"] = output.get("failed_pods", [])
+        return
+
+    if tool_name == "query_datadog_logs":
+        evidence["datadog_logs"] = output.get("logs", [])
+        evidence["datadog_error_logs"] = output.get("error_logs", [])
+        evidence["datadog_logs_query"] = output.get("query", "")
+        return
+
+    if tool_name == "query_datadog_monitors":
+        evidence["datadog_monitors"] = output.get("monitors", [])
+        return
+
+    if tool_name == "query_datadog_events":
+        evidence["datadog_events"] = output.get("events", [])
