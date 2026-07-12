@@ -6,11 +6,17 @@ import logging
 from collections.abc import Callable, Iterator
 from typing import Any
 
-from litellm import completion
-from pydantic import BaseModel
+from core.llm.transports.litellm.frozen_tiktoken_bootstrap import (
+    ensure_tiktoken_encodings_discoverable,
+)
 
-from core.context_budget import strip_internal_message_markers
-from core.llm.shared.openai_chat_completions import (
+ensure_tiktoken_encodings_discoverable()
+
+from litellm import completion  # noqa: E402
+from pydantic import BaseModel  # noqa: E402
+
+from core.context_budget import strip_internal_message_markers  # noqa: E402
+from core.llm.shared.openai_chat_completions import (  # noqa: E402
     AGENT_CLIENT_TIMEOUT_SEC,
     LLM_CLIENT_TIMEOUT_SEC,
     agent_response_from_completion,
@@ -24,9 +30,9 @@ from core.llm.shared.openai_chat_completions import (
     prepend_system_message,
     stream_with_litellm_retries,
 )
-from core.llm.shared.structured_output import StructuredOutputClient
-from core.llm.shared.tool_schema_normalize import build_openai_tool_specs
-from core.llm.types import AgentLLMResponse, LLMResponse, ToolCall
+from core.llm.shared.structured_output import StructuredOutputClient  # noqa: E402
+from core.llm.shared.tool_schema_normalize import build_openai_tool_specs  # noqa: E402
+from core.llm.types import AgentLLMResponse, LLMResponse, ToolCall  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
