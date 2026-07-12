@@ -6,7 +6,7 @@ import base64
 import json
 import logging
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 from urllib.parse import quote
 
 import requests
@@ -184,13 +184,7 @@ class GrafanaClientBase:
 
         url = f"{self.instance_url}/api/datasources"
         try:
-            response = requests.get(
-                url,
-                headers=self._get_auth_headers(),
-                timeout=10,
-            )
-            response.raise_for_status()
-            datasources = response.json()
+            datasources = cast(list[dict[str, Any]], self._make_get_request(url))
 
             # Collect all candidates per type, then pick the best one.
             candidates: dict[str, list[dict]] = {key: [] for key in self._TYPE_MAP.values()}
@@ -275,7 +269,7 @@ class GrafanaClientBase:
             f"/loki/api/v1/label/{label}/values",
         )
         try:
-            data = self._make_request(url)
+            data = self._make_get_request(url)
             values: list[str] = data.get("data", [])
             return values
         except Exception:
@@ -286,14 +280,7 @@ class GrafanaClientBase:
         """Query Grafana alert rules, optionally filtered by folder title."""
         url = f"{self.instance_url}/api/ruler/grafana/api/v1/rules"
         try:
-            response = requests.get(
-                url,
-                headers=self._get_auth_headers(),
-                timeout=10,
-            )
-            response.raise_for_status()
-            data = response.json()
-
+            data = self._make_get_request(url)
             rules: list[dict[str, Any]] = []
             for folder_name, groups in data.items():
                 if folder and folder.lower() not in folder_name.lower():
@@ -342,18 +329,52 @@ class GrafanaClientBase:
         if tags:
             params["tags"] = tags  # requests repeats the param once per tag
         try:
-            response = requests.get(
-                url,
-                headers=self._get_auth_headers(),
-                params=params,
-                timeout=10,
-            )
-            response.raise_for_status()
-            data = response.json()
+            data = cast(list[dict[str, Any]], self._make_get_request(url, params=params))
             return [_map_annotation(item) for item in data if isinstance(item, dict)]
         except Exception as e:
             logger.warning("[grafana] Failed to query annotations: %s", e)
             return []
+
+    def create_annotation(
+        self,
+        text: str,
+        tags: list[str],
+        *,
+        time_ms: int | None = None,
+        time_end_ms: int | None = None,
+        dashboard_uid: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a Grafana annotation via POST /api/annotations.
+
+        Uses the same auth as query_annotations (read_token or basic auth).
+        Requires Editor role or higher on the Grafana instance.
+
+        Returns ``{"success": True, "id": <annotation_id>}`` on success,
+        or ``{"success": False, "error": "..."}`` on failure.
+        """
+        if not self.instance_url or not self.is_configured:
+            return {"success": False, "error": "Grafana client not configured"}
+
+        url = f"{self.instance_url}/api/annotations"
+        body: dict[str, Any] = {"text": text, "tags": tags}
+        if time_ms is not None:
+            body["time"] = time_ms
+        if time_end_ms is not None:
+            body["timeEnd"] = time_end_ms
+        if dashboard_uid:
+            body["dashboardUID"] = dashboard_uid
+
+        try:
+            resp = self._make_post_request(url, json_body=body)
+            resp.raise_for_status()
+            data = resp.json()
+            return {"success": True, "id": data.get("id")}
+        except Exception as e:
+            error_msg = str(e)
+            if hasattr(e, "response") and e.response is not None:
+                error_msg = f"Annotation creation failed: {e.response.status_code}"
+            logger.warning("[grafana] Failed to create annotation: %s", error_msg)
+            return {"success": False, "error": error_msg}
 
     def _get_auth_headers(self) -> dict[str, str]:
         if self.username and self.password:
@@ -363,7 +384,7 @@ class GrafanaClientBase:
             return {}
         return {"Authorization": f"Bearer {self.read_token}"}
 
-    def _make_request(
+    def _make_get_request(
         self,
         url: str,
         params: dict[str, str] | None = None,
@@ -378,3 +399,20 @@ class GrafanaClientBase:
         response.raise_for_status()
         result: dict[str, Any] = response.json()
         return result
+
+    def _make_post_request(
+        self,
+        url: str,
+        json_body: dict[str, Any] | list[Any] | None = None,
+        *,
+        extra_headers: dict[str, str] | None = None,
+        timeout: int = 10,
+    ) -> requests.Response:
+        """POST JSON to a Grafana/Loki API endpoint. Returns raw Response.
+        Returns raw ``Response`` (not parsed JSON) because Loki push returns
+        ``204 No Content`` while annotation returns ``200`` with JSON.
+        Callers inspect ``status_code`` and call ``.json()`` if needed.
+        """
+        headers = {**self._get_auth_headers(), **(extra_headers or {})}
+        headers.setdefault("Content-Type", "application/json")
+        return requests.post(url, json=json_body, headers=headers, timeout=timeout)
