@@ -80,6 +80,7 @@ ignore_imports =
     tools.interactive_shell.implementation.claude_code_executor -> integrations.llm_cli.claude_code
     tools.interactive_shell.implementation.claude_code_executor -> integrations.llm_cli.subprocess_env
     tools.investigation.reporting.delivery.bootstrap -> integrations.discord.reporting_adapter
+    tools.investigation.reporting.delivery.bootstrap -> integrations.grafana.reporting_adapter
     tools.investigation.reporting.delivery.bootstrap -> integrations.openclaw.reporting_adapter
     tools.investigation.reporting.delivery.bootstrap -> integrations.slack.reporting_adapter
     tools.investigation.reporting.delivery.bootstrap -> integrations.telegram.reporting_adapter

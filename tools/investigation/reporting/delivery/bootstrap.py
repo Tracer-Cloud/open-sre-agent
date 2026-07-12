@@ -4,7 +4,7 @@ Each vendor's ``integrations/<vendor>/reporting_adapter.py`` registers a
 :class:`platform.reporting.delivery_registry.ReportDeliveryAdapter` (and the
 Slack module also registers a
 :class:`platform.reporting.slack_reactions.SlackReactionsPort`) at import
-time. This bootstrap concentrates those six vendor imports in one place so
+time. This bootstrap concentrates those vendor imports in one place so
 :mod:`tools.investigation.reporting.delivery.dispatch` — the actual dispatch
 loop — stays vendor-neutral.
 
