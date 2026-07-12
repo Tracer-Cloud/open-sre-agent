@@ -354,7 +354,12 @@ class JsonlSessionStorage:
             if not path.exists():
                 return ""
             entry_id = _new_id()
-            parent = parent_id if parent_id is not None else self._current_leaf_id(path)
+            if parent_id is not None:
+                parent = parent_id
+            elif self._is_diagnostic_type(entry_type):
+                parent = None
+            else:
+                parent = self._current_leaf_id(path)
             record = {
                 "id": entry_id,
                 "parent_id": parent,
@@ -378,12 +383,18 @@ class JsonlSessionStorage:
                     records.append(rec)
         return records
 
+    @staticmethod
+    def _is_diagnostic_type(entry_type: str) -> bool:
+        """Return True for sidecar entry types that must not participate in the
+        session parent-chain or trigger expensive leaf lookups."""
+        return entry_type in ("trace_span",)
+
     def _current_leaf_id(self, path: Path) -> str | None:
         records = self._read_records(path)
         for rec in reversed(records):
             if rec.get("type") == "leaf":
                 return str(rec.get("parent_id") or "") or None
-            if rec.get("type") != "session":
+            if rec.get("type") not in ("session", "trace_span"):
                 return str(rec.get("id") or "") or None
         return None
 
