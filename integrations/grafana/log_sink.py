@@ -98,7 +98,9 @@ class GrafanaLogSink:
             return False
         streams = self._build_loki_streams(state, messages)
         try:
-            url = f"{self._loki_push_url.rstrip('/')}/loki/api/v1/push"
+            url = self._loki_push_url.rstrip("/")
+            if not url.endswith("/loki/api/v1/push"):
+                url = f"{url}/loki/api/v1/push"
             headers: dict[str, str] = {"Content-Type": "application/json"}
             if self._loki_write_token:
                 headers["Authorization"] = f"Bearer {self._loki_write_token}"
