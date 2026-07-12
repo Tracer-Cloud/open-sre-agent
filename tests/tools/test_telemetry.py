@@ -647,7 +647,7 @@ def _sentry_mcp_list_case() -> ToolFailureCase:
         from integrations.sentry_mcp.tools import sentry_mcp_tool as mod
 
         _patch_sentry_mcp_runtime(mp)
-        mp.setattr(mod, "list_sentry_mcp_server_tools", MagicMock(side_effect=RuntimeError("mcp")))
+        mp.setattr(mod, "list_sentry_mcp_tools", MagicMock(side_effect=RuntimeError("mcp")))
 
     def invoke() -> dict[str, Any]:
         from integrations.sentry_mcp.tools.sentry_mcp_tool import list_sentry_tools
@@ -668,7 +668,7 @@ def _sentry_mcp_call_tool_case() -> ToolFailureCase:
         from integrations.sentry_mcp.tools import sentry_mcp_tool as mod
 
         _patch_sentry_mcp_runtime(mp)
-        mp.setattr(mod, "invoke_sentry_mcp_tool", MagicMock(side_effect=RuntimeError("mcp")))
+        mp.setattr(mod, "call_sentry_mcp_tool", MagicMock(side_effect=RuntimeError("mcp")))
 
     def invoke() -> dict[str, Any]:
         from integrations.sentry_mcp.tools.sentry_mcp_tool import call_sentry_tool
