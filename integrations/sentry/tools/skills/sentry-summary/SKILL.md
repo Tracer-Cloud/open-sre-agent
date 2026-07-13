@@ -20,8 +20,11 @@ Sentry here, then suggest a multi-source investigation.
 - **7d** — "this week", general overview
 - Map user words (`last night` → `24h`, `this week` → `7d`)
 
-Up to 100 issue groups (not events). Empty → widen to `7d`. Results include
-`digest` with `structural_clusters`, `priority_candidates`, `top_issues`.
+Up to 100 issue groups per API page (not events). When `digest.page_saturated`
+is true, say `100+` and quote `scope_note` — more groups may exist in the same
+window. When `page_complete`, the count is exact for that window. Empty → widen
+to `7d`. Results include `digest` with `structural_clusters`,
+`priority_candidates`, `top_issues`.
 
 ## 2. Classify
 
@@ -45,9 +48,10 @@ Only top 3–5 and #1 priority: `get_sentry_issue_details` +
 
 Slack-ready digest:
 
-- **I found:** quote `digest.scope_summary` verbatim (total issue groups + window).
+- **I found:** quote `digest.scope_summary` verbatim; add `digest.scope_note` when
+  `page_saturated` or when explaining whether the count is exact vs capped.
 - Themed cluster breakdown: each cluster as `N issues (P%)` with `sample_short_ids`
-  when present (e.g. `PYTHON-G4`, `TRACER-CLIENT-12`).
+  when present (percentages are of the returned page — see `scope_note`).
 - Priority table: rank clusters; columns Priority | Cluster | Issues | Sample IDs |
   Why it matters (from `impact_reasons`).
 - Top 3–5 issues and next actions (fix / monitor / investigation handoff).
@@ -55,5 +59,8 @@ Slack-ready digest:
 ## Traps
 
 - `count` = events in the issue group; `issue_count` = issue groups returned
+- `page_saturated` / `issue_count_label` (`100+`) = first page only; more may exist
+- `page_complete` = exact count for query + window (under 100 cap)
+- Cluster `percent` = share of returned page, not org-wide total
 - `stats_period` is relative — no absolute timestamps
 - Detail APIs are expensive — enrich selectively

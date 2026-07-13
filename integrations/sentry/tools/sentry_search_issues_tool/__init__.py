@@ -169,7 +169,9 @@ def search_sentry_issues(
             "query": query,
         }
 
-    return _search_result_payload(issues, query=query, stats_period=stats_period)
+    return _search_result_payload(
+        issues, query=query, stats_period=stats_period, page_limit=limit
+    )
 
 
 def _search_result_payload(
@@ -177,12 +179,14 @@ def _search_result_payload(
     *,
     query: str,
     stats_period: str,
+    page_limit: int,
 ) -> dict[str, Any]:
     effective_period = _resolve_stats_period(stats_period or None)
     digest = build_sentry_issue_digest(
         issues,
         stats_period=effective_period,
         query=query,
+        page_limit=page_limit,
     )
     sample_limit = 15
     sample = []

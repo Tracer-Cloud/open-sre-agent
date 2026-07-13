@@ -8,6 +8,7 @@ from typing import Any
 _TOP_ISSUE_LIMIT = 5
 _PRIORITY_CANDIDATE_LIMIT = 5
 _CLUSTER_SHORT_ID_LIMIT = 3
+_DEFAULT_PAGE_LIMIT = 100
 _TITLE_THEME_RE = re.compile(r"^\[([^\]]+)\]")
 _CULPRIT_KEY_RE = re.compile(r"[^a-z0-9._-]+")
 
@@ -128,13 +129,78 @@ def scope_summary_for_digest(
     issue_count: int,
     stats_period: str,
     query: str,
+    page_limit: int = _DEFAULT_PAGE_LIMIT,
 ) -> str:
+    scope = build_scope_metadata(
+        issue_count=issue_count,
+        stats_period=stats_period,
+        query=query,
+        page_limit=page_limit,
+    )
+    summary = scope["scope_summary"]
+    return str(summary)
+
+
+def build_scope_metadata(
+    *,
+    issue_count: int,
+    stats_period: str,
+    query: str,
+    page_limit: int = _DEFAULT_PAGE_LIMIT,
+) -> dict[str, Any]:
+    """Describe how complete the returned issue page is for model-facing summaries."""
     period_label = stats_period_label(stats_period)
     query_label = query.strip() or "is:unresolved"
-    return (
-        f"{issue_count} unresolved issue group"
-        f"{'s' if issue_count != 1 else ''} in the {period_label} ({query_label})"
-    )
+    saturated = page_limit > 0 and issue_count >= page_limit
+
+    if saturated:
+        count_label = f"{page_limit}+"
+        completeness = "partial_page"
+        scope_summary = (
+            f"{count_label} unresolved issue groups in the {period_label} matching "
+            f"{query_label} (first page of {page_limit}; more may exist in this window)"
+        )
+        scope_note = (
+            f"Returned the first {page_limit} issue groups from Sentry for "
+            f"{query_label} in the {period_label}; additional unresolved groups "
+            f"may exist in the same window. Cluster percentages are shares of "
+            f"this {page_limit}-issue page, not of all unresolved issues in the org."
+        )
+    elif issue_count == 0:
+        count_label = "0"
+        completeness = "empty"
+        scope_summary = (
+            f"No unresolved issue groups in the {period_label} matching {query_label}"
+        )
+        scope_note = (
+            f"No issue groups matched {query_label} in the {period_label} "
+            f"(complete — nothing returned)."
+        )
+    else:
+        count_label = str(issue_count)
+        completeness = "complete_page"
+        plural = "s" if issue_count != 1 else ""
+        scope_summary = (
+            f"{count_label} unresolved issue group{plural} in the {period_label} "
+            f"matching {query_label} (complete — all matching groups in this window)"
+        )
+        scope_note = (
+            f"Returned all {issue_count} issue group{plural} matching {query_label} "
+            f"in the {period_label} (under the {page_limit}-issue page cap). Cluster "
+            f"percentages are shares of this complete result set."
+        )
+
+    return {
+        "issue_count": issue_count,
+        "issue_count_label": count_label,
+        "page_limit": page_limit,
+        "page_saturated": saturated,
+        "page_complete": not saturated and issue_count > 0,
+        "completeness": completeness,
+        "scope_summary": scope_summary,
+        "scope_note": scope_note,
+        "percent_basis": "returned_page",
+    }
 
 
 def structural_cluster_label(key: str, *, sample_titles: tuple[str, ...] = ()) -> str:
@@ -240,9 +306,16 @@ def build_sentry_issue_digest(
     *,
     stats_period: str,
     query: str,
+    page_limit: int = _DEFAULT_PAGE_LIMIT,
 ) -> dict[str, Any]:
     """Build a bounded digest from the full issue page for model-facing summaries."""
     issue_count = len(issues)
+    scope = build_scope_metadata(
+        issue_count=issue_count,
+        stats_period=stats_period,
+        query=query,
+        page_limit=page_limit,
+    )
     cluster_counts: dict[str, int] = {}
     cluster_titles: dict[str, list[str]] = {}
     cluster_short_ids: dict[str, list[str]] = {}
@@ -315,14 +388,17 @@ def build_sentry_issue_digest(
 
     return {
         "issue_count": issue_count,
+        "issue_count_label": scope["issue_count_label"],
+        "page_limit": scope["page_limit"],
+        "page_saturated": scope["page_saturated"],
+        "page_complete": scope["page_complete"],
+        "completeness": scope["completeness"],
         "stats_period": stats_period,
         "stats_period_label": stats_period_label(stats_period),
         "query": query,
-        "scope_summary": scope_summary_for_digest(
-            issue_count=issue_count,
-            stats_period=stats_period,
-            query=query,
-        ),
+        "scope_summary": scope["scope_summary"],
+        "scope_note": scope["scope_note"],
+        "percent_basis": scope["percent_basis"],
         "structural_clusters": structural_clusters,
         "top_issues": top_issues,
         "priority_candidates": priority_candidates,
