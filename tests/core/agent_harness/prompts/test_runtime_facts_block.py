@@ -115,12 +115,17 @@ def test_environment_block_omits_cloud_when_not_deployed() -> None:
     assert "cloud region is" not in block
 
 
-def test_environment_block_instructs_socket_reachability() -> None:
-    """Reachability questions must route to the sandbox socket pattern, with
-    allow_network named, instead of curl/ping."""
+def test_environment_block_does_not_coach_arbitrary_reachability_probing() -> None:
+    """The always-on prompt must not steer the model toward reachability
+    probing (allow_network has no destination allowlist — coaching it invites
+    SSRF on user-supplied hosts). Reachability guidance lives on the tool,
+    scoped to in-incident hosts, not in the fact block. The prompt still
+    forbids the shell reflexes via the deny-list."""
     block = _env_block({"opensre_version": "0.1"})
-    assert "socket.create_connection" in block
-    assert "allow_network" in block
+    assert "socket.create_connection" not in block
+    assert "allow_network" not in block
+    assert "`curl`" in block
+    assert "`ping`" in block
 
 
 def test_environment_block_omits_disk_memory_when_absent() -> None:
