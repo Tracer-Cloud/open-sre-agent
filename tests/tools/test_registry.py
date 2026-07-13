@@ -325,7 +325,7 @@ def test_github_workflow_skill_guidance_does_not_attach_to_unrelated_github_tool
 
 
 def test_architecture_audit_skill_guidance_is_attached_to_chat_and_investigation() -> None:
-    marker = "Use this workflow when the user asks for an architecture audit"
+    marker = "Required reply template"
 
     for surface in ("chat", "investigation"):
         tools_by_name = {
@@ -336,6 +336,7 @@ def test_architecture_audit_skill_guidance_is_attached_to_chat_and_investigation
         assert "Workflow guidance:" in tool_def.description
         assert marker in tool_def.skill_guidance
         assert "AUDIT_REPORT.md" in tool_def.skill_guidance
+        assert "scan_summary.hotspots" in tool_def.skill_guidance
 
 
 def test_architecture_audit_skill_guidance_does_not_attach_to_unrelated_tools() -> None:
@@ -344,7 +345,7 @@ def test_architecture_audit_skill_guidance_does_not_attach_to_unrelated_tools() 
     tool_def = tools_by_name["get_github_file_contents"]
 
     assert (
-        "Use this workflow when the user asks for an architecture audit"
+        "Required reply template"
         not in tool_def.skill_guidance
     )
     assert "Propose, do not execute" not in tool_def.skill_guidance

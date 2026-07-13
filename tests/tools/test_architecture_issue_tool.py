@@ -49,7 +49,7 @@ def test_metadata_is_github_read_only() -> None:
 
 def test_skill_guidance_is_attached_via_registry() -> None:
     registry_module.clear_tool_registry_cache()
-    marker = "Use this workflow when the user asks for an architecture audit"
+    marker = "Required reply template"
     tools_by_name = {
         tool_def.name: tool_def for tool_def in registry_module.get_registered_tools("chat")
     }
@@ -57,4 +57,8 @@ def test_skill_guidance_is_attached_via_registry() -> None:
     assert marker in tool_def.description
     assert marker in tool_def.skill_guidance
     assert "AUDIT_REPORT.md" in tool_def.skill_guidance
-    assert "Markdown audit report" in tool_def.skill_guidance
+    assert "Hotspots and statistics" in tool_def.skill_guidance
+    assert "scan_summary.hotspots" in tool_def.skill_guidance
+    assert "find_architecture_violations" in tool_def.skill_guidance
+    assert "prepare_architecture_workspace" not in tools_by_name
+    assert "release_architecture_workspace" not in tools_by_name

@@ -79,6 +79,7 @@ class ScanSummary:
     categories_skipped: list[ViolationKind] = field(default_factory=list)
     severity_counts: dict[str, int] = field(default_factory=dict)
     kind_counts: dict[str, int] = field(default_factory=dict)
+    hotspots: list[dict[str, Any]] = field(default_factory=list)
     coverage_complete: bool = True
 
     def to_dict(self) -> dict[str, Any]:
@@ -90,6 +91,7 @@ class ScanSummary:
             "categories_skipped": list(self.categories_skipped),
             "severity_counts": dict(self.severity_counts),
             "kind_counts": dict(self.kind_counts),
+            "hotspots": [dict(item) for item in self.hotspots],
             "coverage_complete": self.coverage_complete,
         }
 
@@ -119,6 +121,7 @@ def build_success_result(
             categories_skipped=list(summary.categories_skipped),
             severity_counts=dict(summary.severity_counts),
             kind_counts=dict(summary.kind_counts),
+            hotspots=[dict(item) for item in summary.hotspots],
             coverage_complete=summary.coverage_complete,
         )
 

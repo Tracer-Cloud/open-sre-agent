@@ -6,6 +6,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
+from tools.architecture_issue_tool.hotspots import build_hotspots
 from tools.architecture_issue_tool.models import (
     ArchitectureViolation,
     ScanSummary,
@@ -109,6 +110,7 @@ def _build_scan_summary(
         categories_skipped=categories_skipped,
         severity_counts=_severity_counts(violations),
         kind_counts=_kind_counts(violations),
+        hotspots=build_hotspots(violations),
         coverage_complete=coverage_complete,
     )
 

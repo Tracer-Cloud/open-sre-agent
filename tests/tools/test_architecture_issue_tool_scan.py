@@ -49,6 +49,15 @@ def test_run_architecture_scan_populates_severity_and_kind_counts(tmp_path: Path
     summary = result["scan_summary"]
     assert summary["severity_counts"] == {"p0": 0, "p1": 0, "p2": 1}
     assert summary["kind_counts"] == {"oversized_file": 1}
+    assert summary["hotspots"] == [
+        {
+            "area": "core",
+            "count": 1,
+            "share": 1.0,
+            "severity_counts": {"p0": 0, "p1": 0, "p2": 1},
+            "kind_counts": {"oversized_file": 1},
+        }
+    ]
     assert summary["coverage_complete"] is True
     assert summary["categories_skipped"] == []
 

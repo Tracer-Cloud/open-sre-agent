@@ -7,25 +7,40 @@ tools:
 
 # Architecture Audit
 
-Use this workflow when the user asks for an architecture audit, layer violations,
-tech-debt scan, or refactor task breakdown on a specific GitHub repository.
+1. Call `find_architecture_violations` with `owner`/`repo`.
+2. Reply with the **full** Markdown report below — never a casual prose summary.
+   Use tool JSON only. Render `scan_summary.hotspots` as the statistics table.
+3. Propose tasks; never auto-apply fixes. File GitHub issues only after approval.
 
-1. Read before reporting. Call `find_architecture_violations` with `owner` and
-   `repo`. Use `include_baselines=True` for full debt inventory; `False` for
-   actionable-only findings outside baselines.
-2. Interpret results. Use `scan_summary.severity_counts`, `kind_counts`,
-   `categories_skipped`, and `coverage_complete`. Cite repo-relative paths from
-   each violation's `evidence`. Warnings and skipped categories mean incomplete
-   coverage, not a clean repo.
-3. Write the Markdown report. The tool returns JSON only. Your user-facing reply
-   must be a Markdown audit report following `AUDIT_REPORT.md` in this directory.
-   Synthesize themes from `violations` and `refactor_tasks`. Do not echo raw JSON
-   or say the repo looks clean when `coverage_complete` is false.
-4. Propose, do not execute. `refactor_tasks` support issue filing; the main
-   deliverable is the Markdown report. Never auto-apply code changes.
-5. GitHub issues are separate. Use `suggested_issue_body` and
-   `execute_github_issue_mutation` only after explicit user approval.
-6. Limitations. Import/layer checks are polyglot tree-sitter scans with tool-owned
-   contracts — no import-linter config or Python requirement in the target repo.
-   Oversized-file, shim, and placement checks are Python/OpenSRE-specific and skip
-   gracefully when the clone lacks relevant files or layout markers.
+## Required reply template (fill every section)
+
+### Executive summary
+Counts from `scan_summary` (`violations`, `severity_counts`, `kind_counts`).
+Note partial coverage when `coverage_complete` is false.
+
+### Coverage and limitations
+List `warnings` and `categories_skipped`.
+
+### Hotspots and statistics
+**Required when `violations` > 0.** Render `scan_summary.hotspots` as a table:
+
+| Area | Count | Share | P0 | P1 | P2 |
+| --- | --- | --- | --- | --- | --- |
+| `area` | `count` | `share` | severity_counts… | | |
+
+Do not invent areas. Skip this section only when hotspots is empty.
+
+### Findings by severity
+P0 / P1 / P2 tables with evidence (path, line, edge) and fix direction.
+If >50 violations, show top examples per severity and state totals.
+
+### Thematic patterns
+Group repeated edges/themes with representative evidence.
+
+### Recommended sequencing
+Order `refactor_tasks` by severity/dependency.
+
+### Checks run
+`categories_scanned` minus skipped; include `owner`/`repo`/`ref`.
+
+Details: `AUDIT_REPORT.md` in this package.

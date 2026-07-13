@@ -138,6 +138,7 @@ def test_scan_summary_to_dict() -> None:
         categories_skipped=["layer_import"],
         severity_counts={"p0": 1, "p1": 1, "p2": 1},
         kind_counts={"layer_import": 1, "oversized_file": 2},
+        hotspots=[{"area": "core", "count": 2, "share": 0.6667}],
         coverage_complete=False,
     )
 
@@ -148,6 +149,7 @@ def test_scan_summary_to_dict() -> None:
     assert payload["categories_skipped"] == ["layer_import"]
     assert payload["severity_counts"] == {"p0": 1, "p1": 1, "p2": 1}
     assert payload["kind_counts"] == {"layer_import": 1, "oversized_file": 2}
+    assert payload["hotspots"] == [{"area": "core", "count": 2, "share": 0.6667}]
     assert payload["coverage_complete"] is False
 
 

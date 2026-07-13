@@ -20,9 +20,11 @@ return pre-rendered Markdown.
    for architecture issues."
 2. The assistant calls `find_architecture_violations` with `owner` and `repo`.
 3. The tool returns `violations`, `refactor_tasks`, and `scan_summary` (counts,
-   warnings, skipped categories, `coverage_complete`).
-4. The assistant replies with a Markdown report: executive summary, findings by
-   severity, thematic patterns, and recommended sequencing.
+   `hotspots`, warnings, skipped categories, `coverage_complete`).
+4. The assistant replies with a Markdown report following the tool's
+   `AUDIT_REPORT.md` outline: executive summary, coverage, hotspots and
+   statistics (from `scan_summary.hotspots`), findings by severity, thematic
+   patterns, recommended sequencing, and checks run.
 
 ## Parameters
 
