@@ -24,7 +24,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS sessions_slack_thread_uidx
     ON sessions (team_id, channel_id, thread_ts)
     WHERE surface = 'slack' AND team_id IS NOT NULL AND channel_id IS NOT NULL AND thread_ts IS NOT NULL;
 
--- Column set must match gateway/api/postgres_store.py (_COLUMNS) — the
+-- Column set must match gateway/http/postgres_store.py (_COLUMNS) — the
 -- runtime store is the authoritative shape.
 CREATE TABLE IF NOT EXISTS investigations (
     id TEXT PRIMARY KEY,

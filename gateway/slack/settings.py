@@ -9,7 +9,7 @@ from pydantic import Field, ValidationError, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 from config.strict_config import StrictConfigModel
-from gateway.config.get_gateway_settings import GatewayConfigurationError
+from gateway.runtime.errors import GatewayConfigurationError
 
 logger = logging.getLogger(__name__)
 

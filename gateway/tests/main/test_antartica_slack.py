@@ -24,7 +24,7 @@ from core.agent_harness.tools.action_tools import action_tool_names
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.action_driver import ToolCallingDeps, run_action_agent_turn
 from core.llm.types import AgentLLMResponse, ToolCall
-from gateway.headless_subprocess_presenter import headless_subprocess_presenter_factory
+from gateway.runtime.headless_subprocess_presenter import headless_subprocess_presenter_factory
 from tools.registry import clear_tool_registry_cache
 
 _USER_MESSAGE = (

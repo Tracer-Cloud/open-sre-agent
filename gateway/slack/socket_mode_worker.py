@@ -16,8 +16,8 @@ from slack_sdk.socket_mode.request import SocketModeRequest
 from slack_sdk.socket_mode.response import SocketModeResponse
 from slack_sdk.web import WebClient
 
-from gateway.config.get_gateway_settings import GatewayConfigurationError
-from gateway.sink_protocol import GatewayAgentCallback
+from gateway.runtime.errors import GatewayConfigurationError
+from gateway.runtime.sink_protocol import GatewayAgentCallback
 from gateway.slack.client import SlackMessagingClient, SlackWebApiClient
 from gateway.slack.events import SlackInboundMessage, parse_events_api_payload
 from gateway.slack.output_sink import SlackOutputSink

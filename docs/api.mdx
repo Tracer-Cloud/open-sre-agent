@@ -4,7 +4,7 @@ slug: "api"
 description: "Use the OpenSRE backend API: health, alert intake, investigations"
 ---
 
-The OpenSRE backend serves one HTTP API (FastAPI, `gateway/webapp.py`). All
+The OpenSRE backend serves one HTTP API (FastAPI, `gateway/http/webapp.py`). All
 routes live on a single port (default `8000`). In production, always call the
 API over HTTPS — deploy behind a TLS-terminating load balancer (see the
 Terraform module under `infra/terraform/`).

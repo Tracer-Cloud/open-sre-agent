@@ -7,6 +7,6 @@
 - ``inbox.py``         — in-process alert queue
 - ``tool_planning.py`` — score and rank investigation tools for an alert
 
-Alert intake HTTP is served by :mod:`gateway.webapp` ``POST /alerts`` (started from
+Alert intake HTTP is served by :mod:`gateway.http.webapp` ``POST /alerts`` (started from
 the interactive shell when ``alert_listener_enabled`` is set in REPL config).
 """

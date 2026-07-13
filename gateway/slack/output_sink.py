@@ -7,12 +7,12 @@ import threading
 import time
 from collections.abc import Iterable
 
-from gateway.slack.client import SlackMessagingClient
-from gateway.status_messages import (
+from gateway.runtime.status_messages import (
     initial_status_message,
     normalize_gateway_status,
     status_from_response_label,
 )
+from gateway.slack.client import SlackMessagingClient
 from platform.common.truncation import truncate
 
 # Slack rejects chat.postMessage text above this length with msg_too_long.
