@@ -3,15 +3,14 @@
 ## Build and Run commands
 
 - Build `make install` (sets up the project environment via `uv sync` and installs this repo in editable mode)
-- Run `**uv run opensre …**` from the repo root while developing — preferred approach, uses this checkout even if another `opensre` is on your `PATH`.
-- Use `**uv run python …**` for any Python commands.
+- Run **`uv run opensre …`** from the repo root while developing — preferred approach, uses this checkout even if another `opensre` is on your `PATH`.
+- Use **`uv run python …`** for any Python commands.
 
 ## Code Style
 
 - Use strict typing, follow DRY principle
 - One clear purpose per file (separation of concerns)
 - Do not keep compatibility-only forwarding modules after refactors. Once imports and tests
-
   are migrated, remove the old module path in the same change and use one canonical import path.
 
 Before any push or PR creation follow [**CI.md**](CI.md) — lint, format, typecheck, and test commands all live there.
@@ -19,7 +18,6 @@ Before any push or PR creation follow [**CI.md**](CI.md) — lint, format, typec
 When opening a PR, fill out the [**PR template**](.github/PULL_REQUEST_TEMPLATE.md) — it is not optional boilerplate; it has a required AI-usage disclosure section.
 
 ## 1. Repo Map
-
 
 | Path                                          | What it does                                                                                                                                                                                                                                                                                                                           |
 | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -47,7 +45,6 @@ When opening a PR, fill out the [**PR template**](.github/PULL_REQUEST_TEMPLATE.
 | `CI.md`                                       | Mandatory pre-push checklist: lint, format, typecheck, tests — agents MUST follow before pushing.                                                                                                                                                                                                                                      |
 | `TESTING.md`                                  | `ReplDriver` reference: API, usage patterns, wait-time guide, and limitations.                                                                                                                                                                                                                                                         |
 | `CONTRIBUTING.md`                             | Contribution workflow, branch/PR guidance, and quality expectations.                                                                                                                                                                                                                                                                   |
-
 
 Main packages one level deeper:
 
@@ -85,31 +82,22 @@ Steps:
 ### Changing the investigation pipeline
 
 Investigations are coordinated in `tools/investigation/lifecycle.py` and exposed via
-
 `tools/investigation/capability.py`. Semantic stages live under
-
 `tools/investigation/stages/`; reporting lives under
-
 `tools/investigation/reporting/`. See
-
 [docs/investigation-pipeline-architecture.md](docs/investigation-pipeline-architecture.md)
-
 for the end-to-end stage/loop diagrams before making structural changes.
 
 Files to touch:
 
 - `tools/investigation/lifecycle.py` for high-level stage ordering.
 - `core/state/` for shared agent state and investigation pipeline slice contracts
-
   that cross stage boundaries.
 - `core/domain/` for pure investigation rules (alert source mapping, tool planning,
-
   category alignment, correlation scoring).
 - `core/` for shared LLM runtime helpers (tool loop and LLM invoke error
-
   classification).
 - `core/state/*.py` when adding or renaming persisted investigation fields
-
   (update `AgentStateModel` and the matching slice).
 - `docs/` — update or add a page if the change introduces user-visible behavior or configuration.
 - `tests/` coverage for the affected CLI, synthetic, or integration paths.
@@ -129,4 +117,16 @@ Steps:
 1. Add the integration config and normalization logic first so the rest of the stack can consume a consistent shape.
 2. Wire the tool layer after the config path is stable.
 3. Before opening or approving the PR, follow [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md).
+
+## 3. Footguns (common mistakes to avoid)
+
+- No planning-stage fail-closed safeguard (v0.1): the interactive-shell action planner never denies a turn with "I couldn't safely decide actions". All terminal actions are read-only, so unmatched/ambiguous/chatty clauses run what they can and fall through to the assistant. Do **not** reintroduce a planner denial, the `mark_unhandled` tool, or the `UNHANDLED:` convention. Rationale and details: `core/agent_harness/AGENTS.md` and `docs/interactive-shell-action-policy.md`. If mutating actions are ever added, gate them at the execution stage (`tools/interactive_shell/shared/execution_policy.py`), not the planner.
+- Docs navigation: Adding an `.mdx` file under `docs/` is not enough — Mintlify only shows pages listed in `docs/docs.json`. Forgetting the `pages` entry leaves the doc unreachable from the site sidebar.
+- Investigation tool schemas: draft-07 JSON Schema (e.g. `"type": ["object", "null"]`) can pass loose checks but fail the LLM API on first invoke because **all** available investigation tools are sent together. Normalize in the provider adapter and extend registry contract tests; see [docs/investigation-tool-calling.md](docs/investigation-tool-calling.md).
+- Interactive-shell action selection: do not implement regex/keyword/fuzzy
+  intent routing, literal slash-command shortcuts, or deterministic action
+  bypasses around the action-agent AgentTool path. Engineers have been fired
+  before for implementing this exact shortcut. The runtime's literal-`/slash`
+  detection (`input_policy._literal_slash_command_text`) is terminal UI policy
+  only (spinner/stdin gating), not an execution path.
 
