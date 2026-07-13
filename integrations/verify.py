@@ -9,15 +9,12 @@ before any caller looks anything up.
 
 from __future__ import annotations
 
-import io
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
-from rich import box
-from rich.console import Console
 from rich.markup import escape
-from rich.table import Table
 
+from integrations._table_render import new_table, render_table
 from integrations._verifiers_loader import register_all_verifiers
 from integrations.catalog import (
     resolve_effective_integrations as _resolve_effective_integrations,
@@ -121,12 +118,7 @@ def format_verification_results(results: list[dict[str, str]]) -> str:
     folded within its own column instead of overflowing the terminal, which
     is what broke row alignment in the old fixed-width string formatting.
     """
-    table = Table(
-        box=box.MINIMAL_HEAVY_HEAD,
-        show_edge=False,
-        pad_edge=False,
-        header_style=f"bold {TEXT}",
-    )
+    table = new_table()
     table.add_column("SERVICE", style=TEXT, no_wrap=True)
     table.add_column("SOURCE", style=DIM, no_wrap=True)
     table.add_column("STATUS", no_wrap=True)
@@ -142,18 +134,7 @@ def format_verification_results(results: list[dict[str, str]]) -> str:
             escape(row.get("detail", "")),
         )
 
-    console = Console(
-        file=io.StringIO(),
-        record=True,
-        force_terminal=True,
-        color_system="truecolor",
-        highlight=False,
-        legacy_windows=False,
-    )
-    console.print()
-    console.print(table)
-    console.print()
-    return console.export_text(styles=False)
+    return render_table(table)
 
 
 def verification_exit_code(
