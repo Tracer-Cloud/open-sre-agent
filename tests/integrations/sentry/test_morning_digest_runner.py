@@ -46,7 +46,7 @@ class TestRunSentryMorningDigest:
         )
         monkeypatch.setattr(
             "integrations.sentry.morning_digest_runner._dispatch_headless_turn",
-            lambda _message: ShellTurnResult(
+            lambda _message, _payload: ShellTurnResult(
                 final_intent="chat",
                 action_result=ToolCallingTurnResult(
                     planned_count=0,
@@ -70,7 +70,7 @@ class TestRunSentryMorningDigest:
         )
         monkeypatch.setattr(
             "integrations.sentry.morning_digest_runner._dispatch_headless_turn",
-            lambda _message: ShellTurnResult(
+            lambda _message, _payload: ShellTurnResult(
                 final_intent="chat",
                 action_result=ToolCallingTurnResult(
                     planned_count=1,
