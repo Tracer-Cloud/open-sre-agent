@@ -11,16 +11,6 @@ from typing import Any
 from config.config import get_tracer_base_url
 from config.llm_credentials import resolve_env_credential
 from integrations.airflow.config import airflow_config_from_env
-from integrations.airflow.config import classify as _classify_airflow
-from integrations.alertmanager import classify as _classify_alertmanager
-from integrations.argocd import classify as _classify_argocd
-from integrations.aws import classify as _classify_aws
-from integrations.azure import classify as _classify_azure
-from integrations.azure_sql import build_azure_sql_config
-from integrations.azure_sql import classify as _classify_azure_sql
-from integrations.betterstack import build_betterstack_config
-from integrations.betterstack import classify as _classify_betterstack
-from integrations.bitbucket import classify as _classify_bitbucket
 from integrations.config_models import (
     AlertmanagerIntegrationConfig,
     ArgoCDIntegrationConfig,
@@ -44,48 +34,9 @@ from integrations.config_models import (
     VictoriaLogsIntegrationConfig,
     WhatsAppConfig,
 )
-from integrations.coralogix import classify as _classify_coralogix
-from integrations.dagster import build_dagster_config
-from integrations.dagster import classify as _classify_dagster
-from integrations.datadog import classify as _classify_datadog
-from integrations.discord import classify as _classify_discord
 from integrations.effective_models import EffectiveIntegrations
-from integrations.github.mcp import build_github_mcp_config
-from integrations.github.mcp import classify as _classify_github
-from integrations.gitlab import DEFAULT_GITLAB_BASE_URL, build_gitlab_config
-from integrations.gitlab import classify as _classify_gitlab
-from integrations.grafana import classify as _classify_grafana
-from integrations.groundcover import classify as _classify_groundcover
-from integrations.helm import classify as _classify_helm
-from integrations.honeycomb import classify as _classify_honeycomb
-from integrations.incident_io import classify as _classify_incident_io
-from integrations.jenkins import classify as _classify_jenkins
 from integrations.jenkins import jenkins_config_from_env
-from integrations.jira import classify as _classify_jira
-from integrations.mariadb import build_mariadb_config
-from integrations.mariadb import classify as _classify_mariadb
-from integrations.mongodb import build_mongodb_config
-from integrations.mongodb import classify as _classify_mongodb
-from integrations.mongodb_atlas import build_mongodb_atlas_config
-from integrations.mongodb_atlas import classify as _classify_mongodb_atlas
-from integrations.mysql import build_mysql_config
-from integrations.mysql import classify as _classify_mysql
-from integrations.openclaw import build_openclaw_config
-from integrations.openclaw import classify as _classify_openclaw
-from integrations.openobserve import classify as _classify_openobserve
-from integrations.opensearch import classify as _classify_opensearch
-from integrations.opsgenie import classify as _classify_opsgenie
-from integrations.pagerduty import classify as _classify_pagerduty
-from integrations.postgresql import build_postgresql_config
-from integrations.postgresql import classify as _classify_postgresql
-from integrations.posthog_mcp import DEFAULT_POSTHOG_MCP_URL, build_posthog_mcp_config
-from integrations.posthog_mcp import classify as _classify_posthog_mcp
-from integrations.prefect import classify as _classify_prefect
-from integrations.rabbitmq import build_rabbitmq_config
-from integrations.rabbitmq import classify as _classify_rabbitmq
-from integrations.rds import classify as _classify_rds
 from integrations.rds import rds_config_from_env
-from integrations.redis import classify as _classify_redis
 from integrations.redis import redis_config_from_env
 from integrations.registry import (
     DIRECT_CLASSIFIED_EFFECTIVE_SERVICES,
@@ -93,30 +44,9 @@ from integrations.registry import (
     family_key,
     service_key,
 )
-from integrations.sentry import build_sentry_config
-from integrations.sentry import classify as _classify_sentry
-from integrations.sentry_mcp import DEFAULT_SENTRY_MCP_URL, build_sentry_mcp_config
-from integrations.sentry_mcp import classify as _classify_sentry_mcp
-from integrations.signoz import classify as _classify_signoz
 from integrations.signoz import signoz_config_from_env
-from integrations.smtp import classify as _classify_smtp
-from integrations.snowflake import classify as _classify_snowflake
-from integrations.splunk import classify as _classify_splunk
 from integrations.store import _STRUCTURAL_RECORD_FIELDS, load_integrations
-from integrations.supabase import build_supabase_config
-from integrations.supabase import classify as _classify_supabase
-from integrations.telegram import classify as _classify_telegram
-from integrations.tempo import classify as _classify_tempo
 from integrations.tempo import tempo_config_from_env
-from integrations.temporal import classify as _classify_temporal
-from integrations.temporal.client import TemporalConfig
-from integrations.twilio import classify as _classify_twilio
-from integrations.vercel import classify as _classify_vercel
-from integrations.vercel.client import VercelConfig
-from integrations.victoria_logs import classify as _classify_victoria_logs
-from integrations.whatsapp import classify as _classify_whatsapp
-from integrations.x_mcp import build_x_mcp_config
-from integrations.x_mcp import classify as _classify_x_mcp
 from platform.common.coercion import safe_int
 from platform.observability.errors.boundary import report_exception
 
@@ -230,60 +160,86 @@ def classify_integrations(integrations: list[dict[str, Any]]) -> dict[str, Any]:
 _ClassifyFn = Callable[[dict[str, Any], str], tuple[Any | None, str | None]]
 
 
-_CLASSIFIERS: dict[str, _ClassifyFn] = {
-    "grafana": _classify_grafana,
-    "grafana_local": _classify_grafana,
-    "aws": _classify_aws,
-    "datadog": _classify_datadog,
-    "groundcover": _classify_groundcover,
-    "honeycomb": _classify_honeycomb,
-    "coralogix": _classify_coralogix,
-    "github": _classify_github,
-    "sentry": _classify_sentry,
-    "gitlab": _classify_gitlab,
-    "jenkins": _classify_jenkins,
-    "mongodb": _classify_mongodb,
-    "redis": _classify_redis,
-    "postgresql": _classify_postgresql,
-    "mongodb_atlas": _classify_mongodb_atlas,
-    "mariadb": _classify_mariadb,
-    "vercel": _classify_vercel,
-    "opsgenie": _classify_opsgenie,
-    "pagerduty": _classify_pagerduty,
-    "incident_io": _classify_incident_io,
-    "jira": _classify_jira,
-    "discord": _classify_discord,
-    "telegram": _classify_telegram,
-    "whatsapp": _classify_whatsapp,
-    "twilio": _classify_twilio,
-    "openclaw": _classify_openclaw,
-    "posthog_mcp": _classify_posthog_mcp,
-    "sentry_mcp": _classify_sentry_mcp,
-    "x_mcp": _classify_x_mcp,
-    "mysql": _classify_mysql,
-    "dagster": _classify_dagster,
-    "rabbitmq": _classify_rabbitmq,
-    "rds": _classify_rds,
-    "airflow": _classify_airflow,
-    "betterstack": _classify_betterstack,
-    "azure_sql": _classify_azure_sql,
-    "alertmanager": _classify_alertmanager,
-    "argocd": _classify_argocd,
-    "helm": _classify_helm,
-    "victoria_logs": _classify_victoria_logs,
-    "bitbucket": _classify_bitbucket,
-    "snowflake": _classify_snowflake,
-    "azure": _classify_azure,
-    "openobserve": _classify_openobserve,
-    "opensearch": _classify_opensearch,
-    "splunk": _classify_splunk,
-    "supabase": _classify_supabase,
-    "signoz": _classify_signoz,
-    "tempo": _classify_tempo,
-    "temporal": _classify_temporal,
-    "smtp": _classify_smtp,
-    "prefect": _classify_prefect,
+_CLASSIFIER_MODULES: dict[str, str] = {
+    "airflow": "integrations.airflow.config",
+    "alertmanager": "integrations.alertmanager",
+    "argocd": "integrations.argocd",
+    "aws": "integrations.aws",
+    "azure": "integrations.azure",
+    "azure_sql": "integrations.azure_sql",
+    "betterstack": "integrations.betterstack",
+    "bitbucket": "integrations.bitbucket",
+    "coralogix": "integrations.coralogix",
+    "dagster": "integrations.dagster",
+    "datadog": "integrations.datadog",
+    "discord": "integrations.discord",
+    "github": "integrations.github.mcp",
+    "gitlab": "integrations.gitlab",
+    "grafana": "integrations.grafana",
+    "grafana_local": "integrations.grafana",
+    "groundcover": "integrations.groundcover",
+    "helm": "integrations.helm",
+    "honeycomb": "integrations.honeycomb",
+    "incident_io": "integrations.incident_io",
+    "jenkins": "integrations.jenkins",
+    "jira": "integrations.jira",
+    "mariadb": "integrations.mariadb",
+    "mongodb": "integrations.mongodb",
+    "mongodb_atlas": "integrations.mongodb_atlas",
+    "mysql": "integrations.mysql",
+    "openclaw": "integrations.openclaw",
+    "openobserve": "integrations.openobserve",
+    "opensearch": "integrations.opensearch",
+    "opsgenie": "integrations.opsgenie",
+    "pagerduty": "integrations.pagerduty",
+    "postgresql": "integrations.postgresql",
+    "posthog_mcp": "integrations.posthog_mcp",
+    "prefect": "integrations.prefect",
+    "rabbitmq": "integrations.rabbitmq",
+    "rds": "integrations.rds",
+    "redis": "integrations.redis",
+    "sentry": "integrations.sentry",
+    "sentry_mcp": "integrations.sentry_mcp",
+    "signoz": "integrations.signoz",
+    "smtp": "integrations.smtp",
+    "snowflake": "integrations.snowflake",
+    "splunk": "integrations.splunk",
+    "supabase": "integrations.supabase",
+    "telegram": "integrations.telegram",
+    "tempo": "integrations.tempo",
+    "temporal": "integrations.temporal",
+    "twilio": "integrations.twilio",
+    "vercel": "integrations.vercel",
+    "victoria_logs": "integrations.victoria_logs",
+    "whatsapp": "integrations.whatsapp",
+    "x_mcp": "integrations.x_mcp",
 }
+
+_classifier_cache: dict[str, _ClassifyFn] = {}
+
+
+def _resolve_classifier(key: str) -> _ClassifyFn | None:
+    """Return the classify function for ``key``, importing its owning
+    module lazily on first lookup and caching the result.
+
+    Replaces a static ``_CLASSIFIERS`` dict of eagerly-imported functions:
+    building that dict required importing every integration's classify
+    function at module load time (~50 imports, some pulling in heavy
+    third-party SDKs), regardless of which services are actually
+    configured. This only imports a service's module the first time that
+    service is actually looked up.
+    """
+    if key in _classifier_cache:
+        return _classifier_cache[key]
+    module_path = _CLASSIFIER_MODULES.get(key)
+    if module_path is None:
+        return None
+    import importlib
+
+    module = importlib.import_module(module_path)
+    fn = module.classify
+    _classifier_cache[key] = fn
+    return fn
 
 
 def _classify_service_instance(
@@ -296,7 +252,7 @@ def _classify_service_instance(
     ``key`` itself, but Grafana splits into ``grafana`` or ``grafana_local``
     based on its ``is_local`` property.
     """
-    handler = _CLASSIFIERS.get(key)
+    handler = _resolve_classifier(key)
     if handler is not None:
         return handler(credentials, record_id)
     # Fallback for unknown services: pass through credentials + record id.
@@ -592,6 +548,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
     github_auth_token = os.getenv("GITHUB_MCP_AUTH_TOKEN", "").strip()
     github_toolsets = os.getenv("GITHUB_MCP_TOOLSETS", "").strip()
     if (github_mode == "stdio" and github_command) or (github_mode != "stdio" and github_url):
+        from integrations.github.mcp import build_github_mcp_config
         github_config = build_github_mcp_config(
             {
                 "url": github_url,
@@ -612,6 +569,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
     sentry_org_slug = os.getenv("SENTRY_ORG_SLUG", "").strip()
     sentry_auth_token = os.getenv("SENTRY_AUTH_TOKEN", "").strip()
     if sentry_org_slug and sentry_auth_token:
+        from integrations.sentry import build_sentry_config
         sentry_config = build_sentry_config(
             {
                 "base_url": os.getenv("SENTRY_URL", "https://sentry.io").strip()
@@ -630,6 +588,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
 
     gitlab_access_token = resolve_env_credential("GITLAB_ACCESS_TOKEN")
     if gitlab_access_token:
+        from integrations.gitlab import DEFAULT_GITLAB_BASE_URL, build_gitlab_config
         gitlab_config = build_gitlab_config(
             {
                 "base_url": os.getenv("GITLAB_BASE_URL", DEFAULT_GITLAB_BASE_URL).strip()
@@ -641,6 +600,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
 
     mongodb_connection_string = os.getenv("MONGODB_CONNECTION_STRING", "").strip()
     if mongodb_connection_string:
+        from integrations.mongodb import build_mongodb_config
         mongodb_config = build_mongodb_config(
             {
                 "connection_string": mongodb_connection_string,
@@ -668,6 +628,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
     postgresql_host = os.getenv("POSTGRESQL_HOST", "").strip()
     postgresql_database = os.getenv("POSTGRESQL_DATABASE", "").strip()
     if postgresql_host and postgresql_database:
+        from integrations.postgresql import build_postgresql_config
         postgresql_config = build_postgresql_config(
             {
                 "host": postgresql_host,
@@ -752,6 +713,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
     vercel_api_token = os.getenv("VERCEL_API_TOKEN", "").strip()
     if vercel_api_token:
         try:
+            from integrations.vercel.client import VercelConfig
             vercel_config = VercelConfig.model_validate(
                 {
                     "api_token": vercel_api_token,
@@ -960,6 +922,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
     atlas_project = os.getenv("MONGODB_ATLAS_PROJECT_ID", "").strip()
     if atlas_pub and atlas_priv and atlas_project:
         try:
+            from integrations.mongodb_atlas import build_mongodb_atlas_config
             atlas_config = build_mongodb_atlas_config(
                 {
                     "api_public_key": atlas_pub,
@@ -988,6 +951,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
         openclaw_mode != "stdio" and openclaw_url
     ):
         try:
+            from integrations.openclaw import build_openclaw_config
             openclaw_config = build_openclaw_config(
                 {
                     "url": openclaw_url,
@@ -1017,6 +981,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
     posthog_mcp_token = resolve_env_credential("POSTHOG_MCP_AUTH_TOKEN")
     posthog_mcp_url = os.getenv("POSTHOG_MCP_URL", "").strip()
     if posthog_mcp_mode != "stdio" and posthog_mcp_token and not posthog_mcp_url:
+        from integrations.posthog_mcp import DEFAULT_POSTHOG_MCP_URL
         posthog_mcp_url = DEFAULT_POSTHOG_MCP_URL
     if (posthog_mcp_mode == "stdio" and posthog_mcp_command) or (
         posthog_mcp_mode != "stdio" and posthog_mcp_url and posthog_mcp_token
@@ -1024,6 +989,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
         read_only_env = os.getenv("POSTHOG_MCP_READ_ONLY", "").strip().lower()
         read_only = read_only_env not in ("false", "0", "no") if read_only_env else True
         try:
+            from integrations.posthog_mcp import build_posthog_mcp_config
             posthog_mcp_config = build_posthog_mcp_config(
                 {
                     "url": posthog_mcp_url,
@@ -1057,11 +1023,13 @@ def load_env_integrations() -> list[dict[str, Any]]:
     sentry_mcp_token = resolve_env_credential("SENTRY_MCP_AUTH_TOKEN")
     sentry_mcp_url = os.getenv("SENTRY_MCP_URL", "").strip()
     if sentry_mcp_mode != "stdio" and sentry_mcp_token and not sentry_mcp_url:
+        from integrations.sentry_mcp import DEFAULT_SENTRY_MCP_URL
         sentry_mcp_url = DEFAULT_SENTRY_MCP_URL
     if (sentry_mcp_mode == "stdio" and sentry_mcp_command) or (
         sentry_mcp_mode != "stdio" and sentry_mcp_url and sentry_mcp_token
     ):
         try:
+            from integrations.sentry_mcp import build_sentry_mcp_config
             sentry_mcp_config = build_sentry_mcp_config(
                 {
                     "url": sentry_mcp_url,
@@ -1097,6 +1065,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
     x_mcp_url = os.getenv("X_MCP_URL", "").strip()
     if (x_mcp_mode == "stdio" and x_mcp_command) or (x_mcp_mode != "stdio" and x_mcp_url):
         try:
+            from integrations.x_mcp import build_x_mcp_config
             x_mcp_config = build_x_mcp_config(
                 {
                     "url": x_mcp_url,
@@ -1123,6 +1092,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
     mariadb_database = os.getenv("MARIADB_DATABASE", "").strip()
     if mariadb_host and mariadb_database:
         try:
+            from integrations.mariadb import build_mariadb_config
             mariadb_config = build_mariadb_config(
                 {
                     "host": mariadb_host,
@@ -1145,6 +1115,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
     dagster_endpoint = os.getenv("DAGSTER_ENDPOINT", "").strip()
     if dagster_endpoint:
         try:
+            from integrations.dagster import build_dagster_config
             dagster_config = build_dagster_config(
                 {
                     "endpoint": dagster_endpoint,
@@ -1164,6 +1135,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
     rabbitmq_username = os.getenv("RABBITMQ_USERNAME", "").strip()
     if rabbitmq_host and rabbitmq_username:
         try:
+            from integrations.rabbitmq import build_rabbitmq_config
             rabbitmq_config = build_rabbitmq_config(
                 {
                     "host": rabbitmq_host,
@@ -1203,6 +1175,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
     bs_username = os.getenv("BETTERSTACK_USERNAME", "").strip()
     if bs_endpoint and bs_username:
         try:
+            from integrations.betterstack import build_betterstack_config
             bs_config = build_betterstack_config(
                 {
                     "query_endpoint": bs_endpoint,
@@ -1223,6 +1196,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
     mysql_host = os.getenv("MYSQL_HOST", "").strip()
     mysql_database = os.getenv("MYSQL_DATABASE", "").strip()
     if mysql_host and mysql_database:
+        from integrations.mysql import build_mysql_config
         mysql_config = build_mysql_config(
             {
                 "host": mysql_host,
@@ -1246,6 +1220,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
     azure_sql_database = os.getenv("AZURE_SQL_DATABASE", "").strip()
     if azure_sql_server and azure_sql_database:
         _az_port = os.getenv("AZURE_SQL_PORT", "").strip()
+        from integrations.azure_sql import build_azure_sql_config
         azure_sql_config = build_azure_sql_config(
             {
                 "server": azure_sql_server,
@@ -1434,6 +1409,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
     supabase_service_key = os.getenv("SUPABASE_SERVICE_KEY", "").strip()
     if supabase_url and supabase_service_key:
         try:
+            from integrations.supabase import build_supabase_config
             sb_config = build_supabase_config(
                 {"url": supabase_url, "service_key": supabase_service_key}
             )
@@ -1486,6 +1462,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
     temporal_namespace = os.getenv("TEMPORAL_NAMESPACE", "default").strip()
     if temporal_url and temporal_namespace:
         try:
+            from integrations.temporal.client import TemporalConfig
             temporal_config = TemporalConfig.model_validate(
                 {
                     "base_url": temporal_url,

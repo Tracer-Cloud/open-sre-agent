@@ -388,7 +388,17 @@ def test_env_loader_failure_reports_and_skips(
     def _boom(*_args: Any, **_kwargs: Any) -> None:
         raise RuntimeError(f"forced {integration} failure")
 
-    monkeypatch.setattr(f"integrations._catalog_impl.{patch_symbol}", _boom)
+    _lazy_import_sources = {
+        "build_mariadb_config": "integrations.mariadb",
+        "build_rabbitmq_config": "integrations.rabbitmq",
+        "build_betterstack_config": "integrations.betterstack",
+        "build_supabase_config": "integrations.supabase",
+        "build_openclaw_config": "integrations.openclaw",
+        "VercelConfig": "integrations.vercel.client",
+        "build_mongodb_atlas_config": "integrations.mongodb_atlas",
+    }
+    patch_module = _lazy_import_sources.get(patch_symbol, "integrations._catalog_impl")
+    monkeypatch.setattr(f"{patch_module}.{patch_symbol}", _boom)
 
     with patch("integrations._catalog_impl.report_exception") as mock_report:
         result = load_env_integrations()
@@ -431,7 +441,7 @@ def test_one_failing_env_loader_does_not_abort_remaining_integrations(
     def _boom(*_args: Any, **_kwargs: Any) -> None:
         raise RuntimeError("forced vercel failure")
 
-    monkeypatch.setattr("integrations._catalog_impl.VercelConfig", _boom)
+    monkeypatch.setattr("integrations.vercel.client.VercelConfig", _boom)
 
     with patch("integrations._catalog_impl.report_exception"):
         result = load_env_integrations()
