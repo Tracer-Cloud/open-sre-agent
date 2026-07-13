@@ -8,7 +8,6 @@ from typing import Any, Literal
 ViolationKind = Literal[
     "layer_import",
     "direct_import",
-    "oversized_file",
     "compatibility_shim",
     "misplaced_module",
 ]

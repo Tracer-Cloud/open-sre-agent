@@ -70,12 +70,6 @@ def _task_for_violation(violation: ArchitectureViolation) -> RefactorTask:
             f"{violation.fix_direction}"
         )
         acceptance = ["make check-imports passes", "No new direct or layer import violations"]
-    elif violation.kind == "oversized_file":
-        path = str(violation.evidence.get("path", "target file"))
-        threshold = violation.evidence.get("threshold", 500)
-        title = f"Split oversized file: {path}"
-        description = f"{path} exceeds the architecture scan threshold. {violation.fix_direction}"
-        acceptance = [f"{path} is at or below {threshold} non-blank code lines"]
     elif violation.kind == "compatibility_shim":
         path = str(violation.evidence.get("path", "shim module"))
         title = f"Remove compatibility shim: {path}"
@@ -89,7 +83,6 @@ def _task_for_violation(violation: ArchitectureViolation) -> RefactorTask:
         title = f"Relocate misplaced module: {path}"
         description = violation.fix_direction
         acceptance = ["Module lives in the canonical package per tool-placement policy"]
-
     task = RefactorTask(
         task_id=_task_id(violation),
         title=title,

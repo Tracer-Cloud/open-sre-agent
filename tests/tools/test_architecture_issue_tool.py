@@ -15,27 +15,29 @@ class TestFindArchitectureViolationsContract(BaseToolContract):
 
 
 def test_find_architecture_violations_scans_local_path_fixture(tmp_path: Path) -> None:
-    core = tmp_path / "core"
-    core.mkdir()
-    (core / "big.py").write_text("x = 1\n" * 501, encoding="utf-8")
+    package = tmp_path / "integrations" / "demo"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text(
+        "from integrations.demo.client import DemoClient\n",
+        encoding="utf-8",
+    )
 
     result = find_architecture_violations(
         owner="Tracer-Cloud",
         repo="opensre",
         local_path=str(tmp_path),
-        categories=["oversized_file"],
+        categories=["compatibility_shim"],
     )
 
     assert result["available"] is True
     assert result["owner"] == "Tracer-Cloud"
     assert result["repo"] == "opensre"
-    assert result["scan_summary"]["categories_scanned"] == ["oversized_file"]
-    assert result["scan_summary"]["severity_counts"] == {"p0": 0, "p1": 0, "p2": 1}
-    assert result["scan_summary"]["kind_counts"] == {"oversized_file": 1}
+    assert result["scan_summary"]["categories_scanned"] == ["compatibility_shim"]
+    assert result["scan_summary"]["kind_counts"].get("compatibility_shim", 0) >= 1
     assert result["scan_summary"]["coverage_complete"] is True
     assert result["scan_summary"]["categories_skipped"] == []
-    assert len(result["violations"]) == 1
-    assert len(result["refactor_tasks"]) == 1
+    assert len(result["violations"]) >= 1
+    assert len(result["refactor_tasks"]) >= 1
     assert result["side_effects"] == []
 
 
@@ -45,6 +47,8 @@ def test_metadata_is_github_read_only() -> None:
     assert rt.side_effect_level == "read_only"
     assert "owner" in rt.input_schema["properties"]
     assert "repo" in rt.input_schema["properties"]
+    assert "oversized_file" not in rt.input_schema["properties"]["categories"]["items"]["enum"]
+    assert "max_lines" not in rt.input_schema["properties"]
 
 
 def test_skill_guidance_is_attached_via_registry() -> None:
@@ -60,5 +64,6 @@ def test_skill_guidance_is_attached_via_registry() -> None:
     assert "Hotspots and statistics" in tool_def.skill_guidance
     assert "scan_summary.hotspots" in tool_def.skill_guidance
     assert "find_architecture_violations" in tool_def.skill_guidance
+    assert "find_oversized_files" not in tools_by_name
     assert "prepare_architecture_workspace" not in tools_by_name
     assert "release_architecture_workspace" not in tools_by_name

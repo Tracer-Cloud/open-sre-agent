@@ -15,7 +15,6 @@ _DEFAULT_CATEGORY_SET = frozenset(
     {
         "layer_import",
         "direct_import",
-        "oversized_file",
         "compatibility_shim",
         "misplaced_module",
     }
@@ -47,7 +46,7 @@ def _github_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     ),
     use_cases=[
         "Auditing layer/import violations in a GitHub repository",
-        "Finding oversized files and compatibility shims before a refactor sprint",
+        "Finding compatibility shims and misplaced modules before a refactor sprint",
         "Producing a Markdown audit summary and atomic refactor task suggestions",
     ],
     anti_examples=[
@@ -64,7 +63,6 @@ def _github_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
             "owner": {"type": "string"},
             "repo": {"type": "string"},
             "ref": {"type": "string"},
-            "max_lines": {"type": "integer", "default": 500},
             "strict_layers": {"type": "boolean", "default": True},
             "include_baselines": {"type": "boolean", "default": False},
             "categories": {
@@ -74,7 +72,6 @@ def _github_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
                     "enum": [
                         "layer_import",
                         "direct_import",
-                        "oversized_file",
                         "compatibility_shim",
                         "misplaced_module",
                     ],
@@ -91,7 +88,6 @@ def find_architecture_violations(
     owner: str,
     repo: str,
     ref: str = "",
-    max_lines: int = 500,
     strict_layers: bool = True,
     include_baselines: bool = False,
     categories: list[str] | None = None,
@@ -116,7 +112,6 @@ def find_architecture_violations(
         ) as workspace:
             return run_architecture_scan(
                 workspace,
-                max_lines=max_lines,
                 strict_layers=strict_layers,
                 include_baselines=include_baselines,
                 categories=normalized_categories,

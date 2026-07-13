@@ -54,13 +54,13 @@ def test_refactor_task_to_dict_omits_empty_issue_body() -> None:
 def test_refactor_task_to_dict_includes_issue_body_when_set() -> None:
     task = RefactorTask(
         task_id="t-2",
-        title="Split oversized module",
-        description="Extract helpers from oversized file.",
+        title="Remove compatibility shim",
+        description="Delete forwarding module.",
         scope_files=["tools/foo.py"],
-        acceptance_criteria=["file under 500 lines"],
+        acceptance_criteria=["Forwarding module removed"],
         labels=["refactor"],
         related_violation_ids=["v-2"],
-        suggested_issue_body="## Summary\nSplit tools/foo.py",
+        suggested_issue_body="## Summary\nRemove tools/foo.py shim",
     )
 
     payload = task.to_dict()
@@ -72,20 +72,20 @@ def test_build_success_result_shape() -> None:
     violations = [
         ArchitectureViolation(
             id="v-1",
-            kind="oversized_file",
+            kind="compatibility_shim",
             severity="p2",
-            title="Oversized file",
-            evidence={"path": "tools/foo.py", "line_count": 501, "threshold": 500},
-            fix_direction="Extract sibling modules.",
+            title="Compatibility shim",
+            evidence={"path": "tools/foo.py", "pattern": "reexport_only_init"},
+            fix_direction="Import the canonical module.",
         )
     ]
     tasks = [
         RefactorTask(
             task_id="t-1",
-            title="Split tools/foo.py",
-            description="Reduce file size.",
+            title="Remove tools/foo.py shim",
+            description="Delete forwarding module.",
             scope_files=["tools/foo.py"],
-            acceptance_criteria=["under 500 lines"],
+            acceptance_criteria=["Forwarding module removed"],
             labels=["refactor"],
             related_violation_ids=["v-1"],
         )
@@ -134,10 +134,10 @@ def test_scan_summary_to_dict() -> None:
         violations=3,
         tasks=2,
         warnings=["skipped layer checks"],
-        categories_scanned=["oversized_file", "compatibility_shim"],
+        categories_scanned=["compatibility_shim", "misplaced_module"],
         categories_skipped=["layer_import"],
         severity_counts={"p0": 1, "p1": 1, "p2": 1},
-        kind_counts={"layer_import": 1, "oversized_file": 2},
+        kind_counts={"layer_import": 1, "compatibility_shim": 2},
         hotspots=[{"area": "core", "count": 2, "share": 0.6667}],
         coverage_complete=False,
     )
@@ -145,10 +145,10 @@ def test_scan_summary_to_dict() -> None:
     payload = summary.to_dict()
 
     assert payload["violations"] == 3
-    assert payload["categories_scanned"] == ["oversized_file", "compatibility_shim"]
+    assert payload["categories_scanned"] == ["compatibility_shim", "misplaced_module"]
     assert payload["categories_skipped"] == ["layer_import"]
     assert payload["severity_counts"] == {"p0": 1, "p1": 1, "p2": 1}
-    assert payload["kind_counts"] == {"layer_import": 1, "oversized_file": 2}
+    assert payload["kind_counts"] == {"layer_import": 1, "compatibility_shim": 2}
     assert payload["hotspots"] == [{"area": "core", "count": 2, "share": 0.6667}]
     assert payload["coverage_complete"] is False
 

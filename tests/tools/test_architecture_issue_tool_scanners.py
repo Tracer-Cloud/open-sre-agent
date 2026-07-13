@@ -8,7 +8,6 @@ from unittest.mock import patch
 from tools.architecture_issue_tool.scanners.compatibility_shims import scan_compatibility_shims
 from tools.architecture_issue_tool.scanners.import_checks import scan_import_violations
 from tools.architecture_issue_tool.scanners.module_placement import scan_module_placement
-from tools.architecture_issue_tool.scanners.oversized_files import scan_oversized_files
 
 _FIXTURE_ROOT = (
     Path(__file__).resolve().parents[1] / "fixtures" / "architecture_audit" / "polyglot_repo"
@@ -21,19 +20,6 @@ def test_scan_import_violations_uses_tree_sitter_graph() -> None:
     assert any(violation.kind == "layer_import" for violation in violations)
     assert any(violation.kind == "direct_import" for violation in violations)
     assert warnings == []
-
-
-def test_scan_oversized_files_flags_large_python_file(tmp_path: Path) -> None:
-    target = tmp_path / "core"
-    target.mkdir()
-    large_file = target / "big.py"
-    large_file.write_text("x = 1\n" * 501, encoding="utf-8")
-
-    violations = scan_oversized_files(tmp_path, max_lines=500)
-
-    assert len(violations) == 1
-    assert violations[0].kind == "oversized_file"
-    assert violations[0].evidence["path"] == "core/big.py"
 
 
 def test_scan_compatibility_shims_detects_reexport_init(tmp_path: Path) -> None:

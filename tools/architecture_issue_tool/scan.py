@@ -19,12 +19,10 @@ from tools.architecture_issue_tool.scanners._paths import iter_py_files
 from tools.architecture_issue_tool.scanners.compatibility_shims import scan_compatibility_shims
 from tools.architecture_issue_tool.scanners.import_checks import scan_import_violations
 from tools.architecture_issue_tool.scanners.module_placement import scan_module_placement
-from tools.architecture_issue_tool.scanners.oversized_files import scan_oversized_files
 
 _DEFAULT_CATEGORIES: tuple[ViolationKind, ...] = (
     "layer_import",
     "direct_import",
-    "oversized_file",
     "compatibility_shim",
     "misplaced_module",
 )
@@ -81,9 +79,6 @@ def _python_only_categories_skipped(
 ) -> list[ViolationKind]:
     skipped: list[ViolationKind] = []
     has_python = _has_python_files(clone_root)
-    if "oversized_file" in selected and not has_python:
-        skipped.append("oversized_file")
-        warnings.append("oversized_file checks skipped: no Python files found")
     if "compatibility_shim" in selected and not has_python:
         skipped.append("compatibility_shim")
         warnings.append("compatibility_shim checks skipped: no Python files found")
@@ -118,7 +113,6 @@ def _build_scan_summary(
 def run_architecture_scan(
     workspace: RepoWorkspace,
     *,
-    max_lines: int = 500,
     strict_layers: bool = True,
     include_baselines: bool = False,
     categories: list[ViolationKind] | None = None,
@@ -143,9 +137,6 @@ def run_architecture_scan(
         warnings.extend(import_warnings)
 
     python_only_skipped = _python_only_categories_skipped(clone_root, selected, warnings)
-
-    if "oversized_file" in selected and "oversized_file" not in python_only_skipped:
-        violations.extend(scan_oversized_files(clone_root, max_lines=max_lines))
 
     if "compatibility_shim" in selected and "compatibility_shim" not in python_only_skipped:
         violations.extend(scan_compatibility_shims(clone_root))

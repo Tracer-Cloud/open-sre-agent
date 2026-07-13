@@ -34,8 +34,12 @@ def test_run_architecture_scan_marks_skipped_import_categories(tmp_path: Path) -
 
 def test_run_architecture_scan_populates_severity_and_kind_counts(tmp_path: Path) -> None:
     workspace = RepoWorkspace(owner="org", repo="repo", ref="main", root=tmp_path)
-    (tmp_path / "core").mkdir()
-    (tmp_path / "core" / "big.py").write_text("x = 1\n" * 501, encoding="utf-8")
+    package = tmp_path / "integrations" / "demo"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text(
+        "from integrations.demo.client import DemoClient\n",
+        encoding="utf-8",
+    )
 
     with patch(
         "tools.architecture_issue_tool.scan.scan_import_violations",
@@ -43,21 +47,13 @@ def test_run_architecture_scan_populates_severity_and_kind_counts(tmp_path: Path
     ):
         result = run_architecture_scan(
             workspace,
-            categories=["oversized_file"],
+            categories=["compatibility_shim"],
         )
 
     summary = result["scan_summary"]
-    assert summary["severity_counts"] == {"p0": 0, "p1": 0, "p2": 1}
-    assert summary["kind_counts"] == {"oversized_file": 1}
-    assert summary["hotspots"] == [
-        {
-            "area": "core",
-            "count": 1,
-            "share": 1.0,
-            "severity_counts": {"p0": 0, "p1": 0, "p2": 1},
-            "kind_counts": {"oversized_file": 1},
-        }
-    ]
+    assert summary["severity_counts"]["p1"] >= 1
+    assert summary["kind_counts"].get("compatibility_shim", 0) >= 1
+    assert summary["hotspots"]
     assert summary["coverage_complete"] is True
     assert summary["categories_skipped"] == []
 

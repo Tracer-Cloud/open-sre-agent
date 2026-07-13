@@ -12,7 +12,7 @@ return pre-rendered Markdown.
 
 | Tool | Role | Side effects |
 | --- | --- | --- |
-| `find_architecture_violations` | Clone and scan `owner`/`repo` for layer imports, direct imports, oversized files, compatibility shims, and misplaced modules | None (ephemeral local clone) |
+| `find_architecture_violations` | Clone and scan `owner`/`repo` for layer imports, direct imports, compatibility shims, and misplaced modules | None (ephemeral local clone) |
 
 ## Typical workflow
 
@@ -35,7 +35,6 @@ return pre-rendered Markdown.
 | `ref` | remote default branch | Branch, tag, or SHA to clone |
 | `include_baselines` | `false` | When `true`, report allowlisted import edges instead of suppressing them |
 | `strict_layers` | `true` | When `true`, evaluate transitive cross-layer reachability; when `false`, direct edges only |
-| `max_lines` | `500` | Oversized-file threshold |
 | `categories` | all scanners | Limit to specific violation kinds |
 
 ## Coverage and limitations
@@ -43,7 +42,7 @@ return pre-rendered Markdown.
 - **Layer and direct import checks** use tree-sitter import extraction across supported
   languages (Python, Go, TypeScript/JavaScript, Rust, Java, and more). No import-linter
   config or Python-only layout is required in the target repository.
-- **Oversized files, shims, and placement** heuristics are Python/OpenSRE-specific and
+- **Shims and placement** heuristics are Python/OpenSRE-specific and
   are skipped gracefully when the clone has no relevant Python packages or layout markers.
 - When `scan_summary.coverage_complete` is `false`, some categories were skipped or
   warnings were raised — treat results as partial coverage, not proof of a clean repo.
