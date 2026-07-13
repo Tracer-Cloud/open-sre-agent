@@ -5,6 +5,7 @@ from __future__ import annotations
 from integrations.sentry.issue_digest import (
     build_sentry_issue_digest,
     business_impact_score,
+    scope_summary_for_digest,
     structural_cluster_key_for_issue,
 )
 
@@ -91,8 +92,16 @@ def test_build_sentry_issue_digest_structural_clusters_and_ranks() -> None:
     digest = build_sentry_issue_digest(issues, stats_period="7d", query="is:unresolved")
 
     assert digest["issue_count"] == 2
+    assert digest["scope_summary"] == scope_summary_for_digest(
+        issue_count=2,
+        stats_period="7d",
+        query="is:unresolved",
+    )
+    assert digest["stats_period_label"] == "last 7 days"
     assert digest["structural_clusters"][0]["key"] == "integrations.datadog.client"
     assert digest["structural_clusters"][0]["sample_titles"]
+    assert digest["structural_clusters"][0]["sample_short_ids"] == ["PYTHON-ET"]
+    assert digest["structural_clusters"][0]["percent"] == 50
     assert "e.g." in digest["structural_clusters"][0]["label"]
     assert digest["priority_candidates"][0]["short_id"] == "PYTHON-Y8"
     assert digest["top_issues"][0]["short_id"] == "PYTHON-Y8"

@@ -7,8 +7,16 @@ from typing import Any
 
 _TOP_ISSUE_LIMIT = 5
 _PRIORITY_CANDIDATE_LIMIT = 5
+_CLUSTER_SHORT_ID_LIMIT = 3
 _TITLE_THEME_RE = re.compile(r"^\[([^\]]+)\]")
 _CULPRIT_KEY_RE = re.compile(r"[^a-z0-9._-]+")
+
+_STATS_PERIOD_LABELS: dict[str, str] = {
+    "24h": "last 24 hours",
+    "7d": "last 7 days",
+    "14d": "last 14 days",
+    "30d": "last 30 days",
+}
 
 # Human-readable labels for common structural keys (LLM may rephrase further).
 _STRUCTURAL_LABELS: dict[str, str] = {
@@ -108,6 +116,25 @@ def _truncate(text: str, limit: int) -> str:
     if len(compact) <= limit:
         return compact
     return f"{compact[: limit - 1]}…"
+
+
+def stats_period_label(stats_period: str) -> str:
+    period = stats_period.strip() or "24h"
+    return _STATS_PERIOD_LABELS.get(period, f"last {period}")
+
+
+def scope_summary_for_digest(
+    *,
+    issue_count: int,
+    stats_period: str,
+    query: str,
+) -> str:
+    period_label = stats_period_label(stats_period)
+    query_label = query.strip() or "is:unresolved"
+    return (
+        f"{issue_count} unresolved issue group"
+        f"{'s' if issue_count != 1 else ''} in the {period_label} ({query_label})"
+    )
 
 
 def structural_cluster_label(key: str, *, sample_titles: tuple[str, ...] = ()) -> str:
@@ -218,6 +245,7 @@ def build_sentry_issue_digest(
     issue_count = len(issues)
     cluster_counts: dict[str, int] = {}
     cluster_titles: dict[str, list[str]] = {}
+    cluster_short_ids: dict[str, list[str]] = {}
     enriched: list[tuple[int, dict[str, Any]]] = []
 
     for issue in issues:
@@ -226,6 +254,9 @@ def build_sentry_issue_digest(
         title = str(issue.get("title") or "").strip()
         if title:
             cluster_titles.setdefault(structural_cluster, []).append(title)
+        short_id = str(issue.get("shortId") or issue.get("id") or "").strip()
+        if short_id:
+            cluster_short_ids.setdefault(structural_cluster, []).append(short_id)
         classification = classify_issue(issue)
         impact_score, impact_reasons = business_impact_score(issue)
         enriched.append(
@@ -258,6 +289,9 @@ def build_sentry_issue_digest(
                 "issue_count": count,
                 "percent": round((count / issue_count) * 100) if issue_count else 0,
                 "sample_titles": list(top_titles),
+                "sample_short_ids": list(
+                    dict.fromkeys(cluster_short_ids.get(key, ()))
+                )[:_CLUSTER_SHORT_ID_LIMIT],
             }
         )
 
@@ -282,7 +316,13 @@ def build_sentry_issue_digest(
     return {
         "issue_count": issue_count,
         "stats_period": stats_period,
+        "stats_period_label": stats_period_label(stats_period),
         "query": query,
+        "scope_summary": scope_summary_for_digest(
+            issue_count=issue_count,
+            stats_period=stats_period,
+            query=query,
+        ),
         "structural_clusters": structural_clusters,
         "top_issues": top_issues,
         "priority_candidates": priority_candidates,

@@ -43,8 +43,14 @@ Only top 3–5 and #1 priority: `get_sentry_issue_details` +
 
 ## 5. Summarise
 
-Slack-ready digest: total + window, themed cluster %, top 3–5, priority call
-with impact_reasons, next actions (fix / monitor / investigation handoff).
+Slack-ready digest:
+
+- **I found:** quote `digest.scope_summary` verbatim (total issue groups + window).
+- Themed cluster breakdown: each cluster as `N issues (P%)` with `sample_short_ids`
+  when present (e.g. `PYTHON-G4`, `TRACER-CLIENT-12`).
+- Priority table: rank clusters; columns Priority | Cluster | Issues | Sample IDs |
+  Why it matters (from `impact_reasons`).
+- Top 3–5 issues and next actions (fix / monitor / investigation handoff).
 
 ## Traps
 

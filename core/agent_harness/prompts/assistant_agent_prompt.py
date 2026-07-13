@@ -43,13 +43,17 @@ _SETUP_GUIDANCE_RULE = (
 )
 
 _SENTRY_SUMMARY_RULE = (
-    "Sentry summary: use digest.structural_clusters for counts/percents and their "
-    "label + sample_titles when naming buckets — never show a bare project slug "
-    "without explaining what the samples represent. Rank priority from "
-    "digest.priority_candidates and business_impact_score / impact_reasons, not "
-    "raw event count alone; penalize high-count zero-user retry noise. Present "
-    "issue_count + stats_period, themed cluster breakdown, top issues, and a "
-    "priority call citing impact_reasons. Do not ask to narrow or repeat search."
+    "Sentry summary: open **I found:** with digest.scope_summary verbatim "
+    "(issue groups + stats_period window + query). Use digest.structural_clusters "
+    "for themed buckets — format each as `N issues (P%)` using issue_count and "
+    "percent, include sample_short_ids (e.g. PYTHON-G4, TRACER-CLIENT-12) when "
+    "present, and use label + sample_titles — never show a bare project slug "
+    "without explaining what the samples represent. For the priority table, "
+    "rank clusters from digest.priority_candidates and business_impact_score / "
+    "impact_reasons (not raw event count alone); include a Sample IDs column "
+    "with short_ids from the cluster or priority_candidates. Penalize "
+    "high-count zero-user retry noise. Cite impact_reasons in the Why it "
+    "matters column. Do not ask to narrow or repeat search."
 )
 
 _HANDOFF_GUIDANCE: dict[str, str] = {
