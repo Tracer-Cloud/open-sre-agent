@@ -1,7 +1,7 @@
 # Unified Dockerfile for OpenSRE
 # Supports two runtime modes via MODE environment variable:
-#   MODE=web      - FastAPI health application (default)
-#   MODE=gateway  - Telegram two-way messaging gateway
+#   MODE=web      - FastAPI web API (health, alerts, async investigations)
+#   MODE=gateway  - Two-way messaging gateway (Slack Socket Mode + Telegram)
 #
 # EC2 deploy (make deploy) runs both as separate containers on one instance.
 #
@@ -15,7 +15,8 @@
 #   docker run -e MODE=gateway --env-file .env opensre-gateway:latest
 #
 # Required env vars for gateway mode:
-#   TELEGRAM_BOT_TOKEN, TELEGRAM_ALLOWED_USERS, LLM_PROVIDER, API keys
+#   SLACK_BOT_TOKEN + SLACK_APP_TOKEN (Slack) and/or TELEGRAM_BOT_TOKEN +
+#   TELEGRAM_ALLOWED_USERS (Telegram), plus LLM_PROVIDER and API keys
 
 FROM python:3.12-slim
 
@@ -27,8 +28,9 @@ RUN apt-get update \
 
 COPY . /app
 
+# postgresql extra: psycopg2 for the DATABASE_URL-backed investigations store.
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir .
+    && pip install --no-cache-dir ".[postgresql]"
 
 ENV PORT=8000
 ENV MODE=web

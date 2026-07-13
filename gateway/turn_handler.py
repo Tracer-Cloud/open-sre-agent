@@ -20,8 +20,8 @@ from core.agent_harness.session import SessionCore
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.default_reasoning_client import DefaultReasoningClientProvider
 from core.agent_harness.turns.headless_dispatch import HeadlessAgent
-from gateway.gateway_output_sink import GatewayOutputSink
 from gateway.headless_subprocess_presenter import headless_subprocess_presenter_factory
+from gateway.sink_protocol import GatewaySink
 from gateway.status_messages import status_from_tool_start
 from platform.observability.trace.spans import traced_session
 
@@ -34,7 +34,7 @@ class _ToolStatusObserver:
     user sees progress before the final answer instead of a silent wait.
     """
 
-    def __init__(self, sink: GatewayOutputSink) -> None:
+    def __init__(self, sink: GatewaySink) -> None:
         self._sink = sink
 
     def __call__(self, kind: str, data: dict[str, object]) -> None:
@@ -61,7 +61,7 @@ class GatewayTurnHandler:
         self,
         text: str,
         session: SessionCore,
-        sink: GatewayOutputSink,
+        sink: GatewaySink,
         logger: logging.Logger,
     ) -> None:
         with traced_session(getattr(session, "session_id", None), component="gateway_turn"):
@@ -87,7 +87,7 @@ class GatewayTurnHandler:
         *,
         text: str,
         session: SessionCore,
-        sink: GatewayOutputSink,
+        sink: GatewaySink,
         logger: logging.Logger,
     ) -> HeadlessAgent:
         """Build a fresh agent for a single gateway turn.

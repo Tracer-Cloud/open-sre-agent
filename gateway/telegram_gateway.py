@@ -14,7 +14,6 @@ from gateway.config.get_gateway_settings import (
     GatewaySettings,
     load_gateway_settings,
 )
-from gateway.polling.handle_polled_inbound_telegram_msg import GatewayAgentCallback
 from gateway.polling.telegram_gateway_background import (
     TelegramGatewayBackground,
     start_telegram_gateway_background,
@@ -23,6 +22,7 @@ from gateway.polling.telegram_polling_runtime import (
     initialize_telegram_polling_runtime,
     shutdown_telegram_polling_runtime,
 )
+from gateway.sink_protocol import GatewayAgentCallback
 
 
 def start_telegram_worker(

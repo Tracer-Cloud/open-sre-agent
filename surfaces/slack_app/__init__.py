@@ -1,15 +1,13 @@
-"""Slack bot surface — Phase 2 of V0.2.
+"""Slack bot surface.
 
-This package is empty scaffolding until the Slack bot code migrates
-from the tracer-web-app repo. See
-``opensre-notes/v0.2-ai-production-engineer/`` for the V0.2 roadmap.
+The inbound Slack transport lives in :mod:`gateway.slack` (Socket Mode worker,
+settings, event parsing, output sink), wired by :mod:`gateway.manager` — the
+layering contract forbids ``gateway`` → ``surfaces`` imports, so the transport
+sits beside the Telegram worker in ``gateway/``. Outbound Slack delivery
+(webhooks, RCA reports) lives in :mod:`integrations.slack`.
 
-Naming note: this package is ``slack_app/``, not ``slack/``, to
-disambiguate from :mod:`integrations.slack` (the existing webhook
-configuration + verifier + outbound delivery). ``surfaces.slack_app``
-is the inbound bot surface; ``integrations.slack`` is the outbound
-integration. The surface may import the integration; the reverse is
-forbidden by the layering contract.
+This package is reserved for a future user-facing Slack surface (slash-command
+UI, home tab); it intentionally holds no code today.
 """
 
 from __future__ import annotations

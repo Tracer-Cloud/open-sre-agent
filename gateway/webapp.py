@@ -33,6 +33,7 @@ from core.domain.alerts.inbox import (
 
 ensure_project_platform_package()
 
+from gateway.api.investigations import router as investigations_router  # noqa: E402
 from platform.observability.errors.sentry import capture_exception, init_sentry  # noqa: E402
 from tools.investigation.capability import (  # noqa: E402
     resolve_investigation_context,
@@ -58,6 +59,7 @@ class HealthResponse(BaseModel):
 
 
 app = FastAPI()
+app.include_router(investigations_router)
 
 
 def get_health_response() -> HealthResponse:

@@ -104,11 +104,28 @@ The tool requires approval before sending (same as other external messaging acti
 
 ---
 
+## Slack bot (chat with the agent)
+
+The gateway can also run a two-way Slack bot over [Socket Mode](https://api.slack.com/apis/connections/socket): mention the bot in a channel (`@OpenSRE what's wrong with checkout?`) or DM it, and it answers in a thread. Each thread is its own conversation with persistent context. No public inbound URL is needed — the gateway holds an outbound websocket.
+
+1. In your Slack app settings, enable **Socket Mode** and create an app-level token with the `connections:write` scope (`xapp-…`).
+2. Under **OAuth & Permissions**, grant the bot scopes `app_mentions:read`, `chat:write`, and `im:history`, then install the app and copy the bot token (`xoxb-…`).
+3. Under **Event Subscriptions**, subscribe to the bot events `app_mention` and `message.im`.
+4. Set `SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN`, and `SLACK_ALLOWED_USERS` (comma-separated Slack user IDs) where the gateway runs, then start it (`opensre gateway start`). Tokens come from the environment or a secret store — never commit them.
+
+`SLACK_ALLOWED_USERS` is **required** for the Socket Mode bot. For dogfood only, you may set `SLACK_ALLOW_OPEN_WORKSPACE=1` instead (any workspace member can talk to the bot).
+
+---
+
 ## Environment variables
 
 | Variable | Description |
 |---|---|
 | `SLACK_WEBHOOK_URL` | Incoming webhook URL. Required for delivery. |
+| `SLACK_BOT_TOKEN` | Bot token (`xoxb-…`) for the two-way Slack bot. From env/secrets only. |
+| `SLACK_APP_TOKEN` | App-level token (`xapp-…`) for Socket Mode. From env/secrets only. |
+| `SLACK_ALLOWED_USERS` | Comma-separated Slack user IDs allowed to talk to the bot (required unless open workspace). |
+| `SLACK_ALLOW_OPEN_WORKSPACE` | Set to `1` to allow any workspace member (dogfood escape hatch). |
 
 ---
 

@@ -2,13 +2,13 @@
 
 ``GatewayManager`` is the composition root for the OpenSRE background agent:
 it assembles the transport-agnostic turn handler from a booted session's tools
-and starts every daemon component — the web health app, the Telegram chat
-worker (when configured), and the scheduled-task runner — then owns the
+and starts every daemon component — the web health app, the Telegram and Slack
+chat workers (when configured), and the scheduled-task runner — then owns the
 process lifecycle (signals, ``stop``/``wait``). Component states are published
 through :func:`gateway.daemon.write_component_status` so the CLI and the
-interactive shell can report status. It holds no Telegram or agent-dispatch
-logic itself — those live in :mod:`gateway.turn_handler` and
-:mod:`gateway.telegram_gateway`.
+interactive shell can report status. It holds no transport or agent-dispatch
+logic itself — those live in :mod:`gateway.turn_handler`,
+:mod:`gateway.telegram_gateway`, and :mod:`gateway.slack_gateway`.
 """
 
 from __future__ import annotations
@@ -31,6 +31,8 @@ from gateway.daemon import (
     write_component_status,
 )
 from gateway.polling.telegram_gateway_background import TelegramGatewayBackground
+from gateway.slack.socket_mode_worker import SlackGatewayBackground
+from gateway.slack_gateway import start_slack_worker
 from gateway.telegram_gateway import start_telegram_worker
 from gateway.turn_handler import GatewayTurnHandler
 
@@ -42,6 +44,7 @@ class GatewayManager:
         self.settings: GatewaySettings | None = None
         self.logger: logging.Logger | None = None
         self.telegram_background_worker: TelegramGatewayBackground | None = None
+        self.slack_background_worker: SlackGatewayBackground | None = None
         self.web_server: Any = None
         self.scheduler: Any = None
         self.components: dict[str, str] = {}
@@ -75,6 +78,7 @@ class GatewayManager:
 
         self._start_web(logger)
         self._start_telegram(logger, handler)
+        self._start_slack(logger, handler)
         self._start_scheduler(logger)
         self._publish_status(logger)
 
@@ -96,6 +100,8 @@ class GatewayManager:
         stopped = True
         if self.telegram_background_worker is not None:
             stopped = self.telegram_background_worker.stop(timeout=timeout)
+        if self.slack_background_worker is not None:
+            stopped = self.slack_background_worker.stop(timeout=timeout) and stopped
         clear_component_status()
         self._stopped.set()
         return stopped
@@ -132,6 +138,17 @@ class GatewayManager:
         self.settings = settings
         self.telegram_background_worker = worker
         self.components["telegram"] = "polling for messages"
+
+    def _start_slack(self, logger: logging.Logger, handler: Any) -> None:
+        """Start the Slack chat worker; run without it when not configured."""
+        try:
+            worker, _settings = start_slack_worker(logger=logger, handler=handler)
+        except GatewayConfigurationError as exc:
+            logger.warning("Slack chat disabled: %s", exc)
+            self.components["slack"] = f"not configured ({exc})"
+            return
+        self.slack_background_worker = worker
+        self.components["slack"] = "connected via socket mode"
 
     def _start_scheduler(self, _logger: logging.Logger) -> None:
         """Run cron-scheduled tasks inside the daemon (no separate process needed)."""

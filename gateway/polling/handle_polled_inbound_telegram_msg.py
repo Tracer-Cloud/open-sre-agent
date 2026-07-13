@@ -4,10 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 
-from core.agent_harness.session import SessionCore
 from gateway.config.get_gateway_settings import GatewaySettings, TelegramInboundMessage
 from gateway.gateway_output_sink import GatewayOutputSink
 from gateway.polling.telegram_poller.client import TelegramBotClient
@@ -15,10 +13,10 @@ from gateway.session.inbound_message_security import (
     enforce_inbound_telegram_message_security,
 )
 from gateway.session.resolve_or_rotate_session import resolve_or_rotate_session
+from gateway.sink_protocol import GatewayAgentCallback
 from gateway.storage import SessionResolver
 
 logger = logging.getLogger(__name__)
-GatewayAgentCallback = Callable[[str, SessionCore, GatewayOutputSink, logging.Logger], None]
 
 
 async def handle_polled_inbound_telegram_message(
