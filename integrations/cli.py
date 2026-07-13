@@ -1455,7 +1455,7 @@ def cmd_list() -> None:
     console.print()
     console.print(table)
     console.print()
-    print(console.export_text(styles=True))
+    print(console.export_text(styles=False))
 
 
 def cmd_show(service: str | None) -> None:
