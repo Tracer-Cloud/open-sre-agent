@@ -30,3 +30,16 @@ def install_scheduler_investigation_runner() -> Iterator[None]:
         yield
     finally:
         register_investigation_runner(None)
+
+
+@pytest.fixture(autouse=True)
+def install_scheduler_agent_runner() -> Iterator[None]:
+    """Bind + tear down the scheduler's agent runner for every test."""
+    from platform.scheduler.agent_runner import register_agent_runner
+    from tools.sentry.scheduler_bootstrap import install
+
+    install()
+    try:
+        yield
+    finally:
+        register_agent_runner(None)
