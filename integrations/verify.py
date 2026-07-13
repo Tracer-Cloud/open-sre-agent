@@ -1,25 +1,22 @@
 """Verification facade: per-service verifiers and the top-level verify_integrations runner.
 
 Verifier callables are sourced from the central plugin registry
-(``integrations.verification``). Importing this module triggers
-:func:`register_all_verifiers`, which pulls in every integration-local
-``@register_verifier`` decorator so the registry is fully populated
-before any caller looks anything up.
+(``integrations.verification``). Each service's ``integrations.<service>.verifier``
+module is imported lazily, on first lookup via ``get_verifier()`` — not eagerly
+for every integration — so this module only pays import costs for services
+that are actually checked.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from integrations._verifiers_loader import register_all_verifiers
 from integrations.catalog import (
     resolve_effective_integrations as _resolve_effective_integrations,
 )
 from integrations.registry import CORE_VERIFY_SERVICES, SUPPORTED_VERIFY_SERVICES
 from integrations.slack.verifier import RUNTIME_SEND_TEST_KEY as _SLACK_RUNTIME_SEND_TEST_KEY
 from integrations.verification import VerifierFn, get_verifier, result
-
-register_all_verifiers()
 
 
 def resolve_effective_integrations() -> dict[str, dict[str, Any]]:

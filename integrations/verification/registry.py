@@ -40,7 +40,24 @@ def register_verifier(service: str) -> Callable[[VerifierFn], VerifierFn]:
 
 
 def get_verifier(service: str) -> VerifierFn | None:
-    """Return the verifier registered for ``service``, or ``None``."""
+    """Return the verifier registered for ``service``.
+
+    Imports ``integrations.<service>.verifier`` on first lookup if not
+    already registered, so callers only pay the import cost for services
+    they actually check — not all integrations on every invocation.
+    Returns ``None`` if the service has no verifier module.
+    """
+    if service not in _REGISTRY:
+        import importlib
+
+        parent = f"integrations.{service}"
+        candidate = f"{parent}.verifier"
+        try:
+            importlib.import_module(candidate)
+        except ModuleNotFoundError as err:
+            if err.name not in (candidate, parent):
+                raise
+            return None
     return _REGISTRY.get(service)
 
 
