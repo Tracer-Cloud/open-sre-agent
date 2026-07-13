@@ -130,7 +130,7 @@ def format_verification_results(results: list[dict[str, str]]) -> str:
         table.add_row(
             escape(row.get("service", "?")),
             escape(row.get("source", "-")),
-            f"[{style}]{glyph} {status}[/]",
+            f"[{style}]{glyph} {escape(status)}[/]",
             escape(row.get("detail", "")),
         )
 
