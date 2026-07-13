@@ -76,12 +76,16 @@ def test_one_pool_and_every_connection_returned(monkeypatch: pytest.MonkeyPatch)
     assert pool.puts == 3
 
 
+def _raise_query_error() -> None:
+    raise RuntimeError("query exploded")
+
+
 def test_connection_returned_to_pool_on_error(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_pool_cls = _install_fake_psycopg2(monkeypatch)
     store = PostgresInvestigationStore("postgresql://example/db")
     pool = fake_pool_cls.instances[0]
 
     with pytest.raises(RuntimeError), store._connection():
-        raise RuntimeError("query exploded")
+        _raise_query_error()
 
     assert pool.puts == pool.gets

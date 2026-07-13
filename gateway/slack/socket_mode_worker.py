@@ -5,7 +5,10 @@ from __future__ import annotations
 import logging
 import sqlite3
 import threading
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
+from dataclasses import dataclass, field
 
 from slack_sdk.socket_mode import SocketModeClient
 from slack_sdk.socket_mode.client import BaseSocketModeClient
@@ -30,6 +33,14 @@ _EVENTS_API_REQUEST_TYPE = "events_api"
 _MAX_CONVERSATION_LOCKS = 1024
 
 _DENIAL_REPLY = "You're not authorized to use this bot. Ask an admin to add you."
+
+
+@dataclass
+class _ConversationLock:
+    """A per-conversation lock with a holder/waiter count for safe pruning."""
+
+    lock: threading.Lock = field(default_factory=threading.Lock)
+    refs: int = 0
 
 
 class SlackGatewayBackground:
@@ -85,7 +96,7 @@ class _SlackTurnDispatcher:
         self._session_resolver = session_resolver
         self._handler = handler
         self._logger = logger
-        self._conversation_locks: dict[str, threading.Lock] = {}
+        self._conversation_locks: dict[str, _ConversationLock] = {}
         self._locks_guard = threading.Lock()
         self._resolver_lock = threading.Lock()
 
@@ -95,22 +106,34 @@ class _SlackTurnDispatcher:
         except Exception:
             self._logger.error("[slack-gateway] turn failed", exc_info=True)
 
-    def _conversation_lock(self, conversation_key: str) -> threading.Lock:
-        """Return the per-conversation lock, pruning idle entries at the cap."""
+    @contextmanager
+    def _conversation_turn(self, conversation_key: str) -> Iterator[None]:
+        """Serialize turns per conversation, pruning idle lock entries at the cap.
+
+        The reference count marks an entry as in use from before this thread
+        leaves the guard until after it releases the lock, so pruning can never
+        discard a lock another thread is about to acquire.
+        """
         with self._locks_guard:
-            lock = self._conversation_locks.get(conversation_key)
-            if lock is None:
+            entry = self._conversation_locks.get(conversation_key)
+            if entry is None:
                 if len(self._conversation_locks) >= _MAX_CONVERSATION_LOCKS:
                     self._conversation_locks = {
                         key: existing
                         for key, existing in self._conversation_locks.items()
-                        if existing.locked()
+                        if existing.refs > 0
                     }
-                lock = self._conversation_locks[conversation_key] = threading.Lock()
-            return lock
+                entry = self._conversation_locks[conversation_key] = _ConversationLock()
+            entry.refs += 1
+        try:
+            with entry.lock:
+                yield
+        finally:
+            with self._locks_guard:
+                entry.refs -= 1
 
     def _run_turn(self, inbound: SlackInboundMessage) -> None:
-        with self._conversation_lock(inbound.conversation_key):
+        with self._conversation_turn(inbound.conversation_key):
             result = authorize_slack_message(
                 user_id=inbound.user_id,
                 channel_id=inbound.channel_id,
