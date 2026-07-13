@@ -1,6 +1,6 @@
 name: terraform-opensre-backend (validate)
 
-# Runs terraform fmt + init + validate against platform/deployment/terraform/
+# Runs terraform fmt + init + validate against infra/terraform/
 # on every PR that touches the backend infra. Validation only — no AWS
 # credentials, no plan, never apply. Apply is developer-local
 # (make deploy-fargate-apply); when plan-from-CI is wanted later, model the
@@ -9,7 +9,7 @@ name: terraform-opensre-backend (validate)
 on:
   pull_request:
     paths:
-      - "platform/deployment/terraform/**"
+      - "infra/terraform/**"
       - ".github/workflows/terraform-opensre-backend.yml"
   workflow_dispatch:
 
@@ -27,7 +27,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: platform/deployment/terraform
+        working-directory: infra/terraform
 
     env:
       TF_IN_AUTOMATION: "true"

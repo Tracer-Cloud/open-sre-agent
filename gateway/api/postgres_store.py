@@ -3,10 +3,17 @@
 from __future__ import annotations
 
 import json
+import threading
 import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 
 from gateway.api.investigation_store import InvestigationRecord, InvestigationStatus
+
+_POOL_MIN_CONNECTIONS = 1
+# Bounds concurrent server connections: the worker plus a burst of API threads.
+_POOL_MAX_CONNECTIONS = 10
 
 _COLUMNS = (
     "id, clerk_org_id, workspace_id, status, trigger, error, "
@@ -57,13 +64,32 @@ class PostgresInvestigationStore:
 
     def __init__(self, dsn: str) -> None:
         self._dsn = dsn
-        with self._connect() as conn, conn.cursor() as cursor:
+        self._pool: Any = None
+        self._pool_lock = threading.Lock()
+        with self._connection() as conn, conn.cursor() as cursor:
             cursor.execute(_SCHEMA)
 
-    def _connect(self) -> Any:
-        import psycopg2  # local import: the postgresql extra is optional
+    def _get_pool(self) -> Any:
+        with self._pool_lock:
+            if self._pool is None:
+                # Local import: the postgresql extra is optional.
+                from psycopg2.pool import ThreadedConnectionPool
 
-        return psycopg2.connect(self._dsn)
+                self._pool = ThreadedConnectionPool(
+                    _POOL_MIN_CONNECTIONS, _POOL_MAX_CONNECTIONS, self._dsn
+                )
+            return self._pool
+
+    @contextmanager
+    def _connection(self) -> Iterator[Any]:
+        """Yield a pooled connection; commit on success, roll back on error, always return it."""
+        pool = self._get_pool()
+        conn = pool.getconn()
+        try:
+            with conn:
+                yield conn
+        finally:
+            pool.putconn(conn)
 
     def create(
         self,
@@ -73,7 +99,7 @@ class PostgresInvestigationStore:
         workspace_id: str | None = None,
     ) -> InvestigationRecord:
         investigation_id = str(uuid.uuid4())
-        with self._connect() as conn, conn.cursor() as cursor:
+        with self._connection() as conn, conn.cursor() as cursor:
             cursor.execute(
                 f"""
                 INSERT INTO investigations
@@ -92,7 +118,7 @@ class PostgresInvestigationStore:
             return _row_to_record(cursor.fetchone())
 
     def get(self, investigation_id: str) -> InvestigationRecord | None:
-        with self._connect() as conn, conn.cursor() as cursor:
+        with self._connection() as conn, conn.cursor() as cursor:
             cursor.execute(
                 f"SELECT {_COLUMNS} FROM investigations WHERE id = %s",
                 (investigation_id,),
@@ -101,7 +127,7 @@ class PostgresInvestigationStore:
             return _row_to_record(row) if row else None
 
     def claim_next_queued(self) -> InvestigationRecord | None:
-        with self._connect() as conn, conn.cursor() as cursor:
+        with self._connection() as conn, conn.cursor() as cursor:
             cursor.execute(
                 f"""
                 UPDATE investigations
@@ -129,7 +155,7 @@ class PostgresInvestigationStore:
         report_s3_key: str | None = None,
         error: str | None = None,
     ) -> None:
-        with self._connect() as conn, conn.cursor() as cursor:
+        with self._connection() as conn, conn.cursor() as cursor:
             cursor.execute(
                 """
                 UPDATE investigations

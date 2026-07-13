@@ -24,7 +24,7 @@ and injected by ECS at task start; they never appear in the task definition.
 ## Usage
 
 ```bash
-cd platform/deployment/terraform
+cd infra/terraform
 terraform init
 
 terraform apply \

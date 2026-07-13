@@ -294,7 +294,7 @@ destroy:
 
 # Fargate backend (web API + Slack gateway) via Terraform — plan by default;
 # apply/destroy prompt for confirmation inside Terraform.
-TERRAFORM_DIR := platform/deployment/terraform
+TERRAFORM_DIR := infra/terraform
 
 deploy-fargate:
 	terraform -chdir=$(TERRAFORM_DIR) init -input=false
