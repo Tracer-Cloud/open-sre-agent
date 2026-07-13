@@ -15,6 +15,7 @@ from typing import Any
 
 from rich import box
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
 from integrations._verifiers_loader import register_all_verifiers
@@ -135,10 +136,10 @@ def format_verification_results(results: list[dict[str, str]]) -> str:
         status = row.get("status", "?")
         glyph, style = _STATUS_STYLE.get(status, (GLYPH_BULLET, TEXT))
         table.add_row(
-            row.get("service", "?"),
-            row.get("source", "-"),
+            escape(row.get("service", "?")),
+            escape(row.get("source", "-")),
             f"[{style}]{glyph} {status}[/]",
-            row.get("detail", ""),
+            escape(row.get("detail", "")),
         )
 
     console = Console(

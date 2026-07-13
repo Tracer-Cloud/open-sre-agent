@@ -1424,6 +1424,7 @@ def cmd_list() -> None:
 
     from rich import box
     from rich.console import Console
+    from rich.markup import escape
     from rich.table import Table
 
     from platform.terminal.theme import GLYPH_SUCCESS, HIGHLIGHT, SECONDARY, TEXT
@@ -1440,9 +1441,11 @@ def cmd_list() -> None:
     for i in items:
         status = i["status"]
         status_cell = (
-            f"[bold {HIGHLIGHT}]{GLYPH_SUCCESS} {status}[/]" if status == "active" else status
+            f"[bold {HIGHLIGHT}]{GLYPH_SUCCESS} {escape(status)}[/]"
+            if status == "active"
+            else escape(status)
         )
-        table.add_row(i["service"], status_cell, i["id"])
+        table.add_row(escape(i["service"]), status_cell, escape(i["id"]))
 
     console = Console(
         file=io.StringIO(),
