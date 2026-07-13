@@ -47,6 +47,8 @@ def test_extract_params_maps_fields() -> None:
 
 
 def test_extract_params_maps_local_store_credentials() -> None:
+    """Store-configured integrations carry base_url/auth_token (not the legacy
+    gitlab_url/gitlab_token keys); extract_params must still surface them."""
     rt = list_gitlab_commits.__opensre_registered_tool__
     sources = mock_agent_state(
         {
@@ -99,17 +101,54 @@ def test_resolve_config_rejects_url_override_without_matching_token(
     assert _resolve_config("https://source.gitlab.example.com", "") is None
 
 
-def test_resolve_config_uses_paired_url_and_token_overrides(
+def test_resolve_config_prefers_injected_store_creds_over_env(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """When both env and the resolved integration store carry credentials, the
+    store (injected) credentials win — env is only a fallback."""
     monkeypatch.setenv("GITLAB_ACCESS_TOKEN", "env-token")
     monkeypatch.setenv("GITLAB_BASE_URL", "https://env.gitlab.example.com/api/v4")
 
-    config = _resolve_config("https://source.gitlab.example.com", "source-token")
+    config = _resolve_config("https://store.gitlab.example.com/api/v4", "store-token")
 
     assert config is not None
-    assert config.auth_token == "source-token"
-    assert config.api_base_url == "https://source.gitlab.example.com/api/v4"
+    assert config.auth_token == "store-token"
+    assert config.api_base_url == "https://store.gitlab.example.com/api/v4"
+
+
+def test_run_uses_resolved_sources_creds_when_env_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression: a store/keyring-configured GitLab integration with NO env vars
+    still resolves credentials from the resolved sources dict and succeeds."""
+    monkeypatch.delenv("GITLAB_ACCESS_TOKEN", raising=False)
+    monkeypatch.delenv("GITLAB_BASE_URL", raising=False)
+
+    rt = list_gitlab_commits.__opensre_registered_tool__
+    sources = mock_agent_state(
+        {
+            "gitlab": {
+                "connection_verified": True,
+                "project_id": "42",
+                "base_url": "https://gitlab.example.com/api/v4",
+                "auth_token": "glpat-store",
+            }
+        }
+    )
+    params = rt.extract_params(sources)
+
+    fake_commits = [{"id": "abc", "title": "fix: bug"}]
+    with patch(
+        "integrations.gitlab.tools.gitlab_commits_tool.get_gitlab_commits",
+        return_value=fake_commits,
+    ) as mock_fn:
+        result = list_gitlab_commits(**params)
+
+    assert result["available"] is True
+    assert result["commits"] == fake_commits
+    config = mock_fn.call_args.kwargs["config"]
+    assert config.auth_token == "glpat-store"
+    assert config.api_base_url == "https://gitlab.example.com/api/v4"
 
 
 def test_run_returns_unavailable_when_config_missing() -> None:

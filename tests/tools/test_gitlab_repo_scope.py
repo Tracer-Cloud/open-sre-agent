@@ -79,6 +79,28 @@ def test_infer_gitlab_repo_scope_uses_environment() -> None:
     assert scope == ("group/project", "release", "docs/runbook.md")
 
 
+def test_infer_gitlab_repo_scope_recognizes_configured_self_hosted_host() -> None:
+    """A self-hosted host that lacks the ``gitlab`` substring is trusted when it
+    matches the configured ``GITLAB_BASE_URL`` host."""
+    scope = infer_gitlab_repo_scope(
+        message="read https://git.internal.corp/team/service/-/blob/main/runbook.md",
+        conversation_messages=[],
+        env={
+            "GITLAB_BASE_URL": "https://git.internal.corp/api/v4",
+            "GITLAB_ACCESS_TOKEN": "glpat-token",
+        },
+    )
+    assert scope == ("team/service", "main", "runbook.md")
+
+
+def test_parse_gitlab_repository_reference_rejects_unknown_self_hosted_host() -> None:
+    """Without the configured host context, a non-gitlab host is not recognized."""
+    assert (
+        parse_gitlab_repository_reference("https://git.internal.corp/team/service/-/blob/main/r.md")
+        is None
+    )
+
+
 def test_detect_git_remote_repo_scope_parses_ssh_remote() -> None:
     with patch("integrations.gitlab.repo_scope.subprocess.run") as run:
         run.return_value = MagicMock(
