@@ -35,6 +35,13 @@ def verify_integrations(
     results: list[dict[str, str]] = []
 
     for current_service in services:
+        integration = effective_integrations.get(current_service)
+        if not integration:
+            results.append(
+                result(current_service, "-", "missing", "Not configured in local store or env.")
+            )
+            continue
+
         verifier = get_verifier(current_service)
         if verifier is None:
             results.append(
@@ -44,13 +51,6 @@ def verify_integrations(
                     "failed",
                     "Verification is not supported for this service.",
                 )
-            )
-            continue
-
-        integration = effective_integrations.get(current_service)
-        if not integration:
-            results.append(
-                result(current_service, "-", "missing", "Not configured in local store or env.")
             )
             continue
 
