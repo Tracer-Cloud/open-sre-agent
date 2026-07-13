@@ -1,6 +1,6 @@
 ---
 title: "Architecture audit"
-description: "Interactive-shell architecture audit: clone, four agent shell passes (import/placement/size/shim), then cleanup"
+description: "Interactive-shell architecture audit: agent-scan orientation, four heuristic shell passes, cleanup, then save observations"
 ---
 
 Architecture audit runs in the **interactive shell** via an action-agent skill.
@@ -10,7 +10,14 @@ It is not a chat/investigation tool.
 
 1. `architecture_clone_repo` shallow-clones `owner`/`repo` into
    `.temp/opensre/architecture_workspace`.
-2. Four separate `shell_run` passes (do not combine):
+2. **Agent scan** — up to three `shell_run` probes to orient on the repo
+   before heuristics: top-level layout, source vs public-header vs API trees,
+   and `CONTEXT.md` / ADRs when present (falls back to `AGENTS.md`,
+   `ARCHITECTURE.md`, `docs/adr/`, etc.). Notes early friction (locality,
+   shallow modules, seam leaks, testability, deletion test). This context
+   steers later passes; it is not a separate findings dump.
+3. Four separate `shell_run` passes (do not combine), using roots discovered
+   above:
    - **Import** — discover the repo's layer/import contract from docs and
      layout, then gather contradicting cross-boundary import evidence.
    - **Placement** — discover package/module placement rules, then report
@@ -18,9 +25,12 @@ It is not a chat/investigation tool.
    - **Size** — oversized source files across languages.
    - **Shims** — compatibility / re-export / facade candidates (distinguish
      deliberate public API entrypoints from leftover forwarding modules).
-3. `architecture_cleanup_repo` deletes `.temp/opensre/architecture_workspace`.
-4. The assistant renders a Markdown audit report from the four shell outputs
-   and invents recommended sequencing calibrated to the target repo's contract.
+4. `architecture_cleanup_repo` deletes `.temp/opensre/architecture_workspace`.
+5. `architecture_save_observations` writes the full **heuristic** observation
+   list (import/placement/size/shim) to
+   `~/.opensre/{session_id}/{repo_name}-architecture-audit-{uuid}.md`.
+6. The assistant renders a summarized Markdown audit report grounded in the
+   agent-scan layout context plus those heuristic leads.
 
 ## Tools
 
@@ -28,7 +38,8 @@ It is not a chat/investigation tool.
 | --- | --- |
 | `architecture_clone_repo` | Clone into `.temp/opensre/architecture_workspace` |
 | `architecture_cleanup_repo` | Delete the architecture workspace only |
-| `shell_run` | Import, placement, size, and shim passes (one command each) |
+| `architecture_save_observations` | Persist heuristic observations under `~/.opensre/{session_id}/` |
+| `shell_run` | ≤3 agent-scan orientation probes plus four heuristic passes (`quiet=true`) |
 
 ## Example
 
@@ -36,8 +47,10 @@ It is not a chat/investigation tool.
 Audit Tracer-Cloud/opensre for architecture violations, including oversized files.
 ```
 
-The action agent clones, runs the four shell passes, cleans up, and returns a
-Markdown report shaped by
+The action agent clones, orients with a short agent scan, runs the four
+heuristic shell passes, cleans up, saves the heuristic observation list, and
+returns a summarized Markdown report shaped by
 `core/agent_harness/prompts/skills/architecture_audit/architecture_audit_report.md`.
 All four passes are heuristic — treat findings as leads grounded in the target
-repo's docs and layout, not AST-proof violations.
+repo's docs and layout, not AST-proof violations. The agent scan exists so
+those passes hit the right trees instead of assuming a fixed layout.

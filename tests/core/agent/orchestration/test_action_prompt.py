@@ -184,8 +184,10 @@ def test_skills_loader_bundles_architecture_audit_skill() -> None:
     assert "scan_architecture_imports" not in block
     assert "scan_module_placement" not in block
     assert "architecture_cleanup_repo" in block
+    assert "architecture_save_observations" in block
     assert "shell_run" in block
     assert "Never end the turn with shell_run" in block
+    assert "quiet=true" in block
     assert "four separate shell_run" in block or "Four separate" in block or "IMPORT pass" in block
     assert "IMPORT pass" in block
     assert "PLACEMENT pass" in block
@@ -193,8 +195,17 @@ def test_skills_loader_bundles_architecture_audit_skill() -> None:
     assert "SHIM pass" in block
     assert "You write each bash" in block
     assert "about 15" in block
-    assert "Budget: clone + 4 shell passes + cleanup" in block
+    assert (
+        "Budget: clone + ≤3 agent-scan shell_run + 4 heuristic shell passes + cleanup"
+        in block
+    )
+    assert "~/.opensre/{session_id}/{repo_name}-architecture-audit-{uuid}.md" in block
     assert "AGENTS-style docs" in block
+    assert "AGENT SCAN" in block
+    assert "deletion test" in block
+    assert "CONTEXT.md" in block
+    assert "max 3 shell_run" in block
+    assert "BEFORE any" in block or "before heuristics" in block
     assert "Decide what \"large\" means" in block
     assert "do NOT limit to Python" in block
     assert "do NOT skip non-Python" in block
@@ -214,6 +225,7 @@ def test_skills_loader_bundles_architecture_audit_skill() -> None:
     assert "Do NOT wrap filled values in backticks" in block
     assert "contract source" in block
     assert "calibrate to the repo" in block
+    assert "grounded in AGENT SCAN context" in block
     assert report_path in block
 
     prompt = build_action_system_prompt(_ctx(messages=[("user", "audit architecture")]))

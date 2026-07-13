@@ -199,17 +199,6 @@ def stream_to_console(
             )
 
     def _flush_paragraphs(*, force: bool = False) -> None:
-        """Emit any complete paragraphs from ``para_buffer``.
-
-        Splits on ``\\n\\n`` (``_PARAGRAPH_BREAK``) but only when an
-        even number of triple-backtick fences (``_CODE_FENCE``) are
-        present in the proposed prefix — that's enough to keep code
-        blocks whole without tracking fence type. A ``\\n\\n`` falling
-        inside an open fence is skipped so we keep scanning forward;
-        otherwise a code block with embedded blank lines would defer
-        every later paragraph to ``force=True`` at EOS. ``force``
-        flushes any remaining buffer at end-of-stream.
-        """
         nonlocal para_buffer
         break_len = len(_PARAGRAPH_BREAK)
         while True:

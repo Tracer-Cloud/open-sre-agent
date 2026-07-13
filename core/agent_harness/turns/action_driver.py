@@ -49,8 +49,9 @@ log = logging.getLogger(__name__)
 # enough headroom for a *data-dependent* compound request that must run
 # sequentially: each step waits for the previous tool's result before the next
 # call can be emitted (e.g. "look up the weather and then send it to Slack" =
-# shell_run -> observe temperature -> slack_send_message -> final no-tool reply).
-_MAX_TOOL_CALLING_ITERATIONS = 10
+# Architecture audit needs headroom for clone + ≤3 agent-scan probes +
+# 4 heuristic shells + cleanup + save observations (then a no-tool report).
+_MAX_TOOL_CALLING_ITERATIONS = 13
 _EXECUTED_HISTORY_TYPES = {
     "slash",
     "shell",

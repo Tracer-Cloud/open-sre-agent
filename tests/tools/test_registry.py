@@ -334,6 +334,7 @@ def test_architecture_audit_action_tools_are_registered() -> None:
     for name in (
         "architecture_clone_repo",
         "architecture_cleanup_repo",
+        "architecture_save_observations",
     ):
         assert name in tools_by_name
         assert tools_by_name[name].skill_guidance == ""
@@ -347,6 +348,7 @@ def test_architecture_audit_not_on_chat_or_investigation() -> None:
         names = {tool_def.name for tool_def in registry_module.get_registered_tools(surface)}
         assert "find_architecture_violations" not in names
         assert "architecture_clone_repo" not in names
+        assert "architecture_save_observations" not in names
 
 
 def test_architecture_audit_skill_guidance_does_not_attach_to_unrelated_tools() -> None:
