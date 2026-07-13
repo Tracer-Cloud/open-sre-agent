@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from platform.common.errors import OpenSREError
 from surfaces.interactive_shell.session.background_investigations import (
     BackgroundInvestigationRecord,
 )
@@ -23,6 +24,35 @@ def deliver_background_notifications(
     effective_integrations = resolve_effective_integrations()
 
     for channel in channels:
+        if channel == "telegram":
+            # Imported lazily: telegram delivery only fires on background-RCA
+            # completion, so the telegram client must not load into the base
+            # REPL boot import path.
+            from integrations.telegram.credentials import load_credentials_from_env
+            from integrations.telegram.delivery import send_telegram_report
+
+            try:
+                creds = load_credentials_from_env()
+            except OpenSREError as exc:
+                results["telegram"] = f"missing telegram integration: {exc}"
+                continue
+
+            _subject, body = format_background_rca_email(
+                task_id=record.task_id,
+                command=record.command,
+                root_cause=record.root_cause,
+                top_analysis=record.top_analysis,
+                next_steps=record.next_steps,
+                stats=record.stats,
+            )
+            ok, error = send_telegram_report(
+                body,
+                {"bot_token": creds.bot_token, "chat_id": creds.chat_id},
+                parse_mode="",
+            )
+            results["telegram"] = "sent" if ok else f"failed: {error}"
+            continue
+
         if channel != "email":
             results[channel] = "unsupported"
             continue
