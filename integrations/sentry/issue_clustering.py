@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 _TITLE_THEME_RE = re.compile(r"^\[([^\]]+)\]")
@@ -21,6 +23,54 @@ STRUCTURAL_LABEL_OVERRIDES: dict[str, str] = {
     "platform.harness_ports": "Harness / integration wiring errors",
     "uncategorised": "Uncategorised errors",
 }
+
+
+# Map repo package prefixes to cluster-key depth (shallow vs nested module path).
+@dataclass(frozen=True)
+class _ModuleClusterRule:
+    prefix: str
+    shallow_depth: int
+    deep_depth: int
+    min_dots_for_deep: int
+
+
+_MODULE_CLUSTER_RULES: tuple[_ModuleClusterRule, ...] = (
+    _ModuleClusterRule("integrations.", shallow_depth=2, deep_depth=3, min_dots_for_deep=2),
+    _ModuleClusterRule("tools.", shallow_depth=2, deep_depth=3, min_dots_for_deep=2),
+    _ModuleClusterRule("core.", shallow_depth=2, deep_depth=2, min_dots_for_deep=999),
+    _ModuleClusterRule("surfaces.", shallow_depth=2, deep_depth=2, min_dots_for_deep=999),
+    _ModuleClusterRule("platform.", shallow_depth=2, deep_depth=2, min_dots_for_deep=999),
+    _ModuleClusterRule("gateway.", shallow_depth=2, deep_depth=2, min_dots_for_deep=999),
+)
+
+# Package-style keys → label template ({name} = first path segment, title-cased).
+_PACKAGE_LABEL_RULES: tuple[tuple[str, str], ...] = (
+    ("integrations.", "{name} integration errors"),
+    ("tools.", "{name} tool errors"),
+    ("core.", "{name} runtime errors"),
+    ("surfaces.", "{name} surface errors"),
+    ("platform.", "{name} platform errors"),
+)
+
+# Fixed-prefix keys → label builder (remainder is the part after the prefix).
+_SPECIAL_LABEL_RULES: tuple[tuple[str, Callable[[str], str]], ...] = (
+    (
+        "title-theme:",
+        lambda rest: f"{rest.replace('_', ' ').title()} errors (from issue titles)",
+    ),
+    (
+        "culprit:",
+        lambda rest: f"Code path {rest.replace('_', '.')}",
+    ),
+    (
+        "project:",
+        lambda rest: f"Sentry project {rest} (fallback bucket — inspect samples)",
+    ),
+    (
+        "issue-group:",
+        lambda rest: f"Issue family {rest.upper()}",
+    ),
+)
 
 
 def _culprit_module(culprit: str) -> str:
@@ -42,6 +92,17 @@ def _package_cluster_key(module: str, *, depth: int) -> str:
     return ".".join(parts[:depth])
 
 
+def _cluster_key_from_module(module: str) -> str | None:
+    for rule in _MODULE_CLUSTER_RULES:
+        if not module.startswith(rule.prefix):
+            continue
+        depth = (
+            rule.deep_depth if module.count(".") >= rule.min_dots_for_deep else rule.shallow_depth
+        )
+        return _package_cluster_key(module, depth=depth)
+    return None
+
+
 def _title_theme_key(issue: dict[str, Any]) -> str | None:
     title = str(issue.get("title") or "").strip()
     match = _TITLE_THEME_RE.match(title)
@@ -51,19 +112,22 @@ def _title_theme_key(issue: dict[str, Any]) -> str | None:
     return f"title-theme:{theme}" if theme != "unknown" else None
 
 
+def _project_slug(issue: dict[str, Any]) -> str:
+    project = issue.get("project")
+    if isinstance(project, dict):
+        return str(project.get("slug") or "").strip()
+    if isinstance(project, str):
+        return project.strip()
+    return ""
+
+
 def structural_cluster_key_for_issue(issue: dict[str, Any]) -> str:
     """Assign a stable structural bucket from culprit, title theme, or issue id."""
     module = _culprit_module(str(issue.get("culprit") or ""))
 
-    if module.startswith("integrations."):
-        return _package_cluster_key(module, depth=3 if module.count(".") >= 2 else 2)
-
-    if module.startswith("tools."):
-        return _package_cluster_key(module, depth=3 if module.count(".") >= 2 else 2)
-
-    for prefix in ("core.", "surfaces.", "platform.", "gateway."):
-        if module.startswith(prefix):
-            return _package_cluster_key(module, depth=2)
+    module_key = _cluster_key_from_module(module)
+    if module_key is not None:
+        return module_key
 
     if module and "." in module:
         return f"culprit:{_sanitize_key(module)}"
@@ -76,13 +140,9 @@ def structural_cluster_key_for_issue(issue: dict[str, Any]) -> str:
     if "-" in short_id:
         return f"issue-group:{short_id.rsplit('-', 1)[0].lower()}"
 
-    project = issue.get("project")
-    if isinstance(project, dict):
-        slug = str(project.get("slug") or "").strip()
-        if slug:
-            return f"project:{slug}"
-    elif isinstance(project, str) and project.strip():
-        return f"project:{project.strip()}"
+    slug = _project_slug(issue)
+    if slug:
+        return f"project:{slug}"
 
     if module:
         return f"culprit:{_sanitize_key(module)}"
@@ -113,33 +173,24 @@ def _structural_label_override(key: str) -> str | None:
     return best_label
 
 
+def _label_from_package_rules(key: str) -> str | None:
+    for prefix, template in _PACKAGE_LABEL_RULES:
+        if not key.startswith(prefix):
+            continue
+        package = key.removeprefix(prefix).split(".", 1)[0]
+        return template.format(name=_package_title(package))
+    return None
+
+
+def _label_from_special_rules(key: str) -> str | None:
+    for prefix, build_label in _SPECIAL_LABEL_RULES:
+        if key.startswith(prefix):
+            return build_label(key.removeprefix(prefix))
+    return None
+
+
 def _generic_structural_label(key: str) -> str:
-    if key.startswith("integrations."):
-        vendor = key.removeprefix("integrations.").split(".", 1)[0]
-        return f"{_package_title(vendor)} integration errors"
-    if key.startswith("tools."):
-        package = key.removeprefix("tools.").split(".", 1)[0]
-        return f"{_package_title(package)} tool errors"
-    if key.startswith("core."):
-        package = key.removeprefix("core.").split(".", 1)[0]
-        return f"{_package_title(package)} runtime errors"
-    if key.startswith("surfaces."):
-        package = key.removeprefix("surfaces.").split(".", 1)[0]
-        return f"{_package_title(package)} surface errors"
-    if key.startswith("platform."):
-        package = key.removeprefix("platform.").split(".", 1)[0]
-        return f"{_package_title(package)} platform errors"
-    if key.startswith("title-theme:"):
-        theme = key.removeprefix("title-theme:").replace("_", " ")
-        return f"{theme.title()} errors (from issue titles)"
-    if key.startswith("culprit:"):
-        return f"Code path {key.removeprefix('culprit:').replace('_', '.')}"
-    if key.startswith("project:"):
-        slug = key.removeprefix("project:")
-        return f"Sentry project {slug} (fallback bucket — inspect samples)"
-    if key.startswith("issue-group:"):
-        return f"Issue family {key.removeprefix('issue-group:').upper()}"
-    return key
+    return _label_from_package_rules(key) or _label_from_special_rules(key) or key
 
 
 def structural_cluster_label(key: str, *, sample_titles: tuple[str, ...] = ()) -> str:
