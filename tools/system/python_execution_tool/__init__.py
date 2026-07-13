@@ -51,8 +51,7 @@ class PythonExecutionTool(BaseTool):
         "Changing local files or shelling out to other processes",
         f"Calling {', '.join(BLOCKED_INTROSPECTION_COMMANDS)} (all blocked by the sandbox)",
         "Probing cloud instance metadata over the network (use the injected cloud facts)",
-        "Using allow_network for arbitrary host/port reachability probes or scanning "
-        "(allow_network is unrestricted once enabled — only for approved API-backed analysis)",
+        "Using allow_network for arbitrary host/port reachability probes or scanning (allow_network is unrestricted once enabled — only for approved API-backed analysis)",
         "Long-running jobs, crawlers, or broad external scans",
         "Accessing credentials not explicitly provided by configured integrations or env vars",
     ]
