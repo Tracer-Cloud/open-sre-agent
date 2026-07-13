@@ -84,6 +84,44 @@ def test_filesystem_introspection_without_subprocess() -> None:
     assert isinstance(payload["memory_used"], (int, float))
 
 
+def test_socket_reachability_check_works_with_allow_network() -> None:
+    """The no-curl/ping replacement path: reachability via
+    socket.create_connection inside the sandbox when the caller opts into
+    network access. A local listener keeps the test deterministic."""
+    import socket
+    import threading
+
+    listener = socket.socket()
+    listener.bind(("127.0.0.1", 0))
+    listener.listen(1)
+    port = listener.getsockname()[1]
+    accepted = threading.Thread(target=lambda: listener.accept(), daemon=True)
+    accepted.start()
+    try:
+        result = execute_python_code.run(
+            code=(
+                "import socket\n"
+                f"conn = socket.create_connection(('127.0.0.1', {port}), timeout=3)\n"
+                "print('reachable')\n"
+                "conn.close()\n"
+            ),
+            allow_network=True,
+        )
+    finally:
+        listener.close()
+    assert result["success"] is True, result
+    assert "reachable" in result["stdout"]
+
+
+def test_socket_reachability_blocked_without_allow_network() -> None:
+    """Default sandbox posture stays closed: no network without the opt-in."""
+    result = execute_python_code.run(
+        code=("import socket\nsocket.create_connection(('127.0.0.1', 9), timeout=1)\n"),
+    )
+    assert result["success"] is False
+    assert "PermissionError" in (result["stderr"] + result["stdout"])
+
+
 def test_reports_version_via_importlib_metadata() -> None:
     result = execute_python_code.run(
         code=("import importlib.metadata as m\nprint(m.version('opensre'))\n"),

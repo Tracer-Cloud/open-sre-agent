@@ -22,6 +22,7 @@ from typing import Any
 from config.config import get_environment
 from config.runtime_metadata.build_info import detect_build_info
 from config.runtime_metadata.host_facts import (
+    cloud_facts,
     disk_memory_facts,
     installed_tools,
     kubeconfig_path,
@@ -33,6 +34,59 @@ from config.version import get_opensre_version
 
 # Reserved key merged into ``execute_python_code`` inputs (never overwrite user keys).
 RUNTIME_INPUTS_KEY = "opensre_runtime"
+
+# The fact contract: every consumer (prompt renderer, sandbox tool schema,
+# contract tests, smoke validators) derives its key lists from these tuples,
+# so adding a fact is one probe + one tuple entry + one prompt producer.
+STATIC_FACT_KEYS: tuple[str, ...] = (
+    "opensre_version",
+    "opensre_build",
+    "runtime_env",
+    "tz_name",
+    "python_version",
+    "pid",
+    "ppid",
+    "tools",
+    "kubeconfig",
+    "hostname",
+    "scratchpad_dir",
+    "cloud_provider",
+    "cloud_region",
+)
+
+# Captured fresh per prompt render / sandbox call; never cached at bootstrap.
+# Disk/memory keys are absent when psutil fails (degraded, not fatal).
+LIVE_FACT_KEYS: tuple[str, ...] = (
+    "now_iso",
+    "uptime_seconds",
+    "disk_used_percent",
+    "disk_free_gb",
+    "memory_used_percent",
+    "memory_available_gb",
+)
+
+# Shell commands the agent must never reach for — every fact above (or the
+# sandbox socket/pathlib guidance) replaces one of these. Rendered into both
+# the assistant prompt guidance and the python-execution tool description.
+# Do not add cloud-instance-metadata link-local addresses here or into prompts:
+# naming them teaches the model the reflex we are removing.
+BLOCKED_INTROSPECTION_COMMANDS: tuple[str, ...] = (
+    "opensre --version",
+    "python --version",
+    "kubectl version",
+    "which",
+    "ps",
+    "date",
+    "uptime",
+    "hostname",
+    "ls",
+    "df",
+    "free",
+    "top",
+    "curl",
+    "ping",
+    "nslookup",
+)
 
 # Monotonic snapshot at import — anchor for uptime deltas that resist wall-clock skew.
 _PROCESS_START_MONOTONIC = _time.monotonic()
@@ -56,9 +110,13 @@ def build_runtime_metadata() -> dict[str, Any]:
     - ``hostname`` — from ``/etc/hostname`` (the pod name in Kubernetes) or
       :func:`socket.gethostname`, never the ``hostname`` binary.
     - ``scratchpad_dir`` — the temp directory scripts may write to.
+    - ``cloud_provider`` / ``cloud_region`` — deploy-time env vars
+      (``CLOUD_PROVIDER`` / ``CLOUD_REGION``, AWS var fallback), never the
+      instance metadata service (IMDS).
 
-    Live values that must NOT be cached (current time, uptime, disk, memory)
-    come from :func:`capture_runtime_facts` at each render/sandbox call.
+    The exact key set is :data:`STATIC_FACT_KEYS` (contract-tested). Live
+    values that must NOT be cached (current time, uptime, disk, memory) come
+    from :func:`capture_runtime_facts` at each render/sandbox call.
     """
     env_override = (os.environ.get("OPENSRE_ENV") or "").strip()
     return {
@@ -73,6 +131,7 @@ def build_runtime_metadata() -> dict[str, Any]:
         "kubeconfig": kubeconfig_path(),
         "hostname": pod_hostname(),
         "scratchpad_dir": tempfile.gettempdir(),
+        **cloud_facts(),
     }
 
 
@@ -108,7 +167,10 @@ def merge_runtime_into_inputs(
 
 
 __all__ = [
+    "BLOCKED_INTROSPECTION_COMMANDS",
+    "LIVE_FACT_KEYS",
     "RUNTIME_INPUTS_KEY",
+    "STATIC_FACT_KEYS",
     "build_runtime_metadata",
     "capture_runtime_facts",
     "merge_runtime_into_inputs",

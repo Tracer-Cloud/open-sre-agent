@@ -12,6 +12,10 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from typing import Any
 
+from config.runtime_metadata import BLOCKED_INTROSPECTION_COMMANDS
+
+_BLOCKED_COMMANDS = ", ".join(f"`{command}`" for command in BLOCKED_INTROSPECTION_COMMANDS)
+
 _GUIDANCE = (
     ". When the user asks which OpenSRE version is running, reply with the "
     "full version string above verbatim — including any parenthetical suffix. "
@@ -19,15 +23,17 @@ _GUIDANCE = (
     "timezone, answer from the strings above — do NOT guess a date/time from "
     "your training data. When the user asks for the Python version, process "
     "id, parent process id, uptime, host/pod name, disk or memory usage, "
-    "kubeconfig path, or which tools are installed, answer from the strings "
-    "above — do NOT run `python --version`, `kubectl version`, `which`, `ps`, "
-    "`date`, `uptime`, `hostname`, `df`, `free`, `top`, or `opensre --version`. "
-    "To list files in the scratchpad or another directory, use the Python "
-    "execution sandbox with `pathlib.Path(...).iterdir()` — never `ls` or "
-    "subprocess. Do NOT invent field names, values, or numbers not present "
-    "above. Do NOT shell out or use subprocess — the Python execution sandbox "
-    "blocks process spawning; use `inputs['opensre_runtime']` inside the "
-    "sandbox instead."
+    "cloud provider or region, kubeconfig path, or which tools are installed, "
+    "answer from the strings above — never run "
+    f"{_BLOCKED_COMMANDS}, and never probe cloud instance metadata over the "
+    "network. To list files in the scratchpad or another directory, "
+    "use the Python execution sandbox with `pathlib.Path(...).iterdir()` — "
+    "never `ls` or subprocess. To check whether a host/port is reachable, use "
+    "the sandbox with `socket.create_connection((host, port), timeout=3)` and "
+    "`allow_network: true` — never `curl`, `ping`, or `nslookup`. Do NOT "
+    "invent field names, values, or numbers not present above. Do NOT shell "
+    "out or use subprocess — the Python execution sandbox blocks process "
+    "spawning; use `inputs['opensre_runtime']` inside the sandbox instead."
 )
 
 FactProducer = Callable[[Mapping[str, Any]], str | None]
@@ -125,6 +131,8 @@ _FACT_PRODUCERS: tuple[FactProducer, ...] = (
         "memory_available_gb",
         "memory is {}% used with {} GB available",
     ),
+    _str_fact("cloud_provider", "cloud provider is {}"),
+    _str_fact("cloud_region", "cloud region is {}"),
     _tools_line,
     _str_fact("kubeconfig", "kubeconfig path is {}"),
     _str_fact("scratchpad_dir", "scratchpad directory is {}"),

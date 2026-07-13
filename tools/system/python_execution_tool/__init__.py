@@ -4,10 +4,18 @@ from __future__ import annotations
 
 from typing import Any
 
+from config.runtime_metadata import (
+    BLOCKED_INTROSPECTION_COMMANDS,
+    LIVE_FACT_KEYS,
+    STATIC_FACT_KEYS,
+)
 from core.tool_framework.base import BaseTool
 from platform.observability.trace.spans import component_span
 from tools.system.python_execution_tool.credentials import execution_env, github_extract_params
 from tools.system.python_execution_tool.runner import run_python_execution
+
+_RUNTIME_FACT_KEYS = ", ".join((*STATIC_FACT_KEYS, *LIVE_FACT_KEYS))
+_NEVER_RUN = ", ".join(f"`{command}`" for command in BLOCKED_INTROSPECTION_COMMANDS)
 
 
 class PythonExecutionTool(BaseTool):
@@ -23,31 +31,28 @@ class PythonExecutionTool(BaseTool):
         "Execute generated Python code in a restricted subprocess, capture stdout, stderr, "
         "exceptions, and timeout state, and return the result to the agent. Network access is "
         "blocked by default; opt in only for approved API-backed analysis. Subprocess spawning "
-        "is always blocked — for runtime facts (OpenSRE version, current time, uptime, PID, "
-        "Python interpreter version, host/pod name, disk and memory usage, kubeconfig path, "
-        "scratchpad directory, installed tools like kubectl/helm/docker/git) read "
-        "`inputs['opensre_runtime']` (injected automatically). For filesystem introspection use "
-        "pure Python: `pathlib.Path(...).iterdir()` to list directories, "
+        "is always blocked — for runtime facts read `inputs['opensre_runtime']` (injected "
+        f"automatically with: {_RUNTIME_FACT_KEYS}). For filesystem introspection use pure "
+        "Python: `pathlib.Path(...).iterdir()` to list directories, "
         "`Path('/etc/hostname').read_text()` for the pod name, `psutil.disk_usage('/')` and "
-        "`psutil.virtual_memory()` for disk/memory. Never run `opensre --version`, "
-        "`python --version`, `kubectl version`, `which`, `ps`, `date`, `uptime`, `hostname`, "
-        "`ls`, `df`, `free`, `top`, or any other `subprocess` call. When workflow guidance "
-        "lists skills, read each skill description and follow the one that matches the "
-        "user's request."
+        "`psutil.virtual_memory()` for disk/memory. To check whether a host/port is reachable, "
+        "use `socket.create_connection((host, port), timeout=3)` with `allow_network: true`. "
+        f"Never run {_NEVER_RUN}, never probe cloud instance metadata over the network, "
+        "and never use any other `subprocess` call. When workflow guidance lists skills, "
+        "read each skill description and follow the one that matches the user's request."
     )
     use_cases = [
         "Compute metrics or summaries from structured evidence already in context",
         "Run a small API-backed calculation with approved credentials",
         "Parse logs or JSON payloads when a direct tool result needs post-processing",
-        "Read runtime facts (version, time, uptime, PID, kubeconfig, tools) via inputs['opensre_runtime']",
+        "Read runtime facts (version, time, uptime, PID, cloud, kubeconfig, tools) via inputs['opensre_runtime']",
         "List scratchpad files with pathlib; read disk/memory with psutil (no ls/df/free)",
+        "Check host/port reachability with socket.create_connection + allow_network (no curl/ping)",
     ]
     anti_examples = [
         "Changing local files or shelling out to other processes",
-        (
-            "Calling opensre --version, python --version, kubectl version, which, ps, "
-            "date, uptime, hostname, ls, df, free, top (all blocked by the sandbox)"
-        ),
+        f"Calling {', '.join(BLOCKED_INTROSPECTION_COMMANDS)} (all blocked by the sandbox)",
+        "Probing cloud instance metadata over the network (use the injected cloud facts)",
         "Long-running jobs, crawlers, or broad external scans",
         "Accessing credentials not explicitly provided by configured integrations or env vars",
     ]
@@ -63,11 +68,7 @@ class PythonExecutionTool(BaseTool):
                 "description": (
                     "Optional JSON-serializable values injected into the script as the "
                     "`inputs` global. OpenSRE always merges `opensre_runtime` under this "
-                    "key with: opensre_version, opensre_build, runtime_env, tz_name, "
-                    "now_iso, uptime_seconds, python_version, pid, ppid, tools "
-                    "(dict of tool name → PATH), kubeconfig, hostname, scratchpad_dir, "
-                    "disk_used_percent, disk_free_gb, memory_used_percent, and "
-                    "memory_available_gb. Skipped if you already set the "
+                    f"key with: {_RUNTIME_FACT_KEYS}. Skipped if you already set the "
                     "`opensre_runtime` key yourself."
                 ),
                 "nullable": True,

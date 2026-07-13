@@ -88,6 +88,41 @@ def test_environment_block_renders_hostname_disk_memory_and_scratchpad() -> None
     assert "iterdir" in block  # pathlib guidance for directory listings
 
 
+def test_environment_block_renders_cloud_provider_and_region() -> None:
+    """Cloud identity must be quotable, with guidance to use injected facts —
+    without naming link-local metadata addresses (that plants the reflex)."""
+    block = _env_block(
+        {
+            "opensre_version": "0.1",
+            "cloud_provider": "aws",
+            "cloud_region": "eu-central-1",
+        }
+    )
+    assert "cloud provider is aws" in block
+    assert "cloud region is eu-central-1" in block
+    assert "never probe cloud instance metadata" in block
+    assert "169.254.169.254" not in block
+    assert "`curl`" in block
+    assert "`ping`" in block
+    assert "`nslookup`" in block
+
+
+def test_environment_block_omits_cloud_when_not_deployed() -> None:
+    """Local dev: empty cloud facts must not render empty slots the LLM could
+    fill with invented values."""
+    block = _env_block({"opensre_version": "0.1", "cloud_provider": "", "cloud_region": ""})
+    assert "cloud provider is" not in block
+    assert "cloud region is" not in block
+
+
+def test_environment_block_instructs_socket_reachability() -> None:
+    """Reachability questions must route to the sandbox socket pattern, with
+    allow_network named, instead of curl/ping."""
+    block = _env_block({"opensre_version": "0.1"})
+    assert "socket.create_connection" in block
+    assert "allow_network" in block
+
+
 def test_environment_block_omits_disk_memory_when_absent() -> None:
     """psutil failures degrade to absent keys; no partial/empty usage lines."""
     block = _env_block({"opensre_version": "0.1", "disk_used_percent": 63.2})

@@ -107,6 +107,28 @@ def disk_memory_facts() -> dict[str, Any]:
     }
 
 
+def cloud_facts() -> dict[str, str]:
+    """Cloud provider/region from deploy-time env vars — no metadata endpoint.
+
+    ``CLOUD_PROVIDER`` / ``CLOUD_REGION`` are the canonical injection points
+    (set at deploy time). Region falls back to ``AWS_REGION`` /
+    ``AWS_DEFAULT_REGION`` — the same pair the LLM transports already read —
+    and when the region came from an AWS var the provider defaults to ``aws``.
+    Never calls the instance metadata service (IMDS); the sandbox blocks
+    network anyway.
+    """
+    provider = (os.environ.get("CLOUD_PROVIDER") or "").strip()
+    region = (os.environ.get("CLOUD_REGION") or "").strip()
+    aws_region = (
+        os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION") or ""
+    ).strip()
+    if not region and aws_region:
+        region = aws_region
+        if not provider:
+            provider = "aws"
+    return {"cloud_provider": provider, "cloud_region": region}
+
+
 def kubeconfig_path() -> str:
     """Effective ``kubeconfig`` path from env, or the default under ``~/.kube``.
 
@@ -124,6 +146,7 @@ def kubeconfig_path() -> str:
 
 
 __all__ = [
+    "cloud_facts",
     "disk_memory_facts",
     "installed_tools",
     "kubeconfig_path",

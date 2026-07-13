@@ -11,7 +11,9 @@ from types import SimpleNamespace
 import pytest
 
 from config.runtime_metadata import (
+    LIVE_FACT_KEYS,
     RUNTIME_INPUTS_KEY,
+    STATIC_FACT_KEYS,
     build_runtime_metadata,
     capture_runtime_facts,
     merge_runtime_into_inputs,
@@ -132,18 +134,72 @@ def test_build_runtime_metadata_populates_build_marker_in_git_checkout() -> None
     assert meta["opensre_build"].startswith("dev"), meta["opensre_build"]
 
 
+def test_cloud_facts_read_deploy_time_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Cloud identity comes from deploy-time env vars, never the metadata
+    endpoint (which the sandbox network block would break anyway)."""
+    monkeypatch.setenv("CLOUD_PROVIDER", "gcp")
+    monkeypatch.setenv("CLOUD_REGION", "europe-west3")
+    meta = build_runtime_metadata()
+    assert meta["cloud_provider"] == "gcp"
+    assert meta["cloud_region"] == "europe-west3"
+
+
+def test_cloud_facts_fall_back_to_aws_region_vars(monkeypatch: pytest.MonkeyPatch) -> None:
+    """AWS deployments usually carry AWS_REGION/AWS_DEFAULT_REGION already —
+    the same pair the LLM transports read. A region from an AWS var implies
+    provider aws unless CLOUD_PROVIDER says otherwise."""
+    for var in ("CLOUD_PROVIDER", "CLOUD_REGION", "AWS_REGION", "AWS_DEFAULT_REGION"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("AWS_DEFAULT_REGION", "eu-central-1")
+    facts = host_facts_module.cloud_facts()
+    assert facts == {"cloud_provider": "aws", "cloud_region": "eu-central-1"}
+
+
+def test_cloud_facts_empty_when_not_deployed_to_cloud(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Local dev has no cloud identity — empty strings, never a guess."""
+    for var in ("CLOUD_PROVIDER", "CLOUD_REGION", "AWS_REGION", "AWS_DEFAULT_REGION"):
+        monkeypatch.delenv(var, raising=False)
+    assert host_facts_module.cloud_facts() == {"cloud_provider": "", "cloud_region": ""}
+
+
+def test_cloud_facts_never_touch_the_network(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Cloud identity must come from env alone — no instance metadata service
+    (IMDS) call, which would hang or fail off-cloud and is blocked in the sandbox."""
+
+    def _explode(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("cloud_facts must not open sockets")
+
+    monkeypatch.setattr(socket, "socket", _explode)
+    monkeypatch.setattr(socket, "create_connection", _explode)
+    monkeypatch.setenv("CLOUD_PROVIDER", "aws")
+    monkeypatch.setenv("CLOUD_REGION", "eu-central-1")
+    assert host_facts_module.cloud_facts() == {
+        "cloud_provider": "aws",
+        "cloud_region": "eu-central-1",
+    }
+
+
+def test_static_facts_match_the_contract_exactly() -> None:
+    """The metadata dict and STATIC_FACT_KEYS must never drift — the prompt
+    renderer, sandbox tool schema, and smoke validators all derive from the
+    tuple. A new fact must land in both places in the same change."""
+    assert set(build_runtime_metadata()) == set(STATIC_FACT_KEYS)
+
+
+def test_live_facts_match_the_contract_exactly() -> None:
+    """capture_runtime_facts adds exactly the LIVE_FACT_KEYS on a machine with
+    working psutil (disk/memory keys are allowed to be absent only when psutil
+    fails, which the degraded-path unit covers)."""
+    meta = build_runtime_metadata()
+    facts = capture_runtime_facts(metadata=meta)
+    assert set(facts) - set(meta) == set(LIVE_FACT_KEYS)
+
+
 def test_build_runtime_metadata_does_not_include_live_slots() -> None:
     """Live values must NOT live on the session-cached metadata: caching them
     at bootstrap would freeze the clock, uptime, and usage numbers."""
     meta = build_runtime_metadata()
-    for key in (
-        "now_iso",
-        "uptime_seconds",
-        "disk_used_percent",
-        "disk_free_gb",
-        "memory_used_percent",
-        "memory_available_gb",
-    ):
+    for key in LIVE_FACT_KEYS:
         assert key not in meta, f"{key} must be live, not cached"
 
 
