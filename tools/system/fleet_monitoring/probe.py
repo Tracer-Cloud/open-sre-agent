@@ -4,10 +4,11 @@ Pure collectors: no background loop, no caching, no UI wiring. The
 wiring layer (#1490) batches calls in a REPL background task; the
 registry layer (#1487) decides which PIDs to ask about.
 
-``psutil`` is intentionally confined to this module. The helpers
-exposed here (:func:`cwd_for_pid`, :func:`started_at_for_pid`,
-:func:`env_value_for_pid`) let other layers query process state
-without importing psutil themselves.
+``psutil`` is intentionally confined to this module for per-PID access.
+The helpers exposed here (:func:`cwd_for_pid`, :func:`started_at_for_pid`,
+:func:`env_value_for_pid`) let other layers query process state without
+importing psutil themselves. System-wide disk/memory facts have their own
+psutil wrapper in :mod:`config.runtime_metadata.host_facts`.
 """
 
 from __future__ import annotations

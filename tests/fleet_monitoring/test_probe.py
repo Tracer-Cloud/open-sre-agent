@@ -23,6 +23,14 @@ from tools.system.fleet_monitoring.probe import (
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 _PROBE_MODULE = _REPO_ROOT / "tools" / "system" / "fleet_monitoring" / "probe.py"
+# Modules sanctioned to import psutil. Each must wrap it behind plain-value
+# helpers so callers never touch psutil directly: probe.py for per-PID
+# snapshots, host_facts.py for system-wide disk/memory session facts
+# (config/ cannot import tools/, so it wraps psutil itself).
+_PSUTIL_SANCTIONED = (
+    _PROBE_MODULE,
+    _REPO_ROOT / "config" / "runtime_metadata" / "host_facts.py",
+)
 _SOURCE_ROOTS = (
     "cli",
     "config",
@@ -119,19 +127,19 @@ def test_process_has_open_codex_rollout_returns_false_when_inaccessible() -> Non
         assert process_has_open_codex_rollout(os.getpid()) is False
 
 
-def test_psutil_is_not_imported_outside_probe_module() -> None:
-    """Acceptance criterion #3: ``psutil`` must stay confined to
-    ``tools/system/fleet_monitoring/probe.py`` so the dependency surface is explicit. A
-    static scan over runtime package trees catches future regressions
-    deterministically — runtime import-graph checks would be flaky
-    against lazy-import patterns the codebase already uses elsewhere.
+def test_psutil_is_not_imported_outside_sanctioned_modules() -> None:
+    """``psutil`` must stay confined to the sanctioned wrapper modules so the
+    dependency surface is explicit. A static scan over runtime package trees
+    catches future regressions deterministically — runtime import-graph checks
+    would be flaky against lazy-import patterns the codebase already uses
+    elsewhere.
     """
     leaks: list[str] = []
     py_files: list[pathlib.Path] = []
     for root_name in _SOURCE_ROOTS:
         py_files.extend(sorted((_REPO_ROOT / root_name).rglob("*.py")))
     for py_file in py_files:
-        if py_file == _PROBE_MODULE:
+        if py_file in _PSUTIL_SANCTIONED:
             continue
         text = py_file.read_text(encoding="utf-8")
         for needle in ("import psutil", "from psutil"):
@@ -140,7 +148,8 @@ def test_psutil_is_not_imported_outside_probe_module() -> None:
                 break
 
     assert not leaks, (
-        "psutil leaked into modules other than tools/system/fleet_monitoring/probe.py:\n  "
+        "psutil leaked into modules other than the sanctioned wrappers "
+        f"({', '.join(str(p.relative_to(_REPO_ROOT)) for p in _PSUTIL_SANCTIONED)}):\n  "
         + "\n  ".join(leaks)
     )
 
