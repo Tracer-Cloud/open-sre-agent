@@ -47,7 +47,7 @@ should be a small registry entrypoint that imports the public tool object.
 - [ ] Expected external failures (missing config, auth failure, rate limit, upstream 4xx/5xx) return structured errors; unexpected exceptions either use the global `BaseTool` wrapper intentionally or are migrated with telemetry coverage
 - [ ] Tool output is normalized enough for the planner/LLM to consume reliably
 - [ ] Reusable transport or integration-specific parsing logic lives in `integrations/<name>/` or `core/tool_framework/utils/` rather than being copied into the tool body
-- [ ] External side effects declare `side_effect_level`, `requires_approval`, `approval_reason`, and `approval_scope` where appropriate
+- [ ] External side effects declare `side_effect_level`, `requires_approval`, and `approval_reason` where appropriate
 - [ ] If the tool should appear in both investigation and chat, set `surfaces=("investigation", "chat")`
 - [ ] Output that may contain secrets, tokens, or PII is run through `platform/masking/` before being returned
 
