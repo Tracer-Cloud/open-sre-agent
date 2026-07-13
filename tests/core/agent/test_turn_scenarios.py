@@ -30,10 +30,10 @@ from tests.core.agent._oracle_runtime import (
     LIVE_INTEGRATION_SENTINEL,
     OracleRunResult,
     fresh_session,
+    normalize_executed_actions_for_oracle_match,
     resolve_live_integrations,
     run_oracle_once,
     session_capabilities,
-    strip_redundant_integrations_list_for_investigation_execution,
 )
 from tests.core.agent._planned_action import default_target_surface
 from tests.core.agent.scenario_loader import (
@@ -287,7 +287,7 @@ def _strip_redundant_integrations_list_for_investigation_plan(
     ``investigation_start`` even when the fixture session already has connected
     integrations (see scenario 314). It does not change the turn outcome.
     """
-    return strip_redundant_integrations_list_for_investigation_execution(
+    return normalize_executed_actions_for_oracle_match(
         actual_actions,
         expected_actions,
     )
@@ -594,3 +594,26 @@ def test_planning_match_strips_redundant_integrations_list_for_investigation() -
     expected = [{"kind": "investigation", "source": "llm", "target_surface": "investigation"}]
     matched = _planning_actions_for_match([investigation, integrations_list], expected)
     assert matched == [investigation]
+
+
+def test_oracle_match_collapses_duplicate_investigation_dispatch() -> None:
+    from tests.core.agent._oracle_runtime import (
+        normalize_executed_actions_for_oracle_match,
+        normalize_history_for_oracle_match,
+    )
+
+    investigation = {
+        "kind": "investigation",
+        "content": "Windows crash across sentry, github, and posthog",
+    }
+    expected = [{"kind": "investigation"}]
+    duplicated = [investigation, dict(investigation)]
+
+    assert normalize_executed_actions_for_oracle_match(duplicated, expected) == [investigation]
+    assert normalize_history_for_oracle_match(
+        [
+            {"type": "alert", "text_normalized": "windows crash", "ok": True},
+            {"type": "alert", "text_normalized": "windows crash", "ok": True},
+        ],
+        expected,
+    ) == [{"type": "alert", "text_normalized": "windows crash", "ok": True}]
