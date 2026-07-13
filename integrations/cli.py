@@ -27,7 +27,6 @@ if TYPE_CHECKING:
     from integrations.github.mcp import GitHubMcpDisplayDetailLevel
 
 from integrations.gitlab import DEFAULT_GITLAB_BASE_URL
-from integrations.openclaw import build_openclaw_config, validate_openclaw_config
 from integrations.posthog_mcp import (
     DEFAULT_POSTHOG_MCP_URL,
     build_posthog_mcp_config,
@@ -866,6 +865,8 @@ def _setup_openclaw() -> None:
     credentials["auth_token"] = ""
 
     print("\n  Validating OpenClaw bridge...")
+    from integrations.openclaw import build_openclaw_config, validate_openclaw_config
+
     config = build_openclaw_config(credentials)
     result = validate_openclaw_config(config)
     print(f"  {result.detail}")
