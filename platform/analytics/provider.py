@@ -17,11 +17,12 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Final
-
-import httpx
+from typing import TYPE_CHECKING, Final
 
 import platform
+
+if TYPE_CHECKING:
+    import httpx
 from config.constants import get_store_path
 from config.constants.posthog import POSTHOG_CAPTURE_API_KEY, POSTHOG_HOST
 from config.version import get_opensre_version
@@ -780,6 +781,8 @@ class Analytics:
         self._worker = worker
 
     def _worker_loop(self) -> None:
+        import httpx
+
         try:
             with httpx.Client(timeout=_SEND_TIMEOUT, trust_env=False) as client:
                 while True:
@@ -809,6 +812,8 @@ class Analytics:
             _log_failure("worker_loop_fatal", exc)
 
     def _send(self, client: httpx.Client, item: _Envelope) -> None:
+        import httpx
+
         properties: Properties = {
             **item.properties,
             "distinct_id": self._anonymous_id,
