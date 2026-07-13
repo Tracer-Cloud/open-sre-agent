@@ -15,28 +15,33 @@ Decoupled from any terminal: progress is forwarded through an optional
 from __future__ import annotations
 
 import json
+import logging
 import os
 from collections.abc import Callable
 from typing import Any, Protocol
 
 from core.agent import Agent
 from core.agent_harness.agent_builder import AgentConfig, build_agent
-from core.agent_harness.debug.prompt_trace import persist_turn_system_prompt
-from core.agent_harness.integrations.resolution import resolve_and_cache_integrations
 from core.agent_harness.ports import ErrorReporter, SessionStore, ToolEventObserver
 from core.agent_harness.prompts.conversation_memory import (
     NO_HISTORY_PLACEHOLDER,
     format_recent_conversation,
 )
 from core.agent_harness.prompts.gather import build_gather_system_prompt
+from core.agent_harness.session.integration_resolution import resolve_and_cache_integrations
 from core.domain.alerts.alert_source import SECONDARY_TOOL_SOURCES
 from core.events import runtime_event_callback_from_observer
+from platform.analytics.react_turn import run_react_agent_with_telemetry
 from platform.harness_ports import (
     apply_github_repo_scope,
     apply_gitlab_repo_scope,
     infer_github_repo_scope,
     infer_gitlab_repo_scope,
 )
+from platform.observability.trace.prompts import persist_turn_system_prompt
+from platform.observability.trace.spans import component_span
+
+log = logging.getLogger(__name__)
 
 # Keep the gathering loop short: this runs inline on a turn, so it must stay
 # responsive. A handful of iterations is enough to fetch the data needed to
@@ -64,7 +69,8 @@ class GatherAgentFactory(Protocol):
         gather_tools: list[Any],
         resolved: dict[str, Any],
         on_progress: ToolEventObserver | None,
-    ) -> Agent[Any]: ...
+    ) -> Agent[Any]:
+        """Build and return the evidence-gather agent for one turn."""
 
 
 class AgentExecutionError(RuntimeError):
@@ -251,10 +257,17 @@ def gather_tool_evidence(
         )
         gather_tools = list(get_investigation_tools(resolved))
         if not _has_usable_gather_tools(gather_tools):
+            log.debug("gather_evidence skip: no usable tools")
             return None
         llm = _load_gather_llm_or_none(error_reporter)
         if llm is None:
+            log.debug("gather_evidence skip: LLM unavailable")
             return None
+        log.debug(
+            "gather_evidence start tools=%s integrations=%s",
+            len(gather_tools),
+            len(resolved),
+        )
         build_agent_for_turn = agent_factory or _build_evidence_agent
         agent = build_agent_for_turn(
             llm=llm,
@@ -263,8 +276,13 @@ def gather_tool_evidence(
             resolved=resolved,
             on_progress=on_progress,
         )
-        result = agent.run(
-            [{"role": "user", "content": _build_gather_user_message(session, message)}]
+        result = run_react_agent_with_telemetry(
+            agent,
+            [{"role": "user", "content": _build_gather_user_message(session, message)}],
+            phase="gather",
+            iteration_cap=_MAX_GATHER_ITERATIONS,
+            llm=llm,
+            session=session,
         )
         persist_turn_system_prompt(
             session,
@@ -273,29 +291,32 @@ def gather_tool_evidence(
         )
         return result
 
-    try:
-        result = _safe_execute(
-            _run_gather_turn,
-            error_reporter=error_reporter,
-            context="core.agent_harness.turns.evidence_driver",
-            wrap_error=lambda exc: GatherEvidenceExecutionError(
-                "Failed to gather evidence for the current conversational turn.",
-                cause=exc,
-            ),
-        )
-    except KeyboardInterrupt:
-        if on_progress is not None:
-            on_progress("gather_cancelled", {})
-        return None
+    with component_span("gather_evidence", session_id=getattr(session, "session_id", None)):
+        try:
+            result = _safe_execute(
+                _run_gather_turn,
+                error_reporter=error_reporter,
+                context="core.agent_harness.turns.evidence_driver",
+                wrap_error=lambda exc: GatherEvidenceExecutionError(
+                    "Failed to gather evidence for the current conversational turn.",
+                    cause=exc,
+                ),
+            )
+        except KeyboardInterrupt:
+            if on_progress is not None:
+                on_progress("gather_cancelled", {})
+            log.debug("gather_evidence cancelled")
+            return None
 
-    if result is None:
-        return None
-
-    if not result.executed:
-        return None
-    if persist is not None:
-        persist(result.executed)
-    return _format_observation(result.executed)
+        if result is None:
+            return None
+        if not result.executed:
+            log.debug("gather_evidence done: no tools executed")
+            return None
+        if persist is not None:
+            persist(result.executed)
+        log.debug("gather_evidence done tools_executed=%s", len(result.executed))
+        return _format_observation(result.executed)
 
 
 __all__ = ["GatherAgentFactory", "PersistToolCalls", "gather_tool_evidence"]

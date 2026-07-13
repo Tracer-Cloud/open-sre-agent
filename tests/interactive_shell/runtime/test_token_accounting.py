@@ -15,8 +15,8 @@ from core.agent_harness.accounting.token_accounting import (
     format_token_total,
     record_llm_turn,
 )
-from core.agent_harness.session import Session
 from surfaces.interactive_shell.runtime.answer_turn import answer_shell_question
+from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui.streaming import _CHARS_PER_TOKEN
 
 

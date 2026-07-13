@@ -12,10 +12,10 @@ from unittest.mock import patch
 import pytest
 from rich.console import Console
 
-from core.agent_harness.session import Session
 from core.tool_framework.registered_tool import RegisteredTool
 from surfaces.interactive_shell.command_registry import dispatch_slash
 from surfaces.interactive_shell.command_registry.tools_cmds import _TOOLS_FIRST_ARGS, _cmd_tools
+from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui.tables import tool_catalog
 from surfaces.interactive_shell.ui.tables.tool_catalog import (
     ToolCatalogEntry,

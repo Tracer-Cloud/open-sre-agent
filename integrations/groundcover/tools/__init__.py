@@ -44,7 +44,6 @@ def _logs_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     display_name="groundcover logs",
     source="groundcover",
     tags=("logs", "observability"),
-    cost_tier="moderate",
     description=(
         "Search groundcover logs with gcQL. Use for application errors, exceptions, and service "
         "log events. " + GCQL_GUIDANCE + " Discover fields with '* | field_names' or by calling "
@@ -129,7 +128,6 @@ def _query_ref_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     display_name="groundcover query reference",
     source="groundcover",
     tags=("observability", "reference"),
-    cost_tier="cheap",
     surfaces=("investigation", "chat"),
     description=(
         "Get the groundcover Query Language (gcQL) reference: operators, functions, pipes, and "
@@ -220,7 +218,6 @@ def _traces_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     display_name="groundcover traces",
     source="groundcover",
     tags=("traces", "observability"),
-    cost_tier="moderate",
     description=(
         "Query groundcover traces/spans with gcQL. Use to find slow spans, failing spans, and "
         "request correlations across services. " + GCQL_GUIDANCE + " Discover fields with "

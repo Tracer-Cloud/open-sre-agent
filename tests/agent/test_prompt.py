@@ -5,6 +5,7 @@ from tools.investigation.stages.gather_evidence.prompt import (
     build_investigation_system_prompt,
     format_alert_context,
 )
+from tools.investigation.stages.gather_evidence.tools import STAGNATION_NUDGE
 
 
 def test_build_investigation_system_prompt_non_hermes_uses_generic_category_instruction() -> None:
@@ -23,6 +24,50 @@ def test_build_investigation_system_prompt_includes_dependency_traversal_rule() 
     assert "Dependency traversal (connection failures only)" in prompt
     assert "connection refused" in prompt
     assert "does not bias localization" in prompt
+
+
+def test_build_investigation_system_prompt_includes_incident_command_phases() -> None:
+    prompt = build_investigation_system_prompt({"alert_source": "grafana"})
+
+    assert "incident commander" in prompt
+    assert "Investigation phases" in prompt
+    assert "Phase 1 — Triage" in prompt
+    assert "Phase 2 — Hypothesis" in prompt
+    assert "Phase 3 — Verification" in prompt
+    assert "Phase 4 — Mitigation" in prompt
+    assert "## How to work" not in prompt
+
+
+def test_build_investigation_system_prompt_includes_missing_context_rule() -> None:
+    prompt = build_investigation_system_prompt({"alert_source": "grafana"})
+
+    assert "Follow-up questions" in prompt
+    assert "Recent deploys" in prompt
+    assert "ending with `?`" in prompt
+    assert "Do not stall waiting for answers" in prompt
+
+
+def test_build_investigation_system_prompt_includes_alignment_and_tradeoffs() -> None:
+    prompt = build_investigation_system_prompt({"alert_source": "grafana"})
+
+    assert "Keeping the team aligned" in prompt
+    assert "Hypotheses:" in prompt
+    assert "Verification:" in prompt
+    assert "Follow-up questions:" in prompt
+    assert "Remediation trade-offs:" in prompt
+    assert "blast radius" in prompt
+    assert "reversibility" in prompt
+
+
+def test_stagnation_nudge_matches_incident_command_output_contract() -> None:
+    nudge = STAGNATION_NUDGE.lower()
+
+    assert "triage complete" in nudge
+    assert "status block" in nudge
+    assert "hypotheses" in nudge
+    assert "verification" in nudge
+    assert "follow-up questions" in nudge
+    assert "remediation trade-offs" in nudge
 
 
 def test_build_investigation_system_prompt_hermes_includes_hermes_taxonomy_only() -> None:
@@ -176,6 +221,42 @@ def test_relevant_sources_honors_explicit_context_sources() -> None:
 
     # Explicit declaration wins even though the content has no Vercel keyword.
     assert _relevant_sources(state, tools_by_source) == ["vercel"]
+
+
+def test_alert_context_includes_incident_window_since_until_keys() -> None:
+    context = format_alert_context(
+        {
+            "alert_name": "Kubernetes job failed",
+            "alert_source": "generic",
+            "pipeline_name": "kubernetes_etl_pipeline",
+            "severity": "critical",
+            "incident_window": {
+                "since": "2026-02-18T22:10:00Z",
+                "until": "2026-02-19T00:10:00Z",
+                "source": "alert.startsAt",
+                "confidence": 1.0,
+            },
+        }
+    )
+
+    assert "Incident window: 2026-02-18T22:10:00Z → 2026-02-19T00:10:00Z" in context
+
+
+def test_alert_context_accepts_legacy_incident_window_start_end_keys() -> None:
+    context = format_alert_context(
+        {
+            "alert_name": "Legacy window shape",
+            "alert_source": "generic",
+            "pipeline_name": "widgets",
+            "severity": "warning",
+            "incident_window": {
+                "start": "2026-01-01T00:00:00Z",
+                "end": "2026-01-01T02:00:00Z",
+            },
+        }
+    )
+
+    assert "Incident window: 2026-01-01T00:00:00Z → 2026-01-01T02:00:00Z" in context
 
 
 def test_alert_context_points_to_primary_source_without_duplicating_tool_metadata() -> None:

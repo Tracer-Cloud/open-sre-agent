@@ -25,11 +25,17 @@ def opensre_home(monkeypatch, tmp_path: Path) -> Path:
     return home
 
 
-def _seed(alert: str, taxonomy: MissTaxonomy, *, feedback_id: str = "fb") -> dict:
+def _seed(
+    alert: str,
+    taxonomy: MissTaxonomy,
+    *,
+    feedback_id: str = "fb",
+    timestamp: str | None = None,
+) -> dict:
     return record_miss(
         {
             "feedback_id": feedback_id,
-            "timestamp": _SEED_TIMESTAMP,
+            "timestamp": timestamp or _SEED_TIMESTAMP,
             "run_id": f"run-{feedback_id}",
             "alert_name": alert,
             "rating": "inaccurate",

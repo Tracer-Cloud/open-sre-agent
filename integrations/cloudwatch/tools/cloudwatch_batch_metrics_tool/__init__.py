@@ -6,9 +6,9 @@ from typing import Any
 
 from core.tool_framework.telemetry import report_run_error
 from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.compaction import truncate_list
 from integrations.aws.cloudwatch_client import get_metric_statistics
 from integrations.cloudwatch.availability import cloudwatch_is_available
+from platform.common.evidence_compaction import truncate_list
 
 
 @tool(
@@ -21,7 +21,6 @@ from integrations.cloudwatch.availability import cloudwatch_is_available
         "Identifying AWS infrastructure issues",
     ],
     tags=("metrics", "aws"),
-    cost_tier="moderate",
     requires=["job_queue"],
     is_available=cloudwatch_is_available,
     input_schema={

@@ -17,6 +17,7 @@ from config.config import (
 )
 from config.grafana_cloud import load_env
 from config.llm_auth.credentials import status as credential_status
+from config.llm_auth.provider_catalog import provider_spec
 from config.platform_bootstrap import ensure_project_platform_package
 from tests.core.agent._ci_gates import (
     running_in_github_actions,
@@ -129,6 +130,16 @@ def _resolve_live_llm_configuration(
             "Live LLM turn tests require usable LLM credentials:"
             f" configured provider={settings.provider!r}, auth={auth.source}, detail={auth.detail}"
         )
+
+    spec = provider_spec(settings.provider)
+    if spec is not None and spec.credential_kind == "api_key" and spec.api_key_env:
+        from config.llm_credentials import resolve_llm_api_key
+
+        if not resolve_llm_api_key(spec.api_key_env):
+            _skip_or_fail_live_llm(
+                "Live LLM turn tests require a resolvable API key:"
+                f" provider={settings.provider!r}, env={spec.api_key_env}"
+            )
 
     from core.llm.factory import reset_llm_clients
 

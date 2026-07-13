@@ -12,8 +12,6 @@ import pytest
 from prompt_toolkit.history import FileHistory
 from rich.console import Console
 
-from core.agent_harness.session import Session
-from core.agent_harness.session.background import BackgroundInvestigationRecord
 from platform.common.task_types import TaskKind, TaskStatus
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
 from surfaces.interactive_shell.command_registry import repl_data as repl_data_module
@@ -22,6 +20,10 @@ from surfaces.interactive_shell.command_registry.investigation import (
     _validate_save_args,
 )
 from surfaces.interactive_shell.command_registry.tasks_cmds import _validate_cancel_args
+from surfaces.interactive_shell.session import Session
+from surfaces.interactive_shell.session.background_investigations import (
+    BackgroundInvestigationRecord,
+)
 from surfaces.interactive_shell.ui.tables.tool_catalog import ToolCatalogEntry
 
 
@@ -31,11 +33,90 @@ def _capture() -> tuple[Console, io.StringIO]:
 
 
 class TestDispatchSlash:
-    def test_exit_returns_false(self) -> None:
+    def test_exit_returns_false(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            "surfaces.interactive_shell.command_registry.system._flush_analytics_on_exit",
+            lambda _console: None,
+        )
         session = Session()
         console, _ = _capture()
         assert dispatch_slash("/exit", session, console) is False
         assert dispatch_slash("/quit", session, console) is False
+
+    def test_exit_flushes_analytics_before_goodbye(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        calls: list[str] = []
+
+        def _flush(console: Console) -> None:
+            calls.append("flush")
+
+        monkeypatch.setattr(
+            "surfaces.interactive_shell.command_registry.system._flush_analytics_on_exit",
+            _flush,
+        )
+        session = Session()
+        console, buf = _capture()
+        assert dispatch_slash("/quit", session, console) is False
+        assert calls == ["flush"]
+        assert "goodbye." in buf.getvalue()
+
+    def test_delegated_cli_failure_does_not_exit_repl(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Non-zero delegated CLI exit must not propagate False from dispatch_slash."""
+        from surfaces.interactive_shell.command_registry import cli_parity as m
+
+        def _fake_run(
+            cmd: list[str],
+            *,
+            check: bool,
+            timeout: float | None,
+            capture_output: bool,
+            text: bool,
+            encoding: str,
+            errors: str,
+            env: dict[str, str],
+        ) -> subprocess.CompletedProcess[str]:
+            del check, timeout, text, encoding, errors, env
+            assert capture_output is True
+            return subprocess.CompletedProcess(cmd, 1, stdout="not logged in\n", stderr="")
+
+        monkeypatch.setattr(m.subprocess, "run", _fake_run)
+        session = Session()
+        console, buf = _capture()
+        assert dispatch_slash("/auth status", session, console) is True
+        assert "non-zero code 1" in buf.getvalue()
+        latest = session.history[-1]
+        assert latest["type"] == "slash"
+        assert latest["text"] == "/auth status"
+        assert latest["ok"] is False
+
+    def test_delegated_cli_timeout_does_not_exit_repl(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Timed-out delegated CLI must not propagate False from dispatch_slash."""
+        from surfaces.interactive_shell.command_registry import cli_parity as m
+
+        def _fake_run(
+            cmd: list[str],
+            *,
+            check: bool,
+            timeout: float | None,
+            capture_output: bool,
+            text: bool,
+            encoding: str,
+            errors: str,
+            env: dict[str, str],
+        ) -> subprocess.CompletedProcess[str]:
+            del check, capture_output, text, encoding, errors, env
+            assert timeout == m._UPDATE_SUBPROCESS_TIMEOUT_SECONDS
+            raise subprocess.TimeoutExpired(cmd=cmd, timeout=timeout or 0.0)
+
+        monkeypatch.setattr(m.subprocess, "run", _fake_run)
+        session = Session()
+        console, buf = _capture()
+        assert dispatch_slash("/update", session, console) is True
+        assert "timed out" in buf.getvalue()
+        assert session.history[-1]["ok"] is False
 
     def test_help_lists_all_commands(self) -> None:
         session = Session()
@@ -111,11 +192,11 @@ class TestDispatchSlash:
     def test_trust_toggle(self) -> None:
         session = Session()
         console, _ = _capture()
-        assert session.trust_mode is False
+        assert session.terminal.trust_mode is False
         dispatch_slash("/trust", session, console)
-        assert session.trust_mode is True
+        assert session.terminal.trust_mode is True
         dispatch_slash("/trust off", session, console)
-        assert session.trust_mode is False
+        assert session.terminal.trust_mode is False
 
     def test_effort_sets_session_preference(self, monkeypatch: pytest.MonkeyPatch) -> None:
         class _FakeLLM:
@@ -163,14 +244,14 @@ class TestDispatchSlash:
         session = Session()
         session.record("alert", "test")
         session.last_state = {"x": 1}
-        session.trust_mode = True
+        session.terminal.trust_mode = True
         console, _ = _capture()
 
         dispatch_slash("/new", session, console)
 
         assert session.history == []
         assert session.last_state is None
-        assert session.trust_mode is True  # /new keeps trust mode
+        assert session.terminal.trust_mode is True  # /new keeps trust mode
 
     def test_status_shows_session_fields(self) -> None:
         session = Session()
@@ -190,7 +271,7 @@ class TestDispatchSlash:
         console, buf = _capture()
 
         assert dispatch_slash("/background on", session, console) is True
-        assert session.background_mode_enabled is True
+        assert session.terminal.background_mode_enabled is True
 
         assert dispatch_slash("/background status", session, console) is True
         output = buf.getvalue()
@@ -207,7 +288,7 @@ class TestDispatchSlash:
 
     def test_background_show_and_use_completed_record(self) -> None:
         session = Session()
-        session.background_investigations["bg123"] = BackgroundInvestigationRecord(
+        session.terminal.background_investigations["bg123"] = BackgroundInvestigationRecord(
             task_id="bg123",
             status="completed",
             command="free-text investigation",
@@ -235,14 +316,14 @@ class TestDispatchSlash:
         assert dispatch_slash("/background notify set pagerduty", session, console) is True
         output = buf.getvalue()
         assert "invalid channel" in output
-        assert session.background_notification_preferences.channels == ()
+        assert session.terminal.background_notification_preferences.channels == ()
 
     def test_background_notify_set_updates_channels(self) -> None:
         session = Session()
         console, buf = _capture()
 
         assert dispatch_slash("/background notify set email", session, console)
-        assert session.background_notification_preferences.channels == ("email",)
+        assert session.terminal.background_notification_preferences.channels == ("email",)
         assert "background notify channels set" in buf.getvalue().lower()
 
     def test_unknown_command_does_not_exit(self) -> None:
@@ -1317,7 +1398,7 @@ class TestInvestigateFileCommand:
         )
 
         session = Session()
-        session.background_mode_enabled = True
+        session.terminal.background_mode_enabled = True
         console, _ = _capture()
         dispatch_slash("/investigate generic", session, console)
 
@@ -1414,12 +1495,12 @@ class TestInvestigateFileCommand:
         console, buf = _capture()
         dispatch_slash("/investigate", session, console)
 
-        assert session.pending_prompt_default == "/investigate generic"
-        assert session.pending_prompt_autosubmit is True
+        assert session.terminal.pending_prompt_default == "/investigate generic"
+        assert session.terminal.pending_prompt_autosubmit is True
         assert captured == []
 
-        dispatch_slash(session.take_pending_prompt_default(), session, console)
-        assert session.take_pending_autosubmit() is True
+        dispatch_slash(session.terminal.pop_pending_prompt_default(), session, console)
+        assert session.terminal.pop_pending_autosubmit() is True
 
         assert captured == ["generic"]
         assert session.last_state == {"root_cause": "sample from menu"}
@@ -1463,8 +1544,8 @@ class TestInvestigateFileCommand:
         console, _ = _capture()
         dispatch_slash("/investigate", session, console)
 
-        assert session.take_pending_autosubmit() is True
-        queued = session.take_pending_prompt_default()
+        assert session.terminal.pop_pending_autosubmit() is True
+        queued = session.terminal.pop_pending_prompt_default()
         assert queued.startswith("/investigate ")
         assert captured == []
 
@@ -1570,7 +1651,7 @@ class TestInvestigateFileCommand:
         )
 
         session = Session()
-        session.background_mode_enabled = True
+        session.terminal.background_mode_enabled = True
         console, _ = _capture()
         dispatch_slash(f"/investigate {alert_file}", session, console)
 
@@ -1632,7 +1713,7 @@ class TestResumeCommand:
         target_id = "old-abc-1234567890"
 
         with patch(
-            "core.agent_harness.session.paths.sessions_dir",
+            "core.agent_harness.session.persistence.paths.sessions_dir",
             return_value=tmp_path,
         ):
             SessionStore.open_session(session)
@@ -1804,7 +1885,7 @@ class TestResumeCommand:
         console, buf = _capture()
 
         with patch(
-            "core.agent_harness.session.paths.sessions_dir",
+            "core.agent_harness.session.persistence.paths.sessions_dir",
             return_value=tmp_path,
         ):
             SessionStore.open_session(session)
@@ -2151,7 +2232,7 @@ class TestPrePolicyValidation:
             return "y"
 
         session = Session()
-        session.trust_mode = True
+        session.terminal.trust_mode = True
 
         console, buf = _capture()
         dispatch_slash("/investigate", session, console, confirm_fn=_confirm, is_tty=True)
@@ -2357,6 +2438,76 @@ class TestRunCliCommand:
         assert replayed == [("partial stdout\n", None), ("partial stderr\n", ERROR)]
         assert "timed out" in buf.getvalue()
 
+    def test_interactive_session_keeps_repl_alive_on_subprocess_failure(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Delegated CLI failures must not return False to dispatch_slash on the REPL."""
+        from surfaces.interactive_shell.command_registry import cli_parity as m
+
+        def _fake_run(
+            cmd: list[str],
+            *,
+            check: bool,
+            timeout: float | None,
+            capture_output: bool,
+            text: bool,
+            encoding: str,
+            errors: str,
+            env: dict[str, str],
+        ) -> subprocess.CompletedProcess[str]:
+            del check, timeout, text, encoding, errors, env
+            assert capture_output is True
+            return subprocess.CompletedProcess(cmd, 1, stdout="auth failed\n", stderr="")
+
+        monkeypatch.setattr(m.subprocess, "run", _fake_run)
+        session = Session()
+        session.record("slash", "/auth status", ok=True)
+        console, buf = _capture()
+        assert (
+            m.run_cli_command(
+                console,
+                ["auth", "status"],
+                capture_output=True,
+                session=session,
+            )
+            is True
+        )
+        assert "non-zero code 1" in buf.getvalue()
+        assert session.history[-1]["ok"] is False
+
+    def test_headless_session_propagates_subprocess_failure(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Gateway/headless surfaces need the real exit status for slash analytics."""
+        from core.agent_harness.session import SessionCore
+        from core.agent_harness.session.persistence.memory import InMemorySessionStorage
+        from surfaces.interactive_shell.command_registry import cli_parity as m
+
+        def _fake_run(
+            cmd: list[str],
+            *,
+            check: bool,
+            timeout: float | None,
+            capture_output: bool,
+            text: bool,
+            encoding: str,
+            errors: str,
+            env: dict[str, str],
+        ) -> subprocess.CompletedProcess[str]:
+            del check, text, encoding, errors, env
+            assert capture_output is True
+            assert timeout == m._HEADLESS_CLI_SUBPROCESS_TIMEOUT_SECONDS
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="boom\n")
+
+        monkeypatch.setattr(m.subprocess, "run", _fake_run)
+        session = SessionCore(storage=InMemorySessionStorage())
+        session.record("slash", "/remote health", ok=True)
+        console, _buf = _capture()
+        assert m.run_cli_command(console, ["remote", "health"], session=session) is False
+        assert session.history[-1]["ok"] is False
+
     def test_frozen_binary_delegate_reexecs_opensre_without_module_flags(
         self,
         monkeypatch: pytest.MonkeyPatch,
@@ -2367,12 +2518,12 @@ class TestRunCliCommand:
         before slash commands like ``/onboard`` can run.
         """
         from surfaces.interactive_shell.command_registry import cli_parity as m
-        from surfaces.interactive_shell.runtime.subprocess_runner import opensre_cli_runner
+        from tools.interactive_shell import cli as opensre_cli
 
         captured: list[list[str]] = []
 
-        monkeypatch.setattr(opensre_cli_runner.sys, "executable", "/tmp/opensre")
-        monkeypatch.setattr(opensre_cli_runner.sys, "frozen", True, raising=False)
+        monkeypatch.setattr(opensre_cli.sys, "executable", "/tmp/opensre")
+        monkeypatch.setattr(opensre_cli.sys, "frozen", True, raising=False)
 
         def _fake_run(
             cmd: list[str],
@@ -2402,13 +2553,13 @@ class TestRunCliCommand:
         avoids turning ``/onboard`` into ``opensre -m cli onboard``.
         """
         from surfaces.interactive_shell.command_registry import cli_parity as m
-        from surfaces.interactive_shell.runtime.subprocess_runner import opensre_cli_runner
+        from tools.interactive_shell import cli as opensre_cli
 
         captured: list[list[str]] = []
 
-        monkeypatch.setattr(opensre_cli_runner.sys, "argv", ["/tmp/bin/opensre"])
-        monkeypatch.setattr(opensre_cli_runner.sys, "executable", "/tmp/bin/python3")
-        monkeypatch.setattr(opensre_cli_runner.sys, "frozen", False, raising=False)
+        monkeypatch.setattr(opensre_cli.sys, "argv", ["/tmp/bin/opensre"])
+        monkeypatch.setattr(opensre_cli.sys, "executable", "/tmp/bin/python3")
+        monkeypatch.setattr(opensre_cli.sys, "frozen", False, raising=False)
 
         def _fake_run(
             cmd: list[str],

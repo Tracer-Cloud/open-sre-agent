@@ -3,6 +3,7 @@
 Pure scoring logic lives in scoring.py.
 Rendering/cross-axis reports live in reporting.py.
 Per-scenario observation building and Rich rendering live in observations.py.
+Trajectory policy types and evaluation live in trajectory_policy.py.
 """
 
 from __future__ import annotations
@@ -41,11 +42,8 @@ from tests.synthetic.mock_aws_backend import FixtureAWSBackend
 from tests.synthetic.mock_grafana_backend.backend import FixtureGrafanaBackend
 from tests.synthetic.mock_grafana_backend.selective_backend import SelectiveGrafanaBackend
 from tests.synthetic.rds_postgres.observations import (
-    TrajectoryPolicy,
-    TrajectoryPolicyResult,
     build_observation,
     compute_trajectory_metrics,
-    evaluate_trajectory_policy,
     render_report_to_console,
     write_observation,
 )
@@ -66,32 +64,20 @@ from tests.synthetic.rds_postgres.scenario_loader import (
     ScenarioFixture,
     load_all_scenarios,
 )
-
-# Re-export scoring symbols so existing import sites continue to work without
-# modification. Track removal in a follow-up once all sites are migrated.
 from tests.synthetic.rds_postgres.scoring import (
     FailureDetail,
     GateResult,
-    ReasoningScore,
     ScenarioScore,
-    TrajectoryScore,
     _all_required_gates_pass,
-    score_reasoning,
     score_result,
-    score_trajectory,
+)
+from tests.synthetic.rds_postgres.trajectory_policy import (
+    TrajectoryPolicy,
+    TrajectoryPolicyResult,
+    evaluate_trajectory_policy,
 )
 
 __all__ = [
-    # dataclasses
-    "FailureDetail",
-    "GateResult",
-    "ReasoningScore",
-    "ScenarioScore",
-    "TrajectoryScore",
-    # functions
-    "score_result",
-    "score_reasoning",
-    "score_trajectory",
     # orchestration
     "run_scenario",
     "run_synthetic_suite",

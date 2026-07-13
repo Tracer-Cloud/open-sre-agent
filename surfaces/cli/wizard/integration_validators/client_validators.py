@@ -6,7 +6,15 @@ from pathlib import Path
 
 from integrations.alertmanager.client import make_alertmanager_client
 from integrations.betterstack import build_betterstack_config, validate_betterstack_config
-from integrations.config_models import PagerDutyIntegrationConfig
+from integrations.config_models import (
+    AWSIntegrationConfig,
+    CoralogixIntegrationConfig,
+    GoogleDocsIntegrationConfig,
+    GrafanaIntegrationConfig,
+    HoneycombIntegrationConfig,
+    IncidentIoIntegrationConfig,
+    PagerDutyIntegrationConfig,
+)
 from integrations.coralogix.client import CoralogixClient
 from integrations.dagster import build_dagster_config, validate_dagster_config
 from integrations.datadog.client import DatadogClient, DatadogConfig
@@ -16,14 +24,6 @@ from integrations.grafana.client import get_grafana_client_from_credentials
 from integrations.honeycomb.client import HoneycombClient
 from integrations.incident_io.client import IncidentIoClient
 from integrations.jenkins import build_jenkins_config, validate_jenkins_config
-from integrations.models import (
-    AWSIntegrationConfig,
-    CoralogixIntegrationConfig,
-    GoogleDocsIntegrationConfig,
-    GrafanaIntegrationConfig,
-    HoneycombIntegrationConfig,
-    IncidentIoIntegrationConfig,
-)
 from integrations.opsgenie.client import OpsGenieClient, OpsGenieConfig
 from integrations.pagerduty.client import PagerDutyClient
 from integrations.sentry import build_sentry_config, validate_sentry_config

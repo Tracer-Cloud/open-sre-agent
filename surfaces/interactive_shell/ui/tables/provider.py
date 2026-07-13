@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import os
 
-from core.agent_harness.providers.provider_models import resolve_provider_models
+from core.agent_harness.llm_resolution import resolve_provider_models
 
 
 def detect_provider_model() -> tuple[str, str]:

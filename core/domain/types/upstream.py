@@ -34,6 +34,56 @@ class MetricSeries:
 
 
 @dataclass(frozen=True)
+class TimeSeries:
+    name: str
+    timestamps: tuple[str, ...]
+    values: tuple[float, ...]
+
+
+@dataclass(frozen=True)
+class TimeWindowCorrelation:
+    primary_signal: str
+    candidate_signal: str
+    aligned_points: int
+    direction_matches: int
+    score: float
+    rationale: str
+
+
+@dataclass(frozen=True)
+class TopologyNode:
+    name: str
+    node_type: str
+    upstream_of: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class TopologyCorrelation:
+    source: str
+    target: str
+    adjacency_score: float
+    rationale: str
+
+
+@dataclass(frozen=True)
+class PeriodicityScore:
+    signal_name: str
+    repeated_spikes: int
+    score: float
+    rationale: str
+
+
+class HintEvidenceScore(Protocol):
+    @property
+    def score(self) -> float:
+        raise NotImplementedError
+
+    @property
+    def rationale(self) -> str:
+        raise NotImplementedError
+
+
+@dataclass(frozen=True)
 class LogSignal:
     source: str
     name: str
@@ -70,12 +120,27 @@ class UpstreamEvidenceProvider(Protocol):
         """Collect evidence needed for symptom-first upstream correlation."""
 
 
+def metric_to_time_series(metric: MetricSeries) -> TimeSeries:
+    return TimeSeries(
+        name=metric.name,
+        timestamps=metric.timestamps,
+        values=metric.values,
+    )
+
+
 __all__ = [
     "CorrelatedSignal",
+    "HintEvidenceScore",
     "LogSignal",
     "MetricSeries",
+    "PeriodicityScore",
+    "TimeSeries",
+    "TimeWindowCorrelation",
+    "TopologyCorrelation",
     "TopologyHint",
+    "TopologyNode",
     "UpstreamCandidate",
     "UpstreamEvidenceBundle",
     "UpstreamEvidenceProvider",
+    "metric_to_time_series",
 ]

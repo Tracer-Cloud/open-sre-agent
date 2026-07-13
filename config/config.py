@@ -21,7 +21,6 @@ from config.llm_auth.auth_method import (
 from config.llm_auth.credentials import status as credential_status
 from config.llm_auth.provider_catalog import (
     API_KEY_PROVIDER_ENVS,
-    KEYLESS_PROVIDER_VALUES,
     SUPPORTED_PROVIDER_VALUES,
 )
 from config.local_env import bootstrap_opensre_env
@@ -188,7 +187,6 @@ LLMProvider = Literal[
     "pi",
 ]
 
-KEYLESS_LLM_PROVIDERS = KEYLESS_PROVIDER_VALUES
 LLM_PROVIDER_API_KEY_ENVS = API_KEY_PROVIDER_ENVS
 
 # Runtime identifiers for ``LLMProvider`` members. Branch on these instead of

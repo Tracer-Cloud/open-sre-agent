@@ -9,10 +9,8 @@ composition root, so this module holds no agent/dispatch logic.
 from __future__ import annotations
 
 import logging
-import sys
 
 from gateway.config.get_gateway_settings import (
-    GatewayConfigurationError,
     GatewaySettings,
     load_gateway_settings,
 )
@@ -36,16 +34,10 @@ def start_telegram_worker(
 
     ``handler`` is the transport-agnostic per-message callback. Returns the
     running worker plus the resolved settings for the composition root to hold.
+    Raises :class:`GatewayConfigurationError` when Telegram is not configured —
+    the composition root decides whether that is fatal.
     """
-    try:
-        settings = load_gateway_settings()
-    except GatewayConfigurationError as exc:
-        print(
-            f"[telegram-gateway] could not start long-poll mode: {exc}",
-            file=sys.stderr,
-        )
-        raise SystemExit(1) from exc
-
+    settings = load_gateway_settings()
     worker = start_telegram_gateway_background(
         settings=settings,
         logger=logger,

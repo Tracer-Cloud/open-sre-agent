@@ -9,7 +9,7 @@ from typing import Any, cast
 import pytest
 
 from core.agent import Agent, AgentRunResult
-from core.agent_harness.turns.headless_dispatch import dispatch_message_to_headless_agent
+from core.agent_harness.turns.headless_dispatch import HeadlessAgent
 from core.events import (
     MessageUpdateEvent,
     RuntimeEvent,
@@ -18,7 +18,7 @@ from core.events import (
 from core.llm.types import AgentLLMResponse, ToolCall
 from core.messages import (
     AppRuntimeMessage,
-    MessageFormatter,
+    MessageMapper,
     ToolResultRuntimeMessage,
     UserRuntimeMessage,
 )
@@ -145,13 +145,66 @@ def test_agent_exposes_headless_dispatch_entrypoint(monkeypatch: pytest.MonkeyPa
         StaticReasoningClientProvider,
     )
 
-    result = dispatch_message_to_headless_agent(
-        "hello",
+    agent = HeadlessAgent(
         tools=NullToolProvider(),
         reasoning=StaticReasoningClientProvider(client=EchoReasoningClient()),
     )
+    result = agent.dispatch("hello")
 
     assert result.assistant_response_text == "hello from headless"
+
+
+def test_one_headless_agent_dispatches_multiple_messages(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Configure once, dispatch many: both turns run on the same agent and session."""
+
+    class EchoReasoningClient:
+        def invoke_stream(self, _prompt: str) -> Iterator[str]:
+            yield "hello from headless"
+
+    monkeypatch.setattr(
+        "core.agent_harness.turns.action_driver.default_llm_factory",
+        lambda: FakeLLM(iter([AgentLLMResponse(content="", tool_calls=[], raw_content=None)])),
+    )
+    from core.agent_harness.turns.headless_dispatch import (
+        NullToolProvider,
+        StaticReasoningClientProvider,
+    )
+
+    agent = HeadlessAgent(
+        tools=NullToolProvider(),
+        reasoning=StaticReasoningClientProvider(client=EchoReasoningClient()),
+    )
+    first = agent.dispatch("one")
+    second = agent.dispatch("two")
+
+    assert first.assistant_response_text == "hello from headless"
+    assert second.assistant_response_text == "hello from headless"
+    # Both turns landed on the same shared session — reuse, not a fresh store per call.
+    assert len(agent._store.cli_agent_messages) == 4
+
+
+def test_provided_accounting_is_reused_across_messages() -> None:
+    from core.agent_harness.turns.headless_dispatch import NoopTurnAccounting, NullToolProvider
+
+    accounting = NoopTurnAccounting()
+    agent = HeadlessAgent(tools=NullToolProvider(), accounting=accounting)
+    assert agent._accounting_for("a") is accounting
+    assert agent._accounting_for("b") is accounting
+
+
+def test_default_accounting_is_resolved_fresh_per_message() -> None:
+    from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
+    from core.agent_harness.turns.headless_dispatch import InMemorySessionStore, NullToolProvider
+
+    class _PersistentStore(InMemorySessionStore):
+        storage = object()  # a persistent-backed store selects DefaultTurnAccounting
+
+    agent = HeadlessAgent(tools=NullToolProvider(), session=_PersistentStore())
+
+    first = agent._accounting_for("msg-a")
+    second = agent._accounting_for("msg-b")
+    assert isinstance(first, DefaultTurnAccounting)
+    assert first is not second  # resolved per message, not once at construction
 
 
 def test_agent_defaults_to_agent_llm_without_tools(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -330,7 +383,7 @@ def test_generic_tool_result_conversion_does_not_import_litellm(
     call = ToolCall(id="c1", name="query_logs", input={})
     message = ToolResultRuntimeMessage(tool_calls=(call,), results=({"ok": True},))
 
-    assert MessageFormatter(llm).to_provider_messages([message]) == [
+    assert MessageMapper(llm).to_provider_messages([message]) == [
         {
             "role": "tool",
             "results": [{"id": "c1", "output": {"ok": True}}],
@@ -377,7 +430,7 @@ def test_legacy_text_blocks_convert_to_bedrock_converse_content() -> None:
     llm = BedrockConverseAgentClient.__new__(BedrockConverseAgentClient)
     messages = [AppRuntimeMessage("custom", [{"type": "text", "text": "custom note"}])]
 
-    assert MessageFormatter(llm).to_provider_messages(messages) == [
+    assert MessageMapper(llm).to_provider_messages(messages) == [
         {"role": "user", "content": [{"text": "custom note"}]}
     ]
 
@@ -588,6 +641,22 @@ def test_always_tool_call_hits_iteration_cap() -> None:
     )
 
     assert result.hit_iteration_cap is True
+    assert result.llm_iterations_used == max_iterations
     assert len(result.executed) == max_iterations
     assert result.final_text == ""
     assert llm.invocations == max_iterations
+
+
+def test_react_loop_records_partial_iterations_when_llm_raises() -> None:
+    def responses() -> Iterator[AgentLLMResponse]:
+        yield _tool_call_response("c1", "query_logs")
+        yield _tool_call_response("c2", "query_logs")
+        raise RuntimeError("provider down")
+
+    llm = FakeLLM(responses())
+    agent = _agent(llm, _tools(FakeTool("query_logs")), max_iterations=5)
+
+    with pytest.raises(RuntimeError, match="provider down"):
+        agent.run([{"role": "user", "content": "hello"}])
+
+    assert agent._react_iterations_used == 3

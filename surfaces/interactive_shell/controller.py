@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from collections.abc import Iterator
 from contextlib import contextmanager
 
@@ -12,7 +13,6 @@ from prompt_toolkit.patch_stdout import patch_stdout
 from rich.console import Console
 
 from config.repl_config import ReplConfig
-from core.agent_harness.session import Session
 from core.domain.alerts import inbox as _alert_inbox
 from surfaces.interactive_shell.runtime.background.workers import BackgroundTaskManager
 from surfaces.interactive_shell.runtime.context import (
@@ -41,9 +41,28 @@ from surfaces.interactive_shell.runtime.turn_host import (
     run_agent_turn_queue,
     run_input_loop,
 )
+from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui import DIM
 
 log = logging.getLogger(__name__)
+
+
+@contextmanager
+def _alert_listener_token(token: str | None) -> Iterator[None]:
+    """Install the configured alert token for this listener, restoring any prior value."""
+    key = "OPENSRE_ALERT_LISTENER_TOKEN"
+    previous = os.environ.get(key)
+    try:
+        if token:
+            os.environ[key] = token
+        else:
+            os.environ.pop(key, None)
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = previous
 
 
 @contextmanager
@@ -60,26 +79,29 @@ def _alert_listener(
         yield None
         return
 
+    from gateway.web_server import WebAppServerHandle, serve_webapp_in_thread
+
     inbox: _alert_inbox.AlertInbox | None = None
-    handle: _alert_inbox.AlertListenerHandle | None = None
+    handle: WebAppServerHandle | None = None
     try:
         inbox = _alert_inbox.AlertInbox()
-        handle = _alert_inbox.start_alert_listener(
-            inbox,
-            host=cfg.alert_listener_host,
-            port=cfg.alert_listener_port,
-            token=cfg.alert_listener_token,
-        )
         _alert_inbox.set_current_inbox(inbox)
-        console.print(f"[{DIM}]listening for alerts on http://{handle.bound_address}/alerts[/]")
+        with _alert_listener_token(cfg.alert_listener_token):
+            handle = serve_webapp_in_thread(
+                host=cfg.alert_listener_host,
+                port=cfg.alert_listener_port,
+            )
+            console.print(f"[{DIM}]listening for alerts on http://{handle.bound_address}/alerts[/]")
+            try:
+                yield inbox
+            finally:
+                if handle is not None:
+                    handle.stop()
+                _alert_inbox.set_current_inbox(None)
     except Exception as exc:
         log.warning("Alert listener could not start: %s — continuing without it.", exc)
-    try:
-        yield inbox
-    finally:
-        if handle is not None:
-            handle.stop()
-            _alert_inbox.set_current_inbox(None)
+        _alert_inbox.set_current_inbox(None)
+        yield None
 
 
 def _resolve_runtime_context(
@@ -201,7 +223,7 @@ class InteractiveShellController:
             )
         )
         # Fleet sampler is lazy: /fleet triggers it on first live use.
-        self.session.fleet_sampler_starter = self.background.ensure_fleet_sampler_started
+        self.session.terminal.fleet_sampler_starter = self.background.ensure_fleet_sampler_started
 
     async def _handle_input_action(self, action: InputAction) -> bool:
         match action:

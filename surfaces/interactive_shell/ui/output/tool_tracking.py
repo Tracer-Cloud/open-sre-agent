@@ -70,11 +70,11 @@ class ToolTrackingMixin:
         *,
         event_key: str | None = None,
     ) -> None:
-        if self._silent:
-            return
         key = event_key or tool_name
         self._tool_start_times[key] = time.monotonic()
         self._tool_inputs[key] = tool_input
+        if self._silent:
+            return
         _record_tool_summary(tool_name, self._tool_summary_counts, self._tool_summary_order)
         source = tool_source_label(tool_name)
         label = tool_short_label(tool_name, source)
@@ -91,12 +91,13 @@ class ToolTrackingMixin:
         event_key: str | None = None,
         tool_input: Any = None,
     ) -> None:
-        if self._silent:
-            return
         key = event_key or tool_name
         start = self._tool_start_times.pop(key, None)
         elapsed_ms = int((time.monotonic() - start) * 1000) if start is not None else None
         stored_input = self._tool_inputs.pop(key, None)
+        # UI tool tracking only; tool spans are emitted in core.execution.
+        if self._silent:
+            return
         self._update_tool_summary_subtext()
         self._record_tool_detail(
             resolve_tool_display_name(tool_name),

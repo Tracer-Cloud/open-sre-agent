@@ -62,7 +62,7 @@ dependencies = [
     # MongoDB
     "pymongo>=4.6.0,<6.0.0",
     # Redis
-    "redis>=5.0.0,<6.0.0",
+    "redis>=5.0.0,<9.0.0",
     # Signature verfication for discord
     "PyNaCl>=1.5.0",
     # MariaDB
@@ -150,6 +150,7 @@ include = [
 
 [tool.setuptools.package-data]
 "surfaces.cli" = ["investigation/sample_alerts/*.json"]
+"core.agent_harness.prompts" = ["skills/*.md"]
 
 # With pytest-xdist (-n auto), each worker writes a fragment; put them under
 # .pytest_cache/ (already gitignored) instead of .coverage.<hostname>.* at repo root.

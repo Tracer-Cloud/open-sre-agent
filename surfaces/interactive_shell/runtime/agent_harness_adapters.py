@@ -36,6 +36,10 @@ class ShellOutputSink:
         # On a credit/billing wall, add the in-tool recovery hint.
         if CREDIT_EXHAUSTED_MARKER in message:
             self._console.print("[dim]Run /model to switch to another provider.[/]")
+            self._console.print(
+                "[dim]Or run /auth login <provider> to re-authenticate "
+                "or add a different provider.[/]"
+            )
 
     def stream(
         self,

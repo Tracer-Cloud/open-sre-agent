@@ -1,40 +1,31 @@
-"""Canonical home for agent session state and persistence.
+"""Surface-agnostic session state and persistence — the session package facade.
 
-This package centralizes reusable session state in one place:
+- :class:`SessionCore` (``session_core``) — the surface-agnostic session domain object.
+  The interactive shell's ``Session`` subclass with UI facets lives in
+  ``surfaces/interactive_shell/session/``.
+- :class:`SessionManager` (``lifecycle``) — create / resolve / rotate / restore / flush.
+- :class:`SessionStorage` / :class:`SessionRepo` protocols + backends (``persistence``).
 
-- :class:`Session` — the in-memory session domain object (``state``).
-- :class:`SessionStorage` / :class:`SessionRepo` protocols plus their JSONL and
-  in-memory backends — persistence, split into per-session writes (storage) and
-  cross-session queries (repo).
-
-``Session`` delegates all persistence to an injected ``SessionStorage`` so
-the on-disk format is swappable and tests can run without touching the
-filesystem. The module-level ``DEFAULT_SESSION_STORAGE`` / ``DEFAULT_SESSION_REPO``
-singletons provide the production JSONL backends used by agent surfaces.
+``SessionCore`` delegates all persistence to an injected ``SessionStorage`` so the on-disk
+format is swappable and tests can run without touching the filesystem. The module-level
+``DEFAULT_SESSION_STORAGE`` / ``DEFAULT_SESSION_REPO`` singletons provide the production
+JSONL backends used by agent surfaces.
 """
 
 from __future__ import annotations
 
-from core.agent_harness.session.repo import JsonlSessionRepo
-from core.agent_harness.session.state import (
-    SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST,
-    Session,
-)
-from core.agent_harness.session.storage import (
+from core.agent_harness.session.persistence import (
     InMemorySessionStorage,
     JsonlSessionStorage,
 )
-from core.agent_harness.session.terminal_metrics import (
-    InterventionKind,
-    TerminalMetrics,
-    TerminalMetricsSnapshot,
-)
-from core.agent_harness.session.types import (
+from core.agent_harness.session.persistence.jsonl_repo import JsonlSessionRepo
+from core.agent_harness.session.persistence.ports import (
     CHAT_KINDS,
     SessionPersistenceSource,
     SessionRepo,
     SessionStorage,
 )
+from core.agent_harness.session.session_core import SessionCore
 
 # Production singletons. Both backends are stateless, so sharing one instance
 # across the process is safe and avoids re-instantiation on every session.
@@ -53,26 +44,21 @@ def default_session_repo() -> SessionRepo:
 
 
 # Imported last: SessionManager reads the DEFAULT_* singletons above (lazily, in
-# its constructor), so this import must follow their definition. SessionManager
-# itself imports only session submodules, so there is no import cycle.
-from core.agent_harness.session.manager import SessionManager  # noqa: E402
+# its constructor), so this import must follow their definition.
+from core.agent_harness.session.lifecycle import SessionManager  # noqa: E402
 
 __all__ = [
     "CHAT_KINDS",
     "DEFAULT_SESSION_REPO",
     "DEFAULT_SESSION_STORAGE",
     "InMemorySessionStorage",
-    "InterventionKind",
     "JsonlSessionRepo",
     "JsonlSessionStorage",
-    "Session",
-    "SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST",
+    "SessionCore",
     "SessionManager",
     "SessionPersistenceSource",
     "SessionRepo",
     "SessionStorage",
-    "TerminalMetrics",
-    "TerminalMetricsSnapshot",
     "default_session_repo",
     "default_session_storage",
 ]

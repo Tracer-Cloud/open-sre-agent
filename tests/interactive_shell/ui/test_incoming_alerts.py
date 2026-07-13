@@ -143,10 +143,10 @@ class TestDrainAndRenderIncoming:
         count = drain_and_render_incoming(session, console, inbox)
 
         assert count == 3
-        assert len(session.incoming_alerts) == 3
-        assert session.incoming_alerts[0].text == "first"
-        assert session.incoming_alerts[1].text == "second"
-        assert session.incoming_alerts[2].text == "third"
+        assert len(session.alerts.entries) == 3
+        assert session.alerts.entries[0].text == "first"
+        assert session.alerts.entries[1].text == "second"
+        assert session.alerts.entries[2].text == "third"
 
     def test_records_in_history(self) -> None:
         session = Session()
@@ -211,7 +211,7 @@ class TestDrainAndRenderIncoming:
         drain_and_render_incoming(session, console, inbox)
 
         # Should be capped at _INCOMING_ALERTS_MAX (256)
-        assert len(session.incoming_alerts) <= session._INCOMING_ALERTS_MAX
+        assert len(session.alerts.entries) <= session.alerts._max
 
 
 class TestSessionIncomingAlerts:
@@ -227,12 +227,12 @@ class TestSessionIncomingAlerts:
         inbox.put(IncomingAlert(text="alert2"))
         drain_and_render_incoming(session, console, inbox)
 
-        assert len(session.incoming_alerts) == 2
+        assert len(session.alerts.entries) == 2
 
         # Clear session
         session.clear()
 
-        assert len(session.incoming_alerts) == 0
+        assert len(session.alerts.entries) == 0
         assert len(session.history) == 0
 
     def test_record_incoming_alert_kind(self) -> None:
@@ -245,8 +245,8 @@ class TestSessionIncomingAlerts:
         assert session.history[0]["type"] == "incoming_alert"
         assert session.history[0]["text"] == "test alert"
         assert session.history[0]["ok"] is True
-        assert len(session.incoming_alerts) == 1
-        assert session.incoming_alerts[0].text == "test alert"
+        assert len(session.alerts.entries) == 1
+        assert session.alerts.entries[0].text == "test alert"
 
     def test_record_incoming_alert_always_ok(self) -> None:
         session = Session()
@@ -263,10 +263,10 @@ class TestSessionIncomingAlerts:
         session.record_incoming_alert(IncomingAlert(text="second"))
         session.record_incoming_alert(IncomingAlert(text="third"))
 
-        assert len(session.incoming_alerts) == 3
-        assert session.incoming_alerts[0].text == "first"
-        assert session.incoming_alerts[1].text == "second"
-        assert session.incoming_alerts[2].text == "third"
+        assert len(session.alerts.entries) == 3
+        assert session.alerts.entries[0].text == "first"
+        assert session.alerts.entries[1].text == "second"
+        assert session.alerts.entries[2].text == "third"
 
 
 class TestAlertInboxEventClearing:

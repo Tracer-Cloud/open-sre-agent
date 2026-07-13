@@ -221,7 +221,7 @@ class TestRedisToolsAvailability:
 
     def test_redis_integration_config_has_required_fields(self):
         """Redis integration provides required fields in resolved config."""
-        from integrations.models import RedisIntegrationConfig
+        from integrations.config_models import RedisIntegrationConfig
 
         config = RedisIntegrationConfig(
             host="localhost",

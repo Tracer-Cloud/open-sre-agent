@@ -14,14 +14,14 @@ import asyncio
 import contextlib
 import logging
 import threading
-from collections.abc import Awaitable, Callable, Coroutine, Iterator
+from collections.abc import Awaitable, Callable, Coroutine
 from dataclasses import dataclass
 from typing import Any
 
 from rich.console import Console
 
-from core.agent_harness.session import Session
-from platform.analytics.repl_context import bind_cli_session_id, reset_cli_session_id
+from platform.analytics.repl_context import bound_repl_turn_context
+from platform.observability.trace.spans import bind_session_trace, emit_thread_boundary
 from surfaces.interactive_shell.runtime.agent_presentation import (
     AgentEvent,
     AgentEventSink,
@@ -42,6 +42,8 @@ from surfaces.interactive_shell.runtime.input.actions import (
 from surfaces.interactive_shell.runtime.utils.input_policy import (
     turn_needs_exclusive_stdin,
 )
+from surfaces.interactive_shell.session import Session
+from surfaces.interactive_shell.ui.output.console_state import set_investigation_spinner
 from surfaces.interactive_shell.ui.output.repl_progress import repl_safe_progress_scope
 from surfaces.interactive_shell.ui.streaming.console import StreamingConsole
 from surfaces.interactive_shell.utils.error_handling.exception_reporting import report_exception
@@ -50,15 +52,6 @@ from surfaces.interactive_shell.utils.telemetry import PromptRecorder
 _logger = logging.getLogger(__name__)
 
 _AGENT_TURN_KIND = "agent"
-
-
-@contextlib.contextmanager
-def _bound_cli_session(session_id: str) -> Iterator[None]:
-    token = bind_cli_session_id(session_id)
-    try:
-        yield
-    finally:
-        reset_cli_session_id(token)
 
 
 @dataclass(frozen=True)
@@ -78,7 +71,6 @@ async def run_agent_turn(runtime: AgentTurnRuntime, text: str) -> None:
     console = StreamingConsole(
         runtime.spinner,
         dispatch_cancel,
-        prompt_invalidator=runtime.invalidate_prompt,
         highlight=False,
         force_terminal=True,
         color_system="truecolor",
@@ -96,9 +88,19 @@ async def run_agent_turn(runtime: AgentTurnRuntime, text: str) -> None:
     )
     exclusive_stdin = turn_needs_exclusive_stdin(text, runtime.session)
     progress_scope = contextlib.nullcontext() if exclusive_stdin else repl_safe_progress_scope()
-    runtime.session.exclusive_stdin_active = exclusive_stdin
+    runtime.session.terminal.exclusive_stdin_active = exclusive_stdin
+    # Expose this turn's spinner so investigation stages can animate phase labels.
+    set_investigation_spinner(runtime.spinner)
+    emit_thread_boundary(
+        runtime.session.session_id,
+        name="turn_boundary",
+        phase="turn_start",
+    )
     try:
-        with progress_scope:
+        with (
+            bind_session_trace(runtime.session.session_id),
+            progress_scope,
+        ):
             await _run_agent_turn_loop(
                 runtime=runtime,
                 text=text,
@@ -109,7 +111,13 @@ async def run_agent_turn(runtime: AgentTurnRuntime, text: str) -> None:
                 dispatch_cancel=dispatch_cancel,
             )
     finally:
-        runtime.session.exclusive_stdin_active = False
+        set_investigation_spinner(None)
+        runtime.session.terminal.exclusive_stdin_active = False
+        emit_thread_boundary(
+            runtime.session.session_id,
+            name="turn_boundary",
+            phase="turn_end",
+        )
 
 
 async def _run_agent_turn_loop(
@@ -135,7 +143,11 @@ async def _run_agent_turn_loop(
         # (``action_agent -> core.agent``) before the first turn is queued.
         from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 
-        with _bound_cli_session(runtime.session.session_id):
+        with bound_repl_turn_context(
+            session_id=runtime.session.session_id,
+            turn_kind=_AGENT_TURN_KIND,
+            prompt_turn_id=recorder.turn_id if recorder is not None else None,
+        ):
             await asyncio.to_thread(
                 execute_shell_turn,
                 text,

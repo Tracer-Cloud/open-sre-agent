@@ -12,7 +12,7 @@ from typing import Any
 
 from core.execution import ToolExecutionResult
 from core.llm.types import ToolCall
-from core.messages import MessageFormatter, RuntimeMessage, RuntimeMessageLike
+from core.messages import MessageMapper, RuntimeMessage, RuntimeMessageLike
 from core.types import RuntimeTool
 
 
@@ -31,6 +31,7 @@ class AgentRunResult:
     tool_results: list[tuple[ToolCall, ToolExecutionResult]] = field(default_factory=list)
     terminated_by_tool: bool = False
     hit_iteration_cap: bool = False
+    llm_iterations_used: int = 0
     final_system_prompt: str = ""
     """System prompt sent to the LLM on the last request (post-hook), for debugging."""
 
@@ -89,7 +90,7 @@ class AgentRunInput[RuntimeToolT: RuntimeTool]:
             resolved=dict(resolved) if resolved is not None else {},
             tool_resources=dict(tool_resources),
             max_iterations=max_iterations,
-            messages=MessageFormatter.normalize(messages),
+            messages=MessageMapper.to_runtime_messages(messages),
         )
 
 

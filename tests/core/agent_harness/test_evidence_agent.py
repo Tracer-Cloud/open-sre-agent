@@ -6,7 +6,7 @@ from typing import Any
 
 import core.agent_harness.turns.evidence_driver as evidence_agent
 import platform.harness_ports as harness_ports
-from core.agent_harness.session import Session
+from surfaces.interactive_shell.session import Session
 
 
 class _RecordingReporter:

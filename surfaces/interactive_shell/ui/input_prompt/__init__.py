@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from prompt_toolkit import PromptSession
 
-from core.agent_harness.session.prompt_history import load_prompt_history
+from surfaces.interactive_shell.prompt_history import load_prompt_history
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui.input_prompt.completion import ShellCompleter
 from surfaces.interactive_shell.ui.input_prompt.key_bindings import _build_prompt_key_bindings

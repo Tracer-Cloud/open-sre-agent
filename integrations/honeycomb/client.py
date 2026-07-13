@@ -8,9 +8,9 @@ from typing import Any
 
 import httpx
 
-from integrations.models import HoneycombIntegrationConfig
+from integrations.config_models import HoneycombIntegrationConfig
 from integrations.probes import ProbeResult
-from platform.observability.service_errors import capture_service_error
+from platform.observability.errors.service import capture_service_error
 
 logger = logging.getLogger(__name__)
 

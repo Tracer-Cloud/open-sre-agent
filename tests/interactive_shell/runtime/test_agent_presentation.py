@@ -1,4 +1,4 @@
-"""The turn-error render adds a ``/model`` recovery hint on a credit-exhausted error."""
+"""The turn-error render adds ``/model`` and ``/auth login`` recovery hints on a credit-exhausted error."""
 
 from __future__ import annotations
 
@@ -40,6 +40,12 @@ def test_credit_exhausted_turn_error_shows_model_hint() -> None:
     assert "/model" in output
 
 
+def test_credit_exhausted_turn_error_shows_auth_login_hint() -> None:
+    output = _render_turn_error(LLMCreditExhaustedError("Anthropic credit exhausted"))
+    assert "/auth login" in output
+
+
 def test_other_turn_error_has_no_model_hint() -> None:
     output = _render_turn_error(RuntimeError("something else broke"))
     assert "/model" not in output
+    assert "/auth login" not in output

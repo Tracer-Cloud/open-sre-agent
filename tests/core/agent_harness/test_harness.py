@@ -2,7 +2,7 @@
 
 Covers the startup responsibilities the harness consolidates: env
 resolution, session bootstrap/resume (delegated to
-:class:`~core.agent_harness.session.manager.SessionManager`), on-demand
+:class:`~core.agent_harness.session.lifecycle.SessionManager`), on-demand
 integration resolution, and context loading — plus the ordering
 ``startup()`` runs them in.
 """
@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import Any
 
 import core.agent_harness.harness as harness_module
-from core.agent_harness.session import Session
+from surfaces.interactive_shell.session import Session
 
 
 class _FakeSessionManager:

@@ -118,7 +118,7 @@ from integrations.whatsapp import classify as _classify_whatsapp
 from integrations.x_mcp import build_x_mcp_config
 from integrations.x_mcp import classify as _classify_x_mcp
 from platform.common.coercion import safe_int
-from platform.observability.errors import report_exception
+from platform.observability.errors.boundary import report_exception
 
 logger = logging.getLogger(__name__)
 

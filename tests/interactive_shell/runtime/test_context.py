@@ -10,8 +10,7 @@ from prompt_toolkit.input import DummyInput
 from prompt_toolkit.output import DummyOutput
 from pydantic import ValidationError
 
-from core.agent_harness.session import Session
-from core.agent_harness.session.tasks import TaskRegistry
+from platform.common.task_registry import TaskRegistry
 from surfaces.interactive_shell.controller import InteractiveShellController
 from surfaces.interactive_shell.runtime.context import (
     ReplRuntimeContext,
@@ -21,8 +20,8 @@ from surfaces.interactive_shell.runtime.context import (
 from surfaces.interactive_shell.runtime.core.state import (
     ReplState,
     SpinnerState,
-    create_repl_mutable_state,
 )
+from surfaces.interactive_shell.session import Session
 
 
 def _prompt_session() -> PromptSession[str]:
@@ -53,12 +52,12 @@ def test_create_context_applies_canonical_session_bootstrap(
         )
 
     assert context.session is session
-    assert session.active_theme_name == "pink"
+    assert session.terminal.active_theme_name == "pink"
     assert session.configured_integrations == ("github",)
     assert session.configured_integrations_known is True
     assert hydrate_calls == [session.session_id]
     assert session.task_registry is registry
-    assert session.prompt_history_backend is prompt.history
+    assert session.terminal.prompt_history_backend is prompt.history
 
 
 def test_context_supports_lightweight_bootstrap_for_unit_seams(
@@ -81,23 +80,72 @@ def test_context_supports_lightweight_bootstrap_for_unit_seams(
         persistent_tasks=False,
     )
 
-    assert context.session.active_theme_name == "green"
+    assert context.session.terminal.active_theme_name == "green"
     assert isinstance(context.state, ReplState)
     assert isinstance(context.spinner, SpinnerState)
 
 
-def test_create_repl_mutable_state_returns_fresh_initial_state() -> None:
-    first = create_repl_mutable_state()
-    second = create_repl_mutable_state()
+def test_create_context_registers_jsonl_session_trace_sink(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """REPL boot wires the JSONL session-trace sink for ATM / span metrics."""
+    from platform.observability.trace.spans import (
+        NoopSessionTraceSink,
+        get_session_trace_sink,
+        is_session_trace_active,
+        set_session_trace_sink,
+    )
+    from surfaces.interactive_shell.session.trace_sink import JsonlSessionTraceSink
 
-    assert isinstance(first.state, ReplState)
-    assert isinstance(first.spinner, SpinnerState)
-    assert first.state is not second.state
-    assert first.spinner is not second.spinner
-    assert first.state.exit_requested is False
-    assert first.state.is_dispatch_running() is False
-    assert first.state.is_awaiting_confirmation() is False
-    assert first.spinner.streaming is False
+    monkeypatch.setattr(
+        Session,
+        "hydrate_configured_integrations",
+        lambda _self: None,
+    )
+    monkeypatch.setattr(
+        TaskRegistry,
+        "persistent",
+        staticmethod(TaskRegistry),
+    )
+    set_session_trace_sink(NoopSessionTraceSink())
+    try:
+        create_repl_runtime_context(
+            hydrate_integrations=False,
+            persistent_tasks=False,
+        )
+        assert is_session_trace_active()
+        assert isinstance(get_session_trace_sink(), JsonlSessionTraceSink)
+    finally:
+        set_session_trace_sink(NoopSessionTraceSink())
+
+
+def test_create_context_uses_noop_trace_sink_for_in_memory_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from core.agent_harness.session import InMemorySessionStorage
+    from platform.observability.trace.spans import (
+        NoopSessionTraceSink,
+        get_session_trace_sink,
+        is_session_trace_active,
+        set_session_trace_sink,
+    )
+
+    monkeypatch.setattr(
+        Session,
+        "hydrate_configured_integrations",
+        lambda _self: None,
+    )
+    set_session_trace_sink(NoopSessionTraceSink())
+    try:
+        create_repl_runtime_context(
+            session=Session(storage=InMemorySessionStorage()),
+            hydrate_integrations=False,
+            persistent_tasks=False,
+        )
+        assert not is_session_trace_active()
+        assert isinstance(get_session_trace_sink(), NoopSessionTraceSink)
+    finally:
+        set_session_trace_sink(NoopSessionTraceSink())
 
 
 def test_context_uses_canonical_initial_mutable_state() -> None:

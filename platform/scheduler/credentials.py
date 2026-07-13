@@ -13,17 +13,36 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
-def resolve_telegram_credentials(task_params: dict[str, str]) -> dict[str, str]:
-    """Resolve Telegram bot_token from task params, integration store, or env.
+try:
+    from keyring.errors import KeyringError as _KeyringError
+except ImportError:
 
-    Priority: task.params > integration store > environment variable.
+    class _KeyringError(Exception):  # type: ignore[no-redef]
+        """Fallback when keyring is not installed."""
+
+
+def resolve_telegram_credentials(task_params: dict[str, str]) -> dict[str, str]:
+    """Resolve Telegram bot_token from task params, integration store, env, or keyring.
+
+    Priority: task.params > integration store > environment variable > system keyring.
     """
-    return _resolve_credentials(
-        task_params,
-        service="telegram",
-        credential_key="bot_token",
-        env_vars=("TELEGRAM_BOT_TOKEN",),
-    )
+    token = task_params.get("bot_token", "").strip()
+    if token:
+        return {"bot_token": token}
+
+    token = _get_integration_credential("telegram", "bot_token")
+    if token:
+        return {"bot_token": token}
+
+    try:
+        from config.llm_credentials import resolve_env_credential
+
+        token = resolve_env_credential("TELEGRAM_BOT_TOKEN").strip()
+    except (ImportError, _KeyringError) as exc:
+        logger.debug("Failed to resolve Telegram credentials from keyring: %s", exc)
+        token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+
+    return {"bot_token": token} if token else {}
 
 
 def resolve_slack_credentials(task_params: dict[str, str]) -> dict[str, str]:

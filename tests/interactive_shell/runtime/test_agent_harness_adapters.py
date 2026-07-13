@@ -1,4 +1,4 @@
-"""ShellOutputSink.render_error appends a ``/model`` hint on a credit-exhausted error."""
+"""ShellOutputSink.render_error appends ``/model`` and ``/auth login`` hints on a credit-exhausted error."""
 
 from __future__ import annotations
 
@@ -25,6 +25,12 @@ def test_render_error_shows_model_hint_on_credit_exhaustion() -> None:
     assert "/model" in output
 
 
+def test_render_error_shows_auth_login_hint_on_credit_exhaustion() -> None:
+    output = _render_error(f"Anthropic {CREDIT_EXHAUSTED_MARKER}. Original error: 400")
+    assert "/auth login" in output
+
+
 def test_render_error_no_hint_for_generic_error() -> None:
     output = _render_error("some other failure")
     assert "/model" not in output
+    assert "/auth login" not in output

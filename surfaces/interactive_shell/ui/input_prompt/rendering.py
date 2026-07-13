@@ -102,7 +102,7 @@ def resolve_idle_hint_ansi(session: Session) -> str:
 def resolve_prompt_placeholder(session: Session) -> ANSI:
     """Contextual ghost text when the input buffer is empty."""
     parts: list[str] = []
-    if session.trust_mode:
+    if session.terminal.trust_mode:
         parts.append("trust on")
     running = session.task_registry.running_count()
     if running:

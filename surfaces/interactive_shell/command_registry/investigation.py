@@ -9,6 +9,10 @@ from rich.console import Console
 from rich.markup import escape
 
 from config.llm_reasoning_effort import apply_reasoning_effort
+from core.agent_harness.session.terminal_access import (
+    background_mode_enabled,
+    session_terminal,
+)
 from platform.common.task_types import TaskRecord
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.runtime import Session
@@ -67,7 +71,7 @@ def _queue_investigate_target(session: Session, target: str) -> None:
     hold it — queue the resolved target so the loop auto-submits it on the next
     prompt iteration without ``queue.join()`` blocking.
     """
-    session.queue_auto_command(f"/investigate {target}")
+    session.terminal.set_auto_command(f"/investigate {target}")
 
 
 def _interactive_investigate_menu(session: Session, console: Console) -> bool:
@@ -159,8 +163,21 @@ def _stage_investigation_turn_telemetry(session: Session, outcome: Investigation
     """Stage LLM run metadata and structured errors for this turn's recorder flush."""
     from core.agent_harness.accounting.token_accounting import LlmRunInfo, record_llm_turn
 
+    if outcome.llm_input_tokens or outcome.llm_output_tokens:
+        record_llm_turn(
+            session,
+            prompt="",
+            response="",
+            input_tokens=outcome.llm_input_tokens,
+            output_tokens=outcome.llm_output_tokens,
+        )
+
+    terminal = session_terminal(session)
+    if terminal is None:
+        return
+
     if outcome.llm_model or outcome.llm_input_tokens or outcome.llm_output_tokens:
-        session.set_pending_turn_llm(
+        terminal.set_pending_turn_llm(
             LlmRunInfo(
                 model=outcome.llm_model or None,
                 provider=outcome.llm_provider or None,
@@ -169,16 +186,8 @@ def _stage_investigation_turn_telemetry(session: Session, outcome: Investigation
                 output_tokens=outcome.llm_output_tokens or None,
             )
         )
-        if outcome.llm_input_tokens or outcome.llm_output_tokens:
-            record_llm_turn(
-                session,
-                prompt="",
-                response="",
-                input_tokens=outcome.llm_input_tokens,
-                output_tokens=outcome.llm_output_tokens,
-            )
     if outcome.status == "failed":
-        session.set_pending_turn_error(
+        terminal.set_pending_turn_error(
             outcome.failure_category or "unknown",
             outcome.error_message or "investigation failed",
         )
@@ -248,7 +257,7 @@ def _cmd_investigate_file(session: Session, console: Console, args: list[str]) -
     # path form (for example: ``/investigate ./generic``).
     if template_name:
         target_slug = normalize_investigation_target(template_name)
-        if session.background_mode_enabled:
+        if background_mode_enabled(session):
             start_background_template_investigation(
                 template_name=template_name,
                 session=session,
@@ -268,6 +277,7 @@ def _cmd_investigate_file(session: Session, console: Console, args: list[str]) -
 
         def _run_template(task: TaskRecord) -> dict[str, object]:
             with (
+                apply_reasoning_effort(session.reasoning_effort),
                 track_investigation(
                     entrypoint=EntrypointSource.CLI_REPL_FILE,
                     trigger_mode=TriggerMode.FILE,
@@ -275,17 +285,15 @@ def _cmd_investigate_file(session: Session, console: Console, args: list[str]) -
                     interactive=True,
                     session=session,
                     investigation_target=target_slug,
-                ),
-                apply_reasoning_effort(session.reasoning_effort),
+                ) as tracker,
             ):
-                suppress = getattr(console, "suppress_prompt_spinner", None)
-                if callable(suppress):
-                    suppress()
-                return run_sample_alert_for_session(
+                final_state = run_sample_alert_for_session(
                     template_name=template_name,
                     context_overrides=session.accumulated_context or None,
                     cancel_requested=task.cancel_requested,
                 )
+                tracker.record_loop_metrics_from_state(final_state)
+                return final_state
 
         command_line = f"/investigate {template_name}"
         outcome = run_foreground_investigation(
@@ -313,7 +321,7 @@ def _cmd_investigate_file(session: Session, console: Console, args: list[str]) -
         session.mark_latest(ok=False, kind="slash")
         return True
 
-    if session.background_mode_enabled:
+    if background_mode_enabled(session):
         target_slug = normalize_investigation_target(raw_target, path=path)
         start_background_text_investigation(
             alert_text=text,
@@ -333,6 +341,7 @@ def _cmd_investigate_file(session: Session, console: Console, args: list[str]) -
 
     def _run_file(task: TaskRecord) -> dict[str, object]:
         with (
+            apply_reasoning_effort(session.reasoning_effort),
             track_investigation(
                 entrypoint=EntrypointSource.CLI_REPL_FILE,
                 trigger_mode=TriggerMode.FILE,
@@ -340,17 +349,15 @@ def _cmd_investigate_file(session: Session, console: Console, args: list[str]) -
                 interactive=True,
                 session=session,
                 investigation_target=target_slug,
-            ),
-            apply_reasoning_effort(session.reasoning_effort),
+            ) as tracker,
         ):
-            suppress = getattr(console, "suppress_prompt_spinner", None)
-            if callable(suppress):
-                suppress()
-            return run_investigation_for_session(
+            final_state = run_investigation_for_session(
                 alert_text=text,
                 context_overrides=session.accumulated_context or None,
                 cancel_requested=task.cancel_requested,
             )
+            tracker.record_loop_metrics_from_state(final_state)
+            return final_state
 
     command_line = f"/investigate {raw_target}"
     outcome = run_foreground_investigation(

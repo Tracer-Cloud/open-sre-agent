@@ -9,9 +9,7 @@ import pytest
 from rich.console import Console
 
 import tools.interactive_shell.actions.slash as slash_tool
-from core.agent_harness.models.turn_results import ToolCallingTurnResult
-from core.agent_harness.providers.default_providers import DefaultTurnAccounting
-from core.agent_harness.session import Session
+from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
 from core.agent_harness.turns.action_driver import (
     ActionTurnPlan,
     ToolCallingDeps,
@@ -20,8 +18,10 @@ from core.agent_harness.turns.action_driver import (
     run_action_agent_turn,
 )
 from core.agent_harness.turns.orchestrator import run_turn
+from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 from core.tool_framework.registered_tool import RegisteredTool
 from surfaces.interactive_shell.runtime.action_turn import run_action_tool_turn
+from surfaces.interactive_shell.session import Session
 from tests.core.agent.orchestration.action_execution_test_harness import (
     ActionExecutionHarness,
     FakeActionLLM,
@@ -287,6 +287,22 @@ def test_route_handled_without_handoff_stays_action_only() -> None:
     assert route.intent == "handled_without_llm"
 
 
+def test_route_investigation_dispatch_skips_gather_even_with_handoff() -> None:
+    from core.agent_harness.turns.orchestrator import TurnRoutingInput, _route_turn
+
+    routing = TurnRoutingInput(
+        action_handled=True,
+        executed_success_count=1,
+        has_observation=False,
+        investigation_dispatched=True,
+    )
+    route = _route_turn(
+        routing,
+        handoff_contents=("chat:non_actionable_literal",),
+    )
+    assert route.intent == "handled_without_llm"
+
+
 def test_run_turn_passes_handoff_contents_to_assistant() -> None:
     captured: list[tuple[str, ...]] = []
 
@@ -314,6 +330,54 @@ def test_run_turn_passes_handoff_contents_to_assistant() -> None:
     )
 
     assert captured == [("provider:local_llama_connect",)]
+
+
+def test_run_turn_clears_terminal_slash_dedup_at_turn_start() -> None:
+    """Per-turn slash dedup lives on session.terminal; run_turn must clear it each turn."""
+    session = Session()
+    session.terminal.agent_turn_executed_slashes.add("/stale")
+
+    def _noop_execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
+        return ToolCallingTurnResult(
+            planned_count=0,
+            executed_count=0,
+            executed_success_count=0,
+            has_unhandled_clause=False,
+            handled=False,
+            response_text="",
+        )
+
+    run_turn(
+        "hi",
+        session,
+        execute_actions=_noop_execute,
+        gather=lambda *_args, **_kwargs: None,
+        answer=lambda *_args, **_kwargs: None,
+        accounting=DefaultTurnAccounting(session, "hi"),
+    )
+
+    assert session.terminal.agent_turn_executed_slashes == set()
+
+
+def test_stage_turn_error_routes_to_terminal_facet() -> None:
+    """Structured error staging lives on session.terminal; stage_turn_error must reach it."""
+    from core.agent_harness.turns.orchestrator import stage_turn_error
+
+    session = Session()
+    stage_turn_error(session, "provider_error", "boom")
+
+    assert session.terminal.pop_pending_turn_error() == ("provider_error", "boom")
+
+
+def test_pop_turn_outcome_hint_reads_terminal_facet() -> None:
+    """Outcome hint lives on session.terminal; the driver helper must pop it from there."""
+    from core.agent_harness.turns.action_driver import _pop_turn_outcome_hint
+
+    session = Session()
+    session.terminal.set_turn_outcome_hint("handled")
+
+    assert _pop_turn_outcome_hint(session) == "handled"
+    assert _pop_turn_outcome_hint(session) == ""
 
 
 def test_run_turn_mixed_action_and_handoff_routes_to_assistant() -> None:
@@ -366,6 +430,136 @@ def test_execute_with_harness_handles_llm_unavailable() -> None:
     assert session.cli_agent_messages[-1] == ("assistant", "action agent unavailable")
 
 
+def test_llm_build_failure_on_conversational_input_stages_llm_failure() -> None:
+    """Conversational turn + provider build failure must flush as a failed LLM call."""
+    message = "LLM provider 'anthropic' requires ANTHROPIC_API_KEY to be set."
+
+    def _raise() -> object:
+        raise RuntimeError(message)
+
+    session = Session()
+    run_action_tool_turn(
+        "hi",
+        session,
+        Console(force_terminal=False),
+        deps=ToolCallingDeps(llm_factory=_raise),
+    )
+
+    assert session.terminal.pop_pending_turn_error() == ("action_agent_error", message)
+    # The client never built, so no attempted-model identity could be staged;
+    # the recorder reports "unknown" from the error kind alone.
+    assert session.terminal.pop_pending_turn_llm() is None
+
+
+def test_llm_invoke_failure_on_conversational_input_stages_attempted_model() -> None:
+    """Invoke-time provider failure stages the attempted model/provider identity."""
+    error = "Bedrock model 'us.anthropic.claude-sonnet-4-6' is not available for your account."
+
+    class _FailingInvokeLLM:
+        _model = "us.anthropic.claude-sonnet-4-6"
+        _provider_label = "Bedrock"
+
+        def tool_schemas(self, _tools: list[Any]) -> list[dict[str, Any]]:
+            return []
+
+        def invoke(self, *_args: Any, **_kwargs: Any) -> Any:
+            raise RuntimeError(error)
+
+    client = _FailingInvokeLLM()
+    session = Session()
+    run_action_tool_turn(
+        "hi",
+        session,
+        Console(force_terminal=False),
+        deps=ToolCallingDeps(llm_factory=lambda: client),
+    )
+
+    assert session.terminal.pop_pending_turn_error() == ("action_agent_error", error)
+    staged = session.terminal.pop_pending_turn_llm()
+    assert staged is not None
+    assert staged.model == "us.anthropic.claude-sonnet-4-6"
+    assert staged.provider == "bedrock"
+
+
+def test_llm_invoke_failure_uses_built_client_without_second_factory_call() -> None:
+    """Invoke-time failure must stage identity from the client that actually failed."""
+    error = "Bedrock model unavailable"
+    factory_calls = 0
+
+    class _FailingInvokeLLM:
+        _model = "us.anthropic.claude-sonnet-4-6"
+        _provider_label = "Bedrock"
+
+        def tool_schemas(self, _tools: list[Any]) -> list[dict[str, Any]]:
+            return []
+
+        def invoke(self, *_args: Any, **_kwargs: Any) -> Any:
+            raise RuntimeError(error)
+
+    client = _FailingInvokeLLM()
+
+    def _factory() -> _FailingInvokeLLM:
+        nonlocal factory_calls
+        factory_calls += 1
+        return client
+
+    session = Session()
+    run_action_tool_turn(
+        "hi",
+        session,
+        Console(force_terminal=False),
+        deps=ToolCallingDeps(llm_factory=_factory),
+    )
+
+    assert factory_calls == 1
+    staged = session.terminal.pop_pending_turn_llm()
+    assert staged is not None
+    assert staged.model == client._model
+
+
+def test_llm_failure_on_literal_slash_input_stays_terminal() -> None:
+    """Explicit /slash and !shell turns must keep the terminal-action telemetry shape."""
+    from core.agent_harness.turns.action_driver import _stage_action_llm_failure
+
+    for terminal_input in ("/help", "!ls -la"):
+        session = Session()
+        _stage_action_llm_failure(terminal_input, session, client=None, error_text="boom")
+        assert session.terminal.pop_pending_turn_error() is None
+        assert session.terminal.pop_pending_turn_llm() is None
+
+
+def test_stream_failure_stages_llm_error_and_identity() -> None:
+    """A conversational stream failure stages both the error and the attempted LLM."""
+    from core.agent_harness.turns.orchestrator import _stream_response
+
+    class _FailingStreamClient:
+        _model = "claude-sonnet-4-6"
+        _provider_label = "Anthropic"
+
+        def invoke_stream(self, _prompt: str) -> Any:
+            raise RuntimeError("Anthropic authentication failed.")
+
+    session = Session()
+    run = _stream_response(
+        client=_FailingStreamClient(),
+        prompt="hi",
+        output=_OutputSink(Console(force_terminal=False)),
+        run_factory=object(),
+        error_reporter=None,
+        session=session,
+    )
+
+    assert run is None
+    assert session.terminal.pop_pending_turn_error() == (
+        "assistant_error",
+        "Anthropic authentication failed.",
+    )
+    staged = session.terminal.pop_pending_turn_llm()
+    assert staged is not None
+    assert staged.model == "claude-sonnet-4-6"
+    assert staged.provider == "anthropic"
+
+
 def test_build_action_agent_returns_action_turn_plan() -> None:
     llm = FakeActionLLM([no_tool_response()])
     deps = ToolCallingDeps(llm_factory=lambda: llm)
@@ -398,8 +592,8 @@ def test_turn_resolved_integrations_trusts_plan_without_reresolving(
     """
     from dataclasses import replace
 
-    from core.agent_harness.models.turn_snapshot import TurnSnapshot
     from core.agent_harness.turns.turn_plan import TurnPlan
+    from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 
     def _must_not_run(_session: object) -> dict:
         raise AssertionError("must not re-resolve when the plan is present")

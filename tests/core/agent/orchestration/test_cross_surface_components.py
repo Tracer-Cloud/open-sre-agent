@@ -9,65 +9,62 @@ from unittest.mock import MagicMock
 import pytest
 from rich.console import Console
 
-from core.agent_harness.models.turn_results import ShellTurnResult, ToolCallingTurnResult
-from core.agent_harness.providers.default_providers import DefaultToolProvider
-from core.agent_harness.session import InMemorySessionStorage, Session
+from core.agent_harness.session import InMemorySessionStorage
+from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.orchestrator import run_turn
-from gateway.turn_handler import build_gateway_turn_handler
+from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
+from gateway.turn_handler import GatewayTurnHandler
+from surfaces.interactive_shell.session import Session
 
 
 def test_gateway_turn_handler_delegates_to_agent_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
-    captured: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
-
-    def _spy(*args: Any, **kwargs: Any) -> ShellTurnResult:
-        captured.append((args, kwargs))
-        return ShellTurnResult(
-            final_intent="cli_agent_handled",
-            action_result=ToolCallingTurnResult(
-                planned_count=1,
-                executed_count=1,
-                executed_success_count=1,
-                has_unhandled_clause=False,
-                handled=True,
-                response_text="gateway-ok",
-            ),
-            assistant_response_text="gateway-ok",
-        )
-
-    monkeypatch.setattr("gateway.turn_handler.dispatch_message_to_headless_agent", _spy)
+    agent_cls = MagicMock()
+    agent_cls.return_value.dispatch.return_value = ShellTurnResult(
+        final_intent="cli_agent_handled",
+        action_result=ToolCallingTurnResult(
+            planned_count=1,
+            executed_count=1,
+            executed_success_count=1,
+            has_unhandled_clause=False,
+            handled=True,
+            response_text="gateway-ok",
+        ),
+        assistant_response_text="gateway-ok",
+    )
+    monkeypatch.setattr("gateway.turn_handler.HeadlessAgent", agent_cls)
 
     session = Session(storage=InMemorySessionStorage())
     sink = MagicMock()
-    handler = build_gateway_turn_handler(console=Console(force_terminal=False))
+    handler = GatewayTurnHandler(console=Console(force_terminal=False))
     handler("hello gateway", session, sink, logging.getLogger("test.gateway.module"))
 
-    assert len(captured) == 1
-    args, kwargs = captured[0]
-    assert args == ("hello gateway",)
-    assert kwargs["session"] is session
-    assert kwargs["output"] is sink
-    assert kwargs["gather_enabled"] is True
-    assert isinstance(kwargs["tools"], DefaultToolProvider)
-    assert kwargs["tools"]._precomputed_action_tools is None
+    # The message is dispatched per-turn; the ports are wired once at construction.
+    agent_cls.return_value.dispatch.assert_called_once()
+    assert agent_cls.return_value.dispatch.call_args.args == ("hello gateway",)
+    ctor = agent_cls.call_args
+    assert ctor.kwargs["session"] is session
+    assert ctor.kwargs["output"] is sink
+    assert ctor.kwargs["gather_enabled"] is True
+    assert isinstance(ctor.kwargs["tools"], DefaultToolProvider)
+    assert ctor.kwargs["tools"]._precomputed_action_tools is None
     sink.finalize.assert_called_once_with("gateway-ok")
 
 
 def test_gateway_turn_handler_does_not_finalize_answered_turn(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        "gateway.turn_handler.dispatch_message_to_headless_agent",
-        lambda *_args, **_kwargs: ShellTurnResult(
-            final_intent="cli_agent_fallback",
-            action_result=ToolCallingTurnResult(0, 0, 0, False, False),
-            assistant_response_text="streamed answer",
-            llm_run=object(),
-        ),
+    agent_cls = MagicMock()
+    agent_cls.return_value.dispatch.return_value = ShellTurnResult(
+        final_intent="cli_agent_fallback",
+        action_result=ToolCallingTurnResult(0, 0, 0, False, False),
+        assistant_response_text="streamed answer",
+        llm_run=object(),
     )
+    monkeypatch.setattr("gateway.turn_handler.HeadlessAgent", agent_cls)
 
     session = Session(storage=InMemorySessionStorage())
     sink = MagicMock()
-    handler = build_gateway_turn_handler(console=Console(force_terminal=False))
+    handler = GatewayTurnHandler(console=Console(force_terminal=False))
     handler("why", session, sink, logging.getLogger("test.gateway.module.answer"))
 
     sink.finalize.assert_not_called()
@@ -249,7 +246,7 @@ def test_action_tools_uses_passed_resolved_integrations(
         return []
 
     monkeypatch.setattr(
-        "core.agent_harness.providers.default_providers.get_action_tools_from_integrations_context",
+        "core.agent_harness.tools.tool_provider.get_action_tools_from_integrations_context",
         _fake_build,
     )
     provider = DefaultToolProvider(
@@ -274,11 +271,11 @@ def test_action_tools_falls_back_to_session_resolve_when_none(
         return []
 
     monkeypatch.setattr(
-        "core.agent_harness.providers.default_providers.get_action_tools_from_integrations_context",
+        "core.agent_harness.tools.tool_provider.get_action_tools_from_integrations_context",
         _fake_build,
     )
     monkeypatch.setattr(
-        "core.agent_harness.integrations.resolution.resolve_and_cache_integrations",
+        "core.agent_harness.session.integration_resolution.resolve_and_cache_integrations",
         lambda _session: dict(session_resolved),
     )
     provider = DefaultToolProvider(

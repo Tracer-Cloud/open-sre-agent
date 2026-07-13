@@ -7,7 +7,7 @@ from typing import Any
 from rich.console import Console, ConsoleOptions, RenderResult
 from rich.text import Text
 
-from platform.observability.tool_trace import format_json_preview
+from platform.observability.trace.redaction import format_json_preview
 from platform.terminal.theme import (
     BRAND,
     DIM,

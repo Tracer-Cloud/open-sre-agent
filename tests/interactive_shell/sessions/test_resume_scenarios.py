@@ -18,8 +18,9 @@ from config.config import (
     resolve_llm_settings_verbose,
 )
 from config.llm_auth.credentials import status as credential_status
-from core.agent_harness.session import JsonlSessionStorage, Session
+from core.agent_harness.session import JsonlSessionStorage
 from surfaces.interactive_shell.command_registry import dispatch_slash
+from surfaces.interactive_shell.session import Session
 
 SessionStore = JsonlSessionStorage()
 
@@ -402,6 +403,10 @@ class TestResumeScenarioMatrix:
 class TestResumeLiveRepl:
     """Live REPL smoke test via ReplDriver with isolated HOME and real planner."""
 
+    @pytest.mark.skip(
+        reason="Flaky live-LLM REPL round-trip (subprocess + 60s waits); resume load "
+        "logic is covered offline. Run manually via ReplDriver."
+    )
     def test_live_resume_round_trip(self, tmp_path: Path) -> None:
         _require_live_llm_for_repl_planner()
 

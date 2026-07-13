@@ -108,13 +108,20 @@ def load_tool_skill_guidance(
     )
 
 
+def _xml_attr(value: str) -> str:
+    """Escape a string for safe use inside an XML double-quoted attribute value."""
+    return (
+        value.replace("&", "&amp;").replace('"', "&quot;").replace("<", "&lt;").replace(">", "&gt;")
+    )
+
+
 def format_tool_skill_guidance(skill: SkillGuidance) -> str:
     """Format skill guidance for inclusion in model-facing tool descriptions."""
 
     skill_dir = str(Path(skill.file_path).parent)
     return (
-        f'<skill name="{skill.name}" description="{skill.description}" '
-        f'location="{skill.file_path}">\n'
+        f'<skill name="{_xml_attr(skill.name)}" description="{_xml_attr(skill.description)}" '
+        f'location="{_xml_attr(skill.file_path)}">\n'
         f"Use this skill when the request matches the description above.\n"
         f"References are relative to {skill_dir}.\n\n"
         f"{skill.content.strip()}\n"

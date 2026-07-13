@@ -4,7 +4,7 @@ Runs one turn through the shared :class:`core.agent.Agent` tool-calling
 loop: it assembles the available agent tools (via a :class:`~core.agent_harness.ports.ToolProvider`),
 drives the loop while a tool-event observer streams each tool call to the
 surface, and summarizes the executed tool calls into a facts-only
-:class:`~core.agent_harness.models.turn_results.ToolCallingTurnResult`.
+:class:`~core.agent_harness.turns.turn_results.ToolCallingTurnResult`.
 
 Accounting/analytics for the turn are the caller's concern (see
 :class:`core.agent_harness.ports.TurnAccounting`); this module emits none itself.
@@ -20,10 +20,7 @@ from typing import Any
 
 from core.agent import Agent
 from core.agent_harness.agent_builder import AgentConfig, build_agent
-from core.agent_harness.debug.prompt_trace import persist_turn_system_prompt
-from core.agent_harness.integrations.resolution import resolve_and_cache_integrations
-from core.agent_harness.models.turn_results import ToolCallingTurnResult
-from core.agent_harness.models.turn_snapshot import TurnSnapshot
+from core.agent_harness.llm_resolution import default_llm_factory
 from core.agent_harness.ports import (
     ConfirmFn,
     ErrorReporter,
@@ -33,12 +30,17 @@ from core.agent_harness.ports import (
 )
 from core.agent_harness.prompts import build_action_system_prompt, build_action_user_message
 from core.agent_harness.prompts.conversation_memory import MAX_CONVERSATION_MESSAGES
-from core.agent_harness.providers.provider_models import default_llm_factory
+from core.agent_harness.session.integration_resolution import resolve_and_cache_integrations
 from core.agent_harness.turns.turn_plan import TurnPlan
+from core.agent_harness.turns.turn_results import ToolCallingTurnResult
+from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 from core.events import runtime_event_callback_from_observer
 from core.execution import ToolExecutionHooks, public_tool_input
 from core.llm.failure_classification import is_context_length_overflow
 from core.llm.types import AgentLLMResponse, ToolCall
+from platform.analytics.react_turn import run_react_agent_with_telemetry
+from platform.observability.trace.prompts import persist_turn_system_prompt
+from platform.observability.trace.spans import component_span
 
 log = logging.getLogger(__name__)
 
@@ -75,12 +77,17 @@ SELF_RECORDING_ACTION_TOOL_NAMES: frozenset[str] = frozenset(
         "task_cancel",
     }
 )
+INVESTIGATION_DISPATCH_TOOL_NAMES: frozenset[str] = frozenset(
+    {"investigation_start", "alert_sample"}
+)
 
 
 @dataclass(frozen=True)
 class ActionTurnPlan:
     agent: Agent[Any]
     user_message: str
+    llm: Any
+    max_iterations: int
 
 
 @dataclass(frozen=True)
@@ -163,7 +170,9 @@ def _history_entry_fallback(item: dict[str, Any]) -> str:
 
 
 def _pop_turn_outcome_hint(session: SessionStore) -> str:
-    pop_hint = getattr(session, "pop_turn_outcome_hint", None)
+    # Outcome hint lives on the shell terminal facet; other sessions have none.
+    terminal = getattr(session, "terminal", None)
+    pop_hint = getattr(terminal, "pop_turn_outcome_hint", None)
     if not callable(pop_hint):
         return ""
     hint = pop_hint()
@@ -243,6 +252,29 @@ def _render_tool_calling_error(output: OutputSink, message: str) -> None:
     output.print()
     output.render_response_header("assistant")
     output.render_error(message)
+
+
+def _stage_action_llm_failure(
+    message: str,
+    session: SessionStore,
+    *,
+    client: Any | None,
+    error_text: str,
+) -> None:
+    """Stage telemetry for an action-agent LLM failure on conversational input.
+
+    Explicit ``!shell`` / literal ``/slash`` turns never invoke the hosted LLM
+    (they run through ``_StaticToolCallLLM``), so a failure there stays a
+    terminal-action outcome. For conversational input the LLM was the intended
+    route, so the turn must be reported as a failed LLM call — not a terminal
+    turn tagged ``no_conversational_agent``.
+    """
+    if _bang_shell_command(message) is not None or message.strip().startswith("/"):
+        return
+    from core.agent_harness.turns.orchestrator import stage_turn_error, stage_turn_llm_failure
+
+    stage_turn_error(session, "action_agent_error", error_text)
+    stage_turn_llm_failure(session, client=client)
 
 
 def _bang_shell_command(message: str) -> str | None:
@@ -351,7 +383,12 @@ def _build_action_agent(
         tool_hooks=tool_hooks,
         on_runtime_event=runtime_event_callback_from_observer(observer),
     )
-    return ActionTurnPlan(agent=build_agent(config), user_message=user_message)
+    return ActionTurnPlan(
+        agent=build_agent(config),
+        user_message=user_message,
+        llm=llm,
+        max_iterations=_MAX_TOOL_CALLING_ITERATIONS,
+    )
 
 
 def run_action_agent_turn(
@@ -374,6 +411,34 @@ def run_action_agent_turn(
     (potentially mid-mutation) session, and its resolved integrations build the
     action tools so prompt and tools agree.
     """
+    with component_span("action_turn", session_id=getattr(session, "session_id", None)):
+        return _run_action_agent_turn_body(
+            message,
+            session,
+            output=output,
+            tools=tools,
+            confirm_fn=confirm_fn,
+            is_tty=is_tty,
+            deps=deps,
+            turn_plan=turn_plan,
+            error_reporter=error_reporter,
+            tool_hooks=tool_hooks,
+        )
+
+
+def _run_action_agent_turn_body(
+    message: str,
+    session: SessionStore,
+    *,
+    output: OutputSink,
+    tools: ToolProvider,
+    confirm_fn: ConfirmFn | None = None,
+    is_tty: bool | None = None,
+    deps: ToolCallingDeps | None = None,
+    turn_plan: TurnPlan | None = None,
+    error_reporter: ErrorReporter | None = None,
+    tool_hooks: ToolExecutionHooks | None = None,
+) -> ToolCallingTurnResult:
     turn_snapshot = turn_plan.snapshot if turn_plan is not None else None
     # Read the turn's resolved integrations once, so the action tools and the
     # AgentConfig are built from the same view (single source, no re-resolve).
@@ -388,7 +453,13 @@ def run_action_agent_turn(
     tool_resources_provider = getattr(tools, "tool_resources", None)
     tool_resources = tool_resources_provider() if callable(tool_resources_provider) else {}
     observer = tools.observer(message=message)
+    log.debug(
+        "action_turn start tools=%s integrations=%s",
+        len(agent_tools),
+        len(resolved_integrations),
+    )
 
+    plan: ActionTurnPlan | None = None
     try:
         # LLM selection inside _build_action_agent is inside the try so a factory
         # raise (e.g. provider unavailable) is caught and rendered like a run-loop
@@ -405,7 +476,14 @@ def run_action_agent_turn(
             tool_resources=tool_resources,
             observer=observer,
         )
-        result = plan.agent.run([{"role": "user", "content": plan.user_message}])
+        result = run_react_agent_with_telemetry(
+            plan.agent,
+            [{"role": "user", "content": plan.user_message}],
+            phase="action",
+            iteration_cap=plan.max_iterations,
+            llm=plan.llm,
+            session=session,
+        )
         persist_turn_system_prompt(
             session,
             phase="action_agent",
@@ -419,6 +497,13 @@ def run_action_agent_turn(
         error_text = str(exc)
         if error_reporter is not None:
             error_reporter.report(exc, context="core.agent_harness.action_driver", expected=True)
+        llm_client = None if plan is None or isinstance(plan.llm, _StaticToolCallLLM) else plan.llm
+        _stage_action_llm_failure(
+            message,
+            session,
+            client=llm_client,
+            error_text=error_text,
+        )
         _render_tool_calling_error(output, error_text)
         _persist_tool_calling_error(session, message, error_text)
         session.record("cli_agent", message, ok=False)
@@ -438,6 +523,9 @@ def run_action_agent_turn(
     executed_success_count += generic_success_count
     planned_count = sum(1 for tc, _output in result.executed if tc.name != "assistant_handoff")
     handled = planned_count > 0
+    investigation_dispatched = any(
+        tc.name in INVESTIGATION_DISPATCH_TOOL_NAMES for tc, _output in result.executed
+    )
     handoff_contents = tuple(
         content
         for tc, _output in result.executed
@@ -458,6 +546,13 @@ def run_action_agent_turn(
     if handled:
         output.print()
 
+    log.debug(
+        "action_turn done planned=%s executed=%s handled=%s investigation=%s",
+        planned_count,
+        executed_count,
+        handled,
+        investigation_dispatched,
+    )
     return ToolCallingTurnResult(
         planned_count,
         executed_count,
@@ -466,6 +561,7 @@ def run_action_agent_turn(
         handled,
         response_text=response_text,
         handoff_contents=handoff_contents,
+        investigation_dispatched=investigation_dispatched,
     )
 
 

@@ -44,7 +44,7 @@ def _cmd_new(session: Session, console: Console, _args: list[str]) -> bool:
 
 def _cmd_compact(session: Session, console: Console, _args: list[str]) -> bool:
     """Compact the live session branch and persist a compaction entry."""
-    from core.agent_harness.session.compaction import compact_session_branch
+    from core.agent_harness.turns.transcript_compaction import compact_session_branch
 
     result = compact_session_branch(session)
     if result is None:

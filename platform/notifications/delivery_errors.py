@@ -29,6 +29,9 @@ def extract_http_error(
     msg = data.get("message")
     if msg:
         return str(msg)
+    err_msg = data.get("error_message")
+    if err_msg:
+        return str(err_msg)
     err = data.get("error")
     if err:
         return str(err)

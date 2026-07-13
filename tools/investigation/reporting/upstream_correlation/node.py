@@ -8,7 +8,7 @@ from core.domain.types.upstream import (
 )
 from core.state import InvestigationState
 from platform.observability import get_progress_tracker as get_tracker
-from platform.observability.tracing import traceable
+from platform.observability.trace.hook import traceable
 from tools.investigation.reporting.upstream_correlation.providers import (
     NoopUpstreamEvidenceProvider,
 )

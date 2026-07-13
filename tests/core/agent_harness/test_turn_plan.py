@@ -6,9 +6,9 @@ from dataclasses import replace
 
 import pytest
 
-from core.agent_harness.models.turn_snapshot import TurnSnapshot
-from core.agent_harness.session import Session
 from core.agent_harness.turns.turn_plan import TurnPlan, build_turn_plan
+from core.agent_harness.turns.turn_snapshot import TurnSnapshot
+from surfaces.interactive_shell.session import Session
 
 
 def _snapshot(text: str = "q", *, resolved: dict | None = None) -> TurnSnapshot:

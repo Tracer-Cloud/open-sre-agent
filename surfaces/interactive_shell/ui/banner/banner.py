@@ -49,6 +49,8 @@ from platform.terminal.theme import (
     SECONDARY,
     TEXT,
     WARNING,
+    _parse_hex_color,
+    get_active_theme,
 )
 from surfaces.interactive_shell.ui.banner.banner_state import _build_ambient_right_column
 from surfaces.interactive_shell.ui.components.banner_art import _render_art
@@ -66,6 +68,30 @@ def _is_first_run() -> bool:
 
 
 # ── Splash screen ─────────────────────────────────────────────────────────────
+
+
+def _interpolate_hex_color(start: str, end: str, t: float) -> str:
+    """Return a hex color linearly interpolated between ``start`` and ``end``."""
+    start_rgb = _parse_hex_color(start)
+    end_rgb = _parse_hex_color(end)
+    clamped = max(0.0, min(1.0, t))
+    channels = tuple(
+        int(round(start_rgb[idx] + (end_rgb[idx] - start_rgb[idx]) * clamped)) for idx in range(3)
+    )
+    return f"#{channels[0]:02X}{channels[1]:02X}{channels[2]:02X}"
+
+
+def _splash_block_style(block_index: int, block_total: int) -> str:
+    """Return the Rich style for one splash block character."""
+    theme = get_active_theme()
+    start = theme.SPLASH_GRADIENT_START
+    end = theme.SPLASH_GRADIENT_END
+    if not start or not end:
+        return f"bold {HIGHLIGHT}"
+    if block_total <= 1:
+        return f"bold {_interpolate_hex_color(start, end, 0.0)}"
+    ratio = block_index / (block_total - 1)
+    return f"bold {_interpolate_hex_color(start, end, ratio)}"
 
 
 def render_splash(console: Console | None = None, *, first_run: bool | None = None) -> None:
@@ -103,8 +129,14 @@ def render_splash(console: Console | None = None, *, first_run: bool | None = No
     for line in art.splitlines():
         t = Text()
         t.append("  ")
+        block_total = line.count("█")
+        block_index = 0
         for ch in line:
-            t.append(ch, style=f"bold {HIGHLIGHT}" if ch == "█" else f"bold {BRAND}")
+            if ch == "█":
+                t.append(ch, style=_splash_block_style(block_index, block_total))
+                block_index += 1
+            else:
+                t.append(ch, style=f"bold {BRAND}")
         console.print(t)
 
     console.print()

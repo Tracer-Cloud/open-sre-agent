@@ -57,7 +57,9 @@ class TestPythonExecutionToolExecution:
         )
         assert result["success"] is True
         assert "Tracer-Cloud/opensre" in result["stdout"]
-        assert result["inputs"] == {"owner": "Tracer-Cloud", "repo": "opensre"}
+        assert result["inputs"]["owner"] == "Tracer-Cloud"
+        assert result["inputs"]["repo"] == "opensre"
+        assert "opensre_runtime" in result["inputs"]
 
     def test_failure_returns_non_zero_exit_code(self) -> None:
         result = execute_python_code.run(code="raise RuntimeError('boom')")

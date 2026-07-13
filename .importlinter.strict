@@ -29,26 +29,25 @@ ignore_imports =
     config.llm_auth.credentials -> integrations.llm_cli.registry
     config.llm_keyring -> platform
     config.repl_config -> platform.terminal.theme
-    config.webapp -> platform.observability.sentry_sdk
-    # core -> integrations/tools (T-4 debt — llm_cli)
-    core.llm.factory -> integrations.llm_cli.registry
-    core.llm.client_builders -> integrations.llm_cli.runner
-    core.llm.transports.sdk.agent_clients -> integrations.llm_cli.runner
-    core.llm.transports.sdk.agent_clients -> integrations.llm_cli.text
-    core.llm_invoke_errors -> integrations.llm_cli.errors
     # platform -> integrations (T-4 debt — scheduler / observability)
     platform.analytics.cli -> integrations.github.identity
-    platform.observability.sentry_sdk -> integrations.llm_cli.errors
+    platform.observability.errors.sentry -> integrations.llm_cli.errors
     platform.scheduler.credentials -> integrations.catalog
     platform.scheduler.executor -> integrations.discord.delivery
     platform.scheduler.executor -> integrations.slack.delivery
     platform.scheduler.executor -> integrations.telegram.delivery
-    # surfaces -> gateway (cli gateway command)
+    platform.scheduler.executor -> integrations.telegram.formatting
+    # surfaces -> gateway (cli + repl gateway commands)
+    surfaces.cli.commands.gateway -> gateway.daemon
     surfaces.cli.commands.gateway -> gateway.manager
+    surfaces.interactive_shell.command_registry.gateway_cmds -> gateway.daemon
+    surfaces.interactive_shell.controller -> gateway.web_server
     # tools.interactive_shell -> surfaces (T-4 debt — issue #3352)
-    tools.interactive_shell.actions.cli_command -> surfaces.interactive_shell.runtime.subprocess_runner
     tools.interactive_shell.actions.investigation -> surfaces.interactive_shell.runtime.background.runner
     tools.interactive_shell.actions.investigation -> surfaces.interactive_shell.runtime.investigation_adapter
+    tools.interactive_shell.actions.investigation -> surfaces.interactive_shell.session
+    tools.interactive_shell.actions.sample_alert -> surfaces.interactive_shell.session
+    tools.interactive_shell.shared.investigation_launch -> surfaces.interactive_shell.session
     tools.interactive_shell.actions.llm_provider -> surfaces.cli.wizard.config
     tools.interactive_shell.actions.llm_provider -> surfaces.interactive_shell.command_registry
     tools.interactive_shell.actions.llm_provider -> surfaces.interactive_shell.ui.execution_confirm
@@ -62,28 +61,20 @@ ignore_imports =
     tools.interactive_shell.actions.task_cancel -> surfaces.interactive_shell.command_registry
     tools.interactive_shell.actions.task_cancel -> surfaces.interactive_shell.runtime
     tools.interactive_shell.actions.task_cancel -> surfaces.interactive_shell.ui.execution_confirm
-    tools.interactive_shell.implementation.claude_code_executor -> surfaces.interactive_shell.runtime
-    tools.interactive_shell.implementation.claude_code_executor -> surfaces.interactive_shell.runtime.subprocess_runner.task_streaming
-    tools.interactive_shell.implementation.claude_code_executor -> surfaces.interactive_shell.ui
-    tools.interactive_shell.implementation.claude_code_executor -> surfaces.interactive_shell.ui.execution_confirm
-    tools.interactive_shell.implementation.claude_code_executor -> surfaces.interactive_shell.utils.error_handling.exception_reporting
-    tools.interactive_shell.shell.runner -> surfaces.interactive_shell.runtime
-    tools.interactive_shell.shell.runner -> surfaces.interactive_shell.runtime.subprocess_runner.task_streaming
-    tools.interactive_shell.shell.runner -> surfaces.interactive_shell.ui
-    tools.interactive_shell.shell.runner -> surfaces.interactive_shell.ui.execution_confirm
-    tools.interactive_shell.shell.runner -> surfaces.interactive_shell.utils.error_handling.exception_reporting
-    tools.interactive_shell.synthetic.runner -> surfaces.interactive_shell.runtime
-    tools.interactive_shell.synthetic.runner -> surfaces.interactive_shell.runtime.subprocess_runner.task_streaming
-    tools.interactive_shell.synthetic.runner -> surfaces.interactive_shell.ui
-    tools.interactive_shell.synthetic.runner -> surfaces.interactive_shell.ui.execution_confirm
-    tools.interactive_shell.synthetic.runner -> surfaces.interactive_shell.utils.error_handling.exception_reporting
     # tools -> integrations (T-4 debt — vendor tools / reporting)
     tools.community_followup_tool -> integrations.github.client
     tools.community_followup_tool -> integrations.github.helpers
     tools.community_followup_tool -> integrations.github.tools.workflow
     tools.cross_vendor.fix_sentry_issue.context -> integrations.sentry
     tools.cross_vendor.fix_sentry_issue.context -> integrations.sentry.issue_url
-    tools.cross_vendor.fix_sentry_issue.runner -> integrations.pi
+    tools.cross_vendor.fix_sentry_issue.pr -> integrations.github.client
+    tools.cross_vendor.fix_sentry_issue.pr -> integrations.github.repo_scope
+    tools.cross_vendor.fix_sentry_issue.runner -> integrations.coding_agent
+    tools.cross_vendor.fix_sentry_issue.runner -> integrations.git
+    tools.cross_vendor.fix_sentry_issue.runner -> integrations.github.client
+    tools.cross_vendor.fix_sentry_issue.ship -> integrations.coding_agent
+    tools.cross_vendor.fix_sentry_issue.ship -> integrations.git
+    tools.cross_vendor.fix_sentry_issue.ship -> integrations.github.client
     tools.git_deploy_timeline_tool -> integrations.github.helpers
     tools.git_deploy_timeline_tool -> integrations.github.mcp
     tools.interactive_shell.implementation.claude_code_executor -> integrations.llm_cli.claude_code
@@ -95,6 +86,7 @@ ignore_imports =
     tools.investigation.reporting.delivery.bootstrap -> integrations.twilio.reporting_adapter
     tools.investigation.reporting.delivery.bootstrap -> integrations.whatsapp.reporting_adapter
     tools.investigation.reporting.evaluation -> integrations.opensre.llm_eval_judge
+    tools.investigation.reporting.formatters.report -> integrations.telegram.formatting
     tools.investigation.reporting.gitlab_writeback -> integrations.gitlab
     tools.investigation.reporting.upstream_correlation.registry -> integrations.datadog.correlation.registration
     tools.investigation.state_factory -> integrations.opensre.hf_remote

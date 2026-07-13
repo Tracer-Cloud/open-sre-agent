@@ -109,6 +109,33 @@ def test_format_telegram_message_uses_html_and_severity_header() -> None:
     assert "*Cited Evidence" not in body
 
 
+def test_format_slack_message_shows_incident_command_section() -> None:
+    state = _make_state()
+    state["triage_summary"] = "Triage complete: Critical errors isolated to payments_etl."
+    state["incident_status"] = (
+        "Status — confirmed: alert critical | open: deploy time | next: verify DB | owner: on-call"
+    )
+    state["investigation_hypotheses"] = [
+        "H1: Database outage — confirm: DB error logs; rule out: caller-only misconfig"
+    ]
+    state["verification_summary"] = ["Datadog logs (H1): connection refused errors in payments_etl"]
+    state["follow_up_questions"] = [
+        "Was there a deploy of payments_etl around 14:32 UTC?",
+    ]
+    state["remediation_tradeoffs"] = (
+        "Rollback is fastest; scaling DB is slower but safer. Recommend rollback first."
+    )
+    message = format_slack_message(build_report_context(state))
+
+    assert "## Incident Command" in message
+    assert "Triage complete: Critical errors isolated to payments_etl." in message
+    assert "Triage complete: Triage complete:" not in message
+    assert "*Hypotheses:*" in message
+    assert "*Verification:*" in message
+    assert "*Follow-up questions:*" in message
+    assert "Remediation trade-offs:" in message
+
+
 def test_format_slack_message_shows_provenance() -> None:
     ctx = build_report_context(_make_state())
     message = format_slack_message(ctx)

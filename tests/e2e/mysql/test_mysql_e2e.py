@@ -235,11 +235,11 @@ class TestMySQLAlertFixture:
 
 
 class TestMySQLIntegrationConfig:
-    """Test MySQLIntegrationConfig model from integrations.models."""
+    """Test MySQLIntegrationConfig model from integrations.config_models."""
 
     def test_mysql_integration_config_has_required_fields(self):
         """MySQL integration provides required fields in resolved config."""
-        from integrations.models import MySQLIntegrationConfig
+        from integrations.config_models import MySQLIntegrationConfig
 
         config = MySQLIntegrationConfig(
             host="localhost",

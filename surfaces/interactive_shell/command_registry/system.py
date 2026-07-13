@@ -19,10 +19,30 @@ from surfaces.interactive_shell.ui import (
 )
 
 
+def _flush_analytics_on_exit(console: Console) -> None:
+    """Best-effort PostHog drain with a spinner so /quit is not silent or fire-and-forget."""
+    from platform.analytics.provider import analytics_needs_flush, shutdown_analytics
+
+    if not analytics_needs_flush():
+        shutdown_analytics(flush=False)
+        return
+
+    if console.is_terminal:
+        with console.status(
+            f"[{DIM}]finishing up…[/]",
+            spinner="dots",
+            spinner_style=DIM,
+        ):
+            shutdown_analytics(flush=True)
+    else:
+        shutdown_analytics(flush=True)
+
+
 def _cmd_exit(session: Session, console: Console, _args: list[str]) -> bool:
     if session.session_id:
         console.print()
         print_session_resume_hint(console, session.session_id)
+    _flush_analytics_on_exit(console)
     console.print(f"[{DIM}]goodbye.[/]")
     return False
 

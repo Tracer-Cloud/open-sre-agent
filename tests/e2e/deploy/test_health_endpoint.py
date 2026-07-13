@@ -8,7 +8,7 @@ import uuid
 
 import requests
 
-from platform.deployment.instance import poll_deployment_health
+from platform.deployment.ecr_deploy.instance import poll_deployment_health
 
 
 def _find_free_port() -> int:

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from core.agent_harness.session.background import BackgroundInvestigationRecord
 from surfaces.interactive_shell.runtime.background.notifications import (
     deliver_background_notifications,
+)
+from surfaces.interactive_shell.session.background_investigations import (
+    BackgroundInvestigationRecord,
 )
 
 

@@ -285,7 +285,8 @@ def main(argv: list[str] | None = None) -> int:
                 _sentry_sdk.flush(timeout=2)
         raise
     finally:
-        shutdown_analytics(flush=True)
+        # Non-blocking: daemon worker may still drain in-flight events briefly.
+        shutdown_analytics(flush=False)
     return 0
 
 

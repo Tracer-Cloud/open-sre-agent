@@ -7,13 +7,13 @@ from pathlib import Path
 import pytest
 
 import config.constants as const_module
-from core.agent_harness.session import (
-    SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST,
+from config.constants.prompts import SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
+from platform.common.task_registry import TaskRegistry
+from platform.common.task_types import TaskKind
+from surfaces.interactive_shell.session import (
     Session,
 )
-from core.agent_harness.session.state import _scenario_id_from_synthetic_label
-from core.agent_harness.session.tasks import TaskRegistry
-from platform.common.task_types import TaskKind
+from surfaces.interactive_shell.session.session import _scenario_id_from_synthetic_label
 
 
 class TestSession:
@@ -22,50 +22,50 @@ class TestSession:
         assert session.history == []
         assert session.last_state is None
         assert session.accumulated_context == {}
-        assert session.trust_mode is False
+        assert session.terminal.trust_mode is False
         assert session.task_registry.list_recent() == []
-        assert session.metrics.turn_count == 0
-        assert session.metrics.fallback_count == 0
-        assert session.metrics.ctrl_c_intervention_count == 0
-        assert session.metrics.correction_intervention_count == 0
-        assert session.pending_prompt_default is None
+        assert session.terminal.metrics.turn_count == 0
+        assert session.terminal.metrics.fallback_count == 0
+        assert session.terminal.metrics.ctrl_c_intervention_count == 0
+        assert session.terminal.metrics.correction_intervention_count == 0
+        assert session.terminal.pending_prompt_default is None
         assert session.last_synthetic_observation_path is None
 
     def test_take_pending_prompt_default_returns_and_clears(self) -> None:
         session = Session()
-        session.pending_prompt_default = "why did it fail?"
-        assert session.take_pending_prompt_default() == "why did it fail?"
-        assert session.pending_prompt_default is None
-        assert session.take_pending_prompt_default() == ""
+        session.terminal.pending_prompt_default = "why did it fail?"
+        assert session.terminal.pop_pending_prompt_default() == "why did it fail?"
+        assert session.terminal.pending_prompt_default is None
+        assert session.terminal.pop_pending_prompt_default() == ""
 
     def test_clear_resets_pending_prompt_default(self) -> None:
         session = Session()
-        session.pending_prompt_default = "why did it fail?"
+        session.terminal.pending_prompt_default = "why did it fail?"
         session.clear()
-        assert session.pending_prompt_default is None
+        assert session.terminal.pending_prompt_default is None
 
     def test_queue_auto_command_sets_pending_and_notifies(self) -> None:
         session = Session()
         calls: list[bool] = []
-        session.prompt_refresh_fn = lambda: calls.append(True)
-        session.queue_auto_command("/integrations setup sentry")
-        assert session.pending_prompt_default == "/integrations setup sentry"
-        assert session.pending_prompt_autosubmit is True
+        session.terminal.prompt_refresh_fn = lambda: calls.append(True)
+        session.terminal.set_auto_command("/integrations setup sentry")
+        assert session.terminal.pending_prompt_default == "/integrations setup sentry"
+        assert session.terminal.pending_prompt_autosubmit is True
         assert calls == [True]
 
     def test_take_pending_autosubmit_returns_and_clears(self) -> None:
         session = Session()
-        session.pending_prompt_autosubmit = True
-        assert session.take_pending_autosubmit() is True
-        assert session.pending_prompt_autosubmit is False
-        assert session.take_pending_autosubmit() is False
+        session.terminal.pending_prompt_autosubmit = True
+        assert session.terminal.pop_pending_autosubmit() is True
+        assert session.terminal.pending_prompt_autosubmit is False
+        assert session.terminal.pop_pending_autosubmit() is False
 
     def test_clear_resets_pending_autosubmit(self) -> None:
         session = Session()
-        session.queue_auto_command("/integrations setup sentry")
+        session.terminal.set_auto_command("/integrations setup sentry")
         session.clear()
-        assert session.pending_prompt_autosubmit is False
-        assert session.pending_prompt_default is None
+        assert session.terminal.pending_prompt_autosubmit is False
+        assert session.terminal.pending_prompt_default is None
 
     def test_scenario_id_from_synthetic_label(self) -> None:
         assert (
@@ -85,7 +85,9 @@ class TestSession:
         session.suggest_synthetic_failure_follow_up(
             label="opensre tests synthetic --scenario 001-replication-lag",
         )
-        assert session.pending_prompt_default == SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
+        assert (
+            session.terminal.pending_prompt_default == SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
+        )
 
     def test_record_appends_entry(self) -> None:
         session = Session()
@@ -108,28 +110,28 @@ class TestSession:
 
     def test_clear_preserves_trust_mode(self) -> None:
         session = Session()
-        session.trust_mode = True
-        session.background_notification_preferences.set_channels(["email"])
+        session.terminal.trust_mode = True
+        session.terminal.background_notification_preferences.set_channels(["email"])
         session.accumulated_context["service"] = "api"
         session.record("alert", "something")
         session.last_state = {"foo": "bar"}
         session.agent.messages.append(("user", "hey"))
-        session.metrics.record_intervention("ctrl_c")
-        session.metrics.record_intervention("correction")
+        session.terminal.metrics.record_intervention("ctrl_c")
+        session.terminal.metrics.record_intervention("correction")
 
-        assert session.history_generation == 0
+        assert session.terminal.history_generation == 0
         session.clear()
-        assert session.history_generation == 1
+        assert session.terminal.history_generation == 1
 
         assert session.history == []
         assert session.last_state is None
         assert session.accumulated_context == {}
         assert session.agent.messages == []
         assert session.task_registry.list_recent() == []
-        assert session.metrics.ctrl_c_intervention_count == 0
-        assert session.metrics.correction_intervention_count == 0
-        assert session.background_notification_preferences.channels == ("email",)
-        assert session.trust_mode is True  # preserved intentionally
+        assert session.terminal.metrics.ctrl_c_intervention_count == 0
+        assert session.terminal.metrics.correction_intervention_count == 0
+        assert session.terminal.background_notification_preferences.channels == ("email",)
+        assert session.terminal.trust_mode is True  # preserved intentionally
 
     def test_clear_keeps_persisted_task_history_file(
         self,
@@ -202,12 +204,12 @@ class TestSession:
     def test_record_terminal_turn_updates_aggregates(self) -> None:
         session = Session()
 
-        first = session.metrics.record_turn(
+        first = session.terminal.metrics.record_turn(
             executed_count=2,
             executed_success_count=1,
             fallback_to_llm=True,
         )
-        second = session.metrics.record_turn(
+        second = session.terminal.metrics.record_turn(
             executed_count=1,
             executed_success_count=1,
             fallback_to_llm=False,
@@ -226,29 +228,29 @@ class TestSession:
     def test_record_intervention_increments_per_kind(self) -> None:
         session = Session()
 
-        session.metrics.record_intervention("ctrl_c")
-        session.metrics.record_intervention("ctrl_c")
-        session.metrics.record_intervention("correction")
+        session.terminal.metrics.record_intervention("ctrl_c")
+        session.terminal.metrics.record_intervention("ctrl_c")
+        session.terminal.metrics.record_intervention("correction")
 
-        assert session.metrics.ctrl_c_intervention_count == 2
-        assert session.metrics.correction_intervention_count == 1
+        assert session.terminal.metrics.ctrl_c_intervention_count == 2
+        assert session.terminal.metrics.correction_intervention_count == 1
 
     def test_record_intervention_kinds_are_independent(self) -> None:
         """Incrementing one kind does not touch the other."""
         session = Session()
 
-        session.metrics.record_intervention("correction")
+        session.terminal.metrics.record_intervention("correction")
 
-        assert session.metrics.ctrl_c_intervention_count == 0
-        assert session.metrics.correction_intervention_count == 1
+        assert session.terminal.metrics.ctrl_c_intervention_count == 0
+        assert session.terminal.metrics.correction_intervention_count == 1
 
     def test_fresh_session_starts_with_zero_intervention_counts(self) -> None:
         """A new Session does not inherit any prior session's counters."""
         first = Session()
-        first.metrics.record_intervention("ctrl_c")
-        first.metrics.record_intervention("correction")
+        first.terminal.metrics.record_intervention("ctrl_c")
+        first.terminal.metrics.record_intervention("correction")
 
         second = Session()
 
-        assert second.metrics.ctrl_c_intervention_count == 0
-        assert second.metrics.correction_intervention_count == 0
+        assert second.terminal.metrics.ctrl_c_intervention_count == 0
+        assert second.terminal.metrics.correction_intervention_count == 0

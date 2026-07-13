@@ -6,7 +6,6 @@ import re
 
 from rich.console import Console
 
-from core.agent_harness.session import Session
 from core.agent_harness.tools.action_tools import (
     get_action_tool,
     get_action_tools_from_integrations_context,
@@ -16,6 +15,7 @@ from core.agent_harness.tools.tool_context import (
 )
 from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS
+from surfaces.interactive_shell.session import Session
 from tools.interactive_shell.action_names import TOOL_KIND_TO_NAME
 
 
@@ -154,10 +154,9 @@ def test_tools_hidden_when_capabilities_are_explicitly_empty() -> None:
 
 
 def test_telegram_send_message_offered_when_telegram_is_configured() -> None:
-    session = Session(
-        configured_integrations=("telegram",),
-        configured_integrations_known=True,
-    )
+    session = Session()
+    session.configured_integrations = ("telegram",)
+    session.configured_integrations_known = True
     names = {
         spec["name"]
         for spec in _tool_specs(

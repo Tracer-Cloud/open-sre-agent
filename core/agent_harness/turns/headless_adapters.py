@@ -10,13 +10,13 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
-from core.agent_harness.models.turn_results import (
-    ShellTurnResult,
-    ToolCallingTurnResult,
-)
 from core.agent_harness.ports import (
     ConfirmFn,
     ToolEventObserver,
+)
+from core.agent_harness.turns.turn_results import (
+    ShellTurnResult,
+    ToolCallingTurnResult,
 )
 
 
@@ -35,6 +35,7 @@ class InMemorySessionStore:
     last_command_observation: str | None = None
     resolved_integrations_cache: dict[str, Any] | None = None
     github_repo_scope: tuple[str, str] | None = None
+    gitlab_repo_scope: tuple[str, str, str] | None = None
     records: list[tuple[str, str, bool]] = field(default_factory=list)
 
     def record(self, kind: str, text: str, *, ok: bool = True) -> None:

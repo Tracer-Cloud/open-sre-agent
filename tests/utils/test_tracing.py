@@ -1,18 +1,40 @@
-"""Tests for no-op tracing helpers."""
+"""Tests for optional ``@traceable`` — free when session tracing is inactive."""
 
 from __future__ import annotations
 
-from platform.observability.tracing import traceable
+import json
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+from core.agent_harness.session.persistence.jsonl_storage import JsonlSessionStorage
+from platform.observability.trace.hook import traceable
+from platform.observability.trace.spans import (
+    NoopSessionTraceSink,
+    bind_session_trace,
+    set_session_trace_sink,
+)
+from surfaces.interactive_shell.session.trace_sink import JsonlSessionTraceSink
 
 
-def test_traceable_returns_identity_decorator() -> None:
+@pytest.fixture(autouse=True)
+def _reset_session_trace_sink() -> Any:
+    set_session_trace_sink(NoopSessionTraceSink())
+    yield
+    set_session_trace_sink(NoopSessionTraceSink())
+
+
+def test_traceable_is_near_free_passthrough_when_noop() -> None:
+    @traceable("investigation")
     def traced_function() -> str:
         return "ok"
 
-    # Identity check is intentional: traceable() is a no-op and must
-    # return the original function unchanged, not a functools.wraps wrapper
-    assert traceable()(traced_function) is traced_function
-    assert traceable("investigation-step", extra="x")(traced_function) is traced_function
+    assert traced_function() == "ok"
+    assert traced_function.__name__ == "traced_function"
+    # Wrapper exists so an active sink can emit spans, but call semantics
+    # stay identical when the default noop sink is registered.
+    assert callable(traced_function)
 
 
 def test_traceable_preserves_args_kwargs_return_value_and_metadata() -> None:
@@ -24,3 +46,73 @@ def test_traceable_preserves_args_kwargs_return_value_and_metadata() -> None:
     assert traced_function(7, suffix="ms") == "7ms"
     assert traced_function.__name__ == "traced_function"
     assert traced_function.__doc__ == "Original docstring."
+
+
+def test_traceable_defaults_name_to_qualname_when_blank() -> None:
+    @traceable("")
+    def named_fn() -> str:
+        return "x"
+
+    assert named_fn() == "x"
+
+
+def test_traceable_emits_component_span_when_sink_active(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "core.agent_harness.session.persistence.jsonl_storage.session_path",
+        lambda session_id: tmp_path / f"{session_id}.jsonl",
+    )
+    storage = JsonlSessionStorage()
+    session_id = "sess-traceable"
+    path = tmp_path / f"{session_id}.jsonl"
+    path.write_text(
+        json.dumps({"type": "session", "version": 2, "id": session_id}) + "\n",
+        encoding="utf-8",
+    )
+    set_session_trace_sink(JsonlSessionTraceSink(storage=storage))
+
+    @traceable(name="investigation")
+    def run_investigation() -> str:
+        return "done"
+
+    with bind_session_trace(session_id):
+        assert run_investigation() == "done"
+
+    lines = [json.loads(line) for line in path.read_text(encoding="utf-8").strip().splitlines()]
+    kinds = {(rec["span_kind"], rec["name"]) for rec in lines if rec.get("type") == "trace_span"}
+    assert ("component", "investigation") in kinds
+
+
+def test_traceable_marks_error_status_when_callable_raises(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "core.agent_harness.session.persistence.jsonl_storage.session_path",
+        lambda session_id: tmp_path / f"{session_id}.jsonl",
+    )
+    storage = JsonlSessionStorage()
+    session_id = "sess-traceable-err"
+    path = tmp_path / f"{session_id}.jsonl"
+    path.write_text(
+        json.dumps({"type": "session", "version": 2, "id": session_id}) + "\n",
+        encoding="utf-8",
+    )
+    set_session_trace_sink(JsonlSessionTraceSink(storage=storage))
+
+    @traceable("failing_component")
+    def boom() -> None:
+        raise ValueError("nope")
+
+    with bind_session_trace(session_id), pytest.raises(ValueError, match="nope"):
+        boom()
+
+    spans = [
+        json.loads(line)
+        for line in path.read_text(encoding="utf-8").strip().splitlines()
+        if json.loads(line).get("type") == "trace_span"
+    ]
+    assert len(spans) == 1
+    assert spans[0]["span_kind"] == "component"
+    assert spans[0]["name"] == "failing_component"
+    assert spans[0]["status"] == "error"

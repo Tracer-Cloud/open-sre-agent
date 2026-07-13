@@ -32,11 +32,11 @@ def _render_background_status(session: Session, console: Console) -> None:
     table = repl_table(title="Background mode\n", title_style=BOLD_BRAND, show_header=False)
     table.add_column("key", style="bold")
     table.add_column("value")
-    table.add_row("enabled", "yes" if session.background_mode_enabled else "no")
-    table.add_row("tracked jobs", str(len(session.background_investigations)))
+    table.add_row("enabled", "yes" if session.terminal.background_mode_enabled else "no")
+    table.add_row("tracked jobs", str(len(session.terminal.background_investigations)))
     table.add_row(
         "notify channels",
-        ", ".join(session.background_notification_preferences.channels) or "none",
+        ", ".join(session.terminal.background_notification_preferences.channels) or "none",
     )
     print_repl_table(console, table)
 
@@ -45,18 +45,18 @@ def _cmd_background(session: Session, console: Console, args: list[str]) -> bool
     sub = (args[0].lower() if args else "status").strip()
 
     if sub == "on":
-        session.background_mode_enabled = True
+        session.terminal.background_mode_enabled = True
         console.print(f"[{HIGHLIGHT}]background mode enabled[/]")
         return True
     if sub == "off":
-        session.background_mode_enabled = False
+        session.terminal.background_mode_enabled = False
         console.print(f"[{DIM}]background mode disabled[/]")
         return True
     if sub == "status":
         _render_background_status(session, console)
         return True
     if sub == "list":
-        if not session.background_investigations:
+        if not session.terminal.background_investigations:
             console.print(f"[{DIM}]no background investigations tracked in this session.[/]")
             return True
         table = repl_table(title="Background investigations\n", title_style=BOLD_BRAND)
@@ -64,7 +64,7 @@ def _cmd_background(session: Session, console: Console, args: list[str]) -> bool
         table.add_column("status")
         table.add_column("command")
         table.add_column("root cause", overflow="fold")
-        for task_id, tracked_record in session.background_investigations.items():
+        for task_id, tracked_record in session.terminal.background_investigations.items():
             table.add_row(
                 task_id,
                 tracked_record.status,
@@ -79,7 +79,7 @@ def _cmd_background(session: Session, console: Console, args: list[str]) -> bool
             session.mark_latest(ok=False, kind="slash")
             return True
         task_id = args[1]
-        selected_record = session.background_investigations.get(task_id)
+        selected_record = session.terminal.background_investigations.get(task_id)
         if selected_record is None:
             console.print(f"[{ERROR}]unknown background task:[/] {escape(task_id)}")
             session.mark_latest(ok=False, kind="slash")
@@ -119,7 +119,7 @@ def _cmd_background(session: Session, console: Console, args: list[str]) -> bool
             session.mark_latest(ok=False, kind="slash")
             return True
         task_id = args[1]
-        selected_record = session.background_investigations.get(task_id)
+        selected_record = session.terminal.background_investigations.get(task_id)
         if selected_record is None:
             console.print(f"[{ERROR}]unknown background task:[/] {escape(task_id)}")
             session.mark_latest(ok=False, kind="slash")
@@ -142,7 +142,7 @@ def _cmd_background(session: Session, console: Console, args: list[str]) -> bool
         if action == "list":
             console.print(
                 f"[{DIM}]background notify channels:[/] "
-                f"{', '.join(session.background_notification_preferences.channels) or 'none'}"
+                f"{', '.join(session.terminal.background_notification_preferences.channels) or 'none'}"
             )
             return True
         if action == "set":
@@ -159,10 +159,10 @@ def _cmd_background(session: Session, console: Console, args: list[str]) -> bool
                 )
                 session.mark_latest(ok=False, kind="slash")
                 return True
-            session.background_notification_preferences.set_channels(requested)
+            session.terminal.background_notification_preferences.set_channels(requested)
             console.print(
                 f"[{HIGHLIGHT}]background notify channels set:[/] "
-                f"{', '.join(session.background_notification_preferences.channels)}"
+                f"{', '.join(session.terminal.background_notification_preferences.channels)}"
             )
             return True
         console.print(f"[{ERROR}]unknown notify subcommand:[/] {escape(action)}")

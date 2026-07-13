@@ -146,6 +146,12 @@ class SpinnerState:
     """Mutable state read by prompt callbacks for toolbar + inline spinner."""
 
     _SPINNER_FRAMES = ("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
+    # One glyph advance per interval of *elapsed time*. The frame must be a
+    # pure function of the clock, never of how often the prompt message
+    # callback runs: prompt_toolkit evaluates the message several times per
+    # render pass (layout measurement + paint), so a per-call counter can land
+    # on the same frame every visible render and freeze the animation.
+    _FRAME_INTERVAL_S = 0.1
     _THINKING_VERBS = (
         "thinking",
         "pondering",
@@ -164,18 +170,33 @@ class SpinnerState:
         self.streaming: bool = False
         self.started_at: float = 0.0
         self.bytes_in: int = 0
-        self._frame_idx: int = 0
         self._verb: str = self._THINKING_VERBS[0]
+        self.phase: str = ""
 
     def start(self) -> None:
         self.streaming = True
         self.started_at = time.monotonic()
         self.bytes_in = 0
-        self._frame_idx = 0
         self._verb = random.choice(self._THINKING_VERBS)
+        self.phase = ""
+
+    def set_phase(self, label: str) -> None:
+        """Animate a caller-supplied phase label instead of a thinking verb.
+
+        Investigation stages (``/investigate``) dispatch deterministically, so
+        the turn-level "thinking" spinner never starts. The progress display
+        calls this to keep the prompt spinner cycling with the active pipeline
+        stage; it can be called repeatedly to advance the phase.
+        """
+        if not self.streaming:
+            self.started_at = time.monotonic()
+            self._frame_idx = 0
+        self.streaming = True
+        self.phase = label
 
     def stop(self) -> None:
         self.streaming = False
+        self.phase = ""
 
     def toolbar_ansi(self) -> str:
         # Always return an empty string so prompt_toolkit's ConditionalContainer
@@ -203,15 +224,16 @@ class SpinnerState:
             return ""
         elapsed = time.monotonic() - self.started_at
         token_count = self.bytes_in // _CHARS_PER_TOKEN
-        glyph = self._SPINNER_FRAMES[self._frame_idx % len(self._SPINNER_FRAMES)]
-        self._frame_idx += 1
+        frame_idx = int(elapsed / self._FRAME_INTERVAL_S)
+        glyph = self._SPINNER_FRAMES[frame_idx % len(self._SPINNER_FRAMES)]
         if token_count > 0:
             tokens_str = format_token_count_short(token_count)
             suffix = f" ({elapsed:.0f}s · ↓ {tokens_str} tokens)"
         else:
             suffix = f" ({elapsed:.0f}s)"
+        label = self.phase or f"{self._verb}…"
         return (
-            f"{ui_theme.PROMPT_ACCENT_ANSI}{glyph} {self._verb}…{ui_theme.ANSI_RESET}"
+            f"{ui_theme.PROMPT_ACCENT_ANSI}{glyph} {label}{ui_theme.ANSI_RESET}"
             f"{ui_theme.ANSI_DIM}{suffix}  esc to cancel{ui_theme.ANSI_RESET}"
         )
 

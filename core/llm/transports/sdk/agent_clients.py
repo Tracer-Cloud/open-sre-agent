@@ -29,6 +29,13 @@ from core.llm.shared.openai_chat_completions import (
 from core.llm.shared.openai_chat_completions import (
     build_tool_result_messages as build_openai_compat_tool_result_messages,
 )
+from core.llm.shared.openai_responses import (
+    response_raw_message,
+    response_tool_calls,
+    responses_input,
+    responses_tool_specs,
+    uses_responses_api,
+)
 from core.llm.shared.tool_schema_normalize import build_openai_tool_specs
 from core.llm.shared.usage import emit_provider_usage
 from core.llm.types import AgentLLMResponse, ToolCall
@@ -498,24 +505,43 @@ class OpenAIAgentClient:
         if system:
             msgs = [{"role": "system", "content": system}] + msgs
 
-        kwargs: dict[str, Any] = {
-            "model": self._model,
-            _openai_max_token_kwarg(self._model): self._max_tokens,
-            "messages": msgs,
-        }
-        if tools:
-            kwargs["tools"] = tools
-            kwargs["tool_choice"] = "auto"
-            if _supports_openai_parallel_tool_calls_param(
-                str(getattr(self, "_api_key_env", "OPENAI_API_KEY"))
-            ):
+        api_key_env = str(getattr(self, "_api_key_env", "OPENAI_API_KEY"))
+        use_responses = uses_responses_api(self._model, api_key_env)
+        if use_responses:
+            kwargs: dict[str, Any] = {
+                "model": self._model,
+                "max_output_tokens": self._max_tokens,
+                "input": responses_input(msgs),
+            }
+            if tools:
+                kwargs["tools"] = responses_tool_specs(tools)
+                kwargs["tool_choice"] = "auto"
                 kwargs["parallel_tool_calls"] = True
+            from config.llm_reasoning_effort import get_active_reasoning_effort
+
+            reasoning_effort = get_active_reasoning_effort()
+            if reasoning_effort is not None:
+                kwargs["reasoning"] = {"effort": reasoning_effort}
+        else:
+            kwargs = {
+                "model": self._model,
+                _openai_max_token_kwarg(self._model): self._max_tokens,
+                "messages": msgs,
+            }
+            if tools:
+                kwargs["tools"] = tools
+                kwargs["tool_choice"] = "auto"
+                if _supports_openai_parallel_tool_calls_param(api_key_env):
+                    kwargs["parallel_tool_calls"] = True
 
         backoff = _RETRY_INITIAL_BACKOFF_SEC
         last_err: Exception | None = None
         for attempt in range(_RETRY_MAX_ATTEMPTS):
             try:
-                response = self._client.chat.completions.create(**kwargs)
+                if use_responses:
+                    response = self._client.responses.create(**kwargs)
+                else:
+                    response = self._client.chat.completions.create(**kwargs)
                 break
             except AuthenticationError as err:
                 raise RuntimeError(f"{self._provider_label} authentication failed.") from err
@@ -556,6 +582,21 @@ class OpenAIAgentClient:
                 backoff *= 2
         else:
             raise RuntimeError(f"{self._provider_label} invocation failed") from last_err
+
+        if use_responses:
+            emit_provider_usage(
+                self._model,
+                getattr(response, "usage", None),
+                input_key="input_tokens",
+                output_key="output_tokens",
+            )
+            responses_tool_calls = response_tool_calls(response)
+            return AgentLLMResponse(
+                content=str(getattr(response, "output_text", "") or ""),
+                tool_calls=responses_tool_calls,
+                stop_reason="tool_calls" if responses_tool_calls else "stop",
+                raw_content=response_raw_message(response),
+            )
 
         if not hasattr(response, "choices") or not response.choices:
             raise RuntimeError(
@@ -619,13 +660,13 @@ class CLIBackedAgentClient:
     )
 
     def __init__(self, adapter: Any, *, model: str | None = None) -> None:
-        from integrations.llm_cli.runner import CLIBackedLLMClient
+        from platform.harness_ports import build_cli_client
 
         self._adapter = adapter
         self._model = model
-        # Reuse one subprocess client so the 45s probe cache in CLIBackedLLMClient
-        # applies across ReAct iterations instead of re-probing every invoke.
-        self._cli_client = CLIBackedLLMClient(adapter, model=self._model)
+        # Reuse one client so any probe cache in the CLI backend applies across
+        # ReAct iterations instead of re-probing every invoke.
+        self._cli_client = build_cli_client(adapter, model=self._model)
 
     @property
     def model_id(self) -> str | None:
@@ -645,7 +686,7 @@ class CLIBackedAgentClient:
         system: str | None = None,
         tools: list[dict[str, Any]] | None = None,
     ) -> AgentLLMResponse:
-        from integrations.llm_cli.text import flatten_messages_to_prompt
+        from platform.harness_ports import flatten_cli_messages_to_prompt
 
         tool_block = ""
         if tools:
@@ -654,7 +695,7 @@ class CLIBackedAgentClient:
 
         system_block = f"System: {system}\n" if system else ""
         instruction = self._TOOL_CALL_INSTRUCTION + tool_block
-        prompt = f"{system_block}{instruction}\n\n{flatten_messages_to_prompt(messages)}"
+        prompt = f"{system_block}{instruction}\n\n{flatten_cli_messages_to_prompt(messages)}"
 
         response = self._cli_client.invoke(prompt)
         text = response.content.strip()

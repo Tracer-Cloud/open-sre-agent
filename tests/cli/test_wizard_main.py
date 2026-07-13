@@ -41,7 +41,7 @@ def test_main_initialises_sentry_and_emits_cli_invoked(
     assert properties["command_family"] == "wizard"
 
 
-def test_main_flushes_analytics_even_when_wizard_raises(
+def test_main_shuts_down_analytics_without_blocking_flush(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     flush_calls: list[bool] = []
@@ -64,7 +64,7 @@ def test_main_flushes_analytics_even_when_wizard_raises(
     with pytest.raises(RuntimeError):
         wizard_main.main()
 
-    assert flush_calls == [True]
+    assert flush_calls == [False]
 
 
 def test_main_treats_abort_as_clean_cancel(
@@ -90,7 +90,7 @@ def test_main_treats_abort_as_clean_cancel(
     exit_code = wizard_main.main()
 
     assert exit_code == 0
-    assert flush_calls == [True]
+    assert flush_calls == [False]
 
 
 def test_main_treats_keyboard_interrupt_as_clean_cancel(
@@ -116,4 +116,4 @@ def test_main_treats_keyboard_interrupt_as_clean_cancel(
     exit_code = wizard_main.main()
 
     assert exit_code == 0
-    assert flush_calls == [True]
+    assert flush_calls == [False]

@@ -418,7 +418,7 @@ class TestVictoriaLogsIntegrationConfig:
     """``VictoriaLogsIntegrationConfig`` model validation."""
 
     def test_config_creation(self) -> None:
-        from integrations.models import VictoriaLogsIntegrationConfig
+        from integrations.config_models import VictoriaLogsIntegrationConfig
 
         config = VictoriaLogsIntegrationConfig(
             base_url="http://vmlogs:9428",
@@ -430,14 +430,14 @@ class TestVictoriaLogsIntegrationConfig:
         assert config.integration_id == "vl-1"
 
     def test_config_url_normalization(self) -> None:
-        from integrations.models import VictoriaLogsIntegrationConfig
+        from integrations.config_models import VictoriaLogsIntegrationConfig
 
         config = VictoriaLogsIntegrationConfig(base_url="  http://vmlogs.example.com:9428/  ")
         assert config.base_url == "http://vmlogs.example.com:9428"
 
     def test_config_empty_tenant_normalizes_to_none(self) -> None:
         """Empty/whitespace tenant_id collapses to None so AccountID header is omitted."""
-        from integrations.models import VictoriaLogsIntegrationConfig
+        from integrations.config_models import VictoriaLogsIntegrationConfig
 
         for empty in ("", "   ", None):
             config = VictoriaLogsIntegrationConfig(

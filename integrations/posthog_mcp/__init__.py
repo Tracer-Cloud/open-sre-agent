@@ -7,8 +7,8 @@ centralizes PostHog MCP configuration, validation, and tool-calling so the
 onboarding wizard, verify CLI, chat tools, and investigation actions all share
 the same transport and parsing logic.
 
-This is distinct from ``integrations/posthog.py``, which is a narrow REST
-client used for bounce-rate alerting. The MCP integration is the general,
+This is distinct from the ``integrations/posthog/`` package, which is a narrow
+REST client used for bounce-rate alerting. The MCP integration is the general,
 customer-connected tool surface.
 
 Supported transports:

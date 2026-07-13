@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from core.agent_harness.session.token_usage import TokenUsage
+from core.agent_harness.accounting.token_usage import TokenUsage
 
 
 def test_record_accumulates_measured_totals_and_call_count() -> None:

@@ -17,15 +17,11 @@ from integrations.posthog_mcp import (
     PostHogMCPConfig,
     PostHogMCPToolCallResult,
     build_posthog_mcp_config,
+    call_posthog_mcp_tool,
     describe_posthog_mcp_error,
+    list_posthog_mcp_tools,
     posthog_mcp_config_from_env,
     posthog_mcp_runtime_unavailable_reason,
-)
-from integrations.posthog_mcp import (
-    call_posthog_mcp_tool as invoke_posthog_mcp_tool,
-)
-from integrations.posthog_mcp import (
-    list_posthog_mcp_tools as list_posthog_mcp_server_tools,
 )
 
 PostHogMCPParams = dict[str, object]
@@ -241,14 +237,14 @@ def list_posthog_tools(
         return payload
 
     try:
-        tools = list_posthog_mcp_server_tools(config)
+        tools = list_posthog_mcp_tools(config)
     except Exception as err:
         report_run_error(
             err,
             tool_name="list_posthog_tools",
             source="posthog_mcp",
             component=_COMPONENT,
-            method="list_posthog_mcp_server_tools",
+            method="list_posthog_mcp_tools",
             extras={"transport": config.mode},
         )
         payload = _unavailable_response(describe_posthog_mcp_error(err, config))
@@ -359,14 +355,14 @@ def call_posthog_tool(
         )
 
     try:
-        result = invoke_posthog_mcp_tool(config, normalized_tool_name, arguments or {})
+        result = call_posthog_mcp_tool(config, normalized_tool_name, arguments or {})
     except Exception as err:
         report_run_error(
             err,
             tool_name="call_posthog_tool",
             source="posthog_mcp",
             component=_COMPONENT,
-            method="invoke_posthog_mcp_tool",
+            method="call_posthog_mcp_tool",
             extras={"mcp_tool": normalized_tool_name, "transport": config.mode},
         )
         return _unavailable_response(

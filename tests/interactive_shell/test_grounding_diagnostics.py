@@ -8,8 +8,8 @@ from core.agent_harness.grounding.diagnostics import (
     log_grounding_cache_diagnostics,
 )
 from core.agent_harness.grounding.models import CacheStats
-from core.agent_harness.session.state import Session
 from surfaces.interactive_shell.grounding.cli_reference import ShellPromptContextProvider
+from surfaces.interactive_shell.session.session import Session
 
 
 def _make_source(name: str, hits: int = 0) -> GroundingSource:

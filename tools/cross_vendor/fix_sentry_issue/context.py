@@ -2,7 +2,7 @@
 
 Resolves the Sentry config, parses the issue URL, fetches the issue, and compacts
 it into a short, **masked** task description. The output is fed (as untrusted text)
-to the Pi coding client, which adds its own safety rules + prompt-injection guard.
+to the coding agent, which adds its own safety rules + prompt-injection guard.
 """
 
 from __future__ import annotations

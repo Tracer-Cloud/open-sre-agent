@@ -7,11 +7,9 @@ from pathlib import Path
 from typing import Any
 
 from tests.synthetic.rds_postgres.observations import (
-    TrajectoryPolicy,
     build_observation,
     compute_trajectory_metrics,
     edit_distance,
-    evaluate_trajectory_policy,
     lcs_length,
     render_report_to_string,
     write_observation,
@@ -20,9 +18,13 @@ from tests.synthetic.rds_postgres.run_suite import (
     _apply_trajectory_policy_to_score,
     _resolved_golden_trajectory,
     _trajectory_policy_for_fixture,
-    score_result,
 )
 from tests.synthetic.rds_postgres.scenario_loader import SUITE_DIR, load_all_scenarios
+from tests.synthetic.rds_postgres.scoring import score_result
+from tests.synthetic.rds_postgres.trajectory_policy import (
+    TrajectoryPolicy,
+    evaluate_trajectory_policy,
+)
 
 
 def _sample_final_state() -> dict[str, Any]:

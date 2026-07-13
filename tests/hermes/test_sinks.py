@@ -474,3 +474,279 @@ class TestDispatcherIntegration:
             f"CancelledError should yield sink_closed, got: {result.state.value}"
         )
         sink.close()
+
+
+class TestDeliveryTransport:
+    """The sink's only egress is ``post_telegram_message`` via
+    :class:`AlarmDispatcher`. These tests pin the transport contract: the
+    resolved credentials and parse mode must reach the wire unchanged, and a
+    failing or raising transport must never propagate out of the sink."""
+
+    def test_resolved_credentials_reach_the_transport(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        calls = _capture_telegram(monkeypatch)
+        creds = TelegramCredentials(bot_token="secret-token", chat_id="chat-42")
+        dispatcher = AlarmDispatcher(creds, cooldown_seconds=300.0)
+        sink = TelegramSink(dispatcher)
+
+        sink(_incident())
+
+        assert len(calls) == 1
+        assert calls[0]["chat_id"] == "chat-42"
+        assert calls[0]["bot_token"] == "secret-token"
+
+    def test_html_parse_mode_is_forwarded_to_transport(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        calls = _capture_telegram(monkeypatch)
+        creds = TelegramCredentials(bot_token="tok", chat_id="chat-1")
+        dispatcher = AlarmDispatcher(creds, cooldown_seconds=300.0, parse_mode="HTML")
+        sink = TelegramSink(dispatcher)
+
+        sink(_incident())
+
+        assert calls[0]["parse_mode"] == "HTML"
+
+    def test_default_parse_mode_is_plain(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        dispatcher, calls = _dispatcher(monkeypatch)
+        sink = TelegramSink(dispatcher)
+
+        sink(_incident())
+
+        assert calls[0]["parse_mode"] == ""
+
+    def test_transport_returning_failure_does_not_raise(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A ``(False, error, "")`` transport result is an *expected* delivery
+        failure — the sink must swallow it, not surface it to the agent."""
+
+        def _failing_post(*_a: Any, **_kw: Any) -> tuple[bool, str, str]:
+            return False, "telegram: 502 bad gateway", ""
+
+        monkeypatch.setattr("integrations.telegram.alarms.post_telegram_message", _failing_post)
+        creds = TelegramCredentials(bot_token="tok", chat_id="chat-1")
+        dispatcher = AlarmDispatcher(creds, cooldown_seconds=300.0)
+        sink = TelegramSink(dispatcher)
+
+        # Must not raise even though delivery failed.
+        sink(_incident(severity=IncidentSeverity.HIGH))
+
+    def test_transport_raising_is_swallowed_by_sink(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A transport that *raises* (e.g. a socket error escaping the HTTP
+        layer) must not crash the sink — Hermes delivery is best-effort."""
+
+        def _raising_post(*_a: Any, **_kw: Any) -> tuple[bool, str, str]:
+            raise ConnectionError("connection reset by peer")
+
+        monkeypatch.setattr("integrations.telegram.alarms.post_telegram_message", _raising_post)
+        creds = TelegramCredentials(bot_token="tok", chat_id="chat-1")
+        dispatcher = AlarmDispatcher(creds, cooldown_seconds=300.0)
+        sink = TelegramSink(dispatcher)
+
+        # AlarmDispatcher.dispatch catches the transport exception; the sink
+        # must complete cleanly regardless.
+        sink(_incident(severity=IncidentSeverity.CRITICAL))
+
+
+class TestSummaryTruncation:
+    """A successful investigation summary is inlined into the message body but
+    must respect ``max_summary_chars`` so one verbose RCA cannot blow past the
+    Telegram limit and crowd out the incident metadata above it."""
+
+    def test_long_summary_is_truncated_with_ellipsis(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        dispatcher, calls = _dispatcher(monkeypatch)
+        long_summary = "root cause: " + ("y" * 5000)
+
+        def _bridge(_incident: HermesIncident) -> str | None:
+            return long_summary
+
+        sink = TelegramSink(
+            dispatcher,
+            investigation_bridge=_bridge,
+            config=TelegramSinkConfig(bridge_run_inline=True, max_summary_chars=100),
+        )
+        sink(_incident(severity=IncidentSeverity.HIGH))
+
+        text = calls[0]["text"]
+        assert "investigation summary:" in text
+        assert long_summary not in text
+        assert "…" in text
+
+    def test_empty_string_summary_is_treated_as_empty(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """An empty-string return is the documented ``None``-equivalent of the
+        bridge contract and must surface the EMPTY marker, not a blank block."""
+        dispatcher, calls = _dispatcher(monkeypatch)
+
+        def _bridge(_incident: HermesIncident) -> str | None:
+            return ""
+
+        sink = TelegramSink(dispatcher, investigation_bridge=_bridge, config=_INLINE)
+        sink(_incident(severity=IncidentSeverity.CRITICAL))
+
+        text = calls[0]["text"]
+        assert "investigation summary:" not in text
+        assert "investigation: attempted (no summary produced)" in text
+
+    def test_summary_is_stripped_before_inlining(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        dispatcher, calls = _dispatcher(monkeypatch)
+
+        def _bridge(_incident: HermesIncident) -> str | None:
+            return "\n  root cause: disk full  \n"
+
+        sink = TelegramSink(dispatcher, investigation_bridge=_bridge, config=_INLINE)
+        sink(_incident(severity=IncidentSeverity.HIGH))
+
+        text = calls[0]["text"]
+        assert "investigation summary:\nroot cause: disk full" in text
+
+
+class TestSeverityGate:
+    """Only HIGH/CRITICAL run the bridge. LOW is silent (no marker at all);
+    MEDIUM carries the notify-only marker. These cases fill the gap between
+    the two already-covered severities."""
+
+    def test_low_severity_never_runs_bridge_and_emits_no_marker(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        dispatcher, calls = _dispatcher(monkeypatch)
+        bridge_calls: list[HermesIncident] = []
+
+        def _bridge(incident: HermesIncident) -> str | None:
+            bridge_calls.append(incident)
+            return "should never run"
+
+        sink = TelegramSink(dispatcher, investigation_bridge=_bridge, config=_INLINE)
+        sink(_incident(severity=IncidentSeverity.LOW, rule="info_noise"))
+
+        assert bridge_calls == []
+        text = calls[0]["text"]
+        assert "investigation" not in text.lower()
+        assert "notify only" not in text
+
+    @pytest.mark.parametrize(
+        ("severity", "should_investigate"),
+        [
+            (IncidentSeverity.LOW, False),
+            (IncidentSeverity.MEDIUM, False),
+            (IncidentSeverity.HIGH, True),
+            (IncidentSeverity.CRITICAL, True),
+        ],
+    )
+    def test_investigation_gate_matches_severity(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        severity: IncidentSeverity,
+        should_investigate: bool,
+    ) -> None:
+        dispatcher, calls = _dispatcher(monkeypatch)
+        bridge_calls: list[HermesIncident] = []
+
+        def _bridge(incident: HermesIncident) -> str | None:
+            bridge_calls.append(incident)
+            return "rca"
+
+        sink = TelegramSink(dispatcher, investigation_bridge=_bridge, config=_INLINE)
+        sink(_incident(severity=severity))
+
+        assert bool(bridge_calls) is should_investigate
+        assert ("investigation summary:" in calls[0]["text"]) is should_investigate
+
+
+class TestRecordFormatting:
+    """Record-block rendering edges that the operator sees directly."""
+
+    def test_no_records_omits_recent_log_records_block(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        dispatcher, calls = _dispatcher(monkeypatch)
+        sink = TelegramSink(dispatcher)
+
+        sink(_incident(records=()))
+
+        text = calls[0]["text"]
+        assert "recent log records:" not in text
+        # Core metadata is still present.
+        assert "Hermes incident:" in text
+
+    def test_single_omitted_record_uses_singular_wording(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        dispatcher, calls = _dispatcher(monkeypatch)
+        sink = TelegramSink(dispatcher, config=TelegramSinkConfig(max_inlined_records=2))
+
+        records = tuple(_record(LogLevel.ERROR, "noisy", f"line-{i}") for i in range(3))
+        sink(_incident(records=records))
+
+        text = calls[0]["text"]
+        assert "1 more record omitted" in text
+        assert "records omitted" not in text  # singular, not plural
+
+    def test_run_id_absent_omits_run_id_line(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        dispatcher, calls = _dispatcher(monkeypatch)
+        sink = TelegramSink(dispatcher)
+
+        sink(_incident(run_id=None))
+
+        assert "run_id:" not in calls[0]["text"]
+
+
+class TestTruncationBoundary:
+    """Truncation boundary behaviour, pinned through the public sink API
+    (``max_record_chars``) rather than the private ``_truncate`` helper: a
+    record exactly at the limit is untouched, one char over collapses to
+    ``limit`` chars with a trailing ellipsis."""
+
+    def test_record_exactly_at_limit_is_not_truncated(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        dispatcher, calls = _dispatcher(monkeypatch)
+        # raw = "<iso> ERROR exact: <msg>"; pin the limit to that exact length.
+        record = _record(LogLevel.ERROR, "exact", "boundary")
+        sink = TelegramSink(dispatcher, config=TelegramSinkConfig(max_record_chars=len(record.raw)))
+
+        sink(_incident(records=(record,)))
+
+        text = calls[0]["text"]
+        assert record.raw in text
+        assert "…" not in text
+
+    def test_record_one_over_limit_collapses_to_limit_with_ellipsis(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        dispatcher, calls = _dispatcher(monkeypatch)
+        record = _record(LogLevel.ERROR, "over", "boundary")
+        limit = len(record.raw) - 1
+        sink = TelegramSink(dispatcher, config=TelegramSinkConfig(max_record_chars=limit))
+
+        sink(_incident(records=(record,)))
+
+        text = calls[0]["text"]
+        assert record.raw not in text
+        # The trimmed line is exactly `limit` chars ending in the ellipsis.
+        assert record.raw[: limit - 1] + "…" in text
+
+
+class TestCloseIdempotency:
+    def test_close_is_idempotent(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        dispatcher, _ = _dispatcher(monkeypatch)
+
+        def _bridge(_incident: HermesIncident) -> str | None:
+            return "rca"
+
+        sink = TelegramSink(
+            dispatcher,
+            investigation_bridge=_bridge,
+            config=TelegramSinkConfig(bridge_workers=1),
+        )
+        # Multiple close() calls must not raise (SIGTERM handlers may double-fire).
+        sink.close()
+        sink.close()
+
+    def test_close_without_bridge_is_safe(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        dispatcher, _ = _dispatcher(monkeypatch)
+        sink = TelegramSink(dispatcher)  # no bridge → no executor ever created
+        sink.close()

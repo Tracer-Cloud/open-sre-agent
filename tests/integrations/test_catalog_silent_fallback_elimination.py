@@ -120,6 +120,7 @@ _CLASSIFY_PATCH_TARGETS: list[tuple[str, str, str]] = [
     ("victoria_logs", "integrations.victoria_logs", "VictoriaLogsIntegrationConfig"),
     ("splunk", "integrations.splunk", "SplunkIntegrationConfig"),
     ("supabase", "integrations.supabase", "build_supabase_config"),
+    ("smtp", "integrations.smtp", "SMTPIntegrationConfig"),
 ]
 
 

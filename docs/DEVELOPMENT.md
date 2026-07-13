@@ -24,7 +24,7 @@ From the repo root:
 ```bash
 make lint          # ruff check
 make format-check  # ruff format --check (CI-enforced)
-make typecheck     # mypy app/
+make typecheck     # mypy config core gateway integrations platform surfaces tools
 make test-cov      # pytest + coverage (default unit suite)
 ```
 
@@ -41,6 +41,17 @@ Action-planner behavior, postprocessing transforms, compatibility seams, and the
 The seven first-party packages, the four-tier layering (which package may
 import which), the folder diagram, per-layer responsibilities, and cross-layer
 flows are documented in [`docs/ARCHITECTURE.md`](ARCHITECTURE.md).
+
+## Tool registry — surface-scoped, lazy loading
+
+Loading every vendor tool at startup was slow. A static index
+(`tools/registry_index.py`) reads tool metadata by scanning the source, without importing executors, so a turn loads only the tools it needs.
+
+- `get_registered_tools(surface)` imports only that surface's tool modules.
+- `get_tool_descriptors(surface)` returns metadata with no executor import.
+- `load_tool(descriptor)` imports the executor, only when a tool runs.
+
+Adding a vendor tool is a `@tool`/`BaseTool` module; the index finds it and no other vendor is imported. `tests/tools/test_registry_index.py` checks the index matches the imported registry exactly, so they cannot drift.
 
 ## Investigation pipeline architecture
 
@@ -80,11 +91,23 @@ To refresh README benchmark copy from cached results (no LLM calls): `make bench
 
 ## Deployment
 
-### Hosted runtime
+Full deployment instructions, prerequisites, and environment variable reference:
+**[DEPLOYMENT.md](../DEPLOYMENT.md)**
+
+Quick reference:
+
+| Path | Commands |
+| ---- | -------- |
+| EC2 (Docker/ECR — web + gateway) | `make build-image` → `make deploy` / `make destroy` |
+| Gateway (AMI + systemd — gateway only) | `make bake-gateway` → `make deploy-gateway` / `make destroy-gateway` |
+| Hosted (Railway / ECS / Vercel) | Deploy with repo `Dockerfile`; set `LLM_PROVIDER` + API key |
+
+### Hosted runtime (Railway / ECS / Vercel)
 
 1. Deploy this repository as a standard Python/FastAPI app using the repo `Dockerfile` or your host's native Python workflow.
 2. Set `LLM_PROVIDER` and the matching API key (for example `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` — see [`.env.example`](https://github.com/Tracer-Cloud/opensre/blob/main/.env.example)).
-3. Add integration and storage env vars your deployment needs.
+3. Add `DATABASE_URI` and `REDIS_URI` for hosted layouts that need persistence.
+4. Add integration and storage env vars your deployment needs.
 
 Minimal LLM env:
 
@@ -93,37 +116,9 @@ export LLM_PROVIDER=anthropic
 export ANTHROPIC_API_KEY=...
 ```
 
-### Railway (self-hosted alternative)
-
-Ensure the Railway project has Postgres and Redis and that the OpenSRE service has **`DATABASE_URI`** and **`REDIS_URI`** wired to them before deploying.
-
-Deploy the service using your Railway project workflow (see [deployment.mdx](deployment.mdx)).
-
-After deploy, register the remote agent:
-
-```bash
-opensre remote --url https://<your-service>.up.railway.app health
-```
-
-If the service never becomes healthy, confirm both `DATABASE_URI` and `REDIS_URI` are set on the service.
-
-### Remote hosted ops (Railway)
-
-After deploy:
-
-```bash
-opensre remote ops --provider railway --project <project> --service <service> status
-opensre remote ops --provider railway --project <project> --service <service> logs --lines 200
-opensre remote ops --provider railway --project <project> --service <service> logs --follow
-opensre remote ops --provider railway --project <project> --service <service> restart --yes
-```
-
-OpenSRE remembers the last `provider`, so you can shorten to:
-
-```bash
-opensre remote ops status
-opensre remote ops logs --follow
-```
+For Railway: ensure the project has Postgres and Redis services and that the OpenSRE
+service has `DATABASE_URI` and `REDIS_URI` set before deploying. Set
+`OPENSRE_DEPLOYMENT_METHOD=railway` for telemetry labeling.
 
 ## Telemetry and privacy
 

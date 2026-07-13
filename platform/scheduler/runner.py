@@ -91,22 +91,14 @@ def _scheduled_job(task_id: str) -> None:
         update_task(task)
 
 
-def start_scheduler() -> None:
-    """Load all enabled tasks and start the blocking scheduler.
-
-    Blocks until SIGINT or SIGTERM. Invalid tasks (bad cron, bad timezone)
-    are logged and skipped rather than crashing the entire daemon.
-    """
+def _register_jobs(scheduler: Any) -> int:
+    """Register all enabled tasks on *scheduler*; invalid tasks are logged and skipped."""
     from apscheduler.events import EVENT_JOB_SUBMITTED
-    from apscheduler.schedulers.blocking import BlockingScheduler
 
-    scheduler = BlockingScheduler()
     scheduler.add_listener(_on_job_submitted, EVENT_JOB_SUBMITTED)
 
-    tasks = list_tasks()
     enabled_count = 0
-
-    for task in tasks:
+    for task in list_tasks():
         if not task.enabled:
             continue
         try:
@@ -132,7 +124,37 @@ def start_scheduler() -> None:
             task.cron,
             task.timezone,
         )
+    return enabled_count
 
+
+def start_background_scheduler() -> tuple[Any, int]:
+    """Start a non-blocking scheduler for embedding in a host process.
+
+    Installs no signal handlers and never exits the process. Returns
+    ``(scheduler, task_count)``; the scheduler is ``None`` when there are no
+    enabled tasks. The caller owns shutdown via ``scheduler.shutdown()``.
+    """
+    from apscheduler.schedulers.background import BackgroundScheduler
+
+    scheduler = BackgroundScheduler()
+    enabled_count = _register_jobs(scheduler)
+    if enabled_count == 0:
+        return None, 0
+    scheduler.start()
+    logger.info("Scheduler started with %d task(s). Waiting for triggers...", enabled_count)
+    return scheduler, enabled_count
+
+
+def start_scheduler() -> None:
+    """Load all enabled tasks and start the blocking scheduler.
+
+    Blocks until SIGINT or SIGTERM. Invalid tasks (bad cron, bad timezone)
+    are logged and skipped rather than crashing the entire daemon.
+    """
+    from apscheduler.schedulers.blocking import BlockingScheduler
+
+    scheduler = BlockingScheduler()
+    enabled_count = _register_jobs(scheduler)
     if enabled_count == 0:
         logger.warning("No enabled tasks found. Scheduler has nothing to run.")
         raise SystemExit("No enabled tasks found. Add tasks with `opensre cron add` first.")
@@ -169,4 +191,4 @@ def run_task_now(task_id: str) -> bool:
     return execute_task(task, fire_time)
 
 
-__all__ = ["run_task_now", "start_scheduler"]
+__all__ = ["run_task_now", "start_background_scheduler", "start_scheduler"]

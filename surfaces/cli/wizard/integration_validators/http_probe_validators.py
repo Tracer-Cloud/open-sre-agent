@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import httpx
 
-from integrations.models import SlackWebhookConfig
+from integrations.config_models import SlackWebhookConfig
 
 from .shared import IntegrationHealthResult
 

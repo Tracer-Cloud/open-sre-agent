@@ -5,7 +5,7 @@ from __future__ import annotations
 import unittest.mock
 from pathlib import Path
 
-from core.agent_harness.session.state import Session
+from surfaces.interactive_shell.session.session import Session
 
 
 def test_suggest_synthetic_failure_follow_up_binds_observation_path(tmp_path: Path) -> None:
@@ -23,7 +23,12 @@ def test_suggest_synthetic_failure_follow_up_binds_observation_path(tmp_path: Pa
     latest.write_text('{"status": "failed"}', encoding="utf-8")
 
     session = Session()
-    with unittest.mock.patch("config.constants.paths.REPO_ROOT", tmp_path):
+    # ``_bind_last_synthetic_observation`` reads the derived ``SYNTHETIC_SCENARIOS_DIR``
+    # constant (computed from REPO_ROOT at import), so patch that, not REPO_ROOT.
+    with unittest.mock.patch(
+        "config.constants.paths.SYNTHETIC_SCENARIOS_DIR",
+        tmp_path / "tests" / "synthetic" / "rds_postgres",
+    ):
         session.suggest_synthetic_failure_follow_up(
             label="opensre tests synthetic --scenario 001-replication-lag",
         )
@@ -47,8 +52,11 @@ def test_suggest_synthetic_failure_follow_up_missing_observation_clears_path(
 
     session = Session()
     with (
-        unittest.mock.patch("config.constants.paths.REPO_ROOT", tmp_path),
-        unittest.mock.patch("core.agent_harness.session.state.time.sleep"),
+        unittest.mock.patch(
+            "config.constants.paths.SYNTHETIC_SCENARIOS_DIR",
+            tmp_path / "tests" / "synthetic" / "rds_postgres",
+        ),
+        unittest.mock.patch("surfaces.interactive_shell.session.session.time.sleep"),
     ):
         session.suggest_synthetic_failure_follow_up(
             label="opensre tests synthetic --scenario 001-replication-lag",

@@ -1,19 +1,19 @@
-"""Coverage for ``tools._telemetry`` and tool-level Sentry capture.
+"""Coverage for tool-level Sentry capture.
 
-Three layers:
+``test_tool_reports_exactly_one_sentry_event`` is the parameterised
+"every migrated tool reports a Sentry event when its underlying client
+raises" assertion called out in #1463 acceptance criteria. Each row
+forces the client used by the tool body to raise and verifies the helper
+produced exactly one event with the expected ``surface=tool``,
+``tool_name``, and ``source`` tags.
 
-1. ``test_report_run_error_*`` exercise the helper directly: tags, severity,
-   logger forwarding, and the fact that a Sentry capture is best-effort.
-2. ``test_tool_reports_exactly_one_sentry_event`` is the parameterised
-   "every migrated tool reports a Sentry event when its underlying client
-   raises" assertion called out in #1463 acceptance criteria. Each row
-   forces the client used by the tool body to raise and verifies the helper
-   produced exactly one event with the expected ``surface=tool``,
-   ``tool_name``, and ``source`` tags.
-3. ``test_eks_client_error_path_uses_warning_severity`` exercises the EKS
-   ``except ClientError`` branch (the whole reason for the severity split)
-   by patching the underlying client to raise ``botocore.exceptions.ClientError``
-   and asserting the helper logged at ``WARNING``, not ``ERROR``.
+``test_eks_client_error_path_uses_warning_severity`` exercises the EKS
+``except ClientError`` branch (the whole reason for the severity split)
+by patching the underlying client to raise ``botocore.exceptions.ClientError``
+and asserting the helper logged at ``WARNING``, not ``ERROR``.
+
+Direct ``report_run_error`` helper tests live in
+``tests/core/tool_framework/test_telemetry.py``.
 """
 
 from __future__ import annotations
@@ -27,8 +27,6 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-
-from core.tool_framework.telemetry import report_run_error
 
 
 @dataclass
@@ -55,7 +53,7 @@ def captured_sentry_events(
       * ``conftest`` sets ``OPENSRE_SENTRY_DISABLED=1`` to keep the suite
         offline — we re-enable it here.
       * ``capture_exception`` and ``push_scope`` both need to be present
-        for the contextual-tag path inside ``platform.observability.sentry_sdk``.
+        for the contextual-tag path inside ``platform.observability.errors.sentry``.
 
     The mock ``push_scope`` returns a per-call ``_Scope`` instance that
     records every ``set_extra`` and ``set_tag`` call. ``capture_exception``
@@ -101,74 +99,6 @@ def captured_sentry_events(
         SimpleNamespace(capture_exception=_capture, push_scope=_RecordingScope),
     )
     yield events
-
-
-def test_report_run_error_captures_with_expected_tags(
-    captured_sentry_events: list[CapturedSentryEvent],
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    boom = RuntimeError("boom")
-    with caplog.at_level(logging.ERROR, logger="tools"):
-        report_run_error(
-            boom,
-            tool_name="query_azure_monitor_logs",
-            source="azure",
-            component="integrations.azure.tools.azure_monitor_logs_tool",
-            method="httpx.post",
-            extras={"workspace_id": "w"},
-        )
-
-    assert len(captured_sentry_events) == 1
-    event = captured_sentry_events[0]
-    assert event.exc is boom
-    assert event.extras["tag.surface"] == "tool"
-    assert event.extras["tag.tool_name"] == "query_azure_monitor_logs"
-    assert event.extras["tag.source"] == "azure"
-    assert event.extras["tag.component"] == "integrations.azure.tools.azure_monitor_logs_tool"
-    assert event.extras["tag.method"] == "httpx.post"
-    assert event.extras["workspace_id"] == "w"
-    assert "Tool query_azure_monitor_logs failed" in caplog.text
-
-
-def test_report_run_error_supports_warning_severity(
-    captured_sentry_events: list[CapturedSentryEvent],
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    err = RuntimeError("recoverable")
-    with caplog.at_level(logging.WARNING, logger="tools"):
-        report_run_error(
-            err,
-            tool_name="describe_eks_cluster",
-            source="eks",
-            component="integrations.eks.tools",
-            severity="warning",
-        )
-
-    assert len(captured_sentry_events) == 1
-    assert captured_sentry_events[0].exc is err
-    error_records = [r for r in caplog.records if r.levelno >= logging.ERROR]
-    assert error_records == [], "warning severity must not log at error level"
-    warning_records = [r for r in caplog.records if r.levelno == logging.WARNING]
-    assert warning_records, "warning severity must produce a WARNING log record"
-
-
-def test_report_run_error_uses_provided_logger(
-    captured_sentry_events: list[CapturedSentryEvent],
-) -> None:
-    custom_logger = MagicMock(spec=logging.Logger)
-    err = ValueError("nope")
-
-    report_run_error(
-        err,
-        tool_name="list_eks_pods",
-        source="eks",
-        component="integrations.eks.tools",
-        logger=custom_logger,
-    )
-
-    custom_logger.error.assert_called_once()
-    assert len(captured_sentry_events) == 1
-    assert captured_sentry_events[0].exc is err
 
 
 # ---------------------------------------------------------------------------
@@ -649,7 +579,7 @@ def _posthog_mcp_list_case() -> ToolFailureCase:
         from integrations.posthog_mcp.tools import posthog_mcp_tool as mod
 
         _patch_posthog_mcp_runtime(mp)
-        mp.setattr(mod, "list_posthog_mcp_server_tools", MagicMock(side_effect=RuntimeError("mcp")))
+        mp.setattr(mod, "list_posthog_mcp_tools", MagicMock(side_effect=RuntimeError("mcp")))
 
     def invoke() -> dict[str, Any]:
         from integrations.posthog_mcp.tools.posthog_mcp_tool import list_posthog_tools
@@ -670,7 +600,7 @@ def _posthog_mcp_call_tool_case() -> ToolFailureCase:
         from integrations.posthog_mcp.tools import posthog_mcp_tool as mod
 
         _patch_posthog_mcp_runtime(mp)
-        mp.setattr(mod, "invoke_posthog_mcp_tool", MagicMock(side_effect=RuntimeError("mcp")))
+        mp.setattr(mod, "call_posthog_mcp_tool", MagicMock(side_effect=RuntimeError("mcp")))
 
     def invoke() -> dict[str, Any]:
         from integrations.posthog_mcp.tools.posthog_mcp_tool import call_posthog_tool
@@ -1082,6 +1012,9 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         # fix_sentry_issue catches only its own FixIssueError for known states;
         # unexpected errors escape to the global #1476 wrapper.
         "fix_sentry_issue",
+        # fix_sentry_issue_start is the interactive-shell action wrapper; it
+        # dispatches to fix_sentry_issue and lets unexpected errors escape.
+        "fix_sentry_issue_start",
         "generate_work_status_report",
         "get_airflow_dag_runs",
         "get_airflow_metrics",
@@ -1247,7 +1180,6 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "query_signoz_traces",
         "query_splunk_logs",
         "query_tempo",
-        "run_diagnostic_code",
         "run_investigation",
         "scan_redis_keys",
         "search_bitbucket_code",
@@ -1285,18 +1217,18 @@ def test_every_registered_tool_is_migrated_or_allowlisted() -> None:
     lets them escape and relies on #1476's global wrapper (allowlist it in
     ``_TOOLS_WITHOUT_DELIBERATE_CATCH``).
     """
-    from tools.registry import _INTEGRATION_TOOL_PACKAGES, get_registered_tool_map
+    from tools.registry import INTEGRATION_TOOL_PACKAGES, get_registered_tool_map
 
     # Limit the audit to PRODUCTION tools — those defined in ``tools.*`` or in
     # the exact per-vendor packages the registry walks via
-    # ``_INTEGRATION_TOOL_PACKAGES``. External packages registered via
+    # ``INTEGRATION_TOOL_PACKAGES``. External packages registered via
     # ``register_external_tool_package`` (e.g. bench-only tools that live under
     # ``tests/benchmarks/``) have their own classification expectations and
     # aren't part of this production-telemetry contract. Pinning the prefix
     # to the registry's own integration list (instead of a broad
     # ``"integrations."``) keeps the audit from sweeping in any future
     # caller that ships tools under an ``integrations.*`` namespace.
-    _PRODUCTION_TOOL_PREFIXES = ("tools.", *_INTEGRATION_TOOL_PACKAGES)
+    _PRODUCTION_TOOL_PREFIXES = ("tools.", *INTEGRATION_TOOL_PACKAGES)
     registered = {
         name
         for name, tool in get_registered_tool_map().items()

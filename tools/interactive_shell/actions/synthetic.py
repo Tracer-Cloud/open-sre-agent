@@ -14,9 +14,8 @@ from core.agent_harness.tools.tool_context import (
     string_property,
 )
 from core.tool_framework.registered_tool import RegisteredTool
-from tools.interactive_shell.synthetic.runner import (
-    run_synthetic_test,
-)
+from tools.interactive_shell.subprocess import require_subprocess_presenter
+from tools.interactive_shell.synthetic.runner import run_synthetic_test
 
 
 @lru_cache(maxsize=1)
@@ -41,14 +40,7 @@ def execute_synthetic_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool
     scenario = str(args.get("scenario", "")).strip()
     if not suite or not scenario:
         return False
-    run_synthetic_test(
-        f"{suite}:{scenario}",
-        ctx.session,
-        ctx.console,
-        confirm_fn=ctx.confirm_fn,
-        is_tty=ctx.is_tty,
-        action_already_listed=ctx.action_already_listed,
-    )
+    run_synthetic_test(f"{suite}:{scenario}", require_subprocess_presenter(ctx))
     return True
 
 
