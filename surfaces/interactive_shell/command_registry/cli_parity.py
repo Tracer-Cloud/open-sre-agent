@@ -351,6 +351,10 @@ def _cmd_cron(session: Session, console: Console, args: list[str]) -> bool:  # n
     return run_cli_command(console, ["cron", *args])
 
 
+def _cmd_sentry(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+    return run_cli_command(console, ["sentry", *args], capture_output=True)
+
+
 def _cmd_watchdog(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
     return run_cli_command(console, ["watchdog", *args])
 
@@ -452,6 +456,18 @@ COMMANDS: list[SlashCommand] = [
         "Manage cron-driven scheduled deliveries.",
         _cmd_cron,
         usage=("/cron list", "/cron add", "/cron remove <id>", "/cron run <id>", "/cron logs <id>"),
+    ),
+    SlashCommand(
+        "/sentry",
+        "Schedule and run automated Sentry morning digests.",
+        _cmd_sentry,
+        usage=(
+            "/sentry digest run",
+            "/sentry digest schedule list",
+            "/sentry digest schedule add",
+            "/sentry digest schedule run <id>",
+            "/sentry digest schedule remove <id>",
+        ),
     ),
     SlashCommand(
         "/watchdog",

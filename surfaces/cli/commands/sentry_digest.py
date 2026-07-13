@@ -116,9 +116,15 @@ def sentry_digest_schedule_add(
     project_slug: str,
 ) -> None:
     """Schedule daily Sentry morning digest delivery."""
+    from integrations.sentry.digest_prerequisites import (
+        require_digest_delivery_provider,
+        require_sentry_integration,
+    )
     from platform.scheduler.store import add_task
     from platform.scheduler.types import Provider, ScheduledTask, TaskKind
 
+    require_sentry_integration()
+    require_digest_delivery_provider(provider)
     _validate_cron_and_timezone(cron_expr, timezone)
 
     params: dict[str, str] = {}
@@ -202,6 +208,7 @@ def sentry_digest_schedule_remove(task_id: str) -> None:
 @click.argument("task_id")
 def sentry_digest_schedule_run(task_id: str) -> None:
     """Run a scheduled Sentry digest task immediately."""
+    from integrations.sentry.digest_prerequisites import require_digest_delivery_provider
     from platform.scheduler.runner import run_task_now
     from platform.scheduler.store import get_task
     from platform.scheduler.types import TaskKind
@@ -211,6 +218,8 @@ def sentry_digest_schedule_run(task_id: str) -> None:
     if task is None or task.kind != TaskKind.SENTRY_MORNING_DIGEST:
         _console.print(f"[red]Error: Sentry digest task {task_id} not found.[/red]")
         raise SystemExit(1)
+
+    require_digest_delivery_provider(task.provider.value)
 
     _console.print(f"Running Sentry digest task {task_id}...")
     success = run_task_now(task_id)
