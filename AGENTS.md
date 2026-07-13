@@ -3,21 +3,23 @@
 ## Build and Run commands
 
 - Build `make install` (sets up the project environment via `uv sync` and installs this repo in editable mode)
-- Run **`uv run opensre …`** from the repo root while developing — preferred approach, uses this checkout even if another `opensre` is on your `PATH`.
-- Use **`uv run python …`** for any Python commands.
+- Run `**uv run opensre …**` from the repo root while developing — preferred approach, uses this checkout even if another `opensre` is on your `PATH`.
+- Use `**uv run python …**` for any Python commands.
 
 ## Code Style
 
 - Use strict typing, follow DRY principle
 - One clear purpose per file (separation of concerns)
 - Do not keep compatibility-only forwarding modules after refactors. Once imports and tests
+
   are migrated, remove the old module path in the same change and use one canonical import path.
 
-Before any push or PR creation follow **[CI.md](CI.md)** — lint, format, typecheck, and test commands all live there.
+Before any push or PR creation follow [**CI.md**](CI.md) — lint, format, typecheck, and test commands all live there.
 
-When opening a PR, fill out the **[PR template](.github/PULL_REQUEST_TEMPLATE.md)** — it is not optional boilerplate; it has a required AI-usage disclosure section.
+When opening a PR, fill out the [**PR template**](.github/PULL_REQUEST_TEMPLATE.md) — it is not optional boilerplate; it has a required AI-usage disclosure section.
 
 ## 1. Repo Map
+
 
 | Path                                          | What it does                                                                                                                                                                                                                                                                                                                           |
 | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -27,7 +29,7 @@ When opening a PR, fill out the **[PR template](.github/PULL_REQUEST_TEMPLATE.md
 | `integrations/`                               | Per-integration config normalization, verification, clients, helpers, store/catalog logic, the Hermes log pipeline, and per-vendor tool packages under `integrations/<vendor>/tools/`.                                                                                                                                                 |
 | `tools/`                                      | Tool registry, per-tool packages for cross-cutting tools that aren't vendor-specific (e.g. `tools/system/fleet_monitoring/`, `tools/system/watch_dog/`, `tools/system/sre_guidance_tool/`), and the interactive-shell action tools. Framework primitives (decorator, base class, utils) live in `core/tool_framework/`.                |
 | `platform/`                                   | Cross-cutting platform services: guardrails, masking, sandbox, analytics, auth, notifications, observability, harness ports (`platform/harness_ports.py`), and EC2 deployment (`platform/deployment/`).                                                                                                                                |
-| `config/`                                     | Shared constants, prompts, and UI theme.                                                                                                                                                                                                                                                  |
+| `config/`                                     | Shared constants, prompts, and UI theme.                                                                                                                                                                                                                                                                                               |
 | `tests/`                                      | Unit, integration, synthetic, deployment, e2e, chaos engineering, and support tests.                                                                                                                                                                                                                                                   |
 | `docs/`                                       | User-facing documentation, integration guides, and docs-site assets.                                                                                                                                                                                                                                                                   |
 | `.github/`                                    | CI workflows, issue templates, pull request template, and repository automation.                                                                                                                                                                                                                                                       |
@@ -45,6 +47,7 @@ When opening a PR, fill out the **[PR template](.github/PULL_REQUEST_TEMPLATE.md
 | `CI.md`                                       | Mandatory pre-push checklist: lint, format, typecheck, tests — agents MUST follow before pushing.                                                                                                                                                                                                                                      |
 | `TESTING.md`                                  | `ReplDriver` reference: API, usage patterns, wait-time guide, and limitations.                                                                                                                                                                                                                                                         |
 | `CONTRIBUTING.md`                             | Contribution workflow, branch/PR guidance, and quality expectations.                                                                                                                                                                                                                                                                   |
+
 
 Main packages one level deeper:
 
@@ -82,22 +85,31 @@ Steps:
 ### Changing the investigation pipeline
 
 Investigations are coordinated in `tools/investigation/lifecycle.py` and exposed via
+
 `tools/investigation/capability.py`. Semantic stages live under
+
 `tools/investigation/stages/`; reporting lives under
+
 `tools/investigation/reporting/`. See
+
 [docs/investigation-pipeline-architecture.md](docs/investigation-pipeline-architecture.md)
+
 for the end-to-end stage/loop diagrams before making structural changes.
 
 Files to touch:
 
 - `tools/investigation/lifecycle.py` for high-level stage ordering.
 - `core/state/` for shared agent state and investigation pipeline slice contracts
+
   that cross stage boundaries.
 - `core/domain/` for pure investigation rules (alert source mapping, tool planning,
+
   category alignment, correlation scoring).
 - `core/` for shared LLM runtime helpers (tool loop and LLM invoke error
+
   classification).
 - `core/state/*.py` when adding or renaming persisted investigation fields
+
   (update `AgentStateModel` and the matching slice).
 - `docs/` — update or add a page if the change introduces user-visible behavior or configuration.
 - `tests/` coverage for the affected CLI, synthetic, or integration paths.
@@ -117,55 +129,4 @@ Steps:
 1. Add the integration config and normalization logic first so the rest of the stack can consume a consistent shape.
 2. Wire the tool layer after the config path is stable.
 3. Before opening or approving the PR, follow [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md).
-
-### Large multi-surface refactors
-
-A consolidation refactor collapses behavior that has diverged across
-multiple surfaces (`interactive_shell/`, `gateway/`, `tools/investigation/`,
-`core/agent_harness/`, etc.) into one shared class or module — e.g. the
-`agent_harness` T-2/T-3 series (session management, integration resolution,
-startup consolidation). These are higher-risk than a normal feature or tool
-change: they touch several call sites at once and the source issue's file
-paths tend to be stale by the time work starts.
-
-Before starting this class of work, follow
-[REFACTOR_CHECKLIST.md](REFACTOR_CHECKLIST.md) — it covers dependency
-ordering, re-validating the issue against current repo state, incremental
-per-surface migration, and the import-boundary tests that must keep
-enforcing the new pattern.
-
-## 3. Rules (if X -> do Y)
-
-- If a new feature is shipped (tool, CLI command, pipeline behavior, integration) -> add a `docs/` page or section covering usage, configuration, and examples before the PR is opened.
-- If a new `docs/` page is added or renamed -> register it in `docs/docs.json` under the correct `pages` array in the same PR (path without `.mdx`, e.g. `messaging/whatsapp` for `docs/messaging/whatsapp.mdx`).
-- If an existing feature changes behavior, flags, or config shape -> update the relevant `docs/` page in the same PR; docs and code must stay in sync.
-- When writing or editing a `docs/` page -> write for **users, not contributors**. Open with a command quick-reference table (command | what it does) if the page covers CLI commands. Follow with brief practical examples. Keep internal file formats, JSONL schemas, and implementation details out of user-facing pages — move those to `docs/DEVELOPMENT.md` or a contributor-only reference file if truly needed.
-- If a tool's API or schema changes -> update docs in `docs/` and update the related unit tests, usually under `tests/tools/`. For investigation LLM tool-calling (any provider), follow [docs/investigation-tool-calling.md](docs/investigation-tool-calling.md).
-- If adding or materially changing a tool/integration -> follow [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md) in the same PR.
-- If an integration changes -> update `tests/integrations/` and verify with `make verify-integrations`.
-- If adding new tests -> place them in `tests/`, never inside the source packages (no inline tests), except gateway tests which intentionally live in `gateway/tests/` per `gateway/AGENTS.md`.
-- If investigation branching or loop behavior changes -> update `tools/investigation/lifecycle.py` and the tests for that path.
-- If adding or changing interactive REPL behavior (slash commands, session management, display output) -> use `ReplDriver` from `tests/utils/repl_driver.py` for live verification alongside unit tests; see [TESTING.md](TESTING.md).
-
-## 4. Testing
-
-Test commands, turn-handling rules, CI-only paths: **[CI.md](CI.md)**. Live REPL testing with `ReplDriver`: **[TESTING.md](TESTING.md)**.
-
-## 5. Footguns (common mistakes to avoid)
-
-- No planning-stage fail-closed safeguard (v0.1): the interactive-shell action planner never denies a turn with "I couldn't safely decide actions". All terminal actions are read-only, so unmatched/ambiguous/chatty clauses run what they can and fall through to the assistant. Do **not** reintroduce a planner denial, the `mark_unhandled` tool, or the `UNHANDLED:` convention. Rationale and details: `core/agent_harness/AGENTS.md` and `docs/interactive-shell-action-policy.md`. If mutating actions are ever added, gate them at the execution stage (`tools/interactive_shell/shared/execution_policy.py`), not the planner.
-- Vendored deps: No obvious vendored third-party dependencies are present. Python dependencies are managed in `pyproject.toml`, and the docs site has its own `docs/package.json` and `docs/pnpm-lock.yaml`. Do not vendor new libraries unless there is a strong reason.
-- Secrets: Never commit `.env` - always use `.env.example` as the template. Use read-only credentials for production integrations.
-- CI-only tests: Some e2e tests, including Kubernetes, EKS, and chaos engineering paths, require live infrastructure and are excluded from `make test-cov`. Do not expect them to pass locally without that environment.
-- Legacy graph dev server: removed; use `make dev` for a local uvicorn hint or run investigations via the CLI.
-- Docker requirement: Several targets, including the Grafana local stack and Chaos Mesh workflows, require a running Docker daemon.
-- Docs navigation: Adding an `.mdx` file under `docs/` is not enough — Mintlify only shows pages listed in `docs/docs.json`. Forgetting the `pages` entry leaves the doc unreachable from the site sidebar.
-- Investigation tool schemas: draft-07 JSON Schema (e.g. `"type": ["object", "null"]`) can pass loose checks but fail the LLM API on first invoke because **all** available investigation tools are sent together. Normalize in the provider adapter and extend registry contract tests; see [docs/investigation-tool-calling.md](docs/investigation-tool-calling.md).
-- External-system code: `integrations/` owns config, clients, verifiers, and integration-local helpers; `tools/` owns every `@tool(...)` function and `BaseTool` class. Do not reintroduce top-level `vendors/` or `services/` packages.
-- Interactive-shell action selection: do not implement regex/keyword/fuzzy
-  intent routing, literal slash-command shortcuts, or deterministic action
-  bypasses around the action-agent AgentTool path. Engineers have been fired
-  before for implementing this exact shortcut. The runtime's literal-`/slash`
-  detection (`input_policy._literal_slash_command_text`) is terminal UI policy
-  only (spinner/stdin gating), not an execution path.
 
