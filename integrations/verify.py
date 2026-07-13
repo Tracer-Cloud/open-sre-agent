@@ -152,7 +152,7 @@ def format_verification_results(results: list[dict[str, str]]) -> str:
     console.print()
     console.print(table)
     console.print()
-    return console.export_text(styles=True)
+    return console.export_text(styles=False)
 
 
 def verification_exit_code(
