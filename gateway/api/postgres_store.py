@@ -26,6 +26,9 @@ CREATE TABLE IF NOT EXISTS investigations (
     created_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL
 );
+ALTER TABLE investigations ADD COLUMN IF NOT EXISTS workspace_id TEXT;
+ALTER TABLE investigations ADD COLUMN IF NOT EXISTS error TEXT;
+ALTER TABLE investigations ADD COLUMN IF NOT EXISTS report_local_path TEXT;
 CREATE INDEX IF NOT EXISTS investigations_status_created
     ON investigations (status, created_at);
 """

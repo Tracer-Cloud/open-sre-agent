@@ -107,6 +107,22 @@ def test_other_org_cannot_read_investigation(monkeypatch: pytest.MonkeyPatch) ->
     assert resp.status_code == 404
 
 
+def test_orgless_token_is_rejected_on_create_and_get(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "gateway.api.clerk_deps.verify_jwt_async",
+        AsyncMock(return_value=_claims(org="")),
+    )
+    client = TestClient(webapp.app)
+    headers = {"Authorization": "Bearer fake"}
+
+    created = client.post("/api/investigations", json={"raw_alert": {}}, headers=headers)
+    fetched = client.get("/api/investigations/any-id", headers=headers)
+
+    # Org-less users must never share the empty-string namespace.
+    assert created.status_code == 403
+    assert fetched.status_code == 403
+
+
 def test_create_accepts_workspace_id(client: TestClient) -> None:
     resp = client.post(
         "/api/investigations",

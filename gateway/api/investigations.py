@@ -10,7 +10,7 @@ import os
 import threading
 from typing import Any
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
@@ -40,6 +40,21 @@ def _store() -> InvestigationStore:
             else:
                 _store_instance = InMemoryInvestigationStore()
         return _store_instance
+
+
+def _require_org(claims_organization: str | None) -> str:
+    """Return the caller's org id; reject org-less tokens.
+
+    Without this, every user whose JWT carries no organization claim would
+    share the empty-string namespace and could read each other's records.
+    """
+    org = (claims_organization or "").strip()
+    if not org:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="organization membership required",
+        )
+    return org
 
 
 class CreateInvestigationRequest(BaseModel):
@@ -74,7 +89,7 @@ def create_investigation(
 ) -> CreateInvestigationResponse:
     """Enqueue an investigation; the background worker runs the pipeline."""
     store = _store()
-    clerk_org_id = (claims.organization or "").strip()
+    clerk_org_id = _require_org(claims.organization)
     trigger = {
         "raw_alert": body.raw_alert,
         "alert_name": body.alert_name,
@@ -98,11 +113,16 @@ def get_investigation(
     investigation_id: str,
     claims: ClerkClaims,
 ) -> GetInvestigationResponse | JSONResponse:
-    """Poll investigation status; report_url is filled when S3 artifacts exist."""
+    """Poll investigation status.
+
+    ``report_s3_key`` is the durable artifact reference; ``report_url`` is
+    reserved for presigned downloads and stays null until URL generation lands.
+    """
+    clerk_org_id = _require_org(claims.organization)
     record = _store().get(investigation_id)
     if record is None:
         return JSONResponse({"error": "not found"}, status_code=status.HTTP_404_NOT_FOUND)
-    if record.clerk_org_id != (claims.organization or "").strip():
+    if record.clerk_org_id != clerk_org_id:
         return JSONResponse({"error": "not found"}, status_code=status.HTTP_404_NOT_FOUND)
     return GetInvestigationResponse(
         investigation_id=record.id,

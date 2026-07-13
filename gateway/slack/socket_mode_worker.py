@@ -25,6 +25,12 @@ from gateway.storage import SessionBindingStore, SessionResolver, connect_gatewa
 _PLATFORM_SLACK = "slack"
 _EVENTS_API_REQUEST_TYPE = "events_api"
 
+# Per-thread locks are pruned once this many conversations have been seen,
+# keeping memory flat in workspaces where every message starts a new thread.
+_MAX_CONVERSATION_LOCKS = 1024
+
+_DENIAL_REPLY = "You're not authorized to use this bot. Ask an admin to add you."
+
 
 class SlackGatewayBackground:
     """Control handle for the background Slack Socket Mode worker."""
@@ -41,18 +47,25 @@ class SlackGatewayBackground:
         self._db = db
 
     def stop(self, *, timeout: float = 8.0) -> bool:
-        """Disconnect from Slack and release worker resources."""
-        _ = timeout
+        """Disconnect from Slack, wait up to ``timeout`` for in-flight turns, and clean up."""
         try:
             self._socket_client.close()
         except Exception:
             logging.getLogger(__name__).debug("[slack-gateway] close failed", exc_info=True)
-        self._executor.shutdown(wait=False, cancel_futures=False)
+        # shutdown() has no timeout parameter, so bound the wait with a joiner thread.
+        waiter = threading.Thread(
+            target=lambda: self._executor.shutdown(wait=True, cancel_futures=False),
+            name="SlackGatewayShutdown",
+            daemon=True,
+        )
+        waiter.start()
+        waiter.join(timeout)
+        stopped = not waiter.is_alive()
         try:
             self._db.close()
         except Exception:
             logging.getLogger(__name__).debug("[slack-gateway] db close failed", exc_info=True)
-        return True
+        return stopped
 
 
 class _SlackTurnDispatcher:
@@ -73,6 +86,7 @@ class _SlackTurnDispatcher:
         self._handler = handler
         self._logger = logger
         self._conversation_locks: dict[str, threading.Lock] = {}
+        self._locks_guard = threading.Lock()
         self._resolver_lock = threading.Lock()
 
     def dispatch(self, inbound: SlackInboundMessage) -> None:
@@ -81,9 +95,22 @@ class _SlackTurnDispatcher:
         except Exception:
             self._logger.error("[slack-gateway] turn failed", exc_info=True)
 
+    def _conversation_lock(self, conversation_key: str) -> threading.Lock:
+        """Return the per-conversation lock, pruning idle entries at the cap."""
+        with self._locks_guard:
+            lock = self._conversation_locks.get(conversation_key)
+            if lock is None:
+                if len(self._conversation_locks) >= _MAX_CONVERSATION_LOCKS:
+                    self._conversation_locks = {
+                        key: existing
+                        for key, existing in self._conversation_locks.items()
+                        if existing.locked()
+                    }
+                lock = self._conversation_locks[conversation_key] = threading.Lock()
+            return lock
+
     def _run_turn(self, inbound: SlackInboundMessage) -> None:
-        lock = self._conversation_locks.setdefault(inbound.conversation_key, threading.Lock())
-        with lock:
+        with self._conversation_lock(inbound.conversation_key):
             result = authorize_slack_message(
                 user_id=inbound.user_id,
                 channel_id=inbound.channel_id,
@@ -92,9 +119,11 @@ class _SlackTurnDispatcher:
                 allow_open_workspace=self._settings.allow_open_workspace,
             )
             if not result:
+                # The detailed reason goes to the audit log only; the channel
+                # reply must not leak configuration (env var names, allowlists).
                 self._messaging.post_message(
                     channel=inbound.channel_id,
-                    text=result.reason,
+                    text=_DENIAL_REPLY,
                     thread_ts=inbound.thread_ts,
                 )
                 return

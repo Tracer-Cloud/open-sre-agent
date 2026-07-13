@@ -3,6 +3,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+import pytest
+
 from gateway.slack.events import SlackInboundMessage
 from gateway.slack.settings import SlackGatewaySettings
 from gateway.slack.socket_mode_worker import _SlackTurnDispatcher
@@ -110,7 +112,28 @@ def test_unauthorized_user_gets_denial_reply_and_no_turn() -> None:
 
     assert turns == []
     assert resolver.calls == []
-    assert "U1" in (messaging.posts[0]["text"] or "")
+    # Generic reply only — no user ids, allowlists, or env var names leak to the channel.
+    denial = messaging.posts[0]["text"] or ""
+    assert "not authorized" in denial
+    assert "U1" not in denial
+    assert "SLACK_" not in denial
+
+
+def test_conversation_locks_are_pruned_at_cap(monkeypatch: pytest.MonkeyPatch) -> None:
+    from gateway.slack import socket_mode_worker
+
+    monkeypatch.setattr(socket_mode_worker, "_MAX_CONVERSATION_LOCKS", 4)
+    dispatcher = _dispatcher(
+        settings=_settings(["U1"]),
+        messaging=_FakeMessagingClient(),
+        resolver=_FakeSessionResolver(),
+        handler=lambda *_args: None,
+    )
+
+    for index in range(10):
+        dispatcher._conversation_lock(f"T1:C1:{index}")
+
+    assert len(dispatcher._conversation_locks) <= 4 + 1
 
 
 def test_handler_exception_is_contained() -> None:
