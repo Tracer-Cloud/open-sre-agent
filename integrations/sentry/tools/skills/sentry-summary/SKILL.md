@@ -14,53 +14,40 @@ Sentry here, then suggest a multi-source investigation.
 
 ## 1. Fetch
 
-`search_sentry_issues` with `query: "is:unresolved"` and window:
+`search_sentry_issues` once with `query: "is:unresolved"`:
 
-- **24h** — morning digest, overnight, today, scheduled #10
+- **24h** — morning digest, overnight, today (#10)
 - **7d** — "this week", general overview
 - Map user words (`last night` → `24h`, `this week` → `7d`)
 
-Up to 100 issue groups per API page (not events). When `digest.page_saturated`
-is true, say `100+` and quote `scope_note` — more groups may exist in the same
-window. When `page_complete`, the count is exact for that window. Empty → widen
-to `7d`. Results include `digest` with `structural_clusters`,
-`priority_candidates`, `top_issues`.
+One API page, max 100 issue groups (not events). Use `digest.page_saturated`
+(`100+` + `scope_note`) vs `page_complete` (exact count). Empty → widen to
+`7d`. Digest has `structural_clusters`, `priority_candidates`, `top_issues`.
 
 ## 2. Classify
 
-Use `digest.structural_clusters` (`key`, `label`, `sample_titles`). Map each
-to a business theme in the answer. Never present bare project slugs without
-explaining samples (e.g. CloudTrail creds, LLM quota, pipeline failures).
+Use `digest.structural_clusters` (`label`, `sample_titles`, `sample_short_ids`).
+Map to business themes — never bare project slugs without sample context.
 
 ## 3. Rank
 
-Use `digest.priority_candidates` and `business_impact_score` — not raw
-`count` alone. Prefer userCount, operational blockers (credentials, quota,
-pipeline stop), regressions. Penalize high events + zero users (retry noise).
-State impact_reasons in the priority call.
+Use `digest.priority_candidates` and `business_impact_score`, not raw `count`.
+Prefer userCount, operational blockers, regressions; penalize high events +
+zero users (retry noise). Cite `impact_reasons`.
 
 ## 4. Enrich (selective)
 
-Only top 3–5 and #1 priority: `get_sentry_issue_details` +
-`list_sentry_issue_events` (limit 10) when traces/regression proof needed.
+Top 3–5 / #1 only: `get_sentry_issue_details` + `list_sentry_issue_events`
+(limit 10) when traces or regression proof needed.
 
 ## 5. Summarise
 
-Slack-ready digest:
-
-- **I found:** quote `digest.scope_summary` verbatim; add `digest.scope_note` when
-  `page_saturated` or when explaining whether the count is exact vs capped.
-- Themed cluster breakdown: each cluster as `N issues (P%)` with `sample_short_ids`
-  when present (percentages are of the returned page — see `scope_note`).
-- Priority table: rank clusters; columns Priority | Cluster | Issues | Sample IDs |
-  Why it matters (from `impact_reasons`).
-- Top 3–5 issues and next actions (fix / monitor / investigation handoff).
+- **I found:** `digest.scope_summary`; add `scope_note` when capped or ambiguous.
+- Clusters: `N issues (P%)` + `sample_short_ids` (`percent` = returned page).
+- Priority table: Priority | Cluster | Issues | Sample IDs | Why (impact_reasons).
 
 ## Traps
 
-- `count` = events in the issue group; `issue_count` = issue groups returned
-- `page_saturated` / `issue_count_label` (`100+`) = first page only; more may exist
-- `page_complete` = exact count for query + window (under 100 cap)
-- Cluster `percent` = share of returned page, not org-wide total
-- `stats_period` is relative — no absolute timestamps
-- Detail APIs are expensive — enrich selectively
+- `count` = events per group; `issue_count` = groups returned
+- `page_saturated` = first page only; `page_complete` = exact for window
+- `stats_period` is relative; detail APIs are expensive — enrich selectively

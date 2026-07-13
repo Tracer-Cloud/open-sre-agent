@@ -46,9 +46,7 @@ def test_structural_cluster_key_uses_issue_group_prefix() -> None:
 
 
 def test_business_impact_score_prefers_operational_blocker_over_volume() -> None:
-    noisy_score, _ = business_impact_score(
-        {"title": "metadata 400", "count": 568, "userCount": 0}
-    )
+    noisy_score, _ = business_impact_score({"title": "metadata 400", "count": 568, "userCount": 0})
     blocker_score, reasons = business_impact_score(
         {
             "title": "LLMCreditExhaustedError: OpenAI credit exhausted",

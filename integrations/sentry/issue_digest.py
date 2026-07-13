@@ -169,9 +169,7 @@ def build_scope_metadata(
     elif issue_count == 0:
         count_label = "0"
         completeness = "empty"
-        scope_summary = (
-            f"No unresolved issue groups in the {period_label} matching {query_label}"
-        )
+        scope_summary = f"No unresolved issue groups in the {period_label} matching {query_label}"
         scope_note = (
             f"No issue groups matched {query_label} in the {period_label} "
             f"(complete — nothing returned)."
@@ -349,7 +347,8 @@ def build_sentry_issue_digest(
     for key, count in sorted(cluster_counts.items(), key=lambda item: item[1], reverse=True):
         titles = tuple(cluster_titles.get(key, ()))
         top_titles = tuple(
-            title for title, _ in sorted(
+            title
+            for title, _ in sorted(
                 ((title, titles.count(title)) for title in set(titles)),
                 key=lambda item: item[1],
                 reverse=True,
@@ -362,15 +361,13 @@ def build_sentry_issue_digest(
                 "issue_count": count,
                 "percent": round((count / issue_count) * 100) if issue_count else 0,
                 "sample_titles": list(top_titles),
-                "sample_short_ids": list(
-                    dict.fromkeys(cluster_short_ids.get(key, ()))
-                )[:_CLUSTER_SHORT_ID_LIMIT],
+                "sample_short_ids": list(dict.fromkeys(cluster_short_ids.get(key, ())))[
+                    :_CLUSTER_SHORT_ID_LIMIT
+                ],
             }
         )
 
-    ranked_issues = [
-        issue for _, issue in sorted(enriched, key=lambda item: item[0], reverse=True)
-    ]
+    ranked_issues = [issue for _, issue in sorted(enriched, key=lambda item: item[0], reverse=True)]
     top_issues = ranked_issues[:_TOP_ISSUE_LIMIT]
     priority_candidates = [
         {
@@ -404,9 +401,7 @@ def build_sentry_issue_digest(
         "priority_candidates": priority_candidates,
         "priority_issue_id": priority_issue.get("id") if priority_issue else None,
         "priority_short_id": priority_issue.get("short_id") if priority_issue else None,
-        "priority_impact_reasons": (
-            priority_issue.get("impact_reasons") if priority_issue else []
-        ),
+        "priority_impact_reasons": (priority_issue.get("impact_reasons") if priority_issue else []),
     }
 
 

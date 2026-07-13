@@ -183,6 +183,47 @@ def execution_expected_actions(actions: list[dict[str, Any]]) -> list[dict[str, 
     ]
 
 
+def _is_integrations_list_slash(action: dict[str, Any]) -> bool:
+    raw_args = action.get("args", [])
+    args = [str(arg).strip() for arg in raw_args] if isinstance(raw_args, list) else []
+    return (
+        str(action.get("kind", "")).strip() == "slash"
+        and str(action.get("command", "")).strip() == "/integrations"
+        and args == ["list"]
+    )
+
+
+def strip_redundant_integrations_list_for_investigation_execution(
+    actual_actions: list[dict[str, Any]],
+    expected_actions: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Drop harmless ``/integrations list`` when an investigation is the sole expectation."""
+    if len(expected_actions) != 1:
+        return actual_actions
+    if str(expected_actions[0].get("kind", "")).strip() != "investigation":
+        return actual_actions
+    return [action for action in actual_actions if not _is_integrations_list_slash(action)]
+
+
+def strip_redundant_integrations_list_history(
+    actual_history: list[dict[str, Any]],
+    expected_actions: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Drop harmless ``/integrations list`` history rows for investigation-only oracles."""
+    if len(expected_actions) != 1:
+        return actual_history
+    if str(expected_actions[0].get("kind", "")).strip() != "investigation":
+        return actual_history
+    return [
+        entry
+        for entry in actual_history
+        if not (
+            str(entry.get("type", "")).strip() == "slash"
+            and str(entry.get("text_normalized", "")).strip() == "/integrations list"
+        )
+    ]
+
+
 def contains_any(haystack: str, needles: list[str]) -> bool:
     if not needles:
         return True
@@ -428,10 +469,18 @@ def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> Orac
     executed_expected = execution_expected_actions(
         [dict(action) for action in answer.executed_actions]
     )
+    executed_for_match = strip_redundant_integrations_list_for_investigation_execution(
+        executed,
+        executed_expected,
+    )
     history_expected = [dict(item) for item in answer.history_expected]
+    history_for_match = strip_redundant_integrations_list_history(
+        history_delta,
+        executed_expected,
+    )
 
-    executed_match = match_actions(executed, executed_expected)
-    history_match = history_matches(history_delta, history_expected)
+    executed_match = match_actions(executed_for_match, executed_expected)
+    history_match = history_matches(history_for_match, history_expected)
     must_contain_any = answer.response_contract.get("must_contain_any", [])
     must_contain_all = answer.response_contract.get("must_contain_all", [])
     must_not_contain = answer.response_contract.get("must_not_contain", [])

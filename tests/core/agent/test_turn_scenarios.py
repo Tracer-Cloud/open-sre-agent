@@ -33,6 +33,7 @@ from tests.core.agent._oracle_runtime import (
     resolve_live_integrations,
     run_oracle_once,
     session_capabilities,
+    strip_redundant_integrations_list_for_investigation_execution,
 )
 from tests.core.agent._planned_action import default_target_surface
 from tests.core.agent.scenario_loader import (
@@ -276,16 +277,6 @@ def _expected_actions_are_assistant_handoff_only(
     )
 
 
-def _is_integrations_list_slash(action: ExpectedAction) -> bool:
-    raw_args = action.get("args", [])
-    args = [str(arg).strip() for arg in raw_args] if isinstance(raw_args, list) else []
-    return (
-        str(action.get("kind", "")).strip() == "slash"
-        and str(action.get("command", "")).strip() == "/integrations"
-        and args == ["list"]
-    )
-
-
 def _strip_redundant_integrations_list_for_investigation_plan(
     actual_actions: list[ExpectedAction],
     expected_actions: list[ExpectedAction],
@@ -296,11 +287,10 @@ def _strip_redundant_integrations_list_for_investigation_plan(
     ``investigation_start`` even when the fixture session already has connected
     integrations (see scenario 314). It does not change the turn outcome.
     """
-    if len(expected_actions) != 1:
-        return actual_actions
-    if str(expected_actions[0].get("kind", "")).strip() != "investigation":
-        return actual_actions
-    return [action for action in actual_actions if not _is_integrations_list_slash(action)]
+    return strip_redundant_integrations_list_for_investigation_execution(
+        actual_actions,
+        expected_actions,
+    )
 
 
 def _planning_actions_for_match(

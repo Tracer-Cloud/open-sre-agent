@@ -169,9 +169,7 @@ def search_sentry_issues(
             "query": query,
         }
 
-    return _search_result_payload(
-        issues, query=query, stats_period=stats_period, page_limit=limit
-    )
+    return _search_result_payload(issues, query=query, stats_period=stats_period, page_limit=limit)
 
 
 def _search_result_payload(
