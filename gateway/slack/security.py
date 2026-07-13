@@ -2,19 +2,14 @@
 
 from __future__ import annotations
 
-import hashlib
-
 from integrations.messaging_security import (
     AuthorizationResult,
     MessagingIdentityPolicy,
     MessagingPlatform,
     audit_log_inbound_message,
     authorize_inbound_message,
+    message_hash,
 )
-
-
-def _message_hash(text: str) -> str:
-    return hashlib.sha256(text.encode()).hexdigest()[:16]
 
 
 def authorize_slack_message(
@@ -39,7 +34,7 @@ def authorize_slack_message(
             platform=MessagingPlatform.SLACK.value,
             user_id=user_id,
             chat_id=channel_id,
-            message_hash=_message_hash(text),
+            message_hash=message_hash(text),
             authorized=False,
             reason=result.reason,
         )
@@ -60,7 +55,7 @@ def authorize_slack_message(
         platform=MessagingPlatform.SLACK.value,
         user_id=user_id,
         chat_id=channel_id,
-        message_hash=_message_hash(text),
+        message_hash=message_hash(text),
         authorized=bool(result),
         reason=result.reason,
     )

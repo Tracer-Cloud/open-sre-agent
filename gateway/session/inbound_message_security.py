@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 from dataclasses import dataclass
 
 from integrations.messaging_security import (
@@ -12,6 +11,7 @@ from integrations.messaging_security import (
     audit_log_inbound_message,
     authorize_inbound_message,
     complete_pairing,
+    message_hash,
 )
 from integrations.store import get_integration, upsert_instance
 
@@ -56,10 +56,6 @@ def _save_policy(record: dict | None, policy: MessagingIdentityPolicy) -> None:
     )
 
 
-def _message_hash(text: str) -> str:
-    return hashlib.sha256(text.encode()).hexdigest()[:16]
-
-
 def enforce_inbound_telegram_message_security(
     *,
     user_id: str,
@@ -80,7 +76,7 @@ def enforce_inbound_telegram_message_security(
             platform=MessagingPlatform.TELEGRAM.value,
             user_id=user_id,
             chat_id=chat_id,
-            message_hash=_message_hash(text),
+            message_hash=message_hash(text),
             authorized=ok,
             reason=msg,
         )
@@ -96,7 +92,7 @@ def enforce_inbound_telegram_message_security(
             platform=MessagingPlatform.TELEGRAM.value,
             user_id=user_id,
             chat_id=chat_id,
-            message_hash=_message_hash(text),
+            message_hash=message_hash(text),
             authorized=True,
             reason="builtin command",
         )
@@ -122,7 +118,7 @@ def enforce_inbound_telegram_message_security(
                 platform=MessagingPlatform.TELEGRAM.value,
                 user_id=user_id,
                 chat_id=chat_id,
-                message_hash=_message_hash(text),
+                message_hash=message_hash(text),
                 authorized=False,
                 reason=result.reason,
             )
@@ -131,7 +127,7 @@ def enforce_inbound_telegram_message_security(
             platform=MessagingPlatform.TELEGRAM.value,
             user_id=user_id,
             chat_id=chat_id,
-            message_hash=_message_hash(text),
+            message_hash=message_hash(text),
             authorized=True,
             reason="session rotate",
         )
@@ -141,7 +137,7 @@ def enforce_inbound_telegram_message_security(
         platform=MessagingPlatform.TELEGRAM.value,
         user_id=user_id,
         chat_id=chat_id,
-        message_hash=_message_hash(text),
+        message_hash=message_hash(text),
         authorized=bool(result),
         reason=result.reason,
     )
