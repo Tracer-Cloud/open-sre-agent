@@ -71,23 +71,13 @@ Main packages one level deeper:
 
 ### Adding a Tool
 
-The tool registry auto-discovers modules under `tools/`, so the normal path is to add one module or package there and let discovery pick it up.
-
-Files to touch:
-
-- `integrations/<vendor>/tools/<tool_name>_tool/__init__.py` when the tool belongs to an existing vendor integration (most common path).
-- `tools/system/<ToolName>/__init__.py` or `tools/cross_vendor/<ToolName>/__init__.py` only when the tool is not vendor-specific — see [docs/tool-placement-policy.md](docs/tool-placement-policy.md) for the system vs. cross_vendor decision rule (e.g. `tools/system/sre_guidance_tool/`).
-- `core/tool_framework/utils/` if the tool needs shared helper code reused across vendors.
-- `integrations/<name>/client.py` if the tool should reuse a dedicated integration API client instead of inlining requests.
-- `docs/<tool_name>.mdx` for user-facing usage, parameters, and examples.
-- `docs/docs.json` — add the page path (without `.mdx`) to the appropriate `pages` array so Mintlify navigation includes it.
-- `tests/tools/test_<tool_name>.py` for behavior and regression coverage.
+The tool registry auto-discovers modules under `tools/`, so the normal path is to add one module or package there and let discovery pick it up. See [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md) for the full file list and the detailed definition of done (package structure, contract/implementation rules, live-payload parsing, required docs/tests).
 
 Steps:
 
 1. Pick the simplest shape that fits the tool. Use a `BaseTool` subclass (from `core.tool_framework.base`) for richer behavior; use `@tool(...)` from `core.tool_framework.tool_decorator` for a lightweight function tool.
 2. Declare clear metadata: `name`, `description`, `source`, `input_schema`, and any `use_cases`, `requires`, `outputs`, or `retrieval_controls` you need.
-3. Before opening or approving the PR, follow [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md) — it is the detailed definition of done: tool package structure, the contract/implementation rules (separation of concerns, side effects, secrets, structured error shapes), live-payload parsing, and required docs/tests.
+3. Before opening or approving the PR, follow [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md).
 
 ### Changing the investigation pipeline
 
@@ -120,35 +110,13 @@ Steps:
 
 ### Adding an Integration
 
-Integration work usually spans config normalization, verification, integration-local clients/helpers, tools, docs, and tests.
+Integration work usually spans config normalization, verification, integration-local clients/helpers, tools, docs, and tests. See [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md) for the full file list, examples from the repo (Datadog, Grafana, Hermes), and the detailed definition of done (core completeness, investigation wiring, docs/tests, `make verify-integrations`, final demo gate).
 
-Files to touch:
-
-- `integrations/<name>/__init__.py` for config builders, validators, selectors, and normalization helpers.
-- `integrations/<name>/client.py` when the integration needs a dedicated API client.
-- `integrations/<name>/verifier.py` when the integration needs local verification logic.
-- `integrations/catalog.py` when the new integration must be resolved into the shared runtime config.
-- `integrations/verify.py` when the integration needs a local verification path.
-- `tools/<Name>Tool/` or `tools/<tool_file>.py` for the user-facing tool layer, or
-  `integrations/<name>/tools/` when consolidating a vendor's tools under its integration package.
-- `docs/<name>.mdx` for user-facing setup, usage, and verification docs.
-- `docs/docs.json` — add the page path (without `.mdx`) to the appropriate `pages` array so Mintlify navigation includes it.
-- `tests/integrations/test_<name>.py` for config, verification, and store coverage.
-- `tests/tools/test_<tool_name>.py` and any relevant `tests/e2e/` or `tests/synthetic/` files if the integration is exercised by tools or scenarios.
-
-Treat `integrations/` as the canonical user/config and external-client boundary, and `tools/` as the canonical agent-callable boundary. Do not add or import top-level `vendors/` or `services/` packages.
-
-Examples from the repo:
-
-- Datadog: `integrations/datadog/` (including `integrations/datadog/tools/` for query tools), `integrations/catalog.py`, and Datadog-related tests under `tests/integrations/datadog/` and `tests/tools/test_datadog_*.py`.
-- Grafana: `integrations/grafana/` (including `integrations/grafana/tools/` for query tools), `integrations/catalog.py`, `surfaces/cli/wizard/local_grafana_stack/`, and Grafana-related tests under `tests/integrations/grafana/` and `tests/tools/test_grafana_*.py`.
-- Hermes: `integrations/hermes/`, `tools/HermesLogsTool/`, `tools/HermesSessionEvidenceTool/`, `surfaces/cli/commands/hermes.py`, `tests/hermes/`, and `tests/synthetic/hermes/`.
-
-Basic steps:
+Steps:
 
 1. Add the integration config and normalization logic first so the rest of the stack can consume a consistent shape.
 2. Wire the tool layer after the config path is stable.
-3. Before opening or approving the PR, follow [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md) — it is the detailed definition of done: core completeness, investigation wiring, docs/tests, `make verify-integrations`, and the final demo gate for new integrations.
+3. Before opening or approving the PR, follow [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md).
 
 ### Large multi-surface refactors
 
@@ -168,8 +136,6 @@ enforcing the new pattern.
 
 ## 3. Rules (if X -> do Y)
 
-- If core agent or pipeline logic changes -> run `make test-cov` and `make typecheck`.
-- If a change consolidates or re-homes behavior across multiple surfaces (a "refactor" issue, not a localized fix) -> follow [REFACTOR_CHECKLIST.md](REFACTOR_CHECKLIST.md) before writing code and before opening the PR.
 - If a new feature is shipped (tool, CLI command, pipeline behavior, integration) -> add a `docs/` page or section covering usage, configuration, and examples before the PR is opened.
 - If a new `docs/` page is added or renamed -> register it in `docs/docs.json` under the correct `pages` array in the same PR (path without `.mdx`, e.g. `messaging/whatsapp` for `docs/messaging/whatsapp.mdx`).
 - If an existing feature changes behavior, flags, or config shape -> update the relevant `docs/` page in the same PR; docs and code must stay in sync.
@@ -178,10 +144,8 @@ enforcing the new pattern.
 - If adding or materially changing a tool/integration -> follow [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md) in the same PR.
 - If an integration changes -> update `tests/integrations/` and verify with `make verify-integrations`.
 - If adding new tests -> place them in `tests/`, never inside the source packages (no inline tests), except gateway tests which intentionally live in `gateway/tests/` per `gateway/AGENTS.md`.
-- If CI-only tests are added -> mark them with the right pytest marker or place them in the appropriate e2e/synthetic/chaos folder so they do not run in the default local suite.
 - If investigation branching or loop behavior changes -> update `tools/investigation/lifecycle.py` and the tests for that path.
 - If adding or changing interactive REPL behavior (slash commands, session management, display output) -> use `ReplDriver` from `tests/utils/repl_driver.py` for live verification alongside unit tests; see [TESTING.md](TESTING.md).
-- If pushing or creating a PR -> follow the full pre-push checklist in [CI.md](CI.md).
 
 ## 4. Testing
 
@@ -198,15 +162,6 @@ Test commands, turn-handling rules, CI-only paths: **[CI.md](CI.md)**. Live REPL
 - Docs navigation: Adding an `.mdx` file under `docs/` is not enough — Mintlify only shows pages listed in `docs/docs.json`. Forgetting the `pages` entry leaves the doc unreachable from the site sidebar.
 - Investigation tool schemas: draft-07 JSON Schema (e.g. `"type": ["object", "null"]`) can pass loose checks but fail the LLM API on first invoke because **all** available investigation tools are sent together. Normalize in the provider adapter and extend registry contract tests; see [docs/investigation-tool-calling.md](docs/investigation-tool-calling.md).
 - External-system code: `integrations/` owns config, clients, verifiers, and integration-local helpers; `tools/` owns every `@tool(...)` function and `BaseTool` class. Do not reintroduce top-level `vendors/` or `services/` packages.
-- Compatibility shims: Do not leave modules whose only job is to re-export symbols from a new
-  location. Update callers to the canonical module and delete the old path.
-- Empty or monolithic tool packages: Do not add a `tools/<name>/__init__.py`
-  that exists only to make discovery pass, and do not hide a non-trivial tool
-  implementation entirely in `__init__.py`. Use sibling modules for validation,
-  models, delivery/client calls, result shaping, and error handling whenever the
-  tool is more than a small function. Every tool must meet the implementation
-  and quality standards in the Adding a Tool section and
-  [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md).
 - Interactive-shell action selection: do not implement regex/keyword/fuzzy
   intent routing, literal slash-command shortcuts, or deterministic action
   bypasses around the action-agent AgentTool path. Engineers have been fired

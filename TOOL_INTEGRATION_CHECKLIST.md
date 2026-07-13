@@ -13,12 +13,13 @@ This file is the detailed definition of done for tool and integration work. Use 
 
 ### Files usually involved
 
-- `integrations/<vendor>/tools/<tool_name>_tool/__init__.py` for vendor-scoped tools (most common path), or `tools/system/<ToolName>/__init__.py` / `tools/cross_vendor/<ToolName>/__init__.py` for tools that aren't vendor-specific (see [docs/tool-placement-policy.md](docs/tool-placement-policy.md) for the system vs. cross_vendor decision rule)
-- `core/tool_framework/utils/` for shared helpers
-- `integrations/<name>/client.py` if transport/parsing should live in the integration implementation
-- `docs/<tool_name>.mdx`
-- `docs/docs.json`
-- `tests/tools/test_<tool_name>.py`
+- `integrations/<vendor>/tools/<tool_name>_tool/__init__.py` when the tool belongs to an existing vendor integration (most common path)
+- `tools/system/<ToolName>/__init__.py` or `tools/cross_vendor/<ToolName>/__init__.py` only when the tool is not vendor-specific — see [docs/tool-placement-policy.md](docs/tool-placement-policy.md) for the system vs. cross_vendor decision rule (e.g. `tools/system/sre_guidance_tool/`)
+- `core/tool_framework/utils/` if the tool needs shared helper code reused across vendors
+- `integrations/<name>/client.py` if the tool should reuse a dedicated integration API client instead of inlining requests
+- `docs/<tool_name>.mdx` for user-facing usage, parameters, and examples
+- `docs/docs.json` — add the page path (without `.mdx`) to the appropriate `pages` array so Mintlify navigation includes it
+- `tests/tools/test_<tool_name>.py` for behavior and regression coverage
 
 `tools/` is the canonical agent-callable boundary. Do not add `@tool(...)`
 functions, `BaseTool` classes, or registry-discovered modules under
@@ -74,20 +75,26 @@ Common failure modes to consider:
 
 ### Files usually involved
 
-- `integrations/<name>/__init__.py`
-- `integrations/<name>/client.py`
-- `integrations/<name>/verifier.py`
-- `integrations/catalog.py`
-- `integrations/verify.py`
-- `tools/<Name>Tool/` or `tools/<tool_file>.py`, or `integrations/<name>/tools/` when consolidating a vendor's tools under its integration package
-- `docs/<name>.mdx`
-- `docs/docs.json`
-- `tests/integrations/test_<name>.py`
-- related `tests/tools/`, `tests/e2e/`, or `tests/synthetic/` coverage
+- `integrations/<name>/__init__.py` for config builders, validators, selectors, and normalization helpers
+- `integrations/<name>/client.py` when the integration needs a dedicated API client
+- `integrations/<name>/verifier.py` when the integration needs local verification logic
+- `integrations/catalog.py` when the new integration must be resolved into the shared runtime config
+- `integrations/verify.py` when the integration needs a local verification path
+- `tools/<Name>Tool/` or `tools/<tool_file>.py` for the user-facing tool layer, or `integrations/<name>/tools/` when consolidating a vendor's tools under its integration package
+- `docs/<name>.mdx` for user-facing setup, usage, and verification docs
+- `docs/docs.json` — add the page path (without `.mdx`) to the appropriate `pages` array so Mintlify navigation includes it
+- `tests/integrations/test_<name>.py` for config, verification, and store coverage
+- `tests/tools/test_<tool_name>.py` and any relevant `tests/e2e/` or `tests/synthetic/` files if the integration is exercised by tools or scenarios
 
 `integrations/` owns user configuration, resolution, clients, verifiers, and
 integration-local helpers. `tools/` owns agent-callable behavior. Do not add or
 import top-level `vendors/` or `services/` packages.
+
+### Examples from the repo
+
+- Datadog: `integrations/datadog/` (including `integrations/datadog/tools/` for query tools), `integrations/catalog.py`, and Datadog-related tests under `tests/integrations/datadog/` and `tests/tools/test_datadog_*.py`.
+- Grafana: `integrations/grafana/` (including `integrations/grafana/tools/` for query tools), `integrations/catalog.py`, `surfaces/cli/wizard/local_grafana_stack/`, and Grafana-related tests under `tests/integrations/grafana/` and `tests/tools/test_grafana_*.py`.
+- Hermes: `integrations/hermes/`, `tools/HermesLogsTool/`, `tools/HermesSessionEvidenceTool/`, `surfaces/cli/commands/hermes.py`, `tests/hermes/`, and `tests/synthetic/hermes/`.
 
 ### Core completeness
 
