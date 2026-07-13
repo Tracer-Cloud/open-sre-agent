@@ -14,8 +14,6 @@ import json
 import sys
 from typing import TYPE_CHECKING, Any, NoReturn, cast
 
-import questionary
-
 from platform.terminal.theme import (
     ANSI_BOLD,
     ANSI_DIM,
@@ -27,17 +25,7 @@ if TYPE_CHECKING:
     from integrations.github.mcp import GitHubMcpDisplayDetailLevel
 
 from integrations.gitlab import DEFAULT_GITLAB_BASE_URL
-from integrations.posthog_mcp import (
-    DEFAULT_POSTHOG_MCP_URL,
-    build_posthog_mcp_config,
-    validate_posthog_mcp_config,
-)
 from integrations.registry import SUPPORTED_SETUP_SERVICES, resolve_management_service
-from integrations.sentry_mcp import (
-    DEFAULT_SENTRY_MCP_URL,
-    build_sentry_mcp_config,
-    validate_sentry_mcp_config,
-)
 from integrations.store import (
     STORE_PATH,
     get_integration,
@@ -51,11 +39,25 @@ from integrations.verify import (
     verification_exit_code,
     verify_integrations,
 )
-from integrations.x_mcp import (
-    DEFAULT_X_MCP_URL,
-    build_x_mcp_config,
-    validate_x_mcp_config,
-)
+
+
+class _LazyQuestionary:
+    """Proxy that imports the real questionary module on first attribute
+    access, then replaces itself in module globals so subsequent access
+    goes straight to the real module. Avoids paying questionary/prompt_toolkit
+    import cost (~500ms) for commands that never show an interactive prompt,
+    e.g. `integrations verify`, while every setup-wizard function below
+    keeps working exactly as before with zero call-site changes.
+    """
+
+    def __getattr__(self, name: str) -> object:
+        import questionary as _real
+
+        globals()["questionary"] = _real
+        return getattr(_real, name)
+
+
+questionary = _LazyQuestionary()
 
 _B = ANSI_BOLD
 _R = ANSI_RESET
@@ -886,6 +888,12 @@ def _setup_posthog_mcp() -> None:
     # on purpose — do NOT reintroduce a transport selection or a stdio branch here.
     mode = "streamable-http"
     credentials: dict[str, Any] = {"mode": mode, "read_only": True}
+    from integrations.posthog_mcp import (
+        DEFAULT_POSTHOG_MCP_URL,
+        build_posthog_mcp_config,
+        validate_posthog_mcp_config,
+    )
+
     url = _p("PostHog MCP URL", default=DEFAULT_POSTHOG_MCP_URL)
     if not url:
         _die("url is required for remote MCP modes.")
@@ -916,6 +924,12 @@ def _setup_sentry_mcp() -> None:
     # on purpose — do NOT reintroduce a transport selection or a stdio branch here.
     mode = "streamable-http"
     credentials: dict[str, Any] = {"mode": mode}
+    from integrations.sentry_mcp import (
+        DEFAULT_SENTRY_MCP_URL,
+        build_sentry_mcp_config,
+        validate_sentry_mcp_config,
+    )
+
     url = _p("Sentry MCP URL", default=DEFAULT_SENTRY_MCP_URL)
     if not url:
         _die("url is required for remote MCP modes.")
@@ -948,6 +962,12 @@ def _setup_x_mcp() -> None:
     # it stays the default here; do NOT add a transport prompt.
     mode = "streamable-http"
     credentials: dict[str, Any] = {"mode": mode}
+    from integrations.x_mcp import (
+        DEFAULT_X_MCP_URL,
+        build_x_mcp_config,
+        validate_x_mcp_config,
+    )
+
     url = _p("X MCP URL", default=DEFAULT_X_MCP_URL)
     if not url:
         _die("url is required for remote MCP modes.")
