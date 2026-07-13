@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
-import re
 from typing import Any
+
+from integrations.sentry.issue_clustering import (
+    cluster_name_for_issue,
+    structural_cluster_key_for_issue,
+    structural_cluster_label,
+)
+from integrations.sentry.issue_scoring import business_impact_score, classify_issue
 
 _TOP_ISSUE_LIMIT = 5
 _PRIORITY_CANDIDATE_LIMIT = 5
 _CLUSTER_SHORT_ID_LIMIT = 3
 _DEFAULT_PAGE_LIMIT = 100
-_TITLE_THEME_RE = re.compile(r"^\[([^\]]+)\]")
-_CULPRIT_KEY_RE = re.compile(r"[^a-z0-9._-]+")
 
 _STATS_PERIOD_LABELS: dict[str, str] = {
     "24h": "last 24 hours",
@@ -18,105 +22,6 @@ _STATS_PERIOD_LABELS: dict[str, str] = {
     "14d": "last 14 days",
     "30d": "last 30 days",
 }
-
-# Human-readable labels for common structural keys (LLM may rephrase further).
-_STRUCTURAL_LABELS: dict[str, str] = {
-    "integrations.datadog": "Datadog integration errors",
-    "integrations.eks": "EKS / Kubernetes errors",
-    "integrations.cloudtrail": "CloudTrail / AWS errors",
-    "integrations.sentry": "Sentry integration errors",
-    "integrations.github": "GitHub integration errors",
-    "integrations.grafana": "Grafana integration errors",
-    "tools.investigation": "Investigation pipeline errors",
-    "core.llm": "LLM runtime / provider errors",
-    "core.agent": "Agent runtime errors",
-    "surfaces.cli": "CLI surface errors",
-    "surfaces.interactive_shell": "Interactive shell errors",
-    "platform.harness_ports": "Harness / integration wiring errors",
-    "uncategorised": "Uncategorised errors",
-}
-
-_OPERATIONAL_KEYWORDS: tuple[tuple[str, str], ...] = (
-    ("credentials", "blocks cloud/AWS credential-dependent workflows"),
-    ("credit exhausted", "LLM billing or quota exhaustion"),
-    ("stream failed", "investigation pipeline stream failure"),
-    ("stopping pipeline", "investigation pipeline stopped"),
-    ("unable to locate credentials", "missing cloud credentials"),
-)
-
-
-def _culprit_module(culprit: str) -> str:
-    text = culprit.strip()
-    if " in " in text:
-        return text.split(" in ", 1)[0].strip()
-    return text
-
-
-def _sanitize_key(text: str) -> str:
-    cleaned = _CULPRIT_KEY_RE.sub("_", text.lower()).strip("._")
-    return cleaned or "unknown"
-
-
-def _package_cluster_key(module: str, *, depth: int) -> str:
-    parts = [part for part in module.split(".") if part]
-    if not parts:
-        return "uncategorised"
-    return ".".join(parts[:depth])
-
-
-def _title_theme_key(issue: dict[str, Any]) -> str | None:
-    title = str(issue.get("title") or "").strip()
-    match = _TITLE_THEME_RE.match(title)
-    if not match:
-        return None
-    theme = _sanitize_key(match.group(1))
-    return f"title-theme:{theme}" if theme != "unknown" else None
-
-
-def structural_cluster_key_for_issue(issue: dict[str, Any]) -> str:
-    """Assign a stable structural bucket from culprit, title theme, or issue id."""
-    module = _culprit_module(str(issue.get("culprit") or ""))
-
-    if module.startswith("integrations."):
-        return _package_cluster_key(module, depth=3 if module.count(".") >= 2 else 2)
-
-    if module.startswith("tools."):
-        return _package_cluster_key(module, depth=3 if module.count(".") >= 2 else 2)
-
-    for prefix in ("core.", "surfaces.", "platform.", "gateway."):
-        if module.startswith(prefix):
-            return _package_cluster_key(module, depth=2)
-
-    if module and "." in module:
-        return f"culprit:{_sanitize_key(module)}"
-
-    title_theme = _title_theme_key(issue)
-    if title_theme is not None:
-        return title_theme
-
-    short_id = str(issue.get("shortId") or "")
-    if "-" in short_id:
-        return f"issue-group:{short_id.rsplit('-', 1)[0].lower()}"
-
-    project = issue.get("project")
-    if isinstance(project, dict):
-        slug = str(project.get("slug") or "").strip()
-        if slug:
-            return f"project:{slug}"
-    elif isinstance(project, str) and project.strip():
-        return f"project:{project.strip()}"
-
-    if module:
-        return f"culprit:{_sanitize_key(module)}"
-
-    return "uncategorised"
-
-
-def _truncate(text: str, limit: int) -> str:
-    compact = " ".join(text.split())
-    if len(compact) <= limit:
-        return compact
-    return f"{compact[: limit - 1]}…"
 
 
 def stats_period_label(stats_period: str) -> str:
@@ -202,77 +107,6 @@ def build_scope_metadata(
         "scope_note": scope_note,
         "percent_basis": "returned_page",
     }
-
-
-def structural_cluster_label(key: str, *, sample_titles: tuple[str, ...] = ()) -> str:
-    if key in _STRUCTURAL_LABELS:
-        base = _STRUCTURAL_LABELS[key]
-    elif key.startswith("integrations."):
-        vendor = key.removeprefix("integrations.").split(".", 1)[0]
-        base = f"{vendor.replace('_', ' ').title()} integration errors"
-    elif key.startswith("tools."):
-        package = key.removeprefix("tools.").split(".", 1)[0]
-        base = f"{package.replace('_', ' ').title()} tool errors"
-    elif key.startswith("title-theme:"):
-        theme = key.removeprefix("title-theme:").replace("_", " ")
-        base = f"{theme.title()} errors (from issue titles)"
-    elif key.startswith("culprit:"):
-        base = f"Code path {key.removeprefix('culprit:').replace('_', '.')}"
-    elif key.startswith("project:"):
-        slug = key.removeprefix("project:")
-        base = f"Sentry project {slug} (fallback bucket — inspect samples)"
-    elif key.startswith("issue-group:"):
-        base = f"Issue family {key.removeprefix('issue-group:').upper()}"
-    else:
-        base = key
-
-    if sample_titles:
-        return f"{base} — e.g. {_truncate(sample_titles[0], 72)}"
-    return base
-
-
-def classify_issue(issue: dict[str, Any]) -> str:
-    if issue.get("regressedAt"):
-        return "regression"
-    if issue.get("status") == "new":
-        return "new failure"
-    return "ongoing"
-
-
-def business_impact_score(issue: dict[str, Any]) -> tuple[int, list[str]]:
-    """Score issues for priority ranking; higher is more urgent."""
-    reasons: list[str] = []
-    score = 0
-    user_count = int(issue.get("userCount") or 0)
-    event_count = int(issue.get("count") or 0)
-    title = str(issue.get("title") or "").lower()
-
-    if user_count:
-        score += user_count * 100
-        reasons.append(f"{user_count} users affected")
-
-    for keyword, reason in _OPERATIONAL_KEYWORDS:
-        if keyword in title:
-            score += 400
-            reasons.append(reason)
-
-    if issue.get("regressedAt"):
-        score += 200
-        reasons.append("regression resurfaced")
-
-    if issue.get("status") == "new":
-        score += 75
-        reasons.append("new in this window")
-
-    if event_count >= 50 and user_count == 0:
-        penalty = min(event_count // 2, 250)
-        score -= penalty
-        reasons.append("high event volume with zero users — possible retry/noise")
-
-    if event_count and not reasons:
-        reasons.append(f"{event_count} events in window")
-
-    return score, reasons
 
 
 def slim_issue(
@@ -409,5 +243,15 @@ def build_sentry_issue_digest(
     }
 
 
-# Backward-compatible alias used by older tests/callers.
-cluster_name_for_issue = structural_cluster_key_for_issue
+__all__ = [
+    "build_sentry_issue_digest",
+    "build_scope_metadata",
+    "business_impact_score",
+    "classify_issue",
+    "cluster_name_for_issue",
+    "scope_summary_for_digest",
+    "slim_issue",
+    "stats_period_label",
+    "structural_cluster_key_for_issue",
+    "structural_cluster_label",
+]

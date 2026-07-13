@@ -1,61 +1,11 @@
-"""Tests for Sentry issue digest helpers."""
+"""Tests for Sentry issue digest assembly."""
 
 from __future__ import annotations
 
 from integrations.sentry.issue_digest import (
     build_sentry_issue_digest,
-    business_impact_score,
     scope_summary_for_digest,
-    structural_cluster_key_for_issue,
 )
-
-
-def test_structural_cluster_key_uses_integration_package() -> None:
-    assert (
-        structural_cluster_key_for_issue(
-            {"culprit": "integrations.datadog.client in list_monitors"}
-        )
-        == "integrations.datadog.client"
-    )
-    assert (
-        structural_cluster_key_for_issue(
-            {"culprit": "integrations.eks.eks_k8s_client in build_k8s_clients"}
-        )
-        == "integrations.eks.eks_k8s_client"
-    )
-
-
-def test_structural_cluster_key_uses_title_theme_before_project() -> None:
-    assert (
-        structural_cluster_key_for_issue(
-            {
-                "title": "[cloudtrail] lookup_events failed region=us-east-1",
-                "project": {"slug": "python"},
-                "culprit": "",
-            }
-        )
-        == "title-theme:cloudtrail"
-    )
-
-
-def test_structural_cluster_key_uses_issue_group_prefix() -> None:
-    assert (
-        structural_cluster_key_for_issue({"shortId": "TRACER-CLIENT-4C", "culprit": ""})
-        == "issue-group:tracer-client"
-    )
-
-
-def test_business_impact_score_prefers_operational_blocker_over_volume() -> None:
-    noisy_score, _ = business_impact_score({"title": "metadata 400", "count": 568, "userCount": 0})
-    blocker_score, reasons = business_impact_score(
-        {
-            "title": "LLMCreditExhaustedError: OpenAI credit exhausted",
-            "count": 51,
-            "userCount": 0,
-        }
-    )
-    assert blocker_score > noisy_score
-    assert "LLM billing or quota exhaustion" in reasons
 
 
 def test_build_sentry_issue_digest_structural_clusters_and_ranks() -> None:
