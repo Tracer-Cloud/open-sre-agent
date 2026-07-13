@@ -138,8 +138,9 @@ TELEGRAM_DEFAULT_CHAT_ID=<chat-id>
 OpenSRE picks these up at startup and registers Telegram as an active integration.
 
 <Note>
-**Credential resolution.** Every Telegram delivery surface — investigations, the
-scheduler, `/watchdog`, `/hermes watch`, and `/watch` — resolves the bot token
+**Credential resolution.** Every Telegram delivery surface — investigations,
+**background RCA completion notifications**, the scheduler, `/watchdog`,
+`/hermes watch`, and `/watch` — resolves the bot token
 in the same order: integration store → `TELEGRAM_BOT_TOKEN` env → system keyring;
 and the chat id as `--chat-id` → store `default_chat_id` →
 `TELEGRAM_DEFAULT_CHAT_ID` env. Either setup option above works for all of them.
@@ -405,7 +406,7 @@ The gateway uses the same headless agent harness as the interactive shell, with 
 - **Read-only evidence tools** — live integration queries (GitHub, logs, metrics, etc.) via the gather pass when integrations are configured
 - **Action tools** — `shell_run` and `investigation_start`
 
-Investigation delivery, watchdog alerts, and cron still use the outbound-only paths documented above — they do not require the gateway process.
+Investigation delivery, background RCA completion notifications, watchdog alerts, and cron still use the outbound-only paths documented above — they do not require the gateway process.
 
 ### Deploying the gateway to a remote host
 
@@ -431,7 +432,23 @@ why — copy the values into `.env` (or `.env.deploy.example`) for the deploy. A
 
 ---
 
-## Scheduled and watchdog delivery
+## Scheduled, background, and watchdog delivery
+
+### Background investigation completion (RCA)
+
+When the interactive shell runs investigations in background mode, Telegram can deliver the RCA summary as soon as a job finishes. Configure Telegram first (Steps 4–5 — the gateway in Step 6 is **not** required), then in the shell:
+
+```text
+/background on
+/background notify set telegram          # or: email,telegram
+/investigate datadog
+```
+
+Keep using the shell while the RCA runs. On completion the summary — root cause, top analysis, next steps, and a short stats block — is posted as plain text to your default chat, truncated to Telegram's 4,096-character limit.
+
+Confirm delivery with `/background show <task_id>`: the `notify` row reads `telegram:sent`, `telegram:failed: <error>`, or `telegram:missing telegram integration: …` when the bot token or chat id is not configured. A notification problem never fails the investigation itself.
+
+See [Background investigations](/background-investigations) for the full command set.
 
 ### Cron (recurring reports)
 

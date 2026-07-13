@@ -549,3 +549,91 @@ def test_deliver_background_notifications_telegram_never_raises_on_expected_stat
     results = deliver_background_notifications(record=record, channels=("telegram",))
     assert results["telegram"].startswith("missing telegram integration: ")
     assert "TELEGRAM_BOT_TOKEN is not set." in results["telegram"]
+
+
+def test_deliver_background_notifications_redacts_bot_token_from_telegram_failure(
+    monkeypatch,
+) -> None:
+    """The bot token rides in the request URL, and the transport passes a non-JSON
+    error body through verbatim. That string lands in the record and is rendered by
+    `/background show`, so the token must never survive into the result."""
+    from integrations.telegram.credentials import TelegramCredentials
+
+    bot_token = "111222:HAPPYTOKEN"
+
+    monkeypatch.setattr(
+        "integrations.telegram.credentials.load_credentials_from_env",
+        lambda **_: TelegramCredentials(bot_token=bot_token, chat_id="chat-1"),
+    )
+    # Mirrors the real leak path: an intercepting proxy returns a non-JSON body that
+    # echoes the request URL, which post_telegram_message surfaces unredacted.
+    monkeypatch.setattr(
+        "integrations.telegram.delivery.send_telegram_report",
+        lambda *_args, **_kwargs: (
+            False,
+            f"<html>502 Bad Gateway: https://api.telegram.org/bot{bot_token}/sendMessage</html>",
+        ),
+    )
+
+    record = BackgroundInvestigationRecord(
+        task_id="bg-123", status="completed", command="free-text", root_cause="boom"
+    )
+    results = deliver_background_notifications(record=record, channels=("telegram",))
+
+    assert "HAPPYTOKEN" not in results["telegram"]
+    assert bot_token not in results["telegram"]
+    assert "<redacted>" in results["telegram"]
+    # The rest of the diagnostic must survive; redaction is not error-swallowing.
+    assert results["telegram"].startswith("failed: ")
+    assert "502 Bad Gateway" in results["telegram"]
+
+
+def test_deliver_background_notifications_telegram_body_keeps_actionable_tail(
+    monkeypatch,
+) -> None:
+    """Telegram tail-truncates at 4096. The RCA body ends with "What to do next" and
+    the stats block, so an unbounded root cause would push exactly the actionable
+    sections off the end. The body must fit the cap with the tail intact."""
+    from integrations.telegram.credentials import TelegramCredentials
+
+    monkeypatch.setattr(
+        "integrations.telegram.credentials.load_credentials_from_env",
+        lambda **_: TelegramCredentials(bot_token="tok", chat_id="chat-1"),
+    )
+
+    captured: dict[str, object] = {}
+
+    def _fake_send_telegram_report(
+        report: str, telegram_ctx: dict[str, object], *, parse_mode: str = "HTML", **_: object
+    ) -> tuple[bool, str]:
+        captured["report"] = report
+        return True, ""
+
+    monkeypatch.setattr(
+        "integrations.telegram.delivery.send_telegram_report",
+        _fake_send_telegram_report,
+    )
+
+    record = BackgroundInvestigationRecord(
+        task_id="bg-123",
+        status="completed",
+        command="/investigate " + "c" * 5_000,
+        root_cause="r" * 6_000,
+        top_analysis=tuple(f"analysis {i} " + "a" * 500 for i in range(12)),
+        next_steps=tuple(f"NEXTSTEPSENTINEL{i} " + "n" * 500 for i in range(12)),
+        stats={"tool_call_count": 4, "investigation_loop_count": 2, "validity_score": 0.8},
+    )
+
+    results = deliver_background_notifications(record=record, channels=("telegram",))
+    assert results == {"telegram": "sent"}
+
+    body = str(captured["report"])
+    # Fits in one Telegram message without the transport having to amputate it.
+    assert len(body) <= 4096
+    # The sections that tell the on-call what to do are still there.
+    assert "What to do next" in body
+    assert "NEXTSTEPSENTINEL0" in body
+    assert "Internal stats" in body
+    assert "validity score" in body
+    # Email keeps the full report; only the Telegram copy is budgeted.
+    assert "r" * 1_000 not in body or len(body) <= 4096
