@@ -1,9 +1,10 @@
-"""Host and process fact probes via pure Python (no subprocess).
+"""Runtime environment probes via pure Python (no subprocess).
 
 Each probe replaces a shell command the agent would otherwise reach for:
 timezone (``date``), hostname (``hostname``), interpreter version
 (``python --version``), tool presence (``which``), kubeconfig
-(``kubectl config view``), and disk/memory (``df``/``free``/``top``).
+(``kubectl config view``), disk/memory (``df``/``free``/``top``), and cloud
+identity (instance metadata endpoint).
 """
 
 from __future__ import annotations

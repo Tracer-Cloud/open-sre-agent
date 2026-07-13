@@ -8,7 +8,7 @@ registry layer (#1487) decides which PIDs to ask about.
 The helpers exposed here (:func:`cwd_for_pid`, :func:`started_at_for_pid`,
 :func:`env_value_for_pid`) let other layers query process state without
 importing psutil themselves. System-wide disk/memory facts have their own
-psutil wrapper in :mod:`config.runtime_metadata.host_facts`.
+psutil wrapper in :mod:`config.runtime_metadata.probes`.
 """
 
 from __future__ import annotations

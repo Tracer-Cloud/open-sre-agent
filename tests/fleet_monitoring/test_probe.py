@@ -25,11 +25,11 @@ _REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 _PROBE_MODULE = _REPO_ROOT / "tools" / "system" / "fleet_monitoring" / "probe.py"
 # Modules sanctioned to import psutil. Each must wrap it behind plain-value
 # helpers so callers never touch psutil directly: probe.py for per-PID
-# snapshots, host_facts.py for system-wide disk/memory session facts
+# snapshots, probes.py for system-wide disk/memory session facts
 # (config/ cannot import tools/, so it wraps psutil itself).
 _PSUTIL_SANCTIONED = (
     _PROBE_MODULE,
-    _REPO_ROOT / "config" / "runtime_metadata" / "host_facts.py",
+    _REPO_ROOT / "config" / "runtime_metadata" / "probes.py",
 )
 _SOURCE_ROOTS = (
     "cli",

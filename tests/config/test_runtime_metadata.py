@@ -18,7 +18,7 @@ from config.runtime_metadata import (
     capture_runtime_facts,
     merge_runtime_into_inputs,
 )
-from config.runtime_metadata import host_facts as host_facts_module
+from config.runtime_metadata import probes as probes_module
 from config.version import get_opensre_version
 from core.agent_harness.session import InMemorySessionStorage, SessionCore, SessionManager
 
@@ -96,15 +96,15 @@ def test_pod_hostname_prefers_etc_hostname_file(
     over socket.gethostname() so "which pod am I in?" gets the pod, not the node."""
     hostname_file = tmp_path / "hostname"
     hostname_file.write_text("opensre-pod-7d9f\n", encoding="utf-8")
-    monkeypatch.setattr(host_facts_module, "_HOSTNAME_FILE", hostname_file)
-    assert host_facts_module.pod_hostname() == "opensre-pod-7d9f"
+    monkeypatch.setattr(probes_module, "_HOSTNAME_FILE", hostname_file)
+    assert probes_module.pod_hostname() == "opensre-pod-7d9f"
 
 
 def test_pod_hostname_falls_back_to_socket_when_file_missing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(host_facts_module, "_HOSTNAME_FILE", tmp_path / "absent")
-    assert host_facts_module.pod_hostname() == socket.gethostname()
+    monkeypatch.setattr(probes_module, "_HOSTNAME_FILE", tmp_path / "absent")
+    assert probes_module.pod_hostname() == socket.gethostname()
 
 
 def test_local_tz_name_reads_iana_from_localtime_symlink(
@@ -118,8 +118,8 @@ def test_local_tz_name_reads_iana_from_localtime_symlink(
     zonefile.write_bytes(b"")
     fake_link = tmp_path / "localtime"
     os.symlink(zonefile, fake_link)
-    monkeypatch.setattr(host_facts_module, "_LOCALTIME_LINK", fake_link)
-    assert host_facts_module.local_tz_name() == "Europe/Berlin"
+    monkeypatch.setattr(probes_module, "_LOCALTIME_LINK", fake_link)
+    assert probes_module.local_tz_name() == "Europe/Berlin"
 
 
 def test_build_runtime_metadata_populates_build_marker_in_git_checkout() -> None:
@@ -151,7 +151,7 @@ def test_cloud_facts_fall_back_to_aws_region_vars(monkeypatch: pytest.MonkeyPatc
     for var in ("CLOUD_PROVIDER", "CLOUD_REGION", "AWS_REGION", "AWS_DEFAULT_REGION"):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv("AWS_DEFAULT_REGION", "eu-central-1")
-    facts = host_facts_module.cloud_facts()
+    facts = probes_module.cloud_facts()
     assert facts == {"cloud_provider": "aws", "cloud_region": "eu-central-1"}
 
 
@@ -159,7 +159,7 @@ def test_cloud_facts_empty_when_not_deployed_to_cloud(monkeypatch: pytest.Monkey
     """Local dev has no cloud identity — empty strings, never a guess."""
     for var in ("CLOUD_PROVIDER", "CLOUD_REGION", "AWS_REGION", "AWS_DEFAULT_REGION"):
         monkeypatch.delenv(var, raising=False)
-    assert host_facts_module.cloud_facts() == {"cloud_provider": "", "cloud_region": ""}
+    assert probes_module.cloud_facts() == {"cloud_provider": "", "cloud_region": ""}
 
 
 def test_cloud_facts_never_touch_the_network(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -173,7 +173,7 @@ def test_cloud_facts_never_touch_the_network(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(socket, "create_connection", _explode)
     monkeypatch.setenv("CLOUD_PROVIDER", "aws")
     monkeypatch.setenv("CLOUD_REGION", "eu-central-1")
-    assert host_facts_module.cloud_facts() == {
+    assert probes_module.cloud_facts() == {
         "cloud_provider": "aws",
         "cloud_region": "eu-central-1",
     }
