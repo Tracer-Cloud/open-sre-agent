@@ -183,4 +183,7 @@ def test_sentry_summary_skill_loads_and_references_correct_tools() -> None:
     formatted = format_tool_skill_guidance(result.skill)
     assert '<skill name="sentry-summary"' in formatted
     assert "search_sentry_issues" in result.skill.content
+    assert "is:unresolved" in result.skill.content
     assert "cluster" in result.skill.content.lower()
+    # Registry truncates combined guidance at 2400 chars; keep the skill under that.
+    assert len(formatted) <= 2400
