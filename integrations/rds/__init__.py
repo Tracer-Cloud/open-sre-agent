@@ -10,8 +10,6 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from pydantic import ValidationError
-
 from config.strict_config import StrictConfigModel
 from integrations._relational import env_str
 from integrations._validation_helpers import report_classify_failure
@@ -96,9 +94,6 @@ def classify(credentials: dict[str, Any], record_id: str) -> tuple[RDSConfig | N
                 "integration_id": record_id,
             }
         )
-    except ValidationError as exc:
-        report_classify_failure(exc, logger=logger, integration="rds", record_id=record_id)
-        return None, None
     except Exception as exc:
         logger.warning("unexpected error classifying rds config", exc_info=True)
         report_classify_failure(exc, logger=logger, integration="rds", record_id=record_id)

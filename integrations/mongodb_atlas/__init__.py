@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import httpx
-from pydantic import Field, ValidationError, field_validator
+from pydantic import Field, field_validator
 
 from config.strict_config import StrictConfigModel
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
@@ -574,11 +574,6 @@ def classify(
                 "integration_id": record_id,
             }
         )
-    except ValidationError as exc:
-        report_classify_failure(
-            exc, logger=logger, integration="mongodb_atlas", record_id=record_id
-        )
-        return None, None
     except Exception as exc:
         logger.warning("unexpected error classifying mongodb_atlas config", exc_info=True)
         report_classify_failure(
