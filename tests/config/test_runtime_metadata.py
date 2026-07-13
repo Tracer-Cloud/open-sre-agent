@@ -1,29 +1,24 @@
-"""Tests for session runtime metadata injection."""
+"""Tests for session runtime metadata: static facts, live capture, and merge."""
 
 from __future__ import annotations
 
 import os
+import socket
+import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-from config import runtime_metadata as runtime_metadata_module
 from config.runtime_metadata import (
     RUNTIME_INPUTS_KEY,
-    _GitLayout,
-    _local_tz_name,
-    _read_git_head_sha,
-    _read_latest_release_tag,
-    _resolve_gitdir,
     build_runtime_metadata,
     capture_runtime_facts,
     merge_runtime_into_inputs,
 )
+from config.runtime_metadata import host_facts as host_facts_module
 from config.version import get_opensre_version
-from core.agent_harness.prompts.assistant_agent_prompt import build_environment_block
 from core.agent_harness.session import InMemorySessionStorage, SessionCore, SessionManager
-from tools.system.python_execution_tool import execute_python_code
 
 
 @pytest.fixture(autouse=True)
@@ -87,11 +82,9 @@ def test_build_runtime_metadata_kubeconfig_takes_first_of_colon_separated(
 def test_build_runtime_metadata_populates_hostname_and_scratchpad() -> None:
     """Static filesystem facts: hostname via file/socket (never the `hostname`
     binary), scratchpad dir via tempfile — both pure Python."""
-    import tempfile as _tempfile
-
     meta = build_runtime_metadata()
     assert isinstance(meta["hostname"], str) and meta["hostname"]
-    assert meta["scratchpad_dir"] == _tempfile.gettempdir()
+    assert meta["scratchpad_dir"] == tempfile.gettempdir()
 
 
 def test_pod_hostname_prefers_etc_hostname_file(
@@ -101,52 +94,15 @@ def test_pod_hostname_prefers_etc_hostname_file(
     over socket.gethostname() so "which pod am I in?" gets the pod, not the node."""
     hostname_file = tmp_path / "hostname"
     hostname_file.write_text("opensre-pod-7d9f\n", encoding="utf-8")
-    monkeypatch.setattr(runtime_metadata_module, "_HOSTNAME_FILE", hostname_file)
-    assert runtime_metadata_module._pod_hostname() == "opensre-pod-7d9f"
+    monkeypatch.setattr(host_facts_module, "_HOSTNAME_FILE", hostname_file)
+    assert host_facts_module.pod_hostname() == "opensre-pod-7d9f"
 
 
 def test_pod_hostname_falls_back_to_socket_when_file_missing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import socket as _socket
-
-    monkeypatch.setattr(runtime_metadata_module, "_HOSTNAME_FILE", tmp_path / "absent")
-    assert runtime_metadata_module._pod_hostname() == _socket.gethostname()
-
-
-def test_capture_runtime_facts_populates_disk_and_memory_via_psutil() -> None:
-    """Live filesystem facts: disk/memory from psutil, absent from the cached
-    metadata (usage changes turn to turn)."""
-    meta = build_runtime_metadata()
-    for key in (
-        "disk_used_percent",
-        "disk_free_gb",
-        "memory_used_percent",
-        "memory_available_gb",
-    ):
-        assert key not in meta, f"{key} must be live, not cached"
-    facts = capture_runtime_facts(metadata=meta)
-    assert 0.0 <= facts["disk_used_percent"] <= 100.0
-    assert facts["disk_free_gb"] >= 0.0
-    assert 0.0 <= facts["memory_used_percent"] <= 100.0
-    assert facts["memory_available_gb"] >= 0.0
-
-
-def test_build_runtime_metadata_does_not_include_live_now_iso() -> None:
-    """``now_iso`` must NOT live on the session-cached metadata: caching it at
-    bootstrap would make the LLM report a stale clock every turn."""
-    meta = build_runtime_metadata()
-    assert "now_iso" not in meta
-
-
-def test_capture_runtime_facts_adds_fresh_now_iso() -> None:
-    meta = build_runtime_metadata()
-    facts = capture_runtime_facts(metadata=meta)
-    assert facts["opensre_version"] == meta["opensre_version"]
-    assert facts["tz_name"] == meta["tz_name"]
-    assert facts["now_iso"], "now_iso should always be populated"
-    # ISO 8601 with offset (e.g. 2026-07-11T14:30:12+02:00 or ...Z-form).
-    assert "T" in facts["now_iso"]
+    monkeypatch.setattr(host_facts_module, "_HOSTNAME_FILE", tmp_path / "absent")
+    assert host_facts_module.pod_hostname() == socket.gethostname()
 
 
 def test_local_tz_name_reads_iana_from_localtime_symlink(
@@ -160,18 +116,59 @@ def test_local_tz_name_reads_iana_from_localtime_symlink(
     zonefile.write_bytes(b"")
     fake_link = tmp_path / "localtime"
     os.symlink(zonefile, fake_link)
-    monkeypatch.setattr(runtime_metadata_module, "_LOCALTIME_LINK", fake_link)
-    assert _local_tz_name() == "Europe/Berlin"
+    monkeypatch.setattr(host_facts_module, "_LOCALTIME_LINK", fake_link)
+    assert host_facts_module.local_tz_name() == "Europe/Berlin"
+
+
+def test_build_runtime_metadata_populates_build_marker_in_git_checkout() -> None:
+    """In a git checkout (this test tree), opensre_build should include a SHA
+    or release tag so the LLM can quote a precise build identifier without
+    shelling out. The exact string varies with head, but must be non-empty."""
+    meta = build_runtime_metadata()
+    # This test runs from the opensre checkout, so .git exists → build marker
+    # is populated. If someone ever runs the test suite from an installed
+    # wheel, this test would need adjusting.
+    assert meta["opensre_build"], "opensre_build should be populated in a git checkout"
+    assert meta["opensre_build"].startswith("dev"), meta["opensre_build"]
+
+
+def test_build_runtime_metadata_does_not_include_live_slots() -> None:
+    """Live values must NOT live on the session-cached metadata: caching them
+    at bootstrap would freeze the clock, uptime, and usage numbers."""
+    meta = build_runtime_metadata()
+    for key in (
+        "now_iso",
+        "uptime_seconds",
+        "disk_used_percent",
+        "disk_free_gb",
+        "memory_used_percent",
+        "memory_available_gb",
+    ):
+        assert key not in meta, f"{key} must be live, not cached"
+
+
+def test_capture_runtime_facts_adds_fresh_now_iso() -> None:
+    meta = build_runtime_metadata()
+    facts = capture_runtime_facts(metadata=meta)
+    assert facts["opensre_version"] == meta["opensre_version"]
+    assert facts["tz_name"] == meta["tz_name"]
+    assert facts["now_iso"], "now_iso should always be populated"
+    # ISO 8601 with offset (e.g. 2026-07-11T14:30:12+02:00 or ...Z-form).
+    assert "T" in facts["now_iso"]
 
 
 def test_capture_runtime_facts_populates_uptime_seconds() -> None:
-    """Uptime is a live fact — it must be present on the captured facts, not
-    on the session-cached metadata (which would freeze it at bootstrap)."""
-    meta = build_runtime_metadata()
-    assert "uptime_seconds" not in meta
-    facts = capture_runtime_facts(metadata=meta)
+    facts = capture_runtime_facts()
     assert isinstance(facts["uptime_seconds"], float)
     assert facts["uptime_seconds"] >= 0.0
+
+
+def test_capture_runtime_facts_populates_disk_and_memory_via_psutil() -> None:
+    facts = capture_runtime_facts()
+    assert 0.0 <= facts["disk_used_percent"] <= 100.0
+    assert facts["disk_free_gb"] >= 0.0
+    assert 0.0 <= facts["memory_used_percent"] <= 100.0
+    assert facts["memory_available_gb"] >= 0.0
 
 
 def test_capture_runtime_facts_uptime_grows_over_time() -> None:
@@ -199,18 +196,6 @@ def test_capture_runtime_facts_refreshes_now_between_calls() -> None:
     assert first != second
 
 
-def test_build_runtime_metadata_populates_build_marker_in_git_checkout() -> None:
-    """In a git checkout (this test tree), opensre_build should include a SHA
-    or release tag so the LLM can quote a precise build identifier without
-    shelling out. The exact string varies with head, but must be non-empty."""
-    meta = build_runtime_metadata()
-    # This test runs from the opensre checkout, so .git exists → build marker
-    # is populated. If someone ever runs the test suite from an installed
-    # wheel, this test would need adjusting.
-    assert meta["opensre_build"], "opensre_build should be populated in a git checkout"
-    assert meta["opensre_build"].startswith("dev"), meta["opensre_build"]
-
-
 def test_merge_runtime_into_inputs_does_not_overwrite_caller_key() -> None:
     custom = {"opensre_version": "custom"}
     merged = merge_runtime_into_inputs({"x": 1, RUNTIME_INPUTS_KEY: custom})
@@ -235,332 +220,3 @@ def test_session_clear_repopulates_runtime_metadata() -> None:
     session.runtime_metadata = {}
     session.clear(rotate_identity=False)
     assert session.runtime_metadata["opensre_version"] == get_opensre_version()
-
-
-def _env_block(runtime: dict[str, object]) -> str:
-    return build_environment_block(integrations=(), known=False, runtime=runtime)
-
-
-def test_environment_block_includes_version_without_subprocess_hint() -> None:
-    block = _env_block({"opensre_version": "9.9.9", "runtime_env": "development"})
-    assert "OpenSRE version is 9.9.9" in block
-    assert "runtime environment is development" in block
-    assert "opensre --version" in block
-    assert "subprocess" in block.lower()
-
-
-def test_environment_block_renders_current_time_and_timezone() -> None:
-    """Time slot must land in the prompt as a quotable string with an anti-
-    guessing instruction — the same shape that stopped the version being
-    hallucinated from training data."""
-    block = _env_block(
-        {
-            "opensre_version": "0.1",
-            "now_iso": "2026-07-11T14:30:12+02:00",
-            "tz_name": "Europe/Berlin",
-        }
-    )
-    assert "current time is 2026-07-11T14:30:12+02:00" in block
-    assert "local timezone is Europe/Berlin" in block
-    assert "do NOT guess a date/time" in block.replace("Do NOT", "do NOT")
-
-
-def test_environment_block_renders_python_process_and_tools_facts() -> None:
-    """The process/tooling facts must land in the block as verbatim-quotable strings,
-    each with a corresponding "do not shell out" instruction that names the
-    reflex command the LLM would otherwise reach for."""
-    block = _env_block(
-        {
-            "opensre_version": "0.1",
-            "python_version": "3.12.4",
-            "pid": 12345,
-            "ppid": 6789,
-            "uptime_seconds": 42.5,
-            "tools": {"kubectl": "/usr/local/bin/kubectl", "helm": "", "git": "/usr/bin/git"},
-            "kubeconfig": "/home/me/.kube/config",
-        }
-    )
-    assert "Python interpreter version is 3.12.4" in block
-    assert "process id is 12345, parent 6789" in block
-    assert "process uptime is 42.5 seconds" in block
-    assert "installed tools on PATH are git, kubectl" in block, block
-    assert "helm" not in block  # not-present tools are filtered
-    assert "kubeconfig path is /home/me/.kube/config" in block
-    # Anti-guess instruction names the actual shell commands the LLM would reach
-    # for, in backticked form so a stray substring can't satisfy the check.
-    assert "`python --version`" in block
-    assert "`kubectl version`" in block
-    assert "`which`" in block
-    assert "`ps`" in block
-
-
-def test_environment_block_renders_hostname_disk_memory_and_scratchpad() -> None:
-    """The filesystem facts: pod hostname, disk/memory readings, scratchpad dir —
-    each quotable, with anti-shell instructions naming hostname/df/free/top/ls."""
-    block = _env_block(
-        {
-            "opensre_version": "0.1",
-            "hostname": "opensre-pod-7d9f",
-            "disk_used_percent": 63.2,
-            "disk_free_gb": 120.5,
-            "memory_used_percent": 41.0,
-            "memory_available_gb": 9.4,
-            "scratchpad_dir": "/tmp",
-        }
-    )
-    assert "host name is opensre-pod-7d9f" in block
-    assert "root disk is 63.2% used with 120.5 GB free" in block
-    assert "memory is 41.0% used with 9.4 GB available" in block
-    assert "scratchpad directory is /tmp" in block
-    assert "`hostname`" in block
-    assert "`df`" in block
-    assert "`free`" in block
-    assert "`top`" in block
-    assert "`ls`" in block
-    assert "iterdir" in block  # pathlib guidance for directory listings
-
-
-def test_environment_block_omits_disk_memory_when_absent() -> None:
-    """psutil failures degrade to absent keys; no partial/empty usage lines."""
-    block = _env_block({"opensre_version": "0.1", "disk_used_percent": 63.2})
-    # disk_free_gb missing → the disk line needs both halves.
-    assert "root disk is" not in block
-    assert "memory is" not in block
-
-
-def test_environment_block_omits_installed_tools_line_when_none_present() -> None:
-    """When every probed tool is absent, the block must not render an
-    empty ``installed tools on PATH are `` line."""
-    block = _env_block({"opensre_version": "0.1", "tools": {"kubectl": "", "helm": "", "git": ""}})
-    assert "installed tools on PATH" not in block
-
-
-def test_environment_block_omits_time_when_slot_empty() -> None:
-    """Released wheels or pathological callers may pass no time; the block
-    must not render an empty ``current time is`` line in that case."""
-    block = _env_block({"opensre_version": "0.1", "now_iso": "", "tz_name": ""})
-    assert "current time is" not in block
-    assert "local timezone is" not in block
-
-
-def test_environment_block_renders_build_marker_when_provided() -> None:
-    """In a git checkout the runtime metadata carries an opensre_build marker;
-    the env block should render it inline with the version so the LLM can
-    quote both parts."""
-    block = _env_block(
-        {
-            "opensre_version": "0.1",
-            "opensre_build": "dev, v0.1.2026.7.11 @ abc1234",
-            "runtime_env": "development",
-        }
-    )
-    assert "OpenSRE version is 0.1 (dev, v0.1.2026.7.11 @ abc1234)" in block
-
-
-def test_environment_block_omits_build_parens_when_marker_empty() -> None:
-    """Released wheels report opensre_build=''; version renders bare."""
-    block = _env_block(
-        {
-            "opensre_version": "0.1.2026.7.11",
-            "opensre_build": "",
-            "runtime_env": "production",
-        }
-    )
-    assert "OpenSRE version is 0.1.2026.7.11" in block
-    assert "OpenSRE version is 0.1.2026.7.11 (" not in block
-
-
-def test_environment_block_instructs_verbatim_quoting_not_field_names() -> None:
-    """Regression guard: an earlier version of the prompt said 'including the
-    build marker if present', which caused the LLM to treat 'build marker' as
-    a field name and hallucinate a value like '0' when the slot was empty. The
-    prompt now instructs verbatim quoting and explicitly forbids inventing field
-    names or numbers not in the block."""
-    block = _env_block(
-        {
-            "opensre_version": "0.1",
-            "opensre_build": "dev, v0.1.2026.7.11 @ abc1234",
-            "runtime_env": "development",
-        }
-    )
-    assert "verbatim" in block
-    assert "Do NOT invent field names" in block
-    assert "build marker" not in block, "the 'build marker' phrase was a hallucination sink"
-
-
-def test_resolve_gitdir_follows_linked_worktree_pointer_file(tmp_path: Path) -> None:
-    """Linked worktrees (and submodules) store ``.git`` as a *file* that points
-    at the real gitdir under the primary repo. Build metadata must resolve
-    through it instead of returning ``None``."""
-    real_gitdir = tmp_path / "primary" / ".git" / "worktrees" / "wt1"
-    real_gitdir.mkdir(parents=True)
-    pointer = tmp_path / "wt" / ".git"
-    pointer.parent.mkdir(parents=True)
-    pointer.write_text(f"gitdir: {real_gitdir}\n", encoding="utf-8")
-    assert _resolve_gitdir(pointer) == real_gitdir
-
-
-def test_resolve_gitdir_returns_none_for_pointer_to_missing_dir(tmp_path: Path) -> None:
-    pointer = tmp_path / ".git"
-    pointer.write_text("gitdir: /does/not/exist\n", encoding="utf-8")
-    assert _resolve_gitdir(pointer) is None
-
-
-def test_latest_release_tag_reads_packed_refs_when_loose_missing(tmp_path: Path) -> None:
-    """After ``git pack-refs`` there is no ``refs/tags/<name>`` file — the tag
-    lives only in ``packed-refs``. Build metadata must fall back so packed
-    repos still surface a build marker."""
-    (tmp_path / "packed-refs").write_text(
-        "# pack-refs with: peeled fully-peeled sorted \n"
-        "abc1234abc1234abc1234abc1234abc1234abcd refs/tags/v0.1.2026.7.11\n"
-        "def5678def5678def5678def5678def5678def56 refs/heads/main\n",
-        encoding="utf-8",
-    )
-    assert _read_latest_release_tag(tmp_path) == "v0.1.2026.7.11"
-
-
-def test_head_sha_reads_packed_refs_when_loose_ref_missing(tmp_path: Path) -> None:
-    """A packed branch has no loose ``refs/heads/<name>`` file; the sha is in
-    ``packed-refs``. Falling through instead of following packed-refs would
-    drop the SHA from the build marker."""
-    (tmp_path / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
-    (tmp_path / "packed-refs").write_text(
-        "abc1234abc1234abc1234abc1234abc1234abcd refs/heads/main\n",
-        encoding="utf-8",
-    )
-    layout = _GitLayout(gitdir=tmp_path, commondir=tmp_path)
-    assert _read_git_head_sha(layout) == "abc1234"
-
-
-def test_head_sha_resolves_branch_from_commondir_in_linked_worktree(tmp_path: Path) -> None:
-    """In a linked worktree ``HEAD`` sits in the per-worktree gitdir but the
-    branch ref lives in the shared commondir. Reading only the per-worktree
-    gitdir would miss the sha and drop it from the build marker."""
-    commondir = tmp_path / "primary" / ".git"
-    (commondir / "refs" / "heads").mkdir(parents=True)
-    (commondir / "refs" / "heads" / "main").write_text(
-        "abc1234abc1234abc1234abc1234abc1234abcd\n", encoding="utf-8"
-    )
-    per_worktree = commondir / "worktrees" / "wt1"
-    per_worktree.mkdir(parents=True)
-    (per_worktree / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
-
-    layout = _GitLayout(gitdir=per_worktree, commondir=commondir)
-    assert _read_git_head_sha(layout) == "abc1234"
-
-
-def test_latest_release_tag_reads_from_commondir_in_linked_worktree(tmp_path: Path) -> None:
-    """Tags are a shared ref: only the commondir's ``refs/tags/`` sees them.
-    A worktree-local read would return ``None`` and drop the tag from the
-    build marker."""
-    commondir = tmp_path / "primary" / ".git"
-    tags_dir = commondir / "refs" / "tags"
-    tags_dir.mkdir(parents=True)
-    (tags_dir / "v0.1.2026.7.11").write_text("sha\n", encoding="utf-8")
-
-    assert _read_latest_release_tag(commondir) == "v0.1.2026.7.11"
-
-
-def test_latest_release_tag_sorts_numerically_not_lexicographically(tmp_path: Path) -> None:
-    """``v0.1.YYYY.M.D`` uses non-padded month/day, so a lexicographic sort
-    would pick ``v0.1.2026.9.30`` over the later ``v0.1.2026.10.1`` (because
-    ``'9' > '1'`` as ASCII). Regression guard: numeric tuple sort."""
-    tags_dir = tmp_path / "refs" / "tags"
-    tags_dir.mkdir(parents=True)
-    for name in ("v0.1.2026.9.30", "v0.1.2026.10.1", "v0.1.2026.7.11"):
-        (tags_dir / name).write_text("sha\n", encoding="utf-8")
-    assert _read_latest_release_tag(tmp_path) == "v0.1.2026.10.1"
-
-
-def test_python_tool_reports_version_via_injected_runtime_inputs() -> None:
-    result = execute_python_code.run(
-        code="print(inputs['opensre_runtime']['opensre_version'])",
-    )
-    assert result["success"] is True
-    assert get_opensre_version() in result["stdout"]
-    assert RUNTIME_INPUTS_KEY in result["inputs"]
-
-
-def test_python_tool_reports_current_time_via_injected_runtime_inputs() -> None:
-    """Sandbox path should surface a fresh ``now_iso`` (not a bootstrap
-    snapshot) so scripts asking for the current time never see a stale value."""
-    result = execute_python_code.run(
-        code="print(inputs['opensre_runtime']['now_iso'])",
-    )
-    assert result["success"] is True
-    stdout = result["stdout"].strip()
-    assert stdout, "now_iso should be non-empty"
-    assert "T" in stdout, f"expected ISO 8601 datetime, got {stdout!r}"
-
-
-def test_python_tool_reports_process_and_python_facts_via_injected_runtime_inputs() -> None:
-    """The no-subprocess replacement path: a script asking for python version, PID,
-    parent PID, uptime, kubeconfig, or the installed tools list should read
-    them from ``inputs['opensre_runtime']`` — no ``subprocess`` needed."""
-    result = execute_python_code.run(
-        code=(
-            "import json\n"
-            "runtime = inputs['opensre_runtime']\n"
-            "print(json.dumps({\n"
-            "    'py': runtime['python_version'],\n"
-            "    'pid': runtime['pid'],\n"
-            "    'ppid': runtime['ppid'],\n"
-            "    'uptime': runtime['uptime_seconds'],\n"
-            "    'kubeconfig': runtime['kubeconfig'],\n"
-            "    'tools': sorted(k for k, v in runtime['tools'].items() if v),\n"
-            "}))\n"
-        ),
-    )
-    assert result["success"] is True, result
-    import json as _json
-
-    payload = _json.loads(result["stdout"].strip())
-    assert payload["pid"] == os.getpid()
-    assert payload["py"].count(".") == 2
-    assert isinstance(payload["uptime"], (int, float))
-    assert payload["uptime"] >= 0.0
-
-
-def test_python_tool_filesystem_introspection_without_subprocess() -> None:
-    """Sandbox filesystem introspection: scratchpad listing via pathlib, hostname and
-    disk/memory from injected facts — all inside the sandbox, no subprocess."""
-    result = execute_python_code.run(
-        code=(
-            "import json\n"
-            "from pathlib import Path\n"
-            "runtime = inputs['opensre_runtime']\n"
-            "scratch = Path(runtime['scratchpad_dir'])\n"
-            "entries = sorted(p.name for p in scratch.iterdir())[:3]\n"
-            "print(json.dumps({\n"
-            "    'hostname': runtime['hostname'],\n"
-            "    'scratchpad': str(scratch),\n"
-            "    'listable': isinstance(entries, list),\n"
-            "    'disk_used': runtime.get('disk_used_percent'),\n"
-            "    'memory_used': runtime.get('memory_used_percent'),\n"
-            "}))\n"
-        ),
-    )
-    assert result["success"] is True, result
-    import json as _json
-
-    payload = _json.loads(result["stdout"].strip())
-    assert payload["hostname"]
-    assert payload["listable"] is True
-    assert isinstance(payload["disk_used"], (int, float))
-    assert isinstance(payload["memory_used"], (int, float))
-
-
-def test_python_tool_reports_version_via_importlib_metadata() -> None:
-    result = execute_python_code.run(
-        code=("import importlib.metadata as m\nprint(m.version('opensre'))\n"),
-    )
-    assert result["success"] is True
-    assert get_opensre_version() in result["stdout"]
-
-
-def test_python_tool_still_blocks_subprocess_version_check() -> None:
-    result = execute_python_code.run(
-        code="import subprocess; subprocess.run(['opensre', '--version'])",
-    )
-    assert result["success"] is False
-    assert "PermissionError" in result["stderr"] or "PermissionError" in result["stdout"]
