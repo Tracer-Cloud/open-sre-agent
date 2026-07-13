@@ -29,9 +29,7 @@ _SKILLS_DIRNAME = "skills"
 _PACKAGE_SKILL_FILENAME = "SKILL.md"
 _REPORT_TEMPLATE_SUFFIX = "_report.md"
 _REPO_SKILLS_PREFIX = "core/agent_harness/prompts/skills"
-_REPORT_TEMPLATE_HEADER = (
-    "REPORT TEMPLATE from `{repo_path}` (fill exactly; keep all headings):"
-)
+_REPORT_TEMPLATE_HEADER = "REPORT TEMPLATE from `{repo_path}` (fill exactly; keep all headings):"
 
 
 def skills_dir() -> Path:

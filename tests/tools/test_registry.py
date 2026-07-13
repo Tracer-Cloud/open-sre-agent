@@ -360,6 +360,7 @@ def test_architecture_audit_skill_guidance_does_not_attach_to_unrelated_tools() 
     assert "Propose, do not execute" not in tool_def.skill_guidance
     assert tool_def.skill_guidance == "" or "architecture-audit" not in tool_def.skill_guidance
 
+
 def test_python_execution_skill_guidance_does_not_attach_to_unrelated_tools() -> None:
     tools_by_name = {tool_def.name: tool_def for tool_def in registry_module.get_registered_tools()}
 

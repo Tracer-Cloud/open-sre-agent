@@ -195,10 +195,7 @@ def test_skills_loader_bundles_architecture_audit_skill() -> None:
     assert "SHIM pass" in block
     assert "You write each bash" in block
     assert "about 15" in block
-    assert (
-        "Budget: clone + ≤3 agent-scan shell_run + 4 heuristic shell passes + cleanup"
-        in block
-    )
+    assert "Budget: clone + ≤3 agent-scan shell_run + 4 heuristic shell passes + cleanup" in block
     assert "~/.opensre/{session_id}/{repo_name}-architecture-audit-{uuid}.md" in block
     assert "AGENTS-style docs" in block
     assert "AGENT SCAN" in block
@@ -206,14 +203,13 @@ def test_skills_loader_bundles_architecture_audit_skill() -> None:
     assert "CONTEXT.md" in block
     assert "max 3 shell_run" in block
     assert "BEFORE any" in block or "before heuristics" in block
-    assert "Decide what \"large\" means" in block
+    assert 'Decide what "large" means' in block
     assert "do NOT limit to Python" in block
     assert "do NOT skip non-Python" in block
     assert ".java" in block and ".rs" in block
     assert "find_architecture_violations" not in block
     report_path = (
-        "core/agent_harness/prompts/skills/architecture_audit/"
-        "architecture_audit_report.md"
+        "core/agent_harness/prompts/skills/architecture_audit/architecture_audit_report.md"
     )
     assert f"REPORT TEMPLATE from `{report_path}`" in block
     assert "### Repository summary" in block

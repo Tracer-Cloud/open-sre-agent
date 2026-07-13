@@ -68,6 +68,7 @@ def _escape_markdown_dunder_filenames(text: str) -> str:
     """Neutralize ``__name__.py`` so Markdown does not parse it as strong emphasis."""
     return _DUNDER_FILENAME_RE.sub(r"\_\_\1\_\_", text)
 
+
 STREAM_LABEL_ASSISTANT = "assistant"
 STREAM_LABEL_ANSWER = "answer"
 
@@ -111,9 +112,7 @@ def stream_to_console(
             with console.use_theme(ui_theme.MARKDOWN_THEME):
                 console.print(
                     Markdown(
-                        _escape_markdown_dunder_filenames(
-                            normalize_three_tier_spacing(text)
-                        ),
+                        _escape_markdown_dunder_filenames(normalize_three_tier_spacing(text)),
                         code_theme=_MARKDOWN_CODE_THEME,
                     )
                 )
