@@ -63,6 +63,26 @@ def test_extract_params_maps_fields() -> None:
     assert params["gitlab_token"] == "glpat-test"
 
 
+def test_extract_params_maps_local_store_credentials() -> None:
+    rt = _registered_tool()
+    sources = mock_agent_state(
+        {
+            "gitlab": {
+                "connection_verified": True,
+                "project_id": "42",
+                "file_path": "runbooks.md",
+                "base_url": "https://gitlab.example.com/api/v4",
+                "auth_token": "glpat-store",
+            }
+        }
+    )
+    params = rt.extract_params(sources)
+    assert params["project_id"] == "42"
+    assert params["file_path"] == "runbooks.md"
+    assert params["gitlab_url"] == "https://gitlab.example.com/api/v4"
+    assert params["gitlab_token"] == "glpat-store"
+
+
 def test_extract_params_defaults_ref_to_main() -> None:
     rt = _registered_tool()
     sources = mock_agent_state(

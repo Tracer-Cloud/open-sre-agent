@@ -19,8 +19,8 @@ def _clean_optional(value: str | None) -> str:
 
 def _gl_creds(gl: dict) -> dict:
     return {
-        "gitlab_url": gl.get("gitlab_url"),
-        "gitlab_token": gl.get("gitlab_token"),
+        "gitlab_url": gl.get("gitlab_url") or gl.get("base_url"),
+        "gitlab_token": gl.get("gitlab_token") or gl.get("auth_token"),
     }
 
 

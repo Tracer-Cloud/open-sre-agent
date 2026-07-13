@@ -131,6 +131,8 @@ class Session:
     integrations change."""
     github_repo_scope: tuple[str, str] | None = None
     """Sticky owner/repo inferred from chat, env, or git remote for GitHub tools."""
+    gitlab_repo_scope: tuple[str, str, str] | None = None
+    """Sticky project/ref/file inferred from chat, env, or git remote for GitLab tools."""
     _integration_warm_lock: threading.Lock = field(
         default_factory=threading.Lock,
         repr=False,
@@ -630,6 +632,7 @@ class Session:
             self._integration_warm_task = None
             self.resolved_integrations_cache = None
             self.github_repo_scope = None
+            self.gitlab_repo_scope = None
         if pending is not None and not pending.done():
             pending.cancel()
         self.hydrate_configured_integrations()
@@ -666,6 +669,7 @@ class Session:
             self._integration_warm_task = None
             self.resolved_integrations_cache = None
             self.github_repo_scope = None
+            self.gitlab_repo_scope = None
         if pending is not None and not pending.done():
             pending.cancel()
         self.available_capabilities.clear()

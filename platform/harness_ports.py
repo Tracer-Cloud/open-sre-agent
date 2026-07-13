@@ -1,4 +1,4 @@
-"""Agent-harness ports — integrations, tools, and GitHub scope without tier violations.
+"""Agent-harness ports — integrations, tools, and repository scope without tier violations.
 
 Adapters register at startup via
 :func:`surfaces.interactive_shell.ui.output.boundary.install_harness_ports`.
@@ -417,6 +417,75 @@ def set_github_repo_scope_adapters(
 
 
 # ---------------------------------------------------------------------------
+# GitLab repo scope
+# ---------------------------------------------------------------------------
+
+GitlabRepoScope = tuple[str, str, str]
+InferGitlabRepoScopeFn = Callable[
+    [
+        str,
+        Sequence[tuple[str, str]] | None,
+        Mapping[str, str] | None,
+        str | Path | None,
+        GitlabRepoScope | None,
+    ],
+    GitlabRepoScope | None,
+]
+ApplyGitlabRepoScopeFn = Callable[[dict[str, Any], str, str, str], dict[str, Any]]
+
+
+def _default_infer_gitlab_scope(
+    message: str,
+    conversation_messages: Sequence[tuple[str, str]] | None,
+    env: Mapping[str, str] | None,
+    cwd: str | Path | None,
+    cached: GitlabRepoScope | None,
+) -> GitlabRepoScope | None:
+    _ = (message, conversation_messages, env, cwd, cached)
+    return None
+
+
+def _default_apply_gitlab_scope(
+    resolved: dict[str, Any], project_id: str, ref_name: str, file_path: str
+) -> dict[str, Any]:
+    _ = (project_id, ref_name, file_path)
+    return dict(resolved)
+
+
+_infer_gitlab_repo_scope: InferGitlabRepoScopeFn = _default_infer_gitlab_scope
+_apply_gitlab_repo_scope: ApplyGitlabRepoScopeFn = _default_apply_gitlab_scope
+
+
+def infer_gitlab_repo_scope(
+    *,
+    message: str,
+    conversation_messages: Sequence[tuple[str, str]] | None = None,
+    env: Mapping[str, str] | None = None,
+    cwd: str | Path | None = None,
+    cached: GitlabRepoScope | None = None,
+) -> GitlabRepoScope | None:
+    return _infer_gitlab_repo_scope(message, conversation_messages, env, cwd, cached)
+
+
+def apply_gitlab_repo_scope(
+    resolved: dict[str, Any], project_id: str, ref_name: str, file_path: str
+) -> dict[str, Any]:
+    return _apply_gitlab_repo_scope(resolved, project_id, ref_name, file_path)
+
+
+def set_gitlab_repo_scope_adapters(
+    *,
+    infer_scope: InferGitlabRepoScopeFn | None = None,
+    apply_scope: ApplyGitlabRepoScopeFn | None = None,
+) -> None:
+    global _infer_gitlab_repo_scope, _apply_gitlab_repo_scope
+    if infer_scope is not None:
+        _infer_gitlab_repo_scope = infer_scope
+    if apply_scope is not None:
+        _apply_gitlab_repo_scope = apply_scope
+
+
+# ---------------------------------------------------------------------------
 # Test reset
 # ---------------------------------------------------------------------------
 
@@ -441,4 +510,8 @@ def reset_harness_ports() -> None:
     set_github_repo_scope_adapters(
         infer_scope=_default_infer_github_scope,
         apply_scope=_default_apply_github_scope,
+    )
+    set_gitlab_repo_scope_adapters(
+        infer_scope=_default_infer_gitlab_scope,
+        apply_scope=_default_apply_gitlab_scope,
     )
