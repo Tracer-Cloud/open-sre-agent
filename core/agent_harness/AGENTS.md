@@ -22,25 +22,54 @@ interactive terminal and be invoked headlessly via
 
 ## Layout
 
-Public surface: `ports.py` (the Protocol seams — output, confirmation, session
-store, tool provider, prompt-context provider, telemetry, error reporter,
-evidence gatherer), `agent_builder.py` (`AgentConfig` + `build_agent`, the
-single instantiation site for `core.agent.Agent` across all surfaces). Turn
-drivers live under `turns/`:
+Top level holds the package's public surface: `__init__.py` (curated
+re-exports), `ports.py`, `agent_builder.py`, plus small shared helpers
+(`error_reporting.py`, `llm_resolution.py`). Everything else lives in a
+responsibility-scoped subpackage.
 
-- `orchestrator.py` — `run_turn`: the three-path routing (summarize-observation
-  / handled / gather+answer). Resolves integrations **once** at the top of the
-  turn onto the frozen `turn_snapshot`; downstream code reads
-  `turn_snapshot.resolved_integrations` rather than re-resolving. Do NOT
-  reintroduce per-component integration resolution.
-- `action_driver.py`, `evidence_driver.py` — the action and evidence-gather
-  turn drivers, each building an `AgentConfig` via a `_build_*_agent` factory.
-- `headless_dispatch.py` — `HeadlessAgent` for API/test/gateway turns. `tools`
-  is required; pass `NullToolProvider()` explicitly for a text-only turn.
-
-Everything else (`tools/`, `accounting/`, `prompts/`, `grounding/`, `session/`,
-`error_reporting.py`, `llm_resolution.py`) is a responsibility-scoped
-subpackage or helper — read the directory for details.
+- `ports.py` — Protocols the engine talks to (output, confirmation, session
+  store, tool provider, prompt-context provider, telemetry, error reporter,
+  evidence gatherer). Kept top-level as the central seam imported everywhere.
+- `agent_builder.py` — `AgentConfig` dataclass + `build_agent(config)`. The
+  single instantiation site for `core.agent.Agent` across all surfaces
+  (action, evidence, gateway). See "Agent construction pattern" below.
+- `turns/` — the turn drivers that orchestrate `core.agent.Agent`:
+  - `orchestrator.py` — `run_turn`: the three-path routing
+    (summarize-observation / handled / gather+answer). Resolves integrations
+    **once** at the top of the turn onto the frozen `turn_snapshot`, so
+    `turn_snapshot.resolved_integrations` is the single source of truth for
+    what the turn knows. Downstream components (e.g.
+    `action_driver._resolved_integrations_for_turn`) read it from there rather
+    than re-resolving. Do NOT reintroduce per-component integration resolution.
+  - `action_driver.py` — `run_action_agent_turn`: one action tool-calling turn
+    over the ports, via a `_build_action_agent` factory that returns an
+    `ActionTurnPlan`.
+  - `evidence_driver.py` — bounded evidence-gather loop, via a
+    `_build_evidence_agent` factory that returns an `AgentConfig` handed to
+    `build_agent`.
+  - `headless_dispatch.py` — headless programmatic entry point
+    (`HeadlessAgent`, constructed with the ports then `.dispatch(message)` per
+    turn) plus in-memory port adapters for API/test runs. `tools` is required
+    — surfaces that want a text-only turn pass `NullToolProvider()` explicitly.
+  - `default_reasoning_client.py` — production
+    `ReasoningClientProvider` default (lazy `LLMRole.REASONING` client).
+  - `turn_snapshot.py`, `turn_results.py` — neutral, surface-agnostic turn
+    data shapes (immutable snapshot + facts-only result models).
+- `tools/` — action-tool wiring over the canonical registry (`action_tools.py`,
+  `tool_context.py`, `tool_provider.py` for `ports.ToolProvider`).
+- `accounting/` — session-scoped token accounting, LLM run metadata, and
+  `ports.TurnAccounting` / `ports.RunRecordFactory` defaults.
+- `prompts/` — action-agent and conversational-assistant prompt builders (pure
+  string assembly; grounding text is supplied via `PromptContextProvider`).
+  `prompt_context.py` implements the default `PromptContextProvider`;
+  `conversation_memory.py` (recent-conversation rendering shared by prompts)
+  lives here too.
+- `grounding/` — reusable grounding cache and rendering contracts; surfaces
+  inject surface-owned command registries instead of being imported here.
+- `session/` — reusable agent session state (`SessionCore`), JSONL storage,
+  prompt history, task registry, session-scoped background records,
+  integration resolution (`session.integration_resolution`), and
+  `SessionManager` (the lifecycle owner — see "Session lifecycle" below).
 
 ## Session lifecycle (owned by SessionManager)
 
@@ -109,15 +138,36 @@ it does not re-implement it. Do not fork the loop here.
 
 ## core/agent package (Agent is a facade, not the algorithm owner)
 
-`core/agent/` is one file per responsibility (see
-[docs/NAMING.md](../../docs/NAMING.md)). `Agent` (in `agent.py`) is a thin
-facade: `__init__` stores construction-time config and `run()` resolves
-per-run context and hands it to `core.agent.react_loop.run_react_loop`, which
-owns the actual think → call-tools → observe algorithm. `mixins.py` provides
-`EventEmitterMixin` / `ToolFilterMixin` / `SteeringMixin`; `provider_hooks.py`
-provides `ProviderHookDelegate`, a fail-open wrapper around
-`core.provider.ProviderHooks` — a raised hook exception is logged and
-swallowed, never breaks the loop.
+`core/agent/` is a package with one file per responsibility (see
+[docs/NAMING.md](../../docs/NAMING.md) for the naming convention). `Agent`
+(in `agent.py`) is a thin facade: `__init__` stores construction-time config
+and `run()` resolves per-run context (from `runtime_request=` or
+`initial_messages=`) and hands it to `core.agent.react_loop.run_react_loop`,
+which owns the actual think → call-tools → observe algorithm.
+
+- `core/agent/mixins.py` — `EventEmitterMixin` (event dispatch),
+  `ToolFilterMixin` (tool-narrowing hook), `SteeringMixin` (`steer`/`follow_up`
+  to nudge a run in progress). `Agent` composes all three;
+  `ConnectedInvestigationAgent` composes the first two instead of subclassing
+  `Agent` (see "Investigation agent" above).
+- `core/agent/provider_hooks.py` — `ProviderHookDelegate`, a fail-open wrapper
+  around `core.provider.ProviderHooks` applied around each LLM call. A raised
+  hook exception is logged and swallowed; it never breaks the loop.
+- `core/agent/loop_host.py` — `LoopHost`, the `Protocol` `run_react_loop` calls
+  back into. `Agent` implements it via the mixins plus its own
+  `_transform_messages` / `_convert_to_llm` / `_before_request` /
+  `_after_response` forwarders. The concrete `ProviderHookDelegate` type is an
+  `Agent` implementation detail, not part of the host contract, so any host can
+  wire those four provider hooks however it likes.
+- `core/agent/run_io.py` — `AgentRunInput` (resolved per-run inputs) and
+  `AgentRunResult` (the loop's outcome). `core.agent` re-exports `AgentRunResult`
+  for the `from core.agent import AgentRunResult` path.
+- `core/agent/react_loop.py` — `ReactLoop` (the loop as a method-object, phases
+  `_think` / `_handle_conclusion` / `_observe`) and `run_react_loop` (its thin
+  functional entry).
+- `core/agent/agent.py` — the `Agent` facade: `__init__` (holds config), `run()`
+  (builds the per-run `AgentRunInput` via `_build_run_input` and hands it to
+  `run_react_loop`), and the `_should_accept_conclusion` override hook.
 
 Do not reintroduce hook-method overrides on `Agent` itself (e.g. a subclass
 overriding a private `_before_provider_request`-style method) — customize via
