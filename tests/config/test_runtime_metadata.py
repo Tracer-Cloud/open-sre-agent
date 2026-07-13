@@ -2,18 +2,22 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
+from config import runtime_metadata as runtime_metadata_module
 from config.runtime_metadata import (
     RUNTIME_INPUTS_KEY,
     _GitLayout,
+    _local_tz_name,
     _read_git_head_sha,
     _read_latest_release_tag,
     _resolve_gitdir,
     build_runtime_metadata,
+    capture_runtime_facts,
     merge_runtime_into_inputs,
 )
 from config.version import get_opensre_version
@@ -36,6 +40,115 @@ def test_build_runtime_metadata_uses_importlib_version(monkeypatch: pytest.Monke
     # opensre_build is populated in git checkouts (dev), empty in installed wheels.
     # Just assert the key exists and is a string — the value varies by env.
     assert isinstance(meta["opensre_build"], str)
+    # tz_name is OS-dependent but always present.
+    assert isinstance(meta["tz_name"], str) and meta["tz_name"]
+
+
+def test_build_runtime_metadata_populates_process_and_python_facts() -> None:
+    """Session-init facts asked in #3950: python version, PID, PPID, tools
+    manifest, kubeconfig — all pure-Python, none via subprocess."""
+    import sys as _sys
+
+    meta = build_runtime_metadata()
+    assert meta["python_version"] == (
+        f"{_sys.version_info.major}.{_sys.version_info.minor}.{_sys.version_info.micro}"
+    )
+    assert meta["pid"] == os.getpid()
+    assert meta["ppid"] == os.getppid()
+    assert isinstance(meta["tools"], dict)
+    # Python itself must be on PATH (we're running under it right now).
+    assert meta["tools"]["python"] or meta["tools"]["python3"], meta["tools"]
+    assert isinstance(meta["kubeconfig"], str)
+
+
+def test_build_runtime_metadata_reflects_kubeconfig_env(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """``KUBECONFIG`` env var wins over the default under ``~/.kube/config``."""
+    override = tmp_path / "mycluster.yaml"
+    override.write_text("apiVersion: v1\n", encoding="utf-8")
+    monkeypatch.setenv("KUBECONFIG", str(override))
+    assert build_runtime_metadata()["kubeconfig"] == str(override)
+
+
+def test_build_runtime_metadata_kubeconfig_takes_first_of_colon_separated(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """``KUBECONFIG`` may hold multiple paths joined by ``os.pathsep``; the
+    first is the merged base and is what we report."""
+    first = tmp_path / "a.yaml"
+    second = tmp_path / "b.yaml"
+    first.write_text("", encoding="utf-8")
+    second.write_text("", encoding="utf-8")
+    monkeypatch.setenv("KUBECONFIG", f"{first}{os.pathsep}{second}")
+    assert build_runtime_metadata()["kubeconfig"] == str(first)
+
+
+def test_build_runtime_metadata_does_not_include_live_now_iso() -> None:
+    """``now_iso`` must NOT live on the session-cached metadata: caching it at
+    bootstrap would make the LLM report a stale clock every turn."""
+    meta = build_runtime_metadata()
+    assert "now_iso" not in meta
+
+
+def test_capture_runtime_facts_adds_fresh_now_iso() -> None:
+    meta = build_runtime_metadata()
+    facts = capture_runtime_facts(metadata=meta)
+    assert facts["opensre_version"] == meta["opensre_version"]
+    assert facts["tz_name"] == meta["tz_name"]
+    assert facts["now_iso"], "now_iso should always be populated"
+    # ISO 8601 with offset (e.g. 2026-07-11T14:30:12+02:00 or ...Z-form).
+    assert "T" in facts["now_iso"]
+
+
+def test_local_tz_name_reads_iana_from_localtime_symlink(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The IANA name (``Europe/Berlin``) is much clearer to the LLM than the
+    OS short code (``CEST``/``BST``), which is ambiguous across regions.
+    Reading ``/etc/localtime``'s symlink target is the standard way to get it."""
+    zonefile = tmp_path / "usr" / "share" / "zoneinfo" / "Europe" / "Berlin"
+    zonefile.parent.mkdir(parents=True)
+    zonefile.write_bytes(b"")
+    fake_link = tmp_path / "localtime"
+    os.symlink(zonefile, fake_link)
+    monkeypatch.setattr(runtime_metadata_module, "_LOCALTIME_LINK", fake_link)
+    assert _local_tz_name() == "Europe/Berlin"
+
+
+def test_capture_runtime_facts_populates_uptime_seconds() -> None:
+    """Uptime is a live fact — it must be present on the captured facts, not
+    on the session-cached metadata (which would freeze it at bootstrap)."""
+    meta = build_runtime_metadata()
+    assert "uptime_seconds" not in meta
+    facts = capture_runtime_facts(metadata=meta)
+    assert isinstance(facts["uptime_seconds"], float)
+    assert facts["uptime_seconds"] >= 0.0
+
+
+def test_capture_runtime_facts_uptime_grows_over_time() -> None:
+    """Uptime is monotonic — a later capture must be >= an earlier one, and
+    grow by roughly the elapsed sleep. Regression guard against accidentally
+    caching a snapshot in metadata."""
+    import time as _t
+
+    first = capture_runtime_facts()["uptime_seconds"]
+    _t.sleep(0.05)
+    second = capture_runtime_facts()["uptime_seconds"]
+    assert second > first
+    assert second - first >= 0.04
+
+
+def test_capture_runtime_facts_refreshes_now_between_calls() -> None:
+    """Live time slot must actually be live — two calls one second apart
+    should differ. Regression guard against accidentally caching now_iso on
+    the session metadata."""
+    import time as _t
+
+    first = capture_runtime_facts()["now_iso"]
+    _t.sleep(1.05)
+    second = capture_runtime_facts()["now_iso"]
+    assert first != second
 
 
 def test_build_runtime_metadata_populates_build_marker_in_git_checkout() -> None:
@@ -87,6 +200,76 @@ def test_environment_block_includes_version_without_subprocess_hint() -> None:
     assert "runtime environment is development" in block
     assert "opensre --version" in block
     assert "subprocess" in block.lower()
+
+
+def test_environment_block_renders_current_time_and_timezone() -> None:
+    """Time slot must land in the prompt as a quotable string with an anti-
+    guessing instruction — the same shape that stopped the version being
+    hallucinated from training data."""
+    block = build_environment_block(
+        integrations=(),
+        known=False,
+        opensre_version="0.1",
+        now_iso="2026-07-11T14:30:12+02:00",
+        tz_name="Europe/Berlin",
+    )
+    assert "current time is 2026-07-11T14:30:12+02:00" in block
+    assert "local timezone is Europe/Berlin" in block
+    assert "do NOT guess a date/time" in block.replace("Do NOT", "do NOT")
+
+
+def test_environment_block_renders_python_process_and_tools_facts() -> None:
+    """All the #3950 facts must land in the block as verbatim-quotable strings,
+    each with a corresponding "do not shell out" instruction that names the
+    reflex command the LLM would otherwise reach for."""
+    block = build_environment_block(
+        integrations=(),
+        known=False,
+        opensre_version="0.1",
+        python_version="3.12.4",
+        pid=12345,
+        ppid=6789,
+        uptime_seconds=42.5,
+        installed_tools={"kubectl": "/usr/local/bin/kubectl", "helm": "", "git": "/usr/bin/git"},
+        kubeconfig="/home/me/.kube/config",
+    )
+    assert "Python interpreter version is 3.12.4" in block
+    assert "process id is 12345, parent 6789" in block
+    assert "process uptime is 42.5 seconds" in block
+    assert "installed tools on PATH are git, kubectl" in block, block
+    assert "helm" not in block  # not-present tools are filtered
+    assert "kubeconfig path is /home/me/.kube/config" in block
+    # Anti-guess instruction names the actual shell commands the LLM would reach for.
+    assert "python --version" in block
+    assert "kubectl version" in block
+    assert "which" in block
+    assert "ps" in block
+
+
+def test_environment_block_omits_installed_tools_line_when_none_present() -> None:
+    """When every probed tool is absent, the block must not render an
+    empty ``installed tools on PATH are `` line."""
+    block = build_environment_block(
+        integrations=(),
+        known=False,
+        opensre_version="0.1",
+        installed_tools={"kubectl": "", "helm": "", "git": ""},
+    )
+    assert "installed tools on PATH" not in block
+
+
+def test_environment_block_omits_time_when_slot_empty() -> None:
+    """Released wheels or pathological callers may pass no time; the block
+    must not render an empty ``current time is`` line in that case."""
+    block = build_environment_block(
+        integrations=(),
+        known=False,
+        opensre_version="0.1",
+        now_iso="",
+        tz_name="",
+    )
+    assert "current time is" not in block
+    assert "local timezone is" not in block
 
 
 def test_environment_block_renders_build_marker_when_provided() -> None:
@@ -225,6 +408,46 @@ def test_python_tool_reports_version_via_injected_runtime_inputs() -> None:
     assert result["success"] is True
     assert get_opensre_version() in result["stdout"]
     assert RUNTIME_INPUTS_KEY in result["inputs"]
+
+
+def test_python_tool_reports_current_time_via_injected_runtime_inputs() -> None:
+    """Sandbox path should surface a fresh ``now_iso`` (not a bootstrap
+    snapshot) so scripts asking for the current time never see a stale value."""
+    result = execute_python_code.run(
+        code="print(inputs['opensre_runtime']['now_iso'])",
+    )
+    assert result["success"] is True
+    stdout = result["stdout"].strip()
+    assert stdout, "now_iso should be non-empty"
+    assert "T" in stdout, f"expected ISO 8601 datetime, got {stdout!r}"
+
+
+def test_python_tool_reports_process_and_python_facts_via_injected_runtime_inputs() -> None:
+    """The #3950 replacement path: a script asking for python version, PID,
+    parent PID, uptime, kubeconfig, or the installed tools list should read
+    them from ``inputs['opensre_runtime']`` — no ``subprocess`` needed."""
+    result = execute_python_code.run(
+        code=(
+            "import json\n"
+            "runtime = inputs['opensre_runtime']\n"
+            "print(json.dumps({\n"
+            "    'py': runtime['python_version'],\n"
+            "    'pid': runtime['pid'],\n"
+            "    'ppid': runtime['ppid'],\n"
+            "    'uptime': runtime['uptime_seconds'],\n"
+            "    'kubeconfig': runtime['kubeconfig'],\n"
+            "    'tools': sorted(k for k, v in runtime['tools'].items() if v),\n"
+            "}))\n"
+        ),
+    )
+    assert result["success"] is True, result
+    import json as _json
+
+    payload = _json.loads(result["stdout"].strip())
+    assert payload["pid"] == os.getpid()
+    assert payload["py"].count(".") == 2
+    assert isinstance(payload["uptime"], (int, float))
+    assert payload["uptime"] >= 0.0
 
 
 def test_python_tool_reports_version_via_importlib_metadata() -> None:

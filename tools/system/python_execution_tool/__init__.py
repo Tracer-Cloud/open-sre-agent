@@ -23,21 +23,23 @@ class PythonExecutionTool(BaseTool):
         "Execute generated Python code in a restricted subprocess, capture stdout, stderr, "
         "exceptions, and timeout state, and return the result to the agent. Network access is "
         "blocked by default; opt in only for approved API-backed analysis. Subprocess spawning "
-        "is always blocked — for OpenSRE version/runtime facts use "
-        "`inputs['opensre_runtime']` (injected automatically) or "
-        "`importlib.metadata.version('opensre')`, never `opensre --version` or "
-        "`subprocess`. When workflow guidance lists skills, read each skill description and "
-        "follow the one that matches the user's request."
+        "is always blocked — for runtime facts (OpenSRE version, current time, uptime, PID, "
+        "Python interpreter version, kubeconfig path, installed tools like kubectl/helm/docker/git) "
+        "read `inputs['opensre_runtime']` (injected automatically). Never run "
+        "`opensre --version`, `python --version`, `kubectl version`, `which`, `ps`, `date`, "
+        "`uptime`, or any other `subprocess` call. When workflow guidance lists skills, read "
+        "each skill description and follow the one that matches the user's request."
     )
     use_cases = [
         "Compute metrics or summaries from structured evidence already in context",
         "Run a small API-backed calculation with approved credentials",
         "Parse logs or JSON payloads when a direct tool result needs post-processing",
-        "Read OpenSRE version via inputs['opensre_runtime'] or importlib.metadata",
+        "Read runtime facts (version, time, uptime, PID, kubeconfig, tools) via inputs['opensre_runtime']",
     ]
     anti_examples = [
         "Changing local files or shelling out to other processes",
-        "Calling opensre --version / subprocess / os.system (blocked by sandbox)",
+        "Calling opensre --version, python --version, kubectl version, which, ps, date, uptime "
+        "(all blocked by the sandbox)",
         "Long-running jobs, crawlers, or broad external scans",
         "Accessing credentials not explicitly provided by configured integrations or env vars",
     ]
@@ -52,8 +54,11 @@ class PythonExecutionTool(BaseTool):
                 "type": "object",
                 "description": (
                     "Optional JSON-serializable values injected into the script as the "
-                    "`inputs` global. OpenSRE always merges `opensre_runtime` "
-                    "(version, runtime_env, feature_flags) unless you already set that key."
+                    "`inputs` global. OpenSRE always merges `opensre_runtime` under this "
+                    "key with: opensre_version, opensre_build, runtime_env, tz_name, "
+                    "now_iso, uptime_seconds, python_version, pid, ppid, tools "
+                    "(dict of tool name → PATH), and kubeconfig. Skipped if you already "
+                    "set the `opensre_runtime` key yourself."
                 ),
                 "nullable": True,
             },

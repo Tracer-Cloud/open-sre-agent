@@ -65,11 +65,16 @@ class DefaultPromptContextProvider:
                     )
                 except Exception:
                     llm_settings_available = False
-            runtime = getattr(self._session, "runtime_metadata", None)
-            if not isinstance(runtime, dict) or not runtime:
-                from config.runtime_metadata import build_runtime_metadata
+            from config.runtime_metadata import capture_runtime_facts
 
-                runtime = build_runtime_metadata()
+            cached = getattr(self._session, "runtime_metadata", None)
+            runtime = capture_runtime_facts(
+                metadata=cached if isinstance(cached, dict) and cached else None
+            )
+            tools = runtime.get("tools")
+            pid = runtime.get("pid")
+            ppid = runtime.get("ppid")
+            uptime = runtime.get("uptime_seconds")
             return build_environment_block(
                 integrations=tuple(self._session.configured_integrations),
                 known=self._session.configured_integrations_known,
@@ -80,6 +85,14 @@ class DefaultPromptContextProvider:
                 opensre_version=str(runtime.get("opensre_version") or ""),
                 opensre_build=str(runtime.get("opensre_build") or ""),
                 runtime_env=str(runtime.get("runtime_env") or ""),
+                now_iso=str(runtime.get("now_iso") or ""),
+                tz_name=str(runtime.get("tz_name") or ""),
+                python_version=str(runtime.get("python_version") or ""),
+                pid=pid if isinstance(pid, int) else None,
+                ppid=ppid if isinstance(ppid, int) else None,
+                uptime_seconds=float(uptime) if isinstance(uptime, (int, float)) else None,
+                installed_tools=tools if isinstance(tools, dict) else None,
+                kubeconfig=str(runtime.get("kubeconfig") or ""),
             )
 
     def suggested_synthetic_prompt(self) -> str:

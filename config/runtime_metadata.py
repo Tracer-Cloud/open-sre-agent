@@ -7,8 +7,12 @@ the Python execution sandbox; this is the preferred alternative.
 
 from __future__ import annotations
 
+import datetime as _dt
 import os
 import re
+import shutil
+import sys
+import time as _time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -201,22 +205,115 @@ def _detect_build_info() -> str:
     return "dev"
 
 
-def build_runtime_metadata() -> dict[str, Any]:
-    """JSON-serializable read-only runtime facts for the current process.
+# Monotonic snapshot at import — anchor for uptime deltas that resist wall-clock skew.
+_PROCESS_START_MONOTONIC = _time.monotonic()
 
-    Keys are stable for prompts and sandbox ``inputs``:
+# Tools the LLM commonly reflex-shells for. Presence-only surfaces so the agent
+# can answer without invoking ``--version``, which the sandbox blocks.
+_TOOLS_TO_PROBE = ("kubectl", "helm", "docker", "git", "python", "python3")
+
+
+_LOCALTIME_LINK = Path("/etc/localtime")
+
+
+def _local_tz_name() -> str:
+    """Best-effort local timezone name — IANA (``Europe/Berlin``) when possible.
+
+    Reads the ``/etc/localtime`` symlink target on macOS/Linux — the standard
+    way the OS advertises which zone it's set to. Falls back to
+    ``time.tzname`` short codes (``CET``, ``BST``) if the symlink can't be
+    resolved (Windows, unusual OS config), and finally to ``UTC``.
+    """
+    try:
+        if _LOCALTIME_LINK.is_symlink():
+            target = os.readlink(_LOCALTIME_LINK)
+            marker = "zoneinfo/"
+            idx = target.rfind(marker)
+            if idx >= 0:
+                iana = target[idx + len(marker) :]
+                if iana:
+                    return iana
+    except OSError:
+        pass
+    return _time.tzname[0] if _time.tzname else "UTC"
+
+
+def _python_version_string() -> str:
+    """Interpreter version as ``major.minor.patch`` from :mod:`sys` (no subprocess)."""
+    info = sys.version_info
+    return f"{info.major}.{info.minor}.{info.micro}"
+
+
+def _installed_tools() -> dict[str, str]:
+    """Map each probed tool name to its ``PATH`` location (empty if absent).
+
+    :func:`shutil.which` walks ``PATH`` in pure Python — no subprocess. Version
+    strings would require invoking the binary and are intentionally omitted;
+    presence is what the agent needs to stop reflex-shelling for ``--version``.
+    """
+    return {tool: shutil.which(tool) or "" for tool in _TOOLS_TO_PROBE}
+
+
+def _kubeconfig_path() -> str:
+    """Effective ``kubeconfig`` path from env, or the default under ``~/.kube``.
+
+    Kept as a session-static fact so the agent can answer "which cluster
+    config is loaded" without shelling to ``kubectl config view``.
+    """
+    override = (os.environ.get("KUBECONFIG") or "").strip()
+    if override:
+        # ``KUBECONFIG`` may be a ``:``-separated list; the first entry wins.
+        first = override.split(os.pathsep, 1)[0]
+        if first:
+            return first
+    default = Path.home() / ".kube" / "config"
+    return str(default) if default.is_file() else ""
+
+
+def build_runtime_metadata() -> dict[str, Any]:
+    """Session-lifetime read-only runtime facts.
+
+    Keys are stable for prompts and sandbox ``inputs`` and safe to cache at
+    session bootstrap (nothing here changes turn to turn):
 
     - ``opensre_version`` — package version via ``importlib.metadata``.
     - ``opensre_build`` — ``""`` in released wheels; ``dev, v0.1.YYYY.M.D @ SHA``
       in a git checkout so the LLM can quote the exact build in local dev.
     - ``runtime_env`` — ``OPENSRE_ENV`` env var, else the app environment name.
+    - ``tz_name`` — local timezone name (rarely changes mid-session).
+    - ``python_version`` — interpreter version from :data:`sys.version_info`.
+    - ``pid`` / ``ppid`` — this process and its parent from :mod:`os`.
+    - ``tools`` — probed tool paths (``kubectl``, ``helm``, ``docker``, ``git``, …).
+    - ``kubeconfig`` — effective kubeconfig path (``KUBECONFIG`` or ``~/.kube/config``).
+
+    Live values that must NOT be cached (current time, uptime) come from
+    :func:`capture_runtime_facts` at each render/sandbox call.
     """
     env_override = (os.environ.get("OPENSRE_ENV") or "").strip()
     return {
         "opensre_version": get_opensre_version(),
         "opensre_build": _detect_build_info(),
         "runtime_env": env_override or get_environment().value,
+        "tz_name": _local_tz_name(),
+        "python_version": _python_version_string(),
+        "pid": os.getpid(),
+        "ppid": os.getppid(),
+        "tools": _installed_tools(),
+        "kubeconfig": _kubeconfig_path(),
     }
+
+
+def capture_runtime_facts(*, metadata: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Session metadata plus fresh live facts (current time, uptime).
+
+    Read once per prompt render or sandbox invocation so time doesn't lie. Pass
+    ``metadata`` (typically ``session.runtime_metadata``) to avoid re-running
+    the git+importlib probe every call.
+    """
+    facts = dict(metadata or build_runtime_metadata())
+    facts["now_iso"] = _dt.datetime.now().astimezone().isoformat(timespec="seconds")
+    facts["uptime_seconds"] = round(_time.monotonic() - _PROCESS_START_MONOTONIC, 3)
+    return facts
 
 
 def merge_runtime_into_inputs(
@@ -224,18 +321,21 @@ def merge_runtime_into_inputs(
     *,
     metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Copy ``inputs`` and inject runtime metadata under :data:`RUNTIME_INPUTS_KEY`.
+    """Copy ``inputs`` and inject runtime facts under :data:`RUNTIME_INPUTS_KEY`.
 
     Never overwrites an existing ``opensre_runtime`` key supplied by the caller.
+    Facts are captured live via :func:`capture_runtime_facts` so ``now_iso`` is
+    fresh for each sandbox invocation.
     """
     merged: dict[str, Any] = dict(inputs or {})
     if RUNTIME_INPUTS_KEY not in merged:
-        merged[RUNTIME_INPUTS_KEY] = dict(metadata or build_runtime_metadata())
+        merged[RUNTIME_INPUTS_KEY] = capture_runtime_facts(metadata=metadata)
     return merged
 
 
 __all__ = [
     "RUNTIME_INPUTS_KEY",
     "build_runtime_metadata",
+    "capture_runtime_facts",
     "merge_runtime_into_inputs",
 ]
