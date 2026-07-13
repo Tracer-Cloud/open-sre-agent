@@ -234,6 +234,7 @@ def _local_tz_name() -> str:
                 if iana:
                     return iana
     except OSError:
+        # Unreadable /etc/localtime: fall back to time.tzname/UTC below.
         pass
     return _time.tzname[0] if _time.tzname else "UTC"
 

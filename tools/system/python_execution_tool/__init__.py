@@ -38,8 +38,10 @@ class PythonExecutionTool(BaseTool):
     ]
     anti_examples = [
         "Changing local files or shelling out to other processes",
-        "Calling opensre --version, python --version, kubectl version, which, ps, date, uptime "
-        "(all blocked by the sandbox)",
+        (
+            "Calling opensre --version, python --version, kubectl version, which, ps, "
+            "date, uptime (all blocked by the sandbox)"
+        ),
         "Long-running jobs, crawlers, or broad external scans",
         "Accessing credentials not explicitly provided by configured integrations or env vars",
     ]

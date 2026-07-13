@@ -239,11 +239,12 @@ def test_environment_block_renders_python_process_and_tools_facts() -> None:
     assert "installed tools on PATH are git, kubectl" in block, block
     assert "helm" not in block  # not-present tools are filtered
     assert "kubeconfig path is /home/me/.kube/config" in block
-    # Anti-guess instruction names the actual shell commands the LLM would reach for.
-    assert "python --version" in block
-    assert "kubectl version" in block
-    assert "which" in block
-    assert "ps" in block
+    # Anti-guess instruction names the actual shell commands the LLM would reach
+    # for, in backticked form so a stray substring can't satisfy the check.
+    assert "`python --version`" in block
+    assert "`kubectl version`" in block
+    assert "`which`" in block
+    assert "`ps`" in block
 
 
 def test_environment_block_omits_installed_tools_line_when_none_present() -> None:
