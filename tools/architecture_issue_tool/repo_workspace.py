@@ -64,11 +64,6 @@ def architecture_workspace_dir() -> Path:
     return _ARCHITECTURE_WORKSPACE_DIR
 
 
-def architecture_sandbox_dir() -> Path:
-    """Alias retained for callers; prefer :func:`architecture_workspace_dir`."""
-    return architecture_workspace_dir()
-
-
 def prepare_architecture_workspace() -> Path:
     """Reset and return the architecture audit clone directory."""
     workspace = architecture_workspace_dir()

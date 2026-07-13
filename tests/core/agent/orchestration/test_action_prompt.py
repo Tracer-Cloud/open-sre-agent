@@ -15,8 +15,10 @@ from core.agent_harness.prompts.conversation_memory import NO_HISTORY_PLACEHOLDE
 from core.agent_harness.prompts.skills_loader import (
     SKILLS_HEADER,
     load_skills_block,
-    load_skills_block as cached_load_skills_block,
     skills_dir,
+)
+from core.agent_harness.prompts.skills_loader import (
+    load_skills_block as cached_load_skills_block,
 )
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 
@@ -179,16 +181,24 @@ def test_skills_loader_bundles_architecture_audit_skill() -> None:
     assert "WHEN TO USE" in block
     assert "summarize this repo's architecture" in block
     assert "architecture_clone_repo" in block
-    assert "scan_architecture_imports" in block
-    assert "scan_module_placement" in block
+    assert "scan_architecture_imports" not in block
+    assert "scan_module_placement" not in block
     assert "architecture_cleanup_repo" in block
     assert "shell_run" in block
     assert "Never end the turn with shell_run" in block
-    assert "You write the bash" in block
-    assert "decide what \"large\" means" in block
-    assert "do NOT limit" in block
-    assert "do NOT skip non-Python sources" in block
-    assert "Scan source files of ANY" in block
+    assert "four separate shell_run" in block or "Four separate" in block or "IMPORT pass" in block
+    assert "IMPORT pass" in block
+    assert "PLACEMENT pass" in block
+    assert "SIZE pass" in block
+    assert "SHIM pass" in block
+    assert "You write each bash" in block
+    assert "about 15" in block
+    assert "Budget: clone + 4 shell passes + cleanup" in block
+    assert "AGENTS-style docs" in block
+    assert "Decide what \"large\" means" in block
+    assert "do NOT limit to Python" in block
+    assert "do NOT skip non-Python" in block
+    assert ".java" in block and ".rs" in block
     assert "find_architecture_violations" not in block
     report_path = (
         "core/agent_harness/prompts/skills/architecture_audit/"
@@ -196,11 +206,14 @@ def test_skills_loader_bundles_architecture_audit_skill() -> None:
     )
     assert f"REPORT TEMPLATE from `{report_path}`" in block
     assert "### Repository summary" in block
+    assert "### Coverage and limitations" in block
     assert "### Findings by severity" in block
     assert "| Severity | Path | Finding |" in block
     assert "### Recommended sequencing" in block
     assert "Fill this template VERBATIM" in block
     assert "Do NOT wrap filled values in backticks" in block
+    assert "contract source" in block
+    assert "calibrate to the repo" in block
     assert report_path in block
 
     prompt = build_action_system_prompt(_ctx(messages=[("user", "audit architecture")]))

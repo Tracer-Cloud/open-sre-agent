@@ -50,9 +50,7 @@ log = logging.getLogger(__name__)
 # sequentially: each step waits for the previous tool's result before the next
 # call can be emitted (e.g. "look up the weather and then send it to Slack" =
 # shell_run -> observe temperature -> slack_send_message -> final no-tool reply).
-# Independent compound turns still fit in a single response; this ceiling exists
-# for the producer -> consumer chains plus a couple of intermediate steps.
-_MAX_TOOL_CALLING_ITERATIONS = 6
+_MAX_TOOL_CALLING_ITERATIONS = 10
 _EXECUTED_HISTORY_TYPES = {
     "slash",
     "shell",

@@ -3,7 +3,8 @@ Fill this template VERBATIM as the final no-tool reply.
 Rules:
 - Keep every heading exactly as written (including ### / ####).
 - Do not add, rename, reorder, or omit sections.
-- Replace every {placeholder} with concrete content from tool JSON + bash.
+- Replace every {placeholder} with concrete content from the four shell
+  passes (import, placement, size, shim).
 - Do NOT wrap filled values in backticks — plain text only (backticks render
   as light-blue inline code in the interactive shell).
 - Escape underscores in file paths so Markdown does not restyle them:
@@ -18,16 +19,16 @@ Rules:
 ### Repository summary
 - **Owner/repo/ref:** {owner}/{repo}
 - **What it does:** {1–3 sentence summary of the repository}
-- **Import findings:** {N}
-- **Placement findings:** {N}
+- **Import findings:** {N} (contract source: {docs / build files you used})
+- **Placement findings:** {N} (contract source: {build files / AGENTS-style docs you used})
 - **Oversized files:** {N} (size definition: {threshold or rule you chose})
 - **Shim candidates:** {N}
 
 ### Coverage and limitations
-- {warnings, categories_skipped, or "none"}
+- {scan gaps, heuristic limits, or "none"}
 
 ### Hotspots and statistics
-- {render scan_summary.hotspots / top edges / counts from import+placement JSON; or "- none"}
+- {top edges / areas / size outliers / shim themes from the four passes; or "- none"}
 
 ### Findings by severity
 | Severity | Path | Finding |

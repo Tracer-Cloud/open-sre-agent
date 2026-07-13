@@ -15,12 +15,13 @@ WHEN TO USE (call this skill when the user ask matches any of these):
 Do NOT use this skill for: live incident RCA, metric/log queries, deploying,
 or ordinary chat that only needs a short verbal overview with no scan.
 
-Use shell_run for size + shim heuristics.
+Use four separate shell_run calls — one per pass. Do not combine passes.
 
 HARD RULES (violating any = failed turn):
 - Never end the turn with shell_run as the last tool. Shell stdout is raw
   evidence only — it is NOT the user-facing answer.
-- After clone + scans + bash, the NEXT tool MUST be architecture_cleanup_repo.
+- After the SHIM shell_run, the NEXT tool MUST be architecture_cleanup_repo.
+  Do not run more shell_run after shim.
 - Only AFTER cleanup succeeds, emit a final message with NO tools that IS the
   filled REPORT TEMPLATE from
   `core/agent_harness/prompts/skills/architecture_audit/architecture_audit_report.md`.
@@ -29,33 +30,55 @@ HARD RULES (violating any = failed turn):
 - Fill that REPORT TEMPLATE exactly: keep every heading, order, and subsection;
   do not invent alternate report layouts. Use `- none` for empty lists.
 - Leaving .temp/opensre/architecture_workspace on disk is a failure.
+- You write each bash command — do not copy a canned script.
+- Cap each shell_run stdout hard: prefer `head` / ranked top-N (about 15–25
+  lines). Huge dumps burn the turn budget and prevent the report from showing.
+- Budget: clone + 4 shell passes + cleanup + final report. Do not add extra
+  tool calls.
 
-Compact sequence (prefer parallel tools where independent):
+Compact sequence:
 1) architecture_clone_repo(owner, repo, ref?)
    → workspace_root = .temp/opensre/architecture_workspace
    (If already in the target checkout and no owner/repo named, skip clone and
    use cwd as workspace_root; then skip cleanup.)
-2) In one step if possible, call BOTH:
-   - scan_architecture_imports(workspace_root=..., owner=..., repo=...)
-   - scan_module_placement(workspace_root=..., owner=..., repo=...)
-3) Invent and run ONE shell_run that covers size + shim heuristics under the
-   workspace (or cwd). You write the bash — do not copy a canned command.
-   Goals for that command:
-   - Size pass: decide what "large" means for this repo/request. Prefer a
-     threshold the user named; otherwise choose a sensible bar from context
-     (e.g. top outliers, percentile, or a line-count cutoff you justify).
-     State the chosen definition in the report. Scan source files of ANY
-     language (e.g. .py, .go, .ts, .tsx, .js, .jsx, .java, .rs, .rb, .php,
-     .cs, .kt, .swift, .c, .cc, .cpp, .h, .hpp, .scala, .sh) — do NOT limit
-     to Python and do NOT skip non-Python sources. Prefer the repo's primary
-     source roots; skip only noise dirs: tests, docs, examples, caches,
-     .venv, node_modules, dist, build, vendor lock dirs, and binary/media
-     assets (images, fonts, lockfiles, generated minified bundles).
-   - Shim pass: lightweight heuristic for compatibility / re-export shims
-     across languages (keywords and/or thin re-export / facade modules).
-     Keep output short (cap rows).
-4) architecture_cleanup_repo()  ← required next tool after step 3
-5) Final NO-TOOL reply: fill
+
+2) shell_run — IMPORT pass
+   Discover the repo's stated layer/module import contract from layout + docs
+   (AGENTS.md, ARCHITECTURE.md, CONTRIBUTING.md, build files, package maps),
+   then gather evidence of cross-boundary imports that contradict that
+   contract. Prefer the target repo's own rules. Treat composition roots / intentional wiring as allowed when
+   the docs imply it; do not invent a stricter graph. Cap rows.
+
+3) shell_run — PLACEMENT pass
+   Discover the repo's package/module placement contract from top-level layout,
+   build/module definition files (settings.gradle, go.mod, Cargo.toml,
+   pyproject.toml, package.json workspaces, Bazel/Pants/Nx, etc.), and
+   AGENTS-style docs. Report only placements that contradict those contracts,
+   with paths + the rule they break. Cap rows.
+
+4) shell_run — SIZE pass 
+   Decide what "large" means for this repo/request. Prefer a threshold the
+   user named; otherwise choose a sensible bar from context (top outliers,
+   percentile, or a justified line-count cutoff). State the chosen definition
+   in the report. Scan source files of ANY language (e.g. .py, .go, .ts,
+   .tsx, .js, .jsx, .java, .rs, .rb, .php, .cs, .kt, .swift, .c, .cc, .cpp,
+   .h, .hpp, .scala, .sh) — do NOT limit to Python and do NOT skip non-Python
+   sources. Prefer primary source roots; skip only noise dirs: tests, docs,
+   examples, caches, .venv, node_modules, dist, build, vendor lock dirs, and
+   binary/media assets (images, fonts, lockfiles, generated minified bundles).
+   Cap rows.
+
+5) shell_run — SHIM pass
+   Lightweight heuristic for compatibility / re-export / facade modules across
+   languages. Distinguish deliberate public API entrypoints (keep as evidence,
+   do not treat as debt by default) from thin leftover forwarding modules.
+   Keep output short (cap rows).
+
+6) architecture_cleanup_repo()  ← required next tool after step 5
+
+7) Final NO-TOOL reply: fill
    `core/agent_harness/prompts/skills/architecture_audit/architecture_audit_report.md`
-   from the output of steps 2 and 3. Summarize; never paste huge raw dumps.
-   Propose tasks; never auto-apply fixes. File GitHub issues only after approval.
+   from the four shell passes. Summarize; never paste huge raw dumps.
+   Invent Recommended sequencing yourself — calibrate to the repo's stated
+   contract, not a generic "delete every cross-module edge" story. Propose
+   tasks; never auto-apply fixes. File GitHub issues only after approval.

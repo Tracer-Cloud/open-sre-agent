@@ -333,12 +333,12 @@ def test_architecture_audit_action_tools_are_registered() -> None:
     }
     for name in (
         "architecture_clone_repo",
-        "scan_architecture_imports",
-        "scan_module_placement",
         "architecture_cleanup_repo",
     ):
         assert name in tools_by_name
         assert tools_by_name[name].skill_guidance == ""
+    assert "scan_architecture_imports" not in tools_by_name
+    assert "scan_module_placement" not in tools_by_name
     assert "find_architecture_violations" not in tools_by_name
 
 

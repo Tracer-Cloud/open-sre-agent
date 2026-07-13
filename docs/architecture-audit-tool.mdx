@@ -1,6 +1,6 @@
 ---
 title: "Architecture audit"
-description: "Interactive-shell architecture audit: clone, deterministic import/placement scans, bash size/shim heuristics, then cleanup"
+description: "Interactive-shell architecture audit: clone, four agent shell passes (import/placement/size/shim), then cleanup"
 ---
 
 Architecture audit runs in the **interactive shell** via an action-agent skill.
@@ -10,25 +10,25 @@ It is not a chat/investigation tool.
 
 1. `architecture_clone_repo` shallow-clones `owner`/`repo` into
    `.temp/opensre/architecture_workspace`.
-2. `scan_architecture_imports` runs polyglot layer/direct import checks
-   (contracts inferred from the target repo layout).
-3. `scan_module_placement` runs placement heuristics that apply when matching
-   patterns exist (e.g. `tools/`, `integrations/`, banned legacy imports);
-   other layouts simply yield zero findings with complete coverage.
-4. `shell_run` bash heuristics find oversized source files (`wc -l` / similar)
-   and likely compatibility shims across languages — not Python-only.
-5. `architecture_cleanup_repo` deletes `.temp/opensre/architecture_workspace`.
-6. The assistant renders a Markdown audit report from tool JSON + bash output.
+2. Four separate `shell_run` passes (do not combine):
+   - **Import** — discover the repo's layer/import contract from docs and
+     layout, then gather contradicting cross-boundary import evidence.
+   - **Placement** — discover package/module placement rules, then report
+     misplacements that contradict them.
+   - **Size** — oversized source files across languages.
+   - **Shims** — compatibility / re-export / facade candidates (distinguish
+     deliberate public API entrypoints from leftover forwarding modules).
+3. `architecture_cleanup_repo` deletes `.temp/opensre/architecture_workspace`.
+4. The assistant renders a Markdown audit report from the four shell outputs
+   and invents recommended sequencing calibrated to the target repo's contract.
 
 ## Tools
 
 | Tool | Role |
 | --- | --- |
 | `architecture_clone_repo` | Clone into `.temp/opensre/architecture_workspace` |
-| `scan_architecture_imports` | Layer/direct import violations |
-| `scan_module_placement` | Misplaced-module findings |
 | `architecture_cleanup_repo` | Delete the architecture workspace only |
-| `shell_run` | Oversized + shim heuristics |
+| `shell_run` | Import, placement, size, and shim passes (one command each) |
 
 ## Example
 
@@ -36,8 +36,8 @@ It is not a chat/investigation tool.
 Audit Tracer-Cloud/opensre for architecture violations, including oversized files.
 ```
 
-The action agent clones, scans, runs the bash passes, cleans up, and returns a
+The action agent clones, runs the four shell passes, cleans up, and returns a
 Markdown report shaped by
 `core/agent_harness/prompts/skills/architecture_audit/architecture_audit_report.md`.
-Size and shim findings are heuristic — treat them as leads, not AST-proof
-violations.
+All four passes are heuristic — treat findings as leads grounded in the target
+repo's docs and layout, not AST-proof violations.
