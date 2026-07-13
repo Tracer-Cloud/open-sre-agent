@@ -21,22 +21,17 @@ Sentry here, then suggest a multi-source investigation.
 - Map user words (`last night` → `24h`, `this week` → `7d`)
 
 Up to 100 issues. Empty → widen to `7d` before reporting none. Results
-include `digest` (clusters, top_issues, priority) — present that directly.
+include `digest` with `structural_clusters` and `top_issues`.
 
 ## 2. Classify
 
-Cluster via `title`, `culprit`, `metadata`. **Default buckets** (OpenSRE
-baseline; override when user supplies their own):
+`digest.structural_clusters` are code-path groups (culprit / project). Map them
+to business themes in the answer (e.g. `integrations.datadog` → integration
+API auth failures; `integrations.cloudtrail` → AWS credential gaps). Use
+example themes when helpful: auth/API key, Windows install, backend timeouts,
+frontend/UI, CI/pipeline — or infer better names from titles and culprits.
 
-- Auth / API key errors
-- Windows / OS install failures
-- Backend timeouts or connection errors
-- Frontend / UI crashes
-- CI / pipeline failures
-- Other / uncategorised
-
-Label top issues: regression, auth (token/scope), or new failure (first in
-window).
+Label top issues: regression, new failure, or ongoing.
 
 ## 3. Rank
 
@@ -52,9 +47,9 @@ are needed.
 
 ## 5. Summarise
 
-Slack-ready digest: total + window, cluster %, top 3–5 (title, cluster,
-classification, events, users, seen range), priority call + why, next actions
-(fix / monitor / investigation handoff with issue `id`).
+Slack-ready digest: total + window, structural cluster % with business theme
+names, top 3–5 issues, priority call + why, next actions (fix / monitor /
+investigation handoff with issue `id`).
 
 ## Traps
 

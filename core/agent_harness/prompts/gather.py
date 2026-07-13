@@ -39,8 +39,8 @@ def build_gather_system_prompt(session: SessionStore) -> str:
         "For Sentry overview, reliability summary, cluster, or morning-digest "
         "questions, call search_sentry_issues exactly once with query "
         '"is:unresolved" and stats_period "7d" for week/overview prompts or '
-        '"24h" for today/overnight. Use the digest field in the result; do not '
-        "repeat the same search.\n"
+        '"24h" for today/overnight. Use digest.structural_clusters and '
+        "digest.top_issues; do not repeat the same search.\n"
         "Do NOT write the final user-facing answer here — a later step composes "
         "that from the tool results you collect. Stop calling tools as soon as "
         "you have enough data.\n"

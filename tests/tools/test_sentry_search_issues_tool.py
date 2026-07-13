@@ -100,6 +100,7 @@ def test_run_happy_path() -> None:
     assert result["query"] == "TypeError"
     assert result["issues_total"] == 1
     assert result["digest"]["issue_count"] == 1
+    assert result["digest"]["structural_clusters"]
     assert result["digest"]["top_issues"][0]["title"] == "TypeError"
 
 
