@@ -135,9 +135,9 @@ class GatewayManager:
 
     def _start_scheduler(self, _logger: logging.Logger) -> None:
         """Run cron-scheduled tasks inside the daemon (no separate process needed)."""
+        from integrations.sentry.scheduler_bootstrap import install as install_sentry_runner
         from platform.scheduler.runner import start_background_scheduler
         from tools.investigation.scheduler_bootstrap import install as install_scheduler_runner
-        from tools.sentry.scheduler_bootstrap import install as install_sentry_runner
 
         install_scheduler_runner()
         install_sentry_runner()

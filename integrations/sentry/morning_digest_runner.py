@@ -37,14 +37,6 @@ def build_morning_digest_prompt(payload: AgentPayload) -> str:
     return prompt
 
 
-def _ensure_harness_wired() -> None:
-    from integrations.harness_adapters import register_harness_adapters as register_integrations
-    from tools.harness_adapters import register_harness_adapters as register_tools
-
-    register_integrations()
-    register_tools()
-
-
 def _require_sentry_configured() -> None:
     if "sentry" not in configured_integration_services():
         raise RuntimeError(
@@ -54,7 +46,6 @@ def _require_sentry_configured() -> None:
 
 
 def _dispatch_headless_turn(message: str) -> ShellTurnResult:
-    _ensure_harness_wired()
     _require_sentry_configured()
 
     harness = AgentHarness(

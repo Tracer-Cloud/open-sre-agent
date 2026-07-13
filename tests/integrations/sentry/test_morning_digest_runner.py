@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import pytest
 
 from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
-from tools.sentry.morning_digest_runner import (
+from integrations.sentry.morning_digest_runner import (
     build_morning_digest_prompt,
     run_sentry_morning_digest,
 )
@@ -32,7 +32,7 @@ class TestBuildMorningDigestPrompt:
 class TestRunSentryMorningDigest:
     def test_raises_when_sentry_not_configured(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
-            "tools.sentry.morning_digest_runner.configured_integration_services",
+            "integrations.sentry.morning_digest_runner.configured_integration_services",
             lambda: ("datadog",),
         )
 
@@ -41,11 +41,11 @@ class TestRunSentryMorningDigest:
 
     def test_raises_when_llm_does_not_answer(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
-            "tools.sentry.morning_digest_runner.configured_integration_services",
+            "integrations.sentry.morning_digest_runner.configured_integration_services",
             lambda: ("sentry",),
         )
         monkeypatch.setattr(
-            "tools.sentry.morning_digest_runner._dispatch_headless_turn",
+            "integrations.sentry.morning_digest_runner._dispatch_headless_turn",
             lambda _message: ShellTurnResult(
                 final_intent="chat",
                 action_result=ToolCallingTurnResult(
@@ -65,11 +65,11 @@ class TestRunSentryMorningDigest:
 
     def test_returns_assistant_text(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
-            "tools.sentry.morning_digest_runner.configured_integration_services",
+            "integrations.sentry.morning_digest_runner.configured_integration_services",
             lambda: ("sentry",),
         )
         monkeypatch.setattr(
-            "tools.sentry.morning_digest_runner._dispatch_headless_turn",
+            "integrations.sentry.morning_digest_runner._dispatch_headless_turn",
             lambda _message: ShellTurnResult(
                 final_intent="chat",
                 action_result=ToolCallingTurnResult(

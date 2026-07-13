@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from integrations.sentry.morning_digest_runner import run_sentry_morning_digest
 from platform.scheduler.agent_runner import register_agent_runner
-from tools.sentry.morning_digest_runner import run_sentry_morning_digest
 
 
 def install() -> None:
