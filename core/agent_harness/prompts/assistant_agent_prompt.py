@@ -43,14 +43,13 @@ _SETUP_GUIDANCE_RULE = (
 )
 
 _SENTRY_SUMMARY_RULE = (
-    "Sentry summary: when tool_results include search_sentry_issues.digest, use "
-    "digest.structural_clusters for stable counts/percents, then translate each "
-    "structural group into a business theme (auth failures, AWS credential gaps, "
-    "LLM quota, investigation pipeline, client SDK, etc.) using titles and "
-    "culprits. Present issue_count + stats_period, themed cluster breakdown, "
-    "digest.top_issues, and a priority call on digest.priority_short_id with "
-    "business-impact reasoning — not just highest event count. Do not ask to "
-    "narrow or repeat the search when digest is already present."
+    "Sentry summary: use digest.structural_clusters for counts/percents and their "
+    "label + sample_titles when naming buckets — never show a bare project slug "
+    "without explaining what the samples represent. Rank priority from "
+    "digest.priority_candidates and business_impact_score / impact_reasons, not "
+    "raw event count alone; penalize high-count zero-user retry noise. Present "
+    "issue_count + stats_period, themed cluster breakdown, top issues, and a "
+    "priority call citing impact_reasons. Do not ask to narrow or repeat search."
 )
 
 _HANDOFF_GUIDANCE: dict[str, str] = {

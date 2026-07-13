@@ -20,39 +20,34 @@ Sentry here, then suggest a multi-source investigation.
 - **7d** — "this week", general overview
 - Map user words (`last night` → `24h`, `this week` → `7d`)
 
-Up to 100 issues. Empty → widen to `7d` before reporting none. Results
-include `digest` with `structural_clusters` and `top_issues`.
+Up to 100 issue groups (not events). Empty → widen to `7d`. Results include
+`digest` with `structural_clusters`, `priority_candidates`, `top_issues`.
 
 ## 2. Classify
 
-`digest.structural_clusters` are code-path groups (culprit / project). Map them
-to business themes in the answer (e.g. `integrations.datadog` → integration
-API auth failures; `integrations.cloudtrail` → AWS credential gaps). Use
-example themes when helpful: auth/API key, Windows install, backend timeouts,
-frontend/UI, CI/pipeline — or infer better names from titles and culprits.
-
-Label top issues: regression, new failure, or ongoing.
+Use `digest.structural_clusters` (`key`, `label`, `sample_titles`). Map each
+to a business theme in the answer. Never present bare project slugs without
+explaining samples (e.g. CloudTrail creds, LLM quota, pipeline failures).
 
 ## 3. Rank
 
-**Business impact** over raw counts. Weigh `userCount`, `count`, regression
-flags, product context (onboarding drop-off > retry noise). Top 3–5 + one #1
-priority.
+Use `digest.priority_candidates` and `business_impact_score` — not raw
+`count` alone. Prefer userCount, operational blockers (credentials, quota,
+pipeline stop), regressions. Penalize high events + zero users (retry noise).
+State impact_reasons in the priority call.
 
 ## 4. Enrich (selective)
 
-Never fetch all issues. Only top 3–5 and #1 priority: `get_sentry_issue_details`
-+ `list_sentry_issue_events` (limit 10) when stack traces or regression proof
-are needed.
+Only top 3–5 and #1 priority: `get_sentry_issue_details` +
+`list_sentry_issue_events` (limit 10) when traces/regression proof needed.
 
 ## 5. Summarise
 
-Slack-ready digest: total + window, structural cluster % with business theme
-names, top 3–5 issues, priority call + why, next actions (fix / monitor /
-investigation handoff with issue `id`).
+Slack-ready digest: total + window, themed cluster %, top 3–5, priority call
+with impact_reasons, next actions (fix / monitor / investigation handoff).
 
 ## Traps
 
-- `count` ≠ users — check `userCount`
+- `count` = events in the issue group; `issue_count` = issue groups returned
 - `stats_period` is relative — no absolute timestamps
 - Detail APIs are expensive — enrich selectively

@@ -19,6 +19,7 @@ from integrations.sentry import (
 )
 from integrations.sentry.issue_digest import (
     build_sentry_issue_digest,
+    business_impact_score,
     classify_issue,
     slim_issue,
     structural_cluster_key_for_issue,
@@ -187,11 +188,14 @@ def _search_result_payload(
     sample = []
     for issue in issues[:sample_limit]:
         structural_cluster = structural_cluster_key_for_issue(issue)
+        impact_score, impact_reasons = business_impact_score(issue)
         sample.append(
             slim_issue(
                 issue,
                 structural_cluster=structural_cluster,
                 classification=classify_issue(issue),
+                impact_score=impact_score,
+                impact_reasons=impact_reasons,
             )
         )
     return {

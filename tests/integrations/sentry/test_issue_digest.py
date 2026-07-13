@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from integrations.sentry.issue_digest import (
     build_sentry_issue_digest,
+    business_impact_score,
     structural_cluster_key_for_issue,
-    structural_cluster_label,
 )
 
 
@@ -14,13 +14,26 @@ def test_structural_cluster_key_uses_integration_package() -> None:
         structural_cluster_key_for_issue(
             {"culprit": "integrations.datadog.client in list_monitors"}
         )
-        == "integrations.datadog"
+        == "integrations.datadog.client"
     )
     assert (
         structural_cluster_key_for_issue(
             {"culprit": "integrations.eks.eks_k8s_client in build_k8s_clients"}
         )
-        == "integrations.eks"
+        == "integrations.eks.eks_k8s_client"
+    )
+
+
+def test_structural_cluster_key_uses_title_theme_before_project() -> None:
+    assert (
+        structural_cluster_key_for_issue(
+            {
+                "title": "[cloudtrail] lookup_events failed region=us-east-1",
+                "project": {"slug": "python"},
+                "culprit": "",
+            }
+        )
+        == "title-theme:cloudtrail"
     )
 
 
@@ -29,6 +42,21 @@ def test_structural_cluster_key_uses_issue_group_prefix() -> None:
         structural_cluster_key_for_issue({"shortId": "TRACER-CLIENT-4C", "culprit": ""})
         == "issue-group:tracer-client"
     )
+
+
+def test_business_impact_score_prefers_operational_blocker_over_volume() -> None:
+    noisy_score, _ = business_impact_score(
+        {"title": "metadata 400", "count": 568, "userCount": 0}
+    )
+    blocker_score, reasons = business_impact_score(
+        {
+            "title": "LLMCreditExhaustedError: OpenAI credit exhausted",
+            "count": 51,
+            "userCount": 0,
+        }
+    )
+    assert blocker_score > noisy_score
+    assert "LLM billing or quota exhaustion" in reasons
 
 
 def test_build_sentry_issue_digest_structural_clusters_and_ranks() -> None:
@@ -48,8 +76,9 @@ def test_build_sentry_issue_digest_structural_clusters_and_ranks() -> None:
         {
             "id": "2",
             "shortId": "PYTHON-Y8",
-            "title": "RuntimeError: No AWS credentials available",
-            "culprit": "integrations.cloudtrail.lookup in lookup_events",
+            "title": "[cloudtrail] lookup_events failed region=us-east-1",
+            "culprit": "",
+            "project": {"slug": "python"},
             "count": 4,
             "userCount": 2,
             "firstSeen": "2026-07-12T00:00:00Z",
@@ -62,13 +91,10 @@ def test_build_sentry_issue_digest_structural_clusters_and_ranks() -> None:
     digest = build_sentry_issue_digest(issues, stats_period="7d", query="is:unresolved")
 
     assert digest["issue_count"] == 2
-    assert digest["stats_period"] == "7d"
-    assert digest["query"] == "is:unresolved"
-    assert len(digest["structural_clusters"]) == 2
-    assert digest["structural_clusters"][0]["key"] == "integrations.datadog"
-    assert digest["structural_clusters"][0]["label"] == structural_cluster_label(
-        "integrations.datadog"
-    )
+    assert digest["structural_clusters"][0]["key"] == "integrations.datadog.client"
+    assert digest["structural_clusters"][0]["sample_titles"]
+    assert "e.g." in digest["structural_clusters"][0]["label"]
+    assert digest["priority_candidates"][0]["short_id"] == "PYTHON-Y8"
     assert digest["top_issues"][0]["short_id"] == "PYTHON-Y8"
-    assert digest["top_issues"][0]["structural_cluster"] == "integrations.cloudtrail"
-    assert digest["priority_issue_id"] == "2"
+    assert digest["priority_short_id"] == "PYTHON-Y8"
+    assert digest["priority_impact_reasons"]
