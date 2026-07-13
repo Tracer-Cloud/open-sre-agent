@@ -40,13 +40,14 @@ class InvestigationStore(Protocol):
         clerk_org_id: str,
         trigger: dict[str, Any],
         workspace_id: str | None = None,
-    ) -> InvestigationRecord: ...
+    ) -> InvestigationRecord:
+        """Persist a new queued investigation and return it."""
 
-    def get(self, investigation_id: str) -> InvestigationRecord | None: ...
+    def get(self, investigation_id: str) -> InvestigationRecord | None:
+        """Return the record for ``investigation_id``, or None when unknown."""
 
     def claim_next_queued(self) -> InvestigationRecord | None:
         """Atomically move the oldest queued record to running and return it."""
-        ...
 
     def finish(
         self,
@@ -56,7 +57,8 @@ class InvestigationStore(Protocol):
         report_local_path: str | None = None,
         report_s3_key: str | None = None,
         error: str | None = None,
-    ) -> None: ...
+    ) -> None:
+        """Record the terminal status and artifact locations for a run."""
 
 
 @dataclass
