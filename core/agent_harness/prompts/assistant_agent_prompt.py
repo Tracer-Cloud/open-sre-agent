@@ -1,5 +1,8 @@
 """System prompt building for the terminal assistant."""
 
+from collections.abc import Mapping
+from typing import Any
+
 from core.agent_harness.prompts.rules import (
     AGENT_RESPONSE_THREE_TIER_RULE,
     CLI_ASSISTANT_MARKDOWN_RULE,
@@ -62,34 +65,50 @@ def build_handoff_guidance_block(handoff_contents: tuple[str, ...]) -> str:
     return "".join(blocks)
 
 
-def _render_runtime_facts(
-    opensre_version: str | None,
-    opensre_build: str | None,
-    runtime_env: str | None,
-    now_iso: str | None,
-    tz_name: str | None,
-    python_version: str | None,
-    pid: int | None,
-    ppid: int | None,
-    uptime_seconds: float | None,
-    installed_tools: dict[str, str] | None,
-    kubeconfig: str | None,
-) -> str:
+def _clean_str(runtime: Mapping[str, Any], key: str) -> str:
+    return str(runtime.get(key) or "").strip()
+
+
+def _clean_int(runtime: Mapping[str, Any], key: str) -> int | None:
+    value = runtime.get(key)
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def _clean_number(runtime: Mapping[str, Any], key: str) -> float | None:
+    value = runtime.get(key)
+    return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+
+
+def _render_runtime_facts(runtime: Mapping[str, Any]) -> str:
     """Runtime section of the environment block, or ``""`` when nothing to say.
 
-    Phrased for quote-verbatim recall: earlier prompt wording ("including the
-    build marker if present") caused the LLM to treat "build marker" as a slot
-    name and hallucinate a value like ``0`` when the marker was empty.
+    ``runtime`` is the dict from ``capture_runtime_facts()`` (session metadata
+    plus live slots). Phrased for quote-verbatim recall: earlier prompt wording
+    ("including the build marker if present") caused the LLM to treat "build
+    marker" as a slot name and hallucinate a value like ``0`` when the marker
+    was empty.
     """
-    version = (opensre_version or "").strip()
-    build_marker = (opensre_build or "").strip()
-    env_name = (runtime_env or "").strip()
-    now = (now_iso or "").strip()
-    tz = (tz_name or "").strip()
-    py = (python_version or "").strip()
-    kubecfg = (kubeconfig or "").strip()
-    present_tools = sorted(name for name, path in (installed_tools or {}).items() if path)
-    if not (version or env_name or now or py or pid or present_tools):
+    version = _clean_str(runtime, "opensre_version")
+    build_marker = _clean_str(runtime, "opensre_build")
+    env_name = _clean_str(runtime, "runtime_env")
+    now = _clean_str(runtime, "now_iso")
+    tz = _clean_str(runtime, "tz_name")
+    py = _clean_str(runtime, "python_version")
+    kubecfg = _clean_str(runtime, "kubeconfig")
+    hostname = _clean_str(runtime, "hostname")
+    scratchpad = _clean_str(runtime, "scratchpad_dir")
+    pid = _clean_int(runtime, "pid")
+    ppid = _clean_int(runtime, "ppid")
+    uptime_seconds = _clean_number(runtime, "uptime_seconds")
+    disk_used = _clean_number(runtime, "disk_used_percent")
+    disk_free = _clean_number(runtime, "disk_free_gb")
+    memory_used = _clean_number(runtime, "memory_used_percent")
+    memory_available = _clean_number(runtime, "memory_available_gb")
+    tools = runtime.get("tools")
+    present_tools = sorted(
+        name for name, path in (tools.items() if isinstance(tools, dict) else ()) if path
+    )
+    if not (version or env_name or now or py or pid or present_tools or hostname):
         return ""
     bits: list[str] = []
     if version:
@@ -97,6 +116,8 @@ def _render_runtime_facts(
         bits.append(f"OpenSRE version is {display}")
     if env_name:
         bits.append(f"runtime environment is {env_name}")
+    if hostname:
+        bits.append(f"host name is {hostname}")
     if now:
         bits.append(f"current time is {now}")
     if tz:
@@ -108,10 +129,16 @@ def _render_runtime_facts(
     if pid:
         parent = f", parent {ppid}" if ppid else ""
         bits.append(f"process id is {pid}{parent}")
+    if disk_used is not None and disk_free is not None:
+        bits.append(f"root disk is {disk_used}% used with {disk_free} GB free")
+    if memory_used is not None and memory_available is not None:
+        bits.append(f"memory is {memory_used}% used with {memory_available} GB available")
     if present_tools:
         bits.append(f"installed tools on PATH are {', '.join(present_tools)}")
     if kubecfg:
         bits.append(f"kubeconfig path is {kubecfg}")
+    if scratchpad:
+        bits.append(f"scratchpad directory is {scratchpad}")
     return (
         "Runtime facts (quote the strings below EXACTLY when asked; do not "
         "paraphrase them into other field names): "
@@ -121,12 +148,16 @@ def _render_runtime_facts(
         "When the user asks for the current date, time, day of the week, or "
         "timezone, answer from the strings above — do NOT guess a date/time from "
         "your training data. When the user asks for the Python version, process "
-        "id, parent process id, uptime, kubeconfig path, or which tools are "
-        "installed, answer from the strings above — do NOT run `python --version`, "
-        "`kubectl version`, `which`, `ps`, `date`, `uptime`, or `opensre --version`. "
-        "Do NOT invent field names, values, or numbers not present above. Do NOT "
-        "shell out or use subprocess — the Python execution sandbox blocks process "
-        "spawning; use `inputs['opensre_runtime']` inside the sandbox instead."
+        "id, parent process id, uptime, host/pod name, disk or memory usage, "
+        "kubeconfig path, or which tools are installed, answer from the strings "
+        "above — do NOT run `python --version`, `kubectl version`, `which`, `ps`, "
+        "`date`, `uptime`, `hostname`, `df`, `free`, `top`, or `opensre --version`. "
+        "To list files in the scratchpad or another directory, use the Python "
+        "execution sandbox with `pathlib.Path(...).iterdir()` — never `ls` or "
+        "subprocess. Do NOT invent field names, values, or numbers not present "
+        "above. Do NOT shell out or use subprocess — the Python execution sandbox "
+        "blocks process spawning; use `inputs['opensre_runtime']` inside the "
+        "sandbox instead."
     )
 
 
@@ -138,22 +169,13 @@ def build_environment_block(
     reasoning_model: str | None = None,
     toolcall_model: str | None = None,
     llm_settings_available: bool | None = None,
-    opensre_version: str | None = None,
-    opensre_build: str | None = None,
-    runtime_env: str | None = None,
-    now_iso: str | None = None,
-    tz_name: str | None = None,
-    python_version: str | None = None,
-    pid: int | None = None,
-    ppid: int | None = None,
-    uptime_seconds: float | None = None,
-    installed_tools: dict[str, str] | None = None,
-    kubeconfig: str | None = None,
+    runtime: Mapping[str, Any] | None = None,
 ) -> str:
     """Render shell-state facts so the assistant can answer directly.
 
     Decoupled from any session type: the caller (a ``PromptContextProvider``
-    adapter) supplies integration names and optional LLM settings.
+    adapter) supplies integration names, optional LLM settings, and the
+    ``capture_runtime_facts()`` dict as ``runtime``.
     """
     facts: list[str] = []
     if integrations:
@@ -190,19 +212,7 @@ def build_environment_block(
             "instead of guessing or telling them to run another command."
         )
 
-    runtime_fact = _render_runtime_facts(
-        opensre_version,
-        opensre_build,
-        runtime_env,
-        now_iso,
-        tz_name,
-        python_version,
-        pid,
-        ppid,
-        uptime_seconds,
-        installed_tools,
-        kubeconfig,
-    )
+    runtime_fact = _render_runtime_facts(runtime or {})
     if runtime_fact:
         facts.append(runtime_fact)
 

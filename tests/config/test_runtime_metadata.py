@@ -45,7 +45,7 @@ def test_build_runtime_metadata_uses_importlib_version(monkeypatch: pytest.Monke
 
 
 def test_build_runtime_metadata_populates_process_and_python_facts() -> None:
-    """Session-init facts asked in #3950: python version, PID, PPID, tools
+    """Session-init process facts: python version, PID, PPID, tools
     manifest, kubeconfig — all pure-Python, none via subprocess."""
     import sys as _sys
 
@@ -82,6 +82,54 @@ def test_build_runtime_metadata_kubeconfig_takes_first_of_colon_separated(
     second.write_text("", encoding="utf-8")
     monkeypatch.setenv("KUBECONFIG", f"{first}{os.pathsep}{second}")
     assert build_runtime_metadata()["kubeconfig"] == str(first)
+
+
+def test_build_runtime_metadata_populates_hostname_and_scratchpad() -> None:
+    """Static filesystem facts: hostname via file/socket (never the `hostname`
+    binary), scratchpad dir via tempfile — both pure Python."""
+    import tempfile as _tempfile
+
+    meta = build_runtime_metadata()
+    assert isinstance(meta["hostname"], str) and meta["hostname"]
+    assert meta["scratchpad_dir"] == _tempfile.gettempdir()
+
+
+def test_pod_hostname_prefers_etc_hostname_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Inside Kubernetes, /etc/hostname holds the pod name — that file must win
+    over socket.gethostname() so "which pod am I in?" gets the pod, not the node."""
+    hostname_file = tmp_path / "hostname"
+    hostname_file.write_text("opensre-pod-7d9f\n", encoding="utf-8")
+    monkeypatch.setattr(runtime_metadata_module, "_HOSTNAME_FILE", hostname_file)
+    assert runtime_metadata_module._pod_hostname() == "opensre-pod-7d9f"
+
+
+def test_pod_hostname_falls_back_to_socket_when_file_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import socket as _socket
+
+    monkeypatch.setattr(runtime_metadata_module, "_HOSTNAME_FILE", tmp_path / "absent")
+    assert runtime_metadata_module._pod_hostname() == _socket.gethostname()
+
+
+def test_capture_runtime_facts_populates_disk_and_memory_via_psutil() -> None:
+    """Live filesystem facts: disk/memory from psutil, absent from the cached
+    metadata (usage changes turn to turn)."""
+    meta = build_runtime_metadata()
+    for key in (
+        "disk_used_percent",
+        "disk_free_gb",
+        "memory_used_percent",
+        "memory_available_gb",
+    ):
+        assert key not in meta, f"{key} must be live, not cached"
+    facts = capture_runtime_facts(metadata=meta)
+    assert 0.0 <= facts["disk_used_percent"] <= 100.0
+    assert facts["disk_free_gb"] >= 0.0
+    assert 0.0 <= facts["memory_used_percent"] <= 100.0
+    assert facts["memory_available_gb"] >= 0.0
 
 
 def test_build_runtime_metadata_does_not_include_live_now_iso() -> None:
@@ -189,13 +237,12 @@ def test_session_clear_repopulates_runtime_metadata() -> None:
     assert session.runtime_metadata["opensre_version"] == get_opensre_version()
 
 
+def _env_block(runtime: dict[str, object]) -> str:
+    return build_environment_block(integrations=(), known=False, runtime=runtime)
+
+
 def test_environment_block_includes_version_without_subprocess_hint() -> None:
-    block = build_environment_block(
-        integrations=(),
-        known=False,
-        opensre_version="9.9.9",
-        runtime_env="development",
-    )
+    block = _env_block({"opensre_version": "9.9.9", "runtime_env": "development"})
     assert "OpenSRE version is 9.9.9" in block
     assert "runtime environment is development" in block
     assert "opensre --version" in block
@@ -206,12 +253,12 @@ def test_environment_block_renders_current_time_and_timezone() -> None:
     """Time slot must land in the prompt as a quotable string with an anti-
     guessing instruction — the same shape that stopped the version being
     hallucinated from training data."""
-    block = build_environment_block(
-        integrations=(),
-        known=False,
-        opensre_version="0.1",
-        now_iso="2026-07-11T14:30:12+02:00",
-        tz_name="Europe/Berlin",
+    block = _env_block(
+        {
+            "opensre_version": "0.1",
+            "now_iso": "2026-07-11T14:30:12+02:00",
+            "tz_name": "Europe/Berlin",
+        }
     )
     assert "current time is 2026-07-11T14:30:12+02:00" in block
     assert "local timezone is Europe/Berlin" in block
@@ -219,19 +266,19 @@ def test_environment_block_renders_current_time_and_timezone() -> None:
 
 
 def test_environment_block_renders_python_process_and_tools_facts() -> None:
-    """All the #3950 facts must land in the block as verbatim-quotable strings,
+    """The process/tooling facts must land in the block as verbatim-quotable strings,
     each with a corresponding "do not shell out" instruction that names the
     reflex command the LLM would otherwise reach for."""
-    block = build_environment_block(
-        integrations=(),
-        known=False,
-        opensre_version="0.1",
-        python_version="3.12.4",
-        pid=12345,
-        ppid=6789,
-        uptime_seconds=42.5,
-        installed_tools={"kubectl": "/usr/local/bin/kubectl", "helm": "", "git": "/usr/bin/git"},
-        kubeconfig="/home/me/.kube/config",
+    block = _env_block(
+        {
+            "opensre_version": "0.1",
+            "python_version": "3.12.4",
+            "pid": 12345,
+            "ppid": 6789,
+            "uptime_seconds": 42.5,
+            "tools": {"kubectl": "/usr/local/bin/kubectl", "helm": "", "git": "/usr/bin/git"},
+            "kubeconfig": "/home/me/.kube/config",
+        }
     )
     assert "Python interpreter version is 3.12.4" in block
     assert "process id is 12345, parent 6789" in block
@@ -247,28 +294,51 @@ def test_environment_block_renders_python_process_and_tools_facts() -> None:
     assert "`ps`" in block
 
 
+def test_environment_block_renders_hostname_disk_memory_and_scratchpad() -> None:
+    """The filesystem facts: pod hostname, disk/memory readings, scratchpad dir —
+    each quotable, with anti-shell instructions naming hostname/df/free/top/ls."""
+    block = _env_block(
+        {
+            "opensre_version": "0.1",
+            "hostname": "opensre-pod-7d9f",
+            "disk_used_percent": 63.2,
+            "disk_free_gb": 120.5,
+            "memory_used_percent": 41.0,
+            "memory_available_gb": 9.4,
+            "scratchpad_dir": "/tmp",
+        }
+    )
+    assert "host name is opensre-pod-7d9f" in block
+    assert "root disk is 63.2% used with 120.5 GB free" in block
+    assert "memory is 41.0% used with 9.4 GB available" in block
+    assert "scratchpad directory is /tmp" in block
+    assert "`hostname`" in block
+    assert "`df`" in block
+    assert "`free`" in block
+    assert "`top`" in block
+    assert "`ls`" in block
+    assert "iterdir" in block  # pathlib guidance for directory listings
+
+
+def test_environment_block_omits_disk_memory_when_absent() -> None:
+    """psutil failures degrade to absent keys; no partial/empty usage lines."""
+    block = _env_block({"opensre_version": "0.1", "disk_used_percent": 63.2})
+    # disk_free_gb missing → the disk line needs both halves.
+    assert "root disk is" not in block
+    assert "memory is" not in block
+
+
 def test_environment_block_omits_installed_tools_line_when_none_present() -> None:
     """When every probed tool is absent, the block must not render an
     empty ``installed tools on PATH are `` line."""
-    block = build_environment_block(
-        integrations=(),
-        known=False,
-        opensre_version="0.1",
-        installed_tools={"kubectl": "", "helm": "", "git": ""},
-    )
+    block = _env_block({"opensre_version": "0.1", "tools": {"kubectl": "", "helm": "", "git": ""}})
     assert "installed tools on PATH" not in block
 
 
 def test_environment_block_omits_time_when_slot_empty() -> None:
     """Released wheels or pathological callers may pass no time; the block
     must not render an empty ``current time is`` line in that case."""
-    block = build_environment_block(
-        integrations=(),
-        known=False,
-        opensre_version="0.1",
-        now_iso="",
-        tz_name="",
-    )
+    block = _env_block({"opensre_version": "0.1", "now_iso": "", "tz_name": ""})
     assert "current time is" not in block
     assert "local timezone is" not in block
 
@@ -277,27 +347,27 @@ def test_environment_block_renders_build_marker_when_provided() -> None:
     """In a git checkout the runtime metadata carries an opensre_build marker;
     the env block should render it inline with the version so the LLM can
     quote both parts."""
-    block = build_environment_block(
-        integrations=(),
-        known=False,
-        opensre_version="0.1",
-        opensre_build="dev, v0.1.2026.7.11 @ abc1234",
-        runtime_env="development",
+    block = _env_block(
+        {
+            "opensre_version": "0.1",
+            "opensre_build": "dev, v0.1.2026.7.11 @ abc1234",
+            "runtime_env": "development",
+        }
     )
     assert "OpenSRE version is 0.1 (dev, v0.1.2026.7.11 @ abc1234)" in block
 
 
 def test_environment_block_omits_build_parens_when_marker_empty() -> None:
     """Released wheels report opensre_build=''; version renders bare."""
-    block = build_environment_block(
-        integrations=(),
-        known=False,
-        opensre_version="0.1.2026.7.11",
-        opensre_build="",
-        runtime_env="production",
+    block = _env_block(
+        {
+            "opensre_version": "0.1.2026.7.11",
+            "opensre_build": "",
+            "runtime_env": "production",
+        }
     )
     assert "OpenSRE version is 0.1.2026.7.11" in block
-    assert "()" not in block
+    assert "OpenSRE version is 0.1.2026.7.11 (" not in block
 
 
 def test_environment_block_instructs_verbatim_quoting_not_field_names() -> None:
@@ -306,12 +376,12 @@ def test_environment_block_instructs_verbatim_quoting_not_field_names() -> None:
     a field name and hallucinate a value like '0' when the slot was empty. The
     prompt now instructs verbatim quoting and explicitly forbids inventing field
     names or numbers not in the block."""
-    block = build_environment_block(
-        integrations=(),
-        known=False,
-        opensre_version="0.1",
-        opensre_build="dev, v0.1.2026.7.11 @ abc1234",
-        runtime_env="development",
+    block = _env_block(
+        {
+            "opensre_version": "0.1",
+            "opensre_build": "dev, v0.1.2026.7.11 @ abc1234",
+            "runtime_env": "development",
+        }
     )
     assert "verbatim" in block
     assert "Do NOT invent field names" in block
@@ -424,7 +494,7 @@ def test_python_tool_reports_current_time_via_injected_runtime_inputs() -> None:
 
 
 def test_python_tool_reports_process_and_python_facts_via_injected_runtime_inputs() -> None:
-    """The #3950 replacement path: a script asking for python version, PID,
+    """The no-subprocess replacement path: a script asking for python version, PID,
     parent PID, uptime, kubeconfig, or the installed tools list should read
     them from ``inputs['opensre_runtime']`` — no ``subprocess`` needed."""
     result = execute_python_code.run(
@@ -449,6 +519,35 @@ def test_python_tool_reports_process_and_python_facts_via_injected_runtime_input
     assert payload["py"].count(".") == 2
     assert isinstance(payload["uptime"], (int, float))
     assert payload["uptime"] >= 0.0
+
+
+def test_python_tool_filesystem_introspection_without_subprocess() -> None:
+    """Sandbox filesystem introspection: scratchpad listing via pathlib, hostname and
+    disk/memory from injected facts — all inside the sandbox, no subprocess."""
+    result = execute_python_code.run(
+        code=(
+            "import json\n"
+            "from pathlib import Path\n"
+            "runtime = inputs['opensre_runtime']\n"
+            "scratch = Path(runtime['scratchpad_dir'])\n"
+            "entries = sorted(p.name for p in scratch.iterdir())[:3]\n"
+            "print(json.dumps({\n"
+            "    'hostname': runtime['hostname'],\n"
+            "    'scratchpad': str(scratch),\n"
+            "    'listable': isinstance(entries, list),\n"
+            "    'disk_used': runtime.get('disk_used_percent'),\n"
+            "    'memory_used': runtime.get('memory_used_percent'),\n"
+            "}))\n"
+        ),
+    )
+    assert result["success"] is True, result
+    import json as _json
+
+    payload = _json.loads(result["stdout"].strip())
+    assert payload["hostname"]
+    assert payload["listable"] is True
+    assert isinstance(payload["disk_used"], (int, float))
+    assert isinstance(payload["memory_used"], (int, float))
 
 
 def test_python_tool_reports_version_via_importlib_metadata() -> None:

@@ -11,7 +11,9 @@ import datetime as _dt
 import os
 import re
 import shutil
+import socket
 import sys
+import tempfile
 import time as _time
 from dataclasses import dataclass
 from pathlib import Path
@@ -255,6 +257,52 @@ def _installed_tools() -> dict[str, str]:
     return {tool: shutil.which(tool) or "" for tool in _TOOLS_TO_PROBE}
 
 
+_HOSTNAME_FILE = Path("/etc/hostname")
+
+
+def _pod_hostname() -> str:
+    """Hostname via file read, no subprocess.
+
+    ``/etc/hostname`` holds the pod name inside Kubernetes containers, which is
+    the value SRE questions ("which pod am I in?") actually want. Falls back to
+    :func:`socket.gethostname` on hosts without the file (macOS, some distros).
+    """
+    try:
+        if _HOSTNAME_FILE.is_file():
+            name = _HOSTNAME_FILE.read_text(encoding="utf-8").strip()
+            if name:
+                return name
+    except OSError:
+        # Unreadable /etc/hostname: fall back to the socket API below.
+        pass
+    try:
+        return socket.gethostname()
+    except OSError:
+        return ""
+
+
+def _disk_memory_facts() -> dict[str, Any]:
+    """Live disk and memory readings via psutil (no ``df``/``free``/``top``).
+
+    Degrades to an empty dict if psutil misbehaves on an exotic platform —
+    the facts are then simply absent rather than crashing prompt assembly.
+    """
+    try:
+        import psutil
+
+        disk = psutil.disk_usage("/")
+        memory = psutil.virtual_memory()
+    except Exception:
+        return {}
+    gib = 1024**3
+    return {
+        "disk_used_percent": round(disk.percent, 1),
+        "disk_free_gb": round(disk.free / gib, 1),
+        "memory_used_percent": round(memory.percent, 1),
+        "memory_available_gb": round(memory.available / gib, 1),
+    }
+
+
 def _kubeconfig_path() -> str:
     """Effective ``kubeconfig`` path from env, or the default under ``~/.kube``.
 
@@ -286,9 +334,12 @@ def build_runtime_metadata() -> dict[str, Any]:
     - ``pid`` / ``ppid`` — this process and its parent from :mod:`os`.
     - ``tools`` — probed tool paths (``kubectl``, ``helm``, ``docker``, ``git``, …).
     - ``kubeconfig`` — effective kubeconfig path (``KUBECONFIG`` or ``~/.kube/config``).
+    - ``hostname`` — from ``/etc/hostname`` (the pod name in Kubernetes) or
+      :func:`socket.gethostname`, never the ``hostname`` binary.
+    - ``scratchpad_dir`` — the temp directory scripts may write to.
 
-    Live values that must NOT be cached (current time, uptime) come from
-    :func:`capture_runtime_facts` at each render/sandbox call.
+    Live values that must NOT be cached (current time, uptime, disk, memory)
+    come from :func:`capture_runtime_facts` at each render/sandbox call.
     """
     env_override = (os.environ.get("OPENSRE_ENV") or "").strip()
     return {
@@ -301,11 +352,13 @@ def build_runtime_metadata() -> dict[str, Any]:
         "ppid": os.getppid(),
         "tools": _installed_tools(),
         "kubeconfig": _kubeconfig_path(),
+        "hostname": _pod_hostname(),
+        "scratchpad_dir": tempfile.gettempdir(),
     }
 
 
 def capture_runtime_facts(*, metadata: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Session metadata plus fresh live facts (current time, uptime).
+    """Session metadata plus fresh live facts (time, uptime, disk, memory).
 
     Read once per prompt render or sandbox invocation so time doesn't lie. Pass
     ``metadata`` (typically ``session.runtime_metadata``) to avoid re-running
@@ -314,6 +367,7 @@ def capture_runtime_facts(*, metadata: dict[str, Any] | None = None) -> dict[str
     facts = dict(metadata or build_runtime_metadata())
     facts["now_iso"] = _dt.datetime.now().astimezone().isoformat(timespec="seconds")
     facts["uptime_seconds"] = round(_time.monotonic() - _PROCESS_START_MONOTONIC, 3)
+    facts.update(_disk_memory_facts())
     return facts
 
 

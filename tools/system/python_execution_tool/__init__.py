@@ -24,23 +24,29 @@ class PythonExecutionTool(BaseTool):
         "exceptions, and timeout state, and return the result to the agent. Network access is "
         "blocked by default; opt in only for approved API-backed analysis. Subprocess spawning "
         "is always blocked — for runtime facts (OpenSRE version, current time, uptime, PID, "
-        "Python interpreter version, kubeconfig path, installed tools like kubectl/helm/docker/git) "
-        "read `inputs['opensre_runtime']` (injected automatically). Never run "
-        "`opensre --version`, `python --version`, `kubectl version`, `which`, `ps`, `date`, "
-        "`uptime`, or any other `subprocess` call. When workflow guidance lists skills, read "
-        "each skill description and follow the one that matches the user's request."
+        "Python interpreter version, host/pod name, disk and memory usage, kubeconfig path, "
+        "scratchpad directory, installed tools like kubectl/helm/docker/git) read "
+        "`inputs['opensre_runtime']` (injected automatically). For filesystem introspection use "
+        "pure Python: `pathlib.Path(...).iterdir()` to list directories, "
+        "`Path('/etc/hostname').read_text()` for the pod name, `psutil.disk_usage('/')` and "
+        "`psutil.virtual_memory()` for disk/memory. Never run `opensre --version`, "
+        "`python --version`, `kubectl version`, `which`, `ps`, `date`, `uptime`, `hostname`, "
+        "`ls`, `df`, `free`, `top`, or any other `subprocess` call. When workflow guidance "
+        "lists skills, read each skill description and follow the one that matches the "
+        "user's request."
     )
     use_cases = [
         "Compute metrics or summaries from structured evidence already in context",
         "Run a small API-backed calculation with approved credentials",
         "Parse logs or JSON payloads when a direct tool result needs post-processing",
         "Read runtime facts (version, time, uptime, PID, kubeconfig, tools) via inputs['opensre_runtime']",
+        "List scratchpad files with pathlib; read disk/memory with psutil (no ls/df/free)",
     ]
     anti_examples = [
         "Changing local files or shelling out to other processes",
         (
             "Calling opensre --version, python --version, kubectl version, which, ps, "
-            "date, uptime (all blocked by the sandbox)"
+            "date, uptime, hostname, ls, df, free, top (all blocked by the sandbox)"
         ),
         "Long-running jobs, crawlers, or broad external scans",
         "Accessing credentials not explicitly provided by configured integrations or env vars",
@@ -59,8 +65,10 @@ class PythonExecutionTool(BaseTool):
                     "`inputs` global. OpenSRE always merges `opensre_runtime` under this "
                     "key with: opensre_version, opensre_build, runtime_env, tz_name, "
                     "now_iso, uptime_seconds, python_version, pid, ppid, tools "
-                    "(dict of tool name → PATH), and kubeconfig. Skipped if you already "
-                    "set the `opensre_runtime` key yourself."
+                    "(dict of tool name → PATH), kubeconfig, hostname, scratchpad_dir, "
+                    "disk_used_percent, disk_free_gb, memory_used_percent, and "
+                    "memory_available_gb. Skipped if you already set the "
+                    "`opensre_runtime` key yourself."
                 ),
                 "nullable": True,
             },
@@ -117,8 +125,8 @@ class PythonExecutionTool(BaseTool):
         ``runtime_metadata`` dict (e.g. ``SessionCore.runtime_metadata``),
         passing it here avoids re-running ``build_runtime_metadata()`` per tool
         call. When ``None`` (default) the merge helper builds a fresh dict —
-        preserving the pre-#3946 behavior. Callers that thread session down
-        (T-2c follow-up) can pass ``session.runtime_metadata`` directly.
+        preserving the previous behavior. Callers that hold a session can
+        pass ``session.runtime_metadata`` directly.
         """
         from config.runtime_metadata import merge_runtime_into_inputs
 

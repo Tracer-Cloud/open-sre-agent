@@ -1,4 +1,4 @@
-"""Perf regression guards for session runtime metadata (#3946).
+"""Perf regression guards for session runtime metadata.
 
 Each test times its target N times, uses the median (robust to jitter), and
 asserts a generous upper bound calibrated at ~10-100x the measured Darwin
@@ -89,8 +89,7 @@ def test_environment_block_render_stays_under_1ms() -> None:
             reasoning_model="gpt-5.4-mini",
             toolcall_model="gpt-5.4-mini",
             llm_settings_available=True,
-            opensre_version=str(metadata.get("opensre_version") or ""),
-            runtime_env=str(metadata.get("runtime_env") or ""),
+            runtime=metadata,
         )
 
     median_ms = _time_median_ms(_run)
@@ -112,12 +111,7 @@ def test_baseline_stability(_i: int) -> None:
     build_ms = _time_median_ms(build_runtime_metadata)
 
     def _env() -> str:
-        return build_environment_block(
-            integrations=(),
-            known=False,
-            opensre_version=str(metadata.get("opensre_version") or ""),
-            runtime_env=str(metadata.get("runtime_env") or ""),
-        )
+        return build_environment_block(integrations=(), known=False, runtime=metadata)
 
     env_ms = _time_median_ms(_env)
 
