@@ -21,8 +21,11 @@ Sentry here, then suggest a multi-source investigation.
 - Map user words (`last night` → `24h`, `this week` → `7d`)
 
 One API page, max 100 issue groups (not events). Use `digest.page_saturated`
-(`100+` + `scope_note`) vs `page_complete` (exact count). Empty → widen to
-`7d`. Digest has `structural_clusters`, `priority_candidates`, `top_issues`.
+(`100+` + `scope_note`) vs `page_complete` (exact count). When
+`completeness` is `empty`, report no groups in the requested window — do not
+widen `stats_period` or run a second search unless the user asks; label any
+broader follow-up separately. Digest has `structural_clusters`,
+`priority_candidates`, `top_issues`.
 
 ## 2. Classify
 
@@ -50,4 +53,5 @@ Top 3–5 / #1 only: `get_sentry_issue_details` + `list_sentry_issue_events`
 
 - `count` = events per group; `issue_count` = groups returned
 - `page_saturated` = first page only; `page_complete` = exact for window
+- `completeness: empty` = zero groups in requested window; never silent widen
 - `stats_period` is relative; detail APIs are expensive — enrich selectively

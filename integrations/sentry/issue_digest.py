@@ -172,7 +172,9 @@ def build_scope_metadata(
         scope_summary = f"No unresolved issue groups in the {period_label} matching {query_label}"
         scope_note = (
             f"No issue groups matched {query_label} in the {period_label} "
-            f"(complete — nothing returned)."
+            f"(complete — nothing returned). Do not widen the search window "
+            f"silently; a broader lookback must be a separate, clearly labeled "
+            f"follow-up."
         )
     else:
         count_label = str(issue_count)
@@ -191,6 +193,7 @@ def build_scope_metadata(
     return {
         "issue_count": issue_count,
         "issue_count_label": count_label,
+        "has_results": issue_count > 0,
         "page_limit": page_limit,
         "page_saturated": saturated,
         "page_complete": not saturated and issue_count > 0,
@@ -386,6 +389,7 @@ def build_sentry_issue_digest(
     return {
         "issue_count": issue_count,
         "issue_count_label": scope["issue_count_label"],
+        "has_results": scope["has_results"],
         "page_limit": scope["page_limit"],
         "page_saturated": scope["page_saturated"],
         "page_complete": scope["page_complete"],

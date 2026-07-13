@@ -127,3 +127,12 @@ def test_scope_metadata_marks_saturated_page() -> None:
     assert "first page" in digest["scope_summary"]
     assert "additional unresolved groups" in digest["scope_note"]
     assert digest["percent_basis"] == "returned_page"
+
+
+def test_scope_metadata_empty_result_discourages_silent_widen() -> None:
+    digest = build_sentry_issue_digest([], stats_period="24h", query="is:unresolved")
+
+    assert digest["has_results"] is False
+    assert digest["completeness"] == "empty"
+    assert "last 24 hours" in digest["scope_summary"]
+    assert "Do not widen" in digest["scope_note"]

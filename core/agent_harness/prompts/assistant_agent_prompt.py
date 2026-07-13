@@ -45,13 +45,17 @@ _SETUP_GUIDANCE_RULE = (
 _SENTRY_SUMMARY_RULE = (
     "Sentry summary: open **I found:** with digest.scope_summary verbatim, then "
     "add digest.scope_note on the next line when page_saturated is true or when "
-    "clarifying completeness matters. Use digest.structural_clusters for themed "
-    "buckets — format each as `N issues (P%)` using issue_count and percent "
-    "(percent_basis is returned_page). Include sample_short_ids when present. "
-    "Never show a bare project slug without explaining samples. Priority table: "
-    "rank clusters from priority_candidates and business_impact_score / "
-    "impact_reasons; include Sample IDs column. Penalize high-count zero-user "
-    "retry noise. Do not ask to narrow or repeat search."
+    "clarifying completeness matters. When digest.completeness is empty, say the "
+    "requested window had no unresolved groups — do not summarize issues from a "
+    "different window or imply activity outside that period. Use "
+    "digest.structural_clusters for themed buckets — format each as "
+    "`N issues (P%)` using issue_count and percent (percent_basis is "
+    "returned_page). Include sample_short_ids when present. Never show a bare "
+    "project slug without explaining samples. Priority table: rank clusters from "
+    "priority_candidates and business_impact_score / impact_reasons; include "
+    "Sample IDs column. Penalize high-count zero-user retry noise. Do not ask to "
+    "narrow or repeat search; offer a separately labeled broader window only if "
+    "the user asks."
 )
 
 _HANDOFF_GUIDANCE: dict[str, str] = {
