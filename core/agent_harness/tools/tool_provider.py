@@ -22,6 +22,11 @@ SubprocessPresenterFactory = Callable[
     [Any, Any, ConfirmFn | None, bool | None, bool],
     Any,
 ]
+# Return value is tools.interactive_shell.dispatch.ActionDispatchPresenter (surface-injected).
+ActionDispatchPresenterFactory = Callable[
+    [Any, Any, ConfirmFn | None, bool | None, bool],
+    Any,
+]
 _TOOL_INPUT_LOG_PREVIEW_LIMIT = 500
 
 
@@ -45,6 +50,7 @@ class DefaultToolProvider:
         observer_factory: ActionObserverFactory | None = None,
         tool_action_logger: logging.Logger | None = None,
         subprocess_presenter_factory: SubprocessPresenterFactory | None = None,
+        action_dispatch_presenter_factory: ActionDispatchPresenterFactory | None = None,
     ) -> None:
         self._session = session
         self._console = console
@@ -53,6 +59,7 @@ class DefaultToolProvider:
         self._observer_factory = observer_factory
         self._tool_action_logger = tool_action_logger
         self._subprocess_presenter_factory = subprocess_presenter_factory
+        self._action_dispatch_presenter_factory = action_dispatch_presenter_factory
         self._tool_context: ActionToolContext | None = None
 
     def action_tools(
@@ -71,6 +78,15 @@ class DefaultToolProvider:
                 is_tty,
                 True,
             )
+        action_dispatch_presenter = None
+        if self._action_dispatch_presenter_factory is not None:
+            action_dispatch_presenter = self._action_dispatch_presenter_factory(
+                self._session,
+                self._console,
+                confirm_fn,
+                is_tty,
+                True,
+            )
         ctx = ActionToolContext(
             session=self._session,
             console=self._console,
@@ -79,6 +95,7 @@ class DefaultToolProvider:
             request_exit=self._request_exit,
             action_already_listed=True,
             subprocess_presenter=subprocess_presenter,
+            action_dispatch_presenter=action_dispatch_presenter,
         )
         self._tool_context = ctx
         if self._precomputed_action_tools is not None:

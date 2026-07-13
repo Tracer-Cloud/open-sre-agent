@@ -13,11 +13,10 @@ from core.agent_harness.tools.tool_context import (
     object_schema,
 )
 from core.tool_framework.registered_tool import RegisteredTool
-from surfaces.interactive_shell.command_registry import (
-    switch_llm_provider,
-    switch_reasoning_model,
+from tools.interactive_shell.dispatch import (
+    ActionDispatchPresenter,
+    require_action_dispatch_presenter,
 )
-from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
 from tools.interactive_shell.shared import allow_tool
 
 
@@ -43,32 +42,25 @@ def _target_property_schema() -> dict[str, Any]:
     }
 
 
-def _apply_model_set_target(target: str, ctx: ActionToolContext) -> bool:
+def _apply_model_set_target(target: str, presenter: ActionDispatchPresenter) -> bool:
     from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
 
     candidate = target.strip()
     if candidate.lower() in PROVIDER_BY_VALUE:
-        return switch_llm_provider(candidate, ctx.console)
-    return switch_reasoning_model(candidate, ctx.console)
+        return presenter.switch_llm_provider(candidate)
+    return presenter.switch_reasoning_model(candidate)
 
 
 def execute_llm_provider_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
+    presenter = require_action_dispatch_presenter(ctx)
     target = str(args.get("target", args.get("provider", ""))).strip()
     if not target:
         return False
     policy = allow_tool("switch_llm_provider")
-    if not execution_allowed(
-        policy,
-        session=ctx.session,
-        console=ctx.console,
-        action_summary=f"/model set {target}",
-        confirm_fn=ctx.confirm_fn,
-        is_tty=ctx.is_tty,
-        action_already_listed=ctx.action_already_listed,
-    ):
+    if not presenter.execution_allowed(policy, action_summary=f"/model set {target}"):
         return True
     ctx.console.print(f"[bold]$ /model set {escape(target)}[/bold]")
-    ok = _apply_model_set_target(target, ctx)
+    ok = _apply_model_set_target(target, presenter)
     ctx.session.record("slash", f"/model set {target}", ok=ok)
     return True
 

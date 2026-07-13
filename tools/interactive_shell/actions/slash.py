@@ -19,14 +19,14 @@ from core.agent_harness.tools.tool_context import (
     execute_with_action_context,
 )
 from core.tool_framework.registered_tool import RegisteredTool
-from surfaces.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
 from surfaces.interactive_shell.command_registry.slash_catalog import (
     slash_invoke_input_schema,
     slash_invoke_tool_description,
 )
-from surfaces.interactive_shell.ui import BOLD_BRAND, DIM, repl_tty_interactive
-from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
-from surfaces.interactive_shell.utils.telemetry.turn_outcome import format_terminal_turn_outcome
+from tools.interactive_shell.dispatch import (
+    ActionDispatchPresenter,
+    require_action_dispatch_presenter,
+)
 from tools.interactive_shell.shared import plan_foreground_tool
 
 # Slash commands that drive a raw-stdin inline picker or wizard (questionary /
@@ -56,6 +56,7 @@ def _slash_drives_interactive_picker(
     *,
     session: Any,
     is_tty: bool | None,
+    presenter: ActionDispatchPresenter,
 ) -> bool:
     """True when a planned slash command opens a raw-stdin inline picker/wizard.
 
@@ -65,7 +66,7 @@ def _slash_drives_interactive_picker(
     """
     if is_tty is False or session_terminal(session) is None:
         return False
-    if not repl_tty_interactive():
+    if not presenter.repl_tty_interactive():
         return False
     if name == "/login":
         return True
@@ -74,21 +75,20 @@ def _slash_drives_interactive_picker(
     return (name, slash_args[0].lower()) in _INTERACTIVE_PICKER_SUBCOMMANDS
 
 
-def _dispatch_and_translate_exit(command: str, ctx: ActionToolContext, **kwargs: Any) -> bool:
-    should_continue = dispatch_slash(
-        command,
-        ctx.session,
-        ctx.console,
-        confirm_fn=ctx.confirm_fn,
-        is_tty=ctx.is_tty,
-        **kwargs,
-    )
+def _dispatch_and_translate_exit(
+    command: str,
+    ctx: ActionToolContext,
+    presenter: ActionDispatchPresenter,
+    **kwargs: Any,
+) -> bool:
+    should_continue = presenter.dispatch_slash(command, **kwargs)
     if not should_continue and ctx.request_exit is not None:
         ctx.request_exit()
     return True
 
 
 def execute_slash_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
+    presenter = require_action_dispatch_presenter(ctx)
     command = str(args.get("command", "")).strip()
     raw_args = args.get("args")
     parsed_args = [str(item).strip() for item in raw_args] if isinstance(raw_args, list) else []
@@ -98,16 +98,17 @@ def execute_slash_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
         return _dispatch_and_translate_exit(
             stripped or "/",
             ctx,
+            presenter,
         )
 
     parts = stripped.split()
     name = parts[0].lower()
     slash_args = parts[1:]
-    cmd = SLASH_COMMANDS.get(name)
-    if cmd is None:
+    if not presenter.slash_command_known(name):
         return _dispatch_and_translate_exit(
             stripped,
             ctx,
+            presenter,
         )
 
     if stripped in agent_turn_executed_slashes(ctx.session):
@@ -118,32 +119,25 @@ def execute_slash_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
         slash_args,
         session=ctx.session,
         is_tty=ctx.is_tty,
+        presenter=presenter,
     ) and not exclusive_stdin_active(ctx.session):
         # Hand the picker back to the REPL loop instead of running it against the
         # live prompt: set_auto_command re-submits it as a deterministic turn
         # the loop dispatches with exclusive stdin, so no CPR replies leak in.
         # Do not record a slash history row here — dispatch_slash will record when
         # the queued command runs. Attach a turn hint for this turn's analytics.
-        ctx.console.print(f"[{DIM}]Launching[/] [{BOLD_BRAND}]{escape(stripped)}[/]…")
+        presenter.queue_slash_for_exclusive_dispatch(stripped)
         set_auto_command(ctx.session, stripped)
         set_turn_outcome_hint(ctx.session, f"queued {stripped} for exclusive stdin dispatch")
         return True
 
     plan = plan_foreground_tool("slash", "slash")
-    if not execution_allowed(
-        plan.policy,
-        session=ctx.session,
-        console=ctx.console,
-        action_summary=stripped,
-        confirm_fn=ctx.confirm_fn,
-        is_tty=ctx.is_tty,
-        action_already_listed=ctx.action_already_listed,
-    ):
+    if not presenter.execution_allowed(plan.policy, action_summary=stripped):
         ctx.session.record(
             "slash",
             stripped,
             ok=False,
-            response_text=format_terminal_turn_outcome(stripped, kind="slash", ok=False),
+            response_text=presenter.format_turn_outcome(stripped, kind="slash", ok=False),
         )
         return True
 
@@ -151,6 +145,7 @@ def execute_slash_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
     _dispatch_and_translate_exit(
         stripped,
         ctx,
+        presenter,
         policy_precleared=True,
     )
     agent_turn_executed_slashes(ctx.session).add(stripped)

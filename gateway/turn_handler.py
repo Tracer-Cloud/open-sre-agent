@@ -21,6 +21,9 @@ from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.default_reasoning_client import DefaultReasoningClientProvider
 from core.agent_harness.turns.headless_dispatch import HeadlessAgent
 from gateway.gateway_output_sink import GatewayOutputSink
+from gateway.headless_action_dispatch_presenter import (
+    headless_action_dispatch_presenter_factory,
+)
 from gateway.headless_subprocess_presenter import headless_subprocess_presenter_factory
 from gateway.status_messages import status_from_tool_start
 from platform.observability.trace.spans import traced_session
@@ -106,6 +109,7 @@ class GatewayTurnHandler:
                 tool_action_logger=logger,
                 observer_factory=lambda _message: observer,
                 subprocess_presenter_factory=headless_subprocess_presenter_factory,
+                action_dispatch_presenter_factory=headless_action_dispatch_presenter_factory,
             ),
             prompts=DefaultPromptContextProvider(session),
             reasoning=DefaultReasoningClientProvider(

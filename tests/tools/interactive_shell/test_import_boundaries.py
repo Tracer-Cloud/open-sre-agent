@@ -58,3 +58,39 @@ def test_t03_runners_do_not_import_interactive_shell_surface() -> None:
         forbidden_prefixes=("surfaces.interactive_shell.",),
     )
     assert not offenders, "\n".join(sorted(set(offenders)))
+
+
+def test_t01_slash_llm_task_cancel_do_not_import_interactive_shell_dispatch_surface() -> None:
+    """slash/llm_provider/task_cancel route dispatch and execution-confirm through
+    ``tools.interactive_shell.dispatch.ActionDispatchPresenter`` (surface-injected via
+    ``ActionToolContext.action_dispatch_presenter``) instead of importing the REPL
+    surface directly.
+
+    ``surfaces.interactive_shell.command_registry.slash_catalog`` is intentionally not
+    forbidden: it supplies the static LLM tool-schema catalog needed at
+    ``RegisteredTool`` construction time (module import), before any per-turn
+    presenter exists, and carries no Rich/session/dispatch UI state.
+    """
+    root = _repo_root()
+    tools_root = root / "tools" / "interactive_shell" / "actions"
+    scoped_paths = [
+        tools_root / "slash.py",
+        tools_root / "llm_provider.py",
+        tools_root / "task_cancel.py",
+    ]
+    offenders = _collect_surface_import_offenders(
+        root,
+        paths=scoped_paths,
+        forbidden_modules=frozenset(
+            {
+                "surfaces.interactive_shell.command_registry",
+                "surfaces.interactive_shell.runtime",
+            }
+        ),
+        forbidden_prefixes=(
+            "surfaces.interactive_shell.ui",
+            "surfaces.interactive_shell.utils.",
+            "surfaces.interactive_shell.runtime.",
+        ),
+    )
+    assert not offenders, "\n".join(sorted(set(offenders)))

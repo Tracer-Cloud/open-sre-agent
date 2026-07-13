@@ -17,7 +17,6 @@ from typing import Any
 
 import pytest
 
-import tools.interactive_shell.actions.slash as slash_tool
 from core.agent_harness.tools.action_tools import get_action_tool
 from gateway.turn_handler import GatewayTurnHandler
 from tests.core.agent.orchestration.cross_surface_parity_harness import (
@@ -67,7 +66,9 @@ def parity_env(monkeypatch: pytest.MonkeyPatch):
             dispatched.append(command)
             return True
 
-        monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
+        monkeypatch.setattr(
+            "surfaces.interactive_shell.command_registry.dispatch_slash", _fake_dispatch
+        )
         _configure(tools=[slash, probe_tool()], action_mode=action_mode)
         return dispatched
 

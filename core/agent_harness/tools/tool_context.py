@@ -31,6 +31,8 @@ class ActionToolContext:
     action_already_listed: bool = False
     # Surface-injected subprocess presenter (``tools.interactive_shell.subprocess``).
     subprocess_presenter: Any = None
+    # Surface-injected slash-dispatch presenter (``tools.interactive_shell.dispatch``).
+    action_dispatch_presenter: Any = None
 
 
 def action_context_from_agent_context(context: AgentToolContext) -> ActionToolContext:

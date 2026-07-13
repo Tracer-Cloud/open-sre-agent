@@ -27,6 +27,9 @@ from core.agent_harness.turns.headless_dispatch import (
 from core.agent_harness.turns.turn_results import ShellTurnResult
 from core.llm.types import AgentLLMResponse, ToolCall
 from core.tool_framework.registered_tool import RegisteredTool
+from gateway.headless_action_dispatch_presenter import (
+    headless_action_dispatch_presenter_factory,
+)
 from gateway.turn_handler import GatewayTurnHandler
 from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 from surfaces.interactive_shell.session import Session
@@ -302,7 +305,11 @@ def _dispatch_turn(
 ) -> ShellTurnResult:
     output = BufferOutputSink()
     agent = HeadlessAgent(
-        tools=DefaultToolProvider(session, console()),
+        tools=DefaultToolProvider(
+            session,
+            console(),
+            action_dispatch_presenter_factory=headless_action_dispatch_presenter_factory,
+        ),
         session=session,
         output=output,
         prompts=DefaultPromptContextProvider(session),

@@ -22,9 +22,6 @@ from tests.core.agent.orchestration.action_execution_test_harness import (
 from tools.interactive_shell.actions import (
     investigation as _investigation_tool,
 )
-from tools.interactive_shell.actions import (
-    slash as _slash_tool,
-)
 
 
 def test_turn_needs_exclusive_stdin_for_bare_integration_menu(
@@ -288,7 +285,9 @@ def test_execute_shell_turn_nitro_prompt_executes_remote_then_investigation(
             ]
         ),
     )
-    monkeypatch.setattr(_slash_tool, "dispatch_slash", _fake_dispatch)
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.command_registry.dispatch_slash", _fake_dispatch
+    )
     monkeypatch.setattr(_investigation_tool, "run_text_investigation", _fake_run_text_investigation)
 
     session = Session()

@@ -8,7 +8,6 @@ from dataclasses import dataclass
 import pytest
 from rich.console import Console
 
-import tools.interactive_shell.actions.slash as slash_tool
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 from surfaces.interactive_shell.runtime.action_turn import run_action_tool_turn
 from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
@@ -64,7 +63,9 @@ def test_literal_slash_command_records_single_history_entry(
         session.record("slash", command, ok=True)
         return True
 
-    monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.command_registry.dispatch_slash", _fake_dispatch
+    )
     session = Session()
     harness = ActionExecutionHarness(llm=FakeActionLLM([no_tool_response()]))
 

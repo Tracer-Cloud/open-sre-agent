@@ -20,6 +20,9 @@ from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 from core.execution import ToolExecutionHooks
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS
 from surfaces.interactive_shell.command_registry.suggestions import resolve_literal_slash_typo
+from surfaces.interactive_shell.runtime.action_dispatch_presenter import (
+    ReplActionDispatchPresenter,
+)
 from surfaces.interactive_shell.runtime.agent_harness_adapters import resolve_output_sink
 from surfaces.interactive_shell.runtime.subprocess_runner.repl_presenter import (
     ReplSubprocessPresenter,
@@ -65,6 +68,22 @@ def _subprocess_presenter_factory(
     )
 
 
+def _action_dispatch_presenter_factory(
+    session: Session,
+    console: Console,
+    confirm_fn: Callable[[str], str] | None,
+    is_tty: bool | None,
+    action_already_listed: bool,
+) -> ReplActionDispatchPresenter:
+    return ReplActionDispatchPresenter(
+        session,
+        console,
+        confirm_fn=confirm_fn,
+        is_tty=is_tty,
+        action_already_listed=action_already_listed,
+    )
+
+
 def run_action_tool_turn(
     message: str,
     session: Session,
@@ -100,6 +119,7 @@ def run_action_tool_turn(
                 session=session, console=console, message=msg
             ),
             subprocess_presenter_factory=_subprocess_presenter_factory,
+            action_dispatch_presenter_factory=_action_dispatch_presenter_factory,
         ),
         confirm_fn=confirm_fn,
         is_tty=is_tty,

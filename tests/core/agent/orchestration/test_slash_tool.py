@@ -17,14 +17,27 @@ import tools.interactive_shell.actions.slash as slash_tool
 from core.agent_harness.tools.tool_context import (
     ActionToolContext,
 )
+from surfaces.interactive_shell.runtime.action_dispatch_presenter import (
+    ReplActionDispatchPresenter,
+)
 from surfaces.interactive_shell.session import Session
+
+_DISPATCH_SLASH_PATCH_TARGET = "surfaces.interactive_shell.command_registry.dispatch_slash"
+_REPL_TTY_INTERACTIVE_PATCH_TARGET = (
+    "surfaces.interactive_shell.ui.components.choice_menu.repl_tty_interactive"
+)
 
 
 def _ctx() -> tuple[ActionToolContext, io.StringIO, Session]:
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False, highlight=False)
     session = Session()
-    return ActionToolContext(session=session, console=console), buf, session
+    presenter = ReplActionDispatchPresenter(session, console)
+    return (
+        ActionToolContext(session=session, console=console, action_dispatch_presenter=presenter),
+        buf,
+        session,
+    )
 
 
 def _record_dispatch(monkeypatch: pytest.MonkeyPatch) -> list[str]:
@@ -34,7 +47,7 @@ def _record_dispatch(monkeypatch: pytest.MonkeyPatch) -> list[str]:
         dispatched.append(command)
         return True
 
-    monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
+    monkeypatch.setattr(_DISPATCH_SLASH_PATCH_TARGET, _fake_dispatch)
     return dispatched
 
 
@@ -57,7 +70,7 @@ def test_interactive_picker_command_is_deferred_to_exclusive_stdin(
 ) -> None:
     """A planner-emitted inline-picker command must be queued for the next prompt
     (exclusive stdin) instead of dispatched inline against the live prompt."""
-    monkeypatch.setattr(slash_tool, "repl_tty_interactive", lambda: True)
+    monkeypatch.setattr(_REPL_TTY_INTERACTIVE_PATCH_TARGET, lambda: True)
     dispatched = _record_dispatch(monkeypatch)
 
     ctx, buf, session = _ctx()
@@ -77,7 +90,7 @@ def test_interactive_picker_runs_inline_when_exclusive_stdin_active(
 ) -> None:
     """When the REPL has already reserved exclusive stdin for this turn, picker
     commands must dispatch inline instead of re-queueing (which would loop)."""
-    monkeypatch.setattr(slash_tool, "repl_tty_interactive", lambda: True)
+    monkeypatch.setattr(_REPL_TTY_INTERACTIVE_PATCH_TARGET, lambda: True)
     dispatched = _record_dispatch(monkeypatch)
 
     ctx, buf, session = _ctx()
@@ -95,7 +108,7 @@ def test_interactive_picker_runs_inline_when_not_a_tty(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Without an interactive TTY there is no live prompt to race; run inline."""
-    monkeypatch.setattr(slash_tool, "repl_tty_interactive", lambda: False)
+    monkeypatch.setattr(_REPL_TTY_INTERACTIVE_PATCH_TARGET, lambda: False)
     dispatched = _record_dispatch(monkeypatch)
 
     ctx, _buf, session = _ctx()
@@ -110,14 +123,14 @@ def test_duplicate_slash_invoke_in_same_turn_is_ignored(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A second slash_invoke for the same command in one turn must not re-run it."""
-    monkeypatch.setattr(slash_tool, "repl_tty_interactive", lambda: True)
+    monkeypatch.setattr(_REPL_TTY_INTERACTIVE_PATCH_TARGET, lambda: True)
     dispatch_calls: list[str] = []
 
     def _fake_dispatch(command: str, *_args: object, **_kwargs: object) -> bool:
         dispatch_calls.append(command)
         return True
 
-    monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
+    monkeypatch.setattr(_DISPATCH_SLASH_PATCH_TARGET, _fake_dispatch)
 
     ctx, _buf, session = _ctx()
     args = {"command": "/integrations", "args": ["list"]}
@@ -142,7 +155,7 @@ def test_non_picker_slash_commands_run_inline_even_in_a_tty(
 ) -> None:
     """Read-only / table commands do not read raw stdin, so they still dispatch
     inline and must not be deferred."""
-    monkeypatch.setattr(slash_tool, "repl_tty_interactive", lambda: True)
+    monkeypatch.setattr(_REPL_TTY_INTERACTIVE_PATCH_TARGET, lambda: True)
     dispatched = _record_dispatch(monkeypatch)
 
     ctx, _buf, session = _ctx()
@@ -161,7 +174,7 @@ def test_exit_slash_requests_runtime_exit(monkeypatch: pytest.MonkeyPatch) -> No
         dispatched.append(command)
         return False
 
-    monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
+    monkeypatch.setattr(_DISPATCH_SLASH_PATCH_TARGET, _fake_dispatch)
 
     requested_exit: list[bool] = []
     ctx, _buf, _session = _ctx()
@@ -169,6 +182,7 @@ def test_exit_slash_requests_runtime_exit(monkeypatch: pytest.MonkeyPatch) -> No
         session=ctx.session,
         console=ctx.console,
         request_exit=lambda: requested_exit.append(True),
+        action_dispatch_presenter=ctx.action_dispatch_presenter,
     )
 
     handled = slash_tool.execute_slash_tool({"command": "/quit", "args": []}, ctx)

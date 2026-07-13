@@ -13,9 +13,8 @@ from core.agent_harness.tools.tool_context import (
     object_schema,
 )
 from core.tool_framework.registered_tool import RegisteredTool
-from surfaces.interactive_shell.command_registry import dispatch_slash
-from surfaces.interactive_shell.runtime import TaskKind, TaskStatus
-from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
+from platform.common.task_types import TaskKind, TaskStatus
+from tools.interactive_shell.dispatch import require_action_dispatch_presenter
 from tools.interactive_shell.shared import plan_foreground_tool
 
 
@@ -67,6 +66,7 @@ def _resolve_task_cancel_target(ctx: ActionToolContext, target: str) -> str | No
 
 
 def execute_task_cancel_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
+    presenter = require_action_dispatch_presenter(ctx)
     target = str(args.get("target", "")).strip()
     if not target:
         return False
@@ -75,26 +75,11 @@ def execute_task_cancel_tool(args: dict[str, Any], ctx: ActionToolContext) -> bo
         return True
     command = f"/cancel {task_id}"
     plan = plan_foreground_tool("slash", "slash")
-    if not execution_allowed(
-        plan.policy,
-        session=ctx.session,
-        console=ctx.console,
-        action_summary=command,
-        confirm_fn=ctx.confirm_fn,
-        is_tty=ctx.is_tty,
-        action_already_listed=ctx.action_already_listed,
-    ):
+    if not presenter.execution_allowed(plan.policy, action_summary=command):
         ctx.session.record("slash", command, ok=False)
         return True
     ctx.console.print(f"[bold]$ {escape(command)}[/bold]")
-    dispatch_slash(
-        command,
-        ctx.session,
-        ctx.console,
-        confirm_fn=ctx.confirm_fn,
-        is_tty=ctx.is_tty,
-        policy_precleared=True,
-    )
+    presenter.dispatch_slash(command, policy_precleared=True)
     return True
 
 
