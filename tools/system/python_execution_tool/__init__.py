@@ -35,11 +35,7 @@ class PythonExecutionTool(BaseTool):
         f"automatically with: {_RUNTIME_FACT_KEYS}). For filesystem introspection use pure "
         "Python: `pathlib.Path(...).iterdir()` to list directories, "
         "`Path('/etc/hostname').read_text()` for the pod name, `psutil.disk_usage('/')` and "
-        "`psutil.virtual_memory()` for disk/memory. When an investigation genuinely needs a "
-        "reachability check for a host already in scope, prefer "
-        "`socket.create_connection((host, port), timeout=3)` with `allow_network: true` over "
-        "`curl`/`ping` — but only for hosts named in the incident, never arbitrary or "
-        "internal-only addresses, and never for scanning. "
+        "`psutil.virtual_memory()` for disk/memory. "
         f"Never run {_NEVER_RUN}, never probe cloud instance metadata over the network, "
         "and never use any other `subprocess` call. When workflow guidance lists skills, "
         "read each skill description and follow the one that matches the user's request."
@@ -50,12 +46,13 @@ class PythonExecutionTool(BaseTool):
         "Parse logs or JSON payloads when a direct tool result needs post-processing",
         "Read runtime facts (version, time, uptime, PID, cloud, kubeconfig, tools) via inputs['opensre_runtime']",
         "List scratchpad files with pathlib; read disk/memory with psutil (no ls/df/free)",
-        "Check host/port reachability with socket.create_connection + allow_network (no curl/ping)",
     ]
     anti_examples = [
         "Changing local files or shelling out to other processes",
         f"Calling {', '.join(BLOCKED_INTROSPECTION_COMMANDS)} (all blocked by the sandbox)",
         "Probing cloud instance metadata over the network (use the injected cloud facts)",
+        "Using allow_network for arbitrary host/port reachability probes or scanning "
+        "(allow_network is unrestricted once enabled — only for approved API-backed analysis)",
         "Long-running jobs, crawlers, or broad external scans",
         "Accessing credentials not explicitly provided by configured integrations or env vars",
     ]

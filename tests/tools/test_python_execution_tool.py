@@ -32,14 +32,18 @@ class TestPythonExecutionToolMetadata:
         assert "github_token" not in props
         assert "github_token" in registered.injected_params
 
-    def test_reachability_guidance_is_scoped_to_in_incident_hosts(self) -> None:
-        """allow_network has no destination allowlist, so the reachability
-        guidance must confine socket probing to hosts named in the incident —
-        never arbitrary or internal-only addresses, never scanning."""
+    def test_does_not_coach_unrestricted_reachability_probing(self) -> None:
+        """allow_network is all-or-nothing with no destination allowlist.
+        Model-facing tool metadata must not advertise socket.create_connection
+        + allow_network as a reachability recipe — natural-language host
+        limits are not a security boundary."""
         description = execute_python_code.description
-        assert "socket.create_connection" in description
-        assert "only for hosts named in the incident" in description
-        assert "never for scanning" in description
+        assert "socket.create_connection" not in description
+        assert "reachability" not in description.lower()
+        assert "approved API-backed analysis" in description
+        anti = " ".join(execute_python_code.anti_examples)
+        assert "arbitrary host/port reachability" in anti
+        assert "socket.create_connection" not in " ".join(execute_python_code.use_cases)
 
     def test_github_star_velocity_skill_guidance_is_attached(self) -> None:
         clear_tool_registry_cache()

@@ -117,10 +117,8 @@ def test_environment_block_omits_cloud_when_not_deployed() -> None:
 
 def test_environment_block_does_not_coach_arbitrary_reachability_probing() -> None:
     """The always-on prompt must not steer the model toward reachability
-    probing (allow_network has no destination allowlist — coaching it invites
-    SSRF on user-supplied hosts). Reachability guidance lives on the tool,
-    scoped to in-incident hosts, not in the fact block. The prompt still
-    forbids the shell reflexes via the deny-list."""
+    probing. allow_network has no destination allowlist — coaching sockets
+    invites SSRF on user-supplied hosts. Shell reflexes stay on the deny-list."""
     block = _env_block({"opensre_version": "0.1"})
     assert "socket.create_connection" not in block
     assert "allow_network" not in block
