@@ -42,6 +42,14 @@ _SETUP_GUIDANCE_RULE = (
     "<server>` for MCP servers. Do not emit JSON or claim you changed runtime state."
 )
 
+_SENTRY_SUMMARY_RULE = (
+    "Sentry summary: when tool_results include search_sentry_issues.digest, present "
+    "the full digest — issue_count + stats_period, cluster breakdown with percents, "
+    "top issues from digest.top_issues, and a priority call using "
+    "digest.priority_short_id with business-impact reasoning. Do not ask to narrow "
+    "or repeat the search when digest is already present."
+)
+
 _HANDOFF_GUIDANCE: dict[str, str] = {
     "provider:local_llama_connect": (
         "The action planner handed off a vague local-model connection request. "
@@ -216,6 +224,7 @@ def _build_system_prompt(
         f"{_PRIOR_INVESTIGATION_FOLLOW_UP_RULE}\n\n"
         f"{_SETUP_GUIDANCE_RULE}\n\n"
         f"{_SOURCE_SCOPED_INVESTIGATION_RULE}\n\n"
+        f"{_SENTRY_SUMMARY_RULE}\n\n"
         f"{_RESPONSE_SHAPE_RULE}\n\n"
         f"{_TERMINOLOGY_RULE}\n{_MARKDOWN_RULE}\n\n"
         f"{environment}"

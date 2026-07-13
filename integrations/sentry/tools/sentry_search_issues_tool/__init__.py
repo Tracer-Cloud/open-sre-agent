@@ -11,10 +11,17 @@ from core.tool_framework.tool_decorator import tool
 from integrations.sentry import (
     DEFAULT_SENTRY_ISSUE_LIMIT,
     SentryConfig,
+    _resolve_stats_period,
     build_sentry_config,
     describe_sentry_api_error,
     list_sentry_issues,
     sentry_config_from_env,
+)
+from integrations.sentry.issue_digest import (
+    build_sentry_issue_digest,
+    classify_issue,
+    cluster_name_for_issue,
+    slim_issue,
 )
 
 
@@ -161,4 +168,38 @@ def search_sentry_issues(
             "query": query,
         }
 
-    return {"source": "sentry", "available": True, "issues": issues, "query": query}
+    return _search_result_payload(issues, query=query, stats_period=stats_period)
+
+
+def _search_result_payload(
+    issues: list[dict[str, Any]],
+    *,
+    query: str,
+    stats_period: str,
+) -> dict[str, Any]:
+    effective_period = _resolve_stats_period(stats_period or None)
+    digest = build_sentry_issue_digest(
+        issues,
+        stats_period=effective_period,
+        query=query,
+    )
+    sample_limit = 15
+    sample = []
+    for issue in issues[:sample_limit]:
+        cluster = cluster_name_for_issue(issue)
+        sample.append(
+            slim_issue(
+                issue,
+                cluster=cluster,
+                classification=classify_issue(issue, cluster),
+            )
+        )
+    return {
+        "source": "sentry",
+        "available": True,
+        "query": query,
+        "stats_period": effective_period,
+        "issues_total": len(issues),
+        "digest": digest,
+        "issues": sample,
+    }

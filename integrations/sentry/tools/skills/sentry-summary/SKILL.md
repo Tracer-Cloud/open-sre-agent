@@ -20,7 +20,8 @@ Sentry here, then suggest a multi-source investigation.
 - **7d** — "this week", general overview
 - Map user words (`last night` → `24h`, `this week` → `7d`)
 
-Up to 100 issues. Empty → widen to `7d` before reporting none.
+Up to 100 issues. Empty → widen to `7d` before reporting none. Results
+include `digest` (clusters, top_issues, priority) — present that directly.
 
 ## 2. Classify
 
