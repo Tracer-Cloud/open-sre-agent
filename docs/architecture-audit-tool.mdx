@@ -1,68 +1,43 @@
 ---
-title: "Architecture audit tool"
-description: "Scan a GitHub repository for architecture violations and get a Markdown audit summary with atomic refactor tasks"
+title: "Architecture audit"
+description: "Interactive-shell architecture audit: clone, deterministic import/placement scans, bash size/shim heuristics, then cleanup"
 ---
 
-The `find_architecture_violations` tool shallow-clones a GitHub repository, runs
-architecture scanners, and returns structured findings. The assistant writes the
-user-facing **Markdown audit report** in chat from that JSON — the tool does not
-return pre-rendered Markdown.
+Architecture audit runs in the **interactive shell** via an action-agent skill.
+It is not a chat/investigation tool.
 
-## Tool
+## Workflow
 
-| Tool | Role | Side effects |
-| --- | --- | --- |
-| `find_architecture_violations` | Clone and scan `owner`/`repo` for layer imports, direct imports, compatibility shims, and misplaced modules | None (ephemeral local clone) |
+1. `architecture_clone_repo` shallow-clones `owner`/`repo` into
+   `.temp/opensre/architecture_workspace`.
+2. `scan_architecture_imports` runs polyglot layer/direct import checks
+   (contracts inferred from the target repo layout).
+3. `scan_module_placement` runs placement heuristics that apply when matching
+   patterns exist (e.g. `tools/`, `integrations/`, banned legacy imports);
+   other layouts simply yield zero findings with complete coverage.
+4. `shell_run` bash heuristics find oversized source files (`wc -l` / similar)
+   and likely compatibility shims across languages — not Python-only.
+5. `architecture_cleanup_repo` deletes `.temp/opensre/architecture_workspace`.
+6. The assistant renders a Markdown audit report from tool JSON + bash output.
 
-## Typical workflow
+## Tools
 
-1. Ask the assistant to audit a repository, for example: "Scan Tracer-Cloud/opensre
-   for architecture issues."
-2. The assistant calls `find_architecture_violations` with `owner` and `repo`.
-3. The tool returns `violations`, `refactor_tasks`, and `scan_summary` (counts,
-   `hotspots`, warnings, skipped categories, `coverage_complete`).
-4. The assistant replies with a Markdown report following the tool's
-   `AUDIT_REPORT.md` outline: executive summary, coverage, hotspots and
-   statistics (from `scan_summary.hotspots`), findings by severity, thematic
-   patterns, recommended sequencing, and checks run.
-
-## Parameters
-
-| Parameter | Default | Purpose |
-| --- | --- | --- |
-| `owner` | required | GitHub organization or user |
-| `repo` | required | Repository name |
-| `ref` | remote default branch | Branch, tag, or SHA to clone |
-| `include_baselines` | `false` | When `true`, report allowlisted import edges instead of suppressing them |
-| `strict_layers` | `true` | When `true`, evaluate transitive cross-layer reachability; when `false`, direct edges only |
-| `categories` | all scanners | Limit to specific violation kinds |
-
-## Coverage and limitations
-
-- **Layer and direct import checks** use tree-sitter import extraction across supported
-  languages (Python, Go, TypeScript/JavaScript, Rust, Java, and more). No import-linter
-  config or Python-only layout is required in the target repository.
-- **Shims and placement** heuristics are Python/OpenSRE-specific and
-  are skipped gracefully when the clone has no relevant Python packages or layout markers.
-- When `scan_summary.coverage_complete` is `false`, some categories were skipped or
-  warnings were raised — treat results as partial coverage, not proof of a clean repo.
-- Layer tiers for unknown repositories are inferred from directory layout; resolution
-  quality varies by language and is syntax-level, not type-aware.
-- Java/Scala/Kotlin repos use Maven-style `module/src/main/java/...` layout for module
-  and package mapping; other JVM layouts may resolve fewer cross-module edges.
-- When import resolution is very low, `scan_summary.warnings` notes under-reporting risk.
-
-## GitHub issues
-
-The tool proposes atomic `refactor_tasks` but does not create GitHub issues. To
-file issues, ask explicitly; the assistant can use approved GitHub mutation tools
-after you confirm.
+| Tool | Role |
+| --- | --- |
+| `architecture_clone_repo` | Clone into `.temp/opensre/architecture_workspace` |
+| `scan_architecture_imports` | Layer/direct import violations |
+| `scan_module_placement` | Misplaced-module findings |
+| `architecture_cleanup_repo` | Delete the architecture workspace only |
+| `shell_run` | Oversized + shim heuristics |
 
 ## Example
 
 ```text
-Audit Tracer-Cloud/opensre for architecture violations and summarize the top themes.
+Audit Tracer-Cloud/opensre for architecture violations, including oversized files.
 ```
 
-The assistant scans the repo, then returns a Markdown report grouped by severity with
-evidence paths and suggested fix order.
+The action agent clones, scans, runs the bash passes, cleans up, and returns a
+Markdown report shaped by
+`core/agent_harness/prompts/skills/architecture_audit/architecture_audit_report.md`.
+Size and shim findings are heuristic — treat them as leads, not AST-proof
+violations.

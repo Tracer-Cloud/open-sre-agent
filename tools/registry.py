@@ -105,7 +105,6 @@ def _skill_guidance_files() -> tuple[Path, ...]:
 
     explicit = (
         REPO_ROOT / "integrations" / "github" / "tools" / "workflow" / "SKILL.md",
-        REPO_ROOT / "tools" / "architecture_issue_tool" / "SKILL.md",
     )
     discovered = sorted(
         (REPO_ROOT / "tools" / "system" / "python_execution_tool" / "skills").glob("*/SKILL.md")

@@ -456,8 +456,11 @@ def run_action_agent_turn(
         )
         if chunk
     ]
-    response_text = "\n".join(response_chunks)
-    if handled:
+    final_text = (getattr(result, "final_text", "") or "").strip()
+    response_text = final_text or "\n".join(response_chunks)
+    if handled and final_text:
+        output.stream(label="OpenSRE", chunks=iter([final_text]))
+    elif handled:
         output.print()
 
     return ToolCallingTurnResult(

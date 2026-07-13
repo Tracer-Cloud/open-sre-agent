@@ -7,12 +7,15 @@ from core.agent_harness.prompts import (
     _SYSTEM_PROMPT_BASE,
     build_action_system_prompt,
     connected_integrations_block,
+    load_skills_block,
     prior_action_facts_block,
     recent_conversation_block,
+    skills_dir,
 )
 from core.agent_harness.prompts.assistant import build_cli_agent_prompt_from_provider
 from core.agent_harness.prompts.assistant_agent_prompt import build_handoff_guidance_block
 from core.agent_harness.prompts.conversation_memory import NO_HISTORY_PLACEHOLDER
+from core.agent_harness.prompts.skills_loader import load_skills_block as cached_load_skills_block
 
 
 def _ctx(
@@ -147,6 +150,50 @@ def test_connected_integrations_block_renders_state() -> None:
     assert "github, posthog_mcp, sentry" in listed
 
 
+def test_skills_loader_bundles_architecture_audit_skill() -> None:
+    cached_load_skills_block.cache_clear()
+    skill_dir = skills_dir() / "architecture_audit"
+    skill = skill_dir / "SKILL.md"
+    template = skill_dir / "architecture_audit_report.md"
+    assert skill.is_file()
+    assert template.is_file()
+
+    block = load_skills_block()
+    assert "SKILLS" in block
+    assert "ARCHITECTURE AUDIT SKILL" in block
+    assert "WHEN TO USE" in block
+    assert "summarize this repo's architecture" in block
+    assert "architecture_clone_repo" in block
+    assert "scan_architecture_imports" in block
+    assert "scan_module_placement" in block
+    assert "architecture_cleanup_repo" in block
+    assert "shell_run" in block
+    assert "Never end the turn with shell_run" in block
+    assert "You write the bash" in block
+    assert "decide what \"large\" means" in block
+    assert "do NOT limit" in block
+    assert "do NOT skip non-Python sources" in block
+    assert "Scan source files of ANY" in block
+    assert "find_architecture_violations" not in block
+    report_path = (
+        "core/agent_harness/prompts/skills/architecture_audit/"
+        "architecture_audit_report.md"
+    )
+    assert f"REPORT TEMPLATE from `{report_path}`" in block
+    assert "### Repository summary" in block
+    assert "### Findings by severity" in block
+    assert "| Severity | Path | Finding |" in block
+    assert "### Recommended sequencing" in block
+    assert "Fill this template VERBATIM" in block
+    assert "Do NOT wrap filled values in backticks" in block
+    assert report_path in block
+
+    prompt = build_action_system_prompt(_ctx(messages=[("user", "audit architecture")]))
+    assert "ARCHITECTURE AUDIT SKILL" in prompt
+    assert "### Findings by severity" in prompt
+    cached_load_skills_block.cache_clear()
+
+
 def test_action_system_prompt_includes_context_blocks() -> None:
     prompt = build_action_system_prompt(
         _ctx(
@@ -157,6 +204,7 @@ def test_action_system_prompt_includes_context_blocks() -> None:
     )
     assert "CONNECTED INTEGRATIONS (this install, right now): github" in prompt
     assert "RECENT CONVERSATION" in prompt
+    assert "ARCHITECTURE AUDIT SKILL" in prompt
 
 
 def test_system_prompt_requires_local_llama_handoff_tag() -> None:

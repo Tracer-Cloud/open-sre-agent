@@ -1,4 +1,4 @@
-"""Tests for architecture scan orchestration and scan_summary metadata."""
+"""Tests for architecture import/placement scan helpers."""
 
 from __future__ import annotations
 
@@ -6,25 +6,19 @@ from pathlib import Path
 from unittest.mock import patch
 
 from tools.architecture_issue_tool.models import ArchitectureViolation
-from tools.architecture_issue_tool.repo_workspace import RepoWorkspace
-from tools.architecture_issue_tool.scan import run_architecture_scan
+from tools.architecture_issue_tool.scan import scan_imports_at_path, scan_placement_at_path
 
 _FIXTURE_ROOT = (
     Path(__file__).resolve().parents[1] / "fixtures" / "architecture_audit" / "polyglot_repo"
 )
 
 
-def test_run_architecture_scan_marks_skipped_import_categories(tmp_path: Path) -> None:
-    workspace = RepoWorkspace(owner="org", repo="repo", ref="main", root=tmp_path)
-
+def test_scan_imports_marks_skipped_categories(tmp_path: Path) -> None:
     with patch(
         "tools.architecture_issue_tool.scan.scan_import_violations",
         return_value=([], ["no supported source files found in cloned repository"]),
     ):
-        result = run_architecture_scan(
-            workspace,
-            categories=["layer_import", "direct_import"],
-        )
+        result = scan_imports_at_path(tmp_path, owner="org", repo="repo")
 
     summary = result["scan_summary"]
     assert summary["categories_skipped"] == ["layer_import", "direct_import"]
@@ -32,35 +26,7 @@ def test_run_architecture_scan_marks_skipped_import_categories(tmp_path: Path) -
     assert "no supported source files found" in summary["warnings"][0]
 
 
-def test_run_architecture_scan_populates_severity_and_kind_counts(tmp_path: Path) -> None:
-    workspace = RepoWorkspace(owner="org", repo="repo", ref="main", root=tmp_path)
-    package = tmp_path / "integrations" / "demo"
-    package.mkdir(parents=True)
-    (package / "__init__.py").write_text(
-        "from integrations.demo.client import DemoClient\n",
-        encoding="utf-8",
-    )
-
-    with patch(
-        "tools.architecture_issue_tool.scan.scan_import_violations",
-        return_value=([], []),
-    ):
-        result = run_architecture_scan(
-            workspace,
-            categories=["compatibility_shim"],
-        )
-
-    summary = result["scan_summary"]
-    assert summary["severity_counts"]["p1"] >= 1
-    assert summary["kind_counts"].get("compatibility_shim", 0) >= 1
-    assert summary["hotspots"]
-    assert summary["coverage_complete"] is True
-    assert summary["categories_skipped"] == []
-
-
-def test_run_architecture_scan_includes_import_violation_counts(tmp_path: Path) -> None:
-    workspace = RepoWorkspace(owner="org", repo="repo", ref="main", root=tmp_path)
-
+def test_scan_imports_includes_violation_counts(tmp_path: Path) -> None:
     layer_violation = ArchitectureViolation(
         id="v-layer",
         kind="layer_import",
@@ -82,7 +48,7 @@ def test_run_architecture_scan_includes_import_violation_counts(tmp_path: Path) 
         "tools.architecture_issue_tool.scan.scan_import_violations",
         return_value=([layer_violation, direct_violation], []),
     ):
-        result = run_architecture_scan(workspace, categories=["layer_import", "direct_import"])
+        result = scan_imports_at_path(tmp_path, owner="org", repo="repo")
 
     summary = result["scan_summary"]
     assert summary["severity_counts"] == {"p0": 1, "p1": 1, "p2": 0}
@@ -91,18 +57,38 @@ def test_run_architecture_scan_includes_import_violation_counts(tmp_path: Path) 
     assert summary["coverage_complete"] is True
 
 
-def test_run_architecture_scan_on_polyglot_fixture() -> None:
-    workspace = RepoWorkspace(
-        owner="fixture",
-        repo="polyglot",
-        ref="main",
-        root=_FIXTURE_ROOT,
-    )
-
-    result = run_architecture_scan(workspace, categories=["layer_import", "direct_import"])
+def test_scan_imports_on_polyglot_fixture() -> None:
+    result = scan_imports_at_path(_FIXTURE_ROOT, owner="fixture", repo="polyglot")
 
     summary = result["scan_summary"]
     assert summary["categories_skipped"] == []
     assert summary["coverage_complete"] is True
     assert summary["kind_counts"].get("layer_import", 0) > 0
     assert summary["kind_counts"].get("direct_import", 0) > 0
+
+
+def test_scan_placement_runs_without_tools_or_integrations(tmp_path: Path) -> None:
+    """Placement coverage stays complete on non-OpenSRE layouts."""
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "a.py").write_text("x = 1\n", encoding="utf-8")
+
+    result = scan_placement_at_path(tmp_path, owner="org", repo="repo")
+
+    summary = result["scan_summary"]
+    assert summary["categories_skipped"] == []
+    assert summary["coverage_complete"] is True
+    assert summary["violations"] == 0
+    assert summary["warnings"] == []
+
+
+def test_scan_placement_detects_legacy_imports_without_opensre_dirs(tmp_path: Path) -> None:
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "legacy.py").write_text("from vendors.foo import bar\n", encoding="utf-8")
+
+    result = scan_placement_at_path(tmp_path, owner="org", repo="repo")
+
+    summary = result["scan_summary"]
+    assert summary["coverage_complete"] is True
+    assert summary["kind_counts"].get("misplaced_module", 0) == 1
+    assert result["violations"][0]["evidence"]["package"] == "vendors"

@@ -1,4 +1,4 @@
-"""Clone GitHub repositories into ephemeral workspaces for architecture scans."""
+"""Clone GitHub repositories into the architecture audit workspace."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from integrations.git.local import _token_auth_env
 _GITHUB_HTTPS_BASE = "https://github.com/"
 _GIT_CLONE_TIMEOUT_SEC = 120.0
 _GIT_REMOTE_TIMEOUT_SEC = 15.0
-_ARCHITECTURE_SANDBOX_DIR = PROJECT_ROOT / ".temp" / "opensre" / "sandbox"
+_ARCHITECTURE_WORKSPACE_DIR = PROJECT_ROOT / ".temp" / "opensre" / "architecture_workspace"
 
 _SKIP_SCAN_ROOT_DIRS = frozenset(
     {
@@ -59,18 +59,38 @@ def github_remote_url(owner: str, repo: str) -> str:
     return f"{_GITHUB_HTTPS_BASE}{owner.strip()}/{repo.strip()}.git"
 
 
-def architecture_sandbox_dir() -> Path:
+def architecture_workspace_dir() -> Path:
     """Return the fixed local directory used for architecture audit git clones."""
-    return _ARCHITECTURE_SANDBOX_DIR
+    return _ARCHITECTURE_WORKSPACE_DIR
 
 
-def _prepare_architecture_sandbox() -> Path:
+def architecture_sandbox_dir() -> Path:
+    """Alias retained for callers; prefer :func:`architecture_workspace_dir`."""
+    return architecture_workspace_dir()
+
+
+def prepare_architecture_workspace() -> Path:
     """Reset and return the architecture audit clone directory."""
-    sandbox = architecture_sandbox_dir()
-    if sandbox.exists():
-        shutil.rmtree(sandbox, ignore_errors=True)
-    sandbox.mkdir(parents=True, exist_ok=True)
-    return sandbox
+    workspace = architecture_workspace_dir()
+    if workspace.exists():
+        shutil.rmtree(workspace, ignore_errors=True)
+    workspace.mkdir(parents=True, exist_ok=True)
+    return workspace
+
+
+def cleanup_architecture_workspace(*, path: str | Path | None = None) -> Path:
+    """Delete the architecture workspace. Refuses paths outside the fixed dir."""
+    workspace = architecture_workspace_dir().resolve()
+    target = workspace if path is None else Path(path).expanduser().resolve()
+    try:
+        target.relative_to(workspace)
+    except ValueError as exc:
+        raise WorkspaceError(
+            f"cleanup refused: path is outside architecture workspace ({workspace})"
+        ) from exc
+    if target.exists():
+        shutil.rmtree(target, ignore_errors=True)
+    return target
 
 
 def resolve_scan_roots(clone_root: Path) -> list[Path]:
@@ -183,20 +203,18 @@ def _shallow_clone(
         raise WorkspaceError(detail)
 
 
-@contextmanager
-def cloned_github_repo(
+def clone_github_repo(
     owner: str,
     repo: str,
     *,
     ref: str = "",
     token: str | None = None,
     local_path: str | None = None,
-) -> Iterator[RepoWorkspace]:
-    """Yield a workspace for *owner*/*repo*, cloning when *local_path* is unset.
+) -> RepoWorkspace:
+    """Clone *owner*/*repo* into the architecture workspace (or use *local_path*).
 
-    When *local_path* is provided (tests/dev only), the path is yielded as-is and
-    never deleted. Otherwise a shallow clone is created under
-    ``.temp/opensre/sandbox`` and removed on exit, including when the caller raises.
+    Unlike :func:`cloned_github_repo`, this does **not** delete the workspace on
+    return — callers must invoke :func:`cleanup_architecture_workspace`.
     """
     normalized_owner = owner.strip()
     normalized_repo = repo.strip()
@@ -207,15 +225,14 @@ def cloned_github_repo(
         root = Path(local_path).expanduser().resolve()
         if not root.is_dir():
             raise WorkspaceError(f"local_path is not a directory: {root}")
-        yield RepoWorkspace(
+        return RepoWorkspace(
             owner=normalized_owner,
             repo=normalized_repo,
             ref=ref.strip(),
             root=root,
         )
-        return
 
-    destination = _prepare_architecture_sandbox()
+    destination = prepare_architecture_workspace()
     remote_url = github_remote_url(normalized_owner, normalized_repo)
     effective_ref = ref.strip() or _remote_default_branch(remote_url, token=token)
 
@@ -226,18 +243,47 @@ def cloned_github_repo(
             ref=effective_ref,
             token=token,
         )
-        yield RepoWorkspace(
-            owner=normalized_owner,
-            repo=normalized_repo,
-            ref=effective_ref,
-            root=destination,
-        )
     except WorkspaceError:
+        cleanup_architecture_workspace()
         raise
     except GitCommandError as exc:
+        cleanup_architecture_workspace()
         if exc.kind == GIT_UNAVAILABLE:
             raise WorkspaceError(exc.message) from exc
         raise WorkspaceError(exc.message) from exc
+
+    return RepoWorkspace(
+        owner=normalized_owner,
+        repo=normalized_repo,
+        ref=effective_ref,
+        root=destination,
+    )
+
+
+@contextmanager
+def cloned_github_repo(
+    owner: str,
+    repo: str,
+    *,
+    ref: str = "",
+    token: str | None = None,
+    local_path: str | None = None,
+) -> Iterator[RepoWorkspace]:
+    """Yield a workspace, cleaning the fixed architecture workspace on exit.
+
+    When *local_path* is provided (tests/dev only), the path is yielded as-is and
+    never deleted. Otherwise a shallow clone is created under
+    ``.temp/opensre/architecture_workspace`` and removed on exit.
+    """
+    workspace = clone_github_repo(
+        owner,
+        repo,
+        ref=ref,
+        token=token,
+        local_path=local_path,
+    )
+    try:
+        yield workspace
     finally:
-        if destination.exists():
-            shutil.rmtree(destination, ignore_errors=True)
+        if local_path is None:
+            cleanup_architecture_workspace()

@@ -1,4 +1,4 @@
-"""Architecture audit tool: scan GitHub repos for violations and propose refactor tasks."""
+"""Architecture audit tools: clone, import/placement scans, and cleanup."""
 
 from __future__ import annotations
 
@@ -14,11 +14,19 @@ from tools.architecture_issue_tool.models import (
 from tools.architecture_issue_tool.repo_workspace import (
     RepoWorkspace,
     WorkspaceError,
+    architecture_workspace_dir,
+    cleanup_architecture_workspace,
+    clone_github_repo,
     cloned_github_repo,
     github_remote_url,
     resolve_scan_roots,
 )
-from tools.architecture_issue_tool.tool import find_architecture_violations
+from tools.architecture_issue_tool.tool import (
+    architecture_cleanup_repo,
+    architecture_clone_repo,
+    scan_architecture_imports,
+    scan_module_placement_tool,
+)
 
 TOOL_MODULES = ("tool",)
 
@@ -31,10 +39,16 @@ __all__ = [
     "Severity",
     "ViolationKind",
     "WorkspaceError",
+    "architecture_cleanup_repo",
+    "architecture_clone_repo",
+    "architecture_workspace_dir",
     "build_error_result",
     "build_success_result",
+    "cleanup_architecture_workspace",
+    "clone_github_repo",
     "cloned_github_repo",
-    "find_architecture_violations",
     "github_remote_url",
     "resolve_scan_roots",
+    "scan_architecture_imports",
+    "scan_module_placement_tool",
 ]

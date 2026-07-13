@@ -324,20 +324,26 @@ def test_github_workflow_skill_guidance_does_not_attach_to_unrelated_github_tool
     assert tool_def.skill_guidance == ""
 
 
-def test_architecture_audit_skill_guidance_is_attached_to_chat_and_investigation() -> None:
-    marker = "Required reply template"
+def test_architecture_audit_action_tools_are_registered() -> None:
+    tools_by_name = {
+        tool_def.name: tool_def for tool_def in registry_module.get_registered_tools("action")
+    }
+    for name in (
+        "architecture_clone_repo",
+        "scan_architecture_imports",
+        "scan_module_placement",
+        "architecture_cleanup_repo",
+    ):
+        assert name in tools_by_name
+        assert tools_by_name[name].skill_guidance == ""
+    assert "find_architecture_violations" not in tools_by_name
 
+
+def test_architecture_audit_not_on_chat_or_investigation() -> None:
     for surface in ("chat", "investigation"):
-        tools_by_name = {
-            tool_def.name: tool_def for tool_def in registry_module.get_registered_tools(surface)
-        }
-        tool_def = tools_by_name["find_architecture_violations"]
-        assert marker in tool_def.description
-        assert "Workflow guidance:" in tool_def.description
-        assert marker in tool_def.skill_guidance
-        assert "AUDIT_REPORT.md" in tool_def.skill_guidance
-        assert "scan_summary.hotspots" in tool_def.skill_guidance
-        assert "find_oversized_files" not in tools_by_name
+        names = {tool_def.name for tool_def in registry_module.get_registered_tools(surface)}
+        assert "find_architecture_violations" not in names
+        assert "architecture_clone_repo" not in names
 
 
 def test_architecture_audit_skill_guidance_does_not_attach_to_unrelated_tools() -> None:
@@ -347,7 +353,7 @@ def test_architecture_audit_skill_guidance_does_not_attach_to_unrelated_tools() 
 
     assert "Required reply template" not in tool_def.skill_guidance
     assert "Propose, do not execute" not in tool_def.skill_guidance
-
+    assert tool_def.skill_guidance == "" or "architecture-audit" not in tool_def.skill_guidance
 
 def test_python_execution_skill_guidance_does_not_attach_to_unrelated_tools() -> None:
     tools_by_name = {tool_def.name: tool_def for tool_def in registry_module.get_registered_tools()}

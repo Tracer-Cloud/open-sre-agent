@@ -48,7 +48,7 @@ def test_build_hotspots_falls_back_to_path_prefix() -> None:
     violations = [
         _violation(
             vid="o1",
-            kind="compatibility_shim",
+            kind="misplaced_module",
             severity="p2",
             evidence={"path": "core/big.py"},
         ),
@@ -62,7 +62,7 @@ def test_build_hotspots_falls_back_to_path_prefix() -> None:
             "count": 1,
             "share": 1.0,
             "severity_counts": {"p0": 0, "p1": 0, "p2": 1},
-            "kind_counts": {"compatibility_shim": 1},
+            "kind_counts": {"misplaced_module": 1},
         }
     ]
 

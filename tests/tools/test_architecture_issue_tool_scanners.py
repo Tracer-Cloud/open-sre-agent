@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
-from tools.architecture_issue_tool.scanners.compatibility_shims import scan_compatibility_shims
 from tools.architecture_issue_tool.scanners.import_checks import scan_import_violations
 from tools.architecture_issue_tool.scanners.module_placement import scan_module_placement
 
@@ -20,17 +19,6 @@ def test_scan_import_violations_uses_tree_sitter_graph() -> None:
     assert any(violation.kind == "layer_import" for violation in violations)
     assert any(violation.kind == "direct_import" for violation in violations)
     assert warnings == []
-
-
-def test_scan_compatibility_shims_detects_reexport_init(tmp_path: Path) -> None:
-    package = tmp_path / "integrations" / "demo"
-    package.mkdir(parents=True)
-    init_file = package / "__init__.py"
-    init_file.write_text("from integrations.demo.client import DemoClient\n", encoding="utf-8")
-
-    violations = scan_compatibility_shims(tmp_path)
-
-    assert any(v.evidence.get("pattern") == "reexport_only_init" for v in violations)
 
 
 def test_scan_module_placement_flags_known_vendor_tool(tmp_path: Path) -> None:

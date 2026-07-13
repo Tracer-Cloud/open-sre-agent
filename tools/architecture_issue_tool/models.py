@@ -8,7 +8,6 @@ from typing import Any, Literal
 ViolationKind = Literal[
     "layer_import",
     "direct_import",
-    "compatibility_shim",
     "misplaced_module",
 ]
 
@@ -105,7 +104,7 @@ def build_success_result(
     scan_summary: ScanSummary | None = None,
     workspace_root: str = "",
 ) -> dict[str, Any]:
-    """Build the stable success payload for ``find_architecture_violations``."""
+    """Build the stable success payload for architecture scan tools."""
 
     summary = scan_summary or ScanSummary(
         violations=len(violations),
@@ -148,7 +147,7 @@ def build_error_result(
     ref: str = "",
     warnings: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Build the stable failure payload for ``find_architecture_violations``."""
+    """Build the stable failure payload for architecture scan tools."""
 
     return {
         "source": "github",

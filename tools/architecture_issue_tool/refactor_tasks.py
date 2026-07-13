@@ -70,14 +70,6 @@ def _task_for_violation(violation: ArchitectureViolation) -> RefactorTask:
             f"{violation.fix_direction}"
         )
         acceptance = ["make check-imports passes", "No new direct or layer import violations"]
-    elif violation.kind == "compatibility_shim":
-        path = str(violation.evidence.get("path", "shim module"))
-        title = f"Remove compatibility shim: {path}"
-        description = (
-            f"{path} appears to be a compatibility-only forwarding module. "
-            f"{violation.fix_direction}"
-        )
-        acceptance = ["Callers import the canonical module path", "Forwarding module removed"]
     else:
         path = str(violation.evidence.get("path", violation.title))
         title = f"Relocate misplaced module: {path}"

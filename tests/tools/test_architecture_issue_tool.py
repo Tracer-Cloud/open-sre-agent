@@ -1,4 +1,4 @@
-"""Tests for find_architecture_violations tool wrapper."""
+"""Tests for architecture action tools (clone, import, placement, cleanup)."""
 
 from __future__ import annotations
 
@@ -6,64 +6,95 @@ from pathlib import Path
 
 from tests.tools.conftest import BaseToolContract
 from tools import registry as registry_module
-from tools.architecture_issue_tool.tool import find_architecture_violations
+from tools.architecture_issue_tool.tool import (
+    architecture_cleanup_repo,
+    architecture_clone_repo,
+    scan_architecture_imports,
+    scan_module_placement_tool,
+)
 
 
-class TestFindArchitectureViolationsContract(BaseToolContract):
+class TestArchitectureCloneRepoContract(BaseToolContract):
     def get_tool_under_test(self):
-        return find_architecture_violations.__opensre_registered_tool__
+        return architecture_clone_repo.__opensre_registered_tool__
 
 
-def test_find_architecture_violations_scans_local_path_fixture(tmp_path: Path) -> None:
-    package = tmp_path / "integrations" / "demo"
-    package.mkdir(parents=True)
-    (package / "__init__.py").write_text(
-        "from integrations.demo.client import DemoClient\n",
-        encoding="utf-8",
-    )
+class TestScanArchitectureImportsContract(BaseToolContract):
+    def get_tool_under_test(self):
+        return scan_architecture_imports.__opensre_registered_tool__
 
-    result = find_architecture_violations(
-        owner="Tracer-Cloud",
-        repo="opensre",
-        local_path=str(tmp_path),
-        categories=["compatibility_shim"],
+
+class TestScanModulePlacementContract(BaseToolContract):
+    def get_tool_under_test(self):
+        return scan_module_placement_tool.__opensre_registered_tool__
+
+
+class TestArchitectureCleanupRepoContract(BaseToolContract):
+    def get_tool_under_test(self):
+        return architecture_cleanup_repo.__opensre_registered_tool__
+
+
+def test_architecture_tools_are_action_surface_only() -> None:
+    registry_module.clear_tool_registry_cache()
+    action = {
+        tool_def.name: tool_def for tool_def in registry_module.get_registered_tools("action")
+    }
+    chat = {tool_def.name: tool_def for tool_def in registry_module.get_registered_tools("chat")}
+
+    for name in (
+        "architecture_clone_repo",
+        "scan_architecture_imports",
+        "scan_module_placement",
+        "architecture_cleanup_repo",
+    ):
+        assert name in action
+        assert name not in chat
+
+    assert "find_architecture_violations" not in action
+    assert "find_architecture_violations" not in chat
+
+
+def test_scan_architecture_imports_on_local_path(tmp_path: Path) -> None:
+    (tmp_path / "core").mkdir()
+    (tmp_path / "core" / "a.py").write_text("x = 1\n", encoding="utf-8")
+
+    result = scan_architecture_imports(
+        workspace_root=str(tmp_path),
+        owner="org",
+        repo="repo",
     )
 
     assert result["available"] is True
-    assert result["owner"] == "Tracer-Cloud"
-    assert result["repo"] == "opensre"
-    assert result["scan_summary"]["categories_scanned"] == ["compatibility_shim"]
-    assert result["scan_summary"]["kind_counts"].get("compatibility_shim", 0) >= 1
-    assert result["scan_summary"]["coverage_complete"] is True
-    assert result["scan_summary"]["categories_skipped"] == []
-    assert len(result["violations"]) >= 1
-    assert len(result["refactor_tasks"]) >= 1
-    assert result["side_effects"] == []
+    assert result["scan_summary"]["categories_scanned"] == ["layer_import", "direct_import"]
+    assert result["workspace_root"] == str(tmp_path.resolve())
 
 
-def test_metadata_is_github_read_only() -> None:
-    rt = find_architecture_violations.__opensre_registered_tool__
-    assert rt.source == "github"
-    assert rt.side_effect_level == "read_only"
-    assert "owner" in rt.input_schema["properties"]
-    assert "repo" in rt.input_schema["properties"]
-    assert "oversized_file" not in rt.input_schema["properties"]["categories"]["items"]["enum"]
-    assert "max_lines" not in rt.input_schema["properties"]
+def test_scan_module_placement_on_local_fixture(tmp_path: Path) -> None:
+    package = tmp_path / "tools" / "community_followup_tool"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text("# placeholder\n", encoding="utf-8")
+
+    result = scan_module_placement_tool(
+        workspace_root=str(tmp_path),
+        owner="org",
+        repo="repo",
+    )
+
+    assert result["available"] is True
+    assert result["scan_summary"]["kind_counts"].get("misplaced_module", 0) >= 1
 
 
-def test_skill_guidance_is_attached_via_registry() -> None:
-    registry_module.clear_tool_registry_cache()
-    marker = "Required reply template"
-    tools_by_name = {
-        tool_def.name: tool_def for tool_def in registry_module.get_registered_tools("chat")
-    }
-    tool_def = tools_by_name["find_architecture_violations"]
-    assert marker in tool_def.description
-    assert marker in tool_def.skill_guidance
-    assert "AUDIT_REPORT.md" in tool_def.skill_guidance
-    assert "Hotspots and statistics" in tool_def.skill_guidance
-    assert "scan_summary.hotspots" in tool_def.skill_guidance
-    assert "find_architecture_violations" in tool_def.skill_guidance
-    assert "find_oversized_files" not in tools_by_name
-    assert "prepare_architecture_workspace" not in tools_by_name
-    assert "release_architecture_workspace" not in tools_by_name
+def test_architecture_clone_repo_local_path(tmp_path: Path) -> None:
+    result = architecture_clone_repo(
+        owner="org",
+        repo="repo",
+        local_path=str(tmp_path),
+    )
+    assert result["ok"] is True
+    assert result["workspace_root"] == str(tmp_path.resolve())
+
+
+def test_architecture_cleanup_refuses_outside_path(tmp_path: Path) -> None:
+    result = architecture_cleanup_repo(workspace_root=str(tmp_path))
+    assert result["ok"] is False
+    assert "outside" in result["error"]

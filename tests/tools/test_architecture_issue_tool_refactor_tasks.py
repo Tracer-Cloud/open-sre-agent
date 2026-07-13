@@ -29,8 +29,8 @@ def _violation(
 
 
 def test_dedupe_violations_keeps_first_of_same_kind_and_path() -> None:
-    first = _violation(violation_id="v-1", kind="compatibility_shim", path="tools/foo.py")
-    second = _violation(violation_id="v-2", kind="compatibility_shim", path="tools/foo.py")
+    first = _violation(violation_id="v-1", kind="misplaced_module", path="tools/foo.py")
+    second = _violation(violation_id="v-2", kind="misplaced_module", path="tools/foo.py")
 
     deduped = dedupe_violations([first, second])
 
@@ -40,7 +40,7 @@ def test_dedupe_violations_keeps_first_of_same_kind_and_path() -> None:
 def test_build_refactor_tasks_emits_one_task_per_violation() -> None:
     violations = [
         _violation(violation_id="v-1", kind="layer_import", edge="core.a -> integrations.b"),
-        _violation(violation_id="v-2", kind="compatibility_shim", path="tools/foo.py"),
+        _violation(violation_id="v-2", kind="misplaced_module", path="tools/foo.py"),
     ]
 
     tasks = build_refactor_tasks(violations)
@@ -53,9 +53,9 @@ def test_build_refactor_tasks_emits_one_task_per_violation() -> None:
 
 
 def test_build_refactor_tasks_includes_acceptance_criteria() -> None:
-    violation = _violation(violation_id="v-1", kind="compatibility_shim", path="pkg/__init__.py")
+    violation = _violation(violation_id="v-1", kind="misplaced_module", path="pkg/bad.py")
 
     tasks = build_refactor_tasks([violation])
 
     assert tasks[0].acceptance_criteria
-    assert "Forwarding module removed" in tasks[0].acceptance_criteria[1]
+    assert "canonical package" in tasks[0].acceptance_criteria[0]

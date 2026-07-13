@@ -57,6 +57,16 @@ _CODE_FENCE = "```"
 _CODE_FENCE_LINE_RE = re.compile(rf"^{re.escape(_CODE_FENCE)}", re.MULTILINE)
 _MARKDOWN_CODE_THEME = "ansi_dark"
 
+# Rich Markdown treats ``__init__.py`` as bold emphasis around ``init``, which
+# strips the underscores and restyles that span. Escape dunder filenames so
+# path-heavy reports (architecture audits, etc.) keep uniform body color.
+_DUNDER_FILENAME_RE = re.compile(r"__([A-Za-z0-9_]+)__(?=\.py\b)")
+
+
+def _escape_markdown_dunder_filenames(text: str) -> str:
+    """Neutralize ``__name__.py`` so Markdown does not parse it as strong emphasis."""
+    return _DUNDER_FILENAME_RE.sub(r"\_\_\1\_\_", text)
+
 STREAM_LABEL_ASSISTANT = "assistant"
 STREAM_LABEL_ANSWER = "answer"
 
@@ -98,7 +108,12 @@ def stream_to_console(
             console.print()
             render_response_header(console, label)
             with console.use_theme(ui_theme.MARKDOWN_THEME):
-                console.print(Markdown(text, code_theme=_MARKDOWN_CODE_THEME))
+                console.print(
+                    Markdown(
+                        _escape_markdown_dunder_filenames(text),
+                        code_theme=_MARKDOWN_CODE_THEME,
+                    )
+                )
             console.print()
         return text
 
@@ -172,7 +187,12 @@ def stream_to_console(
         if not text.strip():
             return
         with console.use_theme(ui_theme.MARKDOWN_THEME):
-            console.print(Markdown(text.rstrip(), code_theme=_MARKDOWN_CODE_THEME))
+            console.print(
+                Markdown(
+                    _escape_markdown_dunder_filenames(text.rstrip()),
+                    code_theme=_MARKDOWN_CODE_THEME,
+                )
+            )
 
     def _flush_paragraphs(*, force: bool = False) -> None:
         """Emit any complete paragraphs from ``para_buffer``.

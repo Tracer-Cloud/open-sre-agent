@@ -72,20 +72,20 @@ def test_build_success_result_shape() -> None:
     violations = [
         ArchitectureViolation(
             id="v-1",
-            kind="compatibility_shim",
+            kind="misplaced_module",
             severity="p2",
-            title="Compatibility shim",
-            evidence={"path": "tools/foo.py", "pattern": "reexport_only_init"},
-            fix_direction="Import the canonical module.",
+            title="Misplaced module",
+            evidence={"path": "tools/foo.py", "pattern": "known_vendor_tool"},
+            fix_direction="Move to integrations.",
         )
     ]
     tasks = [
         RefactorTask(
             task_id="t-1",
-            title="Remove tools/foo.py shim",
-            description="Delete forwarding module.",
+            title="Relocate tools/foo.py",
+            description="Move module.",
             scope_files=["tools/foo.py"],
-            acceptance_criteria=["Forwarding module removed"],
+            acceptance_criteria=["Module lives in the canonical package"],
             labels=["refactor"],
             related_violation_ids=["v-1"],
         )
@@ -134,10 +134,10 @@ def test_scan_summary_to_dict() -> None:
         violations=3,
         tasks=2,
         warnings=["skipped layer checks"],
-        categories_scanned=["compatibility_shim", "misplaced_module"],
+        categories_scanned=["misplaced_module", "layer_import"],
         categories_skipped=["layer_import"],
         severity_counts={"p0": 1, "p1": 1, "p2": 1},
-        kind_counts={"layer_import": 1, "compatibility_shim": 2},
+        kind_counts={"layer_import": 1, "misplaced_module": 2},
         hotspots=[{"area": "core", "count": 2, "share": 0.6667}],
         coverage_complete=False,
     )
@@ -145,10 +145,10 @@ def test_scan_summary_to_dict() -> None:
     payload = summary.to_dict()
 
     assert payload["violations"] == 3
-    assert payload["categories_scanned"] == ["compatibility_shim", "misplaced_module"]
+    assert payload["categories_scanned"] == ["misplaced_module", "layer_import"]
     assert payload["categories_skipped"] == ["layer_import"]
     assert payload["severity_counts"] == {"p0": 1, "p1": 1, "p2": 1}
-    assert payload["kind_counts"] == {"layer_import": 1, "compatibility_shim": 2}
+    assert payload["kind_counts"] == {"layer_import": 1, "misplaced_module": 2}
     assert payload["hotspots"] == [{"area": "core", "count": 2, "share": 0.6667}]
     assert payload["coverage_complete"] is False
 

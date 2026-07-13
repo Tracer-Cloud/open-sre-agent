@@ -80,8 +80,8 @@ def _scan_known_vendor_tools(clone_root: Path) -> list[ArchitectureViolation]:
                     "suggested_location": "integrations/<vendor>/tools/",
                 },
                 fix_direction=(
-                    f"Move {package_name} under integrations/<vendor>/tools/ per "
-                    "docs/tool-placement-policy.md."
+                    f"Move {package_name} under integrations/<vendor>/tools/ "
+                    "(or the repo's equivalent vendor-owned tools package)."
                 ),
             )
         )
@@ -247,7 +247,7 @@ def _scan_legacy_top_level_imports(clone_root: Path) -> list[ArchitectureViolati
                     },
                     fix_direction=(
                         f"Remove imports from banned top-level package {legacy_pkg}/ "
-                        "and use integrations/ instead."
+                        "and use the repo's integration/vendor package layout instead."
                     ),
                 )
             )
