@@ -15,10 +15,10 @@ from dataclasses import dataclass
 from typing import Any
 
 import httpx
-from pydantic import Field
+from pydantic import Field, ValidationError
 
 from config.strict_config import StrictConfigModel
-from integrations._validation_helpers import report_validation_failure
+from integrations._validation_helpers import report_classify_failure, report_validation_failure
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +71,11 @@ class TempoValidationResult:
 def build_tempo_config(raw: dict[str, Any] | None) -> TempoConfig:
     """Build a normalized Tempo config object from env/store data."""
     return TempoConfig.model_validate(raw or {})
+
+
+def _tempo_validation_failure() -> ValueError:
+    """Return a non-secret exception for Tempo config validation failures."""
+    return ValueError("TempoConfig validation failed")
 
 
 def tempo_config_from_env() -> TempoConfig | None:
@@ -162,7 +167,16 @@ def classify(credentials: dict[str, Any], record_id: str) -> tuple[TempoConfig |
                 "integration_id": record_id,
             }
         )
-    except Exception:
+    except ValidationError:
+        report_classify_failure(
+            _tempo_validation_failure(),
+            logger=logger,
+            integration="tempo",
+            record_id=record_id,
+        )
+        return None, None
+    except Exception as exc:
+        report_classify_failure(exc, logger=logger, integration="tempo", record_id=record_id)
         return None, None
     if cfg.is_configured:
         return cfg, "tempo"

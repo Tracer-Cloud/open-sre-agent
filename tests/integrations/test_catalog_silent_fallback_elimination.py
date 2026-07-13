@@ -121,6 +121,7 @@ _CLASSIFY_PATCH_TARGETS: list[tuple[str, str, str]] = [
     ("splunk", "integrations.splunk", "SplunkIntegrationConfig"),
     ("supabase", "integrations.supabase", "build_supabase_config"),
     ("smtp", "integrations.smtp", "SMTPIntegrationConfig"),
+    ("tempo", "integrations.tempo", "build_tempo_config"),
 ]
 
 

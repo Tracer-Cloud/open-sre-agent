@@ -1,9 +1,12 @@
 """Unit tests for the Grafana Tempo integration module."""
 
+from unittest.mock import patch
+
 from integrations.catalog import load_env_integrations
 from integrations.tempo import (
     TempoConfig,
     build_tempo_config,
+    classify,
     tempo_config_from_env,
     tempo_extract_params,
     validate_tempo_config,
@@ -50,6 +53,29 @@ class TestBuildTempoConfig:
 
     def test_from_none(self) -> None:
         assert build_tempo_config(None).is_configured is False
+
+
+class TestTempoClassify:
+    def test_validation_failure_reports_without_secret_values(self) -> None:
+        api_key = "tempo-secret-api-key"
+        password = "tempo-secret-password"
+        with patch("integrations._validation_helpers.report_exception") as mock_report:
+            result = classify(
+                {
+                    "url": object(),
+                    "api_key": api_key,
+                    "username": "tempo-user",
+                    "password": password,
+                },
+                "tempo-record",
+            )
+
+        assert result == (None, None)
+        mock_report.assert_called_once()
+        reported_exc = mock_report.call_args.args[0]
+        assert api_key not in str(reported_exc)
+        assert password not in str(reported_exc)
+        assert "TempoConfig validation failed" in str(reported_exc)
 
 
 class TestTempoConfigFromEnv:
