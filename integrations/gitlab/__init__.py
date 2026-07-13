@@ -6,7 +6,7 @@ import logging
 import os
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 import httpx
 from pydantic import Field, field_validator
@@ -19,6 +19,17 @@ logger = logging.getLogger(__name__)
 DEFAULT_GITLAB_BASE_URL = "https://gitlab.com/api/v4"
 
 
+def _normalize_gitlab_base_url(value: Any) -> str:
+    normalized = str(value or DEFAULT_GITLAB_BASE_URL).strip().rstrip("/")
+    if not normalized:
+        return DEFAULT_GITLAB_BASE_URL
+
+    parsed = urlsplit(normalized)
+    if parsed.scheme and parsed.netloc and parsed.path == "":
+        return f"{normalized}/api/v4"
+    return normalized
+
+
 class GitlabConfig(StrictConfigModel):
     """Normalized Gitlab connection settings."""
 
@@ -29,8 +40,7 @@ class GitlabConfig(StrictConfigModel):
     @field_validator("base_url", mode="before")
     @classmethod
     def _normalize_base_url(cls, value: Any) -> str:
-        normalized = str(value or DEFAULT_GITLAB_BASE_URL).strip()
-        return normalized or DEFAULT_GITLAB_BASE_URL
+        return _normalize_gitlab_base_url(value)
 
     @property
     def api_base_url(self) -> str:
@@ -38,10 +48,10 @@ class GitlabConfig(StrictConfigModel):
 
     @property
     def auth_headers(self) -> dict[str, str]:
-        return {
-            "Authorization": f"Bearer {self.auth_token}",
-            "Accept": "application/json",
-        }
+        headers = {"Accept": "application/json"}
+        if self.auth_token:
+            headers["Authorization"] = f"Bearer {self.auth_token}"
+        return headers
 
 
 @dataclass(frozen=True)

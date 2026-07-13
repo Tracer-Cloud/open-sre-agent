@@ -21,6 +21,7 @@ from integrations.gitlab import (
     validate_gitlab_config,
     validate_gitlab_connection,
 )
+from integrations.gitlab.verifier import verify_gitlab
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -67,6 +68,12 @@ def test_gitlab_config_api_base_url_strips_trailing_slash() -> None:
     assert config.api_base_url == "https://gitlab.example.com/api/v4"
 
 
+def test_gitlab_config_normalizes_bare_host_to_api_base_url() -> None:
+    config = _make_config(base_url="https://gitlab.example.com")
+
+    assert config.api_base_url == "https://gitlab.example.com/api/v4"
+
+
 def test_gitlab_config_auth_headers_include_bearer_token() -> None:
     config = _make_config(auth_token="my-secret-token")
 
@@ -74,6 +81,12 @@ def test_gitlab_config_auth_headers_include_bearer_token() -> None:
         "Authorization": "Bearer my-secret-token",
         "Accept": "application/json",
     }
+
+
+def test_gitlab_config_auth_headers_omit_empty_bearer_token() -> None:
+    config = _make_config(auth_token="")
+
+    assert config.auth_headers == {"Accept": "application/json"}
 
 
 def test_gitlab_config_normalizes_empty_base_url_to_default() -> None:
@@ -217,6 +230,23 @@ def test_validate_gitlab_config_handles_generic_exception(
 
     assert result.ok is False
     assert "connection refused" in result.detail
+
+
+def test_verify_gitlab_wraps_validation_result(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _ok(*, config: GitlabConfig) -> dict[str, str]:
+        del config
+        return {"username": "gl-user"}
+
+    monkeypatch.setattr("integrations.gitlab.validate_gitlab_connection", _ok)
+
+    result = verify_gitlab("local store", {"auth_token": "test-token"})
+
+    assert result == {
+        "service": "gitlab",
+        "source": "local store",
+        "status": "passed",
+        "detail": "GitLab connectivity successful. Authenticated as @gl-user",
+    }
 
 
 # ---------------------------------------------------------------------------

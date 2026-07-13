@@ -17,12 +17,14 @@ from dataclasses import asdict
 from datetime import UTC, datetime
 from tests.synthetic.rds_postgres.run_suite import (
     _resolved_golden_trajectory, _trajectory_policy_for_fixture,
-    _apply_trajectory_policy_to_score, score_result,
+    _apply_trajectory_policy_to_score,
 )
 from tests.synthetic.rds_postgres.observations import (
-    build_observation, compute_trajectory_metrics, evaluate_trajectory_policy,
+    build_observation, compute_trajectory_metrics,
 )
 from tests.synthetic.rds_postgres.scenario_loader import load_all_scenarios, SUITE_DIR
+from tests.synthetic.rds_postgres.scoring import score_result
+from tests.synthetic.rds_postgres.trajectory_policy import evaluate_trajectory_policy
 
 baseline_dir = Path('tests/synthetic/rds_postgres/_baseline')
 baseline_dir.mkdir(parents=True, exist_ok=True)
@@ -69,12 +71,11 @@ uv run python -m tests.synthetic.rds_postgres.run_suite \
   --baseline-check tests/synthetic/rds_postgres/_baseline
 ```
 
-## Re-export shim policy
+## Import policy
 
-Do not add new compatibility-only re-export shims. When moving symbols, migrate
-import sites to the canonical module and delete the old path in the same change.
-Existing re-exports in `observations.py` are temporary legacy debt; remove them
-when touching that surface rather than extending the pattern.
+Import scoring symbols from ``scoring.py``, trajectory policy types from
+``trajectory_policy.py``, and orchestration helpers from ``run_suite.py``.
+Do not add compatibility-only re-export shims.
 
 ## Module layout (after all phases)
 

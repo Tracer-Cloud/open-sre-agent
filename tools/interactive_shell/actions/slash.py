@@ -6,6 +6,13 @@ from typing import Any
 
 from rich.markup import escape
 
+from core.agent_harness.session.terminal_access import (
+    agent_turn_executed_slashes,
+    exclusive_stdin_active,
+    session_terminal,
+    set_auto_command,
+    set_turn_outcome_hint,
+)
 from core.agent_harness.tools.tool_context import (
     ActionToolContext,
     capability_available_from_sources,
@@ -43,12 +50,21 @@ _INTERACTIVE_PICKER_SUBCOMMANDS: frozenset[tuple[str, str]] = frozenset(
 )
 
 
-def _slash_drives_interactive_picker(name: str, slash_args: list[str]) -> bool:
+def _slash_drives_interactive_picker(
+    name: str,
+    slash_args: list[str],
+    *,
+    session: Any,
+    is_tty: bool | None,
+) -> bool:
     """True when a planned slash command opens a raw-stdin inline picker/wizard.
 
-    Only relevant in an interactive TTY: without one there is no live prompt to
-    race and the picker safely no-ops, so the command can run inline.
+    Only relevant in an interactive REPL with a terminal facet: gateway/headless
+    sessions always run inline, and non-TTY turns must not queue back to a REPL
+    loop that does not exist (e.g. gateway running under tmux with a TTY stdin).
     """
+    if is_tty is False or session_terminal(session) is None:
+        return False
     if not repl_tty_interactive():
         return False
     if name == "/login":
@@ -94,23 +110,23 @@ def execute_slash_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
             ctx,
         )
 
-    if stripped in ctx.session.terminal.agent_turn_executed_slashes:
+    if stripped in agent_turn_executed_slashes(ctx.session):
         return True
 
-    if (
-        _slash_drives_interactive_picker(name, slash_args)
-        and not ctx.session.terminal.exclusive_stdin_active
-    ):
+    if _slash_drives_interactive_picker(
+        name,
+        slash_args,
+        session=ctx.session,
+        is_tty=ctx.is_tty,
+    ) and not exclusive_stdin_active(ctx.session):
         # Hand the picker back to the REPL loop instead of running it against the
         # live prompt: set_auto_command re-submits it as a deterministic turn
         # the loop dispatches with exclusive stdin, so no CPR replies leak in.
         # Do not record a slash history row here — dispatch_slash will record when
         # the queued command runs. Attach a turn hint for this turn's analytics.
         ctx.console.print(f"[{DIM}]Launching[/] [{BOLD_BRAND}]{escape(stripped)}[/]…")
-        ctx.session.terminal.set_auto_command(stripped)
-        ctx.session.terminal.set_turn_outcome_hint(
-            f"queued {stripped} for exclusive stdin dispatch"
-        )
+        set_auto_command(ctx.session, stripped)
+        set_turn_outcome_hint(ctx.session, f"queued {stripped} for exclusive stdin dispatch")
         return True
 
     plan = plan_foreground_tool("slash", "slash")
@@ -137,7 +153,7 @@ def execute_slash_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
         ctx,
         policy_precleared=True,
     )
-    ctx.session.terminal.agent_turn_executed_slashes.add(stripped)
+    agent_turn_executed_slashes(ctx.session).add(stripped)
     return True
 
 

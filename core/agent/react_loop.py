@@ -41,7 +41,8 @@ from core.llm.types import ToolCall
 from core.messages import MessageMapper, UserRuntimeMessage
 from core.provider import ProviderRequest
 from core.types import RuntimeTool
-from platform.observability.tool_trace import redact_sensitive
+from platform.observability.trace.redaction import redact_sensitive
+from platform.observability.trace.spans import llm_span
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +78,7 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
         self._final_system_prompt = self._system
         self._hit_cap = True
         self._terminated_by_tool = False
+        self._iterations_used = 0
 
     def run(self) -> AgentRunResult:
         """Drive the loop to completion and return its outcome."""
@@ -89,10 +91,20 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
                 }
             )
         )
-        for iteration in range(self._max_iterations):
-            if self._run_iteration(iteration):
-                break
-        return self._finalize()
+        try:
+            for iteration in range(self._max_iterations):
+                self._iterations_used = iteration + 1
+                if self._run_iteration(iteration):
+                    break
+            return self._finalize()
+        finally:
+            note_progress = getattr(self._host, "_note_react_run_progress", None)
+            if callable(note_progress):
+                note_progress(
+                    iterations_used=self._iterations_used,
+                    executed=list(self._executed),
+                    hit_iteration_cap=self._hit_cap,
+                )
 
     def _run_iteration(self, iteration: int) -> bool:
         """Run one think -> observe step. Return True when the loop should stop."""
@@ -141,11 +153,13 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
                 message_count=len(provider_request.messages),
             )
         )
-        response = self._llm.invoke(
-            provider_request.messages,
-            system=provider_request.system,
-            tools=provider_request.tools,
-        )
+        model_name = str(getattr(self._llm, "model_id", None) or "invoke")
+        with llm_span(model_name, iteration=iteration):
+            response = self._llm.invoke(
+                provider_request.messages,
+                system=provider_request.system,
+                tools=provider_request.tools,
+            )
         response = self._host._after_response(provider_request, response)
         self._host._emit_runtime(
             ProviderRequestEndEvent(
@@ -297,6 +311,7 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
             tool_results=self._tool_results,
             terminated_by_tool=self._terminated_by_tool,
             hit_iteration_cap=self._hit_cap,
+            llm_iterations_used=self._iterations_used,
             final_system_prompt=self._final_system_prompt,
         )
         self._host._emit_runtime(

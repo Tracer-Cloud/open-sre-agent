@@ -314,9 +314,9 @@ def test_trajectory_policy_gate_present_on_pass() -> None:
     """Gates must contain 'trajectory_policy' with status='pass' for a passing policy."""
     from tests.synthetic.rds_postgres.run_suite import (
         _apply_trajectory_policy_to_score,
-        score_result,
     )
     from tests.synthetic.rds_postgres.scenario_loader import SUITE_DIR, load_all_scenarios
+    from tests.synthetic.rds_postgres.scoring import score_result
 
     fixture = next(iter(load_all_scenarios(SUITE_DIR)))
     final_state: dict[str, Any] = {
@@ -364,9 +364,9 @@ def test_trajectory_policy_gate_present_when_not_applicable() -> None:
     """When trajectory_policy is None, gate must be recorded as not_applicable."""
     from tests.synthetic.rds_postgres.run_suite import (
         _apply_trajectory_policy_to_score,
-        score_result,
     )
     from tests.synthetic.rds_postgres.scenario_loader import SUITE_DIR, load_all_scenarios
+    from tests.synthetic.rds_postgres.scoring import score_result
 
     fixture = next(iter(load_all_scenarios(SUITE_DIR)))
     final_state: dict[str, Any] = {
@@ -395,9 +395,9 @@ def test_trajectory_policy_failure_sets_passed_false() -> None:
     from tests.synthetic.rds_postgres.observations import compute_trajectory_metrics
     from tests.synthetic.rds_postgres.run_suite import (
         _apply_trajectory_policy_to_score,
-        score_result,
     )
     from tests.synthetic.rds_postgres.scenario_loader import SUITE_DIR, load_all_scenarios
+    from tests.synthetic.rds_postgres.scoring import score_result
 
     # Use fixture 000-healthy: it has no required evidence so a pure policy
     # failure can be isolated without noise from other failures.

@@ -22,6 +22,10 @@ In v1, the `smtp` integration is used for:
 
 - `/background` RCA completion notifications
 
+Email is one of two completion channels — [Telegram](/messaging/telegram) is the
+other, and you can enable both at once. See
+[Background investigations](/background-investigations).
+
 The email summary includes:
 
 - **Root cause**
@@ -87,14 +91,24 @@ smtp: passed — Connected to SMTP server successfully.
 
 ## Step 3: Use it with background investigations
 
-Enable background mode in the interactive shell:
+Enable background mode in the interactive shell **and select the `email`
+channel**. Notification channels are empty by default, so `/background on` on
+its own sends nothing:
 
 ```text
 /background on
+/background notify set email
+/background notify list   # -> email
 ```
 
 Then start an investigation as usual. When it completes, OpenSRE sends the
 RCA summary email to the configured default recipient.
+
+To send the same summary to Telegram as well:
+
+```text
+/background notify set email,telegram
+```
 
 You can inspect the completed job in the shell with:
 

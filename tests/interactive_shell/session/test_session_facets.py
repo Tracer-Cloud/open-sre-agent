@@ -16,7 +16,7 @@ from core.domain.alerts.inbox import IncomingAlert
 from surfaces.interactive_shell.session.session import Session
 
 # Core fields are inherited from SessionCore; the shell adds these two facets.
-_CORE_FIELD_COUNT = 18
+_CORE_FIELD_COUNT = 19
 _FACET_FIELDS = ("alerts", "terminal")
 
 
@@ -48,7 +48,7 @@ def test_terminal_facet_holds_the_prompt_toolkit_cluster() -> None:
     terminal = _session().terminal
     for f in (
         "prompt_history_backend",
-        "pt_style_app",
+        "prompt_app",
         "main_loop",
         "prompt_refresh_fn",
         "fleet_sampler_starter",

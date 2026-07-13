@@ -407,14 +407,16 @@ class DocsReference:
         *,
         top_n: int = _DEFAULT_TOP_N,
         max_chars: int = _DEFAULT_MAX_TOTAL_CHARS,
+        root: Path | None = None,
     ) -> str:
         """Assemble a docs reference block for LLM grounding.
 
         Includes the top-N most relevant pages (with body excerpts) followed by
         a compact index of all discovered pages. Returns ``""`` when no docs
-        are available so callers can detect that and adjust the prompt.
+        are available so callers can detect that and adjust the prompt. ``root``
+        defaults to the repository ``docs/`` directory.
         """
-        pages = self.discover()
+        pages = self.discover(root)
         if not pages:
             return ""
 

@@ -334,6 +334,11 @@ def sync_provider_env(
             active_non_secret.add(provider.endpoint_env)
         if provider.api_version_env:
             active_non_secret.add(provider.api_version_env)
+    # A ``host`` credential (e.g. the Ollama host) is non-secret runtime config
+    # that the wizard persists to ``.env`` — keep it as an active key so this
+    # sync does not strip it back out in the same wizard run (see #3291).
+    if provider.credential_kind == "host" and provider.api_key_env:
+        active_non_secret.add(provider.api_key_env)
     keys_to_remove -= active_non_secret
 
     lines = _remove_keys(existing, keys_to_remove)

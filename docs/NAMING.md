@@ -61,7 +61,7 @@ Use fully qualified paths in code; keep short mental labels for docs.
 | ReAct loop | `from core.agent.react_loop import run_react_loop` |
 | Loop callback contract | `from core.agent.loop_host import LoopHost` |
 | The agent primitive | `from core.agent import Agent` |
-| Harness turn snapshot | `from core.agent_harness.models.turn_snapshot import TurnSnapshot` |
+| Harness turn snapshot | `from core.agent_harness.turns.turn_snapshot import TurnSnapshot` |
 
 Re-export from a package `__init__.py` only for its single canonical symbol
 (`Agent`), not everything — avoid `from core.agent import *`-style ambiguity.

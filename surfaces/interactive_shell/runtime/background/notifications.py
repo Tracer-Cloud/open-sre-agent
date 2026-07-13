@@ -23,6 +23,17 @@ def deliver_background_notifications(
     effective_integrations = resolve_effective_integrations()
 
     for channel in channels:
+        if channel == "telegram":
+            # Imported lazily: telegram delivery only fires on background-RCA
+            # completion, so the telegram client must not load into the base
+            # REPL boot import path.
+            from surfaces.interactive_shell.runtime.background.telegram_channel import (
+                deliver_telegram_notification,
+            )
+
+            results["telegram"] = deliver_telegram_notification(record)
+            continue
+
         if channel != "email":
             results[channel] = "unsupported"
             continue

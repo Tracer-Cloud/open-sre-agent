@@ -2,16 +2,26 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 from core.state import AgentState
 from core.state.updates import apply_state_updates
+from platform.analytics.investigation_loop import bind_investigation_loop_metrics_from_state
 
 if TYPE_CHECKING:
     # Type-only import — avoids paying the agent module's heavy import cost
     # at pipeline load while still letting static type-checkers validate
     # ``agent_class`` injections.
     from tools.investigation.stages.gather_evidence import ConnectedInvestigationAgent
+
+
+def _run_stage(name: str, stage: Callable[[AgentState], Any], state: AgentState) -> None:
+    """Merge one pipeline stage's updates into ``state`` under a stage trace span."""
+    from platform.observability.trace.spans import stage_span
+
+    with stage_span(name):
+        apply_state_updates(state, stage(state))
 
 
 def run_connected_investigation(
@@ -29,7 +39,7 @@ def run_connected_investigation(
     custom termination policy, structured-stage progression, or other
     agent-level extensions can pass a subclass instead.
     """
-    from platform.observability.sentry_sdk import capture_exception
+    from platform.observability.errors.sentry import capture_exception
     from tools.investigation.reporting import deliver
     from tools.investigation.stages.diagnose import diagnose
     from tools.investigation.stages.gather_evidence import get_investigation_agent_class
@@ -40,16 +50,17 @@ def run_connected_investigation(
     agent_class = agent_class or get_investigation_agent_class()
 
     try:
-        apply_state_updates(state, resolve_integrations(state))
-        apply_state_updates(state, extract_alert(state))
+        _run_stage("resolve_integrations", resolve_integrations, state)
+        _run_stage("intake", extract_alert, state)
         if state.get("is_noise"):
             return state
 
-        apply_state_updates(state, plan_actions(state))
-        apply_state_updates(state, agent_class().run(state))
-        apply_state_updates(state, diagnose(state))
-        apply_state_updates(state, deliver(state))
+        _run_stage("plan_evidence", plan_actions, state)
+        _run_stage("gather_evidence", agent_class().run, state)
+        _run_stage("diagnose", diagnose, state)
+        _run_stage("deliver", deliver, state)
     except Exception as exc:
+        bind_investigation_loop_metrics_from_state(state)
         capture_exception(exc)
         raise
 

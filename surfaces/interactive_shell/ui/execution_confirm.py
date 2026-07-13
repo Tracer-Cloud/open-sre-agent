@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING
 from rich.console import Console
 from rich.markup import escape
 
+from core.agent_harness.session.terminal_access import trust_mode_enabled
 from platform.analytics.cli import capture_repl_execution_policy_decision
 from platform.analytics.provider import Properties
 from platform.terminal.theme import DIM, WARNING
@@ -79,7 +80,7 @@ def execution_allowed(
     When ``action_already_listed`` is True (e.g. assistant printed a numbered action plan),
     the TTY prompt omits repeating ``action_summary`` and shows only the policy reason.
     """
-    trust_mode = session.terminal.trust_mode
+    trust_mode = trust_mode_enabled(session)
     tty = sys.stdin.isatty() if is_tty is None else is_tty
     confirm = confirm_fn or DEFAULT_CONFIRM_FN
 

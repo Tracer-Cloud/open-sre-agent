@@ -132,8 +132,8 @@ separate tiers would forbid that edge, so they share a tier as siblings.
 
 ### Tier 4 — `config`
 
-The floor: shared constants, prompts, UI theme, and the web app entrypoint
-(`config/webapp.py`). Everything above may read from `config`, but `config`
+The floor: shared constants, prompts, and UI theme. Everything above may
+read from `config`, but `config`
 imports no other first-party package — keeping it a leaf means constants can be
 imported anywhere without dragging runtime along.
 

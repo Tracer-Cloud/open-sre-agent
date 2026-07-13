@@ -273,8 +273,8 @@ def test_score_result_fails_when_pi_required_but_only_cloudwatch_present() -> No
     A scenario requiring PI evidence must fail when only CloudWatch data is available,
     even if grafana_metrics is populated.
     """
-    from tests.synthetic.rds_postgres.run_suite import score_result
     from tests.synthetic.rds_postgres.scenario_loader import SUITE_DIR, load_all_scenarios
+    from tests.synthetic.rds_postgres.scoring import score_result
 
     # Use scenario 004 (cpu-saturation-bad-query) which requires PI
     fixtures = load_all_scenarios(SUITE_DIR)

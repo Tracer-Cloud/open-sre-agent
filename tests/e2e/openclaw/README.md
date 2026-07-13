@@ -79,5 +79,5 @@ calls the investigation pipeline (gated on
   `tests/e2e/upstream_lambda/test_agent_e2e.py`
 - OpenClaw integration code: `integrations/openclaw.py`
 - Existing unit coverage (do not duplicate):
-  `tests/test_openclaw_integration.py`
-- Test conventions: `tests/AGENTS.md`
+  `tests/integrations/openclaw/test_integration.py`
+- Test conventions: [tests/e2e/AGENTS.md](../../e2e/AGENTS.md)

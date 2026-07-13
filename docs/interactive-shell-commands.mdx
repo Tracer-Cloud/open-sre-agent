@@ -96,6 +96,7 @@ When you type `/` and browse completions with the arrow keys, the full descripti
 
 | Command | What it does |
 | --- | --- |
+| `/background` | Run investigations async; track RCAs and completion notifications |
 | `/tasks` | List recent and in-flight background tasks |
 | `/cancel <id>` | Cancel a running task by id **elevated** |
 | `/stop` | Guidance for stopping investigations and background work |
@@ -740,6 +741,29 @@ Prints guidance only — does not kill processes:
 | Streaming investigation | **Ctrl+C** |
 | Background test or CLI task | `/tasks` → `/cancel <id>` |
 | Watchdog | `/unwatch <id>` or `/cancel <id>` |
+
+### `/background`
+
+Session-local async investigation mode. Launch an RCA, keep using the shell, and get the finished report delivered to email or Telegram.
+
+| Subcommand | What it does |
+| --- | --- |
+| `/background on` \| `off` | Enable or disable async investigation launches |
+| `/background status` | Mode, tracked job count, and active notify channels |
+| `/background list` | Tracked jobs with status and root cause |
+| `/background show <task_id>` | Full RCA summary plus per-channel notification result |
+| `/background use <task_id>` | Promote a completed RCA into active follow-up context |
+| `/background notify list` | Show the current completion channels |
+| `/background notify set <channel[,channel...]>` | Set channels — `email`, `telegram`, or both |
+
+```text
+/background on
+/background notify set email,telegram
+/investigate datadog
+/background show <task_id>
+```
+
+Channels are **off by default** and reset on REPL restart. `email` requires the [`smtp`](/smtp) integration; `telegram` requires the [`telegram`](/messaging/telegram) integration. Interactive shell only — there is no `opensre background …` CLI command. Full guide: [Background investigations](/background-investigations).
 
 ---
 

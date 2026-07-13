@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from core.agent_harness.integrations.resolution import resolve_and_cache_integrations
+from core.agent_harness.session.integration_resolution import resolve_and_cache_integrations
 from surfaces.interactive_shell.session import Session
 
 
@@ -20,7 +20,7 @@ def test_resolve_integrations_returns_cached_configs_without_lookup(
         raise AssertionError("resolve_integrations() must not run on a cache hit")
 
     monkeypatch.setattr(
-        "core.agent_harness.integrations.resolution.resolve_integrations",
+        "core.agent_harness.session.integration_resolution.resolve_integrations",
         _unexpected,
     )
 
@@ -34,7 +34,7 @@ def test_resolve_integrations_resolves_on_cache_miss_and_merges(
 ) -> None:
     session = Session()
     monkeypatch.setattr(
-        "core.agent_harness.integrations.resolution.resolve_integrations",
+        "core.agent_harness.session.integration_resolution.resolve_integrations",
         lambda *_args, **_kwargs: {"datadog": {"api_key": "dd-key"}},
     )
 
@@ -50,7 +50,7 @@ def test_resolve_integrations_does_not_cache_empty_resolve(
     # An empty resolve must not be cached, so a later turn can retry.
     session = Session()
     monkeypatch.setattr(
-        "core.agent_harness.integrations.resolution.resolve_integrations",
+        "core.agent_harness.session.integration_resolution.resolve_integrations",
         lambda *_args, **_kwargs: {},
     )
 
@@ -65,7 +65,7 @@ def test_resolve_integrations_reresolves_metadata_only_cache(
     session = Session()
     session.resolved_integrations_cache = {"_auth_token": "tok"}
     monkeypatch.setattr(
-        "core.agent_harness.integrations.resolution.resolve_integrations",
+        "core.agent_harness.session.integration_resolution.resolve_integrations",
         lambda *_args, **_kwargs: {"datadog": {"api_key": "dd-key"}},
     )
 

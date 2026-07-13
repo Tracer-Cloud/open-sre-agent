@@ -275,6 +275,8 @@ jobs:
           --collect-data config
           --copy-metadata opensre
           --collect-data litellm
+          --hidden-import tiktoken_ext
+          --hidden-import tiktoken_ext.openai_public
           --collect-submodules integrations
           --collect-submodules surfaces.interactive_shell
           --collect-submodules tools

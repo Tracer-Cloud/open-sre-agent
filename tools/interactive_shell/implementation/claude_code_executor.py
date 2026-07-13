@@ -34,7 +34,6 @@ from tools.interactive_shell.subprocess import (
 
 _DIM_STYLE = "dim"
 _ERROR_STYLE = "error"
-_HIGHLIGHT_STYLE = "highlight"
 _WARNING_STYLE = "warning"
 
 _IMPLEMENT_PERMISSION_MODE_ENV = "CLAUDE_CODE_IMPLEMENT_PERMISSION_MODE"

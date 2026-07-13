@@ -53,7 +53,7 @@ def captured_sentry_events(
       * ``conftest`` sets ``OPENSRE_SENTRY_DISABLED=1`` to keep the suite
         offline — we re-enable it here.
       * ``capture_exception`` and ``push_scope`` both need to be present
-        for the contextual-tag path inside ``platform.observability.sentry_sdk``.
+        for the contextual-tag path inside ``platform.observability.errors.sentry``.
 
     The mock ``push_scope`` returns a per-call ``_Scope`` instance that
     records every ``set_extra`` and ``set_tag`` call. ``capture_exception``
@@ -579,7 +579,7 @@ def _posthog_mcp_list_case() -> ToolFailureCase:
         from integrations.posthog_mcp.tools import posthog_mcp_tool as mod
 
         _patch_posthog_mcp_runtime(mp)
-        mp.setattr(mod, "list_posthog_mcp_server_tools", MagicMock(side_effect=RuntimeError("mcp")))
+        mp.setattr(mod, "list_posthog_mcp_tools", MagicMock(side_effect=RuntimeError("mcp")))
 
     def invoke() -> dict[str, Any]:
         from integrations.posthog_mcp.tools.posthog_mcp_tool import list_posthog_tools
@@ -600,7 +600,7 @@ def _posthog_mcp_call_tool_case() -> ToolFailureCase:
         from integrations.posthog_mcp.tools import posthog_mcp_tool as mod
 
         _patch_posthog_mcp_runtime(mp)
-        mp.setattr(mod, "invoke_posthog_mcp_tool", MagicMock(side_effect=RuntimeError("mcp")))
+        mp.setattr(mod, "call_posthog_mcp_tool", MagicMock(side_effect=RuntimeError("mcp")))
 
     def invoke() -> dict[str, Any]:
         from integrations.posthog_mcp.tools.posthog_mcp_tool import call_posthog_tool
@@ -647,7 +647,7 @@ def _sentry_mcp_list_case() -> ToolFailureCase:
         from integrations.sentry_mcp.tools import sentry_mcp_tool as mod
 
         _patch_sentry_mcp_runtime(mp)
-        mp.setattr(mod, "list_sentry_mcp_server_tools", MagicMock(side_effect=RuntimeError("mcp")))
+        mp.setattr(mod, "list_sentry_mcp_tools", MagicMock(side_effect=RuntimeError("mcp")))
 
     def invoke() -> dict[str, Any]:
         from integrations.sentry_mcp.tools.sentry_mcp_tool import list_sentry_tools
@@ -668,7 +668,7 @@ def _sentry_mcp_call_tool_case() -> ToolFailureCase:
         from integrations.sentry_mcp.tools import sentry_mcp_tool as mod
 
         _patch_sentry_mcp_runtime(mp)
-        mp.setattr(mod, "invoke_sentry_mcp_tool", MagicMock(side_effect=RuntimeError("mcp")))
+        mp.setattr(mod, "call_sentry_mcp_tool", MagicMock(side_effect=RuntimeError("mcp")))
 
     def invoke() -> dict[str, Any]:
         from integrations.sentry_mcp.tools.sentry_mcp_tool import call_sentry_tool
@@ -1180,7 +1180,6 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "query_signoz_traces",
         "query_splunk_logs",
         "query_tempo",
-        "run_diagnostic_code",
         "run_investigation",
         "scan_redis_keys",
         "search_bitbucket_code",
@@ -1218,18 +1217,18 @@ def test_every_registered_tool_is_migrated_or_allowlisted() -> None:
     lets them escape and relies on #1476's global wrapper (allowlist it in
     ``_TOOLS_WITHOUT_DELIBERATE_CATCH``).
     """
-    from tools.registry import _INTEGRATION_TOOL_PACKAGES, get_registered_tool_map
+    from tools.registry import INTEGRATION_TOOL_PACKAGES, get_registered_tool_map
 
     # Limit the audit to PRODUCTION tools — those defined in ``tools.*`` or in
     # the exact per-vendor packages the registry walks via
-    # ``_INTEGRATION_TOOL_PACKAGES``. External packages registered via
+    # ``INTEGRATION_TOOL_PACKAGES``. External packages registered via
     # ``register_external_tool_package`` (e.g. bench-only tools that live under
     # ``tests/benchmarks/``) have their own classification expectations and
     # aren't part of this production-telemetry contract. Pinning the prefix
     # to the registry's own integration list (instead of a broad
     # ``"integrations."``) keeps the audit from sweeping in any future
     # caller that ships tools under an ``integrations.*`` namespace.
-    _PRODUCTION_TOOL_PREFIXES = ("tools.", *_INTEGRATION_TOOL_PACKAGES)
+    _PRODUCTION_TOOL_PREFIXES = ("tools.", *INTEGRATION_TOOL_PACKAGES)
     registered = {
         name
         for name, tool in get_registered_tool_map().items()

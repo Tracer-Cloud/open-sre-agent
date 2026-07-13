@@ -16,13 +16,13 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from core.agent_harness.grounding.context import GroundingContext
-    from core.agent_harness.integrations.resolution import IntegrationResolutionResult
+    from core.agent_harness.session.integration_resolution import IntegrationResolutionResult
 else:
     GroundingContext = Any
 
 from config.llm_reasoning_effort import ReasoningEffortChoice
 from core.agent_harness.accounting.token_usage import TokenUsage
-from core.agent_harness.session.integration_state import IntegrationState
+from core.agent_harness.session.integration_resolution import IntegrationState
 from core.agent_harness.session.persistence.jsonl_storage import JsonlSessionStorage
 from core.agent_harness.session.persistence.ports import SessionStorage
 from core.state import MutableAgentState
@@ -98,6 +98,9 @@ class SessionCore:
     accumulated_context: dict[str, Any] = field(default_factory=dict)
     """Reusable infra context — service names, clusters, regions — learned from
     earlier investigations that should seed future ones."""
+
+    runtime_metadata: dict[str, Any] = field(default_factory=dict)
+    """Read-only process facts (version, build, env) exposed to prompts and sandboxed tools."""
 
     reasoning_effort: ReasoningEffortChoice | None = None
     """Session-scoped reasoning effort preference for REPL-driven LLM calls."""
@@ -267,6 +270,21 @@ class SessionCore:
     def github_repo_scope(self, value: tuple[str, str] | None) -> None:
         self.integrations.github_repo_scope = value
 
+    @property
+    def gitlab_repo_scope(self) -> tuple[str, str, str] | None:
+        """Sticky project/ref/file inferred from chat, env, or git remote for GitLab tools."""
+        return self.integrations.gitlab_repo_scope
+
+    @gitlab_repo_scope.setter
+    def gitlab_repo_scope(self, value: tuple[str, str, str] | None) -> None:
+        self.integrations.gitlab_repo_scope = value
+
+    def refresh_runtime_metadata(self) -> None:
+        """Repopulate :attr:`runtime_metadata` from current process facts."""
+        from config.runtime_metadata import build_runtime_metadata
+
+        self.runtime_metadata = build_runtime_metadata()
+
     def hydrate_configured_integrations(self) -> None:
         """Load configured integration names (env + local store); metadata-only."""
         self.integrations.hydrate()
@@ -314,6 +332,7 @@ class SessionCore:
         self.accumulated_context.clear()
         self.tokens.reset()
         self.agent.clear()
+        self.refresh_runtime_metadata()
         # Keep persisted cross-session task history on disk intact.
         # /new is session-scoped, so swap in a fresh in-memory registry
         # that reuses the same backing store (if any) so /tasks still shows history.

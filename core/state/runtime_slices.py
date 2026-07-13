@@ -77,6 +77,7 @@ class InvestigationRuntimeSlice(TypedDict, total=False):
     evidence: dict[str, Any]
     correlation: dict[str, Any]
     investigation_loop_count: int
+    investigation_iteration_cap: int
     hypotheses: list[str]
     executed_hypotheses: list[dict[str, Any]]
     evidence_entries: list[dict[str, Any]]
@@ -95,6 +96,12 @@ class DiagnosisSlice(TypedDict, total=False):
     validity_score: float
     investigation_recommendations: list[str]
     remediation_steps: list[str]
+    triage_summary: str
+    incident_status: str
+    investigation_hypotheses: list[str]
+    verification_summary: list[str]
+    follow_up_questions: list[str]
+    remediation_tradeoffs: str
 
 
 class MaskingSlice(TypedDict, total=False):

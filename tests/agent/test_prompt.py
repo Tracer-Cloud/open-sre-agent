@@ -5,6 +5,7 @@ from tools.investigation.stages.gather_evidence.prompt import (
     build_investigation_system_prompt,
     format_alert_context,
 )
+from tools.investigation.stages.gather_evidence.tools import STAGNATION_NUDGE
 
 
 def test_build_investigation_system_prompt_non_hermes_uses_generic_category_instruction() -> None:
@@ -23,6 +24,50 @@ def test_build_investigation_system_prompt_includes_dependency_traversal_rule() 
     assert "Dependency traversal (connection failures only)" in prompt
     assert "connection refused" in prompt
     assert "does not bias localization" in prompt
+
+
+def test_build_investigation_system_prompt_includes_incident_command_phases() -> None:
+    prompt = build_investigation_system_prompt({"alert_source": "grafana"})
+
+    assert "incident commander" in prompt
+    assert "Investigation phases" in prompt
+    assert "Phase 1 — Triage" in prompt
+    assert "Phase 2 — Hypothesis" in prompt
+    assert "Phase 3 — Verification" in prompt
+    assert "Phase 4 — Mitigation" in prompt
+    assert "## How to work" not in prompt
+
+
+def test_build_investigation_system_prompt_includes_missing_context_rule() -> None:
+    prompt = build_investigation_system_prompt({"alert_source": "grafana"})
+
+    assert "Follow-up questions" in prompt
+    assert "Recent deploys" in prompt
+    assert "ending with `?`" in prompt
+    assert "Do not stall waiting for answers" in prompt
+
+
+def test_build_investigation_system_prompt_includes_alignment_and_tradeoffs() -> None:
+    prompt = build_investigation_system_prompt({"alert_source": "grafana"})
+
+    assert "Keeping the team aligned" in prompt
+    assert "Hypotheses:" in prompt
+    assert "Verification:" in prompt
+    assert "Follow-up questions:" in prompt
+    assert "Remediation trade-offs:" in prompt
+    assert "blast radius" in prompt
+    assert "reversibility" in prompt
+
+
+def test_stagnation_nudge_matches_incident_command_output_contract() -> None:
+    nudge = STAGNATION_NUDGE.lower()
+
+    assert "triage complete" in nudge
+    assert "status block" in nudge
+    assert "hypotheses" in nudge
+    assert "verification" in nudge
+    assert "follow-up questions" in nudge
+    assert "remediation trade-offs" in nudge
 
 
 def test_build_investigation_system_prompt_hermes_includes_hermes_taxonomy_only() -> None:

@@ -26,6 +26,7 @@ def publish_investigation_outcome_analytics(outcome: InvestigationOutcome) -> No
         capture_investigation_cancelled(
             investigation_id=outcome.investigation_id,
             investigation_target=outcome.target,
+            state=outcome.final_state,
         )
     # Completed runs must not carry placeholder failure properties; consumers
     # would otherwise have to special-case failure_category == "unknown".
@@ -42,6 +43,7 @@ def publish_investigation_outcome_analytics(outcome: InvestigationOutcome) -> No
             (outcome.integration_failure_message or None) if not_completed else None
         ),
         failure_detail=(outcome.error_detail or None) if not_completed else None,
+        state=outcome.final_state,
     )
 
 

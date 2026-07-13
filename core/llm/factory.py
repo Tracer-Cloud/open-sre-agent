@@ -88,10 +88,10 @@ def _resolve_settings_or_raise() -> Any:
 
 
 def _cli_provider_registration(provider: str) -> Any:
-    """CLI registry entry for *provider*, or None. Lazy import avoids a package cycle."""
-    from integrations.llm_cli.registry import get_cli_provider_registration
+    """CLI registry entry for *provider*, or None."""
+    from platform.harness_ports import cli_provider_registration
 
-    return get_cli_provider_registration(provider)
+    return cli_provider_registration(provider)
 
 
 # ---------------------------------------------------------------------------

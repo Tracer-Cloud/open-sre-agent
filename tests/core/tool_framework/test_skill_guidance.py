@@ -156,3 +156,34 @@ tools:
     formatted = format_tool_skill_guidance(skill_with_amp)
     assert "&amp;" in formatted
     assert 'description="A & B tool"' not in formatted
+
+
+def test_sentry_summary_skill_loads_and_references_correct_tools() -> None:
+    """The sentry-summary SKILL.md must load cleanly and declare the three Sentry tools."""
+    skill_path = (
+        Path(__file__).resolve().parents[3]
+        / "integrations"
+        / "sentry"
+        / "tools"
+        / "skills"
+        / "sentry-summary"
+        / "SKILL.md"
+    )
+
+    known_tools = frozenset(
+        {"search_sentry_issues", "get_sentry_issue_details", "list_sentry_issue_events"}
+    )
+    result = load_tool_skill_guidance(skill_path, known_tool_names=known_tools)
+
+    assert result.diagnostics == [], f"Unexpected diagnostics: {result.diagnostics}"
+    assert result.skill is not None
+    assert result.skill.name == "sentry-summary"
+    assert set(result.skill.tool_names) == known_tools
+
+    formatted = format_tool_skill_guidance(result.skill)
+    assert '<skill name="sentry-summary"' in formatted
+    assert "search_sentry_issues" in result.skill.content
+    assert "is:unresolved" in result.skill.content
+    assert "priority_candidates" in result.skill.content
+    # Registry truncates combined guidance at 2400 chars; keep the skill under that.
+    assert len(formatted) <= 2400

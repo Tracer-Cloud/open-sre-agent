@@ -10,12 +10,13 @@ from collections.abc import Callable
 
 from rich.console import Console
 
-from core.agent_harness.models.turn_results import ToolCallingTurnResult
+from core.agent_harness.error_reporting import DefaultErrorReporter
+from core.agent_harness.llm_resolution import default_llm_factory
 from core.agent_harness.ports import OutputSink
-from core.agent_harness.providers.default_providers import DefaultErrorReporter, DefaultToolProvider
-from core.agent_harness.providers.provider_models import default_llm_factory
+from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.action_driver import ToolCallingDeps, run_action_agent_turn
 from core.agent_harness.turns.turn_plan import TurnPlan
+from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 from core.execution import ToolExecutionHooks
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS
 from surfaces.interactive_shell.command_registry.suggestions import resolve_literal_slash_typo
@@ -25,14 +26,6 @@ from surfaces.interactive_shell.runtime.subprocess_runner.repl_presenter import 
 )
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui.action_rendering import ActionRenderObserver
-
-
-def _action_observer_factory(
-    session: Session,
-    console: Console,
-    message: str,
-) -> ActionRenderObserver:
-    return ActionRenderObserver(session=session, console=console, message=message)
 
 
 def _complete_literal_slash_typo_turn(
@@ -103,7 +96,9 @@ def run_action_tool_turn(
             session,
             console,
             request_exit=request_exit,
-            observer_factory=_action_observer_factory,
+            observer_factory=lambda msg: ActionRenderObserver(
+                session=session, console=console, message=msg
+            ),
             subprocess_presenter_factory=_subprocess_presenter_factory,
         ),
         confirm_fn=confirm_fn,

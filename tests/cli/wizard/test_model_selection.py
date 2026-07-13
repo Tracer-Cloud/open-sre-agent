@@ -104,3 +104,36 @@ def test_choose_model_works_for_cli_provider(monkeypatch: pytest.MonkeyPatch) ->
     model = _ui._choose_model(provider, default="")
 
     assert model == "gpt-5.4"
+
+
+class TestGpt56CatalogPresence:
+    """The onboarding picker must offer Sol / Terra / Luna (#3931)."""
+
+    @pytest.mark.parametrize("model", ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"])
+    def test_openai_picker_lists_every_tier(self, model: str) -> None:
+        values = {option.value for option in PROVIDER_BY_VALUE["openai"].models}
+        assert model in values
+
+    @pytest.mark.parametrize("model", ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"])
+    def test_azure_picker_lists_every_tier(self, model: str) -> None:
+        values = {option.value for option in PROVIDER_BY_VALUE["azure-openai"].models}
+        assert model in values
+
+    def test_openrouter_picker_uses_namespaced_ids(self) -> None:
+        values = {option.value for option in PROVIDER_BY_VALUE["openrouter"].models}
+        assert "openai/gpt-5.6-sol" in values
+
+    def test_codex_picker_lists_sol(self) -> None:
+        values = {option.value for option in PROVIDER_BY_VALUE["codex"].models}
+        assert "gpt-5.6-sol" in values
+
+    def test_openai_default_model_is_unchanged(self) -> None:
+        # #3931 explicitly does not re-point defaults; adding quick-picks
+        # must not promote a GPT-5.6 tier to the default slot.
+        assert PROVIDER_BY_VALUE["openai"].default_model == "gpt-5.4-mini"
+
+    def test_openai_picker_selects_sol(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        provider = PROVIDER_BY_VALUE["openai"]
+        _wire_prompts(monkeypatch, select_values=["gpt-5.6-sol"])
+
+        assert _ui._choose_model(provider, default="") == "gpt-5.6-sol"

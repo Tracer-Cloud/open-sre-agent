@@ -103,6 +103,33 @@ def test_sync_provider_env_updates_provider_specific_keys(tmp_path, monkeypatch)
     assert "OPENAI_MODEL=gpt-5-mini\n" in content
 
 
+def test_sync_provider_env_preserves_host_credential(tmp_path, monkeypatch) -> None:
+    """#3291: the wizard writes the Ollama host to .env, then calls sync_provider_env
+    in the same run. A host credential is non-secret runtime config, so it must
+    survive that sync — otherwise OLLAMA_HOST is stripped from both .env and the
+    environment and the custom host is silently lost again."""
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("OLLAMA_MODEL", raising=False)
+    monkeypatch.setenv("OLLAMA_HOST", "http://10.0.0.5:11434")
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "OLLAMA_HOST=http://10.0.0.5:11434\nLLM_PROVIDER=ollama\n",
+        encoding="utf-8",
+    )
+
+    sync_provider_env(
+        provider=PROVIDER_BY_VALUE["ollama"],
+        model="llama3.1",
+        env_path=env_path,
+    )
+
+    content = env_path.read_text(encoding="utf-8")
+    assert "OLLAMA_HOST=http://10.0.0.5:11434\n" in content  # kept in .env
+    assert os.environ["OLLAMA_HOST"] == "http://10.0.0.5:11434"  # kept in runtime env
+    assert "LLM_PROVIDER=ollama\n" in content
+    assert "OLLAMA_MODEL=llama3.1\n" in content
+
+
 def test_sync_provider_env_strips_integration_fallback_secrets(tmp_path, monkeypatch) -> None:
     monkeypatch.delenv("LLM_PROVIDER", raising=False)
     monkeypatch.delenv("OPENAI_REASONING_MODEL", raising=False)

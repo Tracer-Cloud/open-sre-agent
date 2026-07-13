@@ -32,6 +32,7 @@ from rich.console import Console
 from rich.markdown import Markdown
 
 import platform.terminal.theme as ui_theme
+from core.agent_harness.prompts.rules import normalize_three_tier_spacing
 from surfaces.interactive_shell.ui.components.token_format import (
     _CHARS_PER_TOKEN,
     format_token_count_short,
@@ -110,7 +111,9 @@ def stream_to_console(
             with console.use_theme(ui_theme.MARKDOWN_THEME):
                 console.print(
                     Markdown(
-                        _escape_markdown_dunder_filenames(text),
+                        _escape_markdown_dunder_filenames(
+                            normalize_three_tier_spacing(text)
+                        ),
                         code_theme=_MARKDOWN_CODE_THEME,
                     )
                 )
@@ -186,10 +189,11 @@ def stream_to_console(
     def _render_paragraph(text: str) -> None:
         if not text.strip():
             return
+        spaced = normalize_three_tier_spacing(text)
         with console.use_theme(ui_theme.MARKDOWN_THEME):
             console.print(
                 Markdown(
-                    _escape_markdown_dunder_filenames(text.rstrip()),
+                    _escape_markdown_dunder_filenames(spaced.rstrip()),
                     code_theme=_MARKDOWN_CODE_THEME,
                 )
             )

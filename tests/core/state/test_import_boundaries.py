@@ -5,6 +5,8 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+from tests.utils.tracked_sources import tracked_python_files
+
 
 def _repo_root() -> Path:
     for parent in Path(__file__).resolve().parents:
@@ -60,7 +62,7 @@ def test_old_core_domain_state_import_path_is_removed() -> None:
     root = _repo_root()
     old_state_module = ".".join(("core", "domain", "state"))
     offenders: list[str] = []
-    for path in sorted(root.rglob("*.py")):
+    for path in tracked_python_files(str(root)):
         if _is_ignored_scan_path(path, root):
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))

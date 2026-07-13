@@ -19,7 +19,7 @@ from core.agent_harness.prompts.conversation_memory import (
 )
 
 if TYPE_CHECKING:
-    from core.agent_harness.models.turn_snapshot import TurnSnapshot
+    from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 
 _logger = logging.getLogger(__name__)
 

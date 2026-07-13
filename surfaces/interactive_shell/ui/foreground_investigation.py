@@ -9,9 +9,11 @@ from typing import TYPE_CHECKING, Any
 from rich.console import Console
 from rich.markup import escape
 
+from core.agent_harness.session.terminal_access import session_terminal
 from core.llm.shared.llm_retry import CREDIT_EXHAUSTED_MARKER
 from platform.common.errors import OpenSREError
 from platform.common.task_types import TaskKind, TaskRecord
+from platform.observability.trace.spans import mark_span_outcome, traced_session
 from platform.terminal.theme import DIM, ERROR, WARNING
 from surfaces.interactive_shell.ui.investigation_outcome import (
     InvestigationOutcome,
@@ -73,6 +75,43 @@ def run_foreground_investigation(
     task = session.task_registry.create(TaskKind.INVESTIGATION, command=task_command)
     task.mark_running()
     started = time.monotonic()
+    session_id = str(getattr(session, "session_id", "") or "") or None
+    with traced_session(
+        session_id,
+        component="investigation",
+        attributes={"target": normalized_target, "command": task_command},
+    ) as attrs:
+        outcome = _run_foreground_investigation_body(
+            session=session,
+            console=console,
+            task_command=task_command,
+            run=run,
+            exception_context=exception_context,
+            normalized_target=normalized_target,
+            task=task,
+            started=started,
+        )
+        mark_span_outcome(
+            attrs,
+            outcome.status,
+            error=bool(outcome.failure_category),
+            investigation_id=outcome.investigation_id or None,
+            failure_category=outcome.failure_category or None,
+        )
+        return outcome
+
+
+def _run_foreground_investigation_body(
+    *,
+    session: Session,
+    console: Console,
+    task_command: str,
+    run: Callable[[TaskRecord], dict[str, Any]],
+    exception_context: str,
+    normalized_target: str,
+    task: TaskRecord,
+    started: float,
+) -> InvestigationOutcome:
     try:
         with observe_investigation_llm_usage() as usage:
             final_state = run(task)
@@ -129,14 +168,20 @@ def run_foreground_investigation(
     task.mark_completed(result=str(root) if root is not None else "")
     session.apply_investigation_result(final_state, trigger=task_command)
 
+    from surfaces.interactive_shell.ui.components.choice_menu import repl_tty_interactive
     from surfaces.interactive_shell.ui.components.key_reader import restore_stdin_terminal
     from surfaces.interactive_shell.ui.feedback import prompt_investigation_feedback
 
     # Skip feedback while the prompt-toolkit app is running: its cursor-position
     # queries would race the raw feedback menu and leak bytes into the next prompt.
-    pt_app = session.terminal.pt_style_app
-    pt_app_running = pt_app is not None and getattr(pt_app, "is_running", False)
-    if not pt_app_running:
+    terminal = session_terminal(session)
+    prompt_app_running = False
+    if terminal is not None:
+        prompt_app = terminal.prompt_app
+        prompt_app_running = prompt_app is not None and getattr(prompt_app, "is_running", False)
+    # RCA feedback is REPL-only: gateway/headless sessions have no terminal facet and
+    # must not block on a raw-stdin picker (e.g. gateway running under tmux with TTY).
+    if terminal is not None and not prompt_app_running and repl_tty_interactive():
         restore_stdin_terminal()
         prompt_investigation_feedback(final_state)
     return InvestigationOutcome(

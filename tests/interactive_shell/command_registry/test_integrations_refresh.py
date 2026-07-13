@@ -34,7 +34,7 @@ def test_refresh_integration_state_rehydrates_and_clears_cache(monkeypatch: Any)
     )
     refreshed = {"gitlab": {"token": "x"}, "sentry": {"dsn": "y"}}
     monkeypatch.setattr(
-        "core.agent_harness.integrations.resolution.resolve_integrations",
+        "core.agent_harness.session.integration_resolution.resolve_integrations",
         lambda: refreshed,
     )
     session = Session()
@@ -61,7 +61,7 @@ def test_setup_subcommand_refreshes_configured_integrations(monkeypatch: Any) ->
         lambda: list(store),
     )
     monkeypatch.setattr(
-        "core.agent_harness.integrations.resolution.resolve_integrations",
+        "core.agent_harness.session.integration_resolution.resolve_integrations",
         lambda: dict(store),
     )
 
@@ -86,7 +86,7 @@ def test_remove_subcommand_refreshes_configured_integrations(monkeypatch: Any) -
         lambda: list(store),
     )
     monkeypatch.setattr(
-        "core.agent_harness.integrations.resolution.resolve_integrations",
+        "core.agent_harness.session.integration_resolution.resolve_integrations",
         lambda: dict(store),
     )
 
@@ -110,7 +110,7 @@ def test_mcp_connect_refreshes_configured_integrations(monkeypatch: Any) -> None
         lambda: list(store),
     )
     monkeypatch.setattr(
-        "core.agent_harness.integrations.resolution.resolve_integrations",
+        "core.agent_harness.session.integration_resolution.resolve_integrations",
         lambda: dict(store),
     )
 

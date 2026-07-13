@@ -6,7 +6,7 @@ import pytest
 
 from integrations.argocd.verifier import verify_argocd as _verify_argocd
 from integrations.catalog import classify_integrations, resolve_effective_integrations
-from integrations.models import ArgoCDIntegrationConfig
+from integrations.config_models import ArgoCDIntegrationConfig
 from integrations.verify import verify_integrations
 
 

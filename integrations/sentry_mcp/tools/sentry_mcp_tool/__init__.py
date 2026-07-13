@@ -17,15 +17,11 @@ from integrations.sentry_mcp import (
     SentryMCPConfig,
     SentryMCPToolCallResult,
     build_sentry_mcp_config,
+    call_sentry_mcp_tool,
     describe_sentry_mcp_error,
+    list_sentry_mcp_tools,
     sentry_mcp_config_from_env,
     sentry_mcp_runtime_unavailable_reason,
-)
-from integrations.sentry_mcp import (
-    call_sentry_mcp_tool as invoke_sentry_mcp_tool,
-)
-from integrations.sentry_mcp import (
-    list_sentry_mcp_tools as list_sentry_mcp_server_tools,
 )
 
 SentryMCPParams = dict[str, object]
@@ -196,14 +192,14 @@ def list_sentry_tools(
         return payload
 
     try:
-        tools = list_sentry_mcp_server_tools(config)
+        tools = list_sentry_mcp_tools(config)
     except Exception as err:
         report_run_error(
             err,
             tool_name="list_sentry_tools",
             source="sentry_mcp",
             component=_COMPONENT,
-            method="list_sentry_mcp_server_tools",
+            method="list_sentry_mcp_tools",
             extras={"transport": config.mode},
         )
         payload = _unavailable_response(describe_sentry_mcp_error(err, config))
@@ -296,14 +292,14 @@ def call_sentry_tool(
         )
 
     try:
-        result = invoke_sentry_mcp_tool(config, normalized_tool_name, arguments or {})
+        result = call_sentry_mcp_tool(config, normalized_tool_name, arguments or {})
     except Exception as err:
         report_run_error(
             err,
             tool_name="call_sentry_tool",
             source="sentry_mcp",
             component=_COMPONENT,
-            method="invoke_sentry_mcp_tool",
+            method="call_sentry_mcp_tool",
             extras={"mcp_tool": normalized_tool_name, "transport": config.mode},
         )
         return _unavailable_response(

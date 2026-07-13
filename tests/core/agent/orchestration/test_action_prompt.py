@@ -2,20 +2,23 @@
 
 from __future__ import annotations
 
-from core.agent_harness.models.turn_snapshot import TurnSnapshot
 from core.agent_harness.prompts import (
     _SYSTEM_PROMPT_BASE,
     build_action_system_prompt,
     connected_integrations_block,
-    load_skills_block,
     prior_action_facts_block,
     recent_conversation_block,
-    skills_dir,
 )
 from core.agent_harness.prompts.assistant import build_cli_agent_prompt_from_provider
 from core.agent_harness.prompts.assistant_agent_prompt import build_handoff_guidance_block
 from core.agent_harness.prompts.conversation_memory import NO_HISTORY_PLACEHOLDER
-from core.agent_harness.prompts.skills_loader import load_skills_block as cached_load_skills_block
+from core.agent_harness.prompts.skills_loader import (
+    SKILLS_HEADER,
+    load_skills_block,
+    load_skills_block as cached_load_skills_block,
+    skills_dir,
+)
+from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 
 
 def _ctx(
@@ -127,6 +130,18 @@ def test_system_prompt_keeps_bare_alert_blob_as_handoff() -> None:
     assert "not such a question — hand it off" in prompt
 
 
+def test_system_prompt_hands_off_when_delivery_tool_unavailable() -> None:
+    prompt = _SYSTEM_PROMPT_BASE.lower()
+    compact_prompt = " ".join(prompt.split())
+    assert "delivery tool unavailable — never fabricate a command to deliver" in prompt
+    assert "matching send tool" in prompt
+    assert "that channel is not configured" in compact_prompt
+    assert "do not invent or guess a slash/cli subcommand to deliver" in compact_prompt
+    assert "`/messaging send slack …` is not a real command" in compact_prompt
+    assert "route the user to enable it" in compact_prompt
+    assert "this applies even mid-chain" in compact_prompt
+
+
 def test_system_prompt_preserves_bare_numeric_synthetic_mapping() -> None:
     prompt = _SYSTEM_PROMPT_BASE.lower()
     assert "run synthetic test 005 now" in prompt
@@ -205,6 +220,30 @@ def test_action_system_prompt_includes_context_blocks() -> None:
     assert "CONNECTED INTEGRATIONS (this install, right now): github" in prompt
     assert "RECENT CONVERSATION" in prompt
     assert "ARCHITECTURE AUDIT SKILL" in prompt
+
+
+def test_skills_loader_bundles_markdown_files() -> None:
+    md_files = list(skills_dir().glob("*.md"))
+    assert md_files, "expected at least one bundled skill markdown file"
+
+    block = load_skills_block()
+    assert block.startswith(SKILLS_HEADER)
+    for path in md_files:
+        body = path.read_text(encoding="utf-8").strip()
+        if body:
+            assert body in block
+
+
+def test_action_system_prompt_includes_skills_block() -> None:
+    prompt = build_action_system_prompt(_ctx())
+    assert SKILLS_HEADER in prompt
+    assert "MORNING REPORT SKILL" in prompt
+    # Skills must sit after the base rules so the COMPOUND TURN RULE is set first.
+    assert prompt.index("COMPOUND TURN RULE") < prompt.index(SKILLS_HEADER)
+    # ...and before the per-turn context blocks that follow.
+    assert prompt.index(SKILLS_HEADER) < prompt.index(
+        "CONNECTED INTEGRATIONS (this install, right now):"
+    )
 
 
 def test_system_prompt_requires_local_llama_handoff_tag() -> None:

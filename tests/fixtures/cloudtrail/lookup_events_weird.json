@@ -1,0 +1,53 @@
+{
+  "_comment": "Partial/degenerate LookupEvents payloads the parser must survive: CloudTrailEvent as valid-but-non-dict JSON (null / string / list) or invalid JSON, an event with only EventId, ReadOnly as bool / mixed-case string, and a null plus a _sanitize_response truncation marker inside Resources — the one place the marker is genuinely reachable (a single event CAN reference >MAX_LIST_ITEMS resources, e.g. CreateTags across a fleet). Truncated lists are abbreviated here for readability; a real post-sanitizer list carries exactly MAX_LIST_ITEMS kept items before the marker. The marker as the final Events entry is a purely DEFENSIVE case: LookupEvents pages cap at 50 < MAX_LIST_ITEMS so the sanitizer cannot produce it there — it exercises non-dict-entry tolerance, not real transport behavior.",
+  "Events": [
+    {
+      "EventId": "weird-null-detail",
+      "EventName": "PutRolePolicy",
+      "EventSource": "iam.amazonaws.com",
+      "CloudTrailEvent": "null"
+    },
+    {
+      "EventId": "weird-string-detail",
+      "EventName": "AssumeRole",
+      "EventSource": "sts.amazonaws.com",
+      "CloudTrailEvent": "\"throttled\""
+    },
+    {
+      "EventId": "weird-list-detail",
+      "EventName": "RunInstances",
+      "EventSource": "ec2.amazonaws.com",
+      "CloudTrailEvent": "[1, 2]"
+    },
+    {
+      "EventId": "weird-invalid-json-detail",
+      "EventName": "CreateBucket",
+      "EventSource": "s3.amazonaws.com",
+      "CloudTrailEvent": "{ this is not json"
+    },
+    {
+      "EventId": "weird-bare-event"
+    },
+    {
+      "EventId": "weird-resources-mixed",
+      "EventName": "CreateTags",
+      "ReadOnly": true,
+      "EventSource": "ec2.amazonaws.com",
+      "Username": "fleet-tagger",
+      "Resources": [
+        {"ResourceType": "AWS::EC2::Instance", "ResourceName": "i-0abc123def456789a"},
+        null,
+        "... (57 more items truncated)"
+      ],
+      "CloudTrailEvent": "{\"awsRegion\":\"eu-west-1\",\"sourceIPAddress\":\"192.0.2.44\",\"readOnly\":false}"
+    },
+    {
+      "EventId": "weird-readonly-mixed-case",
+      "EventName": "GetCallerIdentity",
+      "ReadOnly": "True",
+      "EventSource": "sts.amazonaws.com"
+    },
+    "... (12 more items truncated)"
+  ],
+  "NextToken": "AAAAweirdPageToken"
+}

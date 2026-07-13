@@ -401,6 +401,58 @@ def _derive_root_cause_sentence(ctx: ReportContext) -> str:
     return ""
 
 
+def _normalize_triage_summary(summary: str) -> str:
+    """Remove the marker when the model included it inside the parsed summary."""
+    return re.sub(r"^(?i:triage complete:)\s*", "", summary).strip()
+
+
+def _format_incident_command_block(ctx: ReportContext) -> str:
+    """Render incident-command summary fields when diagnose extracted them."""
+    triage = _normalize_triage_summary(str(ctx.get("triage_summary") or "").strip())
+    status = str(ctx.get("incident_status") or "").strip()
+    hypotheses = [
+        str(item).strip()
+        for item in (ctx.get("investigation_hypotheses") or [])
+        if str(item).strip()
+    ]
+    verification = [
+        str(item).strip() for item in (ctx.get("verification_summary") or []) if str(item).strip()
+    ]
+    follow_ups = [
+        str(item).strip() for item in (ctx.get("follow_up_questions") or []) if str(item).strip()
+    ]
+    tradeoffs = str(ctx.get("remediation_tradeoffs") or "").strip()
+    if not any((triage, status, hypotheses, verification, follow_ups, tradeoffs)):
+        return ""
+
+    lines = ["\n## Incident Command\n"]
+    if triage:
+        lines.append(f"Triage complete: {_sanitize_for_slack(triage)}\n")
+    if status:
+        lines.append(f"{_sanitize_for_slack(status)}\n")
+    if hypotheses:
+        lines.append(
+            "*Hypotheses:*\n"
+            + "\n".join(f"• {_sanitize_for_slack(item)}" for item in hypotheses)
+            + "\n"
+        )
+    if verification:
+        lines.append(
+            "*Verification:*\n"
+            + "\n".join(f"• {_sanitize_for_slack(item)}" for item in verification)
+            + "\n"
+        )
+    if follow_ups:
+        lines.append(
+            "*Follow-up questions:*\n"
+            + "\n".join(f"• {_sanitize_for_slack(item)}" for item in follow_ups)
+            + "\n"
+        )
+    if tradeoffs:
+        lines.append(f"*Remediation trade-offs:*\n{_sanitize_for_slack(tradeoffs)}\n")
+    return "".join(lines)
+
+
 # ---------------------------------------------------------------------------
 # Text renderer (Slack mrkdwn fallback + terminal + ingest report_md)
 # ---------------------------------------------------------------------------
@@ -424,6 +476,8 @@ def format_slack_message(ctx: ReportContext) -> str:
     top_log = _get_top_error_log(ctx.get("evidence") or {})
     if top_log:
         conclusion_block += f"`{top_log}`\n"
+
+    conclusion_block += _format_incident_command_block(ctx)
 
     validated_lines, non_validated_lines = _render_claim_lines(ctx)
     if validated_lines:
@@ -514,6 +568,57 @@ def format_telegram_message(ctx: ReportContext) -> str:
         if top_log:
             rc += "\n<code>" + html.escape(top_log) + "</code>"
         parts.append(rc)
+
+    triage = _normalize_triage_summary(str(ctx.get("triage_summary") or "").strip())
+    status = str(ctx.get("incident_status") or "").strip()
+    hypotheses = [
+        str(item).strip()
+        for item in (ctx.get("investigation_hypotheses") or [])
+        if str(item).strip()
+    ]
+    verification = [
+        str(item).strip() for item in (ctx.get("verification_summary") or []) if str(item).strip()
+    ]
+    follow_ups = [
+        str(item).strip() for item in (ctx.get("follow_up_questions") or []) if str(item).strip()
+    ]
+    tradeoffs = str(ctx.get("remediation_tradeoffs") or "").strip()
+    if any((triage, status, hypotheses, verification, follow_ups, tradeoffs)):
+        ic_parts: list[str] = ["<b>Incident Command</b>"]
+        if triage:
+            ic_parts.append(
+                "Triage complete: " + _to_telegram_html_body(_sanitize_for_slack(triage))
+            )
+        if status:
+            ic_parts.append(_to_telegram_html_body(_sanitize_for_slack(status)))
+        if hypotheses:
+            ic_parts.append(
+                "<b>Hypotheses</b>\n"
+                + "\n".join(
+                    "• " + _to_telegram_html_body(_sanitize_for_slack(item)) for item in hypotheses
+                )
+            )
+        if verification:
+            ic_parts.append(
+                "<b>Verification</b>\n"
+                + "\n".join(
+                    "• " + _to_telegram_html_body(_sanitize_for_slack(item))
+                    for item in verification
+                )
+            )
+        if follow_ups:
+            ic_parts.append(
+                "<b>Follow-up questions</b>\n"
+                + "\n".join(
+                    "• " + _to_telegram_html_body(_sanitize_for_slack(item)) for item in follow_ups
+                )
+            )
+        if tradeoffs:
+            ic_parts.append(
+                "<b>Remediation trade-offs</b>\n"
+                + _to_telegram_html_body(_sanitize_for_slack(tradeoffs))
+            )
+        parts.append("\n".join(ic_parts))
 
     validated_lines, non_validated_lines = _render_claim_lines_telegram(ctx)
     if validated_lines:

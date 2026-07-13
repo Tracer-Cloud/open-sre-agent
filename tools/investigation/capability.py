@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import contextvars
 import logging
 import queue
 import threading
@@ -12,10 +13,14 @@ from typing import TYPE_CHECKING, Any, cast
 
 from core.domain.stream import StreamEvent
 from core.state import AgentState
-from platform.observability.errors import report_and_reraise
-from platform.observability.sentry_sdk import init_sentry
+from platform.observability.errors.boundary import report_and_reraise
+from platform.observability.errors.sentry import init_sentry
+from platform.observability.trace.spans import stage_span
 from tools.investigation.state_factory import make_initial_state
-from tools.investigation.streaming import resolved_integrations_stream_payload
+from tools.investigation.streaming import (
+    InvestigationPipelineStreamError,
+    resolved_integrations_stream_payload,
+)
 
 if TYPE_CHECKING:
     # Type-only — avoids paying the agent module's heavy import cost at
@@ -45,22 +50,23 @@ def _capture_exception_once(
 ) -> None:
     if _exception_was_captured(exc):
         return
-    from platform.observability.sentry_sdk import capture_exception
+    from platform.observability.errors.sentry import capture_exception
 
     capture_exception(exc, context=context, tags=tags)
     _mark_exception_captured(exc)
 
 
 def _traced_node(node_name: str, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
-    try:
-        return fn(*args, **kwargs)
-    except Exception as exc:
-        _capture_exception_once(
-            exc,
-            context=f"node.{node_name}",
-            tags={"surface": "node", "node": node_name},
-        )
-        raise
+    with stage_span(node_name):
+        try:
+            return fn(*args, **kwargs)
+        except Exception as exc:
+            _capture_exception_once(
+                exc,
+                context=f"node.{node_name}",
+                tags={"surface": "node", "node": node_name},
+            )
+            raise
 
 
 def run_investigation(
@@ -104,7 +110,11 @@ def run_investigation(
         message="run_investigation failed",
         tags={"surface": "pipeline", "component": "tools.investigation.capability"},
     ):
-        return _run(initial, agent_class=agent_class)
+        from platform.analytics.investigation_loop import bind_investigation_loop_metrics_from_state
+
+        state = _run(initial, agent_class=agent_class)
+        bind_investigation_loop_metrics_from_state(state)
+        return state
 
 
 def resolve_investigation_context(
@@ -289,6 +299,7 @@ async def astream_investigation(
     def _run_pipeline() -> None:
         try:
             from core.state.updates import apply_state_updates
+            from platform.analytics.investigation_loop import loop_metrics_from_state
             from tools.investigation.reporting.node import generate_report
             from tools.investigation.stages.diagnose import diagnose
             from tools.investigation.stages.gather_evidence import ConnectedInvestigationAgent
@@ -452,14 +463,25 @@ async def astream_investigation(
             )
 
         except Exception as exc:
+            loop_count, iteration_cap = loop_metrics_from_state(state)
             _capture_exception_once(exc, context="pipeline.astream_investigation")
             with contextlib.suppress(RuntimeError):
-                loop.call_soon_threadsafe(event_queue.put_nowait, exc)
+                loop.call_soon_threadsafe(
+                    event_queue.put_nowait,
+                    InvestigationPipelineStreamError(
+                        cause=exc,
+                        loop_count=loop_count,
+                        iteration_cap=iteration_cap,
+                    ),
+                )
         finally:
             with contextlib.suppress(RuntimeError):
                 loop.call_soon_threadsafe(event_queue.put_nowait, None)
 
-    thread = threading.Thread(target=_run_pipeline, daemon=True)
+    # Copy the caller's context so ContextVar bindings (session trace) reach the thread.
+    thread = threading.Thread(
+        target=contextvars.copy_context().run, args=(_run_pipeline,), daemon=True
+    )
     thread.start()
 
     while True:
@@ -472,6 +494,8 @@ async def astream_investigation(
 
         if item is None:
             break
+        if isinstance(item, InvestigationPipelineStreamError):
+            raise item
         if isinstance(item, BaseException):
             raise item
         yield item

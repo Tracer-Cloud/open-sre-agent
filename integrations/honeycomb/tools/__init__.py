@@ -7,8 +7,8 @@ from __future__ import annotations
 from typing import Any
 
 from core.tool_framework.base import BaseTool
+from integrations.config_models import HoneycombIntegrationConfig
 from integrations.honeycomb.client import HoneycombClient
-from integrations.models import HoneycombIntegrationConfig
 
 
 def _honeycomb_available(sources: dict) -> bool:

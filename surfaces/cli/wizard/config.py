@@ -120,6 +120,9 @@ ANTHROPIC_MODELS = (
 # provider uses Chat Completions, while Codex models require a different API path.
 OPENAI_MODELS = (
     ModelOption(value=OPENAI_REASONING_MODEL, label="GPT-5.4 mini"),
+    ModelOption(value="gpt-5.6-sol", label="GPT-5.6 Sol — flagship"),
+    ModelOption(value="gpt-5.6-terra", label="GPT-5.6 Terra — balanced"),
+    ModelOption(value="gpt-5.6-luna", label="GPT-5.6 Luna — cost-efficient"),
     ModelOption(value="gpt-5.5", label="GPT-5.5"),
     ModelOption(value="gpt-5.4", label="GPT-5.4"),
     ModelOption(value="gpt-5.4-nano", label="GPT-5.4 nano"),
@@ -128,6 +131,9 @@ OPENAI_MODELS = (
 # Source: https://openrouter.ai/api/v1/models
 OPENROUTER_MODELS = (
     ModelOption(value=OPENROUTER_REASONING_MODEL, label="OpenRouter Auto (smart routing)"),
+    ModelOption(value="openai/gpt-5.6-sol", label="GPT-5.6 Sol (via OpenRouter)"),
+    ModelOption(value="openai/gpt-5.6-terra", label="GPT-5.6 Terra (via OpenRouter)"),
+    ModelOption(value="openai/gpt-5.6-luna", label="GPT-5.6 Luna (via OpenRouter)"),
     ModelOption(value="openai/gpt-5.5", label="GPT-5.5 (via OpenRouter)"),
     ModelOption(value="anthropic/claude-opus-4.7", label="Claude Opus 4.7 (via OpenRouter)"),
     ModelOption(value="anthropic/claude-sonnet-4.6", label="Claude Sonnet 4.6 (via OpenRouter)"),
@@ -201,6 +207,9 @@ GROQ_MODELS = (
 # Source: https://learn.microsoft.com/en-us/azure/ai-foundry/model-inference/concepts/models
 AZURE_OPENAI_MODELS = (
     ModelOption(value=AZURE_OPENAI_REASONING_MODEL, label="gpt-5.4-mini deployment"),
+    ModelOption(value="gpt-5.6-sol", label="gpt-5.6-sol deployment"),
+    ModelOption(value="gpt-5.6-terra", label="gpt-5.6-terra deployment"),
+    ModelOption(value="gpt-5.6-luna", label="gpt-5.6-luna deployment"),
     ModelOption(value="gpt-5.5", label="gpt-5.5 deployment"),
     ModelOption(value="gpt-5.4", label="gpt-5.4 deployment"),
     ModelOption(value="gpt-5.4-nano", label="gpt-5.4-nano deployment"),
@@ -285,7 +294,10 @@ CODEX_MODELS = (
         value="",
         label="CLI default (no -m; use Codex configured model)",
     ),
-    ModelOption(value="gpt-5.5", label="gpt-5.5 — newest frontier coding"),
+    ModelOption(value="gpt-5.6-sol", label="gpt-5.6-sol — newest frontier coding"),
+    ModelOption(value="gpt-5.6-terra", label="gpt-5.6-terra — balanced"),
+    ModelOption(value="gpt-5.6-luna", label="gpt-5.6-luna — fast, cost-efficient"),
+    ModelOption(value="gpt-5.5", label="gpt-5.5 — frontier coding"),
     ModelOption(value="gpt-5.4", label="gpt-5.4 — fallback default"),
     ModelOption(value="gpt-5.4-mini", label="gpt-5.4-mini — fast, cost-efficient"),
     ModelOption(value="gpt-5.3-codex", label="gpt-5.3-codex — coding-optimized"),

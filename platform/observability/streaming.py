@@ -17,10 +17,12 @@ import logging
 from collections import Counter
 from dataclasses import dataclass, field
 
-from platform.observability.errors import report_exception
+from platform.observability.errors.boundary import report_exception
 
 #: Default fraction of skipped lines tolerated before a stream is flagged.
 DEFAULT_SKIP_THRESHOLD: float = 0.10
+#: Decimal places for ``skip_ratio`` in Sentry extras.
+_SKIP_RATIO_DECIMAL_PLACES = 3
 
 
 @dataclass
@@ -82,7 +84,7 @@ class StreamingParseStats:
             extras={
                 "parsed": self.parsed,
                 "skipped": self.skipped,
-                "skip_ratio": round(self.skip_ratio, 3),
+                "skip_ratio": round(self.skip_ratio, _SKIP_RATIO_DECIMAL_PLACES),
                 "errors": dict(self.errors),
                 "threshold": threshold,
             },

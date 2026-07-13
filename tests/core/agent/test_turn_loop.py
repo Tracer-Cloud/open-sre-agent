@@ -7,7 +7,7 @@ from typing import Any
 
 from rich.console import Console
 
-from core.agent_harness.providers.default_providers import DefaultTurnAccounting
+from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
 from core.agent_harness.session.persistence.memory import InMemorySessionStorage
 from core.agent_harness.turns.orchestrator import run_turn
 from surfaces.interactive_shell.runtime.core.turn_accounting import (

@@ -31,6 +31,7 @@ class AgentRunResult:
     tool_results: list[tuple[ToolCall, ToolExecutionResult]] = field(default_factory=list)
     terminated_by_tool: bool = False
     hit_iteration_cap: bool = False
+    llm_iterations_used: int = 0
     final_system_prompt: str = ""
     """System prompt sent to the LLM on the last request (post-hook), for debugging."""
 

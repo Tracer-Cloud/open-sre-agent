@@ -9,14 +9,13 @@ from typing import Any
 
 import pytest
 
-import core.agent_harness.integrations.resolution as resolution
 import platform.harness_ports as harness_ports
-from surfaces.interactive_shell.ui.output import boundary as output_boundary
+from surfaces.interactive_shell.ui.output.boundary import install_harness_ports
 
 
 @pytest.fixture(autouse=True)
 def _harness_ports() -> Iterator[None]:
-    output_boundary.install_harness_ports()
+    install_harness_ports()
     yield
     harness_ports.reset_harness_ports()
 
@@ -33,7 +32,7 @@ def test_resolve_integrations_returns_existing_state_without_lookup(monkeypatch:
 
     monkeypatch.setattr("integrations.store.load_integrations", _unexpected_lookup)
 
-    resolved = resolution.resolve_integrations(
+    resolved = harness_ports.resolve_integrations(
         {"resolved_integrations": {"datadog": {"site": "datadoghq.com"}}}
     )
 
@@ -41,7 +40,7 @@ def test_resolve_integrations_returns_existing_state_without_lookup(monkeypatch:
 
 
 def test_resolution_request_ignores_unrelated_runtime_state() -> None:
-    request = resolution.IntegrationResolutionRequest.model_validate(
+    request = harness_ports.IntegrationResolutionRequest.model_validate(
         {
             "_auth_token": " Bearer token ",
             "org_id": " org-123 ",
@@ -57,7 +56,7 @@ def test_resolution_request_ignores_unrelated_runtime_state() -> None:
 
 def test_resolution_result_rejects_unknown_fields() -> None:
     with pytest.raises(ValueError):
-        resolution.IntegrationResolutionResult.model_validate(
+        harness_ports.IntegrationResolutionResult.model_validate(
             {
                 "resolved_integrations": {},
                 "unexpected": True,
@@ -81,7 +80,7 @@ def test_resolve_local_store_sources_returns_progress_metadata(monkeypatch: Any)
         lambda _records: {"datadog": {"site": "datadoghq.com"}},
     )
 
-    result = resolution.resolve_integrations_with_metadata()
+    result = harness_ports.resolve_integrations_with_metadata()
 
     assert result.resolved_integrations == {"datadog": {"site": "datadoghq.com"}}
     assert result.services == ("datadog",)
@@ -89,7 +88,7 @@ def test_resolve_local_store_sources_returns_progress_metadata(monkeypatch: Any)
 
 
 def test_resolution_result_is_strict_pydantic_model() -> None:
-    result = resolution.IntegrationResolutionResult(
+    result = harness_ports.IntegrationResolutionResult(
         resolved_integrations={
             "datadog": {"site": "datadoghq.com"},
             "_gateway_chat_id": "chat-1",
@@ -146,7 +145,7 @@ def test_resolve_env_token_merges_remote_store_and_env(monkeypatch: Any) -> None
         lambda _records: {"datadog": {}, "grafana": {}, "sentry": {}},
     )
 
-    result = resolution.resolve_integrations_with_metadata()
+    result = harness_ports.resolve_integrations_with_metadata()
 
     assert captured_fetch == {
         "org_id": "org-123",
@@ -168,7 +167,7 @@ def test_resolve_without_sources_reports_empty_local_lookup(monkeypatch: Any) ->
     monkeypatch.setattr(harness_ports, "_load_integrations", list)
     monkeypatch.setattr(harness_ports, "_load_env_integrations", list)
 
-    result = resolution.resolve_integrations_with_metadata()
+    result = harness_ports.resolve_integrations_with_metadata()
 
     assert result.resolved_integrations == {}
     assert result.progress_message is not None
