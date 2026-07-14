@@ -3,7 +3,7 @@
 Three exported entry points
 ---------------------------
 render_splash(console, first_run=False)
-    Full branded startup screen with ASCII art and optional security gate.
+    Branded startup screen with the Braille logomark and optional security gate.
     Called once when the CLI starts.
 
 render_ready_box(console, session=None)
@@ -18,9 +18,9 @@ render_banner(console)
 
 Rendered output legend (colour roles)
 --------------------------------------
-# [HIGHLIGHT]  ASCII art lines · ◉ glyph · OpenSRE brand name
+# [HIGHLIGHT]  ◉ glyph · OpenSRE brand name
 # [BRAND]      version string · model name · section headers
-# [SECONDARY]  "opensre" product name label · cwd · tip / note body
+# [SECONDARY]  Braille logomark · "opensre" product name label · cwd · tip / note body
 # [DIM]        subtitle description · rule lines · box chrome · dividers
 # [TEXT]       provider/model values · greeting
 # [WARNING]    read-only or trust-mode notice · incomplete-integration marker
@@ -49,11 +49,9 @@ from platform.terminal.theme import (
     SECONDARY,
     TEXT,
     WARNING,
-    _parse_hex_color,
-    get_active_theme,
 )
 from surfaces.interactive_shell.ui.banner.banner_state import _build_ambient_right_column
-from surfaces.interactive_shell.ui.components.banner_art import _render_art
+from surfaces.interactive_shell.ui.banner.splash_layout import build_splash_layout
 from surfaces.interactive_shell.ui.tables.provider import detect_provider_model
 
 
@@ -70,41 +68,17 @@ def _is_first_run() -> bool:
 # ── Splash screen ─────────────────────────────────────────────────────────────
 
 
-def _interpolate_hex_color(start: str, end: str, t: float) -> str:
-    """Return a hex color linearly interpolated between ``start`` and ``end``."""
-    start_rgb = _parse_hex_color(start)
-    end_rgb = _parse_hex_color(end)
-    clamped = max(0.0, min(1.0, t))
-    channels = tuple(
-        int(round(start_rgb[idx] + (end_rgb[idx] - start_rgb[idx]) * clamped)) for idx in range(3)
-    )
-    return f"#{channels[0]:02X}{channels[1]:02X}{channels[2]:02X}"
-
-
-def _splash_block_style(block_index: int, block_total: int) -> str:
-    """Return the Rich style for one splash block character."""
-    theme = get_active_theme()
-    start = theme.SPLASH_GRADIENT_START
-    end = theme.SPLASH_GRADIENT_END
-    if not start or not end:
-        return f"bold {HIGHLIGHT}"
-    if block_total <= 1:
-        return f"bold {_interpolate_hex_color(start, end, 0.0)}"
-    ratio = block_index / (block_total - 1)
-    return f"bold {_interpolate_hex_color(start, end, ratio)}"
-
-
 def render_splash(console: Console | None = None, *, first_run: bool | None = None) -> None:
     """Print the branded startup splash.
 
-    Rendered output (with colour roles):
+    Responsive layout (see splash_layout.select_splash_mode):
+    ≥ 90 cols — large Braille logo beside the splash content:
     ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ [DIM divider]
-    ╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋           [HIGHLIGHT art]
-    ...
-      opensre  [SECONDARY]  ·  v<version> [BRAND]
-      open-source SRE agent for automated incident
-      investigation and root cause analysis          [DIM]
+      ⣠⣶⡿…⢶⣄     opensre  ·  v<version>          [SECONDARY logo · BRAND]
+      …            open-source SRE agent …          [DIM]
     ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ [DIM divider]
+    60–89 cols — small Braille logo beside the same condensed content.
+    < 60 cols — stacked subtitle + description only, no logo.
 
     If first_run (or not set and wizard has never run):
       ⚠  This tool runs AI-powered commands …      [WARNING]
@@ -120,40 +94,11 @@ def render_splash(console: Console | None = None, *, first_run: bool | None = No
         first_run = _is_first_run()
 
     version = get_opensre_version()
-    art = _render_art(console.width)
 
     console.print()
     console.print(Rule(style=DIM))
     console.print()
-
-    for line in art.splitlines():
-        t = Text()
-        t.append("  ")
-        block_total = line.count("█")
-        block_index = 0
-        for ch in line:
-            if ch == "█":
-                t.append(ch, style=_splash_block_style(block_index, block_total))
-                block_index += 1
-            else:
-                t.append(ch, style=f"bold {BRAND}")
-        console.print(t)
-
-    console.print()
-
-    subtitle = Text()
-    subtitle.append("  ")
-    subtitle.append("opensre", style=SECONDARY)
-    subtitle.append("  ·  ", style=DIM)
-    subtitle.append(f"v{version}", style=BRAND)
-    console.print(subtitle)
-
-    desc = Text()
-    desc.append(
-        "  open-source SRE agent for automated incident investigation and root cause analysis",
-        style=DIM,
-    )
-    console.print(desc)
+    console.print(build_splash_layout(console.width, version))
     console.print()
     console.print(Rule(style=DIM))
 
