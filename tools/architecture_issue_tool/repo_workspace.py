@@ -64,11 +64,26 @@ def architecture_workspace_dir() -> Path:
     return _ARCHITECTURE_WORKSPACE_DIR
 
 
+def _remove_tree(path: Path, *, action: str) -> None:
+    """Delete *path* recursively; raise WorkspaceError on any failure.
+
+    Unlike ``shutil.rmtree(..., ignore_errors=True)``, this never reports success
+    when the tree is only partially removed (or not removed at all).
+    """
+    if not path.exists():
+        return
+    try:
+        shutil.rmtree(path)
+    except OSError as exc:
+        raise WorkspaceError(f"{action} failed: could not remove {path}: {exc}") from exc
+    if path.exists():
+        raise WorkspaceError(f"{action} failed: path still exists after removal ({path})")
+
+
 def prepare_architecture_workspace() -> Path:
     """Reset and return the architecture audit clone directory."""
     workspace = architecture_workspace_dir()
-    if workspace.exists():
-        shutil.rmtree(workspace, ignore_errors=True)
+    _remove_tree(workspace, action="prepare architecture workspace")
     workspace.mkdir(parents=True, exist_ok=True)
     return workspace
 
@@ -83,8 +98,7 @@ def cleanup_architecture_workspace(*, path: str | Path | None = None) -> Path:
         raise WorkspaceError(
             f"cleanup refused: path is outside architecture workspace ({workspace})"
         ) from exc
-    if target.exists():
-        shutil.rmtree(target, ignore_errors=True)
+    _remove_tree(target, action="cleanup architecture workspace")
     return target
 
 

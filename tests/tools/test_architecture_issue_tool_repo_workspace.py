@@ -77,13 +77,72 @@ def test_cleanup_architecture_workspace_refuses_outside_path(tmp_path: Path) -> 
         cleanup_architecture_workspace(path=tmp_path)
 
 
+def test_cleanup_architecture_workspace_surfaces_rmtree_errors(tmp_path: Path) -> None:
+    workspace = tmp_path / "architecture_workspace"
+    workspace.mkdir()
+    (workspace / "stale.txt").write_text("x", encoding="utf-8")
+
+    with (
+        patch(
+            "tools.architecture_issue_tool.repo_workspace.architecture_workspace_dir",
+            return_value=workspace,
+        ),
+        patch(
+            "tools.architecture_issue_tool.repo_workspace.shutil.rmtree",
+            side_effect=OSError("Permission denied"),
+        ),
+        pytest.raises(WorkspaceError, match="could not remove"),
+    ):
+        cleanup_architecture_workspace()
+
+
+def test_prepare_architecture_workspace_surfaces_rmtree_errors(tmp_path: Path) -> None:
+    from tools.architecture_issue_tool.repo_workspace import prepare_architecture_workspace
+
+    workspace = tmp_path / "architecture_workspace"
+    workspace.mkdir()
+    (workspace / "stale.txt").write_text("x", encoding="utf-8")
+
+    with (
+        patch(
+            "tools.architecture_issue_tool.repo_workspace.architecture_workspace_dir",
+            return_value=workspace,
+        ),
+        patch(
+            "tools.architecture_issue_tool.repo_workspace.shutil.rmtree",
+            side_effect=OSError("Directory not empty"),
+        ),
+        pytest.raises(WorkspaceError, match="could not remove"),
+    ):
+        prepare_architecture_workspace()
+
+
+def test_cleanup_architecture_workspace_fails_if_path_still_exists(tmp_path: Path) -> None:
+    workspace = tmp_path / "architecture_workspace"
+    workspace.mkdir()
+
+    def _noop_rmtree(path: object, *args: object, **kwargs: object) -> None:
+        return None
+
+    with (
+        patch(
+            "tools.architecture_issue_tool.repo_workspace.architecture_workspace_dir",
+            return_value=workspace,
+        ),
+        patch(
+            "tools.architecture_issue_tool.repo_workspace.shutil.rmtree",
+            side_effect=_noop_rmtree,
+        ),
+        pytest.raises(WorkspaceError, match="still exists"),
+    ):
+        cleanup_architecture_workspace()
+
+
 @patch("tools.architecture_issue_tool.repo_workspace._shallow_clone")
 @patch("tools.architecture_issue_tool.repo_workspace._remote_default_branch", return_value="main")
-@patch("tools.architecture_issue_tool.repo_workspace.shutil.rmtree")
 @patch("tools.architecture_issue_tool.repo_workspace.prepare_architecture_workspace")
 def test_cloned_github_repo_clones_and_cleans_up(
     mock_prepare,
-    mock_rmtree,
     mock_default_branch,
     mock_shallow_clone,
     tmp_path: Path,
@@ -96,6 +155,7 @@ def test_cloned_github_repo_clones_and_cleans_up(
         destination = kwargs["destination"]
         assert isinstance(destination, Path)
         destination.mkdir(parents=True, exist_ok=True)
+        (destination / "README.md").write_text("ok\n", encoding="utf-8")
 
     mock_shallow_clone.side_effect = _clone
 
@@ -110,21 +170,21 @@ def test_cloned_github_repo_clones_and_cleans_up(
         assert result.root == workspace
         mock_default_branch.assert_called_once()
         mock_shallow_clone.assert_called_once()
+        assert workspace.exists()
 
-    assert mock_rmtree.called
+    assert not workspace.exists()
 
 
 @patch("tools.architecture_issue_tool.repo_workspace._shallow_clone")
-@patch("tools.architecture_issue_tool.repo_workspace.shutil.rmtree")
 @patch("tools.architecture_issue_tool.repo_workspace.prepare_architecture_workspace")
 def test_clone_github_repo_cleans_up_on_clone_failure(
     mock_prepare,
-    mock_rmtree,
     mock_shallow_clone,
     tmp_path: Path,
 ) -> None:
     workspace = tmp_path / ".temp" / "opensre" / "architecture_workspace"
     workspace.mkdir(parents=True)
+    (workspace / "stale.txt").write_text("x", encoding="utf-8")
     mock_prepare.return_value = workspace
     mock_shallow_clone.side_effect = WorkspaceError("git clone failed")
 
@@ -137,7 +197,7 @@ def test_clone_github_repo_cleans_up_on_clone_failure(
     ):
         clone_github_repo("Tracer-Cloud", "opensre", ref="main")
 
-    assert mock_rmtree.called
+    assert not workspace.exists()
 
 
 def test_shallow_clone_sha_fetches_commit_directly(tmp_path: Path) -> None:
