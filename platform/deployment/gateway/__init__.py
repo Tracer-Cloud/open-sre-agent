@@ -1,1 +1,1 @@
-"""Systemd deployment path for the OpenSRE Telegram gateway."""
+"""Systemd deployment path for the OpenSRE messaging gateway (Telegram and/or Slack)."""

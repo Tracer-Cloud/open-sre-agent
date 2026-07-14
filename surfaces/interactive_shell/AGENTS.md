@@ -8,7 +8,7 @@ subdirectories. The repo-root `AGENTS.md` still applies.
 `interactive_shell/` owns the interactive OpenSRE terminal surface: the REPL
 loop, slash-command surface, local alert ingestion, shell execution, and Rich /
 prompt-toolkit UI. Reusable agent session state, prompt history, grounding, and
-prompt construction live under `core.agent`.
+prompt construction live under `core.agent_harness`.
 
 Design for a terminal user who may be in the middle of an incident: behavior
 should be predictable, interruptible, explainable, and safe by default.
@@ -35,19 +35,14 @@ owning area rather than adding more logic to the caller.
 - Treat every external input as untrusted: user prompt text, slash-command args,
   alert payloads, files read into prompts, history, subprocess output, model
   output, and integration metadata.
-- Keep the interactive path responsive. Long-running work must be cancellable,
+- Keep the interactive path responsive: long-running work must be cancellable,
   timeout-bounded, moved off the input path, or surfaced with clear progress.
-- Preserve import-time lightness. Do not start threads, call LLMs, read large
+- Preserve import-time lightness — do not start threads, call LLMs, read large
   files, or contact networks at module import time.
-- Prefer explicit data models and typed helpers over loosely shaped dictionaries
-  when data crosses submodule boundaries.
-- Keep user-visible strings intentional. Slash-command names, flags, output
-  labels, prompts, response bodies, and error wording are user-facing API.
-- Avoid new module-level mutable globals. If global coordination is unavoidable,
-  provide deterministic reset/cleanup hooks and test isolation.
-- Do not keep compatibility-only forwarding modules after moving code. Migrate
-  callers/tests to the canonical owner and remove the old import path in the
-  same change.
+- Slash-command names, flags, output labels, prompts, response bodies, and
+  error wording are user-facing API — treat them as intentional, not incidental.
+- Avoid new module-level mutable globals; if global coordination is
+  unavoidable, provide deterministic reset/cleanup hooks for test isolation.
 
 ## Slash commands
 
@@ -145,9 +140,9 @@ owning area rather than adding more logic to the caller.
   tool, the `UNHANDLED:` convention, and the "I couldn't safely decide actions"
   message because they caused frequent false denials (e.g. a conversational
   question that embedded a quoted, list-style directive) with no safety upside.
-  Details and rationale live in `core/agent_harness/AGENTS.md`. If
+  Details and rationale live in `docs/interactive-shell-action-policy.md`. If
   mutating actions are ever introduced, gate them with the
-  execution-stage confirmation policy (`tools/shared/execution_policy.py`), not a
+  execution-stage confirmation policy (`tools/interactive_shell/shared/execution_policy.py`), not a
   planner-stage denial.
 - Keep deterministic command detection in `orchestration/` for terminal UI
   policy only; use the action agent for slash/tool action selection.
@@ -156,24 +151,20 @@ owning area rather than adding more logic to the caller.
 - LLM-generated text must never execute directly. Convert proposed actions into
   explicit planned actions, show them to the user when appropriate, then execute
   through `orchestration/` and policy gates.
-- Keep action summaries human-readable and specific enough for confirmation UX
-  and audit logs.
 - When adding a new action type, test allowed, denied, and confirmation-required
   paths.
 
 ## LLM prompts, grounding, and references
 
-- Keep prompts bounded. Enforce size caps for docs, source chunks, histories,
-  observations, alert text, and command output included in model context.
+- Enforce size caps for docs, source chunks, histories, observations, alert
+  text, and command output included in model context.
 - Ground procedural/help answers in maintained references (`docs/`, CLI help,
-  AGENTS files, source snippets). If references do not support an answer, say so
-  rather than inventing steps.
-- Do not include secrets in prompts. Redact or omit tokens, auth headers, env
+  AGENTS files, source snippets). If references do not support an answer, say
+  so rather than inventing steps.
+- Do not include secrets in prompts — redact or omit tokens, auth headers, env
   values, local credentials, and raw integration config.
 - Keep prompt rules reusable in `core.agent_harness.prompts` so chat/help/action
   surfaces use consistent terminology and formatting.
-- Reference caches should be deterministic, invalidatable when source files
-  change, and cheap to rebuild in tests.
 
 ## Terminal UI and rendering
 
@@ -184,15 +175,12 @@ owning area rather than adding more logic to the caller.
 - Use semantic tokens from `ui/theme.py`. Do not introduce raw hex colors, Rich
   named colors, or raw ANSI escapes outside `ui/theme.py` unless a narrow
   prompt-toolkit compatibility path requires it.
-- Keep rendering helpers as pure as practical: accept data, return/render Rich
-  objects, avoid reading config or mutating session state from UI modules.
 - Any raw terminal-mode code must check TTY support and restore terminal state
   in `finally`.
 - Be careful mixing `prompt_toolkit.patch_stdout`, Rich live rendering, and
-  background output. Prefer append-only, paragraph-buffered, or throttled
-  rendering paths that do not corrupt the editable prompt.
-- UI changes should handle narrow terminals, non-ASCII fallback where relevant,
-  long text, empty states, and non-TTY automation.
+  background output — see the CPR gotcha under Slash commands above. Prefer
+  append-only, paragraph-buffered, or throttled rendering paths that do not
+  corrupt the editable prompt.
 
 ## Shell, subprocesses, and local system effects
 
@@ -202,14 +190,9 @@ owning area rather than adding more logic to the caller.
   markup and cap what is retained or sent to prompts.
 - Use explicit timeouts and clear cancellation behavior for subprocesses. Avoid
   waits that can hang the REPL indefinitely.
-- Keep allow/deny decisions explainable. If a command is blocked, return a
-  user-facing reason and a safe alternative when possible.
 
 ## State, history, config, and background work
 
-- Prefer explicit `Session` fields for session state. Keep ownership clear:
-  runtime owns lifecycle, history owns persistence, config owns shell-specific
-  settings.
 - Background threads/tasks/listeners must have deterministic shutdown. Tests
   should stop handles and workers in fixtures or `finally` blocks.
 - Protect shared queues and mutable session data with locks or single-owner
@@ -217,8 +200,6 @@ owning area rather than adding more logic to the caller.
   current tasks, and listener handles.
 - History should avoid storing secrets or excessive payloads. Apply truncation
   and privacy policy consistently.
-- Config loading should degrade gracefully with actionable errors; do not make
-  the REPL unusable because an optional config or catalog source is missing.
 
 ## External input and local listener safety
 
@@ -236,8 +217,6 @@ owning area rather than adding more logic to the caller.
 - Preserve clean unauthorized responses for real POST bodies by draining only a
   bounded body before returning `401`; this avoids close-with-unread-data resets
   on some platforms without allowing oversized pre-auth reads.
-- Keep request-size and malformed-header checks effective for both authenticated
-  and unauthenticated callers.
 - Keep non-loopback listener binding protected by a token. Use constant-time
   token comparison and never log bearer tokens, raw auth headers, or full alert
   payloads.
@@ -256,20 +235,3 @@ owning area rather than adding more logic to the caller.
   caps, Rich escaping, and background cleanup.
 - Prefer deterministic tests over sleep-heavy tests. Use fake classifiers,
   fake sessions, fake consoles, monkeypatched subprocesses, and small fixtures.
-- For UI work, test pure formatting/rendering helpers where possible and keep
-  full REPL-loop tests minimal.
-- For action-planning or execution-policy changes, test both safe fallback behavior and
-  the intended positive path.
-
-## Change checklist
-
-Before considering an interactive-shell change complete, check:
-
-1. Is the logic in the right submodule, with import-time side effects avoided?
-2. Is user-facing behavior preserved or intentionally documented?
-3. Are unsafe actions sent through execution policy with the correct tier?
-4. Are external inputs bounded, escaped, redacted, and timeout-protected?
-5. Do background resources shut down deterministically?
-6. Are focused tests added or updated under `tests/interactive_shell/`?
-7. If `SLASH_COMMANDS` changed, does `slash_catalog.py` include every command
-   (REPL and `cli_parity`)? Run `test_slash_catalog.py`.

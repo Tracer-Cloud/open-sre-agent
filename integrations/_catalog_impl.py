@@ -1608,6 +1608,28 @@ def _raw_credentials(config: dict[str, Any]) -> dict[str, Any]:
     return config
 
 
+def _slack_effective_config(
+    *, webhook_url: str, bot_token: str, app_token: str, webhook_label: str
+) -> dict[str, str]:
+    """Return the Slack effective config: webhook and/or Socket Mode tokens.
+
+    Empty when nothing is configured. An invalid webhook URL is dropped with a
+    static warning naming ``webhook_label`` — Pydantic's ValidationError embeds
+    the URL, which carries a secret token in its path, so it is never logged.
+    """
+    config: dict[str, str] = {}
+    if webhook_url:
+        try:
+            SlackWebhookConfig.model_validate({"webhook_url": webhook_url})
+            config["webhook_url"] = webhook_url
+        except Exception:
+            logger.warning("%s is invalid; skipping Slack webhook", webhook_label)
+    if bot_token or app_token:
+        config["bot_token"] = bot_token
+        config["app_token"] = app_token
+    return config
+
+
 def resolve_effective_integrations(
     *,
     store_integrations: list[dict[str, Any]] | None = None,
@@ -1673,25 +1695,23 @@ def resolve_effective_integrations(
     slack_store_integration = store_integration_by_service.get("slack")
     if isinstance(slack_store_integration, dict):
         slack_credentials = _raw_credentials(slack_store_integration)
-        webhook_url = str(slack_credentials.get("webhook_url", "")).strip()
-        if webhook_url:
-            try:
-                slack_config = SlackWebhookConfig.model_validate({"webhook_url": webhook_url})
-                effective["slack"] = _effective_entry("local store", slack_config.model_dump())
-            except Exception:
-                # Do NOT include the exception value — Pydantic v2 ValidationError
-                # embeds the input_value (here a SlackWebhookConfig containing the
-                # webhook_url) in its string representation, and Slack webhook URLs
-                # carry a secret token in the path. Log only a static message.
-                logger.warning("Slack webhook URL from store is invalid; skipping Slack")
-    elif slack_webhook_url := os.getenv("SLACK_WEBHOOK_URL", "").strip():
-        try:
-            slack_config = SlackWebhookConfig.model_validate({"webhook_url": slack_webhook_url})
-            effective["slack"] = _effective_entry("local env", slack_config.model_dump())
-        except Exception:
-            # See note above: avoid logging the ValidationError which embeds the
-            # raw webhook_url (and its secret token).
-            logger.warning("SLACK_WEBHOOK_URL is invalid; skipping Slack")
+        slack_config = _slack_effective_config(
+            webhook_url=str(slack_credentials.get("webhook_url", "")).strip(),
+            bot_token=str(slack_credentials.get("bot_token", "")).strip(),
+            app_token=str(slack_credentials.get("app_token", "")).strip(),
+            webhook_label="Slack webhook URL from store",
+        )
+        if slack_config:
+            effective["slack"] = _effective_entry("local store", slack_config)
+    else:
+        slack_config = _slack_effective_config(
+            webhook_url=os.getenv("SLACK_WEBHOOK_URL", "").strip(),
+            bot_token=os.getenv("SLACK_BOT_TOKEN", "").strip(),
+            app_token=os.getenv("SLACK_APP_TOKEN", "").strip(),
+            webhook_label="SLACK_WEBHOOK_URL",
+        )
+        if slack_config:
+            effective["slack"] = _effective_entry("local env", slack_config)
 
     google_docs_integration = classified_integrations.get("google_docs")
     if isinstance(google_docs_integration, dict):

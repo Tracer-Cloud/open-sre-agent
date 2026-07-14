@@ -90,7 +90,37 @@ def test_wait_for_gateway_ready_returns_when_active_and_sentinel(mock_sleep, moc
     """wait_for_gateway_ready() returns once the service is active and logs the sentinel."""
     mock_ssm.return_value = {
         "status": "Success",
-        "stdout": "active\nsome log line\ntelegram-gateway polling started\n",
+        "stdout": "active\nsome log line\n[gateway] ready\n",
+        "stderr": "",
+    }
+
+    provision_module.wait_for_gateway_ready(_INSTANCE_ID)
+
+    assert mock_ssm.call_count >= 1
+
+
+@patch("platform.deployment.gateway.provision.run_ssm_shell_command")
+@patch("platform.deployment.gateway.provision.time.sleep", return_value=None)
+def test_wait_for_gateway_ready_accepts_slack_sentinel(mock_sleep, mock_ssm):
+    """Legacy Slack Socket Mode log line still satisfies the ready wait."""
+    mock_ssm.return_value = {
+        "status": "Success",
+        "stdout": "active\n[slack-gateway] socket mode connected\n",
+        "stderr": "",
+    }
+
+    provision_module.wait_for_gateway_ready(_INSTANCE_ID)
+
+    assert mock_ssm.call_count >= 1
+
+
+@patch("platform.deployment.gateway.provision.run_ssm_shell_command")
+@patch("platform.deployment.gateway.provision.time.sleep", return_value=None)
+def test_wait_for_gateway_ready_accepts_telegram_sentinel(mock_sleep, mock_ssm):
+    """Legacy Telegram polling log line still satisfies the ready wait."""
+    mock_ssm.return_value = {
+        "status": "Success",
+        "stdout": "active\n[telegram-gateway] polling started\n",
         "stderr": "",
     }
 

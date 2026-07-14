@@ -192,3 +192,40 @@ class TestMessageBuilders:
         tasks_mod._build_custom_investigation(task)
         assert "bot_token" not in captured_payload
         assert captured_payload.get("custom_param") == "safe_value"
+
+    def test_sentry_morning_digest_uses_agent_runner(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        task = ScheduledTask(
+            kind=TaskKind.SENTRY_MORNING_DIGEST,
+            cron="0 8 * * *",
+            provider=Provider.SLACK,
+            chat_id="C123",
+            params={"project_slug": "api"},
+        )
+        captured: dict[str, object] = {}
+
+        def _mock_agent_runner(payload: dict[str, object]) -> str:
+            captured.update(payload)
+            return "Top clusters: checkout failures"
+
+        monkeypatch.setattr("platform.scheduler.tasks.invoke_agent_runner", _mock_agent_runner)
+        msg = tasks_mod.build_message(task)
+        assert msg == "Top clusters: checkout failures"
+        assert captured["query"] == "is:unresolved"
+        assert captured["stats_period"] == "24h"
+        assert captured["project_slug"] == "api"
+
+    def test_sentry_morning_digest_failure_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        task = ScheduledTask(
+            kind=TaskKind.SENTRY_MORNING_DIGEST,
+            cron="0 8 * * *",
+            provider=Provider.TELEGRAM,
+            chat_id="-100",
+        )
+
+        def _raise(_payload: dict[str, object]) -> str:
+            raise RuntimeError("LLM unavailable")
+
+        monkeypatch.setattr("platform.scheduler.tasks.invoke_agent_runner", _raise)
+
+        with pytest.raises(RuntimeError, match="Sentry morning digest failed"):
+            tasks_mod.build_message(task)
