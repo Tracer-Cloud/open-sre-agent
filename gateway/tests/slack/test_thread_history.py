@@ -10,24 +10,29 @@ import pytest
 import gateway.slack.thread_history as thread_history
 
 
-def test_session_needs_seed_for_bare_yes_without_want_me_to() -> None:
-    session = SimpleNamespace(cli_agent_messages=[("user", "hi"), ("assistant", "hello")])
-    assert thread_history.session_needs_thread_seed(session, "yes") is True
+def test_session_needs_seed_for_bare_yes() -> None:
+    assert thread_history.session_needs_thread_seed("yes") is True
 
 
-def test_session_skips_seed_when_want_me_to_already_present() -> None:
-    session = SimpleNamespace(
-        cli_agent_messages=[
-            ("assistant", "Want me to: group them by title, or pull engineers?"),
-        ]
-    )
-    assert thread_history.session_needs_thread_seed(session, "yes") is False
+def test_affirmative_always_reseeds_even_with_prior_offer() -> None:
+    # Re-seeding pulls the complete current thread, so a repeated affirmative
+    # resolves against the LATEST offer rather than stale session state.
+    assert thread_history.session_needs_thread_seed("yes") is True
+
+
+def test_any_threaded_reply_seeds_regardless_of_wording() -> None:
+    # "do that", "the first one", etc. must seed without a phrase list.
+    assert thread_history.session_needs_thread_seed("do that", is_reply=True) is True
+    assert thread_history.session_needs_thread_seed("the first one", is_reply=True) is True
+
+
+def test_new_top_level_mention_does_not_seed() -> None:
+    assert thread_history.session_needs_thread_seed("who is on the team?", is_reply=False) is False
 
 
 def test_session_needs_seed_for_restated_yes() -> None:
-    session = SimpleNamespace(cli_agent_messages=[])
     assert thread_history.session_needs_thread_seed(
-        session, 'you asked a question: "want me to:" and I replied yes'
+        'you asked a question: "want me to:" and I replied yes'
     )
 
 
@@ -116,7 +121,7 @@ def test_empty_session_yes_after_thread_seed_expands_dual_offer(
     )
 
     session: Any = SimpleNamespace(cli_agent_messages=[])
-    assert thread_history.session_needs_thread_seed(session, "yes") is True
+    assert thread_history.session_needs_thread_seed("yes") is True
     assert (
         thread_history.seed_session_from_slack_thread(
             session, channel_id="C0BJ1D4LZDE", thread_ts="1.0", exclude_ts="1.2"

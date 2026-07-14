@@ -108,12 +108,14 @@ class _SlackTurnDispatcher:
         session_resolver: SessionResolver,
         handler: GatewayAgentCallback,
         logger: logging.Logger,
+        bot_user_id: str = "",
     ) -> None:
         self._settings = settings
         self._messaging = messaging
         self._session_resolver = session_resolver
         self._handler = handler
         self._logger = logger
+        self._bot_user_id = bot_user_id
         self._conversation_locks: dict[str, _ConversationLock] = {}
         self._locks_guard = threading.Lock()
         self._resolver_lock = threading.Lock()
@@ -244,12 +246,13 @@ class _SlackTurnDispatcher:
             try:
                 # Slack thread is the continuity source when the
                 # gateway session file is empty (redeploy / ephemeral disk).
-                if session_needs_thread_seed(session, inbound.text):
+                if session_needs_thread_seed(inbound.text, is_reply=is_reply):
                     seeded = seed_session_from_slack_thread(
                         session,
                         channel_id=inbound.channel_id,
                         thread_ts=inbound.thread_ts,
                         exclude_ts=inbound.ts,
+                        bot_user_id=self._bot_user_id,
                     )
                     if seeded:
                         self._logger.info(
@@ -301,6 +304,15 @@ def _agent_text_with_slack_context(inbound: SlackInboundMessage) -> str:
     return f"[Slack channel_id={inbound.channel_id} thread_ts={inbound.thread_ts}]\n{inbound.text}"
 
 
+def _resolve_bot_user_id(web_client: WebClient, logger: logging.Logger) -> str:
+    """Return the bot's own Slack user id via auth.test, or '' on failure."""
+    try:
+        return str(web_client.auth_test().get("user_id") or "")
+    except Exception:
+        logger.debug("[slack-gateway] auth.test for bot_user_id failed", exc_info=True)
+        return ""
+
+
 def start_slack_gateway_background(
     *,
     settings: SlackGatewaySettings,
@@ -315,12 +327,16 @@ def start_slack_gateway_background(
         max_workers=settings.max_concurrent_turns,
         thread_name_prefix="SlackGatewayTurn",
     )
+    # Resolve the bot's own user id once so thread seeding can label the bot's
+    # replies by author, not by fragile text-shape matching.
+    bot_user_id = _resolve_bot_user_id(web_client, logger)
     dispatcher = _SlackTurnDispatcher(
         settings=settings,
         messaging=SlackWebApiClient(web_client),
         session_resolver=SessionResolver(SessionBindingStore(db), platform=_PLATFORM_SLACK),
         handler=handler,
         logger=logger,
+        bot_user_id=bot_user_id,
     )
 
     def _on_request(client: BaseSocketModeClient, request: SocketModeRequest) -> None:

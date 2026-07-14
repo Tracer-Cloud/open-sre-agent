@@ -26,14 +26,18 @@ _ASSISTANT_SHAPE_RE = re.compile(
 _THREAD_SEED_LIMIT = 40
 
 
-def session_needs_thread_seed(session: Any, user_text: str) -> bool:
-    """True when follow-up resolution needs Slack thread history."""
-    messages = list(getattr(session, "cli_agent_messages", None) or [])
-    if any(
-        role == "assistant" and isinstance(content, str) and _WANT_ME_TO_RE.search(content)
-        for role, content in messages
-    ):
-        return False
+def session_needs_thread_seed(user_text: str, *, is_reply: bool = False) -> bool:
+    """True when follow-up resolution needs Slack thread history.
+
+    The Slack thread is the source of truth for a conversation (gateway session
+    files are ephemeral across redeploys). So ANY threaded reply re-seeds from
+    the live thread — this covers every follow-up shape ("yes", "do that",
+    "the first one", "group by role") without maintaining a phrase list, and a
+    repeated affirmative resolves against the LATEST assistant offer. A brand-new
+    top-level mention (not a reply) starts fresh and needs no seed.
+    """
+    if is_reply:
+        return True
     bare = str(user_text or "").strip()
     if not bare:
         return False
