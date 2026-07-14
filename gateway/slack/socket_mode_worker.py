@@ -34,6 +34,10 @@ from gateway.slack.security import (
     persist_policy_if_needed,
 )
 from gateway.slack.settings import SlackGatewaySettings
+from gateway.slack.thread_history import (
+    seed_session_from_slack_thread,
+    session_needs_thread_seed,
+)
 from gateway.storage import SessionBindingStore, SessionResolver, connect_gateway_db
 
 _PLATFORM_SLACK = "slack"
@@ -220,8 +224,20 @@ class _SlackTurnDispatcher:
                 update_interval_seconds=self._settings.status_update_interval_seconds,
             )
             try:
-                # Give the agent the current channel/thread so "this channel" /
-                # "summarize the conversation" can call slack_read_messages.
+                # Slack thread is the continuity source when the
+                # gateway session file is empty (redeploy / ephemeral disk).
+                if session_needs_thread_seed(session, inbound.text):
+                    seeded = seed_session_from_slack_thread(
+                        session,
+                        channel_id=inbound.channel_id,
+                        thread_ts=inbound.thread_ts,
+                        exclude_ts=inbound.ts,
+                    )
+                    if seeded:
+                        self._logger.info(
+                            "seeded session history from Slack thread msgs=%d",
+                            seeded,
+                        )
                 agent_text = _agent_text_with_slack_context(inbound)
                 self._handler(agent_text, session, sink, self._logger)
             except Exception:
@@ -239,13 +255,16 @@ class _SlackTurnDispatcher:
 
 
 def _agent_text_with_slack_context(inbound: SlackInboundMessage) -> str:
-    """Prefix inbound text with channel id only for teammate tool targeting.
+    """Prefix inbound text with channel/thread ids for teammate tool targeting.
 
-    Keep this a short metadata line — a long tool-steering preamble made short
-    follow-ups like "yes" look like brand-new Slack requests and drowned the
-    prior Want me to: offer. Tool routing lives in the action/system prompts.
+    Keep this a short metadata line — tool routing lives in action prompts.
+    ``thread_ts`` is included so follow-up seeding / thread reads can target
+    the triggering thread without steering every question to channel history.
     """
-    return f"[Slack channel_id={inbound.channel_id}]\n{inbound.text}"
+    return (
+        f"[Slack channel_id={inbound.channel_id} thread_ts={inbound.thread_ts}]\n"
+        f"{inbound.text}"
+    )
 
 
 def start_slack_gateway_background(

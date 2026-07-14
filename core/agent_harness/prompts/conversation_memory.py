@@ -29,9 +29,15 @@ _AFFIRMATIVE_RE = re.compile(
     r"(?is)^\s*(?:yes|y|yeah|yep|yup|sure|ok|okay|please|go ahead|do it|do that)"
     r"(?:\s*please)?\s*[.!?]?\s*$"
 )
+# Slack users often restate the offer instead of a bare yes.
+_AFFIRMATIVE_RESTATED_RE = re.compile(
+    r"(?is)(?:want\s+me\s+to\s*:.*\byes\b|\bi replied yes\b|"
+    r"you asked .*\byes\b|\bas a yes\b)"
+)
 _WANT_ME_TO_RE = re.compile(
     r"(?is)\*{0,2}Want me to:\*{0,2}\s*(.+?)(?:\n\s*\n|\Z)",
 )
+_OR_SPLIT_RE = re.compile(r"(?i),\s*or\s+|\s+or\s+")
 
 
 def expand_affirmative_follow_up(
@@ -55,13 +61,23 @@ def expand_affirmative_follow_up(
     if ctx:
         prefix = ctx.group(0)
         remainder = raw[ctx.end() :]
-    if not _AFFIRMATIVE_RE.match(remainder):
+    if not (
+        _AFFIRMATIVE_RE.match(remainder) or _AFFIRMATIVE_RESTATED_RE.search(remainder)
+    ):
         return raw
 
     offer = _latest_want_me_to_offer(messages)
     if not offer:
         return raw
-    return f"{prefix}Yes — please {offer}."
+    return f"{prefix}Yes — please {_normalize_offer(offer)}."
+
+
+def _normalize_offer(offer: str) -> str:
+    """Collapse dual ``A, or B`` Want-me-to offers into an actionable request."""
+    parts = [p.strip(" .?") for p in _OR_SPLIT_RE.split(offer, maxsplit=1) if p.strip()]
+    if len(parts) == 2:
+        return f"do both — {parts[0]}; and {parts[1]}"
+    return offer
 
 
 def _latest_want_me_to_offer(

@@ -24,6 +24,28 @@ def test_expands_yes_after_roster_want_me_to_offer() -> None:
     assert expanded.strip().endswith(".")
 
 
+def test_expands_dual_or_offer_into_do_both() -> None:
+    history = [
+        (
+            "assistant",
+            "Want me to: group them by title, or pull just the engineering folks?",
+        ),
+    ]
+    expanded = expand_affirmative_follow_up("yes", history)
+    assert "do both — group them by title; and pull just the engineering folks." in expanded
+
+
+def test_expands_restated_yes_after_want_me_to() -> None:
+    history = [
+        ("assistant", "Want me to: group them by title, or pull just the engineering folks?"),
+    ]
+    expanded = expand_affirmative_follow_up(
+        'you asked a question: "want me to:" and I replied yes',
+        history,
+    )
+    assert expanded.startswith("Yes — please do both")
+
+
 def test_leaves_non_affirmative_unchanged() -> None:
     history = [
         ("assistant", "Want me to: list their display names and titles, too?"),

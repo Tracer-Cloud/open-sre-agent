@@ -119,7 +119,8 @@ def test_authorized_message_reaches_handler_with_thread_sink() -> None:
 
     assert len(turns) == 1
     agent_text, session = turns[0]
-    assert agent_text.startswith("[Slack channel_id=C1]")
+    assert agent_text.startswith("[Slack channel_id=C1 ")
+    assert "thread_ts=100.1" in agent_text
     assert "slack_read_messages" not in agent_text
     assert agent_text.endswith("check the api")
     assert session is turns[0][1]
