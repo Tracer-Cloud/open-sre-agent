@@ -109,7 +109,9 @@ sum(rate(http_requests_total{job="podinfo"}[1m])) by (status)
 histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job="podinfo"}[1m])) by (le))
 ```
 
-![Spike in Error Rate in Grafana](/images/grafana-prometheus-visualisation.png)
+<Frame>
+  ![Spike in Error Rate in Grafana](/images/grafana-prometheus-visualisation.png)
+</Frame>
 
 ### Setting up Prometheus Alerts
 
@@ -139,4 +141,6 @@ YAML
 
 The prometheus alert will be fired after 30 seconds of the error rate being high. You can check the alert in the prometheus dashboard at [http://localhost:9090/alerts](http://localhost:9090/alerts).
 
-![Prometheus Alert Firing](/images/prometheus-alert-firing.png)
+<Frame>
+  ![Prometheus Alert Firing](/images/prometheus-alert-firing.png)
+</Frame>
