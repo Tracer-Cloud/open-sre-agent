@@ -551,7 +551,7 @@ RULES: tuple[PathRule, ...] = (
         ("tests/deployment/", "tests/platform/deployment/test_deployment_health.py"),
     ),
     PathRule("platform/auth/", ("tests/platform/auth/",)),
-    PathRule("gateway/webapp.py", ("gateway/tests/test_webapp.py",)),
+    PathRule("gateway/http/webapp.py", ("gateway/tests/http/test_webapp.py",)),
     # Repo-wide config
     PathRule("pyproject.toml", (), always_escalate=True),
     PathRule("uv.lock", (), always_escalate=True),

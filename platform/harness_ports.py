@@ -1,7 +1,7 @@
 """Agent-harness ports — integrations, tools, and repository scope without tier violations.
 
 Adapters register at startup via :func:`surfaces.interactive_shell.ui.output.boundary.install_harness_ports`
-(shell/tests) or the gateway boot path in :mod:`gateway.manager` (duplicate wiring).
+(shell/tests) or the gateway boot path in :mod:`gateway.runtime.manager` (duplicate wiring).
 """
 
 from __future__ import annotations

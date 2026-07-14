@@ -1,0 +1,52 @@
+name: terraform-opensre-backend (validate)
+
+# Runs terraform fmt + init + validate against infra/terraform/
+# on every PR that touches the backend infra. Validation only — no AWS
+# credentials, no plan, never apply. Apply is developer-local
+# (make deploy-fargate-apply); when plan-from-CI is wanted later, model the
+# OIDC role assumption on terraform-bench.yml.
+
+on:
+  pull_request:
+    paths:
+      - "infra/terraform/**"
+      - ".github/workflows/terraform-opensre-backend.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: terraform-opensre-backend-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: terraform validate
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: infra/terraform
+
+    env:
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "0"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.5"
+
+      - name: terraform fmt
+        run: terraform fmt -check -recursive -no-color
+
+      - name: terraform init (no backend)
+        run: terraform init -backend=false -no-color
+
+      - name: terraform validate
+        run: terraform validate -no-color

@@ -1,6 +1,7 @@
 # `platform/deployment/gateway/`
 
-AMI + systemd deployment path for the OpenSRE Telegram gateway.
+AMI + systemd deployment path for the OpenSRE messaging gateway (Telegram long
+polling and/or Slack Socket Mode).
 
 This path is an alternative to the main Docker/ECR web+gateway deploy.
 It runs the gateway process directly on the EC2 host as a systemd service,
@@ -44,13 +45,20 @@ uv run python -m platform.deployment.gateway.lifecycle destroy
 ### Environment variables
 
 Copy [`.env.deploy.example`](../../../.env.deploy.example) and set the same
-`TELEGRAM_BOT_TOKEN`, `LLM_PROVIDER`, and API keys used by the main deploy.
+`TELEGRAM_BOT_TOKEN` and/or `SLACK_BOT_TOKEN` + `SLACK_APP_TOKEN`, plus
+`LLM_PROVIDER` and API keys used by the main deploy.
 
 | Variable | Required | Used by |
 | -------- | -------- | ------- |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Yes (or role) | Provisioning |
-| `TELEGRAM_BOT_TOKEN` | Yes | Gateway service |
+| `TELEGRAM_BOT_TOKEN` | Yes* | Gateway service |
 | `TELEGRAM_ALLOWED_USERS` | Recommended | Gateway pairing gate |
+| `SLACK_BOT_TOKEN` | Yes* | Socket Mode bot token (`xoxb-…`) |
+| `SLACK_APP_TOKEN` | Yes* | Socket Mode app token (`xapp-…`) |
+| `SLACK_ALLOWED_USERS` | Recommended | Slack allowlist (or `SLACK_ALLOW_OPEN_WORKSPACE=1`) |
+
+\* At least one of Telegram **or** Slack Socket Mode must be configured for `make deploy`.
+
 | `LLM_PROVIDER` + API key | Yes | Gateway service |
 | `OPENSRE_GATEWAY_GIT_REF` | No | Git ref to bake (default: local HEAD SHA) |
 | `OPENSRE_GATEWAY_AMI_ID` | No | Skip bake, use existing AMI id |

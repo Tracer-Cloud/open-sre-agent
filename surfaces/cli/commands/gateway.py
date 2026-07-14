@@ -6,7 +6,7 @@ import time
 
 import click
 
-from gateway.daemon import (
+from gateway.runtime.daemon import (
     GATEWAY_LOG_FILE,
     gateway_daemon_pid,
     read_component_status,
@@ -37,7 +37,7 @@ def gateway_start_command(foreground: bool) -> None:
     """Start the gateway daemon (background by default)."""
     if foreground:
         click.echo("Starting OpenSRE gateway (foreground)")
-        from gateway.manager import start_gateway
+        from gateway.runtime.manager import start_gateway
 
         start_gateway()
         return

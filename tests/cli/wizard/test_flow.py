@@ -532,7 +532,9 @@ def test_run_wizard_configures_slack_persists_webhook(monkeypatch, tmp_path) -> 
     readable afterwards). The webhook is a secret, so it belongs in the store,
     not `.env` — `sync_env_values` is called with an empty mapping.
     """
-    select_responses = iter(["quickstart", "anthropic", "api_key", "claude-opus-4-7", "slack"])
+    select_responses = iter(
+        ["quickstart", "anthropic", "api_key", "claude-opus-4-7", "slack", "webhook"]
+    )
     # webhook_url is prompted with secret=True, so it comes from the password mock.
     password_responses = iter(["llm-secret", "https://hooks.slack.com/services/T0/B0/XXXXX"])
     saved_integrations: list[tuple[str, dict]] = []
