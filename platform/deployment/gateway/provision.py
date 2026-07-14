@@ -11,9 +11,9 @@ from platform.deployment.aws.client import DEFAULT_REGION
 from platform.deployment.aws.config import (
     GATEWAY_HEALTH_MAX_ATTEMPTS,
     GATEWAY_HEALTH_POLL_INTERVAL_SECONDS,
-    GATEWAY_READY_LOG_SENTINEL,
     SSM_PROVISION_CMD_POLL_ATTEMPTS,
     SSM_PROVISION_CMD_POLL_INTERVAL_SECONDS,
+    logs_contain_gateway_ready,
 )
 from platform.deployment.aws.ssm import run_ssm_shell_command
 
@@ -111,7 +111,7 @@ def wait_for_gateway_ready(
             stdout = result.get("stdout", "")
             lines = [ln.strip() for ln in stdout.strip().splitlines() if ln.strip()]
             service_active = bool(lines) and lines[0] == "active"
-            sentinel_found = GATEWAY_READY_LOG_SENTINEL in stdout
+            sentinel_found = logs_contain_gateway_ready(stdout)
 
             if service_active and sentinel_found:
                 logger.info(

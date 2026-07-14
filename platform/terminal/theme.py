@@ -17,15 +17,6 @@ Token reference
   BG         terminal background, never used as foreground
   INPUT_SURFACE  prompt/menu surface background
 
-Optional per-theme splash gradient (``CliTheme`` only)
-----------------------------------------------------
-  SPLASH_GRADIENT_START  left/start colour for splash ASCII art gradients
-  SPLASH_GRADIENT_END    right/end colour for splash ASCII art gradients
-
-When both gradient fields are set, the splash banner interpolates between
-them across each row of ``█`` block characters. Themes without these fields
-continue to use ``HIGHLIGHT`` for splash art.
-
 Usage
 -----
   from platform.terminal.theme import HIGHLIGHT, ERROR, DIM
@@ -55,8 +46,6 @@ class CliTheme:
     ERROR: str
     BG: str
     INPUT_SURFACE: str
-    SPLASH_GRADIENT_START: str | None = None
-    SPLASH_GRADIENT_END: str | None = None
 
 
 THEME_REGISTRY: dict[str, CliTheme] = {
@@ -239,8 +228,6 @@ THEME_REGISTRY: dict[str, CliTheme] = {
         ERROR="#FF4D4D",
         BG="#0D1220",
         INPUT_SURFACE="#151D33",
-        SPLASH_GRADIENT_START="#E23636",
-        SPLASH_GRADIENT_END="#2B63F5",
     ),
     "sunset": CliTheme(
         name="sunset",
@@ -253,8 +240,6 @@ THEME_REGISTRY: dict[str, CliTheme] = {
         ERROR="#FF5A5F",
         BG="#22151A",
         INPUT_SURFACE="#2B1C24",
-        SPLASH_GRADIENT_START="#FFB067",
-        SPLASH_GRADIENT_END="#FF6FA8",
     ),
 }
 

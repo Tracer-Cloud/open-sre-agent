@@ -79,7 +79,7 @@ def _alert_listener(
         yield None
         return
 
-    from gateway.web_server import WebAppServerHandle, serve_webapp_in_thread
+    from gateway.http.web_server import WebAppServerHandle, serve_webapp_in_thread
 
     inbox: _alert_inbox.AlertInbox | None = None
     handle: WebAppServerHandle | None = None

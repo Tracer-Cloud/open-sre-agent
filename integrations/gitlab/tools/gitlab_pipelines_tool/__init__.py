@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.code_host_unavailable import code_host_unavailable_payload
 from integrations.gitlab import (
     get_gitlab_pipelines,
 )
@@ -51,8 +52,6 @@ def _list_gitlab_pipelines_available(sources: dict[str, dict]) -> bool:
             "updated_after": {"type": "string"},
             "status": {"type": "string", "default": "failed"},
             "per_page": {"type": "integer", "default": 10},
-            "gitlab_url": {"type": "string"},
-            "gitlab_token": {"type": "string"},
         },
         "required": ["project_id"],
     },
@@ -72,12 +71,12 @@ def list_gitlab_pipelines(
     """List recent CI/CD pipelines for a GitLab project."""
     config = _resolve_config(gitlab_url, gitlab_token)
     if config is None:
-        return {
-            "source": "gitlab",
-            "available": False,
-            "error": "gitlab integration is not configured.",
-            "pipelines": [],
-        }
+        return code_host_unavailable_payload(
+            source="gitlab",
+            integration_name="gitlab",
+            empty_key="pipelines",
+            empty_value=[],
+        )
 
     result = get_gitlab_pipelines(
         config=config,

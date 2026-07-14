@@ -3,9 +3,22 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Any
 
 from pydantic import BaseModel
+
+
+@dataclass(frozen=True, slots=True)
+class InvestigationPipelineStreamError(Exception):
+    """Pipeline failure with loop metrics for the caller's thread context."""
+
+    cause: BaseException
+    loop_count: int
+    iteration_cap: int
+
+    def __str__(self) -> str:
+        return str(self.cause)
 
 
 def normalize_stream_payload(value: Any) -> Any:

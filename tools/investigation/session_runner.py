@@ -164,8 +164,12 @@ def run_session_alert_payload(
                 except queue.Empty:
                     continue
                 if isinstance(item, BaseException):
+                    from platform.analytics.investigation_loop import (
+                        publish_loop_metrics_from_stream_failure,
+                    )
+
                     thread.join(timeout=5)
-                    reraise_investigation_failure(item)
+                    reraise_investigation_failure(publish_loop_metrics_from_stream_failure(item))
                 if item is None:
                     return
                 yield item

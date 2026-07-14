@@ -326,6 +326,149 @@ class TestDispatchSlash:
         assert session.terminal.background_notification_preferences.channels == ("email",)
         assert "background notify channels set" in buf.getvalue().lower()
 
+    def test_background_notify_set_accepts_telegram(self) -> None:
+        """AC-1: /background notify set telegram is accepted, stores ("telegram",)."""
+        session = Session()
+        console, buf = _capture()
+
+        assert dispatch_slash("/background notify set telegram", session, console) is True
+        assert session.terminal.background_notification_preferences.channels == ("telegram",)
+        output = buf.getvalue()
+        assert "background notify channels set" in output.lower()
+        assert "invalid channel" not in output.lower()
+
+    def test_background_notify_set_accepts_email_and_telegram_combined(self) -> None:
+        """AC-2: email,telegram combined -> both stored, first-seen order preserved."""
+        session = Session()
+        console, buf = _capture()
+
+        assert dispatch_slash("/background notify set email,telegram", session, console) is True
+        assert session.terminal.background_notification_preferences.channels == (
+            "email",
+            "telegram",
+        )
+
+    def test_background_notify_set_invalid_channel_hint_lists_telegram(self) -> None:
+        """AC-3: invalid channels are still rejected; the (allowed: ...) hint now lists telegram."""
+        session = Session()
+        console, buf = _capture()
+
+        assert dispatch_slash("/background notify set pagerduty", session, console) is True
+        output = buf.getvalue()
+        assert "invalid channel" in output
+        assert session.terminal.background_notification_preferences.channels == ()
+        assert "email, telegram" in output
+
+    def test_background_notify_set_telegram_shows_in_list_and_status(self) -> None:
+        """AC-21: after setting telegram, /background notify list and the /background status
+        notify row both render it (both renderers are `', '.join(...channels)` with no
+        hardcoded literal).
+        """
+        session = Session()
+        set_console, _ = _capture()
+
+        assert dispatch_slash("/background notify set telegram", session, set_console) is True
+        assert session.terminal.background_notification_preferences.channels == ("telegram",)
+
+        list_console, list_buf = _capture()
+        assert dispatch_slash("/background notify list", session, list_console) is True
+        assert "telegram" in list_buf.getvalue().lower()
+
+        status_console, status_buf = _capture()
+        assert dispatch_slash("/background status", session, status_console) is True
+        assert "telegram" in status_buf.getvalue().lower()
+
+    def test_background_notify_set_dedupes_duplicate_telegram_channel(self) -> None:
+        """AC-27a (command layer): telegram,telegram collapses to a single stored channel."""
+        session = Session()
+        console, buf = _capture()
+
+        assert dispatch_slash("/background notify set telegram,telegram", session, console) is True
+        assert session.terminal.background_notification_preferences.channels == ("telegram",)
+        assert "invalid channel" not in buf.getvalue().lower()
+
+    def test_background_show_renders_real_dispatcher_telegram_sent(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """AC-8: results come from the REAL deliver_background_notifications dispatcher
+        (mocked only at the telegram transport boundary), not a hand-constructed dict —
+        a hand-built notification_results would be vacuous per AC-30. On pristine code the
+        dispatcher's `channel != "email"` fallthrough yields "unsupported" for telegram, so
+        this assertion fails until the telegram branch is implemented.
+        """
+        from integrations.telegram.credentials import TelegramCredentials
+        from surfaces.interactive_shell.runtime.background.notifications import (
+            deliver_background_notifications,
+        )
+
+        monkeypatch.setattr(
+            "integrations.telegram.credentials.load_credentials_from_env",
+            lambda **_: TelegramCredentials(bot_token="tok", chat_id="chat-1"),
+        )
+        monkeypatch.setattr(
+            "integrations.telegram.delivery.send_telegram_report",
+            lambda *_args, **_kwargs: (True, ""),
+        )
+
+        record = BackgroundInvestigationRecord(
+            task_id="bg-show-telegram-sent",
+            status="completed",
+            command="free-text",
+            root_cause="AC8 sentinel root cause",
+        )
+        record.notification_results = deliver_background_notifications(
+            record=record, channels=("telegram",)
+        )
+
+        session = Session()
+        session.terminal.background_investigations["bg-show-telegram-sent"] = record
+        console, buf = _capture()
+
+        assert dispatch_slash("/background show bg-show-telegram-sent", session, console) is True
+        assert "telegram:sent" in buf.getvalue()
+
+    def test_background_show_renders_real_dispatcher_telegram_failed_bracketed_long_value(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """AC-29: same real-dispatcher route as AC-8, but the telegram transport reports
+        failure with a bracketed, very-long error string. /background show must render it
+        (via rich.markup.escape + overflow="fold") without raising rich.errors.MarkupError,
+        and the bracketed prefix must survive in the output. On pristine code the dispatcher
+        never reaches the transport mock (falls through to "unsupported"), so the bracketed
+        prefix never appears in notification_results and this assertion fails.
+        """
+        from integrations.telegram.credentials import TelegramCredentials
+        from surfaces.interactive_shell.runtime.background.notifications import (
+            deliver_background_notifications,
+        )
+
+        monkeypatch.setattr(
+            "integrations.telegram.credentials.load_credentials_from_env",
+            lambda **_: TelegramCredentials(bot_token="tok", chat_id="chat-1"),
+        )
+        hostile_error = "[oom-killer] " + "x" * 500
+        monkeypatch.setattr(
+            "integrations.telegram.delivery.send_telegram_report",
+            lambda *_args, **_kwargs: (False, hostile_error),
+        )
+
+        record = BackgroundInvestigationRecord(
+            task_id="bg-show-telegram-failed",
+            status="completed",
+            command="free-text",
+            root_cause="AC29 sentinel root cause",
+        )
+        record.notification_results = deliver_background_notifications(
+            record=record, channels=("telegram",)
+        )
+
+        session = Session()
+        session.terminal.background_investigations["bg-show-telegram-failed"] = record
+        console, buf = _capture()
+
+        assert dispatch_slash("/background show bg-show-telegram-failed", session, console) is True
+        assert "[oom-killer]" in buf.getvalue()
+
     def test_unknown_command_does_not_exit(self) -> None:
         session = Session()
         console, buf = _capture()

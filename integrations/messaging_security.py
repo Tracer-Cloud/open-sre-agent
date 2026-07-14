@@ -333,6 +333,11 @@ def complete_pairing(
 # ---------------------------------------------------------------------------
 
 
+def message_hash(text: str) -> str:
+    """Short content hash for audit entries — bodies are never logged in plaintext."""
+    return hashlib.sha256(text.encode()).hexdigest()[:16]
+
+
 def audit_log_inbound_message(
     *,
     platform: str,

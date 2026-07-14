@@ -89,7 +89,7 @@ def test_call_tool_passes_through_result() -> None:
         "arguments": {"issue_id": "123"},
     }
     with patch(
-        "integrations.sentry_mcp.tools.sentry_mcp_tool.invoke_sentry_mcp_tool",
+        "integrations.sentry_mcp.tools.sentry_mcp_tool.call_sentry_mcp_tool",
         return_value=fake_result,
     ) as mock_invoke:
         result = call_sentry_tool(
@@ -113,7 +113,7 @@ def test_call_tool_surfaces_mcp_error() -> None:
         "arguments": {},
     }
     with patch(
-        "integrations.sentry_mcp.tools.sentry_mcp_tool.invoke_sentry_mcp_tool",
+        "integrations.sentry_mcp.tools.sentry_mcp_tool.call_sentry_mcp_tool",
         return_value=fake_result,
     ):
         result = call_sentry_tool(
@@ -132,7 +132,7 @@ def test_list_tools_returns_compact_summaries_without_schema() -> None:
         {"name": "get_issue_details", "description": "Issue", "input_schema": {"a": 1}},
     ]
     with patch(
-        "integrations.sentry_mcp.tools.sentry_mcp_tool.list_sentry_mcp_server_tools",
+        "integrations.sentry_mcp.tools.sentry_mcp_tool.list_sentry_mcp_tools",
         return_value=fake_tools,
     ):
         result = list_sentry_tools(
@@ -154,7 +154,7 @@ def test_list_tools_filters_and_includes_schema_for_narrow_results() -> None:
         {"name": "search_events", "description": "Events", "input_schema": {"t": "s"}},
     ]
     with patch(
-        "integrations.sentry_mcp.tools.sentry_mcp_tool.list_sentry_mcp_server_tools",
+        "integrations.sentry_mcp.tools.sentry_mcp_tool.list_sentry_mcp_tools",
         return_value=fake_tools,
     ):
         result = list_sentry_tools(

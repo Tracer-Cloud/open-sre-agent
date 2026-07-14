@@ -15,9 +15,11 @@ def register_harness_adapters() -> None:
         merge_local_integrations,
     )
     from integrations.github.repo_scope import apply_github_repo_scope, infer_github_repo_scope
+    from integrations.gitlab.repo_scope import apply_gitlab_repo_scope, infer_gitlab_repo_scope
     from integrations.store import STORE_PATH, load_integrations
     from platform.harness_ports import (
         set_github_repo_scope_adapters,
+        set_gitlab_repo_scope_adapters,
         set_integration_resolution_adapters,
     )
 
@@ -48,6 +50,26 @@ def register_harness_adapters() -> None:
         )
 
     set_github_repo_scope_adapters(infer_scope=_infer, apply_scope=apply_github_repo_scope)
+
+    def _infer_gitlab(
+        message: str,
+        conversation_messages: Sequence[tuple[str, str]] | None,
+        env: Mapping[str, str] | None,
+        cwd: str | Path | None,
+        cached: tuple[str, str, str] | None,
+    ) -> tuple[str, str, str] | None:
+        return infer_gitlab_repo_scope(
+            message=message,
+            conversation_messages=conversation_messages,
+            env=env,
+            cwd=cwd,
+            cached=cached,
+        )
+
+    set_gitlab_repo_scope_adapters(
+        infer_scope=_infer_gitlab,
+        apply_scope=apply_gitlab_repo_scope,
+    )
     _register_cli_llm_adapters()
 
 
