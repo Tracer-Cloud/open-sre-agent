@@ -239,12 +239,19 @@ class _SlackTurnDispatcher:
 
 
 def _agent_text_with_slack_context(inbound: SlackInboundMessage) -> str:
-    """Prefix inbound text with Slack channel/thread ids for teammate tools."""
-    parts = [f"[Slack channel_id={inbound.channel_id}"]
-    if inbound.thread_ts:
-        parts.append(f" thread_ts={inbound.thread_ts}")
-    parts.append("]")
-    return f"{''.join(parts)}\n{inbound.text}"
+    """Prefix inbound text with an actionable Slack-context directive.
+
+    Names the channel id to pass to the Slack tools and steers "this channel"
+    reads to channel history rather than the (often empty) triggering thread.
+    """
+    directive = (
+        f"[Slack context: this message arrived in channel {inbound.channel_id}. "
+        f"To read or summarize 'this channel', call slack_read_messages with "
+        f"channel_id={inbound.channel_id} (do NOT pass thread_ts — that reads only "
+        f"the current thread). To reply here, use slack_reply_message with "
+        f"channel_id={inbound.channel_id}.]"
+    )
+    return f"{directive}\n{inbound.text}"
 
 
 def start_slack_gateway_background(

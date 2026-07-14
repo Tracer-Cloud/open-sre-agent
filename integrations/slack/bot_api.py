@@ -18,6 +18,9 @@ _REQUEST_TIMEOUT_SECONDS = 10.0
 _PAGE_LIMIT = 200
 _MAX_MEMBER_PAGES = 5
 _MAX_CHANNEL_LIST_PAGES = 10
+# Thread reads: fetch a bounded window so the most recent replies are included.
+_MAX_THREAD_FETCH = 200
+_THREAD_FETCH_FACTOR = 5
 _MAX_TEXT_CHARS_PER_MESSAGE = 2_000
 
 # Slack channel/DM/group IDs look like C0123ABCD — not bare names like "devs".
@@ -246,11 +249,14 @@ def fetch_channel_messages(
     limit: int,
     thread_ts: str = "",
 ) -> tuple[list[dict[str, str]] | None, str]:
-    """Fetch recent channel messages or thread replies, oldest first."""
+    """Fetch the most recent channel messages or thread replies, oldest first."""
     parent = str(thread_ts or "").strip()
     if parent:
         path = "conversations.replies"
-        params: dict[str, Any] = {"channel": channel_id, "ts": parent, "limit": limit}
+        # conversations.replies returns oldest-first; request a bounded window
+        # so the most recent replies are included, then keep the last `limit`.
+        window = max(limit, min(_MAX_THREAD_FETCH, limit * _THREAD_FETCH_FACTOR))
+        params: dict[str, Any] = {"channel": channel_id, "ts": parent, "limit": window}
     else:
         path = "conversations.history"
         params = {"channel": channel_id, "limit": limit}
@@ -264,8 +270,10 @@ def fetch_channel_messages(
 
     raw_messages = payload.get("messages") or []
     messages = [_normalize_message(m) for m in raw_messages if isinstance(m, dict)]
-    if not parent:
-        messages.reverse()
+    if parent:
+        # Oldest-first already; keep the most recent `limit` (the tail).
+        return messages[-limit:], ""
+    messages.reverse()
     return messages, ""
 
 

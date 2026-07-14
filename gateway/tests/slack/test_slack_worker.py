@@ -119,8 +119,9 @@ def test_authorized_message_reaches_handler_with_thread_sink() -> None:
 
     assert len(turns) == 1
     agent_text, session = turns[0]
-    assert agent_text.startswith("[Slack channel_id=C1")
-    assert "thread_ts=100.1" in agent_text
+    assert agent_text.startswith("[Slack context:")
+    assert "channel_id=C1" in agent_text
+    assert "slack_read_messages" in agent_text
     assert agent_text.endswith("check the api")
     assert session is turns[0][1]
     assert resolver.calls == [{"user_id": "T1:C1:100.1", "chat_id": "C1"}]

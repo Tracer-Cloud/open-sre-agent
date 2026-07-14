@@ -80,6 +80,17 @@ SELF_RECORDING_ACTION_TOOL_NAMES: frozenset[str] = frozenset(
 INVESTIGATION_DISPATCH_TOOL_NAMES: frozenset[str] = frozenset(
     {"investigation_start", "alert_sample"}
 )
+# Generic tools whose JSON/text results should be summarized into a user-facing
+# answer (``cli_agent_summarized``). Keep this narrow: most action tools fully
+# handle the turn via ``response_text`` (``cli_agent_handled``). Broad stashing
+# broke cross-surface parity (every probe became summarize_observation).
+_OBSERVATION_STASH_TOOL_NAMES: frozenset[str] = frozenset(
+    {
+        "slack_read_messages",
+        "slack_list_team_members",
+        "slack_search_messages",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -223,6 +234,16 @@ def _generic_tool_result_counts(result: Any) -> tuple[int, int]:
         if not getattr(tool_result, "is_error", False)
     )
     return executed_count, success_count
+
+
+def _should_stash_observation(result: Any) -> bool:
+    """True when a successful Slack discovery tool ran and needs a summary pass."""
+    for tool_call, tool_result in _generic_tool_results(result):
+        if getattr(tool_result, "is_error", False):
+            continue
+        if tool_call.name in _OBSERVATION_STASH_TOOL_NAMES:
+            return True
+    return False
 
 
 def _turn_resolved_integrations(
@@ -543,11 +564,15 @@ def _run_action_agent_turn_body(
         if chunk
     ]
     response_text = "\n".join(response_chunks)
-    # Generic action tools (e.g. slack_read_messages / roster) do not set
-    # last_command_observation themselves. Stash their output so the turn
-    # router summarizes into a user-facing answer instead of returning raw
-    # JSON or an empty "nothing to add" gateway fallback.
-    if response_text.strip() and generic_success_count > 0 and not session.last_command_observation:
+    # Slack discovery tools return structured JSON that users should not see raw.
+    # Stash only those results so the turn router summarizes into a user-facing
+    # answer. Other generic tools keep ``cli_agent_handled`` (response_text only).
+    if (
+        response_text.strip()
+        and generic_success_count > 0
+        and not session.last_command_observation
+        and _should_stash_observation(result)
+    ):
         session.last_command_observation = response_text
     if handled:
         output.print()
