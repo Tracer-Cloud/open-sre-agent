@@ -137,6 +137,51 @@ def test_generic_registered_action_tool_result_marks_turn_handled() -> None:
     assert "fake_send_message" in harness.llm.tool_schema_names
 
 
+def test_action_final_text_is_streamed_as_user_facing_response() -> None:
+    """When the action agent concludes with prose after tools, show that text.
+
+    Interactive-shell ``handled_without_llm`` used to keep only tool dumps in
+    ``response_text`` and never render the agent's final Markdown — so skills
+    like architecture audit never surfaced their report.
+    """
+    tool = RegisteredTool(
+        name="fake_scan",
+        description="Run a fake scan.",
+        input_schema={
+            "type": "object",
+            "properties": {},
+            "additionalProperties": False,
+        },
+        source="knowledge",
+        surfaces=("action",),
+        run=lambda: {"ok": True},
+    )
+    report = "### Executive summary\nScan complete.\n"
+    harness = ActionExecutionHarness(
+        llm=FakeActionLLM(
+            [
+                tool_response("fake_scan", {}),
+                no_tool_response(report),
+            ]
+        )
+    )
+    sink = _OutputSink(harness.console)
+
+    result = run_action_agent_turn(
+        "run the scan and report",
+        Session(),
+        output=sink,
+        tools=_GenericActionToolProvider(tool),
+        deps=harness.deps,
+        is_tty=False,
+    )
+
+    assert result.handled is True
+    assert result.response_text == report.strip()
+    assert "Executive summary" in harness.console_buffer.getvalue()
+    assert "fake_scan result:" not in result.response_text
+
+
 def test_literal_slash_command_dispatches_deterministically_without_llm(
     monkeypatch,
 ) -> None:

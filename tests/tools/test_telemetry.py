@@ -996,6 +996,11 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "alert_sample",
         "alertmanager_alerts",
         "alertmanager_silences",
+        # architecture_* catch only WorkspaceError / ReportPersistenceError for
+        # known failure states; unexpected errors escape to the #1476 wrapper.
+        "architecture_cleanup_repo",
+        "architecture_clone_repo",
+        "architecture_save_observations",
         "assistant_handoff",
         "argocd_application_diff",
         "argocd_application_status",

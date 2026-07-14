@@ -49,10 +49,9 @@ log = logging.getLogger(__name__)
 # enough headroom for a *data-dependent* compound request that must run
 # sequentially: each step waits for the previous tool's result before the next
 # call can be emitted (e.g. "look up the weather and then send it to Slack" =
-# shell_run -> observe temperature -> slack_send_message -> final no-tool reply).
-# Independent compound turns still fit in a single response; this ceiling exists
-# for the producer -> consumer chains plus a couple of intermediate steps.
-_MAX_TOOL_CALLING_ITERATIONS = 6
+# Architecture audit needs headroom for clone + ≤3 agent-scan probes +
+# 4 heuristic shells + cleanup + save observations (then a no-tool report).
+_MAX_TOOL_CALLING_ITERATIONS = 13
 _EXECUTED_HISTORY_TYPES = {
     "slash",
     "shell",
@@ -223,6 +222,16 @@ def _response_text_from_generic_results(result: Any) -> str:
             else:
                 chunks.append(f"{tool_call.name} result: {content.strip()}")
     return "\n".join(chunks)
+
+
+def _is_user_facing_final_text(text: str) -> bool:
+    """True when post-tool model text should replace tool dumps and be streamed."""
+    stripped = text.strip()
+    if not stripped:
+        return False
+    if "\n" in stripped or stripped.startswith("#"):
+        return True
+    return len(stripped) > 60
 
 
 def _generic_tool_result_counts(result: Any) -> tuple[int, int]:
@@ -563,7 +572,13 @@ def _run_action_agent_turn_body(
         )
         if chunk
     ]
-    response_text = "\n".join(response_chunks)
+    final_text = (getattr(result, "final_text", "") or "").strip()
+    # Prefer the agent's closing prose when it looks like a real reply (report /
+    # multi-line Markdown). Short one-liners like "done" are common after a
+    # single tool call and must not replace tool-derived response_text or get
+    # streamed on action-only turns (gateway finalize / cross-surface parity).
+    use_final_text = _is_user_facing_final_text(final_text)
+    response_text = final_text if use_final_text else "\n".join(response_chunks)
     # Slack discovery tools return structured JSON that users should not see raw.
     # Stash only those results so the turn router summarizes into a user-facing
     # answer. Other generic tools keep ``cli_agent_handled`` (response_text only).
@@ -574,7 +589,9 @@ def _run_action_agent_turn_body(
         and _should_stash_observation(result)
     ):
         session.last_command_observation = response_text
-    if handled:
+    if handled and use_final_text:
+        output.stream(label="OpenSRE", chunks=iter([final_text]))
+    elif handled:
         output.print()
 
     log.debug(

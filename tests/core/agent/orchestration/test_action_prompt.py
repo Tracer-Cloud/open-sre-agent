@@ -17,6 +17,9 @@ from core.agent_harness.prompts.skills_loader import (
     load_skills_block,
     skills_dir,
 )
+from core.agent_harness.prompts.skills_loader import (
+    load_skills_block as cached_load_skills_block,
+)
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 
 
@@ -179,6 +182,69 @@ def test_connected_integrations_block_renders_state() -> None:
     assert "github, posthog_mcp, sentry" in listed
 
 
+def test_skills_loader_bundles_architecture_audit_skill() -> None:
+    cached_load_skills_block.cache_clear()
+    skill_dir = skills_dir() / "architecture_audit"
+    skill = skill_dir / "SKILL.md"
+    template = skill_dir / "architecture_audit_report.md"
+    assert skill.is_file()
+    assert template.is_file()
+
+    block = load_skills_block()
+    assert "SKILLS" in block
+    assert "ARCHITECTURE AUDIT SKILL" in block
+    assert "WHEN TO USE" in block
+    assert "summarize this repo's architecture" in block
+    assert "architecture_clone_repo" in block
+    assert "scan_architecture_imports" not in block
+    assert "scan_module_placement" not in block
+    assert "architecture_cleanup_repo" in block
+    assert "architecture_save_observations" in block
+    assert "shell_run" in block
+    assert "Never end the turn with shell_run" in block
+    assert "quiet=true" in block
+    assert "four separate shell_run" in block or "Four separate" in block or "IMPORT pass" in block
+    assert "IMPORT pass" in block
+    assert "PLACEMENT pass" in block
+    assert "SIZE pass" in block
+    assert "SHIM pass" in block
+    assert "You write each bash" in block
+    assert "about 15" in block
+    assert "Budget: clone + ≤3 agent-scan shell_run + 4 heuristic shell passes + cleanup" in block
+    assert "~/.opensre/{session_id}/{repo_name}-architecture-audit-{uuid}.md" in block
+    assert "AGENTS-style docs" in block
+    assert "AGENT SCAN" in block
+    assert "deletion test" in block
+    assert "CONTEXT.md" in block
+    assert "max 3 shell_run" in block
+    assert "BEFORE any" in block or "before heuristics" in block
+    assert 'Decide what "large" means' in block
+    assert "do NOT limit to Python" in block
+    assert "do NOT skip non-Python" in block
+    assert ".java" in block and ".rs" in block
+    assert "find_architecture_violations" not in block
+    report_path = (
+        "core/agent_harness/prompts/skills/architecture_audit/architecture_audit_report.md"
+    )
+    assert f"REPORT TEMPLATE from `{report_path}`" in block
+    assert "### Repository summary" in block
+    assert "### Coverage and limitations" in block
+    assert "### Findings by severity" in block
+    assert "| Severity | Path | Finding |" in block
+    assert "### Recommended sequencing" in block
+    assert "Fill this template VERBATIM" in block
+    assert "Do NOT wrap filled values in backticks" in block
+    assert "contract source" in block
+    assert "calibrate to the repo" in block
+    assert "grounded in AGENT SCAN context" in block
+    assert report_path in block
+
+    prompt = build_action_system_prompt(_ctx(messages=[("user", "audit architecture")]))
+    assert "ARCHITECTURE AUDIT SKILL" in prompt
+    assert "### Findings by severity" in prompt
+    cached_load_skills_block.cache_clear()
+
+
 def test_action_system_prompt_includes_context_blocks() -> None:
     prompt = build_action_system_prompt(
         _ctx(
@@ -189,6 +255,7 @@ def test_action_system_prompt_includes_context_blocks() -> None:
     )
     assert "CONNECTED INTEGRATIONS (this install, right now): github" in prompt
     assert "RECENT CONVERSATION" in prompt
+    assert "ARCHITECTURE AUDIT SKILL" in prompt
 
 
 def test_skills_loader_bundles_markdown_files() -> None:
