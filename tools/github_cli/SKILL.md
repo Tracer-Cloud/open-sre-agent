@@ -1,7 +1,7 @@
 ---
 name: github-cli
 description: >
-  Default GitHub skill for chat. Use for any plausible GitHub request —
+  Default GitHub skill for chat. Use for any GitHub request —
   issues, PRs, repos, releases, labels, checks, workflows, repo access,
   github.com/owner/repo URLs, or flexible gh api — via github_cli /
   github_cli_write. Prefer these over shell_run/raw gh. Only defer to
