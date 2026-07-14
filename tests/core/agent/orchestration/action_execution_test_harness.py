@@ -79,5 +79,5 @@ def tool_response(name: str, args: dict[str, Any] | None = None) -> AgentLLMResp
     )
 
 
-def no_tool_response() -> AgentLLMResponse:
-    return AgentLLMResponse(content="", tool_calls=[], raw_content=None)
+def no_tool_response(content: str = "") -> AgentLLMResponse:
+    return AgentLLMResponse(content=content, tool_calls=[], raw_content=None)

@@ -1016,6 +1016,8 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         # dispatches to fix_sentry_issue and lets unexpected errors escape.
         "fix_sentry_issue_start",
         "generate_work_status_report",
+        "github_cli",
+        "github_cli_write",
         "get_airflow_dag_runs",
         "get_airflow_metrics",
         "get_airflow_task_instances",
