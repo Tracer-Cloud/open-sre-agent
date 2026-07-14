@@ -38,9 +38,7 @@ class _FakeClient:
 
 
 def _install_fake_client(monkeypatch: Any, responder: Any) -> None:
-    import integrations.slack.bot_api as _b
-
-    monkeypatch.setattr(_b, "_shared_client", lambda: _FakeClient(responder))
+    monkeypatch.setattr("integrations.slack.bot_api._shared_client", lambda: _FakeClient(responder))
 
 
 def test_metadata_is_read_only_without_approval() -> None:

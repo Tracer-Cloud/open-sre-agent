@@ -42,8 +42,10 @@ class SlackReadMessagesTool(BaseTool):
         "Summarizing what was said in a named #channel or 'this channel/thread'",
     ]
     anti_examples = [
-        'Answering "who is on the team?", "who\'s on the team?", or "list team members" '
-        "(use slack_list_team_members — never substitute channel history)",
+        (
+            'Answering "who is on the team?" or "list team members" — use '
+            + "slack_list_team_members, never substitute channel history"
+        ),
         "Building a people/roster list from speakers in channel messages",
         "Searching messages across the whole workspace (use slack_search_messages)",
         "Reading a channel the bot has not been invited to",

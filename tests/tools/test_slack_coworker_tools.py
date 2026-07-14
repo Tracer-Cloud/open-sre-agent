@@ -7,12 +7,6 @@ from typing import Any
 import pytest
 
 import integrations.slack.bot_api as bot_api
-from integrations.slack.bot_api import (
-    SlackBotTarget,
-    add_reaction,
-    join_channel,
-    search_messages,
-)
 from integrations.slack.tools.slack_join_channel_tool import slack_join_channel
 from integrations.slack.tools.slack_search_messages_tool import slack_search_messages
 
@@ -53,7 +47,9 @@ def test_join_channel_treats_already_in_as_success(monkeypatch: pytest.MonkeyPat
         monkeypatch,
         lambda **_kw: _FakeResponse({"ok": False, "error": "already_in_channel"}),
     )
-    ok, error = join_channel(SlackBotTarget(bot_token="xoxb-x"), channel_id="C01234567")
+    ok, error = bot_api.join_channel(
+        bot_api.SlackBotTarget(bot_token="xoxb-x"), channel_id="C01234567"
+    )
     assert ok is True
     assert error == ""
 
@@ -74,7 +70,9 @@ def test_search_messages_maps_matches(monkeypatch: pytest.MonkeyPatch) -> None:
         },
     }
     _install_fake_client(monkeypatch, lambda **_kw: _FakeResponse(payload))
-    matches, error = search_messages(SlackBotTarget(bot_token="xoxb-x"), query="boom")
+    matches, error = bot_api.search_messages(
+        bot_api.SlackBotTarget(bot_token="xoxb-x"), query="boom"
+    )
     assert error == ""
     assert matches is not None
     assert matches[0]["channel_id"] == "C01234567"
@@ -82,8 +80,8 @@ def test_search_messages_maps_matches(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_add_reaction_ok(monkeypatch: pytest.MonkeyPatch) -> None:
     _install_fake_client(monkeypatch, lambda **_kw: _FakeResponse({"ok": True}))
-    ok, error = add_reaction(
-        SlackBotTarget(bot_token="xoxb-x"),
+    ok, error = bot_api.add_reaction(
+        bot_api.SlackBotTarget(bot_token="xoxb-x"),
         channel_id="C01234567",
         timestamp="1.0",
         emoji="eyes",
