@@ -16,17 +16,20 @@ class SlackListTeamMembersTool(BaseTool):
     name = "slack_list_team_members"
     source = SOURCE
     description = (
-        "List members of the Slack workspace (id, username, real name, title, bot flag) "
-        "using the configured bot token. Use this to know who is on the team, resolve "
-        "a person's member ID for mentions or allowlists, or find who holds a role."
+        "List members of the Slack *workspace* the bot is installed in "
+        "(id, username, real name, title, bot flag) via users.list. "
+        "This is the ONLY tool for who is on the team / team roster / member IDs. "
+        "Do NOT use slack_read_messages for these questions — channel history is "
+        "not a roster, even when a [Slack channel_id=…] context line is present."
     )
     use_cases = [
-        "Answering who is on the team and what their roles are",
-        "Resolving a teammate's Slack member ID from their name",
-        "Choosing whom to notify about an incident or finding",
+        'Answering "who is on the team?", "who\'s on the team?", or "list team members"',
+        "Resolving a teammate's Slack member ID (U…) from their name for mentions or allowlists",
+        "Choosing whom to notify / page about an incident (workspace roster, not channel chat)",
     ]
     anti_examples = [
-        "Reading a channel's messages (use slack_read_messages)",
+        "Reading or summarizing a channel/thread (use slack_read_messages)",
+        "Inferring teammates from recent channel messages instead of the workspace roster",
         "Looking up users in a different workspace",
     ]
     requires = ["slack"]

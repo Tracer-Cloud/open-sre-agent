@@ -29,19 +29,23 @@ class SlackReadMessagesTool(BaseTool):
     name = "slack_read_messages"
     source = SOURCE
     description = (
-        "Read recent messages from a Slack channel (or a thread) the bot has been "
-        "added to, using the configured bot token. Pass a channel ID (C0123ABCD) or "
-        "#channel-name. Optionally pass thread_ts to read that thread via "
-        "conversations.replies. Returns messages oldest-first with user id, "
-        "timestamp, and text."
+        "Read recent *messages* from one Slack channel or thread the bot can see "
+        "(conversations.history / conversations.replies). Pass channel ID (C…) or "
+        "#channel-name; optional thread_ts for a thread. Returns message text + user "
+        'ids — NOT a workspace member roster. For "who is on the team?" / roster / '
+        "member IDs use slack_list_team_members instead (do not invent a roster from "
+        "channel chat, even when [Slack channel_id=…] is in the user message)."
     )
     use_cases = [
         "Reading recent discussion in an incident channel for context",
         "Reading a specific thread under a parent message ts",
-        "Summarizing what a team channel said about an alert or deploy",
+        "Summarizing what was said in a named #channel or 'this channel/thread'",
     ]
     anti_examples = [
-        "Searching messages across the whole workspace (this reads one channel/thread)",
+        'Answering "who is on the team?", "who\'s on the team?", or "list team members" '
+        "(use slack_list_team_members — never substitute channel history)",
+        "Building a people/roster list from speakers in channel messages",
+        "Searching messages across the whole workspace (use slack_search_messages)",
         "Reading a channel the bot has not been invited to",
     ]
     requires = ["slack"]

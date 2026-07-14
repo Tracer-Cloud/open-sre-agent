@@ -199,6 +199,14 @@ just proposed. Resolve the referent against the assistant's previous reply:
   "/integrations remove github" and "/integrations list" and the user says
   "do both" → emit slash_invoke("/integrations", args=["remove", "github"])
   then slash_invoke("/integrations", args=["list"]).
+- If that reply ended with Want me to: offering more Slack roster/detail
+  (display names, titles, members, …), call slack_list_team_members (or the
+  matching slack_* tool) — do NOT assistant_handoff and do NOT treat "yes" as
+  a new investigation or docs question. Example: after a team roster summary
+  with "Want me to: list their display names and titles, too?" and the user
+  says "yes" → slack_list_team_members.
+- If the USER MESSAGE was already expanded to "Yes — please <offer>." treat
+  that as the concrete request and emit the matching tool.
 - If you cannot confidently map the referent to a concrete action from the
   prior reply, emit assistant_handoff rather than guessing an unrelated action.
 
@@ -280,10 +288,12 @@ Other tools:
 - slack_reply_message — post to a specific Slack channel or thread with the bot
   token (`channel_id` = C… or #name, optional `thread_ts`). Prefer this over
   slack_send_message for teammate-style replies.
-- slack_read_messages — read recent channel history or a thread (`thread_ts`)
-  for context before answering.
-- slack_search_messages — workspace search (Slack search syntax).
-- slack_list_team_members — roster (who is on the team / member IDs).
+- slack_read_messages — read recent *message history* in one channel/thread
+  (`thread_ts`). For conversation summarize / "what was said here" only — NOT
+  for who is on the team / roster / member IDs.
+- slack_search_messages — workspace *message* search (Slack search syntax).
+- slack_list_team_members — workspace *roster* (who is on the team / member IDs).
+  Never substitute slack_read_messages for this.
 - slack_join_channel — join a public #channel before reading/posting.
 - slack_add_reaction — add an emoji reaction to a message ts.
 - slack_capture_task — when the user says "add task …", "remind me …", or
@@ -304,16 +314,19 @@ is for Datadog/Grafana/Sentry/PostHog record lookups via the gather loop).
 If the message includes a line like `[Slack channel_id=C… thread_ts=…]`, use
 that channel_id (and thread_ts when reading a thread) as the default target when
 the user says "this channel", "here", "this thread", or "the conversation".
+That context line does NOT mean "read the channel" for every Slack question —
+roster / people questions ignore channel_id and call slack_list_team_members.
 Examples:
 * "read the last 10 messages in #opensre-slack-testing and summarize"
   → slack_read_messages(channel="#opensre-slack-testing", limit=10)
 * "sum / summarize this channel's conversation" with Slack channel_id context
   → slack_read_messages(channel="C…", limit=50) using the context channel_id
 * "search Slack for deploy freeze" → slack_search_messages(query="deploy freeze")
-* "who is on the team?" / "who's on the team" / "list team members"
-  → slack_list_team_members — ALWAYS, even when CONNECTED INTEGRATIONS is none
-  (bot token tools resolve credentials themselves; do NOT hand off asking which
-  team or which system)
+* "who is on the team?" / "who's on the team" / "list team members" / "who are
+  the members?" — even when `[Slack channel_id=…]` is present
+  → slack_list_team_members ONLY (never slack_read_messages, never hand off
+  asking which team). Bot token tools resolve credentials themselves; do NOT
+  gate on CONNECTED INTEGRATIONS.
 After the tool returns, the turn summarizes the tool output — do not hand off
 first asking for "target system" or `/integrations setup slack`.
 

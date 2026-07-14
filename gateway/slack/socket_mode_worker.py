@@ -239,19 +239,13 @@ class _SlackTurnDispatcher:
 
 
 def _agent_text_with_slack_context(inbound: SlackInboundMessage) -> str:
-    """Prefix inbound text with an actionable Slack-context directive.
+    """Prefix inbound text with channel id only for teammate tool targeting.
 
-    Names the channel id to pass to the Slack tools and steers "this channel"
-    reads to channel history rather than the (often empty) triggering thread.
+    Keep this a short metadata line — a long tool-steering preamble made short
+    follow-ups like "yes" look like brand-new Slack requests and drowned the
+    prior Want me to: offer. Tool routing lives in the action/system prompts.
     """
-    directive = (
-        f"[Slack context: this message arrived in channel {inbound.channel_id}. "
-        f"To read or summarize 'this channel', call slack_read_messages with "
-        f"channel_id={inbound.channel_id} (do NOT pass thread_ts — that reads only "
-        f"the current thread). To reply here, use slack_reply_message with "
-        f"channel_id={inbound.channel_id}.]"
-    )
-    return f"{directive}\n{inbound.text}"
+    return f"[Slack channel_id={inbound.channel_id}]\n{inbound.text}"
 
 
 def start_slack_gateway_background(

@@ -16,15 +16,17 @@ class SlackSearchMessagesTool(BaseTool):
     name = "slack_search_messages"
     source = SOURCE
     description = (
-        "Search Slack messages workspace-wide (search.messages) using the bot token. "
+        "Search Slack *messages* workspace-wide (search.messages) using the bot token. "
         "Use Slack search syntax (e.g. 'in:#incidents timeout', 'from:@user error'). "
-        "Requires the search:read bot scope."
+        "Requires the search:read bot scope. Not for workspace roster — use "
+        "slack_list_team_members for who is on the team / member IDs."
     )
     use_cases = [
         "Finding prior discussion of an incident keyword",
         "Locating where a bug was reported in Slack",
     ]
     anti_examples = [
+        'Answering "who is on the team?" (use slack_list_team_members)',
         "Reading one known channel's recent history (use slack_read_messages)",
         "Searching without a concrete query",
     ]

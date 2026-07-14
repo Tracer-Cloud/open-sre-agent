@@ -16,12 +16,31 @@ from integrations.slack.tools.slack_reply_message_tool import (
 class _FakeResponse:
     def __init__(self, payload: dict[str, Any]) -> None:
         self._payload = payload
+        self.status_code = 200
+        self.headers: dict[str, str] = {}
 
     def raise_for_status(self) -> None:
         return None
 
     def json(self) -> dict[str, Any]:
         return self._payload
+
+
+class _FakeClient:
+    def __init__(self, responder: Any) -> None:
+        self._responder = responder
+
+    def get(self, path: str, **kw: Any) -> Any:
+        return self._responder(path=path, **kw)
+
+    def post(self, path: str, **kw: Any) -> Any:
+        return self._responder(path=path, **kw)
+
+
+def _install_fake_client(monkeypatch: Any, responder: Any) -> None:
+    import integrations.slack.bot_api as _b
+
+    monkeypatch.setattr(_b, "_shared_client", lambda: _FakeClient(responder))
 
 
 def test_metadata_requires_approval_for_external_send() -> None:
@@ -38,7 +57,7 @@ def test_post_includes_thread_ts_only_when_given(monkeypatch: pytest.MonkeyPatch
         captured.append(kwargs["json"])
         return _FakeResponse({"ok": True})
 
-    monkeypatch.setattr("integrations.slack.bot_api.httpx.post", fake_post)
+    _install_fake_client(monkeypatch, fake_post)
     target = SlackBotTarget(bot_token="xoxb-x")
 
     assert post_channel_message(target, channel_id="C1", text="hi") == (True, "")
@@ -48,8 +67,8 @@ def test_post_includes_thread_ts_only_when_given(monkeypatch: pytest.MonkeyPatch
 
 
 def test_post_maps_missing_scope(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        "integrations.slack.bot_api.httpx.post",
+    _install_fake_client(
+        monkeypatch,
         lambda *_a, **_kw: _FakeResponse({"ok": False, "error": "missing_scope"}),
     )
     ok, error = post_channel_message(SlackBotTarget(bot_token="xoxb-x"), channel_id="C1", text="hi")

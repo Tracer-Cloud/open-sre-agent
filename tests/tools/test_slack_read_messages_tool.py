@@ -20,6 +20,8 @@ from integrations.slack.tools.slack_read_messages_tool.validation import (
 class _FakeResponse:
     def __init__(self, payload: dict[str, Any]) -> None:
         self._payload = payload
+        self.status_code = 200
+        self.headers: dict[str, str] = {}
 
     def raise_for_status(self) -> None:
         return None
@@ -28,12 +30,37 @@ class _FakeResponse:
         return self._payload
 
 
+class _FakeClient:
+    def __init__(self, responder: Any) -> None:
+        self._responder = responder
+
+    def get(self, path: str, **kw: Any) -> Any:
+        return self._responder(path=path, **kw)
+
+    def post(self, path: str, **kw: Any) -> Any:
+        return self._responder(path=path, **kw)
+
+
+def _install_fake_client(monkeypatch: Any, responder: Any) -> None:
+    import integrations.slack.bot_api as _b
+
+    monkeypatch.setattr(_b, "_shared_client", lambda: _FakeClient(responder))
+
+
 def test_metadata_declares_read_only_slack_source() -> None:
     metadata = SlackReadMessagesTool.metadata()
     assert metadata.name == "slack_read_messages"
     assert metadata.source == "slack"
     assert metadata.side_effect_level == "read_only"
     assert slack_read_messages.requires_approval is False
+
+
+def test_description_rejects_roster_questions() -> None:
+    tool = SlackReadMessagesTool()
+    anti = "\n".join(tool.anti_examples).lower()
+    assert "who is on the team" in anti
+    assert "slack_list_team_members" in anti
+    assert "not a workspace member roster" in tool.description.lower()
 
 
 def test_is_available_with_bot_token_in_sources(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -80,8 +107,8 @@ def test_fetch_returns_oldest_first_and_truncates(monkeypatch: pytest.MonkeyPatc
             {"user": "U1", "ts": "100.0", "text": "x" * 3000},
         ],
     }
-    monkeypatch.setattr(
-        "integrations.slack.bot_api.httpx.get",
+    _install_fake_client(
+        monkeypatch,
         lambda *_a, **_kw: _FakeResponse(payload),
     )
 
@@ -104,7 +131,7 @@ def test_fetch_thread_uses_replies(monkeypatch: pytest.MonkeyPatch) -> None:
             {"ok": True, "messages": [{"user": "U1", "ts": "1.0", "text": "parent"}]}
         )
 
-    monkeypatch.setattr("integrations.slack.bot_api.httpx.get", fake_get)
+    _install_fake_client(monkeypatch, fake_get)
 
     messages, error = fetch_channel_messages(
         SlackBotTarget(bot_token="xoxb-x"),
@@ -119,8 +146,8 @@ def test_fetch_thread_uses_replies(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_fetch_maps_api_errors_to_hints(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        "integrations.slack.bot_api.httpx.get",
+    _install_fake_client(
+        monkeypatch,
         lambda *_a, **_kw: _FakeResponse({"ok": False, "error": "not_in_channel"}),
     )
 

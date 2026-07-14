@@ -36,7 +36,10 @@ from core.agent_harness.ports import (
     TurnAccounting,
 )
 from core.agent_harness.prompts import build_cli_agent_prompt_from_provider
-from core.agent_harness.prompts.conversation_memory import MAX_CONVERSATION_MESSAGES
+from core.agent_harness.prompts.conversation_memory import (
+    MAX_CONVERSATION_MESSAGES,
+    expand_affirmative_follow_up,
+)
 from core.agent_harness.session.terminal_access import agent_turn_executed_slashes
 from core.agent_harness.turns.transcript_compaction import auto_compact_if_needed
 from core.agent_harness.turns.turn_plan import TurnPlan, build_turn_plan
@@ -328,6 +331,11 @@ def run_turn(
     # is a no-op when compaction isn't required. Belongs at the harness layer
     # so every surface (shell, headless, gateway) benefits without re-implementing.
     auto_compact_if_needed(session)
+
+    # Bare "yes"/"sure" after a Want me to: offer must resolve to that offer —
+    # otherwise gateway Slack follow-ups hand off as brand-new vague requests.
+    prior_messages = getattr(session, "cli_agent_messages", None) or ()
+    text = expand_affirmative_follow_up(text, prior_messages)
 
     # Snapshot session state before any turn mutations. Both the action agent
     # and the conversational assistant read from this frozen context so their

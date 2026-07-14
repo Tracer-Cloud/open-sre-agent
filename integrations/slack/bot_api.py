@@ -8,18 +8,24 @@ from __future__ import annotations
 
 import os
 import re
+import threading
+import time
 from dataclasses import dataclass
+from http import HTTPStatus
 from typing import Any
 
 import httpx
 
 _API_BASE = "https://slack.com/api"
 _REQUEST_TIMEOUT_SECONDS = 10.0
+_MAX_REQUEST_ATTEMPTS = 3
+_DEFAULT_RETRY_WAIT_SECONDS = 0.5
+_MAX_RETRY_WAIT_SECONDS = 5.0
 _PAGE_LIMIT = 200
 _MAX_MEMBER_PAGES = 5
 _MAX_CHANNEL_LIST_PAGES = 10
 # Thread reads: paginate replies to the last page (bounded) for recent replies.
-_MAX_THREAD_PAGES = 10
+_MAX_THREAD_PAGES = 25
 _MAX_TEXT_CHARS_PER_MESSAGE = 2_000
 
 # Slack channel/DM/group IDs look like C0123ABCD — not bare names like "devs".
@@ -132,6 +138,31 @@ def _api_error_hint(error: str, *, context: str) -> str:
     return hints.get(error, f"Slack API error: {error}")
 
 
+_client_lock = threading.Lock()
+_client: httpx.Client | None = None
+
+
+def _shared_client() -> httpx.Client:
+    """Return a process-wide keep-alive client so calls reuse one connection."""
+    global _client
+    with _client_lock:
+        if _client is None:
+            _client = httpx.Client(
+                base_url=_API_BASE,
+                timeout=_REQUEST_TIMEOUT_SECONDS,
+                limits=httpx.Limits(max_keepalive_connections=4, max_connections=8),
+            )
+        return _client
+
+
+def _retry_after_seconds(response: httpx.Response) -> float:
+    raw = response.headers.get("Retry-After", "")
+    try:
+        return min(float(raw), _MAX_RETRY_WAIT_SECONDS)
+    except (TypeError, ValueError):
+        return _DEFAULT_RETRY_WAIT_SECONDS
+
+
 def _request_json(
     method: str,
     path: str,
@@ -140,29 +171,52 @@ def _request_json(
     params: dict[str, Any] | None = None,
     json_body: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any] | None, str]:
-    url = f"{_API_BASE}/{path}"
-    try:
-        if method == "GET":
-            response = httpx.get(
-                url,
-                headers={"Authorization": f"Bearer {token}"},
-                params=params or {},
-                timeout=_REQUEST_TIMEOUT_SECONDS,
-            )
+    """Call one Slack Web API method, retrying transient failures.
+
+    Returns ``(payload, "")`` on any HTTP-level success (Slack encodes its own
+    errors in ``payload["ok"]`` for callers to classify), or ``(None, detail)``
+    with a specific reason — rate-limit, timeout, HTTP status, or bad payload —
+    so callers can surface an actionable hint instead of a generic failure.
+    """
+    client = _shared_client()
+    headers = {"Authorization": f"Bearer {token}"}
+    if method != "GET":
+        headers = _bearer_headers(token)
+
+    last_error = f"Slack {path} request failed."
+    for attempt in range(_MAX_REQUEST_ATTEMPTS):
+        try:
+            if method == "GET":
+                response = client.get(f"/{path}", headers=headers, params=params or {})
+            else:
+                response = client.post(f"/{path}", headers=headers, json=json_body or {})
+        except httpx.TimeoutException:
+            last_error = f"Slack {path} timed out."
+        except httpx.HTTPError:
+            last_error = f"Slack {path} request failed."
         else:
-            response = httpx.post(
-                url,
-                headers=_bearer_headers(token),
-                json=json_body or {},
-                timeout=_REQUEST_TIMEOUT_SECONDS,
-            )
-        response.raise_for_status()
-        payload = response.json()
-    except Exception:
-        return None, f"Slack {path} request failed."
-    if not isinstance(payload, dict):
-        return None, f"Slack {path} returned an unexpected payload."
-    return payload, ""
+            status = response.status_code
+            if status == HTTPStatus.TOO_MANY_REQUESTS:
+                last_error = f"Slack {path} is rate-limited; try again shortly."
+                if attempt < _MAX_REQUEST_ATTEMPTS - 1:
+                    time.sleep(_retry_after_seconds(response))
+                    continue
+                return None, last_error
+            if status >= HTTPStatus.INTERNAL_SERVER_ERROR:
+                last_error = f"Slack {path} returned HTTP {status}."
+            elif status >= HTTPStatus.BAD_REQUEST:
+                return None, f"Slack {path} returned HTTP {status}."
+            else:
+                try:
+                    payload = response.json()
+                except ValueError:
+                    return None, f"Slack {path} returned a non-JSON payload."
+                if not isinstance(payload, dict):
+                    return None, f"Slack {path} returned an unexpected payload."
+                return payload, ""
+        if attempt < _MAX_REQUEST_ATTEMPTS - 1:
+            time.sleep(_DEFAULT_RETRY_WAIT_SECONDS)
+    return None, last_error
 
 
 def normalize_channel_ref(channel: str) -> tuple[bool, str, str]:
@@ -278,8 +332,10 @@ def _fetch_thread_replies(
 ) -> tuple[list[dict[str, str]] | None, str]:
     """Return the newest ``limit`` thread replies, oldest-first.
 
-    conversations.replies is oldest-first and paginated, so follow the cursor to
-    the last page (bounded) to get recent replies rather than the first page.
+    conversations.replies is oldest-first with no reverse paging, so follow the
+    cursor to the true end. If a thread is longer than the safety bound can
+    traverse, return an error rather than stale middle replies — never present
+    old content as current.
     """
     collected: list[dict[str, str]] = []
     cursor = ""
@@ -301,8 +357,11 @@ def _fetch_thread_replies(
         )
         cursor = str(((payload.get("response_metadata") or {}).get("next_cursor")) or "")
         if not cursor:
-            break
-    return collected[-limit:], ""
+            return collected[-limit:], ""
+    return None, (
+        "This thread is too long to read the most recent replies reliably. "
+        "Ask about a narrower window or the parent message directly."
+    )
 
 
 def fetch_team_members(

@@ -16,6 +16,8 @@ from integrations.slack.tools.slack_list_members_tool import (
 class _FakeResponse:
     def __init__(self, payload: dict[str, Any]) -> None:
         self._payload = payload
+        self.status_code = 200
+        self.headers: dict[str, str] = {}
 
     def raise_for_status(self) -> None:
         return None
@@ -24,11 +26,36 @@ class _FakeResponse:
         return self._payload
 
 
+class _FakeClient:
+    def __init__(self, responder: Any) -> None:
+        self._responder = responder
+
+    def get(self, path: str, **kw: Any) -> Any:
+        return self._responder(path=path, **kw)
+
+    def post(self, path: str, **kw: Any) -> Any:
+        return self._responder(path=path, **kw)
+
+
+def _install_fake_client(monkeypatch: Any, responder: Any) -> None:
+    import integrations.slack.bot_api as _b
+
+    monkeypatch.setattr(_b, "_shared_client", lambda: _FakeClient(responder))
+
+
 def test_metadata_is_read_only_without_approval() -> None:
     metadata = SlackListTeamMembersTool.metadata()
     assert metadata.name == "slack_list_team_members"
     assert metadata.side_effect_level == "read_only"
     assert slack_list_team_members.requires_approval is False
+
+
+def test_description_steers_roster_away_from_channel_history() -> None:
+    tool = SlackListTeamMembersTool()
+    blob = f"{tool.description}\n" + "\n".join(tool.use_cases + tool.anti_examples)
+    assert "who is on the team" in blob.lower()
+    assert "slack_read_messages" in blob
+    assert "channel history" in blob.lower() or "channel/thread" in blob.lower()
 
 
 def test_fetch_filters_deleted_and_slackbot(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -41,8 +68,8 @@ def test_fetch_filters_deleted_and_slackbot(monkeypatch: pytest.MonkeyPatch) -> 
             {"id": "B1", "name": "bot", "is_bot": True, "profile": {"real_name": "Bot"}},
         ],
     }
-    monkeypatch.setattr(
-        "integrations.slack.bot_api.httpx.get",
+    _install_fake_client(
+        monkeypatch,
         lambda *_a, **_kw: _FakeResponse(payload),
     )
 
@@ -74,7 +101,7 @@ def test_fetch_signals_truncation(monkeypatch: pytest.MonkeyPatch) -> None:
             }
         )
 
-    monkeypatch.setattr("integrations.slack.bot_api.httpx.get", fake_get)
+    _install_fake_client(monkeypatch, fake_get)
 
     members, error, truncated = fetch_team_members(SlackBotTarget(bot_token="xoxb-x"))
 
@@ -135,8 +162,8 @@ def test_is_available_falls_back_to_store_when_sources_empty(
 
 
 def test_missing_scope_maps_to_hint(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        "integrations.slack.bot_api.httpx.get",
+    _install_fake_client(
+        monkeypatch,
         lambda *_a, **_kw: _FakeResponse({"ok": False, "error": "missing_scope"}),
     )
 
