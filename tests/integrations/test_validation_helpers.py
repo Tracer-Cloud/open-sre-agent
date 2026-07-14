@@ -165,6 +165,32 @@ class TestReportClassifyFailure:
         assert not isinstance(captured_exc, ValidationError)
         assert secret_value not in str(captured_exc)
 
+    def test_validation_error_wrapper_keeps_original_traceback(self) -> None:
+        """The wrapper must not drop the traceback pointing at the failing
+        vendor model/validator, or logs/Sentry become undebuggable — but it
+        must not use ``raise ... from`` chaining either, since that would
+        print the raw ``ValidationError`` text (with the secret) as part of
+        the exception chain when the local log formats it.
+        """
+        mock_log = _mock_logger()
+        try:
+            _SecretConfig.model_validate({"api_token": "x", "port": "not-a-number"})
+        except ValidationError as exc:
+            validation_error = exc
+
+        with patch("platform.observability.errors.boundary.capture_exception"):
+            report_classify_failure(
+                validation_error,
+                logger=mock_log,
+                integration="widget",
+                record_id="rec-1",
+            )
+
+        logged_exc = mock_log.warning.call_args.kwargs["exc_info"]
+        assert logged_exc.__traceback__ is validation_error.__traceback__
+        assert logged_exc.__cause__ is None
+        assert logged_exc.__context__ is None
+
     def test_non_validation_error_passes_through_unchanged(self) -> None:
         mock_log = _mock_logger()
         exc = RuntimeError("boom")

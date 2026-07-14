@@ -78,9 +78,16 @@ def report_classify_failure(
     captured events, but this function also logs locally with ``exc_info``,
     which bypasses the Sentry scrubber entirely. Swap in a message-only
     ``ValueError`` so no call site has to do this itself.
+
+    The wrapper reuses the original exception's ``__traceback__`` (but not
+    ``__cause__`` — chaining would print the raw ``ValidationError`` text as
+    part of the chain in local logs, defeating the swap above) so logs and
+    Sentry still point at the vendor model/field that actually failed.
     """
     if isinstance(exc, ValidationError):
-        exc = ValueError(f"{integration} config validation failed")
+        safe_exc = ValueError(f"{integration} config validation failed")
+        safe_exc.__traceback__ = exc.__traceback__
+        exc = safe_exc
     report_exception(
         exc,
         logger=logger,
