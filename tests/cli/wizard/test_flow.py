@@ -4723,4 +4723,6 @@ def test_credential_line_for_saved_summary_ollama_host_verified() -> None:
     )
     assert ".env" in line, f"the summary must name .env for a host credential; got {line!r}"
     # A verified host must not be labelled unverified.
-    assert "unverified" not in line.lower(), f"a verified host must not read unverified; got {line!r}"
+    assert "unverified" not in line.lower(), (
+        f"a verified host must not read unverified; got {line!r}"
+    )

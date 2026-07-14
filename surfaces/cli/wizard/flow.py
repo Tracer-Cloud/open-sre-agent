@@ -139,6 +139,13 @@ def _credential_line_for_saved_summary(
         if provider.value == "openai":
             return "OpenAI OAuth tokens (Codex CLI)"
         return f"{_provider_choice_label(provider)} OAuth session"
+    if provider.credential_kind == "host":
+        # A ``host`` credential (e.g. the Ollama host URL) is written to the project
+        # ``.env`` by ``_persist_llm_credential``, never the keyring — the summary must
+        # name .env, not the system keychain, in both the verified and unverified cases.
+        if credential_state == "unverified":
+            return "project .env (unverified)"
+        return "project .env"
     if provider.credential_kind != "cli":
         if credential_state == "unsaved":
             return "not saved — re-enter next run"
@@ -460,10 +467,22 @@ def _prompt_validated_llm_credential(
         validation = _validate_llm_credential(provider, value=value, model=model)
         _render_credential_validation(label, model, validation)
         if not validation.ok:
+            is_azure = provider.value == "azure-openai"
             action = _recovery_action(
                 prompt=f"{credential_display} could not be verified. What next?",
-                retry_label=f"Re-enter the {provider.credential_label}",
-                retry_hint=f"Prompts for {env_key} again",
+                # Azure re-enters the endpoint too: a wrong resource URL, not the key, is
+                # the usual cause of an Azure failure, and the endpoint is popped below so
+                # it is genuinely re-prompted.
+                retry_label=(
+                    f"Re-enter the endpoint and {provider.credential_label}"
+                    if is_azure
+                    else f"Re-enter the {provider.credential_label}"
+                ),
+                retry_hint=(
+                    f"Prompts for {provider.endpoint_env} and {env_key} again"
+                    if is_azure
+                    else f"Prompts for {env_key} again"
+                ),
                 escape=Choice(
                     value="save_anyway",
                     label="Save anyway without validating",
@@ -474,8 +493,14 @@ def _prompt_validated_llm_credential(
                 ),
             )
             if action == "retry":
+                # Drop the (possibly wrong) Azure endpoint so retry re-prompts it, not
+                # just the key; a no-op for every non-Azure provider.
+                _clear_azure_openai_endpoint_env(provider)
                 continue
             if action == "repick":
+                # Same reason as retry: the re-selected Azure provider must re-prompt the
+                # endpoint instead of short-circuiting on the stale env var.
+                _clear_azure_openai_endpoint_env(provider)
                 return "repick"
             if action != "save_anyway":
                 return "cancel"  # ESCAPE, or defensively: no other values are offered
@@ -551,6 +576,22 @@ def _ensure_azure_openai_endpoint_settings(provider: ProviderOption) -> dict[str
     if azure_openai_endpoint_configured():
         return _azure_openai_endpoint_env(provider)
     return _prompt_azure_openai_endpoint_settings(provider)
+
+
+def _clear_azure_openai_endpoint_env(provider: ProviderOption) -> None:
+    """Drop the Azure endpoint env vars so the endpoint is re-prompted next iteration.
+
+    After an Azure validation failure the endpoint the user typed may be the wrong
+    resource URL, but ``_ensure_azure_openai_endpoint_settings`` short-circuits while
+    ``azure_openai_endpoint_configured()`` still sees that stale value in ``os.environ``
+    — so retry/repick would silently reuse the bad endpoint and never ask for a
+    correction. Popping the endpoint env (azure-only) forces a fresh endpoint prompt.
+    """
+    if provider.value != "azure-openai":
+        return
+    for env_key in (provider.endpoint_env, provider.api_version_env):
+        if env_key:
+            os.environ.pop(env_key, None)
 
 
 def _subscription_login_command(
