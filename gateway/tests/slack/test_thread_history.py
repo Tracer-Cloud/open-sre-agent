@@ -8,16 +8,11 @@ from typing import Any
 import pytest
 
 import gateway.slack.thread_history as thread_history
-from gateway.slack.thread_history import (
-    messages_from_slack_thread,
-    seed_session_from_slack_thread,
-    session_needs_thread_seed,
-)
 
 
 def test_session_needs_seed_for_bare_yes_without_want_me_to() -> None:
     session = SimpleNamespace(cli_agent_messages=[("user", "hi"), ("assistant", "hello")])
-    assert session_needs_thread_seed(session, "yes") is True
+    assert thread_history.session_needs_thread_seed(session, "yes") is True
 
 
 def test_session_skips_seed_when_want_me_to_already_present() -> None:
@@ -26,12 +21,12 @@ def test_session_skips_seed_when_want_me_to_already_present() -> None:
             ("assistant", "Want me to: group them by title, or pull engineers?"),
         ]
     )
-    assert session_needs_thread_seed(session, "yes") is False
+    assert thread_history.session_needs_thread_seed(session, "yes") is False
 
 
 def test_session_needs_seed_for_restated_yes() -> None:
     session = SimpleNamespace(cli_agent_messages=[])
-    assert session_needs_thread_seed(
+    assert thread_history.session_needs_thread_seed(
         session, 'you asked a question: "want me to:" and I replied yes'
     )
 
@@ -61,7 +56,7 @@ def test_messages_from_slack_thread_maps_roles(monkeypatch: pytest.MonkeyPatch) 
             "",
         ),
     )
-    mapped = messages_from_slack_thread(
+    mapped = thread_history.messages_from_slack_thread(
         channel_id="C1",
         thread_ts="1.0",
         exclude_ts="1.2",
@@ -87,7 +82,9 @@ def test_seed_session_writes_cli_agent_messages(monkeypatch: pytest.MonkeyPatch)
         ],
     )
     session: Any = SimpleNamespace(cli_agent_messages=[])
-    n = seed_session_from_slack_thread(session, channel_id="C1", thread_ts="1.0", exclude_ts="1.2")
+    n = thread_history.seed_session_from_slack_thread(
+        session, channel_id="C1", thread_ts="1.0", exclude_ts="1.2"
+    )
     assert n == 2
     assert session.cli_agent_messages[1][1] == "Want me to: list titles?"
 
@@ -119,9 +116,9 @@ def test_empty_session_yes_after_thread_seed_expands_dual_offer(
     )
 
     session: Any = SimpleNamespace(cli_agent_messages=[])
-    assert session_needs_thread_seed(session, "yes") is True
+    assert thread_history.session_needs_thread_seed(session, "yes") is True
     assert (
-        seed_session_from_slack_thread(
+        thread_history.seed_session_from_slack_thread(
             session, channel_id="C0BJ1D4LZDE", thread_ts="1.0", exclude_ts="1.2"
         )
         == 2
