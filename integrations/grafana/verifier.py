@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 import requests
 
@@ -22,7 +22,7 @@ def _discover_datasources(config: GrafanaIntegrationConfig) -> list[Any] | str:
     try:
         response = requests.get(url, headers=config.auth_headers, timeout=10)
         response.raise_for_status()
-        return response.json()
+        return cast(list[Any], response.json())
     except requests.HTTPError as exc:
         status = exc.response.status_code if exc.response is not None else "unknown"
         body = ""
