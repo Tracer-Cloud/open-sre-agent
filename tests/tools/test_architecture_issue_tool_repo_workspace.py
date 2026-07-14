@@ -14,7 +14,6 @@ from tools.architecture_issue_tool.repo_workspace import (
     clone_github_repo,
     cloned_github_repo,
     github_remote_url,
-    resolve_scan_roots,
 )
 
 
@@ -23,19 +22,6 @@ def test_github_remote_url() -> None:
         github_remote_url("Tracer-Cloud", "opensre")
         == "https://github.com/Tracer-Cloud/opensre.git"
     )
-
-
-def test_resolve_scan_roots_skips_tests_and_docs(tmp_path: Path) -> None:
-    (tmp_path / "core").mkdir()
-    (tmp_path / "core" / "module.py").write_text("x = 1\n", encoding="utf-8")
-    (tmp_path / "tests").mkdir()
-    (tmp_path / "tests" / "test_x.py").write_text("def test_x() -> None: ...\n", encoding="utf-8")
-    (tmp_path / "docs").mkdir()
-    (tmp_path / "docs" / "readme.md").write_text("# docs\n", encoding="utf-8")
-
-    roots = resolve_scan_roots(tmp_path)
-
-    assert [path.name for path in roots] == ["core"]
 
 
 def test_cloned_github_repo_uses_local_path_without_clone(tmp_path: Path) -> None:

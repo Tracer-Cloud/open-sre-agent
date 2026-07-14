@@ -20,23 +20,6 @@ _GIT_CLONE_TIMEOUT_SEC = 120.0
 _GIT_REMOTE_TIMEOUT_SEC = 15.0
 _ARCHITECTURE_WORKSPACE_DIR = PROJECT_ROOT / ".temp" / "opensre" / "architecture_workspace"
 
-_SKIP_SCAN_ROOT_DIRS = frozenset(
-    {
-        ".git",
-        ".github",
-        ".pytest_cache",
-        ".ruff_cache",
-        ".venv",
-        "__pycache__",
-        "docs",
-        "node_modules",
-        "opensre.egg-info",
-        "packaging",
-        "tests",
-        "venv",
-    }
-)
-
 _SHA_REF_RE = re.compile(r"^[0-9a-fA-F]{7,40}$")
 
 
@@ -100,23 +83,6 @@ def cleanup_architecture_workspace(*, path: str | Path | None = None) -> Path:
         ) from exc
     _remove_tree(target, action="cleanup architecture workspace")
     return target
-
-
-def resolve_scan_roots(clone_root: Path) -> list[Path]:
-    """Return top-level package directories to scan under *clone_root*."""
-    roots: list[Path] = []
-    if not clone_root.is_dir():
-        return roots
-
-    for child in sorted(clone_root.iterdir()):
-        if not child.is_dir() or child.name.startswith("."):
-            continue
-        if child.name in _SKIP_SCAN_ROOT_DIRS:
-            continue
-        if not any(child.rglob("*.py")):
-            continue
-        roots.append(child)
-    return roots
 
 
 def _run_git(
