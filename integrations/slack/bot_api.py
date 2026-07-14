@@ -18,9 +18,8 @@ _REQUEST_TIMEOUT_SECONDS = 10.0
 _PAGE_LIMIT = 200
 _MAX_MEMBER_PAGES = 5
 _MAX_CHANNEL_LIST_PAGES = 10
-# Thread reads: fetch a bounded window so the most recent replies are included.
-_MAX_THREAD_FETCH = 200
-_THREAD_FETCH_FACTOR = 5
+# Thread reads: paginate replies to the last page (bounded) for recent replies.
+_MAX_THREAD_PAGES = 10
 _MAX_TEXT_CHARS_PER_MESSAGE = 2_000
 
 # Slack channel/DM/group IDs look like C0123ABCD — not bare names like "devs".
@@ -252,29 +251,58 @@ def fetch_channel_messages(
     """Fetch the most recent channel messages or thread replies, oldest first."""
     parent = str(thread_ts or "").strip()
     if parent:
-        path = "conversations.replies"
-        # conversations.replies returns oldest-first; request a bounded window
-        # so the most recent replies are included, then keep the last `limit`.
-        window = max(limit, min(_MAX_THREAD_FETCH, limit * _THREAD_FETCH_FACTOR))
-        params: dict[str, Any] = {"channel": channel_id, "ts": parent, "limit": window}
-    else:
-        path = "conversations.history"
-        params = {"channel": channel_id, "limit": limit}
+        return _fetch_thread_replies(target, channel_id=channel_id, parent=parent, limit=limit)
 
-    payload, req_err = _request_json("GET", path, target.bot_token, params=params)
+    payload, req_err = _request_json(
+        "GET",
+        "conversations.history",
+        target.bot_token,
+        params={"channel": channel_id, "limit": limit},
+    )
     if payload is None:
         return None, req_err
     if not payload.get("ok"):
-        error = str(payload.get("error") or "unknown_error")
-        return None, _api_error_hint(error, context="history")
+        return None, _api_error_hint(
+            str(payload.get("error") or "unknown_error"), context="history"
+        )
 
-    raw_messages = payload.get("messages") or []
-    messages = [_normalize_message(m) for m in raw_messages if isinstance(m, dict)]
-    if parent:
-        # Oldest-first already; keep the most recent `limit` (the tail).
-        return messages[-limit:], ""
-    messages.reverse()
+    messages = [
+        _normalize_message(m) for m in (payload.get("messages") or []) if isinstance(m, dict)
+    ]
+    messages.reverse()  # history is newest-first; present oldest-first
     return messages, ""
+
+
+def _fetch_thread_replies(
+    target: SlackBotTarget, *, channel_id: str, parent: str, limit: int
+) -> tuple[list[dict[str, str]] | None, str]:
+    """Return the newest ``limit`` thread replies, oldest-first.
+
+    conversations.replies is oldest-first and paginated, so follow the cursor to
+    the last page (bounded) to get recent replies rather than the first page.
+    """
+    collected: list[dict[str, str]] = []
+    cursor = ""
+    for _ in range(_MAX_THREAD_PAGES):
+        params: dict[str, Any] = {"channel": channel_id, "ts": parent, "limit": _PAGE_LIMIT}
+        if cursor:
+            params["cursor"] = cursor
+        payload, req_err = _request_json(
+            "GET", "conversations.replies", target.bot_token, params=params
+        )
+        if payload is None:
+            return None, req_err
+        if not payload.get("ok"):
+            return None, _api_error_hint(
+                str(payload.get("error") or "unknown_error"), context="history"
+            )
+        collected.extend(
+            _normalize_message(m) for m in (payload.get("messages") or []) if isinstance(m, dict)
+        )
+        cursor = str(((payload.get("response_metadata") or {}).get("next_cursor")) or "")
+        if not cursor:
+            break
+    return collected[-limit:], ""
 
 
 def fetch_team_members(
@@ -354,8 +382,13 @@ def join_channel(target: SlackBotTarget, *, channel_id: str) -> tuple[bool, str]
         return False, req_err
     if not payload.get("ok"):
         error = str(payload.get("error") or "unknown_error")
-        if error in ("already_in_channel", "method_not_supported_for_channel_type"):
+        if error == "already_in_channel":
             return True, ""
+        if error == "method_not_supported_for_channel_type":
+            return False, (
+                "conversations.join only works on public channels. For a private "
+                "channel, DM, or group DM, invite the bot instead."
+            )
         return False, _api_error_hint(error, context="join")
     return True, ""
 
