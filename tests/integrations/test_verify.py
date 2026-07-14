@@ -299,6 +299,42 @@ def test_verify_slack_send_test_false_does_not_post(monkeypatch: pytest.MonkeyPa
     assert "Use --send-slack-test" in results[0]["detail"]
 
 
+def test_verify_slack_mixed_webhook_and_socket_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A config carrying webhook plus Socket Mode tokens must verify, not be
+    rejected by the strict webhook-only model."""
+    monkeypatch.setattr(
+        "integrations.catalog.load_integrations",
+        lambda: [
+            {
+                "id": "slack-local",
+                "service": "slack",
+                "status": "active",
+                "instances": [
+                    {
+                        "name": "default",
+                        "tags": {},
+                        "credentials": {
+                            "webhook_url": "https://hooks.slack.com/services/T000/B000/test",
+                            "bot_token": "xoxb-test",
+                            "app_token": "xapp-test",
+                        },
+                    }
+                ],
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        "integrations.slack.verifier.httpx.get",
+        lambda *_args, **_kwargs: _FakeResponse({"ok": True, "team": "testspace"}),
+    )
+
+    results = verify_integrations("slack")
+
+    assert results[0]["status"] == "passed"
+    assert "Webhook configured." in results[0]["detail"]
+    assert "auth.test ok" in results[0]["detail"]
+
+
 def test_verify_slack_uses_v2_store_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "integrations.catalog.load_integrations",

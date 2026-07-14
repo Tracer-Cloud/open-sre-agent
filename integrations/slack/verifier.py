@@ -81,9 +81,9 @@ def verify_slack(source: str, config: dict[str, Any]) -> dict[str, str]:
         )
 
     try:
-        SlackWebhookConfig.model_validate(
-            {k: v for k, v in config.items() if k != RUNTIME_SEND_TEST_KEY}
-        )
+        # Validate the webhook field only — mixed configs also carry Socket
+        # Mode keys, which the strict webhook model would reject.
+        SlackWebhookConfig.model_validate({"webhook_url": webhook_url})
     except Exception as err:
         return result("slack", source, "missing", str(err))
 
