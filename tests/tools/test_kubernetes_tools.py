@@ -444,6 +444,29 @@ def test_describe_pod_run_includes_valuefrom_env_names_without_values() -> None:
     assert "debug" not in env_names
 
 
+def test_describe_pod_run_strips_last_applied_config_annotation() -> None:
+    pod = _make_mock_pod_detail("web-abc")
+    pod.metadata.annotations = {
+        "kubectl.kubernetes.io/last-applied-configuration": (
+            '{"spec":{"containers":[{"env":[{"name":"DB_PASSWORD","value":"hunter2"}]}]}}'
+        ),
+        "some-other/annotation": "keep-me",
+    }
+
+    mock_core = MagicMock()
+    mock_core.read_namespaced_pod.return_value = pod
+
+    tool = KubernetesDescribePodTool()
+    with patch(
+        "integrations.kubernetes.tools._make_client",
+        return_value=_make_client_with_core(mock_core),
+    ):
+        result = tool.run(kubeconfig=_MINIMAL_KUBECONFIG, pod_name="web-abc", namespace="default")
+
+    assert "kubectl.kubernetes.io/last-applied-configuration" not in result["annotations"]
+    assert result["annotations"]["some-other/annotation"] == "keep-me"
+
+
 # ---------------------------------------------------------------------------
 # list_nodes run()
 # ---------------------------------------------------------------------------
@@ -773,6 +796,46 @@ def test_get_resource_run_happy_path() -> None:
     assert result["resource_type"] == "deployment"
     assert result["name"] == "api"
     assert result["resource"]["kind"] == "Deployment"
+
+
+def test_get_resource_run_strips_last_applied_config_annotation() -> None:
+    from integrations.config_models import KubernetesIntegrationConfig
+    from integrations.kubernetes.client import KubernetesClient
+
+    cfg = KubernetesIntegrationConfig.model_validate({"kubeconfig": _MINIMAL_KUBECONFIG})
+    mock_client = KubernetesClient(cfg)
+    mock_client._core_v1 = MagicMock()
+    mock_apps = MagicMock()
+    mock_apps.read_namespaced_deployment.return_value = MagicMock()
+    mock_client._apps_v1 = mock_apps
+    mock_client._networking_v1 = MagicMock()
+    mock_client._api_client = MagicMock()
+    mock_client._api_client.sanitize_for_serialization.return_value = {
+        "kind": "Deployment",
+        "metadata": {
+            "name": "api",
+            "annotations": {
+                "kubectl.kubernetes.io/last-applied-configuration": (
+                    '{"spec":{"template":{"spec":{"containers":'
+                    '[{"env":[{"name":"DB_PASSWORD","value":"hunter2"}]}]}}}}'
+                ),
+                "some-other/annotation": "keep-me",
+            },
+        },
+    }
+
+    tool = KubernetesGetResourceTool()
+    with patch("integrations.kubernetes.tools._make_client", return_value=mock_client):
+        result = tool.run(
+            kubeconfig=_MINIMAL_KUBECONFIG,
+            resource_type="deployment",
+            name="api",
+            namespace="default",
+        )
+
+    annotations = result["resource"]["metadata"]["annotations"]
+    assert "kubectl.kubernetes.io/last-applied-configuration" not in annotations
+    assert annotations["some-other/annotation"] == "keep-me"
 
 
 def test_get_resource_run_unsupported_type() -> None:

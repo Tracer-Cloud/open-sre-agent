@@ -77,7 +77,8 @@ ALERT_SOURCE_ROUTING: dict[str, AlertSourceRouting] = {
     "github": _routing(("github",), ("github",)),
     "gitlab": _routing(("gitlab",), ("gitlab",)),
     "bitbucket": _routing(("bitbucket",), ("bitbucket",)),
-    "argocd": _routing(("eks",), ("eks",)),
+    # ArgoCD deploys to any Kubernetes cluster, not just EKS — seed both.
+    "argocd": _routing(("eks", "kubernetes"), ("eks", "kubernetes")),
     "splunk": _routing(("splunk",), ("splunk",)),
     "signoz": _routing(("signoz",), ("signoz",)),
     "jenkins": _routing(("jenkins",), ("jenkins",)),
@@ -102,7 +103,10 @@ SOURCE_ALIASES: dict[str, tuple[str, ...]] = {
     "coralogix": ("coralogix",),
     "splunk": ("splunk",),
     "cloudwatch": ("cloudwatch", "lambda", "log group"),
-    "eks": ("eks", "kubernetes", "k8s", "kubectl", "pod"),
+    # Generic k8s/pod/kubectl terms live under "kubernetes" below — keeping them
+    # here too would make eks look "relevant" for any Kubernetes alert even
+    # when no EKS cluster is configured.
+    "eks": ("eks",),
     "kubernetes": (
         "kubernetes",
         "k8s",

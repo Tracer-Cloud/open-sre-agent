@@ -73,6 +73,19 @@ _RESOURCE_DISPATCH: dict[str, tuple[str, str, bool]] = {
 }
 
 
+# kubectl writes the full applied manifest -- including literal env var
+# values -- into this annotation on `kubectl apply`. It must be stripped
+# wherever annotations are returned, or it silently reintroduces the
+# credentials that _redact_env_values and the env-name-only projection in
+# describe_pod were written to remove.
+_LAST_APPLIED_CONFIG_ANNOTATION = "kubectl.kubernetes.io/last-applied-configuration"
+
+
+def _redact_annotations(annotations: dict[str, Any] | None) -> dict[str, Any]:
+    """Return a copy of ``annotations`` with the last-applied-configuration key removed."""
+    return {k: v for k, v in (annotations or {}).items() if k != _LAST_APPLIED_CONFIG_ANNOTATION}
+
+
 def _redact_env_values(resource_dict: dict[str, Any]) -> None:
     """Strip env var values from a serialized workload dict in-place.
 
@@ -452,7 +465,7 @@ class KubernetesClient:
                 "name": meta.name,
                 "namespace": meta.namespace,
                 "labels": dict(meta.labels or {}),
-                "annotations": dict(meta.annotations or {}),
+                "annotations": _redact_annotations(meta.annotations),
                 "creation_timestamp": meta.creation_timestamp.isoformat()
                 if meta.creation_timestamp
                 else None,
@@ -837,6 +850,9 @@ class KubernetesClient:
             # carries env vars. Consistent with describe_pod (keys only).
             if rt in _WORKLOAD_TYPES:
                 _redact_env_values(resource_dict)
+            metadata = resource_dict.get("metadata")
+            if isinstance(metadata, dict):
+                metadata["annotations"] = _redact_annotations(metadata.get("annotations"))
             return {
                 "success": True,
                 "resource_type": resource_type,
