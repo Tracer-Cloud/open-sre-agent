@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 
+import integrations.slack.bot_api as bot_api
 from integrations.slack.bot_api import (
     SlackBotTarget,
     add_reaction,
@@ -19,6 +20,10 @@ from integrations.slack.tools.slack_search_messages_tool import slack_search_mes
 class _FakeResponse:
     def __init__(self, payload: dict[str, Any]) -> None:
         self._payload = payload
+        self.status_code = 200
+        self.headers: dict[str, str] = {}
+        self.status_code = 200
+        self.headers: dict[str, str] = {}
 
     def raise_for_status(self) -> None:
         return None
@@ -27,10 +32,26 @@ class _FakeResponse:
         return self._payload
 
 
+class _FakeClient:
+    def __init__(self, responder: Any) -> None:
+        self._responder = responder
+
+    def get(self, path: str, **kw: Any) -> Any:
+        return self._responder(path=path, **kw)
+
+    def post(self, path: str, **kw: Any) -> Any:
+        return self._responder(path=path, **kw)
+
+
+def _install_fake_client(monkeypatch: pytest.MonkeyPatch, responder: Any) -> None:
+    monkeypatch.setattr(bot_api, "_shared_client", lambda: _FakeClient(responder))
+    monkeypatch.setattr(bot_api.time, "sleep", lambda _s: None)
+
+
 def test_join_channel_treats_already_in_as_success(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        "integrations.slack.bot_api.httpx.post",
-        lambda *_a, **_kw: _FakeResponse({"ok": False, "error": "already_in_channel"}),
+    _install_fake_client(
+        monkeypatch,
+        lambda **_kw: _FakeResponse({"ok": False, "error": "already_in_channel"}),
     )
     ok, error = join_channel(SlackBotTarget(bot_token="xoxb-x"), channel_id="C01234567")
     assert ok is True
@@ -52,10 +73,7 @@ def test_search_messages_maps_matches(monkeypatch: pytest.MonkeyPatch) -> None:
             ]
         },
     }
-    monkeypatch.setattr(
-        "integrations.slack.bot_api.httpx.get",
-        lambda *_a, **_kw: _FakeResponse(payload),
-    )
+    _install_fake_client(monkeypatch, lambda **_kw: _FakeResponse(payload))
     matches, error = search_messages(SlackBotTarget(bot_token="xoxb-x"), query="boom")
     assert error == ""
     assert matches is not None
@@ -63,10 +81,7 @@ def test_search_messages_maps_matches(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_add_reaction_ok(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        "integrations.slack.bot_api.httpx.post",
-        lambda *_a, **_kw: _FakeResponse({"ok": True}),
-    )
+    _install_fake_client(monkeypatch, lambda **_kw: _FakeResponse({"ok": True}))
     ok, error = add_reaction(
         SlackBotTarget(bot_token="xoxb-x"),
         channel_id="C01234567",
