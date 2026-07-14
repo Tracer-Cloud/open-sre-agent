@@ -34,7 +34,6 @@ from typing import Never
 
 import pytest
 
-
 _MESSAGE = (
     "A wizard test attempted a real outbound network connection. "
     "Wizard tests must never touch the network: stub the live provider probe with "
