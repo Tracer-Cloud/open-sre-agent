@@ -213,8 +213,23 @@ class RegisteredToolRegistry:
 
 
 def resolve_tool_display_name(tool_name: str) -> str:
-    """Return a human-friendly label for a tool name."""
+    """Return a human-friendly label for a tool name.
+
+    Tries the cheap static descriptor index first (no tool executor
+    imports) so a display-name lookup does not force-import every tool
+    module (including ones like fleet monitoring) just to render a label.
+    Falls back to the full registry snapshot only if the tool is not
+    found there - covers externally/dynamically registered tools that
+    have no corresponding file for the static index to discover.
+    """
+    from tools.registry_index import build_descriptor_index
+
+    descriptor = build_descriptor_index().get(tool_name)
+    if descriptor is not None and descriptor.display_name:
+        return descriptor.display_name
+
     tool = _load_registry_tool_map().get(tool_name)
     if tool is not None:
         return tool.display_name or tool.name.replace("_", " ")
+
     return tool_name.replace("_", " ")

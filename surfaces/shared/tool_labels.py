@@ -14,8 +14,14 @@ from tools.registry import get_registered_tool_map, resolve_tool_display_name
 
 def tool_source_label(tool_name: str) -> str:
     """Return a human-friendly source badge (e.g. ``Grafana``, ``SRE``) for a tool."""
-    tool = get_registered_tool_map().get(tool_name)
-    source = str(tool.source) if tool is not None else infer_tool_source(tool_name)
+    from tools.registry_index import build_descriptor_index
+
+    descriptor = build_descriptor_index().get(tool_name)
+    if descriptor is not None and descriptor.source:
+        source = descriptor.source
+    else:
+        tool = get_registered_tool_map().get(tool_name)
+        source = str(tool.source) if tool is not None else infer_tool_source(tool_name)
     if source == "grafana":
         return "Grafana"
     if source == "knowledge":

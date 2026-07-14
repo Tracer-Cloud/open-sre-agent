@@ -97,6 +97,30 @@ class LazyCommandsDict(dict[str, click.Command]):
         return super().items()
 
 
+_LAZY_COMMAND_MODULES: dict[str, tuple[str, str]] = {
+    "investigate": ("surfaces.cli.commands.general", "investigate_command"),
+    "onboard": ("surfaces.cli.commands.onboard", "onboard"),
+    "auth": ("surfaces.cli.commands.auth", "auth_command"),
+    "config": ("surfaces.cli.commands.config", "config_command"),
+    "tests": ("surfaces.cli.commands.tests", "tests"),
+    "integrations": ("surfaces.cli.commands.integrations", "integrations"),
+    "guardrails": ("surfaces.cli.commands.guardrails", "guardrails"),
+    "fleet": ("surfaces.cli.commands.agent", "fleet"),
+    "messaging": ("surfaces.cli.commands.messaging", "messaging"),
+    "misses": ("surfaces.cli.commands.misses", "misses_command"),
+    "hermes": ("surfaces.cli.commands.hermes", "hermes_command"),
+    "cron": ("surfaces.cli.commands.cron", "cron_command"),
+    "watchdog": ("surfaces.cli.commands.watchdog", "watchdog_command"),
+    "debug": ("surfaces.cli.commands.debug", "debug_command"),
+    "gateway": ("surfaces.cli.commands.gateway", "gateway_command"),
+    "health": ("surfaces.cli.commands.general", "health_command"),
+    "doctor": ("surfaces.cli.commands.doctor", "doctor_command"),
+    "update": ("surfaces.cli.commands.general", "update_command"),
+    "uninstall": ("surfaces.cli.commands.general", "uninstall_command"),
+    "version": ("surfaces.cli.commands.general", "version_command"),
+}
+
+
 class LazyRichGroup(click.Group):
     """Root CLI group with lazy command registration and Rich help rendering."""
 
@@ -115,11 +139,19 @@ class LazyRichGroup(click.Group):
 
         register_commands(self)
 
-    def list_commands(self, ctx: click.Context) -> list[str]:
-        self.ensure_commands_registered()
-        return super().list_commands(ctx)
+    def list_commands(self, _ctx: click.Context) -> list[str]:
+        return sorted(_LAZY_COMMAND_MODULES)
 
     def get_command(self, ctx: click.Context, cmd_name: str) -> click.Command | None:
+        entry = _LAZY_COMMAND_MODULES.get(cmd_name)
+        if entry is not None:
+            import importlib
+
+            module_path, attr = entry
+            module = importlib.import_module(module_path)
+            command = getattr(module, attr, None)
+            if command is not None:
+                return command
         self.ensure_commands_registered()
         return super().get_command(ctx, cmd_name)
 

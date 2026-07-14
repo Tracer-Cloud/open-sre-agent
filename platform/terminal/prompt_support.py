@@ -7,12 +7,12 @@ import sys
 import time
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import questionary.question
-from prompt_toolkit.key_binding import KeyBindings, KeyBindingsBase, merge_key_bindings
-from prompt_toolkit.keys import Keys
 from rich.console import Console
+
+if TYPE_CHECKING:
+    import questionary.question
 
 from platform.terminal.theme import DIM
 
@@ -31,6 +31,9 @@ class _HardQuitInterrupt(KeyboardInterrupt):
 
 def _with_escape_cancel(question: questionary.question.Question) -> questionary.question.Question:
     """Prepend Escape handling so it wins over questionary's catch-all bindings."""
+    from prompt_toolkit.key_binding import KeyBindings, KeyBindingsBase, merge_key_bindings
+    from prompt_toolkit.keys import Keys
+
     extra = KeyBindings()
 
     @extra.add(Keys.Escape, eager=True)
