@@ -7,30 +7,33 @@ right rate to each bucket instead of using the legacy 70/30 blend.
 
 Rates come from litellm's bundled community-maintained price table
 (~2.8k models) rather than a hand-vendored dict — see issue #4035. We
-read litellm's *local* snapshot directly
-(``GetModelCostMap.load_local_model_cost_map()``) instead of the
-shared ``litellm.model_cost`` global: that global is a process-wide
-singleton populated from a live network fetch on whichever import
-touches it first, so depending on it would make our pricing
-nondeterministic based on unrelated import order elsewhere in the
-process (confirmed in practice — a live fetch elsewhere had already
-picked up a same-week model release our local snapshot didn't have
-yet). This module is imported unconditionally by the always-on
+read litellm's *local* snapshot directly from its packaged JSON file
+instead of the shared ``litellm.model_cost`` global: that global is a
+process-wide singleton populated from a live network fetch on
+whichever import touches it first, so depending on it would make our
+pricing nondeterministic based on unrelated import order elsewhere in
+the process (confirmed in practice — a live fetch elsewhere had
+already picked up a same-week model release our local snapshot didn't
+have yet). This module is imported unconditionally by the always-on
 dashboard sampler, so pricing lookups must stay a pure, deterministic
-offline dict read regardless of what else the process has imported. A
-tiny local override table covers the rare model litellm's snapshot
-hasn't picked up yet (a brand-new release, or a routing alias
-OpenAI/Anthropic don't publish as their own price-table row). Unknown
-models return ``None`` so the dashboard renders ``-`` rather than
-inventing a rate.
+offline dict read regardless of what else the process has imported,
+and must degrade to "no rates" rather than crash the sampler if the
+data file is ever missing. A tiny local override table covers the
+rare model litellm's snapshot hasn't picked up yet (a brand-new
+release, or a routing alias OpenAI/Anthropic don't publish as their
+own price-table row). Unknown models return ``None`` so the dashboard
+renders ``-`` rather than inventing a rate.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from dataclasses import dataclass
 from functools import lru_cache
+from importlib.resources import files
+from typing import TypeGuard
 
 # litellm imports tiktoken and resolves an encoding at module load time; under
 # a frozen (PyInstaller) build that lookup fails unless this bootstrap runs
@@ -42,9 +45,16 @@ from core.llm.transports.litellm.frozen_tiktoken_bootstrap import (
 
 ensure_tiktoken_encodings_discoverable()
 
-from litellm.litellm_core_utils.get_model_cost_map import GetModelCostMap  # noqa: E402
-
 from tools.system.fleet_monitoring.meters import TokenUsage  # noqa: E402
+
+#: litellm's bundled price/context-window snapshot. Read directly (see
+#: _litellm_local_cost_map) rather than via litellm.litellm_core_utils's
+#: GetModelCostMap — that class is a private internal, not covered by
+#: litellm's semver, and a rename there must not crash this always-on
+#: sampler. The filename itself is already a load-bearing contract
+#: elsewhere (tests/packaging/test_litellm_bundle_contract.py asserts it
+#: ships in frozen release builds).
+_LITELLM_LOCAL_PRICE_SNAPSHOT_FILENAME = "model_prices_and_context_window_backup.json"
 
 #: Kept for callers that logged/displayed the vendored-table refresh date.
 #: Rates are now sourced live (per-process) from litellm's own bundled table.
@@ -258,6 +268,7 @@ _ROUTING_SUFFIX_RE = re.compile(r"-v\d+:\d+$")
 def _is_canonical_candidate(candidate: str) -> bool:
     return (
         "/" not in candidate
+        and "@" not in candidate
         and "anthropic." not in candidate
         and not _ROUTING_SUFFIX_RE.search(candidate)
     )
@@ -360,14 +371,32 @@ def _litellm_local_cost_map() -> dict[str, object]:
     """litellm's bundled price snapshot, read directly (never the live fetch).
 
     Deliberately bypasses the shared ``litellm.model_cost`` global — see the
-    module docstring for why that global isn't safe to depend on here.
+    module docstring for why that global isn't safe to depend on here. Reads
+    the packaged JSON file directly rather than through litellm's internal
+    ``GetModelCostMap`` class, and degrades to an empty table (every model
+    reports unpriced) instead of raising if the file is ever missing or
+    unreadable — this module is imported unconditionally by the always-on
+    dashboard sampler, so a data-loading hiccup must never crash it.
 
     Keyed lowercase: our candidates are always lowercased (see
     ``_model_candidates``), but litellm's own keys aren't uniformly
     lowercase — e.g. MiniMax entries are ``minimax/MiniMax-M2.1``. A
     case-sensitive ``dict.get`` would silently miss those.
     """
-    raw = GetModelCostMap.load_local_model_cost_map()
+    try:
+        raw = json.loads(
+            files("litellm")
+            .joinpath(_LITELLM_LOCAL_PRICE_SNAPSHOT_FILENAME)
+            .read_text(encoding="utf-8")
+        )
+    except (OSError, ValueError):
+        logger.warning(
+            "litellm local price snapshot unavailable; pricing lookups will report unpriced",
+            exc_info=True,
+        )
+        return {}
+    if not isinstance(raw, dict):
+        return {}
     return {key.lower(): value for key, value in raw.items()}
 
 
@@ -383,7 +412,7 @@ def _litellm_price(candidate: str) -> ModelPrice | None:
         return None
     input_rate = entry.get("input_cost_per_token")
     output_rate = entry.get("output_cost_per_token")
-    if not isinstance(input_rate, (int, float)) or not isinstance(output_rate, (int, float)):
+    if not _is_rate(input_rate) or not _is_rate(output_rate):
         return None
     return ModelPrice(
         usd_per_input_token=float(input_rate),
@@ -395,8 +424,15 @@ def _litellm_price(candidate: str) -> ModelPrice | None:
     )
 
 
+def _is_rate(value: object) -> TypeGuard[int | float]:
+    # bool is rejected explicitly because isinstance(True, int) is True —
+    # same guard as meters/__init__.py's safe_int, applied here so a stray
+    # boolean in litellm's JSON can't be silently read as a 1 USD/token rate.
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
 def _optional_rate(value: object) -> float | None:
-    return float(value) if isinstance(value, (int, float)) else None
+    return float(value) if _is_rate(value) else None
 
 
 @lru_cache(maxsize=512)
