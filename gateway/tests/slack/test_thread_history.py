@@ -87,8 +87,59 @@ def test_seed_session_writes_cli_agent_messages(monkeypatch: pytest.MonkeyPatch)
         ],
     )
     session: Any = SimpleNamespace(cli_agent_messages=[])
-    n = seed_session_from_slack_thread(
-        session, channel_id="C1", thread_ts="1.0", exclude_ts="1.2"
-    )
+    n = seed_session_from_slack_thread(session, channel_id="C1", thread_ts="1.0", exclude_ts="1.2")
     assert n == 2
     assert session.cli_agent_messages[1][1] == "Want me to: list titles?"
+
+
+def test_empty_session_yes_after_thread_seed_expands_dual_offer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Live dogfood: empty gateway session + Slack thread Want me to + bare yes.
+
+    Replays the AWS failure where ``yes`` (and a restated ``I replied yes``)
+    forgot the prior dual ``Want me to: A, or B?`` offer and fell through to
+    investigate onboarding. Seeding from the thread then expanding must yield
+    an actionable ``do both`` request.
+    """
+    from core.agent_harness.prompts.conversation_memory import expand_affirmative_follow_up
+
+    offer = (
+        "I found: the team has 12 members in the connected Slack workspace.\n\n"
+        "Here's what that looks like:\n• vincent — Vincent — Co-founder\n\n"
+        "Want me to: group them by title, or pull just the engineering folks?"
+    )
+    monkeypatch.setattr(
+        thread_history,
+        "messages_from_slack_thread",
+        lambda **_k: [
+            ("user", "who is on the team?"),
+            ("assistant", offer),
+        ],
+    )
+
+    session: Any = SimpleNamespace(cli_agent_messages=[])
+    assert session_needs_thread_seed(session, "yes") is True
+    assert (
+        seed_session_from_slack_thread(
+            session, channel_id="C0BJ1D4LZDE", thread_ts="1.0", exclude_ts="1.2"
+        )
+        == 2
+    )
+
+    expanded_yes = expand_affirmative_follow_up(
+        "[Slack channel_id=C0BJ1D4LZDE thread_ts=1.0]\nyes",
+        session.cli_agent_messages,
+    )
+    assert expanded_yes.startswith("[Slack channel_id=C0BJ1D4LZDE")
+    assert (
+        "Yes — please do both — group them by title; and pull just the engineering folks."
+        in expanded_yes
+    )
+
+    restated = expand_affirmative_follow_up(
+        'you asked a question: "want me to:" and I replied yes',
+        session.cli_agent_messages,
+    )
+    assert restated.startswith("Yes — please do both — group them by title")
+    assert "pull just the engineering folks" in restated

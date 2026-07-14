@@ -61,9 +61,7 @@ def expand_affirmative_follow_up(
     if ctx:
         prefix = ctx.group(0)
         remainder = raw[ctx.end() :]
-    if not (
-        _AFFIRMATIVE_RE.match(remainder) or _AFFIRMATIVE_RESTATED_RE.search(remainder)
-    ):
+    if not (_AFFIRMATIVE_RE.match(remainder) or _AFFIRMATIVE_RESTATED_RE.search(remainder)):
         return raw
 
     offer = _latest_want_me_to_offer(messages)

@@ -261,10 +261,7 @@ def _agent_text_with_slack_context(inbound: SlackInboundMessage) -> str:
     ``thread_ts`` is included so follow-up seeding / thread reads can target
     the triggering thread without steering every question to channel history.
     """
-    return (
-        f"[Slack channel_id={inbound.channel_id} thread_ts={inbound.thread_ts}]\n"
-        f"{inbound.text}"
-    )
+    return f"[Slack channel_id={inbound.channel_id} thread_ts={inbound.thread_ts}]\n{inbound.text}"
 
 
 def start_slack_gateway_background(
