@@ -13,11 +13,38 @@ DEFAULT_TIMEOUT_SECONDS = 60
 MAX_TIMEOUT_SECONDS = 120
 
 
+def _first_positional_command(args: list[str]) -> str | None:
+    """Return the first non-flag token in ``args`` (the ``gh`` subcommand)."""
+    i = 0
+    while i < len(args):
+        token = str(args[i]).strip()
+        if not token or token == "--":
+            i += 1
+            continue
+        if token.startswith("-"):
+            # Skip global flags that take a value (e.g. ``-R owner/name``).
+            name, _, inline = token.partition("=")
+            if inline:
+                i += 1
+                continue
+            if name in {"-R", "--repo", "-h", "--hostname"} and i + 1 < len(args):
+                nxt = str(args[i + 1])
+                if nxt and not nxt.startswith("-"):
+                    i += 2
+                    continue
+            i += 1
+            continue
+        return token.lower()
+    return None
+
+
 def build_gh_argv(*, args: list[str], repo: str | None = None) -> list[str]:
-    """Build full argv for ``gh`` including optional ``-R owner/name``."""
+    """Build full argv for ``gh`` including optional ``-R owner/name``.
+    """
     argv = ["gh"]
     cleaned_repo = (repo or "").strip()
-    if cleaned_repo:
+    command = _first_positional_command(args)
+    if cleaned_repo and command != "api":
         argv.extend(["-R", cleaned_repo])
     argv.extend(str(a) for a in args)
     return argv

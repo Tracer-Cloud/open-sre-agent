@@ -61,6 +61,21 @@ def test_build_gh_argv_includes_repo_flag() -> None:
     ]
 
 
+def test_build_gh_argv_skips_repo_flag_for_api() -> None:
+    """``gh api`` rejects ``-R``; repo belongs in the API path."""
+    assert build_gh_argv(
+        args=["api", "repos/acme/widgets/pulls/1/comments"],
+        repo="acme/widgets",
+    ) == ["gh", "api", "repos/acme/widgets/pulls/1/comments"]
+
+
+def test_build_gh_argv_skips_repo_flag_for_api_after_global_flags() -> None:
+    assert build_gh_argv(
+        args=["--hostname", "github.com", "api", "user"],
+        repo="acme/widgets",
+    ) == ["gh", "--hostname", "github.com", "api", "user"]
+
+
 def test_run_gh_missing_token() -> None:
     with patch("tools.github_cli.runner.resolve_github_token", return_value=""):
         result = run_gh(args=["issue", "list"])
@@ -153,7 +168,8 @@ def test_skill_guidance_attaches_to_github_cli() -> None:
     assert "Workflow guidance:" in tool.description
     assert "github_cli" in tool.skill_guidance
     assert "shell_run" in tool.skill_guidance.lower() or "Never" in tool.skill_guidance
-    # Capability map must survive the registry truncation budget.
+    # Capability map + failure clause must survive the registry truncation budget.
     assert "Create issue" in tool.skill_guidance
     assert "Arbitrary API" in tool.skill_guidance
+    assert "failed to run" in tool.skill_guidance.lower()
     assert not tool.skill_guidance.endswith("...")
