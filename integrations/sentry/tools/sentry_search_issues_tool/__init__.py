@@ -11,10 +11,18 @@ from core.tool_framework.tool_decorator import tool
 from integrations.sentry import (
     DEFAULT_SENTRY_ISSUE_LIMIT,
     SentryConfig,
+    _resolve_stats_period,
     build_sentry_config,
     describe_sentry_api_error,
     list_sentry_issues,
     sentry_config_from_env,
+)
+from integrations.sentry.issue_digest import (
+    build_sentry_issue_digest,
+    business_impact_score,
+    classify_issue,
+    slim_issue,
+    structural_cluster_key_for_issue,
 )
 
 
@@ -161,4 +169,43 @@ def search_sentry_issues(
             "query": query,
         }
 
-    return {"source": "sentry", "available": True, "issues": issues, "query": query}
+    return _search_result_payload(issues, query=query, stats_period=stats_period, page_limit=limit)
+
+
+def _search_result_payload(
+    issues: list[dict[str, Any]],
+    *,
+    query: str,
+    stats_period: str,
+    page_limit: int,
+) -> dict[str, Any]:
+    effective_period = _resolve_stats_period(stats_period or None)
+    digest = build_sentry_issue_digest(
+        issues,
+        stats_period=effective_period,
+        query=query,
+        page_limit=page_limit,
+    )
+    sample_limit = 15
+    sample = []
+    for issue in issues[:sample_limit]:
+        structural_cluster = structural_cluster_key_for_issue(issue)
+        impact_score, impact_reasons = business_impact_score(issue)
+        sample.append(
+            slim_issue(
+                issue,
+                structural_cluster=structural_cluster,
+                classification=classify_issue(issue),
+                impact_score=impact_score,
+                impact_reasons=impact_reasons,
+            )
+        )
+    return {
+        "source": "sentry",
+        "available": True,
+        "query": query,
+        "stats_period": effective_period,
+        "issues_total": len(issues),
+        "digest": digest,
+        "issues": sample,
+    }

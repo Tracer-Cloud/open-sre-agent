@@ -46,6 +46,22 @@ _SETUP_GUIDANCE_RULE = (
     "<server>` for MCP servers. Do not emit JSON or claim you changed runtime state."
 )
 
+_SENTRY_SUMMARY_RULE = (
+    "Sentry summary: open **I found:** with digest.scope_summary verbatim, then "
+    "add digest.scope_note on the next line when page_saturated is true or when "
+    "clarifying completeness matters. When digest.completeness is empty, say the "
+    "requested window had no unresolved groups — do not summarize issues from a "
+    "different window or imply activity outside that period. Use "
+    "digest.structural_clusters for themed buckets — format each as "
+    "`N issues (P%)` using issue_count and percent (percent_basis is "
+    "returned_page). Include sample_short_ids when present. Never show a bare "
+    "project slug without explaining samples. Priority table: rank clusters from "
+    "priority_candidates and business_impact_score / impact_reasons; include "
+    "Sample IDs column. Penalize high-count zero-user retry noise. Do not ask to "
+    "narrow or repeat search; offer a separately labeled broader window only if "
+    "the user asks."
+)
+
 _HANDOFF_GUIDANCE: dict[str, str] = {
     "provider:local_llama_connect": (
         "The action planner handed off a vague local-model connection request. "
@@ -185,6 +201,7 @@ def _build_system_prompt(
         f"{_PRIOR_INVESTIGATION_FOLLOW_UP_RULE}\n\n"
         f"{_SETUP_GUIDANCE_RULE}\n\n"
         f"{_SOURCE_SCOPED_INVESTIGATION_RULE}\n\n"
+        f"{_SENTRY_SUMMARY_RULE}\n\n"
         f"{_RESPONSE_SHAPE_RULE}\n\n"
         f"{_TERMINOLOGY_RULE}\n{_MARKDOWN_RULE}\n\n"
         f"{environment}"

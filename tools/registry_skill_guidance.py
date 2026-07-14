@@ -23,7 +23,10 @@ _MAX_TOOL_SKILL_GUIDANCE_CHARS = 2400
 def _skill_guidance_files() -> tuple[Path, ...]:
     """Return explicit and package-local SKILL.md files attached at registry load."""
 
-    explicit = (REPO_ROOT / "integrations" / "github" / "tools" / "workflow" / "SKILL.md",)
+    explicit = (
+        REPO_ROOT / "integrations" / "github" / "tools" / "workflow" / "SKILL.md",
+        REPO_ROOT / "integrations" / "sentry" / "tools" / "skills" / "sentry-summary" / "SKILL.md",
+    )
     discovered = sorted(
         (REPO_ROOT / "tools" / "system" / "python_execution_tool" / "skills").glob("*/SKILL.md")
     )

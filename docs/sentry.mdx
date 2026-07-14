@@ -99,6 +99,36 @@ Status: passed
 Detail: Sentry validated for org your-org; 30 issue(s) in the last 7 days
 ```
 
+## Morning digest (scheduled)
+
+Deliver a daily unresolved-issues summary to Slack or Telegram. This uses the
+headless **sentry-summary** skill path (one search + LLM answer), not the
+investigation pipeline or generic `opensre cron` kinds.
+
+| Command | What it does |
+| --- | --- |
+| `/sentry digest schedule add …` | Same as CLI — schedule from the REPL |
+| `opensre sentry digest run` | Run once and print the digest to stdout |
+| `opensre sentry digest schedule add` | Schedule daily delivery (cron + provider + chat) |
+| `opensre sentry digest schedule list` | List Sentry digest schedules |
+| `opensre sentry digest schedule run TASK_ID` | Run a scheduled digest immediately |
+| `opensre sentry digest schedule remove TASK_ID` | Remove a schedule |
+
+Example — weekdays at 08:00 London time to Telegram:
+
+```bash
+opensre sentry digest schedule add \
+  --cron "0 8 * * 1-5" \
+  --tz Europe/London \
+  --provider telegram \
+  --chat-id "-1001234567890"
+```
+
+Optional `--project my-service` scopes the digest to one Sentry project.
+
+The gateway daemon picks up scheduled digests automatically when it is running.
+If the LLM is unavailable, the run fails with an error (no deterministic fallback).
+
 <Note>
 The count reflects issues seen in the last 7 days (capped at 100, shown as
 `100+` when it saturates). Use a search (e.g. `search_sentry_issues` during an

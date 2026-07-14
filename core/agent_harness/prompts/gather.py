@@ -36,6 +36,13 @@ def build_gather_system_prompt(session: SessionStore) -> str:
         "For GitHub repository metadata such as star count, forks, visibility, "
         "or default branch, call get_github_repository — do not use "
         "search_github_code or search_github_issues for those questions.\n"
+        "For Sentry overview, reliability summary, cluster, or morning-digest "
+        "questions, call search_sentry_issues exactly once with query "
+        '"is:unresolved" and stats_period "7d" for week/overview prompts or '
+        '"24h" for today/overnight. If the result is empty, stop — do not widen '
+        "stats_period or call search again with a broader window. Use "
+        "digest.structural_clusters and digest.top_issues; do not repeat the "
+        "same search.\n"
         "Do NOT write the final user-facing answer here — a later step composes "
         "that from the tool results you collect. Stop calling tools as soon as "
         "you have enough data.\n"

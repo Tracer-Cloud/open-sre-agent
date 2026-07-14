@@ -74,16 +74,35 @@ responsibility-scoped subpackage.
 ## Session lifecycle (owned by SessionManager)
 
 `core.agent_harness.session.SessionManager` is the single owner of session
-create / resolve / rotate / restore / flush. Every surface (shell, gateway,
-headless) delegates lifecycle to it instead of re-implementing bootstrap +
-persistence — gateway's `SessionResolver` delegates create/resolve/rotate to
-it; headless in-memory sessions bypass it by design (never persisted, no
-lifecycle to manage) but still run tool-calling turns through the shared
-harness.
+create / resolve / rotate / restore / flush. Every surface delegates lifecycle
+to it instead of re-implementing bootstrap + persistence:
 
-`Session` (formerly `ReplSession`) is the in-memory session object used by
-every surface, including headless gateway — it is not REPL-specific. Do not
-re-add per-surface session bootstrap logic; extend `SessionManager` instead.
+- **shell** — `SessionBootstrapSpec` calls `SessionManager().bootstrap(...)` for
+  the core startup mutations (persistent task registry + integration
+  hydration), then layers shell-only UI concerns (theme, grounding providers,
+  prompt history) on top. Interactive REPL entry calls
+  :meth:`SessionManager.open_storage` once the run is confirmed interactive;
+  ``/new`` calls :meth:`SessionManager.rotate_in_place`; ``/resume`` calls
+  :meth:`SessionManager.rebind_for_resume` then :meth:`SessionManager.restore_context`.
+  REPL exit calls :meth:`SessionManager.close` via
+  :meth:`SessionManager.for_session`.
+- **gateway** — `gateway/runtime/manager.py` bootstraps the process via
+  :meth:`SessionManager.create` (``open_storage=False``).
+  `gateway/storage/session/resolver.py::SessionResolver` owns per-chat
+  chat-id ↔ session-id binding + metadata; it delegates `create` / `resolve` /
+  `rotate` to `SessionManager`. Turn dispatch uses `HeadlessAgent` via
+  `gateway/runtime/turn_handler.py`'s `GatewayTurnHandler` with
+  :class:`~core.agent_harness.tools.tool_provider.DefaultToolProvider`
+  built from the **live per-chat session** each turn (same tool resolution as
+  shell). There is no separate gateway-owned ``Agent`` instance.
+- **headless** — ephemeral in-memory sessions (``headless_dispatch.InMemorySessionStore``)
+  bypass ``SessionManager`` by design: they never persist to JSONL and do not
+  need create/resolve/rotate/close. Tool-calling turns still run through the
+  shared harness; only session lifecycle is skipped.
+
+`Session` (formerly `ReplSession`) is the in-memory session object used by every
+surface, including headless gateway — it is not REPL-specific. Do not re-add
+per-surface session bootstrap logic; extend `SessionManager` instead.
 
 ## Agent construction pattern (Pattern A — canonical)
 

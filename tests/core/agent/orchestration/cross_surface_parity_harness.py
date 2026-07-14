@@ -27,7 +27,7 @@ from core.agent_harness.turns.headless_dispatch import (
 from core.agent_harness.turns.turn_results import ShellTurnResult
 from core.llm.types import AgentLLMResponse, ToolCall
 from core.tool_framework.registered_tool import RegisteredTool
-from gateway.turn_handler import GatewayTurnHandler
+from gateway.runtime.turn_handler import GatewayTurnHandler
 from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 from surfaces.interactive_shell.session import Session
 
@@ -349,7 +349,7 @@ def snapshot_gateway_handler(
             captured.append(result)
             return result
 
-    monkeypatch.setattr("gateway.turn_handler.HeadlessAgent", _SpyAgent)
+    monkeypatch.setattr("gateway.runtime.turn_handler.HeadlessAgent", _SpyAgent)
     before = probe_run_count()
     handler = GatewayTurnHandler(console=console())
     handler(message, session, sink, logging.getLogger("test.parity.gateway"))
@@ -421,7 +421,7 @@ def run_gateway_turn_with_sink(
             captured.append(result)
             return result
 
-    monkeypatch.setattr("gateway.turn_handler.HeadlessAgent", _SpyAgent)
+    monkeypatch.setattr("gateway.runtime.turn_handler.HeadlessAgent", _SpyAgent)
     before = probe_run_count()
     handler = GatewayTurnHandler(console=console())
     handler(message, session, sink, logging.getLogger("test.parity.gateway.sink"))

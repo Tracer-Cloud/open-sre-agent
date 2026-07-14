@@ -5,16 +5,40 @@ new gateway unit tests there. `pytest.ini` discovers them and
 `.github/ci/test_scope_rules.py` scopes CI to that path when only `gateway/`
 changes.
 
+## Entry points (open these first)
+
+| Role | Path |
+|------|------|
+| Package main | `main.py` (`python -m gateway.main`) |
+| Composition root / process | `runtime/manager.py` |
+| Daemon pidfile / status | `runtime/daemon.py` |
+| Turn callback | `runtime/turn_handler.py` |
+| Sink + callback contracts | `runtime/sink_protocol.py` |
+| Shared config error | `runtime/errors.py` (`GatewayConfigurationError`) |
+| HTTP FastAPI app | `http/webapp.py` (`app`) |
+| Telegram start | `telegram/wiring.py` (`start_telegram_worker`) |
+| Slack start | `slack/wiring.py` (`start_slack_worker`) |
+
 ## Layout
 
-- `manager.py` — process composition root: builds the turn handler, starts the
-  Telegram worker, owns signals and shutdown.
-- `turn_handler.py` — transport-agnostic turn callback: `GatewayTurnHandler`
-  (a `(text, session, sink, logger) -> None` callable) builds a fresh
+- `runtime/` — process and turn machinery. `runtime/manager.py` is the
+  composition root: builds the turn handler, starts the transport workers,
+  owns signals and shutdown. `runtime/turn_handler.py` is the
+  transport-agnostic turn callback: `GatewayTurnHandler` (a
+  `(text, session, sink, logger) -> None` callable) builds a fresh
   `HeadlessAgent` per turn and calls `agent.dispatch(text)`.
-- `telegram_gateway.py` — wires the handler into the Telegram polling worker.
-- `storage/session/resolver.py` — per-chat session binding; delegates
-  create / resolve / rotate to `SessionManager`.
+  `runtime/sink_protocol.py` holds `GatewaySink` + `GatewayAgentCallback`;
+  `runtime/errors.py` holds `GatewayConfigurationError`.
+- `http/` — everything served over HTTP: `http/webapp.py` (FastAPI app),
+  `http/web_server.py`, the `/api/investigations` routes, and the
+  investigation store / worker / artifacts.
+- `telegram/` and `slack/` — one package per transport, each owning settings,
+  the inbound worker, inbound security, the output sink, and `wiring.py`
+  (e.g. `telegram/wiring.py` wires the handler into the polling worker).
+- `storage/session/resolver.py` — per-conversation session binding keyed by
+  platform; delegates create / resolve / rotate to `SessionManager`.
+
+Tests mirror the subpackages: `gateway/tests/{runtime,http,telegram,slack}/`.
 
 ## Gateway turn dispatch
 

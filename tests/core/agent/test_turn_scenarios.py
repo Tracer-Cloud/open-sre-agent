@@ -30,6 +30,7 @@ from tests.core.agent._oracle_runtime import (
     LIVE_INTEGRATION_SENTINEL,
     OracleRunResult,
     fresh_session,
+    normalize_executed_actions_for_oracle_match,
     resolve_live_integrations,
     run_oracle_once,
     session_capabilities,
@@ -276,16 +277,6 @@ def _expected_actions_are_assistant_handoff_only(
     )
 
 
-def _is_integrations_list_slash(action: ExpectedAction) -> bool:
-    raw_args = action.get("args", [])
-    args = [str(arg).strip() for arg in raw_args] if isinstance(raw_args, list) else []
-    return (
-        str(action.get("kind", "")).strip() == "slash"
-        and str(action.get("command", "")).strip() == "/integrations"
-        and args == ["list"]
-    )
-
-
 def _strip_redundant_integrations_list_for_investigation_plan(
     actual_actions: list[ExpectedAction],
     expected_actions: list[ExpectedAction],
@@ -296,11 +287,10 @@ def _strip_redundant_integrations_list_for_investigation_plan(
     ``investigation_start`` even when the fixture session already has connected
     integrations (see scenario 314). It does not change the turn outcome.
     """
-    if len(expected_actions) != 1:
-        return actual_actions
-    if str(expected_actions[0].get("kind", "")).strip() != "investigation":
-        return actual_actions
-    return [action for action in actual_actions if not _is_integrations_list_slash(action)]
+    return normalize_executed_actions_for_oracle_match(
+        actual_actions,
+        expected_actions,
+    )
 
 
 def _planning_actions_for_match(
@@ -604,3 +594,26 @@ def test_planning_match_strips_redundant_integrations_list_for_investigation() -
     expected = [{"kind": "investigation", "source": "llm", "target_surface": "investigation"}]
     matched = _planning_actions_for_match([investigation, integrations_list], expected)
     assert matched == [investigation]
+
+
+def test_oracle_match_collapses_duplicate_investigation_dispatch() -> None:
+    from tests.core.agent._oracle_runtime import (
+        normalize_executed_actions_for_oracle_match,
+        normalize_history_for_oracle_match,
+    )
+
+    investigation = {
+        "kind": "investigation",
+        "content": "Windows crash across sentry, github, and posthog",
+    }
+    expected = [{"kind": "investigation"}]
+    duplicated = [investigation, dict(investigation)]
+
+    assert normalize_executed_actions_for_oracle_match(duplicated, expected) == [investigation]
+    assert normalize_history_for_oracle_match(
+        [
+            {"type": "alert", "text_normalized": "windows crash", "ok": True},
+            {"type": "alert", "text_normalized": "windows crash", "ok": True},
+        ],
+        expected,
+    ) == [{"type": "alert", "text_normalized": "windows crash", "ok": True}]

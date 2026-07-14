@@ -29,7 +29,15 @@ from platform.deployment.ecr_deploy.stack import GATEWAY_CONTAINER_NAME, WEB_CON
 logger = logging.getLogger(__name__)
 
 _ENV_DIR = "/etc/opensre"
-_GATEWAY_ONLY_ENV_KEYS = frozenset({"TELEGRAM_BOT_TOKEN", "TELEGRAM_ALLOWED_USERS"})
+_GATEWAY_ONLY_ENV_KEYS = frozenset(
+    {
+        "TELEGRAM_BOT_TOKEN",
+        "TELEGRAM_ALLOWED_USERS",
+        "SLACK_BOT_TOKEN",
+        "SLACK_APP_TOKEN",
+        "SLACK_ALLOWED_USERS",
+    }
+)
 
 __all__ = [
     "GATEWAY_CONTAINER_NAME",

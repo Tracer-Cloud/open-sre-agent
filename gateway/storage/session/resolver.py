@@ -30,20 +30,22 @@ def _inject_chat_context(session: SessionCore, *, chat_id: str) -> SessionCore:
 
 
 class SessionResolver:
-    """Bind Telegram chats to sessions, delegating lifecycle to SessionManager."""
+    """Bind platform conversations to sessions, delegating lifecycle to SessionManager."""
 
     def __init__(
         self,
         bindings: SessionBindingStore,
         *,
         manager: SessionManager | None = None,
+        platform: str = _PLATFORM_TELEGRAM,
     ) -> None:
         self._bindings = bindings
         self._manager = manager or SessionManager()
+        self._platform = platform
 
     def resolve(self, *, user_id: str, chat_id: str) -> SessionCore:
-        """Return a hydrated session for the Telegram DM user id."""
-        existing = self._bindings.get_session_id(platform=_PLATFORM_TELEGRAM, chat_id=user_id)
+        """Return a hydrated session for the platform conversation key ``user_id``."""
+        existing = self._bindings.get_session_id(platform=self._platform, chat_id=user_id)
         if existing:
             session = self._manager.resolve(existing)
             return _inject_chat_context(session, chat_id=chat_id)
@@ -51,20 +53,21 @@ class SessionResolver:
         session = self._manager.create(warm_integrations=True)
         _inject_chat_context(session, chat_id=chat_id)
         self._bindings.bind(
-            platform=_PLATFORM_TELEGRAM,
+            platform=self._platform,
             chat_id=user_id,
             session_id=session.session_id,
         )
         logger.info(
-            "[gateway] created session %s for telegram user %s",
+            "[gateway] created session %s for %s conversation %s",
             session.session_id,
+            self._platform,
             user_id,
         )
         return session
 
     def rotate(self, *, user_id: str, chat_id: str) -> SessionCore:
         """Flush the current session file and start a new binding."""
-        existing = self._bindings.get_session_id(platform=_PLATFORM_TELEGRAM, chat_id=user_id)
-        new_id = self._bindings.rotate(platform=_PLATFORM_TELEGRAM, chat_id=user_id)
+        existing = self._bindings.get_session_id(platform=self._platform, chat_id=user_id)
+        new_id = self._bindings.rotate(platform=self._platform, chat_id=user_id)
         session = self._manager.rotate(old_session_id=existing or None, new_session_id=new_id)
         return _inject_chat_context(session, chat_id=chat_id)
