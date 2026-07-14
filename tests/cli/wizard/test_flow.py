@@ -868,6 +868,12 @@ def test_run_wizard_changes_model_when_user_keeps_provider(monkeypatch, tmp_path
             m.ask.return_value = "openai"
         elif "Choose OpenAI model" in prompt:
             m.ask.return_value = "gpt-5.4-mini"
+        elif "Choose an integration to configure" in prompt:
+            # Explicit skip. Falling through to `default` here selects the menu's
+            # default — the local Grafana stack — which shells out to
+            # `docker compose` and POSTs demo logs into a live Loki on :3100.
+            # This model-change test never meant to configure an integration.
+            m.ask.return_value = "skip"
         else:
             m.ask.return_value = default
         return m
@@ -2491,3 +2497,274 @@ def test_run_wizard_host_kind_does_not_migrate_legacy_api_key(monkeypatch, tmp_p
     assert ("ollama", "sk-stale-legacy-secret") not in persisted
     assert persisted == [("ollama", "http://10.0.0.9:11434")]
     assert exit_code == 1  # _fake_persist returned False to short-circuit the run
+
+
+# ===========================================================================
+# #3591 — live LLM credential validation, recovery menus, honest summary copy.
+#
+# These tests pin the APPROVED design contract. The three helpers the
+# implementation must expose in `flow`:
+#
+#   _recovery_action(*, prompt, retry_label, retry_hint, escape: Choice)
+#       -> "retry" | <escape.value> | "repick" | "cancel"
+#   _prompt_validated_llm_credential(provider, *, model)
+#       -> "ok" | "repick" | "cancel"
+#   _persist_llm_credential_with_recovery(provider, value)
+#       -> "ok" | "unsaved" | "repick" | "cancel"
+#
+# The literal user-facing strings asserted below are the approved copy, not a
+# paraphrase: if the implementation reads well but says something else, these
+# tests are supposed to fail.
+# ===========================================================================
+
+_SENTINEL_SECRET = "sk-ant-SENTINEL-DO-NOT-PRINT"
+
+
+def _flat(text: str) -> str:
+    """Collapse Rich's line wrapping so copy assertions are console-width independent."""
+    return " ".join(text.split())
+
+
+class _Selects:
+    """Answer wizard select prompts by prompt TEXT, never by call order.
+
+    The approved design hoists the model pick *above* the credential prompt
+    (D1), so any fixed-order `iter([...])` of select answers would silently
+    mis-answer the wizard the moment the source is reordered — and mis-answer
+    it *plausibly*, which is worse than crashing.
+
+    There is deliberately no ``else: return default`` fallthrough. That pattern
+    is how a wizard test silently accepts the integrations menu's default (the
+    local Grafana stack), shells out to `docker compose`, and POSTs into a live
+    Loki. Every prompt must be routed explicitly or the test fails loudly.
+
+    An answer of ``None`` is ESCAPE: `_choose` has ``back_on_cancel=False`` at
+    the recovery menus, so a ``None`` from `.ask()` makes it raise a bare
+    ``KeyboardInterrupt`` — which is the *production* cancel path (real Ctrl-C
+    never reaches here; it is intercepted by `_with_ctrl_c_double_exit`).
+    """
+
+    def __init__(self, routes, events=None):
+        self._routes = [(needle, list(a) if isinstance(a, list) else a) for needle, a in routes]
+        self._events = events
+        self.prompts: list[str] = []
+
+    def __call__(self, prompt, **_kwargs):
+        text = str(prompt)
+        self.prompts.append(text)
+        if self._events is not None:
+            self._events.append(("select", text))
+        for needle, answer in self._routes:
+            if needle in text:
+                if isinstance(answer, list):
+                    assert answer, f"ran out of answers for select prompt {text!r}"
+                    value = answer.pop(0)
+                else:
+                    value = answer
+                m = MagicMock()
+                m.ask.return_value = value
+                return m
+        raise AssertionError(f"unrouted wizard select prompt: {text!r}")
+
+    def count(self, needle: str) -> int:
+        return sum(1 for prompt in self.prompts if needle in prompt)
+
+
+class _Values:
+    """Answer questionary text/password prompts by LABEL, recording each `default=`.
+
+    The recorded default is what proves bug K: today the Azure key prompt is
+    handed `provider.credential_default`, which for Azure is the *endpoint*
+    placeholder URL, and `_prompt_value` returns the default on empty input.
+    """
+
+    def __init__(self, routes, events=None):
+        self._routes = [(needle, list(a) if isinstance(a, list) else a) for needle, a in routes]
+        self._events = events
+        self.seen: list[tuple[str, str]] = []  # (label, default kwarg)
+
+    def __call__(self, label, **kwargs):
+        text = str(label)
+        self.seen.append((text, str(kwargs.get("default", ""))))
+        if self._events is not None:
+            self._events.append(("prompt", text))
+        for needle, answer in self._routes:
+            if needle in text:
+                if isinstance(answer, list):
+                    assert answer, f"ran out of answers for value prompt {text!r}"
+                    value = answer.pop(0)
+                else:
+                    value = answer
+                m = MagicMock()
+                m.ask.return_value = value
+                return m
+        raise AssertionError(f"unrouted wizard value prompt: {text!r}")
+
+    def default_for(self, needle: str) -> str:
+        for label, default in self.seen:
+            if needle in label:
+                return default
+        raise AssertionError(f"no value prompt matched {needle!r}; saw {self.seen!r}")
+
+    def count(self, needle: str) -> int:
+        return sum(1 for label, _default in self.seen if needle in label)
+
+
+class _Confirms:
+    def __init__(self, routes):
+        self._routes = [(needle, list(a) if isinstance(a, list) else a) for needle, a in routes]
+
+    def __call__(self, prompt, **_kwargs):
+        text = str(prompt)
+        for needle, answer in self._routes:
+            if needle in text:
+                value = answer.pop(0) if isinstance(answer, list) else answer
+                m = MagicMock()
+                m.ask.return_value = value
+                return m
+        raise AssertionError(f"unrouted wizard confirm prompt: {text!r}")
+
+
+class _Validator:
+    """Stand-in for `validate_provider_credentials`.
+
+    Keyword-only, exactly like the real signature, so a positional call from the
+    implementation is a hard TypeError rather than a silent pass. Snapshots the
+    environment on every probe, which is what makes AC-8 (no side effects from a
+    failed attempt) and AC-3 (the Azure endpoint exists *before* the first
+    probe) assertable rather than assumed.
+    """
+
+    def __init__(self, results, events=None):
+        self._results = list(results)
+        self._events = events
+        self.keys: list[str] = []
+        self.models: list[str] = []
+        self.providers: list[str] = []
+        self.credential_env: list[str | None] = []
+        self.endpoint_env: list[str] = []
+
+    @property
+    def call_count(self) -> int:
+        return len(self.keys)
+
+    def __call__(self, *, provider, api_key, model):
+        self.providers.append(provider.value)
+        self.keys.append(api_key)
+        self.models.append(model)
+        self.credential_env.append(os.environ.get(provider.api_key_env))
+        self.endpoint_env.append(
+            os.environ.get(provider.endpoint_env, "") if provider.endpoint_env else ""
+        )
+        if self._events is not None:
+            self._events.append(("validate", model))
+        index = min(self.call_count - 1, len(self._results) - 1)
+        return self._results[index]
+
+
+class _Wizard:
+    """Everything a #3591 test needs to observe about one `run_wizard()` call."""
+
+    def __init__(self):
+        self.saved_config: dict = {}
+        self.keyring_attempts: list[tuple[str, str]] = []  # every save_api_key call
+        self.saved_keys: list[tuple[str, str]] = []  # the ones that did not raise
+        self.env_writes: list[dict[str, str]] = []  # every sync_env_values call (.env)
+        self.summary: dict = {}  # _render_saved_summary kwargs
+        self.menus: list[dict] = []  # every flow._choose call
+
+    def menu(self, needle: str) -> dict:
+        matches = [m for m in self.menus if needle in m["prompt"]]
+        assert matches, (
+            f"no menu prompt contained {needle!r}; "
+            f"menus shown: {[m['prompt'] for m in self.menus]!r}"
+        )
+        return matches[0]
+
+
+def _wire_wizard(
+    monkeypatch,
+    tmp_path,
+    *,
+    selects,
+    passwords=None,
+    texts=None,
+    confirms=None,
+    validator=None,
+    keyring_errors=None,
+    store=None,
+    has_api_key=False,
+) -> _Wizard:
+    """Install the standard wizard mocks and return the recorder."""
+    w = _Wizard()
+
+    monkeypatch.setattr(_ui, "select_prompt", selects)
+    if passwords is not None:
+        monkeypatch.setattr(flow.questionary, "password", passwords)
+    if texts is not None:
+        monkeypatch.setattr(flow.questionary, "text", texts)
+    if confirms is not None:
+        monkeypatch.setattr(flow.questionary, "confirm", confirms)
+
+    monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "get_store_path", lambda: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "probe_local_target", lambda _p: ProbeResult("local", True, "ok"))
+    monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
+
+    if store is not None:
+        monkeypatch.setattr(_ui, "load_local_config", lambda _path: store)
+        monkeypatch.setattr(_ui, "has_llm_api_key", lambda _env: has_api_key)
+
+    def _save_local_config(**kwargs):
+        w.saved_config.update(kwargs)
+        return tmp_path / "opensre.json"
+
+    monkeypatch.setattr(flow, "save_local_config", _save_local_config)
+
+    errors = list(keyring_errors) if isinstance(keyring_errors, list) else keyring_errors
+
+    def _save_api_key(provider, value, **_kwargs):
+        w.keyring_attempts.append((provider, value))
+        error = None
+        if isinstance(errors, list):
+            error = errors.pop(0) if errors else None
+        elif errors is not None:
+            error = errors
+        if error is not None:
+            raise error
+        w.saved_keys.append((provider, value))
+
+    monkeypatch.setattr(_ui, "save_api_key", _save_api_key)
+
+    def _sync_env_values(values, **_kwargs):
+        w.env_writes.append(dict(values))
+        return tmp_path / ".env"
+
+    monkeypatch.setattr(flow, "sync_env_values", _sync_env_values)
+
+    real_summary = flow._render_saved_summary
+
+    def _summary(**kwargs):
+        w.summary = dict(kwargs)
+        return real_summary(**kwargs)
+
+    monkeypatch.setattr(flow, "_render_saved_summary", _summary)
+
+    # Wrap (not replace) `_choose` so the real prompt still runs through the
+    # routed `select_prompt` above, while the approved menu rows — the `Choice`
+    # dataclasses, and the `default=` that D3 requires to be "retry" — stay
+    # observable.
+    real_choose = flow._choose
+
+    def _spy_choose(prompt, choices, **kwargs):
+        w.menus.append(
+            {"prompt": str(prompt), "choices": list(choices), "default": kwargs.get("default")}
+        )
+        return real_choose(prompt, choices, **kwargs)
+
+    monkeypatch.setattr(flow, "_choose", _spy_choose)
+
+    if validator is not None:
+        monkeypatch.setattr(flow, "validate_provider_credentials", validator, raising=False)
+
+    return w
