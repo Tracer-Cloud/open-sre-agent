@@ -6,7 +6,7 @@ from typing import Any
 
 from core.tool_framework.base import BaseTool
 from integrations.config_models import KubernetesIntegrationConfig
-from integrations.kubernetes.client import KubernetesClient, _RESOURCE_DISPATCH
+from integrations.kubernetes.client import _RESOURCE_DISPATCH, KubernetesClient
 
 _RESOURCE_TYPE_ENUM: list[str] = sorted(_RESOURCE_DISPATCH.keys())
 
