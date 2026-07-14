@@ -70,6 +70,15 @@ class TestUsdPerTokenBlended:
         expected = 0.7 * entry["input_cost_per_token"] + 0.3 * entry["output_cost_per_token"]
         assert usd_per_token_blended("claude-sonnet-4-5") == pytest.approx(expected)
 
+    def test_local_snapshot_loads_a_substantial_table(self) -> None:
+        # Startup-time smoke guard: if litellm's packaged JSON file is ever
+        # missing/unreadable, _litellm_local_cost_map degrades to an empty
+        # dict rather than crashing the always-on sampler (see its
+        # docstring) — but that failure mode must be loud in CI, not silent.
+        from tools.system.fleet_monitoring.pricing import _litellm_local_cost_map
+
+        assert len(_litellm_local_cost_map()) > 1000
+
 
 class TestGpt56Family:
     """GPT-5.6 Sol / Terra / Luna (#3931) — the confirmed litellm gap.

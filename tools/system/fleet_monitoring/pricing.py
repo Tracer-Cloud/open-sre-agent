@@ -33,7 +33,7 @@ import re
 from dataclasses import dataclass
 from functools import lru_cache
 from importlib.resources import files
-from typing import TypeGuard
+from typing import Any, TypeGuard
 
 # litellm imports tiktoken and resolves an encoding at module load time; under
 # a frozen (PyInstaller) build that lookup fails unless this bootstrap runs
@@ -367,7 +367,7 @@ def _lookup_price(model: str) -> ModelPrice | None:
 
 
 @lru_cache(maxsize=1)
-def _litellm_local_cost_map() -> dict[str, object]:
+def _litellm_local_cost_map() -> dict[str, Any]:
     """litellm's bundled price snapshot, read directly (never the live fetch).
 
     Deliberately bypasses the shared ``litellm.model_cost`` global — see the
