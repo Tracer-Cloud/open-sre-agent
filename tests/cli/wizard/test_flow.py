@@ -4493,3 +4493,234 @@ def test_prompt_validated_llm_credential_wizard_back_precedes_keyboard_interrupt
 
     assert outcome == "repick"
     assert "Setup cancelled." not in capsys.readouterr().out
+
+
+def test_run_wizard_azure_endpoint_reprompted_on_retry_after_validation_failure(
+    monkeypatch, tmp_path
+) -> None:
+    """#3591 FIX 1 (RED): after an Azure endpoint+key validation FAILURE, choosing
+    "retry" must re-prompt the ENDPOINT, not only the key.
+
+    Repro of the dead-end: a wrong-but-valid endpoint is entered, then a key. The
+    validator fails. The recovery menu's "retry" arm re-enters only the key; the next
+    iteration sees ``azure_openai_endpoint_configured() == True`` (os.environ still
+    holds the bad AZURE_OPENAI_BASE_URL) and short-circuits, so the second validation
+    reuses the stale bad endpoint and the corrected endpoint the user would type is
+    never asked for. The fix must let "retry" re-prompt the endpoint so a corrected
+    URL reaches the second validation call.
+    """
+    # Ensure the Azure endpoint env starts unset AND is restored after the test, even
+    # though the wizard writes it into os.environ mid-run.
+    monkeypatch.setenv("AZURE_OPENAI_BASE_URL", "wiped")
+    monkeypatch.delenv("AZURE_OPENAI_BASE_URL")
+    monkeypatch.setenv("AZURE_OPENAI_API_VERSION", "wiped")
+    monkeypatch.delenv("AZURE_OPENAI_API_VERSION")
+
+    endpoint_prompts: list[str] = []
+    endpoint_env_at_validation: list[str | None] = []
+    validator_calls: list[tuple[str, str]] = []
+    saved_llm_keys: list[tuple[str, str]] = []
+
+    endpoint_values = iter(
+        [
+            "https://wrong-resource.openai.azure.com",
+            "https://right-resource.openai.azure.com",
+        ]
+    )
+
+    def _mock_select(*_args, **_kwargs):
+        prompt = str(_args[0]) if _args else ""
+        m = MagicMock()
+        if "What next?" in prompt:
+            # First (and only) validation failure -> re-enter, staying on Azure.
+            m.ask.return_value = "retry"
+        elif "Choose your LLM provider" in prompt:
+            m.ask.return_value = "azure-openai"
+        elif "model" in prompt:
+            m.ask.return_value = "gpt-5.4-mini"
+        elif "integration" in prompt.lower():
+            m.ask.return_value = "skip"
+        else:
+            m.ask.return_value = "quickstart"
+        return m
+
+    def _mock_password(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = "az-key"
+        return m
+
+    def _mock_text(*_args, **_kwargs):
+        prompt = str(_args[0]) if _args else ""
+        endpoint_prompts.append(prompt)
+        m = MagicMock()
+        m.ask.return_value = next(endpoint_values)
+        return m
+
+    def _validate(*, provider, api_key, model):
+        validator_calls.append((provider.value, api_key))
+        endpoint_env_at_validation.append(os.environ.get("AZURE_OPENAI_BASE_URL"))
+        # First attempt fails; the retry (with a corrected endpoint) must succeed.
+        if len(validator_calls) == 1:
+            return ValidationResult(ok=False, detail="Azure OpenAI rejected the request.")
+        return ValidationResult(ok=True, detail="Azure OpenAI API key validated.")
+
+    monkeypatch.setattr(_ui, "select_prompt", _mock_select)
+    monkeypatch.setattr(flow.questionary, "password", _mock_password)
+    monkeypatch.setattr(flow.questionary, "text", _mock_text)
+    monkeypatch.setattr(flow, "validate_provider_credentials", _validate)
+    monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
+    monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
+    monkeypatch.setattr(
+        _ui,
+        "save_api_key",
+        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
+    )
+
+    exit_code = flow.run_wizard()
+
+    # RED: the endpoint prompt is asked exactly ONCE today (the retry short-circuits on
+    # the stale env). The fix must ask it a SECOND time so the correction is collected.
+    assert len(endpoint_prompts) == 2, (
+        f"expected the Azure endpoint to be re-prompted on retry, got "
+        f"{len(endpoint_prompts)} endpoint prompt(s)"
+    )
+    # RED: the corrected endpoint must reach the second validation call. Today the
+    # second probe reuses the stale wrong endpoint from os.environ.
+    assert endpoint_env_at_validation == [
+        "https://wrong-resource.openai.azure.com",
+        "https://right-resource.openai.azure.com",
+    ]
+    assert validator_calls == [("azure-openai", "az-key"), ("azure-openai", "az-key")]
+    assert saved_llm_keys == [("azure-openai", "az-key")]
+    assert exit_code == 0
+
+
+def test_run_wizard_azure_endpoint_reprompted_on_repick_then_reselect(
+    monkeypatch, tmp_path
+) -> None:
+    """#3591 FIX 1 (RED): after an Azure validation FAILURE, choosing "Pick a different
+    LLM provider" (repick) and then re-selecting Azure must re-prompt the endpoint.
+
+    Today nothing pops AZURE_OPENAI_BASE_URL between wizard iterations
+    (``sync_provider_env`` runs only after the loop breaks), so on the re-selection
+    ``azure_openai_endpoint_configured()`` is still True and the endpoint prompt is
+    short-circuited to the stale bad URL. The fix must re-prompt the endpoint on the
+    repick arm so a corrected URL reaches the second validation call.
+    """
+    monkeypatch.setenv("AZURE_OPENAI_BASE_URL", "wiped")
+    monkeypatch.delenv("AZURE_OPENAI_BASE_URL")
+    monkeypatch.setenv("AZURE_OPENAI_API_VERSION", "wiped")
+    monkeypatch.delenv("AZURE_OPENAI_API_VERSION")
+
+    endpoint_prompts: list[str] = []
+    endpoint_env_at_validation: list[str | None] = []
+    validator_calls: list[tuple[str, str]] = []
+    saved_llm_keys: list[tuple[str, str]] = []
+
+    provider_responses = iter(["azure-openai", "azure-openai"])
+    endpoint_values = iter(
+        [
+            "https://wrong-resource.openai.azure.com",
+            "https://right-resource.openai.azure.com",
+        ]
+    )
+
+    def _mock_select(*_args, **_kwargs):
+        prompt = str(_args[0]) if _args else ""
+        m = MagicMock()
+        if "What next?" in prompt:
+            # First (and only) validation failure -> bail to the provider picker.
+            m.ask.return_value = "repick"
+        elif "Choose your LLM provider" in prompt:
+            m.ask.return_value = next(provider_responses)
+        elif "model" in prompt:
+            m.ask.return_value = "gpt-5.4-mini"
+        elif "integration" in prompt.lower():
+            m.ask.return_value = "skip"
+        else:
+            m.ask.return_value = "quickstart"
+        return m
+
+    def _mock_password(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = "az-key"
+        return m
+
+    def _mock_text(*_args, **_kwargs):
+        prompt = str(_args[0]) if _args else ""
+        endpoint_prompts.append(prompt)
+        m = MagicMock()
+        m.ask.return_value = next(endpoint_values)
+        return m
+
+    def _validate(*, provider, api_key, model):
+        validator_calls.append((provider.value, api_key))
+        endpoint_env_at_validation.append(os.environ.get("AZURE_OPENAI_BASE_URL"))
+        if len(validator_calls) == 1:
+            return ValidationResult(ok=False, detail="Azure OpenAI rejected the request.")
+        return ValidationResult(ok=True, detail="Azure OpenAI API key validated.")
+
+    monkeypatch.setattr(_ui, "select_prompt", _mock_select)
+    monkeypatch.setattr(flow.questionary, "password", _mock_password)
+    monkeypatch.setattr(flow.questionary, "text", _mock_text)
+    monkeypatch.setattr(flow, "validate_provider_credentials", _validate)
+    monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
+    monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
+    monkeypatch.setattr(
+        _ui,
+        "save_api_key",
+        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
+    )
+
+    exit_code = flow.run_wizard()
+
+    # RED: today the endpoint is prompted ONCE; the re-selected Azure short-circuits on
+    # the stale AZURE_OPENAI_BASE_URL. The fix must re-prompt it after repick+reselect.
+    assert len(endpoint_prompts) == 2, (
+        f"expected the Azure endpoint to be re-prompted after repick+reselect, got "
+        f"{len(endpoint_prompts)} endpoint prompt(s)"
+    )
+    # RED: the corrected endpoint must reach the second validation call.
+    assert endpoint_env_at_validation == [
+        "https://wrong-resource.openai.azure.com",
+        "https://right-resource.openai.azure.com",
+    ]
+    assert exit_code == 0
+
+
+def test_credential_line_for_saved_summary_ollama_host_unverified() -> None:
+    """#3591 FIX 3 (RED): an Ollama host saved via "Save anyway" (unverified) is written
+    to .env, not the keyring — the summary must name .env, never the system keychain.
+
+    ``credential_kind == "host"`` values go through the .env branch of
+    ``_persist_llm_credential`` (``sync_env_values`` + ``os.environ``), never the
+    keyring. The honest summary line must reflect that. Today the function falls into
+    the ``credential_kind != "cli"`` block and returns "system keychain (unverified)",
+    which lies about where the credential landed.
+    """
+    ollama = flow.PROVIDER_BY_VALUE["ollama"]
+    line = flow._credential_line_for_saved_summary(ollama, credential_state="unverified")
+    assert "keychain" not in line.lower(), (
+        f"an Ollama host lives in .env, not the keychain; got {line!r}"
+    )
+    assert ".env" in line, f"the summary must name .env for a host credential; got {line!r}"
+    # The line must still disclose that the saved host was not verified.
+    assert "unverified" in line.lower(), f"the unverified state must be disclosed; got {line!r}"
+
+
+def test_credential_line_for_saved_summary_ollama_host_verified() -> None:
+    """#3591 FIX 3 (RED): a verified Ollama host is still a .env credential, so the
+    summary must name .env and must not claim the system keychain.
+    """
+    ollama = flow.PROVIDER_BY_VALUE["ollama"]
+    line = flow._credential_line_for_saved_summary(ollama)
+    assert "keychain" not in line.lower(), (
+        f"an Ollama host lives in .env, not the keychain; got {line!r}"
+    )
+    assert ".env" in line, f"the summary must name .env for a host credential; got {line!r}"
+    # A verified host must not be labelled unverified.
+    assert "unverified" not in line.lower(), f"a verified host must not read unverified; got {line!r}"
