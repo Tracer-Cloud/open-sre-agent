@@ -67,8 +67,12 @@ class SlackReadMessagesTool(BaseTool):
             "thread_ts": {
                 "type": "string",
                 "description": (
-                    "Optional parent message ts — when set, reads that thread "
-                    "(conversations.replies) instead of channel history."
+                    "OMIT for 'this channel' / 'summarize the channel' — leaving it "
+                    "unset reads whole-channel history. Set it ONLY when the user "
+                    "explicitly asks about 'this thread' or a specific thread; it "
+                    "then reads just that thread's replies. Never copy the triggering "
+                    "message ts here by default — that returns only the current "
+                    "(usually empty) thread."
                 ),
             },
         },

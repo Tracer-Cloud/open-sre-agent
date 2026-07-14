@@ -23,10 +23,12 @@ class SlackReplyMessageTool(BaseTool):
     name = "slack_reply_message"
     source = SOURCE
     description = (
-        "Post a plain-text message to a specific Slack channel (or as a thread reply) "
-        "using the configured bot token. Unlike slack_send_message (webhook, fixed "
-        "channel), this can target any channel the bot has been added to. Pass a "
-        "channel ID (C0123ABCD) or #channel-name."
+        "Post a plain-text message to ANOTHER Slack channel or thread (not the one "
+        "you are currently chatting in) using the bot token. Unlike slack_send_message "
+        "(webhook, fixed channel), this targets any channel the bot has joined. To "
+        "answer the user in the CURRENT Slack conversation, just return your reply as "
+        "text — the gateway delivers it in-thread; do NOT call this tool for that. "
+        "Pass a channel ID (C0123ABCD) or #channel-name."
     )
     use_cases = [
         "Replying in a specific incident channel or thread",
@@ -138,5 +140,5 @@ class SlackReplyMessageTool(BaseTool):
 
 slack_reply_message = tool(
     SlackReplyMessageTool(),
-    surfaces=("investigation", "chat", "action"),
+    surfaces=("investigation", "action"),
 )

@@ -48,6 +48,13 @@ class SlackOutputSink:
             text=initial_status_message(),
             thread_ts=thread_ts,
         )
+        if self._message_ts is None:
+            logger.warning(
+                "[slack-sink] placeholder post FAILED channel=%s thread_ts=%s; "
+                "final answer will be posted as a new message",
+                channel_id,
+                thread_ts,
+            )
 
     def print(self, message: str = "") -> None:
         if message:
@@ -98,11 +105,13 @@ class SlackOutputSink:
 
     def _finalize(self, text: str) -> None:
         final = truncate(markdown_to_slack_mrkdwn(text), SLACK_MAX_MESSAGE_CHARS, suffix="…")
+        mode = "edit"
         with self._lock:
             delivered = self._message_ts is not None and self._client.update_message(
                 channel=self._channel_id, ts=self._message_ts, text=final
             )
             if not delivered:
+                mode = "new-message"
                 delivered = (
                     self._client.post_message(
                         channel=self._channel_id, text=final, thread_ts=self._thread_ts
@@ -111,7 +120,19 @@ class SlackOutputSink:
                 )
         if delivered:
             logger.info(
-                "outbound channel=%s chars=%d",
+                "outbound channel=%s thread_ts=%s mode=%s chars=%d",
                 self._channel_id,
+                self._thread_ts,
+                mode,
+                len(final),
+            )
+        else:
+            # Both the in-place edit and the fresh post failed: the user is left
+            # staring at the "Digging in…" placeholder with no answer.
+            logger.error(
+                "[slack-sink] DELIVERY FAILED channel=%s thread_ts=%s chars=%d "
+                "(both update and post rejected)",
+                self._channel_id,
+                self._thread_ts,
                 len(final),
             )

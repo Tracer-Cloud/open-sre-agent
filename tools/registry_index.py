@@ -136,7 +136,7 @@ def _fallback_descriptors() -> tuple[ToolDescriptor, ...]:
         ),
         ToolDescriptor(
             "slack_reply_message",
-            ("investigation", "chat", "action"),
+            ("investigation", "action"),
             "slack",
             None,
             "integrations.slack.tools.slack_reply_message_tool.tool",

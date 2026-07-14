@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 import threading
+import time
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
@@ -205,13 +206,30 @@ class _SlackTurnDispatcher:
                 return
 
             # Never log message bodies — audit hashes live in messaging_security.
+            # ts vs thread_ts distinguishes a new mention (ts == thread_ts) from a
+            # threaded reply — key to diagnosing session continuity.
+            is_reply = inbound.thread_ts != inbound.ts
             self._logger.info(
-                "inbound platform=slack user=%s channel=%s session=%s chars=%d",
+                "inbound platform=slack user=%s channel=%s thread_ts=%s reply=%s "
+                "session=%s chars=%d",
                 inbound.user_id,
                 inbound.channel_id,
+                inbound.thread_ts,
+                is_reply,
                 session.session_id[:8],
                 len(inbound.text),
             )
+            # Continuity + availability diagnostics: prior-message count shows
+            # whether "yes"-style follow-ups kept context; the slack flag shows
+            # whether the Slack teammate tools will be offered this turn.
+            resolved = getattr(session, "resolved_integrations_cache", None) or {}
+            prior_msgs = len(getattr(session, "cli_agent_messages", []) or [])
+            self._logger.info(
+                "turn setup platform=slack prior_msgs=%d slack_resolved=%s",
+                prior_msgs,
+                "slack" in resolved,
+            )
+            turn_started = time.monotonic()
             mark_turn_working(
                 self._messaging,
                 channel=inbound.channel_id,
@@ -241,12 +259,31 @@ class _SlackTurnDispatcher:
                 agent_text = _agent_text_with_slack_context(inbound)
                 self._handler(agent_text, session, sink, self._logger)
             except Exception:
+                self._logger.exception(
+                    "[slack-gateway] turn ERRORED after %.1fs channel=%s session=%s",
+                    time.monotonic() - turn_started,
+                    inbound.channel_id,
+                    session.session_id[:8],
+                )
+                # Replace the "Digging in…" placeholder with a visible error —
+                # otherwise a raised turn is indistinguishable from one still
+                # running (only the ✗ reaction changes).
+                try:
+                    sink.render_error("Something went wrong on that request.")
+                except Exception:
+                    self._logger.debug("[slack-gateway] error finalize failed", exc_info=True)
                 mark_turn_failed(
                     self._messaging,
                     channel=inbound.channel_id,
                     timestamp=inbound.ts,
                 )
                 raise
+            self._logger.info(
+                "[slack-gateway] turn done in %.1fs channel=%s session=%s",
+                time.monotonic() - turn_started,
+                inbound.channel_id,
+                session.session_id[:8],
+            )
             mark_turn_done(
                 self._messaging,
                 channel=inbound.channel_id,

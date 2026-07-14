@@ -206,3 +206,25 @@ def test_handler_exception_is_contained() -> None:
         resolver=_FakeSessionResolver(),
         handler=handler,
     ).dispatch(_inbound())
+
+
+def test_errored_turn_replaces_placeholder_with_error() -> None:
+    """A raising handler must leave a visible error in the thread, not a frozen
+    'Digging in…' placeholder (only the reaction changing)."""
+    messaging = _FakeMessagingClient()
+
+    def handler(_text: str, _session: Any, _sink: Any, _logger: logging.Logger) -> None:
+        raise RuntimeError("boom")
+
+    with pytest.raises(RuntimeError):
+        _dispatcher(
+            settings=_settings(["U1"]),
+            messaging=messaging,
+            resolver=_FakeSessionResolver(),
+            handler=handler,
+        )._run_turn(_inbound())
+
+    # The placeholder message was edited to an error, and the message shows ✗.
+    assert messaging.updates, "placeholder was never updated on error"
+    assert "went wrong" in messaging.updates[-1]["text"].lower()
+    assert ("add", "x") in [(r["op"], r["emoji"]) for r in messaging.reactions]
