@@ -138,8 +138,10 @@ def test_run_wizard_shows_keyring_fix_steps_when_secure_storage_is_unavailable(
     select_responses = iter(["quickstart", "anthropic", "api_key", "claude-opus-4-7"])
 
     def _mock_select(*_args, **_kwargs):
+        prompt = str(_args[0]) if _args else ""
         m = MagicMock()
-        m.ask.return_value = next(select_responses)
+        # ESCAPE at the keychain recovery menu -> "Setup cancelled." -> exit 1.
+        m.ask.return_value = None if "What next?" in prompt else next(select_responses)
         return m
 
     def _mock_password(*_args, **_kwargs):
@@ -880,6 +882,11 @@ def test_run_wizard_changes_model_when_user_keeps_provider(monkeypatch, tmp_path
             m.ask.return_value = "openai"
         elif "Choose OpenAI model" in prompt:
             m.ask.return_value = "gpt-5.4-mini"
+        elif "integration" in prompt.lower():
+            # Falling through to `default` here picks "grafana local", whose configurator
+            # runs `docker compose up -d` and then seeds a *live* Loki over the network —
+            # neither of which this model-selection test has any interest in.
+            m.ask.return_value = "skip"
         else:
             m.ask.return_value = default
         return m
@@ -2967,16 +2974,23 @@ def test_run_wizard_cli_provider_skips_llm_key_validation(monkeypatch, tmp_path)
     assert exit_code == 0
 
 
-def test_run_wizard_ollama_host_skips_llm_key_validation(monkeypatch, tmp_path) -> None:
-    """Scope gate: a host-kind credential (Ollama) never triggers key validation.
+def test_run_wizard_ollama_host_is_validated_then_persisted_to_dotenv(
+    monkeypatch, tmp_path
+) -> None:
+    """A host-kind credential (Ollama) IS probed — and still lands in .env, not the keyring.
 
-    Same control structure as the CLI gate: the api_key provider validated
-    (and failed) first in the run proves the validator is live, then the
-    repicked ollama host is persisted to .env without any validator call.
+    Ollama is the one provider whose credential is a host URL rather than a secret, and
+    it is exactly the provider a live probe helps most: an unreachable host or an
+    un-pulled model is otherwise only discovered later, at the first investigation.
+    ``validate_provider_credentials`` already routes ``ollama`` to ``_check_ollama``.
+
+    The api_key provider that validated (and failed) first in the run proves the
+    validator is live; the repicked Ollama host is then probed against the model the
+    user actually picked and persisted to .env, with nothing written to the keyring.
     """
     provider_responses = iter(["anthropic", "ollama"])
     menu_responses = iter(["repick"])
-    validator_calls: list[tuple[str, str]] = []
+    validator_calls: list[tuple[str, str, str]] = []
     saved_llm_keys: list[tuple[str, str]] = []
     synced_env_values: list[dict[str, str]] = []
 
@@ -3010,7 +3024,9 @@ def test_run_wizard_ollama_host_skips_llm_key_validation(monkeypatch, tmp_path) 
         return m
 
     def _validate(*, provider, api_key, model):
-        validator_calls.append((provider.value, api_key))
+        validator_calls.append((provider.value, api_key, model))
+        if provider.value == "ollama":
+            return ValidationResult(ok=True, detail=f"Ollama reachable. Model '{model}' is ready.")
         return ValidationResult(ok=False, detail="Anthropic rejected the API key.")
 
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
@@ -3034,10 +3050,13 @@ def test_run_wizard_ollama_host_skips_llm_key_validation(monkeypatch, tmp_path) 
 
     exit_code = flow.run_wizard()
 
-    assert validator_calls == [("anthropic", "sk-bad-anthropic")]
+    assert validator_calls == [
+        ("anthropic", "sk-bad-anthropic", "claude-opus-4-7"),
+        ("ollama", "http://127.0.0.1:11434", "llama3.2"),
+    ]
     assert synced_env_values == [{"OLLAMA_HOST": "http://127.0.0.1:11434"}]
     assert os.environ["OLLAMA_HOST"] == "http://127.0.0.1:11434"
-    assert saved_llm_keys == []
+    assert saved_llm_keys == []  # a host URL is config, never a keyring secret
     assert exit_code == 0
 
 
@@ -3535,7 +3554,9 @@ def test_run_wizard_llm_key_validator_exception_treated_as_failure(
     assert validation_call_count == 2
     output = capsys.readouterr().out
     assert "boom" in output
-    assert "OpenAI API key could not be verified. What next?" in select_prompts
+    # The raising probe is call #1 — Anthropic — so Anthropic is the provider named in
+    # the failure menu. OpenAI is the provider the user repicks, and it validates cleanly.
+    assert "Anthropic API key could not be verified. What next?" in select_prompts
     assert saved_llm_keys == [("openai", "sk-openai")]
     assert exit_code == 0
 

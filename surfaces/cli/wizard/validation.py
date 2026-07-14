@@ -71,6 +71,10 @@ def _get_provider_base_url(provider_value: str) -> str | None:
         from config.config import GROQ_BASE_URL
 
         return GROQ_BASE_URL
+    if provider_value == "minimax":
+        from config.config import MINIMAX_BASE_URL
+
+        return MINIMAX_BASE_URL
     return None
 
 
@@ -218,7 +222,9 @@ def validate_provider_credentials(
                 ok=True, detail="Anthropic API key validated.", sample_response=sample_text
             )
 
-        # All OpenAI-compatible providers (openai, openrouter, deepseek, gemini, nvidia)
+        # All OpenAI-compatible providers (openai, openrouter, deepseek, gemini, nvidia,
+        # groq, minimax) — a provider missing from _get_provider_base_url silently falls
+        # back to api.openai.com and its (valid) key is reported as rejected.
         base_url = _get_provider_base_url(provider.value)
         openai_client = openai_client_cls(api_key=api_key, base_url=base_url, timeout=30.0)
         # Only native OpenAI reasoning models use max_completion_tokens; others use max_tokens
