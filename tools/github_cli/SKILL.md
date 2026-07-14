@@ -10,36 +10,35 @@ tools:
 
 # github-cli
 
-Authenticated GitHub CLI (`gh`) for OpenSRE. **One tool for reads and writes**
-— no separate write tool, no approval gate.
+Authenticated `gh` for OpenSRE. **Reads and writes** — no separate write tool,
+no approval gate. Prefer over `shell_run` / `!gh`.
 
-## When to use
+Pass `args` after `gh`. Optional `repo` as `owner/name` → `-R`. End with a short
+human summary (URLs, titles, counts).
 
-Anything plausible about GitHub: create/list/view issues or PRs; assign; labels;
-repo list; releases; checks; questions naming `github.com/owner/repo`.
+## Capabilities
 
-## Important Functions
+| Intent | Example `args` |
+| --- | --- |
+| Create issue | `["issue", "create", "--title", "…", "--body", "…", "--assignee", "user"]` |
+| List / view issues | `["issue", "list", "--limit", "20"]` / `["issue", "view", "42"]` |
+| Close / comment / edit | `["issue", "close", "42"]` / `["issue", "comment", "42", "--body", "…"]` |
+| List / view PRs | `["pr", "list"]` / `["pr", "view", "45"]` |
+| PR checks / merge | `["pr", "checks", "45"]` / `["pr", "merge", "45"]` |
+| Repos | `["repo", "list", "--limit", "30"]` / `["repo", "view"]` |
+| Search | `["search", "issues", "crash"]` / `["search", "prs", "fix"]` |
+| Releases / labels / runs | `["release", "list"]` / `["label", "list"]` / `["run", "list"]` |
+| Arbitrary API | `["api", "repos/OWNER/REPO/issues"]` |
 
-Use `github_cli` — never raw `git`/`gh` in `shell_run` or `!gh`.
+Add flags as needed (`--label`, `--json`, `--jq`). Use `["api", …]` when no
+subcommand fits.
 
-Pass `args` as the list **after** `gh`. Optional `repo` as `owner/name` → `-R`.
-
-### Examples
-
-- Create: `["issue", "create", "--title", "…", "--body", "…", "--assignee", "joe"]`
-- List: `["issue", "list", "--limit", "20"]`
-- Repos: `["repo", "list", "--limit", "30"]`
-- View PR: `["pr", "view", "45"]`
-
-Always end with a short human summary (issue URL, titles, counts).
-
-## Prefer dedicated tools only when they clearly fit
+## Prefer dedicated tools when they clearly fit
 
 - Slack propose/execute mutation tools
-- Investigation keyword search: `search_github_issues`
+- Investigation search: `search_github_issues`
 - Work-status / security digests: workflow tools first
 
-## Known Limitations
+## Limitations
 
-- `gh` must be on PATH; auth from OpenSRE GitHub token env.
-- Projects v2 may 403.
+`gh` on PATH; OpenSRE token auth. Projects v2 may 403. Token scopes limit writes.

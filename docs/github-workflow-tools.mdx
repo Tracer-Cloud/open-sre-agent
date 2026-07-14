@@ -10,7 +10,12 @@ OpenSRE provides GitHub workflow tools for engineering coordination. The public 
 3. Render a mutation proposal for explicit Slack-sourced task requests.
 4. Execute the proposal only through the runtime approval path.
 
-The implementation deliberately separates read-only tools from mutating execution. Headless or non-approved runs can produce proposals, but they cannot mutate GitHub.
+The workflow tools deliberately separate read-only snapshots from mutating
+execution. Headless or non-approved runs can produce proposals, but they cannot
+execute workflow mutations.
+
+For ad-hoc chat mutations outside the Slack proposal flow (create issue, assign,
+merge, `gh api`, etc.), use **`github_cli`** instead — see [GitHub](github).
 
 ## Tools
 
@@ -72,7 +77,7 @@ The proposal includes:
 
 ### 4. Execute mutations
 
-`execute_github_issue_mutation` is the only mutating tool. It has no `confirm` argument.
+`execute_github_issue_mutation` is the only **workflow** mutating tool. It has no `confirm` argument. Ad-hoc GitHub writes in chat go through `github_cli`.
 
 Mutation behavior:
 

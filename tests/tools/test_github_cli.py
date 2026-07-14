@@ -153,3 +153,7 @@ def test_skill_guidance_attaches_to_github_cli() -> None:
     assert "Workflow guidance:" in tool.description
     assert "github_cli" in tool.skill_guidance
     assert "shell_run" in tool.skill_guidance.lower() or "Never" in tool.skill_guidance
+    # Capability map must survive the registry truncation budget.
+    assert "Create issue" in tool.skill_guidance
+    assert "Arbitrary API" in tool.skill_guidance
+    assert not tool.skill_guidance.endswith("...")
