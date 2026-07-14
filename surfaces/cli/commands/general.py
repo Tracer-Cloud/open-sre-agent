@@ -199,7 +199,7 @@ def investigate_command(
             input_json=input_json,
             interactive=interactive,
             evaluate_requested=evaluate,
-        ):
+        ) as tracker:
             # Only stream the live UI when the user is interactively watching stdout
             # and hasn't asked for machine-readable JSON. Otherwise the spinner and
             # ANSI control codes corrupt the JSON payload that consumers expect on
@@ -210,7 +210,7 @@ def investigate_command(
                 sys.stdout.isatty() and not is_json_output() and output is None and not evaluate
             )
             if stream_to_stdout:
-                run_investigation_cli_streaming(raw_alert=payload)
+                run_investigation_cli_streaming(raw_alert=payload, tracker=tracker)
             else:
                 result = run_investigation_cli(raw_alert=payload, opensre_evaluate=evaluate)
                 write_json(result, output)

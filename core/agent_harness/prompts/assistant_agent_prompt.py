@@ -1,10 +1,14 @@
 """System prompt building for the terminal assistant."""
 
+from collections.abc import Mapping
+from typing import Any
+
 from core.agent_harness.prompts.rules import (
     AGENT_RESPONSE_THREE_TIER_RULE,
     CLI_ASSISTANT_MARKDOWN_RULE,
     INTERACTIVE_SHELL_TERMINOLOGY_RULE,
 )
+from core.agent_harness.prompts.runtime_facts import render_runtime_facts
 
 _TERMINOLOGY_RULE = INTERACTIVE_SHELL_TERMINOLOGY_RULE
 _MARKDOWN_RULE = CLI_ASSISTANT_MARKDOWN_RULE
@@ -42,6 +46,22 @@ _SETUP_GUIDANCE_RULE = (
     "<server>` for MCP servers. Do not emit JSON or claim you changed runtime state."
 )
 
+_SENTRY_SUMMARY_RULE = (
+    "Sentry summary: open **I found:** with digest.scope_summary verbatim, then "
+    "add digest.scope_note on the next line when page_saturated is true or when "
+    "clarifying completeness matters. When digest.completeness is empty, say the "
+    "requested window had no unresolved groups — do not summarize issues from a "
+    "different window or imply activity outside that period. Use "
+    "digest.structural_clusters for themed buckets — format each as "
+    "`N issues (P%)` using issue_count and percent (percent_basis is "
+    "returned_page). Include sample_short_ids when present. Never show a bare "
+    "project slug without explaining samples. Priority table: rank clusters from "
+    "priority_candidates and business_impact_score / impact_reasons; include "
+    "Sample IDs column. Penalize high-count zero-user retry noise. Do not ask to "
+    "narrow or repeat search; offer a separately labeled broader window only if "
+    "the user asks."
+)
+
 _HANDOFF_GUIDANCE: dict[str, str] = {
     "provider:local_llama_connect": (
         "The action planner handed off a vague local-model connection request. "
@@ -70,11 +90,13 @@ def build_environment_block(
     reasoning_model: str | None = None,
     toolcall_model: str | None = None,
     llm_settings_available: bool | None = None,
+    runtime: Mapping[str, Any] | None = None,
 ) -> str:
     """Render shell-state facts so the assistant can answer directly.
 
     Decoupled from any session type: the caller (a ``PromptContextProvider``
-    adapter) supplies integration names and optional LLM settings.
+    adapter) supplies integration names, optional LLM settings, and the
+    ``capture_runtime_facts()`` dict as ``runtime``.
     """
     facts: list[str] = []
     if integrations:
@@ -110,6 +132,10 @@ def build_environment_block(
             "which model/provider is being used, say the settings could not be read "
             "instead of guessing or telling them to run another command."
         )
+
+    runtime_fact = render_runtime_facts(runtime or {})
+    if runtime_fact:
+        facts.append(runtime_fact)
 
     if not facts:
         return ""
@@ -175,6 +201,7 @@ def _build_system_prompt(
         f"{_PRIOR_INVESTIGATION_FOLLOW_UP_RULE}\n\n"
         f"{_SETUP_GUIDANCE_RULE}\n\n"
         f"{_SOURCE_SCOPED_INVESTIGATION_RULE}\n\n"
+        f"{_SENTRY_SUMMARY_RULE}\n\n"
         f"{_RESPONSE_SHAPE_RULE}\n\n"
         f"{_TERMINOLOGY_RULE}\n{_MARKDOWN_RULE}\n\n"
         f"{environment}"

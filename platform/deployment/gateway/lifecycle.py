@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deploy and destroy the OpenSRE Telegram gateway on EC2 using a custom AMI."""
+"""Deploy and destroy the OpenSRE messaging gateway on EC2 using a custom AMI."""
 
 from __future__ import annotations
 
@@ -50,6 +50,10 @@ REGION = DEFAULT_REGION
 _CONTAINER_ENV_KEYS = (
     "TELEGRAM_BOT_TOKEN",
     "TELEGRAM_ALLOWED_USERS",
+    "SLACK_BOT_TOKEN",
+    "SLACK_APP_TOKEN",
+    "SLACK_ALLOWED_USERS",
+    "SLACK_ALLOW_OPEN_WORKSPACE",
     "LLM_PROVIDER",
     "OPENAI_API_KEY",
     "ANTHROPIC_API_KEY",

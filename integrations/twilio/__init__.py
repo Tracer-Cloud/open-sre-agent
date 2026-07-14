@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from integrations._validation_helpers import report_classify_failure
 from integrations.config_models import TwilioIntegrationConfig
 
 logger = logging.getLogger(__name__)
@@ -22,6 +23,7 @@ def classify(
                 "integration_id": record_id,
             }
         )
-    except Exception:
+    except Exception as exc:
+        report_classify_failure(exc, logger=logger, integration="twilio", record_id=record_id)
         return None, None
     return cfg, "twilio"

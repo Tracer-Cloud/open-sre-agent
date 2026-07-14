@@ -11,7 +11,7 @@ When background mode is enabled:
 - new investigations run asynchronously
 - the shell stays free for more questions and follow-ups
 - completed RCAs are tracked in-session
-- email notifications can be sent on completion via the `smtp` integration
+- completion notifications can be sent to email (via the [`smtp`](/smtp) integration), Telegram (via the [`telegram`](/messaging/telegram) integration), or both
 
 <Note>
 This first version is **session-local only**. If the REPL process exits,
@@ -22,25 +22,16 @@ in-flight background jobs stop with it.
 
 ## Commands
 
-```text
-/background on
-/background off
-/background status
-/background list
-/background show <task_id>
-/background use <task_id>
-/background notify list
-/background notify set email
-```
-
-### What they do
-
-- `/background on` — enable async investigation launches
-- `/background off` — return to normal foreground execution
-- `/background list` — show tracked jobs
-- `/background show <task_id>` — show the RCA summary for one job
-- `/background use <task_id>` — promote a completed job into the active follow-up context
-- `/background notify set email` — keep email as the completion channel in v1
+| Command | What it does |
+| --- | --- |
+| `/background on` | Enable async investigation launches |
+| `/background off` | Return to normal foreground execution |
+| `/background status` | Show background mode, tracked job count, and active notify channels |
+| `/background list` | List tracked jobs |
+| `/background show <task_id>` | Show the RCA summary and the per-channel notification result for one job |
+| `/background use <task_id>` | Promote a completed job into the active follow-up context |
+| `/background notify list` | Show the channels a completed RCA is delivered to (default: **none**) |
+| `/background notify set <channel[,channel...]>` | Set completion channels — `email`, `telegram`, or `email,telegram` |
 
 ---
 
@@ -53,16 +44,24 @@ in-flight background jobs stop with it.
 /background on
 ```
 
-3. Start an investigation:
+3. Choose where the completed RCA is delivered. **Channels are empty by default — skip this and no
+   notification is sent:**
 
 ```text
-/investigate kubernetes-high-cpu
+/background notify set telegram    # or: email, or email,telegram
+/background notify list           # confirm
+```
+
+4. Start an investigation:
+
+```text
+/investigate datadog
 ```
 
 or paste a fresh alert in free text.
 
-4. Keep using the shell while the RCA runs.
-5. When it completes:
+5. Keep using the shell while the RCA runs.
+6. When it completes:
    - inspect it with `/background show <task_id>`
    - adopt it into active follow-up context with `/background use <task_id>`
 
@@ -82,23 +81,34 @@ Completed background jobs store:
 
 ---
 
-## Email notifications
+## Completion notifications
 
-Email delivery is handled through the [`smtp`](/smtp) integration.
+Notifications are **off by default** — pick your channels with `/background notify set`.
 
-The notification email focuses on:
+| Channel | Delivered through | Set up with |
+| --- | --- | --- |
+| `email` | [`smtp`](/smtp) integration | `opensre integrations setup smtp` |
+| `telegram` | [`telegram`](/messaging/telegram) integration | `opensre integrations setup telegram` |
 
-- **Root cause**
-- **Top analysis**
-- **What to do next**
+Both channels send the same summary — **Root cause**, **Top analysis**, **What to do next**, plus a
+short internal stats section. Telegram messages are plain text and are capped at Telegram's 4,096-character
+limit.
 
-plus a short internal stats section.
+Check what was actually delivered with `/background show <task_id>`: the `notify` row shows one
+result per channel — `sent`, `failed: <error>`, or a setup hint such as
+`missing telegram integration: TELEGRAM_BOT_TOKEN is not set.`
+
+<Note>
+A notification problem never fails the investigation. If a channel is unconfigured
+or delivery errors, the RCA still completes, stays in `/background list`, and can still be promoted with
+`/background use`.
+</Note>
 
 ---
 
 ## Current v1 limits
 
-- notification preferences are email-only in the current shipped path
+- interactive shell only — there is no `opensre background …` CLI command
 - jobs are not persisted across REPL restarts
 - completion does not automatically replace your active follow-up context
 - you must run `/background use <task_id>` to promote a finished RCA

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 # Align copy across docs-aware and conversational CLI assistants so wording
 # does not drift between modules.
 INTERACTIVE_SHELL_TERMINOLOGY_RULE = (
@@ -29,9 +31,28 @@ AGENT_RESPONSE_THREE_TIER_RULE = (
     "questions, offer something concrete such as connecting another "
     "integration, verifying a failed one, or running setup for a missing "
     "service.\n"
+    "Put a blank line between each part (two newlines in Markdown) so the "
+    "sections render as separate paragraphs.\n"
     "For single-line confirmations, keep the main answer to one sentence, but "
     "still add **Want me to:** when a sensible follow-up exists."
 )
+
+
+def normalize_three_tier_spacing(text: str) -> str:
+    """Ensure three-tier section headers are separated by a Markdown paragraph break."""
+    normalized = text.replace("\r\n", "\n").replace("\r", "\n")
+    for marker in ("**Here's what that looks like:**", "**Want me to:**"):
+        normalized = re.sub(
+            rf"\n(?!\n)(?={re.escape(marker)})",
+            "\n\n",
+            normalized,
+        )
+        normalized = re.sub(
+            rf"(?<!\n)({re.escape(marker)})",
+            r"\n\n\1",
+            normalized,
+        )
+    return re.sub(r"\n{3,}", "\n\n", normalized).strip()
 
 
 def format_agent_response(
@@ -65,4 +86,5 @@ __all__ = [
     "CLI_ASSISTANT_MARKDOWN_RULE",
     "INTERACTIVE_SHELL_TERMINOLOGY_RULE",
     "format_agent_response",
+    "normalize_three_tier_spacing",
 ]

@@ -437,6 +437,10 @@ def test_prompt_recorder_set_error_adds_structured_properties(monkeypatch, tmp_p
     assert captured[0]["$ai_is_error"] is True
     assert captured[0]["$ai_error"] == "ANTHROPIC_API_KEY not set"
     assert captured[0]["error_kind"] == "config"
+    # Investigation-style errors are terminal-path failures, not conversational
+    # LLM provider failures: no ai_error_kind and the sentinel model stays.
+    assert "ai_error_kind" not in captured[0]
+    assert captured[0]["$ai_model"] == "no_conversational_agent"
 
 
 def test_prompt_recorder_omits_error_properties_by_default(monkeypatch, tmp_path: Path) -> None:
@@ -468,6 +472,100 @@ def test_prompt_recorder_omits_error_properties_by_default(monkeypatch, tmp_path
     assert "$ai_is_error" not in captured[0]
     assert "$ai_error" not in captured[0]
     assert "error_kind" not in captured[0]
+
+
+def _posthog_recorder(
+    monkeypatch,
+    tmp_path: Path,
+    *,
+    text: str,
+    captured: list[dict[str, object]],
+) -> PromptRecorder:
+    cfg = PromptLogConfig(
+        enabled=True,
+        local_enabled=False,
+        posthog_enabled=True,
+        redact=False,
+        max_chars=1000,
+        log_path=tmp_path / "prompt_log.jsonl",
+    )
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.utils.telemetry.recorder.PromptLogConfig.load", lambda: cfg
+    )
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.utils.telemetry.recorder.build_turn_integration_snapshot",
+        lambda _session: {},
+    )
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.utils.telemetry.recorder.capture_ai_generation",
+        lambda payload: captured.append(payload),
+    )
+    recorder = PromptRecorder.start(session=Session(), text=text, turn_kind="agent")
+    assert recorder is not None
+    return recorder
+
+
+def test_prompt_recorder_llm_provider_failure_never_uses_terminal_sentinel(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """Conversational prompt + provider failure must not be tagged no_conversational_agent."""
+    captured: list[dict[str, object]] = []
+    recorder = _posthog_recorder(monkeypatch, tmp_path, text="hi", captured=captured)
+    error = (
+        "Bedrock model 'us.anthropic.claude-sonnet-4-6' is not available for your account. "
+        "Check Bedrock model access in the configured AWS region."
+    )
+    recorder.set_error("action_agent_error", error)
+    recorder.set_response(error)
+    recorder.flush()
+    assert captured[0]["$ai_model"] == "unknown"
+    assert captured[0]["$ai_provider"] == "unknown"
+    assert captured[0]["ai_error_kind"] == "not_configured"
+    assert "not available for your account" in captured[0]["$ai_output_choices"][0]["content"]
+
+
+def test_prompt_recorder_llm_provider_failure_reports_attempted_model(
+    monkeypatch, tmp_path: Path
+) -> None:
+    captured: list[dict[str, object]] = []
+    recorder = _posthog_recorder(monkeypatch, tmp_path, text="hi", captured=captured)
+    recorder.set_error("assistant_error", "Anthropic authentication failed.")
+    recorder.set_response(
+        "",
+        LlmRunInfo(model="claude-sonnet-4-6", provider="anthropic"),
+    )
+    recorder.flush()
+    assert captured[0]["$ai_model"] == "claude-sonnet-4-6"
+    assert captured[0]["$ai_provider"] == "anthropic"
+    assert captured[0]["ai_error_kind"] == "auth"
+    # Empty assistant text falls back to the error message, not the terminal fallback.
+    assert captured[0]["$ai_output_choices"][0]["content"] == "Anthropic authentication failed."
+
+
+def test_prompt_recorder_flush_resolves_error_message_after_empty_set_response(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """Flush-time fallback tolerates set_response before set_error."""
+    captured: list[dict[str, object]] = []
+    recorder = _posthog_recorder(monkeypatch, tmp_path, text="hi", captured=captured)
+    recorder.set_response("")
+    recorder.set_error("assistant_error", "provider failed")
+    recorder.flush()
+    assert captured[0]["$ai_output_choices"][0]["content"] == "provider failed"
+
+
+def test_prompt_recorder_terminal_error_kinds_keep_terminal_sentinel(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """Background-task style errors (e.g. subprocess timeout) stay terminal-action turns."""
+    captured: list[dict[str, object]] = []
+    recorder = _posthog_recorder(monkeypatch, tmp_path, text="hi", captured=captured)
+    recorder.set_error("timeout", "command timed out after 60 seconds")
+    recorder.set_response("command timed out after 60 seconds")
+    recorder.flush()
+    assert captured[0]["$ai_model"] == "no_conversational_agent"
+    assert captured[0]["$ai_provider"] == "no_conversational_agent"
+    assert "ai_error_kind" not in captured[0]
 
 
 def test_prompt_recorder_uses_only_latest_slash_outcome(monkeypatch, tmp_path: Path) -> None:

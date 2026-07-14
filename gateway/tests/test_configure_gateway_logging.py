@@ -36,7 +36,7 @@ def _make_record(*, name: str, level: int, message: str) -> logging.LogRecord:
 def test_gateway_formatter_shortens_package_logger_names() -> None:
     formatter = _GatewayLogFormatter(fmt="%(name)s | %(message)s")
     record = _make_record(
-        name="gateway.polling.handle_polled_inbound_telegram_msg",
+        name="gateway.telegram.inbound_handler",
         level=logging.INFO,
         message="turn complete",
     )

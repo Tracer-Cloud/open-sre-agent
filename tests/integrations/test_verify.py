@@ -1,9 +1,22 @@
 from __future__ import annotations
 
 import logging
+import os
+from collections.abc import Iterator
 from typing import Any
 
 import pytest
+
+
+@pytest.fixture(autouse=True)
+def clean_slack_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Remove SLACK_* env vars so the Slack verifier's Socket Mode branch only
+    activates when a test configures tokens explicitly."""
+    for key in list(os.environ):
+        if key.startswith("SLACK_"):
+            monkeypatch.delenv(key, raising=False)
+    yield
+
 
 from integrations.aws.verifier import verify_aws as _verify_aws
 from integrations.coralogix.verifier import verify_coralogix as _verify_coralogix
@@ -286,6 +299,42 @@ def test_verify_slack_send_test_false_does_not_post(monkeypatch: pytest.MonkeyPa
     assert "Use --send-slack-test" in results[0]["detail"]
 
 
+def test_verify_slack_mixed_webhook_and_socket_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A config carrying webhook plus Socket Mode tokens must verify, not be
+    rejected by the strict webhook-only model."""
+    monkeypatch.setattr(
+        "integrations.catalog.load_integrations",
+        lambda: [
+            {
+                "id": "slack-local",
+                "service": "slack",
+                "status": "active",
+                "instances": [
+                    {
+                        "name": "default",
+                        "tags": {},
+                        "credentials": {
+                            "webhook_url": "https://hooks.slack.com/services/T000/B000/test",
+                            "bot_token": "xoxb-test",
+                            "app_token": "xapp-test",
+                        },
+                    }
+                ],
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        "integrations.slack.verifier.httpx.get",
+        lambda *_args, **_kwargs: _FakeResponse({"ok": True, "team": "testspace"}),
+    )
+
+    results = verify_integrations("slack")
+
+    assert results[0]["status"] == "passed"
+    assert "Webhook configured." in results[0]["detail"]
+    assert "auth.test ok" in results[0]["detail"]
+
+
 def test_verify_slack_uses_v2_store_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "integrations.catalog.load_integrations",
@@ -315,7 +364,7 @@ def test_verify_slack_uses_v2_store_credentials(monkeypatch: pytest.MonkeyPatch)
             "service": "slack",
             "source": "local store",
             "status": "passed",
-            "detail": "Configured. Use --send-slack-test to validate delivery.",
+            "detail": "Webhook configured. Use --send-slack-test to validate delivery.",
         }
     ]
 

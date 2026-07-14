@@ -45,6 +45,23 @@ def test_extract_params_maps_fields() -> None:
     assert params["gitlab_token"] == "glpat-test"
 
 
+def test_extract_params_maps_local_store_credentials() -> None:
+    rt = list_gitlab_pipelines.__opensre_registered_tool__
+    sources = mock_agent_state(
+        {
+            "gitlab": {
+                "connection_verified": True,
+                "project_id": "42",
+                "base_url": "https://gitlab.example.com/api/v4",
+                "auth_token": "glpat-store",
+            }
+        }
+    )
+    params = rt.extract_params(sources)
+    assert params["gitlab_url"] == "https://gitlab.example.com/api/v4"
+    assert params["gitlab_token"] == "glpat-store"
+
+
 def test_extract_params_defaults_ref_to_main() -> None:
     rt = list_gitlab_pipelines.__opensre_registered_tool__
     sources = mock_agent_state(
@@ -72,6 +89,13 @@ def test_extract_params_defaults_updated_after_to_empty_string() -> None:
     )
     params = rt.extract_params(sources)
     assert params["updated_after"] == ""
+
+
+def test_schema_does_not_expose_gitlab_credentials_as_model_inputs() -> None:
+    rt = list_gitlab_pipelines.__opensre_registered_tool__
+
+    assert "gitlab_url" not in rt.input_schema["properties"]
+    assert "gitlab_token" not in rt.input_schema["properties"]
 
 
 def test_run_returns_unavailable_when_config_missing() -> None:

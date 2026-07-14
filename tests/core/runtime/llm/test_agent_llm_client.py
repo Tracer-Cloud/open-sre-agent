@@ -598,6 +598,112 @@ def test_openai_agent_client_enables_parallel_tool_calls_for_openai(
     assert captured["parallel_tool_calls"] is True
 
 
+def test_openai_gpt_5_6_agent_uses_responses_api_and_replays_reasoning(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_openai(monkeypatch)
+    monkeypatch.setenv("OPENSRE_REASONING_EFFORT", "high")
+    captured: list[dict[str, Any]] = []
+
+    reasoning = types.SimpleNamespace(
+        type="reasoning",
+        model_dump=lambda **_: {"id": "rs_1", "type": "reasoning", "summary": []},
+    )
+    function_call = types.SimpleNamespace(
+        type="function_call",
+        call_id="call_1",
+        name="get_logs",
+        arguments='{"service":"api"}',
+        model_dump=lambda **_: {
+            "id": "fc_1",
+            "type": "function_call",
+            "call_id": "call_1",
+            "name": "get_logs",
+            "arguments": '{"service":"api"}',
+        },
+    )
+    first_response = types.SimpleNamespace(
+        output=[reasoning, function_call],
+        output_text="",
+        usage=None,
+    )
+    final_response = types.SimpleNamespace(
+        output=[],
+        output_text="done",
+        usage=None,
+    )
+
+    def responses_create(**kwargs: Any) -> object:
+        captured.append(kwargs)
+        return first_response if len(captured) == 1 else final_response
+
+    client = OpenAIAgentClient.__new__(OpenAIAgentClient)
+    client._client = types.SimpleNamespace(
+        responses=types.SimpleNamespace(create=responses_create),
+        chat=types.SimpleNamespace(
+            completions=types.SimpleNamespace(
+                create=lambda **_: pytest.fail("GPT-5.6 must not use Chat Completions")
+            )
+        ),
+    )
+    client._model = "gpt-5.6"
+    client._max_tokens = 4096
+    client._api_key_env = "OPENAI_API_KEY"
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "get_logs",
+                "description": "Fetch logs",
+                "parameters": {"type": "object", "properties": {}},
+            },
+        }
+    ]
+
+    first = client.invoke(
+        messages=[{"role": "user", "content": "check the api"}],
+        tools=tools,
+    )
+    second = client.invoke(
+        messages=[
+            {"role": "user", "content": "check the api"},
+            first.raw_content,
+            {"role": "tool", "tool_call_id": "call_1", "content": '{"ok":true}'},
+        ],
+        tools=tools,
+    )
+
+    assert first.tool_calls[0].id == "call_1"
+    assert first.tool_calls[0].input == {"service": "api"}
+    assert second.content == "done"
+    assert captured[0]["max_output_tokens"] == 4096
+    assert captured[0]["reasoning"] == {"effort": "high"}
+    assert captured[0]["tools"] == [
+        {
+            "type": "function",
+            "name": "get_logs",
+            "description": "Fetch logs",
+            "parameters": {"type": "object", "properties": {}},
+            "strict": False,
+        }
+    ]
+    assert captured[1]["input"][1:3] == [
+        {"id": "rs_1", "type": "reasoning", "summary": []},
+        {
+            "id": "fc_1",
+            "type": "function_call",
+            "call_id": "call_1",
+            "name": "get_logs",
+            "arguments": '{"service":"api"}',
+        },
+    ]
+    assert captured[1]["input"][3] == {
+        "type": "function_call_output",
+        "call_id": "call_1",
+        "output": '{"ok":true}',
+    }
+
+
 def test_openai_agent_client_omits_parallel_tool_calls_for_compat_provider(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

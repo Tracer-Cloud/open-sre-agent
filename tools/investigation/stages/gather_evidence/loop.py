@@ -7,6 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from config.constants.investigation import MAX_INVESTIGATION_LOOPS
 from core.llm.types import ToolCall
 from core.llm_invoke_errors import LLMInvokeFailure
 from core.state.evidence import EvidenceEntry
@@ -96,6 +97,7 @@ def degraded_investigation_from_llm_failure(
     messages: list[dict[str, Any]],
     executed_hypotheses: list[dict[str, Any]],
     tool_context: dict[str, Any],
+    investigation_loop_count: int = 0,
 ) -> dict[str, Any]:
     """Return a partial investigation state when an LLM invoke fails operatively."""
     tracker.error("investigation_agent", message=failure.tracker_message)
@@ -121,6 +123,8 @@ def degraded_investigation_from_llm_failure(
         "evidence_entries": [e.model_dump() for e in evidence_entries],
         "agent_messages": messages,
         "executed_hypotheses": executed_hypotheses,
+        "investigation_loop_count": max(0, int(investigation_loop_count)),
+        "investigation_iteration_cap": MAX_INVESTIGATION_LOOPS,
     }
     updates.update(tool_context)
     return updates

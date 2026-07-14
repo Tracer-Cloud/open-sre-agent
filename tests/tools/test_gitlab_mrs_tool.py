@@ -44,6 +44,23 @@ def test_extract_params_maps_fields() -> None:
     assert params["gitlab_token"] == "glpat-test"
 
 
+def test_extract_params_maps_local_store_credentials() -> None:
+    rt = list_gitlab_mrs.__opensre_registered_tool__
+    sources = mock_agent_state(
+        {
+            "gitlab": {
+                "connection_verified": True,
+                "project_id": "42",
+                "base_url": "https://gitlab.example.com/api/v4",
+                "auth_token": "glpat-store",
+            }
+        }
+    )
+    params = rt.extract_params(sources)
+    assert params["gitlab_url"] == "https://gitlab.example.com/api/v4"
+    assert params["gitlab_token"] == "glpat-store"
+
+
 def test_extract_params_defaults_target_branch_to_main() -> None:
     rt = list_gitlab_mrs.__opensre_registered_tool__
     sources = mock_agent_state(
@@ -73,6 +90,13 @@ def test_extract_params_defaults_updated_after_to_empty_string() -> None:
     assert params["updated_after"] == ""
 
 
+def test_schema_does_not_expose_gitlab_credentials_as_model_inputs() -> None:
+    rt = list_gitlab_mrs.__opensre_registered_tool__
+
+    assert "gitlab_url" not in rt.input_schema["properties"]
+    assert "gitlab_token" not in rt.input_schema["properties"]
+
+
 def test_run_returns_unavailable_when_config_missing() -> None:
     with patch("integrations.gitlab.tools.gitlab_mrs_tool._resolve_config", return_value=None):
         result = list_gitlab_mrs(project_id="42")
@@ -88,7 +112,8 @@ def test_run_happy_path_returns_mrs() -> None:
     ]
     with (
         patch(
-            "integrations.gitlab.tools.gitlab_mrs_tool._resolve_config", return_value=MagicMock()
+            "integrations.gitlab.tools.gitlab_mrs_tool._resolve_config",
+            return_value=MagicMock(),
         ),
         patch(
             "integrations.gitlab.tools.gitlab_mrs_tool.get_gitlab_mrs", return_value=fake_mrs
@@ -109,7 +134,8 @@ def test_run_happy_path_returns_mrs() -> None:
 def test_run_error_path_returns_empty_mrs_when_integration_returns_empty() -> None:
     with (
         patch(
-            "integrations.gitlab.tools.gitlab_mrs_tool._resolve_config", return_value=MagicMock()
+            "integrations.gitlab.tools.gitlab_mrs_tool._resolve_config",
+            return_value=MagicMock(),
         ),
         patch("integrations.gitlab.tools.gitlab_mrs_tool.get_gitlab_mrs", return_value=[]),
     ):

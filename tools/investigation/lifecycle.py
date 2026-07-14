@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from core.state import AgentState
 from core.state.updates import apply_state_updates
+from platform.analytics.investigation_loop import bind_investigation_loop_metrics_from_state
 
 if TYPE_CHECKING:
     # Type-only import — avoids paying the agent module's heavy import cost
@@ -59,6 +60,7 @@ def run_connected_investigation(
         _run_stage("diagnose", diagnose, state)
         _run_stage("deliver", deliver, state)
     except Exception as exc:
+        bind_investigation_loop_metrics_from_state(state)
         capture_exception(exc)
         raise
 

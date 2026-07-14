@@ -4,7 +4,11 @@ Three patterns previously dropped exceptions to ``(None, None)``, ``pass``,
 or ``logger.debug(..., exc_info=True)`` with no Sentry trace:
 
   A. ``_classify_service_instance`` per-vendor ``try/except Exception``
-     blocks (33 sites covering grafana .. supabase).
+     blocks (38 sites covering grafana .. whatsapp; bitbucket/signoz/tempo/
+     twilio/whatsapp were fixed in a later pass — see
+     ``integrations._validation_helpers.report_classify_failure``, which now
+     centrally wraps ``pydantic.ValidationError`` so no vendor classifier has
+     to duplicate that guard itself).
   B. ``load_env_integrations`` argocd + helm ``except Exception: pass``.
   C. ``load_env_integrations`` debug-only env loaders (incident_io,
      openclaw, mariadb, rabbitmq, rds, betterstack, alertmanager,
@@ -121,6 +125,15 @@ _CLASSIFY_PATCH_TARGETS: list[tuple[str, str, str]] = [
     ("splunk", "integrations.splunk", "SplunkIntegrationConfig"),
     ("supabase", "integrations.supabase", "build_supabase_config"),
     ("smtp", "integrations.smtp", "SMTPIntegrationConfig"),
+    # Previously silent or partially-reported (bitbucket/signoz/tempo dropped to
+    # (None, None) with no report at all; twilio/whatsapp swallowed ValidationError
+    # specifically). All five now route through report_classify_failure like every
+    # other vendor above.
+    ("bitbucket", "integrations.bitbucket", "BitbucketConfig"),
+    ("signoz", "integrations.signoz", "build_signoz_config"),
+    ("tempo", "integrations.tempo", "build_tempo_config"),
+    ("twilio", "integrations.twilio", "TwilioIntegrationConfig"),
+    ("whatsapp", "integrations.whatsapp", "WhatsAppConfig"),
 ]
 
 

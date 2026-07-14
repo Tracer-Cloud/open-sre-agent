@@ -917,18 +917,20 @@ class TwilioIntegrationConfig(StrictConfigModel):
 
 
 class SlackBotConfig(StrictConfigModel):
-    """Slack Bot (Events API) runtime config for inbound messaging.
+    """Slack Bot runtime config for inbound messaging (Socket Mode or Events API).
 
-    NOTE: ``signing_secret`` defaults to empty for backward compatibility,
-    but MUST be set in production when inbound messaging is enabled.
-    Without it, the Slack Events API webhook handler cannot verify request
-    authenticity and will accept forged requests from any source.
+    Socket Mode uses ``bot_token`` + ``app_token``. Events API HTTP also needs
+    ``signing_secret`` — leave it empty for Socket Mode-only installs.
     """
 
     bot_token: str
+    app_token: str = Field(
+        default="",
+        description="App-level token (xapp-…) for Socket Mode. Required for gateway chat.",
+    )
     signing_secret: str = Field(
         default="",
-        description="Slack signing secret for webhook HMAC verification. MUST be set for inbound.",
+        description="Slack signing secret for webhook HMAC verification. MUST be set for Events API HTTP.",
     )
     app_id: str = ""
     identity_policy: dict[str, object] | None = Field(

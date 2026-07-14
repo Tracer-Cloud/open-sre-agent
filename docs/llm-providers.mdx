@@ -63,9 +63,13 @@ with fast-changing or account-gated catalogs (OpenAI, OpenRouter, Gemini, NVIDIA
 CLIs, Ollama, and DeepSeek) also accept custom model IDs:
 
 ```bash
-/model set openai gpt-5.5
+/model set openai gpt-5.6-sol
+/model set openai gpt-5.6-terra --toolcall-model gpt-5.6-luna
 /model set openai gpt-5.5 --toolcall-model gpt-5.4-mini
 ```
+
+The GPT-5.6 family has three tiers: `gpt-5.6-sol` (flagship), `gpt-5.6-terra` (balanced),
+and `gpt-5.6-luna` (cost-efficient). The bare `gpt-5.6` alias is routed to Sol by OpenAI.
 
 Override the default model for a slot via env vars:
 
@@ -105,6 +109,10 @@ When `OPENSRE_LLM_TRANSPORT=litellm` (or when using `LLM_PROVIDER=azure-openai`)
 | `groq` | OpenAI-compatible SDK | `openai/<model>` + Groq base URL | Opt-in |
 | `ollama` | OpenAI-compatible SDK | `openai/<model>` + `${OLLAMA_HOST}/v1` | Opt-in |
 | `azure-openai` | — | `azure/<deployment>` | **Always** via LiteLLM |
+
+The native OpenAI SDK transport uses the Responses API for GPT-5.6 agent tool calls, including
+replaying reasoning and function-call items between tool steps. Older OpenAI models and
+OpenAI-compatible providers continue to use Chat Completions.
 
 For providers beyond this list, LiteLLM supports [100+ backends](https://docs.litellm.ai/docs/providers). OpenSRE only wires the slugs above today — use one of them, or open an issue if you need another first-class provider.
 
@@ -210,7 +218,7 @@ In the REPL, switch provider or deployment like any other API provider:
 /model set azure-openai gpt-5.4-mini --toolcall-model gpt-5.4-nano
 ```
 
-Common deployment names in the onboarding picker include `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.4-nano`, `gpt-5-mini`, `gpt-4.1`, and `o3-mini`. Use custom names when your Azure deployment names differ (`allow_custom_models` is enabled).
+Common deployment names in the onboarding picker include `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.4-nano`, `gpt-5-mini`, `gpt-4.1`, and `o3-mini`. Use custom names when your Azure deployment names differ (`allow_custom_models` is enabled).
 
 ### OpenRouter
 
