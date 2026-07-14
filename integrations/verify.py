@@ -35,6 +35,17 @@ def verify_integrations(
     results: list[dict[str, str]] = []
 
     for current_service in services:
+        if current_service not in SUPPORTED_VERIFY_SERVICES:
+            results.append(
+                result(
+                    current_service,
+                    "-",
+                    "unsupported",
+                    "Verification is not supported for this service yet.",
+                )
+            )
+            continue
+
         integration = effective_integrations.get(current_service)
         if not integration:
             results.append(
