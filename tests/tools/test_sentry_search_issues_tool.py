@@ -79,7 +79,7 @@ def test_run_returns_unavailable_when_no_config() -> None:
 
 
 def test_run_happy_path() -> None:
-    fake_issues = [{"id": "1", "title": "TypeError", "status": "unresolved"}]
+    fake_issues = [{"id": "1", "title": "TypeError", "status": "unresolved", "count": 3}]
     with (
         patch(
             "integrations.sentry.tools.sentry_search_issues_tool.list_sentry_issues",
@@ -98,6 +98,10 @@ def test_run_happy_path() -> None:
     assert result["available"] is True
     assert len(result["issues"]) == 1
     assert result["query"] == "TypeError"
+    assert result["issues_total"] == 1
+    assert result["digest"]["issue_count"] == 1
+    assert result["digest"]["structural_clusters"]
+    assert result["digest"]["top_issues"][0]["title"] == "TypeError"
 
 
 def test_run_empty_issues() -> None:

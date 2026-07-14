@@ -99,6 +99,11 @@ jobs:
       - name: Import graph
         run: uv run python .github/ci/check_imports.py --strict
 
+      # Full layered contracts (.importlinter.strict), not the minimal default
+      # .importlinter config used by ``make check-imports``.
+      - name: Import boundaries
+        run: uv run lint-imports --config .importlinter.strict
+
   test:
     name: test (${{ matrix.shard }})
     strategy:
@@ -142,7 +147,6 @@ jobs:
               tests/delivery
               tests/sandbox
               tests/hermes
-              tests/github
           - os: ubuntu-latest
             shard: integrations-and-misc
             pytest_paths: >-
@@ -213,14 +217,31 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen --extra dev
 
+      - name: Validate pytest marker
+        env:
+          # Fork PRs do not receive repository secrets; skip live_llm contracts
+          # (see interactive-shell-live.yml). Index a JSON string array so the
+          # value is always a marker string — never a bare boolean from
+          # ``a && 'x' || 'y'`` (boolean false → ``-m false`` → xdist
+          # ``N workers [0 items]``, which can still exit 0).
+          PYTEST_MARKER_EXPR: ${{ fromJSON('["not synthetic", "not (synthetic or live_llm)"]')[github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == true] }}
+        run: |
+          echo "PYTEST_MARKER_EXPR=${PYTEST_MARKER_EXPR}"
+          case "${PYTEST_MARKER_EXPR}" in
+            "not synthetic"|"not (synthetic or live_llm)") ;;
+            *)
+              echo "Refusing unexpected PYTEST_MARKER_EXPR: '${PYTEST_MARKER_EXPR}'" >&2
+              exit 1
+              ;;
+          esac
+
       - name: Run tests
         env:
           COVERAGE_FILE: .coverage.${{ matrix.shard }}
-          # Fork PRs do not receive repository secrets; skip live_llm contracts
-          # (see interactive-shell-live.yml). Use a job env var so the marker
-          # expression is always one quoted token (shell `and` would otherwise
-          # split `-m not synthetic and not live_llm` into separate commands).
-          PYTEST_MARKER_EXPR: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) && 'not (synthetic or live_llm)' || 'not synthetic' }}
+          PYTEST_MARKER_EXPR: ${{ fromJSON('["not synthetic", "not (synthetic or live_llm)"]')[github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == true] }}
+        # Keep ``run: >`` (folded) so ``matrix.pytest_paths`` stays one argv list.
+        # A ``run: |`` + ``\`` rewrite can drop/split those paths and yield
+        # ``N workers [0 items]`` even when the marker is correct.
         run: >
           uv run python -m pytest -n auto -v
           ${{ matrix.pytest_paths }}

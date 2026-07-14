@@ -84,7 +84,7 @@ interactive:
 Separately from typed-command history, the interactive shell records each LLM turn — the full prompt sent and the full response received — for chat and follow-up routes. This log is richer than command history (it includes model output, not just what you typed) and is used for two purposes:
 
 1. **Local debugging / `/resume`**: appended as JSON Lines to `~/.opensre/prompt_log.jsonl`, and folded into the session file so `/resume` can restore conversation context.
-2. **Product analytics**: forwarded to PostHog as an `$ai_generation` event (model, provider, latency, token counts, and the prompt/response text) so we can track usage and quality of the AI features. Investigation turns additionally include the model/provider/token usage of the investigation run and an `investigation_id` join key; failed turns carry structured error properties (`$ai_is_error`, `$ai_error`, `error_kind`).
+2. **Product analytics**: forwarded to PostHog as an `$ai_generation` event (model, provider, latency, token counts, and the prompt/response text) so we can track usage and quality of the AI features. Investigation turns additionally include the model/provider/token usage of the investigation run and an `investigation_id` join key; failed turns carry structured error properties (`$ai_is_error`, `$ai_error`, `error_kind`). Turns handled entirely by terminal tools or slash commands report `$ai_model` / `$ai_provider` as `no_conversational_agent`; when a conversational reply was intended but the LLM provider failed (missing API key, model access, quota, auth), the event instead reports the attempted model (or `unknown`) plus an `ai_error_kind` bucket (`not_configured`, `quota`, `auth`, or `provider_error`).
 
 ### Defaults
 

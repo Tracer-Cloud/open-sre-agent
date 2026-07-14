@@ -14,13 +14,13 @@ import asyncio
 import contextlib
 import logging
 import threading
-from collections.abc import Awaitable, Callable, Coroutine, Iterator
+from collections.abc import Awaitable, Callable, Coroutine
 from dataclasses import dataclass
 from typing import Any
 
 from rich.console import Console
 
-from platform.analytics.repl_context import bind_cli_session_id, reset_cli_session_id
+from platform.analytics.repl_context import bound_repl_turn_context
 from platform.observability.trace.spans import bind_session_trace, emit_thread_boundary
 from surfaces.interactive_shell.runtime.agent_presentation import (
     AgentEvent,
@@ -52,15 +52,6 @@ from surfaces.interactive_shell.utils.telemetry import PromptRecorder
 _logger = logging.getLogger(__name__)
 
 _AGENT_TURN_KIND = "agent"
-
-
-@contextlib.contextmanager
-def _bound_cli_session(session_id: str) -> Iterator[None]:
-    token = bind_cli_session_id(session_id)
-    try:
-        yield
-    finally:
-        reset_cli_session_id(token)
 
 
 @dataclass(frozen=True)
@@ -152,7 +143,11 @@ async def _run_agent_turn_loop(
         # (``action_agent -> core.agent``) before the first turn is queued.
         from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 
-        with _bound_cli_session(runtime.session.session_id):
+        with bound_repl_turn_context(
+            session_id=runtime.session.session_id,
+            turn_kind=_AGENT_TURN_KIND,
+            prompt_turn_id=recorder.turn_id if recorder is not None else None,
+        ):
             await asyncio.to_thread(
                 execute_shell_turn,
                 text,

@@ -41,6 +41,7 @@ from core.agent_harness.session.persistence.ports import SessionRepo, SessionSto
 # re-export SessionManager without a circular import.
 from core.agent_harness.session.session_core import SessionCore
 from platform.common.task_registry import TaskRegistry
+from platform.observability.trace.spans import component_span
 
 logger = logging.getLogger(__name__)
 
@@ -102,6 +103,9 @@ class SessionManager:
         """
         if persistent_tasks:
             session.task_registry = TaskRegistry.persistent()
+        # Safe read-only facts (version/env) so agents never need subprocess introspection.
+        with component_span("runtime_metadata:bootstrap", session_id=session.session_id):
+            session.refresh_runtime_metadata()
         if hydrate_integrations:
             session.hydrate_configured_integrations()
         if warm_integrations:

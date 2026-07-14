@@ -6,6 +6,8 @@ import base64
 from typing import Any, cast
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from integrations.gitlab.tools.gitlab_file_tool import get_gitlab_file_contents
 from tests.tools.conftest import BaseToolContract, mock_agent_state
 
@@ -63,6 +65,28 @@ def test_extract_params_maps_fields() -> None:
     assert params["gitlab_token"] == "glpat-test"
 
 
+def test_extract_params_maps_local_store_credentials() -> None:
+    """Store-configured integrations carry base_url/auth_token; extract_params
+    must still surface them as the injected credential kwargs."""
+    rt = _registered_tool()
+    sources = mock_agent_state(
+        {
+            "gitlab": {
+                "connection_verified": True,
+                "project_id": "42",
+                "file_path": "runbooks.md",
+                "base_url": "https://gitlab.example.com/api/v4",
+                "auth_token": "glpat-store",
+            }
+        }
+    )
+    params = rt.extract_params(sources)
+    assert params["project_id"] == "42"
+    assert params["file_path"] == "runbooks.md"
+    assert params["gitlab_url"] == "https://gitlab.example.com/api/v4"
+    assert params["gitlab_token"] == "glpat-store"
+
+
 def test_extract_params_defaults_ref_to_main() -> None:
     rt = _registered_tool()
     sources = mock_agent_state(
@@ -70,6 +94,57 @@ def test_extract_params_defaults_ref_to_main() -> None:
     )
     params = rt.extract_params(sources)
     assert params["ref"] == "main"
+
+
+def test_schema_does_not_expose_gitlab_credentials_as_model_inputs() -> None:
+    rt = _registered_tool()
+
+    assert "gitlab_url" not in rt.input_schema["properties"]
+    assert "gitlab_token" not in rt.input_schema["properties"]
+
+
+def test_run_uses_resolved_sources_creds_when_env_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression: a store/keyring-configured GitLab integration with NO env vars
+    still resolves credentials from the resolved sources dict and reads the file."""
+    monkeypatch.delenv("GITLAB_ACCESS_TOKEN", raising=False)
+    monkeypatch.delenv("GITLAB_BASE_URL", raising=False)
+
+    rt = _registered_tool()
+    sources = mock_agent_state(
+        {
+            "gitlab": {
+                "connection_verified": True,
+                "project_id": "42",
+                "file_path": "runbooks/api.md",
+                "ref_name": "main",
+                "base_url": "https://gitlab.example.com/api/v4",
+                "auth_token": "glpat-store",
+            }
+        }
+    )
+    params = rt.extract_params(sources)
+
+    raw_content = "# runbook\n"
+    encoded = base64.b64encode(raw_content.encode("utf-8")).decode("ascii")
+    fake_response = {
+        "file_name": "api.md",
+        "file_path": "runbooks/api.md",
+        "ref": "main",
+        "size": len(raw_content),
+        "content": encoded,
+    }
+    with patch(
+        "integrations.gitlab.tools.gitlab_file_tool.get_gitlab_file", return_value=fake_response
+    ) as mock_fn:
+        result = get_gitlab_file_contents(**params)
+
+    assert result["available"] is True
+    assert result["file"]["content"] == raw_content
+    config = mock_fn.call_args.kwargs["config"]
+    assert config.auth_token == "glpat-store"
+    assert config.api_base_url == "https://gitlab.example.com/api/v4"
 
 
 def test_run_returns_unavailable_when_config_missing() -> None:

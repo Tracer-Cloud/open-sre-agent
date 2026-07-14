@@ -22,6 +22,12 @@ class ReportContext(TypedDict, total=False):
     validated_claims: list[dict]
     non_validated_claims: list[dict]
     remediation_steps: list[str]
+    triage_summary: str
+    incident_status: str
+    investigation_hypotheses: list[str]
+    verification_summary: list[str]
+    follow_up_questions: list[str]
+    remediation_tradeoffs: str
     correlation: dict[str, Any]
 
     # S3 verification

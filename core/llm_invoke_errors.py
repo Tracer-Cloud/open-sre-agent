@@ -76,6 +76,69 @@ def is_cli_timeout_error(exc: BaseException) -> bool:
     return _is_llm_cli_error(exc, "CLITimeoutError")
 
 
+# Turn-error kinds staged when the conversational/action LLM was the intended
+# route for the user's input but the provider failed before a normal reply.
+# The prompt-log recorder uses this set to report a failed LLM turn (model
+# "unknown" plus ``ai_error_kind``) instead of a terminal-action turn
+# (``no_conversational_agent``). Terminal-path kinds (investigation failure
+# categories, background-task "timeout"/"cli_exit_nonzero", slash outcomes)
+# must never appear here.
+LLM_PROVIDER_FAILURE_KINDS = frozenset(
+    {
+        "llm_unavailable",  # reasoning client import/creation failed
+        "llm_timeout",  # conversational stream timed out
+        "assistant_error",  # conversational stream failed mid-turn
+        "action_agent_error",  # action-selection LLM failed for conversational input
+    }
+)
+
+_NOT_CONFIGURED_PATTERNS = (
+    "_api_key",  # env-var style, e.g. "requires ANTHROPIC_API_KEY to be set"
+    "api key is not set",
+    "missing api key",
+    "not available for your account",
+    "marketplace",
+    "inference profile",
+    "not configured",
+    "no llm provider",
+    "llm client unavailable",
+    "billing is not enabled",
+)
+_QUOTA_PATTERNS = ("429", "quota", "rate limit", "too many requests", "credit")
+_AUTH_PATTERNS = (
+    "authentication",
+    "unauthorized",
+    "401",
+    "403",
+    "forbidden",
+    "invalid api key",
+    "incorrect api key",
+    "invalid api_key",
+    "incorrect api_key",
+    "api_key is invalid",
+    "x-api-key",
+)
+
+
+def classify_provider_error_kind(message: str) -> str:
+    """Bucket an LLM provider failure message for analytics filtering.
+
+    Returns one of ``not_configured``, ``quota``, ``auth``, or
+    ``provider_error`` so downstream dashboards can filter provider failures
+    without regexing over response text.
+    """
+    text = message.lower()
+    if any(pattern in text for pattern in _AUTH_PATTERNS):
+        return "auth"
+    if any(pattern in text for pattern in _QUOTA_PATTERNS):
+        return "quota"
+    if any(pattern in text for pattern in _NOT_CONFIGURED_PATTERNS) or (
+        "model" in text and "not found" in text
+    ):
+        return "not_configured"
+    return "provider_error"
+
+
 def classify_llm_invoke_failure(exc: BaseException) -> LLMInvokeFailure | None:
     """Return a structured failure when *exc* is a known operational LLM error.
 

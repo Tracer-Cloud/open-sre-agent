@@ -300,8 +300,8 @@ class TestObservationSummaryBlock:
         assert "tool_results" in block
         assert "- sentry: missing (Not configured.)" in block
         assert "summarize" in block.lower()
-        # The summary turn must not kick off more actions.
-        assert "not request, plan, or emit any further actions" in block.lower()
+        # The summary turn must not kick off more tool calls; offers are prose only.
+        assert "not request, plan, or emit any further tool calls" in block.lower()
 
     def test_answer_shell_question_injects_observation(self, monkeypatch: Any) -> None:
         client = _patch_llm(monkeypatch, "No — Sentry is not configured.")

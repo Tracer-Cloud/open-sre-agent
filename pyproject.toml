@@ -38,6 +38,8 @@ dependencies = [
     "keyring>=23.0.1",
     # AWS
     "boto3>=1.42.88",
+    # Slack (Socket Mode gateway + Web API)
+    "slack-sdk>=3.31.0",
     # Utilities
     "python-dotenv>=1.2.2",
     "click>=8.1.0",
@@ -150,6 +152,7 @@ include = [
 
 [tool.setuptools.package-data]
 "surfaces.cli" = ["investigation/sample_alerts/*.json"]
+"core.agent_harness.prompts" = ["skills/*.md"]
 
 # With pytest-xdist (-n auto), each worker writes a fragment; put them under
 # .pytest_cache/ (already gitignored) instead of .coverage.<hostname>.* at repo root.

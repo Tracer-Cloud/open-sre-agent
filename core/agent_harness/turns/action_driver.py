@@ -38,6 +38,7 @@ from core.events import runtime_event_callback_from_observer
 from core.execution import ToolExecutionHooks, public_tool_input
 from core.llm.failure_classification import is_context_length_overflow
 from core.llm.types import AgentLLMResponse, ToolCall
+from platform.analytics.react_turn import run_react_agent_with_telemetry
 from platform.observability.trace.prompts import persist_turn_system_prompt
 from platform.observability.trace.spans import component_span
 
@@ -85,6 +86,8 @@ INVESTIGATION_DISPATCH_TOOL_NAMES: frozenset[str] = frozenset(
 class ActionTurnPlan:
     agent: Agent[Any]
     user_message: str
+    llm: Any
+    max_iterations: int
 
 
 @dataclass(frozen=True)
@@ -251,6 +254,29 @@ def _render_tool_calling_error(output: OutputSink, message: str) -> None:
     output.render_error(message)
 
 
+def _stage_action_llm_failure(
+    message: str,
+    session: SessionStore,
+    *,
+    client: Any | None,
+    error_text: str,
+) -> None:
+    """Stage telemetry for an action-agent LLM failure on conversational input.
+
+    Explicit ``!shell`` / literal ``/slash`` turns never invoke the hosted LLM
+    (they run through ``_StaticToolCallLLM``), so a failure there stays a
+    terminal-action outcome. For conversational input the LLM was the intended
+    route, so the turn must be reported as a failed LLM call — not a terminal
+    turn tagged ``no_conversational_agent``.
+    """
+    if _bang_shell_command(message) is not None or message.strip().startswith("/"):
+        return
+    from core.agent_harness.turns.orchestrator import stage_turn_error, stage_turn_llm_failure
+
+    stage_turn_error(session, "action_agent_error", error_text)
+    stage_turn_llm_failure(session, client=client)
+
+
 def _bang_shell_command(message: str) -> str | None:
     # Explicit `!cmd` shell escape: a deterministic bypass for input the user
     # typed verbatim as a shell command. This is NOT natural-language intent
@@ -357,7 +383,12 @@ def _build_action_agent(
         tool_hooks=tool_hooks,
         on_runtime_event=runtime_event_callback_from_observer(observer),
     )
-    return ActionTurnPlan(agent=build_agent(config), user_message=user_message)
+    return ActionTurnPlan(
+        agent=build_agent(config),
+        user_message=user_message,
+        llm=llm,
+        max_iterations=_MAX_TOOL_CALLING_ITERATIONS,
+    )
 
 
 def run_action_agent_turn(
@@ -428,6 +459,7 @@ def _run_action_agent_turn_body(
         len(resolved_integrations),
     )
 
+    plan: ActionTurnPlan | None = None
     try:
         # LLM selection inside _build_action_agent is inside the try so a factory
         # raise (e.g. provider unavailable) is caught and rendered like a run-loop
@@ -444,7 +476,14 @@ def _run_action_agent_turn_body(
             tool_resources=tool_resources,
             observer=observer,
         )
-        result = plan.agent.run([{"role": "user", "content": plan.user_message}])
+        result = run_react_agent_with_telemetry(
+            plan.agent,
+            [{"role": "user", "content": plan.user_message}],
+            phase="action",
+            iteration_cap=plan.max_iterations,
+            llm=plan.llm,
+            session=session,
+        )
         persist_turn_system_prompt(
             session,
             phase="action_agent",
@@ -458,6 +497,13 @@ def _run_action_agent_turn_body(
         error_text = str(exc)
         if error_reporter is not None:
             error_reporter.report(exc, context="core.agent_harness.action_driver", expected=True)
+        llm_client = None if plan is None or isinstance(plan.llm, _StaticToolCallLLM) else plan.llm
+        _stage_action_llm_failure(
+            message,
+            session,
+            client=llm_client,
+            error_text=error_text,
+        )
         _render_tool_calling_error(output, error_text)
         _persist_tool_calling_error(session, message, error_text)
         session.record("cli_agent", message, ok=False)

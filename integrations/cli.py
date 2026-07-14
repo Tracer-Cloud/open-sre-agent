@@ -1419,10 +1419,26 @@ def cmd_list() -> None:
             "or opensre onboard for the guided wizard."
         )
         return
-    print(f"\n  {_B}{'SERVICE':<14}STATUS    ID{_R}")
+
+    from rich.markup import escape
+
+    from integrations._table_render import new_table, render_table
+    from platform.terminal.theme import GLYPH_SUCCESS, HIGHLIGHT, SECONDARY, TEXT
+
+    table = new_table()
+    table.add_column("SERVICE", style=TEXT, no_wrap=True)
+    table.add_column("STATUS", no_wrap=True)
+    table.add_column("ID", style=SECONDARY)
     for i in items:
-        print(f"  {i['service']:<14}{i['status']:<10}{i['id']}")
-    print()
+        status = i["status"]
+        status_cell = (
+            f"[bold {HIGHLIGHT}]{GLYPH_SUCCESS} {escape(status)}[/]"
+            if status == "active"
+            else escape(status)
+        )
+        table.add_row(escape(i["service"]), status_cell, escape(i["id"]))
+
+    print(render_table(table))
 
 
 def cmd_show(service: str | None) -> None:

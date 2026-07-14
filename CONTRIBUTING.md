@@ -61,7 +61,7 @@ If you prefer VS Code, use the devcontainer at [.devcontainer/devcontainer.json]
 git checkout -b issue/123-short-description
 ```
 
-Use `issue/` or `fix/` prefix. Branch names should be lowercase with hyphens.
+Use `issue/` or `fix/` for fixing bugs or `/feat` for any new feature development. Branch names should be lowercase with hyphens.
 
 ### 2. Make Changes
 

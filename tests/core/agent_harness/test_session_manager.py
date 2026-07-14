@@ -127,6 +127,7 @@ def test_bootstrap_sets_persistent_task_registry() -> None:
     before = session.task_registry
     _manager().bootstrap(session)
     assert session.task_registry is not before
+    assert session.runtime_metadata.get("opensre_version")
 
 
 def test_created_session_persists_through_manager_storage() -> None:

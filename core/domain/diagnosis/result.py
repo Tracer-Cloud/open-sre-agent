@@ -56,6 +56,12 @@ class InvestigationResult:
     non_validated_claims: list[dict] = field(default_factory=list)
     remediation_steps: list[str] = field(default_factory=list)
     validity_score: float = 0.0
+    triage_summary: str = ""
+    incident_status: str = ""
+    investigation_hypotheses: list[str] = field(default_factory=list)
+    verification_summary: list[str] = field(default_factory=list)
+    follow_up_questions: list[str] = field(default_factory=list)
+    remediation_tradeoffs: str = ""
     evidence: dict[str, Any] = field(default_factory=dict)
     evidence_entries: list[dict] = field(default_factory=list)
     agent_messages: list[dict] = field(default_factory=list)
@@ -87,6 +93,12 @@ def result_to_state(result: InvestigationResult) -> dict[str, Any]:
         "non_validated_claims": result.non_validated_claims,
         "remediation_steps": result.remediation_steps,
         "validity_score": result.validity_score,
+        "triage_summary": result.triage_summary,
+        "incident_status": result.incident_status,
+        "investigation_hypotheses": result.investigation_hypotheses,
+        "verification_summary": result.verification_summary,
+        "follow_up_questions": result.follow_up_questions,
+        "remediation_tradeoffs": result.remediation_tradeoffs,
         "investigation_recommendations": result.investigation_recommendations,
         "evidence": result.evidence,
         "evidence_entries": result.evidence_entries,
@@ -166,6 +178,30 @@ def build_diagnosis_schema(include_categories: set[str]) -> type[BaseModel]:
         remediation_steps: list[str] = Field(
             default_factory=list, description="Concrete remediation actions in order"
         )
+        triage_summary: str = Field(
+            default="",
+            description="One-line triage complete scope summary",
+        )
+        incident_status: str = Field(
+            default="",
+            description="Status block: confirmed | open | next | owner",
+        )
+        investigation_hypotheses: list[str] = Field(
+            default_factory=list,
+            description="Numbered hypotheses with confirm/rule-out criteria",
+        )
+        verification_summary: list[str] = Field(
+            default_factory=list,
+            description="Which verification tools/results tested which hypothesis",
+        )
+        follow_up_questions: list[str] = Field(
+            default_factory=list,
+            description="Direct follow-up questions for responders (each ending with ?)",
+        )
+        remediation_tradeoffs: str = Field(
+            default="",
+            description="Remediation trade-off analysis or N/A for a single fix path",
+        )
         validity_score: float = Field(
             default=0.0, description="0.0–1.0 confidence in the diagnosis"
         )
@@ -187,6 +223,12 @@ def build_investigation_result(
     remediation_steps: list[str],
     validity_score: float,
     alert_source: str = "",
+    triage_summary: str = "",
+    incident_status: str = "",
+    investigation_hypotheses: list[str] | None = None,
+    verification_summary: list[str] | None = None,
+    follow_up_questions: list[str] | None = None,
+    remediation_tradeoffs: str = "",
 ) -> InvestigationResult:
     normalized_category = normalize_root_cause_category(
         root_cause_category,
@@ -206,6 +248,12 @@ def build_investigation_result(
         non_validated_claims=claims_to_dicts(non_validated_claims, "not_validated"),
         remediation_steps=remediation_steps,
         validity_score=score,
+        triage_summary=triage_summary,
+        incident_status=incident_status,
+        investigation_hypotheses=list(investigation_hypotheses or []),
+        verification_summary=list(verification_summary or []),
+        follow_up_questions=list(follow_up_questions or []),
+        remediation_tradeoffs=remediation_tradeoffs,
         investigation_recommendations=recommendations,
         category_text_mismatch=mismatch,
         category_text_mismatch_reason=reason,

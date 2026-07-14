@@ -1,7 +1,7 @@
 """Per-session integration state, cache helpers, and turn-time resolution.
 
 Owns everything session-scoped for integration discovery: configured service
-names, the resolved-config cache, GitHub repo scope, background warm tasks, and
+names, the resolved-config cache, repository scopes, background warm tasks, and
 ``resolve_and_cache_integrations`` for the turn engine.
 
 ``SessionCore`` composes :class:`IntegrationState` as ``session.integrations`` and
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 __all__ = [
     "IntegrationResolutionResult",
     "IntegrationState",
-    "has_only_runtime_metadata",
+    "has_only_underscore_prefixed_keys",
     "has_resolved_integrations",
     "merge_resolved_integrations",
     "resolve_and_cache_integrations",
@@ -47,8 +47,8 @@ def has_resolved_integrations(cache: dict[str, Any] | None) -> bool:
     return any(not str(key).startswith("_") for key in cache)
 
 
-def has_only_runtime_metadata(cache: dict[str, Any] | None) -> bool:
-    """Return True when the cache holds only runtime metadata keys."""
+def has_only_underscore_prefixed_keys(cache: dict[str, Any] | None) -> bool:
+    """True when every cache key starts with ``_`` (book-keeping only, no configs)."""
     if not cache:
         return False
     return all(str(key).startswith("_") for key in cache)
@@ -67,7 +67,7 @@ def merge_resolved_integrations(
 def _has_usable_cache(cache: dict[str, Any] | None) -> bool:
     """True when a cache holds resolved configs and need not be re-resolved."""
     return cache is not None and (
-        has_resolved_integrations(cache) or not has_only_runtime_metadata(cache)
+        has_resolved_integrations(cache) or not has_only_underscore_prefixed_keys(cache)
     )
 
 
@@ -105,6 +105,8 @@ class IntegrationState:
     pass. Cleared by :meth:`refresh` when integrations change."""
     github_repo_scope: tuple[str, str] | None = None
     """Sticky owner/repo inferred from chat, env, or git remote for GitHub tools."""
+    gitlab_repo_scope: tuple[str, str, str] | None = None
+    """Sticky project/ref/file inferred from chat, env, or git remote for GitLab tools."""
 
     _warm_lock: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
     _warm_generation: int = field(default=0, repr=False, compare=False)
@@ -134,7 +136,7 @@ class IntegrationState:
         resolution raced store/env hydration. Failures leave the cache unset.
         """
         cached = self.resolved_cache
-        if cached is not None and not has_only_runtime_metadata(cached):
+        if cached is not None and not has_only_underscore_prefixed_keys(cached):
             return
         if generation is None:
             with self._warm_lock:
@@ -152,7 +154,7 @@ class IntegrationState:
         with self._warm_lock:
             if generation != self._warm_generation:
                 return
-            if self.resolved_cache is not None and not has_only_runtime_metadata(
+            if self.resolved_cache is not None and not has_only_underscore_prefixed_keys(
                 self.resolved_cache
             ):
                 return
@@ -194,5 +196,6 @@ class IntegrationState:
             if drop_cache:
                 self.resolved_cache = None
                 self.github_repo_scope = None
+                self.gitlab_repo_scope = None
         if pending is not None and not pending.done():
             pending.cancel()

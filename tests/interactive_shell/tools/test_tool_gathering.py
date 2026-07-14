@@ -301,6 +301,41 @@ def test_resolve_gather_integrations_uses_session_cache_on_follow_up() -> None:
     assert resolved["github"]["repo"] == "opensre"
 
 
+def test_resolve_gather_integrations_enriches_gitlab_file_scope() -> None:
+    session = Session()
+    session.resolved_integrations_cache = {
+        "gitlab": {
+            "connection_verified": True,
+            "base_url": "https://gitlab.com/api/v4",
+            "auth_token": "token",
+        }
+    }
+
+    resolved = _resolve_gather_integrations(
+        session,
+        "read https://gitlab.com/group/project/-/blob/main/runbooks/api.md",
+    )
+
+    gitlab = resolved["gitlab"]
+    assert gitlab["project_id"] == "group/project"
+    assert gitlab["ref_name"] == "main"
+    assert gitlab["file_path"] == "runbooks/api.md"
+    assert session.gitlab_repo_scope == ("group/project", "main", "runbooks/api.md")
+
+
+def test_resolve_gather_integrations_uses_gitlab_session_cache() -> None:
+    session = Session()
+    session.resolved_integrations_cache = {
+        "gitlab": {"connection_verified": True, "auth_token": "token"}
+    }
+    session.gitlab_repo_scope = ("group/project", "main", "runbook.md")
+
+    resolved = _resolve_gather_integrations(session, "read that file")
+
+    assert resolved["gitlab"]["project_id"] == "group/project"
+    assert resolved["gitlab"]["file_path"] == "runbook.md"
+
+
 def test_resolve_gather_integrations_uses_passed_turn_view() -> None:
     """When the turn's resolved view is supplied, it is the base — no session re-resolve."""
     session = Session()
@@ -365,6 +400,40 @@ def test_gather_enriches_github_before_selecting_tools(monkeypatch: Any) -> None
     gh = seen["resolved"]["github"]
     assert gh["owner"] == "Tracer-Cloud"
     assert gh["repo"] == "opensre"
+
+
+def test_gather_enriches_gitlab_before_selecting_tools(monkeypatch: Any) -> None:
+    session = Session()
+    session.resolved_integrations_cache = {
+        "gitlab": {"connection_verified": True, "auth_token": "token"}
+    }
+    seen: dict[str, Any] = {}
+
+    def _capture_tools(resolved: dict[str, Any]) -> list[_DummyTool]:
+        seen["resolved"] = resolved
+        gitlab = resolved.get("gitlab", {})
+        if isinstance(gitlab, dict) and gitlab.get("file_path"):
+            return [_DummyTool("get_gitlab_file", source="gitlab")]
+        return []
+
+    monkeypatch.setattr(harness_ports, "get_investigation_tools", _capture_tools)
+    monkeypatch.setattr("core.llm.factory.get_llm", lambda _role: object())
+
+    def _fake_run(
+        _kwargs: dict[str, Any], _initial_messages: list[dict[str, Any]]
+    ) -> runtime_module.AgentRunResult:
+        return runtime_module.AgentRunResult(messages=[], final_text="", executed=[])
+
+    gather_integration_tool_evidence(
+        "read https://gitlab.com/group/project/-/blob/main/runbook.md",
+        session,
+        _console(),
+        agent_factory=_stub_agent_factory(_fake_run),
+    )
+
+    gitlab = seen["resolved"]["gitlab"]
+    assert gitlab["project_id"] == "group/project"
+    assert gitlab["file_path"] == "runbook.md"
 
 
 def test_gather_user_message_includes_recent_conversation(monkeypatch: Any) -> None:

@@ -197,6 +197,9 @@ MODEL_PRICES: dict[str, ModelPrice] = {
     "gpt-5.4-pro": _price(30.00, 180.00),
     "gpt-5.5": _price(5.00, 30.00, cache_read_usd_per_million=0.50),
     "gpt-5.5-pro": _price(30.00, 180.00),
+    "gpt-5.6-luna": _price(1.00, 6.00, cache_read_usd_per_million=0.10),
+    "gpt-5.6-sol": _price(5.00, 30.00, cache_read_usd_per_million=0.50),
+    "gpt-5.6-terra": _price(2.50, 15.00, cache_read_usd_per_million=0.25),
     "o3": _price(2.00, 8.00, cache_read_usd_per_million=0.50),
     "o3-deep-research": _price(10.00, 40.00, cache_read_usd_per_million=2.50),
     "o3-mini": _price(1.10, 4.40, cache_read_usd_per_million=0.55),
@@ -223,6 +226,12 @@ _UNSORTED_FAMILY_FALLBACKS: tuple[tuple[str, str], ...] = (
     ("gpt-5.1-codex-max", "gpt-5.1-codex-max"),
     ("gpt-5.1-codex", "gpt-5.1-codex"),
     ("gpt-5-codex", "gpt-5-codex"),
+    ("gpt-5.6-terra", "gpt-5.6-terra"),
+    ("gpt-5.6-luna", "gpt-5.6-luna"),
+    ("gpt-5.6-sol", "gpt-5.6-sol"),
+    # OpenAI routes the bare `gpt-5.6` alias to Sol server-side. The three
+    # rows above are longer prefixes, so they still win for terra/luna.
+    ("gpt-5.6", "gpt-5.6-sol"),
     ("gpt-5.5-pro", "gpt-5.5-pro"),
     ("gpt-5.5", "gpt-5.5"),
     ("gpt-5.4-mini", "gpt-5.4-mini"),

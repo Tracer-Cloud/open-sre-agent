@@ -63,6 +63,68 @@ class TestUsdPerTokenBlended:
         assert opus_4_1 is not None
 
 
+class TestGpt56Family:
+    """GPT-5.6 Sol / Terra / Luna (#3931).
+
+    Rates from https://developers.openai.com/api/docs/pricing (GA 2026-07-09),
+    per 1M tokens: sol 5/30, terra 2.50/15, luna 1/6. Cached input is 90% off.
+    """
+
+    @pytest.mark.parametrize(
+        ("model", "input_usd_per_million", "output_usd_per_million"),
+        [
+            ("gpt-5.6-sol", 5.00, 30.00),
+            ("gpt-5.6-terra", 2.50, 15.00),
+            ("gpt-5.6-luna", 1.00, 6.00),
+        ],
+    )
+    def test_published_rates(
+        self, model: str, input_usd_per_million: float, output_usd_per_million: float
+    ) -> None:
+        price = MODEL_PRICES[model]
+        assert price.usd_per_input_token == pytest.approx(input_usd_per_million / 1e6)
+        assert price.usd_per_output_token == pytest.approx(output_usd_per_million / 1e6)
+        # Cached input reads are 90% off uncached input.
+        assert price.usd_per_cache_read_input_token == pytest.approx(
+            input_usd_per_million / 1e6 * 0.10
+        )
+
+    def test_sol_is_not_priced_as_base_gpt5(self) -> None:
+        # The regression this whole entry exists to prevent: before #3931,
+        # ``gpt-5.6-sol`` matched the ``gpt-5`` family catch-all and was
+        # silently billed at the base gpt-5 rate (1.25/10) — a 4x
+        # under-report on the flagship, with no error and no ``-`` cell.
+        assert usd_per_token_blended("gpt-5.6-sol") != usd_per_token_blended("gpt-5")
+
+    def test_tiers_are_distinctly_priced(self) -> None:
+        # Each tier must resolve to its own rate rather than collapsing
+        # onto a sibling via the shared ``gpt-5.6`` prefix.
+        sol = usd_per_token_blended("gpt-5.6-sol")
+        terra = usd_per_token_blended("gpt-5.6-terra")
+        luna = usd_per_token_blended("gpt-5.6-luna")
+        assert sol is not None and terra is not None and luna is not None
+        assert sol > terra > luna
+
+    def test_bare_alias_resolves_to_sol(self) -> None:
+        # OpenAI routes the bare ``gpt-5.6`` alias to Sol server-side, so
+        # billing it as anything else would mis-report real spend.
+        assert usd_per_token_blended("gpt-5.6") == usd_per_token_blended("gpt-5.6-sol")
+        assert normalize_model_name("gpt-5.6") == "gpt-5.6-sol"
+
+    def test_unknown_tier_suffix_does_not_borrow_sol_rate(self) -> None:
+        # ``gpt-5.6-terra-preview`` must land on terra, not on Sol via the
+        # shorter ``gpt-5.6`` alias prefix. This is what the per-tier
+        # family rows buy us over a single alias row.
+        assert usd_per_token_blended("gpt-5.6-terra-preview") == usd_per_token_blended(
+            "gpt-5.6-terra"
+        )
+
+    def test_openai_provider_prefix_resolves(self) -> None:
+        # OpenRouter-style ids (``openai/gpt-5.6-sol``) are stripped to the
+        # bare model before lookup.
+        assert usd_per_token_blended("openai/gpt-5.6-sol") == usd_per_token_blended("gpt-5.6-sol")
+
+
 class TestUsdPerHour:
     def test_zero_tokens_per_min_is_zero_cost(self) -> None:
         # An idle agent costs $0/hr — the cell shows ``$0.00``, not

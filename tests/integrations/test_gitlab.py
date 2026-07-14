@@ -68,6 +68,12 @@ def test_gitlab_config_api_base_url_strips_trailing_slash() -> None:
     assert config.api_base_url == "https://gitlab.example.com/api/v4"
 
 
+def test_gitlab_config_normalizes_bare_host_to_api_base_url() -> None:
+    config = _make_config(base_url="https://gitlab.example.com")
+
+    assert config.api_base_url == "https://gitlab.example.com/api/v4"
+
+
 def test_gitlab_config_auth_headers_include_bearer_token() -> None:
     config = _make_config(auth_token="my-secret-token")
 
@@ -75,6 +81,12 @@ def test_gitlab_config_auth_headers_include_bearer_token() -> None:
         "Authorization": "Bearer my-secret-token",
         "Accept": "application/json",
     }
+
+
+def test_gitlab_config_auth_headers_omit_empty_bearer_token() -> None:
+    config = _make_config(auth_token="")
+
+    assert config.auth_headers == {"Accept": "application/json"}
 
 
 def test_gitlab_config_normalizes_empty_base_url_to_default() -> None:

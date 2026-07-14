@@ -1,12 +1,22 @@
-"""Process-level snapshots for session trace spans (memory, threads, asyncio tasks)."""
+"""Process-level snapshots for session trace spans (memory, threads, asyncio tasks).
+
+``rss_mb`` is **current** resident set size (Linux ``/proc``), so turn-boundary
+series can rise *and fall*; elsewhere it falls back to the peak watermark.
+``rss_peak_mb`` is the POSIX ``ru_maxrss`` high-water mark (never decreases) —
+useful context, not a leak signal by itself.
+"""
 
 from __future__ import annotations
 
 import gc
-import resource
 import sys
 import threading
 from typing import Any
+
+try:
+    import resource as _resource
+except ImportError:  # Windows / non-POSIX
+    _resource = None  # type: ignore[assignment]
 
 #: Cap thread rows embedded in a turn-boundary snapshot (ATM thread map).
 _MAX_THREADS_IN_SNAPSHOT = 40
@@ -18,8 +28,8 @@ _BYTES_PER_MEBIBYTE = _BYTES_PER_KIBIBYTE * _KIB_PER_MIB
 _RSS_MB_DECIMAL_PLACES = 2
 
 
-def _normalize_rss_mb(ru_maxrss: int) -> float:
-    """Normalize ``resource.getrusage`` RSS to mebibytes (macOS vs Linux)."""
+def _normalize_ru_maxrss_mb(ru_maxrss: int) -> float:
+    """Normalize ``resource.getrusage`` peak RSS to mebibytes (macOS vs Linux)."""
     if sys.platform == "darwin":
         # Darwin reports ``ru_maxrss`` in bytes.
         return round(ru_maxrss / _BYTES_PER_MEBIBYTE, _RSS_MB_DECIMAL_PLACES)
@@ -27,16 +37,44 @@ def _normalize_rss_mb(ru_maxrss: int) -> float:
     return round(ru_maxrss / _KIB_PER_MIB, _RSS_MB_DECIMAL_PLACES)
 
 
+def _current_rss_mb() -> float | None:
+    """Current process RSS in MiB from Linux ``/proc``, or ``None`` elsewhere."""
+    if sys.platform.startswith("linux"):
+        try:
+            with open("/proc/self/status", encoding="utf-8") as fh:
+                for line in fh:
+                    if line.startswith("VmRSS:"):
+                        # VmRSS is in kB
+                        kib = int(line.split()[1])
+                        return round(kib / _KIB_PER_MIB, _RSS_MB_DECIMAL_PLACES)
+        except (OSError, ValueError, IndexError):
+            # /proc unavailable or malformed: treat current RSS as unknown.
+            return None
+    return None
+
+
 def sample_resource_snapshot() -> dict[str, Any]:
-    """RSS + GC generation counts (cheap; safe on turn boundaries)."""
-    rss_kb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    """Current RSS (when available) + peak RSS + GC generation counts."""
     gen0, gen1, gen2 = gc.get_count()
-    return {
-        "rss_mb": _normalize_rss_mb(rss_kb),
+    out: dict[str, Any] = {
         "gc_gen0": gen0,
         "gc_gen1": gen1,
         "gc_gen2": gen2,
     }
+    current = _current_rss_mb()
+    if current is not None:
+        out["rss_mb"] = current
+
+    if _resource is not None:
+        ru_maxrss = _resource.getrusage(_resource.RUSAGE_SELF).ru_maxrss
+        peak = _normalize_ru_maxrss_mb(ru_maxrss)
+        out["rss_peak_mb"] = peak
+        # Last-resort: if current RSS unavailable, keep legacy field as peak
+        # but mark it so consumers know it is a watermark.
+        if "rss_mb" not in out:
+            out["rss_mb"] = peak
+            out["rss_is_peak"] = True
+    return out
 
 
 def sample_thread_snapshot(*, asyncio_tasks: int | None = None) -> dict[str, Any]:

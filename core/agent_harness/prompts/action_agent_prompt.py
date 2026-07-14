@@ -11,6 +11,7 @@ from core.agent_harness.prompts.conversation_memory import (
     format_recent_conversation,
 )
 from core.agent_harness.prompts.envelope import PromptBlock, PromptEnvelope
+from core.agent_harness.prompts.skills_loader import load_skills_block
 
 if TYPE_CHECKING:
     from core.agent_harness.turns.turn_snapshot import TurnSnapshot
@@ -31,6 +32,18 @@ def build_action_system_prompt_envelope(turn_snapshot: TurnSnapshot) -> PromptEn
             content=_SYSTEM_PROMPT_BASE + "\n\n",
             provenance="core.agent_harness.prompts.action_agent_system_prompt",
         ),
+    ]
+    skills = load_skills_block()
+    if skills:
+        blocks.append(
+            PromptBlock(
+                id="action-agent-skills",
+                kind="rule",
+                content=skills + "\n\n",
+                provenance="core.agent_harness.prompts.skills",
+            )
+        )
+    blocks += [
         PromptBlock(
             id="connected-integrations",
             kind="context",

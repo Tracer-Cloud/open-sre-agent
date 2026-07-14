@@ -4,9 +4,18 @@ from __future__ import annotations
 
 from typing import Any
 
+from config.runtime_metadata import (
+    BLOCKED_INTROSPECTION_COMMANDS,
+    LIVE_FACT_KEYS,
+    STATIC_FACT_KEYS,
+)
 from core.tool_framework.base import BaseTool
+from platform.observability.trace.spans import component_span
 from tools.system.python_execution_tool.credentials import execution_env, github_extract_params
 from tools.system.python_execution_tool.runner import run_python_execution
+
+_RUNTIME_FACT_KEYS = ", ".join((*STATIC_FACT_KEYS, *LIVE_FACT_KEYS))
+_NEVER_RUN = ", ".join(f"`{command}`" for command in BLOCKED_INTROSPECTION_COMMANDS)
 
 
 class PythonExecutionTool(BaseTool):
@@ -21,17 +30,28 @@ class PythonExecutionTool(BaseTool):
     description = (
         "Execute generated Python code in a restricted subprocess, capture stdout, stderr, "
         "exceptions, and timeout state, and return the result to the agent. Network access is "
-        "blocked by default; opt in only for approved API-backed analysis. When workflow "
-        "guidance lists skills, read each skill description and follow the one that matches "
-        "the user's request."
+        "blocked by default; opt in only for approved API-backed analysis. Subprocess spawning "
+        "is always blocked — for runtime facts read `inputs['opensre_runtime']` (injected "
+        f"automatically with: {_RUNTIME_FACT_KEYS}). For filesystem introspection use pure "
+        "Python: `pathlib.Path(...).iterdir()` to list directories, "
+        "`Path('/etc/hostname').read_text()` for the pod name, `psutil.disk_usage('/')` and "
+        "`psutil.virtual_memory()` for disk/memory. "
+        f"Never run {_NEVER_RUN}, never probe cloud instance metadata over the network, "
+        "and never use any other `subprocess` call. When workflow guidance lists skills, "
+        "read each skill description and follow the one that matches the user's request."
     )
     use_cases = [
         "Compute metrics or summaries from structured evidence already in context",
         "Run a small API-backed calculation with approved credentials",
         "Parse logs or JSON payloads when a direct tool result needs post-processing",
+        "Read runtime facts (version, time, uptime, PID, cloud, kubeconfig, tools) via inputs['opensre_runtime']",
+        "List scratchpad files with pathlib; read disk/memory with psutil (no ls/df/free)",
     ]
     anti_examples = [
         "Changing local files or shelling out to other processes",
+        f"Calling {', '.join(BLOCKED_INTROSPECTION_COMMANDS)} (all blocked by the sandbox)",
+        "Probing cloud instance metadata over the network (use the injected cloud facts)",
+        "Using allow_network for arbitrary host/port reachability probes or scanning (allow_network is unrestricted once enabled — only for approved API-backed analysis)",
         "Long-running jobs, crawlers, or broad external scans",
         "Accessing credentials not explicitly provided by configured integrations or env vars",
     ]
@@ -46,7 +66,9 @@ class PythonExecutionTool(BaseTool):
                 "type": "object",
                 "description": (
                     "Optional JSON-serializable values injected into the script as the "
-                    "`inputs` global."
+                    "`inputs` global. OpenSRE always merges `opensre_runtime` under this "
+                    f"key with: {_RUNTIME_FACT_KEYS}. Skipped if you already set the "
+                    "`opensre_runtime` key yourself."
                 ),
                 "nullable": True,
             },
@@ -95,16 +117,29 @@ class PythonExecutionTool(BaseTool):
         timeout: int | None = None,
         allow_network: bool | None = None,
         github_token: str | None = None,
+        runtime_metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        env, credentials_available = execution_env(github_token=github_token)
-        return run_python_execution(
-            code=code,
-            inputs=inputs,
-            timeout=timeout,
-            env=env,
-            allow_network=bool(allow_network),
-            credentials_available=credentials_available,
-        )
+        """Execute ``code`` in the sandbox with runtime metadata injected.
+
+        ``runtime_metadata`` — when the caller has a session with a pre-built
+        ``runtime_metadata`` dict (e.g. ``SessionCore.runtime_metadata``),
+        passing it here avoids re-running ``build_runtime_metadata()`` per tool
+        call. When ``None`` (default) the merge helper builds a fresh dict —
+        preserving the previous behavior. Callers that hold a session can
+        pass ``session.runtime_metadata`` directly.
+        """
+        from config.runtime_metadata import merge_runtime_into_inputs
+
+        with component_span("runtime_metadata:sandbox"):
+            env, credentials_available = execution_env(github_token=github_token)
+            return run_python_execution(
+                code=code,
+                inputs=merge_runtime_into_inputs(inputs, metadata=runtime_metadata),
+                timeout=timeout,
+                env=env,
+                allow_network=bool(allow_network),
+                credentials_available=credentials_available,
+            )
 
 
 execute_python_code = PythonExecutionTool()
