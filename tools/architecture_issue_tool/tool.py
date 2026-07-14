@@ -89,7 +89,7 @@ def _session_id_from_runtime(context: Any, explicit: str = "") -> str:
     ],
     requires=["owner", "repo"],
     surfaces=("action",),
-    side_effect_level="read_only",
+    side_effect_level="mutating",
     input_schema={
         "type": "object",
         "properties": {
