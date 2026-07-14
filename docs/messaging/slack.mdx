@@ -133,7 +133,13 @@ HTTPS URL is required — the gateway holds an outbound websocket.
 
 ### Allow your Slack user
 
-Find your member ID: Profile → ⋯ → **Copy member ID** (`U…`), then:
+Find your Slack **member ID** (`U…`) in the Slack app:
+
+1. Open your profile (avatar / name).
+2. Click **⋯** (More) next to **View as** / profile actions.
+3. Choose **Copy member ID**.
+
+Then allow that id:
 
 Interactive shell:
 
@@ -151,8 +157,9 @@ or set `SLACK_ALLOWED_USERS=U0123ABCD` in `.env`. The integration store takes
 precedence when both are set.
 
 <Warning>
-  Use the Slack **member ID** (`U…`), not `@display-name`. Handles can be
-  reassigned; inbound authorization only matches stable user IDs.
+  Use the Slack **member ID** (`U…`) from **Copy member ID**, not `@display-name`
+  (e.g. not `@Yauhen`). Handles can be reassigned; inbound authorization only
+  matches stable user IDs.
 </Warning>
 
 For dogfood only, you may set `SLACK_ALLOW_OPEN_WORKSPACE=1` instead (any

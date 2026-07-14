@@ -76,12 +76,20 @@ only in *how they receive input and send output* — never in how the agent thin
 # Allow your Telegram user id (from @userinfobot)
 uv run opensre messaging allow -p telegram -u 123456789
 
-# Allow your Slack member id (profile → Copy member ID)
+# Allow your Slack member id (see below)
 uv run opensre messaging allow -p slack -u U0123ABCD
 
 # Start the gateway daemon (web app + Telegram chat + Slack chat + task scheduler)
 uv run opensre gateway start
 ```
+
+**Find your Slack user id (member ID):**
+
+1. Open your profile in the Slack app (avatar / name).
+2. Click **⋯** (More) next to **View as** / profile actions.
+3. Choose **Copy member ID** — that value starts with `U…` and is what
+   `SLACK_ALLOWED_USERS` / `messaging allow -p slack -u …` need.
+4. Do **not** use `@display-name` (e.g. `@Yauhen`); only the member ID is stable.
 
 Both transports load configuration the same way: tokens from env first with the
 integration store as fallback; allowed users from the integration store
