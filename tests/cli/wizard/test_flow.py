@@ -3954,6 +3954,7 @@ def test_run_wizard_keyring_failure_continue_unsaved_exports_env_and_never_write
     menu_responses = iter(["continue_unsaved"])
     persist_attempts: list[tuple[str, str]] = []
     synced_env_values: list[dict[str, str]] = []
+    env_path = tmp_path / ".env"
 
     def _mock_select(*_args, **_kwargs):
         prompt = str(_args[0]) if _args else ""
@@ -3992,7 +3993,14 @@ def test_run_wizard_keyring_failure_continue_unsaved_exports_env_and_never_write
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
-    monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
+    # Run the REAL sync against a tmp .env so the assertion below exercises the true
+    # pop-then-re-apply path: sync_provider_env pops ANTHROPIC_API_KEY from os.environ,
+    # and only the #3591 re-apply keeps it alive for the in-process shell handoff.
+    monkeypatch.setattr(
+        flow,
+        "sync_provider_env",
+        lambda **kwargs: sync_provider_env(env_path=env_path, **kwargs),
+    )
     monkeypatch.setattr(
         flow,
         "sync_env_values",
@@ -4009,9 +4017,13 @@ def test_run_wizard_keyring_failure_continue_unsaved_exports_env_and_never_write
 
     assert exit_code == 0
     assert "ANTHROPIC_API_KEY could not be saved. What next?" in select_prompts
-    # Exported for this process only...
+    # Exported for this process only, and it SURVIVES the real sync_provider_env pop so
+    # the in-process shell handoff can read it (#3591). Without the re-apply this is "".
     assert os.environ["ANTHROPIC_API_KEY"] == "sk-good"
-    # ...and NEVER written to .env.
+    # ...and NEVER written to .env — assert against the real file the real sync wrote.
+    env_written = env_path.read_text(encoding="utf-8")
+    assert "ANTHROPIC_API_KEY=" not in env_written
+    assert "sk-good" not in env_written
     assert all("ANTHROPIC_API_KEY" not in values for values in synced_env_values)
     assert all("sk-good" not in values.values() for values in synced_env_values)
     assert persist_attempts == [("anthropic", "sk-good")]

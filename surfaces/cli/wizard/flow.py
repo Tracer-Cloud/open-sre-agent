@@ -356,7 +356,10 @@ def _validate_llm_credential(
 
 
 def _persist_llm_credential_with_recovery(
-    provider: ProviderOption, api_key: str
+    provider: ProviderOption,
+    api_key: str,
+    *,
+    session_env_sink: dict[str, str] | None = None,
 ) -> Literal["ok", "unsaved", "repick", "cancel"]:
     """Persist a credential; on keychain failure offer the shared recovery menu.
 
@@ -366,6 +369,12 @@ def _persist_llm_credential_with_recovery(
 
     Unreachable for ``credential_kind == "host"``: ``_persist_llm_credential`` writes
     the host to ``.env`` and returns ``True`` unconditionally.
+
+    ``session_env_sink`` records the ``continue_unsaved`` export ``{env_key: api_key}``
+    so ``run_wizard`` can re-apply it after ``sync_provider_env`` — which pops every
+    secret provider's api-key env — hands off to the in-process shell (#3591). This is
+    the single point where an unsaved secret is exported, so it is the only capture
+    site needed for all callers.
     """
     env_key = provider.api_key_env
     for _attempt in range(_LLM_CREDENTIAL_MAX_ATTEMPTS):
@@ -387,6 +396,8 @@ def _persist_llm_credential_with_recovery(
             # Process-local only. The secret must never reach .env: the keyring is the
             # only place OpenSRE stores an API key.
             os.environ[env_key] = api_key
+            if session_env_sink is not None:
+                session_env_sink[env_key] = api_key
             _console.print(
                 f"[{WARNING}]  {GLYPH_WARNING}  "
                 f"Using {env_key} for this session only — it was not saved.[/]"
@@ -403,13 +414,21 @@ def _persist_llm_credential_with_recovery(
     return "cancel"
 
 
-def _prompt_validated_llm_credential(provider: ProviderOption, *, model: str) -> CredentialOutcome:
+def _prompt_validated_llm_credential(
+    provider: ProviderOption,
+    *,
+    model: str,
+    session_env_sink: dict[str, str] | None = None,
+) -> CredentialOutcome:
     """Prompt for, validate against ``model``, and persist one LLM credential.
 
     ``model`` is the model the wizard is about to persist — never the provider default
     — so the probe exercises exactly what the runtime will use.
 
     ``repick`` = pick a different LLM provider (mirrors ``_run_cli_llm_onboarding``).
+
+    ``session_env_sink`` is forwarded to ``_persist_llm_credential_with_recovery`` so a
+    ``continue_unsaved`` export survives the post-wizard ``sync_provider_env`` (#3591).
     """
     _step(provider.credential_label.title())
     label = _credential_prompt_label(provider)
@@ -461,7 +480,9 @@ def _prompt_validated_llm_credential(provider: ProviderOption, *, model: str) ->
             if action != "save_anyway":
                 return "cancel"  # ESCAPE, or defensively: no other values are offered
 
-        outcome = _persist_llm_credential_with_recovery(provider, value)
+        outcome = _persist_llm_credential_with_recovery(
+            provider, value, session_env_sink=session_env_sink
+        )
         if outcome != "ok":
             return outcome
         if not validation.ok:
@@ -992,8 +1013,12 @@ def run_wizard(_argv: list[str] | None = None) -> int:
     model: str
     provider_extra_env: dict[str, str] = {}
     credential_state: CredentialState = "ok"
+    # Records a ``continue_unsaved`` secret export so it can be re-applied after
+    # ``sync_provider_env`` pops it, before the in-process shell handoff (#3591).
+    session_env_sink: dict[str, str] = {}
     while True:
         credential_state = "ok"
+        session_env_sink = {}
         _step_header(2, WIZARD_TOTAL_STEPS, "LLM Provider")
         saved_provider = (
             PROVIDER_BY_VALUE.get(saved_provider_value) if saved_provider_value else None
@@ -1082,7 +1107,9 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                 "cli",
                 "none",
             ):
-                credential_outcome = _prompt_validated_llm_credential(provider, model=model)
+                credential_outcome = _prompt_validated_llm_credential(
+                    provider, model=model, session_env_sink=session_env_sink
+                )
                 if credential_outcome == "cancel":
                     return 1
                 if credential_outcome == "repick":
@@ -1111,7 +1138,7 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                 # through to the host prompt instead (#3291).
                 if not has_api_key and legacy_api_key and provider.credential_kind != "host":
                     migration_outcome = _persist_llm_credential_with_recovery(
-                        provider, legacy_api_key
+                        provider, legacy_api_key, session_env_sink=session_env_sink
                     )
                     if migration_outcome == "cancel":
                         return 1
@@ -1122,7 +1149,9 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                         credential_state = "unsaved"
                     has_api_key = True
                 if not has_api_key:
-                    credential_outcome = _prompt_validated_llm_credential(provider, model=model)
+                    credential_outcome = _prompt_validated_llm_credential(
+                        provider, model=model, session_env_sink=session_env_sink
+                    )
                     if credential_outcome == "cancel":
                         return 1
                     if credential_outcome == "repick":
@@ -1176,6 +1205,13 @@ def run_wizard(_argv: list[str] | None = None) -> int:
         auth_method=persisted_auth_method,
         extra_env=provider_extra_env or None,
     )
+    if credential_state == "unsaved":
+        # sync_provider_env pops every secret provider's api-key env; re-apply the
+        # session-only secret the user chose to continue with so the in-process shell
+        # handoff can read it. It is never written to .env — the keyring stays the only
+        # persistent store (#3591). A ``host`` credential is not a secret and never
+        # reaches this sink, so it is not double-handled.
+        os.environ.update(session_env_sink)
 
     _step_header(3, WIZARD_TOTAL_STEPS, "Integrations")
     try:
