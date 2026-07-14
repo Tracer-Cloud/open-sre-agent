@@ -40,9 +40,7 @@ def session_needs_thread_seed(session: Any, user_text: str) -> bool:
     lower = bare.lower()
     if lower in {"yes", "y", "yeah", "yep", "yup", "sure", "ok", "okay", "please"}:
         return True
-    if "want me to" in lower and re.search(r"\byes\b", lower):
-        return True
-    return False
+    return "want me to" in lower and re.search(r"\byes\b", lower) is not None
 
 
 def messages_from_slack_thread(
