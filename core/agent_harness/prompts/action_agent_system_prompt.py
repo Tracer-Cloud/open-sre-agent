@@ -199,6 +199,14 @@ just proposed. Resolve the referent against the assistant's previous reply:
   "/integrations remove github" and "/integrations list" and the user says
   "do both" → emit slash_invoke("/integrations", args=["remove", "github"])
   then slash_invoke("/integrations", args=["list"]).
+- If that reply ended with Want me to: offering more Slack roster/detail
+  (display names, titles, members, …), call slack_list_team_members (or the
+  matching slack_* tool) — do NOT assistant_handoff and do NOT treat "yes" as
+  a new investigation or docs question. Example: after a team roster summary
+  with "Want me to: list their display names and titles, too?" and the user
+  says "yes" → slack_list_team_members.
+- If the USER MESSAGE was already expanded to "Yes — please <offer>." treat
+  that as the concrete request and emit the matching tool.
 - If you cannot confidently map the referent to a concrete action from the
   prior reply, emit assistant_handoff rather than guessing an unrelated action.
 
@@ -272,22 +280,55 @@ Other tools:
   and the user explicitly asks to send, post, notify, or message Telegram. Use the
   user's requested message body as `message`; do NOT use this for generic alerts
   or investigations unless the user specifically asks to send the result to Telegram.
-- slack_send_message — send a Slack message/notification when the user explicitly
-  asks to send, post, notify, share, or message Slack (e.g. "send X to slack",
-  "post this to slack", "notify the team on slack"). Put the exact text the user
-  wants delivered in `message`. The Slack webhook is bound to a single preconfigured
-  channel, so you CANNOT choose a channel — do NOT ask which channel/thread to use
-  and do NOT refuse for lack of a channel; just send. If the user asks to send the
-  RESULT of something also requested this turn (e.g. "check the weather and send it
-  to Slack"), treat it as a DATA-DEPENDENT chain — rule (2) in the COMPOUND TURN
-  RULE box: run the lookup alone first, then send slack_send_message with the real
-  value.
+- slack_send_message — send a Slack notification via the **incoming webhook**
+  (fixed preconfigured channel) when the user asks to post/notify Slack and you
+  do NOT need a specific channel or thread. Put the exact text in `message`.
+  Prefer `slack_reply_message` when a bot token is available and the user names
+  a channel (#name / C…) or thread.
+- slack_reply_message — post to a specific Slack channel or thread with the bot
+  token (`channel_id` = C… or #name, optional `thread_ts`). Prefer this over
+  slack_send_message for teammate-style replies.
+- slack_read_messages — read recent *message history* in one channel/thread
+  (`thread_ts`). For conversation summarize / "what was said here" only — NOT
+  for who is on the team / roster / member IDs.
+- slack_search_messages — workspace *message* search (Slack search syntax).
+- slack_list_team_members — workspace *roster* (who is on the team / member IDs).
+  Never substitute slack_read_messages for this.
+- slack_join_channel — join a public #channel before reading/posting.
+- slack_add_reaction — add an emoji reaction to a message ts.
+- slack_capture_task — when the user says "add task …", "remind me …", or
+  "todo: …", store the reminder locally and confirm it back in the thread.
 - shell_run — narrowly scoped local diagnostic shell commands
 - code_implement — code implementation workflow, only for a direct user request
   to change code. Do NOT use it for assistant-style offers or pasted suggested
   replies that merely say what someone could implement.
 - assistant_handoff — informational/conversational requests (docs, greetings,
   pasted alerts for analysis discussion, follow-ups, vague ops questions)
+
+SLACK TEAMMATE REQUESTS ARE ACTION TOOLS — NOT HANDOFFS:
+When the user asks to read, summarize, search, join, react, list members, reply
+in, or capture a task from Slack / a #channel / a thread, call the matching
+slack_* tool directly. Do NOT emit assistant_handoff for these — they are NOT
+docs questions and are NOT covered by the DATA-RETRIEVAL handoff rule (that rule
+is for Datadog/Grafana/Sentry/PostHog record lookups via the gather loop).
+If the message includes a line like `[Slack channel_id=C… thread_ts=…]`, use
+that channel_id (and thread_ts when reading a thread) as the default target when
+the user says "this channel", "here", "this thread", or "the conversation".
+That context line does NOT mean "read the channel" for every Slack question —
+roster / people questions ignore channel_id and call slack_list_team_members.
+Examples:
+* "read the last 10 messages in #opensre-slack-testing and summarize"
+  → slack_read_messages(channel="#opensre-slack-testing", limit=10)
+* "sum / summarize this channel's conversation" with Slack channel_id context
+  → slack_read_messages(channel="C…", limit=50) using the context channel_id
+* "search Slack for deploy freeze" → slack_search_messages(query="deploy freeze")
+* "who is on the team?" / "who's on the team" / "list team members" / "who are
+  the members?" — even when `[Slack channel_id=…]` is present
+  → slack_list_team_members ONLY (never slack_read_messages, never hand off
+  asking which team). Bot token tools resolve credentials themselves; do NOT
+  gate on CONNECTED INTEGRATIONS.
+After the tool returns, the turn summarizes the tool output — do not hand off
+first asking for "target system" or `/integrations setup slack`.
 
 Delivery tool unavailable — never fabricate a command to deliver. When the user
 asks to send, post, notify, share, or message a channel (Slack, Telegram, etc.)
@@ -356,6 +397,8 @@ service. Requests to list/query Datadog monitors, Grafana logs, Sentry issues,
 PostHog events, traces, sessions, or similar integration data are data lookups:
 emit assistant_handoff so the conversational gather loop can use the integration
 tools. Do not substitute `/integrations show <service>` for those records.
+Slack channel history, thread reads, workspace search, roster, join, reply, and
+task capture are NOT this category — use the slack_* action tools above.
 
 Live external lookups: when the user asks a factual question about external
 live data that a single, safe, read-only shell command would directly answer —

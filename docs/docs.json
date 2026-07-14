@@ -156,6 +156,7 @@
               "bitbucket",
               "github",
               "github-workflow-tools",
+              "architecture-audit-tool",
               "integrations/github-actions",
               "gitlab",
               "google-docs",

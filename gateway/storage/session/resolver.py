@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 
 from core.agent_harness.session import SessionCore, SessionManager
+from core.agent_harness.session.integration_resolution import has_resolved_integrations
 from gateway.session.gateway_chat_context import inject_gateway_chat_context
 from gateway.storage.session.bindings import SessionBindingStore
 
@@ -20,8 +21,21 @@ logger = logging.getLogger(__name__)
 _PLATFORM_TELEGRAM = "telegram"
 
 
+def _ensure_integrations(session: SessionCore) -> SessionCore:
+    """Re-hydrate configured names and warm configs when the cache is empty.
+
+    Gateway turns must see Slack (and other store/env integrations) even when a
+    prior session left a metadata-only or empty resolved cache.
+    """
+    session.hydrate_configured_integrations()
+    if not has_resolved_integrations(session.resolved_integrations_cache):
+        session.warm_resolved_integrations()
+    return session
+
+
 def _inject_chat_context(session: SessionCore, *, chat_id: str) -> SessionCore:
     """Attach per-turn gateway chat metadata to the session's integration cache."""
+    _ensure_integrations(session)
     session.resolved_integrations_cache = inject_gateway_chat_context(
         dict(session.resolved_integrations_cache or {}),
         chat_id,

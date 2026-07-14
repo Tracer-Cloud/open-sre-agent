@@ -1,4 +1,4 @@
-"""Tests for tools/slack_send_message_tool - Slack message action surface."""
+"""Tests for integrations/slack/tools/slack_send_message_tool - Slack message action surface."""
 
 from __future__ import annotations
 
@@ -8,7 +8,10 @@ from typing import Any
 
 import pytest
 
-from tools.slack_send_message_tool import SlackSendMessageTool, slack_send_message
+from integrations.slack.tools.slack_send_message_tool import (
+    SlackSendMessageTool,
+    slack_send_message,
+)
 
 
 @pytest.fixture
@@ -71,9 +74,9 @@ def test_extract_params_returns_no_credentials(slack_source: dict[str, Any]) -> 
 
 
 def test_init_is_only_registry_entrypoint() -> None:
-    package = importlib.import_module("tools.slack_send_message_tool")
+    package = importlib.import_module("integrations.slack.tools.slack_send_message_tool")
     source = inspect.getsource(package)
-    assert "from tools.slack_send_message_tool.tool import" in source
+    assert "from integrations.slack.tools.slack_send_message_tool.tool import" in source
     assert "class SlackSendMessageTool" not in source
 
 
@@ -84,7 +87,7 @@ def test_run_resolves_webhook_internally_and_dispatches(
 
     def _fake_resolve(webhook_url: str = "") -> tuple[Any, str]:
         captured["webhook_url_arg"] = webhook_url
-        from tools.slack_send_message_tool.models import SlackDeliveryTarget
+        from integrations.slack.tools.slack_send_message_tool.models import SlackDeliveryTarget
 
         return SlackDeliveryTarget(
             webhook_url="https://hooks.slack.com/services/T00/B00/secret"
@@ -95,8 +98,12 @@ def test_run_resolves_webhook_internally_and_dispatches(
         captured["target"] = target
         return True, ""
 
-    monkeypatch.setattr("tools.slack_send_message_tool.tool.resolve_webhook_url", _fake_resolve)
-    monkeypatch.setattr("tools.slack_send_message_tool.tool.dispatch_message", _fake_dispatch)
+    monkeypatch.setattr(
+        "integrations.slack.tools.slack_send_message_tool.tool.resolve_webhook_url", _fake_resolve
+    )
+    monkeypatch.setattr(
+        "integrations.slack.tools.slack_send_message_tool.tool.dispatch_message", _fake_dispatch
+    )
 
     result = slack_send_message.run(
         message=" deploy complete ",
@@ -113,10 +120,10 @@ def test_run_resolves_webhook_internally_and_dispatches(
 def test_run_sends_user_requested_action_message(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, Any] = {}
 
-    from tools.slack_send_message_tool.models import SlackDeliveryTarget
+    from integrations.slack.tools.slack_send_message_tool.models import SlackDeliveryTarget
 
     monkeypatch.setattr(
-        "tools.slack_send_message_tool.tool.resolve_webhook_url",
+        "integrations.slack.tools.slack_send_message_tool.tool.resolve_webhook_url",
         lambda _webhook_url="": (
             SlackDeliveryTarget(webhook_url="https://hooks.slack.com/services/T00/B00/secret"),
             "",
@@ -127,7 +134,9 @@ def test_run_sends_user_requested_action_message(monkeypatch: pytest.MonkeyPatch
         captured["message"] = message
         return True, ""
 
-    monkeypatch.setattr("tools.slack_send_message_tool.tool.dispatch_message", _fake_dispatch)
+    monkeypatch.setattr(
+        "integrations.slack.tools.slack_send_message_tool.tool.dispatch_message", _fake_dispatch
+    )
 
     result = slack_send_message.run(message="Tell the team the database failover is complete.")
 
@@ -147,7 +156,7 @@ def test_run_failed_when_message_is_empty() -> None:
 
 def test_run_failed_when_slack_not_configured(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "tools.slack_send_message_tool.tool.resolve_webhook_url",
+        "integrations.slack.tools.slack_send_message_tool.tool.resolve_webhook_url",
         lambda _webhook_url="": (None, "Slack is not configured."),
     )
 
@@ -161,17 +170,17 @@ def test_run_failed_when_slack_not_configured(monkeypatch: pytest.MonkeyPatch) -
 
 
 def test_run_propagates_send_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    from tools.slack_send_message_tool.models import SlackDeliveryTarget
+    from integrations.slack.tools.slack_send_message_tool.models import SlackDeliveryTarget
 
     monkeypatch.setattr(
-        "tools.slack_send_message_tool.tool.resolve_webhook_url",
+        "integrations.slack.tools.slack_send_message_tool.tool.resolve_webhook_url",
         lambda _webhook_url="": (
             SlackDeliveryTarget(webhook_url="https://hooks.slack.com/services/T00/B00/secret"),
             "",
         ),
     )
     monkeypatch.setattr(
-        "tools.slack_send_message_tool.tool.dispatch_message",
+        "integrations.slack.tools.slack_send_message_tool.tool.dispatch_message",
         lambda _message, _target: (False, "Slack webhook delivery failed."),
     )
 

@@ -67,7 +67,10 @@ def test_registry_preserves_aliases_and_special_case_buckets() -> None:
     assert service_key("open search") == "opensearch"
     assert family_key("grafana_local") == "grafana"
     assert family_key("grafana") == "grafana"
-    assert "slack" in SKIP_CLASSIFIED_SERVICES
+    # Slack must classify (bot token / webhook) so teammate tools resolve —
+    # it is not a skip_classification transport-only stub.
+    assert "slack" not in SKIP_CLASSIFIED_SERVICES
+    assert "slack" in DIRECT_CLASSIFIED_EFFECTIVE_SERVICES
     assert "grafana" in DIRECT_CLASSIFIED_EFFECTIVE_SERVICES
     assert "bitbucket" not in DIRECT_CLASSIFIED_EFFECTIVE_SERVICES
 

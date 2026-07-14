@@ -102,6 +102,7 @@ from integrations.sentry_mcp import DEFAULT_SENTRY_MCP_URL, build_sentry_mcp_con
 from integrations.sentry_mcp import classify as _classify_sentry_mcp
 from integrations.signoz import classify as _classify_signoz
 from integrations.signoz import signoz_config_from_env
+from integrations.slack.classify import classify as _classify_slack
 from integrations.smtp import classify as _classify_smtp
 from integrations.snowflake import classify as _classify_snowflake
 from integrations.splunk import classify as _classify_splunk
@@ -257,6 +258,7 @@ _CLASSIFIERS: dict[str, _ClassifyFn] = {
     "jira": _classify_jira,
     "discord": _classify_discord,
     "telegram": _classify_telegram,
+    "slack": _classify_slack,
     "whatsapp": _classify_whatsapp,
     "twilio": _classify_twilio,
     "openclaw": _classify_openclaw,
@@ -886,6 +888,18 @@ def load_env_integrations() -> list[dict[str, Any]]:
             _report_env_loader_failure(exc, integration="telegram")
         else:
             integrations.append(_active_env_record("telegram", tg_config.model_dump()))
+
+    slack_bot_token = os.getenv("SLACK_BOT_TOKEN", "").strip()
+    slack_webhook_url = os.getenv("SLACK_WEBHOOK_URL", "").strip()
+    if slack_bot_token or slack_webhook_url:
+        slack_credentials = {
+            "webhook_url": slack_webhook_url,
+            "bot_token": slack_bot_token,
+            "app_token": os.getenv("SLACK_APP_TOKEN", "").strip(),
+        }
+        slack_view, _slack_key = _classify_slack(slack_credentials, record_id="env:slack")
+        if slack_view is not None:
+            integrations.append(_active_env_record("slack", slack_view))
 
     smtp_host = os.getenv("SMTP_HOST", "").strip()
     if smtp_host:

@@ -83,6 +83,13 @@ variable "slack_allow_open_workspace" {
   default     = false
 }
 
+variable "slack_webhook_url" {
+  description = "Slack incoming webhook URL for outbound findings delivery (SLACK_WEBHOOK_URL); empty disables webhook delivery"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 variable "alert_listener_token" {
   description = "Bearer token required by /alerts and /investigate (OPENSRE_ALERT_LISTENER_TOKEN); empty leaves those routes loopback-only"
   type        = string

@@ -19,7 +19,13 @@ from slack_sdk.web import WebClient
 from core.agent_harness.session import SessionCore
 from gateway.runtime.errors import GatewayConfigurationError
 from gateway.runtime.sink_protocol import GatewayAgentCallback
-from gateway.slack.client import SlackMessagingClient, SlackWebApiClient
+from gateway.slack.client import (
+    SlackMessagingClient,
+    SlackWebApiClient,
+    mark_turn_done,
+    mark_turn_failed,
+    mark_turn_working,
+)
 from gateway.slack.events import SlackInboundMessage, parse_events_api_payload
 from gateway.slack.output_sink import SlackOutputSink
 from gateway.slack.security import (
@@ -28,6 +34,10 @@ from gateway.slack.security import (
     persist_policy_if_needed,
 )
 from gateway.slack.settings import SlackGatewaySettings
+from gateway.slack.thread_history import (
+    seed_session_from_slack_thread,
+    session_needs_thread_seed,
+)
 from gateway.storage import SessionBindingStore, SessionResolver, connect_gateway_db
 
 _PLATFORM_SLACK = "slack"
@@ -202,13 +212,56 @@ class _SlackTurnDispatcher:
                 session.session_id[:8],
                 len(inbound.text),
             )
+            mark_turn_working(
+                self._messaging,
+                channel=inbound.channel_id,
+                timestamp=inbound.ts,
+            )
             sink = SlackOutputSink(
                 client=self._messaging,
                 channel_id=inbound.channel_id,
                 thread_ts=inbound.thread_ts,
                 update_interval_seconds=self._settings.status_update_interval_seconds,
             )
-            self._handler(inbound.text, session, sink, self._logger)
+            try:
+                # Slack thread is the continuity source when the
+                # gateway session file is empty (redeploy / ephemeral disk).
+                if session_needs_thread_seed(session, inbound.text):
+                    seeded = seed_session_from_slack_thread(
+                        session,
+                        channel_id=inbound.channel_id,
+                        thread_ts=inbound.thread_ts,
+                        exclude_ts=inbound.ts,
+                    )
+                    if seeded:
+                        self._logger.info(
+                            "seeded session history from Slack thread msgs=%d",
+                            seeded,
+                        )
+                agent_text = _agent_text_with_slack_context(inbound)
+                self._handler(agent_text, session, sink, self._logger)
+            except Exception:
+                mark_turn_failed(
+                    self._messaging,
+                    channel=inbound.channel_id,
+                    timestamp=inbound.ts,
+                )
+                raise
+            mark_turn_done(
+                self._messaging,
+                channel=inbound.channel_id,
+                timestamp=inbound.ts,
+            )
+
+
+def _agent_text_with_slack_context(inbound: SlackInboundMessage) -> str:
+    """Prefix inbound text with channel/thread ids for teammate tool targeting.
+
+    Keep this a short metadata line — tool routing lives in action prompts.
+    ``thread_ts`` is included so follow-up seeding / thread reads can target
+    the triggering thread without steering every question to channel history.
+    """
+    return f"[Slack channel_id={inbound.channel_id} thread_ts={inbound.thread_ts}]\n{inbound.text}"
 
 
 def start_slack_gateway_background(

@@ -65,10 +65,15 @@ def merge_resolved_integrations(
 
 
 def _has_usable_cache(cache: dict[str, Any] | None) -> bool:
-    """True when a cache holds resolved configs and need not be re-resolved."""
-    return cache is not None and (
-        has_resolved_integrations(cache) or not has_only_underscore_prefixed_keys(cache)
-    )
+    """True when a cache holds resolved configs and need not be re-resolved.
+
+    An empty ``{}`` is *not* usable — that shape appears when gateway chat
+    metadata is about to be merged onto a still-unresolved session, and must
+    not freeze the turn on "no integrations".
+    """
+    if not cache:
+        return False
+    return has_resolved_integrations(cache) or not has_only_underscore_prefixed_keys(cache)
 
 
 def resolve_and_cache_integrations(session: SessionStore) -> dict[str, Any]:

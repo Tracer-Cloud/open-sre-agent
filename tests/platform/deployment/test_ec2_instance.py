@@ -75,3 +75,24 @@ def test_provision_instance_via_ssm_installs_pulls_and_starts_containers(
     assert "--env-file" in joined
     assert "/usr/bin/docker run" in joined
     assert mock_run_ssm.call_args.kwargs["max_poll_attempts"] == 60
+
+
+def test_extra_env_keys_are_collected(monkeypatch) -> None:
+    from platform.deployment.ecr_deploy import lifecycle
+
+    monkeypatch.setenv("OPENSRE_DEPLOY_EXTRA_ENV_KEYS", "GRAFANA_INSTANCE_URL, DATADOG_API_KEY")
+    monkeypatch.setenv("GRAFANA_INSTANCE_URL", "https://g.example")
+    monkeypatch.setenv("DATADOG_API_KEY", "dd-test")
+    monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
+
+    collected = lifecycle._collect_deploy_env_vars()
+
+    assert collected["GRAFANA_INSTANCE_URL"] == "https://g.example"
+    assert collected["DATADOG_API_KEY"] == "dd-test"
+
+
+def test_extra_env_keys_default_empty(monkeypatch) -> None:
+    from platform.deployment.ecr_deploy import lifecycle
+
+    monkeypatch.delenv("OPENSRE_DEPLOY_EXTRA_ENV_KEYS", raising=False)
+    assert lifecycle._extra_env_keys() == ()

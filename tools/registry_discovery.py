@@ -76,6 +76,7 @@ INTEGRATION_TOOL_PACKAGES: tuple[str, ...] = (
     "integrations.sentry.tools",
     "integrations.sentry_mcp.tools",
     "integrations.signoz.tools",
+    "integrations.slack.tools",
     "integrations.snowflake.tools",
     "integrations.splunk.tools",
     "integrations.supabase.tools",

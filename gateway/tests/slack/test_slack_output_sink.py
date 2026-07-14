@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from gateway.slack.output_sink import SLACK_MAX_MESSAGE_CHARS, SlackOutputSink
 
 
@@ -19,6 +21,12 @@ class _FakeMessagingClient:
     def update_message(self, *, channel: str, ts: str, text: str) -> bool:
         self.updates.append({"channel": channel, "ts": ts, "text": text})
         return self.update_ok
+
+    def add_reaction(self, **_kwargs: Any) -> bool:
+        return True
+
+    def remove_reaction(self, **_kwargs: Any) -> bool:
+        return True
 
 
 def _sink(client: _FakeMessagingClient) -> SlackOutputSink:
