@@ -9,7 +9,7 @@ AWS EC2 deployment and shared provisioning primitives for OpenSRE.
 | [`aws/`](aws/) | Shared AWS SDK primitives (`client`, `config`, VPC/SG, EC2/IAM, ECR, SSM). |
 | [`ecr_deploy/`](ecr_deploy/) | Docker/ECR EC2 provisioning: `opensre-web` + `opensre-gateway` on one instance. |
 | [`fargate/`](fargate/) | ECS Fargate + RDS layout (plan/dry-run; apply not implemented yet). |
-| [`gateway/`](gateway/) | AMI + systemd deployment path for the Telegram gateway only (no Docker/ECR). See [gateway/README.md](gateway/README.md). |
+| [`gateway/`](gateway/) | AMI + systemd deployment path for the messaging gateway (Telegram and/or Slack; no Docker/ECR). See [gateway/README.md](gateway/README.md). |
 | `install-proxy/` | Install proxy utility (Cloudflare Worker). |
 
 ## EC2 deploy commands
@@ -46,8 +46,9 @@ Copy [`.env.deploy.example`](../../.env.deploy.example) to `.env` in the repo ro
 | Variable | Required | Used by |
 | --- | --- | --- |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Yes (or role) | Provisioning |
-| `TELEGRAM_BOT_TOKEN` | Yes | Gateway container |
-| `TELEGRAM_ALLOWED_USERS` | Recommended | Gateway pairing gate |
+| `TELEGRAM_BOT_TOKEN` **or** `SLACK_BOT_TOKEN` + `SLACK_APP_TOKEN` | Yes (at least one chat gateway) | Gateway container |
+| `TELEGRAM_ALLOWED_USERS` | Recommended when Telegram is configured | Gateway pairing gate |
+| `SLACK_ALLOWED_USERS` | Recommended when Slack is configured (or `SLACK_ALLOW_OPEN_WORKSPACE=1`) | Gateway allowlist |
 | `LLM_PROVIDER` + API key | Yes | Both containers |
 | `EC2_KEY_NAME` | No | Optional SSH debug key pair |
 
@@ -61,7 +62,7 @@ One stack named `opensre-ec2`:
 - **IAM** instance profile — ECR pull, SSM, Bedrock (if used)
 - **Containers on the instance:**
   - `opensre-web` — `MODE=web`, port `8000`
-  - `opensre-gateway` — `MODE=gateway`, Telegram long-polling
+  - `opensre-gateway` — `MODE=gateway`, Telegram long-polling and/or Slack Socket Mode
 
 Outputs are written to `~/.opensre/deployments/opensre-ec2.json` (`InstanceId`, `PublicIpAddress`, `ImageUri`, etc.).
 

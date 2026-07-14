@@ -77,7 +77,7 @@ def test_classify_validation_failure_reports_without_secret_value() -> None:
     mock_report.assert_called_once()
     reported_exc = mock_report.call_args.args[0]
     assert secret not in str(reported_exc)
-    assert "SMTPIntegrationConfig validation failed" in str(reported_exc)
+    assert "smtp config validation failed" in str(reported_exc)
 
 
 def test_catalog_bootstraps_smtp_from_env(monkeypatch: pytest.MonkeyPatch) -> None:

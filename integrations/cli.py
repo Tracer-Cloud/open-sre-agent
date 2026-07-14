@@ -273,10 +273,65 @@ def _setup_aws() -> None:
 
 
 def _setup_slack() -> None:
-    webhook_url = _p("Slack webhook URL", secret=True)
-    if not webhook_url:
-        _die("webhook_url is required.")
-    upsert_integration("slack", {"credentials": {"webhook_url": webhook_url}})
+    """Configure Slack delivery webhook and/or Socket Mode gateway tokens.
+
+    Mirrors Telegram setup: credentials land in the integration store so
+    ``load_slack_gateway_settings`` and outbound delivery can read them.
+    Existing credentials are merged so re-running setup does not wipe the
+    other mode.
+    """
+    from integrations.store import get_integration
+
+    existing = get_integration("slack") or {}
+    creds = dict(existing.get("credentials") or {})
+
+    mode = questionary.select(
+        "Slack setup:",
+        choices=[
+            questionary.Choice("Incoming webhook (outbound delivery)", value="webhook"),
+            questionary.Choice("Socket Mode bot (two-way gateway chat)", value="socket"),
+            questionary.Choice("Both webhook and Socket Mode", value="both"),
+        ],
+        instruction="(use arrow keys)",
+    ).ask()
+    if mode is None:
+        print("\nAborted.")
+        sys.exit(1)
+
+    if mode in {"webhook", "both"}:
+        webhook_url = _p(
+            "Slack webhook URL",
+            secret=True,
+            default=str(creds.get("webhook_url") or ""),
+        )
+        if not webhook_url:
+            _die("webhook_url is required for webhook setup.")
+        creds["webhook_url"] = webhook_url
+
+    if mode in {"socket", "both"}:
+        bot_token = _p(
+            "Slack bot token (xoxb-…)",
+            secret=True,
+            default=str(creds.get("bot_token") or ""),
+        )
+        app_token = _p(
+            "Slack app-level token (xapp-…)",
+            secret=True,
+            default=str(creds.get("app_token") or ""),
+        )
+        if not bot_token or not app_token:
+            _die("bot_token and app_token are required for Socket Mode setup.")
+        if not bot_token.startswith("xoxb-"):
+            _die("bot_token must start with xoxb-")
+        if not app_token.startswith("xapp-"):
+            _die("app_token must start with xapp-")
+        creds["bot_token"] = bot_token
+        creds["app_token"] = app_token
+        print("\n  Next for the gateway:")
+        print("    - opensre messaging allow -p slack -u <U…>")
+        print("    - opensre gateway start")
+
+    upsert_integration("slack", {"credentials": creds})
 
 
 def _setup_opensearch() -> None:

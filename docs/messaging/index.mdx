@@ -9,7 +9,7 @@ OpenSRE can deliver investigation findings — and accept investigation triggers
 
 | Platform | Best for | Trigger investigations from chat? | Configured by | Setup time |
 |---|---|---|---|---|
-| [**Slack**](/messaging/slack) | Teams already paged in Slack channels | ❌ delivery only (incoming webhook) | `opensre integrations setup slack` | ~5 min |
+| [**Slack**](/messaging/slack) | Teams already paged in Slack channels | ✅ Socket Mode chat via `opensre gateway start` (+ webhook delivery) | `opensre integrations setup slack` | ~10 min |
 | [**Discord**](/messaging/discord) | Communities and teams using Discord servers | ✅ `/investigate` slash command in any channel the bot is in | `opensre onboard` or `opensre integrations setup discord` | ~10 min |
 | [**Telegram**](/messaging/telegram) | Mobile-first and on-call rotations | ✅ DM text chat via `opensre gateway start` | `opensre onboard` or `opensre integrations setup telegram` | ~5 min |
 | [**WhatsApp**](/messaging/whatsapp) | Mobile alerting via Twilio WhatsApp | ❌ delivery only | `opensre integrations setup whatsapp` | ~5 min |
@@ -37,9 +37,11 @@ Each platform guide walks you through:
 Discord and Telegram credentials can also be set directly in `.env` instead of (or alongside) the CLI configuration:
 
 ```bash
-# Slack — read as a fallback when no Slack entry exists in
-# ~/.opensre/integrations.json
+# Slack — webhook delivery and/or Socket Mode gateway
 SLACK_WEBHOOK_URL=
+SLACK_BOT_TOKEN=
+SLACK_APP_TOKEN=
+SLACK_ALLOWED_USERS=
 
 # Discord
 DISCORD_BOT_TOKEN=
@@ -50,6 +52,7 @@ DISCORD_DEFAULT_CHANNEL_ID=
 # Telegram
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_DEFAULT_CHAT_ID=
+TELEGRAM_ALLOWED_USERS=
 
 # WhatsApp (Twilio)
 TWILIO_ACCOUNT_SID=

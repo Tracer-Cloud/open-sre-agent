@@ -17,11 +17,11 @@ from platform.deployment.aws.config import (
     GATEWAY_HEALTH_MAX_ATTEMPTS,
     GATEWAY_HEALTH_POLL_INTERVAL_SECONDS,
     GATEWAY_LOG_TAIL_LINES,
-    GATEWAY_READY_LOG_SENTINEL,
     PROVISION_ECR_AUTH_MAX_ATTEMPTS,
     PROVISION_ECR_AUTH_RETRY_SECONDS,
     SSM_PROVISION_CMD_POLL_ATTEMPTS,
     SSM_PROVISION_CMD_POLL_INTERVAL_SECONDS,
+    logs_contain_gateway_ready,
 )
 from platform.deployment.aws.ssm import run_ssm_shell_command
 from platform.deployment.ecr_deploy.stack import GATEWAY_CONTAINER_NAME, WEB_CONTAINER_NAME
@@ -36,6 +36,7 @@ _GATEWAY_ONLY_ENV_KEYS = frozenset(
         "SLACK_BOT_TOKEN",
         "SLACK_APP_TOKEN",
         "SLACK_ALLOWED_USERS",
+        "SLACK_ALLOW_OPEN_WORKSPACE",
     }
 )
 
@@ -240,7 +241,7 @@ def wait_for_gateway_process(
 
             stdout = result["stdout"]
             container_running = bool(stdout.strip().split("\n")[0].strip())
-            logs_contain_sentinel = GATEWAY_READY_LOG_SENTINEL in stdout
+            logs_contain_sentinel = logs_contain_gateway_ready(stdout)
 
             if container_running and logs_contain_sentinel:
                 logger.info(
