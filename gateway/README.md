@@ -76,9 +76,17 @@ only in *how they receive input and send output* — never in how the agent thin
 # Allow your Telegram user id (from @userinfobot)
 uv run opensre messaging allow -p telegram -u 123456789
 
+# Allow your Slack member id (profile → Copy member ID)
+uv run opensre messaging allow -p slack -u U0123ABCD
+
 # Start the gateway daemon (web app + Telegram chat + Slack chat + task scheduler)
 uv run opensre gateway start
 ```
+
+Both transports load configuration the same way: tokens from env first with the
+integration store as fallback; allowed users from the integration store
+(written by `opensre messaging allow`) first with the `*_ALLOWED_USERS` env
+var as fallback.
 
 DM your bot from Telegram, or mention/DM it in Slack (see
 `docs/messaging/slack.mdx` for the Slack app setup).

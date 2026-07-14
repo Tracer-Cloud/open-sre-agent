@@ -36,6 +36,7 @@ _GATEWAY_ONLY_ENV_KEYS = frozenset(
         "SLACK_BOT_TOKEN",
         "SLACK_APP_TOKEN",
         "SLACK_ALLOWED_USERS",
+        "SLACK_ALLOW_OPEN_WORKSPACE",
     }
 )
 

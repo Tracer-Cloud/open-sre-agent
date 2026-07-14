@@ -113,7 +113,13 @@ The gateway can also run a two-way Slack bot over [Socket Mode](https://api.slac
 3. Under **Event Subscriptions**, subscribe to the bot events `app_mention` and `message.im`.
 4. Set `SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN`, and `SLACK_ALLOWED_USERS` (comma-separated Slack user IDs) where the gateway runs, then start it (`opensre gateway start`). Tokens come from the environment or a secret store — never commit them.
 
-`SLACK_ALLOWED_USERS` is **required** for the Socket Mode bot. For dogfood only, you may set `SLACK_ALLOW_OPEN_WORKSPACE=1` instead (any workspace member can talk to the bot).
+An allowlist is **required** for the Socket Mode bot, managed the same way as Telegram's:
+
+```bash
+opensre messaging allow -p slack -u U0123ABCD   # persisted in the integration store
+```
+
+or via the `SLACK_ALLOWED_USERS` env var (comma-separated member IDs; the integration store takes precedence when both are set). For dogfood only, you may set `SLACK_ALLOW_OPEN_WORKSPACE=1` instead (any workspace member can talk to the bot).
 
 ---
 
