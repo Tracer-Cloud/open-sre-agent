@@ -19,12 +19,15 @@ _DEPLOY_ENV_EXAMPLE = ".env.deploy.example"
 # paths (CodeQL clear-text logging).
 _MISSING_LABELS: dict[str, str] = {
     "aws": "AWS account access for EC2 provisioning",
+    "messaging_gateway": "Chat gateway configuration (Telegram and/or Slack Socket Mode)",
     "telegram_bot": "Telegram gateway bot configuration",
+    "slack_bot": "Slack Socket Mode gateway configuration",
     "llm_provider_invalid": "LLM provider setting (unsupported value)",
     "llm_api": "LLM provider configuration for the selected provider",
 }
 _WARNING_LABELS: dict[str, str] = {
     "telegram_users": "Telegram allowed-users configuration (recommended)",
+    "slack_users": "Slack allowed-users configuration (recommended)",
     "llm_provider_ec2": "LLM provider may not work inside EC2 containers",
 }
 
@@ -60,6 +63,60 @@ def _aws_credentials_available() -> bool:
     return credentials is not None
 
 
+def _collect_messaging_gateway_issues() -> tuple[list[DeployEnvIssue], list[DeployEnvIssue]]:
+    """Validate Telegram and/or Slack Socket Mode deploy env."""
+    missing: list[DeployEnvIssue] = []
+    warnings: list[DeployEnvIssue] = []
+
+    telegram_ok = _env_set("TELEGRAM_BOT_TOKEN")
+    slack_bot = _env_set("SLACK_BOT_TOKEN")
+    slack_app = _env_set("SLACK_APP_TOKEN")
+    slack_ok = slack_bot and slack_app
+    slack_partial = (slack_bot or slack_app) and not slack_ok
+
+    if slack_partial:
+        missing.append(DeployEnvIssue("slack_bot", env_vars=("SLACK_BOT_TOKEN", "SLACK_APP_TOKEN")))
+    elif not telegram_ok and not slack_ok:
+        missing.append(
+            DeployEnvIssue(
+                "messaging_gateway",
+                env_vars=("TELEGRAM_BOT_TOKEN", "SLACK_BOT_TOKEN", "SLACK_APP_TOKEN"),
+            )
+        )
+
+    if telegram_ok and not _env_set("TELEGRAM_ALLOWED_USERS"):
+        warnings.append(DeployEnvIssue("telegram_users", env_vars=("TELEGRAM_ALLOWED_USERS",)))
+
+    if (
+        slack_ok
+        and not _env_set("SLACK_ALLOWED_USERS")
+        and not _env_set("SLACK_ALLOW_OPEN_WORKSPACE")
+    ):
+        warnings.append(DeployEnvIssue("slack_users", env_vars=("SLACK_ALLOWED_USERS",)))
+
+    return missing, warnings
+
+
+def _collect_llm_issues() -> tuple[list[DeployEnvIssue], list[DeployEnvIssue]]:
+    missing: list[DeployEnvIssue] = []
+    warnings: list[DeployEnvIssue] = []
+    provider = get_configured_llm_provider()
+    if provider not in SUPPORTED_PROVIDER_VALUES:
+        missing.append(DeployEnvIssue("llm_provider_invalid", env_vars=("LLM_PROVIDER",)))
+        return missing, warnings
+
+    api_key_env = get_llm_provider_api_key_env(provider)
+    if api_key_env and not _env_set(api_key_env):
+        missing.append(DeployEnvIssue("llm_api", env_vars=(api_key_env,), provider=provider))
+        return missing, warnings
+
+    if provider in KEYLESS_PROVIDER_VALUES:
+        spec = provider_spec(provider)
+        if spec is not None and spec.credential_kind in {"cli", "local"}:
+            warnings.append(DeployEnvIssue("llm_provider_ec2"))
+    return missing, warnings
+
+
 def _collect_deploy_env_issues() -> tuple[list[DeployEnvIssue], list[DeployEnvIssue]]:
     """Return ``(missing_required, warnings)`` for the current process env."""
     bootstrap_opensre_env(override=False)
@@ -70,23 +127,13 @@ def _collect_deploy_env_issues() -> tuple[list[DeployEnvIssue], list[DeployEnvIs
     if not _aws_credentials_available():
         missing.append(DeployEnvIssue("aws"))
 
-    if not _env_set("TELEGRAM_BOT_TOKEN"):
-        missing.append(DeployEnvIssue("telegram_bot", env_vars=("TELEGRAM_BOT_TOKEN",)))
+    msg_missing, msg_warnings = _collect_messaging_gateway_issues()
+    missing.extend(msg_missing)
+    warnings.extend(msg_warnings)
 
-    if not _env_set("TELEGRAM_ALLOWED_USERS"):
-        warnings.append(DeployEnvIssue("telegram_users", env_vars=("TELEGRAM_ALLOWED_USERS",)))
-
-    provider = get_configured_llm_provider()
-    if provider not in SUPPORTED_PROVIDER_VALUES:
-        missing.append(DeployEnvIssue("llm_provider_invalid", env_vars=("LLM_PROVIDER",)))
-    else:
-        api_key_env = get_llm_provider_api_key_env(provider)
-        if api_key_env and not _env_set(api_key_env):
-            missing.append(DeployEnvIssue("llm_api", env_vars=(api_key_env,), provider=provider))
-        elif provider in KEYLESS_PROVIDER_VALUES:
-            spec = provider_spec(provider)
-            if spec is not None and spec.credential_kind in {"cli", "local"}:
-                warnings.append(DeployEnvIssue("llm_provider_ec2"))
+    llm_missing, llm_warnings = _collect_llm_issues()
+    missing.extend(llm_missing)
+    warnings.extend(llm_warnings)
 
     return missing, warnings
 
@@ -98,13 +145,11 @@ def _supports_color() -> bool:
 def _highlight(text: str, *, kind: str) -> str:
     if not _supports_color():
         return text
-    if kind == "missing":
-        return f"\033[31m{text}\033[0m"
-    if kind == "warn":
-        return f"\033[33m{text}\033[0m"
-    if kind == "label":
-        return f"\033[1m{text}\033[0m"
-    return text
+    codes = {"missing": "31", "warn": "33", "label": "1"}
+    code = codes.get(kind)
+    if code is None:
+        return text
+    return f"\033[{code}m{text}\033[0m"
 
 
 def _label_for_issue(issue: DeployEnvIssue, *, warning: bool) -> str:
@@ -113,28 +158,48 @@ def _label_for_issue(issue: DeployEnvIssue, *, warning: bool) -> str:
 
 
 def _format_issue_message(issue: DeployEnvIssue, *, warning: bool) -> str:
+    """Format one deploy issue via a code → formatter map (no long if/elif chain)."""
     label = _label_for_issue(issue, warning=warning)
-
-    if issue.code == "telegram_bot" and issue.env_vars:
-        return f"{issue.env_vars[0]} — API key not set ({label})"
-
-    if issue.code == "llm_api" and issue.env_vars:
-        provider = issue.provider or "selected provider"
-        return f"{issue.env_vars[0]} — API key not set (required for LLM provider: {provider})"
-
-    if issue.code == "aws":
-        return (
+    formatters = {
+        "telegram_bot": lambda: (
+            f"{issue.env_vars[0]} — API key not set ({label})" if issue.env_vars else label
+        ),
+        "slack_bot": lambda: (
+            f"{' + '.join(issue.env_vars)} — both required for Socket Mode ({label})"
+            if issue.env_vars
+            else label
+        ),
+        "messaging_gateway": lambda: (
+            "Chat gateway — set TELEGRAM_BOT_TOKEN and/or "
+            f"SLACK_BOT_TOKEN + SLACK_APP_TOKEN ({label})"
+        ),
+        "llm_api": lambda: (
+            f"{issue.env_vars[0]} — API key not set "
+            f"(required for LLM provider: {issue.provider or 'selected provider'})"
+            if issue.env_vars
+            else label
+        ),
+        "aws": lambda: (
             "AWS credentials — not configured "
             "(set AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY, AWS_ROLE_ARN, or AWS_PROFILE)"
-        )
-
-    if issue.code == "llm_provider_invalid" and issue.env_vars:
-        return f"{issue.env_vars[0]} — unsupported or missing value ({label})"
-
-    if issue.code == "telegram_users" and issue.env_vars:
-        return f"{issue.env_vars[0]} — not set ({label})"
-
-    return label
+        ),
+        "llm_provider_invalid": lambda: (
+            f"{issue.env_vars[0]} — unsupported or missing value ({label})"
+            if issue.env_vars
+            else label
+        ),
+        "telegram_users": lambda: (
+            f"{issue.env_vars[0]} — not set ({label})" if issue.env_vars else label
+        ),
+        "slack_users": lambda: (
+            f"{issue.env_vars[0]} — not set ({label}; "
+            "or set SLACK_ALLOW_OPEN_WORKSPACE=1 for dogfood)"
+            if issue.env_vars
+            else label
+        ),
+    }
+    formatter = formatters.get(issue.code)
+    return formatter() if formatter is not None else label
 
 
 def _print_deploy_env_report(missing: list[DeployEnvIssue], warnings: list[DeployEnvIssue]) -> None:

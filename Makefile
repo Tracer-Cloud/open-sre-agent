@@ -310,7 +310,7 @@ destroy-fargate:
 test-deploy:
 	$(PYTHON) -m pytest tests/deployment/ec2/ -v -s
 
-# Gateway deploy (Telegram gateway only, no Docker/ECR)
+# Gateway deploy (Telegram and/or Slack Socket Mode; no Docker/ECR)
 # Step 1 — bake once per code change (launches temp EC2, installs opensre, snapshots AMI):
 bake-gateway:
 	$(PYTHON) -m platform.deployment.gateway.lifecycle bake-ami

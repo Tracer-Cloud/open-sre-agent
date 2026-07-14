@@ -16,23 +16,30 @@ from slack_sdk.socket_mode.request import SocketModeRequest
 from slack_sdk.socket_mode.response import SocketModeResponse
 from slack_sdk.web import WebClient
 
+from core.agent_harness.session import SessionCore
 from gateway.runtime.errors import GatewayConfigurationError
 from gateway.runtime.sink_protocol import GatewayAgentCallback
 from gateway.slack.client import SlackMessagingClient, SlackWebApiClient
 from gateway.slack.events import SlackInboundMessage, parse_events_api_payload
 from gateway.slack.output_sink import SlackOutputSink
-from gateway.slack.security import authorize_slack_message
+from gateway.slack.security import (
+    SlackInboundDecision,
+    enforce_inbound_slack_message_security,
+    persist_policy_if_needed,
+)
 from gateway.slack.settings import SlackGatewaySettings
 from gateway.storage import SessionBindingStore, SessionResolver, connect_gateway_db
 
 _PLATFORM_SLACK = "slack"
 _EVENTS_API_REQUEST_TYPE = "events_api"
+_ROTATE_SESSION = "__ROTATE_SESSION__"
 
 # Per-thread locks are pruned once this many conversations have been seen,
 # keeping memory flat in workspaces where every message starts a new thread.
 _MAX_CONVERSATION_LOCKS = 1024
 
 _DENIAL_REPLY = "You're not authorized to use this bot. Ask an admin to add you."
+_NEW_SESSION_REPLY = "Started a new session."
 
 
 @dataclass
@@ -132,30 +139,61 @@ class _SlackTurnDispatcher:
             with self._locks_guard:
                 entry.refs -= 1
 
-    def _run_turn(self, inbound: SlackInboundMessage) -> None:
-        with self._conversation_turn(inbound.conversation_key):
-            result = authorize_slack_message(
-                user_id=inbound.user_id,
-                channel_id=inbound.channel_id,
-                text=inbound.text,
-                allowed_user_ids=self._settings.allowed_user_ids,
-                allow_open_workspace=self._settings.allow_open_workspace,
-            )
-            if not result:
-                # The detailed reason goes to the audit log only; the channel
-                # reply must not leak configuration (env var names, allowlists).
-                self._messaging.post_message(
-                    channel=inbound.channel_id,
-                    text=_DENIAL_REPLY,
-                    thread_ts=inbound.thread_ts,
-                )
-                return
+    def _post(self, inbound: SlackInboundMessage, text: str) -> None:
+        self._messaging.post_message(
+            channel=inbound.channel_id,
+            text=text,
+            thread_ts=inbound.thread_ts,
+        )
 
-            with self._resolver_lock:
-                session = self._session_resolver.resolve(
+    def _apply_inbound_decision(
+        self,
+        inbound: SlackInboundMessage,
+        decision: SlackInboundDecision,
+    ) -> SessionCore | None:
+        """Apply auth decision side effects. Return a session to run, or None to stop."""
+        persist_policy_if_needed(decision)
+
+        is_rotate = decision.reply_text == _ROTATE_SESSION
+        if decision.reply_text and not is_rotate:
+            # Pairing / help replies are safe to show; never echo allowlist
+            # denial reasons (those stay in the audit log only).
+            self._post(inbound, decision.reply_text)
+            if not decision.allowed:
+                return None
+
+        if not decision.allowed and not is_rotate:
+            self._post(inbound, _DENIAL_REPLY)
+            return None
+
+        with self._resolver_lock:
+            if is_rotate:
+                session = self._session_resolver.rotate(
                     user_id=inbound.conversation_key,
                     chat_id=inbound.channel_id,
                 )
+                self._post(inbound, _NEW_SESSION_REPLY)
+                if inbound.text.strip().lower() == "/new":
+                    return None
+                return session
+            return self._session_resolver.resolve(
+                user_id=inbound.conversation_key,
+                chat_id=inbound.channel_id,
+            )
+
+    def _run_turn(self, inbound: SlackInboundMessage) -> None:
+        with self._conversation_turn(inbound.conversation_key):
+            decision = enforce_inbound_slack_message_security(
+                user_id=inbound.user_id,
+                channel_id=inbound.channel_id,
+                text=inbound.text,
+                env_allowed_user_ids=self._settings.allowed_user_ids,
+                allow_open_workspace=self._settings.allow_open_workspace,
+            )
+            session = self._apply_inbound_decision(inbound, decision)
+            if session is None:
+                return
+
             # Never log message bodies — audit hashes live in messaging_security.
             self._logger.info(
                 "inbound platform=slack user=%s channel=%s session=%s chars=%d",

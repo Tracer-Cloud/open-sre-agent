@@ -1,9 +1,22 @@
 from __future__ import annotations
 
 import logging
+import os
+from collections.abc import Iterator
 from typing import Any
 
 import pytest
+
+
+@pytest.fixture(autouse=True)
+def clean_slack_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Remove SLACK_* env vars so the Slack verifier's Socket Mode branch only
+    activates when a test configures tokens explicitly."""
+    for key in list(os.environ):
+        if key.startswith("SLACK_"):
+            monkeypatch.delenv(key, raising=False)
+    yield
+
 
 from integrations.aws.verifier import verify_aws as _verify_aws
 from integrations.coralogix.verifier import verify_coralogix as _verify_coralogix
@@ -315,7 +328,7 @@ def test_verify_slack_uses_v2_store_credentials(monkeypatch: pytest.MonkeyPatch)
             "service": "slack",
             "source": "local store",
             "status": "passed",
-            "detail": "Configured. Use --send-slack-test to validate delivery.",
+            "detail": "Webhook configured. Use --send-slack-test to validate delivery.",
         }
     ]
 

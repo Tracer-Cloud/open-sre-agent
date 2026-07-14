@@ -82,6 +82,9 @@ class GatewayManager:
         self._start_slack(logger, handler)
         self._start_scheduler(logger)
         self._publish_status(logger)
+        # Deploy health waits (EC2 Docker + AMI) match this line for Telegram
+        # and/or Slack — do not rely on transport-specific log strings alone.
+        logger.info("[gateway] ready")
 
         signal.signal(signal.SIGINT, self._handle_signal)
         signal.signal(signal.SIGTERM, self._handle_signal)

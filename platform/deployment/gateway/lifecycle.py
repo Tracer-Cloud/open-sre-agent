@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deploy and destroy the OpenSRE Telegram gateway on EC2 using a custom AMI."""
+"""Deploy and destroy the OpenSRE messaging gateway on EC2 using a custom AMI."""
 
 from __future__ import annotations
 

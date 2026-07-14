@@ -113,10 +113,11 @@ class TestGatewayHealth:
             f"Gateway container '{GATEWAY_CONTAINER_NAME}' not running. SSM stdout:\n{stdout[:500]}"
         )
 
-        # Gateway must have logged the startup sentinel
-        assert "polling started" in stdout, (
-            f"Gateway polling-started sentinel not found in container logs. "
-            f"SSM stdout:\n{stdout[:1000]}"
+        # Gateway must have logged a ready sentinel (unified or legacy transport)
+        from platform.deployment.aws.config import logs_contain_gateway_ready
+
+        assert logs_contain_gateway_ready(stdout), (
+            f"Gateway ready sentinel not found in container logs. SSM stdout:\n{stdout[:1000]}"
         )
 
         logger.info("Gateway process health check OK on instance %s", instance_id)
