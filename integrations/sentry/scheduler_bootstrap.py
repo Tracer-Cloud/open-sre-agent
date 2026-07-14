@@ -1,14 +1,13 @@
-"""Register the Sentry morning digest as the scheduler's agent runner."""
+"""Register scheduled agent digests (Sentry + GitHub PR sweep)."""
 
 from __future__ import annotations
 
-from integrations.sentry.morning_digest_runner import run_sentry_morning_digest
-from platform.scheduler.agent_runner import register_agent_runner
+from integrations.scheduled_agent_bootstrap import install as install_scheduled_agent
 
 
 def install() -> None:
-    """Bind the Sentry morning digest runner for scheduled delivery tasks."""
-    register_agent_runner(run_sentry_morning_digest)
+    """Bind the multiplexed scheduled agent runner (backward-compatible entry)."""
+    install_scheduled_agent()
 
 
 __all__ = ["install"]

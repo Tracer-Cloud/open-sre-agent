@@ -121,6 +121,16 @@ def test_system_prompt_hands_off_natural_language_slash_status_questions() -> No
     assert "current llm settings in its environment context" in compact_prompt
 
 
+def test_system_prompt_routes_slack_teammate_reads_to_action_tools() -> None:
+    prompt = _SYSTEM_PROMPT_BASE.lower()
+    compact = prompt.replace(" ", "")
+    assert "slack teammate requests are action tools" in prompt
+    assert "not handoffs" in prompt
+    assert 'slack_read_messages(channel="#opensre-slack-testing"' in compact
+    assert "are not covered by the data-retrieval handoff rule" in prompt
+    assert "do not emit assistant_handoff for these" in prompt
+
+
 def test_system_prompt_keeps_bare_alert_blob_as_handoff() -> None:
     prompt = _SYSTEM_PROMPT_BASE.lower()
     assert "a bare pasted alert blob with no instruction remains assistant_handoff" in prompt

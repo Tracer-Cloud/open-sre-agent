@@ -39,6 +39,7 @@ def build_message(task: ScheduledTask) -> str:
         TaskKind.SYNTHETIC_RUN: _build_synthetic_run,
         TaskKind.CUSTOM_INVESTIGATION: _build_custom_investigation,
         TaskKind.SENTRY_MORNING_DIGEST: _build_sentry_morning_digest,
+        TaskKind.GITHUB_PR_SWEEP: _build_github_pr_sweep,
     }
     builder = builders.get(task.kind)
     if builder is None:
@@ -191,17 +192,34 @@ def _build_sentry_morning_digest(task: ScheduledTask) -> str:
     try:
         safe_params = {k: v for k, v in task.params.items() if k not in _CREDENTIAL_KEYS}
         payload = {
-            "source": "scheduled_sentry_morning_digest",
-            "task_id": task.id,
             "stats_period": "24h",
             "query": "is:unresolved",
             **safe_params,
+            "source": "scheduled_sentry_morning_digest",
+            "task_id": task.id,
         }
         return invoke_agent_runner(payload)
     except Exception as exc:
         logger.error("Sentry morning digest failed for task %s: %s", task.id, exc)
         raise RuntimeError(
             f"Sentry morning digest failed for task {task.id}. Check logs for details."
+        ) from exc
+
+
+def _build_github_pr_sweep(task: ScheduledTask) -> str:
+    """Build a GitHub PR sweep digest via the headless agent path."""
+    try:
+        safe_params = {k: v for k, v in task.params.items() if k not in _CREDENTIAL_KEYS}
+        payload = {
+            **safe_params,
+            "source": "scheduled_github_pr_sweep",
+            "task_id": task.id,
+        }
+        return invoke_agent_runner(payload)
+    except Exception as exc:
+        logger.error("GitHub PR sweep failed for task %s: %s", task.id, exc)
+        raise RuntimeError(
+            f"GitHub PR sweep failed for task {task.id}. Check logs for details."
         ) from exc
 
 

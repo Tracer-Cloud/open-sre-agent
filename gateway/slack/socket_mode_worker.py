@@ -19,7 +19,13 @@ from slack_sdk.web import WebClient
 from core.agent_harness.session import SessionCore
 from gateway.runtime.errors import GatewayConfigurationError
 from gateway.runtime.sink_protocol import GatewayAgentCallback
-from gateway.slack.client import SlackMessagingClient, SlackWebApiClient
+from gateway.slack.client import (
+    SlackMessagingClient,
+    SlackWebApiClient,
+    mark_turn_done,
+    mark_turn_failed,
+    mark_turn_working,
+)
 from gateway.slack.events import SlackInboundMessage, parse_events_api_payload
 from gateway.slack.output_sink import SlackOutputSink
 from gateway.slack.security import (
@@ -202,13 +208,43 @@ class _SlackTurnDispatcher:
                 session.session_id[:8],
                 len(inbound.text),
             )
+            mark_turn_working(
+                self._messaging,
+                channel=inbound.channel_id,
+                timestamp=inbound.ts,
+            )
             sink = SlackOutputSink(
                 client=self._messaging,
                 channel_id=inbound.channel_id,
                 thread_ts=inbound.thread_ts,
                 update_interval_seconds=self._settings.status_update_interval_seconds,
             )
-            self._handler(inbound.text, session, sink, self._logger)
+            try:
+                # Give the agent the current channel/thread so "this channel" /
+                # "summarize the conversation" can call slack_read_messages.
+                agent_text = _agent_text_with_slack_context(inbound)
+                self._handler(agent_text, session, sink, self._logger)
+            except Exception:
+                mark_turn_failed(
+                    self._messaging,
+                    channel=inbound.channel_id,
+                    timestamp=inbound.ts,
+                )
+                raise
+            mark_turn_done(
+                self._messaging,
+                channel=inbound.channel_id,
+                timestamp=inbound.ts,
+            )
+
+
+def _agent_text_with_slack_context(inbound: SlackInboundMessage) -> str:
+    """Prefix inbound text with Slack channel/thread ids for teammate tools."""
+    parts = [f"[Slack channel_id={inbound.channel_id}"]
+    if inbound.thread_ts:
+        parts.append(f" thread_ts={inbound.thread_ts}")
+    parts.append("]")
+    return f"{''.join(parts)}\n{inbound.text}"
 
 
 def start_slack_gateway_background(

@@ -7,10 +7,13 @@ from typing import Any
 
 from core.tool_framework.base import BaseTool
 from core.tool_framework.tool_decorator import tool
-from tools.slack_send_message_tool.constants import SOURCE
-from tools.slack_send_message_tool.delivery import dispatch_message, resolve_webhook_url
-from tools.slack_send_message_tool.results import failed_result, sent_result
-from tools.slack_send_message_tool.validation import validate_message
+from integrations.slack.tools.slack_send_message_tool.constants import SOURCE
+from integrations.slack.tools.slack_send_message_tool.delivery import (
+    dispatch_message,
+    resolve_webhook_url,
+)
+from integrations.slack.tools.slack_send_message_tool.results import failed_result, sent_result
+from integrations.slack.tools.slack_send_message_tool.validation import validate_message
 
 
 class SlackSendMessageTool(BaseTool):
@@ -68,6 +71,8 @@ class SlackSendMessageTool(BaseTool):
     def is_available(self, sources: dict[str, Any]) -> bool:
         slack = sources.get("slack") or {}
         configured_webhook = str(slack.get("webhook_url") or "").strip()
+        if not configured_webhook and isinstance(slack.get("config"), dict):
+            configured_webhook = str(slack["config"].get("webhook_url") or "").strip()
         env_webhook = os.getenv("SLACK_WEBHOOK_URL", "").strip()
         return bool(configured_webhook or env_webhook)
 

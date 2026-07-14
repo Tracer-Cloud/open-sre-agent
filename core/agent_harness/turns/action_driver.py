@@ -543,6 +543,12 @@ def _run_action_agent_turn_body(
         if chunk
     ]
     response_text = "\n".join(response_chunks)
+    # Generic action tools (e.g. slack_read_messages / roster) do not set
+    # last_command_observation themselves. Stash their output so the turn
+    # router summarizes into a user-facing answer instead of returning raw
+    # JSON or an empty "nothing to add" gateway fallback.
+    if response_text.strip() and generic_success_count > 0 and not session.last_command_observation:
+        session.last_command_observation = response_text
     if handled:
         output.print()
 

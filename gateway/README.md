@@ -55,16 +55,18 @@ Three things that are easy to mix up:
   **gateway** (`gateway/`, you chat with the agent from a chat app).
 - **Gateway** — one specific surface: the always-on process that connects a chat app
   to the agent. It speaks **Telegram** (long poll) and **Slack** (Socket Mode).
-- **Integrations + tools** — the *outbound* side: the agent sending a message *out*
-  to a channel. `integrations/telegram` and `integrations/slack` deliver messages;
-  the agent calls the `telegram_send_message` / `slack_send_message` tools to do it.
+- **Integrations + tools** — the *outbound* / teammate side: the agent reading and
+  posting in Slack. Shared client: `integrations/slack/bot_api.py`. Tools:
+  `slack_send_message` (webhook), `slack_reply_message` (bot token, any channel),
+  `slack_read_messages` (history / thread), `slack_list_team_members` (roster).
+  See `docs/messaging/slack.mdx` for OAuth scopes.
 
 Both platforms are symmetric:
 
-| | Inbound (person → agent) | Outbound (agent → channel) |
+| | Inbound (person → agent) | Outbound / teammate tools |
 |---|---|---|
 | **Telegram** | Yes — `gateway/telegram/` | Yes — integration + tool |
-| **Slack** | Yes — `gateway/slack/` (Socket Mode; each thread is a conversation) | Yes — integration + tool |
+| **Slack** | Yes — `gateway/slack/` (Socket Mode; each thread is a conversation) | Yes — webhook + bot-token tools |
 
 **One core for every surface.** Shell, CLI, and the gateway transports all hand the
 message to the same place: a `HeadlessAgent` (`agent.dispatch(message)`). They differ

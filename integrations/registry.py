@@ -338,7 +338,7 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
     IntegrationSpec(
         service="slack",
         has_verifier=True,
-        skip_classification=True,
+        direct_effective=True,
         setup_order=9,
         verify_order=8,
     ),

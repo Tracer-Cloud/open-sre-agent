@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from tools.slack_send_message_tool.tool import SlackSendMessageTool, slack_send_message
+from integrations.slack.tools.slack_send_message_tool.tool import (
+    SlackSendMessageTool,
+    slack_send_message,
+)
 
 TOOL_MODULES = ("tool",)
 

@@ -95,8 +95,6 @@ ignore_imports =
     tools.pi_coding_tool.validation -> integrations.pi
     tools.system.python_execution_tool.credentials -> integrations.github.client
     tools.system.python_execution_tool.credentials -> integrations.github.helpers
-    tools.slack_send_message_tool.delivery -> integrations.catalog
-    tools.slack_send_message_tool.delivery -> integrations.slack.delivery
     tools.system.watch_dog.runner -> integrations.telegram.alarms
     tools.system.watch_dog.runner -> integrations.telegram.credentials
     tools.work_status_report_tool -> integrations.github.client
