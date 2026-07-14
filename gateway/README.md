@@ -76,7 +76,7 @@ only in *how they receive input and send output* — never in how the agent thin
 # Allow your Telegram user id (from @userinfobot)
 uv run opensre messaging allow -p telegram -u 123456789
 
-# Allow your Slack member id (see below)
+# Allow your Slack member id (profile → Copy member ID; see below)
 uv run opensre messaging allow -p slack -u U0123ABCD
 
 # Start the gateway daemon (web app + Telegram chat + Slack chat + task scheduler)
