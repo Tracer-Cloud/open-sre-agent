@@ -122,6 +122,7 @@ def _build_system_prompt(
     prior_investigation: str = "",
     prior_action_facts: str = "",
     environment: str = "",
+    long_term_memory: str = "",
 ) -> str:
     """Build the system prompt for one assistant turn."""
     repo_map_block = f"--- Repo map (AGENTS.md) ---\n{agents_md}\n\n" if agents_md else ""
@@ -141,6 +142,21 @@ def _build_system_prompt(
         "them for follow-up questions and comparisons; do not ask the user to "
         f"paste values that are already listed here.\n{prior_action_facts}\n\n"
         if prior_action_facts
+        else ""
+    )
+    long_term_memory_block = (
+        "--- Long-term memory ---\n"
+        "Durable knowledge saved in previous sessions (stored locally in "
+        "~/.opensre/memory; the user can view it with /memory and edit or "
+        "delete the files at any time). Use these facts to personalize "
+        "answers and avoid re-asking for information already listed here. "
+        "Only the index is shown; to read a full entry, use the "
+        "memory_recall action. When the user shares durable knowledge worth "
+        "keeping (who they are, infrastructure conventions, preferences, "
+        "lessons from incidents), save it with memory_remember — reuse an "
+        "existing name to update that memory instead of creating a "
+        f"near-duplicate.\n{long_term_memory}\n\n"
+        if long_term_memory
         else ""
     )
     return (
@@ -179,6 +195,7 @@ def _build_system_prompt(
         f"{investigation_flow_block}"
         f"{prior_investigation_block}"
         f"{prior_action_facts_block}"
+        f"{long_term_memory_block}"
         f"{repo_map_block}"
         f"--- Recent CLI conversation ---\n{history}\n"
     )

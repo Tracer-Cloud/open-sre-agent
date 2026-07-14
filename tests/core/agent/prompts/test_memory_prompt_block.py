@@ -1,0 +1,67 @@
+"""Tests for the long-term memory block in the assistant system prompt."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from core.agent_harness.prompts.assistant import build_assistant_system_prompt
+from core.domain.memory import save_memory
+
+_HEADER = "--- Long-term memory ---"
+
+
+class TestSystemPromptBlock:
+    def test_block_rendered_when_memory_text_present(self) -> None:
+        prompt = build_assistant_system_prompt(
+            "ref",
+            "history",
+            long_term_memory="- [user] user-profile — Name is Vaibhav (updated 2026-07-09)",
+        )
+        assert _HEADER in prompt
+        assert "user-profile" in prompt
+        assert "memory_recall" in prompt
+        assert "memory_remember" in prompt
+
+    def test_block_omitted_when_empty(self) -> None:
+        prompt = build_assistant_system_prompt("ref", "history", long_term_memory="")
+        assert _HEADER not in prompt
+
+    def test_block_omitted_by_default(self) -> None:
+        assert _HEADER not in build_assistant_system_prompt("ref", "history")
+
+
+class TestDefaultProviderMemory:
+    @pytest.fixture(autouse=True)
+    def _isolated_memory_dir(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("OPENSRE_MEMORY_DIR", str(tmp_path / "memory"))
+        monkeypatch.delenv("OPENSRE_MEMORY_DISABLED", raising=False)
+
+    def _provider_memory(self) -> str:
+        from core.agent_harness.prompts.prompt_context import DefaultPromptContextProvider
+
+        return DefaultPromptContextProvider(session=object()).long_term_memory()
+
+    def test_empty_when_no_memories(self) -> None:
+        assert self._provider_memory() == ""
+
+    def test_renders_index_when_memories_exist(self) -> None:
+        save_memory(
+            slug="prod-cluster",
+            memory_type="infrastructure",
+            description="Prod cluster is eks-prod-1",
+            body="details",
+        )
+        rendered = self._provider_memory()
+        assert "[infrastructure] prod-cluster" in rendered
+
+    def test_empty_when_disabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        save_memory(
+            slug="prod-cluster",
+            memory_type="infrastructure",
+            description="Prod cluster is eks-prod-1",
+            body="details",
+        )
+        monkeypatch.setenv("OPENSRE_MEMORY_DISABLED", "1")
+        assert self._provider_memory() == ""

@@ -269,9 +269,14 @@ class SessionManager:
 
         Persisting is best-effort (a failed flush must not crash teardown);
         the session releases its own resources (:meth:`SessionCore.release_resources`)
-        to prevent per-session leaks.
+        to prevent per-session leaks. Long-term memory extraction
+        (:mod:`~core.agent_harness.session.memory_extraction`) runs here with
+        the same best-effort guarantee.
         """
         self._flush(session)
+        from core.agent_harness.session.memory_extraction import extract_memories_from_session
+
+        extract_memories_from_session(session)
         from platform.observability.trace.spans import emit_thread_boundary
 
         emit_thread_boundary(session.session_id, name="session_end", phase="session_end")

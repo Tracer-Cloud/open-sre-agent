@@ -1147,6 +1147,13 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "list_sentry_issue_events",
         "llm_set_provider",
         "lookup_cloudtrail_events",
+        # Long-term memory tools: local-file CRUD over core/domain/memory;
+        # expected failures return structured error dicts without catching,
+        # unexpected exceptions escape to the global wrapper. The domain
+        # store's OSError handling mirrors the misses store (stderr notice).
+        "memory_forget",
+        "memory_recall",
+        "memory_remember",
         "opsgenie_alert_detail",
         "opsgenie_alerts",
         "pagerduty_incident_detail",

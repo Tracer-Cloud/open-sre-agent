@@ -69,6 +69,13 @@ class DefaultPromptContextProvider:
             llm_settings_available=llm_settings_available,
         )
 
+    def long_term_memory(self) -> str:
+        from core.domain.memory import memory_enabled, render_prompt_index
+
+        if not memory_enabled():
+            return ""
+        return render_prompt_index()
+
     def suggested_synthetic_prompt(self) -> str:
         return SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
 

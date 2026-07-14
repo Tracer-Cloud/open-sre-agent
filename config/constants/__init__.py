@@ -8,6 +8,7 @@ from config.constants.paths import (
     OPENSRE_HOME_DIR,
     OPENSRE_TMP_DIR,
     ensure_opensre_tmp_dir,
+    get_memory_dir,
     get_store_path,
 )
 from config.constants.platform import IS_WINDOWS
@@ -45,5 +46,6 @@ __all__ = [
     "SENTRY_MAX_BREADCRUMBS",
     "SENTRY_TRACES_SAMPLE_RATE",
     "ensure_opensre_tmp_dir",
+    "get_memory_dir",
     "get_store_path",
 ]

@@ -1,0 +1,54 @@
+"""Long-term memory store: local, file-based semantic memory for the agent.
+
+One markdown file per memory under ``~/.opensre/memory/`` (override:
+``OPENSRE_MEMORY_DIR``), plus a generated ``MEMORY.md`` index. See
+``docs/memory.mdx`` for the user-facing behavior.
+"""
+
+from __future__ import annotations
+
+from core.domain.memory.index import (
+    DEFAULT_PROMPT_INDEX_CHARS,
+    rebuild_index,
+    render_prompt_index,
+)
+from core.domain.memory.models import (
+    MAX_BODY_CHARS,
+    MAX_DESCRIPTION_CHARS,
+    MEMORY_TYPES,
+    MemoryRecord,
+    MemoryType,
+)
+from core.domain.memory.settings import auto_extract_enabled, memory_enabled
+from core.domain.memory.slugs import is_valid_slug, slugify
+from core.domain.memory.store import (
+    delete_memory,
+    list_memories,
+    load_memory,
+    memory_dir,
+    memory_path,
+    save_memory,
+    search_memories,
+)
+
+__all__ = [
+    "DEFAULT_PROMPT_INDEX_CHARS",
+    "MAX_BODY_CHARS",
+    "MAX_DESCRIPTION_CHARS",
+    "MEMORY_TYPES",
+    "MemoryRecord",
+    "MemoryType",
+    "auto_extract_enabled",
+    "delete_memory",
+    "is_valid_slug",
+    "list_memories",
+    "load_memory",
+    "memory_dir",
+    "memory_enabled",
+    "memory_path",
+    "rebuild_index",
+    "render_prompt_index",
+    "save_memory",
+    "search_memories",
+    "slugify",
+]
