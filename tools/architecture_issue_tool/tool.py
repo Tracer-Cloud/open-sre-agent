@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from core.agent_harness.tools.tool_context import action_context_from_agent_context
 from core.tool_framework.tool_decorator import tool
-from integrations.github.client import resolve_github_token
-from integrations.github.helpers import github_creds, github_source_available
 from tools.architecture_issue_tool.repo_workspace import (
     WorkspaceError,
     architecture_workspace_dir,
@@ -20,15 +19,32 @@ from tools.architecture_issue_tool.report_persistence import (
 )
 
 
+def _resolve_github_token(explicit: str | None = None) -> str:
+    """Resolve a GitHub token without importing ``integrations`` (layer peers)."""
+    return (explicit or os.getenv("GITHUB_TOKEN") or os.getenv("GH_TOKEN") or "").strip()
+
+
+def _github_source_available(sources: dict[str, dict]) -> bool:
+    return bool(sources.get("github", {}).get("connection_verified"))
+
+
+def _github_creds(gh: dict[str, Any]) -> dict[str, Any]:
+    creds: dict[str, Any] = {}
+    token = gh.get("github_token") or gh.get("auth_token")
+    if token:
+        creds["github_token"] = token
+    return creds
+
+
 def _github_clone_available(sources: dict[str, dict]) -> bool:
-    return bool(github_source_available(sources) or resolve_github_token(None))
+    return bool(_github_source_available(sources) or _resolve_github_token(None))
 
 
 def _github_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     gh = sources.get("github", {})
     if not gh:
         return {}
-    payload: dict[str, Any] = {**github_creds(gh)}
+    payload: dict[str, Any] = {**_github_creds(gh)}
     if gh.get("owner"):
         payload["owner"] = gh.get("owner")
     if gh.get("repo"):
@@ -77,12 +93,25 @@ def _session_id_from_runtime(context: Any, explicit: str = "") -> str:
     input_schema={
         "type": "object",
         "properties": {
-            "owner": {"type": "string"},
-            "repo": {"type": "string"},
-            "ref": {"type": "string"},
-            "github_token": {"type": "string"},
+            "owner": {
+                "type": "string",
+                "description": "GitHub repository owner or organization.",
+            },
+            "repo": {
+                "type": "string",
+                "description": "GitHub repository name.",
+            },
+            "ref": {
+                "type": "string",
+                "description": "Optional branch, tag, or commit SHA to clone.",
+            },
+            "github_token": {
+                "type": "string",
+                "description": "Optional GitHub token override for private clones.",
+            },
         },
         "required": ["owner", "repo"],
+        "additionalProperties": False,
     },
     is_available=_github_clone_available,
     extract_params=_github_extract_params,
@@ -143,6 +172,7 @@ def architecture_clone_repo(
             }
         },
         "required": [],
+        "additionalProperties": False,
     },
     is_available=_always_available,
 )
@@ -205,6 +235,7 @@ def architecture_cleanup_repo(
             },
         },
         "required": ["repo_name", "observations"],
+        "additionalProperties": False,
     },
     is_available=_always_available,
 )

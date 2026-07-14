@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import os
 import re
 import shutil
 import subprocess
@@ -12,8 +14,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from config.constants.paths import PROJECT_ROOT
-from integrations.git.errors import GIT_UNAVAILABLE, GitCommandError
-from integrations.git.local import _token_auth_env
 
 _GITHUB_HTTPS_BASE = "https://github.com/"
 _GIT_CLONE_TIMEOUT_SEC = 120.0
@@ -124,6 +124,23 @@ def _run_git(
         raise WorkspaceError("git is not installed or not on PATH.") from exc
     except subprocess.TimeoutExpired as exc:
         raise WorkspaceError(f"git command timed out after {timeout:.0f}s.") from exc
+
+
+def _token_auth_env(token: str, base_url: str) -> dict[str, str]:
+    """Inject an HTTPS Authorization header scoped to *base_url* via git config env.
+
+    Kept local so this tools package does not import ``integrations`` (layer peers).
+    """
+    basic = base64.b64encode(f"x-access-token:{token}".encode()).decode()
+    env = dict(os.environ)
+    try:
+        count = int(env.get("GIT_CONFIG_COUNT", "0") or "0")
+    except ValueError:
+        count = 0
+    env[f"GIT_CONFIG_KEY_{count}"] = f"http.{base_url}.extraheader"
+    env[f"GIT_CONFIG_VALUE_{count}"] = f"Authorization: Basic {basic}"
+    env["GIT_CONFIG_COUNT"] = str(count + 1)
+    return env
 
 
 def _auth_env(token: str | None) -> dict[str, str] | None:
@@ -241,11 +258,6 @@ def clone_github_repo(
     except WorkspaceError:
         cleanup_architecture_workspace()
         raise
-    except GitCommandError as exc:
-        cleanup_architecture_workspace()
-        if exc.kind == GIT_UNAVAILABLE:
-            raise WorkspaceError(exc.message) from exc
-        raise WorkspaceError(exc.message) from exc
 
     return RepoWorkspace(
         owner=normalized_owner,

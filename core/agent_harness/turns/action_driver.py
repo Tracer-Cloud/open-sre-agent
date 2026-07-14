@@ -213,6 +213,16 @@ def _response_text_from_generic_results(result: Any) -> str:
     return "\n".join(chunks)
 
 
+def _is_user_facing_final_text(text: str) -> bool:
+    """True when post-tool model text should replace tool dumps and be streamed."""
+    stripped = text.strip()
+    if not stripped:
+        return False
+    if "\n" in stripped or stripped.startswith("#"):
+        return True
+    return len(stripped) > 60
+
+
 def _generic_tool_result_counts(result: Any) -> tuple[int, int]:
     generic_results = _generic_tool_results(result)
     executed_count = len(generic_results)
@@ -542,8 +552,13 @@ def _run_action_agent_turn_body(
         if chunk
     ]
     final_text = (getattr(result, "final_text", "") or "").strip()
-    response_text = final_text or "\n".join(response_chunks)
-    if handled and final_text:
+    # Prefer the agent's closing prose when it looks like a real reply (report /
+    # multi-line Markdown). Short one-liners like "done" are common after a
+    # single tool call and must not replace tool-derived response_text or get
+    # streamed on action-only turns (gateway finalize / cross-surface parity).
+    use_final_text = _is_user_facing_final_text(final_text)
+    response_text = final_text if use_final_text else "\n".join(response_chunks)
+    if handled and use_final_text:
         output.stream(label="OpenSRE", chunks=iter([final_text]))
     elif handled:
         output.print()
