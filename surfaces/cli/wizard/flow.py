@@ -45,6 +45,7 @@ from surfaces.cli.wizard._ui import (
     _persist_llm_api_key,
     _prompt_value,
     _render_header,
+    _render_integration_result,
     _render_next_steps,
     _render_saved_summary,
     _select_target_for_advanced,
@@ -56,7 +57,13 @@ from surfaces.cli.wizard.env_sync import sync_env_values, sync_provider_env
 from surfaces.cli.wizard.integration_health import IntegrationHealthResult
 from surfaces.cli.wizard.probes import ProbeResult, probe_local_target, probe_remote_target
 from surfaces.cli.wizard.store import get_store_path, save_local_config
-from surfaces.cli.wizard.validation import build_demo_action_response as _build_demo_action_response
+from surfaces.cli.wizard.validation import (
+    ValidationResult,
+    validate_provider_credentials,
+)
+from surfaces.cli.wizard.validation import (
+    build_demo_action_response as _build_demo_action_response,
+)
 
 DEFAULT_GITHUB_MCP_MODE = _integration_configurators_module.DEFAULT_GITHUB_MCP_MODE
 DEFAULT_GITHUB_MCP_URL = _integration_configurators_module.DEFAULT_GITHUB_MCP_URL
@@ -237,6 +244,123 @@ def _persist_llm_credential(provider: ProviderOption, value: str) -> bool:
         os.environ[provider.api_key_env] = value
         return True
     return _persist_llm_api_key(provider.api_key_env, value)
+
+
+_LLM_CREDENTIAL_MAX_ATTEMPTS = 10  # mirrors _run_cli_llm_onboarding's retry budget
+
+
+def _persist_llm_credential_with_recovery(
+    provider: ProviderOption, api_key: str
+) -> Literal["ok", "abort", "repick"]:
+    """Persist a credential; on keychain failure offer retry/repick instead of aborting."""
+    for _attempt in range(_LLM_CREDENTIAL_MAX_ATTEMPTS):
+        if _persist_llm_credential(provider, api_key):
+            return "ok"
+        try:
+            action = _choose(
+                f"Could not save the {provider.credential_label}. What next?",
+                [
+                    Choice(
+                        value="retry",
+                        label="Try saving again",
+                        hint="after fixing the keychain",
+                    ),
+                    Choice(
+                        value="repick",
+                        label="Pick a different LLM provider",
+                        hint=None,
+                    ),
+                ],
+                default="retry",
+            )
+        except KeyboardInterrupt:
+            _console.print(f"\n[{WARNING}]Setup cancelled.[/]")
+            return "abort"
+        if action == "repick":
+            return "repick"
+        if action != "retry":
+            return "abort"  # defensive: the select offers no other values
+    _console.print(f"[{WARNING}]  {GLYPH_WARNING}  Too many retry attempts. Aborting setup.[/]")
+    return "abort"
+
+
+def _collect_validated_llm_credential(
+    provider: ProviderOption, *, model: str
+) -> Literal["ok", "abort", "repick"]:
+    """Prompt for, validate, and persist one LLM credential.
+
+    ``repick`` = pick a different LLM provider (mirrors ``_run_cli_llm_onboarding``).
+    """
+    _step(provider.credential_label.title())
+    label = _credential_prompt_label(provider)
+    credential_display = f"{label} {provider.credential_label}"
+    for _attempt in range(_LLM_CREDENTIAL_MAX_ATTEMPTS):
+        try:
+            api_key = _prompt_value(
+                f"{credential_display} ({provider.api_key_env})",
+                default=provider.credential_default,
+                secret=provider.credential_secret,
+                back_on_cancel=True,
+            )
+        except WizardBack:  # must precede KeyboardInterrupt: WizardBack subclasses it
+            return "repick"
+        except KeyboardInterrupt:
+            _console.print(f"\n[{WARNING}]Setup cancelled.[/]")
+            return "abort"
+
+        if provider.credential_kind == "api_key":  # host/cli/none kinds never validate
+            azure_env = _ensure_azure_openai_endpoint_settings(provider)
+            if azure_env is None:  # endpoint back-out -> provider menu
+                return "repick"
+            os.environ.update(azure_env)  # endpoint env must exist before the validator reads it
+            try:
+                with _console.status(f"Validating {credential_display}...", spinner="dots"):
+                    validation = validate_provider_credentials(
+                        provider=provider, api_key=api_key, model=model
+                    )
+            except Exception as err:  # mirror the validator's own catch-all conversion
+                validation = ValidationResult(ok=False, detail=f"Validation request failed: {err}")
+            _render_integration_result(
+                label, IntegrationHealthResult(ok=validation.ok, detail=validation.detail)
+            )
+            if not validation.ok:
+                try:
+                    action = _choose(
+                        f"{credential_display} failed validation. What next?",
+                        [
+                            Choice(
+                                value="retry",
+                                label=f"Enter a different {provider.credential_label}",
+                                hint=None,
+                            ),
+                            Choice(
+                                value="save_anyway",
+                                label="Save it anyway",
+                                hint="skip validation (offline or restricted network)",
+                            ),
+                            Choice(
+                                value="repick",
+                                label="Pick a different LLM provider",
+                                hint=None,
+                            ),
+                        ],
+                        default="retry",
+                    )
+                except KeyboardInterrupt:
+                    _console.print(f"\n[{WARNING}]Setup cancelled.[/]")
+                    return "abort"
+                if action == "repick":
+                    return "repick"
+                if action == "retry":
+                    continue
+                if action != "save_anyway":
+                    return "abort"  # defensive: the select offers no other values
+                _console.print(
+                    f"[{WARNING}]  {GLYPH_WARNING}  Saving {credential_display} without validation.[/]"
+                )
+        return _persist_llm_credential_with_recovery(provider, api_key)
+    _console.print(f"[{WARNING}]  {GLYPH_WARNING}  Too many retry attempts. Aborting setup.[/]")
+    return "abort"
 
 
 def _azure_openai_endpoint_env(provider: ProviderOption) -> dict[str, str]:
@@ -797,22 +921,12 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                 "cli",
                 "none",
             ):
-                _step(provider.credential_label.title())
-                try:
-                    api_key = _prompt_value(
-                        f"{_credential_prompt_label(provider)} {provider.credential_label} ({provider.api_key_env})",
-                        default=provider.credential_default,
-                        secret=provider.credential_secret,
-                        back_on_cancel=True,
-                    )
-                except WizardBack:
+                credential_outcome = _collect_validated_llm_credential(provider, model=model)
+                if credential_outcome == "abort":
+                    return 1
+                if credential_outcome == "repick":
                     force_repick = True
                     continue
-                except KeyboardInterrupt:
-                    _console.print(f"\n[{WARNING}]Setup cancelled.[/]")
-                    return 1
-                if not _persist_llm_credential(provider, api_key):
-                    return 1
                 azure_env = _ensure_azure_openai_endpoint_settings(provider)
                 if azure_env is None:
                     force_repick = True
@@ -836,26 +950,22 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                 # secret-shaped value into .env and point the runtime at a bogus host. Fall
                 # through to the host prompt instead (#3291).
                 if not has_api_key and legacy_api_key and provider.credential_kind != "host":
-                    if not _persist_llm_credential(provider, legacy_api_key):
+                    migration_outcome = _persist_llm_credential_with_recovery(
+                        provider, legacy_api_key
+                    )
+                    if migration_outcome == "abort":
                         return 1
-                    has_api_key = True
-                if not has_api_key:
-                    _step(provider.credential_label.title())
-                    try:
-                        api_key = _prompt_value(
-                            f"{_credential_prompt_label(provider)} {provider.credential_label} ({provider.api_key_env})",
-                            default=provider.credential_default,
-                            secret=provider.credential_secret,
-                            back_on_cancel=True,
-                        )
-                    except WizardBack:
+                    if migration_outcome == "repick":
                         force_repick = True
                         continue
-                    except KeyboardInterrupt:
-                        _console.print(f"\n[{WARNING}]Setup cancelled.[/]")
+                    has_api_key = True
+                if not has_api_key:
+                    credential_outcome = _collect_validated_llm_credential(provider, model=model)
+                    if credential_outcome == "abort":
                         return 1
-                    if not _persist_llm_credential(provider, api_key):
-                        return 1
+                    if credential_outcome == "repick":
+                        force_repick = True
+                        continue
             azure_env = _ensure_azure_openai_endpoint_settings(provider)
             if azure_env is None:
                 force_repick = True

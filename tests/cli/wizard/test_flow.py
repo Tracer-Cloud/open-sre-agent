@@ -11,6 +11,7 @@ from surfaces.cli.wizard import _integration_configurators, _ui, flow
 from surfaces.cli.wizard import store as wizard_store
 from surfaces.cli.wizard.env_sync import sync_provider_env
 from surfaces.cli.wizard.probes import ProbeResult
+from surfaces.cli.wizard.validation import ValidationResult
 from tests.integrations.llm_cli.testing_helpers import write_fake_runnable_cli_bin
 
 
@@ -18,6 +19,17 @@ from tests.integrations.llm_cli.testing_helpers import write_fake_runnable_cli_b
 def _stub_managed_llm_secret_persistence(monkeypatch: pytest.MonkeyPatch) -> None:
     """Wizard flow tests should not touch the developer's real keychain."""
     monkeypatch.setattr(_ui, "save_api_key", lambda *_args, **_kwargs: None)
+
+
+@pytest.fixture(autouse=True)
+def _stub_llm_credential_validation(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Wizard flow tests must never hit live provider endpoints."""
+    monkeypatch.setattr(
+        flow,
+        "validate_provider_credentials",
+        lambda **_kwargs: ValidationResult(ok=True, detail="stubbed"),
+        raising=False,
+    )
 
 
 def test_run_wizard_advanced_remote_falls_back_to_local(monkeypatch, tmp_path, capsys) -> None:
@@ -868,12 +880,6 @@ def test_run_wizard_changes_model_when_user_keeps_provider(monkeypatch, tmp_path
             m.ask.return_value = "openai"
         elif "Choose OpenAI model" in prompt:
             m.ask.return_value = "gpt-5.4-mini"
-        elif "Choose an integration to configure" in prompt:
-            # Explicit skip. Falling through to `default` here selects the menu's
-            # default — the local Grafana stack — which shells out to
-            # `docker compose` and POSTs demo logs into a live Loki on :3100.
-            # This model-change test never meant to configure an integration.
-            m.ask.return_value = "skip"
         else:
             m.ask.return_value = default
         return m
@@ -2499,272 +2505,1107 @@ def test_run_wizard_host_kind_does_not_migrate_legacy_api_key(monkeypatch, tmp_p
     assert exit_code == 1  # _fake_persist returned False to short-circuit the run
 
 
-# ===========================================================================
-# #3591 — live LLM credential validation, recovery menus, honest summary copy.
-#
-# These tests pin the APPROVED design contract. The three helpers the
-# implementation must expose in `flow`:
-#
-#   _recovery_action(*, prompt, retry_label, retry_hint, escape: Choice)
-#       -> "retry" | <escape.value> | "repick" | "cancel"
-#   _prompt_validated_llm_credential(provider, *, model)
-#       -> "ok" | "repick" | "cancel"
-#   _persist_llm_credential_with_recovery(provider, value)
-#       -> "ok" | "unsaved" | "repick" | "cancel"
-#
-# The literal user-facing strings asserted below are the approved copy, not a
-# paraphrase: if the implementation reads well but says something else, these
-# tests are supposed to fail.
-# ===========================================================================
+def test_run_wizard_llm_key_retries_on_validation_failure(monkeypatch, tmp_path, capsys) -> None:
+    """Two consecutive LLM key validation failures, then success.
 
-_SENTINEL_SECRET = "sk-ant-SENTINEL-DO-NOT-PRINT"
-
-
-def _flat(text: str) -> str:
-    """Collapse Rich's line wrapping so copy assertions are console-width independent."""
-    return " ".join(text.split())
-
-
-class _Selects:
-    """Answer wizard select prompts by prompt TEXT, never by call order.
-
-    The approved design hoists the model pick *above* the credential prompt
-    (D1), so any fixed-order `iter([...])` of select answers would silently
-    mis-answer the wizard the moment the source is reordered — and mis-answer
-    it *plausibly*, which is worse than crashing.
-
-    There is deliberately no ``else: return default`` fallthrough. That pattern
-    is how a wizard test silently accepts the integrations menu's default (the
-    local Grafana stack), shells out to `docker compose`, and POSTs into a live
-    Loki. Every prompt must be routed explicitly or the test fails loudly.
-
-    An answer of ``None`` is ESCAPE: `_choose` has ``back_on_cancel=False`` at
-    the recovery menus, so a ``None`` from `.ask()` makes it raise a bare
-    ``KeyboardInterrupt`` — which is the *production* cancel path (real Ctrl-C
-    never reaches here; it is intercepted by `_with_ctrl_c_double_exit`).
+    Mirrors test_run_wizard_dagster_retries_on_validation_failure: the wizard
+    recovers from N consecutive failures and only the final validated key
+    reaches the persistence layer.
     """
+    menu_responses = iter(["retry", "retry"])
+    password_responses = iter(["sk-bad-1", "sk-bad-2", "sk-good"])
+    validator_calls: list[tuple[str, str, str]] = []
+    saved_llm_keys: list[tuple[str, str]] = []
+    call_order: list[str] = []
 
-    def __init__(self, routes, events=None):
-        self._routes = [(needle, list(a) if isinstance(a, list) else a) for needle, a in routes]
-        self._events = events
-        self.prompts: list[str] = []
+    def _mock_select(*_args, **_kwargs):
+        prompt = str(_args[0]) if _args else ""
+        m = MagicMock()
+        if "What next?" in prompt:
+            m.ask.return_value = next(menu_responses)
+        elif "Choose your LLM provider" in prompt:
+            m.ask.return_value = "anthropic"
+        elif "auth method" in prompt:
+            m.ask.return_value = "api_key"
+        elif "model" in prompt:
+            m.ask.return_value = "claude-opus-4-7"
+        elif "integration" in prompt.lower():
+            m.ask.return_value = "skip"
+        else:
+            m.ask.return_value = "quickstart"
+        return m
 
-    def __call__(self, prompt, **_kwargs):
-        text = str(prompt)
-        self.prompts.append(text)
-        if self._events is not None:
-            self._events.append(("select", text))
-        for needle, answer in self._routes:
-            if needle in text:
-                if isinstance(answer, list):
-                    assert answer, f"ran out of answers for select prompt {text!r}"
-                    value = answer.pop(0)
-                else:
-                    value = answer
-                m = MagicMock()
-                m.ask.return_value = value
-                return m
-        raise AssertionError(f"unrouted wizard select prompt: {text!r}")
+    def _mock_password(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = next(password_responses)
+        return m
 
-    def count(self, needle: str) -> int:
-        return sum(1 for prompt in self.prompts if needle in prompt)
-
-
-class _Values:
-    """Answer questionary text/password prompts by LABEL, recording each `default=`.
-
-    The recorded default is what proves bug K: today the Azure key prompt is
-    handed `provider.credential_default`, which for Azure is the *endpoint*
-    placeholder URL, and `_prompt_value` returns the default on empty input.
-    """
-
-    def __init__(self, routes, events=None):
-        self._routes = [(needle, list(a) if isinstance(a, list) else a) for needle, a in routes]
-        self._events = events
-        self.seen: list[tuple[str, str]] = []  # (label, default kwarg)
-
-    def __call__(self, label, **kwargs):
-        text = str(label)
-        self.seen.append((text, str(kwargs.get("default", ""))))
-        if self._events is not None:
-            self._events.append(("prompt", text))
-        for needle, answer in self._routes:
-            if needle in text:
-                if isinstance(answer, list):
-                    assert answer, f"ran out of answers for value prompt {text!r}"
-                    value = answer.pop(0)
-                else:
-                    value = answer
-                m = MagicMock()
-                m.ask.return_value = value
-                return m
-        raise AssertionError(f"unrouted wizard value prompt: {text!r}")
-
-    def default_for(self, needle: str) -> str:
-        for label, default in self.seen:
-            if needle in label:
-                return default
-        raise AssertionError(f"no value prompt matched {needle!r}; saw {self.seen!r}")
-
-    def count(self, needle: str) -> int:
-        return sum(1 for label, _default in self.seen if needle in label)
-
-
-class _Confirms:
-    def __init__(self, routes):
-        self._routes = [(needle, list(a) if isinstance(a, list) else a) for needle, a in routes]
-
-    def __call__(self, prompt, **_kwargs):
-        text = str(prompt)
-        for needle, answer in self._routes:
-            if needle in text:
-                value = answer.pop(0) if isinstance(answer, list) else answer
-                m = MagicMock()
-                m.ask.return_value = value
-                return m
-        raise AssertionError(f"unrouted wizard confirm prompt: {text!r}")
-
-
-class _Validator:
-    """Stand-in for `validate_provider_credentials`.
-
-    Keyword-only, exactly like the real signature, so a positional call from the
-    implementation is a hard TypeError rather than a silent pass. Snapshots the
-    environment on every probe, which is what makes AC-8 (no side effects from a
-    failed attempt) and AC-3 (the Azure endpoint exists *before* the first
-    probe) assertable rather than assumed.
-    """
-
-    def __init__(self, results, events=None):
-        self._results = list(results)
-        self._events = events
-        self.keys: list[str] = []
-        self.models: list[str] = []
-        self.providers: list[str] = []
-        self.credential_env: list[str | None] = []
-        self.endpoint_env: list[str] = []
-
-    @property
-    def call_count(self) -> int:
-        return len(self.keys)
-
-    def __call__(self, *, provider, api_key, model):
-        self.providers.append(provider.value)
-        self.keys.append(api_key)
-        self.models.append(model)
-        self.credential_env.append(os.environ.get(provider.api_key_env))
-        self.endpoint_env.append(
-            os.environ.get(provider.endpoint_env, "") if provider.endpoint_env else ""
-        )
-        if self._events is not None:
-            self._events.append(("validate", model))
-        index = min(self.call_count - 1, len(self._results) - 1)
-        return self._results[index]
-
-
-class _Wizard:
-    """Everything a #3591 test needs to observe about one `run_wizard()` call."""
-
-    def __init__(self):
-        self.saved_config: dict = {}
-        self.keyring_attempts: list[tuple[str, str]] = []  # every save_api_key call
-        self.saved_keys: list[tuple[str, str]] = []  # the ones that did not raise
-        self.env_writes: list[dict[str, str]] = []  # every sync_env_values call (.env)
-        self.summary: dict = {}  # _render_saved_summary kwargs
-        self.menus: list[dict] = []  # every flow._choose call
-
-    def menu(self, needle: str) -> dict:
-        matches = [m for m in self.menus if needle in m["prompt"]]
-        assert matches, (
-            f"no menu prompt contained {needle!r}; "
-            f"menus shown: {[m['prompt'] for m in self.menus]!r}"
-        )
-        return matches[0]
-
-
-def _wire_wizard(
-    monkeypatch,
-    tmp_path,
-    *,
-    selects,
-    passwords=None,
-    texts=None,
-    confirms=None,
-    validator=None,
-    keyring_errors=None,
-    store=None,
-    has_api_key=False,
-) -> _Wizard:
-    """Install the standard wizard mocks and return the recorder."""
-    w = _Wizard()
-
-    monkeypatch.setattr(_ui, "select_prompt", selects)
-    if passwords is not None:
-        monkeypatch.setattr(flow.questionary, "password", passwords)
-    if texts is not None:
-        monkeypatch.setattr(flow.questionary, "text", texts)
-    if confirms is not None:
-        monkeypatch.setattr(flow.questionary, "confirm", confirms)
-
-    monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
-    monkeypatch.setattr(flow, "get_store_path", lambda: tmp_path / "opensre.json")
-    monkeypatch.setattr(flow, "probe_local_target", lambda _p: ProbeResult("local", True, "ok"))
-    monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
-
-    if store is not None:
-        monkeypatch.setattr(_ui, "load_local_config", lambda _path: store)
-        monkeypatch.setattr(_ui, "has_llm_api_key", lambda _env: has_api_key)
-
-    def _save_local_config(**kwargs):
-        w.saved_config.update(kwargs)
-        return tmp_path / "opensre.json"
-
-    monkeypatch.setattr(flow, "save_local_config", _save_local_config)
-
-    errors = list(keyring_errors) if isinstance(keyring_errors, list) else keyring_errors
+    def _validate(*, provider, api_key, model):
+        validator_calls.append((provider.value, api_key, model))
+        call_order.append(f"validate:{api_key}")
+        if len(validator_calls) < 3:
+            return ValidationResult(ok=False, detail="Anthropic rejected the API key.")
+        return ValidationResult(ok=True, detail="Anthropic API key validated.")
 
     def _save_api_key(provider, value, **_kwargs):
-        w.keyring_attempts.append((provider, value))
-        error = None
-        if isinstance(errors, list):
-            error = errors.pop(0) if errors else None
-        elif errors is not None:
-            error = errors
-        if error is not None:
-            raise error
-        w.saved_keys.append((provider, value))
+        saved_llm_keys.append((provider, value))
+        call_order.append(f"persist:{value}")
 
+    monkeypatch.setattr(_ui, "select_prompt", _mock_select)
+    monkeypatch.setattr(flow.questionary, "password", _mock_password)
+    monkeypatch.setattr(flow, "validate_provider_credentials", _validate)
+    monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
+    monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
     monkeypatch.setattr(_ui, "save_api_key", _save_api_key)
 
-    def _sync_env_values(values, **_kwargs):
-        w.env_writes.append(dict(values))
+    exit_code = flow.run_wizard()
+
+    assert validator_calls == [
+        ("anthropic", "sk-bad-1", "claude-opus-4-7"),
+        ("anthropic", "sk-bad-2", "claude-opus-4-7"),
+        ("anthropic", "sk-good", "claude-opus-4-7"),
+    ]
+    assert saved_llm_keys == [("anthropic", "sk-good")]
+    assert call_order[-2:] == ["validate:sk-good", "persist:sk-good"]
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert output.count("Anthropic rejected the API key.") >= 2
+    assert output.count("Failed") >= 2
+    assert "Summary" in output
+    assert "Done." in output
+
+
+def test_run_wizard_saved_provider_missing_key_validates_on_reentry(monkeypatch, tmp_path) -> None:
+    """The saved-provider re-entry key prompt validates with the saved model."""
+    menu_responses = iter(["retry"])
+    password_responses = iter(["sk-bad", "sk-good"])
+    validator_calls: list[tuple[str, str, str]] = []
+    saved_llm_keys: list[tuple[str, str]] = []
+
+    def _mock_select(*_args, **_kwargs):
+        prompt = str(_args[0]) if _args else ""
+        m = MagicMock()
+        if "What next?" in prompt:
+            m.ask.return_value = next(menu_responses)
+        elif "integration" in prompt.lower():
+            m.ask.return_value = "skip"
+        else:
+            m.ask.return_value = "quickstart"
+        return m
+
+    def _mock_confirm(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = False
+        return m
+
+    def _mock_password(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = next(password_responses)
+        return m
+
+    def _validate(*, provider, api_key, model):
+        validator_calls.append((provider.value, api_key, model))
+        if len(validator_calls) == 1:
+            return ValidationResult(ok=False, detail="OpenAI rejected the API key.")
+        return ValidationResult(ok=True, detail="OpenAI API key validated.")
+
+    monkeypatch.setattr(_ui, "select_prompt", _mock_select)
+    monkeypatch.setattr(flow.questionary, "confirm", _mock_confirm)
+    monkeypatch.setattr(flow.questionary, "password", _mock_password)
+    monkeypatch.setattr(flow, "validate_provider_credentials", _validate)
+    monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
+    monkeypatch.setattr(
+        _ui,
+        "load_local_config",
+        lambda _path: {
+            "wizard": {"mode": "quickstart"},
+            "targets": {
+                "local": {
+                    "provider": "openai",
+                    # Deliberately NOT the openai default model: proves the saved
+                    # model (not default_model) reaches the validator on this path.
+                    "model": "gpt-5.3-mini",
+                    "api_key_env": "OPENAI_API_KEY",
+                    "auth_method": "api_key",
+                }
+            },
+        },
+    )
+    monkeypatch.setattr(_ui, "has_llm_api_key", lambda _env: False)
+    monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
+    monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
+    monkeypatch.setattr(
+        _ui,
+        "save_api_key",
+        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
+    )
+
+    exit_code = flow.run_wizard()
+
+    assert validator_calls == [
+        ("openai", "sk-bad", "gpt-5.3-mini"),
+        ("openai", "sk-good", "gpt-5.3-mini"),
+    ]
+    assert saved_llm_keys == [("openai", "sk-good")]
+    assert exit_code == 0
+
+
+def test_run_wizard_llm_key_save_anyway_persists_unvalidated_key(
+    monkeypatch, tmp_path, capsys
+) -> None:
+    """Offline escape hatch: save-anyway persists the key without re-validating."""
+    menu_responses = iter(["save_anyway"])
+    validation_call_count = 0
+    saved_llm_keys: list[tuple[str, str]] = []
+
+    def _mock_select(*_args, **_kwargs):
+        prompt = str(_args[0]) if _args else ""
+        m = MagicMock()
+        if "What next?" in prompt:
+            m.ask.return_value = next(menu_responses)
+        elif "Choose your LLM provider" in prompt:
+            m.ask.return_value = "anthropic"
+        elif "auth method" in prompt:
+            m.ask.return_value = "api_key"
+        elif "model" in prompt:
+            m.ask.return_value = "claude-opus-4-7"
+        elif "integration" in prompt.lower():
+            m.ask.return_value = "skip"
+        else:
+            m.ask.return_value = "quickstart"
+        return m
+
+    def _mock_password(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = "sk-offline"
+        return m
+
+    def _validate(*, provider, api_key, model):
+        nonlocal validation_call_count
+        validation_call_count += 1
+        return ValidationResult(ok=False, detail="Validation request failed: network unreachable")
+
+    monkeypatch.setattr(_ui, "select_prompt", _mock_select)
+    monkeypatch.setattr(flow.questionary, "password", _mock_password)
+    monkeypatch.setattr(flow, "validate_provider_credentials", _validate)
+    monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
+    monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
+    monkeypatch.setattr(
+        _ui,
+        "save_api_key",
+        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
+    )
+
+    exit_code = flow.run_wizard()
+
+    assert validation_call_count == 1
+    assert saved_llm_keys == [("anthropic", "sk-offline")]
+    output = capsys.readouterr().out
+    assert "without validation" in output
+    assert exit_code == 0
+
+
+def test_run_wizard_llm_key_repick_returns_to_provider_menu(monkeypatch, tmp_path) -> None:
+    """Repick from a failed key re-renders the provider menu; nothing persisted."""
+    select_prompts: list[str] = []
+    provider_responses = iter(["anthropic", "openai"])
+    menu_responses = iter(["repick"])
+    password_responses = iter(["sk-fail-anthropic", "sk-openai-good"])
+    validator_calls: list[tuple[str, str]] = []
+    saved_llm_keys: list[tuple[str, str]] = []
+    saved_llm_secrets: list[tuple[str, str]] = []
+    synced_env_values: list[dict[str, str]] = []
+
+    def _mock_select(*_args, **_kwargs):
+        prompt = str(_args[0]) if _args else ""
+        select_prompts.append(prompt)
+        m = MagicMock()
+        if "What next?" in prompt:
+            m.ask.return_value = next(menu_responses)
+        elif "Choose your LLM provider" in prompt:
+            m.ask.return_value = next(provider_responses)
+        elif "auth method" in prompt:
+            m.ask.return_value = "api_key"
+        elif "model" in prompt:
+            m.ask.return_value = "gpt-5.4-mini" if "OpenAI" in prompt else "claude-opus-4-7"
+        elif "integration" in prompt.lower():
+            m.ask.return_value = "skip"
+        else:
+            m.ask.return_value = "quickstart"
+        return m
+
+    def _mock_password(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = next(password_responses)
+        return m
+
+    def _validate(*, provider, api_key, model):
+        validator_calls.append((provider.value, api_key))
+        if len(validator_calls) == 1:
+            return ValidationResult(ok=False, detail="Anthropic rejected the API key.")
+        return ValidationResult(ok=True, detail="OpenAI API key validated.")
+
+    monkeypatch.setattr(_ui, "select_prompt", _mock_select)
+    monkeypatch.setattr(flow.questionary, "password", _mock_password)
+    monkeypatch.setattr(flow, "validate_provider_credentials", _validate)
+    monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
+    monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
+    monkeypatch.setattr(
+        flow,
+        "sync_env_values",
+        lambda values, **_kwargs: synced_env_values.append(values) or (tmp_path / ".env"),
+    )
+    monkeypatch.setattr(
+        _ui,
+        "save_api_key",
+        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
+    )
+    monkeypatch.setattr(
+        _ui,
+        "save_llm_api_key",
+        lambda env, value, **_kwargs: saved_llm_secrets.append((env, value)),
+    )
+
+    exit_code = flow.run_wizard()
+
+    assert select_prompts.count("Choose your LLM provider") == 2
+    assert saved_llm_keys == [("openai", "sk-openai-good")]
+    assert saved_llm_secrets == []
+    assert all("sk-fail-anthropic" not in str(values) for values in synced_env_values)
+    assert exit_code == 0
+
+
+def test_run_wizard_llm_key_valid_first_try_validates_once(monkeypatch, tmp_path, capsys) -> None:
+    """Happy path: exactly one validation, before persist, and no new prompts."""
+    select_responses = iter(["quickstart", "anthropic", "api_key", "claude-opus-4-7", "skip"])
+    validation_call_count = 0
+    saved_llm_keys: list[tuple[str, str]] = []
+    call_order: list[str] = []
+
+    def _mock_select(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = next(select_responses)
+        return m
+
+    def _mock_password(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = "sk-good"
+        return m
+
+    def _validate(*, provider, api_key, model):
+        nonlocal validation_call_count
+        validation_call_count += 1
+        call_order.append(f"validate:{api_key}")
+        return ValidationResult(ok=True, detail="Anthropic API key validated.")
+
+    def _save_api_key(provider, value, **_kwargs):
+        saved_llm_keys.append((provider, value))
+        call_order.append(f"persist:{value}")
+
+    monkeypatch.setattr(_ui, "select_prompt", _mock_select)
+    monkeypatch.setattr(flow.questionary, "password", _mock_password)
+    monkeypatch.setattr(flow, "validate_provider_credentials", _validate)
+    monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
+    monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
+    monkeypatch.setattr(_ui, "save_api_key", _save_api_key)
+
+    exit_code = flow.run_wizard()
+
+    assert validation_call_count == 1
+    assert saved_llm_keys == [("anthropic", "sk-good")]
+    assert call_order == ["validate:sk-good", "persist:sk-good"]
+    assert next(select_responses, None) is None  # no leftover prompt: no new menus
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert "Summary" in output
+    assert "Done." in output
+    assert output.index("Summary") < output.index("Done.")
+
+
+def test_run_wizard_azure_llm_key_validation_runs_after_endpoint_prompt(
+    monkeypatch, tmp_path
+) -> None:
+    """Azure: AZURE_OPENAI_BASE_URL must be populated BEFORE the validator runs."""
+    monkeypatch.setenv("AZURE_OPENAI_BASE_URL", "wiped")
+    monkeypatch.delenv("AZURE_OPENAI_BASE_URL")
+    monkeypatch.setenv("AZURE_OPENAI_API_VERSION", "wiped")
+    monkeypatch.delenv("AZURE_OPENAI_API_VERSION")
+
+    endpoint_env_at_validation: list[str | None] = []
+    validator_calls: list[tuple[str, str]] = []
+    saved_llm_keys: list[tuple[str, str]] = []
+    synced_provider_env: list[dict[str, object]] = []
+
+    def _mock_select(*_args, **_kwargs):
+        prompt = str(_args[0]) if _args else ""
+        m = MagicMock()
+        if "Choose your LLM provider" in prompt:
+            m.ask.return_value = "azure-openai"
+        elif "model" in prompt:
+            m.ask.return_value = "gpt-5.4-mini"
+        elif "integration" in prompt.lower():
+            m.ask.return_value = "skip"
+        else:
+            m.ask.return_value = "quickstart"
+        return m
+
+    def _mock_password(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = "az-key"
+        return m
+
+    def _mock_text(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = "https://myres.openai.azure.com"
+        return m
+
+    def _validate(*, provider, api_key, model):
+        validator_calls.append((provider.value, api_key))
+        endpoint_env_at_validation.append(os.environ.get("AZURE_OPENAI_BASE_URL"))
+        return ValidationResult(ok=True, detail="Azure OpenAI API key validated.")
+
+    def _sync_provider_env(**kwargs):
+        synced_provider_env.append(kwargs)
         return tmp_path / ".env"
 
-    monkeypatch.setattr(flow, "sync_env_values", _sync_env_values)
+    monkeypatch.setattr(_ui, "select_prompt", _mock_select)
+    monkeypatch.setattr(flow.questionary, "password", _mock_password)
+    monkeypatch.setattr(flow.questionary, "text", _mock_text)
+    monkeypatch.setattr(flow, "validate_provider_credentials", _validate)
+    monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
+    monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "sync_provider_env", _sync_provider_env)
+    monkeypatch.setattr(
+        _ui,
+        "save_api_key",
+        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
+    )
 
-    real_summary = flow._render_saved_summary
+    exit_code = flow.run_wizard()
 
-    def _summary(**kwargs):
-        w.summary = dict(kwargs)
-        return real_summary(**kwargs)
+    assert endpoint_env_at_validation == ["https://myres.openai.azure.com"]
+    assert validator_calls == [("azure-openai", "az-key")]
+    assert saved_llm_keys == [("azure-openai", "az-key")]
+    extra_env = synced_provider_env[0]["extra_env"]
+    assert isinstance(extra_env, dict)
+    assert extra_env["AZURE_OPENAI_BASE_URL"] == "https://myres.openai.azure.com"
+    assert exit_code == 0
 
-    monkeypatch.setattr(flow, "_render_saved_summary", _summary)
 
-    # Wrap (not replace) `_choose` so the real prompt still runs through the
-    # routed `select_prompt` above, while the approved menu rows — the `Choice`
-    # dataclasses, and the `default=` that D3 requires to be "retry" — stay
-    # observable.
-    real_choose = flow._choose
+def test_run_wizard_cli_provider_skips_llm_key_validation(monkeypatch, tmp_path) -> None:
+    """Scope gate: a CLI-kind provider never triggers key validation.
 
-    def _spy_choose(prompt, choices, **kwargs):
-        w.menus.append(
-            {"prompt": str(prompt), "choices": list(choices), "default": kwargs.get("default")}
-        )
-        return real_choose(prompt, choices, **kwargs)
+    The api_key provider tried (and failed) first in the same run proves the
+    validator is live and the repick landed on the CLI path — killing the
+    tautology where "never validates" holds only because nothing validates.
+    """
+    provider_responses = iter(["anthropic", "claude-code"])
+    menu_responses = iter(["repick"])
+    validator_calls: list[tuple[str, str]] = []
+    saved_llm_keys: list[tuple[str, str]] = []
+    cli_onboarding_providers: list[str] = []
 
-    monkeypatch.setattr(flow, "_choose", _spy_choose)
+    def _mock_select(*_args, **_kwargs):
+        prompt = str(_args[0]) if _args else ""
+        m = MagicMock()
+        if "What next?" in prompt:
+            m.ask.return_value = next(menu_responses)
+        elif "Choose your LLM provider" in prompt:
+            m.ask.return_value = next(provider_responses)
+        elif "auth method" in prompt:
+            m.ask.return_value = "api_key"
+        elif "model" in prompt:
+            m.ask.return_value = ""
+        elif "integration" in prompt.lower():
+            m.ask.return_value = "skip"
+        else:
+            m.ask.return_value = "quickstart"
+        return m
 
-    if validator is not None:
-        monkeypatch.setattr(flow, "validate_provider_credentials", validator, raising=False)
+    def _mock_password(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = "sk-bad-anthropic"
+        return m
 
-    return w
+    def _validate(*, provider, api_key, model):
+        validator_calls.append((provider.value, api_key))
+        return ValidationResult(ok=False, detail="Anthropic rejected the API key.")
+
+    def _cli_onboarding(provider, **_kwargs):
+        cli_onboarding_providers.append(provider.value)
+        return "ok"
+
+    monkeypatch.setattr(_ui, "select_prompt", _mock_select)
+    monkeypatch.setattr(flow.questionary, "password", _mock_password)
+    monkeypatch.setattr(flow, "validate_provider_credentials", _validate)
+    monkeypatch.setattr(flow, "_run_cli_llm_onboarding", _cli_onboarding)
+    monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
+    monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
+    monkeypatch.setattr(
+        _ui,
+        "save_api_key",
+        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
+    )
+
+    exit_code = flow.run_wizard()
+
+    assert validator_calls == [("anthropic", "sk-bad-anthropic")]
+    assert cli_onboarding_providers == ["claude-code"]
+    assert saved_llm_keys == []
+    assert exit_code == 0
+
+
+def test_run_wizard_ollama_host_skips_llm_key_validation(monkeypatch, tmp_path) -> None:
+    """Scope gate: a host-kind credential (Ollama) never triggers key validation.
+
+    Same control structure as the CLI gate: the api_key provider validated
+    (and failed) first in the run proves the validator is live, then the
+    repicked ollama host is persisted to .env without any validator call.
+    """
+    provider_responses = iter(["anthropic", "ollama"])
+    menu_responses = iter(["repick"])
+    validator_calls: list[tuple[str, str]] = []
+    saved_llm_keys: list[tuple[str, str]] = []
+    synced_env_values: list[dict[str, str]] = []
+
+    monkeypatch.setenv("OLLAMA_HOST", "sentinel-before")
+
+    def _mock_select(*_args, **_kwargs):
+        prompt = str(_args[0]) if _args else ""
+        m = MagicMock()
+        if "What next?" in prompt:
+            m.ask.return_value = next(menu_responses)
+        elif "Choose your LLM provider" in prompt:
+            m.ask.return_value = next(provider_responses)
+        elif "auth method" in prompt:
+            m.ask.return_value = "api_key"
+        elif "model" in prompt:
+            m.ask.return_value = "llama3.2" if "Ollama" in prompt else "claude-opus-4-7"
+        elif "integration" in prompt.lower():
+            m.ask.return_value = "skip"
+        else:
+            m.ask.return_value = "quickstart"
+        return m
+
+    def _mock_password(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = "sk-bad-anthropic"
+        return m
+
+    def _mock_text(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = "http://127.0.0.1:11434"
+        return m
+
+    def _validate(*, provider, api_key, model):
+        validator_calls.append((provider.value, api_key))
+        return ValidationResult(ok=False, detail="Anthropic rejected the API key.")
+
+    monkeypatch.setattr(_ui, "select_prompt", _mock_select)
+    monkeypatch.setattr(flow.questionary, "password", _mock_password)
+    monkeypatch.setattr(flow.questionary, "text", _mock_text)
+    monkeypatch.setattr(flow, "validate_provider_credentials", _validate)
+    monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
+    monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
+    monkeypatch.setattr(
+        flow,
+        "sync_env_values",
+        lambda values, **_kwargs: synced_env_values.append(values) or (tmp_path / ".env"),
+    )
+    monkeypatch.setattr(
+        _ui,
+        "save_api_key",
+        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
+    )
+
+    exit_code = flow.run_wizard()
+
+    assert validator_calls == [("anthropic", "sk-bad-anthropic")]
+    assert synced_env_values == [{"OLLAMA_HOST": "http://127.0.0.1:11434"}]
+    assert os.environ["OLLAMA_HOST"] == "http://127.0.0.1:11434"
+    assert saved_llm_keys == []
+    assert exit_code == 0
+
+
+def test_run_wizard_saved_provider_with_stored_key_skips_validation(monkeypatch, tmp_path) -> None:
+    """REGRESSION GATE: a stored key means no key prompt and no validator call."""
+    password_prompts: list[str] = []
+    saved_llm_keys: list[tuple[str, str]] = []
+
+    def _mock_select(*_args, **_kwargs):
+        prompt = str(_args[0]) if _args else ""
+        m = MagicMock()
+        m.ask.return_value = "skip" if "integration" in prompt.lower() else "quickstart"
+        return m
+
+    def _mock_confirm(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = False
+        return m
+
+    def _mock_password(*_args, **_kwargs):
+        password_prompts.append(str(_args[0]) if _args else "")
+        m = MagicMock()
+        m.ask.return_value = "must-not-be-prompted"
+        return m
+
+    def _validate(**_kwargs):
+        raise AssertionError("validator must not be called for a stored key")
+
+    monkeypatch.setattr(_ui, "select_prompt", _mock_select)
+    monkeypatch.setattr(flow.questionary, "confirm", _mock_confirm)
+    monkeypatch.setattr(flow.questionary, "password", _mock_password)
+    monkeypatch.setattr(flow, "validate_provider_credentials", _validate, raising=False)
+    monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
+    monkeypatch.setattr(
+        _ui,
+        "load_local_config",
+        lambda _path: {
+            "wizard": {"mode": "quickstart"},
+            "targets": {
+                "local": {
+                    "provider": "openai",
+                    "model": "gpt-5.4-mini",
+                    "api_key_env": "OPENAI_API_KEY",
+                    "auth_method": "api_key",
+                }
+            },
+        },
+    )
+    monkeypatch.setattr(_ui, "has_llm_api_key", lambda _env: True)
+    monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
+    monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
+    monkeypatch.setattr(
+        _ui,
+        "save_api_key",
+        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
+    )
+
+    exit_code = flow.run_wizard()
+
+    assert exit_code == 0
+    assert password_prompts == []
+    assert saved_llm_keys == []
+
+
+def test_run_wizard_legacy_key_migration_does_not_validate(monkeypatch, tmp_path) -> None:
+    """REGRESSION GATE: silent legacy-store migration persists without validating."""
+    password_prompts: list[str] = []
+    saved_llm_keys: list[tuple[str, str]] = []
+
+    def _mock_select(*_args, **_kwargs):
+        prompt = str(_args[0]) if _args else ""
+        m = MagicMock()
+        m.ask.return_value = "skip" if "integration" in prompt.lower() else "quickstart"
+        return m
+
+    def _mock_confirm(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = False
+        return m
+
+    def _mock_password(*_args, **_kwargs):
+        password_prompts.append(str(_args[0]) if _args else "")
+        m = MagicMock()
+        m.ask.return_value = "must-not-be-prompted"
+        return m
+
+    def _validate(**_kwargs):
+        raise AssertionError("validator must not be called for a legacy migration")
+
+    monkeypatch.setattr(_ui, "select_prompt", _mock_select)
+    monkeypatch.setattr(flow.questionary, "confirm", _mock_confirm)
+    monkeypatch.setattr(flow.questionary, "password", _mock_password)
+    monkeypatch.setattr(flow, "validate_provider_credentials", _validate, raising=False)
+    monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
+    monkeypatch.setattr(
+        _ui,
+        "load_local_config",
+        lambda _path: {
+            "wizard": {"mode": "quickstart"},
+            "targets": {
+                "local": {
+                    "provider": "openai",
+                    "model": "gpt-5.4-mini",
+                    "api_key_env": "OPENAI_API_KEY",
+                    "auth_method": "api_key",
+                    "api_key": "saved-secret",
+                }
+            },
+        },
+    )
+    monkeypatch.setattr(_ui, "has_llm_api_key", lambda _env: False)
+    monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
+    monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
+    monkeypatch.setattr(
+        _ui,
+        "save_api_key",
+        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
+    )
+
+    exit_code = flow.run_wizard()
+
+    assert exit_code == 0
+    assert password_prompts == []
+    assert saved_llm_keys == [("openai", "saved-secret")]
+
+
+def test_run_wizard_llm_key_persist_failure_offers_recovery_menu(
+    monkeypatch, tmp_path, capsys
+) -> None:
+    """Keyring persist failure offers retry instead of hard-exiting with 1."""
+    select_prompts: list[str] = []
+    menu_responses = iter(["retry"])
+    validation_call_count = 0
+    persist_attempts: list[tuple[str, str]] = []
+
+    def _mock_select(*_args, **_kwargs):
+        prompt = str(_args[0]) if _args else ""
+        select_prompts.append(prompt)
+        m = MagicMock()
+        if "What next?" in prompt:
+            m.ask.return_value = next(menu_responses)
+        elif "Choose your LLM provider" in prompt:
+            m.ask.return_value = "anthropic"
+        elif "auth method" in prompt:
+            m.ask.return_value = "api_key"
+        elif "model" in prompt:
+            m.ask.return_value = "claude-opus-4-7"
+        elif "integration" in prompt.lower():
+            m.ask.return_value = "skip"
+        else:
+            m.ask.return_value = "quickstart"
+        return m
+
+    def _mock_password(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = "sk-good"
+        return m
+
+    def _validate(*, provider, api_key, model):
+        nonlocal validation_call_count
+        validation_call_count += 1
+        return ValidationResult(ok=True, detail="Anthropic API key validated.")
+
+    def _save_api_key(provider, value, **_kwargs):
+        persist_attempts.append((provider, value))
+        if len(persist_attempts) == 1:
+            raise RuntimeError("keychain locked")
+
+    monkeypatch.setattr(_ui, "select_prompt", _mock_select)
+    monkeypatch.setattr(flow.questionary, "password", _mock_password)
+    monkeypatch.setattr(flow, "validate_provider_credentials", _validate)
+    monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
+    monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
+    monkeypatch.setattr(_ui, "save_api_key", _save_api_key)
+    monkeypatch.setattr(
+        _ui,
+        "get_keyring_setup_instructions",
+        lambda _env_var: ("Current keyring backend: keyring.backends.fail.Keyring.",),
+    )
+
+    exit_code = flow.run_wizard()
+
+    assert persist_attempts == [("anthropic", "sk-good"), ("anthropic", "sk-good")]
+    assert exit_code == 0
+    assert validation_call_count == 1  # validation is NOT re-run on persist retry
+    assert "Could not save the API key. What next?" in select_prompts
+    output = capsys.readouterr().out
+    assert "OpenSRE could not save your API key to the local system keychain." in output
+
+
+def test_run_wizard_llm_key_persist_failure_repick_returns_to_provider_menu(
+    monkeypatch, tmp_path
+) -> None:
+    """Repick from the persist-failure menu re-renders the provider menu."""
+    select_prompts: list[str] = []
+    provider_responses = iter(["anthropic", "openai"])
+    menu_responses = iter(["repick"])
+    validation_call_count = 0
+    persist_attempts: list[tuple[str, str]] = []
+
+    def _mock_select(*_args, **_kwargs):
+        prompt = str(_args[0]) if _args else ""
+        select_prompts.append(prompt)
+        m = MagicMock()
+        if "What next?" in prompt:
+            m.ask.return_value = next(menu_responses)
+        elif "Choose your LLM provider" in prompt:
+            m.ask.return_value = next(provider_responses)
+        elif "auth method" in prompt:
+            m.ask.return_value = "api_key"
+        elif "model" in prompt:
+            m.ask.return_value = "gpt-5.4-mini" if "OpenAI" in prompt else "claude-opus-4-7"
+        elif "integration" in prompt.lower():
+            m.ask.return_value = "skip"
+        else:
+            m.ask.return_value = "quickstart"
+        return m
+
+    password_responses = iter(["sk-anthropic", "sk-openai"])
+
+    def _mock_password(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = next(password_responses)
+        return m
+
+    def _validate(*, provider, api_key, model):
+        nonlocal validation_call_count
+        validation_call_count += 1
+        return ValidationResult(ok=True, detail="API key validated.")
+
+    def _save_api_key(provider, value, **_kwargs):
+        persist_attempts.append((provider, value))
+        if len(persist_attempts) == 1:
+            raise RuntimeError("keychain locked")
+
+    monkeypatch.setattr(_ui, "select_prompt", _mock_select)
+    monkeypatch.setattr(flow.questionary, "password", _mock_password)
+    monkeypatch.setattr(flow, "validate_provider_credentials", _validate)
+    monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
+    monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
+    monkeypatch.setattr(_ui, "save_api_key", _save_api_key)
+    monkeypatch.setattr(
+        _ui,
+        "get_keyring_setup_instructions",
+        lambda _env_var: ("Current keyring backend: keyring.backends.fail.Keyring.",),
+    )
+
+    exit_code = flow.run_wizard()
+
+    assert select_prompts.count("Choose your LLM provider") == 2
+    assert persist_attempts == [("anthropic", "sk-anthropic"), ("openai", "sk-openai")]
+    assert validation_call_count == 2
+    assert exit_code == 0
+
+
+def test_run_wizard_llm_key_persist_failure_abort_exits_nonzero(
+    monkeypatch, tmp_path, capsys
+) -> None:
+    """Ctrl+C at the persist-failure menu cancels setup with exit code 1."""
+    select_prompts: list[str] = []
+    persist_attempts: list[tuple[str, str]] = []
+
+    def _mock_select(*_args, **_kwargs):
+        prompt = str(_args[0]) if _args else ""
+        select_prompts.append(prompt)
+        m = MagicMock()
+        if "What next?" in prompt:
+            m.ask.return_value = None  # Ctrl+C at the recovery menu
+        elif "Choose your LLM provider" in prompt:
+            m.ask.return_value = "anthropic"
+        elif "auth method" in prompt:
+            m.ask.return_value = "api_key"
+        elif "model" in prompt:
+            m.ask.return_value = "claude-opus-4-7"
+        elif "integration" in prompt.lower():
+            m.ask.return_value = "skip"
+        else:
+            m.ask.return_value = "quickstart"
+        return m
+
+    def _mock_password(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = "sk-good"
+        return m
+
+    def _save_api_key(provider, value, **_kwargs):
+        persist_attempts.append((provider, value))
+        raise RuntimeError("keychain locked")
+
+    monkeypatch.setattr(_ui, "select_prompt", _mock_select)
+    monkeypatch.setattr(flow.questionary, "password", _mock_password)
+    monkeypatch.setattr(
+        flow,
+        "validate_provider_credentials",
+        lambda **_kwargs: ValidationResult(ok=True, detail="Anthropic API key validated."),
+    )
+    monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
+    monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
+    monkeypatch.setattr(_ui, "save_api_key", _save_api_key)
+    monkeypatch.setattr(
+        _ui,
+        "get_keyring_setup_instructions",
+        lambda _env_var: ("Current keyring backend: keyring.backends.fail.Keyring.",),
+    )
+
+    exit_code = flow.run_wizard()
+
+    output = capsys.readouterr().out
+    assert "Setup cancelled." in output
+    assert exit_code == 1
+    assert "Could not save the API key. What next?" in select_prompts
+    assert persist_attempts == [("anthropic", "sk-good")]
+
+
+def test_run_wizard_llm_key_back_at_reprompt_returns_to_provider_menu(
+    monkeypatch, tmp_path, capsys
+) -> None:
+    """WizardBack at the key re-prompt returns to the provider menu, not cancel."""
+    select_prompts: list[str] = []
+    provider_responses = iter(["anthropic", "openai"])
+    menu_responses = iter(["retry"])
+    password_responses = iter(["sk-bad", None, "sk-openai-good"])
+    validator_calls: list[tuple[str, str]] = []
+    saved_llm_keys: list[tuple[str, str]] = []
+
+    def _mock_select(*_args, **_kwargs):
+        prompt = str(_args[0]) if _args else ""
+        select_prompts.append(prompt)
+        m = MagicMock()
+        if "What next?" in prompt:
+            m.ask.return_value = next(menu_responses)
+        elif "Choose your LLM provider" in prompt:
+            m.ask.return_value = next(provider_responses)
+        elif "auth method" in prompt:
+            m.ask.return_value = "api_key"
+        elif "model" in prompt:
+            m.ask.return_value = "gpt-5.4-mini" if "OpenAI" in prompt else "claude-opus-4-7"
+        elif "integration" in prompt.lower():
+            m.ask.return_value = "skip"
+        else:
+            m.ask.return_value = "quickstart"
+        return m
+
+    def _mock_password(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = next(password_responses)
+        return m
+
+    def _validate(*, provider, api_key, model):
+        validator_calls.append((provider.value, api_key))
+        if len(validator_calls) == 1:
+            return ValidationResult(ok=False, detail="Anthropic rejected the API key.")
+        return ValidationResult(ok=True, detail="OpenAI API key validated.")
+
+    monkeypatch.setattr(_ui, "select_prompt", _mock_select)
+    monkeypatch.setattr(flow.questionary, "password", _mock_password)
+    monkeypatch.setattr(flow, "validate_provider_credentials", _validate)
+    monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
+    monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
+    monkeypatch.setattr(
+        _ui,
+        "save_api_key",
+        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
+    )
+
+    exit_code = flow.run_wizard()
+
+    assert select_prompts.count("Choose your LLM provider") == 2
+    assert [call[1] for call in validator_calls] == ["sk-bad", "sk-openai-good"]
+    assert saved_llm_keys == [("openai", "sk-openai-good")]
+    output = capsys.readouterr().out
+    assert "Setup cancelled." not in output
+    assert exit_code == 0
+
+
+def test_run_wizard_llm_key_ctrl_c_at_retry_menu_cancels_setup(
+    monkeypatch, tmp_path, capsys
+) -> None:
+    """Ctrl+C at the validation-failure menu cancels setup; nothing persisted."""
+    saved_llm_keys: list[tuple[str, str]] = []
+
+    def _mock_select(*_args, **_kwargs):
+        prompt = str(_args[0]) if _args else ""
+        m = MagicMock()
+        if "What next?" in prompt:
+            m.ask.return_value = None  # Ctrl+C at the retry menu
+        elif "Choose your LLM provider" in prompt:
+            m.ask.return_value = "anthropic"
+        elif "auth method" in prompt:
+            m.ask.return_value = "api_key"
+        elif "model" in prompt:
+            m.ask.return_value = "claude-opus-4-7"
+        elif "integration" in prompt.lower():
+            m.ask.return_value = "skip"
+        else:
+            m.ask.return_value = "quickstart"
+        return m
+
+    def _mock_password(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = "sk-bad"
+        return m
+
+    monkeypatch.setattr(_ui, "select_prompt", _mock_select)
+    monkeypatch.setattr(flow.questionary, "password", _mock_password)
+    monkeypatch.setattr(
+        flow,
+        "validate_provider_credentials",
+        lambda **_kwargs: ValidationResult(ok=False, detail="Anthropic rejected the API key."),
+    )
+    monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
+    monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
+    monkeypatch.setattr(
+        _ui,
+        "save_api_key",
+        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
+    )
+
+    exit_code = flow.run_wizard()
+
+    assert exit_code == 1
+    output = capsys.readouterr().out
+    assert "Setup cancelled." in output
+    assert saved_llm_keys == []
+
+
+def test_run_wizard_llm_key_validator_exception_treated_as_failure(
+    monkeypatch, tmp_path, capsys
+) -> None:
+    """A raising validator renders as a failure instead of crashing the wizard."""
+    select_prompts: list[str] = []
+    provider_responses = iter(["anthropic", "openai"])
+    menu_responses = iter(["repick"])
+    password_responses = iter(["sk-anthropic", "sk-openai"])
+    validation_call_count = 0
+    saved_llm_keys: list[tuple[str, str]] = []
+
+    def _mock_select(*_args, **_kwargs):
+        prompt = str(_args[0]) if _args else ""
+        select_prompts.append(prompt)
+        m = MagicMock()
+        if "What next?" in prompt:
+            m.ask.return_value = next(menu_responses)
+        elif "Choose your LLM provider" in prompt:
+            m.ask.return_value = next(provider_responses)
+        elif "auth method" in prompt:
+            m.ask.return_value = "api_key"
+        elif "model" in prompt:
+            m.ask.return_value = "gpt-5.4-mini" if "OpenAI" in prompt else "claude-opus-4-7"
+        elif "integration" in prompt.lower():
+            m.ask.return_value = "skip"
+        else:
+            m.ask.return_value = "quickstart"
+        return m
+
+    def _mock_password(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = next(password_responses)
+        return m
+
+    def _validate(*, provider, api_key, model):
+        nonlocal validation_call_count
+        validation_call_count += 1
+        if validation_call_count == 1:
+            raise RuntimeError("boom")
+        return ValidationResult(ok=True, detail="OpenAI API key validated.")
+
+    monkeypatch.setattr(_ui, "select_prompt", _mock_select)
+    monkeypatch.setattr(flow.questionary, "password", _mock_password)
+    monkeypatch.setattr(flow, "validate_provider_credentials", _validate)
+    monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
+    monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
+    monkeypatch.setattr(
+        _ui,
+        "save_api_key",
+        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
+    )
+
+    exit_code = flow.run_wizard()
+
+    assert validation_call_count == 2
+    output = capsys.readouterr().out
+    assert "boom" in output
+    assert any("failed validation. What next?" in prompt for prompt in select_prompts)
+    assert saved_llm_keys == [("openai", "sk-openai")]
+    assert exit_code == 0
+
+
+def test_run_wizard_llm_key_validation_failure_output_masks_secret(
+    monkeypatch, tmp_path, capsys
+) -> None:
+    """The fail -> retry -> save-anyway path never leaks the key to any surface."""
+    secret = "sk-super-secret-XYZ"
+    menu_responses = iter(["retry", "save_anyway"])
+    validation_call_count = 0
+    saved_llm_keys: list[tuple[str, str]] = []
+    password_calls: list[dict[str, object]] = []
+    select_renderings: list[str] = []
+
+    def _mock_select(*_args, **_kwargs):
+        prompt = str(_args[0]) if _args else ""
+        rendered = [prompt]
+        for choice in _kwargs.get("choices") or []:
+            rendered.append(str(getattr(choice, "title", "")))
+            rendered.append(str(getattr(choice, "description", "")))
+        select_renderings.append(" ".join(rendered))
+        m = MagicMock()
+        if "What next?" in prompt:
+            m.ask.return_value = next(menu_responses)
+        elif "Choose your LLM provider" in prompt:
+            m.ask.return_value = "anthropic"
+        elif "auth method" in prompt:
+            m.ask.return_value = "api_key"
+        elif "model" in prompt:
+            m.ask.return_value = "claude-opus-4-7"
+        elif "integration" in prompt.lower():
+            m.ask.return_value = "skip"
+        else:
+            m.ask.return_value = "quickstart"
+        return m
+
+    def _mock_password(*_args, **_kwargs):
+        password_calls.append({"label": str(_args[0]) if _args else "", **_kwargs})
+        m = MagicMock()
+        m.ask.return_value = secret
+        return m
+
+    def _validate(*, provider, api_key, model):
+        nonlocal validation_call_count
+        validation_call_count += 1
+        return ValidationResult(ok=False, detail="Anthropic rejected the API key.")
+
+    monkeypatch.setattr(_ui, "select_prompt", _mock_select)
+    monkeypatch.setattr(flow.questionary, "password", _mock_password)
+    monkeypatch.setattr(flow, "validate_provider_credentials", _validate)
+    monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
+    monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
+    monkeypatch.setattr(
+        _ui,
+        "save_api_key",
+        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
+    )
+
+    exit_code = flow.run_wizard()
+
+    assert validation_call_count == 2
+    captured = capsys.readouterr()
+    assert "without validation" in captured.out
+    assert secret not in captured.out
+    assert secret not in captured.err
+    assert all(secret not in str(call.get("default", "")) for call in password_calls)
+    assert all(secret not in str(call.get("instruction") or "") for call in password_calls)
+    assert all(secret not in rendered for rendered in select_renderings)
+    assert saved_llm_keys == [("anthropic", secret)]
+    assert exit_code == 0

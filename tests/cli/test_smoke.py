@@ -637,6 +637,19 @@ def test_onboard_interactive_smoke(cli_sandbox: CliSandbox) -> None:
                 stagger_j=1,
             ),
             PtyAction(expect="Anthropic API key", send=b"smoke-test-key\r"),
+            # #3591: the wizard now live-validates the key; smoke-test-key fails
+            # (401 online, connection error offline — the menu renders either way).
+            # One `j` moves from the default "Enter a different API key" to
+            # "Save it anyway", which keeps the keyring persistence path and every
+            # downstream assertion intact. The per-action timeout covers a hanging
+            # network: the validator's client timeout is 30s and connection errors
+            # are retried (the CLI login expect below already uses 90.0 as well).
+            PtyAction(
+                expect="failed validation. What next?",
+                send=b"\r",
+                stagger_j=1,
+                timeout=90.0,
+            ),
             PtyAction(expect="Choose Anthropic model", send=b"\r"),
             PtyAction(
                 expect="Choose an integration to configure",
@@ -746,6 +759,13 @@ def test_onboard_interactive_smoke_cli_provider_repick_when_unauthenticated(
                 stagger_j=1,
             ),
             PtyAction(expect="Anthropic API key", send=b"smoke-test-key\r"),
+            # #3591: same save-anyway step as test_onboard_interactive_smoke.
+            PtyAction(
+                expect="failed validation. What next?",
+                send=b"\r",
+                stagger_j=1,
+                timeout=90.0,
+            ),
             PtyAction(expect="Choose Anthropic model", send=b"\r"),
             PtyAction(
                 expect="Choose an integration to configure",
