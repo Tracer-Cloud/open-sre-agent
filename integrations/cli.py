@@ -1302,6 +1302,37 @@ def _setup_pagerduty() -> None:
     )
 
 
+def _setup_kubernetes() -> None:
+    kubeconfig_path = _p(
+        "Kubeconfig file path (e.g. ~/.kube/config) — leave empty to paste inline YAML",
+        default="",
+    )
+    kubeconfig_content = ""
+    if not kubeconfig_path:
+        kubeconfig_content = _p(
+            "Paste raw kubeconfig YAML content (required if no file path given)",
+            default="",
+        )
+        if not kubeconfig_content:
+            _die("Either a kubeconfig file path or inline YAML content is required.")
+    context = _p(
+        "Kubeconfig context to use (leave empty to use the current-context from the file)",
+        default="",
+    )
+    namespace = _p("Default namespace", default="default")
+    upsert_integration(
+        "kubernetes",
+        {
+            "credentials": {
+                "kubeconfig_path": kubeconfig_path,
+                "kubeconfig": kubeconfig_content,
+                "context": context,
+                "namespace": namespace or "default",
+            }
+        },
+    )
+
+
 _HANDLERS: dict[str, Any] = {
     "alertmanager": _setup_alertmanager,
     "aws": _setup_aws,
@@ -1340,6 +1371,7 @@ _HANDLERS: dict[str, Any] = {
     "jenkins": _setup_jenkins,
     "tempo": _setup_tempo,
     "pagerduty": _setup_pagerduty,
+    "kubernetes": _setup_kubernetes,
 }
 
 

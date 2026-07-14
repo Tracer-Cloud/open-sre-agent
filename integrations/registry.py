@@ -397,6 +397,15 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         setup_order=37,
         verify_order=48,
     ),
+    IntegrationSpec(
+        service="kubernetes",
+        aliases=("k8s",),
+        has_verifier=True,
+        direct_effective=True,
+        core_verify=True,
+        setup_order=51,
+        verify_order=53,
+    ),
 )
 
 INTEGRATION_SPECS_BY_SERVICE = {spec.service: spec for spec in INTEGRATION_SPECS}

@@ -199,6 +199,18 @@ def build_seed_calls(
 
     resolved = state.get("resolved_integrations") or {}
     tool_sources = availability_view(resolved)
+
+    # Enrich kubernetes tool_sources with alert-extracted context so seed calls
+    # use the correct namespace/pod rather than the default from the integration config.
+    alert_json = state.get("alert_json") or {}
+    if "kubernetes" in tool_sources and alert_json:
+        k8s_src = dict(tool_sources["kubernetes"])
+        if alert_json.get("kube_namespace"):
+            k8s_src["namespace"] = alert_json["kube_namespace"]
+        if alert_json.get("pod_name"):
+            k8s_src["pod_name"] = alert_json["pod_name"]
+        tool_sources = {**tool_sources, "kubernetes": k8s_src}
+
     seed_tools = [t for t in tools if str(t.source) in target_sources]
     if not seed_tools:
         return []

@@ -1212,6 +1212,21 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "vercel_deployment_logs",
         "vercel_deployment_status",
         "victoria_logs_query",
+        # Kubernetes tools: client methods catch exceptions internally via
+        # capture_service_error and return structured error dicts; any unexpected
+        # exception from run() escapes to the #1476 global wrapper.
+        "kubernetes_describe_pod",
+        "kubernetes_get_events",
+        "kubernetes_get_pod_logs",
+        "kubernetes_get_resource",
+        "kubernetes_list_configmaps",
+        "kubernetes_list_daemonsets",
+        "kubernetes_list_deployments",
+        "kubernetes_list_ingresses",
+        "kubernetes_list_nodes",
+        "kubernetes_list_pods",
+        "kubernetes_list_services",
+        "kubernetes_list_statefulsets",
     }
 )
 

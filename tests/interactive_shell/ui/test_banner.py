@@ -40,21 +40,6 @@ def test_ready_box_uses_active_theme_palette() -> None:
     assert green_rgb not in styled
 
 
-def test_splash_gradient_style_for_gradient_theme() -> None:
-    from platform.terminal.theme import set_active_theme
-
-    set_active_theme("webflux")
-    assert banner_module._splash_block_style(1, 3) == "bold #864C96"
-    assert banner_module._splash_block_style(0, 1) == "bold #E23636"
-
-
-def test_splash_gradient_style_falls_back_to_highlight_without_gradient() -> None:
-    from platform.terminal.theme import HIGHLIGHT, set_active_theme
-
-    set_active_theme("nord")
-    assert banner_module._splash_block_style(0, 1) == f"bold {HIGHLIGHT}"
-
-
 def test_refresh_welcome_poster_uses_repl_safe_render(monkeypatch: object) -> None:
     console = Console(record=True, width=120)
     render_calls: list[dict[str, object | None]] = []

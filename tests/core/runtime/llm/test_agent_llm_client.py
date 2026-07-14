@@ -1054,7 +1054,6 @@ def test_build_openai_tool_specs_normalizes_anyof_optional_parameters() -> None:
 def test_get_llm_agent_routes_deepseek_to_openai_compatible_client(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-
     captured: dict[str, object] = {}
 
     class _FakeOpenAIAgentClient:
@@ -1115,7 +1114,6 @@ def test_get_llm_agent_routes_deepseek_to_litellm_when_transport_enabled(
 def test_get_llm_agent_uses_sdk_without_transport_flag(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-
     monkeypatch.setenv("LLM_PROVIDER", "deepseek")
     monkeypatch.setenv("DEEPSEEK_API_KEY", "ds-test")
     monkeypatch.setenv("DEEPSEEK_REASONING_MODEL", "deepseek-v4-pro")

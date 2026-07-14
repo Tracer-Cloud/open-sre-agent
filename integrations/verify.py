@@ -19,8 +19,13 @@ from integrations._verifiers_loader import register_all_verifiers
 from integrations.catalog import (
     resolve_effective_integrations as _resolve_effective_integrations,
 )
-from integrations.registry import CORE_VERIFY_SERVICES, SUPPORTED_VERIFY_SERVICES
+from integrations.registry import (
+    CORE_VERIFY_SERVICES,
+    INTEGRATION_SPECS_BY_SERVICE,
+    SUPPORTED_VERIFY_SERVICES,
+)
 from integrations.slack.verifier import RUNTIME_SEND_TEST_KEY as _SLACK_RUNTIME_SEND_TEST_KEY
+from integrations.store import get_integration
 from integrations.verification import VerifierFn, get_verifier, result
 from platform.terminal.theme import (
     DIM,
@@ -53,6 +58,50 @@ def resolve_effective_integrations() -> dict[str, dict[str, Any]]:
     return _resolve_effective_integrations()
 
 
+def _missing_integration_detail(current_service: str) -> str:
+    """Explain why verification sees no effective config for *current_service*."""
+    store_record = get_integration(current_service)
+    if store_record is None:
+        spec = INTEGRATION_SPECS_BY_SERVICE.get(current_service)
+        if spec is not None:
+            for member in spec.family_members:
+                store_record = get_integration(member)
+                if store_record is not None:
+                    break
+    if store_record is None:
+        return "Not configured in local store or environment variables."
+
+    endpoint = ""
+    credentials = store_record.get("credentials")
+    if isinstance(credentials, dict):
+        endpoint = str(credentials.get("endpoint", "")).strip()
+    if not endpoint:
+        instances = store_record.get("instances")
+        if isinstance(instances, list):
+            for instance in instances:
+                if not isinstance(instance, dict):
+                    continue
+                instance_credentials = instance.get("credentials")
+                if isinstance(instance_credentials, dict):
+                    endpoint = str(instance_credentials.get("endpoint", "")).strip()
+                    if endpoint:
+                        break
+
+    if current_service == "grafana" and endpoint and "localhost" in endpoint.lower():
+        return (
+            "Grafana credentials are saved in the local store, but localhost endpoints "
+            "are classified separately and were not published for verification. "
+            "Re-run setup or upgrade OpenSRE if this persists after saving "
+            f"{endpoint} with a service account token."
+        )
+
+    return (
+        f"Credentials for {current_service} are saved in the local store "
+        f"({store_record.get('id', 'unknown id')}), but they did not resolve into a "
+        "usable runtime config. Check required fields and re-run setup."
+    )
+
+
 def _verify_one(
     current_service: str,
     effective_integrations: dict[str, dict[str, Any]],
@@ -70,7 +119,12 @@ def _verify_one(
 
     integration = effective_integrations.get(current_service)
     if not integration:
-        return result(current_service, "-", "missing", "Not configured in local store or env.")
+        return result(
+            current_service,
+            "-",
+            "missing",
+            _missing_integration_detail(current_service),
+        )
 
     config = dict(integration["config"])
     if current_service == "slack" and send_slack_test:
