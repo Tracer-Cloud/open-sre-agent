@@ -34,6 +34,11 @@ class TestArchitectureSaveObservationsContract(BaseToolContract):
         return architecture_save_observations.__opensre_registered_tool__
 
 
+def test_architecture_cleanup_repo_is_mutating() -> None:
+    registered = architecture_cleanup_repo.__opensre_registered_tool__
+    assert registered.side_effect_level == "mutating"
+
+
 def test_architecture_tools_are_action_surface_only() -> None:
     registry_module.clear_tool_registry_cache()
     action = {

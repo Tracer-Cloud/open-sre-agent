@@ -138,3 +138,35 @@ def test_clone_github_repo_cleans_up_on_clone_failure(
         clone_github_repo("Tracer-Cloud", "opensre", ref="main")
 
     assert mock_rmtree.called
+
+
+def test_shallow_clone_sha_fetches_commit_directly(tmp_path: Path) -> None:
+    """Non-HEAD SHAs must use init+fetch, not clone --depth 1 + checkout."""
+    from subprocess import CompletedProcess
+
+    from tools.architecture_issue_tool.repo_workspace import _shallow_clone
+
+    destination = tmp_path / "architecture_workspace"
+    sha = "abcdef0123456789abcdef0123456789abcdef01"
+    calls: list[tuple[str, ...]] = []
+
+    def _fake_run_git(cwd: Path, *args: str, **_kwargs: object) -> CompletedProcess[str]:
+        calls.append(args)
+        return CompletedProcess(args=("git", *args), returncode=0, stdout="", stderr="")
+
+    with patch(
+        "tools.architecture_issue_tool.repo_workspace._run_git",
+        side_effect=_fake_run_git,
+    ):
+        _shallow_clone(
+            remote_url="https://github.com/org/repo.git",
+            destination=destination,
+            ref=sha,
+            token=None,
+        )
+
+    assert calls[0] == ("init",)
+    assert calls[1] == ("remote", "add", "origin", "https://github.com/org/repo.git")
+    assert calls[2] == ("fetch", "--depth", "1", "origin", sha)
+    assert calls[3] == ("checkout", "--detach", "FETCH_HEAD")
+    assert not any(args[:1] == ("clone",) for args in calls)

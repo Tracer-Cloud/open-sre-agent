@@ -177,6 +177,47 @@ def _looks_like_sha(ref: str) -> bool:
     return bool(_SHA_REF_RE.fullmatch(ref.strip()))
 
 
+def _git_ok(
+    result: subprocess.CompletedProcess[str],
+    *,
+    fallback: str,
+) -> None:
+    if result.returncode == 0:
+        return
+    detail = result.stderr.strip() or result.stdout.strip() or fallback
+    raise WorkspaceError(detail)
+
+
+def _shallow_clone_sha(
+    *,
+    remote_url: str,
+    destination: Path,
+    sha: str,
+    token: str | None,
+) -> None:
+    """Fetch a single commit SHA without requiring it to be the remote HEAD.
+
+    ``git clone --depth 1`` only materializes the tip of the default branch, so
+    ``checkout <sha>`` fails for any non-HEAD commit. Init + ``fetch --depth 1
+    origin <sha>`` asks the remote for that object directly.
+    """
+    env = _auth_env(token)
+    destination.mkdir(parents=True, exist_ok=True)
+    _git_ok(_run_git(destination, "init", env=env), fallback="git init failed")
+    _git_ok(
+        _run_git(destination, "remote", "add", "origin", remote_url, env=env),
+        fallback="git remote add failed",
+    )
+    _git_ok(
+        _run_git(destination, "fetch", "--depth", "1", "origin", sha, env=env),
+        fallback=f"git fetch failed for SHA {sha}",
+    )
+    _git_ok(
+        _run_git(destination, "checkout", "--detach", "FETCH_HEAD", env=env),
+        fallback=f"git checkout failed for SHA {sha}",
+    )
+
+
 def _shallow_clone(
     *,
     remote_url: str,
@@ -189,14 +230,12 @@ def _shallow_clone(
     env = _auth_env(token)
 
     if _looks_like_sha(ref):
-        result = _run_git(parent, "clone", "--depth", "1", remote_url, str(destination), env=env)
-        if result.returncode != 0:
-            detail = result.stderr.strip() or result.stdout.strip() or "git clone failed"
-            raise WorkspaceError(detail)
-        checkout = _run_git(destination, "checkout", ref, env=env)
-        if checkout.returncode != 0:
-            detail = checkout.stderr.strip() or checkout.stdout.strip() or "git checkout failed"
-            raise WorkspaceError(detail)
+        _shallow_clone_sha(
+            remote_url=remote_url,
+            destination=destination,
+            sha=ref.strip(),
+            token=token,
+        )
         return
 
     result = _run_git(
@@ -210,9 +249,7 @@ def _shallow_clone(
         str(destination),
         env=env,
     )
-    if result.returncode != 0:
-        detail = result.stderr.strip() or result.stdout.strip() or "git clone failed"
-        raise WorkspaceError(detail)
+    _git_ok(result, fallback="git clone failed")
 
 
 def clone_github_repo(

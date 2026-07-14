@@ -96,15 +96,16 @@ Compact sequence:
 7) architecture_cleanup_repo()  ← required next tool after step 6
    (Skip when step 1 used cwd and did not clone.)
 
-8) Final NO-TOOL reply: fill
+8) architecture_save_observations(repo_name, observations)
+   ← required after cleanup (or after shim when cleanup was skipped),
+   before the final no-tool report. Ending the turn before this call skips it.
+   `observations` = the complete markdown list of findings from passes 3–6
+   (raw heuristic evidence).
+   `repo_name` = the repo slug (e.g. opensre or owner/repo).
+
+9) Final NO-TOOL reply: fill
    `core/agent_harness/prompts/skills/architecture_audit/architecture_audit_report.md`
    from passes 3–6 grounded in AGENT SCAN context. Summarize; never paste huge
    raw dumps. Invent Recommended sequencing yourself — calibrate to the repo's
    stated contract, not a generic "delete every cross-module edge" story. Propose
    tasks; never auto-apply fixes. File GitHub issues only after approval.
-
-9) architecture_save_observations(repo_name, observations)
-   ← required after cleanup (or after shim when cleanup was skipped).
-   `observations` = the complete markdown list of findings from passes 3–6
-   (raw heuristic evidence) as well as the report from step 8.
-   `repo_name` = the repo slug (e.g. opensre or owner/repo).

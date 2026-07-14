@@ -162,7 +162,7 @@ def architecture_clone_repo(
     use_cases=["Cleanup after architecture_clone_repo"],
     anti_examples=["Deleting arbitrary paths outside the architecture workspace"],
     surfaces=("action",),
-    side_effect_level="read_only",
+    side_effect_level="mutating",
     input_schema={
         "type": "object",
         "properties": {
