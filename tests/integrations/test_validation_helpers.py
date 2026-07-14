@@ -177,6 +177,8 @@ class TestReportClassifyFailure:
             _SecretConfig.model_validate({"api_token": "x", "port": "not-a-number"})
         except ValidationError as exc:
             validation_error = exc
+        else:
+            raise AssertionError("expected ValidationError")
 
         with patch("platform.observability.errors.boundary.capture_exception"):
             report_classify_failure(
