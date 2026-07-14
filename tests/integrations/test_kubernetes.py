@@ -93,6 +93,38 @@ def test_classify_preserves_context_and_namespace() -> None:
 
 
 # ---------------------------------------------------------------------------
+# KubernetesClient._build_clients()
+# ---------------------------------------------------------------------------
+
+
+def test_build_clients_passes_single_kubeconfig_path_through() -> None:
+    from integrations.kubernetes.client import KubernetesClient
+
+    cfg = KubernetesIntegrationConfig(kubeconfig_path="/home/user/.kube/config")
+    client = KubernetesClient(cfg)
+
+    with patch("integrations.kubernetes.client.k8s_config.load_kube_config") as mock_load:
+        client._build_clients()
+
+    assert mock_load.call_args.kwargs["config_file"] == "/home/user/.kube/config"
+
+
+def test_build_clients_passes_colon_separated_kubeconfig_path_through() -> None:
+    """Colon-separated paths must reach the SDK's own KubeConfigMerger, not fall
+    back to reading the process environment's KUBECONFIG variable."""
+    from integrations.kubernetes.client import KubernetesClient
+
+    colon_path = "/home/user/.kube/config:/home/user/.kube/dev"
+    cfg = KubernetesIntegrationConfig(kubeconfig_path=colon_path)
+    client = KubernetesClient(cfg)
+
+    with patch("integrations.kubernetes.client.k8s_config.load_kube_config") as mock_load:
+        client._build_clients()
+
+    assert mock_load.call_args.kwargs["config_file"] == colon_path
+
+
+# ---------------------------------------------------------------------------
 # KubernetesClient.probe_access()
 # ---------------------------------------------------------------------------
 

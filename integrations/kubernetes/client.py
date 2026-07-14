@@ -130,17 +130,15 @@ class KubernetesClient:
         api_config = k8s_client.Configuration()
         context = self.config.context or None
         if self.config.kubeconfig_path:
-            # load_kube_config(config_file=) only accepts a single path. A
-            # colon-separated value (the standard KUBECONFIG merge idiom, e.g.
-            # ~/.kube/config:~/.kube/dev) would be treated as a literal filename
-            # and raise FileNotFoundError. When the value contains ":", omit
-            # config_file= so the SDK reads KUBECONFIG from the environment
-            # natively (kube_config.py:48) and performs the merge itself.
-            config_file = (
-                None if ":" in self.config.kubeconfig_path else self.config.kubeconfig_path
-            )
+            # config_file= is forwarded verbatim to KubeConfigMerger, which
+            # already splits on the OS path separator (":" on non-Windows) and
+            # merges each file itself — the same mechanism the SDK uses when
+            # reading the KUBECONFIG env var. Passing the configured value
+            # directly (rather than falling back to config_file=None) keeps
+            # DB-stored integrations from silently reading the process
+            # environment's KUBECONFIG instead of the configured paths.
             k8s_config.load_kube_config(
-                config_file=config_file,
+                config_file=self.config.kubeconfig_path,
                 client_configuration=api_config,
                 context=context,
             )
