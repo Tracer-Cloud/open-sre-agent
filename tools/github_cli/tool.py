@@ -1,4 +1,4 @@
-"""Agent-callable authenticated GitHub CLI tools."""
+"""Agent-callable authenticated GitHub CLI tool."""
 
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ _ARGS_SCHEMA: dict[str, Any] = {
             "items": {"type": "string"},
             "description": (
                 "Arguments after the `gh` binary (for example: "
+                '["issue", "create", "--title", "Bug", "--body", "…"] or '
                 '["issue", "list", "--limit", "10"]). Do not include `gh` itself.'
             ),
         },
@@ -69,23 +70,24 @@ def _normalize_args(args: list[str] | None) -> list[str]:
     name="github_cli",
     source="github",
     description=(
-        "Run a read-only GitHub CLI (`gh`) command with OpenSRE-configured auth. "
-        "Use for listing/viewing issues, PRs, repos, search, and GET-style `gh api`. "
-        "For mutating commands (create/edit/close/merge/...), use github_cli_write instead. "
-        "Never use shell_run with raw gh."
+        "Run GitHub CLI (`gh`) with OpenSRE-configured auth — reads and writes. "
+        "Use for issue/PR create, list, view, assign, label, merge, repo list, "
+        "and gh api. Prefer this over shell_run / !gh / raw gh. "
+        "Pass args after the gh binary; optional repo as owner/name for -R."
     ),
     use_cases=[
+        "Creating a GitHub issue (title/body/assignee/labels) when the user asks",
         "Listing or viewing GitHub issues and pull requests via gh",
-        "Inspecting repository metadata with gh repo view",
-        "Running read-only gh api GET requests",
+        "Inspecting repository metadata or listing accessible repos",
+        "Editing, closing, commenting, or merging via gh",
     ],
     anti_examples=[
-        "Creating or editing issues (use github_cli_write)",
-        "Running gh via shell_run",
+        "Running gh via shell_run or !gh",
         "Printing or logging the GitHub token",
+        "Inventing repo lists without calling github_cli",
     ],
     surfaces=("investigation", "chat", "action"),
-    side_effect_level="read_only",
+    side_effect_level="mutating",
     requires_approval=False,
     input_schema=_ARGS_SCHEMA,
     is_available=_github_cli_available,
@@ -98,77 +100,13 @@ def github_cli(
     github_token: str | None = None,
     **_kwargs: Any,
 ) -> dict[str, Any]:
-    """Run a read-only authenticated ``gh`` command."""
+    """Run an authenticated ``gh`` command (read or write; no approval gate)."""
     normalized = _normalize_args(args)
     effect = classify_gh_args(normalized)
-    if effect != "read":
-        return {
-            "ok": False,
-            "error": (
-                "This command looks mutating. Call github_cli_write instead (requires approval)."
-            ),
-            "error_type": "wrong_tool",
-            "effect": effect,
-            "args": normalized,
-            "suggested_tool": "github_cli_write",
-        }
     result = run_gh(args=normalized, repo=repo, github_token=github_token, timeout=timeout)
-    result["effect"] = "read"
+    result["effect"] = effect
     result["tool"] = "github_cli"
     return result
 
 
-@tool(
-    name="github_cli_write",
-    source="github",
-    description=(
-        "Run a mutating GitHub CLI (`gh`) command with OpenSRE-configured auth "
-        "(issue/PR create, edit, close, merge, labels, etc.). Requires approval. "
-        "Prefer github_cli for read-only commands. Never use shell_run with raw gh."
-    ),
-    use_cases=[
-        "Creating a GitHub issue after the user approves",
-        "Editing, closing, or commenting on issues via gh",
-        "Mutating pull requests (merge, review, edit) via gh",
-    ],
-    anti_examples=[
-        "Read-only listing (use github_cli)",
-        "Running gh via shell_run",
-        "Mutating GitHub without user approval",
-    ],
-    surfaces=("chat", "action"),
-    side_effect_level="mutating",
-    requires_approval=True,
-    approval_reason="Runs a mutating GitHub CLI (`gh`) command with your configured token.",
-    input_schema=_ARGS_SCHEMA,
-    is_available=_github_cli_available,
-    extract_params=_github_cli_extract_params,
-)
-def github_cli_write(
-    args: list[str],
-    repo: str | None = None,
-    timeout: int | None = None,
-    github_token: str | None = None,
-    **_kwargs: Any,
-) -> dict[str, Any]:
-    """Run a mutating authenticated ``gh`` command (approval-gated)."""
-    normalized = _normalize_args(args)
-    effect = classify_gh_args(normalized)
-    if effect != "mutate":
-        return {
-            "ok": False,
-            "error": (
-                "This command looks read-only. Call github_cli instead (no approval required)."
-            ),
-            "error_type": "wrong_tool",
-            "effect": effect,
-            "args": normalized,
-            "suggested_tool": "github_cli",
-        }
-    result = run_gh(args=normalized, repo=repo, github_token=github_token, timeout=timeout)
-    result["effect"] = "mutate"
-    result["tool"] = "github_cli_write"
-    return result
-
-
-__all__ = ["github_cli", "github_cli_write"]
+__all__ = ["github_cli"]

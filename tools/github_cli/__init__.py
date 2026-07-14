@@ -1,9 +1,9 @@
-"""Registry entrypoint for authenticated GitHub CLI tools."""
+"""Registry entrypoint for the authenticated GitHub CLI tool."""
 
 from __future__ import annotations
 
-from tools.github_cli.tool import github_cli, github_cli_write
+from tools.github_cli.tool import github_cli
 
 TOOL_MODULES = ("tool",)
 
-__all__ = ["TOOL_MODULES", "github_cli", "github_cli_write"]
+__all__ = ["TOOL_MODULES", "github_cli"]

@@ -29,4 +29,4 @@ community follow-ups, or turning an explicit Slack request into a GitHub issue.
    mutating GitHub workflow tool. It is never an investigation action and must
    remain chat-only, approval-gated, and proposal-driven.
 5. For ad-hoc `gh` (flexible issue/PR/api ops outside this Slack proposal flow),
-   use `github_cli` / `github_cli_write` — never `shell_run` with raw `gh`.
+   use `github_cli` — never `shell_run` with raw `gh`.
