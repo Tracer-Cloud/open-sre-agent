@@ -35,7 +35,8 @@ class InvestigationSession(Protocol):
         *,
         ok: bool = True,
         **metadata: Any,
-    ) -> None: ...
+    ) -> None:
+        raise NotImplementedError
 
 
 @dataclass(frozen=True)

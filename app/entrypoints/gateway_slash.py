@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Any
+from surfaces.interactive_shell.runtime.slash_adapter import (
+    SlashPorts,
+    headless_slash_ports,
+)
 
-from surfaces.interactive_shell.runtime.slash_adapter import headless_slash_ports
 
-
-def gateway_slash_ports_factory() -> Any:
+def gateway_slash_ports_factory() -> SlashPorts:
     """Build slash runtime ports for non-interactive gateway turns."""
     return headless_slash_ports()
 

@@ -11,10 +11,6 @@ from rich.console import Console
 from core.agent_harness.session.terminal_access import background_mode_enabled
 from core.domain.stream import StreamEvent
 from platform.common.task_types import TaskRecord
-from surfaces.interactive_shell.runtime.background.runner import (
-    start_background_template_investigation,
-    start_background_text_investigation,
-)
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
 from surfaces.interactive_shell.ui.foreground_investigation import run_foreground_investigation
@@ -174,6 +170,10 @@ class ReplInvestigationLaunchPorts:
         console: Console,
         display_command: str,
     ) -> None:
+        from surfaces.interactive_shell.runtime.background.runner import (
+            start_background_text_investigation,
+        )
+
         start_background_text_investigation(
             alert_text=alert_text,
             session=session,
@@ -189,6 +189,10 @@ class ReplInvestigationLaunchPorts:
         console: Console,
         display_command: str,
     ) -> None:
+        from surfaces.interactive_shell.runtime.background.runner import (
+            start_background_template_investigation,
+        )
+
         start_background_template_investigation(
             template_name=template_name,
             session=session,
