@@ -12,9 +12,11 @@ class _FakeSlackClient:
         self.finalized = ""
 
     def post_message(self, *, channel: str, text: str, thread_ts: str | None = None) -> str | None:
+        _ = (channel, text, thread_ts)
         return "1.0"
 
     def update_message(self, *, channel: str, ts: str, text: str) -> bool:
+        _ = (channel, ts)
         self.finalized = text
         return True
 

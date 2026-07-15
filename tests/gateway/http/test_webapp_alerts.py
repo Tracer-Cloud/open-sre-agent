@@ -1,7 +1,8 @@
 """HTTP-surface tests for ``POST /alerts`` error handling.
 
-A rejected alert payload must return only the exception *type*, never the underlying detail 
-(submitted values, required-field names, or the pydantic model name), which stays in the server log.
+A rejected alert payload must return only the exception *type*, never the
+underlying detail (submitted values, required-field names, or the pydantic
+model name), which stays in the server log.
 """
 
 from __future__ import annotations
