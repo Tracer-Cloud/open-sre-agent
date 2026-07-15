@@ -884,7 +884,7 @@ def test_ensure_github_cli_skips_when_gh_present(tmp_path: Path) -> None:
 
     result = _run_ensure_github_cli(path_dirs=[bin_dir])
     assert result.returncode == 0, result.stderr
-    assert "cli.github.com" not in result.stderr
+    assert "OpenSRE GitHub chat tools" not in result.stderr
     assert "Installing GitHub CLI" not in result.stdout
 
 
@@ -898,4 +898,4 @@ def test_ensure_github_cli_respects_skip_env(tmp_path: Path) -> None:
     )
     assert result.returncode == 0, result.stderr
     assert "OPENSRE_SKIP_GH_INSTALL" in result.stderr
-    assert "cli.github.com" in result.stderr
+    assert "OpenSRE GitHub chat tools" in result.stderr
