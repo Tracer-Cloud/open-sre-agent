@@ -84,7 +84,7 @@ def _configure_grafana_local() -> tuple[str, str]:
         )
         return "Grafana Local (skipped)", ""
 
-    compose_file = str(Path(__file__).parent / "local_grafana_stack/docker-compose.yml")
+    compose_file = str(Path(__file__).parent.parent / "local_grafana_stack/docker-compose.yml")
     with _console.status("Starting Grafana + Loki (docker compose up -d)...", spinner="dots"):
         result = subprocess.run(
             ["docker", "compose", "-f", compose_file, "up", "-d"],
