@@ -1,0 +1,77 @@
+---
+title: "PostHog (Bounce Rate)"
+description: "Connect the PostHog REST integration so OpenSRE can monitor session bounce rates and trigger watchdog alerts"
+---
+
+OpenSRE queries PostHog session metrics to calculate bounce rates and trigger alerts when the percentage of short sessions exceeds your configured threshold.
+
+This integration uses the PostHog REST API to fetch session telemetry during SRE watchdog cycles. 
+
+<Info>
+  This is distinct from the [PostHog MCP integration](/posthog-mcp), which connects to PostHog's hosted Model Context Protocol (MCP) server to expose product analytics, feature flags, and HogQL tools directly to the agent.
+</Info>
+
+## Prerequisites
+
+- A PostHog account (US or EU hosted, or self-hosted)
+- A PostHog **project ID**
+- A PostHog **personal API key** with read permissions for the project. See [PostHog's personal API keys documentation](https://posthog.com/docs/api/personal-api-keys) to generate one.
+
+## Setup
+
+The PostHog bounce-rate integration is configured exclusively using environment variables.
+
+### Environment variables
+
+Add the following variables to your `.env` file:
+
+```bash
+POSTHOG_PROJECT_ID=your_project_id
+POSTHOG_PERSONAL_API_KEY=phx_your_personal_api_key
+POSTHOG_BASE_URL=https://us.i.posthog.com           # Optional, defaults to US SaaS
+POSTHOG_TIMEOUT_SECONDS=15.0                        # Optional, defaults to 15.0
+POSTHOG_BOUNCE_THRESHOLD=0.6                        # Optional, defaults to 0.6 (60%)
+POSTHOG_BOUNCE_WINDOW=24h                           # Optional, defaults to 24h
+```
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `POSTHOG_PROJECT_ID` | — | **Required.** Your PostHog project ID |
+| `POSTHOG_PERSONAL_API_KEY` | — | **Required.** Your PostHog personal API key |
+| `POSTHOG_BASE_URL` | `https://us.i.posthog.com` | PostHog API instance base URL (use `https://eu.i.posthog.com` for EU SaaS) |
+| `POSTHOG_TIMEOUT_SECONDS` | `15.0` | Timeout in seconds for HTTP requests to the PostHog API |
+| `POSTHOG_BOUNCE_THRESHOLD` | `0.6` | Bounce rate threshold (as a decimal from `0.0` to `1.0`) above which alerting is triggered |
+| `POSTHOG_BOUNCE_WINDOW` | `24h` | Time window to query for calculating the bounce rate (e.g. `24h`, `48h`, `1h`) |
+
+## Bounce Rate Calculation
+
+The integration calculates the bounce rate using HogQL. A session is considered a "bounce" if its total duration is **10 seconds or less**.
+
+The calculation runs the following query:
+
+```sql
+SELECT 
+  countIf(session_duration <= 10) AS bounced_sessions,
+  count() AS total_sessions
+FROM sessions
+WHERE start_time >= now() - INTERVAL <POSTHOG_BOUNCE_WINDOW>
+```
+
+If the calculated bounce rate exceeds the configured `POSTHOG_BOUNCE_THRESHOLD`, a watchdog alert is raised:
+- **Warning Alert:** Triggered if the bounce rate is above the threshold but less than or equal to 90% (`0.9`).
+- **Critical Alert:** Triggered if the bounce rate is above 90% (`0.9`).
+
+## Troubleshooting
+
+| Symptom | Fix |
+| --- | --- |
+| **Authentication failed (401)** | Confirm your `POSTHOG_PERSONAL_API_KEY` is correct and active. Verify it has sufficient read access to the project. |
+| **Project not found (404)** | Check that `POSTHOG_PROJECT_ID` is correct for the specified `POSTHOG_BASE_URL` instance. |
+| **Invalid bounce window error** | Ensure `POSTHOG_BOUNCE_WINDOW` follows the format `<number><unit>` (where unit is `s`, `m`, `h`, `d`, `w`), e.g., `24h` or `1h`. |
+| **No alerts generated** | Verify the calculated bounce rate is higher than the `POSTHOG_BOUNCE_THRESHOLD` (defaults to `0.6`, which is 60%). |
+
+## Security Best Practices
+
+- Always use a dedicated **personal API key** with the minimal required permissions for reading project data.
+- Avoid hardcoding credentials in source files. Store keys securely using environment variables or a secret manager.
+- Periodically rotate your PostHog API keys to minimize exposure risk.
