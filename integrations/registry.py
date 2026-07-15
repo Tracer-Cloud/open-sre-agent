@@ -365,6 +365,7 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         service="posthog",
         has_verifier=True,
         direct_effective=True,
+        setup_order=40,
         verify_order=54,
     ),
     IntegrationSpec(service="trello"),

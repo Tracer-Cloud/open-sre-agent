@@ -50,6 +50,12 @@ ONBOARD_INTEGRATION_CHOICES: tuple[Choice, ...] = (
         hint="Investigate errors, events, and issue history",
     ),
     Choice(
+        value="posthog",
+        label="PostHog",
+        group="Observability",
+        hint="Query session bounce rates in your PostHog project",
+    ),
+    Choice(
         value="betterstack",
         label="Better Stack Telemetry",
         group="Observability",

@@ -1,6 +1,6 @@
 """PostHog REST and MCP integrations use distinct CLI service names.
 
-Bare ``posthog`` is the env-configured REST bounce-rate integration (verify only).
+Bare ``posthog`` is the REST bounce-rate integration (setup + verify).
 ``posthog_mcp`` is the separate MCP setup/verify flow — matching the Sentry /
 ``sentry_mcp`` split.
 """
@@ -16,11 +16,19 @@ from integrations.cli import _HANDLERS, cmd_setup, cmd_verify
 from surfaces.cli.__main__ import cli
 
 
-def test_setup_posthog_is_not_a_setup_target() -> None:
+def test_setup_posthog_dispatches_rest_handler() -> None:
     runner = CliRunner()
-    result = runner.invoke(cli, ["integrations", "setup", "posthog"])
-    assert result.exit_code == 2
-    assert "not one of" in result.output
+    with (
+        patch("surfaces.cli.commands.integrations.capture_integration_setup_started"),
+        patch("surfaces.cli.commands.integrations.capture_integration_setup_completed"),
+        patch("surfaces.cli.commands.integrations.capture_integration_verified"),
+        patch("integrations.cli.cmd_setup") as mock_cmd,
+        patch("integrations.cli.cmd_verify", return_value=0),
+    ):
+        mock_cmd.return_value = "posthog"
+        result = runner.invoke(cli, ["integrations", "setup", "posthog"])
+    assert result.exit_code == 0
+    mock_cmd.assert_called_once_with("posthog")
 
 
 def test_setup_posthog_mcp_still_works() -> None:
@@ -45,15 +53,18 @@ def test_setup_rejects_unknown_service() -> None:
     assert "not one of" in result.output
 
 
-def test_cmd_setup_posthog_has_no_handler(
+def test_cmd_setup_posthog_dispatches_rest_handler(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Direct cmd_setup('posthog') (python -m integrations path) has no wizard."""
-    with pytest.raises(SystemExit):
-        cmd_setup("posthog")
-    captured = capsys.readouterr()
-    assert "Usage: setup <service>" in captured.out + captured.err
+    called: list[str] = []
+    monkeypatch.setitem(_HANDLERS, "posthog", lambda: called.append("posthog"))
+
+    resolved = cmd_setup("posthog")
+
+    assert resolved == "posthog"
+    assert called == ["posthog"]
+    assert "Setting up" in capsys.readouterr().out
 
 
 def test_cmd_setup_posthog_mcp_dispatches_handler(

@@ -84,7 +84,7 @@ def test_resolve_management_service_keeps_posthog_and_posthog_mcp_distinct() -> 
     assert "posthog_mcp" in SUPPORTED_SETUP_SERVICES
     assert "posthog_mcp" in SUPPORTED_VERIFY_SERVICES
     assert "posthog" in SUPPORTED_VERIFY_SERVICES
-    assert "posthog" not in SUPPORTED_SETUP_SERVICES
+    assert "posthog" in SUPPORTED_SETUP_SERVICES
 
 
 def test_resolve_management_service_leaves_other_services_unaliased() -> None:

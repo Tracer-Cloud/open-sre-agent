@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -32,6 +33,36 @@ class BounceRateAlert:
     message: str
 
 
+_HOGQL_INTERVAL_RE = re.compile(
+    r"^(?P<count>\d+)\s*(?P<unit>h|hour|hours|d|day|days|w|week|weeks)$",
+    re.IGNORECASE,
+)
+
+
+def _hogql_interval(period: str) -> str:
+    """Convert compact period (e.g. ``24h``) to HogQL ``INTERVAL`` form (``24 HOUR``)."""
+    stripped = period.strip()
+    if " " in stripped:
+        normalized = stripped.upper()
+        for plural, singular in (("HOURS", "HOUR"), ("DAYS", "DAY"), ("WEEKS", "WEEK")):
+            normalized = normalized.replace(plural, singular)
+        return normalized
+
+    match = _HOGQL_INTERVAL_RE.match(stripped)
+    if not match:
+        raise ValueError(f"Invalid PostHog period: {period!r}")
+
+    count = match.group("count")
+    unit = match.group("unit").lower()
+    if unit in {"h", "hour", "hours"}:
+        return f"{count} HOUR"
+    if unit in {"d", "day", "days"}:
+        return f"{count} DAY"
+    if unit in {"w", "week", "weeks"}:
+        return f"{count} WEEK"
+    raise ValueError(f"Invalid PostHog period: {period!r}")
+
+
 def _request_json(
     config: PostHogConfig,
     method: str,
@@ -58,6 +89,7 @@ def query_bounce_rate(
     *,
     period: str = DEFAULT_POSTHOG_BOUNCE_WINDOW,
 ) -> BounceRateResult:
+    hogql_period = _hogql_interval(period)
     payload = _request_json(
         config,
         "POST",
@@ -67,10 +99,10 @@ def query_bounce_rate(
                 "kind": "HogQLQuery",
                 "query": (
                     "SELECT "
-                    "countIf(session_duration <= 10) AS bounced_sessions, "
+                    "countIf($session_duration <= 10) AS bounced_sessions, "
                     "count() AS total_sessions "
                     "FROM sessions "
-                    f"WHERE start_time >= now() - INTERVAL {period}"
+                    f"WHERE $start_timestamp >= now() - INTERVAL {hogql_period}"
                 ),
             }
         },

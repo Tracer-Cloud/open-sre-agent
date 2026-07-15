@@ -52,6 +52,7 @@ def test_legacy_integration_health_import_surface_still_exports_validators() -> 
         "validate_openclaw_integration",
         "validate_opensearch_integration",
         "validate_opsgenie_integration",
+        "validate_posthog_integration",
         "validate_posthog_mcp_integration",
         "validate_pagerduty_integration",
         "validate_sentry_integration",

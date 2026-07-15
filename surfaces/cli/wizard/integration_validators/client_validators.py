@@ -26,6 +26,8 @@ from integrations.incident_io.client import IncidentIoClient
 from integrations.jenkins import build_jenkins_config, validate_jenkins_config
 from integrations.opsgenie.client import OpsGenieClient, OpsGenieConfig
 from integrations.pagerduty.client import PagerDutyClient
+from integrations.posthog.config import build_posthog_config
+from integrations.posthog.verifier import validate_posthog_config
 from integrations.sentry import build_sentry_config, validate_sentry_config
 from integrations.splunk.client import SplunkClient, SplunkConfig
 from integrations.tempo import build_tempo_config, validate_tempo_config
@@ -286,6 +288,24 @@ def validate_aws_integration(
         )
     except Exception as err:
         return IntegrationHealthResult(ok=False, detail=f"AWS validation failed: {err}")
+
+
+def validate_posthog_integration(
+    *,
+    base_url: str,
+    project_id: str,
+    personal_api_key: str,
+) -> IntegrationHealthResult:
+    """Validate PostHog REST connectivity with a project metadata probe."""
+    config = build_posthog_config(
+        {
+            "base_url": base_url,
+            "project_id": project_id,
+            "personal_api_key": personal_api_key,
+        }
+    )
+    result = validate_posthog_config(config)
+    return IntegrationHealthResult(ok=result.ok, detail=result.detail)
 
 
 def validate_sentry_integration(

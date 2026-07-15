@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from urllib.parse import urlparse
 
+from config.constants.posthog import DEFAULT_POSTHOG_URL
 from integrations.sentry import get_sentry_auth_recommendations
 from integrations.store import remove_integration, upsert_integration
 from platform.terminal.theme import (
@@ -50,6 +51,7 @@ from surfaces.cli.wizard.integration_health import (
     validate_opensearch_integration,
     validate_opsgenie_integration,
     validate_pagerduty_integration,
+    validate_posthog_integration,
     validate_posthog_mcp_integration,
     validate_sentry_integration,
     validate_sentry_mcp_integration,
@@ -794,6 +796,56 @@ def _configure_openclaw() -> tuple[str, str]:
                 f"[{SECONDARY}]Accurate RCA:[/] [bold]also configure Grafana/Datadog and GitHub[/]"
             )
             return "OpenClaw", str(env_path)
+        _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
+
+
+def _configure_posthog() -> tuple[str, str]:
+    _, credentials = _integration_defaults("posthog")
+    _console.print(
+        f"[{SECONDARY}]Create a personal API key (phx_...) with read access — "
+        "https://posthog.com/docs/api/personal-api-keys[/]"
+    )
+
+    while True:
+        base_url = _prompt_value(
+            "PostHog API base URL",
+            default=_string_value(credentials.get("base_url"), DEFAULT_POSTHOG_URL),
+        )
+        project_id = _prompt_value(
+            "PostHog project ID",
+            default=_string_value(credentials.get("project_id")),
+        )
+        personal_api_key = _prompt_value(
+            "PostHog personal API key",
+            default=_string_value(credentials.get("personal_api_key")),
+            secret=True,
+        )
+
+        with _console.status("Validating PostHog integration...", spinner="dots"):
+            result = validate_posthog_integration(
+                base_url=base_url,
+                project_id=project_id,
+                personal_api_key=personal_api_key,
+            )
+        _render_integration_result("PostHog", result)
+        if result.ok:
+            credentials = {
+                "base_url": base_url,
+                "project_id": project_id,
+                "personal_api_key": personal_api_key,
+            }
+            upsert_integration("posthog", {"credentials": credentials})
+            sync_env_secret("POSTHOG_PERSONAL_API_KEY", personal_api_key)
+            env_path = sync_env_values(
+                {
+                    "POSTHOG_PROJECT_ID": project_id,
+                    "POSTHOG_BASE_URL": base_url,
+                }
+            )
+            _console.print(
+                f"[{SECONDARY}]Verify:[/] [bold]uv run opensre integrations verify posthog[/]"
+            )
+            return "PostHog", str(env_path)
         _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
 
 
@@ -1778,6 +1830,7 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
         "incident_io": _configure_incident_io,
         "notion": _configure_notion,
         "openclaw": _configure_openclaw,
+        "posthog": _configure_posthog,
         "posthog_mcp": _configure_posthog_mcp,
         "sentry_mcp": _configure_sentry_mcp,
         "opensearch": _configure_opensearch,
@@ -1808,6 +1861,7 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
         "incident_io": "incident.io",
         "notion": "notion",
         "openclaw": "openclaw",
+        "posthog": "posthog",
         "posthog_mcp": "posthog mcp",
         "sentry_mcp": "sentry mcp",
         "opensearch": "opensearch",

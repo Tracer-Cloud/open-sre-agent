@@ -6,14 +6,14 @@ description: "Connect PostHog so OpenSRE can query session bounce rates in your 
 OpenSRE can query **your** PostHog project for session bounce rates — the share of sessions that end within 10 seconds. Configure it with `POSTHOG_*` environment variables.
 
 <Info>
-  Looking for agent tools during investigations (analytics, feature flags, HogQL)? Use [PostHog (MCP)](/posthog-mcp) instead. That integration has interactive onboarding; this one does not.
+  Looking for agent tools during investigations (analytics, feature flags, HogQL)? Use [PostHog (MCP)](/posthog-mcp) with `opensre integrations setup posthog_mcp`.
 </Info>
 
 ## PostHog in OpenSRE — quick guide
 
 | What you want | Use this | How to set it up |
 | --- | --- | --- |
-| Query bounce rates in **your** PostHog project | **PostHog** — this page | Environment variables (below) |
+| Query bounce rates in **your** PostHog project | **PostHog** — this page | `opensre integrations setup posthog` or env vars (below) |
 | Let the agent explore PostHog during incidents | [PostHog (MCP)](/posthog-mcp) | `opensre integrations setup posthog_mcp` or onboarding wizard |
 | OpenSRE's own usage telemetry | Built-in product analytics | Controlled by `OPENSRE_NO_TELEMETRY` — not your PostHog project |
 
@@ -25,7 +25,25 @@ OpenSRE can query **your** PostHog project for session bounce rates — the shar
 
 ## Setup
 
-There is no interactive setup wizard for bounce-rate monitoring. Add credentials to your `.env` file:
+### Option 1: Interactive CLI
+
+```bash
+opensre integrations setup posthog
+```
+
+Or run the onboarding wizard and select **PostHog** under Observability.
+
+You will be prompted for:
+
+- **Project ID** — from PostHog project settings
+- **Personal API key** (`phx_...`) — [Personal API keys](https://posthog.com/docs/api/personal-api-keys) with read access
+- **API base URL** — defaults to US SaaS (`https://us.i.posthog.com`); use `https://eu.i.posthog.com` for EU
+
+On success, credentials are saved to your integration store and synced to `.env`.
+
+### Option 2: Environment variables
+
+Add credentials directly to your `.env` file:
 
 ```bash
 POSTHOG_PROJECT_ID=your_project_id
@@ -44,10 +62,6 @@ POSTHOG_BOUNCE_WINDOW=24h                           # optional — lookback wind
 | `POSTHOG_TIMEOUT_SECONDS` | `15.0` | HTTP timeout in seconds |
 | `POSTHOG_BOUNCE_THRESHOLD` | `0.6` | Alert when bounce rate exceeds this decimal (`0.0`–`1.0`) |
 | `POSTHOG_BOUNCE_WINDOW` | `24h` | Lookback window — format `<number><unit>` where unit is `s`, `m`, `h`, `d`, or `w` (e.g. `24h`, `7d`) |
-
-<Info>
-  Bounce-rate setup is env-only today — there is no `opensre integrations setup posthog` wizard. Use [PostHog (MCP)](/posthog-mcp) for the interactive MCP onboarding flow.
-</Info>
 
 ## Verify
 

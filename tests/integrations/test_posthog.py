@@ -16,6 +16,7 @@ from integrations.posthog import (
     validate_posthog_config,
 )
 from integrations.posthog.classify import classify
+from integrations.posthog.client import _hogql_interval
 from integrations.posthog.verifier import verify_posthog
 
 
@@ -186,6 +187,27 @@ def test_validate_posthog_config_generic_error_still_handled(
     assert "network unreachable" in result.detail
 
 
+@pytest.mark.parametrize(
+    ("period", "expected"),
+    [
+        ("24h", "24 HOUR"),
+        ("48h", "48 HOUR"),
+        ("7d", "7 DAY"),
+        ("2w", "2 WEEK"),
+        ("24 HOUR", "24 HOUR"),
+        ("24 HOURS", "24 HOUR"),
+        ("7 DAYS", "7 DAY"),
+    ],
+)
+def test_hogql_interval(period: str, expected: str) -> None:
+    assert _hogql_interval(period) == expected
+
+
+def test_hogql_interval_invalid() -> None:
+    with pytest.raises(ValueError, match="Invalid PostHog period"):
+        _hogql_interval("bad")
+
+
 def test_query_bounce_rate_success(monkeypatch: pytest.MonkeyPatch) -> None:
     config = PostHogConfig(
         project_id="123",
@@ -193,6 +215,10 @@ def test_query_bounce_rate_success(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
     def fake_request_json(*args, **kwargs):
+        query = kwargs.get("json", {}).get("query", {}).get("query", "")
+        assert "$session_duration" in query
+        assert "$start_timestamp" in query
+        assert "INTERVAL 24 HOUR" in query
         return {"results": [[750, 1000]]}
 
     monkeypatch.setattr("integrations.posthog.client._request_json", fake_request_json)
