@@ -537,16 +537,9 @@ ensure_github_cli() {
   fi
 
   if command -v apt-get >/dev/null 2>&1; then
-    if command -v sudo >/dev/null 2>&1; then
-      if sudo apt-get update -y && sudo apt-get install -y gh; then
-        success "Installed GitHub CLI (gh) via apt"
-        return 0
-      fi
-      warn "apt failed to install gh. Install manually from https://cli.github.com/"
-      return 0
-    fi
-    warn "GitHub CLI (gh) is missing and sudo/apt is unavailable for auto-install."
-    warn "Install from https://cli.github.com/ for OpenSRE GitHub chat tools."
+    # Soft dependency only — never require sudo for the OpenSRE installer.
+    warn "GitHub CLI (gh) is missing and apt is available but auto-install needs sudo."
+    warn "Install manually: apt install gh  (or https://cli.github.com/) for OpenSRE GitHub chat tools."
     return 0
   fi
 

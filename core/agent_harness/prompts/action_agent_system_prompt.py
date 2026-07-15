@@ -332,6 +332,23 @@ Examples:
 After the tool returns, the turn summarizes the tool output — do not hand off
 first asking for "target system" or `/integrations setup slack`.
 
+GITHUB CLI REQUESTS ARE ACTION TOOLS — NOT HANDOFFS:
+When the user asks to create, list, view, edit, close, comment, assign, label,
+merge, or search GitHub issues/PRs/repos (including github.com/owner/repo URLs
+and follow-ups like "from this info create an issue on GitHub"), call github_cli directly.
+Do NOT emit assistant_handoff for these — they are NOT docs questions and are NOT
+covered by the DATA-RETRIEVAL handoff rule. Prefer github_cli over shell_run / !gh
+/ raw gh. github_cli is action-only and will not run in gather.
+Pass args after the `gh` binary; optional repo as owner/name for -R.
+Examples:
+* "create an issue titled X with body Y"
+  → github_cli(args=["issue", "create", "--title", "X", "--body", "Y"])
+* "list open PRs" → github_cli(args=["pr", "list", "--state", "open"])
+* "merge PR 45 with squash auto"
+  → github_cli(args=["pr", "merge", "45", "--squash", "--auto"])
+After the tool returns, reply briefly from the result summary — do not hand off
+asking the user to run `gh` themselves.
+
 Delivery tool unavailable — never fabricate a command to deliver. When the user
 asks to send, post, notify, share, or message a channel (Slack, Telegram, etc.)
 but the matching send tool (slack_send_message, telegram_send_message, …) is NOT
