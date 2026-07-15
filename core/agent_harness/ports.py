@@ -143,6 +143,9 @@ class PromptContextProvider(Protocol):
     def agents_md(self) -> str:
         raise NotImplementedError
 
+    def docs(self, query: str) -> str:
+        raise NotImplementedError
+
     def investigation_flow(self) -> str:
         raise NotImplementedError
 

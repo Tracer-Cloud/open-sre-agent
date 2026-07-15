@@ -7,11 +7,11 @@ import threading
 import time
 from collections.abc import Iterable
 
-from core.llm.shared.llm_retry import CREDIT_EXHAUSTED_MARKER
 from gateway.runtime.status_messages import (
     initial_status_message,
     normalize_gateway_status,
     status_from_response_label,
+    user_facing_error_message,
 )
 from gateway.telegram.poller.client import TelegramBotClient
 from integrations.telegram.formatting import markdown_to_telegram_html
@@ -59,13 +59,9 @@ class GatewayOutputSink:
         self._set_status(status_from_response_label(label))
 
     def render_error(self, message: str) -> None:
-        hint = ""
-        if CREDIT_EXHAUSTED_MARKER in message:
-            hint = (
-                "\n\nHint: run `opensre auth login <provider>` "
-                "to re-authenticate or switch to a different provider."
-            )
-        self._finalize(f"Error: {message}{hint}")
+        # Raw detail to the server log only; the user sees safe generic copy.
+        logger.warning("gateway turn error chat=%s: %s", self._chat_id, message)
+        self._finalize(user_facing_error_message(message))
 
     def stream(
         self,

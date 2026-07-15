@@ -297,6 +297,10 @@ class _FakePrompts:
     def agents_md(self) -> str:
         return ""
 
+    def docs(self, query: str) -> str:
+        _ = query
+        return ""
+
     def investigation_flow(self) -> str:
         return ""
 
@@ -339,3 +343,47 @@ def test_local_llama_handoff_injects_setup_guidance_into_assistant_prompt() -> N
     assert "opensre onboard local_llm" in prompt
     assert "/onboard local_llm" in prompt
     assert "/model set ollama" in prompt
+
+
+class _FakePromptsWithDocs(_FakePrompts):
+    """Provider that echoes the retrieval query so the wiring can be asserted."""
+
+    def __init__(self) -> None:
+        self.docs_query: str | None = None
+
+    def docs(self, query: str) -> str:
+        self.docs_query = query
+        return "=== docs/messaging/telegram.mdx ===\nCreate a bot with @BotFather"
+
+
+def test_docs_grounding_reaches_assistant_prompt() -> None:
+    """The user's question is retrieved against docs and injected into the prompt.
+
+    Locks the wiring the harness-move refactor severed: a procedural setup
+    question must carry its documentation page into the LLM grounding so the
+    assistant answers with the out-of-tool steps instead of improvising.
+    """
+    message = "how do I set up the telegram bot?"
+    turn_snapshot = TurnSnapshot(
+        text=message,
+        conversation_messages=(),
+        configured_integrations=(),
+        configured_integrations_known=True,
+        last_state=None,
+        last_synthetic_observation_path=None,
+        reasoning_effort=None,
+    )
+    prompts = _FakePromptsWithDocs()
+
+    prompt = build_cli_agent_prompt_from_provider(
+        message=message,
+        prompts=prompts,
+        tool_observation=None,
+        tool_observation_on_screen=True,
+        turn_snapshot=turn_snapshot,
+    )
+
+    assert prompts.docs_query == message
+    assert "--- Documentation reference (docs/) ---" in prompt
+    assert "docs/messaging/telegram.mdx" in prompt
+    assert "@BotFather" in prompt

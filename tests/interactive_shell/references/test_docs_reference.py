@@ -146,6 +146,22 @@ class TestFindRelevantDocs:
         results = find_relevant_docs("install configure deploy investigate", pages, top_n=2)
         assert len(results) <= 2
 
+    def test_min_score_floor_excludes_weak_matches(self, tmp_path: Path) -> None:
+        """A page whose only match is a single body token is kept at the default
+        floor but dropped once the caller raises ``min_score`` — the knob the
+        assistant provider uses so weak keyword overlap does not ground an
+        answer."""
+        _write_doc(
+            tmp_path,
+            "notes.mdx",
+            "# Notes\n\nWe briefly mention masking in this note.\n",
+        )
+        pages = DocsReference().discover(tmp_path)
+        # Default floor (1) keeps the weak single-token match.
+        assert [p.slug for p in find_relevant_docs("masking", pages)] == ["notes"]
+        # A higher floor drops it entirely.
+        assert find_relevant_docs("masking", pages, min_score=5) == []
+
     def test_nested_page_with_weak_match_is_not_dropped_by_depth(self, tmp_path: Path) -> None:
         """A page whose only match is a single body token, nested deep enough
         that the depth penalty equals or exceeds its raw score, must still
@@ -185,6 +201,18 @@ class TestBuildDocsReferenceText:
         # can suggest other relevant pages even when one ranked highest.
         assert "docs index" in text
         assert "deployment.mdx" in text
+
+    def test_omits_block_when_nothing_clears_floor(self, tmp_path: Path) -> None:
+        # A query no page strongly matches must contribute no grounding at all,
+        # rather than injecting an unrelated excerpt or a bare page index.
+        _seed_docs(tmp_path)
+        assert DocsReference().build_text("bake sourdough bread", root=tmp_path, min_score=8) == ""
+
+    def test_strong_match_survives_floor(self, tmp_path: Path) -> None:
+        _seed_docs(tmp_path)
+        text = DocsReference().build_text("how do I configure Datadog?", root=tmp_path, min_score=8)
+        assert "datadog.mdx" in text
+        assert "API Key" in text
 
     def test_truncates_to_max_chars(self, tmp_path: Path) -> None:
         _seed_docs(tmp_path)

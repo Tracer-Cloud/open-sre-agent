@@ -146,6 +146,7 @@ def _build_system_prompt(
     reference: str,
     history: str,
     agents_md: str = "",
+    docs: str = "",
     investigation_flow: str = "",
     prior_investigation: str = "",
     prior_action_facts: str = "",
@@ -153,6 +154,16 @@ def _build_system_prompt(
 ) -> str:
     """Build the system prompt for one assistant turn."""
     repo_map_block = f"--- Repo map (AGENTS.md) ---\n{agents_md}\n\n" if agents_md else ""
+    docs_block = (
+        "--- Documentation reference (docs/) ---\n"
+        "Relevant OpenSRE documentation pages for this question. When answering "
+        "how to configure or set up something, use these to give the complete "
+        "procedure — including steps that happen outside OpenSRE (creating "
+        "accounts, API keys, bots, OAuth apps, finding IDs) — not just the "
+        f"in-tool command. Do not invent steps beyond what these pages state.\n{docs}\n\n"
+        if docs
+        else ""
+    )
     investigation_flow_block = (
         f"--- Investigation flow reference ---\n{investigation_flow}\n\n"
         if investigation_flow
@@ -216,6 +227,7 @@ def _build_system_prompt(
         f"{_TERMINOLOGY_RULE}\n{_MARKDOWN_RULE}\n\n"
         f"{environment}"
         f"--- CLI reference ---\n{reference}\n\n"
+        f"{docs_block}"
         f"{investigation_flow_block}"
         f"{prior_investigation_block}"
         f"{prior_action_facts_block}"

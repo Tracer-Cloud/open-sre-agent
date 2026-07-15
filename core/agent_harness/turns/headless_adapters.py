@@ -84,6 +84,10 @@ class EmptyPromptContextProvider:
     def agents_md(self) -> str:
         return ""
 
+    def docs(self, query: str) -> str:
+        _ = query
+        return ""
+
     def investigation_flow(self) -> str:
         return ""
 

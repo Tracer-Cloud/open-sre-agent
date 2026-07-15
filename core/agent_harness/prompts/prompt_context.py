@@ -12,6 +12,13 @@ from core.agent_harness.llm_resolution import resolve_provider_models
 from core.agent_harness.prompts import build_environment_block
 from platform.observability.trace.spans import component_span
 
+# Minimum retrieval score for a docs page to ground an assistant answer. A
+# genuine setup/config question scores ~30 on its page (slug + exact-slug +
+# title + heading hits); incidental single-token overlap scores ~1-4. A floor
+# of 8 requires at least a slug/title-level signal, so unrelated pages are
+# dropped rather than injected as excerpts.
+_DOCS_RELEVANCE_FLOOR = 8
+
 
 def load_llm_settings() -> Any | None:
     """Best-effort LLM settings load for prompt environment grounding."""
@@ -45,6 +52,14 @@ class DefaultPromptContextProvider:
 
     def agents_md(self) -> str:
         return str(self._session.grounding.agents_md.build_text())
+
+    def docs(self, query: str) -> str:
+        # Only ground on a docs page the question strongly points at. A real
+        # setup question ("how do I set up telegram?") scores ~30 on its page;
+        # this floor drops incidental keyword overlap (e.g. "center a div"
+        # colliding with cost-center-mapping) so unrelated pages never leak into
+        # the answer. Below the floor the block is omitted entirely.
+        return str(self._session.grounding.docs.build_text(query, min_score=_DOCS_RELEVANCE_FLOOR))
 
     def investigation_flow(self) -> str:
         return build_investigation_flow_reference_text()
