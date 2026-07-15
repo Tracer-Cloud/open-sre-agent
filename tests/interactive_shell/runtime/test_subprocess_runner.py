@@ -371,6 +371,41 @@ def test_run_shell_command_silent_success_prints_checkmark(monkeypatch: pytest.M
     assert session.history[-1] == {"type": "shell", "text": "true", "ok": True}
 
 
+def test_run_shell_command_quiet_hides_command_and_stdout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _fake_execute(**_kwargs: object) -> ShellExecutionResult:
+        return ShellExecutionResult(
+            command="echo hi",
+            argv=["echo", "hi"],
+            stdout="hi\n",
+            stderr="",
+            exit_code=0,
+            timed_out=False,
+            truncated=False,
+            executed_with_shell=False,
+        )
+
+    monkeypatch.setattr(
+        "tools.interactive_shell.shell.execution.execute_shell_command",
+        _fake_execute,
+    )
+
+    session = Session()
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    result = run_shell_command("echo hi", _presenter(session, console), quiet=True)
+    out = buf.getvalue()
+    assert "$" not in out
+    assert "hi" not in out
+    assert "✓" not in out
+    assert result["ok"] is True
+    assert result["stdout"] == "hi"
+    assert result["response_text"] == "hi"
+    assert session.history[-1]["ok"] is True
+
+
 def test_run_shell_command_success_records_stdout_without_stderr_noise(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

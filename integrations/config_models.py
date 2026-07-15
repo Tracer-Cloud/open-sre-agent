@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from base64 import b64encode
 from urllib.parse import urlparse
 
 from pydantic import AliasChoices, Field, field_validator, model_validator
@@ -38,7 +39,21 @@ DEFAULT_PAGERDUTY_BASE_URL = "https://api.pagerduty.com"
 
 
 class GrafanaIntegrationConfig(StrictConfigModel):
-    """Normalized Grafana credentials used by resolution and verification flows."""
+    """Normalized Grafana credentials used by resolution and verification flows.
+
+    Grafana supports two authentication styles, and this model is the single
+    owner of the "how do I authenticate?" decision so callers (classifier,
+    verifier, clients) never re-derive it:
+
+    * **Service account token** — sent as ``Authorization: Bearer <token>``.
+      Used by Grafana Cloud and by a locally hosted Grafana that has a token.
+    * **Basic auth** — ``username`` + ``password`` sent as
+      ``Authorization: Basic <base64>``. Common for local dev Grafana
+      (e.g. the default ``admin`` / ``admin`` login).
+
+    A local Grafana with neither is treated as *anonymous* (``is_local`` and
+    no credentials): it is reachable without an ``Authorization`` header.
+    """
 
     endpoint: str
     api_key: str = ""
@@ -52,6 +67,39 @@ class GrafanaIntegrationConfig(StrictConfigModel):
     def is_local(self) -> bool:
         host = urlparse(self.endpoint).hostname or ""
         return host in _LOCAL_GRAFANA_HOSTS
+
+    @property
+    def has_token(self) -> bool:
+        """Whether a usable service account token is configured.
+
+        The sentinel ``"local"`` is the anonymous-local marker, not a real
+        token, so it does not count.
+        """
+        return bool(self.api_key) and self.api_key != "local"
+
+    @property
+    def has_basic_auth(self) -> bool:
+        return bool(self.username and self.password)
+
+    @property
+    def is_anonymous_local(self) -> bool:
+        """A local Grafana reachable without any credentials."""
+        return self.is_local and not self.has_token and not self.has_basic_auth
+
+    @property
+    def has_usable_credentials(self) -> bool:
+        """Whether this config can attempt an authenticated (or anonymous-local) request."""
+        return self.has_token or self.has_basic_auth or self.is_anonymous_local
+
+    @property
+    def auth_headers(self) -> dict[str, str]:
+        """Return the ``Authorization`` header for this config (empty when anonymous)."""
+        if self.has_basic_auth:
+            token = b64encode(f"{self.username}:{self.password}".encode()).decode()
+            return {"Authorization": f"Basic {token}"}
+        if self.has_token:
+            return {"Authorization": f"Bearer {self.api_key}"}
+        return {}
 
 
 class DatadogIntegrationConfig(StrictConfigModel):
@@ -1187,3 +1235,34 @@ class TemporalIntegrationConfig(StrictConfigModel):
             headers["Authorization"] = f"Bearer {self.api_key}"
 
         return headers
+
+
+class KubernetesIntegrationConfig(StrictConfigModel):
+    """Normalized Kubernetes credentials used by resolution and verification flows.
+
+    Supports two mutually compatible auth paths:
+    - ``kubeconfig_path``: path to a kubeconfig file on disk (preferred when
+      available — ``load_kube_config`` handles single-file and multi-file merged
+      configs via the standard KUBECONFIG env var semantics).
+    - ``kubeconfig``: raw kubeconfig YAML string stored inline (used when the
+      config is embedded, e.g. from a secrets manager or stored integration).
+
+    ``kubeconfig_path`` takes precedence over ``kubeconfig`` at connection time.
+    """
+
+    kubeconfig: str = ""
+    kubeconfig_path: str = ""
+    context: str = ""
+    namespace: str = "default"
+    integration_id: str = ""
+
+    _normalize_strs = field_validator(
+        "kubeconfig_path", "context", "integration_id", mode="before"
+    )(normalize_str())
+    _normalize_namespace = field_validator("namespace", mode="before")(
+        normalize_with_default("default")
+    )
+
+    @property
+    def is_configured(self) -> bool:
+        return bool(self.kubeconfig or self.kubeconfig_path)

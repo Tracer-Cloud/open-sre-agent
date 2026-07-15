@@ -47,6 +47,8 @@ from platform.deployment.gateway.stack import (
 
 REGION = DEFAULT_REGION
 
+_EXTRA_ENV_KEYS_ENV = "OPENSRE_DEPLOY_EXTRA_ENV_KEYS"
+
 _CONTAINER_ENV_KEYS = (
     "TELEGRAM_BOT_TOKEN",
     "TELEGRAM_ALLOWED_USERS",
@@ -54,6 +56,7 @@ _CONTAINER_ENV_KEYS = (
     "SLACK_APP_TOKEN",
     "SLACK_ALLOWED_USERS",
     "SLACK_ALLOW_OPEN_WORKSPACE",
+    "SLACK_WEBHOOK_URL",
     "LLM_PROVIDER",
     "OPENAI_API_KEY",
     "ANTHROPIC_API_KEY",
@@ -63,9 +66,20 @@ _CONTAINER_ENV_KEYS = (
 _ABORT_IF_EXISTS_ENV = "OPENSRE_DEPLOY_ABORT_IF_EXISTS"
 
 
+def _extra_env_keys() -> tuple[str, ...]:
+    """Additional env keys to ship, from OPENSRE_DEPLOY_EXTRA_ENV_KEYS (CSV).
+
+    Lets a deployment carry integration credentials (Grafana, Datadog, …) so
+    the deployed agent's tools become available, without hardcoding every
+    vendor's variables here.
+    """
+    raw = os.getenv(_EXTRA_ENV_KEYS_ENV, "")
+    return tuple(key.strip() for key in raw.split(",") if key.strip())
+
+
 def _collect_deploy_env_vars() -> dict[str, str]:
     env_vars: dict[str, str] = {}
-    for key in _CONTAINER_ENV_KEYS:
+    for key in (*_CONTAINER_ENV_KEYS, *_extra_env_keys()):
         val = os.getenv(key)
         if val:
             env_vars[key] = val

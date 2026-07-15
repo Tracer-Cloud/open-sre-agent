@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from tools.slack_send_message_tool.constants import SOURCE
+from integrations.slack.tools.slack_send_message_tool.constants import SOURCE
 
 
 def failed_result(

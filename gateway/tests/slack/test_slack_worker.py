@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 
@@ -9,11 +10,24 @@ from gateway.slack.events import SlackInboundMessage
 from gateway.slack.settings import SlackGatewaySettings
 from gateway.slack.socket_mode_worker import _SlackTurnDispatcher
 
+_SECURITY = "gateway.slack.security"
+
+
+@pytest.fixture(autouse=True)
+def _isolate_slack_integration_store():
+    """Worker tests must not depend on the developer's ~/.opensre integrations."""
+    with (
+        patch(f"{_SECURITY}.get_integration", return_value=None),
+        patch(f"{_SECURITY}.upsert_instance"),
+    ):
+        yield
+
 
 class _FakeMessagingClient:
     def __init__(self) -> None:
         self.posts: list[dict[str, str | None]] = []
         self.updates: list[dict[str, str]] = []
+        self.reactions: list[dict[str, str]] = []
 
     def post_message(self, *, channel: str, text: str, thread_ts: str | None = None) -> str | None:
         self.posts.append({"channel": channel, "text": text, "thread_ts": thread_ts})
@@ -21,6 +35,18 @@ class _FakeMessagingClient:
 
     def update_message(self, *, channel: str, ts: str, text: str) -> bool:
         self.updates.append({"channel": channel, "ts": ts, "text": text})
+        return True
+
+    def add_reaction(self, *, channel: str, timestamp: str, emoji: str) -> bool:
+        self.reactions.append(
+            {"op": "add", "channel": channel, "timestamp": timestamp, "emoji": emoji}
+        )
+        return True
+
+    def remove_reaction(self, *, channel: str, timestamp: str, emoji: str) -> bool:
+        self.reactions.append(
+            {"op": "remove", "channel": channel, "timestamp": timestamp, "emoji": emoji}
+        )
         return True
 
 
@@ -91,11 +117,22 @@ def test_authorized_message_reaches_handler_with_thread_sink() -> None:
         settings=_settings(["U1"]), messaging=messaging, resolver=resolver, handler=handler
     ).dispatch(_inbound())
 
-    assert turns == [("check the api", turns[0][1])]
+    assert len(turns) == 1
+    agent_text, session = turns[0]
+    assert agent_text.startswith("[Slack channel_id=C1 ")
+    assert "thread_ts=100.1" in agent_text
+    assert "slack_read_messages" not in agent_text
+    assert agent_text.endswith("check the api")
+    assert session is turns[0][1]
     assert resolver.calls == [{"user_id": "T1:C1:100.1", "chat_id": "C1"}]
     # Placeholder posted into the thread, then edited with the final answer.
     assert messaging.posts[0]["thread_ts"] == "100.1"
     assert messaging.updates[-1]["text"] == "done"
+    # Viktor-like coworker UX: eyes while working, then checkmark.
+    emoji_ops = [(r["op"], r["emoji"]) for r in messaging.reactions]
+    assert ("add", "eyes") in emoji_ops
+    assert ("remove", "eyes") in emoji_ops
+    assert ("add", "white_check_mark") in emoji_ops
 
 
 def test_unauthorized_user_gets_denial_reply_and_no_turn() -> None:

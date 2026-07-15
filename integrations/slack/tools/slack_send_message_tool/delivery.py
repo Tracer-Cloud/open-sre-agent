@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 
 from integrations.slack.delivery import send_slack_webhook_message
-from tools.slack_send_message_tool.models import SlackDeliveryTarget
+from integrations.slack.tools.slack_send_message_tool.models import SlackDeliveryTarget
 
 
 def resolve_webhook_url(webhook_url: str = "") -> tuple[SlackDeliveryTarget | None, str]:

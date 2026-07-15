@@ -13,6 +13,7 @@ from gateway.runtime.status_messages import (
     status_from_response_label,
 )
 from gateway.slack.client import SlackMessagingClient
+from integrations.slack.formatting import markdown_to_slack_mrkdwn
 from platform.common.truncation import truncate
 
 # Slack rejects chat.postMessage text above this length with msg_too_long.
@@ -96,7 +97,7 @@ class SlackOutputSink:
                 self._last_update = time.monotonic()
 
     def _finalize(self, text: str) -> None:
-        final = truncate(text, SLACK_MAX_MESSAGE_CHARS, suffix="…")
+        final = truncate(markdown_to_slack_mrkdwn(text), SLACK_MAX_MESSAGE_CHARS, suffix="…")
         with self._lock:
             delivered = self._message_ts is not None and self._client.update_message(
                 channel=self._channel_id, ts=self._message_ts, text=final

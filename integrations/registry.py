@@ -338,7 +338,7 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
     IntegrationSpec(
         service="slack",
         has_verifier=True,
-        skip_classification=True,
+        direct_effective=True,
         setup_order=9,
         verify_order=8,
     ),
@@ -396,6 +396,15 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         direct_effective=True,
         setup_order=37,
         verify_order=48,
+    ),
+    IntegrationSpec(
+        service="kubernetes",
+        aliases=("k8s",),
+        has_verifier=True,
+        direct_effective=True,
+        core_verify=True,
+        setup_order=51,
+        verify_order=53,
     ),
 )
 

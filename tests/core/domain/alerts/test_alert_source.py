@@ -54,11 +54,16 @@ def test_resolve_alert_source_empty_when_unresolved() -> None:
 
 
 def test_primary_sources_for_alert_known_source() -> None:
-    assert primary_sources_for_alert({"alert_source": "eks"}) == ("eks", "ec2", "cloudtrail")
+    assert primary_sources_for_alert({"alert_source": "eks"}) == (
+        "eks",
+        "ec2",
+        "cloudtrail",
+        "kubernetes",
+    )
 
 
 def test_seed_tool_sources_for_alert_known_source() -> None:
-    assert seed_tool_sources_for_alert({"alert_source": "eks"}) == ("eks",)
+    assert seed_tool_sources_for_alert({"alert_source": "eks"}) == ("eks", "kubernetes")
 
 
 def test_routing_registry_entries_are_well_formed() -> None:
@@ -172,6 +177,6 @@ def test_relevant_sources_empty_when_no_text_and_no_declared_sources() -> None:
 def test_seed_sources_narrower_than_relevance_sources_for_eks() -> None:
     """Regression guard: seeding stays narrower than relevance routing."""
     routing = ALERT_SOURCE_ROUTING["eks"]
-    assert routing.seed_tool_sources == ("eks",)
+    assert routing.seed_tool_sources == ("eks", "kubernetes")
     assert "ec2" in routing.relevance_tool_sources
     assert "ec2" not in routing.seed_tool_sources

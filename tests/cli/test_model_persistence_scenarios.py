@@ -123,7 +123,6 @@ class TestReplModelPersistence:
         persistence_paths: dict[str, Path],
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-
         monkeypatch.setattr("core.llm.factory.reset_llm_clients", lambda: None)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
 
@@ -145,7 +144,6 @@ class TestReplModelPersistence:
         persistence_paths: dict[str, Path],
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-
         monkeypatch.setattr("core.llm.factory.reset_llm_clients", lambda: None)
         monkeypatch.setenv("LLM_PROVIDER", "anthropic")
         wizard_store.save_local_config(
@@ -174,7 +172,6 @@ class TestReplModelPersistence:
         persistence_paths: dict[str, Path],
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-
         monkeypatch.setattr("core.llm.factory.reset_llm_clients", lambda: None)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
 
@@ -199,7 +196,6 @@ class TestReplModelPersistence:
         persistence_paths: dict[str, Path],
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-
         monkeypatch.setattr("core.llm.factory.reset_llm_clients", lambda: None)
         monkeypatch.setenv("LLM_PROVIDER", "anthropic")
         wizard_store.save_local_config(
@@ -226,7 +222,6 @@ class TestReplModelPersistence:
         persistence_paths: dict[str, Path],
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-
         monkeypatch.setattr("core.llm.factory.reset_llm_clients", lambda: None)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
         monkeypatch.setenv("LLM_PROVIDER", "anthropic")

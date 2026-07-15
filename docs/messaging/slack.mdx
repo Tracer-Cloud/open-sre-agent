@@ -98,22 +98,74 @@ Findings should appear in the configured channel.
 
 ---
 
-## On-demand Slack messages
+## Agent Slack tools
 
-The `slack_send_message` tool lets the agent post a plain-text notification to your configured incoming webhook at any time — not only when an investigation publishes an RCA report.
+Teammate tools (bot token) plus webhook blast. Credentials resolve inside the
+tools (never in tool-call traces). Shared client: `integrations/slack/bot_api.py`.
 
-| Surface | Available when |
-|---|---|
-| Interactive shell / chat | Slack webhook configured (`SLACK_WEBHOOK_URL` or `opensre integrations setup slack`) |
-| Investigation gather pass | Same |
-| Gateway / action agent | Same |
+| Tool | What it does | Needs | Approval |
+|---|---|---|---|
+| `slack_send_message` | Post to the webhook's fixed channel | `SLACK_WEBHOOK_URL` | Yes |
+| `slack_reply_message` | Post to any channel/thread (`C…` or `#name`) | bot token, `chat:write` | Yes |
+| `slack_read_messages` | Read channel history or a thread (`thread_ts`) | bot token, history + list scopes | No |
+| `slack_search_messages` | Workspace message search | bot token, `search:read` | No |
+| `slack_list_team_members` | List workspace members | bot token, `users:read` | No |
+| `slack_join_channel` | Join a public channel | bot token, `channels:join` | Yes |
+| `slack_add_reaction` | React to a message ts | bot token, `reactions:write` | No |
+| `slack_capture_task` | Persist “add task …” / “remind me …” locally | none (writes `~/.opensre/slack_captured_tasks.jsonl`) | No |
+
+Prefer `slack_reply_message` / `slack_read_messages` when the bot token is
+configured and the user names a channel or thread. Use `slack_send_message` only
+for the fixed webhook channel.
 
 Example prompts:
 
-- "Post to Slack: deploy to staging completed successfully."
-- "Send a Slack message that the checkout 502 spike is resolved."
+- "Read the last 20 messages in #incidents and summarize."
+- "Search Slack for 'Windows install' this week."
+- "Join #ops then reply that mitigation is rolled out."
+- "Who is on the team, and what does Vaibhav do?"
+- "Add task: ping owners about the deploy window."
 
-The tool requires approval before sending (same as other external messaging actions). It resolves the webhook URL internally and never exposes it in tool traces.
+Add the scopes in the table under **Create Socket Mode tokens**, then
+**Reinstall to Workspace**. Invite the bot (`/invite @OpenSRE`) to private
+channels it should read or post in.
+
+---
+
+## Production Engineer schedules (Slack)
+
+Wire morning digests and PR sweeps to a Slack channel (`C…` id from channel
+details). The gateway daemon must be running so the scheduler can deliver.
+
+**Sentry morning digest** (unresolved issues → Slack):
+
+```bash
+opensre sentry digest schedule add \
+  --cron "0 8 * * 1-5" \
+  --tz Europe/London \
+  --provider slack \
+  --chat-id C0123ABCD
+opensre sentry digest schedule run <task_id>   # dogfood once
+```
+
+**Daily ops summary** (investigation pipeline → Slack):
+
+```bash
+opensre cron add --kind daily_summary --cron "0 9 * * 1-5" \
+  --tz Europe/London --provider slack --chat-id C0123ABCD
+opensre cron run <task_id>
+```
+
+**GitHub PR sweep** (mergeable / stale / conflicted → Slack; needs GitHub configured):
+
+```bash
+opensre integrations verify github
+opensre cron add --kind github_pr_sweep --cron "0 9 * * 1-5" \
+  --tz Europe/London --provider slack --chat-id C0123ABCD
+opensre cron run <task_id>
+```
+
+See also [Scheduled deliveries](/cron) and [Sentry morning digest](/sentry#morning-digest-scheduled).
 
 ---
 
@@ -127,9 +179,29 @@ HTTPS URL is required — the gateway holds an outbound websocket.
 
 1. In your Slack app settings, enable **Socket Mode** and create an app-level token
    with the `connections:write` scope (`xapp-…`).
-2. Under **OAuth & Permissions**, grant the bot scopes `app_mentions:read`,
-   `chat:write`, and `im:history`, then install the app and copy the bot token (`xoxb-…`).
+2. Under **OAuth & Permissions**, grant the bot scopes below, then install the
+   app and copy the bot token (`xoxb-…`).
 3. Under **Event Subscriptions**, subscribe to the bot events `app_mention` and `message.im`.
+
+**Bot Token Scopes (Socket Mode chat + teammate tools):**
+
+| Scope | Needed for |
+|-------|------------|
+| `app_mentions:read` | Gateway `@mention` inbound |
+| `chat:write` | Gateway replies + `slack_reply_message` |
+| `im:history` | Gateway DMs + reading DM history |
+| `channels:history` | `slack_read_messages` in public channels |
+| `groups:history` | `slack_read_messages` in private channels |
+| `mpim:history` | `slack_read_messages` in multi-party DMs |
+| `channels:read` | Resolve `#channel-name` → ID |
+| `groups:read` | Resolve private channel names |
+| `im:read` / `mpim:read` | List DMs when resolving names |
+| `users:read` | `slack_list_team_members` |
+| `search:read` | `slack_search_messages` |
+| `channels:join` | `slack_join_channel` (public channels) |
+| `reactions:write` | Gateway ack reactions + `slack_add_reaction` |
+
+Reinstall the app after adding scopes so the bot token picks them up.
 
 ### Allow your Slack user
 
@@ -203,6 +275,9 @@ opensre gateway status
 
 Built-in chat commands: `/new` (fresh session), `/help`, `/pair <code>`.
 
+While a turn runs, the gateway adds an 👀 (`eyes`) reaction on the inbound
+message, then swaps to ✅ (`white_check_mark`) when the reply is finalized.
+
 If Slack is not configured the daemon still runs the other components and
 `opensre gateway status` shows `slack: not configured`.
 
@@ -226,6 +301,20 @@ ANTHROPIC_API_KEY=…                  # or your provider's key env
 Slack Socket Mode. Partial Slack config (bot token without app token) aborts.
 Missing allowlists are warnings (same shape as Telegram). Deploy health waits
 for the `[gateway] ready` log line (works for Telegram-only, Slack-only, or both).
+
+To give the deployed agent access to your observability integrations (so it
+can pull Grafana, Datadog, or other data when asked in Slack), put those
+credentials in `.env` too and list the variable names in
+`OPENSRE_DEPLOY_EXTRA_ENV_KEYS`:
+
+```bash
+GRAFANA_INSTANCE_URL=…
+GRAFANA_READ_TOKEN=…
+OPENSRE_DEPLOY_EXTRA_ENV_KEYS=GRAFANA_INSTANCE_URL,GRAFANA_READ_TOKEN
+```
+
+The deploy ships every listed variable to both containers; the matching agent
+tools become available automatically.
 
 Fargate/terraform under `infra/terraform/` injects Slack secrets via SSM —
 see that README for the cloud path.

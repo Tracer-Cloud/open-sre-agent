@@ -165,7 +165,7 @@ def test_agent_computes_temperature_then_sends_it_to_slack(
         return True, ""
 
     monkeypatch.setattr(
-        "tools.slack_send_message_tool.delivery.send_slack_webhook_message",
+        "integrations.slack.tools.slack_send_message_tool.delivery.send_slack_webhook_message",
         _capture_send,
     )
 

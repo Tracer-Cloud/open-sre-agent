@@ -33,6 +33,7 @@ locals {
     SLACK_BOT_TOKEN              = var.slack_bot_token
     SLACK_APP_TOKEN              = var.slack_app_token
     OPENSRE_ALERT_LISTENER_TOKEN = var.alert_listener_token
+    SLACK_WEBHOOK_URL            = var.slack_webhook_url
     DATABASE_URL                 = var.database_url
   }
   secret_keys = toset([for key, value in local.secret_values : key if nonsensitive(value != "")])

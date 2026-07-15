@@ -176,6 +176,12 @@ def mock_agent_state(overrides: dict | None = None) -> dict[str, Any]:
             "api_key": "",
             "namespace": "default",
         },
+        "kubernetes": {
+            "connection_verified": True,
+            "kubeconfig": "apiVersion: v1\nclusters: []\ncontexts: []\ncurrent-context: ''\nkind: Config\npreferences: {}\nusers: []\n",
+            "context": "",
+            "namespace": "default",
+        },
     }
     if overrides:
         for key, value in overrides.items():

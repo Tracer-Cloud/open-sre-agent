@@ -191,8 +191,52 @@ def test_local_grafana_without_basic_auth_keeps_credentials_empty() -> None:
 
     resolved = classify_integrations([local_only])
     assert resolved["grafana_local"].endpoint == "http://localhost:3000"
+    assert resolved["grafana_local"].api_key == ""
     assert resolved["grafana_local"].username == ""
     assert resolved["grafana_local"].password == ""
+
+
+def test_local_grafana_service_account_token_is_preserved() -> None:
+    local_with_token = {
+        "id": "store-grafana",
+        "service": "grafana",
+        "status": "active",
+        "credentials": {
+            "endpoint": "http://localhost:3001",
+            "api_key": "glsa_test_token",
+        },
+    }
+
+    resolved = classify_integrations([local_with_token])
+
+    assert resolved["grafana_local"].endpoint == "http://localhost:3001"
+    assert resolved["grafana_local"].api_key == "glsa_test_token"
+
+
+def test_resolve_effective_integrations_publishes_localhost_grafana() -> None:
+    from integrations.catalog import resolve_effective_integrations
+
+    local_with_token = {
+        "id": "store-grafana",
+        "service": "grafana",
+        "status": "active",
+        "instances": [
+            {
+                "name": "default",
+                "tags": {},
+                "credentials": {
+                    "endpoint": "http://localhost:3001",
+                    "api_key": "glsa_test_token",
+                },
+            }
+        ],
+    }
+
+    effective = resolve_effective_integrations(store_integrations=[local_with_token])
+
+    assert effective["grafana"]["source"] == "local store"
+    assert effective["grafana"]["config"]["endpoint"] == "http://localhost:3001"
+    assert effective["grafana"]["config"]["api_key"] == "glsa_test_token"
 
 
 def test_classify_inactive_record_is_skipped() -> None:

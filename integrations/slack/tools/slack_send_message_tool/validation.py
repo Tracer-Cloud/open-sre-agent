@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tools.slack_send_message_tool.constants import MAX_MESSAGE_CHARS
+from integrations.slack.tools.slack_send_message_tool.constants import MAX_MESSAGE_CHARS
 
 
 def validate_message(message: str) -> tuple[bool, str, str]:

@@ -124,6 +124,16 @@ opensre sentry digest schedule add \
   --chat-id "-1001234567890"
 ```
 
+Example — same schedule to a Slack channel (`C…` member/channel id):
+
+```bash
+opensre sentry digest schedule add \
+  --cron "0 8 * * 1-5" \
+  --tz Europe/London \
+  --provider slack \
+  --chat-id C0123ABCD
+```
+
 Optional `--project my-service` scopes the digest to one Sentry project.
 
 The gateway daemon picks up scheduled digests automatically when it is running.

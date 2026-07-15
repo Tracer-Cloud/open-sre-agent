@@ -14,13 +14,21 @@ OpenSRE can deliver recurring reports to messaging providers on a cron schedule.
 opensre cron add --kind daily_summary --cron "0 9 * * 1-5" \
   --tz Asia/Kolkata --provider telegram --chat-id <chat_id>
 
+# Same kind to Slack (channel id C…)
+opensre cron add --kind daily_summary --cron "0 9 * * 1-5" \
+  --tz Europe/London --provider slack --chat-id C0123ABCD
+
+# GitHub PR sweep standup digest → Slack
+opensre cron add --kind github_pr_sweep --cron "0 9 * * 1-5" \
+  --tz Europe/London --provider slack --chat-id C0123ABCD
+
 # List configured tasks
 opensre cron list
 
 # Run a task immediately (for debugging)
 opensre cron run <task_id>
 
-# Start the scheduler daemon
+# Start the scheduler daemon (or rely on `opensre gateway start`)
 opensre cron start
 ```
 
@@ -32,7 +40,7 @@ Create a new scheduled delivery task.
 
 | Option | Required | Description |
 |--------|----------|-------------|
-| `--kind` | Yes | Task kind: `daily_summary`, `weekly_audit`, `incident_window_replay`, `synthetic_run`, `custom_investigation` |
+| `--kind` | Yes | Task kind: `daily_summary`, `weekly_audit`, `incident_window_replay`, `synthetic_run`, `custom_investigation`, `github_pr_sweep` |
 | `--cron` | Yes | Cron expression (5 fields: minute hour day month day_of_week) |
 | `--tz` | No | IANA timezone (default: `UTC`). Examples: `Europe/London`, `US/Eastern`, `Asia/Kolkata` |
 | `--provider` | Yes | Messaging provider: `telegram`, `slack`, `discord` |
@@ -117,6 +125,10 @@ This means you don't need to pass credentials at `cron add` time — they're pic
 | `incident_window_replay` | Replays the investigation pipeline over the configured window. Raises on failure (operator should know). |
 | `synthetic_run` | Runs the pipeline with a synthetic source. Raises on failure. |
 | `custom_investigation` | Runs a custom investigation with user-provided params. Credential keys are stripped before forwarding to the pipeline. |
+| `github_pr_sweep` | Headless GitHub PR standup (mergeable / stale / conflicted). Requires GitHub configured; posts via the chosen provider. |
+
+Sentry morning digests use a separate CLI (`opensre sentry digest schedule …`),
+not `opensre cron add`. See [Sentry](/sentry#morning-digest-scheduled).
 
 ## Persistence
 
