@@ -9,6 +9,7 @@ from rich.console import Console
 
 from core.agent_harness.tools.tool_context import (
     ActionToolContext,
+    capability_available_from_sources,
     execute_with_action_context,
     object_schema,
     string_property,
@@ -122,6 +123,10 @@ alert_sample_tool = RegisteredTool(
     parallel_safe=False,
     accepts_runtime_context=True,
     run=run_sample_alert_action,
+    is_available=lambda sources: capability_available_from_sources(
+        sources,
+        "investigation",
+    ),
 )
 
 

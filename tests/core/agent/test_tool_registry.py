@@ -142,6 +142,7 @@ def test_tools_hidden_when_capabilities_are_explicitly_empty() -> None:
             "shell_commands": (),
             "implementation": (),
             "llm_provider": (),
+            "investigation": (),
         }
     )
     names = {spec["name"] for spec in _tool_specs(session)}
@@ -151,6 +152,8 @@ def test_tools_hidden_when_capabilities_are_explicitly_empty() -> None:
     assert "shell_run" not in names
     assert "code_implement" not in names
     assert "llm_set_provider" not in names
+    assert "investigation_start" not in names
+    assert "alert_sample" not in names
 
 
 def test_telegram_send_message_offered_when_telegram_is_configured() -> None:
