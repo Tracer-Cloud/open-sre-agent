@@ -749,7 +749,11 @@ def _prompt_and_persist_api_key(provider: ProviderOption) -> str | None:
     1 from run_wizard) after a Ctrl+C or a failed keychain/.env write.
     Propagates WizardBack uncaught so the caller's own repick loop still
     intercepts it — WizardBack subclasses KeyboardInterrupt, so it must not be
-    swallowed by the except clause below.
+    swallowed by the except clause below. Since the prompt below always sets
+    ``back_on_cancel=True``, a cancelled prompt raises WizardBack, not a bare
+    KeyboardInterrupt — the except KeyboardInterrupt branch is a defensive
+    fallback for a real OS-level Ctrl+C landing outside that path, not a
+    normally-reachable branch.
     """
     _step(provider.credential_label.title())
     try:
