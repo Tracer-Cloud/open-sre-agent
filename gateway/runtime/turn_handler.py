@@ -107,7 +107,7 @@ class GatewayTurnHandler:
                 observer_factory=lambda _message: observer,
                 subprocess_presenter_factory=headless_subprocess_presenter_factory,
             ),
-            prompts=DefaultPromptContextProvider(session),
+            prompts=DefaultPromptContextProvider(session, surface="gateway"),
             reasoning=DefaultReasoningClientProvider(
                 output=sink,
                 error_reporter=error_reporter,

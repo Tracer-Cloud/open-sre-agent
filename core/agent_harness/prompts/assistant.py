@@ -60,6 +60,7 @@ def build_assistant_system_prompt(
     prior_investigation: str = "",
     prior_action_facts: str = "",
     environment: str = "",
+    surface: str = "interactive_shell",
 ) -> str:
     """Build the system prompt for one assistant turn."""
     return _build_system_prompt(
@@ -71,6 +72,7 @@ def build_assistant_system_prompt(
         prior_investigation=prior_investigation,
         prior_action_facts=prior_action_facts,
         environment=environment,
+        surface=surface,
     )
 
 
@@ -225,6 +227,8 @@ def build_cli_agent_prompt_from_provider(
 ) -> str:
     """Render an assistant prompt from the core prompt-provider port."""
     prompts.log_diagnostics("cli_agent_grounding")
+    surface_fn = getattr(prompts, "surface", None)
+    surface = surface_fn() if callable(surface_fn) else "interactive_shell"
     system = build_assistant_system_prompt(
         prompts.cli_reference(),
         format_recent_conversation(list(turn_snapshot.conversation_messages)),
@@ -238,6 +242,7 @@ def build_cli_agent_prompt_from_provider(
         ),
         prior_action_facts=format_prior_action_facts(list(turn_snapshot.conversation_messages)),
         environment=prompts.environment_block(),
+        surface=surface,
     )
     return (
         f"{system}\n"

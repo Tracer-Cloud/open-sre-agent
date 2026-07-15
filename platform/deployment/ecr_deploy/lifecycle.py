@@ -11,7 +11,7 @@ from botocore.exceptions import ClientError
 
 from config.constants.paths import REPO_ROOT
 from platform.deployment.aws import ecr
-from platform.deployment.aws.client import DEFAULT_REGION
+from platform.deployment.aws.client import DEFAULT_REGION, assert_deploy_account
 from platform.deployment.aws.config import (
     ECR_DEFAULT_IMAGE_TAG,
     ECR_DOCKER_PLATFORM,
@@ -135,6 +135,7 @@ def build_image() -> str:
     Returns:
         The full ECR image URI (e.g. ``123….dkr.ecr.us-east-1.amazonaws.com/opensre:latest``).
     """
+    assert_deploy_account(REGION)
     stack = get_stack()
     start_time = time.time()
     print("=" * 60)
@@ -218,6 +219,7 @@ def deploy() -> dict[str, str]:
     Requires a pre-built ECR image. Run ``make build-image`` first, or set the
     ``OPENSRE_IMAGE_URI`` environment variable to an existing image URI.
     """
+    assert_deploy_account(REGION)
     validate_deploy_env()
 
     stack = get_stack()

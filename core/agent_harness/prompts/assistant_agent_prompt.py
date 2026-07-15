@@ -6,6 +6,9 @@ from typing import Any
 from core.agent_harness.prompts.rules import (
     AGENT_RESPONSE_THREE_TIER_RULE,
     CLI_ASSISTANT_MARKDOWN_RULE,
+    GATEWAY_RESPONSE_SHAPE_RULE,
+    GATEWAY_SETUP_GUIDANCE_RULE,
+    GATEWAY_TEAMMATE_PERSONA_RULE,
     INTERACTIVE_SHELL_TERMINOLOGY_RULE,
 )
 from core.agent_harness.prompts.runtime_facts import render_runtime_facts
@@ -151,8 +154,13 @@ def _build_system_prompt(
     prior_investigation: str = "",
     prior_action_facts: str = "",
     environment: str = "",
+    surface: str = "interactive_shell",
 ) -> str:
     """Build the system prompt for one assistant turn."""
+    is_gateway = surface == "gateway"
+    terminology_rule = GATEWAY_TEAMMATE_PERSONA_RULE if is_gateway else _TERMINOLOGY_RULE
+    setup_rule = GATEWAY_SETUP_GUIDANCE_RULE if is_gateway else _SETUP_GUIDANCE_RULE
+    response_shape_rule = GATEWAY_RESPONSE_SHAPE_RULE if is_gateway else _RESPONSE_SHAPE_RULE
     repo_map_block = f"--- Repo map (AGENTS.md) ---\n{agents_md}\n\n" if agents_md else ""
     docs_block = (
         "--- Documentation reference (docs/) ---\n"
@@ -220,11 +228,11 @@ def _build_system_prompt(
         "those as available thread context for follow-up questions; do not ask the "
         "user to paste values that are already present there.\n\n"
         f"{_PRIOR_INVESTIGATION_FOLLOW_UP_RULE}\n\n"
-        f"{_SETUP_GUIDANCE_RULE}\n\n"
+        f"{setup_rule}\n\n"
         f"{_SOURCE_SCOPED_INVESTIGATION_RULE}\n\n"
         f"{_SENTRY_SUMMARY_RULE}\n\n"
-        f"{_RESPONSE_SHAPE_RULE}\n\n"
-        f"{_TERMINOLOGY_RULE}\n{_MARKDOWN_RULE}\n\n"
+        f"{response_shape_rule}\n\n"
+        f"{terminology_rule}\n{_MARKDOWN_RULE}\n\n"
         f"{environment}"
         f"--- CLI reference ---\n{reference}\n\n"
         f"{docs_block}"

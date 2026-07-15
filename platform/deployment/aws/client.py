@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 import boto3
@@ -12,10 +13,33 @@ from platform.deployment.aws.config import (
     BOTO3_READ_TIMEOUT_SECONDS,
     BOTO3_RETRY_MAX_ATTEMPTS,
     DEFAULT_REGION,
+    DEPLOY_ACCOUNT_ID_ENV,
     MANAGED_TAG_KEY,
     MANAGED_TAG_VALUE,
     STACK_TAG_KEY,
 )
+
+
+class DeployAccountError(RuntimeError):
+    """Raised when the active AWS account is not the configured deploy account."""
+
+
+def assert_deploy_account(region: str = DEFAULT_REGION) -> str:
+    """Abort unless the active AWS account matches ``OPENSRE_DEPLOY_ACCOUNT_ID``.
+
+    Opt-in guard: when the env var is set (local ``.env``), it stops the default
+    AWS profile from creating opensre resources in the wrong account. Unset
+    (other devs, CI) means no enforcement. Returns the active account id.
+    """
+    active = str(get_boto3_client("sts", region).get_caller_identity()["Account"])
+    expected = os.getenv(DEPLOY_ACCOUNT_ID_ENV, "").strip()
+    if expected and active != expected:
+        raise DeployAccountError(
+            f"Active AWS account {active} is not the configured opensre deploy account "
+            f"{expected}. Point AWS_PROFILE at the opensre account, or unset "
+            f"{DEPLOY_ACCOUNT_ID_ENV}. Refusing to create resources here."
+        )
+    return active
 
 
 def get_boto3_client(service: str, region: str = DEFAULT_REGION) -> Any:
