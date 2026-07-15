@@ -68,12 +68,48 @@ def test_messages_from_slack_thread_maps_roles(monkeypatch: pytest.MonkeyPatch) 
         bot_user_id="UBOT",
     )
     assert mapped == [
-        ("user", "who is on the team?"),
+        ("user", "<@U1>: who is on the team?"),
         (
             "assistant",
             "I found: 12 members.\n\n"
             "Want me to: group them by title, or pull just the engineering folks?",
         ),
+    ]
+
+
+def test_seeded_user_messages_attribute_each_speaker(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Multi-user threads keep who-said-what (the "world's greatest intern" bug).
+
+    Lars asks to be called a name, Joe asks who holds it — without attribution
+    both collapse into one anonymous "user" and the agent answers Joe as if he
+    were Lars. Assistant messages stay bare (the reply sink owns their shape).
+    """
+    monkeypatch.setattr(
+        thread_history,
+        "resolve_bot_token",
+        lambda: (SimpleNamespace(bot_token="xoxb-x"), ""),
+    )
+    monkeypatch.setattr(
+        thread_history,
+        "fetch_channel_messages",
+        lambda *_a, **_k: (
+            [
+                {"user": "ULARS", "ts": "1.0", "text": "call me the worlds greatest intern"},
+                {"user": "UBOT", "ts": "1.1", "text": "Absolutely — will do."},
+                {"user": "UJOE", "ts": "1.2", "text": "who is the worlds greatest intern?"},
+            ],
+            "",
+        ),
+    )
+    mapped = thread_history.messages_from_slack_thread(
+        channel_id="C1",
+        thread_ts="1.0",
+        bot_user_id="UBOT",
+    )
+    assert mapped == [
+        ("user", "<@ULARS>: call me the worlds greatest intern"),
+        ("assistant", "Absolutely — will do."),
+        ("user", "<@UJOE>: who is the worlds greatest intern?"),
     ]
 
 

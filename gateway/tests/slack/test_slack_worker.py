@@ -123,7 +123,7 @@ def test_authorized_message_reaches_handler_with_thread_sink() -> None:
 
     assert len(turns) == 1
     agent_text, session = turns[0]
-    assert agent_text.startswith("[Slack channel_id=C1]")
+    assert agent_text.startswith("[Slack channel_id=C1 user=<@U1>]")
     assert "thread_ts" not in agent_text
     assert "slack_read_messages" not in agent_text
     assert agent_text.endswith("check the api")
@@ -245,6 +245,16 @@ def test_agent_context_omits_thread_ts_to_avoid_thread_reads() -> None:
     assert "channel_id=C1" in text
     assert "thread_ts" not in text
     assert "check the api" in text
+
+
+def test_agent_context_attributes_the_speaker() -> None:
+    """The turn prefix names who is speaking (multi-user thread attribution)."""
+    from gateway.slack.socket_mode_worker import _agent_text_with_slack_context
+
+    text = _agent_text_with_slack_context(_inbound())
+
+    # Single metadata line: prefix stays one line, text follows on the next.
+    assert text == "[Slack channel_id=C1 user=<@U1>]\ncheck the api"
 
 
 def test_turn_timeout_finalizes_placeholder_when_handler_hangs() -> None:

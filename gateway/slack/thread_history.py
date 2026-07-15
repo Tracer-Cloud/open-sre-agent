@@ -81,6 +81,11 @@ def messages_from_slack_thread(
             continue
         user = str(item.get("user") or "")
         role = "assistant" if _is_assistant_message(text, user=user, bot_user_id=bot) else "user"
+        if role == "user" and user:
+            # Attribute the speaker: multi-user threads collapse into one
+            # anonymous "user" otherwise, so the agent cannot tell who said
+            # what ("call me X" then someone else asks "what is my name?").
+            text = f"<@{user}>: {text}"
         out.append((role, text))
     return out
 
