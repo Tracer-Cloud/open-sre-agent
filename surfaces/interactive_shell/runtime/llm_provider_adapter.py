@@ -18,9 +18,6 @@ from tools.interactive_shell.shared.execution_policy import ExecutionPolicyResul
 
 
 class LlmProviderPorts(Protocol):
-    def provider_values(self) -> tuple[str, ...]:
-        raise NotImplementedError
-
     def execution_allowed(
         self,
         *,
@@ -39,9 +36,6 @@ class LlmProviderPorts(Protocol):
 
 
 class ReplLlmProviderPorts:
-    def provider_values(self) -> tuple[str, ...]:
-        return tuple(sorted(PROVIDER_BY_VALUE.keys()))
-
     def execution_allowed(
         self,
         *,

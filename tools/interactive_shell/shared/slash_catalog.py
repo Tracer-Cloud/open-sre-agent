@@ -57,7 +57,7 @@ def _mcp(
     )
 
 
-_MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
+MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
     "/?": _mcp(
         "Shortcut for /help — open the interactive slash-command help browser.",
         "User types ? or asks for command help via the shortcut alias",
@@ -390,7 +390,7 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
 
 
 def _resolve_mcp_fields(command: SlashCommandLike) -> _SlashMcpFields:
-    registry = _MCP_BY_COMMAND.get(command.name)
+    registry = MCP_BY_COMMAND.get(command.name)
     llm_description = (
         command.llm_description or (registry.llm_description if registry else "")
     ).strip()
@@ -457,7 +457,7 @@ def build_slash_command_specs(
             examples=(),
             args_schema=None,
         )
-        for name, fields in sorted(_MCP_BY_COMMAND.items())
+        for name, fields in sorted(MCP_BY_COMMAND.items())
     ]
 
 
@@ -534,6 +534,7 @@ def slash_invoke_input_schema(
 
 
 __all__ = [
+    "MCP_BY_COMMAND",
     "SlashCommandSpec",
     "build_slash_command_specs",
     "format_slash_catalog_text",
