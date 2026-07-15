@@ -277,6 +277,7 @@ def _cmd_investigate_file(session: Session, console: Console, args: list[str]) -
 
         def _run_template(task: TaskRecord) -> dict[str, object]:
             with (
+                apply_reasoning_effort(session.reasoning_effort),
                 track_investigation(
                     entrypoint=EntrypointSource.CLI_REPL_FILE,
                     trigger_mode=TriggerMode.FILE,
@@ -284,14 +285,15 @@ def _cmd_investigate_file(session: Session, console: Console, args: list[str]) -
                     interactive=True,
                     session=session,
                     investigation_target=target_slug,
-                ),
-                apply_reasoning_effort(session.reasoning_effort),
+                ) as tracker,
             ):
-                return run_sample_alert_for_session(
+                final_state = run_sample_alert_for_session(
                     template_name=template_name,
                     context_overrides=session.accumulated_context or None,
                     cancel_requested=task.cancel_requested,
                 )
+                tracker.record_loop_metrics_from_state(final_state)
+                return final_state
 
         command_line = f"/investigate {template_name}"
         outcome = run_foreground_investigation(
@@ -339,6 +341,7 @@ def _cmd_investigate_file(session: Session, console: Console, args: list[str]) -
 
     def _run_file(task: TaskRecord) -> dict[str, object]:
         with (
+            apply_reasoning_effort(session.reasoning_effort),
             track_investigation(
                 entrypoint=EntrypointSource.CLI_REPL_FILE,
                 trigger_mode=TriggerMode.FILE,
@@ -346,14 +349,15 @@ def _cmd_investigate_file(session: Session, console: Console, args: list[str]) -
                 interactive=True,
                 session=session,
                 investigation_target=target_slug,
-            ),
-            apply_reasoning_effort(session.reasoning_effort),
+            ) as tracker,
         ):
-            return run_investigation_for_session(
+            final_state = run_investigation_for_session(
                 alert_text=text,
                 context_overrides=session.accumulated_context or None,
                 cancel_requested=task.cancel_requested,
             )
+            tracker.record_loop_metrics_from_state(final_state)
+            return final_state
 
     command_line = f"/investigate {raw_target}"
     outcome = run_foreground_investigation(

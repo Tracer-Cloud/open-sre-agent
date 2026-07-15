@@ -34,6 +34,7 @@ _CORE_FIELDS = (
     "task_registry",
     "agent",
     "grounding",
+    "runtime_metadata",
     "_ACCUMULATED_KEYS",
 )
 

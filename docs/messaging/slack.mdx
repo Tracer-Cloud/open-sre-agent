@@ -1,16 +1,20 @@
 ---
 title: "Slack"
-description: "Deliver investigation findings to a Slack channel via incoming webhook."
+description: "Deliver investigation findings via webhook, and chat with the agent via Socket Mode."
 ---
 
-The Slack integration delivers investigation findings to a Slack channel using an [incoming webhook](https://api.slack.com/messaging/webhooks). It is the simplest of the three messaging integrations to configure — one URL, one channel.
+The Slack integration covers two surfaces:
+
+1. **Incoming webhook** — outbound delivery of investigation findings to a channel.
+2. **Socket Mode bot** — two-way chat with the OpenSRE agent (mentions and DMs),
+   managed the same way as the [Telegram gateway](/messaging/telegram#two-way-chat-gateway-dm-text).
 
 ---
 
 ## Prerequisites
 
 - A Slack workspace where you can create or install apps (workspace admin or app-install permissions).
-- The channel you want findings posted to.
+- The channel you want findings posted to (webhook) and/or where the bot will be invited (Socket Mode).
 
 ---
 
@@ -42,20 +46,27 @@ You have two equivalent paths:
     ```bash
     opensre integrations setup slack
     ```
-    Paste the webhook URL when prompted. The credentials are persisted to `~/.opensre/integrations.json`.
+    Choose **webhook**, **Socket Mode**, or **both**. Credentials are persisted to
+    `~/.opensre/integrations.json` (and can be merged on re-run).
   </Tab>
   <Tab title="Manual env var">
     Add to `.env`:
     ```bash
     SLACK_WEBHOOK_URL=https://hooks.slack.com/services/<workspace-id>/<binding-id>/<secret>
+    # Optional Socket Mode gateway:
+    SLACK_BOT_TOKEN=xoxb-…
+    SLACK_APP_TOKEN=xapp-…
+    SLACK_ALLOWED_USERS=U0123ABCD
     ```
-    OpenSRE reads this at startup as a fallback when no Slack entry exists in `~/.opensre/integrations.json`. If you have previously run `opensre integrations setup slack`, remove that entry first (`opensre integrations remove slack`) or the env var will be ignored.
+    OpenSRE reads env as a fallback when no Slack entry exists in `~/.opensre/integrations.json`.
+    For gateway tokens, env wins over the store when both are set (same as Telegram).
   </Tab>
   <Tab title="Onboarding wizard">
     ```bash
     opensre onboard
     ```
-    Select **Slack** and paste your webhook URL. The wizard validates the URL via a probe request, then persists it to `~/.opensre/integrations.json` — the same store the direct setup command writes to. No extra step is needed.
+    Select **Slack** and choose webhook / Socket Mode / both. The wizard validates
+    the webhook when configured, then persists credentials to the integration store.
   </Tab>
 </Tabs>
 
@@ -67,7 +78,9 @@ You have two equivalent paths:
 opensre integrations verify slack
 ```
 
-A successful run reports the integration as `passed` — but this only confirms the webhook URL is configured. It does **not** post anything to Slack. To also confirm delivery actually works, add the `--send-slack-test` flag:
+A successful run reports the integration as `passed`. Webhook-only configs confirm
+the URL is present; Socket Mode configs also run Slack `auth.test` on the bot token.
+To also confirm webhook delivery, add the `--send-slack-test` flag:
 
 ```bash
 opensre integrations verify slack --send-slack-test
@@ -85,22 +98,226 @@ Findings should appear in the configured channel.
 
 ---
 
-## On-demand Slack messages
+## Agent Slack tools
 
-The `slack_send_message` tool lets the agent post a plain-text notification to your configured incoming webhook at any time — not only when an investigation publishes an RCA report.
+Teammate tools (bot token) plus webhook blast. Credentials resolve inside the
+tools (never in tool-call traces). Shared client: `integrations/slack/bot_api.py`.
 
-| Surface | Available when |
-|---|---|
-| Interactive shell / chat | Slack webhook configured (`SLACK_WEBHOOK_URL` or `opensre integrations setup slack`) |
-| Investigation gather pass | Same |
-| Gateway / action agent | Same |
+| Tool | What it does | Needs | Approval |
+|---|---|---|---|
+| `slack_send_message` | Post to the webhook's fixed channel | `SLACK_WEBHOOK_URL` | Yes |
+| `slack_reply_message` | Post to any channel/thread (`C…` or `#name`) | bot token, `chat:write` | Yes |
+| `slack_read_messages` | Read channel history or a thread (`thread_ts`) | bot token, history + list scopes | No |
+| `slack_search_messages` | Workspace message search | bot token, `search:read` | No |
+| `slack_list_team_members` | List workspace members | bot token, `users:read` | No |
+| `slack_join_channel` | Join a public channel | bot token, `channels:join` | Yes |
+| `slack_add_reaction` | React to a message ts | bot token, `reactions:write` | No |
+| `slack_capture_task` | Persist “add task …” / “remind me …” locally | none (writes `~/.opensre/slack_captured_tasks.jsonl`) | No |
+
+Prefer `slack_reply_message` / `slack_read_messages` when the bot token is
+configured and the user names a channel or thread. Use `slack_send_message` only
+for the fixed webhook channel.
 
 Example prompts:
 
-- "Post to Slack: deploy to staging completed successfully."
-- "Send a Slack message that the checkout 502 spike is resolved."
+- "Read the last 20 messages in #incidents and summarize."
+- "Search Slack for 'Windows install' this week."
+- "Join #ops then reply that mitigation is rolled out."
+- "Who is on the team, and what does Vaibhav do?"
+- "Add task: ping owners about the deploy window."
 
-The tool requires approval before sending (same as other external messaging actions). It resolves the webhook URL internally and never exposes it in tool traces.
+Add the scopes in the table under **Create Socket Mode tokens**, then
+**Reinstall to Workspace**. Invite the bot (`/invite @OpenSRE`) to private
+channels it should read or post in.
+
+---
+
+## Production Engineer schedules (Slack)
+
+Wire morning digests and PR sweeps to a Slack channel (`C…` id from channel
+details). The gateway daemon must be running so the scheduler can deliver.
+
+**Sentry morning digest** (unresolved issues → Slack):
+
+```bash
+opensre sentry digest schedule add \
+  --cron "0 8 * * 1-5" \
+  --tz Europe/London \
+  --provider slack \
+  --chat-id C0123ABCD
+opensre sentry digest schedule run <task_id>   # dogfood once
+```
+
+**Daily ops summary** (investigation pipeline → Slack):
+
+```bash
+opensre cron add --kind daily_summary --cron "0 9 * * 1-5" \
+  --tz Europe/London --provider slack --chat-id C0123ABCD
+opensre cron run <task_id>
+```
+
+**GitHub PR sweep** (mergeable / stale / conflicted → Slack; needs GitHub configured):
+
+```bash
+opensre integrations verify github
+opensre cron add --kind github_pr_sweep --cron "0 9 * * 1-5" \
+  --tz Europe/London --provider slack --chat-id C0123ABCD
+opensre cron run <task_id>
+```
+
+See also [Scheduled deliveries](/cron) and [Sentry morning digest](/sentry#morning-digest-scheduled).
+
+---
+
+## Two-way chat gateway (Socket Mode)
+
+OpenSRE can also run a **Slack messaging gateway** so you can chat with the agent
+from Slack mentions or DMs. Each thread is its own conversation. No public inbound
+HTTPS URL is required — the gateway holds an outbound websocket.
+
+### Create Socket Mode tokens
+
+1. In your Slack app settings, enable **Socket Mode** and create an app-level token
+   with the `connections:write` scope (`xapp-…`).
+2. Under **OAuth & Permissions**, grant the bot scopes below, then install the
+   app and copy the bot token (`xoxb-…`).
+3. Under **Event Subscriptions**, subscribe to the bot events `app_mention` and `message.im`.
+
+**Bot Token Scopes (Socket Mode chat + teammate tools):**
+
+| Scope | Needed for |
+|-------|------------|
+| `app_mentions:read` | Gateway `@mention` inbound |
+| `chat:write` | Gateway replies + `slack_reply_message` |
+| `im:history` | Gateway DMs + reading DM history |
+| `channels:history` | `slack_read_messages` in public channels |
+| `groups:history` | `slack_read_messages` in private channels |
+| `mpim:history` | `slack_read_messages` in multi-party DMs |
+| `channels:read` | Resolve `#channel-name` → ID |
+| `groups:read` | Resolve private channel names |
+| `im:read` / `mpim:read` | List DMs when resolving names |
+| `users:read` | `slack_list_team_members` |
+| `search:read` | `slack_search_messages` |
+| `channels:join` | `slack_join_channel` (public channels) |
+| `reactions:write` | Gateway ack reactions + `slack_add_reaction` |
+
+Reinstall the app after adding scopes so the bot token picks them up.
+
+### Allow your Slack user
+
+Find your Slack **member ID** (`U…`) in the Slack app:
+
+1. Open your profile (avatar / name).
+2. Click **⋯** (More) next to **View as** / profile actions.
+3. Choose **Copy member ID**.
+
+Then allow that id:
+
+Interactive shell:
+
+```text
+/messaging allow -p slack -u U0123ABCD
+```
+
+CLI:
+
+```bash
+opensre messaging allow -p slack -u U0123ABCD
+```
+
+or set `SLACK_ALLOWED_USERS=U0123ABCD` in `.env`. The integration store takes
+precedence when both are set.
+
+<Warning>
+  Use the Slack **member ID** (`U…`) from **Copy member ID**, not `@display-name`
+  (e.g. not `@Yauhen`). Handles can be reassigned; inbound authorization only
+  matches stable user IDs.
+</Warning>
+
+For dogfood only, you may set `SLACK_ALLOW_OPEN_WORKSPACE=1` instead (any
+workspace member can talk to the bot).
+
+### DM pairing (optional)
+
+Same policy as Telegram. Generate a code:
+
+```bash
+opensre messaging pair -p slack
+```
+
+Then DM the bot (or mention it) and send:
+
+```text
+/pair <code>
+```
+
+Check / revoke:
+
+```bash
+opensre messaging status -p slack
+opensre messaging revoke -p slack -u U0123ABCD
+```
+
+### Start the gateway daemon
+
+```bash
+opensre gateway start
+opensre gateway status
+# want: slack: connected via socket mode
+```
+
+| Command | What it does |
+| --- | --- |
+| `opensre gateway start` | Start the daemon (web, Telegram, Slack, scheduler) |
+| `opensre gateway status` | Show daemon and component state |
+| `opensre gateway logs -f` | Follow live gateway logs |
+| `opensre gateway stop` | Stop the daemon |
+
+Built-in chat commands: `/new` (fresh session), `/help`, `/pair <code>`.
+
+While a turn runs, the gateway adds an 👀 (`eyes`) reaction on the inbound
+message, then swaps to ✅ (`white_check_mark`) when the reply is finalized.
+
+If Slack is not configured the daemon still runs the other components and
+`opensre gateway status` shows `slack: not configured`.
+
+### Deploying the gateway to a remote host
+
+Running the gateway on a server with `make deploy` (EC2) is different from local
+use: **the remote host cannot read your local machine's integration store /
+keychain**. Deploy validates that secrets are present as **plaintext env vars**
+in `.env`:
+
+```bash
+# Telegram-only, Slack-only, or both are accepted
+TELEGRAM_BOT_TOKEN=…                 # optional if Slack is fully set
+SLACK_BOT_TOKEN=xoxb-…
+SLACK_APP_TOKEN=xapp-…
+SLACK_ALLOWED_USERS=U0123ABCD
+ANTHROPIC_API_KEY=…                  # or your provider's key env
+```
+
+`make deploy` / `make deploy-gateway` require **at least one** of Telegram or
+Slack Socket Mode. Partial Slack config (bot token without app token) aborts.
+Missing allowlists are warnings (same shape as Telegram). Deploy health waits
+for the `[gateway] ready` log line (works for Telegram-only, Slack-only, or both).
+
+To give the deployed agent access to your observability integrations (so it
+can pull Grafana, Datadog, or other data when asked in Slack), put those
+credentials in `.env` too and list the variable names in
+`OPENSRE_DEPLOY_EXTRA_ENV_KEYS`:
+
+```bash
+GRAFANA_INSTANCE_URL=…
+GRAFANA_READ_TOKEN=…
+OPENSRE_DEPLOY_EXTRA_ENV_KEYS=GRAFANA_INSTANCE_URL,GRAFANA_READ_TOKEN
+```
+
+The deploy ships every listed variable to both containers; the matching agent
+tools become available automatically.
+
+Fargate/terraform under `infra/terraform/` injects Slack secrets via SSM —
+see that README for the cloud path.
 
 ---
 
@@ -108,7 +325,11 @@ The tool requires approval before sending (same as other external messaging acti
 
 | Variable | Description |
 |---|---|
-| `SLACK_WEBHOOK_URL` | Incoming webhook URL. Required for delivery. |
+| `SLACK_WEBHOOK_URL` | Incoming webhook URL. Required for outbound delivery. |
+| `SLACK_BOT_TOKEN` | Bot token (`xoxb-…`) for the two-way Slack bot. Env or integration store. |
+| `SLACK_APP_TOKEN` | App-level token (`xapp-…`) for Socket Mode. Env or integration store. |
+| `SLACK_ALLOWED_USERS` | Comma-separated Slack user IDs allowed to talk to the bot (required unless open workspace). |
+| `SLACK_ALLOW_OPEN_WORKSPACE` | Set to `1` to allow any workspace member (dogfood escape hatch). |
 
 ---
 
@@ -116,7 +337,15 @@ The tool requires approval before sending (same as other external messaging acti
 
 **`error: webhook_url is required.` from `opensre integrations setup slack`**
 
-The setup command was given an empty value. Re-run and paste the full URL including the `https://` prefix.
+You chose webhook (or both) and left the URL empty. Re-run and paste the full URL including the `https://` prefix, or choose Socket Mode only.
+
+**`slack: not configured` from `opensre gateway status`**
+
+Missing `SLACK_BOT_TOKEN` / `SLACK_APP_TOKEN` (env or store) or empty allowlist without `SLACK_ALLOW_OPEN_WORKSPACE=1`. Run `opensre messaging allow -p slack -u <U…>` then `gateway stop` / `start`.
+
+**Connected, but deny reply**
+
+Your `U…` is not in `SLACK_ALLOWED_USERS` / store allowlist. Pair with `/pair <code>` after `opensre messaging pair -p slack`, or add yourself with `messaging allow`.
 
 **`invalid_payload` or `channel_not_found` from Slack**
 

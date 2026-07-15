@@ -1,4 +1,4 @@
-"""Tests for the alert inbox domain queue (HTTP intake lives in gateway.webapp)."""
+"""Tests for the alert inbox domain queue (HTTP intake lives in gateway.http.webapp)."""
 
 from __future__ import annotations
 

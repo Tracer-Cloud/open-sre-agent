@@ -36,7 +36,7 @@ def main() -> int:
         print(flush=True)
         return 0
     finally:
-        shutdown_analytics(flush=True)
+        shutdown_analytics(flush=False)
 
 
 if __name__ == "__main__":

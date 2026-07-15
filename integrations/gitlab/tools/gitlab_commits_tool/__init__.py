@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.code_host_unavailable import code_host_unavailable_payload
 from integrations.gitlab import (
     GitlabConfig,
     build_gitlab_config,
@@ -13,10 +14,20 @@ from integrations.gitlab import (
 )
 
 
+def _clean_optional(value: str | None) -> str:
+    return str(value or "").strip()
+
+
 def _gl_creds(gl: dict) -> dict:
+    """Pull resolved integration credentials out of the ``gitlab`` source dict.
+
+    The integration resolution pipeline loads the configured (keyring-backed)
+    token/url into ``sources["gitlab"]`` under ``base_url``/``auth_token``; the
+    legacy ``gitlab_url``/``gitlab_token`` keys are accepted for back-compat.
+    """
     return {
-        "gitlab_url": gl.get("gitlab_url"),
-        "gitlab_token": gl.get("gitlab_token"),
+        "gitlab_url": gl.get("gitlab_url") or gl.get("base_url"),
+        "gitlab_token": gl.get("gitlab_token") or gl.get("auth_token"),
     }
 
 
@@ -25,12 +36,22 @@ def _gitlab_available(sources: dict) -> bool:
 
 
 def _resolve_config(gitlab_url: str | None, gitlab_token: str | None) -> GitlabConfig | None:
+    """Resolve a GitLab config from injected (resolved integration) credentials.
+
+    Falls back to env config only when no resolved credentials were injected.
+    An empty token with a present URL returns ``None`` (unavailable) instead of
+    building a config that would emit an invalid ``Bearer `` header.
+    """
     env_config = gitlab_config_from_env()
-    if any([gitlab_url, gitlab_token]):
+    base_url = _clean_optional(gitlab_url)
+    auth_token = _clean_optional(gitlab_token)
+    if base_url or auth_token:
+        if not auth_token:
+            return None
         return build_gitlab_config(
             {
-                "base_url": gitlab_url or (env_config.base_url if env_config else ""),
-                "auth_token": gitlab_token or (env_config.auth_token if env_config else ""),
+                "base_url": base_url or (env_config.base_url if env_config else ""),
+                "auth_token": auth_token,
             }
         )
     return env_config
@@ -69,8 +90,6 @@ def _list_gitlab_commits_available(sources: dict[str, dict]) -> bool:
             "ref_name": {"type": "string", "default": ""},
             "since": {"type": "string"},
             "per_page": {"type": "integer", "default": 10},
-            "gitlab_url": {"type": "string"},
-            "gitlab_token": {"type": "string"},
         },
         "required": ["project_id"],
     },
@@ -89,12 +108,12 @@ def list_gitlab_commits(
     """List recent commits for a Gitlab repository"""
     config = _resolve_config(gitlab_url, gitlab_token)
     if config is None:
-        return {
-            "source": "gitlab",
-            "available": False,
-            "error": "gitlab integration is not configured.",
-            "commits": [],
-        }
+        return code_host_unavailable_payload(
+            source="gitlab",
+            integration_name="gitlab",
+            empty_key="commits",
+            empty_value=[],
+        )
 
     result = get_gitlab_commits(
         config=config, project_id=project_id, ref_name=ref_name, since=since, per_page=per_page

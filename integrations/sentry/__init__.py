@@ -115,7 +115,10 @@ def get_sentry_auth_recommendations() -> dict[str, str]:
         "where_to_create": "Settings > Developer Settings > Organization Tokens",
         "fallback_token_type": "Internal Integration",
         "fallback_where_to_create": "Settings > Developer Settings > Internal Integrations",
-        "required_scope_hint": "Issue and event lookup requires an auth token with event:read access.",
+        "required_scope_hint": (
+            "Issue and event lookup requires event:read. "
+            "Uptime monitor watching (opensre sentry uptime) also needs alerts:read."
+        ),
     }
 
 

@@ -22,7 +22,7 @@ def test_alert_listener_replaces_stale_process_token(monkeypatch) -> None:
         return handle
 
     monkeypatch.setattr(
-        "gateway.web_server.serve_webapp_in_thread",
+        "gateway.http.web_server.serve_webapp_in_thread",
         _fake_serve,
     )
     cfg = ReplConfig(alert_listener_enabled=True, alert_listener_token="fresh")
@@ -45,7 +45,7 @@ def test_alert_listener_clears_token_when_unconfigured(monkeypatch) -> None:
         return handle
 
     monkeypatch.setattr(
-        "gateway.web_server.serve_webapp_in_thread",
+        "gateway.http.web_server.serve_webapp_in_thread",
         _fake_serve,
     )
     cfg = ReplConfig(alert_listener_enabled=True, alert_listener_token=None)

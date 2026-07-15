@@ -273,10 +273,65 @@ def _setup_aws() -> None:
 
 
 def _setup_slack() -> None:
-    webhook_url = _p("Slack webhook URL", secret=True)
-    if not webhook_url:
-        _die("webhook_url is required.")
-    upsert_integration("slack", {"credentials": {"webhook_url": webhook_url}})
+    """Configure Slack delivery webhook and/or Socket Mode gateway tokens.
+
+    Mirrors Telegram setup: credentials land in the integration store so
+    ``load_slack_gateway_settings`` and outbound delivery can read them.
+    Existing credentials are merged so re-running setup does not wipe the
+    other mode.
+    """
+    from integrations.store import get_integration
+
+    existing = get_integration("slack") or {}
+    creds = dict(existing.get("credentials") or {})
+
+    mode = questionary.select(
+        "Slack setup:",
+        choices=[
+            questionary.Choice("Incoming webhook (outbound delivery)", value="webhook"),
+            questionary.Choice("Socket Mode bot (two-way gateway chat)", value="socket"),
+            questionary.Choice("Both webhook and Socket Mode", value="both"),
+        ],
+        instruction="(use arrow keys)",
+    ).ask()
+    if mode is None:
+        print("\nAborted.")
+        sys.exit(1)
+
+    if mode in {"webhook", "both"}:
+        webhook_url = _p(
+            "Slack webhook URL",
+            secret=True,
+            default=str(creds.get("webhook_url") or ""),
+        )
+        if not webhook_url:
+            _die("webhook_url is required for webhook setup.")
+        creds["webhook_url"] = webhook_url
+
+    if mode in {"socket", "both"}:
+        bot_token = _p(
+            "Slack bot token (xoxb-…)",
+            secret=True,
+            default=str(creds.get("bot_token") or ""),
+        )
+        app_token = _p(
+            "Slack app-level token (xapp-…)",
+            secret=True,
+            default=str(creds.get("app_token") or ""),
+        )
+        if not bot_token or not app_token:
+            _die("bot_token and app_token are required for Socket Mode setup.")
+        if not bot_token.startswith("xoxb-"):
+            _die("bot_token must start with xoxb-")
+        if not app_token.startswith("xapp-"):
+            _die("app_token must start with xapp-")
+        creds["bot_token"] = bot_token
+        creds["app_token"] = app_token
+        print("\n  Next for the gateway:")
+        print("    - opensre messaging allow -p slack -u <U…>")
+        print("    - opensre gateway start")
+
+    upsert_integration("slack", {"credentials": creds})
 
 
 def _setup_opensearch() -> None:
@@ -617,6 +672,24 @@ def _setup_sentry() -> None:
                 "organization_slug": organization_slug,
                 "auth_token": auth_token,
                 "project_slug": project_slug,
+            }
+        },
+    )
+
+
+def _setup_posthog() -> None:
+    base_url = _p("PostHog API base URL", default="https://us.i.posthog.com")
+    project_id = _p("PostHog project ID")
+    personal_api_key = _p("PostHog personal API key (phx_...)", secret=True)
+    if not project_id or not personal_api_key:
+        _die("project_id and personal_api_key are required.")
+    upsert_integration(
+        "posthog",
+        {
+            "credentials": {
+                "base_url": base_url,
+                "project_id": project_id,
+                "personal_api_key": personal_api_key,
             }
         },
     )
@@ -1247,6 +1320,37 @@ def _setup_pagerduty() -> None:
     )
 
 
+def _setup_kubernetes() -> None:
+    kubeconfig_path = _p(
+        "Kubeconfig file path (e.g. ~/.kube/config) — leave empty to paste inline YAML",
+        default="",
+    )
+    kubeconfig_content = ""
+    if not kubeconfig_path:
+        kubeconfig_content = _p(
+            "Paste raw kubeconfig YAML content (required if no file path given)",
+            default="",
+        )
+        if not kubeconfig_content:
+            _die("Either a kubeconfig file path or inline YAML content is required.")
+    context = _p(
+        "Kubeconfig context to use (leave empty to use the current-context from the file)",
+        default="",
+    )
+    namespace = _p("Default namespace", default="default")
+    upsert_integration(
+        "kubernetes",
+        {
+            "credentials": {
+                "kubeconfig_path": kubeconfig_path,
+                "kubeconfig": kubeconfig_content,
+                "context": context,
+                "namespace": namespace or "default",
+            }
+        },
+    )
+
+
 _HANDLERS: dict[str, Any] = {
     "alertmanager": _setup_alertmanager,
     "aws": _setup_aws,
@@ -1268,6 +1372,7 @@ _HANDLERS: dict[str, Any] = {
     "github": _setup_github,
     "gitlab": _setup_gitlab,
     "sentry": _setup_sentry,
+    "posthog": _setup_posthog,
     "mongodb": _setup_mongodb,
     "discord": _setup_discord,
     "telegram": _setup_telegram,
@@ -1285,6 +1390,7 @@ _HANDLERS: dict[str, Any] = {
     "jenkins": _setup_jenkins,
     "tempo": _setup_tempo,
     "pagerduty": _setup_pagerduty,
+    "kubernetes": _setup_kubernetes,
 }
 
 
@@ -1419,10 +1525,26 @@ def cmd_list() -> None:
             "or opensre onboard for the guided wizard."
         )
         return
-    print(f"\n  {_B}{'SERVICE':<14}STATUS    ID{_R}")
+
+    from rich.markup import escape
+
+    from integrations._table_render import new_table, render_table
+    from platform.terminal.theme import GLYPH_SUCCESS, HIGHLIGHT, SECONDARY, TEXT
+
+    table = new_table()
+    table.add_column("SERVICE", style=TEXT, no_wrap=True)
+    table.add_column("STATUS", no_wrap=True)
+    table.add_column("ID", style=SECONDARY)
     for i in items:
-        print(f"  {i['service']:<14}{i['status']:<10}{i['id']}")
-    print()
+        status = i["status"]
+        status_cell = (
+            f"[bold {HIGHLIGHT}]{GLYPH_SUCCESS} {escape(status)}[/]"
+            if status == "active"
+            else escape(status)
+        )
+        table.add_row(escape(i["service"]), status_cell, escape(i["id"]))
+
+    print(render_table(table))
 
 
 def cmd_show(service: str | None) -> None:

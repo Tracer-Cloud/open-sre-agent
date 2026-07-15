@@ -67,7 +67,20 @@ DOCKER_BIN = "/usr/bin/docker"
 GATEWAY_HEALTH_POLL_INTERVAL_SECONDS = 15
 GATEWAY_HEALTH_MAX_ATTEMPTS = 60
 GATEWAY_LOG_TAIL_LINES = 200
-GATEWAY_READY_LOG_SENTINEL = "polling started"
+# Transport-agnostic ready line from GatewayManager after components start.
+# Also accept legacy per-transport lines so older images still pass health waits.
+GATEWAY_READY_LOG_SENTINEL = "[gateway] ready"
+GATEWAY_READY_LOG_SENTINELS: tuple[str, ...] = (
+    GATEWAY_READY_LOG_SENTINEL,
+    "polling started",  # Telegram long poll (pre-unified images)
+    "socket mode connected",  # Slack Socket Mode (pre-unified images)
+)
+
+
+def logs_contain_gateway_ready(stdout: str) -> bool:
+    """True when gateway logs show any accepted ready sentinel."""
+    return any(sentinel in stdout for sentinel in GATEWAY_READY_LOG_SENTINELS)
+
 
 # ─── Gateway AMI baking ────────────────────────────────────────────────────────
 GATEWAY_AMI_NAME_PREFIX = "opensre-gateway"

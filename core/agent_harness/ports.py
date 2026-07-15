@@ -78,6 +78,7 @@ class SessionStore(Protocol):
     # --- gather caches ---
     resolved_integrations_cache: dict[str, Any] | None
     github_repo_scope: tuple[str, str] | None
+    gitlab_repo_scope: tuple[str, str, str] | None
 
     def record(self, kind: str, text: str, *, ok: bool = True) -> None:
         """Append a record of an executed action/turn to the session log."""
@@ -140,6 +141,9 @@ class PromptContextProvider(Protocol):
         raise NotImplementedError
 
     def agents_md(self) -> str:
+        raise NotImplementedError
+
+    def docs(self, query: str) -> str:
         raise NotImplementedError
 
     def investigation_flow(self) -> str:

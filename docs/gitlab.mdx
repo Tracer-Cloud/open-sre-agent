@@ -53,6 +53,11 @@ The wizard validates your token by calling the GitLab API and writes the followi
 | `GITLAB_ACCESS_TOKEN` | Token used for all GitLab API calls |
 | `GITLAB_BASE_URL` | API base URL (defaults to `https://gitlab.com/api/v4`) |
 
+GitLab tools use this configured integration for the base URL and token. Do not
+pass `gitlab_url` or `gitlab_token` as tool arguments; those values are
+resolved from the integration configuration. A self-hosted instance host such as
+`https://gitlab.example.com` is normalized to `https://gitlab.example.com/api/v4`.
+
 ---
 
 ## What the Agent Can Do
@@ -65,6 +70,26 @@ Once connected, OpenSRE automatically uses GitLab as an investigation source whe
 | Commits | Commit messages, authors, and changed files in a branch or MR |
 | Pipelines | Pipeline status, failed jobs, and job logs |
 | Files | File contents at a specific ref for diff analysis |
+
+### Use GitLab tools in the interactive shell
+
+After connecting GitLab, include a GitLab project or file URL in your request.
+OpenSRE infers the project scope from the current message and keeps it for
+follow-up questions in the same session.
+
+```text
+Read https://gitlab.com/group/project/-/blob/main/runbooks/api.md and summarize the recovery steps.
+```
+
+Project URLs enable commits, merge request, and pipeline tools:
+
+```text
+Check recent changes and failed pipelines for https://gitlab.com/group/project.
+```
+
+OpenSRE also checks recent conversation, `GITLAB_PROJECT_ID`, `GITLAB_REF`,
+`GITLAB_FILE_PATH`, and the current repository's GitLab origin remote when the
+current message does not contain a URL.
 
 ---
 

@@ -64,6 +64,9 @@ class _StubPromptContextProvider:
     def agents_md(self) -> str:
         return _AGENTS_MD_TEXT
 
+    def docs(self, query: str) -> str:  # noqa: ARG002 - stub
+        return ""
+
     def investigation_flow(self) -> str:
         return build_investigation_flow_reference_text()
 

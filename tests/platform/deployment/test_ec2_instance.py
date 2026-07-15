@@ -31,19 +31,25 @@ def test_create_instance_profile_returns_profile_details(
     _mock_sleep.assert_called_once_with(10)
 
 
-def test_split_container_env_vars_excludes_telegram_from_web() -> None:
+def test_split_container_env_vars_excludes_messaging_tokens_from_web() -> None:
     web_env, gateway_env = instance_module._split_container_env_vars(
         {
             "LLM_PROVIDER": "openai",
             "OPENAI_API_KEY": "sk-test",
             "TELEGRAM_BOT_TOKEN": "tg-token",
             "TELEGRAM_ALLOWED_USERS": "123",
+            "SLACK_BOT_TOKEN": "xoxb-test",
+            "SLACK_APP_TOKEN": "xapp-test",
+            "SLACK_ALLOWED_USERS": "U123",
         }
     )
 
     assert web_env == {"MODE": "web", "LLM_PROVIDER": "openai", "OPENAI_API_KEY": "sk-test"}
     assert gateway_env["MODE"] == "gateway"
     assert gateway_env["TELEGRAM_BOT_TOKEN"] == "tg-token"
+    assert gateway_env["SLACK_BOT_TOKEN"] == "xoxb-test"
+    assert gateway_env["SLACK_APP_TOKEN"] == "xapp-test"
+    assert gateway_env["SLACK_ALLOWED_USERS"] == "U123"
 
 
 @patch("platform.deployment.ecr_deploy.instance.run_ssm_shell_command")
@@ -69,3 +75,24 @@ def test_provision_instance_via_ssm_installs_pulls_and_starts_containers(
     assert "--env-file" in joined
     assert "/usr/bin/docker run" in joined
     assert mock_run_ssm.call_args.kwargs["max_poll_attempts"] == 60
+
+
+def test_extra_env_keys_are_collected(monkeypatch) -> None:
+    from platform.deployment.ecr_deploy import lifecycle
+
+    monkeypatch.setenv("OPENSRE_DEPLOY_EXTRA_ENV_KEYS", "GRAFANA_INSTANCE_URL, DATADOG_API_KEY")
+    monkeypatch.setenv("GRAFANA_INSTANCE_URL", "https://g.example")
+    monkeypatch.setenv("DATADOG_API_KEY", "dd-test")
+    monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
+
+    collected = lifecycle._collect_deploy_env_vars()
+
+    assert collected["GRAFANA_INSTANCE_URL"] == "https://g.example"
+    assert collected["DATADOG_API_KEY"] == "dd-test"
+
+
+def test_extra_env_keys_default_empty(monkeypatch) -> None:
+    from platform.deployment.ecr_deploy import lifecycle
+
+    monkeypatch.delenv("OPENSRE_DEPLOY_EXTRA_ENV_KEYS", raising=False)
+    assert lifecycle._extra_env_keys() == ()

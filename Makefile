@@ -273,7 +273,7 @@ run:
 	opensre investigate
 
 dev:
-	@echo "Run the health app with: uv run uvicorn gateway.webapp:app --reload --host 0.0.0.0 --port 8000"
+	@echo "Run the health app with: uv run uvicorn gateway.http.webapp:app --reload --host 0.0.0.0 --port 8000"
 
 docs-dev:
 	cd docs && mint dev
@@ -292,10 +292,25 @@ deploy:
 destroy:
 	$(PYTHON) -m platform.deployment.ecr_deploy.lifecycle destroy
 
+# Fargate backend (web API + Slack gateway) via Terraform — plan by default;
+# apply/destroy prompt for confirmation inside Terraform.
+TERRAFORM_DIR := infra/terraform
+
+deploy-fargate:
+	terraform -chdir=$(TERRAFORM_DIR) init -input=false
+	terraform -chdir=$(TERRAFORM_DIR) plan
+
+deploy-fargate-apply:
+	terraform -chdir=$(TERRAFORM_DIR) init -input=false
+	terraform -chdir=$(TERRAFORM_DIR) apply
+
+destroy-fargate:
+	terraform -chdir=$(TERRAFORM_DIR) destroy
+
 test-deploy:
 	$(PYTHON) -m pytest tests/deployment/ec2/ -v -s
 
-# Gateway deploy (Telegram gateway only, no Docker/ECR)
+# Gateway deploy (Telegram and/or Slack Socket Mode; no Docker/ECR)
 # Step 1 — bake once per code change (launches temp EC2, installs opensre, snapshots AMI):
 bake-gateway:
 	$(PYTHON) -m platform.deployment.gateway.lifecycle bake-ami

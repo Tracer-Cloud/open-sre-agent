@@ -1,114 +1,33 @@
-"""Canonical tool registry shared by investigation and chat surfaces."""
+"""Canonical tool registry shared by investigation and chat surfaces.
+
+Facade over tool discovery (:mod:`tools.registry_discovery`), the static
+descriptor index (:mod:`tools.registry_index`), and skill-guidance attachment
+(:mod:`tools.registry_skill_guidance`): it owns the cached snapshots, the public
+lookup API, and the ``ToolRegistry`` port.
+"""
 
 from __future__ import annotations
 
 import importlib
-import inspect
 import logging
-import pkgutil
 import threading
-from dataclasses import replace
 from functools import lru_cache
-from pathlib import Path
 from types import ModuleType
+from typing import TYPE_CHECKING
 
 import tools as tools_package
-from config.constants.paths import REPO_ROOT
-from core.tool_framework.base import BaseTool
-from core.tool_framework.registered_tool import REGISTERED_TOOL_ATTR, RegisteredTool, ToolSurface
-from core.tool_framework.skill_guidance import format_tool_skill_guidance, load_tool_skill_guidance
-
-# Per-vendor tool packages — when a vendor consolidates its tool code under
-# ``integrations/<vendor>/tools/``, list the dotted package path here so the
-# registry walks it alongside the canonical ``tools/`` package. New vendors get
-# one entry each as they migrate.
-#
-# The external extension point (:func:`register_external_tool_package`) is
-# separate; it's for plugin-style callers that ship tool packages outside of
-# opensre's own codebase.
-_INTEGRATION_TOOL_PACKAGES: tuple[str, ...] = (
-    "integrations.alertmanager.tools",
-    "integrations.argocd.tools",
-    "integrations.aws.tools",
-    "integrations.aws_lambda.tools",
-    "integrations.azure.tools",
-    "integrations.azure_sql.tools",
-    "integrations.betterstack.tools",
-    "integrations.bitbucket.tools",
-    "integrations.clickhouse.tools",
-    "integrations.cloudtrail.tools",
-    "integrations.cloudwatch.tools",
-    "integrations.coralogix.tools",
-    "integrations.dagster.tools",
-    "integrations.datadog.tools",
-    "integrations.ec2.tools",
-    "integrations.eks.tools",
-    "integrations.elasticsearch.tools",
-    "integrations.elb.tools",
-    "integrations.github.tools",
-    "integrations.gitlab.tools",
-    "integrations.google_docs.tools",
-    "integrations.grafana.tools",
-    "integrations.groundcover.tools",
-    "integrations.helm.tools",
-    "integrations.hermes.tools",
-    "integrations.honeycomb.tools",
-    "integrations.incident_io.tools",
-    "integrations.jenkins.tools",
-    "integrations.jira.tools",
-    "integrations.kafka.tools",
-    "integrations.mariadb.tools",
-    "integrations.mongodb.tools",
-    "integrations.mongodb_atlas.tools",
-    "integrations.mysql.tools",
-    "integrations.openclaw.tools",
-    "integrations.openobserve.tools",
-    "integrations.opensearch.tools",
-    "integrations.opsgenie.tools",
-    "integrations.pagerduty.tools",
-    "integrations.posthog_mcp.tools",
-    "integrations.postgresql.tools",
-    "integrations.prefect.tools",
-    "integrations.rabbitmq.tools",
-    "integrations.rds.tools",
-    "integrations.redis.tools",
-    "integrations.s3.tools",
-    "integrations.sentry.tools",
-    "integrations.sentry_mcp.tools",
-    "integrations.signoz.tools",
-    "integrations.snowflake.tools",
-    "integrations.splunk.tools",
-    "integrations.supabase.tools",
-    "integrations.telegram.tools",
-    "integrations.tempo.tools",
-    "integrations.temporal.tools",
-    "integrations.tracer.tools",
-    "integrations.twilio.tools",
-    "integrations.vercel.tools",
-    "integrations.victoria_logs.tools",
-    "integrations.x_mcp.tools",
+from core.tool_framework.registered_tool import RegisteredTool, ToolSurface
+from tools.registry_discovery import (
+    INTEGRATION_TOOL_PACKAGES,
+    collect_registered_tools_from_module,
+    iter_discovered_tool_modules,
 )
+from tools.registry_skill_guidance import apply_skill_guidance
+
+if TYPE_CHECKING:
+    from tools.registry_index import ToolDescriptor
 
 logger = logging.getLogger(__name__)
-
-_SKIP_MODULE_NAMES = {
-    "__pycache__",
-    "investigation_registry",
-    "registry",
-}
-_TOOL_MODULES_ATTR = "TOOL_MODULES"
-_MAX_TOOL_SKILL_GUIDANCE_CHARS = 2400
-
-
-def _skill_guidance_files() -> tuple[Path, ...]:
-    """Return explicit and package-local SKILL.md files attached at registry load."""
-
-    explicit = (REPO_ROOT / "integrations" / "github" / "tools" / "workflow" / "SKILL.md",)
-    discovered = sorted(
-        (REPO_ROOT / "tools" / "system" / "python_execution_tool" / "skills").glob("*/SKILL.md")
-    )
-    return (*explicit, *discovered)
-
 
 # Extension point: callers outside ``tools.*`` can register additional
 # tool packages by calling :func:`register_external_tool_package`.
@@ -147,193 +66,6 @@ def register_external_tool_package(package: ModuleType) -> None:
         clear_tool_registry_cache()
 
 
-def _iter_tool_module_names(package: ModuleType) -> list[str]:
-    module_names: list[str] = []
-    for module_info in pkgutil.iter_modules(package.__path__):
-        if module_info.name in _SKIP_MODULE_NAMES:
-            continue
-        if module_info.name.startswith("_") or module_info.name.endswith("_test"):
-            continue
-        module_names.append(module_info.name)
-    return sorted(module_names)
-
-
-def _import_tool_module(package: ModuleType, module_name: str) -> ModuleType:
-    return importlib.import_module(_qualify_tool_module_name(package, module_name))
-
-
-def _qualify_tool_module_name(package: ModuleType, module_name: str) -> str:
-    if module_name == package.__name__ or module_name.startswith(f"{package.__name__}."):
-        return module_name
-    return f"{package.__name__}.{module_name}"
-
-
-def _iter_manifest_tool_module_names(module: ModuleType) -> tuple[str, ...]:
-    manifest = getattr(module, _TOOL_MODULES_ATTR, ())
-    if manifest is None:
-        return ()
-    if isinstance(manifest, str):
-        logger.warning(
-            "[tools] Ignoring %s.%s because it must be an iterable of module names, not a string",
-            module.__name__,
-            _TOOL_MODULES_ATTR,
-        )
-        return ()
-
-    try:
-        module_names = tuple(manifest)
-    except TypeError:
-        logger.warning(
-            "[tools] Ignoring %s.%s because it is not iterable",
-            module.__name__,
-            _TOOL_MODULES_ATTR,
-        )
-        return ()
-
-    valid_module_names: list[str] = []
-    for module_name in module_names:
-        if not isinstance(module_name, str) or not module_name:
-            logger.warning(
-                "[tools] Ignoring invalid %s entry on %s: %r",
-                _TOOL_MODULES_ATTR,
-                module.__name__,
-                module_name,
-            )
-            continue
-        valid_module_names.append(module_name)
-    return tuple(valid_module_names)
-
-
-def _import_tool_module_or_none(package: ModuleType, module_name: str) -> ModuleType | None:
-    full_module_name = _qualify_tool_module_name(package, module_name)
-    try:
-        return _import_tool_module(package, module_name)
-    except ModuleNotFoundError as exc:
-        logger.warning("[tools] Skipping %s: %s", full_module_name, exc)
-        return None
-    except Exception as exc:
-        logger.warning(
-            "[tools] Skipping %s due to import failure: %s",
-            full_module_name,
-            exc,
-            exc_info=True,
-        )
-        return None
-
-
-def _iter_discovered_tool_modules(package: ModuleType) -> list[ModuleType]:
-    modules: list[ModuleType] = []
-    for module_name in _iter_tool_module_names(package):
-        module = _import_tool_module_or_none(package, module_name)
-        if module is None:
-            continue
-        modules.append(module)
-
-        for manifest_module_name in _iter_manifest_tool_module_names(module):
-            manifest_module = _import_tool_module_or_none(module, manifest_module_name)
-            if manifest_module is not None:
-                modules.append(manifest_module)
-
-    return modules
-
-
-def _candidate_belongs_to_module(candidate: object, module_name: str) -> bool:
-    if isinstance(candidate, RegisteredTool):
-        return (candidate.origin_module or getattr(candidate.run, "__module__", "")) == module_name
-    if isinstance(candidate, BaseTool):
-        return candidate.__class__.__module__ == module_name
-    return getattr(candidate, "__module__", None) == module_name
-
-
-def _registered_tool_from_candidate(candidate: object) -> RegisteredTool | None:
-    if isinstance(candidate, RegisteredTool):
-        if not candidate.origin_module or not candidate.origin_name:
-            return replace(
-                candidate,
-                origin_module=candidate.origin_module or getattr(candidate.run, "__module__", ""),
-                origin_name=candidate.origin_name or getattr(candidate.run, "__name__", ""),
-            )
-        return candidate
-
-    registered = getattr(candidate, REGISTERED_TOOL_ATTR, None)
-    if isinstance(registered, RegisteredTool):
-        return registered
-
-    if isinstance(candidate, BaseTool):
-        return RegisteredTool.from_base_tool(candidate)
-
-    return None
-
-
-def _collect_registered_tools_from_module(module: ModuleType) -> list[RegisteredTool]:
-    tools_by_name: dict[str, RegisteredTool] = {}
-    seen_candidate_ids: set[int] = set()
-
-    for _, candidate in inspect.getmembers(module):
-        if not _candidate_belongs_to_module(candidate, module.__name__):
-            continue
-        candidate_id = id(candidate)
-        if candidate_id in seen_candidate_ids:
-            continue
-        seen_candidate_ids.add(candidate_id)
-        registered = _registered_tool_from_candidate(candidate)
-        if registered is None:
-            continue
-        if registered.name in tools_by_name:
-            logger.warning(
-                "[tools] Duplicate tool name '%s' in module %s; keeping first definition",
-                registered.name,
-                module.__name__,
-            )
-            continue
-        tools_by_name[registered.name] = registered
-
-    return sorted(tools_by_name.values(), key=lambda tool: tool.name)
-
-
-def _truncate_skill_guidance(text: str) -> str:
-    if len(text) <= _MAX_TOOL_SKILL_GUIDANCE_CHARS:
-        return text
-    return text[: _MAX_TOOL_SKILL_GUIDANCE_CHARS - 3].rstrip() + "..."
-
-
-def _with_skill_guidance(tool: RegisteredTool, guidance: str) -> RegisteredTool:
-    if not guidance:
-        return tool
-    return replace(
-        tool,
-        description=f"{tool.description}\n\nWorkflow guidance:\n{guidance}",
-        skill_guidance=guidance,
-    )
-
-
-def _apply_skill_guidance(tools_by_name: dict[str, RegisteredTool]) -> None:
-    known_tool_names = frozenset(tools_by_name)
-    guidance_by_tool: dict[str, list[str]] = {}
-
-    for skill_path in _skill_guidance_files():
-        result = load_tool_skill_guidance(skill_path, known_tool_names=known_tool_names)
-        for diagnostic in result.diagnostics:
-            logger.warning(
-                "[tools] Skill guidance %s (%s): %s",
-                diagnostic.path,
-                diagnostic.code,
-                diagnostic.message,
-            )
-        skill = result.skill
-        if skill is None or skill.disable_model_invocation:
-            continue
-        guidance = format_tool_skill_guidance(skill)
-        for tool_name in skill.tool_names:
-            if tool_name not in tools_by_name:
-                continue
-            guidance_by_tool.setdefault(tool_name, []).append(guidance)
-
-    for tool_name, guidances in guidance_by_tool.items():
-        combined = _truncate_skill_guidance("\n\n".join(guidances))
-        tools_by_name[tool_name] = _with_skill_guidance(tools_by_name[tool_name], combined)
-
-
 @lru_cache(maxsize=1)
 def _load_registry_snapshot() -> tuple[RegisteredTool, ...]:
     tools_by_name: dict[str, RegisteredTool] = {}
@@ -342,7 +74,7 @@ def _load_registry_snapshot() -> tuple[RegisteredTool, ...]:
     # packages, then any externally-registered packages in registration order.
     # First definition of a given tool name wins; duplicates are logged and skipped.
     integration_packages: list[ModuleType] = []
-    for dotted in _INTEGRATION_TOOL_PACKAGES:
+    for dotted in INTEGRATION_TOOL_PACKAGES:
         try:
             integration_packages.append(importlib.import_module(dotted))
         except ImportError as exc:
@@ -364,9 +96,9 @@ def _load_registry_snapshot() -> tuple[RegisteredTool, ...]:
         modules_to_scan: list[ModuleType] = []
         if id(package) in integration_module_ids:
             modules_to_scan.append(package)
-        modules_to_scan.extend(_iter_discovered_tool_modules(package))
+        modules_to_scan.extend(iter_discovered_tool_modules(package))
         for module in modules_to_scan:
-            for tool in _collect_registered_tools_from_module(module):
+            for tool in collect_registered_tools_from_module(module):
                 if tool.name in tools_by_name:
                     logger.warning(
                         "[tools] Duplicate tool name '%s' across modules; keeping first definition",
@@ -375,7 +107,7 @@ def _load_registry_snapshot() -> tuple[RegisteredTool, ...]:
                     continue
                 tools_by_name[tool.name] = tool
 
-    _apply_skill_guidance(tools_by_name)
+    apply_skill_guidance(tools_by_name)
     return tuple(sorted(tools_by_name.values(), key=lambda tool: tool.name))
 
 
@@ -384,22 +116,90 @@ def _load_registry_tool_map() -> dict[str, RegisteredTool]:
     return {tool.name: tool for tool in _load_registry_snapshot()}
 
 
+@lru_cache(maxsize=8)
+def _load_surface_snapshot(surface: str) -> tuple[RegisteredTool, ...]:
+    """Import only the modules that statically declare a tool for ``surface``.
+
+    Resolved from the descriptor index so a surface load never imports the other
+    surfaces' vendor executors. Runtime-registered external packages are already
+    imported, so they are collected directly. Equivalent to the full snapshot
+    filtered by ``surface`` (pinned by the registry-index contract test).
+    """
+    from tools.registry_index import build_descriptor_index
+
+    index = build_descriptor_index()
+    modules = sorted({d.module for d in index.values() if surface in d.surfaces})
+    tools_by_name: dict[str, RegisteredTool] = {}
+    for dotted in modules:
+        try:
+            module = importlib.import_module(dotted)
+        except Exception as exc:
+            logger.warning("[tools] Skipping %s for surface %r: %s", dotted, surface, exc)
+            continue
+        for tool in collect_registered_tools_from_module(module):
+            if surface in tool.surfaces:
+                tools_by_name.setdefault(tool.name, tool)
+
+    for package in _external_tool_packages:
+        for module in iter_discovered_tool_modules(package):
+            for tool in collect_registered_tools_from_module(module):
+                if surface in tool.surfaces:
+                    tools_by_name.setdefault(tool.name, tool)
+
+    apply_skill_guidance(tools_by_name, known_tool_names=frozenset(index))
+    return tuple(sorted(tools_by_name.values(), key=lambda tool: tool.name))
+
+
 def clear_tool_registry_cache() -> None:
     _load_registry_snapshot.cache_clear()
     _load_registry_tool_map.cache_clear()
+    _load_surface_snapshot.cache_clear()
+    from tools.registry_index import clear_descriptor_index_cache
+
+    clear_descriptor_index_cache()
 
 
 def get_registered_tools(surface: ToolSurface | None = None) -> list[RegisteredTool]:
-    tools = list(_load_registry_snapshot())
     if surface is None:
-        return tools
-    return [tool for tool in tools if surface in tool.surfaces]
+        return list(_load_registry_snapshot())
+    return list(_load_surface_snapshot(surface))
 
 
 def get_registered_tool_map(surface: ToolSurface | None = None) -> dict[str, RegisteredTool]:
     if surface is None:
         return dict(_load_registry_tool_map())
     return {tool.name: tool for tool in get_registered_tools(surface)}
+
+
+def get_tool_descriptors(surface: ToolSurface | None = None) -> list[ToolDescriptor]:
+    """Cheap tool metadata for ``surface`` — reads the static index, imports no
+    executor. Use for listing/availability; call :func:`load_tool` to materialize
+    an executor only when a tool must run.
+    """
+    from tools.registry_index import build_descriptor_index
+
+    descriptors = list(build_descriptor_index().values())
+    if surface is not None:
+        descriptors = [d for d in descriptors if surface in d.surfaces]
+    return sorted(descriptors, key=lambda descriptor: descriptor.name)
+
+
+def load_tool(descriptor: ToolDescriptor) -> RegisteredTool | None:
+    """Import a descriptor's module and return its executor — the lazy step.
+
+    Returns ``None`` if the module fails to import or no longer defines the tool.
+    """
+    try:
+        module = importlib.import_module(descriptor.module)
+    except Exception as exc:
+        logger.warning(
+            "[tools] Failed to load %r from %s: %s", descriptor.name, descriptor.module, exc
+        )
+        return None
+    for tool in collect_registered_tools_from_module(module):
+        if tool.name == descriptor.name:
+            return tool
+    return None
 
 
 class RegisteredToolRegistry:

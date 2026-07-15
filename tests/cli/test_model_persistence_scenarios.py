@@ -123,7 +123,6 @@ class TestReplModelPersistence:
         persistence_paths: dict[str, Path],
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-
         monkeypatch.setattr("core.llm.factory.reset_llm_clients", lambda: None)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
 
@@ -145,7 +144,6 @@ class TestReplModelPersistence:
         persistence_paths: dict[str, Path],
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-
         monkeypatch.setattr("core.llm.factory.reset_llm_clients", lambda: None)
         monkeypatch.setenv("LLM_PROVIDER", "anthropic")
         wizard_store.save_local_config(
@@ -174,7 +172,6 @@ class TestReplModelPersistence:
         persistence_paths: dict[str, Path],
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-
         monkeypatch.setattr("core.llm.factory.reset_llm_clients", lambda: None)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
 
@@ -199,7 +196,6 @@ class TestReplModelPersistence:
         persistence_paths: dict[str, Path],
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-
         monkeypatch.setattr("core.llm.factory.reset_llm_clients", lambda: None)
         monkeypatch.setenv("LLM_PROVIDER", "anthropic")
         wizard_store.save_local_config(
@@ -226,7 +222,6 @@ class TestReplModelPersistence:
         persistence_paths: dict[str, Path],
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-
         monkeypatch.setattr("core.llm.factory.reset_llm_clients", lambda: None)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
         monkeypatch.setenv("LLM_PROVIDER", "anthropic")
@@ -271,3 +266,26 @@ class TestReplModelPersistence:
         assert "unknown model for anthropic" in buf.getvalue()
         assert not persistence_paths["env"].exists()
         assert not persistence_paths["store"].exists()
+
+    @pytest.mark.parametrize("model", ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"])
+    def test_model_set_accepts_and_persists_gpt56_tiers(
+        self,
+        model: str,
+        persistence_paths: dict[str, Path],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # #3931 acceptance criterion: ``/model set openai gpt-5.6-<tier>``
+        # is accepted and persists. openai sets ``allow_custom_models``, so
+        # this already held before the quick-picks landed; the test pins it
+        # against a future tightening of the allowlist.
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+
+        console, buf = _capture()
+        dispatch_slash(f"/model set openai {model}", Session(), console)
+
+        assert "unknown model" not in buf.getvalue()
+        assert f"OPENAI_REASONING_MODEL={model}" in persistence_paths["env"].read_text(
+            encoding="utf-8"
+        )
+        stored = wizard_store.load_local_config(persistence_paths["store"])
+        assert stored["targets"]["local"]["model"] == model

@@ -17,6 +17,9 @@ class TaskKind(StrEnum):
     INCIDENT_WINDOW_REPLAY = "incident_window_replay"
     SYNTHETIC_RUN = "synthetic_run"
     CUSTOM_INVESTIGATION = "custom_investigation"
+    SENTRY_MORNING_DIGEST = "sentry_morning_digest"
+    SENTRY_UPTIME_WATCH = "sentry_uptime_watch"
+    GITHUB_PR_SWEEP = "github_pr_sweep"
 
 
 class TaskStatus(StrEnum):

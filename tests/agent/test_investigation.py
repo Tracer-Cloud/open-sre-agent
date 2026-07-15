@@ -200,6 +200,22 @@ def test_run_gracefully_handles_model_not_found_runtime_error() -> None:
     assert "not found" in result["root_cause"].lower()
     assert result["remediation_steps"]
     assert result["causal_chain"]
+    assert result.get("investigation_loop_count") == 0
+
+
+def test_degraded_llm_failure_after_completed_loops_reports_actual_count() -> None:
+    """A classified LLM failure mid-loop should not count the failing invoke."""
+    tool = _fake_tool("list_posthog_tools")
+    responses: list[Any] = [
+        _tool_call_response([ToolCall(id="c1", name="list_posthog_tools", input={})]),
+        _tool_call_response([ToolCall(id="c2", name="list_posthog_tools", input={"x": 1})]),
+        RuntimeError("OpenAI model 'qwen' not found."),
+    ]
+
+    result, mock_llm = _run_agent_with_scripted_llm(invoke=responses, tools=[tool])
+
+    assert mock_llm.invoke.call_count == 3
+    assert result.get("investigation_loop_count") == 2
 
 
 def test_run_re_raises_unmatched_runtime_error() -> None:

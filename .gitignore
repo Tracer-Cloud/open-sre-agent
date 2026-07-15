@@ -36,6 +36,9 @@ share/python-wheels/
 *.egg
 MANIFEST
 
+# Local ephemeral workspaces (architecture audit clones, etc.)
+.temp/
+
 # Virtual environments
 venv/
 env/

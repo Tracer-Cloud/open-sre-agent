@@ -7,6 +7,7 @@ import pytest
 from core.agent_harness.prompts.rules import (
     AGENT_RESPONSE_THREE_TIER_RULE,
     format_agent_response,
+    normalize_three_tier_spacing,
 )
 
 
@@ -51,3 +52,20 @@ def test_observation_block_on_screen_requires_want_me_to() -> None:
 
     assert "**Want me to:**" in block
     assert "connect another integration" in block
+
+
+def test_normalize_three_tier_spacing_splits_want_me_to() -> None:
+    text = (
+        "**I found:** LLM errors are the top priority.\n\n"
+        "**Here's what that looks like:**\n"
+        " • Export formatter bugs: 3\n"
+        "**Want me to:** summarize the top issue titles?"
+    )
+    normalized = normalize_three_tier_spacing(text)
+
+    assert " • Export formatter bugs: 3\n\n**Want me to:**" in normalized
+
+
+def test_normalize_three_tier_spacing_idempotent() -> None:
+    text = format_agent_response("CPU is high.", "Host: prod-api-3", "check memory?")
+    assert normalize_three_tier_spacing(text) == text

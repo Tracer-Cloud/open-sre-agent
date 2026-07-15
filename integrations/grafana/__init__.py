@@ -1,4 +1,16 @@
-"""Grafana integration classifier."""
+"""Grafana integration classifier.
+
+Splits a validated :class:`GrafanaIntegrationConfig` into one of two resolved
+keys so the rest of the stack can treat local and cloud Grafana separately:
+
+* ``grafana`` — a remote/cloud instance authenticated with a service account
+  token.
+* ``grafana_local`` — a locally hosted instance (localhost / loopback), whether
+  it authenticates with a token, basic auth, or anonymously.
+
+Authentication details (token vs basic vs anonymous) are owned by
+``GrafanaIntegrationConfig``; this module only decides local vs cloud routing.
+"""
 
 from __future__ import annotations
 
@@ -30,8 +42,10 @@ def classify(
     if not cfg.endpoint:
         return None, None
     if cfg.is_local:
-        # Clear api_key for local grafana — basic auth (username/password) is used instead.
-        return cfg.model_copy(update={"api_key": ""}), "grafana_local"
-    if cfg.api_key and cfg.api_key != "local":
+        if cfg.is_anonymous_local:
+            # Drop the "local" sentinel so downstream auth stays anonymous.
+            return cfg.model_copy(update={"api_key": ""}), "grafana_local"
+        return cfg, "grafana_local"
+    if cfg.has_token:
         return cfg, "grafana"
     return None, None

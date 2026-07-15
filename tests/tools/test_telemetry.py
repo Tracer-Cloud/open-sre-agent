@@ -579,7 +579,7 @@ def _posthog_mcp_list_case() -> ToolFailureCase:
         from integrations.posthog_mcp.tools import posthog_mcp_tool as mod
 
         _patch_posthog_mcp_runtime(mp)
-        mp.setattr(mod, "list_posthog_mcp_server_tools", MagicMock(side_effect=RuntimeError("mcp")))
+        mp.setattr(mod, "list_posthog_mcp_tools", MagicMock(side_effect=RuntimeError("mcp")))
 
     def invoke() -> dict[str, Any]:
         from integrations.posthog_mcp.tools.posthog_mcp_tool import list_posthog_tools
@@ -600,7 +600,7 @@ def _posthog_mcp_call_tool_case() -> ToolFailureCase:
         from integrations.posthog_mcp.tools import posthog_mcp_tool as mod
 
         _patch_posthog_mcp_runtime(mp)
-        mp.setattr(mod, "invoke_posthog_mcp_tool", MagicMock(side_effect=RuntimeError("mcp")))
+        mp.setattr(mod, "call_posthog_mcp_tool", MagicMock(side_effect=RuntimeError("mcp")))
 
     def invoke() -> dict[str, Any]:
         from integrations.posthog_mcp.tools.posthog_mcp_tool import call_posthog_tool
@@ -647,7 +647,7 @@ def _sentry_mcp_list_case() -> ToolFailureCase:
         from integrations.sentry_mcp.tools import sentry_mcp_tool as mod
 
         _patch_sentry_mcp_runtime(mp)
-        mp.setattr(mod, "list_sentry_mcp_server_tools", MagicMock(side_effect=RuntimeError("mcp")))
+        mp.setattr(mod, "list_sentry_mcp_tools", MagicMock(side_effect=RuntimeError("mcp")))
 
     def invoke() -> dict[str, Any]:
         from integrations.sentry_mcp.tools.sentry_mcp_tool import list_sentry_tools
@@ -668,7 +668,7 @@ def _sentry_mcp_call_tool_case() -> ToolFailureCase:
         from integrations.sentry_mcp.tools import sentry_mcp_tool as mod
 
         _patch_sentry_mcp_runtime(mp)
-        mp.setattr(mod, "invoke_sentry_mcp_tool", MagicMock(side_effect=RuntimeError("mcp")))
+        mp.setattr(mod, "call_sentry_mcp_tool", MagicMock(side_effect=RuntimeError("mcp")))
 
     def invoke() -> dict[str, Any]:
         from integrations.sentry_mcp.tools.sentry_mcp_tool import call_sentry_tool
@@ -996,6 +996,11 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "alert_sample",
         "alertmanager_alerts",
         "alertmanager_silences",
+        # architecture_* catch only WorkspaceError / ReportPersistenceError for
+        # known failure states; unexpected errors escape to the #1476 wrapper.
+        "architecture_cleanup_repo",
+        "architecture_clone_repo",
+        "architecture_save_observations",
         "assistant_handoff",
         "argocd_application_diff",
         "argocd_application_status",
@@ -1145,6 +1150,7 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "list_jenkins_running_builds",
         "list_s3_objects",
         "list_sentry_issue_events",
+        "list_sentry_uptime_alerts",
         "llm_set_provider",
         "lookup_cloudtrail_events",
         "opsgenie_alert_detail",
@@ -1187,6 +1193,13 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "search_github_issues",
         "search_sentry_issues",
         "shell_run",
+        "slack_add_reaction",
+        "slack_capture_task",
+        "slack_join_channel",
+        "slack_list_team_members",
+        "slack_read_messages",
+        "slack_reply_message",
+        "slack_search_messages",
         "slack_send_message",
         "slash_invoke",
         "summarize_community_followups",
@@ -1205,6 +1218,21 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "vercel_deployment_logs",
         "vercel_deployment_status",
         "victoria_logs_query",
+        # Kubernetes tools: client methods catch exceptions internally via
+        # capture_service_error and return structured error dicts; any unexpected
+        # exception from run() escapes to the #1476 global wrapper.
+        "kubernetes_describe_pod",
+        "kubernetes_get_events",
+        "kubernetes_get_pod_logs",
+        "kubernetes_get_resource",
+        "kubernetes_list_configmaps",
+        "kubernetes_list_daemonsets",
+        "kubernetes_list_deployments",
+        "kubernetes_list_ingresses",
+        "kubernetes_list_nodes",
+        "kubernetes_list_pods",
+        "kubernetes_list_services",
+        "kubernetes_list_statefulsets",
     }
 )
 
@@ -1217,18 +1245,18 @@ def test_every_registered_tool_is_migrated_or_allowlisted() -> None:
     lets them escape and relies on #1476's global wrapper (allowlist it in
     ``_TOOLS_WITHOUT_DELIBERATE_CATCH``).
     """
-    from tools.registry import _INTEGRATION_TOOL_PACKAGES, get_registered_tool_map
+    from tools.registry import INTEGRATION_TOOL_PACKAGES, get_registered_tool_map
 
     # Limit the audit to PRODUCTION tools — those defined in ``tools.*`` or in
     # the exact per-vendor packages the registry walks via
-    # ``_INTEGRATION_TOOL_PACKAGES``. External packages registered via
+    # ``INTEGRATION_TOOL_PACKAGES``. External packages registered via
     # ``register_external_tool_package`` (e.g. bench-only tools that live under
     # ``tests/benchmarks/``) have their own classification expectations and
     # aren't part of this production-telemetry contract. Pinning the prefix
     # to the registry's own integration list (instead of a broad
     # ``"integrations."``) keeps the audit from sweeping in any future
     # caller that ships tools under an ``integrations.*`` namespace.
-    _PRODUCTION_TOOL_PREFIXES = ("tools.", *_INTEGRATION_TOOL_PACKAGES)
+    _PRODUCTION_TOOL_PREFIXES = ("tools.", *INTEGRATION_TOOL_PACKAGES)
     registered = {
         name
         for name, tool in get_registered_tool_map().items()

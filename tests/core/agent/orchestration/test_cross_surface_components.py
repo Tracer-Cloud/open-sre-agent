@@ -13,7 +13,7 @@ from core.agent_harness.session import InMemorySessionStorage
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.orchestrator import run_turn
 from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
-from gateway.turn_handler import GatewayTurnHandler
+from gateway.runtime.turn_handler import GatewayTurnHandler
 from surfaces.interactive_shell.session import Session
 
 
@@ -31,7 +31,7 @@ def test_gateway_turn_handler_delegates_to_agent_dispatch(monkeypatch: pytest.Mo
         ),
         assistant_response_text="gateway-ok",
     )
-    monkeypatch.setattr("gateway.turn_handler.HeadlessAgent", agent_cls)
+    monkeypatch.setattr("gateway.runtime.turn_handler.HeadlessAgent", agent_cls)
 
     session = Session(storage=InMemorySessionStorage())
     sink = MagicMock()
@@ -60,7 +60,7 @@ def test_gateway_turn_handler_does_not_finalize_answered_turn(
         assistant_response_text="streamed answer",
         llm_run=object(),
     )
-    monkeypatch.setattr("gateway.turn_handler.HeadlessAgent", agent_cls)
+    monkeypatch.setattr("gateway.runtime.turn_handler.HeadlessAgent", agent_cls)
 
     session = Session(storage=InMemorySessionStorage())
     sink = MagicMock()

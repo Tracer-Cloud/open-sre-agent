@@ -1,0 +1,27 @@
+# EXAMPLE ONLY — copy to terraform.tfvars (gitignored) or pass via TF_VAR_*.
+# Never commit real tokens. All secrets are marked sensitive in variables.tf
+# and stored in SSM SecureString at apply time.
+
+region     = "us-east-1"
+name_prefix = "opensre"
+image_uri  = "<account>.dkr.ecr.us-east-1.amazonaws.com/opensre:latest"
+
+llm_provider = "bedrock"
+
+# Required for Slack (leave empty strings out of git; set via env):
+#   export TF_VAR_slack_bot_token='xoxb-…'
+#   export TF_VAR_slack_app_token='xapp-…'
+slack_bot_token = ""
+slack_app_token = ""
+
+# Prefer an allowlist. Open-workspace is dogfood-only.
+slack_allowed_users         = "U0123456789"
+slack_allow_open_workspace  = false
+
+# Optional web API / persistence (also via TF_VAR_*):
+anthropic_api_key    = ""
+openai_api_key       = ""
+alert_listener_token = ""
+database_url         = ""
+artifacts_bucket     = ""
+certificate_arn      = ""

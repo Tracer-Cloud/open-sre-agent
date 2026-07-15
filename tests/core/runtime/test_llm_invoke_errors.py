@@ -4,9 +4,13 @@ import sys
 from types import ModuleType
 from unittest.mock import patch
 
+import pytest
+
 from core.llm_invoke_errors import (
+    LLM_PROVIDER_FAILURE_KINDS,
     _looks_like_timeout,
     classify_llm_invoke_failure,
+    classify_provider_error_kind,
     is_cli_timeout_error,
 )
 from integrations.llm_cli.errors import CLITimeoutError
@@ -55,6 +59,44 @@ def test_cli_auth_required_uses_unknown_provider_when_attr_missing() -> None:
     assert failure.remediation_steps == [
         "Run `opensre doctor` to verify CLI installation and auth.",
     ]
+
+
+@pytest.mark.parametrize(
+    ("message", "expected"),
+    [
+        (
+            "Bedrock model 'us.anthropic.claude-sonnet-4-6' is not available for your "
+            "account. Check Bedrock model access in the configured AWS region, AWS "
+            "Marketplace subscription/payment setup, and IAM permissions.",
+            "not_configured",
+        ),
+        ("LLM provider 'anthropic' requires ANTHROPIC_API_KEY to be set.", "not_configured"),
+        (
+            "Gemini model 'gemini-pro' is not configured or billing is not enabled: x",
+            "not_configured",
+        ),
+        ("Anthropic model 'claude-x' was not found.", "not_configured"),
+        ("LLM client unavailable: No module named 'anthropic'", "not_configured"),
+        ("OpenAI rate limit exceeded after 6 attempts.", "quota"),
+        ("Error code: 429 - too many requests", "quota"),
+        ("Your credit balance is too low to access the Anthropic API.", "quota"),
+        ("Anthropic authentication failed.", "auth"),
+        ("openai request forbidden: 403", "auth"),
+        ("invalid api key provided", "auth"),
+        ("Incorrect api_key value provided", "auth"),
+        ("Your api_key is invalid", "auth"),
+        ("anthropic CLI timed out after 300s.", "provider_error"),
+        ("something unexpected exploded", "provider_error"),
+    ],
+)
+def test_classify_provider_error_kind(message: str, expected: str) -> None:
+    assert classify_provider_error_kind(message) == expected
+
+
+def test_llm_provider_failure_kinds_exclude_terminal_task_kinds() -> None:
+    """Background-task/investigation error kinds must never count as LLM provider failures."""
+    for terminal_kind in ("timeout", "cli_exit_nonzero", "spawn_failed", "unknown", "config"):
+        assert terminal_kind not in LLM_PROVIDER_FAILURE_KINDS
 
 
 def test_cli_auth_required_filters_none_remediation_fields() -> None:

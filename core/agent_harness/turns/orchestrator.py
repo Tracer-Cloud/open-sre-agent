@@ -36,7 +36,10 @@ from core.agent_harness.ports import (
     TurnAccounting,
 )
 from core.agent_harness.prompts import build_cli_agent_prompt_from_provider
-from core.agent_harness.prompts.conversation_memory import MAX_CONVERSATION_MESSAGES
+from core.agent_harness.prompts.conversation_memory import (
+    MAX_CONVERSATION_MESSAGES,
+    expand_affirmative_follow_up,
+)
 from core.agent_harness.session.terminal_access import agent_turn_executed_slashes
 from core.agent_harness.turns.transcript_compaction import auto_compact_if_needed
 from core.agent_harness.turns.turn_plan import TurnPlan, build_turn_plan
@@ -62,6 +65,31 @@ def stage_turn_error(session: Any, kind: str, message: str) -> None:
     setter = getattr(terminal, "set_pending_turn_error", None)
     if callable(setter):
         setter(kind, message)
+
+
+def stage_turn_llm_failure(session: Any, *, client: Any | None = None) -> None:
+    """Best-effort staging of the attempted conversational-LLM identity.
+
+    When the LLM was the intended route for a turn but the provider failed,
+    the turn's ``$ai_model`` must reflect the attempted model (or ``unknown``)
+    rather than the terminal-action sentinel. Stages whatever identity the
+    failed *client* exposes; when nothing resolves, the recorder falls back to
+    ``unknown`` based on the staged error kind.
+    """
+    from core.agent_harness.accounting.token_accounting import (
+        LlmRunInfo,
+        resolve_model_name,
+        resolve_provider_name,
+    )
+
+    terminal = getattr(session, "terminal", None)
+    setter = getattr(terminal, "set_pending_turn_llm", None)
+    if not callable(setter):
+        return
+    model = resolve_model_name(client) if client is not None else None
+    provider = resolve_provider_name(client) if client is not None else None
+    if model or provider:
+        setter(LlmRunInfo(model=model, provider=provider))
 
 
 def _stream_response(
@@ -90,8 +118,9 @@ def _stream_response(
                 expected=is_cli_timeout_error(exc),
             )
         if session is not None:
-            kind = "timeout" if is_cli_timeout_error(exc) else "assistant_error"
+            kind = "llm_timeout" if is_cli_timeout_error(exc) else "assistant_error"
             stage_turn_error(session, kind, str(exc))
+            stage_turn_llm_failure(session, client=client)
         output.render_error(f"assistant failed: {exc}")
         return None
     return run_factory.build(client=client, prompt=prompt, response_text=text_str, started=started)
@@ -302,6 +331,11 @@ def run_turn(
     # is a no-op when compaction isn't required. Belongs at the harness layer
     # so every surface (shell, headless, gateway) benefits without re-implementing.
     auto_compact_if_needed(session)
+
+    # Bare "yes"/"sure" after a Want me to: offer must resolve to that offer —
+    # otherwise gateway Slack follow-ups hand off as brand-new vague requests.
+    prior_messages = getattr(session, "cli_agent_messages", None) or ()
+    text = expand_affirmative_follow_up(text, prior_messages)
 
     # Snapshot session state before any turn mutations. Both the action agent
     # and the conversational assistant read from this frozen context so their

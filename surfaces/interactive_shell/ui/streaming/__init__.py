@@ -32,6 +32,7 @@ from rich.console import Console
 from rich.markdown import Markdown
 
 import platform.terminal.theme as ui_theme
+from core.agent_harness.prompts.rules import normalize_three_tier_spacing
 from surfaces.interactive_shell.ui.components.token_format import (
     _CHARS_PER_TOKEN,
     format_token_count_short,
@@ -56,6 +57,17 @@ _CODE_FENCE = "```"
 # more accurate check than a naive substring count.
 _CODE_FENCE_LINE_RE = re.compile(rf"^{re.escape(_CODE_FENCE)}", re.MULTILINE)
 _MARKDOWN_CODE_THEME = "ansi_dark"
+
+# Rich Markdown treats ``__init__.py`` as bold emphasis around ``init``, which
+# strips the underscores and restyles that span. Escape dunder filenames so
+# path-heavy reports (architecture audits, etc.) keep uniform body color.
+_DUNDER_FILENAME_RE = re.compile(r"__([A-Za-z0-9_]+)__(?=\.py\b)")
+
+
+def _escape_markdown_dunder_filenames(text: str) -> str:
+    """Neutralize ``__name__.py`` so Markdown does not parse it as strong emphasis."""
+    return _DUNDER_FILENAME_RE.sub(r"\_\_\1\_\_", text)
+
 
 STREAM_LABEL_ASSISTANT = "assistant"
 STREAM_LABEL_ANSWER = "answer"
@@ -98,7 +110,12 @@ def stream_to_console(
             console.print()
             render_response_header(console, label)
             with console.use_theme(ui_theme.MARKDOWN_THEME):
-                console.print(Markdown(text, code_theme=_MARKDOWN_CODE_THEME))
+                console.print(
+                    Markdown(
+                        _escape_markdown_dunder_filenames(normalize_three_tier_spacing(text)),
+                        code_theme=_MARKDOWN_CODE_THEME,
+                    )
+                )
             console.print()
         return text
 
@@ -171,21 +188,16 @@ def stream_to_console(
     def _render_paragraph(text: str) -> None:
         if not text.strip():
             return
+        spaced = normalize_three_tier_spacing(text)
         with console.use_theme(ui_theme.MARKDOWN_THEME):
-            console.print(Markdown(text.rstrip(), code_theme=_MARKDOWN_CODE_THEME))
+            console.print(
+                Markdown(
+                    _escape_markdown_dunder_filenames(spaced.rstrip()),
+                    code_theme=_MARKDOWN_CODE_THEME,
+                )
+            )
 
     def _flush_paragraphs(*, force: bool = False) -> None:
-        """Emit any complete paragraphs from ``para_buffer``.
-
-        Splits on ``\\n\\n`` (``_PARAGRAPH_BREAK``) but only when an
-        even number of triple-backtick fences (``_CODE_FENCE``) are
-        present in the proposed prefix — that's enough to keep code
-        blocks whole without tracking fence type. A ``\\n\\n`` falling
-        inside an open fence is skipped so we keep scanning forward;
-        otherwise a code block with embedded blank lines would defer
-        every later paragraph to ``force=True`` at EOS. ``force``
-        flushes any remaining buffer at end-of-stream.
-        """
         nonlocal para_buffer
         break_len = len(_PARAGRAPH_BREAK)
         while True:

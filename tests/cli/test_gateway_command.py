@@ -22,7 +22,7 @@ def test_gateway_requires_subcommand(runner: CliRunner) -> None:
 
 
 def test_gateway_start_foreground_runs_manager(runner: CliRunner) -> None:
-    with patch("gateway.manager.start_gateway") as mock_start:
+    with patch("gateway.runtime.manager.start_gateway") as mock_start:
         result = runner.invoke(cli, ["gateway", "start", "--foreground"])
 
     assert result.exit_code == 0

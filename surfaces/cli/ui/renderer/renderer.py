@@ -10,8 +10,8 @@ from rich.console import Console
 from rich.text import Text
 
 from core.domain.stream import StreamEvent
+from platform.analytics.cli import capture_investigation_lifecycle_event
 from platform.analytics.events import Event
-from platform.analytics.provider import get_analytics
 from platform.observability.trace.redaction import format_json_preview
 from surfaces.cli.ui.renderer.constants import (
     _DIAGNOSE_NODE,
@@ -68,7 +68,12 @@ class StreamRenderer:
         # buffer + Live region + throttle state; the renderer only
         # orchestrates lifecycle (active_node tracking, finish-on-end).
         self._console = Console(highlight=False)
-        self._diagnose = _DiagnoseStreamRenderer(self._console, self._tracker, local=self._local)
+        self._diagnose = _DiagnoseStreamRenderer(
+            self._console,
+            self._tracker,
+            local=self._local,
+            state_provider=lambda: self._final_state,
+        )
         # Track tool call start times keyed by tool name for elapsed display
         self._tool_start_times: dict[str, float] = {}
         self._tool_inputs: dict[str, Any] = {}
@@ -168,12 +173,13 @@ class StreamRenderer:
                 self._handle_event(event)
         except KeyboardInterrupt:
             _interrupted = True
-            get_analytics().capture(
+            capture_investigation_lifecycle_event(
                 Event.INVESTIGATION_ABANDONED,
                 {
                     "stage": self._active_node or "unstarted",
                     "source": _render_source(local=self._local),
                 },
+                state=self._final_state,
             )
             raise
         finally:

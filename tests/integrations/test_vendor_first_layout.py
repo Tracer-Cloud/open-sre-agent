@@ -33,6 +33,7 @@ ALLOWED_FLAT_MODULES = frozenset(
         "port.py",
         "probes.py",
         "registry.py",
+        "scheduled_agent_bootstrap.py",
         "selectors.py",
         "store.py",
         "verify.py",

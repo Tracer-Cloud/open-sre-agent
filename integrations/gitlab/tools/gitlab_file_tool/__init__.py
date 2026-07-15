@@ -49,8 +49,6 @@ def _get_gitlab_file_available(sources: dict[str, dict]) -> bool:
             "project_id": {"type": "string"},
             "file_path": {"type": "string"},
             "ref": {"type": "string", "default": "main"},
-            "gitlab_url": {"type": "string"},
-            "gitlab_token": {"type": "string"},
         },
         "required": ["project_id", "file_path"],
     },

@@ -44,6 +44,7 @@
               "interactive-shell-commands",
               "interactive-shell-assistant",
               "deployment",
+              "api",
               "faq"
             ]
           },
@@ -134,6 +135,7 @@
               "openobserve",
               "opsgenie",
               "pagerduty",
+              "posthog",
               "posthog-mcp",
               "sentry",
               "sentry-mcp",
@@ -150,10 +152,12 @@
             "pages": [
               "argocd",
               "aws",
+              "kubernetes",
               "cloudtrail_events",
               "bitbucket",
               "github",
               "github-workflow-tools",
+              "architecture-audit-tool",
               "integrations/github-actions",
               "gitlab",
               "google-docs",
@@ -205,124 +209,6 @@
             ]
           }
         ]
-      },
-      {
-        "tab": "Tracer",
-        "icon": "/images/logo/tracer/Tracer-Head-Black.png",
-        "groups": [
-          {
-            "group": "Getting started",
-            "pages": [
-              "introduction-monitoring",
-              "quickstart-monitoring",
-              "tracer-faq"
-            ]
-          },
-          {
-            "group": "Use cases",
-            "pages": [
-              "use-cases/logging",
-              "use-cases/metrics",
-              "use-cases/cost-optimization",
-              "use-cases/right-sizing",
-              "use-cases/cost-center-mapping",
-              "use-cases/datalake"
-            ]
-          },
-          {
-            "group": "Tutorials",
-            "pages": [
-              "tutorials/viewing-task-status",
-              "tutorials/investigating-task-failures",
-              "tutorials/fastquorum-debugging"
-            ]
-          },
-          {
-            "group": "Frameworks",
-            "pages": [
-              "integrations/integration-workflow",
-              "integrations/nextflow",
-              "integrations/wdl",
-              "integrations/bash",
-              "integrations/snakemake",
-              "integrations/slurm"
-            ]
-          },
-          {
-            "group": "Technology",
-            "pages": [
-              "technology/end-to-end",
-              "technology/our-features",
-              "technology/how-it-works",
-              "technology/product-benefits",
-              "technology/tracer-agent",
-              {
-                "group": "Tracer products",
-                "expanded": true,
-                "pages": [
-                  "technology/tracer-collect",
-                  "technology/tracer-tune",
-                  "technology/tracer-sweep"
-                ]
-              },
-              "technology/ebpf-security",
-              "technology/why-ebpf",
-              "technology/data-model",
-              "technology/limits-privacy",
-              "technology/capabilities-compatibility"
-            ]
-          },
-          {
-            "group": "Deployment environments",
-            "pages": [
-              "environments/overview",
-              "environments/codespaces",
-              "environments/linux-cloud",
-              "environments/aws-batch",
-              "environments/google-batch",
-              "environments/docker",
-              "environments/linux-local",
-              "environments/macos",
-              "environments/windows-local"
-            ]
-          },
-          {
-            "group": "Comparisons",
-            "pages": [
-              "comparisons/overview",
-              {
-                "group": "Workflow orchestration",
-                "expanded": true,
-                "pages": [
-                  "comparisons/workflow-orchestration",
-                  "comparisons/Tracer_vs_Airflow",
-                  "comparisons/Tracer_vs_Dagster",
-                  "comparisons/Tracer_vs_Flyte",
-                  "comparisons/Tracer_vs_Prefect",
-                  "comparisons/Tracer_vs_Seqera"
-                ]
-              },
-              {
-                "group": "Observability",
-                "expanded": true,
-                "pages": [
-                  "comparisons/observability-tools",
-                  "comparisons/Tracer_vs_Datadog",
-                  "comparisons/Tracer_vs_Grafana",
-                  "comparisons/Tracer_vs_Prometheus"
-                ]
-              },
-              {
-                "group": "Cloud native",
-                "expanded": true,
-                "pages": [
-                  "comparisons/cloud-native-monitoring",
-                  "comparisons/Tracer_vs_AWS_CloudWatch"
-                ]
-              }
-            ]
-          }
-        ]
       }
     ]
   },
@@ -344,11 +230,6 @@
         "href": "https://github.com/Tracer-Cloud/opensre",
         "icon": "github",
         "iconType": "brands"
-      },
-      {
-        "label": "OpenSRE Cloud",
-        "href": "https://app.tracer.cloud/",
-        "icon": "/images/logo/tracer/Tracer-Head-Black.png"
       }
     ]
   },

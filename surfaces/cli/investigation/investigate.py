@@ -7,7 +7,7 @@ import contextlib
 import logging
 import threading
 from collections.abc import Generator
-from typing import Any, NoReturn
+from typing import TYPE_CHECKING, Any, NoReturn
 
 from core.domain.stream import StreamEvent
 from platform.observability.trace.hook import traceable
@@ -17,6 +17,9 @@ from tools.investigation.session_runner import InvestigationPumpCancelled, check
 _logger = logging.getLogger(__name__)
 
 _SESSION_EVENT_POLL_S = 0.25
+
+if TYPE_CHECKING:
+    from platform.analytics.cli import InvestigationTracker
 
 
 def _reraise_cli_investigation_failure(exc: BaseException) -> NoReturn:
@@ -124,8 +127,12 @@ def stream_investigation_cli(
             except queue.Empty:
                 continue
             if isinstance(item, BaseException):
+                from platform.analytics.investigation_loop import (
+                    publish_loop_metrics_from_stream_failure,
+                )
+
                 thread.join(timeout=5)
-                _reraise_cli_investigation_failure(item)
+                _reraise_cli_investigation_failure(publish_loop_metrics_from_stream_failure(item))
             if item is None:
                 break
             yield item
@@ -142,6 +149,7 @@ def stream_investigation_cli(
 def run_investigation_cli_streaming(
     *,
     raw_alert: dict[str, Any],
+    tracker: InvestigationTracker | None = None,
 ) -> dict[str, Any]:
     """Run the investigation with real-time streaming UI and return the result.
 
@@ -165,6 +173,8 @@ def run_investigation_cli_streaming(
 
     restore_stdin_terminal()
     prompt_investigation_feedback(final_state)
+    if tracker is not None:
+        tracker.record_loop_metrics_from_state(final_state)
     return {
         "report": final_state.get("slack_message", final_state.get("report", "")),
         "problem_md": final_state.get("problem_md", ""),

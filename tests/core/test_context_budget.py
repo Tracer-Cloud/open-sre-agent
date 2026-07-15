@@ -1,6 +1,33 @@
 from __future__ import annotations
 
-from core.context_budget import strip_internal_message_markers
+from core.context_budget import context_budget_ceiling_for_model, strip_internal_message_markers
+
+
+class TestGpt56ContextWindow:
+    """GPT-5.6 ships a 1M-token window, unlike the 128k-pinned gpt-5 family (#3931)."""
+
+    def test_sol_reclaims_the_million_token_window(self) -> None:
+        # 1_000_000 window - 16_000 response headroom.
+        assert context_budget_ceiling_for_model("gpt-5.6-sol") == 984_000
+
+    def test_all_tiers_share_the_family_window(self) -> None:
+        sol = context_budget_ceiling_for_model("gpt-5.6-sol")
+        assert context_budget_ceiling_for_model("gpt-5.6-terra") == sol
+        assert context_budget_ceiling_for_model("gpt-5.6-luna") == sol
+        assert context_budget_ceiling_for_model("gpt-5.6") == sol
+
+    def test_gpt56_is_not_shadowed_by_the_gpt5_catch_all(self) -> None:
+        # ``_MODEL_CONTEXT_WINDOWS`` is matched by substring in insertion
+        # order with a break, so moving the ``gpt-5.6`` key below ``gpt-5``
+        # would silently pin 5.6 back to 128k. Nothing else would fail.
+        assert context_budget_ceiling_for_model("gpt-5.6-sol") > context_budget_ceiling_for_model(
+            "gpt-5.5"
+        )
+
+    def test_older_gpt5_models_keep_their_conservative_pin(self) -> None:
+        # 128_000 window - 16_000 response headroom.
+        assert context_budget_ceiling_for_model("gpt-5.5") == 112_000
+        assert context_budget_ceiling_for_model("gpt-5") == 112_000
 
 
 def test_strip_internal_message_markers_removes_opensre_keys() -> None:

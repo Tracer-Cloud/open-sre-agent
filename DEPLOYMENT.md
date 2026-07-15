@@ -18,8 +18,9 @@ Copy [`.env.deploy.example`](.env.deploy.example) and export the required variab
 | Variable | Required | Used by |
 | -------- | -------- | ------- |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Yes (or role) | Provisioning |
-| `TELEGRAM_BOT_TOKEN` | Yes | Gateway container |
-| `TELEGRAM_ALLOWED_USERS` | Recommended | Gateway pairing gate |
+| `TELEGRAM_BOT_TOKEN` **or** `SLACK_BOT_TOKEN` + `SLACK_APP_TOKEN` | Yes (at least one chat gateway) | Gateway container |
+| `TELEGRAM_ALLOWED_USERS` | Recommended when Telegram is set | Gateway pairing gate |
+| `SLACK_ALLOWED_USERS` | Recommended when Slack is set (or `SLACK_ALLOW_OPEN_WORKSPACE=1`) | Gateway allowlist |
 | `LLM_PROVIDER` + API key | Yes | Both containers |
 
 ```bash
@@ -50,11 +51,12 @@ Outputs (instance ID, public IP, image URI) are written to
 
 ---
 
-## Gateway Deploy — AMI + systemd (Telegram gateway only)
+## Gateway Deploy — AMI + systemd (Telegram and/or Slack)
 
-Runs the Telegram gateway directly on EC2 as a systemd service — no Docker or ECR
-required. The gateway is baked into a custom AMI once; subsequent deploys launch from
-that AMI in ~2–3 minutes.
+Runs the messaging gateway directly on EC2 as a systemd service — no Docker or ECR
+required. Telegram long polling and/or Slack Socket Mode start from the same process
+when their env vars are set. The gateway is baked into a custom AMI once; subsequent
+deploys launch from that AMI in ~2–3 minutes.
 
 **Prerequisites:** AWS credentials with EC2 / IAM / SSM permissions. No Docker needed.
 

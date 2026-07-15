@@ -137,6 +137,51 @@ def test_generic_registered_action_tool_result_marks_turn_handled() -> None:
     assert "fake_send_message" in harness.llm.tool_schema_names
 
 
+def test_action_final_text_is_streamed_as_user_facing_response() -> None:
+    """When the action agent concludes with prose after tools, show that text.
+
+    Interactive-shell ``handled_without_llm`` used to keep only tool dumps in
+    ``response_text`` and never render the agent's final Markdown — so skills
+    like architecture audit never surfaced their report.
+    """
+    tool = RegisteredTool(
+        name="fake_scan",
+        description="Run a fake scan.",
+        input_schema={
+            "type": "object",
+            "properties": {},
+            "additionalProperties": False,
+        },
+        source="knowledge",
+        surfaces=("action",),
+        run=lambda: {"ok": True},
+    )
+    report = "### Executive summary\nScan complete.\n"
+    harness = ActionExecutionHarness(
+        llm=FakeActionLLM(
+            [
+                tool_response("fake_scan", {}),
+                no_tool_response(report),
+            ]
+        )
+    )
+    sink = _OutputSink(harness.console)
+
+    result = run_action_agent_turn(
+        "run the scan and report",
+        Session(),
+        output=sink,
+        tools=_GenericActionToolProvider(tool),
+        deps=harness.deps,
+        is_tty=False,
+    )
+
+    assert result.handled is True
+    assert result.response_text == report.strip()
+    assert "Executive summary" in harness.console_buffer.getvalue()
+    assert "fake_scan result:" not in result.response_text
+
+
 def test_literal_slash_command_dispatches_deterministically_without_llm(
     monkeypatch,
 ) -> None:
@@ -428,6 +473,136 @@ def test_execute_with_harness_handles_llm_unavailable() -> None:
     assert result.has_unhandled_clause is True
     assert result.planned_count == 0
     assert session.cli_agent_messages[-1] == ("assistant", "action agent unavailable")
+
+
+def test_llm_build_failure_on_conversational_input_stages_llm_failure() -> None:
+    """Conversational turn + provider build failure must flush as a failed LLM call."""
+    message = "LLM provider 'anthropic' requires ANTHROPIC_API_KEY to be set."
+
+    def _raise() -> object:
+        raise RuntimeError(message)
+
+    session = Session()
+    run_action_tool_turn(
+        "hi",
+        session,
+        Console(force_terminal=False),
+        deps=ToolCallingDeps(llm_factory=_raise),
+    )
+
+    assert session.terminal.pop_pending_turn_error() == ("action_agent_error", message)
+    # The client never built, so no attempted-model identity could be staged;
+    # the recorder reports "unknown" from the error kind alone.
+    assert session.terminal.pop_pending_turn_llm() is None
+
+
+def test_llm_invoke_failure_on_conversational_input_stages_attempted_model() -> None:
+    """Invoke-time provider failure stages the attempted model/provider identity."""
+    error = "Bedrock model 'us.anthropic.claude-sonnet-4-6' is not available for your account."
+
+    class _FailingInvokeLLM:
+        _model = "us.anthropic.claude-sonnet-4-6"
+        _provider_label = "Bedrock"
+
+        def tool_schemas(self, _tools: list[Any]) -> list[dict[str, Any]]:
+            return []
+
+        def invoke(self, *_args: Any, **_kwargs: Any) -> Any:
+            raise RuntimeError(error)
+
+    client = _FailingInvokeLLM()
+    session = Session()
+    run_action_tool_turn(
+        "hi",
+        session,
+        Console(force_terminal=False),
+        deps=ToolCallingDeps(llm_factory=lambda: client),
+    )
+
+    assert session.terminal.pop_pending_turn_error() == ("action_agent_error", error)
+    staged = session.terminal.pop_pending_turn_llm()
+    assert staged is not None
+    assert staged.model == "us.anthropic.claude-sonnet-4-6"
+    assert staged.provider == "bedrock"
+
+
+def test_llm_invoke_failure_uses_built_client_without_second_factory_call() -> None:
+    """Invoke-time failure must stage identity from the client that actually failed."""
+    error = "Bedrock model unavailable"
+    factory_calls = 0
+
+    class _FailingInvokeLLM:
+        _model = "us.anthropic.claude-sonnet-4-6"
+        _provider_label = "Bedrock"
+
+        def tool_schemas(self, _tools: list[Any]) -> list[dict[str, Any]]:
+            return []
+
+        def invoke(self, *_args: Any, **_kwargs: Any) -> Any:
+            raise RuntimeError(error)
+
+    client = _FailingInvokeLLM()
+
+    def _factory() -> _FailingInvokeLLM:
+        nonlocal factory_calls
+        factory_calls += 1
+        return client
+
+    session = Session()
+    run_action_tool_turn(
+        "hi",
+        session,
+        Console(force_terminal=False),
+        deps=ToolCallingDeps(llm_factory=_factory),
+    )
+
+    assert factory_calls == 1
+    staged = session.terminal.pop_pending_turn_llm()
+    assert staged is not None
+    assert staged.model == client._model
+
+
+def test_llm_failure_on_literal_slash_input_stays_terminal() -> None:
+    """Explicit /slash and !shell turns must keep the terminal-action telemetry shape."""
+    from core.agent_harness.turns.action_driver import _stage_action_llm_failure
+
+    for terminal_input in ("/help", "!ls -la"):
+        session = Session()
+        _stage_action_llm_failure(terminal_input, session, client=None, error_text="boom")
+        assert session.terminal.pop_pending_turn_error() is None
+        assert session.terminal.pop_pending_turn_llm() is None
+
+
+def test_stream_failure_stages_llm_error_and_identity() -> None:
+    """A conversational stream failure stages both the error and the attempted LLM."""
+    from core.agent_harness.turns.orchestrator import _stream_response
+
+    class _FailingStreamClient:
+        _model = "claude-sonnet-4-6"
+        _provider_label = "Anthropic"
+
+        def invoke_stream(self, _prompt: str) -> Any:
+            raise RuntimeError("Anthropic authentication failed.")
+
+    session = Session()
+    run = _stream_response(
+        client=_FailingStreamClient(),
+        prompt="hi",
+        output=_OutputSink(Console(force_terminal=False)),
+        run_factory=object(),
+        error_reporter=None,
+        session=session,
+    )
+
+    assert run is None
+    assert session.terminal.pop_pending_turn_error() == (
+        "assistant_error",
+        "Anthropic authentication failed.",
+    )
+    staged = session.terminal.pop_pending_turn_llm()
+    assert staged is not None
+    assert staged.model == "claude-sonnet-4-6"
+    assert staged.provider == "anthropic"
 
 
 def test_build_action_agent_returns_action_turn_plan() -> None:

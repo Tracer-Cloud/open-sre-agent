@@ -1,10 +1,14 @@
 """System prompt building for the terminal assistant."""
 
+from collections.abc import Mapping
+from typing import Any
+
 from core.agent_harness.prompts.rules import (
     AGENT_RESPONSE_THREE_TIER_RULE,
     CLI_ASSISTANT_MARKDOWN_RULE,
     INTERACTIVE_SHELL_TERMINOLOGY_RULE,
 )
+from core.agent_harness.prompts.runtime_facts import render_runtime_facts
 
 _TERMINOLOGY_RULE = INTERACTIVE_SHELL_TERMINOLOGY_RULE
 _MARKDOWN_RULE = CLI_ASSISTANT_MARKDOWN_RULE
@@ -42,6 +46,22 @@ _SETUP_GUIDANCE_RULE = (
     "<server>` for MCP servers. Do not emit JSON or claim you changed runtime state."
 )
 
+_SENTRY_SUMMARY_RULE = (
+    "Sentry summary: open **I found:** with digest.scope_summary verbatim, then "
+    "add digest.scope_note on the next line when page_saturated is true or when "
+    "clarifying completeness matters. When digest.completeness is empty, say the "
+    "requested window had no unresolved groups — do not summarize issues from a "
+    "different window or imply activity outside that period. Use "
+    "digest.structural_clusters for themed buckets — format each as "
+    "`N issues (P%)` using issue_count and percent (percent_basis is "
+    "returned_page). Include sample_short_ids when present. Never show a bare "
+    "project slug without explaining samples. Priority table: rank clusters from "
+    "priority_candidates and business_impact_score / impact_reasons; include "
+    "Sample IDs column. Penalize high-count zero-user retry noise. Do not ask to "
+    "narrow or repeat search; offer a separately labeled broader window only if "
+    "the user asks."
+)
+
 _HANDOFF_GUIDANCE: dict[str, str] = {
     "provider:local_llama_connect": (
         "The action planner handed off a vague local-model connection request. "
@@ -70,11 +90,13 @@ def build_environment_block(
     reasoning_model: str | None = None,
     toolcall_model: str | None = None,
     llm_settings_available: bool | None = None,
+    runtime: Mapping[str, Any] | None = None,
 ) -> str:
     """Render shell-state facts so the assistant can answer directly.
 
     Decoupled from any session type: the caller (a ``PromptContextProvider``
-    adapter) supplies integration names and optional LLM settings.
+    adapter) supplies integration names, optional LLM settings, and the
+    ``capture_runtime_facts()`` dict as ``runtime``.
     """
     facts: list[str] = []
     if integrations:
@@ -111,6 +133,10 @@ def build_environment_block(
             "instead of guessing or telling them to run another command."
         )
 
+    runtime_fact = render_runtime_facts(runtime or {})
+    if runtime_fact:
+        facts.append(runtime_fact)
+
     if not facts:
         return ""
     return "--- Environment (current shell state) ---\n" + "\n".join(facts) + "\n\n"
@@ -120,6 +146,7 @@ def _build_system_prompt(
     reference: str,
     history: str,
     agents_md: str = "",
+    docs: str = "",
     investigation_flow: str = "",
     prior_investigation: str = "",
     prior_action_facts: str = "",
@@ -127,6 +154,16 @@ def _build_system_prompt(
 ) -> str:
     """Build the system prompt for one assistant turn."""
     repo_map_block = f"--- Repo map (AGENTS.md) ---\n{agents_md}\n\n" if agents_md else ""
+    docs_block = (
+        "--- Documentation reference (docs/) ---\n"
+        "Relevant OpenSRE documentation pages for this question. When answering "
+        "how to configure or set up something, use these to give the complete "
+        "procedure — including steps that happen outside OpenSRE (creating "
+        "accounts, API keys, bots, OAuth apps, finding IDs) — not just the "
+        f"in-tool command. Do not invent steps beyond what these pages state.\n{docs}\n\n"
+        if docs
+        else ""
+    )
     investigation_flow_block = (
         f"--- Investigation flow reference ---\n{investigation_flow}\n\n"
         if investigation_flow
@@ -161,13 +198,23 @@ def _build_system_prompt(
         "alert text, JSON, or a concrete incident description (errors, "
         "services, symptoms). Mention `opensre investigate` and pasting "
         "into this interactive shell.\n"
+        "Exception: if Recent CLI conversation ends with **Want me to:** and "
+        "the user replies yes/sure/ok/please (or 'Yes — please …'), fulfill "
+        "that offer from the prior turn — do NOT pivot to paste-an-alert / "
+        "integration-setup onboarding for those affirmatives. If the offer "
+        "had two options joined by 'or', do both (or the clearer one) rather "
+        "than asking what 'yes' means.\n"
         "Be brief and friendly. Ground CLI facts in the reference below; do "
         "not invent subcommands. For investigation-flow questions, use the "
         "investigation flow reference below and do not claim the pipeline "
         "definition is unavailable.\n"
         "For vague operational questions (for example why a database is slow) "
         "with no pasted alert, restate the user's question in your reply and "
-        "ask for the target system, service, or alert context.\n\n"
+        "ask for the target system, service, or alert context. Do NOT apply this "
+        "when the user already named a Slack #channel / channel_id, or when a "
+        "[Slack channel_id=…] context line is present — answer from Slack tools "
+        "or say what blocked the Slack read, without asking to run "
+        "`/integrations setup`.\n\n"
         "The Recent CLI conversation may include outputs from earlier action tools "
         "(shell stdout, computed values, and sent-message inputs/results). Treat "
         "those as available thread context for follow-up questions; do not ask the "
@@ -175,10 +222,12 @@ def _build_system_prompt(
         f"{_PRIOR_INVESTIGATION_FOLLOW_UP_RULE}\n\n"
         f"{_SETUP_GUIDANCE_RULE}\n\n"
         f"{_SOURCE_SCOPED_INVESTIGATION_RULE}\n\n"
+        f"{_SENTRY_SUMMARY_RULE}\n\n"
         f"{_RESPONSE_SHAPE_RULE}\n\n"
         f"{_TERMINOLOGY_RULE}\n{_MARKDOWN_RULE}\n\n"
         f"{environment}"
         f"--- CLI reference ---\n{reference}\n\n"
+        f"{docs_block}"
         f"{investigation_flow_block}"
         f"{prior_investigation_block}"
         f"{prior_action_facts_block}"

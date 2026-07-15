@@ -52,14 +52,16 @@ from surfaces.cli.wizard._ui import (
     _step_header,
 )
 from surfaces.cli.wizard.config import PROVIDER_BY_VALUE, SUPPORTED_PROVIDERS, ProviderOption
+from surfaces.cli.wizard.configurators.github import (
+    DEFAULT_GITHUB_MCP_MODE,
+    DEFAULT_GITHUB_MCP_URL,
+)
 from surfaces.cli.wizard.env_sync import sync_env_values, sync_provider_env
 from surfaces.cli.wizard.integration_health import IntegrationHealthResult
 from surfaces.cli.wizard.probes import ProbeResult, probe_local_target, probe_remote_target
 from surfaces.cli.wizard.store import get_store_path, save_local_config
 from surfaces.cli.wizard.validation import build_demo_action_response as _build_demo_action_response
 
-DEFAULT_GITHUB_MCP_MODE = _integration_configurators_module.DEFAULT_GITHUB_MCP_MODE
-DEFAULT_GITHUB_MCP_URL = _integration_configurators_module.DEFAULT_GITHUB_MCP_URL
 WIZARD_TOTAL_STEPS = 4
 _CLI_SUBSCRIPTION_LOGIN_ARGS: dict[str, tuple[str, ...]] = {
     "claude-code": ("auth", "login"),
@@ -222,6 +224,21 @@ def _credential_prompt_label(provider: ProviderOption) -> str:
     if provider.label.lower().endswith(suffix.lower()):
         return provider.label[: -len(suffix)]
     return provider.label
+
+
+def _persist_llm_credential(provider: ProviderOption, value: str) -> bool:
+    """Persist one prompted credential where the runtime will actually read it.
+
+    ``credential_kind == "host"`` values (e.g. the Ollama host URL) are plain
+    runtime configuration, not secrets: the runtime resolves them from the
+    environment only, never the keyring, so they belong in the project ``.env``.
+    Everything else keeps the keyring path.
+    """
+    if provider.credential_kind == "host":
+        sync_env_values({provider.api_key_env: value})
+        os.environ[provider.api_key_env] = value
+        return True
+    return _persist_llm_api_key(provider.api_key_env, value)
 
 
 def _azure_openai_endpoint_env(provider: ProviderOption) -> dict[str, str]:
@@ -796,7 +813,7 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                 except KeyboardInterrupt:
                     _console.print(f"\n[{WARNING}]Setup cancelled.[/]")
                     return 1
-                if not _persist_llm_api_key(provider.api_key_env, api_key):
+                if not _persist_llm_credential(provider, api_key):
                     return 1
                 azure_env = _ensure_azure_openai_endpoint_settings(provider)
                 if azure_env is None:
@@ -816,8 +833,12 @@ def run_wizard(_argv: list[str] | None = None) -> int:
             ):
                 has_api_key = bool(defaults["has_api_key"])
                 legacy_api_key = str(defaults["legacy_api_key"] or "").strip()
-                if not has_api_key and legacy_api_key:
-                    if not _persist_llm_api_key(provider.api_key_env, legacy_api_key):
+                # A ``host`` credential (e.g. the Ollama host) is not a secret api key: never
+                # migrate a stale legacy ``api_key`` value into it — that would leak a
+                # secret-shaped value into .env and point the runtime at a bogus host. Fall
+                # through to the host prompt instead (#3291).
+                if not has_api_key and legacy_api_key and provider.credential_kind != "host":
+                    if not _persist_llm_credential(provider, legacy_api_key):
                         return 1
                     has_api_key = True
                 if not has_api_key:
@@ -835,7 +856,7 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                     except KeyboardInterrupt:
                         _console.print(f"\n[{WARNING}]Setup cancelled.[/]")
                         return 1
-                    if not _persist_llm_api_key(provider.api_key_env, api_key):
+                    if not _persist_llm_credential(provider, api_key):
                         return 1
             azure_env = _ensure_azure_openai_endpoint_settings(provider)
             if azure_env is None:

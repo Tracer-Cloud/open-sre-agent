@@ -35,6 +35,7 @@ class InMemorySessionStore:
     last_command_observation: str | None = None
     resolved_integrations_cache: dict[str, Any] | None = None
     github_repo_scope: tuple[str, str] | None = None
+    gitlab_repo_scope: tuple[str, str, str] | None = None
     records: list[tuple[str, str, bool]] = field(default_factory=list)
 
     def record(self, kind: str, text: str, *, ok: bool = True) -> None:
@@ -81,6 +82,10 @@ class EmptyPromptContextProvider:
         return ""
 
     def agents_md(self) -> str:
+        return ""
+
+    def docs(self, query: str) -> str:
+        _ = query
         return ""
 
     def investigation_flow(self) -> str:
