@@ -169,11 +169,24 @@ def test_finalize_appends_provenance_footer() -> None:
 
     sink.finalize("answer")
 
-    footer = client.updates[-1]["blocks"][-1]
-    assert footer["type"] == "context"
+    footer = next(b for b in client.updates[-1]["blocks"] if b["type"] == "context")
     footer_text = footer["elements"][0]["text"]
     assert "OpenSRE" in footer_text
     assert "AI-generated" in footer_text
+
+
+def test_finalize_appends_feedback_buttons_after_footer() -> None:
+    client = _FakeMessagingClient()
+    sink = _sink(client)
+
+    sink.finalize("answer")
+
+    feedback = client.updates[-1]["blocks"][-1]
+    assert feedback["type"] == "context_actions"
+    element = feedback["elements"][0]
+    assert element["type"] == "feedback_buttons"
+    assert element["positive_button"]["value"] == "good"
+    assert element["negative_button"]["value"] == "bad"
 
 
 def test_status_updates_render_as_italic_meta_text() -> None:
@@ -276,11 +289,12 @@ def test_streaming_turn_renders_tasks_then_markdown_then_stops_with_footer() -> 
     markdown = "".join(c["text"] for c in chunks if c["type"] == "markdown_text")
     assert markdown == "The disk is full."
 
-    # Stopped once, with the provenance footer as the only final block.
+    # Stopped once, closing with the provenance footer + feedback buttons.
     assert len(client.stream_stops) == 1
-    footer = client.stream_stops[0]["blocks"][-1]
-    assert footer["type"] == "context"
+    stop_blocks = client.stream_stops[0]["blocks"]
+    footer = next(b for b in stop_blocks if b["type"] == "context")
     assert "AI-generated" in footer["elements"][0]["text"]
+    assert stop_blocks[-1]["type"] == "context_actions"
     # The answer was fully streamed: no legacy edit/post delivery on top.
     assert all("answer" not in update["text"] for update in client.updates)
     assert len(client.posts) == 1  # just the placeholder

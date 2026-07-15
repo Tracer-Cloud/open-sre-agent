@@ -25,6 +25,7 @@ from gateway.runtime.status_messages import (
     user_facing_error_message,
 )
 from gateway.slack.client import Blocks, SlackMessagingClient
+from gateway.slack.feedback import feedback_block
 from integrations.slack.formatting import markdown_to_slack_mrkdwn
 from platform.common.truncation import truncate
 
@@ -149,7 +150,7 @@ class SlackOutputSink:
     def _finalize(self, text: str) -> None:
         with self._lock:
             if self._turn_stream.started:
-                if self._turn_stream.finish(text, blocks=[self._footer_block()]):
+                if self._turn_stream.finish(text, blocks=self._closing_blocks()):
                     logger.info(
                         "outbound channel=%s thread_ts=%s mode=stream chars=%d",
                         self._channel_id,
@@ -215,10 +216,11 @@ class SlackOutputSink:
         body = text.strip()
         if not body or len(body) > SLACK_MAX_MARKDOWN_BLOCK_CHARS:
             return None
-        return [
-            {"type": "markdown", "text": body},
-            self._footer_block(),
-        ]
+        return [{"type": "markdown", "text": body}, *self._closing_blocks()]
+
+    def _closing_blocks(self) -> list[dict[str, object]]:
+        """Provenance footer + 👍/👎 feedback buttons, on every final reply."""
+        return [self._footer_block(), feedback_block()]
 
     def _footer_block(self) -> dict[str, object]:
         return {

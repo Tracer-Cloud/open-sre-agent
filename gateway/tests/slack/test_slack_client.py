@@ -159,6 +159,25 @@ def test_start_stream_retries_after_transient_error() -> None:
     assert len(web.start_calls) == 2
 
 
+def test_stop_stream_retries_without_blocks_when_rejected() -> None:
+    """Feedback buttons may be feature-gated; the stream must still stop."""
+
+    class _BlockRejectingWebClient(_StreamingWebClient):
+        def chat_stopStream(self, **kwargs: Any) -> dict[str, Any]:
+            self.stop_calls.append(kwargs)
+            if "blocks" in kwargs:
+                raise _api_error("invalid_blocks")
+            return {"ok": True}
+
+    web = _BlockRejectingWebClient(start={"ts": "5.5"})
+    client = SlackWebApiClient(web)  # type: ignore[arg-type]
+
+    ok = client.stop_stream(channel="C1", ts="5.5", blocks=[{"type": "context_actions"}])
+
+    assert ok is True
+    assert "blocks" not in web.stop_calls[-1]
+
+
 def test_append_and_stop_stream_round_trip() -> None:
     web = _StreamingWebClient(start={"ts": "5.5"})
     client = SlackWebApiClient(web)  # type: ignore[arg-type]

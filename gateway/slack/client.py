@@ -219,11 +219,22 @@ class SlackWebApiClient:
         return True
 
     def stop_stream(self, *, channel: str, ts: str, blocks: Blocks | None = None) -> bool:
-        try:
-            if blocks is not None:
+        if blocks is not None:
+            try:
                 self._web_client.chat_stopStream(channel=channel, ts=ts, blocks=list(blocks))
-            else:
-                self._web_client.chat_stopStream(channel=channel, ts=ts)
+                return True
+            except SlackApiError as exc:
+                # A workspace that rejects our closing blocks (feedback buttons
+                # may be feature-gated) must still get the stream stopped.
+                logger.warning(
+                    "[slack-gateway] chat.stopStream with blocks failed (%s); "
+                    "retrying without blocks",
+                    exc.response.get("error"),
+                )
+            except Exception:
+                logger.warning("[slack-gateway] chat.stopStream failed", exc_info=True)
+        try:
+            self._web_client.chat_stopStream(channel=channel, ts=ts)
         except SlackApiError as exc:
             logger.warning("[slack-gateway] chat.stopStream failed: %s", exc.response.get("error"))
             return False

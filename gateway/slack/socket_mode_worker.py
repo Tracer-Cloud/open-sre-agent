@@ -16,9 +16,11 @@ from slack_sdk.web import WebClient
 from gateway.runtime.errors import GatewayConfigurationError
 from gateway.runtime.sink_protocol import GatewayAgentCallback
 from gateway.slack.approvals import ApprovalBroker, handle_block_actions_payload
+from gateway.slack.channel_intro import ChannelIntroGreeter
 from gateway.slack.client import SlackWebApiClient
 from gateway.slack.dispatcher import _SlackTurnDispatcher
 from gateway.slack.events import parse_events_api_payload
+from gateway.slack.feedback import record_feedback_payload
 from gateway.slack.settings import SlackGatewaySettings
 from gateway.storage import SessionBindingStore, SessionResolver, connect_gateway_db
 
@@ -90,9 +92,11 @@ def start_slack_gateway_background(
     # replies by author, not by fragile text-shape matching.
     bot_user_id = _resolve_bot_user_id(web_client, logger)
     approvals = ApprovalBroker()
+    messaging = SlackWebApiClient(web_client)
+    greeter = ChannelIntroGreeter(messaging=messaging, bot_user_id=bot_user_id)
     dispatcher = _SlackTurnDispatcher(
         settings=settings,
-        messaging=SlackWebApiClient(web_client),
+        messaging=messaging,
         session_resolver=SessionResolver(SessionBindingStore(db), platform=_PLATFORM_SLACK),
         handler=handler,
         logger=logger,
@@ -106,7 +110,8 @@ def start_slack_gateway_background(
         if request.type == _INTERACTIVE_REQUEST_TYPE:
             # Approval clicks resolve on the listener thread: turn workers may
             # all be blocked *waiting* on these buttons, so a click must never
-            # need a free worker.
+            # need a free worker. Feedback clicks share the envelope type.
+            record_feedback_payload(request.payload)
             handle_block_actions_payload(
                 request.payload,
                 broker=approvals,
@@ -115,6 +120,11 @@ def start_slack_gateway_background(
             )
             return
         if request.type != _EVENTS_API_REQUEST_TYPE:
+            return
+        event_type = str((request.payload.get("event") or {}).get("type") or "")
+        if event_type == "member_joined_channel":
+            # Greeting posts a message (network call): hand it to a worker.
+            executor.submit(greeter.handle, request.payload)
             return
         inbound = parse_events_api_payload(request.payload)
         if inbound is None:
