@@ -129,6 +129,11 @@ service has `DATABASE_URI` and `REDIS_URI` set before deploying. Set
 
 Events are tagged with `entrypoint`, `opensre.runtime`, and `deployment_method`. Sensitive headers, paths, and secret-shaped keys are scrubbed before send.
 
+PostHog product events also carry `execution_environment` (`local`, `ci`, `container`,
+or `ci_container`), `is_ci`, `is_container`, and `container_runtime`. Use these
+first-party fields to exclude automated environments from product funnels; PostHog's
+virtual traffic classification intentionally treats CLI HTTP clients as automation.
+
 A random install ID is stored under `~/.opensre/anonymous_id`. PostHog `distinct_id` is scoped to that ID. Telemetry is off in GitHub Actions and pytest.
 
 ### First-launch GitHub login

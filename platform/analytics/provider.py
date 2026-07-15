@@ -26,6 +26,11 @@ from config.constants import get_store_path
 from config.constants.posthog import POSTHOG_CAPTURE_API_KEY, POSTHOG_HOST
 from config.version import get_opensre_version
 from platform.analytics.events import Event
+from platform.analytics.runtime_context import (
+    detect_container_runtime,
+    detect_runtime_context,
+    is_ci_environment,
+)
 
 _CONFIG_DIR = get_store_path().parent
 _ANONYMOUS_ID_PATH = _CONFIG_DIR / "anonymous_id"
@@ -367,6 +372,16 @@ def _build_composite_fingerprint() -> _CompositeFingerprint:
         _add_fingerprint_component(
             components, component_sources, "home_name", Path.home().name, "user"
         )
+    if is_ci_environment():
+        _add_fingerprint_component(components, component_sources, "runtime:ci", "true", "ci")
+    if container_runtime := detect_container_runtime():
+        _add_fingerprint_component(
+            components,
+            component_sources,
+            "runtime:container",
+            container_runtime,
+            "container",
+        )
     for key in _CI_FINGERPRINT_ENV_KEYS:
         if value := _normalized_fingerprint_value(os.getenv(key, "")):
             components[f"env:{key.casefold()}"] = value
@@ -647,6 +662,7 @@ def _is_json_value(value: object) -> bool:
 
 
 _COMPOSITE_FINGERPRINT = _build_composite_fingerprint()
+_RUNTIME_CONTEXT = detect_runtime_context()
 
 _BASE_PROPERTIES: Final[Properties] = {
     "cli_version": _cli_version(),
@@ -656,6 +672,10 @@ _BASE_PROPERTIES: Final[Properties] = {
     "composite_fingerprint": _COMPOSITE_FINGERPRINT.value,
     "composite_fingerprint_version": _COMPOSITE_FINGERPRINT_VERSION,
     "composite_fingerprint_components": _COMPOSITE_FINGERPRINT.components,
+    "execution_environment": _RUNTIME_CONTEXT.execution_environment,
+    "is_ci": _RUNTIME_CONTEXT.is_ci,
+    "is_container": _RUNTIME_CONTEXT.is_container,
+    "container_runtime": _RUNTIME_CONTEXT.container_runtime,
     "$process_person_profile": False,
 }
 
