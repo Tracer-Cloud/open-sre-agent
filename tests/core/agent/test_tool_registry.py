@@ -248,4 +248,5 @@ def test_gateway_capabilities_only_hide_gateway_unsupported_tools() -> None:
     assert "investigation_start" not in names
     assert "alert_sample" not in names
     assert "llm_set_provider" not in names
+    assert "task_cancel" not in names
     assert "slash_invoke" in names
