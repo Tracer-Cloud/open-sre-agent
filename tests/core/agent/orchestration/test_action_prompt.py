@@ -291,6 +291,9 @@ def test_system_prompt_requires_local_llama_handoff_tag() -> None:
 
 
 class _FakePrompts:
+    def surface(self) -> str:
+        return "interactive_shell"
+
     def cli_reference(self) -> str:
         return "cli reference"
 

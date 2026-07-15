@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from gateway.slack.output_sink import SLACK_MAX_MESSAGE_CHARS, SlackOutputSink
+from gateway.slack.output_sink import (
+    SLACK_MAX_MARKDOWN_BLOCK_CHARS,
+    SLACK_MAX_MESSAGE_CHARS,
+    SlackOutputSink,
+)
 
 
 class _FakeMessagingClient:
@@ -11,15 +15,24 @@ class _FakeMessagingClient:
     def __init__(self, *, post_ok: bool = True, update_ok: bool = True) -> None:
         self.post_ok = post_ok
         self.update_ok = update_ok
-        self.posts: list[dict[str, str | None]] = []
-        self.updates: list[dict[str, str]] = []
+        self.posts: list[dict[str, Any]] = []
+        self.updates: list[dict[str, Any]] = []
 
-    def post_message(self, *, channel: str, text: str, thread_ts: str | None = None) -> str | None:
-        self.posts.append({"channel": channel, "text": text, "thread_ts": thread_ts})
+    def post_message(
+        self,
+        *,
+        channel: str,
+        text: str,
+        thread_ts: str | None = None,
+        blocks: Any = None,
+    ) -> str | None:
+        self.posts.append(
+            {"channel": channel, "text": text, "thread_ts": thread_ts, "blocks": blocks}
+        )
         return f"ts-{len(self.posts)}" if self.post_ok else None
 
-    def update_message(self, *, channel: str, ts: str, text: str) -> bool:
-        self.updates.append({"channel": channel, "ts": ts, "text": text})
+    def update_message(self, *, channel: str, ts: str, text: str, blocks: Any = None) -> bool:
+        self.updates.append({"channel": channel, "ts": ts, "text": text, "blocks": blocks})
         return self.update_ok
 
     def add_reaction(self, **_kwargs: Any) -> bool:
@@ -98,6 +111,39 @@ def test_empty_stream_finalizes_with_placeholder_fallback() -> None:
     # Assert: the placeholder is replaced with a clear message, not left blank.
     assert text == ""
     assert client.updates[-1]["text"] == "I didn't have anything to add for that."
+
+
+def test_finalize_sends_markdown_block_with_mrkdwn_fallback_text() -> None:
+    client = _FakeMessagingClient()
+    sink = _sink(client)
+
+    sink.finalize("## Root cause\nThe **disk** is full")
+
+    final = client.updates[-1]
+    # Native markdown block carries the original markdown untouched…
+    assert final["blocks"] == [{"type": "markdown", "text": "## Root cause\nThe **disk** is full"}]
+    # …while the text field stays mrkdwn for notifications/older clients.
+    assert "disk" in final["text"]
+
+
+def test_finalize_skips_markdown_block_over_block_limit() -> None:
+    client = _FakeMessagingClient()
+    sink = _sink(client)
+
+    sink.finalize("x" * (SLACK_MAX_MARKDOWN_BLOCK_CHARS + 1))
+
+    # Over the 12k block cap: text-only delivery, no rejected blocks payload.
+    assert client.updates[-1]["blocks"] is None
+    assert len(client.updates[-1]["text"]) > 0
+
+
+def test_status_updates_never_carry_blocks() -> None:
+    client = _FakeMessagingClient()
+    sink = _sink(client)
+
+    sink.set_tool_status("Running kubectl get pods")
+
+    assert client.updates[-1]["blocks"] is None
 
 
 def test_tool_status_edits_placeholder() -> None:

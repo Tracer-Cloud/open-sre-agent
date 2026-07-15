@@ -63,3 +63,46 @@ def test_update_message_true_on_success() -> None:
     client = SlackWebApiClient(web)  # type: ignore[arg-type]
 
     assert client.update_message(channel="C1", ts="1.2", text="done") is True
+
+
+_MARKDOWN_BLOCKS = [{"type": "markdown", "text": "# hi"}]
+
+
+def test_post_message_passes_blocks_through() -> None:
+    web = _FakeWebClient(post={"ts": "1.2"})
+    client = SlackWebApiClient(web)  # type: ignore[arg-type]
+
+    assert client.post_message(channel="C1", text="hi", blocks=_MARKDOWN_BLOCKS) == "1.2"
+    assert web.post_calls[0]["blocks"] == _MARKDOWN_BLOCKS
+
+
+def test_post_message_retries_text_only_when_blocks_rejected() -> None:
+    """A workspace that rejects the markdown block still gets the answer."""
+
+    class _RecoveringWebClient(_FakeWebClient):
+        def chat_postMessage(self, **kwargs: Any) -> dict[str, Any]:
+            self.post_calls.append(kwargs)
+            if "blocks" in kwargs:
+                raise _api_error("invalid_blocks")
+            return {"ts": "9.9"}
+
+    web = _RecoveringWebClient(post={"ts": "unused"})
+    client = SlackWebApiClient(web)  # type: ignore[arg-type]
+
+    assert client.post_message(channel="C1", text="hi", blocks=_MARKDOWN_BLOCKS) == "9.9"
+    assert "blocks" not in web.post_calls[-1]
+
+
+def test_update_message_retries_text_only_when_blocks_rejected() -> None:
+    class _RecoveringWebClient(_FakeWebClient):
+        def chat_update(self, **kwargs: Any) -> dict[str, Any]:
+            self.update_calls.append(kwargs)
+            if "blocks" in kwargs:
+                raise _api_error("invalid_blocks")
+            return {"ok": True}
+
+    web = _RecoveringWebClient(post={"ts": "1.2"})
+    client = SlackWebApiClient(web)  # type: ignore[arg-type]
+
+    assert client.update_message(channel="C1", ts="1.2", text="x", blocks=_MARKDOWN_BLOCKS) is True
+    assert "blocks" not in web.update_calls[-1]

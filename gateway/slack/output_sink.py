@@ -14,12 +14,15 @@ from gateway.runtime.status_messages import (
     status_from_response_label,
     user_facing_error_message,
 )
-from gateway.slack.client import SlackMessagingClient
+from gateway.slack.client import Blocks, SlackMessagingClient
 from integrations.slack.formatting import markdown_to_slack_mrkdwn
 from platform.common.truncation import truncate
 
 # Slack rejects chat.postMessage text above this length with msg_too_long.
 SLACK_MAX_MESSAGE_CHARS = 40_000
+# Block Kit markdown blocks cap at 12k chars; longer answers fall back to
+# mrkdwn text, which Slack accepts up to SLACK_MAX_MESSAGE_CHARS.
+SLACK_MAX_MARKDOWN_BLOCK_CHARS = 12_000
 
 logger = logging.getLogger("gateway")
 
@@ -109,16 +112,20 @@ class SlackOutputSink:
 
     def _finalize(self, text: str) -> None:
         final = truncate(markdown_to_slack_mrkdwn(text), SLACK_MAX_MESSAGE_CHARS, suffix="…")
+        blocks = _markdown_blocks(text)
         mode = "edit"
         with self._lock:
             delivered = self._message_ts is not None and self._client.update_message(
-                channel=self._channel_id, ts=self._message_ts, text=final
+                channel=self._channel_id, ts=self._message_ts, text=final, blocks=blocks
             )
             if not delivered:
                 mode = "new-message"
                 delivered = (
                     self._client.post_message(
-                        channel=self._channel_id, text=final, thread_ts=self._thread_ts
+                        channel=self._channel_id,
+                        text=final,
+                        thread_ts=self._thread_ts,
+                        blocks=blocks,
                     )
                     is not None
                 )
@@ -140,3 +147,17 @@ class SlackOutputSink:
                 self._thread_ts,
                 len(final),
             )
+
+
+def _markdown_blocks(text: str) -> Blocks | None:
+    """Wrap the final answer in a Block Kit ``markdown`` block when it fits.
+
+    Slack built this block for LLM output: standard markdown (headers, tables,
+    fenced code) renders natively instead of being mangled through mrkdwn.
+    Answers over the block's 12k-char limit stay text-only; the mrkdwn text is
+    always sent alongside as the notification/fallback rendering.
+    """
+    body = text.strip()
+    if not body or len(body) > SLACK_MAX_MARKDOWN_BLOCK_CHARS:
+        return None
+    return [{"type": "markdown", "text": body}]

@@ -20,6 +20,7 @@ from slack_sdk.web import WebClient
 from core.agent_harness.session import SessionCore
 from gateway.runtime.errors import GatewayConfigurationError
 from gateway.runtime.sink_protocol import GatewayAgentCallback
+from gateway.slack.attention import GateDecision, ThreadAttentionGate
 from gateway.slack.client import (
     SlackMessagingClient,
     SlackWebApiClient,
@@ -117,15 +118,68 @@ class _SlackTurnDispatcher:
         self._handler = handler
         self._logger = logger
         self._bot_user_id = bot_user_id
+        self._attention = ThreadAttentionGate()
         self._conversation_locks: dict[str, _ConversationLock] = {}
         self._locks_guard = threading.Lock()
         self._resolver_lock = threading.Lock()
 
     def dispatch(self, inbound: SlackInboundMessage) -> None:
         try:
+            if not self._admit(inbound):
+                return
             self._run_turn(inbound)
         except Exception:
             self._logger.error("[slack-gateway] turn failed", exc_info=True)
+
+    def _admit(self, inbound: SlackInboundMessage) -> bool:
+        """Layered gate: decide whether this inbound message runs a turn at all.
+
+        Mentions and DMs always run (and open/refresh the thread's attention
+        window). An un-tagged thread reply runs only when every free check
+        passes: the bot already joined the thread (bindings store), the
+        attention window from the last mention is still open, and the
+        deterministic address check says the reply is for the bot — so
+        human-to-human traffic in the same thread passes through silently.
+        """
+        if inbound.addressed:
+            self._attention.note_addressed_turn(inbound.conversation_key)
+            return True
+        # Layer 1: only threads the bot already joined; never channel chatter.
+        if not self._session_resolver.has_session(user_id=inbound.conversation_key):
+            return False
+        if not self._bot_user_id:
+            # Without our own id we can neither dedup mention copies nor run
+            # the address check safely: require explicit mentions.
+            return False
+        if f"<@{self._bot_user_id}>" in inbound.text:
+            # When both app_mention and message.channels are subscribed, a
+            # mention arrives twice; drop the plain-message copy.
+            return False
+        # Layers 2-3: attention window + address check + unprompted rate limit.
+        decision = self._attention.decide(
+            conversation_key=inbound.conversation_key,
+            text=inbound.text,
+            bot_user_id=self._bot_user_id,
+        )
+        if decision is GateDecision.RATE_LIMITED:
+            # Heard, but over the unprompted budget: acknowledge, don't reply.
+            self._messaging.add_reaction(
+                channel=inbound.channel_id, timestamp=inbound.ts, emoji="eyes"
+            )
+            self._logger.info(
+                "[slack-gateway] unprompted reply rate-limited channel=%s thread_ts=%s",
+                inbound.channel_id,
+                inbound.thread_ts,
+            )
+            return False
+        if decision is not GateDecision.ENGAGE:
+            return False
+        self._logger.info(
+            "[slack-gateway] engaging un-tagged thread reply channel=%s thread_ts=%s",
+            inbound.channel_id,
+            inbound.thread_ts,
+        )
+        return True
 
     @contextmanager
     def _conversation_turn(self, conversation_key: str) -> Iterator[None]:
@@ -167,6 +221,12 @@ class _SlackTurnDispatcher:
     ) -> SessionCore | None:
         """Apply auth decision side effects. Return a session to run, or None to stop."""
         persist_policy_if_needed(decision)
+
+        if not inbound.addressed and (not decision.allowed or decision.reply_text):
+            # An un-tagged reply the bot chose to answer must never turn into
+            # denial/help/pairing chatter in a human conversation: anything but
+            # a clean authorized turn stays silent. Commands require a mention.
+            return None
 
         is_rotate = decision.reply_text == _ROTATE_SESSION
         if decision.reply_text and not is_rotate:

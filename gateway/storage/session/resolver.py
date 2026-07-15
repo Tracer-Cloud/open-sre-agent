@@ -80,6 +80,14 @@ class SessionResolver:
         )
         return session
 
+    def has_session(self, *, user_id: str) -> bool:
+        """Whether the bot already has a session bound to this conversation key.
+
+        Used to gate un-addressed thread follow-ups: the bot answers an un-tagged
+        reply only in a thread it already joined.
+        """
+        return bool(self._bindings.get_session_id(platform=self._platform, chat_id=user_id))
+
     def rotate(self, *, user_id: str, chat_id: str) -> SessionCore:
         """Flush the current session file and start a new binding."""
         existing = self._bindings.get_session_id(platform=self._platform, chat_id=user_id)

@@ -26,6 +26,10 @@ class SlackInboundMessage:
     ts: str
     thread_ts: str
     text: str
+    # True for an @mention or DM (directly addressed); False for an un-tagged
+    # reply in a channel thread, which is only answered when the bot is already
+    # active in that thread.
+    addressed: bool = True
 
     @property
     def conversation_key(self) -> str:
@@ -36,10 +40,13 @@ class SlackInboundMessage:
 def parse_events_api_payload(payload: Mapping[str, Any]) -> SlackInboundMessage | None:
     """Return the inbound message for an ``events_api`` envelope payload.
 
-    Accepts ``app_mention`` events (channels) and plain ``message`` events in
-    DMs, including ``file_share`` / ``thread_broadcast`` subtypes that still
-    carry a real mention. Returns ``None`` for anything else — bot echoes,
-    bookkeeping subtypes (edits, joins), and events missing required fields.
+    Accepts ``app_mention`` events (channels), plain ``message`` events in
+    DMs, and un-tagged ``message`` events that are replies inside an existing
+    channel thread (``addressed=False`` — the worker's attention gate decides
+    whether those run a turn). ``file_share`` / ``thread_broadcast`` subtypes
+    that still carry a real message are kept. Returns ``None`` for anything
+    else — bot echoes, bookkeeping subtypes (edits, joins), top-level channel
+    chatter, and events missing required fields.
     """
     event = payload.get("event")
     if not isinstance(event, Mapping):
@@ -51,23 +58,33 @@ def parse_events_api_payload(payload: Mapping[str, Any]) -> SlackInboundMessage 
     event_type = event.get("type")
     is_mention = event_type == "app_mention"
     is_dm = event_type == "message" and event.get("channel_type") == _DM_CHANNEL_TYPE
-    if not (is_mention or is_dm):
+    ts = str(event.get("ts") or "")
+    raw_thread_ts = str(event.get("thread_ts") or "")
+    # An un-tagged reply inside an existing channel thread; only answered when the
+    # bot is already active in that thread (membership is checked by the worker).
+    is_thread_followup = event_type == "message" and bool(raw_thread_ts) and raw_thread_ts != ts
+    if not (is_mention or is_dm or is_thread_followup):
         return None
 
     team_id = str(payload.get("team_id") or event.get("team") or "")
     user_id = str(event.get("user") or "")
     channel_id = str(event.get("channel") or "")
-    ts = str(event.get("ts") or "")
-    text = _LEADING_MENTION.sub("", str(event.get("text") or "")).strip()
+    addressed = is_mention or is_dm
+    text = str(event.get("text") or "")
+    if addressed:
+        text = _LEADING_MENTION.sub("", text)
+    # An unaddressed reply keeps its leading mention: "<@U2> can you look" is
+    # aimed at a human, and the attention gate must be able to see that.
+    text = text.strip()
     if not (team_id and user_id and channel_id and ts and text):
         return None
 
-    thread_ts = str(event.get("thread_ts") or ts)
     return SlackInboundMessage(
         team_id=team_id,
         user_id=user_id,
         channel_id=channel_id,
         ts=ts,
-        thread_ts=thread_ts,
+        thread_ts=raw_thread_ts or ts,
         text=text,
+        addressed=addressed,
     )
