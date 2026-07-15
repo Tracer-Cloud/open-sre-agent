@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from integrations.llm_cli.codex_oauth import CodexOAuthResult
-from surfaces.cli.wizard import _integration_configurators, _ui, flow
+from surfaces.cli.wizard import _integration_configurators, _ui, flow, llm_credential
 from surfaces.cli.wizard import store as wizard_store
 from surfaces.cli.wizard.env_sync import sync_provider_env
 from surfaces.cli.wizard.probes import ProbeResult
@@ -25,7 +25,7 @@ def _stub_managed_llm_secret_persistence(monkeypatch: pytest.MonkeyPatch) -> Non
 def _stub_llm_credential_validation(monkeypatch: pytest.MonkeyPatch) -> None:
     """Wizard flow tests must never hit live provider endpoints."""
     monkeypatch.setattr(
-        flow,
+        llm_credential,
         "validate_provider_credentials",
         lambda **_kwargs: ValidationResult(ok=True, detail="stubbed"),
         raising=False,
@@ -1590,14 +1590,17 @@ def test_credential_line_for_saved_summary_cli_codex() -> None:
     from surfaces.cli.wizard import config as wizard_config
 
     codex = next(p for p in wizard_config.SUPPORTED_PROVIDERS if p.value == "codex")
-    assert flow._credential_line_for_saved_summary(codex) == "OpenAI Codex CLI (Run: codex login)"
+    assert (
+        llm_credential._credential_line_for_saved_summary(codex)
+        == "OpenAI Codex CLI (Run: codex login)"
+    )
 
 
 def test_credential_line_for_saved_summary_cli_claude_code() -> None:
     from surfaces.cli.wizard import config as wizard_config
 
     claude_code = next(p for p in wizard_config.SUPPORTED_PROVIDERS if p.value == "claude-code")
-    assert flow._credential_line_for_saved_summary(claude_code) == (
+    assert llm_credential._credential_line_for_saved_summary(claude_code) == (
         "Anthropic Claude Code CLI (Run: claude auth login or set ANTHROPIC_API_KEY)"
     )
 
@@ -1606,7 +1609,7 @@ def test_credential_line_for_saved_summary_cli_gemini_cli() -> None:
     from surfaces.cli.wizard import config as wizard_config
 
     gemini_cli = next(p for p in wizard_config.SUPPORTED_PROVIDERS if p.value == "gemini-cli")
-    assert flow._credential_line_for_saved_summary(gemini_cli) == (
+    assert llm_credential._credential_line_for_saved_summary(gemini_cli) == (
         "Google Gemini CLI (Run: gemini (interactive login) or set GEMINI_API_KEY)"
     )
 
@@ -1615,7 +1618,7 @@ def test_credential_line_for_saved_summary_cli_copilot() -> None:
     from surfaces.cli.wizard import config as wizard_config
 
     copilot = next(p for p in wizard_config.SUPPORTED_PROVIDERS if p.value == "copilot")
-    line = flow._credential_line_for_saved_summary(copilot)
+    line = llm_credential._credential_line_for_saved_summary(copilot)
     # PR #1533: hint surfaces both CLI paths (`copilot login`, `gh auth login`)
     # before the env-var bypass, matching the new CLI-first probe order.
     assert line.startswith("GitHub Copilot CLI (Run `copilot login`")
@@ -1627,7 +1630,7 @@ def test_credential_line_for_saved_summary_anthropic() -> None:
     from surfaces.cli.wizard import config as wizard_config
 
     anthropic = next(p for p in wizard_config.SUPPORTED_PROVIDERS if p.value == "anthropic")
-    assert flow._credential_line_for_saved_summary(anthropic) == "system keychain"
+    assert llm_credential._credential_line_for_saved_summary(anthropic) == "system keychain"
 
 
 def test_credential_line_for_saved_summary_cli_without_factory() -> None:
@@ -1645,7 +1648,7 @@ def test_credential_line_for_saved_summary_cli_without_factory() -> None:
         adapter_factory=None,
         allow_custom_models=True,
     )
-    assert flow._credential_line_for_saved_summary(p) == "Fake CLI (CLI)"
+    assert llm_credential._credential_line_for_saved_summary(p) == "Fake CLI (CLI)"
 
 
 def test_run_wizard_configures_gitlab(monkeypatch, tmp_path) -> None:
@@ -2398,17 +2401,19 @@ def test_persist_llm_credential_host_kind_writes_env_not_keyring(monkeypatch, tm
 
     synced: dict[str, str] = {}
     monkeypatch.setattr(
-        flow, "sync_env_values", lambda values: synced.update(values) or tmp_path / ".env"
+        llm_credential, "sync_env_values", lambda values: synced.update(values) or tmp_path / ".env"
     )
     keyring_calls: list[tuple[str, str]] = []
     monkeypatch.setattr(
-        flow,
+        llm_credential,
         "_persist_llm_api_key",
         lambda env, val: keyring_calls.append((env, val)) or True,
     )
     monkeypatch.setenv("OLLAMA_HOST", "sentinel-before")
 
-    assert flow._persist_llm_credential(PROVIDER_BY_VALUE["ollama"], "http://10.0.0.5:11434")
+    assert llm_credential._persist_llm_credential(
+        PROVIDER_BY_VALUE["ollama"], "http://10.0.0.5:11434"
+    )
 
     assert synced == {"OLLAMA_HOST": "http://10.0.0.5:11434"}
     assert keyring_calls == []
@@ -2419,16 +2424,16 @@ def test_persist_llm_credential_secret_kind_keeps_keyring(monkeypatch, tmp_path)
     from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
 
     monkeypatch.setattr(
-        flow, "sync_env_values", lambda _values: pytest.fail("secret must not hit .env")
+        llm_credential, "sync_env_values", lambda _values: pytest.fail("secret must not hit .env")
     )
     keyring_calls: list[tuple[str, str]] = []
     monkeypatch.setattr(
-        flow,
+        llm_credential,
         "_persist_llm_api_key",
         lambda env, val: keyring_calls.append((env, val)) or True,
     )
 
-    assert flow._persist_llm_credential(PROVIDER_BY_VALUE["anthropic"], "sk-test")
+    assert llm_credential._persist_llm_credential(PROVIDER_BY_VALUE["anthropic"], "sk-test")
 
     assert keyring_calls == [("ANTHROPIC_API_KEY", "sk-test")]
 
@@ -2492,7 +2497,7 @@ def test_run_wizard_host_kind_does_not_migrate_legacy_api_key(monkeypatch, tmp_p
         prompted.append(label)
         return "http://10.0.0.9:11434"  # the host the user actually enters
 
-    monkeypatch.setattr(flow, "_prompt_value", _fake_prompt)
+    monkeypatch.setattr(llm_credential, "_prompt_value", _fake_prompt)
 
     persisted: list[tuple[str, str]] = []
 
@@ -2500,7 +2505,7 @@ def test_run_wizard_host_kind_does_not_migrate_legacy_api_key(monkeypatch, tmp_p
         persisted.append((provider.value, value))
         return False  # stop the wizard right after the credential decision
 
-    monkeypatch.setattr(flow, "_persist_llm_credential", _fake_persist)
+    monkeypatch.setattr(llm_credential, "_persist_llm_credential", _fake_persist)
 
     exit_code = flow.run_wizard()
 
@@ -2560,7 +2565,7 @@ def test_run_wizard_llm_key_retries_on_validation_failure(monkeypatch, tmp_path,
 
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
-    monkeypatch.setattr(flow, "validate_provider_credentials", _validate)
+    monkeypatch.setattr(llm_credential, "validate_provider_credentials", _validate)
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
@@ -2621,7 +2626,7 @@ def test_run_wizard_saved_provider_missing_key_validates_on_reentry(monkeypatch,
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "confirm", _mock_confirm)
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
-    monkeypatch.setattr(flow, "validate_provider_credentials", _validate)
+    monkeypatch.setattr(llm_credential, "validate_provider_credentials", _validate)
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(
         _ui,
@@ -2697,7 +2702,7 @@ def test_run_wizard_llm_key_save_anyway_persists_unvalidated_key(
 
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
-    monkeypatch.setattr(flow, "validate_provider_credentials", _validate)
+    monkeypatch.setattr(llm_credential, "validate_provider_credentials", _validate)
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
@@ -2759,13 +2764,13 @@ def test_run_wizard_llm_key_repick_returns_to_provider_menu(monkeypatch, tmp_pat
 
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
-    monkeypatch.setattr(flow, "validate_provider_credentials", _validate)
+    monkeypatch.setattr(llm_credential, "validate_provider_credentials", _validate)
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
     monkeypatch.setattr(
-        flow,
+        llm_credential,
         "sync_env_values",
         lambda values, **_kwargs: synced_env_values.append(values) or (tmp_path / ".env"),
     )
@@ -2818,7 +2823,7 @@ def test_run_wizard_llm_key_valid_first_try_validates_once(monkeypatch, tmp_path
 
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
-    monkeypatch.setattr(flow, "validate_provider_credentials", _validate)
+    monkeypatch.setattr(llm_credential, "validate_provider_credentials", _validate)
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
@@ -2887,7 +2892,7 @@ def test_run_wizard_azure_llm_key_validation_runs_after_endpoint_prompt(
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
     monkeypatch.setattr(flow.questionary, "text", _mock_text)
-    monkeypatch.setattr(flow, "validate_provider_credentials", _validate)
+    monkeypatch.setattr(llm_credential, "validate_provider_credentials", _validate)
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
@@ -2954,7 +2959,7 @@ def test_run_wizard_cli_provider_skips_llm_key_validation(monkeypatch, tmp_path)
 
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
-    monkeypatch.setattr(flow, "validate_provider_credentials", _validate)
+    monkeypatch.setattr(llm_credential, "validate_provider_credentials", _validate)
     monkeypatch.setattr(flow, "_run_cli_llm_onboarding", _cli_onboarding)
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
@@ -3032,13 +3037,13 @@ def test_run_wizard_ollama_host_is_validated_then_persisted_to_dotenv(
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
     monkeypatch.setattr(flow.questionary, "text", _mock_text)
-    monkeypatch.setattr(flow, "validate_provider_credentials", _validate)
+    monkeypatch.setattr(llm_credential, "validate_provider_credentials", _validate)
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
     monkeypatch.setattr(
-        flow,
+        llm_credential,
         "sync_env_values",
         lambda values, **_kwargs: synced_env_values.append(values) or (tmp_path / ".env"),
     )
@@ -3116,7 +3121,7 @@ def test_run_wizard_ollama_host_env_write_failure_offers_recovery_menu(
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
-    monkeypatch.setattr(flow, "sync_env_values", _raise_env_write)
+    monkeypatch.setattr(llm_credential, "sync_env_values", _raise_env_write)
     monkeypatch.setattr(
         _ui,
         "save_api_key",
@@ -3162,7 +3167,7 @@ def test_run_wizard_saved_provider_with_stored_key_skips_validation(monkeypatch,
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "confirm", _mock_confirm)
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
-    monkeypatch.setattr(flow, "validate_provider_credentials", _validate, raising=False)
+    monkeypatch.setattr(llm_credential, "validate_provider_credentials", _validate, raising=False)
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(
         _ui,
@@ -3224,7 +3229,7 @@ def test_run_wizard_legacy_key_migration_does_not_validate(monkeypatch, tmp_path
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "confirm", _mock_confirm)
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
-    monkeypatch.setattr(flow, "validate_provider_credentials", _validate, raising=False)
+    monkeypatch.setattr(llm_credential, "validate_provider_credentials", _validate, raising=False)
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(
         _ui,
@@ -3303,7 +3308,7 @@ def test_run_wizard_llm_key_persist_failure_offers_recovery_menu(
 
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
-    monkeypatch.setattr(flow, "validate_provider_credentials", _validate)
+    monkeypatch.setattr(llm_credential, "validate_provider_credentials", _validate)
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
@@ -3372,7 +3377,7 @@ def test_run_wizard_llm_key_persist_failure_repick_returns_to_provider_menu(
 
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
-    monkeypatch.setattr(flow, "validate_provider_credentials", _validate)
+    monkeypatch.setattr(llm_credential, "validate_provider_credentials", _validate)
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
@@ -3429,7 +3434,7 @@ def test_run_wizard_llm_key_persist_failure_abort_exits_nonzero(
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
     monkeypatch.setattr(
-        flow,
+        llm_credential,
         "validate_provider_credentials",
         lambda **_kwargs: ValidationResult(ok=True, detail="Anthropic API key validated."),
     )
@@ -3495,7 +3500,7 @@ def test_run_wizard_llm_key_back_at_reprompt_returns_to_provider_menu(
 
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
-    monkeypatch.setattr(flow, "validate_provider_credentials", _validate)
+    monkeypatch.setattr(llm_credential, "validate_provider_credentials", _validate)
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
@@ -3547,7 +3552,7 @@ def test_run_wizard_llm_key_ctrl_c_at_retry_menu_cancels_setup(
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
     monkeypatch.setattr(
-        flow,
+        llm_credential,
         "validate_provider_credentials",
         lambda **_kwargs: ValidationResult(ok=False, detail="Anthropic rejected the API key."),
     )
@@ -3612,7 +3617,7 @@ def test_run_wizard_llm_key_validator_exception_treated_as_failure(
 
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
-    monkeypatch.setattr(flow, "validate_provider_credentials", _validate)
+    monkeypatch.setattr(llm_credential, "validate_provider_credentials", _validate)
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
@@ -3681,7 +3686,7 @@ def test_run_wizard_llm_key_validation_failure_output_masks_secret(
 
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
-    monkeypatch.setattr(flow, "validate_provider_credentials", _validate)
+    monkeypatch.setattr(llm_credential, "validate_provider_credentials", _validate)
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
@@ -3761,7 +3766,7 @@ def test_run_wizard_validates_the_model_the_user_picked_change_provider(
 
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
-    monkeypatch.setattr(flow, "validate_provider_credentials", _validate)
+    monkeypatch.setattr(llm_credential, "validate_provider_credentials", _validate)
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(flow, "save_local_config", _save_local_config)
@@ -3823,7 +3828,7 @@ def test_run_wizard_validates_the_model_the_user_picked_saved_provider(
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "confirm", _mock_confirm)
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
-    monkeypatch.setattr(flow, "validate_provider_credentials", _validate)
+    monkeypatch.setattr(llm_credential, "validate_provider_credentials", _validate)
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(
         _ui,
@@ -3904,12 +3909,12 @@ def test_run_wizard_ollama_validates_the_selected_model_not_the_default(
 
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "text", _mock_text)
-    monkeypatch.setattr(flow, "validate_provider_credentials", _validate)
+    monkeypatch.setattr(llm_credential, "validate_provider_credentials", _validate)
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(flow, "save_local_config", _save_local_config)
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
-    monkeypatch.setattr(flow, "sync_env_values", lambda _values, **_kw: tmp_path / ".env")
+    monkeypatch.setattr(llm_credential, "sync_env_values", lambda _values, **_kw: tmp_path / ".env")
 
     exit_code = flow.run_wizard()
 
@@ -3947,7 +3952,7 @@ def test_recovery_action_renders_three_rows_with_retry_as_the_default(monkeypatc
         recorded["kwargs"] = kwargs
         return "retry"
 
-    monkeypatch.setattr(flow, "_choose", _fake_choose)
+    monkeypatch.setattr(llm_credential, "_choose", _fake_choose)
 
     escape = flow.Choice(
         value="save_anyway",
@@ -3957,7 +3962,7 @@ def test_recovery_action_renders_three_rows_with_retry_as_the_default(monkeypatc
             "proxied, or sure it is correct"
         ),
     )
-    action = flow._recovery_action(
+    action = llm_credential._recovery_action(
         prompt="Anthropic API key could not be verified. What next?",
         retry_label="Re-enter the API key",
         retry_hint="Prompts for ANTHROPIC_API_KEY again",
@@ -3998,9 +4003,9 @@ def test_recovery_action_escape_returns_cancel_and_prints_setup_cancelled(
     def _fake_choose(*_args, **_kwargs):
         raise KeyboardInterrupt
 
-    monkeypatch.setattr(flow, "_choose", _fake_choose)
+    monkeypatch.setattr(llm_credential, "_choose", _fake_choose)
 
-    action = flow._recovery_action(
+    action = llm_credential._recovery_action(
         prompt="ANTHROPIC_API_KEY could not be saved. What next?",
         retry_label="Retry saving to the system keychain",
         retry_hint="Run the steps above first, then retry",
@@ -4060,7 +4065,7 @@ def test_run_wizard_keyring_failure_continue_unsaved_exports_env_and_never_write
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
     monkeypatch.setattr(
-        flow,
+        llm_credential,
         "validate_provider_credentials",
         lambda **_kwargs: ValidationResult(ok=True, detail="Anthropic API key validated."),
     )
@@ -4076,7 +4081,7 @@ def test_run_wizard_keyring_failure_continue_unsaved_exports_env_and_never_write
         lambda **kwargs: sync_provider_env(env_path=env_path, **kwargs),
     )
     monkeypatch.setattr(
-        flow,
+        llm_credential,
         "sync_env_values",
         lambda values, **_kw: synced_env_values.append(dict(values)) or (tmp_path / ".env"),
     )
@@ -4149,7 +4154,7 @@ def test_run_wizard_keyring_failure_at_saved_provider_site_reaches_the_shared_me
     monkeypatch.setattr(flow.questionary, "confirm", _mock_confirm)
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
     monkeypatch.setattr(
-        flow,
+        llm_credential,
         "validate_provider_credentials",
         lambda **_kwargs: ValidationResult(ok=True, detail="Anthropic API key validated."),
     )
@@ -4234,7 +4239,7 @@ def test_run_wizard_keyring_failure_at_legacy_migration_site_reaches_the_shared_
     monkeypatch.setattr(flow.questionary, "confirm", _mock_confirm)
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
     monkeypatch.setattr(
-        flow,
+        llm_credential,
         "validate_provider_credentials",
         lambda **_kwargs: ValidationResult(ok=True, detail="stubbed"),
     )
@@ -4332,7 +4337,7 @@ def test_run_wizard_azure_empty_key_input_never_persists_the_endpoint_placeholde
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
     monkeypatch.setattr(flow.questionary, "text", _mock_text)
-    monkeypatch.setattr(flow, "validate_provider_credentials", _validate)
+    monkeypatch.setattr(llm_credential, "validate_provider_credentials", _validate)
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
@@ -4389,7 +4394,7 @@ def test_run_wizard_ollama_host_prompt_keeps_its_localhost_default(monkeypatch, 
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "text", _mock_text)
     monkeypatch.setattr(
-        flow,
+        llm_credential,
         "validate_provider_credentials",
         lambda **_kwargs: ValidationResult(ok=True, detail="Ollama host URL validated."),
     )
@@ -4398,7 +4403,7 @@ def test_run_wizard_ollama_host_prompt_keeps_its_localhost_default(monkeypatch, 
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
     monkeypatch.setattr(
-        flow,
+        llm_credential,
         "sync_env_values",
         lambda values, **_kw: synced_env_values.append(dict(values)) or (tmp_path / ".env"),
     )
@@ -4466,7 +4471,7 @@ def test_run_wizard_summary_credential_line_after_continue_unsaved(monkeypatch, 
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
     monkeypatch.setattr(
-        flow,
+        llm_credential,
         "validate_provider_credentials",
         lambda **_kwargs: ValidationResult(ok=True, detail="Anthropic API key validated."),
     )
@@ -4517,7 +4522,7 @@ def test_run_wizard_summary_credential_line_after_save_anyway(monkeypatch, tmp_p
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
     monkeypatch.setattr(
-        flow,
+        llm_credential,
         "validate_provider_credentials",
         lambda **_kwargs: ValidationResult(
             ok=False, detail="Validation request failed: Connection error."
@@ -4560,10 +4565,10 @@ def test_prompt_validated_llm_credential_wizard_back_precedes_keyboard_interrupt
         raise AssertionError("validation must not run after a back-out")
 
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
-    monkeypatch.setattr(flow, "validate_provider_credentials", _must_not_validate)
+    monkeypatch.setattr(llm_credential, "validate_provider_credentials", _must_not_validate)
 
     provider = flow.PROVIDER_BY_VALUE["anthropic"]
-    outcome = flow._prompt_validated_llm_credential(provider, model="claude-opus-4-7")
+    outcome = llm_credential._prompt_validated_llm_credential(provider, model="claude-opus-4-7")
 
     assert outcome == "repick"
     assert "Setup cancelled." not in capsys.readouterr().out
@@ -4641,7 +4646,7 @@ def test_run_wizard_azure_endpoint_reprompted_on_retry_after_validation_failure(
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
     monkeypatch.setattr(flow.questionary, "text", _mock_text)
-    monkeypatch.setattr(flow, "validate_provider_credentials", _validate)
+    monkeypatch.setattr(llm_credential, "validate_provider_credentials", _validate)
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
@@ -4739,7 +4744,7 @@ def test_run_wizard_azure_endpoint_reprompted_on_repick_then_reselect(
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
     monkeypatch.setattr(flow.questionary, "text", _mock_text)
-    monkeypatch.setattr(flow, "validate_provider_credentials", _validate)
+    monkeypatch.setattr(llm_credential, "validate_provider_credentials", _validate)
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
@@ -4777,7 +4782,7 @@ def test_credential_line_for_saved_summary_ollama_host_unverified() -> None:
     which lies about where the credential landed.
     """
     ollama = flow.PROVIDER_BY_VALUE["ollama"]
-    line = flow._credential_line_for_saved_summary(ollama, credential_state="unverified")
+    line = llm_credential._credential_line_for_saved_summary(ollama, credential_state="unverified")
     assert "keychain" not in line.lower(), (
         f"an Ollama host lives in .env, not the keychain; got {line!r}"
     )
@@ -4791,7 +4796,7 @@ def test_credential_line_for_saved_summary_ollama_host_verified() -> None:
     summary must name .env and must not claim the system keychain.
     """
     ollama = flow.PROVIDER_BY_VALUE["ollama"]
-    line = flow._credential_line_for_saved_summary(ollama)
+    line = llm_credential._credential_line_for_saved_summary(ollama)
     assert "keychain" not in line.lower(), (
         f"an Ollama host lives in .env, not the keychain; got {line!r}"
     )
