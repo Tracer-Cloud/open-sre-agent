@@ -153,6 +153,8 @@ connected right now (or "none" / "unknown"). Apply these rules in order:
   EVEN WHEN integrations are connected. The investigation rule applies ONLY when
   the request asks for the CAUSE of a failure, crash, error, outage, or incident;
   a lookup with no failure being diagnosed is never investigation_start.
+  Exception: GitHub issue/PR/repo create/list/view/merge/comment/search via `gh`
+  is NOT this handoff — call github_cli (see GITHUB CLI REQUESTS below).
   Examples that are HANDOFFS (data lookups), NOT investigations:
   * "events for the person whose github_username is davincios in posthog"
   * "show me the latest sessions for user X"

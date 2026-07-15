@@ -8,14 +8,16 @@ repositories, Actions, and code — and correlate recent commits with incidents.
 
 ## What you can do
 
-Once GitHub is connected, chat can use **`github_cli`** (authenticated `gh`) for
-flexible reads and writes — create/list/view issues and PRs, assign, label,
-comment, merge, search, releases, workflow runs, and `gh api` — without a
-separate approval gate. Prefer this over shell `gh` / `!gh`.
+Once GitHub is connected, the interactive-shell **action agent** uses
+**`github_cli`** (authenticated `gh`) for flexible reads and writes —
+create/list/view issues and PRs, assign, label, comment, merge, search,
+releases, workflow runs, and `gh api` — without a separate approval gate.
+Prefer this over shell `gh` / `!gh`. These requests stay on the action path
+(not the conversational gather/answer loop).
 
 | Area | How OpenSRE does it |
 | --- | --- |
-| Ad-hoc issues, PRs, repos, search, API | `github_cli` (chat / action) |
+| Ad-hoc issues, PRs, repos, search, API | `github_cli` (action agent) |
 | Engineering digests, PR readiness, security alerts | [GitHub workflow tools](github-workflow-tools) |
 | Slack → GitHub issue create/update/close | Propose + approve via workflow mutation tools |
 | Investigation: code, commits, files, issue search | Dedicated GitHub investigation tools |

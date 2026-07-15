@@ -9,8 +9,8 @@ import pytest
 
 from core.tool_framework.registered_tool import RegisteredTool
 from tests.tools.conftest import BaseToolContract
-from tools.github_cli.classify import classify_gh_args
 from tools.github_cli.runner import build_gh_argv, run_gh
+from tools.github_cli.summary import summarize_gh_result
 from tools.github_cli.tool import github_cli
 from tools.registry import clear_tool_registry_cache, get_registered_tools
 
@@ -22,33 +22,6 @@ def _registered(tool: Any) -> RegisteredTool:
 class TestGithubCliContract(BaseToolContract):
     def get_tool_under_test(self) -> RegisteredTool:
         return _registered(github_cli)
-
-
-@pytest.mark.parametrize(
-    ("args", "expected"),
-    [
-        (["issue", "list"], "read"),
-        (["issue", "view", "12"], "read"),
-        (["-R", "o/r", "issue", "list"], "read"),
-        (["pr", "view", "3"], "read"),
-        (["repo", "view"], "read"),
-        (["api", "repos/o/r"], "read"),
-        (["api", "-X", "GET", "repos/o/r"], "read"),
-        (["search", "issues", "crash"], "read"),
-        (["auth", "status"], "read"),
-        (["status"], "read"),
-        (["issue", "create", "--title", "t"], "mutate"),
-        (["issue", "close", "1"], "mutate"),
-        (["pr", "merge", "2"], "mutate"),
-        (["api", "-X", "POST", "repos/o/r/issues"], "mutate"),
-        (["api", "-F", "title=hi", "repos/o/r/issues"], "mutate"),
-        (["label", "create", "bug"], "mutate"),
-        ([], "mutate"),
-        (["unknown", "thing"], "mutate"),
-    ],
-)
-def test_classify_gh_args(args: list[str], expected: str) -> None:
-    assert classify_gh_args(args) == expected
 
 
 def test_build_gh_argv_includes_repo_flag() -> None:
@@ -121,7 +94,9 @@ def test_run_gh_injects_token_env() -> None:
 def test_github_cli_runs_mutate_without_approval() -> None:
     tool = _registered(github_cli)
     assert tool.requires_approval is False
-    assert "action" in tool.surfaces
+    assert tool.surfaces == ("action",)
+    assert "investigation" not in tool.surfaces
+    assert "chat" not in tool.surfaces
 
     with patch(
         "tools.github_cli.tool.run_gh",
@@ -138,9 +113,8 @@ def test_github_cli_runs_mutate_without_approval() -> None:
             repo="o/r",
         )
     assert result["ok"] is True
-    assert result["effect"] == "mutate"
-    assert result["tool"] == "github_cli"
     assert "issues/99" in result["stdout"]
+    assert result["summary"] == "Created issue #99: https://github.com/o/r/issues/99"
     run_mock.assert_called_once()
 
 
@@ -157,7 +131,27 @@ def test_github_cli_runs_read() -> None:
     ):
         result = github_cli(args=["issue", "list"], repo="o/r")
     assert result["ok"] is True
-    assert result["effect"] == "read"
+    assert "Open bug" in result["summary"]
+
+
+def test_summarize_gh_result_auto_merge() -> None:
+    summary = summarize_gh_result(
+        args=["pr", "merge", "3996", "--squash", "--auto"],
+        ok=True,
+        stdout="",
+    )
+    assert summary.startswith("Enabled auto-merge for PR")
+
+
+def test_summarize_gh_result_failure() -> None:
+    summary = summarize_gh_result(
+        args=["issue", "create", "--title", "t"],
+        ok=False,
+        error="GraphQL: Merge commits are not allowed",
+        error_type="gh_error",
+    )
+    assert summary.startswith("GitHub action failed to run:")
+    assert "Merge commits" in summary
 
 
 def test_skill_guidance_attaches_to_github_cli() -> None:
@@ -172,4 +166,6 @@ def test_skill_guidance_attaches_to_github_cli() -> None:
     assert "Create issue" in tool.skill_guidance
     assert "Arbitrary API" in tool.skill_guidance
     assert "failed to run" in tool.skill_guidance.lower()
+    assert "summary" in tool.skill_guidance.lower()
+    assert "markdown" in tool.skill_guidance.lower()
     assert not tool.skill_guidance.endswith("...")

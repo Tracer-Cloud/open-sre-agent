@@ -210,6 +210,9 @@ def _format_generic_tool_payload(tool_call: ToolCall, tool_result: Any) -> str:
     """Build a user-visible summary for one non-self-recording tool result."""
     details = getattr(tool_result, "details", None)
     if isinstance(details, dict):
+        summary = details.get("summary")
+        if isinstance(summary, str) and summary.strip():
+            return summary.strip()
         stdout = details.get("stdout")
         if details.get("ok") and isinstance(stdout, str) and stdout.strip():
             return stdout.strip()
@@ -219,6 +222,19 @@ def _format_generic_tool_payload(tool_call: ToolCall, tool_result: Any) -> str:
     content = _content_to_text(getattr(tool_result, "content", "")).strip()
     if not content:
         return ""
+    # Prefer a nested summary when the tool returned a JSON object payload.
+    try:
+        parsed = json.loads(content)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        parsed = None
+    if isinstance(parsed, dict):
+        summary = parsed.get("summary")
+        if isinstance(summary, str) and summary.strip():
+            return summary.strip()
+        if parsed.get("ok") and isinstance(parsed.get("stdout"), str) and parsed["stdout"].strip():
+            return str(parsed["stdout"]).strip()
+        if parsed.get("error"):
+            return str(parsed["error"]).strip()
     args = public_tool_input(tool_call.input)
     if args:
         return (

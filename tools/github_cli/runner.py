@@ -12,38 +12,57 @@ from integrations.github.client import resolve_github_token
 DEFAULT_TIMEOUT_SECONDS = 60
 MAX_TIMEOUT_SECONDS = 120
 
+# Global flags that consume a following value (after the ``gh`` binary).
+_VALUE_FLAGS = frozenset(
+    {
+        "-R",
+        "--repo",
+        "-h",
+        "--hostname",
+        "--jq",
+        "-t",
+        "--template",
+    }
+)
 
-def _first_positional_command(args: list[str]) -> str | None:
-    """Return the first non-flag token in ``args`` (the ``gh`` subcommand)."""
+
+def positional_gh_tokens(args: list[str] | tuple[str, ...]) -> list[str]:
+    """Return command positionals, skipping leading global flags."""
+    positionals: list[str] = []
     i = 0
-    while i < len(args):
-        token = str(args[i]).strip()
+    cleaned = [str(a) for a in args]
+    while i < len(cleaned):
+        token = cleaned[i]
         if not token or token == "--":
             i += 1
             continue
         if token.startswith("-"):
-            # Skip global flags that take a value (e.g. ``-R owner/name``).
             name, _, inline = token.partition("=")
             if inline:
                 i += 1
                 continue
-            if name in {"-R", "--repo", "-h", "--hostname"} and i + 1 < len(args):
-                nxt = str(args[i + 1])
+            if name in _VALUE_FLAGS and i + 1 < len(cleaned):
+                nxt = cleaned[i + 1]
                 if nxt and not nxt.startswith("-"):
                     i += 2
                     continue
             i += 1
             continue
-        return token.lower()
-    return None
+        positionals.append(token)
+        i += 1
+        while i < len(cleaned):
+            positionals.append(cleaned[i])
+            i += 1
+        break
+    return positionals
 
 
 def build_gh_argv(*, args: list[str], repo: str | None = None) -> list[str]:
-    """Build full argv for ``gh`` including optional ``-R owner/name``.
-    """
+    """Build full argv for ``gh`` including optional ``-R owner/name``."""
     argv = ["gh"]
     cleaned_repo = (repo or "").strip()
-    command = _first_positional_command(args)
+    positionals = positional_gh_tokens(args)
+    command = positionals[0].lower() if positionals else None
     if cleaned_repo and command != "api":
         argv.extend(["-R", cleaned_repo])
     argv.extend(str(a) for a in args)
@@ -157,5 +176,6 @@ __all__ = [
     "DEFAULT_TIMEOUT_SECONDS",
     "MAX_TIMEOUT_SECONDS",
     "build_gh_argv",
+    "positional_gh_tokens",
     "run_gh",
 ]

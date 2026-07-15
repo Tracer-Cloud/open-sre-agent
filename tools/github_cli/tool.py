@@ -7,8 +7,8 @@ from typing import Any
 from core.tool_framework.tool_decorator import tool
 from integrations.github.client import resolve_github_token
 from integrations.github.helpers import github_creds, github_source_available
-from tools.github_cli.classify import classify_gh_args
 from tools.github_cli.runner import run_gh
+from tools.github_cli.summary import attach_summary
 
 _ARGS_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -49,14 +49,15 @@ def _github_cli_available(sources: dict[str, dict]) -> bool:
 def _github_cli_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     gh = sources.get("github", {})
     params: dict[str, Any] = {}
-    if gh:
-        creds = github_creds(gh)
-        if creds.get("github_token"):
-            params["github_token"] = creds["github_token"]
-        owner = str(gh.get("owner") or "").strip()
-        repo = str(gh.get("repo") or "").strip()
-        if owner and repo and "repo" not in params:
-            params["repo"] = f"{owner}/{repo}"
+    if not gh:
+        return params
+    creds = github_creds(gh)
+    if creds.get("github_token"):
+        params["github_token"] = creds["github_token"]
+    owner = str(gh.get("owner") or "").strip()
+    repo = str(gh.get("repo") or "").strip()
+    if owner and repo:
+        params["repo"] = f"{owner}/{repo}"
     return params
 
 
@@ -73,7 +74,10 @@ def _normalize_args(args: list[str] | None) -> list[str]:
         "Run GitHub CLI (`gh`) with OpenSRE-configured auth — reads and writes. "
         "Use for issue/PR create, list, view, assign, label, merge, repo list, "
         "and gh api. Prefer this over shell_run / !gh / raw gh. "
-        "Pass args after the gh binary; optional repo as owner/name for -R."
+        "Pass args after the gh binary; optional repo as owner/name for -R. "
+        "After the call, reply from the result summary — plain prose for simple "
+        "confirms; chat-like markdown bullets for multi-item reads (not report "
+        "tables/headers). Not raw JSON/GraphQL dumps."
     ),
     use_cases=[
         "Creating a GitHub issue (title/body/assignee/labels) when the user asks",
@@ -86,7 +90,7 @@ def _normalize_args(args: list[str] | None) -> list[str]:
         "Printing or logging the GitHub token",
         "Inventing repo lists without calling github_cli",
     ],
-    surfaces=("investigation", "chat", "action"),
+    surfaces=("action",),
     side_effect_level="mutating",
     requires_approval=False,
     input_schema=_ARGS_SCHEMA,
@@ -102,11 +106,10 @@ def github_cli(
 ) -> dict[str, Any]:
     """Run an authenticated ``gh`` command (read or write; no approval gate)."""
     normalized = _normalize_args(args)
-    effect = classify_gh_args(normalized)
-    result = run_gh(args=normalized, repo=repo, github_token=github_token, timeout=timeout)
-    result["effect"] = effect
-    result["tool"] = "github_cli"
-    return result
+    return attach_summary(
+        run_gh(args=normalized, repo=repo, github_token=github_token, timeout=timeout),
+        args=normalized,
+    )
 
 
 __all__ = ["github_cli"]
