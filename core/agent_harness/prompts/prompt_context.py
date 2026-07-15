@@ -51,6 +51,20 @@ class DefaultPromptContextProvider:
     def surface(self) -> str:
         return self._surface
 
+    def _visible_integrations(self) -> tuple[str, ...]:
+        """Integration names to advertise, minus any the surface asked to hide.
+
+        The gateway injects ``_gateway_hidden_integrations`` (the inactive chat
+        transports) so a Slack teammate does not surface Telegram, and vice
+        versa. Core stays transport-agnostic — it only applies the injected set.
+        """
+        names = tuple(self._session.configured_integrations)
+        cache = getattr(self._session, "resolved_integrations_cache", None) or {}
+        hidden = {str(n).strip().lower() for n in (cache.get("_gateway_hidden_integrations") or ())}
+        if not hidden:
+            return names
+        return tuple(name for name in names if name.strip().lower() not in hidden)
+
     def cli_reference(self) -> str:
         return ""
 
@@ -91,7 +105,7 @@ class DefaultPromptContextProvider:
                 metadata=cached if isinstance(cached, dict) and cached else None
             )
             return build_environment_block(
-                integrations=tuple(self._session.configured_integrations),
+                integrations=self._visible_integrations(),
                 known=self._session.configured_integrations_known,
                 llm_provider=llm_provider,
                 reasoning_model=reasoning_model,
