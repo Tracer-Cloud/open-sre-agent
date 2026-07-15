@@ -81,6 +81,17 @@ def run_gh(
     Never returns the token. On success/failure returns a structured payload
     suitable for agent consumption.
     """
+    if not args:
+        return {
+            "ok": False,
+            "error": "args must be a non-empty list of arguments after `gh`.",
+            "error_type": "validation_error",
+            "argv": ["gh"],
+            "exit_code": None,
+            "stdout": "",
+            "stderr": "",
+        }
+
     token = resolve_github_token(github_token)
     if not token:
         return {
@@ -99,17 +110,6 @@ def run_gh(
             "error": "The GitHub CLI (`gh`) is not installed or not on PATH.",
             "error_type": "missing_binary",
             "argv": build_gh_argv(args=args, repo=repo),
-            "exit_code": None,
-            "stdout": "",
-            "stderr": "",
-        }
-
-    if not args:
-        return {
-            "ok": False,
-            "error": "args must be a non-empty list of arguments after `gh`.",
-            "error_type": "validation_error",
-            "argv": ["gh"],
             "exit_code": None,
             "stdout": "",
             "stderr": "",

@@ -596,8 +596,9 @@ def _run_action_agent_turn_body(
     generic_text = _response_text_from_generic_results(result)
     hint = _pop_turn_outcome_hint(session)
     # History entries are already rendered by self-recording tools (shell/slash/…).
-    # Only print final LLM text + generic tool results + hints so users see
+    # Console display uses final_text + generic results + hints only so users see
     # github_cli / other registry tools without double-printing shell output.
+    # response_text still includes history for persistence / non-TTY surfaces.
     display_chunks = [chunk for chunk in (final_text, generic_text, hint) if chunk]
     response_chunks = [
         chunk
@@ -609,7 +610,6 @@ def _run_action_agent_turn_body(
         )
         if chunk
     ]
-    final_text = (getattr(result, "final_text", "") or "").strip()
     # Prefer the agent's closing prose when it looks like a real reply (report /
     # multi-line Markdown). Short one-liners like "done" are common after a
     # single tool call and must not replace tool-derived response_text or get
@@ -628,6 +628,10 @@ def _run_action_agent_turn_body(
         session.last_command_observation = response_text
     if handled and use_final_text:
         output.stream(label="OpenSRE", chunks=iter([final_text]))
+    elif display_chunks:
+        output.print()
+        output.render_response_header("assistant")
+        output.print("\n".join(display_chunks))
     elif handled:
         output.print()
 
