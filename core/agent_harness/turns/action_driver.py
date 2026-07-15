@@ -219,6 +219,8 @@ def _format_generic_tool_payload(tool_call: ToolCall, tool_result: Any) -> str:
         error = details.get("error")
         if error:
             return str(error).strip()
+    if getattr(tool_result, "is_error", False):
+        return ""
     content = _content_to_text(getattr(tool_result, "content", "")).strip()
     if not content:
         return ""
