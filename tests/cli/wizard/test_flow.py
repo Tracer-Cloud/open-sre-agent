@@ -3060,6 +3060,80 @@ def test_run_wizard_ollama_host_is_validated_then_persisted_to_dotenv(
     assert exit_code == 0
 
 
+def test_run_wizard_ollama_host_env_write_failure_offers_recovery_menu(
+    monkeypatch, tmp_path
+) -> None:
+    """#3591 (cerencamkiran): a host credential whose .env write fails reaches the shared
+    recovery menu, it does not crash the wizard.
+
+    ``_persist_llm_credential``'s host branch writes the Ollama host to ``.env`` via
+    ``sync_env_values``. If that write raises (permission denied, read-only fs, a full
+    disk — any ``OSError``), the user must see the same Retry / Continue-without-saving
+    / Pick-a-different-provider menu the keyring path already offers, and choosing
+    "Continue without saving (this session only)" must finish onboarding with the host
+    exported to ``os.environ`` only — never with the write error propagating.
+
+    Today the host branch does not catch the write error, so the ``OSError`` escapes
+    ``_persist_llm_credential_with_recovery`` and crashes onboarding. This test is RED
+    until that gap is closed.
+    """
+    menu_responses = iter(["continue_unsaved"])
+    recovery_prompts: list[str] = []
+    saved_llm_keys: list[tuple[str, str]] = []
+
+    monkeypatch.setenv("OLLAMA_HOST", "sentinel-before")
+
+    def _mock_select(*_args, **_kwargs):
+        prompt = str(_args[0]) if _args else ""
+        m = MagicMock()
+        if "could not be saved" in prompt:
+            recovery_prompts.append(prompt)
+            m.ask.return_value = next(menu_responses)
+        elif "Choose your LLM provider" in prompt:
+            m.ask.return_value = "ollama"
+        elif "auth method" in prompt:
+            m.ask.return_value = "api_key"
+        elif "model" in prompt:
+            m.ask.return_value = "llama3.2"
+        elif "integration" in prompt.lower():
+            m.ask.return_value = "skip"
+        else:
+            m.ask.return_value = "quickstart"
+        return m
+
+    def _mock_text(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = "http://127.0.0.1:11434"
+        return m
+
+    def _raise_env_write(_values, **_kwargs):
+        # Simulate a real .env write failure: no write permission / read-only fs / full disk.
+        raise OSError("[Errno 13] Permission denied: '.env'")
+
+    monkeypatch.setattr(_ui, "select_prompt", _mock_select)
+    monkeypatch.setattr(flow.questionary, "text", _mock_text)
+    monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
+    monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
+    monkeypatch.setattr(flow, "sync_env_values", _raise_env_write)
+    monkeypatch.setattr(
+        _ui,
+        "save_api_key",
+        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
+    )
+
+    # RED expectation: the write error is caught and turned into the shared recovery menu,
+    # not propagated. Today ``run_wizard`` raises the OSError here instead.
+    exit_code = flow.run_wizard()
+
+    assert recovery_prompts, "a failed .env write must surface the shared recovery menu"
+    # "Continue without saving (this session only)" exports the host process-locally only.
+    assert os.environ["OLLAMA_HOST"] == "http://127.0.0.1:11434"
+    assert saved_llm_keys == []  # a host URL is config, never a keyring secret
+    assert exit_code == 0
+
+
 def test_run_wizard_saved_provider_with_stored_key_skips_validation(monkeypatch, tmp_path) -> None:
     """REGRESSION GATE: a stored key means no key prompt and no validator call."""
     password_prompts: list[str] = []
