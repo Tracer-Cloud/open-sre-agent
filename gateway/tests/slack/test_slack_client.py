@@ -106,3 +106,66 @@ def test_update_message_retries_text_only_when_blocks_rejected() -> None:
 
     assert client.update_message(channel="C1", ts="1.2", text="x", blocks=_MARKDOWN_BLOCKS) is True
     assert "blocks" not in web.update_calls[-1]
+
+
+class _StreamingWebClient(_FakeWebClient):
+    def __init__(self, *, start: dict[str, Any] | Exception) -> None:
+        super().__init__(post={"ts": "unused"})
+        self._start = start
+        self.start_calls: list[dict[str, Any]] = []
+        self.append_calls: list[dict[str, Any]] = []
+        self.stop_calls: list[dict[str, Any]] = []
+
+    def chat_startStream(self, **kwargs: Any) -> dict[str, Any]:
+        self.start_calls.append(kwargs)
+        if isinstance(self._start, Exception):
+            raise self._start
+        return self._start
+
+    def chat_appendStream(self, **kwargs: Any) -> dict[str, Any]:
+        self.append_calls.append(kwargs)
+        return {"ok": True}
+
+    def chat_stopStream(self, **kwargs: Any) -> dict[str, Any]:
+        self.stop_calls.append(kwargs)
+        return {"ok": True}
+
+
+def test_start_stream_returns_ts_and_requests_timeline_mode() -> None:
+    web = _StreamingWebClient(start={"ts": "5.5"})
+    client = SlackWebApiClient(web)  # type: ignore[arg-type]
+
+    assert client.start_stream(channel="C1", thread_ts="1.0") == "5.5"
+    assert web.start_calls[0]["task_display_mode"] == "timeline"
+
+
+def test_start_stream_caches_permanent_unsupported_error() -> None:
+    web = _StreamingWebClient(start=_api_error("unknown_method"))
+    client = SlackWebApiClient(web)  # type: ignore[arg-type]
+
+    assert client.start_stream(channel="C1", thread_ts="1.0") is None
+    assert client.start_stream(channel="C1", thread_ts="1.0") is None
+    # Second call short-circuits without hitting the API again.
+    assert len(web.start_calls) == 1
+
+
+def test_start_stream_retries_after_transient_error() -> None:
+    web = _StreamingWebClient(start=_api_error("internal_error"))
+    client = SlackWebApiClient(web)  # type: ignore[arg-type]
+
+    assert client.start_stream(channel="C1", thread_ts="1.0") is None
+    assert client.start_stream(channel="C1", thread_ts="1.0") is None
+    # Transient errors do not disable streaming for the process.
+    assert len(web.start_calls) == 2
+
+
+def test_append_and_stop_stream_round_trip() -> None:
+    web = _StreamingWebClient(start={"ts": "5.5"})
+    client = SlackWebApiClient(web)  # type: ignore[arg-type]
+
+    chunks = [{"type": "markdown_text", "text": "hi"}]
+    assert client.append_stream(channel="C1", ts="5.5", chunks=chunks) is True
+    assert web.append_calls[0]["chunks"] == chunks
+    footer = [{"type": "context", "elements": []}]
+    assert client.stop_stream(channel="C1", ts="5.5", blocks=footer) is True
+    assert web.stop_calls[0]["blocks"] == footer

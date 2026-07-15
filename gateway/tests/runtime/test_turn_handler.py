@@ -108,3 +108,29 @@ def test_turn_handler_skips_finalize_when_answer_was_streamed(monkeypatch: Any) 
     handler = GatewayTurnHandler(console=Console(force_terminal=False))
     handler("hi", SessionCore(storage=InMemorySessionStorage()), sink, logging.getLogger("test"))
     sink.finalize.assert_not_called()
+
+
+def test_turn_handler_forwards_sink_tool_hooks_to_agent(monkeypatch: Any) -> None:
+    """A sink carrying tool hooks (Slack's approval gate) wires them into the agent."""
+    agent_cls = _patch_headless_agent(monkeypatch, _empty_turn_result())
+    sink = MagicMock()
+    hooks = object()
+    sink.tool_hooks = hooks
+    handler = GatewayTurnHandler(console=Console(force_terminal=False))
+    handler("hi", SessionCore(storage=InMemorySessionStorage()), sink, logging.getLogger("test"))
+    assert agent_cls.call_args.kwargs["tool_hooks"] is hooks
+
+
+def test_turn_handler_tolerates_sinks_without_tool_hooks(monkeypatch: Any) -> None:
+    """Sinks without the attribute (Telegram) run unhooked, as before."""
+
+    class _BareSink:
+        def finalize(self, text: str) -> None:
+            self.finalized = text
+
+    agent_cls = _patch_headless_agent(monkeypatch, _empty_turn_result())
+    handler = GatewayTurnHandler(console=Console(force_terminal=False))
+    handler(
+        "hi", SessionCore(storage=InMemorySessionStorage()), _BareSink(), logging.getLogger("test")
+    )
+    assert agent_cls.call_args.kwargs["tool_hooks"] is None

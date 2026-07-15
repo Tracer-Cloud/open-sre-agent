@@ -16,6 +16,7 @@ import threading
 import time
 from collections.abc import Callable, Iterable
 
+from core.execution import ToolExecutionHooks
 from gateway.runtime.status_messages import (
     EMPTY_RESPONSE_MESSAGE,
     initial_status_message,
@@ -46,7 +47,11 @@ class SlackOutputSink:
         channel_id: str,
         thread_ts: str,
         update_interval_seconds: float = 3.0,
+        tool_hooks: ToolExecutionHooks | None = None,
     ) -> None:
+        # Per-turn tool-execution hooks (e.g. the Block Kit approval gate),
+        # read duck-typed by GatewayTurnHandler when building the agent.
+        self.tool_hooks = tool_hooks
         self._client = client
         self._channel_id = channel_id
         self._thread_ts = thread_ts

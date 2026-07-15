@@ -11,6 +11,11 @@ from dataclasses import dataclass, field
 
 from core.agent_harness.session import SessionCore
 from gateway.runtime.sink_protocol import GatewayAgentCallback
+from gateway.slack.approvals import (
+    ApprovalBroker,
+    ThreadApprovalPrompter,
+    approval_tool_hooks,
+)
 from gateway.slack.attention import GateDecision, ThreadAttentionGate
 from gateway.slack.client import (
     SlackMessagingClient,
@@ -63,6 +68,7 @@ class _SlackTurnDispatcher:
         handler: GatewayAgentCallback,
         logger: logging.Logger,
         bot_user_id: str = "",
+        approvals: ApprovalBroker | None = None,
     ) -> None:
         self._settings = settings
         self._messaging = messaging
@@ -70,6 +76,7 @@ class _SlackTurnDispatcher:
         self._handler = handler
         self._logger = logger
         self._bot_user_id = bot_user_id
+        self._approvals = approvals if approvals is not None else ApprovalBroker()
         self._attention = ThreadAttentionGate()
         self._conversation_locks: dict[str, _ConversationLock] = {}
         self._locks_guard = threading.Lock()
@@ -254,11 +261,20 @@ class _SlackTurnDispatcher:
                 channel=inbound.channel_id,
                 timestamp=inbound.ts,
             )
+            # Write tools declaring requires_approval get an Approve/Deny
+            # button prompt in this thread before they run (fail-closed).
+            prompter = ThreadApprovalPrompter(
+                client=self._messaging,
+                broker=self._approvals,
+                channel_id=inbound.channel_id,
+                thread_ts=inbound.thread_ts,
+            )
             sink = SlackOutputSink(
                 client=self._messaging,
                 channel_id=inbound.channel_id,
                 thread_ts=inbound.thread_ts,
                 update_interval_seconds=self._settings.status_update_interval_seconds,
+                tool_hooks=approval_tool_hooks(prompter),
             )
             outcome_lock = threading.Lock()
             outcome_taken = False

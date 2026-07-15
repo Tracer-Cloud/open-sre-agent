@@ -15,6 +15,7 @@ from slack_sdk.web import WebClient
 
 from gateway.runtime.errors import GatewayConfigurationError
 from gateway.runtime.sink_protocol import GatewayAgentCallback
+from gateway.slack.approvals import ApprovalBroker, handle_block_actions_payload
 from gateway.slack.client import SlackWebApiClient
 from gateway.slack.dispatcher import _SlackTurnDispatcher
 from gateway.slack.events import parse_events_api_payload
@@ -23,6 +24,7 @@ from gateway.storage import SessionBindingStore, SessionResolver, connect_gatewa
 
 _PLATFORM_SLACK = "slack"
 _EVENTS_API_REQUEST_TYPE = "events_api"
+_INTERACTIVE_REQUEST_TYPE = "interactive"
 
 
 class SlackGatewayBackground:
@@ -87,6 +89,7 @@ def start_slack_gateway_background(
     # Resolve the bot's own user id once so thread seeding can label the bot's
     # replies by author, not by fragile text-shape matching.
     bot_user_id = _resolve_bot_user_id(web_client, logger)
+    approvals = ApprovalBroker()
     dispatcher = _SlackTurnDispatcher(
         settings=settings,
         messaging=SlackWebApiClient(web_client),
@@ -94,11 +97,23 @@ def start_slack_gateway_background(
         handler=handler,
         logger=logger,
         bot_user_id=bot_user_id,
+        approvals=approvals,
     )
 
     def _on_request(client: BaseSocketModeClient, request: SocketModeRequest) -> None:
         # Ack first: Slack redelivers any envelope not acked within 3 seconds.
         client.send_socket_mode_response(SocketModeResponse(envelope_id=request.envelope_id))
+        if request.type == _INTERACTIVE_REQUEST_TYPE:
+            # Approval clicks resolve on the listener thread: turn workers may
+            # all be blocked *waiting* on these buttons, so a click must never
+            # need a free worker.
+            handle_block_actions_payload(
+                request.payload,
+                broker=approvals,
+                allowed_user_ids=settings.allowed_user_ids,
+                allow_open_workspace=settings.allow_open_workspace,
+            )
+            return
         if request.type != _EVENTS_API_REQUEST_TYPE:
             return
         inbound = parse_events_api_payload(request.payload)

@@ -10,13 +10,31 @@ from gateway.slack.output_sink import (
 
 
 class _FakeMessagingClient:
-    """Records posts/updates; per-instance switches simulate API failures."""
+    """Records posts/updates; per-instance switches simulate API failures.
 
-    def __init__(self, *, post_ok: bool = True, update_ok: bool = True) -> None:
+    ``stream_ok=False`` (the default) mimics a workspace where
+    ``chat.startStream`` is unavailable, so most tests exercise the
+    placeholder-edit fallback path.
+    """
+
+    def __init__(
+        self,
+        *,
+        post_ok: bool = True,
+        update_ok: bool = True,
+        stream_ok: bool = False,
+        append_ok: bool = True,
+    ) -> None:
         self.post_ok = post_ok
         self.update_ok = update_ok
+        self.stream_ok = stream_ok
+        self.append_ok = append_ok
         self.posts: list[dict[str, Any]] = []
         self.updates: list[dict[str, Any]] = []
+        self.deletes: list[dict[str, Any]] = []
+        self.stream_starts: list[dict[str, Any]] = []
+        self.stream_appends: list[dict[str, Any]] = []
+        self.stream_stops: list[dict[str, Any]] = []
 
     def post_message(
         self,
@@ -40,6 +58,25 @@ class _FakeMessagingClient:
 
     def remove_reaction(self, **_kwargs: Any) -> bool:
         return True
+
+    def delete_message(self, *, channel: str, ts: str) -> bool:
+        self.deletes.append({"channel": channel, "ts": ts})
+        return True
+
+    def start_stream(self, *, channel: str, thread_ts: str) -> str | None:
+        self.stream_starts.append({"channel": channel, "thread_ts": thread_ts})
+        return f"stream-{len(self.stream_starts)}" if self.stream_ok else None
+
+    def append_stream(self, *, channel: str, ts: str, chunks: Any) -> bool:
+        self.stream_appends.append({"channel": channel, "ts": ts, "chunks": list(chunks)})
+        return self.append_ok
+
+    def stop_stream(self, *, channel: str, ts: str, blocks: Any = None) -> bool:
+        self.stream_stops.append({"channel": channel, "ts": ts, "blocks": blocks})
+        return True
+
+    def all_streamed_chunks(self) -> list[dict[str, Any]]:
+        return [chunk for append in self.stream_appends for chunk in append["chunks"]]
 
 
 def _sink(client: _FakeMessagingClient) -> SlackOutputSink:
@@ -204,3 +241,100 @@ def test_survives_failed_placeholder_post() -> None:
     # No placeholder to edit: statuses are dropped, the answer is posted fresh.
     assert not client.updates
     assert client.posts[-1]["text"] == "answer"
+
+
+# ---------------------------------------------------------------------------
+# Streamed delivery (chat.startStream / appendStream / stopStream)
+# ---------------------------------------------------------------------------
+
+
+def test_streaming_turn_renders_tasks_then_markdown_then_stops_with_footer() -> None:
+    client = _FakeMessagingClient(stream_ok=True)
+    sink = _sink(client)
+
+    sink.set_tool_status("Reading Slack messages")
+    sink.set_tool_status("Checking Kubernetes pods")
+    text = sink.stream(label="assistant", chunks=["The disk", " is full."])
+    assert text == "The disk is full."
+
+    # The placeholder is replaced by the streamed message.
+    assert client.deletes and client.deletes[0]["ts"] == "ts-1"
+    assert len(client.stream_starts) == 1
+
+    chunks = client.all_streamed_chunks()
+    task_chunks = [c for c in chunks if c["type"] == "task_update"]
+    # Two tasks; the first completes when the second starts, the second when
+    # the answer text begins.
+    assert [c["status"] for c in task_chunks] == [
+        "in_progress",
+        "complete",
+        "in_progress",
+        "complete",
+    ]
+    assert "Reading Slack messages" in task_chunks[0]["title"]
+
+    markdown = "".join(c["text"] for c in chunks if c["type"] == "markdown_text")
+    assert markdown == "The disk is full."
+
+    # Stopped once, with the provenance footer as the only final block.
+    assert len(client.stream_stops) == 1
+    footer = client.stream_stops[0]["blocks"][-1]
+    assert footer["type"] == "context"
+    assert "AI-generated" in footer["elements"][0]["text"]
+    # The answer was fully streamed: no legacy edit/post delivery on top.
+    assert all("answer" not in update["text"] for update in client.updates)
+    assert len(client.posts) == 1  # just the placeholder
+
+
+def test_stream_start_failure_is_probed_once_then_placeholder_edits() -> None:
+    client = _FakeMessagingClient(stream_ok=False)
+    sink = _sink(client)
+
+    sink.set_tool_status("step one")
+    sink.set_tool_status("step two")
+
+    # One probe only; both statuses land as placeholder edits.
+    assert len(client.stream_starts) == 1
+    assert not client.deletes
+    assert len(client.updates) == 2
+
+
+def test_stream_append_failure_falls_back_to_full_redelivery() -> None:
+    client = _FakeMessagingClient(stream_ok=True, append_ok=False)
+    sink = _sink(client)
+
+    sink.set_tool_status("working")  # starts stream, append fails -> broken
+    sink.finalize("the full answer")
+
+    # The placeholder was already deleted for the stream, so the fallback
+    # posts the complete answer as a fresh message.
+    assert client.posts[-1]["text"] == "the full answer"
+    assert client.posts[-1]["thread_ts"] == "1700.100"
+
+
+def test_finalize_after_streamed_answer_does_not_duplicate_text() -> None:
+    client = _FakeMessagingClient(stream_ok=True)
+    sink = _sink(client)
+
+    sink.stream(label="assistant", chunks=["done"])
+
+    markdown = "".join(
+        c["text"] for c in client.all_streamed_chunks() if c["type"] == "markdown_text"
+    )
+    assert markdown == "done"
+    assert len(client.stream_stops) == 1
+
+
+def test_error_after_partial_stream_appends_error_copy() -> None:
+    client = _FakeMessagingClient(stream_ok=True)
+    sink = _sink(client)
+
+    sink.set_tool_status("working")
+    sink.render_error("provider exploded at db-host:5432")
+
+    markdown = "".join(
+        c["text"] for c in client.all_streamed_chunks() if c["type"] == "markdown_text"
+    )
+    assert "Something went wrong" in markdown
+    assert "db-host" not in markdown
+    assert len(client.stream_stops) == 1
