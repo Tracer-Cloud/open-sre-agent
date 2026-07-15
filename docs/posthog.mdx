@@ -1,5 +1,5 @@
 ---
-title: "PostHog (Bounce Rate)"
+title: "PostHog"
 description: "Connect PostHog so OpenSRE can query session bounce rates in your project"
 ---
 
@@ -13,7 +13,7 @@ OpenSRE can query **your** PostHog project for session bounce rates — the shar
 
 | What you want | Use this | How to set it up |
 | --- | --- | --- |
-| Query bounce rates in **your** PostHog project | **PostHog (Bounce Rate)** — this page | Environment variables (below) |
+| Query bounce rates in **your** PostHog project | **PostHog** — this page | Environment variables (below) |
 | Let the agent explore PostHog during incidents | [PostHog (MCP)](/posthog-mcp) | `opensre integrations setup posthog_mcp` or onboarding wizard |
 | OpenSRE's own usage telemetry | Built-in product analytics | Controlled by `OPENSRE_NO_TELEMETRY` — not your PostHog project |
 
@@ -45,21 +45,21 @@ POSTHOG_BOUNCE_WINDOW=24h                           # optional — lookback wind
 | `POSTHOG_BOUNCE_THRESHOLD` | `0.6` | Alert when bounce rate exceeds this decimal (`0.0`–`1.0`) |
 | `POSTHOG_BOUNCE_WINDOW` | `24h` | Lookback window — format `<number><unit>` where unit is `s`, `m`, `h`, `d`, or `w` (e.g. `24h`, `7d`) |
 
-<Warning>
-  `opensre integrations setup posthog` configures **PostHog MCP**, not bounce-rate credentials. The onboarding wizard also lists **PostHog (MCP)** only — bounce-rate setup is env-only today.
-</Warning>
+<Info>
+  Bounce-rate setup is env-only today — there is no `opensre integrations setup posthog` wizard. Use [PostHog (MCP)](/posthog-mcp) for the interactive MCP onboarding flow.
+</Info>
 
 ## Verify
 
 After saving your `.env`, confirm OpenSRE can reach your PostHog project:
 
 ```bash
-opensre integrations verify posthog-bounce
+opensre integrations verify posthog
 ```
 
-You can also use the alias `posthog bounce`. A successful check prints `PostHog validated.`
+A successful check prints `PostHog validated.`
 
-`opensre integrations verify posthog` checks **PostHog MCP** instead — use `posthog-bounce` for this integration.
+For the MCP integration, use `opensre integrations verify posthog_mcp` instead.
 
 ## How bounce rate is calculated
 

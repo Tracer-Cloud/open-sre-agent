@@ -1,9 +1,8 @@
-"""`opensre integrations <cmd> posthog` resolves to the `posthog_mcp` flow.
+"""PostHog REST and MCP integrations use distinct CLI service names.
 
-The bare ``posthog`` integration is env-configured analytics with no interactive
-setup/verify flow, so management commands accept ``posthog`` as an alias for the
-only real target, ``posthog_mcp``. Previously ``click.Choice`` rejected
-``posthog`` with exit code 2 before any handler ran.
+Bare ``posthog`` is the env-configured REST bounce-rate integration (verify only).
+``posthog_mcp`` is the separate MCP setup/verify flow — matching the Sentry /
+``sentry_mcp`` split.
 """
 
 from __future__ import annotations
@@ -17,7 +16,14 @@ from integrations.cli import _HANDLERS, cmd_setup, cmd_verify
 from surfaces.cli.__main__ import cli
 
 
-def test_setup_posthog_alias_resolves_to_posthog_mcp() -> None:
+def test_setup_posthog_is_not_a_setup_target() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["integrations", "setup", "posthog"])
+    assert result.exit_code == 2
+    assert "not one of" in result.output
+
+
+def test_setup_posthog_mcp_still_works() -> None:
     runner = CliRunner()
     with (
         patch("surfaces.cli.commands.integrations.capture_integration_setup_started"),
@@ -27,10 +33,8 @@ def test_setup_posthog_alias_resolves_to_posthog_mcp() -> None:
         patch("integrations.cli.cmd_verify", return_value=0),
     ):
         mock_cmd.return_value = "posthog_mcp"
-        result = runner.invoke(cli, ["integrations", "setup", "posthog"])
+        result = runner.invoke(cli, ["integrations", "setup", "posthog_mcp"])
     assert result.exit_code == 0
-    # The alias is resolved at the Click boundary, so cmd_setup receives the
-    # canonical service name rather than the raw "posthog".
     mock_cmd.assert_called_once_with("posthog_mcp")
 
 
@@ -41,22 +45,32 @@ def test_setup_rejects_unknown_service() -> None:
     assert "not one of" in result.output
 
 
-def test_cmd_setup_posthog_alias_dispatches_posthog_mcp_handler(
+def test_cmd_setup_posthog_has_no_handler(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Direct cmd_setup('posthog') (python -m integrations path) dispatches MCP."""
+    """Direct cmd_setup('posthog') (python -m integrations path) has no wizard."""
+    with pytest.raises(SystemExit):
+        cmd_setup("posthog")
+    captured = capsys.readouterr()
+    assert "Usage: setup <service>" in captured.out + captured.err
+
+
+def test_cmd_setup_posthog_mcp_dispatches_handler(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     called: list[str] = []
     monkeypatch.setitem(_HANDLERS, "posthog_mcp", lambda: called.append("posthog_mcp"))
 
-    resolved = cmd_setup("posthog")
+    resolved = cmd_setup("posthog_mcp")
 
     assert resolved == "posthog_mcp"
     assert called == ["posthog_mcp"]
     assert "Setting up" in capsys.readouterr().out
 
 
-def test_cmd_verify_posthog_alias_resolves_before_verifying(
+def test_cmd_verify_posthog_resolves_to_rest_integration(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: dict[str, str | None] = {}
@@ -73,4 +87,24 @@ def test_cmd_verify_posthog_alias_resolves_before_verifying(
     )
 
     assert cmd_verify("posthog") == 0
+    assert captured["service"] == "posthog"
+
+
+def test_cmd_verify_posthog_mcp_still_works(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, str | None] = {}
+
+    def fake_verify(*, service: str | None, send_slack_test: bool = False) -> list[dict[str, str]]:
+        captured["service"] = service
+        return []
+
+    monkeypatch.setattr("integrations.cli.verify_integrations", fake_verify)
+    monkeypatch.setattr("integrations.cli.format_verification_results", lambda _results: "")
+    monkeypatch.setattr(
+        "integrations.cli.verification_exit_code",
+        lambda *_args, **_kwargs: 0,
+    )
+
+    assert cmd_verify("posthog_mcp") == 0
     assert captured["service"] == "posthog_mcp"
