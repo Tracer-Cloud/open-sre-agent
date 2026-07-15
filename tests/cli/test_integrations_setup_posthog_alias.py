@@ -1,6 +1,6 @@
 """PostHog REST and MCP integrations use distinct CLI service names.
 
-Bare ``posthog`` is the REST bounce-rate integration (setup + verify).
+Bare ``posthog`` is the REST credentials integration (setup + verify).
 ``posthog_mcp`` is the separate MCP setup/verify flow — matching the Sentry /
 ``sentry_mcp`` split.
 """

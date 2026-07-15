@@ -53,7 +53,7 @@ ONBOARD_INTEGRATION_CHOICES: tuple[Choice, ...] = (
         value="posthog",
         label="PostHog",
         group="Observability",
-        hint="Query session bounce rates in your PostHog project",
+        hint="Store PostHog REST credentials for your project",
     ),
     Choice(
         value="betterstack",

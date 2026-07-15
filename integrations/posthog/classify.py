@@ -1,4 +1,4 @@
-"""PostHog bounce-rate integration classifier."""
+"""PostHog REST integration classifier."""
 
 from __future__ import annotations
 
@@ -22,11 +22,6 @@ def classify(
     }
     if credentials.get("timeout_seconds") is not None:
         raw["timeout_seconds"] = credentials["timeout_seconds"]
-    if credentials.get("bounce_rate_threshold") is not None:
-        raw["bounce_rate_threshold"] = credentials["bounce_rate_threshold"]
-    bounce_rate_window = str(credentials.get("bounce_rate_window", "") or "").strip()
-    if bounce_rate_window:
-        raw["bounce_rate_window"] = bounce_rate_window
     try:
         cfg = build_posthog_config(raw)
     except Exception as exc:

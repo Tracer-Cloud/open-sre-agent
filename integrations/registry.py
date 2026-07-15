@@ -486,7 +486,7 @@ def service_key(service_name: str) -> str:
 # Aliases that apply only to the integration-management commands (setup, verify,
 # show, remove). These intentionally diverge from `service_key` / `SERVICE_KEY_MAP`
 # when a user-facing label should map to a different canonical handler. Like
-# Sentry, bare ``posthog`` is the REST bounce-rate integration and ``posthog_mcp``
+# Sentry, bare ``posthog`` is the REST credentials integration and ``posthog_mcp``
 # is the separate MCP flow — they are not aliased to each other.
 MANAGEMENT_SERVICE_ALIASES: dict[str, str] = {}
 
