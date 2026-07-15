@@ -7,7 +7,7 @@ import shutil
 import subprocess
 from typing import Any
 
-from integrations.github.client import resolve_github_token
+from tools.github_cli.credentials import resolve_github_token
 
 DEFAULT_TIMEOUT_SECONDS = 60
 MAX_TIMEOUT_SECONDS = 120

@@ -5,8 +5,11 @@ from __future__ import annotations
 from typing import Any
 
 from core.tool_framework.tool_decorator import tool
-from integrations.github.client import resolve_github_token
-from integrations.github.helpers import github_creds, github_source_available
+from tools.github_cli.credentials import (
+    github_creds,
+    github_source_available,
+    resolve_github_token,
+)
 from tools.github_cli.runner import run_gh
 from tools.github_cli.summary import attach_summary
 
