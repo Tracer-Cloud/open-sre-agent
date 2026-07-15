@@ -230,7 +230,9 @@ class TestMessageBuilders:
         with pytest.raises(RuntimeError, match="Sentry morning digest failed"):
             tasks_mod.build_message(task)
 
-    def test_sentry_uptime_watch_uses_tick_helper(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_sentry_uptime_watch_uses_agent_runner_port(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         task = ScheduledTask(
             id="uptime1",
             kind=TaskKind.SENTRY_UPTIME_WATCH,
@@ -241,12 +243,13 @@ class TestMessageBuilders:
         )
         captured: dict[str, object] = {}
 
-        def _mock_tick(*, task_id: str, project_slug: str = "") -> str:
-            captured["task_id"] = task_id
-            captured["project_slug"] = project_slug
+        def _mock_agent_runner(payload: dict[str, object]) -> str:
+            captured.update(payload)
             return "CRITICAL downtime: api"
 
-        monkeypatch.setattr("integrations.sentry.uptime.run_uptime_watch_tick", _mock_tick)
+        monkeypatch.setattr("platform.scheduler.tasks.invoke_agent_runner", _mock_agent_runner)
         msg = tasks_mod.build_message(task)
         assert msg == "CRITICAL downtime: api"
-        assert captured == {"task_id": "uptime1", "project_slug": "api"}
+        assert captured["source"] == "scheduled_sentry_uptime_watch"
+        assert captured["task_id"] == "uptime1"
+        assert captured["project_slug"] == "api"
