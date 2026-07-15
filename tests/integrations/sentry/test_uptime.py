@@ -179,6 +179,29 @@ def test_list_sentry_uptime_monitors_403_includes_alerts_hint(
         list_sentry_uptime_monitors(config=config)
 
 
+def test_resolve_sentry_config_reads_store_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("integrations.sentry.uptime.sentry_config_from_env", lambda: None)
+    monkeypatch.setattr(
+        "integrations.sentry.uptime.get_integration",
+        lambda _service: {
+            "service": "sentry",
+            "credentials": {
+                "base_url": "https://sentry.io",
+                "organization_slug": "tracer-30",
+                "auth_token": "sntrys_test",
+                "project_slug": "python",
+            },
+        },
+    )
+    from integrations.sentry.uptime import resolve_sentry_config
+
+    config = resolve_sentry_config()
+    assert config is not None
+    assert config.organization_slug == "tracer-30"
+    assert config.auth_token == "sntrys_test"
+    assert config.project_slug == "python"
+
+
 def test_run_uptime_watch_tick_notifies_then_quiets(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

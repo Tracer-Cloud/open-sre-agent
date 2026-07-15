@@ -70,24 +70,41 @@ class WatchState:
     open_incidents: set[str] = field(default_factory=set)
 
 
+def _store_credentials(store: dict[str, Any]) -> dict[str, Any]:
+    """Extract Sentry credentials from an integration store record.
+
+    Store shape is ``{credentials: {...}}`` (optionally with ``instances``),
+    not a top-level ``config`` dict.
+    """
+    creds = store.get("credentials")
+    if isinstance(creds, dict) and creds:
+        return creds
+    instances = store.get("instances")
+    if isinstance(instances, list):
+        for instance in instances:
+            if not isinstance(instance, dict):
+                continue
+            nested = instance.get("credentials")
+            if isinstance(nested, dict) and nested:
+                return nested
+    # Legacy / test shapes
+    nested_config = store.get("config")
+    if isinstance(nested_config, dict) and nested_config:
+        return nested_config
+    return store
+
+
 def resolve_sentry_config(*, project_slug: str = "") -> SentryConfig | None:
     """Resolve Sentry REST config from env, then the integration store."""
     env_config = sentry_config_from_env()
     store = get_integration("sentry") or {}
-    raw_config = store.get("config")
-    store_config: dict[str, Any]
-    if isinstance(raw_config, dict):
-        store_config = raw_config
-    elif isinstance(store, dict):
-        store_config = store
-    else:
-        store_config = {}
+    store_config = _store_credentials(store if isinstance(store, dict) else {})
 
     organization_slug = (env_config.organization_slug if env_config else "") or str(
         store_config.get("organization_slug") or ""
     ).strip()
     auth_token = (env_config.auth_token if env_config else "") or str(
-        store_config.get("auth_token") or ""
+        store_config.get("auth_token") or store_config.get("sentry_token") or ""
     ).strip()
     if not organization_slug or not auth_token:
         return None
@@ -101,7 +118,11 @@ def resolve_sentry_config(*, project_slug: str = "") -> SentryConfig | None:
         {
             "base_url": (
                 (env_config.base_url if env_config else "")
-                or str(store_config.get("base_url") or "https://sentry.io").strip()
+                or str(
+                    store_config.get("base_url")
+                    or store_config.get("sentry_url")
+                    or "https://sentry.io"
+                ).strip()
                 or "https://sentry.io"
             ),
             "organization_slug": organization_slug,
