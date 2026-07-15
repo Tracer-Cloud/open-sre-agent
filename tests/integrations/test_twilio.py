@@ -7,6 +7,7 @@ from typing import Any
 import pytest
 
 from integrations.config_models import TwilioIntegrationConfig, TwilioSMSChannelConfig
+from integrations.twilio import classify
 from integrations.twilio.verifier import verify_twilio as _verify_twilio
 
 
@@ -161,6 +162,47 @@ def test_verify_failed_when_api_errors(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert result["status"] == "failed"
     assert "Connection timeout" in result["detail"]
+
+
+# ---- classify() ---------------------------------------------------------------
+
+
+def test_classify_returns_config_on_valid_credentials() -> None:
+    cfg, key = classify(
+        {
+            "account_sid": "AC1",
+            "auth_token": "tok",
+            "sms": {"enabled": True, "from_number": "+14155551111"},
+        },
+        "rec-1",
+    )
+    assert key == "twilio"
+    assert isinstance(cfg, TwilioIntegrationConfig)
+    assert cfg.account_sid == "AC1"
+
+
+def test_classify_returns_none_on_invalid_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "integrations._classify_helpers.report_classify_failure",
+        lambda *_a, **_kw: None,
+    )
+    cfg, key = classify({"account_sid": "   ", "auth_token": "tok"}, "rec-bad")
+    assert cfg is None
+    assert key is None
+
+
+def test_classify_reports_failure_on_validation_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    reported: list[BaseException] = []
+
+    monkeypatch.setattr(
+        "integrations._classify_helpers.report_classify_failure",
+        lambda exc, **_kw: reported.append(exc),
+    )
+
+    cfg, key = classify({"account_sid": "   ", "auth_token": "tok"}, "rec-err")
+    assert cfg is None
+    assert key is None
+    assert len(reported) == 1
 
 
 # ---- Catalog env-bootstrap ----------------------------------------------------
