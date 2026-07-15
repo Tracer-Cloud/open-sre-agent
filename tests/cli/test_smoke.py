@@ -760,15 +760,20 @@ def test_onboard_interactive_smoke_cli_provider_repick_when_unauthenticated(
                 send=b"\r",
                 stagger_j=1,
             ),
+            # #3591: the model is chosen BEFORE the credential, so the live probe
+            # runs against the model that gets persisted. Same order as
+            # test_onboard_interactive_smoke: model -> key -> recovery menu.
+            PtyAction(expect="Choose Anthropic model", send=b"\r"),
             PtyAction(expect="Anthropic API key", send=b"smoke-test-key\r"),
-            # #3591: same save-anyway step as test_onboard_interactive_smoke.
+            # smoke-test-key fails validation; move to "Save anyway without
+            # validating" to keep the keyring persistence path and every
+            # downstream assertion intact.
             PtyAction(
-                expect="failed validation. What next?",
+                expect="could not be verified. What next?",
                 send=b"\r",
                 stagger_j=1,
                 timeout=90.0,
             ),
-            PtyAction(expect="Choose Anthropic model", send=b"\r"),
             PtyAction(
                 expect="Choose an integration to configure",
                 send=b"\r",
