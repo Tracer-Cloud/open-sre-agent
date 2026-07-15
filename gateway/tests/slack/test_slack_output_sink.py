@@ -97,13 +97,18 @@ def test_tool_status_edits_placeholder() -> None:
     assert "kubectl" in client.updates[-1]["text"]
 
 
-def test_render_error_finalizes_with_error_text() -> None:
+def test_render_error_hides_raw_detail_behind_generic_copy() -> None:
+    # Arrange
     client = _FakeMessagingClient()
     sink = _sink(client)
 
-    sink.render_error("provider unavailable")
+    # Act: hand render_error a raw exception string with sensitive detail.
+    sink.render_error("provider unavailable at db-host:5432")
 
-    assert client.updates[-1]["text"] == "Error: provider unavailable"
+    # Assert: the thread shows generic copy, none of the raw detail.
+    finalized = client.updates[-1]["text"]
+    assert finalized == "Something went wrong handling that request. Please try again."
+    assert "db-host" not in finalized
 
 
 def test_survives_failed_placeholder_post() -> None:
