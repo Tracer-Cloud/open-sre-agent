@@ -129,7 +129,7 @@ investigation_start_tool = RegisteredTool(
     parallel_safe=False,
     accepts_runtime_context=True,
     run=run_investigation,
-        is_available=lambda sources: capability_available_from_sources(
+    is_available=lambda sources: capability_available_from_sources(
         sources,
         "investigation",
     ),
