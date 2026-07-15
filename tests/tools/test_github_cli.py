@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 from core.tool_framework.registered_tool import RegisteredTool
 from tests.tools.conftest import BaseToolContract
-from tools.github_cli.runner import build_gh_argv, run_gh
+from tools.github_cli.runner import build_gh_argv, denied_gh_command, run_gh
 from tools.github_cli.summary import summarize_gh_result
 from tools.github_cli.tool import github_cli
 from tools.registry import clear_tool_registry_cache, get_registered_tools
@@ -66,6 +66,18 @@ def test_run_gh_blocks_extension_install_after_global_flags() -> None:
     assert result["ok"] is False
     assert result["error_type"] == "policy_error"
     assert "extension" in result["error"]
+    run_mock.assert_not_called()
+
+
+def test_help_flag_does_not_mask_blocked_command() -> None:
+    """``-h`` is ``--help``, not a value flag; must not skip the next token."""
+    assert denied_gh_command(["-h", "auth", "token"]) == "auth"
+    assert denied_gh_command(["-h", "extension", "install", "evil/x"]) == "extension"
+    with patch("tools.github_cli.runner.subprocess.run") as run_mock:
+        result = run_gh(args=["-h", "auth", "token"])
+    assert result["ok"] is False
+    assert result["error_type"] == "policy_error"
+    assert "auth" in result["error"]
     run_mock.assert_not_called()
 
 

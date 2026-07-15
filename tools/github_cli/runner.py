@@ -28,11 +28,11 @@ _DENIED_TOP_LEVEL_COMMANDS = frozenset(
 )
 
 # Global flags that consume a following value (after the ``gh`` binary).
+# Note: ``-h`` is ``--help`` (boolean), not a short form of ``--hostname``.
 _VALUE_FLAGS = frozenset(
     {
         "-R",
         "--repo",
-        "-h",
         "--hostname",
         "--jq",
         "-t",
