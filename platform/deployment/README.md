@@ -8,7 +8,6 @@ AWS EC2 deployment and shared provisioning primitives for OpenSRE.
 | --- | --- |
 | [`aws/`](aws/) | Shared AWS SDK primitives (`client`, `config`, VPC/SG, EC2/IAM, ECR, SSM). |
 | [`ecr_deploy/`](ecr_deploy/) | Docker/ECR EC2 provisioning: `opensre-web` + `opensre-gateway` on one instance. |
-| [`fargate/`](fargate/) | ECS Fargate + RDS layout (plan/dry-run; apply not implemented yet). |
 | [`gateway/`](gateway/) | AMI + systemd deployment path for the messaging gateway (Telegram and/or Slack; no Docker/ECR). See [gateway/README.md](gateway/README.md). |
 | `install-proxy/` | Install proxy utility (Cloudflare Worker). |
 
