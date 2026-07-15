@@ -137,6 +137,10 @@ class PromptContextProvider(Protocol):
     caches, the headless adapter returns empty strings.
     """
 
+    def surface(self) -> str:
+        """Which surface this turn runs on; defaults to the interactive shell."""
+        return "interactive_shell"
+
     def cli_reference(self) -> str:
         raise NotImplementedError
 

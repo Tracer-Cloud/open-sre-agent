@@ -29,11 +29,14 @@ def assert_deploy_account(region: str = DEFAULT_REGION) -> str:
 
     Opt-in guard: when the env var is set (local ``.env``), it stops the default
     AWS profile from creating opensre resources in the wrong account. Unset
-    (other devs, CI) means no enforcement. Returns the active account id.
+    (other devs, CI) means no enforcement and no STS call. Returns the active
+    account id when enforced, else an empty string.
     """
-    active = str(get_boto3_client("sts", region).get_caller_identity()["Account"])
     expected = os.getenv(DEPLOY_ACCOUNT_ID_ENV, "").strip()
-    if expected and active != expected:
+    if not expected:
+        return ""
+    active = str(get_boto3_client("sts", region).get_caller_identity()["Account"])
+    if active != expected:
         raise DeployAccountError(
             f"Active AWS account {active} is not the configured opensre deploy account "
             f"{expected}. Point AWS_PROFILE at the opensre account, or unset "

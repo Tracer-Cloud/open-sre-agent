@@ -58,6 +58,9 @@ class _StubPromptContextProvider:
         self._configured_integrations = configured_integrations
         self._configured_integrations_known = configured_integrations_known
 
+    def surface(self) -> str:
+        return "interactive_shell"
+
     def cli_reference(self) -> str:
         return _CLI_REFERENCE_TEXT
 

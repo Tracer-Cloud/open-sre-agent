@@ -28,3 +28,11 @@ def test_gateway_drops_slash_command_setup_guidance() -> None:
     prompt = build_assistant_system_prompt("ref", "hist", surface="gateway")
     # It must not push CLI slash-command setup at Slack users.
     assert "never tell them to run" in prompt
+
+
+def test_gateway_preamble_is_slack_teammate_not_terminal() -> None:
+    prompt = build_assistant_system_prompt("ref", "hist", surface="gateway")
+    # The opening framing (highest salience) must not call it a terminal assistant.
+    assert prompt.startswith("You are OpenSRE, an AI production engineer teammate")
+    assert "terminal assistant" not in prompt
+    assert "full-shell semantics" not in prompt

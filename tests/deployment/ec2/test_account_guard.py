@@ -26,13 +26,17 @@ def stub_active_account(monkeypatch: pytest.MonkeyPatch):
     return _apply
 
 
-def test_unset_env_skips_enforcement(monkeypatch: pytest.MonkeyPatch, stub_active_account) -> None:
-    # Arrange: no expected account configured (other devs / CI).
+def test_unset_env_skips_enforcement_without_sts_call(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Arrange: guard disabled (other devs / CI) — STS must not be called at all.
     monkeypatch.delenv(_ENV, raising=False)
-    stub_active_account("111111111111")
 
-    # Act / Assert: returns the active account, never raises.
-    assert assert_deploy_account() == "111111111111"
+    def _no_sts(*_args, **_kwargs):
+        raise AssertionError("STS must not be called when the guard is disabled")
+
+    monkeypatch.setattr(aws_client, "get_boto3_client", _no_sts)
+
+    # Act / Assert: returns empty (no enforcement), never touches AWS.
+    assert assert_deploy_account() == ""
 
 
 def test_matching_account_passes(monkeypatch: pytest.MonkeyPatch, stub_active_account) -> None:

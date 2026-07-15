@@ -78,6 +78,9 @@ class BufferOutputSink:
 class EmptyPromptContextProvider:
     """Grounding provider that supplies no corpora (headless)."""
 
+    def surface(self) -> str:
+        return "interactive_shell"
+
     def cli_reference(self) -> str:
         return ""
 

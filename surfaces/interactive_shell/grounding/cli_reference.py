@@ -330,6 +330,9 @@ class ShellPromptContextProvider:
         self._base = DefaultPromptContextProvider(session)
         self._cli = session_cli_reference(session)
 
+    def surface(self) -> str:
+        return "interactive_shell"
+
     def cli_reference(self) -> str:
         return self._cli.build_text()
 
