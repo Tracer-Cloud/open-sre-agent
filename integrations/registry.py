@@ -361,7 +361,13 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
     IntegrationSpec(service="alicloud", direct_effective=True),
     IntegrationSpec(service="notion"),
     IntegrationSpec(service="prefect", has_verifier=True, verify_order=51),
-    IntegrationSpec(service="posthog"),
+    IntegrationSpec(
+        service="posthog",
+        aliases=("posthog bounce", "posthog-bounce"),
+        has_verifier=True,
+        direct_effective=True,
+        verify_order=43,
+    ),
     IntegrationSpec(service="trello"),
     IntegrationSpec(service="rds", setup_order=11),
     IntegrationSpec(
@@ -481,8 +487,9 @@ def service_key(service_name: str) -> str:
 # show, remove). These intentionally diverge from `service_key` / `SERVICE_KEY_MAP`,
 # which must keep `posthog` distinct from `posthog_mcp` for classification: the
 # bare `posthog` integration is env-configured analytics with no interactive
-# setup/verify flow of its own, so when a user (or the action planner) asks to
+# setup flow of its own, so when a user (or the action planner) asks to
 # *manage* "posthog" the only real target is the PostHog MCP integration.
+# Verify bounce-rate credentials with ``posthog-bounce`` instead.
 MANAGEMENT_SERVICE_ALIASES: dict[str, str] = {
     "posthog": "posthog_mcp",
 }

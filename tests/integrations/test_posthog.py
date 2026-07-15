@@ -15,6 +15,8 @@ from integrations.posthog import (
     query_bounce_rate,
     validate_posthog_config,
 )
+from integrations.posthog.classify import classify
+from integrations.posthog.verifier import verify_posthog
 
 
 def test_build_posthog_config_defaults() -> None:
@@ -331,3 +333,50 @@ def test_check_bounce_rate_alert_critical(monkeypatch: pytest.MonkeyPatch) -> No
     assert alert.bounce_rate == 0.95
     assert alert.total_sessions == 1000
     assert alert.bounced_sessions == 950
+
+
+def test_classify_posthog_requires_project_and_key() -> None:
+    cfg, service = classify({"project_id": "123"}, "env-posthog")
+    assert cfg is None
+    assert service is None
+
+    cfg, service = classify(
+        {"project_id": "123", "personal_api_key": "phx_test"},
+        "env-posthog",
+    )
+    assert service == "posthog"
+    assert cfg is not None
+    assert cfg.project_id == "123"
+    assert cfg.personal_api_key == "phx_test"
+
+
+def test_verify_posthog_missing_project_id() -> None:
+    result = verify_posthog("local env", {"personal_api_key": "phx_test"})
+    assert result["service"] == "posthog"
+    assert result["status"] == "failed"
+    assert "project ID is required" in result["detail"]
+
+
+def test_verify_posthog_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_request_json(
+        _config: PostHogConfig,
+        _method: str,
+        _path: str,
+        *,
+        params: dict | None = None,
+        json: dict | None = None,
+    ) -> dict[str, list[list[int]]]:
+        return {"results": [[0, 0]]}
+
+    monkeypatch.setattr("integrations.posthog.client._request_json", fake_request_json)
+
+    result = verify_posthog(
+        "local env",
+        {
+            "project_id": "123",
+            "personal_api_key": "phx_test",
+        },
+    )
+    assert result["service"] == "posthog"
+    assert result["status"] == "passed"
+    assert result["detail"] == "PostHog validated."

@@ -76,14 +76,20 @@ def test_registry_preserves_aliases_and_special_case_buckets() -> None:
 
 
 def test_resolve_management_service_maps_posthog_to_posthog_mcp() -> None:
-    # The bare `posthog` integration has no interactive setup/verify flow, so
-    # management commands should treat "posthog" as the PostHog MCP integration.
+    # The bare `posthog` integration has no interactive setup flow, so management
+    # commands should treat "posthog" as the PostHog MCP integration.
     assert resolve_management_service("posthog") == "posthog_mcp"
     assert resolve_management_service("  PostHog  ") == "posthog_mcp"
     assert resolve_management_service("posthog_mcp") == "posthog_mcp"
     # `posthog_mcp` must be a real setup + verify target for the alias to be useful.
     assert "posthog_mcp" in SUPPORTED_SETUP_SERVICES
     assert "posthog_mcp" in SUPPORTED_VERIFY_SERVICES
+    assert "posthog" in SUPPORTED_VERIFY_SERVICES
+
+
+def test_service_key_resolves_posthog_bounce_aliases() -> None:
+    assert service_key("posthog-bounce") == "posthog"
+    assert service_key("posthog bounce") == "posthog"
 
 
 def test_resolve_management_service_leaves_other_services_unaliased() -> None:

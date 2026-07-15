@@ -80,6 +80,8 @@ from integrations.opsgenie import classify as _classify_opsgenie
 from integrations.pagerduty import classify as _classify_pagerduty
 from integrations.postgresql import build_postgresql_config
 from integrations.postgresql import classify as _classify_postgresql
+from integrations.posthog import posthog_config_from_env
+from integrations.posthog.classify import classify as _classify_posthog
 from integrations.posthog_mcp import DEFAULT_POSTHOG_MCP_URL, build_posthog_mcp_config
 from integrations.posthog_mcp import classify as _classify_posthog_mcp
 from integrations.prefect import classify as _classify_prefect
@@ -262,6 +264,7 @@ _CLASSIFIERS: dict[str, _ClassifyFn] = {
     "whatsapp": _classify_whatsapp,
     "twilio": _classify_twilio,
     "openclaw": _classify_openclaw,
+    "posthog": _classify_posthog,
     "posthog_mcp": _classify_posthog_mcp,
     "sentry_mcp": _classify_sentry_mcp,
     "x_mcp": _classify_x_mcp,
@@ -1028,6 +1031,18 @@ def load_env_integrations() -> list[dict[str, Any]]:
             )
         except Exception as exc:
             _report_env_loader_failure(exc, integration="openclaw")
+
+    try:
+        posthog_config = posthog_config_from_env()
+        if posthog_config is not None:
+            integrations.append(
+                _active_env_record(
+                    "posthog",
+                    posthog_config.model_dump(exclude={"integration_id"}),
+                )
+            )
+    except Exception as exc:
+        _report_env_loader_failure(exc, integration="posthog")
 
     posthog_mcp_mode = os.getenv("POSTHOG_MCP_MODE", "streamable-http").strip().lower()
     posthog_mcp_mode = posthog_mcp_mode or "streamable-http"
