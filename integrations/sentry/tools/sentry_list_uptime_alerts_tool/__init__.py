@@ -4,14 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
-import httpx
-
 from core.tool_framework.telemetry import report_run_error
 from core.tool_framework.tool_decorator import tool
 from integrations.sentry import (
     SentryConfig,
     build_sentry_config,
-    describe_sentry_api_error,
     sentry_config_from_env,
 )
 from integrations.sentry.uptime import list_sentry_uptime_monitors
@@ -75,6 +72,7 @@ def _extract_params(sources: dict[str, dict]) -> dict[str, Any]:
         },
         "required": ["organization_slug", "sentry_token"],
     },
+    injected_params=("organization_slug", "sentry_token", "sentry_url", "project_slug"),
     is_available=_sentry_available,
     extract_params=_extract_params,
     surfaces=("investigation", "chat"),
@@ -88,31 +86,52 @@ def list_sentry_uptime_alerts(
     """Return normalized Sentry uptime monitor health."""
     config = _resolve_config(sentry_url, organization_slug, sentry_token, project_slug)
     if config is None:
-        return {"error": "Sentry organization_slug and auth token are required."}
+        return {
+            "source": "sentry",
+            "available": False,
+            "error": "Sentry organization_slug and auth token are required.",
+            "monitors": [],
+        }
 
     try:
         monitors = list_sentry_uptime_monitors(config=config)
     except RuntimeError as err:
-        return {"error": str(err)}
-    except httpx.HTTPStatusError as err:
+        # HTTP failures are wrapped as RuntimeError by list_sentry_uptime_monitors.
         report_run_error(
             err,
             tool_name="list_sentry_uptime_alerts",
-            integration="sentry",
+            source="sentry",
+            component="integrations.sentry.tools.sentry_list_uptime_alerts_tool",
+            method="list_sentry_uptime_monitors",
+            severity="warning",
+            extras={"organization_slug": config.organization_slug},
         )
         return {
-            "error": describe_sentry_api_error(err, project_slug=config.project_slug),
+            "source": "sentry",
+            "available": False,
+            "error": str(err),
+            "monitors": [],
         }
     except Exception as err:
         report_run_error(
             err,
             tool_name="list_sentry_uptime_alerts",
-            integration="sentry",
+            source="sentry",
+            component="integrations.sentry.tools.sentry_list_uptime_alerts_tool",
+            method="list_sentry_uptime_monitors",
+            extras={"organization_slug": config.organization_slug},
         )
-        return {"error": f"Failed to list Sentry uptime monitors: {err}"}
+        return {
+            "source": "sentry",
+            "available": False,
+            "error": f"Failed to list Sentry uptime monitors: {err}",
+            "monitors": [],
+        }
 
     down = [m for m in monitors if m.health == "down"]
     return {
+        "source": "sentry",
+        "available": True,
         "monitor_count": len(monitors),
         "down_count": len(down),
         "monitors": [

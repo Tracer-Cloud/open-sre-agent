@@ -27,6 +27,7 @@ def test_list_sentry_uptime_alerts_returns_normalized_rows(monkeypatch) -> None:
     )
 
     result = list_sentry_uptime_alerts(organization_slug="acme", sentry_token="tok")
+    assert result["available"] is True
     assert result["down_count"] == 1
     assert result["monitors"][0]["severity"] == "critical"
     assert result["monitors"][0]["health"] == "down"
@@ -38,4 +39,5 @@ def test_list_sentry_uptime_alerts_missing_creds(monkeypatch) -> None:
         lambda: None,
     )
     result = list_sentry_uptime_alerts(organization_slug="", sentry_token="")
+    assert result["available"] is False
     assert "error" in result

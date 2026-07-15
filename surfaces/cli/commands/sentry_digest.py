@@ -159,7 +159,9 @@ def sentry_uptime_watch_add(
         timezone=timezone,
         provider=Provider(provider),
         chat_id=chat_id,
-        window_hours=1,
+        # Unused by the uptime watcher (poll is point-in-time); keep 0 so
+        # operators aren't misled into thinking a lookback window applies.
+        window_hours=0,
         params=params,
     )
     added = add_task(task)

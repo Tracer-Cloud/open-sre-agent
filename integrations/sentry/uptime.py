@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass
+import os
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
@@ -61,11 +62,26 @@ class UptimeTransition:
     monitor: UptimeMonitor
 
 
+@dataclass
+class WatchState:
+    """Persisted per-task watch snapshot."""
+
+    health: dict[str, MonitorHealth] = field(default_factory=dict)
+    open_incidents: set[str] = field(default_factory=set)
+
+
 def resolve_sentry_config(*, project_slug: str = "") -> SentryConfig | None:
     """Resolve Sentry REST config from env, then the integration store."""
     env_config = sentry_config_from_env()
     store = get_integration("sentry") or {}
-    store_config = store.get("config") if isinstance(store.get("config"), dict) else store
+    raw_config = store.get("config")
+    store_config: dict[str, Any]
+    if isinstance(raw_config, dict):
+        store_config = raw_config
+    elif isinstance(store, dict):
+        store_config = store
+    else:
+        store_config = {}
 
     organization_slug = (env_config.organization_slug if env_config else "") or str(
         store_config.get("organization_slug") or ""
@@ -161,52 +177,65 @@ def list_sentry_uptime_monitors(*, config: SentryConfig) -> list[UptimeMonitor]:
     return monitors
 
 
-def health_snapshot(monitors: list[UptimeMonitor]) -> dict[str, MonitorHealth]:
-    """Map monitor id → health for persistence."""
-    return {monitor.id: monitor.health for monitor in monitors}
+def health_snapshot(
+    monitors: list[UptimeMonitor],
+    *,
+    previous: dict[str, MonitorHealth] | None = None,
+) -> dict[str, MonitorHealth]:
+    """Map monitor id → health for persistence.
+
+    Unknown samples do not clobber a known prior value so a transient
+    ``down → unknown → up`` sequence still recovers cleanly.
+    """
+    prior = previous or {}
+    out: dict[str, MonitorHealth] = {}
+    for monitor in monitors:
+        if monitor.health == "unknown" and prior.get(monitor.id) in ("up", "down"):
+            out[monitor.id] = prior[monitor.id]
+        else:
+            out[monitor.id] = monitor.health
+    return out
 
 
 def detect_uptime_transitions(
     previous: dict[str, MonitorHealth],
     monitors: list[UptimeMonitor],
     *,
+    open_incidents: set[str] | None = None,
     notify_initial_down: bool = True,
-) -> list[UptimeTransition]:
-    """Return DOWN / RECOVERED transitions versus *previous* snapshot.
+) -> tuple[list[UptimeTransition], set[str]]:
+    """Return DOWN / RECOVERED transitions and the updated open-incident set.
 
-    First poll (empty *previous*): optionally emit DOWN for currently-failed
-    monitors so existing outages are not silent until the next flip.
+    Recovery is keyed off *open_incidents*, not only the prior health value, so
+    ``down → unknown → up`` still emits RECOVERED.
     """
     transitions: list[UptimeTransition] = []
+    open_set = set(open_incidents or ())
     by_id = {monitor.id: monitor for monitor in monitors}
 
-    if not previous:
+    if not previous and not open_set:
         if notify_initial_down:
             for monitor in monitors:
                 if monitor.health == "down":
                     transitions.append(UptimeTransition(kind="down", monitor=monitor))
-        return transitions
+                    open_set.add(monitor.id)
+        return transitions, open_set
 
-    for monitor_id, monitor in by_id.items():
-        prior = previous.get(monitor_id)
-        if prior is None:
-            if monitor.health == "down":
-                transitions.append(UptimeTransition(kind="down", monitor=monitor))
-            continue
-        if prior != "down" and monitor.health == "down":
+    for monitor in by_id.values():
+        if monitor.health == "down" and monitor.id not in open_set:
             transitions.append(UptimeTransition(kind="down", monitor=monitor))
-        elif prior == "down" and monitor.health == "up":
+            open_set.add(monitor.id)
+        elif monitor.health == "up" and monitor.id in open_set:
             transitions.append(UptimeTransition(kind="recovered", monitor=monitor))
+            open_set.discard(monitor.id)
+        # unknown: leave open_incidents unchanged
 
-    for monitor_id, prior in previous.items():
+    for monitor_id in list(open_set):
         if monitor_id in by_id:
             continue
-        # Monitor disappeared from the API — if it was down, treat as recovered
-        # only when we no longer observe it as failing (cannot confirm up).
-        if prior == "down":
-            logger.info("Previously down uptime monitor %s no longer listed", monitor_id)
+        logger.info("Previously open uptime incident %s no longer listed", monitor_id)
 
-    return transitions
+    return transitions, open_set
 
 
 def format_uptime_transition_message(transitions: list[UptimeTransition]) -> str:
@@ -234,38 +263,47 @@ def load_watch_state(
     task_id: str,
     *,
     path: Path | None = None,
-) -> dict[str, MonitorHealth]:
-    """Load prior health snapshot for a scheduled watch task."""
+) -> WatchState:
+    """Load prior health snapshot and open incidents for a watch task."""
     store_path = path or _state_path()
     if not store_path.exists():
-        return {}
+        return WatchState()
     try:
         raw = json.loads(store_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         logger.warning("Failed to read uptime watch state: %s", exc)
-        return {}
+        return WatchState()
     if not isinstance(raw, dict):
-        return {}
+        return WatchState()
     entry = raw.get(task_id)
     if not isinstance(entry, dict):
-        return {}
+        return WatchState()
+
+    health: dict[str, MonitorHealth] = {}
     snapshot = entry.get("health")
-    if not isinstance(snapshot, dict):
-        return {}
-    out: dict[str, MonitorHealth] = {}
-    for key, value in snapshot.items():
-        if value in ("up", "down", "unknown"):
-            out[str(key)] = value  # type: ignore[assignment]
-    return out
+    if isinstance(snapshot, dict):
+        for key, value in snapshot.items():
+            if value in ("up", "down", "unknown"):
+                health[str(key)] = value  # type: ignore[assignment]
+
+    open_incidents: set[str] = set()
+    incidents = entry.get("open_incidents")
+    if isinstance(incidents, list):
+        open_incidents = {str(item) for item in incidents if str(item).strip()}
+    else:
+        # Back-compat: reconstruct open incidents from down snapshots.
+        open_incidents = {mid for mid, status in health.items() if status == "down"}
+
+    return WatchState(health=health, open_incidents=open_incidents)
 
 
 def save_watch_state(
     task_id: str,
-    health: dict[str, MonitorHealth],
+    state: WatchState,
     *,
     path: Path | None = None,
 ) -> None:
-    """Persist health snapshot for a scheduled watch task."""
+    """Persist watch state atomically (temp file + replace)."""
     store_path = path or _state_path()
     store_path.parent.mkdir(parents=True, exist_ok=True)
     existing: dict[str, Any] = {}
@@ -276,8 +314,14 @@ def save_watch_state(
                 existing = loaded
         except (OSError, json.JSONDecodeError):
             existing = {}
-    existing[task_id] = {"health": health}
-    store_path.write_text(json.dumps(existing, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    existing[task_id] = {
+        "health": state.health,
+        "open_incidents": sorted(state.open_incidents),
+    }
+    payload = json.dumps(existing, indent=2, sort_keys=True) + "\n"
+    tmp_path = store_path.with_suffix(store_path.suffix + f".{os.getpid()}.tmp")
+    tmp_path.write_text(payload, encoding="utf-8")
+    tmp_path.replace(store_path)
 
 
 def run_uptime_watch_tick(
@@ -297,18 +341,24 @@ def run_uptime_watch_tick(
 
     monitors = list_sentry_uptime_monitors(config=config)
     previous = load_watch_state(task_id, path=state_path)
-    transitions = detect_uptime_transitions(
-        previous,
+    transitions, open_incidents = detect_uptime_transitions(
+        previous.health,
         monitors,
+        open_incidents=previous.open_incidents,
         notify_initial_down=notify_initial_down,
     )
-    save_watch_state(task_id, health_snapshot(monitors), path=state_path)
+    next_state = WatchState(
+        health=health_snapshot(monitors, previous=previous.health),
+        open_incidents=open_incidents,
+    )
+    save_watch_state(task_id, next_state, path=state_path)
     return format_uptime_transition_message(transitions)
 
 
 __all__ = [
     "UptimeMonitor",
     "UptimeTransition",
+    "WatchState",
     "detect_uptime_transitions",
     "format_uptime_transition_message",
     "health_snapshot",

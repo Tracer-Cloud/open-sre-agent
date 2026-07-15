@@ -10,6 +10,7 @@ import pytest
 from integrations.sentry import SentryConfig
 from integrations.sentry.uptime import (
     UptimeMonitor,
+    WatchState,
     detect_uptime_transitions,
     format_uptime_transition_message,
     health_snapshot,
@@ -28,7 +29,7 @@ def _monitor(
     url: str = "https://example.com",
     name: str = "example",
 ) -> UptimeMonitor:
-    status = 2 if health == "down" else 1
+    status = 2 if health == "down" else 1 if health == "up" else None
     return UptimeMonitor(
         id=monitor_id,
         name=name,
@@ -60,31 +61,73 @@ def test_detect_transitions_initial_down_and_recovery() -> None:
     down = _monitor("1", health="down")
     up = _monitor("1", health="up")
 
-    initial = detect_uptime_transitions({}, [down], notify_initial_down=True)
+    initial, open_set = detect_uptime_transitions({}, [down], notify_initial_down=True)
     assert len(initial) == 1
     assert initial[0].kind == "down"
+    assert open_set == {"1"}
 
-    recovered = detect_uptime_transitions({"1": "down"}, [up])
+    recovered, open_after = detect_uptime_transitions(
+        {"1": "down"},
+        [up],
+        open_incidents={"1"},
+    )
     assert len(recovered) == 1
     assert recovered[0].kind == "recovered"
+    assert open_after == set()
 
-    quiet = detect_uptime_transitions({"1": "up"}, [up])
+    quiet, open_quiet = detect_uptime_transitions({"1": "up"}, [up], open_incidents=set())
     assert quiet == []
+    assert open_quiet == set()
+
+
+def test_detect_transitions_recovers_after_unknown() -> None:
+    """down → unknown → up must still emit RECOVERED (Greptile P1)."""
+    unknown = _monitor("1", health="unknown")
+    up = _monitor("1", health="up")
+
+    transitions, open_set = detect_uptime_transitions(
+        {"1": "down"},
+        [unknown],
+        open_incidents={"1"},
+    )
+    assert transitions == []
+    assert open_set == {"1"}
+
+    recovered, open_after = detect_uptime_transitions(
+        {"1": "down"},
+        [up],
+        open_incidents=open_set,
+    )
+    assert len(recovered) == 1
+    assert recovered[0].kind == "recovered"
+    assert open_after == set()
+
+
+def test_health_snapshot_preserves_known_over_unknown() -> None:
+    unknown = _monitor("1", health="unknown")
+    assert health_snapshot([unknown], previous={"1": "down"}) == {"1": "down"}
 
 
 def test_format_message_marks_critical_downtime() -> None:
-    transitions = detect_uptime_transitions({}, [_monitor("1", health="down", name="api")])
+    transitions, _ = detect_uptime_transitions({}, [_monitor("1", health="down", name="api")])
     message = format_uptime_transition_message(transitions)
     assert "CRITICAL downtime" in message
     assert "api" in message
     assert format_uptime_transition_message([]) == ""
 
 
-def test_watch_state_roundtrip(tmp_path: Path) -> None:
+def test_watch_state_roundtrip_atomic(tmp_path: Path) -> None:
     path = tmp_path / "state.json"
-    save_watch_state("task-a", {"1": "down", "2": "up"}, path=path)
-    assert load_watch_state("task-a", path=path) == {"1": "down", "2": "up"}
-    assert load_watch_state("missing", path=path) == {}
+    save_watch_state(
+        "task-a",
+        WatchState(health={"1": "down", "2": "up"}, open_incidents={"1"}),
+        path=path,
+    )
+    loaded = load_watch_state("task-a", path=path)
+    assert loaded.health == {"1": "down", "2": "up"}
+    assert loaded.open_incidents == {"1"}
+    assert load_watch_state("missing", path=path).health == {}
+    assert not list(tmp_path.glob("*.tmp"))
 
 
 def test_list_sentry_uptime_monitors_parses_payload(monkeypatch: pytest.MonkeyPatch) -> None:
