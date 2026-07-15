@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from typing import Any, Protocol
 
 from slack_sdk.errors import SlackApiError
@@ -15,7 +15,7 @@ _WORKING_REACTION = "eyes"
 _DONE_REACTION = "white_check_mark"
 _FAILED_REACTION = "x"
 
-Blocks = Sequence[Mapping[str, Any]]
+Blocks = Sequence[dict[str, Any]]
 
 
 class SlackMessagingClient(Protocol):

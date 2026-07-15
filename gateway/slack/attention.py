@@ -56,6 +56,10 @@ class GateDecision(Enum):
 @dataclass
 class _ThreadAttention:
     expires_at: float
+    # Humans who have spoken in this thread while the window was open. While
+    # only one human has spoken, the thread is a 1:1 conversation with the bot
+    # and every reply is treated as addressed to it (DM-like trust).
+    speakers: set[str] = field(default_factory=set)
     unprompted_at: list[float] = field(default_factory=list)
 
 
@@ -97,7 +101,7 @@ class ThreadAttentionGate:
         self._threads: dict[str, _ThreadAttention] = {}
         self._lock = threading.Lock()
 
-    def note_addressed_turn(self, conversation_key: str) -> None:
+    def note_addressed_turn(self, conversation_key: str, *, user_id: str = "") -> None:
         """A mention/DM turn ran: open (or refresh) the thread's window."""
         now = self._clock()
         with self._lock:
@@ -105,15 +109,32 @@ class ThreadAttentionGate:
             entry = self._threads.get(conversation_key)
             if entry is None:
                 entry = self._threads[conversation_key] = _ThreadAttention(expires_at=0.0)
+            if user_id:
+                entry.speakers.add(user_id)
             entry.expires_at = now + self._window_seconds
 
-    def decide(self, *, conversation_key: str, text: str, bot_user_id: str) -> GateDecision:
-        """Gate one un-tagged reply in ``conversation_key``."""
+    def decide(
+        self, *, conversation_key: str, text: str, user_id: str, bot_user_id: str
+    ) -> GateDecision:
+        """Gate one un-tagged reply from ``user_id`` in ``conversation_key``."""
         now = self._clock()
         with self._lock:
             entry = self._threads.get(conversation_key)
             if entry is None or entry.expires_at <= now:
                 return GateDecision.PASS
+            # A leading mention names the addressee outright — if it's another
+            # human, the reply is theirs even in a 1:1 thread with the bot.
+            lead = _LEADING_USER_MENTION.match(text.strip())
+            if lead and lead.group("user") != bot_user_id:
+                entry.speakers.add(user_id)
+                return GateDecision.PASS
+            solo = entry.speakers <= {user_id}
+            entry.speakers.add(user_id)
+            if solo:
+                # 1:1 conversation with the bot: every reply is for it, like a
+                # DM. No address heuristics, no unprompted budget.
+                entry.expires_at = now + self._window_seconds
+                return GateDecision.ENGAGE
             if not is_addressed_to_bot(text, bot_user_id=bot_user_id):
                 return GateDecision.PASS
             entry.unprompted_at = [t for t in entry.unprompted_at if now - t < self._rate_window]

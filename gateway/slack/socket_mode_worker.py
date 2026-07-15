@@ -137,12 +137,14 @@ class _SlackTurnDispatcher:
         Mentions and DMs always run (and open/refresh the thread's attention
         window). An un-tagged thread reply runs only when every free check
         passes: the bot already joined the thread (bindings store), the
-        attention window from the last mention is still open, and the
-        deterministic address check says the reply is for the bot — so
-        human-to-human traffic in the same thread passes through silently.
+        attention window from the last mention is still open, and the reply is
+        for the bot — either the thread is a 1:1 conversation with the bot
+        (one human speaker → every reply engages, DM-style) or the
+        deterministic address check matches. Human-to-human traffic in
+        multi-user threads passes through silently.
         """
         if inbound.addressed:
-            self._attention.note_addressed_turn(inbound.conversation_key)
+            self._attention.note_addressed_turn(inbound.conversation_key, user_id=inbound.user_id)
             return True
         # Layer 1: only threads the bot already joined; never channel chatter.
         if not self._session_resolver.has_session(user_id=inbound.conversation_key):
@@ -156,9 +158,11 @@ class _SlackTurnDispatcher:
             # mention arrives twice; drop the plain-message copy.
             return False
         # Layers 2-3: attention window + address check + unprompted rate limit.
+        # 1:1 threads (one human + the bot) engage every reply, DM-style.
         decision = self._attention.decide(
             conversation_key=inbound.conversation_key,
             text=inbound.text,
+            user_id=inbound.user_id,
             bot_user_id=self._bot_user_id,
         )
         if decision is GateDecision.RATE_LIMITED:

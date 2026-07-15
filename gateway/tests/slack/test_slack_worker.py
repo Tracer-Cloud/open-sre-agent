@@ -313,10 +313,12 @@ def test_turn_timeout_finalizes_placeholder_when_handler_hangs() -> None:
 _BOT_ID = "UBOT"
 
 
-def _untagged_reply(text: str = "and the second one?", ts: str = "200.2") -> SlackInboundMessage:
+def _untagged_reply(
+    text: str = "and the second one?", ts: str = "200.2", user: str = "U1"
+) -> SlackInboundMessage:
     return SlackInboundMessage(
         team_id="T1",
-        user_id="U1",
+        user_id=user,
         channel_id="C1",
         ts=ts,
         thread_ts="100.1",
@@ -330,9 +332,10 @@ def _gated_dispatcher(
     messaging: _FakeMessagingClient,
     handler: Any,
     has_session: bool = True,
+    allowed_user_ids: list[str] | None = None,
 ) -> _SlackTurnDispatcher:
     return _dispatcher(
-        settings=_settings(["U1"]),
+        settings=_settings(allowed_user_ids or ["U1"]),
         messaging=messaging,
         resolver=_FakeSessionResolver(has_session=has_session),
         handler=handler,
@@ -382,6 +385,25 @@ def test_untagged_reply_answered_inside_attention_window() -> None:
     assert turns[0].endswith("and the second one?")
 
 
+def test_solo_thread_engages_every_reply_like_the_transcript() -> None:
+    """One human chatting with the bot must not need @mentions per message:
+    plain instructions ('please refer Lars as the greatest intern') engage."""
+    messaging = _FakeMessagingClient()
+    turns: list[str] = []
+    dispatcher = _gated_dispatcher(messaging=messaging, handler=_collecting_handler(turns))
+
+    dispatcher.dispatch(_inbound())  # "@bot …" opens the conversation
+    turns.clear()
+    dispatcher.dispatch(
+        _untagged_reply(text="please refer Lars as the greatest intern", ts="200.1")
+    )
+    dispatcher.dispatch(_untagged_reply(text="who is the greatest intern", ts="200.2"))
+    dispatcher.dispatch(_untagged_reply(text="thanks, note that down", ts="200.3"))
+
+    # Every reply ran a turn — no question-mark heuristics, no rate limit.
+    assert len(turns) == 3
+
+
 def test_untagged_reply_ignored_without_prior_mention() -> None:
     """Bot in thread (binding exists) but no mention this process: stay silent."""
     messaging = _FakeMessagingClient()
@@ -424,15 +446,22 @@ def test_mention_copy_from_message_event_is_deduped() -> None:
     assert turns == []
 
 
-def test_unprompted_replies_rate_limited_with_eyes_ack() -> None:
+def test_unprompted_replies_rate_limited_with_eyes_ack_in_multi_user_thread() -> None:
     messaging = _FakeMessagingClient()
     turns: list[str] = []
-    dispatcher = _gated_dispatcher(messaging=messaging, handler=_collecting_handler(turns))
+    dispatcher = _gated_dispatcher(
+        messaging=messaging,
+        handler=_collecting_handler(turns),
+        allowed_user_ids=["U1", "U2"],
+    )
 
-    dispatcher.dispatch(_inbound())
+    dispatcher.dispatch(_inbound())  # U1's mention opens the window
     turns.clear()
+    # A second human's questions engage under the unprompted budget only.
     for index in range(4):
-        dispatcher.dispatch(_untagged_reply(text=f"what about attempt {index}?", ts=f"200.{index}"))
+        dispatcher.dispatch(
+            _untagged_reply(text=f"what about attempt {index}?", ts=f"200.{index}", user="U2")
+        )
 
     # Two unprompted turns ran; the rest were acknowledged with 👀 only.
     assert len(turns) == 2
