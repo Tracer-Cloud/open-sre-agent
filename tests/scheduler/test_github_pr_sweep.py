@@ -45,8 +45,6 @@ def test_scheduled_agent_routes_github(monkeypatch) -> None:
     assert run_scheduled_agent_digest({"source": "scheduled_github_pr_sweep"}) == "gh"
     assert run_scheduled_agent_digest({"source": "scheduled_sentry_morning_digest"}) == "sentry"
     assert (
-        run_scheduled_agent_digest(
-            {"source": "scheduled_sentry_uptime_watch", "task_id": "t1"}
-        )
+        run_scheduled_agent_digest({"source": "scheduled_sentry_uptime_watch", "task_id": "t1"})
         == "uptime"
     )
