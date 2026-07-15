@@ -29,6 +29,7 @@ from core.llm.types import AgentLLMResponse, ToolCall
 from core.tool_framework.registered_tool import RegisteredTool
 from gateway.runtime.turn_handler import GatewayTurnHandler
 from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
+from surfaces.interactive_shell.runtime.slash_adapter import headless_slash_ports
 from surfaces.interactive_shell.session import Session
 
 Surface = Literal["shell", "headless", "gateway_handler"]
@@ -302,7 +303,11 @@ def _dispatch_turn(
 ) -> ShellTurnResult:
     output = BufferOutputSink()
     agent = HeadlessAgent(
-        tools=DefaultToolProvider(session, console()),
+        tools=DefaultToolProvider(
+            session,
+            console(),
+            slash_ports_factory=headless_slash_ports,
+        ),
         session=session,
         output=output,
         prompts=DefaultPromptContextProvider(session),
@@ -351,7 +356,10 @@ def snapshot_gateway_handler(
 
     monkeypatch.setattr("gateway.runtime.turn_handler.HeadlessAgent", _SpyAgent)
     before = probe_run_count()
-    handler = GatewayTurnHandler(console=console())
+    handler = GatewayTurnHandler(
+        console=console(),
+        slash_ports_factory=headless_slash_ports,
+    )
     handler(message, session, sink, logging.getLogger("test.parity.gateway"))
     assert len(captured) == 1, "gateway handler must dispatch exactly one headless turn"
     return TurnSnapshot.from_result(captured[0], probe_ran=probe_run_count() > before)
@@ -423,7 +431,10 @@ def run_gateway_turn_with_sink(
 
     monkeypatch.setattr("gateway.runtime.turn_handler.HeadlessAgent", _SpyAgent)
     before = probe_run_count()
-    handler = GatewayTurnHandler(console=console())
+    handler = GatewayTurnHandler(
+        console=console(),
+        slash_ports_factory=headless_slash_ports,
+    )
     handler(message, session, sink, logging.getLogger("test.parity.gateway.sink"))
     assert len(captured) == 1, "gateway handler must dispatch exactly one headless turn"
     snapshot = TurnSnapshot.from_result(captured[0], probe_ran=probe_run_count() > before)

@@ -8,8 +8,13 @@ from typing import Any
 
 from rich.console import Console
 
+from core.agent_harness.session.terminal_access import background_mode_enabled
 from core.domain.stream import StreamEvent
 from platform.common.task_types import TaskRecord
+from surfaces.interactive_shell.runtime.background.runner import (
+    start_background_template_investigation,
+    start_background_text_investigation,
+)
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
 from surfaces.interactive_shell.ui.foreground_investigation import run_foreground_investigation
@@ -130,6 +135,65 @@ class ReplInvestigationLaunchPorts:
             confirm_fn=confirm_fn,
             is_tty=is_tty,
             action_already_listed=action_already_listed,
+        )
+
+    def background_mode_enabled(self, session: Session) -> bool:
+        return background_mode_enabled(session)
+
+    def run_text_investigation(
+        self,
+        *,
+        alert_text: str,
+        context_overrides: dict[str, Any] | None,
+        cancel_requested: Any,
+    ) -> dict[str, object]:
+        return run_investigation_for_session(
+            alert_text=alert_text,
+            context_overrides=context_overrides,
+            cancel_requested=cancel_requested,
+        )
+
+    def run_sample_alert(
+        self,
+        *,
+        template_name: str,
+        context_overrides: dict[str, Any] | None,
+        cancel_requested: Any,
+    ) -> dict[str, object]:
+        return run_sample_alert_for_session(
+            template_name=template_name,
+            context_overrides=context_overrides,
+            cancel_requested=cancel_requested,
+        )
+
+    def start_background_text(
+        self,
+        *,
+        alert_text: str,
+        session: Session,
+        console: Console,
+        display_command: str,
+    ) -> None:
+        start_background_text_investigation(
+            alert_text=alert_text,
+            session=session,
+            console=console,
+            display_command=display_command,
+        )
+
+    def start_background_sample(
+        self,
+        *,
+        template_name: str,
+        session: Session,
+        console: Console,
+        display_command: str,
+    ) -> None:
+        start_background_template_investigation(
+            template_name=template_name,
+            session=session,
+            console=console,
+            display_command=display_command,
         )
 
     def run_foreground_investigation(

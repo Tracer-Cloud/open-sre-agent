@@ -9,6 +9,8 @@ one of these and hands it to whichever poller runs.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
+from typing import Any
 
 from rich.console import Console
 
@@ -24,6 +26,8 @@ from gateway.runtime.headless_subprocess_presenter import headless_subprocess_pr
 from gateway.runtime.sink_protocol import GatewaySink
 from gateway.runtime.status_messages import status_from_tool_start
 from platform.observability.trace.spans import traced_session
+
+SlashPortsFactory = Callable[[], Any]
 
 
 class _ToolStatusObserver:
@@ -54,8 +58,14 @@ class GatewayTurnHandler:
     persistent per-transport agent, and concurrent turns stay isolated.
     """
 
-    def __init__(self, *, console: Console) -> None:
+    def __init__(
+        self,
+        *,
+        console: Console,
+        slash_ports_factory: SlashPortsFactory | None = None,
+    ) -> None:
         self._console = console
+        self._slash_ports_factory = slash_ports_factory
 
     def __call__(
         self,
@@ -106,6 +116,7 @@ class GatewayTurnHandler:
                 tool_action_logger=logger,
                 observer_factory=lambda _message: observer,
                 subprocess_presenter_factory=headless_subprocess_presenter_factory,
+                slash_ports_factory=self._slash_ports_factory,
             ),
             prompts=DefaultPromptContextProvider(session),
             reasoning=DefaultReasoningClientProvider(

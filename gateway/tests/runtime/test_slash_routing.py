@@ -10,6 +10,7 @@ from unittest.mock import MagicMock
 import pytest
 from rich.console import Console
 
+from app.entrypoints.gateway_slash import gateway_slash_ports_factory
 from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStorage
 from core.agent_harness.tools.action_tools import get_action_tool
@@ -24,7 +25,10 @@ def _gateway_console() -> Console:
 def _run_gateway_slash(message: str) -> RecordingGatewaySink:
     session = SessionCore(storage=InMemorySessionStorage())
     sink = RecordingGatewaySink()
-    handler = GatewayTurnHandler(console=_gateway_console())
+    handler = GatewayTurnHandler(
+        console=_gateway_console(),
+        slash_ports_factory=gateway_slash_ports_factory,
+    )
     handler(message, session, sink, logging.getLogger("test.gateway.slash"))
     return sink
 

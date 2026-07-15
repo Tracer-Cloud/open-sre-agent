@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 from rich.console import Console
 
-import tools.interactive_shell.actions.slash as slash_tool
+import surfaces.interactive_shell.runtime.slash_adapter as slash_adapter
 from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
 from core.agent_harness.turns.action_driver import (
     ActionTurnPlan,
@@ -81,7 +81,7 @@ def test_execute_with_harness_runs_slash_tool_call(monkeypatch) -> None:
         console.print(f"ran {command}")
         return True
 
-    monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
+    monkeypatch.setattr(slash_adapter, "dispatch_slash", _fake_dispatch)
     harness = ActionExecutionHarness(
         llm=FakeActionLLM([tool_response("slash_invoke", {"command": "/health", "args": []})])
     )
@@ -200,7 +200,7 @@ def test_literal_slash_command_dispatches_deterministically_without_llm(
         session.record("slash", command, ok=True)
         return True
 
-    monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
+    monkeypatch.setattr(slash_adapter, "dispatch_slash", _fake_dispatch)
     harness = ActionExecutionHarness(llm=FakeActionLLM([no_tool_response()]))
     session = Session()
 
@@ -233,7 +233,7 @@ def test_literal_slash_command_forwards_args_without_llm(monkeypatch) -> None:
         session.record("slash", command, ok=True)
         return True
 
-    monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
+    monkeypatch.setattr(slash_adapter, "dispatch_slash", _fake_dispatch)
     harness = ActionExecutionHarness(llm=FakeActionLLM([no_tool_response()]))
 
     result = run_action_tool_turn(
@@ -255,7 +255,7 @@ def test_natural_language_still_routes_through_action_agent(monkeypatch) -> None
     def _unexpected_dispatch(*_args: object, **_kwargs: object) -> bool:
         raise AssertionError("free-form text must not deterministically dispatch a slash command")
 
-    monkeypatch.setattr(slash_tool, "dispatch_slash", _unexpected_dispatch)
+    monkeypatch.setattr(slash_adapter, "dispatch_slash", _unexpected_dispatch)
     harness = ActionExecutionHarness(llm=FakeActionLLM([no_tool_response()]))
 
     result = run_action_tool_turn(
