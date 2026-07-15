@@ -33,7 +33,8 @@ class BackgroundTextLauncher(Protocol):
         session: Session,
         console: Console,
         display_command: str,
-    ) -> str: ...
+    ) -> str:
+        raise NotImplementedError
 
 
 class BackgroundSampleLauncher(Protocol):
@@ -46,7 +47,8 @@ class BackgroundSampleLauncher(Protocol):
         session: Session,
         console: Console,
         display_command: str,
-    ) -> str: ...
+    ) -> str:
+        raise NotImplementedError
 
 
 def repl_foreground_renderer() -> session_runner.StreamRendererFn:
