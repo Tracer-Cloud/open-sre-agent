@@ -15,11 +15,16 @@ MAX_TIMEOUT_SECONDS = 120
 # Top-level ``gh`` commands that must never run under OpenSRE-injected credentials.
 # - auth: ``gh auth token`` prints GH_TOKEN to stdout (self-exfiltration)
 # - extension: install/run can download and execute arbitrary code
+# - workflow / run: trigger or re-run CI (arbitrary code via workflow YAML)
+# - secret: mutate repository secrets
 # - codespace / ssh-key / gpg-key / config: credential and host-config mutation surface
 _DENIED_TOP_LEVEL_COMMANDS = frozenset(
     {
         "auth",
         "extension",
+        "workflow",
+        "run",
+        "secret",
         "codespace",
         "ssh-key",
         "gpg-key",

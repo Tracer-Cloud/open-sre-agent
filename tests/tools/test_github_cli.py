@@ -81,6 +81,21 @@ def test_help_flag_does_not_mask_blocked_command() -> None:
     run_mock.assert_not_called()
 
 
+def test_run_gh_blocks_ci_and_secret_mutation_commands() -> None:
+    cases = (
+        (["workflow", "run", "deploy.yml"], "workflow"),
+        (["run", "rerun", "123"], "run"),
+        (["secret", "set", "TOKEN"], "secret"),
+    )
+    for args, blocked in cases:
+        with patch("tools.github_cli.runner.subprocess.run") as run_mock:
+            result = run_gh(args=list(args))
+        assert result["ok"] is False, args
+        assert result["error_type"] == "policy_error", args
+        assert blocked in result["error"], args
+        run_mock.assert_not_called()
+
+
 def test_run_gh_redacts_token_echo_in_stdout() -> None:
     completed = MagicMock(returncode=0, stdout="token=secret-token\n", stderr="")
     with (

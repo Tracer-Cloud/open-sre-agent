@@ -13,7 +13,8 @@ tools:
 
 Authenticated `gh` for OpenSRE. Reads and writes — no approval gate. Prefer over
 `shell_run` / `!gh`. Pass `args` after `gh`; optional `repo` as `owner/name` → `-R`.
-Blocked top-level: `auth`, `extension`, `codespace`, `ssh-key`, `gpg-key`, `config`.
+Blocked top-level: `auth`, `extension`, `workflow`, `run`, `secret`,
+`codespace`, `ssh-key`, `gpg-key`, `config`.
 
 ## Capabilities
 
