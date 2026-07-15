@@ -58,6 +58,19 @@ def execute_task(
         _record_failure(task, fire_time, f"Message build error: {type(exc).__name__}")
         return False
 
+    # Quiet ticks (e.g. uptime watch with no transitions) skip delivery.
+    if not message.strip():
+        complete_run(
+            task.id,
+            fire_time,
+            status=TaskStatus.SUCCESS,
+            posted_message_id="",
+            provider=task.provider.value,
+        )
+        _emit_analytics(task, TaskStatus.SUCCESS)
+        logger.info("Task %s produced no message; delivery skipped", task.id)
+        return True
+
     # Deliver to the configured provider
     ok, error, message_id = _deliver(task, message)
 

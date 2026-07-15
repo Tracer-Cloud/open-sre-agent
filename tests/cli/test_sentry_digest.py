@@ -37,6 +37,32 @@ def test_schedule_add_requires_delivery_provider(monkeypatch) -> None:
     assert "Telegram is not configured" in result.output
 
 
+def test_uptime_watch_add_requires_sentry(monkeypatch) -> None:
+    runner = CliRunner()
+    monkeypatch.setattr(
+        "integrations.sentry.digest_prerequisites.configured_integration_services",
+        lambda: ("telegram",),
+    )
+
+    result = runner.invoke(
+        sentry_command,
+        [
+            "uptime",
+            "watch",
+            "add",
+            "--cron",
+            "*/5 * * * *",
+            "--provider",
+            "telegram",
+            "--chat-id",
+            "-100",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "Sentry is not configured" in result.output
+
+
 def test_schedule_add_requires_sentry(monkeypatch) -> None:
     runner = CliRunner()
     monkeypatch.setattr(

@@ -459,7 +459,7 @@ COMMANDS: list[SlashCommand] = [
     ),
     SlashCommand(
         "/sentry",
-        "Schedule and run automated Sentry morning digests.",
+        "Schedule and run automated Sentry morning digests or uptime watches.",
         _cmd_sentry,
         usage=(
             "/sentry digest run",
@@ -467,6 +467,11 @@ COMMANDS: list[SlashCommand] = [
             "/sentry digest schedule add",
             "/sentry digest schedule run <id>",
             "/sentry digest schedule remove <id>",
+            "/sentry uptime check",
+            "/sentry uptime watch list",
+            "/sentry uptime watch add",
+            "/sentry uptime watch run <id>",
+            "/sentry uptime watch remove <id>",
         ),
     ),
     SlashCommand(

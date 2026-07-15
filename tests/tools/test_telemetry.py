@@ -1150,6 +1150,7 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "list_jenkins_running_builds",
         "list_s3_objects",
         "list_sentry_issue_events",
+        "list_sentry_uptime_alerts",
         "llm_set_provider",
         "lookup_cloudtrail_events",
         "opsgenie_alert_detail",

@@ -106,10 +106,13 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         anti_examples=("User asks about one-off messaging without a schedule (use /messaging)",),
     ),
     "/sentry": _mcp(
-        "Schedule and run automated Sentry morning digests (requires Telegram or Slack). "
-        "Subcommands: digest run, digest schedule list|add|run|remove.",
+        "Schedule and run automated Sentry morning digests or uptime watches "
+        "(requires Telegram or Slack). "
+        "Subcommands: digest run, digest schedule list|add|run|remove, "
+        "uptime check, uptime watch list|add|run|remove.",
         "User asks to schedule or automate a Sentry morning digest delivery",
         "User asks to list or run configured Sentry digest schedules",
+        "User asks to poll Sentry uptime monitors or watch for downtime",
         anti_examples=(
             "User wants an on-demand Sentry summary in chat (ask naturally; skill handles it)",
             "User asks about Sentry integration setup only (use /integrations)",

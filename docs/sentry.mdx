@@ -8,7 +8,9 @@ OpenSRE queries Sentry to retrieve recent issues, error events, and stack traces
 ## Prerequisites
 
 - Sentry account with at least one organization
-- Auth token with `event:read` scope
+- Auth token with `event:read` scope (Issues lookup)
+- For uptime watching: also `alerts:read` (or `org:read`) so
+  `opensre sentry uptime` can list monitors
 
 ## Setup
 
@@ -35,7 +37,7 @@ SENTRY_STATS_PERIOD=24h                # optional, issue search time window
 | Variable | Default | Description |
 | --- | --- | --- |
 | `SENTRY_ORG_SLUG` | — | **Required.** Your Sentry organization slug |
-| `SENTRY_AUTH_TOKEN` | — | **Required.** Sentry auth token with `event:read` |
+| `SENTRY_AUTH_TOKEN` | — | **Required.** Sentry auth token with `event:read` (add `alerts:read` for uptime watch) |
 | `SENTRY_URL` | `https://sentry.io` | Override for self-hosted Sentry |
 | `SENTRY_PROJECT_SLUG` | — | Scope queries to a specific project |
 | `SENTRY_STATS_PERIOD` | `24h` | Time window for issue searches (e.g. `24h`, `14d`, `90d`) |
@@ -74,7 +76,7 @@ almost always the time window or a `SENTRY_PROJECT_SLUG` scope — not a cap of 
 
 1. In Sentry, go to **Settings** → **Developer Settings** → **Organization Tokens**
 2. Click **Create New Token**
-3. Enable the `event:read` scope
+3. Enable the `event:read` scope (and `alerts:read` if you use uptime watch)
 4. Copy the token
 
 **Alternative: Internal Integration**
@@ -144,6 +146,38 @@ The count reflects issues seen in the last 7 days (capped at 100, shown as
 `100+` when it saturates). Use a search (e.g. `search_sentry_issues` during an
 investigation) to enumerate the full issue set over a custom window.
 </Note>
+
+## Uptime watch (downtime notifications)
+
+Poll Sentry **uptime monitors** (Alerts / Uptime — not the Issues digest) and
+ping Slack or Telegram only when a monitor transitions to **down** or
+**recovered**. Quiet polls deliver nothing. This is separate from the morning
+Issues digest (`sentry-summary` / Feature #10).
+
+| Command | What it does |
+| --- | --- |
+| `opensre sentry uptime check` | List current uptime monitor health once |
+| `opensre sentry uptime watch add` | Schedule polling (default every 5 minutes) |
+| `opensre sentry uptime watch list` | List uptime watch schedules |
+| `opensre sentry uptime watch run TASK_ID` | Run a watch tick now (may notify) |
+| `opensre sentry uptime watch remove TASK_ID` | Remove a watch schedule |
+
+Example — poll every 5 minutes and ping Slack on transitions:
+
+```bash
+opensre sentry uptime watch add \
+  --cron "*/5 * * * *" \
+  --tz UTC \
+  --provider slack \
+  --chat-id C0123ABCD
+```
+
+Requires `alerts:read` (or equivalent) on the Sentry token. The agent tool
+`list_sentry_uptime_alerts` exposes the same monitor list in chat/investigation.
+
+Follow-ups (not in v1): inbound Sentry webhooks, auto-remediation attempts, and
+a morning-digest section summarizing yesterday's uptime transitions.
+
 ## Telemetry knobs
 
 | Variable | Default | Description |
@@ -179,7 +213,7 @@ command exits non-zero without sending anything.
 
 | Symptom | Fix |
 | --- | --- |
-| **403 Forbidden** | Ensure the token has `event:read` scope |
+| **403 Forbidden** | Ensure the token has `event:read`; for uptime watch also `alerts:read` |
 | **Organization not found** | Verify `SENTRY_ORG_SLUG` matches the slug in your Sentry URL |
 | **Connection refused** | Check `SENTRY_URL` for self-hosted instances |
 | **No issues returned** | Normal if no issues exist in the time window — check `SENTRY_PROJECT_SLUG` |

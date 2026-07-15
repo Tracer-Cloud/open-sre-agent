@@ -39,6 +39,7 @@ def build_message(task: ScheduledTask) -> str:
         TaskKind.SYNTHETIC_RUN: _build_synthetic_run,
         TaskKind.CUSTOM_INVESTIGATION: _build_custom_investigation,
         TaskKind.SENTRY_MORNING_DIGEST: _build_sentry_morning_digest,
+        TaskKind.SENTRY_UPTIME_WATCH: _build_sentry_uptime_watch,
         TaskKind.GITHUB_PR_SWEEP: _build_github_pr_sweep,
     }
     builder = builders.get(task.kind)
@@ -203,6 +204,23 @@ def _build_sentry_morning_digest(task: ScheduledTask) -> str:
         logger.error("Sentry morning digest failed for task %s: %s", task.id, exc)
         raise RuntimeError(
             f"Sentry morning digest failed for task {task.id}. Check logs for details."
+        ) from exc
+
+
+def _build_sentry_uptime_watch(task: ScheduledTask) -> str:
+    """Poll Sentry uptime monitors; return a notify body only on transitions.
+
+    Quiet ticks return an empty string so the executor skips delivery (#4032 v1).
+    """
+    from integrations.sentry.uptime import run_uptime_watch_tick
+
+    try:
+        project_slug = str(task.params.get("project_slug") or "").strip()
+        return run_uptime_watch_tick(task_id=task.id, project_slug=project_slug)
+    except Exception as exc:
+        logger.error("Sentry uptime watch failed for task %s: %s", task.id, exc)
+        raise RuntimeError(
+            f"Sentry uptime watch failed for task {task.id}. Check logs for details."
         ) from exc
 
 
