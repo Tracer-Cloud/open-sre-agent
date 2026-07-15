@@ -9,7 +9,7 @@ import httpx
 from integrations.posthog.config import PostHogConfig
 
 
-def request_json(
+def _request_json(
     config: PostHogConfig,
     method: str,
     path: str,
@@ -28,7 +28,3 @@ def request_json(
     )
     response.raise_for_status()
     return response.json()
-
-
-# Back-compat alias for verifier/tests that patch the private name.
-_request_json = request_json
