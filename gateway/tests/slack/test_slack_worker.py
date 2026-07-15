@@ -277,4 +277,8 @@ def test_turn_timeout_finalizes_placeholder_when_handler_hangs() -> None:
     assert any("taking longer" in update["text"].lower() for update in messaging.updates), (
         "timeout did not replace the placeholder"
     )
-    assert ("add", "x") in [(r["op"], r["emoji"]) for r in messaging.reactions]
+    ops = [(r["op"], r["emoji"]) for r in messaging.reactions]
+    assert ("add", "x") in ops
+    # The timeout owns the outcome, so a late normal completion must not stack a
+    # done tick over the timeout's cross.
+    assert ("add", "white_check_mark") not in ops

@@ -109,7 +109,7 @@ class DefaultToolProvider:
 
         def _logging_observer(kind: str, data: dict[str, Any]) -> None:
             if kind == "tool_start":
-                tool_name = str(data.get("name") or "tool").strip()
+                tool_name = str(data.get("name") or "").strip()
                 if tool_name:
                     logger.info(
                         "tool action name=%s input=%s",
@@ -117,7 +117,7 @@ class DefaultToolProvider:
                         _tool_input_preview(data.get("input", {})),
                     )
             elif kind == "tool_end":
-                tool_name = str(data.get("name") or "tool").strip()
+                tool_name = str(data.get("name") or "").strip()
                 if tool_name:
                     from core.events import tool_result_is_error
 

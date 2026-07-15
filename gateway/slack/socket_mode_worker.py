@@ -244,13 +244,27 @@ class _SlackTurnDispatcher:
                 thread_ts=inbound.thread_ts,
                 update_interval_seconds=self._settings.status_update_interval_seconds,
             )
-            timed_out = threading.Event()
+            outcome_lock = threading.Lock()
+            outcome_taken = False
+
+            def _claim_terminal_outcome() -> bool:
+                # The first of {timeout, error, normal completion} to claim owns
+                # the final message + reaction. This keeps a timed-out turn that
+                # later finishes from stacking a done tick over the timeout's
+                # cross, and stops a timeout racing an error from finalizing twice.
+                nonlocal outcome_taken
+                with outcome_lock:
+                    if outcome_taken:
+                        return False
+                    outcome_taken = True
+                    return True
 
             def _on_turn_timeout() -> None:
                 # A blocking handler cannot be cancelled, so surface a visible
                 # message and mark the turn failed instead of leaving a frozen
                 # placeholder; the orphaned turn keeps running.
-                timed_out.set()
+                if not _claim_terminal_outcome():
+                    return
                 self._logger.warning(
                     "[slack-gateway] turn TIMED OUT after %.0fs channel=%s session=%s",
                     self._settings.turn_timeout_seconds,
@@ -297,8 +311,8 @@ class _SlackTurnDispatcher:
                 # Replace the "Digging in…" placeholder with a visible error —
                 # otherwise a raised turn is indistinguishable from one still
                 # running (only the ✗ reaction changes). Skip if the timeout
-                # already reported the failure.
-                if not timed_out.is_set():
+                # already owns the outcome.
+                if _claim_terminal_outcome():
                     try:
                         sink.render_error("Something went wrong on that request.")
                     except Exception:
@@ -311,17 +325,18 @@ class _SlackTurnDispatcher:
                 raise
             finally:
                 timer.cancel()
-            self._logger.info(
-                "[slack-gateway] turn done in %.1fs channel=%s session=%s",
-                time.monotonic() - turn_started,
-                inbound.channel_id,
-                session.session_id[:8],
-            )
-            mark_turn_done(
-                self._messaging,
-                channel=inbound.channel_id,
-                timestamp=inbound.ts,
-            )
+            if _claim_terminal_outcome():
+                self._logger.info(
+                    "[slack-gateway] turn done in %.1fs channel=%s session=%s",
+                    time.monotonic() - turn_started,
+                    inbound.channel_id,
+                    session.session_id[:8],
+                )
+                mark_turn_done(
+                    self._messaging,
+                    channel=inbound.channel_id,
+                    timestamp=inbound.ts,
+                )
 
 
 def _agent_text_with_slack_context(inbound: SlackInboundMessage) -> str:
