@@ -21,6 +21,7 @@ from core.execution import ToolExecutionHooks
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS
 from surfaces.interactive_shell.command_registry.suggestions import resolve_literal_slash_typo
 from surfaces.interactive_shell.runtime.agent_harness_adapters import resolve_output_sink
+from surfaces.interactive_shell.runtime.background import runner as background_runner
 from surfaces.interactive_shell.runtime.investigation_adapter import (
     repl_investigation_launch_ports,
 )
@@ -38,6 +39,7 @@ from surfaces.interactive_shell.runtime.task_cancel_adapter import (
 )
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui.action_rendering import ActionRenderObserver
+from tools.interactive_shell.shared.investigation_launch import InvestigationLaunchPorts
 
 
 def _complete_literal_slash_typo_turn(
@@ -77,6 +79,13 @@ def _subprocess_presenter_factory(
     )
 
 
+def _investigation_ports_factory() -> InvestigationLaunchPorts:
+    return repl_investigation_launch_ports(
+        start_background_text=background_runner.start_background_text_investigation,
+        start_background_sample=background_runner.start_background_template_investigation,
+    )
+
+
 def run_action_tool_turn(
     message: str,
     session: Session,
@@ -112,7 +121,7 @@ def run_action_tool_turn(
                 session=session, console=console, message=msg
             ),
             subprocess_presenter_factory=_subprocess_presenter_factory,
-            investigation_ports_factory=repl_investigation_launch_ports,
+            investigation_ports_factory=_investigation_ports_factory,
             llm_provider_ports_factory=repl_llm_provider_ports,
             task_cancel_ports_factory=repl_task_cancel_ports,
             slash_ports_factory=repl_slash_ports,

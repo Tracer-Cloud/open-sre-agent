@@ -454,9 +454,7 @@ def test_shell_completer_investigate_includes_template_hints() -> None:
     assert any(c.text == "splunk" for c in completions)
 
 
-def test_run_text_investigation_uses_background_launcher_when_mode_enabled(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_run_text_investigation_uses_background_launcher_when_mode_enabled() -> None:
     from rich.console import Console
 
     from tools.interactive_shell.actions.investigation import (
@@ -476,10 +474,15 @@ def test_run_text_investigation_uses_background_launcher_when_mode_enabled(
         launches.append((alert_text, display_command))
         return "bg123"
 
-    monkeypatch.setattr(
-        "surfaces.interactive_shell.runtime.background.runner.start_background_text_investigation",
-        _fake_start_background_text_investigation,
-    )
+    def _unexpected_sample_launcher(
+        *,
+        template_name: str,
+        session: Session,
+        console: Console,
+        display_command: str,
+    ) -> str:
+        _ = (template_name, session, console, display_command)
+        raise AssertionError("sample launcher should not run")
 
     session = Session()
     session.terminal.background_mode_enabled = True
@@ -489,7 +492,10 @@ def test_run_text_investigation_uses_background_launcher_when_mode_enabled(
         "High CPU alert",
         session,
         console,
-        ports=repl_investigation_launch_ports(),
+        ports=repl_investigation_launch_ports(
+            start_background_text=_fake_start_background_text_investigation,
+            start_background_sample=_unexpected_sample_launcher,
+        ),
     )
 
     assert launches == [("High CPU alert", "background free-text investigation")]

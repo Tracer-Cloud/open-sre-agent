@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from functools import partial
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -116,7 +117,7 @@ def test_architecture_save_observations_tool_uses_explicit_session(
 ) -> None:
     monkeypatch.setattr(
         "tools.architecture_issue_tool.tool.save_architecture_observations",
-        lambda **kwargs: save_architecture_observations(**kwargs, home_dir=tmp_path),
+        partial(save_architecture_observations, home_dir=tmp_path),
     )
     result = architecture_save_observations(
         repo_name="opensre",
@@ -142,7 +143,7 @@ def test_architecture_save_observations_tool_reads_session_from_context(
 
     monkeypatch.setattr(
         "tools.architecture_issue_tool.tool.save_architecture_observations",
-        lambda **kwargs: save_architecture_observations(**kwargs, home_dir=tmp_path),
+        partial(save_architecture_observations, home_dir=tmp_path),
     )
     session = SimpleNamespace(session_id="ctx-session-id")
     context = AgentToolContext(

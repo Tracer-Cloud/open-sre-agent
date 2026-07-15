@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Callable, Iterator
-from typing import Any, cast
+from typing import Any, Protocol, cast
 
 from rich.console import Console
 
@@ -21,6 +21,32 @@ from tools.interactive_shell.shared.investigation_launch import (
     InvestigationSession,
 )
 from tools.investigation import session_runner
+
+
+class BackgroundTextLauncher(Protocol):
+    """Callable contract for starting a background text investigation."""
+
+    def __call__(
+        self,
+        *,
+        alert_text: str,
+        session: Session,
+        console: Console,
+        display_command: str,
+    ) -> str: ...
+
+
+class BackgroundSampleLauncher(Protocol):
+    """Callable contract for starting a background sample investigation."""
+
+    def __call__(
+        self,
+        *,
+        template_name: str,
+        session: Session,
+        console: Console,
+        display_command: str,
+    ) -> str: ...
 
 
 def repl_foreground_renderer() -> session_runner.StreamRendererFn:
@@ -113,6 +139,15 @@ def run_sample_alert_for_session_background(
 class ReplInvestigationLaunchPorts:
     """Default REPL ports for investigation-style action tools."""
 
+    def __init__(
+        self,
+        *,
+        start_background_text: BackgroundTextLauncher,
+        start_background_sample: BackgroundSampleLauncher,
+    ) -> None:
+        self._start_background_text = start_background_text
+        self._start_background_sample = start_background_sample
+
     def execution_allowed(
         self,
         *,
@@ -171,11 +206,7 @@ class ReplInvestigationLaunchPorts:
         console: Console,
         display_command: str,
     ) -> None:
-        from surfaces.interactive_shell.runtime.background.runner import (
-            start_background_text_investigation,
-        )
-
-        start_background_text_investigation(
+        self._start_background_text(
             alert_text=alert_text,
             session=cast(Session, session),
             console=console,
@@ -190,11 +221,7 @@ class ReplInvestigationLaunchPorts:
         console: Console,
         display_command: str,
     ) -> None:
-        from surfaces.interactive_shell.runtime.background.runner import (
-            start_background_template_investigation,
-        )
-
-        start_background_template_investigation(
+        self._start_background_sample(
             template_name=template_name,
             session=cast(Session, session),
             console=console,
@@ -222,9 +249,16 @@ class ReplInvestigationLaunchPorts:
         return ForegroundInvestigationResult(status=outcome.status)
 
 
-def repl_investigation_launch_ports() -> InvestigationLaunchPorts:
+def repl_investigation_launch_ports(
+    *,
+    start_background_text: BackgroundTextLauncher,
+    start_background_sample: BackgroundSampleLauncher,
+) -> InvestigationLaunchPorts:
     """Return REPL investigation launch ports for action tools."""
-    return ReplInvestigationLaunchPorts()
+    return ReplInvestigationLaunchPorts(
+        start_background_text=start_background_text,
+        start_background_sample=start_background_sample,
+    )
 
 
 __all__ = [

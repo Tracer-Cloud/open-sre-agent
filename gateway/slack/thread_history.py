@@ -18,7 +18,6 @@ from integrations.slack.bot_api import (
 
 logger = logging.getLogger(__name__)
 
-_WANT_ME_TO_RE = re.compile(r"(?i)want\s+me\s+to\s*:")
 _ASSISTANT_SHAPE_RE = re.compile(
     r"(?i)(?:\*\*)?I found:(?:\*\*)?|(?:\*\*)?Want me to:(?:\*\*)?|"
     r"(?:\*\*)?Here's what that looks like:(?:\*\*)?"
