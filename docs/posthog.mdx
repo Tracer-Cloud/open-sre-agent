@@ -43,21 +43,11 @@ POSTHOG_BOUNCE_WINDOW=24h                           # Optional, defaults to 24h
 | `POSTHOG_BOUNCE_THRESHOLD` | `0.6` | Bounce rate threshold (as a decimal from `0.0` to `1.0`) above which alerting is triggered |
 | `POSTHOG_BOUNCE_WINDOW` | `24h` | Time window to query for calculating the bounce rate (e.g. `24h`, `48h`, `1h`) |
 
-## Bounce Rate Calculation
+## How Alerting Works
 
-The integration calculates the bounce rate using HogQL. A session is considered a "bounce" if its total duration is **10 seconds or less**.
+OpenSRE automatically monitors your PostHog sessions under the hood. During each watchdog cycle, it queries your session data to compute the bounce rate (the percentage of sessions with a duration of 10 seconds or less).
 
-The calculation runs the following query:
-
-```sql
-SELECT 
-  countIf(session_duration <= 10) AS bounced_sessions,
-  count() AS total_sessions
-FROM sessions
-WHERE start_time >= now() - INTERVAL <POSTHOG_BOUNCE_WINDOW>
-```
-
-If the calculated bounce rate exceeds the configured `POSTHOG_BOUNCE_THRESHOLD`, a watchdog alert is raised:
+If the bounce rate exceeds your configured `POSTHOG_BOUNCE_THRESHOLD`, a watchdog alert is raised automatically:
 - **Warning Alert:** Triggered if the bounce rate is above the threshold but less than or equal to 90% (`0.9`).
 - **Critical Alert:** Triggered if the bounce rate is above 90% (`0.9`).
 
