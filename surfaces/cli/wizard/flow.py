@@ -687,7 +687,7 @@ def _run_cli_llm_onboarding(
     return "abort"
 
 
-@dataclass
+@dataclass(frozen=True)
 class _ModeSelectionResult:
     """Result of the wizard's Setup Mode step: chosen mode and resolved probes."""
 
@@ -769,7 +769,7 @@ def _prompt_and_persist_api_key(provider: ProviderOption) -> str | None:
     return api_key
 
 
-@dataclass
+@dataclass(frozen=True)
 class _ProviderSelectionResult:
     """Result of the wizard's LLM Provider step: chosen provider, auth, and model."""
 
