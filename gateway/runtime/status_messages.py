@@ -11,6 +11,8 @@ import re
 from functools import lru_cache
 from typing import Any
 
+from core.llm.shared.llm_retry import CREDIT_EXHAUSTED_MARKER
+
 INITIAL_STATUSES: tuple[str, ...] = (
     "🔍 On it — give me a moment…",
     "⚡ Digging in…",
@@ -32,6 +34,24 @@ def normalize_gateway_status(text: str) -> str:
     if not stripped or _WORKING_PLACEHOLDER.fullmatch(stripped):
         return initial_status_message()
     return text
+
+
+_GENERIC_ERROR = "Something went wrong handling that request. Please try again."
+
+
+def user_facing_error_message(detail: str) -> str:
+    """Safe chat copy for an internal error string.
+
+    External Slack/Telegram users must never see raw exception detail; it is
+    logged server-side instead. Known-actionable conditions get specific
+    guidance, everything else a generic message.
+    """
+    if CREDIT_EXHAUSTED_MARKER in detail:
+        return (
+            "The assistant is temporarily unavailable: LLM credits are exhausted. "
+            "Run `opensre auth login <provider>` to re-authenticate or switch providers."
+        )
+    return _GENERIC_ERROR
 
 
 def status_from_response_label(label: str) -> str:
@@ -85,4 +105,5 @@ __all__ = [
     "normalize_gateway_status",
     "status_from_response_label",
     "status_from_tool_start",
+    "user_facing_error_message",
 ]

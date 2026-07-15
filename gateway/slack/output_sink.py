@@ -11,6 +11,7 @@ from gateway.runtime.status_messages import (
     initial_status_message,
     normalize_gateway_status,
     status_from_response_label,
+    user_facing_error_message,
 )
 from gateway.slack.client import SlackMessagingClient
 from integrations.slack.formatting import markdown_to_slack_mrkdwn
@@ -57,7 +58,9 @@ class SlackOutputSink:
         self._set_status(status_from_response_label(label))
 
     def render_error(self, message: str) -> None:
-        self._finalize(f"Error: {message}")
+        # Raw detail to the server log only; the user sees safe generic copy.
+        logger.warning("gateway turn error channel=%s: %s", self._channel_id, message)
+        self._finalize(user_facing_error_message(message))
 
     def stream(
         self,

@@ -153,7 +153,13 @@ async def receive_alert(request: Request) -> JSONResponse:
             data["received_at"] = datetime.now(UTC)
         alert = IncomingAlert.model_validate(data)
     except (TypeError, ValidationError, ValueError) as exc:
-        return JSONResponse({"error": str(exc)}, status_code=400)
+        # Log full validation detail server-side; return only the exception
+        # type so payload field names and model internals are not exposed.
+        logger.warning("Alert payload rejected (%s): %s", type(exc).__name__, exc)
+        return JSONResponse(
+            {"error": f"invalid alert payload: {type(exc).__name__}"},
+            status_code=400,
+        )
 
     inbox = _alert_inbox()
     accepted = inbox.put(alert)
