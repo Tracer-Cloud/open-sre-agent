@@ -687,29 +687,21 @@ def _run_cli_llm_onboarding(
     return "abort"
 
 
-def run_wizard(_argv: list[str] | None = None) -> int:
-    """Run the interactive wizard."""
-    _render_header()
-    defaults = _local_defaults()
-    saved_provider_value = defaults["provider"] if isinstance(defaults["provider"], str) else None
-    saved_model_value = defaults["model"] if isinstance(defaults["model"], str) else ""
-    default_wizard_mode = (
-        defaults["wizard_mode"] if isinstance(defaults["wizard_mode"], str) else "quickstart"
-    )
-    raw_saved_auth_method = defaults.get("auth_method")
-    saved_auth_method = (
-        normalize_llm_auth_method(raw_saved_auth_method)
-        if isinstance(raw_saved_auth_method, str)
-        else API_KEY_AUTH_METHOD
-    )
-    provider_options = _onboarding_provider_options()
-    provider_option_values = {p.value for p in provider_options}
-    default_provider_value = (
-        saved_provider_value
-        if saved_provider_value in provider_option_values
-        else provider_options[0].value
-    )
+@dataclass
+class _ModeSelectionResult:
+    """Result of the wizard's Setup Mode step: chosen mode and resolved probes."""
 
+    wizard_mode: str
+    local_probe: ProbeResult
+    remote_probe: ProbeResult
+
+
+def _select_wizard_mode_and_target(default_wizard_mode: str) -> _ModeSelectionResult | None:
+    """Step 1: choose quickstart/advanced and resolve the local/remote target.
+
+    Returns None when the wizard should abort (advanced target selection
+    cancelled, or a non-local target chosen — only local config is supported).
+    """
     _step_header(1, WIZARD_TOTAL_STEPS, "Setup Mode")
     wizard_mode = _choose(
         "How do you want to get started?",
@@ -726,8 +718,7 @@ def run_wizard(_argv: list[str] | None = None) -> int:
         default=default_wizard_mode,
     )
 
-    store_path = get_store_path()
-    local_probe = probe_local_target(store_path)
+    local_probe = probe_local_target(get_store_path())
     remote_probe = ProbeResult(
         target="remote",
         reachable=False,
@@ -738,14 +729,73 @@ def run_wizard(_argv: list[str] | None = None) -> int:
         remote_probe = probe_remote_target()
         target = _select_target_for_advanced(local_probe, remote_probe)
         if target is None:
-            return 1
+            return None
     else:
         target = "local"
 
     if target != "local":
         print("Only local configuration is supported today.", file=sys.stderr)
-        return 1
+        return None
 
+    return _ModeSelectionResult(
+        wizard_mode=wizard_mode, local_probe=local_probe, remote_probe=remote_probe
+    )
+
+
+def _prompt_and_persist_api_key(provider: ProviderOption) -> str | None:
+    """Prompt for and persist a provider's API key credential.
+
+    Returns the persisted API key, or None if the caller should abort (return
+    1 from run_wizard) after a Ctrl+C or a failed keychain/.env write.
+    Propagates WizardBack uncaught so the caller's own repick loop still
+    intercepts it — WizardBack subclasses KeyboardInterrupt, so it must not be
+    swallowed by the except clause below.
+    """
+    _step(provider.credential_label.title())
+    try:
+        api_key = _prompt_value(
+            f"{_credential_prompt_label(provider)} {provider.credential_label} ({provider.api_key_env})",
+            default=provider.credential_default,
+            secret=provider.credential_secret,
+            back_on_cancel=True,
+        )
+    except WizardBack:
+        raise
+    except KeyboardInterrupt:
+        _console.print(f"\n[{WARNING}]Setup cancelled.[/]")
+        return None
+    if not _persist_llm_credential(provider, api_key):
+        return None
+    return api_key
+
+
+@dataclass
+class _ProviderSelectionResult:
+    """Result of the wizard's LLM Provider step: chosen provider, auth, and model."""
+
+    provider: ProviderOption
+    model_provider: ProviderOption
+    auth_method: LLMAuthMethod | None
+    model: str
+    provider_extra_env: dict[str, str]
+
+
+def _select_provider_auth_and_model(
+    *,
+    defaults: dict[str, str | bool | None],
+    saved_provider_value: str | None,
+    saved_model_value: str,
+    saved_auth_method: LLMAuthMethod,
+    provider_options: tuple[ProviderOption, ...],
+    default_provider_value: str,
+) -> _ProviderSelectionResult | None:
+    """Step 2: interactively select an LLM provider, auth method, and model.
+
+    Handles reusing a saved provider, WizardBack-triggered re-picks, API key
+    credential prompting/persistence, Azure OpenAI endpoint setup, and CLI
+    provider onboarding. Returns None when the wizard should abort (return 1
+    from run_wizard); the caller is responsible for exiting in that case.
+    """
     force_repick = False
     provider: ProviderOption
     model_provider: ProviderOption
@@ -799,22 +849,13 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                 "cli",
                 "none",
             ):
-                _step(provider.credential_label.title())
                 try:
-                    api_key = _prompt_value(
-                        f"{_credential_prompt_label(provider)} {provider.credential_label} ({provider.api_key_env})",
-                        default=provider.credential_default,
-                        secret=provider.credential_secret,
-                        back_on_cancel=True,
-                    )
+                    api_key = _prompt_and_persist_api_key(provider)
                 except WizardBack:
                     force_repick = True
                     continue
-                except KeyboardInterrupt:
-                    _console.print(f"\n[{WARNING}]Setup cancelled.[/]")
-                    return 1
-                if not _persist_llm_credential(provider, api_key):
-                    return 1
+                if api_key is None:
+                    return None
                 azure_env = _ensure_azure_openai_endpoint_settings(provider)
                 if azure_env is None:
                     force_repick = True
@@ -839,25 +880,16 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                 # through to the host prompt instead (#3291).
                 if not has_api_key and legacy_api_key and provider.credential_kind != "host":
                     if not _persist_llm_credential(provider, legacy_api_key):
-                        return 1
+                        return None
                     has_api_key = True
                 if not has_api_key:
-                    _step(provider.credential_label.title())
                     try:
-                        api_key = _prompt_value(
-                            f"{_credential_prompt_label(provider)} {provider.credential_label} ({provider.api_key_env})",
-                            default=provider.credential_default,
-                            secret=provider.credential_secret,
-                            back_on_cancel=True,
-                        )
+                        api_key = _prompt_and_persist_api_key(provider)
                     except WizardBack:
                         force_repick = True
                         continue
-                    except KeyboardInterrupt:
-                        _console.print(f"\n[{WARNING}]Setup cancelled.[/]")
-                        return 1
-                    if not _persist_llm_credential(provider, api_key):
-                        return 1
+                    if api_key is None:
+                        return None
             azure_env = _ensure_azure_openai_endpoint_settings(provider)
             if azure_env is None:
                 force_repick = True
@@ -904,34 +936,28 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                 ),
             )
             if cli_out == "abort":
-                return 1
+                return None
             if cli_out == "repick":
                 force_repick = True
                 continue
         break
 
-    probes = {
-        "local": local_probe.as_dict(),
-        "remote": remote_probe.as_dict(),
-    }
-    persisted_auth_method = _persisted_auth_method(provider, auth_method)
-    saved_path = save_local_config(
-        wizard_mode=wizard_mode,
-        provider=provider.value,
-        model=model,
-        api_key_env=provider.api_key_env,
-        model_env=model_provider.model_env,
-        auth_method=persisted_auth_method,
-        probes=probes,
-    )
-    env_path = sync_provider_env(
+    return _ProviderSelectionResult(
         provider=provider,
-        model=model,
         model_provider=model_provider,
-        auth_method=persisted_auth_method,
-        extra_env=provider_extra_env or None,
+        auth_method=auth_method,
+        model=model,
+        provider_extra_env=provider_extra_env,
     )
 
+
+def _run_integrations_step() -> tuple[list[str], str | None]:
+    """Step 3: run the interactive integrations configurator.
+
+    Returns the list of configured integration labels and the last
+    integration env path written (or None if the user cancelled or
+    configured nothing).
+    """
     _step_header(3, WIZARD_TOTAL_STEPS, "Integrations")
     try:
         configured_integrations, integration_env_path = (
@@ -944,17 +970,82 @@ def run_wizard(_argv: list[str] | None = None) -> int:
         _console.print(cancelled)
         configured_integrations = []
         integration_env_path = None
+    return configured_integrations, integration_env_path
 
+
+def run_wizard(_argv: list[str] | None = None) -> int:
+    """Run the interactive wizard."""
+    _render_header()
+    defaults = _local_defaults()
+    saved_provider_value = defaults["provider"] if isinstance(defaults["provider"], str) else None
+    saved_model_value = defaults["model"] if isinstance(defaults["model"], str) else ""
+    default_wizard_mode = (
+        defaults["wizard_mode"] if isinstance(defaults["wizard_mode"], str) else "quickstart"
+    )
+    raw_saved_auth_method = defaults.get("auth_method")
+    saved_auth_method = (
+        normalize_llm_auth_method(raw_saved_auth_method)
+        if isinstance(raw_saved_auth_method, str)
+        else API_KEY_AUTH_METHOD
+    )
+    provider_options = _onboarding_provider_options()
+    provider_option_values = {p.value for p in provider_options}
+    default_provider_value = (
+        saved_provider_value
+        if saved_provider_value in provider_option_values
+        else provider_options[0].value
+    )
+
+    mode_selection = _select_wizard_mode_and_target(default_wizard_mode)
+    if mode_selection is None:
+        return 1
+
+    selection = _select_provider_auth_and_model(
+        defaults=defaults,
+        saved_provider_value=saved_provider_value,
+        saved_model_value=saved_model_value,
+        saved_auth_method=saved_auth_method,
+        provider_options=provider_options,
+        default_provider_value=default_provider_value,
+    )
+    if selection is None:
+        return 1
+
+    probes = {
+        "local": mode_selection.local_probe.as_dict(),
+        "remote": mode_selection.remote_probe.as_dict(),
+    }
+    persisted_auth_method = _persisted_auth_method(selection.provider, selection.auth_method)
+    saved_path = save_local_config(
+        wizard_mode=mode_selection.wizard_mode,
+        provider=selection.provider.value,
+        model=selection.model,
+        api_key_env=selection.provider.api_key_env,
+        model_env=selection.model_provider.model_env,
+        auth_method=persisted_auth_method,
+        probes=probes,
+    )
+    env_path = sync_provider_env(
+        provider=selection.provider,
+        model=selection.model,
+        model_provider=selection.model_provider,
+        auth_method=persisted_auth_method,
+        extra_env=selection.provider_extra_env or None,
+    )
+
+    configured_integrations, integration_env_path = _run_integrations_step()
     summary_env_path = integration_env_path or str(env_path)
 
     _step_header(4, WIZARD_TOTAL_STEPS, "Summary")
     _render_saved_summary(
-        provider_label=_provider_label_for_saved_summary(provider, persisted_auth_method),
-        model=model,
+        provider_label=_provider_label_for_saved_summary(selection.provider, persisted_auth_method),
+        model=selection.model,
         saved_path=str(saved_path),
         env_path=summary_env_path,
         configured_integrations=configured_integrations,
-        credential_line=_credential_line_for_saved_summary(provider, persisted_auth_method),
+        credential_line=_credential_line_for_saved_summary(
+            selection.provider, persisted_auth_method
+        ),
     )
     _render_next_steps()
     return 0
