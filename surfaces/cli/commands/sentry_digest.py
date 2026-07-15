@@ -171,6 +171,21 @@ def sentry_uptime_watch_add(
     if params:
         _console.print(f"  Project: {params['project_slug']}")
 
+    from integrations.sentry.uptime import format_uptime_watch_active_message
+    from platform.scheduler.executor import deliver_scheduled_message
+
+    active_message = format_uptime_watch_active_message(
+        task_id=added.id,
+        cron=added.cron,
+        timezone=added.timezone,
+        project_slug=params.get("project_slug", ""),
+    )
+    ok, error, _message_id = deliver_scheduled_message(added, active_message)
+    if ok:
+        _console.print("[green]Activation notice sent to chat.[/green]")
+    else:
+        _console.print(f"[yellow]Watch scheduled, but activation notice failed: {error}[/yellow]")
+
 
 @sentry_uptime_watch_command.command(name="list")
 def sentry_uptime_watch_list() -> None:

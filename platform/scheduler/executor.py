@@ -269,4 +269,13 @@ def _emit_analytics(task: ScheduledTask, status: TaskStatus, error: str = "") ->
         logger.debug("Failed to emit analytics for task %s", task.id, exc_info=True)
 
 
-__all__ = ["execute_task"]
+def deliver_scheduled_message(task: ScheduledTask, message: str) -> tuple[bool, str, str]:
+    """Deliver an ad-hoc message using the task's configured provider/chat.
+
+    Used for one-shot notices (e.g. uptime watch activation) outside a cron tick.
+    Returns ``(ok, error, message_id)``.
+    """
+    return _deliver(task, message)
+
+
+__all__ = ["deliver_scheduled_message", "execute_task"]

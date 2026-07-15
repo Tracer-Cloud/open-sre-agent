@@ -276,6 +276,26 @@ def format_uptime_transition_message(transitions: list[UptimeTransition]) -> str
     return "\n".join(lines)
 
 
+def format_uptime_watch_active_message(
+    *,
+    task_id: str,
+    cron: str,
+    timezone: str,
+    project_slug: str = "",
+) -> str:
+    """One-shot confirmation when a watch schedule is created."""
+    scope = (
+        f"Sentry project `{project_slug}`" if project_slug.strip() else "all Sentry uptime monitors"
+    )
+    return (
+        "Sentry uptime watch is **active**.\n"
+        f"OpenSRE will poll {scope} on schedule `{cron}` ({timezone}) "
+        "and ping this chat when a monitor goes **down** or **recovers**.\n"
+        "Quiet polls (no change) send nothing.\n"
+        f"Task id: `{task_id}`"
+    )
+
+
 def _state_path() -> Path:
     return OPENSRE_HOME_DIR / "sentry_uptime_watch_state.json"
 
@@ -382,6 +402,7 @@ __all__ = [
     "WatchState",
     "detect_uptime_transitions",
     "format_uptime_transition_message",
+    "format_uptime_watch_active_message",
     "health_snapshot",
     "list_sentry_uptime_monitors",
     "load_watch_state",

@@ -108,6 +108,21 @@ def test_health_snapshot_preserves_known_over_unknown() -> None:
     assert health_snapshot([unknown], previous={"1": "down"}) == {"1": "down"}
 
 
+def test_format_uptime_watch_active_message() -> None:
+    from integrations.sentry.uptime import format_uptime_watch_active_message
+
+    message = format_uptime_watch_active_message(
+        task_id="abc123",
+        cron="*/5 * * * *",
+        timezone="UTC",
+        project_slug="marketing-website",
+    )
+    assert "active" in message.lower()
+    assert "down" in message.lower()
+    assert "abc123" in message
+    assert "marketing-website" in message
+
+
 def test_format_message_marks_critical_downtime() -> None:
     transitions, _ = detect_uptime_transitions({}, [_monitor("1", health="down", name="api")])
     message = format_uptime_transition_message(transitions)
