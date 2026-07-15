@@ -153,8 +153,9 @@ async def receive_alert(request: Request) -> JSONResponse:
             data["received_at"] = datetime.now(UTC)
         alert = IncomingAlert.model_validate(data)
     except (TypeError, ValidationError, ValueError) as exc:
-        # Log full validation detail server-side; return only the exception
-        # type so payload field names and model internals are not exposed.
+        # Expected client error: log the full detail, return only the exception
+        # type (payload field names and model internals stay out of the
+        # response), and skip Sentry capture for routine 400s.
         logger.warning("Alert payload rejected (%s): %s", type(exc).__name__, exc)
         return JSONResponse(
             {"error": f"invalid alert payload: {type(exc).__name__}"},
