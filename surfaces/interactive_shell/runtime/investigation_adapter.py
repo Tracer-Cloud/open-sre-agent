@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Callable, Iterator
-from typing import Any
+from typing import Any, cast
 
 from rich.console import Console
 
@@ -18,6 +18,7 @@ from tools.interactive_shell.shared.execution_policy import ExecutionPolicyResul
 from tools.interactive_shell.shared.investigation_launch import (
     ForegroundInvestigationResult,
     InvestigationLaunchPorts,
+    InvestigationSession,
 )
 from tools.investigation import session_runner
 
@@ -116,7 +117,7 @@ class ReplInvestigationLaunchPorts:
         self,
         *,
         policy: ExecutionPolicyResult,
-        session: Session,
+        session: InvestigationSession,
         console: Console,
         action_summary: str,
         confirm_fn: Callable[[str], str] | None,
@@ -125,7 +126,7 @@ class ReplInvestigationLaunchPorts:
     ) -> bool:
         return execution_allowed(
             policy,
-            session=session,
+            session=cast(Session, session),
             console=console,
             action_summary=action_summary,
             confirm_fn=confirm_fn,
@@ -133,8 +134,8 @@ class ReplInvestigationLaunchPorts:
             action_already_listed=action_already_listed,
         )
 
-    def background_mode_enabled(self, session: Session) -> bool:
-        return background_mode_enabled(session)
+    def background_mode_enabled(self, session: InvestigationSession) -> bool:
+        return background_mode_enabled(cast(Session, session))
 
     def run_text_investigation(
         self,
@@ -166,7 +167,7 @@ class ReplInvestigationLaunchPorts:
         self,
         *,
         alert_text: str,
-        session: Session,
+        session: InvestigationSession,
         console: Console,
         display_command: str,
     ) -> None:
@@ -176,7 +177,7 @@ class ReplInvestigationLaunchPorts:
 
         start_background_text_investigation(
             alert_text=alert_text,
-            session=session,
+            session=cast(Session, session),
             console=console,
             display_command=display_command,
         )
@@ -185,7 +186,7 @@ class ReplInvestigationLaunchPorts:
         self,
         *,
         template_name: str,
-        session: Session,
+        session: InvestigationSession,
         console: Console,
         display_command: str,
     ) -> None:
@@ -195,7 +196,7 @@ class ReplInvestigationLaunchPorts:
 
         start_background_template_investigation(
             template_name=template_name,
-            session=session,
+            session=cast(Session, session),
             console=console,
             display_command=display_command,
         )
@@ -203,7 +204,7 @@ class ReplInvestigationLaunchPorts:
     def run_foreground_investigation(
         self,
         *,
-        session: Session,
+        session: InvestigationSession,
         console: Console,
         task_command: str,
         run: Callable[[TaskRecord], dict[str, object]],
@@ -211,7 +212,7 @@ class ReplInvestigationLaunchPorts:
         target: str,
     ) -> ForegroundInvestigationResult:
         outcome = run_foreground_investigation(
-            session=session,
+            session=cast(Session, session),
             console=console,
             task_command=task_command,
             run=run,

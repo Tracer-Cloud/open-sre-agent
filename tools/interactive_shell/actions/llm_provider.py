@@ -40,7 +40,7 @@ def _target_property_schema() -> dict[str, Any]:
 def _apply_model_set_target(target: str, ctx: ActionToolContext) -> bool:
     if ctx.llm_provider_ports is None:
         raise RuntimeError("LLM provider tool requires provider runtime ports")
-    return ctx.llm_provider_ports.apply_target(target, ctx.console)
+    return bool(ctx.llm_provider_ports.apply_target(target, ctx.console))
 
 
 def execute_llm_provider_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
