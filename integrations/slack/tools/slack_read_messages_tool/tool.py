@@ -62,7 +62,7 @@ class SlackReadMessagesTool(BaseTool):
             },
             "limit": {
                 "type": "integer",
-                "description": "How many recent messages to fetch (1-100, default 20).",
+                "description": "How many recent messages to fetch (1-100, default 50).",
             },
             "thread_ts": {
                 "type": "string",

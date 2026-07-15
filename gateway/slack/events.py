@@ -11,6 +11,10 @@ _LEADING_MENTION = re.compile(r"^\s*<@[^>]+>\s*")
 
 _DM_CHANNEL_TYPE = "im"
 
+# Message subtypes that still carry a real user mention/message to answer.
+# Everything else with a subtype (edits, joins, channel bookkeeping) is ignored.
+_HANDLED_MESSAGE_SUBTYPES = frozenset({"file_share", "thread_broadcast"})
+
 
 @dataclass(frozen=True)
 class SlackInboundMessage:
@@ -33,13 +37,15 @@ def parse_events_api_payload(payload: Mapping[str, Any]) -> SlackInboundMessage 
     """Return the inbound message for an ``events_api`` envelope payload.
 
     Accepts ``app_mention`` events (channels) and plain ``message`` events in
-    DMs. Returns ``None`` for anything else — bot echoes, message subtypes
-    (edits, joins), and events missing required fields.
+    DMs, including ``file_share`` / ``thread_broadcast`` subtypes that still
+    carry a real mention. Returns ``None`` for anything else — bot echoes,
+    bookkeeping subtypes (edits, joins), and events missing required fields.
     """
     event = payload.get("event")
     if not isinstance(event, Mapping):
         return None
-    if event.get("bot_id") or event.get("subtype"):
+    subtype = event.get("subtype")
+    if event.get("bot_id") or (subtype and subtype not in _HANDLED_MESSAGE_SUBTYPES):
         return None
 
     event_type = event.get("type")

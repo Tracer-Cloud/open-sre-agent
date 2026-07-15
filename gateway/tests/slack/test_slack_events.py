@@ -79,6 +79,15 @@ def test_rejects_bot_echo_and_message_subtypes() -> None:
     assert parse_events_api_payload(_mention_payload(subtype="message_changed")) is None
 
 
+def test_accepts_file_share_and_thread_broadcast_subtypes() -> None:
+    # These subtypes still carry a real user mention and must be answered,
+    # not silently dropped like edit/join bookkeeping subtypes.
+    for subtype in ("file_share", "thread_broadcast"):
+        inbound = parse_events_api_payload(_mention_payload(subtype=subtype))
+        assert inbound is not None, f"{subtype} mention was dropped"
+        assert inbound.text == "check the checkout service"
+
+
 def test_rejects_channel_messages_without_mention() -> None:
     payload = _mention_payload(type="message", channel_type="channel")
     assert parse_events_api_payload(payload) is None

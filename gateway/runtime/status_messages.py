@@ -38,6 +38,9 @@ def normalize_gateway_status(text: str) -> str:
 
 _GENERIC_ERROR = "Something went wrong handling that request. Please try again."
 
+# Shown when a turn streams no text at all, so the placeholder is not left blank.
+EMPTY_RESPONSE_MESSAGE = "I didn't have anything to add for that."
+
 
 def user_facing_error_message(detail: str) -> str:
     """Safe chat copy for an internal error string.
@@ -101,6 +104,7 @@ def _input_hint(tool_input: Any) -> str:
 
 
 __all__ = [
+    "EMPTY_RESPONSE_MESSAGE",
     "initial_status_message",
     "normalize_gateway_status",
     "status_from_response_label",

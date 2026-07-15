@@ -26,6 +26,7 @@ class SlackGatewaySettings(StrictConfigModel):
     allow_open_workspace: bool = False
     max_concurrent_turns: int = Field(default=4, ge=1)
     status_update_interval_seconds: float = Field(default=1.5, gt=0)
+    turn_timeout_seconds: float = Field(default=240.0, gt=0)
 
 
 class SlackGatewayEnv(BaseSettings):
@@ -45,6 +46,7 @@ class SlackGatewayEnv(BaseSettings):
     allow_open_workspace: bool = False
     gateway_max_concurrent: int = Field(default=4, ge=1)
     gateway_status_update_interval_seconds: float = Field(default=1.5, gt=0)
+    gateway_turn_timeout_seconds: float = Field(default=240.0, gt=0)
 
     @field_validator("allowed_users", mode="before")
     @classmethod
@@ -155,4 +157,5 @@ def load_slack_gateway_settings() -> SlackGatewaySettings:
         allow_open_workspace=env.allow_open_workspace,
         max_concurrent_turns=env.gateway_max_concurrent,
         status_update_interval_seconds=env.gateway_status_update_interval_seconds,
+        turn_timeout_seconds=env.gateway_turn_timeout_seconds,
     )

@@ -8,6 +8,7 @@ import time
 from collections.abc import Iterable
 
 from gateway.runtime.status_messages import (
+    EMPTY_RESPONSE_MESSAGE,
     initial_status_message,
     normalize_gateway_status,
     status_from_response_label,
@@ -84,7 +85,7 @@ class SlackOutputSink:
             if now - self._last_update >= self._update_interval:
                 self._edit_preview("".join(parts))
         text = "".join(parts)
-        self._finalize(text or "(no response)")
+        self._finalize(text or EMPTY_RESPONSE_MESSAGE)
         return text
 
     def set_tool_status(self, text: str) -> None:

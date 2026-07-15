@@ -32,9 +32,11 @@ def test_metadata_declares_slack_source() -> None:
     assert slack_send_message.requires_approval is True
 
 
-def test_registered_tool_is_available_on_chat_investigation_and_action_surfaces() -> None:
+def test_registered_tool_is_scoped_off_the_chat_surface() -> None:
+    # Not on the gateway chat surface: the reply sink delivers gateway messages,
+    # so exposing a send tool there lets the agent target the wrong platform.
     registered = slack_send_message.__opensre_registered_tool__
-    assert registered.surfaces == ("investigation", "chat", "action")
+    assert registered.surfaces == ("investigation", "action")
     assert registered.requires_approval is True
 
 

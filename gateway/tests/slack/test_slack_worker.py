@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import threading
+import time
 from typing import Any
 from unittest.mock import patch
 
@@ -67,6 +69,7 @@ def _settings(
     allowed_user_ids: list[str] | None = None,
     *,
     allow_open_workspace: bool = False,
+    turn_timeout_seconds: float = 240.0,
 ) -> SlackGatewaySettings:
     return SlackGatewaySettings(
         bot_token="xoxb-test",
@@ -74,6 +77,7 @@ def _settings(
         allowed_user_ids=allowed_user_ids or [],
         allow_open_workspace=allow_open_workspace,
         status_update_interval_seconds=0.01,
+        turn_timeout_seconds=turn_timeout_seconds,
     )
 
 
@@ -119,8 +123,8 @@ def test_authorized_message_reaches_handler_with_thread_sink() -> None:
 
     assert len(turns) == 1
     agent_text, session = turns[0]
-    assert agent_text.startswith("[Slack channel_id=C1 ")
-    assert "thread_ts=100.1" in agent_text
+    assert agent_text.startswith("[Slack channel_id=C1]")
+    assert "thread_ts" not in agent_text
     assert "slack_read_messages" not in agent_text
     assert agent_text.endswith("check the api")
     assert session is turns[0][1]
@@ -227,4 +231,50 @@ def test_errored_turn_replaces_placeholder_with_error() -> None:
     # The placeholder message was edited to an error, and the message shows ✗.
     assert messaging.updates, "placeholder was never updated on error"
     assert "went wrong" in messaging.updates[-1]["text"].lower()
+    assert ("add", "x") in [(r["op"], r["emoji"]) for r in messaging.reactions]
+
+
+def test_agent_context_omits_thread_ts_to_avoid_thread_reads() -> None:
+    # Arrange / Act
+    from gateway.slack.socket_mode_worker import _agent_text_with_slack_context
+
+    text = _agent_text_with_slack_context(_inbound())
+
+    # Assert: channel id is present for tool targeting, but the thread ts is not
+    # exposed (the agent would copy it into channel reads, returning one thread).
+    assert "channel_id=C1" in text
+    assert "thread_ts" not in text
+    assert "check the api" in text
+
+
+def test_turn_timeout_finalizes_placeholder_when_handler_hangs() -> None:
+    """A turn that outruns the timeout gets a visible message + ✗ instead of a
+    frozen placeholder, even though the blocking handler cannot be cancelled."""
+    messaging = _FakeMessagingClient()
+    release = threading.Event()
+
+    def hanging_handler(_text: str, _session: Any, _sink: Any, _logger: logging.Logger) -> None:
+        release.wait(5.0)  # blocks past the tiny timeout; released once observed
+
+    dispatcher = _dispatcher(
+        settings=_settings(["U1"], turn_timeout_seconds=0.05),
+        messaging=messaging,
+        resolver=_FakeSessionResolver(),
+        handler=hanging_handler,
+    )
+    worker = threading.Thread(target=lambda: dispatcher._run_turn(_inbound()))
+    worker.start()
+    try:
+        deadline = time.monotonic() + 3.0
+        while time.monotonic() < deadline and not any(
+            "taking longer" in update["text"].lower() for update in messaging.updates
+        ):
+            time.sleep(0.02)
+    finally:
+        release.set()
+        worker.join(5.0)
+
+    assert any("taking longer" in update["text"].lower() for update in messaging.updates), (
+        "timeout did not replace the placeholder"
+    )
     assert ("add", "x") in [(r["op"], r["emoji"]) for r in messaging.reactions]

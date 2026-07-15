@@ -92,7 +92,7 @@ def test_validate_channel_id_accepts_ids_and_names() -> None:
 
 
 def test_clamp_limit_bounds() -> None:
-    assert clamp_limit(None) == 20
+    assert clamp_limit(None) == 50
     assert clamp_limit(0) == 1
     assert clamp_limit(1000) == 100
 

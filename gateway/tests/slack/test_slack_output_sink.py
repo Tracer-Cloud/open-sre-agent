@@ -87,6 +87,19 @@ def test_stream_returns_full_text_and_updates_preview() -> None:
     assert client.updates[-1]["text"] == "hello world"
 
 
+def test_empty_stream_finalizes_with_placeholder_fallback() -> None:
+    # Arrange
+    client = _FakeMessagingClient()
+    sink = _sink(client)
+
+    # Act: a turn that streams nothing at all.
+    text = sink.stream(label="assistant", chunks=[])
+
+    # Assert: the placeholder is replaced with a clear message, not left blank.
+    assert text == ""
+    assert client.updates[-1]["text"] == "I didn't have anything to add for that."
+
+
 def test_tool_status_edits_placeholder() -> None:
     client = _FakeMessagingClient()
     sink = _sink(client)
