@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 import pytest
 from pydantic import BaseModel, field_validator
 
@@ -139,3 +141,43 @@ def test_pre_check_proceeds_when_true() -> None:
     )
     assert cfg is not None
     assert key == "my_key"
+
+
+# ---- logger parameter ---------------------------------------------------------
+
+
+def test_vendor_logger_used_for_exception_reporting(monkeypatch: pytest.MonkeyPatch) -> None:
+    vendor_logger = logging.getLogger("integrations.test_vendor")
+    received: list[logging.Logger] = []
+
+    monkeypatch.setattr(
+        "integrations._classify_helpers.report_classify_failure",
+        lambda _exc, *, logger, **_kw: received.append(logger),
+    )
+
+    validate_classify(
+        _Simple,
+        "rec-1",
+        {"name": ""},
+        integration="test",
+        resolved_key="my_key",
+        logger=vendor_logger,
+    )
+
+    assert received == [vendor_logger]
+
+
+def test_check_fn_rejection_emits_debug_log(caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level(logging.DEBUG, logger="integrations._classify_helpers"):
+        cfg, key = validate_classify(
+            _Simple,
+            "rec-1",
+            {"name": "ok"},
+            integration="myvendor",
+            resolved_key="my_key",
+            check_fn=lambda c: c.value > 0,
+        )
+
+    assert cfg is None
+    assert key is None
+    assert any("myvendor" in r.message for r in caplog.records)

@@ -15,7 +15,7 @@ from pydantic import BaseModel
 
 from integrations._validation_helpers import report_classify_failure
 
-logger = logging.getLogger(__name__)
+_logger = logging.getLogger(__name__)
 
 
 def validate_classify[ConfigT: BaseModel](
@@ -27,6 +27,7 @@ def validate_classify[ConfigT: BaseModel](
     resolved_key: str,
     check_fn: Callable[[ConfigT], bool] | None = None,
     pre_check: Callable[[dict[str, Any]], bool] | None = None,
+    logger: logging.Logger | None = None,
 ) -> tuple[ConfigT | None, str | None]:
     """Validate *data* against *model_cls* and return a classified config tuple.
 
@@ -46,17 +47,22 @@ def validate_classify[ConfigT: BaseModel](
         pre_check: Optional pre-validation guard; receives the raw *data* dict
             and returns ``False`` to skip validation entirely (e.g.
             ``lambda d: bool((d.get("bot_token") or "").strip())``).
+        logger: Optional vendor logger. When provided, log entries appear under
+            the vendor's module name instead of ``integrations._classify_helpers``,
+            preserving per-vendor log filtering.
 
     Returns:
         ``(cfg, resolved_key)`` on success, ``(None, None)`` on any failure.
     """
+    _log = logger if logger is not None else _logger
     if pre_check is not None and not pre_check(data):
         return None, None
     try:
         cfg: ConfigT = model_cls.model_validate(data)
     except Exception as exc:
-        report_classify_failure(exc, logger=logger, integration=integration, record_id=record_id)
+        report_classify_failure(exc, logger=_log, integration=integration, record_id=record_id)
         return None, None
     if check_fn is not None and not check_fn(cfg):
+        _log.debug("classify check_fn rejected config for %s record %s", integration, record_id)
         return None, None
     return cfg, resolved_key
