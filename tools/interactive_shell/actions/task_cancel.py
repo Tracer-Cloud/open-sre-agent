@@ -9,6 +9,7 @@ from rich.markup import escape
 
 from core.agent_harness.tools.tool_context import (
     ActionToolContext,
+    capability_available_from_sources,
     execute_with_action_context,
     object_schema,
 )
@@ -125,6 +126,10 @@ task_cancel_tool = RegisteredTool(
     parallel_safe=False,
     accepts_runtime_context=True,
     run=run_task_cancel,
+        is_available=lambda sources: capability_available_from_sources(
+        sources,
+        "task_cancel",
+    ),
 )
 
 

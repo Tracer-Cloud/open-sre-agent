@@ -42,25 +42,6 @@ ignore_imports =
     surfaces.cli.commands.gateway -> gateway.runtime.manager
     surfaces.interactive_shell.command_registry.gateway_cmds -> gateway.runtime.daemon
     surfaces.interactive_shell.controller -> gateway.http.web_server
-    # tools.interactive_shell -> surfaces (T-4 debt — issue #3352)
-    tools.interactive_shell.actions.investigation -> surfaces.interactive_shell.runtime.background.runner
-    tools.interactive_shell.actions.investigation -> surfaces.interactive_shell.runtime.investigation_adapter
-    tools.interactive_shell.actions.investigation -> surfaces.interactive_shell.session
-    tools.interactive_shell.actions.sample_alert -> surfaces.interactive_shell.session
-    tools.interactive_shell.shared.investigation_launch -> surfaces.interactive_shell.session
-    tools.interactive_shell.actions.llm_provider -> surfaces.cli.wizard.config
-    tools.interactive_shell.actions.llm_provider -> surfaces.interactive_shell.command_registry
-    tools.interactive_shell.actions.llm_provider -> surfaces.interactive_shell.ui.execution_confirm
-    tools.interactive_shell.actions.sample_alert -> surfaces.interactive_shell.runtime.background.runner
-    tools.interactive_shell.actions.sample_alert -> surfaces.interactive_shell.runtime.investigation_adapter
-    tools.interactive_shell.actions.slash -> surfaces.interactive_shell.command_registry
-    tools.interactive_shell.actions.slash -> surfaces.interactive_shell.command_registry.slash_catalog
-    tools.interactive_shell.actions.slash -> surfaces.interactive_shell.ui
-    tools.interactive_shell.actions.slash -> surfaces.interactive_shell.ui.execution_confirm
-    tools.interactive_shell.actions.slash -> surfaces.interactive_shell.utils.telemetry.turn_outcome
-    tools.interactive_shell.actions.task_cancel -> surfaces.interactive_shell.command_registry
-    tools.interactive_shell.actions.task_cancel -> surfaces.interactive_shell.runtime
-    tools.interactive_shell.actions.task_cancel -> surfaces.interactive_shell.ui.execution_confirm
     # tools -> integrations (T-4 debt — vendor tools / reporting)
     tools.community_followup_tool -> integrations.github.client
     tools.community_followup_tool -> integrations.github.helpers

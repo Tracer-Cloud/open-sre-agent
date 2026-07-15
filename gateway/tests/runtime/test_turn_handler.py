@@ -12,6 +12,9 @@ from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStorage
 from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
 from gateway.runtime.turn_handler import GatewayTurnHandler
+from tests.core.agent.orchestration.cross_surface_parity_harness import (
+    RecordingGatewaySink,
+)
 
 
 def _patch_headless_agent(monkeypatch: Any, result: ShellTurnResult) -> MagicMock:
@@ -108,3 +111,19 @@ def test_turn_handler_skips_finalize_when_answer_was_streamed(monkeypatch: Any) 
     handler = GatewayTurnHandler(console=Console(force_terminal=False))
     handler("hi", SessionCore(storage=InMemorySessionStorage()), sink, logging.getLogger("test"))
     sink.finalize.assert_not_called()
+
+
+def test_turn_handler_disables_unsupported_gateway_capabilities() -> None:
+    session = SessionCore(storage=InMemorySessionStorage())
+    handler = GatewayTurnHandler(console=Console(force_terminal=False))
+
+    handler(
+        "hello",
+        session,
+        RecordingGatewaySink(),
+        logging.getLogger("test"),
+    )
+
+    assert session.available_capabilities["investigation"] == ()
+    assert session.available_capabilities["llm_provider"] == ()
+    assert session.available_capabilities["task_cancel"] == ()

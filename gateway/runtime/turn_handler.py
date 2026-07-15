@@ -29,6 +29,12 @@ from platform.observability.trace.spans import traced_session
 
 SlashPortsFactory = Callable[[], Any]
 
+_UNSUPPORTED_GATEWAY_CAPABILITIES = (
+    "investigation",
+    "llm_provider",
+    "task_cancel",
+)
+
 
 class _ToolStatusObserver:
     """Live tool-progress feedback for the gateway.
@@ -74,6 +80,8 @@ class GatewayTurnHandler:
         sink: GatewaySink,
         logger: logging.Logger,
     ) -> None:
+        session.available_capabilities.update(dict.fromkeys(_UNSUPPORTED_GATEWAY_CAPABILITIES, ()))
+
         with traced_session(getattr(session, "session_id", None), component="gateway_turn"):
             agent = self._agent_for_turn(text=text, session=session, sink=sink, logger=logger)
             turn_result = agent.dispatch(text)
