@@ -149,6 +149,15 @@ class HeadlessSlashPorts(ReplSlashPorts):
     def launching_message(self, command: str) -> str:
         return f"Launching {command}…"
 
+    def format_turn_outcome(
+        self,
+        command: str,
+        *,
+        ok: bool,
+    ) -> str:
+        status = "succeeded" if ok else "failed"
+        return f"Slash command {command} {status}."
+
 
 def repl_slash_ports() -> SlashPorts:
     return ReplSlashPorts()

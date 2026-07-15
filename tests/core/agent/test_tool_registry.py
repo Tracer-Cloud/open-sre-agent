@@ -143,6 +143,7 @@ def test_tools_hidden_when_capabilities_are_explicitly_empty() -> None:
             "implementation": (),
             "llm_provider": (),
             "investigation": (),
+            "task_cancel": (),
         }
     )
     names = {spec["name"] for spec in _tool_specs(session)}
@@ -154,6 +155,7 @@ def test_tools_hidden_when_capabilities_are_explicitly_empty() -> None:
     assert "llm_set_provider" not in names
     assert "investigation_start" not in names
     assert "alert_sample" not in names
+    assert "task_cancel" not in names
 
 
 def test_telegram_send_message_offered_when_telegram_is_configured() -> None:
@@ -230,3 +232,20 @@ def test_synthetic_tool_description_preserves_numeric_id_guidance() -> None:
     assert '"005" -> "005-failover"' in description
     assert '"004" -> "004-cpu-saturation-bad-query"' in description
     assert "never substitute a neighboring numbered scenario" in description
+
+
+def test_gateway_capabilities_only_hide_gateway_unsupported_tools() -> None:
+    session = Session(
+        available_capabilities={
+            "investigation": (),
+            "llm_provider": (),
+            "task_cancel": (),
+        }
+    )
+
+    names = {spec["name"] for spec in _tool_specs(session)}
+
+    assert "investigation_start" not in names
+    assert "alert_sample" not in names
+    assert "llm_set_provider" not in names
+    assert "slash_invoke" in names

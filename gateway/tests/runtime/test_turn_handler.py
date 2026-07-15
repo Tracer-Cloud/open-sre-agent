@@ -127,3 +127,47 @@ def test_turn_handler_disables_unsupported_gateway_capabilities() -> None:
     assert session.available_capabilities["investigation"] == ()
     assert session.available_capabilities["llm_provider"] == ()
     assert session.available_capabilities["task_cancel"] == ()
+
+
+def test_turn_handler_preserves_supported_capabilities() -> None:
+    session = SessionCore(storage=InMemorySessionStorage())
+    session.available_capabilities.update(
+        {
+            "investigation": ("existing-investigation",),
+            "llm_provider": ("existing-provider",),
+            "task_cancel": ("existing-cancel",),
+            "shell_commands": ("shell",),
+            "custom_gateway_capability": ("enabled",),
+        }
+    )
+
+    handler = GatewayTurnHandler(console=Console(force_terminal=False))
+    handler(
+        "hello",
+        session,
+        RecordingGatewaySink(),
+        logging.getLogger("test.gateway.capabilities"),
+    )
+
+    assert session.available_capabilities["investigation"] == ()
+    assert session.available_capabilities["llm_provider"] == ()
+    assert session.available_capabilities["task_cancel"] == ()
+
+    assert session.available_capabilities["shell_commands"] == ("shell",)
+    assert session.available_capabilities["custom_gateway_capability"] == ("enabled",)
+
+
+def test_turn_handler_capability_gating_is_stable_across_turns() -> None:
+    session = SessionCore(storage=InMemorySessionStorage())
+    session.available_capabilities["shell_commands"] = ("shell",)
+
+    handler = GatewayTurnHandler(console=Console(force_terminal=False))
+    logger = logging.getLogger("test.gateway.capabilities")
+
+    handler("first turn", session, RecordingGatewaySink(), logger)
+    handler("second turn", session, RecordingGatewaySink(), logger)
+
+    assert session.available_capabilities["investigation"] == ()
+    assert session.available_capabilities["llm_provider"] == ()
+    assert session.available_capabilities["task_cancel"] == ()
+    assert session.available_capabilities["shell_commands"] == ("shell",)
