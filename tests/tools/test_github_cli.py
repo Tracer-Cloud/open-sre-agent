@@ -5,8 +5,6 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from core.tool_framework.registered_tool import RegisteredTool
 from tests.tools.conftest import BaseToolContract
 from tools.github_cli.runner import build_gh_argv, run_gh
