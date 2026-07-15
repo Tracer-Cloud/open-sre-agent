@@ -1,3 +1,5 @@
+"""Tests for the Slack turn dispatcher: admit gate, auth, seeding, timeout, reactions."""
+
 from __future__ import annotations
 
 import logging
@@ -8,9 +10,9 @@ from unittest.mock import patch
 
 import pytest
 
+from gateway.slack.dispatcher import _SlackTurnDispatcher
 from gateway.slack.events import SlackInboundMessage
 from gateway.slack.settings import SlackGatewaySettings
-from gateway.slack.socket_mode_worker import _SlackTurnDispatcher
 
 _SECURITY = "gateway.slack.security"
 
@@ -177,9 +179,9 @@ def test_unauthorized_user_gets_denial_reply_and_no_turn() -> None:
 
 
 def test_conversation_locks_are_pruned_at_cap(monkeypatch: pytest.MonkeyPatch) -> None:
-    from gateway.slack import socket_mode_worker
+    from gateway.slack import dispatcher
 
-    monkeypatch.setattr(socket_mode_worker, "_MAX_CONVERSATION_LOCKS", 4)
+    monkeypatch.setattr(dispatcher, "_MAX_CONVERSATION_LOCKS", 4)
     dispatcher = _dispatcher(
         settings=_settings(["U1"]),
         messaging=_FakeMessagingClient(),
@@ -195,9 +197,9 @@ def test_conversation_locks_are_pruned_at_cap(monkeypatch: pytest.MonkeyPatch) -
 
 
 def test_in_use_conversation_lock_survives_pruning(monkeypatch: pytest.MonkeyPatch) -> None:
-    from gateway.slack import socket_mode_worker
+    from gateway.slack import dispatcher
 
-    monkeypatch.setattr(socket_mode_worker, "_MAX_CONVERSATION_LOCKS", 1)
+    monkeypatch.setattr(dispatcher, "_MAX_CONVERSATION_LOCKS", 1)
     dispatcher = _dispatcher(
         settings=_settings(["U1"]),
         messaging=_FakeMessagingClient(),
@@ -252,7 +254,7 @@ def test_errored_turn_replaces_placeholder_with_error() -> None:
 
 def test_agent_context_omits_thread_ts_to_avoid_thread_reads() -> None:
     # Arrange / Act
-    from gateway.slack.socket_mode_worker import _agent_text_with_slack_context
+    from gateway.slack.dispatcher import _agent_text_with_slack_context
 
     text = _agent_text_with_slack_context(_inbound())
 
@@ -265,7 +267,7 @@ def test_agent_context_omits_thread_ts_to_avoid_thread_reads() -> None:
 
 def test_agent_context_attributes_the_speaker() -> None:
     """The turn prefix names who is speaking (multi-user thread attribution)."""
-    from gateway.slack.socket_mode_worker import _agent_text_with_slack_context
+    from gateway.slack.dispatcher import _agent_text_with_slack_context
 
     text = _agent_text_with_slack_context(_inbound())
 

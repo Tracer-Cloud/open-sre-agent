@@ -1,11 +1,20 @@
-"""Slack output sink: placeholder status message edited in place, final answer in-thread."""
+"""Slack output sink: streamed timeline reply with placeholder-edit fallback.
+
+Preferred delivery is Slack's streaming surface (``chat.startStream`` →
+``chat.appendStream`` → ``chat.stopStream``): tool progress renders as
+timeline task cards and the answer streams as native markdown, like Claude
+Tag. When streaming is unavailable (feature-gated workspace, old plan, API
+error) the sink falls back to the classic flow — one status placeholder
+posted in-thread, edited in place while the turn runs, replaced by the final
+answer.
+"""
 
 from __future__ import annotations
 
 import logging
 import threading
 import time
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 
 from gateway.runtime.status_messages import (
     EMPTY_RESPONSE_MESSAGE,
@@ -28,11 +37,7 @@ logger = logging.getLogger("gateway")
 
 
 class SlackOutputSink:
-    """Stream assistant output back to the triggering Slack thread.
-
-    Posts one status placeholder as a thread reply, edits it in place while the
-    turn runs (throttled), and replaces it with the final answer.
-    """
+    """Stream assistant output back to the triggering Slack thread."""
 
     def __init__(
         self,
@@ -48,7 +53,16 @@ class SlackOutputSink:
         self._update_interval = update_interval_seconds
         self._last_update = 0.0
         self._started_at = time.monotonic()
-        self._lock = threading.Lock()
+        # RLock: the turn stream's on-start callback deletes the placeholder
+        # from inside an already-locked status/stream call.
+        self._lock = threading.RLock()
+        self._turn_stream = _TurnStream(
+            client=client,
+            channel_id=channel_id,
+            thread_ts=thread_ts,
+            update_interval_seconds=update_interval_seconds,
+            on_started=self._drop_placeholder,
+        )
         self._message_ts = client.post_message(
             channel=channel_id,
             text=_as_status_line(initial_status_message()),
@@ -84,7 +98,11 @@ class SlackOutputSink:
         _ = (label, suppress_if_starts_with)
         parts: list[str] = []
         for chunk in chunks:
-            parts.append(str(chunk))
+            text_chunk = str(chunk)
+            parts.append(text_chunk)
+            with self._lock:
+                if self._turn_stream.append_text(text_chunk):
+                    continue
             now = time.monotonic()
             if now - self._last_update >= self._update_interval:
                 self._edit_preview("".join(parts))
@@ -99,19 +117,48 @@ class SlackOutputSink:
         self._finalize(text)
 
     def _set_status(self, text: str) -> None:
-        self._edit_preview(_as_status_line(normalize_gateway_status(text)))
+        status = normalize_gateway_status(text)
+        with self._lock:
+            if self._turn_stream.note_task(status):
+                return
+        self._edit_preview(_as_status_line(status))
+
+    def _drop_placeholder(self) -> None:
+        """The streamed message replaces the placeholder — remove it."""
+        with self._lock:
+            ts = self._message_ts
+            self._message_ts = None
+        if ts:
+            self._client.delete_message(channel=self._channel_id, ts=ts)
 
     def _edit_preview(self, text: str) -> None:
         if not self._message_ts:
             return
         preview = truncate(text, SLACK_MAX_MESSAGE_CHARS, suffix="…")
         with self._lock:
-            if self._client.update_message(
+            if self._message_ts and self._client.update_message(
                 channel=self._channel_id, ts=self._message_ts, text=preview
             ):
                 self._last_update = time.monotonic()
 
     def _finalize(self, text: str) -> None:
+        with self._lock:
+            if self._turn_stream.started:
+                if self._turn_stream.finish(text, blocks=[self._footer_block()]):
+                    logger.info(
+                        "outbound channel=%s thread_ts=%s mode=stream chars=%d",
+                        self._channel_id,
+                        self._thread_ts,
+                        len(text),
+                    )
+                    return
+                # Stream broke mid-turn: deliver the full answer the classic way.
+                logger.warning(
+                    "[slack-sink] stream delivery failed channel=%s thread_ts=%s; "
+                    "falling back to a plain message",
+                    self._channel_id,
+                    self._thread_ts,
+                )
         final = truncate(markdown_to_slack_mrkdwn(text), SLACK_MAX_MESSAGE_CHARS, suffix="…")
         blocks = self._final_blocks(text)
         mode = "edit"
@@ -165,14 +212,159 @@ class SlackOutputSink:
             return None
         return [
             {"type": "markdown", "text": body},
-            {
-                "type": "context",
-                "elements": [{"type": "mrkdwn", "text": self._footer_text()}],
-            },
+            self._footer_block(),
         ]
+
+    def _footer_block(self) -> dict[str, object]:
+        return {
+            "type": "context",
+            "elements": [{"type": "mrkdwn", "text": self._footer_text()}],
+        }
 
     def _footer_text(self) -> str:
         return f"OpenSRE · AI-generated · {_format_duration(time.monotonic() - self._started_at)}"
+
+
+class _TurnStream:
+    """One turn's streamed Slack message (``chat.startStream`` lifecycle).
+
+    Started lazily on the first tool status or answer chunk. Tool statuses
+    become timeline ``task_update`` chunks (the previous task flips to
+    ``complete`` when the next one starts); answer text streams as throttled
+    ``markdown_text`` chunks. A start failure marks the stream dead for the
+    turn and the sink stays on the placeholder path; an append failure after
+    a successful start marks it broken and the sink re-delivers in full.
+    """
+
+    def __init__(
+        self,
+        *,
+        client: SlackMessagingClient,
+        channel_id: str,
+        thread_ts: str,
+        update_interval_seconds: float,
+        on_started: Callable[[], None],
+    ) -> None:
+        self._client = client
+        self._channel_id = channel_id
+        self._thread_ts = thread_ts
+        self._update_interval = update_interval_seconds
+        self._on_started = on_started
+        self._ts: str | None = None
+        self._dead = False
+        self._broken = False
+        self._task_seq = 0
+        self._open_task: tuple[str, str] | None = None  # (id, title)
+        self._sent_text = ""
+        self._pending_text = ""
+        self._last_flush = 0.0
+
+    @property
+    def started(self) -> bool:
+        return self._ts is not None
+
+    def note_task(self, title: str) -> bool:
+        """Show ``title`` as the new in-progress timeline task."""
+        if not self._ensure_started():
+            return False
+        chunks: list[dict[str, object]] = list(self._close_open_task_chunks())
+        self._task_seq += 1
+        task_id = f"task-{self._task_seq}"
+        chunks.append(
+            {"type": "task_update", "id": task_id, "title": title, "status": "in_progress"}
+        )
+        if not self._append(chunks):
+            return False
+        self._open_task = (task_id, title)
+        return True
+
+    def append_text(self, chunk: str) -> bool:
+        """Buffer an answer chunk; flush on the update interval."""
+        if self._broken or not self._ensure_started():
+            return False
+        self._pending_text += chunk
+        if time.monotonic() - self._last_flush >= self._update_interval:
+            self._flush_text()
+        # Buffered content is delivered by finish() even if this flush failed.
+        return not self._broken
+
+    def finish(self, full_text: str, *, blocks: Blocks | None) -> bool:
+        """Deliver any remaining text and stop the stream.
+
+        Returns whether the streamed message contains the complete answer;
+        on False the caller re-delivers ``full_text`` through the fallback
+        path (the stream, if still open server-side, times out on its own).
+        """
+        if self._ts is None:
+            return False
+        if self._dead:
+            # Already finished once (e.g. a timeout finalize raced the answer);
+            # the streamed message stands as delivered.
+            return True
+        streamed = self._sent_text + self._pending_text
+        if full_text.startswith(streamed):
+            self._pending_text += full_text[len(streamed) :]
+        elif full_text != streamed:
+            # A finalize with unrelated text (error copy, timeout notice)
+            # lands after whatever partial answer already streamed.
+            self._pending_text += ("\n\n" if streamed else "") + full_text
+        self._flush_text(include_task_close=True)
+        stopped = self._client.stop_stream(channel=self._channel_id, ts=self._ts, blocks=blocks)
+        if self._broken:
+            return False
+        if not stopped:
+            # Content is fully appended; a failed stop only leaves the
+            # streaming indicator until Slack expires it. Don't re-post.
+            logger.warning(
+                "[slack-sink] chat.stopStream failed channel=%s ts=%s",
+                self._channel_id,
+                self._ts,
+            )
+        self._dead = True
+        return True
+
+    def _ensure_started(self) -> bool:
+        if self._dead or self._broken:
+            return False
+        if self._ts is not None:
+            return True
+        ts = self._client.start_stream(channel=self._channel_id, thread_ts=self._thread_ts)
+        if ts is None:
+            self._dead = True
+            return False
+        self._ts = ts
+        self._last_flush = time.monotonic()
+        self._on_started()
+        return True
+
+    def _flush_text(self, *, include_task_close: bool = False) -> None:
+        chunks: list[dict[str, object]] = []
+        if include_task_close or self._pending_text:
+            # Answer text starting (or the turn ending) closes the open task.
+            chunks.extend(self._close_open_task_chunks())
+        if self._pending_text:
+            budget = SLACK_MAX_MARKDOWN_BLOCK_CHARS - len(self._sent_text)
+            text = truncate(self._pending_text, max(budget, 1), suffix="…")
+            chunks.append({"type": "markdown_text", "text": text})
+            self._sent_text += self._pending_text
+            self._pending_text = ""
+        if chunks:
+            self._append(chunks)
+
+    def _close_open_task_chunks(self) -> list[dict[str, object]]:
+        if self._open_task is None:
+            return []
+        (task_id, title), self._open_task = self._open_task, None
+        return [{"type": "task_update", "id": task_id, "title": title, "status": "complete"}]
+
+    def _append(self, chunks: list[dict[str, object]]) -> bool:
+        if self._ts is None:
+            return False
+        if self._client.append_stream(channel=self._channel_id, ts=self._ts, chunks=chunks):
+            self._last_flush = time.monotonic()
+            return True
+        self._broken = True
+        return False
 
 
 def _format_duration(seconds: float) -> str:
