@@ -200,7 +200,26 @@ def test_summarize_gh_result_auto_merge() -> None:
         ok=True,
         stdout="",
     )
-    assert summary.startswith("Enabled auto-merge for PR")
+    assert summary == "Enabled auto-merge for PR #3996."
+
+
+def test_summarize_gh_result_auto_merge_flags_before_number() -> None:
+    summary = summarize_gh_result(
+        args=["pr", "merge", "--squash", "--auto", "3996"],
+        ok=True,
+        stdout="",
+    )
+    assert summary == "Enabled auto-merge for PR #3996."
+
+
+def test_summarize_gh_result_auto_merge_ignores_repo_flag_value() -> None:
+    """``-R owner/repo`` values must not be mistaken for the PR number."""
+    summary = summarize_gh_result(
+        args=["pr", "merge", "-R", "acme/widgets", "--auto", "42"],
+        ok=True,
+        stdout="",
+    )
+    assert summary == "Enabled auto-merge for PR #42."
 
 
 def test_summarize_gh_result_failure() -> None:

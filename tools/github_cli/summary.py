@@ -43,6 +43,20 @@ def _object_label(url: str) -> str:
     return f"{kind} #{match.group('number')}"
 
 
+def _pr_number_label(rest: list[str]) -> str:
+    """Return ``PR #<n>`` from merge args, ignoring flag values like ``-R owner/repo``.
+
+    ``rest`` is positionals after the top-level command with bare ``-…`` flags
+    removed (so ``["merge", "3996"]`` or ``["merge", "o/r", "3996"]``). The PR
+    number is the first all-digit token after the subcommand — not ``rest[1]``,
+    which may be a value that followed a stripped flag.
+    """
+    for token in rest[1:]:
+        if token.isdigit():
+            return f"PR #{token}"
+    return ""
+
+
 def summarize_gh_result(
     *,
     args: list[str],
@@ -77,8 +91,8 @@ def summarize_gh_result(
     if verb:
         if "--auto" in cleaned_args and command == "pr" and sub == "merge":
             verb = "Enabled auto-merge for"
-            if not label and rest[1:]:
-                label = f"PR #{rest[1]}"
+            if not label:
+                label = _pr_number_label(rest)
         if url and label:
             return f"{verb} {label}: {url}"
         if url:
