@@ -63,6 +63,19 @@ GATEWAY_RESPONSE_SHAPE_RULE = (
     "example live weather), say so plainly instead of guessing."
 )
 
+GATEWAY_MESSAGE_LAYOUT_RULE = (
+    "Slack message layout: lead with the answer in the first sentence — "
+    "people read Slack on phones between meetings. Keep replies short and "
+    "scannable: a few short paragraphs at most, bullet lists for enumerations, "
+    "a Markdown table only for genuinely tabular data, and fenced code blocks "
+    "for logs, queries, and commands (your Markdown renders natively). Skip "
+    "headers on short answers. When you refer to a person whose Slack mention "
+    "token (like <@U123ABC>) you have seen in this conversation, use that "
+    "token so Slack renders their real @name; never invent mention tokens. "
+    "For long investigations, end with the key takeaway rather than restating "
+    "everything."
+)
+
 GATEWAY_SETUP_GUIDANCE_RULE = (
     "Integration setup is handled by whoever operates the bot, not by commands "
     "the user runs here. If an integration the user needs is not connected, say "
@@ -117,6 +130,7 @@ def format_agent_response(
 __all__ = [
     "AGENT_RESPONSE_THREE_TIER_RULE",
     "CLI_ASSISTANT_MARKDOWN_RULE",
+    "GATEWAY_MESSAGE_LAYOUT_RULE",
     "GATEWAY_RESPONSE_SHAPE_RULE",
     "GATEWAY_SETUP_GUIDANCE_RULE",
     "GATEWAY_TEAMMATE_PERSONA_RULE",

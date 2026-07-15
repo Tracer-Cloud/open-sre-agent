@@ -30,6 +30,18 @@ def test_gateway_drops_slash_command_setup_guidance() -> None:
     assert "never tell them to run" in prompt
 
 
+def test_gateway_prompt_includes_slack_layout_guidance() -> None:
+    prompt = build_assistant_system_prompt("ref", "hist", surface="gateway")
+    # Slack-specific layout: answer-first, scannable, real @mentions.
+    assert "lead with the answer" in prompt
+    assert "never invent mention tokens" in prompt
+
+
+def test_cli_prompt_omits_slack_layout_guidance() -> None:
+    prompt = build_assistant_system_prompt("ref", "hist", surface="interactive_shell")
+    assert "lead with the answer" not in prompt
+
+
 def test_gateway_preamble_is_slack_teammate_not_terminal() -> None:
     prompt = build_assistant_system_prompt("ref", "hist", surface="gateway")
     # The opening framing (highest salience) must not call it a terminal assistant.

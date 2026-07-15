@@ -40,17 +40,18 @@ class SlackOutputSink:
         client: SlackMessagingClient,
         channel_id: str,
         thread_ts: str,
-        update_interval_seconds: float = 1.5,
+        update_interval_seconds: float = 3.0,
     ) -> None:
         self._client = client
         self._channel_id = channel_id
         self._thread_ts = thread_ts
         self._update_interval = update_interval_seconds
         self._last_update = 0.0
+        self._started_at = time.monotonic()
         self._lock = threading.Lock()
         self._message_ts = client.post_message(
             channel=channel_id,
-            text=initial_status_message(),
+            text=_as_status_line(initial_status_message()),
             thread_ts=thread_ts,
         )
         if self._message_ts is None:
@@ -98,7 +99,7 @@ class SlackOutputSink:
         self._finalize(text)
 
     def _set_status(self, text: str) -> None:
-        self._edit_preview(normalize_gateway_status(text))
+        self._edit_preview(_as_status_line(normalize_gateway_status(text)))
 
     def _edit_preview(self, text: str) -> None:
         if not self._message_ts:
@@ -112,7 +113,7 @@ class SlackOutputSink:
 
     def _finalize(self, text: str) -> None:
         final = truncate(markdown_to_slack_mrkdwn(text), SLACK_MAX_MESSAGE_CHARS, suffix="…")
-        blocks = _markdown_blocks(text)
+        blocks = self._final_blocks(text)
         mode = "edit"
         with self._lock:
             delivered = self._message_ts is not None and self._client.update_message(
@@ -148,16 +149,45 @@ class SlackOutputSink:
                 len(final),
             )
 
+    def _final_blocks(self, text: str) -> Blocks | None:
+        """Compose the final reply: a ``markdown`` block + a context footer.
 
-def _markdown_blocks(text: str) -> Blocks | None:
-    """Wrap the final answer in a Block Kit ``markdown`` block when it fits.
+        Slack built the markdown block for LLM output: standard markdown
+        (headers, tables, fenced code) renders natively instead of being
+        mangled through mrkdwn. The context footer is the Claude-Tag-style
+        provenance line (who answered, how long it took) rendered in Slack's
+        muted small type. Answers over the block's 12k-char limit stay
+        text-only; the mrkdwn text is always sent alongside as the
+        notification/fallback rendering.
+        """
+        body = text.strip()
+        if not body or len(body) > SLACK_MAX_MARKDOWN_BLOCK_CHARS:
+            return None
+        return [
+            {"type": "markdown", "text": body},
+            {
+                "type": "context",
+                "elements": [{"type": "mrkdwn", "text": self._footer_text()}],
+            },
+        ]
 
-    Slack built this block for LLM output: standard markdown (headers, tables,
-    fenced code) renders natively instead of being mangled through mrkdwn.
-    Answers over the block's 12k-char limit stay text-only; the mrkdwn text is
-    always sent alongside as the notification/fallback rendering.
+    def _footer_text(self) -> str:
+        return f"OpenSRE · AI-generated · {_format_duration(time.monotonic() - self._started_at)}"
+
+
+def _format_duration(seconds: float) -> str:
+    whole = max(0, int(seconds))
+    if whole < 60:
+        return f"{whole}s"
+    return f"{whole // 60}m {whole % 60:02d}s"
+
+
+def _as_status_line(text: str) -> str:
+    """Render an in-progress status as one italic mrkdwn line.
+
+    Mirrors the "is thinking…" affordance in Claude Tag / Slack assistant
+    threads: progress reads as muted meta-text, clearly distinct from the
+    final answer that replaces it.
     """
-    body = text.strip()
-    if not body or len(body) > SLACK_MAX_MARKDOWN_BLOCK_CHARS:
-        return None
-    return [{"type": "markdown", "text": body}]
+    line = " ".join(text.split())
+    return f"_{line}_" if line else line

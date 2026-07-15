@@ -6,6 +6,7 @@ from typing import Any
 from core.agent_harness.prompts.rules import (
     AGENT_RESPONSE_THREE_TIER_RULE,
     CLI_ASSISTANT_MARKDOWN_RULE,
+    GATEWAY_MESSAGE_LAYOUT_RULE,
     GATEWAY_RESPONSE_SHAPE_RULE,
     GATEWAY_SETUP_GUIDANCE_RULE,
     GATEWAY_TEAMMATE_PERSONA_RULE,
@@ -193,6 +194,7 @@ def _build_system_prompt(
     terminology_rule = GATEWAY_TEAMMATE_PERSONA_RULE if is_gateway else _TERMINOLOGY_RULE
     setup_rule = GATEWAY_SETUP_GUIDANCE_RULE if is_gateway else _SETUP_GUIDANCE_RULE
     response_shape_rule = GATEWAY_RESPONSE_SHAPE_RULE if is_gateway else _RESPONSE_SHAPE_RULE
+    layout_block = f"{GATEWAY_MESSAGE_LAYOUT_RULE}\n\n" if is_gateway else ""
     repo_map_block = f"--- Repo map (AGENTS.md) ---\n{agents_md}\n\n" if agents_md else ""
     docs_block = (
         "--- Documentation reference (docs/) ---\n"
@@ -250,6 +252,7 @@ def _build_system_prompt(
         f"{_SOURCE_SCOPED_INVESTIGATION_RULE}\n\n"
         f"{_SENTRY_SUMMARY_RULE}\n\n"
         f"{response_shape_rule}\n\n"
+        f"{layout_block}"
         f"{terminology_rule}\n{_MARKDOWN_RULE}\n\n"
         f"{environment}"
         f"--- CLI reference ---\n{reference}\n\n"

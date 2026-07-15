@@ -121,9 +121,32 @@ def test_finalize_sends_markdown_block_with_mrkdwn_fallback_text() -> None:
 
     final = client.updates[-1]
     # Native markdown block carries the original markdown untouched…
-    assert final["blocks"] == [{"type": "markdown", "text": "## Root cause\nThe **disk** is full"}]
+    assert final["blocks"][0] == {"type": "markdown", "text": "## Root cause\nThe **disk** is full"}
     # …while the text field stays mrkdwn for notifications/older clients.
     assert "disk" in final["text"]
+
+
+def test_finalize_appends_provenance_footer() -> None:
+    client = _FakeMessagingClient()
+    sink = _sink(client)
+
+    sink.finalize("answer")
+
+    footer = client.updates[-1]["blocks"][-1]
+    assert footer["type"] == "context"
+    footer_text = footer["elements"][0]["text"]
+    assert "OpenSRE" in footer_text
+    assert "AI-generated" in footer_text
+
+
+def test_status_updates_render_as_italic_meta_text() -> None:
+    client = _FakeMessagingClient()
+    sink = _sink(client)
+
+    sink.set_tool_status("Running kubectl get pods")
+
+    status = client.updates[-1]["text"]
+    assert status.startswith("_") and status.endswith("_")
 
 
 def test_finalize_skips_markdown_block_over_block_limit() -> None:
