@@ -361,7 +361,13 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
     IntegrationSpec(service="alicloud", direct_effective=True),
     IntegrationSpec(service="notion"),
     IntegrationSpec(service="prefect", has_verifier=True, verify_order=51),
-    IntegrationSpec(service="posthog"),
+    IntegrationSpec(
+        service="posthog",
+        has_verifier=True,
+        direct_effective=True,
+        setup_order=40,
+        verify_order=54,
+    ),
     IntegrationSpec(service="trello"),
     IntegrationSpec(service="rds", setup_order=11),
     IntegrationSpec(
@@ -478,23 +484,18 @@ def service_key(service_name: str) -> str:
 
 
 # Aliases that apply only to the integration-management commands (setup, verify,
-# show, remove). These intentionally diverge from `service_key` / `SERVICE_KEY_MAP`,
-# which must keep `posthog` distinct from `posthog_mcp` for classification: the
-# bare `posthog` integration is env-configured analytics with no interactive
-# setup/verify flow of its own, so when a user (or the action planner) asks to
-# *manage* "posthog" the only real target is the PostHog MCP integration.
-MANAGEMENT_SERVICE_ALIASES: dict[str, str] = {
-    "posthog": "posthog_mcp",
-}
+# show, remove). These intentionally diverge from `service_key` / `SERVICE_KEY_MAP`
+# when a user-facing label should map to a different canonical handler. Like
+# Sentry, bare ``posthog`` is the REST credentials integration and ``posthog_mcp``
+# is the separate MCP flow — they are not aliased to each other.
+MANAGEMENT_SERVICE_ALIASES: dict[str, str] = {}
 
 
 def resolve_management_service(service_name: str) -> str:
     """Resolve a service token for the integration-management CLI commands.
 
     Layers management-only aliases on top of the global `service_key`
-    normalization so commands like ``integrations setup posthog`` resolve to the
-    canonical ``posthog_mcp`` flow instead of failing the ``click.Choice`` enum
-    check before the handler ever runs.
+    normalization when a CLI label should map to a different canonical handler.
     """
     lowered = service_name.strip().lower()
     aliased = MANAGEMENT_SERVICE_ALIASES.get(lowered)

@@ -5,7 +5,7 @@ from __future__ import annotations
 from core.agent_harness.tools.action_tools import get_action_tool
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS
 from surfaces.interactive_shell.command_registry.slash_catalog import (
-    _MCP_BY_COMMAND,
+    MCP_BY_COMMAND,
     build_slash_command_specs,
     format_slash_catalog_text,
     slash_invoke_input_schema,
@@ -17,16 +17,16 @@ _MIN_LLM_DESCRIPTION_LEN = 20
 
 def test_slash_catalog_covers_all_registered_commands() -> None:
     registered = set(SLASH_COMMANDS.keys())
-    catalogued = set(_MCP_BY_COMMAND)
+    catalogued = set(MCP_BY_COMMAND)
     missing = sorted(registered - catalogued)
     stale = sorted(catalogued - registered)
     assert not missing, (
-        "Add _MCP_BY_COMMAND entries in surfaces/interactive_shell/command_registry/"
+        "Add MCP_BY_COMMAND entries in surfaces/interactive_shell/command_registry/"
         f"slash_catalog.py for: {missing}. See surfaces/interactive_shell/AGENTS.md "
         "(Slash commands → REPL + CLI parity)."
     )
     assert not stale, (
-        "Remove stale _MCP_BY_COMMAND keys from slash_catalog.py (no longer in "
+        "Remove stale MCP_BY_COMMAND keys from slash_catalog.py (no longer in "
         f"SLASH_COMMANDS): {stale}"
     )
     specs = build_slash_command_specs()

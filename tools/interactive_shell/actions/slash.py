@@ -19,15 +19,11 @@ from core.agent_harness.tools.tool_context import (
     execute_with_action_context,
 )
 from core.tool_framework.registered_tool import RegisteredTool
-from surfaces.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
-from surfaces.interactive_shell.command_registry.slash_catalog import (
+from tools.interactive_shell.shared import plan_foreground_tool
+from tools.interactive_shell.shared.slash_catalog import (
     slash_invoke_input_schema,
     slash_invoke_tool_description,
 )
-from surfaces.interactive_shell.ui import BOLD_BRAND, DIM, repl_tty_interactive
-from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
-from surfaces.interactive_shell.utils.telemetry.turn_outcome import format_terminal_turn_outcome
-from tools.interactive_shell.shared import plan_foreground_tool
 
 # Slash commands that drive a raw-stdin inline picker or wizard (questionary /
 # repl_choose_one). When the action agent resolves free text (e.g. "remove
@@ -56,6 +52,7 @@ def _slash_drives_interactive_picker(
     *,
     session: Any,
     is_tty: bool | None,
+    ports: Any,
 ) -> bool:
     """True when a planned slash command opens a raw-stdin inline picker/wizard.
 
@@ -65,7 +62,7 @@ def _slash_drives_interactive_picker(
     """
     if is_tty is False or session_terminal(session) is None:
         return False
-    if not repl_tty_interactive():
+    if not ports.tty_interactive():
         return False
     if name == "/login":
         return True
@@ -75,10 +72,10 @@ def _slash_drives_interactive_picker(
 
 
 def _dispatch_and_translate_exit(command: str, ctx: ActionToolContext, **kwargs: Any) -> bool:
-    should_continue = dispatch_slash(
+    should_continue = ctx.slash_ports.dispatch(
         command,
-        ctx.session,
-        ctx.console,
+        session=ctx.session,
+        console=ctx.console,
         confirm_fn=ctx.confirm_fn,
         is_tty=ctx.is_tty,
         **kwargs,
@@ -89,6 +86,8 @@ def _dispatch_and_translate_exit(command: str, ctx: ActionToolContext, **kwargs:
 
 
 def execute_slash_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
+    if ctx.slash_ports is None:
+        raise RuntimeError("slash tool requires slash runtime ports")
     command = str(args.get("command", "")).strip()
     raw_args = args.get("args")
     parsed_args = [str(item).strip() for item in raw_args] if isinstance(raw_args, list) else []
@@ -103,8 +102,7 @@ def execute_slash_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
     parts = stripped.split()
     name = parts[0].lower()
     slash_args = parts[1:]
-    cmd = SLASH_COMMANDS.get(name)
-    if cmd is None:
+    if not ctx.slash_ports.command_exists(name):
         return _dispatch_and_translate_exit(
             stripped,
             ctx,
@@ -118,20 +116,21 @@ def execute_slash_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
         slash_args,
         session=ctx.session,
         is_tty=ctx.is_tty,
+        ports=ctx.slash_ports,
     ) and not exclusive_stdin_active(ctx.session):
         # Hand the picker back to the REPL loop instead of running it against the
         # live prompt: set_auto_command re-submits it as a deterministic turn
         # the loop dispatches with exclusive stdin, so no CPR replies leak in.
         # Do not record a slash history row here — dispatch_slash will record when
         # the queued command runs. Attach a turn hint for this turn's analytics.
-        ctx.console.print(f"[{DIM}]Launching[/] [{BOLD_BRAND}]{escape(stripped)}[/]…")
+        ctx.console.print(ctx.slash_ports.launching_message(escape(stripped)))
         set_auto_command(ctx.session, stripped)
         set_turn_outcome_hint(ctx.session, f"queued {stripped} for exclusive stdin dispatch")
         return True
 
     plan = plan_foreground_tool("slash", "slash")
-    if not execution_allowed(
-        plan.policy,
+    if not ctx.slash_ports.execution_allowed(
+        policy=plan.policy,
         session=ctx.session,
         console=ctx.console,
         action_summary=stripped,
@@ -143,7 +142,7 @@ def execute_slash_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
             "slash",
             stripped,
             ok=False,
-            response_text=format_terminal_turn_outcome(stripped, kind="slash", ok=False),
+            response_text=ctx.slash_ports.format_turn_outcome(stripped, ok=False),
         )
         return True
 

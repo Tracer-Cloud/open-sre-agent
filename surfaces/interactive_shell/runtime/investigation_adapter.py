@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Callable, Iterator
-from typing import Any
+from typing import Any, cast
 
 from rich.console import Console
 
+from core.agent_harness.session.terminal_access import background_mode_enabled
 from core.domain.stream import StreamEvent
 from platform.common.task_types import TaskRecord
 from surfaces.interactive_shell.session import Session
@@ -17,6 +18,7 @@ from tools.interactive_shell.shared.execution_policy import ExecutionPolicyResul
 from tools.interactive_shell.shared.investigation_launch import (
     ForegroundInvestigationResult,
     InvestigationLaunchPorts,
+    InvestigationSession,
 )
 from tools.investigation import session_runner
 
@@ -115,7 +117,7 @@ class ReplInvestigationLaunchPorts:
         self,
         *,
         policy: ExecutionPolicyResult,
-        session: Session,
+        session: InvestigationSession,
         console: Console,
         action_summary: str,
         confirm_fn: Callable[[str], str] | None,
@@ -124,7 +126,7 @@ class ReplInvestigationLaunchPorts:
     ) -> bool:
         return execution_allowed(
             policy,
-            session=session,
+            session=cast(Session, session),
             console=console,
             action_summary=action_summary,
             confirm_fn=confirm_fn,
@@ -132,10 +134,77 @@ class ReplInvestigationLaunchPorts:
             action_already_listed=action_already_listed,
         )
 
+    def background_mode_enabled(self, session: InvestigationSession) -> bool:
+        return background_mode_enabled(cast(Session, session))
+
+    def run_text_investigation(
+        self,
+        *,
+        alert_text: str,
+        context_overrides: dict[str, Any] | None,
+        cancel_requested: Any,
+    ) -> dict[str, object]:
+        return run_investigation_for_session(
+            alert_text=alert_text,
+            context_overrides=context_overrides,
+            cancel_requested=cancel_requested,
+        )
+
+    def run_sample_alert(
+        self,
+        *,
+        template_name: str,
+        context_overrides: dict[str, Any] | None,
+        cancel_requested: Any,
+    ) -> dict[str, object]:
+        return run_sample_alert_for_session(
+            template_name=template_name,
+            context_overrides=context_overrides,
+            cancel_requested=cancel_requested,
+        )
+
+    def start_background_text(
+        self,
+        *,
+        alert_text: str,
+        session: InvestigationSession,
+        console: Console,
+        display_command: str,
+    ) -> None:
+        from surfaces.interactive_shell.runtime.background.runner import (
+            start_background_text_investigation,
+        )
+
+        start_background_text_investigation(
+            alert_text=alert_text,
+            session=cast(Session, session),
+            console=console,
+            display_command=display_command,
+        )
+
+    def start_background_sample(
+        self,
+        *,
+        template_name: str,
+        session: InvestigationSession,
+        console: Console,
+        display_command: str,
+    ) -> None:
+        from surfaces.interactive_shell.runtime.background.runner import (
+            start_background_template_investigation,
+        )
+
+        start_background_template_investigation(
+            template_name=template_name,
+            session=cast(Session, session),
+            console=console,
+            display_command=display_command,
+        )
+
     def run_foreground_investigation(
         self,
         *,
-        session: Session,
+        session: InvestigationSession,
         console: Console,
         task_command: str,
         run: Callable[[TaskRecord], dict[str, object]],
@@ -143,7 +212,7 @@ class ReplInvestigationLaunchPorts:
         target: str,
     ) -> ForegroundInvestigationResult:
         outcome = run_foreground_investigation(
-            session=session,
+            session=cast(Session, session),
             console=console,
             task_command=task_command,
             run=run,

@@ -9,6 +9,8 @@ one of these and hands it to whichever poller runs.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
+from typing import Any
 
 from rich.console import Console
 
@@ -24,6 +26,14 @@ from gateway.runtime.headless_subprocess_presenter import headless_subprocess_pr
 from gateway.runtime.sink_protocol import GatewaySink
 from gateway.runtime.status_messages import status_from_tool_start
 from platform.observability.trace.spans import traced_session
+
+SlashPortsFactory = Callable[[], Any]
+
+_UNSUPPORTED_GATEWAY_CAPABILITIES = (
+    "investigation",
+    "llm_provider",
+    "task_cancel",
+)
 
 
 class _ToolStatusObserver:
@@ -54,8 +64,14 @@ class GatewayTurnHandler:
     persistent per-transport agent, and concurrent turns stay isolated.
     """
 
-    def __init__(self, *, console: Console) -> None:
+    def __init__(
+        self,
+        *,
+        console: Console,
+        slash_ports_factory: SlashPortsFactory | None = None,
+    ) -> None:
         self._console = console
+        self._slash_ports_factory = slash_ports_factory
 
     def __call__(
         self,
@@ -64,6 +80,8 @@ class GatewayTurnHandler:
         sink: GatewaySink,
         logger: logging.Logger,
     ) -> None:
+        session.available_capabilities.update(dict.fromkeys(_UNSUPPORTED_GATEWAY_CAPABILITIES, ()))
+
         with traced_session(getattr(session, "session_id", None), component="gateway_turn"):
             agent = self._agent_for_turn(text=text, session=session, sink=sink, logger=logger)
             turn_result = agent.dispatch(text)
@@ -111,6 +129,7 @@ class GatewayTurnHandler:
                 tool_action_logger=logger,
                 observer_factory=lambda _message: observer,
                 subprocess_presenter_factory=headless_subprocess_presenter_factory,
+                slash_ports_factory=self._slash_ports_factory,
             ),
             prompts=DefaultPromptContextProvider(session, surface="gateway"),
             reasoning=DefaultReasoningClientProvider(

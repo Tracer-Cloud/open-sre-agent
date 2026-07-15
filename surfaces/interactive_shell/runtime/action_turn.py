@@ -21,8 +21,20 @@ from core.execution import ToolExecutionHooks
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS
 from surfaces.interactive_shell.command_registry.suggestions import resolve_literal_slash_typo
 from surfaces.interactive_shell.runtime.agent_harness_adapters import resolve_output_sink
+from surfaces.interactive_shell.runtime.investigation_adapter import (
+    repl_investigation_launch_ports,
+)
+from surfaces.interactive_shell.runtime.llm_provider_adapter import (
+    repl_llm_provider_ports,
+)
+from surfaces.interactive_shell.runtime.slash_adapter import (
+    repl_slash_ports,
+)
 from surfaces.interactive_shell.runtime.subprocess_runner.repl_presenter import (
     ReplSubprocessPresenter,
+)
+from surfaces.interactive_shell.runtime.task_cancel_adapter import (
+    repl_task_cancel_ports,
 )
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui.action_rendering import ActionRenderObserver
@@ -100,6 +112,10 @@ def run_action_tool_turn(
                 session=session, console=console, message=msg
             ),
             subprocess_presenter_factory=_subprocess_presenter_factory,
+            investigation_ports_factory=repl_investigation_launch_ports,
+            llm_provider_ports_factory=repl_llm_provider_ports,
+            task_cancel_ports_factory=repl_task_cancel_ports,
+            slash_ports_factory=repl_slash_ports,
         ),
         confirm_fn=confirm_fn,
         is_tty=is_tty,

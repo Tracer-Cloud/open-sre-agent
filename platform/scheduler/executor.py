@@ -58,6 +58,19 @@ def execute_task(
         _record_failure(task, fire_time, f"Message build error: {type(exc).__name__}")
         return False
 
+    # Quiet ticks (e.g. uptime watch with no transitions) skip delivery.
+    if not message.strip():
+        complete_run(
+            task.id,
+            fire_time,
+            status=TaskStatus.SUCCESS,
+            posted_message_id="",
+            provider=task.provider.value,
+        )
+        _emit_analytics(task, TaskStatus.SUCCESS)
+        logger.info("Task %s produced no message; delivery skipped", task.id)
+        return True
+
     # Deliver to the configured provider
     ok, error, message_id = _deliver(task, message)
 
@@ -256,4 +269,13 @@ def _emit_analytics(task: ScheduledTask, status: TaskStatus, error: str = "") ->
         logger.debug("Failed to emit analytics for task %s", task.id, exc_info=True)
 
 
-__all__ = ["execute_task"]
+def deliver_scheduled_message(task: ScheduledTask, message: str) -> tuple[bool, str, str]:
+    """Deliver an ad-hoc message using the task's configured provider/chat.
+
+    Used for one-shot notices (e.g. uptime watch activation) outside a cron tick.
+    Returns ``(ok, error, message_id)``.
+    """
+    return _deliver(task, message)
+
+
+__all__ = ["deliver_scheduled_message", "execute_task"]

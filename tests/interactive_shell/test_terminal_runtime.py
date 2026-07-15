@@ -32,6 +32,9 @@ from surfaces.interactive_shell.command_registry import SLASH_COMMANDS, dispatch
 from surfaces.interactive_shell.runtime.core import confirmation as controller_runtime
 from surfaces.interactive_shell.runtime.core import state as loop_state
 from surfaces.interactive_shell.runtime.core import turn_detection as loop_turn_detection
+from surfaces.interactive_shell.runtime.investigation_adapter import (
+    repl_investigation_launch_ports,
+)
 from surfaces.interactive_shell.runtime.startup import initial_input as startup_initial_input
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui import input_prompt
@@ -482,7 +485,12 @@ def test_run_text_investigation_uses_background_launcher_when_mode_enabled(
     session.terminal.background_mode_enabled = True
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
 
-    run_text_investigation("High CPU alert", session, console)
+    run_text_investigation(
+        "High CPU alert",
+        session,
+        console,
+        ports=repl_investigation_launch_ports(),
+    )
 
     assert launches == [("High CPU alert", "background free-text investigation")]
     assert session.task_registry.list_recent(10) == []

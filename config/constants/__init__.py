@@ -12,8 +12,6 @@ from config.constants.paths import (
 )
 from config.constants.platform import IS_WINDOWS
 from config.constants.posthog import (
-    DEFAULT_POSTHOG_BOUNCE_THRESHOLD,
-    DEFAULT_POSTHOG_BOUNCE_WINDOW,
     DEFAULT_POSTHOG_TIMEOUT_SECONDS,
     DEFAULT_POSTHOG_URL,
     POSTHOG_CAPTURE_API_KEY,
@@ -28,8 +26,6 @@ from config.constants.sentry import (
 )
 
 __all__ = [
-    "DEFAULT_POSTHOG_BOUNCE_THRESHOLD",
-    "DEFAULT_POSTHOG_BOUNCE_WINDOW",
     "DEFAULT_POSTHOG_TIMEOUT_SECONDS",
     "DEFAULT_POSTHOG_URL",
     "INTEGRATIONS_STORE_PATH",

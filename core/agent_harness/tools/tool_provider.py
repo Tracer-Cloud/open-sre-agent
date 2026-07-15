@@ -22,6 +22,12 @@ SubprocessPresenterFactory = Callable[
     [Any, Any, ConfirmFn | None, bool | None, bool],
     Any,
 ]
+
+InvestigationPortsFactory = Callable[[], Any]
+LlmProviderPortsFactory = Callable[[], Any]
+TaskCancelPortsFactory = Callable[[], Any]
+SlashPortsFactory = Callable[[], Any]
+
 _TOOL_INPUT_LOG_PREVIEW_LIMIT = 500
 
 
@@ -45,6 +51,10 @@ class DefaultToolProvider:
         observer_factory: ActionObserverFactory | None = None,
         tool_action_logger: logging.Logger | None = None,
         subprocess_presenter_factory: SubprocessPresenterFactory | None = None,
+        investigation_ports_factory: InvestigationPortsFactory | None = None,
+        llm_provider_ports_factory: LlmProviderPortsFactory | None = None,
+        task_cancel_ports_factory: TaskCancelPortsFactory | None = None,
+        slash_ports_factory: SlashPortsFactory | None = None,
     ) -> None:
         self._session = session
         self._console = console
@@ -53,6 +63,10 @@ class DefaultToolProvider:
         self._observer_factory = observer_factory
         self._tool_action_logger = tool_action_logger
         self._subprocess_presenter_factory = subprocess_presenter_factory
+        self._investigation_ports_factory = investigation_ports_factory
+        self._llm_provider_ports_factory = llm_provider_ports_factory
+        self._task_cancel_ports_factory = task_cancel_ports_factory
+        self._slash_ports_factory = slash_ports_factory
         self._tool_context: ActionToolContext | None = None
 
     def action_tools(
@@ -71,6 +85,23 @@ class DefaultToolProvider:
                 is_tty,
                 True,
             )
+
+        investigation_ports = None
+        if self._investigation_ports_factory is not None:
+            investigation_ports = self._investigation_ports_factory()
+
+        llm_provider_ports = None
+        if self._llm_provider_ports_factory is not None:
+            llm_provider_ports = self._llm_provider_ports_factory()
+
+        task_cancel_ports = None
+        if self._task_cancel_ports_factory is not None:
+            task_cancel_ports = self._task_cancel_ports_factory()
+
+        slash_ports = None
+        if self._slash_ports_factory is not None:
+            slash_ports = self._slash_ports_factory()
+
         ctx = ActionToolContext(
             session=self._session,
             console=self._console,
@@ -79,6 +110,10 @@ class DefaultToolProvider:
             request_exit=self._request_exit,
             action_already_listed=True,
             subprocess_presenter=subprocess_presenter,
+            investigation_ports=investigation_ports,
+            llm_provider_ports=llm_provider_ports,
+            task_cancel_ports=task_cancel_ports,
+            slash_ports=slash_ports,
         )
         self._tool_context = ctx
         if self._precomputed_action_tools is not None:

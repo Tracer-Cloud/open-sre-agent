@@ -135,6 +135,7 @@
               "openobserve",
               "opsgenie",
               "pagerduty",
+              "posthog",
               "posthog-mcp",
               "sentry",
               "sentry-mcp",

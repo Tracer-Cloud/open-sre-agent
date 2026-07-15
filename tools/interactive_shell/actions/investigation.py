@@ -9,14 +9,18 @@ from rich.console import Console
 
 from core.agent_harness.tools.tool_context import (
     ActionToolContext,
+    capability_available_from_sources,
     execute_with_action_context,
     object_schema,
     string_property,
 )
 from core.tool_framework.registered_tool import RegisteredTool
 from platform.common.task_types import TaskRecord
-from surfaces.interactive_shell.session import Session
-from tools.interactive_shell.shared.investigation_launch import launch_investigation
+from tools.interactive_shell.shared.investigation_launch import (
+    InvestigationLaunchPorts,
+    InvestigationSession,
+    launch_investigation,
+)
 
 
 def normalize_investigation_alert_text(raw: str) -> str:
@@ -29,31 +33,23 @@ def normalize_investigation_alert_text(raw: str) -> str:
 
 def run_text_investigation(
     alert_text: str,
-    session: Session,
+    session: InvestigationSession,
     console: Console,
     *,
+    ports: InvestigationLaunchPorts,
     confirm_fn: Callable[[str], str] | None = None,
     is_tty: bool | None = None,
     action_already_listed: bool = False,
 ) -> None:
-    from surfaces.interactive_shell.runtime.investigation_adapter import (
-        repl_investigation_launch_ports,
-        run_investigation_for_session,
-    )
-
     def _run(task: TaskRecord) -> dict[str, object]:
-        return run_investigation_for_session(
+        return ports.run_text_investigation(
             alert_text=alert_text,
             context_overrides=session.accumulated_context or None,
             cancel_requested=task.cancel_requested,
         )
 
     def _start_background() -> None:
-        from surfaces.interactive_shell.runtime.background.runner import (
-            start_background_text_investigation,
-        )
-
-        start_background_text_investigation(
+        ports.start_background_text(
             alert_text=alert_text,
             session=session,
             console=console,
@@ -63,7 +59,7 @@ def run_text_investigation(
     launch_investigation(
         session=session,
         console=console,
-        ports=repl_investigation_launch_ports(),
+        ports=ports,
         tool_type="investigation",
         action_summary=f'investigation from text "{alert_text}"',
         announce_label="investigation",
@@ -83,10 +79,13 @@ def execute_investigation_tool(args: dict[str, Any], ctx: ActionToolContext) -> 
     alert_text = normalize_investigation_alert_text(str(args.get("alert_text", "")))
     if not alert_text:
         return False
+    if ctx.investigation_ports is None:
+        raise RuntimeError("investigation tool requires investigation runtime ports")
     run_text_investigation(
         alert_text,
         ctx.session,
         ctx.console,
+        ports=ctx.investigation_ports,
         confirm_fn=ctx.confirm_fn,
         is_tty=ctx.is_tty,
         action_already_listed=ctx.action_already_listed,
@@ -130,6 +129,10 @@ investigation_start_tool = RegisteredTool(
     parallel_safe=False,
     accepts_runtime_context=True,
     run=run_investigation,
+    is_available=lambda sources: capability_available_from_sources(
+        sources,
+        "investigation",
+    ),
 )
 
 
