@@ -47,6 +47,41 @@ def test_build_gh_argv_skips_repo_flag_for_api_after_global_flags() -> None:
     ) == ["gh", "--hostname", "github.com", "api", "user"]
 
 
+def test_run_gh_blocks_auth_token_before_spawn() -> None:
+    with (
+        patch("tools.github_cli.runner.resolve_github_token") as resolve_mock,
+        patch("tools.github_cli.runner.subprocess.run") as run_mock,
+    ):
+        result = run_gh(args=["auth", "token"])
+    assert result["ok"] is False
+    assert result["error_type"] == "policy_error"
+    assert "auth" in result["error"]
+    resolve_mock.assert_not_called()
+    run_mock.assert_not_called()
+
+
+def test_run_gh_blocks_extension_install_after_global_flags() -> None:
+    with patch("tools.github_cli.runner.subprocess.run") as run_mock:
+        result = run_gh(args=["--hostname", "github.com", "extension", "install", "evil/x"])
+    assert result["ok"] is False
+    assert result["error_type"] == "policy_error"
+    assert "extension" in result["error"]
+    run_mock.assert_not_called()
+
+
+def test_run_gh_redacts_token_echo_in_stdout() -> None:
+    completed = MagicMock(returncode=0, stdout="token=secret-token\n", stderr="")
+    with (
+        patch("tools.github_cli.runner.resolve_github_token", return_value="secret-token"),
+        patch("tools.github_cli.runner.shutil.which", return_value="/usr/bin/gh"),
+        patch("tools.github_cli.runner.subprocess.run", return_value=completed),
+    ):
+        result = run_gh(args=["issue", "view", "1"])
+    assert result["ok"] is True
+    assert "secret-token" not in result["stdout"]
+    assert "***" in result["stdout"]
+
+
 def test_run_gh_missing_token() -> None:
     with patch("tools.github_cli.runner.resolve_github_token", return_value=""):
         result = run_gh(args=["issue", "list"])

@@ -13,6 +13,7 @@ tools:
 
 Authenticated `gh` for OpenSRE. Reads and writes — no approval gate. Prefer over
 `shell_run` / `!gh`. Pass `args` after `gh`; optional `repo` as `owner/name` → `-R`.
+Blocked top-level: `auth`, `extension`, `codespace`, `ssh-key`, `gpg-key`, `config`.
 
 ## Capabilities
 
@@ -27,27 +28,19 @@ Authenticated `gh` for OpenSRE. Reads and writes — no approval gate. Prefer ov
 
 ## After github_cli returns
 
-Use `summary` when present. Reply short and chat-like (Conversational chat tone).
+Use `summary` when present. Reply short and chat-like.
 
-- **Simple** (create/close/comment/merge, single URL/`#n`): plain prose, one
-  sentence — no markdown needed.
-- **Structured reads** (lists, status, checks): light chat markdown — short
-  lead-in + bullets (`* #42 — title`). Prefer bullets over tables/headers.
-  Truncate ("…and N more").
- - **Mutate extras:** at most 2–4 useful bullets. No GraphQL/JSON dumps
-  (`mergeStateStatus`, `argv`, check matrices). No "I found:" on confirms.
-  Skip "Want me to:" unless a concrete next step helps.
-- **Failure:** one sentence from `error` / `error_type` — say it failed to run;
-  do not invent success.
+- **Simple** (create/close/comment/merge, URL/`#n`): plain prose, one sentence.
+- **Structured reads**: light chat markdown — short lead-in + bullets
+  (`* #42 — title`); no tables/headers.
+- **Mutate extras:** at most 2–4 bullets. No GraphQL/JSON dumps. No "I found:".
+- **Failure:** one sentence from `error` / `error_type` — say it failed to run.
 
 ## Prefer dedicated tools when they clearly fit
 
-Slack propose/execute mutations; workflow digests first. Investigation
-code/commit search stays on dedicated tools (not github_cli). Multi-source
-RCA that names github issues alongside Sentry/PostHog → investigation_start,
-not github_cli.
+Slack propose/execute; workflow digests; investigation code/commit search.
+Multi-source RCA (sentry + github issues + posthog) → investigation_start.
 
 ## Limitations
 
-`gh` on PATH; OpenSRE token auth. Projects v2 may 403. Token scopes limit writes.
-Action-only — not available in gather/investigation.
+`gh` on PATH; OpenSRE token auth. Action-only — not in gather/investigation.

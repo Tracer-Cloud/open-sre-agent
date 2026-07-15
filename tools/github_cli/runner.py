@@ -12,6 +12,21 @@ from tools.github_cli.credentials import resolve_github_token
 DEFAULT_TIMEOUT_SECONDS = 60
 MAX_TIMEOUT_SECONDS = 120
 
+# Top-level ``gh`` commands that must never run under OpenSRE-injected credentials.
+# - auth: ``gh auth token`` prints GH_TOKEN to stdout (self-exfiltration)
+# - extension: install/run can download and execute arbitrary code
+# - codespace / ssh-key / gpg-key / config: credential and host-config mutation surface
+_DENIED_TOP_LEVEL_COMMANDS = frozenset(
+    {
+        "auth",
+        "extension",
+        "codespace",
+        "ssh-key",
+        "gpg-key",
+        "config",
+    }
+)
+
 # Global flags that consume a following value (after the ``gh`` binary).
 _VALUE_FLAGS = frozenset(
     {
@@ -57,6 +72,15 @@ def positional_gh_tokens(args: list[str] | tuple[str, ...]) -> list[str]:
     return positionals
 
 
+def denied_gh_command(args: list[str] | tuple[str, ...]) -> str | None:
+    """Return the blocked top-level ``gh`` command, or None if allowed."""
+    positionals = positional_gh_tokens(args)
+    if not positionals:
+        return None
+    command = positionals[0].lower()
+    return command if command in _DENIED_TOP_LEVEL_COMMANDS else None
+
+
 def build_gh_argv(*, args: list[str], repo: str | None = None) -> list[str]:
     """Build full argv for ``gh`` including optional ``-R owner/name``."""
     argv = ["gh"]
@@ -69,6 +93,12 @@ def build_gh_argv(*, args: list[str], repo: str | None = None) -> list[str]:
     return argv
 
 
+def _redact_secret(text: str, secret: str) -> str:
+    if not secret or not text:
+        return text
+    return text.replace(secret, "***")
+
+
 def run_gh(
     *,
     args: list[str],
@@ -78,8 +108,9 @@ def run_gh(
 ) -> dict[str, Any]:
     """Execute ``gh`` with OpenSRE-resolved credentials.
 
-    Never returns the token. On success/failure returns a structured payload
-    suitable for agent consumption.
+    Never returns the token: denied subcommands that could print or misuse it are
+    rejected before spawn, and any accidental token echo in stdout/stderr is
+    redacted from the returned payload.
     """
     if not args:
         return {
@@ -87,6 +118,21 @@ def run_gh(
             "error": "args must be a non-empty list of arguments after `gh`.",
             "error_type": "validation_error",
             "argv": ["gh"],
+            "exit_code": None,
+            "stdout": "",
+            "stderr": "",
+        }
+
+    blocked = denied_gh_command(args)
+    if blocked is not None:
+        return {
+            "ok": False,
+            "error": (
+                f"`gh {blocked}` is blocked by OpenSRE (credential / host-config / "
+                "extension commands are not allowed via github_cli)."
+            ),
+            "error_type": "policy_error",
+            "argv": build_gh_argv(args=args, repo=repo),
             "exit_code": None,
             "stdout": "",
             "stderr": "",
@@ -154,8 +200,8 @@ def run_gh(
             "stderr": "",
         }
 
-    stdout = completed.stdout or ""
-    stderr = completed.stderr or ""
+    stdout = _redact_secret(completed.stdout or "", token)
+    stderr = _redact_secret(completed.stderr or "", token)
     ok = completed.returncode == 0
     payload: dict[str, Any] = {
         "ok": ok,
@@ -165,9 +211,8 @@ def run_gh(
         "stderr": stderr,
     }
     if not ok:
-        payload["error"] = (
-            stderr.strip() or stdout.strip() or f"gh exited with {completed.returncode}"
-        )
+        error_text = stderr.strip() or stdout.strip() or f"gh exited with {completed.returncode}"
+        payload["error"] = _redact_secret(error_text, token)
         payload["error_type"] = "gh_error"
     return payload
 
@@ -176,6 +221,7 @@ __all__ = [
     "DEFAULT_TIMEOUT_SECONDS",
     "MAX_TIMEOUT_SECONDS",
     "build_gh_argv",
+    "denied_gh_command",
     "positional_gh_tokens",
     "run_gh",
 ]
