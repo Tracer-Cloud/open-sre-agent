@@ -147,7 +147,7 @@ def _integration_row(r: dict[str, str]) -> tuple[str | Text, ...]:
     return (
         r.get("service", "?"),
         r.get("source", "?"),
-        Text(f"{status_glyph(st)} {st}", style=status_style(st)),
+        Text(st, style=status_style(st)),
         r.get("detail", ""),
     )
 
