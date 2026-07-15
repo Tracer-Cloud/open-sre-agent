@@ -10,7 +10,8 @@ WHEN TO USE (call github_cli; do NOT assistant_handoff):
 - Follow-ups like "create an issue from that" after a prior scan/report
 
 Do NOT use this skill for:
-- Live incident RCA (investigation_start)
+- Live incident RCA (investigation_start) — including multi-source asks that
+  name github issues alongside Sentry/PostHog/Datadog while diagnosing a crash
 - Observability lookups (Sentry/Datadog/Grafana/PostHog) — those stay handoffs
 - Slack → GitHub propose/execute mutations (workflow tools)
 - Architecture audit (architecture_* tools + architecture audit skill)

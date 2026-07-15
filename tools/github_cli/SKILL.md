@@ -43,7 +43,9 @@ Use `summary` when present. Reply short and chat-like (Conversational chat tone)
 ## Prefer dedicated tools when they clearly fit
 
 Slack propose/execute mutations; workflow digests first. Investigation
-code/commit search stays on dedicated tools (not github_cli).
+code/commit search stays on dedicated tools (not github_cli). Multi-source
+RCA that names github issues alongside Sentry/PostHog → investigation_start,
+not github_cli.
 
 ## Limitations
 
