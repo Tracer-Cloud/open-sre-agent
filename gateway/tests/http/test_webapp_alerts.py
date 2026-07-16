@@ -65,6 +65,23 @@ def test_missing_text_returns_400(client: TestClient, inbox: AlertInbox) -> None
     assert inbox.pop_nowait() is None
 
 
+def test_rejected_alert_does_not_leak_exception_detail(client: TestClient) -> None:
+    # Arrange: omit required ``text`` and plant a value pydantic would echo
+    # verbatim (``input_value=...``) inside the raw ValidationError message.
+    payload = {"severity": "SENSITIVE-DO-NOT-LEAK"}
+
+    # Act
+    resp = client.post("/alerts", json=payload)
+
+    # Assert: only the exception type is returned; no detail reaches the caller.
+    assert resp.status_code == 400
+    assert resp.json() == {"error": "invalid alert payload: ValidationError"}
+    body = resp.text
+    assert "SENSITIVE-DO-NOT-LEAK" not in body
+    assert "IncomingAlert" not in body
+    assert "Field required" not in body
+
+
 def test_oversized_body_returns_413(client: TestClient, inbox: AlertInbox) -> None:
     resp = client.post("/alerts", json={"text": "x" * (webapp.MAX_ALERT_BODY_BYTES + 1)})
     assert resp.status_code == 413

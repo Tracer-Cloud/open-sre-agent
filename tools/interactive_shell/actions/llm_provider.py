@@ -6,6 +6,7 @@ from typing import Any
 
 from rich.markup import escape
 
+from config.llm_auth.provider_catalog import PROVIDER_BY_VALUE
 from core.agent_harness.tools.tool_context import (
     ActionToolContext,
     capability_available_from_sources,
@@ -13,17 +14,10 @@ from core.agent_harness.tools.tool_context import (
     object_schema,
 )
 from core.tool_framework.registered_tool import RegisteredTool
-from surfaces.interactive_shell.command_registry import (
-    switch_llm_provider,
-    switch_reasoning_model,
-)
-from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
 from tools.interactive_shell.shared import allow_tool
 
 
 def _provider_values() -> tuple[str, ...]:
-    from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
-
     return tuple(sorted(PROVIDER_BY_VALUE.keys()))
 
 
@@ -44,21 +38,20 @@ def _target_property_schema() -> dict[str, Any]:
 
 
 def _apply_model_set_target(target: str, ctx: ActionToolContext) -> bool:
-    from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
-
-    candidate = target.strip()
-    if candidate.lower() in PROVIDER_BY_VALUE:
-        return switch_llm_provider(candidate, ctx.console)
-    return switch_reasoning_model(candidate, ctx.console)
+    if ctx.llm_provider_ports is None:
+        raise RuntimeError("LLM provider tool requires provider runtime ports")
+    return bool(ctx.llm_provider_ports.apply_target(target, ctx.console))
 
 
 def execute_llm_provider_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
     target = str(args.get("target", args.get("provider", ""))).strip()
     if not target:
         return False
+    if ctx.llm_provider_ports is None:
+        raise RuntimeError("LLM provider tool requires provider runtime ports")
     policy = allow_tool("switch_llm_provider")
-    if not execution_allowed(
-        policy,
+    if not ctx.llm_provider_ports.execution_allowed(
+        policy=policy,
         session=ctx.session,
         console=ctx.console,
         action_summary=f"/model set {target}",

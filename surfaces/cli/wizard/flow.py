@@ -52,14 +52,16 @@ from surfaces.cli.wizard._ui import (
     _step_header,
 )
 from surfaces.cli.wizard.config import PROVIDER_BY_VALUE, SUPPORTED_PROVIDERS, ProviderOption
+from surfaces.cli.wizard.configurators.github import (
+    DEFAULT_GITHUB_MCP_MODE,
+    DEFAULT_GITHUB_MCP_URL,
+)
 from surfaces.cli.wizard.env_sync import sync_env_values, sync_provider_env
 from surfaces.cli.wizard.integration_health import IntegrationHealthResult
 from surfaces.cli.wizard.probes import ProbeResult, probe_local_target, probe_remote_target
 from surfaces.cli.wizard.store import get_store_path, save_local_config
 from surfaces.cli.wizard.validation import build_demo_action_response as _build_demo_action_response
 
-DEFAULT_GITHUB_MCP_MODE = _integration_configurators_module.DEFAULT_GITHUB_MCP_MODE
-DEFAULT_GITHUB_MCP_URL = _integration_configurators_module.DEFAULT_GITHUB_MCP_URL
 WIZARD_TOTAL_STEPS = 4
 _CLI_SUBSCRIPTION_LOGIN_ARGS: dict[str, tuple[str, ...]] = {
     "claude-code": ("auth", "login"),

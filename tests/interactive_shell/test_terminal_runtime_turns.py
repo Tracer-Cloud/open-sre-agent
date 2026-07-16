@@ -8,6 +8,7 @@ import io
 import pytest
 from rich.console import Console
 
+import surfaces.interactive_shell.runtime.slash_adapter as slash_adapter
 from core.llm.types import AgentLLMResponse, ToolCall
 from surfaces.interactive_shell.runtime.core.turn_accounting import (
     ToolCallingTurnResult,
@@ -21,9 +22,6 @@ from tests.core.agent.orchestration.action_execution_test_harness import (
 )
 from tools.interactive_shell.actions import (
     investigation as _investigation_tool,
-)
-from tools.interactive_shell.actions import (
-    slash as _slash_tool,
 )
 
 
@@ -288,7 +286,7 @@ def test_execute_shell_turn_nitro_prompt_executes_remote_then_investigation(
             ]
         ),
     )
-    monkeypatch.setattr(_slash_tool, "dispatch_slash", _fake_dispatch)
+    monkeypatch.setattr(slash_adapter, "dispatch_slash", _fake_dispatch)
     monkeypatch.setattr(_investigation_tool, "run_text_investigation", _fake_run_text_investigation)
 
     session = Session()

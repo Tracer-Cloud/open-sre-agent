@@ -58,11 +58,17 @@ class _StubPromptContextProvider:
         self._configured_integrations = configured_integrations
         self._configured_integrations_known = configured_integrations_known
 
+    def surface(self) -> str:
+        return "interactive_shell"
+
     def cli_reference(self) -> str:
         return _CLI_REFERENCE_TEXT
 
     def agents_md(self) -> str:
         return _AGENTS_MD_TEXT
+
+    def docs(self, query: str) -> str:  # noqa: ARG002 - stub
+        return ""
 
     def investigation_flow(self) -> str:
         return build_investigation_flow_reference_text()

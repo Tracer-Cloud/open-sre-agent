@@ -272,11 +272,6 @@ from platform.common.evidence_compaction import summarize_counts
 from platform.common.log_compaction import build_error_taxonomy, deduplicate_logs
 
 
-def _map_pipeline_to_service_name(pipeline_name: str) -> str:
-    """Pass pipeline name through as the Grafana service name."""
-    return pipeline_name
-
-
 def _resolve_grafana_client(
     grafana_endpoint: str | None = None,
     grafana_api_key: str | None = None,

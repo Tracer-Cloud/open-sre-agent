@@ -92,6 +92,19 @@ def test_env_service_list_uses_plain_env_without_keyring(monkeypatch: Any) -> No
     assert "gitlab" in catalog.load_env_integration_services()
 
 
+def test_slack_bot_token_marks_slack_configured(monkeypatch: Any) -> None:
+    # The Slack gateway runs on SLACK_BOT_TOKEN; slack must show as a configured
+    # integration so the agent doesn't self-describe as telegram-only on Slack.
+    monkeypatch.setenv("SLACK_BOT_TOKEN", "xoxb-test")
+    assert "slack" in catalog.load_env_integration_services()
+
+
+def test_slack_absent_without_slack_env(monkeypatch: Any) -> None:
+    monkeypatch.delenv("SLACK_BOT_TOKEN", raising=False)
+    monkeypatch.delenv("SLACK_ACCESS_TOKEN", raising=False)
+    assert "slack" not in catalog.load_env_integration_services()
+
+
 class TestConfiguredIntegrationHealth:
     """Offline health for the welcome banner: present vs. minimally usable.
 

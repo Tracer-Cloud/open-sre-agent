@@ -159,3 +159,20 @@ def test_render_error_no_auth_hint_for_generic_error() -> None:
 
     finalized = client.edit_message_text.call_args[0][2]
     assert "opensre auth login" not in finalized
+
+
+def test_render_error_strips_raw_exception_detail() -> None:
+    # Arrange
+    client = MagicMock(spec=TelegramBotClient)
+    client.send_message.return_value = (True, "", "1")
+    client.edit_message_text.return_value = (True, "")
+    sink = GatewayOutputSink(client=client, chat_id="123", edit_interval_seconds=0.0)
+
+    # Act: hand render_error a raw exception string with a secret in it.
+    sink.render_error("RuntimeError: token sk-DO-NOT-LEAK rejected by db-host:5432")
+
+    # Assert: the chat message carries none of the raw detail.
+    finalized = client.edit_message_text.call_args[0][2]
+    assert "sk-DO-NOT-LEAK" not in finalized
+    assert "db-host" not in finalized
+    assert "Something went wrong" in finalized

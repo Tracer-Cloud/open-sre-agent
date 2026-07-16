@@ -77,6 +77,15 @@ def _all_registered_tools() -> dict[str, object]:
     return tools
 
 
+def test_cross_platform_send_tools_are_not_chat_surfaced() -> None:
+    # On a gateway chat turn the reply is delivered by the sink, so exposing the
+    # send tools lets the agent pick the wrong platform (e.g. telegram_send_message
+    # on a Slack turn). They stay on investigation/action only.
+    chat_tool_names = {tool.name for tool in get_registered_tools("chat")}
+    assert "telegram_send_message" not in chat_tool_names
+    assert "slack_send_message" not in chat_tool_names
+
+
 def test_no_tool_requires_a_credential_in_its_model_facing_schema() -> None:
     """Credentials must be injected from config, never required of the model.
 

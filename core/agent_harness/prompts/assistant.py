@@ -29,10 +29,17 @@ _MAX_SYNTHETIC_OBSERVATION_PROMPT_CHARS = 120_000
 class AssistantPromptContextProvider(Protocol):
     """Grounding provider used by the surface-agnostic assistant turn."""
 
+    def surface(self) -> str:
+        """Which surface this turn runs on; defaults to the interactive shell."""
+        return "interactive_shell"
+
     def cli_reference(self) -> str:
         raise NotImplementedError
 
     def agents_md(self) -> str:
+        raise NotImplementedError
+
+    def docs(self, query: str) -> str:
         raise NotImplementedError
 
     def investigation_flow(self) -> str:
@@ -52,20 +59,24 @@ def build_assistant_system_prompt(
     reference: str,
     history: str,
     agents_md: str = "",
+    docs: str = "",
     investigation_flow: str = "",
     prior_investigation: str = "",
     prior_action_facts: str = "",
     environment: str = "",
+    surface: str = "interactive_shell",
 ) -> str:
     """Build the system prompt for one assistant turn."""
     return _build_system_prompt(
         reference,
         history,
         agents_md=agents_md,
+        docs=docs,
         investigation_flow=investigation_flow,
         prior_investigation=prior_investigation,
         prior_action_facts=prior_action_facts,
         environment=environment,
+        surface=surface,
     )
 
 
@@ -224,6 +235,7 @@ def build_cli_agent_prompt_from_provider(
         prompts.cli_reference(),
         format_recent_conversation(list(turn_snapshot.conversation_messages)),
         agents_md=prompts.agents_md(),
+        docs=prompts.docs(message),
         investigation_flow=prompts.investigation_flow(),
         prior_investigation=(
             _summarize_last_state(turn_snapshot.last_state)
@@ -232,6 +244,7 @@ def build_cli_agent_prompt_from_provider(
         ),
         prior_action_facts=format_prior_action_facts(list(turn_snapshot.conversation_messages)),
         environment=prompts.environment_block(),
+        surface=prompts.surface(),
     )
     return (
         f"{system}\n"

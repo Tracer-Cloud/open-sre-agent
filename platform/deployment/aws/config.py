@@ -5,6 +5,13 @@ from __future__ import annotations
 # ─── Region ───────────────────────────────────────────────────────────────────
 DEFAULT_REGION = "us-east-1"
 
+# ─── Deploy account guard ─────────────────────────────────────────────────────
+# When OPENSRE_DEPLOY_ACCOUNT_ID is set (local .env only — never commit an account
+# id), build/deploy assert the active AWS account matches it before creating
+# anything, so the default profile can't silently deploy to the wrong account.
+# Unset (other devs, CI) means no enforcement.
+DEPLOY_ACCOUNT_ID_ENV = "OPENSRE_DEPLOY_ACCOUNT_ID"
+
 # ─── Boto3 client ─────────────────────────────────────────────────────────────
 BOTO3_RETRY_MAX_ATTEMPTS = 3
 BOTO3_CONNECT_TIMEOUT_SECONDS = 10

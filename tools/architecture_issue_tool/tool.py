@@ -75,7 +75,8 @@ def _session_id_from_runtime(context: Any, explicit: str = "") -> str:
     source="github",
     description=(
         "Shallow-clone a GitHub repository into "
-        ".temp/opensre/architecture_workspace for an architecture audit. "
+        "opensre/workspace under the system temp directory "
+        "for an architecture audit. "
         "Always call architecture_cleanup_repo when finished, then "
         "architecture_save_observations before the final report."
     ),
@@ -156,7 +157,8 @@ def architecture_clone_repo(
     name="architecture_cleanup_repo",
     source="github",
     description=(
-        "Delete .temp/opensre/architecture_workspace after an architecture audit. "
+        "Delete opensre/workspace under the system temp directory "
+        "after an architecture audit. "
         "Refuses paths outside that directory."
     ),
     use_cases=["Cleanup after architecture_clone_repo"],

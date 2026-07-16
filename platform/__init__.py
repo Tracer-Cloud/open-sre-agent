@@ -45,14 +45,6 @@ def _candidate_stdlib_platform_paths() -> list[Path]:
     return candidates
 
 
-def _is_frozen() -> bool:
-    """Check if running in a PyInstaller frozen build."""
-    return getattr(sys, "frozen", False)
-
-
-_REENTRANCY_GUARD = "_opensre_platform_loading"
-
-
 def _load_stdlib_platform():
     """Load the genuine stdlib ``platform`` module.
 

@@ -13,7 +13,6 @@ Examples of files that qualify:
 - `CI.md`
 - `CONTRIBUTING.md`
 - `README.md`
-- `TESTING.md`
 - `TOOL_INTEGRATION_CHECKLIST.md`
 - `docs/**/*.md`
 - `docs/**/*.mdx`

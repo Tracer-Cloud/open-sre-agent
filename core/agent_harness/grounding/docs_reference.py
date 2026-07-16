@@ -323,15 +323,21 @@ def find_relevant_docs(
     pages: list[DocPage],
     *,
     top_n: int = _DEFAULT_TOP_N,
+    min_score: int = 1,
 ) -> list[DocPage]:
     """Return up to ``top_n`` docs most relevant to ``query``, ranked by overlap.
 
-    Returns an empty list if the query has no useful tokens or no pages match.
+    Only pages scoring at least ``min_score`` are returned. The default of 1
+    keeps every positive match; callers that ground an LLM prompt pass a higher
+    floor so a weak keyword overlap (a single body token, or a slug collision
+    like "center" matching "cost-center-mapping") does not inject an unrelated
+    page. Returns an empty list if the query has no useful tokens or nothing
+    clears the floor.
     """
     qt = _query_tokens(query)
     if not qt:
         return []
-    scored = [(s, p) for p in pages for s in [_score(qt, p)] if s > 0]
+    scored = [(s, p) for p in pages for s in [_score(qt, p)] if s >= min_score]
     scored.sort(key=lambda item: (-item[0], item[1].relpath))
     return [page for _, page in scored[:top_n]]
 
@@ -396,10 +402,11 @@ class DocsReference:
         pages: list[DocPage] | None = None,
         *,
         top_n: int = _DEFAULT_TOP_N,
+        min_score: int = 1,
     ) -> list[DocPage]:
         """Return up to ``top_n`` docs most relevant to ``query``."""
         candidates = pages if pages is not None else self.discover()
-        return find_relevant_docs(query, candidates, top_n=top_n)
+        return find_relevant_docs(query, candidates, top_n=top_n, min_score=min_score)
 
     def build_text(
         self,
@@ -408,21 +415,28 @@ class DocsReference:
         top_n: int = _DEFAULT_TOP_N,
         max_chars: int = _DEFAULT_MAX_TOTAL_CHARS,
         root: Path | None = None,
+        min_score: int = 1,
     ) -> str:
         """Assemble a docs reference block for LLM grounding.
 
-        Includes the top-N most relevant pages (with body excerpts) followed by
-        a compact index of all discovered pages. Returns ``""`` when no docs
-        are available so callers can detect that and adjust the prompt. ``root``
-        defaults to the repository ``docs/`` directory.
+        Includes the top-N pages scoring at least ``min_score`` (with body
+        excerpts), followed by a compact index of all discovered pages so the
+        LLM can point at siblings. Returns ``""`` when no docs are available, or
+        when nothing clears ``min_score``, so a query that no page strongly
+        matches contributes no grounding rather than injecting an unrelated
+        excerpt. ``root`` defaults to the repository ``docs/`` directory.
         """
         pages = self.discover(root)
         if not pages:
             return ""
 
-        parts: list[str] = []
-        relevant = self.find_relevant(query, pages, top_n=top_n) if query else []
+        relevant = (
+            self.find_relevant(query, pages, top_n=top_n, min_score=min_score) if query else []
+        )
+        if not relevant:
+            return ""
 
+        parts: list[str] = []
         for page in relevant:
             parts.append(f"=== docs/{page.relpath} (title: {page.title}) ===\n")
             parts.append(excerpt(page.body, _MAX_PER_DOC_CHARS))

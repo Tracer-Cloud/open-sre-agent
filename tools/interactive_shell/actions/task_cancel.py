@@ -9,13 +9,12 @@ from rich.markup import escape
 
 from core.agent_harness.tools.tool_context import (
     ActionToolContext,
+    capability_available_from_sources,
     execute_with_action_context,
     object_schema,
 )
 from core.tool_framework.registered_tool import RegisteredTool
-from surfaces.interactive_shell.command_registry import dispatch_slash
-from surfaces.interactive_shell.runtime import TaskKind, TaskStatus
-from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
+from platform.common.task_types import TaskKind, TaskStatus
 from tools.interactive_shell.shared import plan_foreground_tool
 
 
@@ -70,13 +69,15 @@ def execute_task_cancel_tool(args: dict[str, Any], ctx: ActionToolContext) -> bo
     target = str(args.get("target", "")).strip()
     if not target:
         return False
+    if ctx.task_cancel_ports is None:
+        raise RuntimeError("task cancel tool requires cancellation runtime ports")
     task_id = _resolve_task_cancel_target(ctx, target)
     if task_id is None:
         return True
     command = f"/cancel {task_id}"
     plan = plan_foreground_tool("slash", "slash")
-    if not execution_allowed(
-        plan.policy,
+    if not ctx.task_cancel_ports.execution_allowed(
+        policy=plan.policy,
         session=ctx.session,
         console=ctx.console,
         action_summary=command,
@@ -87,13 +88,12 @@ def execute_task_cancel_tool(args: dict[str, Any], ctx: ActionToolContext) -> bo
         ctx.session.record("slash", command, ok=False)
         return True
     ctx.console.print(f"[bold]$ {escape(command)}[/bold]")
-    dispatch_slash(
+    ctx.task_cancel_ports.dispatch_cancel(
         command,
-        ctx.session,
-        ctx.console,
+        session=ctx.session,
+        console=ctx.console,
         confirm_fn=ctx.confirm_fn,
         is_tty=ctx.is_tty,
-        policy_precleared=True,
     )
     return True
 
@@ -126,6 +126,10 @@ task_cancel_tool = RegisteredTool(
     parallel_safe=False,
     accepts_runtime_context=True,
     run=run_task_cancel,
+    is_available=lambda sources: capability_available_from_sources(
+        sources,
+        "task_cancel",
+    ),
 )
 
 

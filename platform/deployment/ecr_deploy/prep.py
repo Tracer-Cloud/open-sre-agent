@@ -19,15 +19,13 @@ _DEPLOY_ENV_EXAMPLE = ".env.deploy.example"
 # paths (CodeQL clear-text logging).
 _MISSING_LABELS: dict[str, str] = {
     "aws": "AWS account access for EC2 provisioning",
-    "messaging_gateway": "Chat gateway configuration (Telegram and/or Slack Socket Mode)",
     "telegram_bot": "Telegram gateway bot configuration",
-    "slack_bot": "Slack Socket Mode gateway configuration",
     "llm_provider_invalid": "LLM provider setting (unsupported value)",
     "llm_api": "LLM provider configuration for the selected provider",
 }
 _WARNING_LABELS: dict[str, str] = {
     "telegram_users": "Telegram allowed-users configuration (recommended)",
-    "slack_users": "Slack allowed-users configuration (recommended)",
+    "slack_on_ec2": "Slack is deployed and operated separately, not from this repo",
     "llm_provider_ec2": "LLM provider may not work inside EC2 containers",
 }
 
@@ -64,35 +62,25 @@ def _aws_credentials_available() -> bool:
 
 
 def _collect_messaging_gateway_issues() -> tuple[list[DeployEnvIssue], list[DeployEnvIssue]]:
-    """Validate Telegram and/or Slack Socket Mode deploy env."""
+    """Validate the Telegram deploy env (the EC2 gateway is Telegram-only).
+
+    Slack is deployed and operated separately, not from this repo: Socket Mode
+    is single-consumer, so shipping Slack tokens to EC2 would compete with the
+    primary Slack gateway. Tokens present in the deploy env are ignored with a
+    warning, never shipped.
+    """
     missing: list[DeployEnvIssue] = []
     warnings: list[DeployEnvIssue] = []
 
-    telegram_ok = _env_set("TELEGRAM_BOT_TOKEN")
-    slack_bot = _env_set("SLACK_BOT_TOKEN")
-    slack_app = _env_set("SLACK_APP_TOKEN")
-    slack_ok = slack_bot and slack_app
-    slack_partial = (slack_bot or slack_app) and not slack_ok
-
-    if slack_partial:
-        missing.append(DeployEnvIssue("slack_bot", env_vars=("SLACK_BOT_TOKEN", "SLACK_APP_TOKEN")))
-    elif not telegram_ok and not slack_ok:
-        missing.append(
-            DeployEnvIssue(
-                "messaging_gateway",
-                env_vars=("TELEGRAM_BOT_TOKEN", "SLACK_BOT_TOKEN", "SLACK_APP_TOKEN"),
-            )
-        )
-
-    if telegram_ok and not _env_set("TELEGRAM_ALLOWED_USERS"):
+    if not _env_set("TELEGRAM_BOT_TOKEN"):
+        missing.append(DeployEnvIssue("telegram_bot", env_vars=("TELEGRAM_BOT_TOKEN",)))
+    elif not _env_set("TELEGRAM_ALLOWED_USERS"):
         warnings.append(DeployEnvIssue("telegram_users", env_vars=("TELEGRAM_ALLOWED_USERS",)))
 
-    if (
-        slack_ok
-        and not _env_set("SLACK_ALLOWED_USERS")
-        and not _env_set("SLACK_ALLOW_OPEN_WORKSPACE")
-    ):
-        warnings.append(DeployEnvIssue("slack_users", env_vars=("SLACK_ALLOWED_USERS",)))
+    if _env_set("SLACK_BOT_TOKEN") or _env_set("SLACK_APP_TOKEN"):
+        warnings.append(
+            DeployEnvIssue("slack_on_ec2", env_vars=("SLACK_BOT_TOKEN", "SLACK_APP_TOKEN"))
+        )
 
     return missing, warnings
 
@@ -164,15 +152,6 @@ def _format_issue_message(issue: DeployEnvIssue, *, warning: bool) -> str:
         "telegram_bot": lambda: (
             f"{issue.env_vars[0]} — API key not set ({label})" if issue.env_vars else label
         ),
-        "slack_bot": lambda: (
-            f"{' + '.join(issue.env_vars)} — both required for Socket Mode ({label})"
-            if issue.env_vars
-            else label
-        ),
-        "messaging_gateway": lambda: (
-            "Chat gateway — set TELEGRAM_BOT_TOKEN and/or "
-            f"SLACK_BOT_TOKEN + SLACK_APP_TOKEN ({label})"
-        ),
         "llm_api": lambda: (
             f"{issue.env_vars[0]} — API key not set "
             f"(required for LLM provider: {issue.provider or 'selected provider'})"
@@ -191,9 +170,8 @@ def _format_issue_message(issue: DeployEnvIssue, *, warning: bool) -> str:
         "telegram_users": lambda: (
             f"{issue.env_vars[0]} — not set ({label})" if issue.env_vars else label
         ),
-        "slack_users": lambda: (
-            f"{issue.env_vars[0]} — not set ({label}; "
-            "or set SLACK_ALLOW_OPEN_WORKSPACE=1 for dogfood)"
+        "slack_on_ec2": lambda: (
+            f"{' / '.join(issue.env_vars)} — ignored by the EC2 deploy ({label})"
             if issue.env_vars
             else label
         ),

@@ -1,20 +1,16 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
-
 import httpx
 import pytest
 
 from integrations.posthog import (
-    BounceRateAlert,
-    BounceRateResult,
     PostHogConfig,
     build_posthog_config,
-    check_bounce_rate_alert,
     posthog_config_from_env,
-    query_bounce_rate,
     validate_posthog_config,
 )
+from integrations.posthog.classify import classify
+from integrations.posthog.verifier import verify_posthog
 
 
 def test_build_posthog_config_defaults() -> None:
@@ -24,8 +20,6 @@ def test_build_posthog_config_defaults() -> None:
     assert config.project_id == ""
     assert config.personal_api_key == ""
     assert config.timeout_seconds == 15.0
-    assert config.bounce_rate_threshold == 0.6
-    assert config.bounce_rate_window == "24h"
 
 
 def test_posthog_config_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -33,8 +27,6 @@ def test_posthog_config_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("POSTHOG_PERSONAL_API_KEY", "phx_test")
     monkeypatch.setenv("POSTHOG_BASE_URL", "https://eu.i.posthog.com")
     monkeypatch.setenv("POSTHOG_TIMEOUT_SECONDS", "20")
-    monkeypatch.setenv("POSTHOG_BOUNCE_THRESHOLD", "0.75")
-    monkeypatch.setenv("POSTHOG_BOUNCE_WINDOW", "48h")
 
     config = posthog_config_from_env()
 
@@ -43,8 +35,6 @@ def test_posthog_config_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     assert config.personal_api_key == "phx_test"
     assert config.base_url == "https://eu.i.posthog.com"
     assert config.timeout_seconds == 20.0
-    assert config.bounce_rate_threshold == 0.75
-    assert config.bounce_rate_window == "48h"
 
 
 def test_posthog_config_from_env_returns_none_when_missing(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -184,150 +174,48 @@ def test_validate_posthog_config_generic_error_still_handled(
     assert "network unreachable" in result.detail
 
 
-def test_query_bounce_rate_success(monkeypatch: pytest.MonkeyPatch) -> None:
-    config = PostHogConfig(
-        project_id="123",
-        personal_api_key="phx_test",
-    )
+def test_classify_posthog_requires_project_and_key() -> None:
+    cfg, service = classify({"project_id": "123"}, "env-posthog")
+    assert cfg is None
+    assert service is None
 
-    def fake_request_json(*args, **kwargs):
-        return {"results": [[750, 1000]]}
+    cfg, service = classify(
+        {"project_id": "123", "personal_api_key": "phx_test"},
+        "env-posthog",
+    )
+    assert service == "posthog"
+    assert cfg is not None
+    assert cfg.project_id == "123"
+    assert cfg.personal_api_key == "phx_test"
+
+
+def test_verify_posthog_missing_project_id() -> None:
+    result = verify_posthog("local env", {"personal_api_key": "phx_test"})
+    assert result["service"] == "posthog"
+    assert result["status"] == "failed"
+    assert "project ID is required" in result["detail"]
+
+
+def test_verify_posthog_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_request_json(
+        _config: PostHogConfig,
+        _method: str,
+        _path: str,
+        *,
+        params: dict | None = None,
+        json: dict | None = None,
+    ) -> dict[str, int]:
+        return {"id": 123, "name": "Demo Project"}
 
     monkeypatch.setattr("integrations.posthog.client._request_json", fake_request_json)
 
-    result = query_bounce_rate(config, period="24h")
-
-    assert result.bounce_rate == 0.75
-    assert result.total_sessions == 1000
-    assert result.bounced_sessions == 750
-    assert result.period == "24h"
-    assert isinstance(result.queried_at, datetime)
-    assert result.queried_at.tzinfo == UTC
-
-
-def test_query_bounce_rate_clamps_to_one(monkeypatch: pytest.MonkeyPatch) -> None:
-    config = PostHogConfig(
-        project_id="123",
-        personal_api_key="phx_test",
+    result = verify_posthog(
+        "local env",
+        {
+            "project_id": "123",
+            "personal_api_key": "phx_test",
+        },
     )
-
-    def fake_request_json(*args, **kwargs):
-        return {"results": [[1500, 1000]]}
-
-    monkeypatch.setattr("integrations.posthog.client._request_json", fake_request_json)
-
-    result = query_bounce_rate(config, period="24h")
-
-    assert result.bounce_rate == 1.0
-    assert result.total_sessions == 1000
-    assert result.bounced_sessions == 1500
-
-
-def test_query_bounce_rate_empty_results(monkeypatch: pytest.MonkeyPatch) -> None:
-    config = PostHogConfig(
-        project_id="123",
-        personal_api_key="phx_test",
-    )
-
-    def fake_request_json(*args, **kwargs):
-        return {"results": []}
-
-    monkeypatch.setattr("integrations.posthog.client._request_json", fake_request_json)
-
-    with pytest.raises(ValueError, match="Empty PostHog response"):
-        query_bounce_rate(config)
-
-
-def test_query_bounce_rate_invalid_response(monkeypatch: pytest.MonkeyPatch) -> None:
-    config = PostHogConfig(
-        project_id="123",
-        personal_api_key="phx_test",
-    )
-
-    def fake_request_json(*args, **kwargs):
-        return []
-
-    monkeypatch.setattr("integrations.posthog.client._request_json", fake_request_json)
-
-    with pytest.raises(ValueError, match="Unexpected PostHog response"):
-        query_bounce_rate(config)
-
-
-def test_check_bounce_rate_alert_below_threshold(monkeypatch: pytest.MonkeyPatch) -> None:
-    config = PostHogConfig(
-        project_id="123",
-        personal_api_key="phx_test",
-        bounce_rate_threshold=0.6,
-        bounce_rate_window="24h",
-    )
-
-    monkeypatch.setattr(
-        "integrations.posthog.client.query_bounce_rate",
-        lambda _config, period: BounceRateResult(
-            bounce_rate=0.3,
-            total_sessions=600,
-            bounced_sessions=180,
-            period=period,
-            queried_at=datetime.now(UTC),
-        ),
-    )
-
-    alert = check_bounce_rate_alert(config)
-
-    assert alert is None
-
-
-def test_check_bounce_rate_alert_warning(monkeypatch: pytest.MonkeyPatch) -> None:
-    config = PostHogConfig(
-        project_id="123",
-        personal_api_key="phx_test",
-        bounce_rate_threshold=0.6,
-        bounce_rate_window="24h",
-    )
-
-    monkeypatch.setattr(
-        "integrations.posthog.client.query_bounce_rate",
-        lambda _config, period: BounceRateResult(
-            bounce_rate=0.75,
-            total_sessions=1000,
-            bounced_sessions=750,
-            period=period,
-            queried_at=datetime.now(UTC),
-        ),
-    )
-
-    alert = check_bounce_rate_alert(config)
-
-    assert isinstance(alert, BounceRateAlert)
-    assert alert.severity == "warning"
-    assert alert.bounce_rate == 0.75
-    assert alert.threshold == 0.6
-    assert "75.0%" in alert.message
-
-
-def test_check_bounce_rate_alert_critical(monkeypatch: pytest.MonkeyPatch) -> None:
-    config = PostHogConfig(
-        project_id="123",
-        personal_api_key="phx_test",
-        bounce_rate_threshold=0.6,
-        bounce_rate_window="24h",
-    )
-
-    monkeypatch.setattr(
-        "integrations.posthog.client.query_bounce_rate",
-        lambda _config, period: BounceRateResult(
-            bounce_rate=0.95,
-            total_sessions=1000,
-            bounced_sessions=950,
-            period=period,
-            queried_at=datetime.now(UTC),
-        ),
-    )
-
-    alert = check_bounce_rate_alert(config)
-
-    assert isinstance(alert, BounceRateAlert)
-    assert alert.severity == "critical"
-    assert alert.bounce_rate == 0.95
-    assert alert.total_sessions == 1000
-    assert alert.bounced_sessions == 950
+    assert result["service"] == "posthog"
+    assert result["status"] == "passed"
+    assert result["detail"] == "PostHog validated."

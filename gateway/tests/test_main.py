@@ -20,4 +20,4 @@ def test_gateway_main_module_exports_main() -> None:
     import gateway.main as entry
 
     assert callable(entry.main)
-    assert entry.main.__module__ == "gateway.runtime.manager"
+    assert entry.main.__module__ == "app.entrypoints.gateway"

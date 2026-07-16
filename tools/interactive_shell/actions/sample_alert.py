@@ -9,45 +9,43 @@ from rich.console import Console
 
 from core.agent_harness.tools.tool_context import (
     ActionToolContext,
+    capability_available_from_sources,
     execute_with_action_context,
     object_schema,
     string_property,
 )
 from core.tool_framework.registered_tool import RegisteredTool
 from platform.common.task_types import TaskRecord
-from surfaces.interactive_shell.session import Session
-from tools.interactive_shell.shared.investigation_launch import launch_investigation
+from tools.interactive_shell.shared.investigation_launch import (
+    InvestigationLaunchPorts,
+    InvestigationSession,
+    launch_investigation,
+)
 
 _SAMPLE_ALERT_TEMPLATES = ("generic",)
 
 
 def run_sample_alert(
     template_name: str,
-    session: Session,
+    session: InvestigationSession,
     console: Console,
     *,
+    ports: InvestigationLaunchPorts,
     confirm_fn: Callable[[str], str] | None = None,
     is_tty: bool | None = None,
     action_already_listed: bool = False,
 ) -> None:
-    from surfaces.interactive_shell.runtime.investigation_adapter import (
-        repl_investigation_launch_ports,
-        run_sample_alert_for_session,
-    )
 
     def _run(task: TaskRecord) -> dict[str, object]:
-        return run_sample_alert_for_session(
+        return ports.run_sample_alert(
             template_name=template_name,
             context_overrides=session.accumulated_context or None,
             cancel_requested=task.cancel_requested,
         )
 
     def _start_background() -> None:
-        from surfaces.interactive_shell.runtime.background.runner import (
-            start_background_template_investigation,
-        )
 
-        start_background_template_investigation(
+        ports.start_background_sample(
             template_name=template_name,
             session=session,
             console=console,
@@ -57,7 +55,7 @@ def run_sample_alert(
     launch_investigation(
         session=session,
         console=console,
-        ports=repl_investigation_launch_ports(),
+        ports=ports,
         tool_type="sample_alert",
         action_summary=f"sample alert investigation ({template_name})",
         announce_label="sample alert",
@@ -77,10 +75,13 @@ def execute_sample_alert_tool(args: dict[str, Any], ctx: ActionToolContext) -> b
     template = str(args.get("template", "")).strip()
     if not template:
         return False
+    if ctx.investigation_ports is None:
+        raise RuntimeError("sample alert tool requires investigation runtime ports")
     run_sample_alert(
         template,
         ctx.session,
         ctx.console,
+        ports=ctx.investigation_ports,
         confirm_fn=ctx.confirm_fn,
         is_tty=ctx.is_tty,
         action_already_listed=ctx.action_already_listed,
@@ -122,6 +123,10 @@ alert_sample_tool = RegisteredTool(
     parallel_safe=False,
     accepts_runtime_context=True,
     run=run_sample_alert_action,
+    is_available=lambda sources: capability_available_from_sources(
+        sources,
+        "investigation",
+    ),
 )
 
 

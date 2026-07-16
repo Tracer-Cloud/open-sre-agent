@@ -52,6 +52,7 @@ class TestScheduledTask:
         assert TaskKind.SYNTHETIC_RUN == "synthetic_run"
         assert TaskKind.CUSTOM_INVESTIGATION == "custom_investigation"
         assert TaskKind.SENTRY_MORNING_DIGEST == "sentry_morning_digest"
+        assert TaskKind.SENTRY_UPTIME_WATCH == "sentry_uptime_watch"
 
     def test_all_providers(self) -> None:
         assert Provider.TELEGRAM == "telegram"

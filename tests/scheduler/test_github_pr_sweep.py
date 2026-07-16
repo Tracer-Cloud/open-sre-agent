@@ -38,5 +38,13 @@ def test_scheduled_agent_routes_github(monkeypatch) -> None:
         "integrations.scheduled_agent_bootstrap.run_sentry_morning_digest",
         lambda _payload: "sentry",
     )
+    monkeypatch.setattr(
+        "integrations.scheduled_agent_bootstrap.run_uptime_watch_tick",
+        lambda **_kwargs: "uptime",
+    )
     assert run_scheduled_agent_digest({"source": "scheduled_github_pr_sweep"}) == "gh"
     assert run_scheduled_agent_digest({"source": "scheduled_sentry_morning_digest"}) == "sentry"
+    assert (
+        run_scheduled_agent_digest({"source": "scheduled_sentry_uptime_watch", "task_id": "t1"})
+        == "uptime"
+    )

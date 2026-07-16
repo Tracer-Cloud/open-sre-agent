@@ -17,6 +17,7 @@ import logging
 import os
 import signal
 import threading
+from collections.abc import Callable
 from typing import Any
 
 from rich.console import Console
@@ -37,11 +38,17 @@ from gateway.telegram.background import TelegramGatewayBackground
 from gateway.telegram.settings import GatewaySettings
 from gateway.telegram.wiring import start_telegram_worker
 
+SlashPortsFactory = Callable[[], Any]
+
 
 class GatewayManager:
     """Composition root and lifecycle handle for the running gateway process."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        slash_ports_factory: SlashPortsFactory | None = None,
+    ) -> None:
         self.settings: GatewaySettings | None = None
         self.logger: logging.Logger | None = None
         self.telegram_background_worker: TelegramGatewayBackground | None = None
@@ -49,6 +56,7 @@ class GatewayManager:
         self.web_server: Any = None
         self.scheduler: Any = None
         self.components: dict[str, str] = {}
+        self._slash_ports_factory = slash_ports_factory
         self._stopped = threading.Event()
 
     def start_gateway(self, *, wait: bool = True) -> GatewayManager:
@@ -75,7 +83,10 @@ class GatewayManager:
         # Compose the transport-agnostic turn handler. Action tools are resolved
         # per turn from each chat's live session inside the handler (not here).
         console = Console(force_terminal=False)
-        handler = GatewayTurnHandler(console=console)
+        handler = GatewayTurnHandler(
+            console=console,
+            slash_ports_factory=self._slash_ports_factory,
+        )
 
         self._start_web(logger)
         self._start_telegram(logger, handler)

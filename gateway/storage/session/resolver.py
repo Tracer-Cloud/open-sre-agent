@@ -33,12 +33,13 @@ def _ensure_integrations(session: SessionCore) -> SessionCore:
     return session
 
 
-def _inject_chat_context(session: SessionCore, *, chat_id: str) -> SessionCore:
+def _inject_chat_context(session: SessionCore, *, chat_id: str, platform: str = "") -> SessionCore:
     """Attach per-turn gateway chat metadata to the session's integration cache."""
     _ensure_integrations(session)
     session.resolved_integrations_cache = inject_gateway_chat_context(
         dict(session.resolved_integrations_cache or {}),
         chat_id,
+        platform,
     )
     return session
 
@@ -62,10 +63,10 @@ class SessionResolver:
         existing = self._bindings.get_session_id(platform=self._platform, chat_id=user_id)
         if existing:
             session = self._manager.resolve(existing)
-            return _inject_chat_context(session, chat_id=chat_id)
+            return _inject_chat_context(session, chat_id=chat_id, platform=self._platform)
 
         session = self._manager.create(warm_integrations=True)
-        _inject_chat_context(session, chat_id=chat_id)
+        _inject_chat_context(session, chat_id=chat_id, platform=self._platform)
         self._bindings.bind(
             platform=self._platform,
             chat_id=user_id,
@@ -79,9 +80,17 @@ class SessionResolver:
         )
         return session
 
+    def has_session(self, *, user_id: str) -> bool:
+        """Whether the bot already has a session bound to this conversation key.
+
+        Used to gate un-addressed thread follow-ups: the bot answers an un-tagged
+        reply only in a thread it already joined.
+        """
+        return bool(self._bindings.get_session_id(platform=self._platform, chat_id=user_id))
+
     def rotate(self, *, user_id: str, chat_id: str) -> SessionCore:
         """Flush the current session file and start a new binding."""
         existing = self._bindings.get_session_id(platform=self._platform, chat_id=user_id)
         new_id = self._bindings.rotate(platform=self._platform, chat_id=user_id)
         session = self._manager.rotate(old_session_id=existing or None, new_session_id=new_id)
-        return _inject_chat_context(session, chat_id=chat_id)
+        return _inject_chat_context(session, chat_id=chat_id, platform=self._platform)
