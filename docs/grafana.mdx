@@ -25,6 +25,20 @@ Official documentation: [<u>How to add a token to a service account in Grafana</
      ![Connect Grafana](/images/connect_grafana.png)
    </Frame>
 
+### Private or self-signed certificates
+
+OpenSRE verifies Grafana TLS certificates by default. For an internal certificate
+authority, provide its PEM bundle during onboarding or configure:
+
+```bash
+GRAFANA_VERIFY_SSL=true
+GRAFANA_CA_BUNDLE=/etc/ssl/certs/internal-grafana-ca.pem
+```
+
+For a trusted local development instance only, you can disable verification with
+`GRAFANA_VERIFY_SSL=false`. Prefer a CA bundle in production because disabling
+verification permits man-in-the-middle attacks.
+
 ## Local Grafana Setup (Minikube example)
 
 ### Steps

@@ -83,6 +83,11 @@ class GrafanaClientBase:
         self.tempo_datasource_uid = config.tempo_datasource_uid
         self.mimir_datasource_uid = config.mimir_datasource_uid
         self.uses_local_anonymous_auth = config.uses_local_anonymous_auth
+        self._ssl_verify = config.ssl_verify
+
+    @property
+    def ssl_verify(self) -> bool | str:
+        return self._ssl_verify
 
     @property
     def is_configured(self) -> bool:
@@ -188,6 +193,7 @@ class GrafanaClientBase:
                 url,
                 headers=self._get_auth_headers(),
                 timeout=10,
+                verify=self.ssl_verify,
             )
             response.raise_for_status()
             datasources = response.json()
@@ -290,6 +296,7 @@ class GrafanaClientBase:
                 url,
                 headers=self._get_auth_headers(),
                 timeout=10,
+                verify=self.ssl_verify,
             )
             response.raise_for_status()
             data = response.json()
@@ -347,6 +354,7 @@ class GrafanaClientBase:
                 headers=self._get_auth_headers(),
                 params=params,
                 timeout=10,
+                verify=self.ssl_verify,
             )
             response.raise_for_status()
             data = response.json()
@@ -374,6 +382,7 @@ class GrafanaClientBase:
             headers=self._get_auth_headers(),
             params=params,
             timeout=timeout,
+            verify=self.ssl_verify,
         )
         response.raise_for_status()
         result: dict[str, Any] = response.json()

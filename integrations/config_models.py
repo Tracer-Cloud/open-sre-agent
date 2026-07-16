@@ -60,8 +60,18 @@ class GrafanaIntegrationConfig(StrictConfigModel):
     integration_id: str = ""
     username: str = ""
     password: str = ""
+    verify_ssl: bool = True
+    ca_bundle: str = ""
 
     _normalize_endpoint = field_validator("endpoint", mode="before")(normalize_url())
+    _normalize_ca_bundle = field_validator("ca_bundle", mode="before")(normalize_str())
+    _normalize_verify_ssl = field_validator("verify_ssl", mode="before")(normalize_bool_str())
+
+    @property
+    def ssl_verify(self) -> bool | str:
+        if self.ca_bundle:
+            return self.ca_bundle
+        return self.verify_ssl
 
     @property
     def is_local(self) -> bool:

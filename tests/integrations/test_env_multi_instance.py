@@ -14,6 +14,8 @@ def _clear_env(monkeypatch) -> None:
         "GRAFANA_INSTANCES",
         "GRAFANA_INSTANCE_URL",
         "GRAFANA_READ_TOKEN",
+        "GRAFANA_VERIFY_SSL",
+        "GRAFANA_CA_BUNDLE",
         "DD_INSTANCES",
         "DD_API_KEY",
         "DD_APP_KEY",
@@ -102,6 +104,20 @@ def test_bad_json_logs_warning_and_falls_through_to_legacy(
     assert "instances" not in grafana_records[0]
     assert grafana_records[0]["credentials"]["endpoint"] == "https://legacy"
     assert any("GRAFANA_INSTANCES is not valid JSON" in r.message for r in caplog.records)
+
+
+def test_grafana_legacy_env_includes_tls_policy(monkeypatch: pytest.MonkeyPatch) -> None:
+    _clear_env(monkeypatch)
+    monkeypatch.setenv("GRAFANA_INSTANCE_URL", "https://legacy")
+    monkeypatch.setenv("GRAFANA_READ_TOKEN", "legacy-key")
+    monkeypatch.setenv("GRAFANA_VERIFY_SSL", "false")
+    monkeypatch.setenv("GRAFANA_CA_BUNDLE", "/etc/ssl/corp-ca.pem")
+
+    records = load_env_integrations()
+    grafana = [r for r in records if r.get("service") == "grafana"][0]
+
+    assert grafana["credentials"]["verify_ssl"] is False
+    assert grafana["credentials"]["ca_bundle"] == "/etc/ssl/corp-ca.pem"
 
 
 def test_instances_env_var_suppresses_legacy_single_var(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from integrations._validators import normalize_bool_str
 from integrations.store import remove_integration, upsert_integration
 from platform.terminal.theme import DIM, ERROR, GLYPH_ERROR, HIGHLIGHT, SECONDARY
 from surfaces.cli.wizard._ui import (
@@ -25,6 +26,8 @@ from surfaces.cli.wizard.integration_health import (
     validate_tempo_integration,
 )
 
+_normalize_bool = normalize_bool_str()
+
 
 def _configure_grafana() -> tuple[str, str]:
     _, credentials = _integration_defaults("grafana")
@@ -43,18 +46,43 @@ def _configure_grafana() -> tuple[str, str]:
             default=_string_value(credentials.get("api_key")),
             secret=True,
         )
+        verify_ssl = _confirm(
+            "Verify SSL certificate?",
+            default=_normalize_bool(credentials.get("verify_ssl", True)),
+        )
+        ca_bundle = ""
+        if verify_ssl:
+            ca_bundle = _prompt_value(
+                "Path to CA bundle for SSL verification (leave empty to use system defaults)",
+                default=_string_value(credentials.get("ca_bundle")),
+                allow_empty=True,
+            )
         with _console.status("Validating Grafana integration...", spinner="dots"):
-            result = validate_grafana_integration(endpoint=endpoint, api_key=api_key)
+            result = validate_grafana_integration(
+                endpoint=endpoint,
+                api_key=api_key,
+                verify_ssl=verify_ssl,
+                ca_bundle=ca_bundle,
+            )
         _render_integration_result("Grafana", result)
         if result.ok:
             upsert_integration(
-                "grafana", {"credentials": {"endpoint": endpoint, "api_key": api_key}}
-            )
-            env_path = sync_env_values(
+                "grafana",
                 {
-                    "GRAFANA_INSTANCE_URL": endpoint,
-                }
+                    "credentials": {
+                        "endpoint": endpoint,
+                        "api_key": api_key,
+                        "verify_ssl": verify_ssl,
+                        "ca_bundle": ca_bundle,
+                    }
+                },
             )
+            env_values: dict[str, str] = {
+                "GRAFANA_INSTANCE_URL": endpoint,
+                "GRAFANA_VERIFY_SSL": "true" if verify_ssl else "false",
+                "GRAFANA_CA_BUNDLE": ca_bundle,
+            }
+            env_path = sync_env_values(env_values)
             return "Grafana", str(env_path)
         _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
 

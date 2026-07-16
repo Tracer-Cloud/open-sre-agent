@@ -92,7 +92,7 @@ def query_grafana_alert_rules(
             "raw": raw,
         }
 
-    client = _resolve_grafana_client(grafana_endpoint, grafana_api_key)
+    client = _resolve_grafana_client_from_kwargs(grafana_endpoint, grafana_api_key, **_kwargs)
     if not client or not client.is_configured:
         return {
             "source": "grafana_alerts",
@@ -218,8 +218,12 @@ def query_grafana_annotations(
             "raw": raw,
         }
 
-    client = _resolve_grafana_client(
-        grafana_endpoint, grafana_api_key, grafana_username, grafana_password
+    client = _resolve_grafana_client_from_kwargs(
+        grafana_endpoint,
+        grafana_api_key,
+        grafana_username,
+        grafana_password,
+        **_kwargs,
     )
     if not client or not client.is_configured:
         return {
@@ -277,6 +281,9 @@ def _resolve_grafana_client(
     grafana_api_key: str | None = None,
     grafana_username: str = "",
     grafana_password: str = "",
+    *,
+    verify_ssl: bool | str = True,
+    ca_bundle: str = "",
 ):
     if not grafana_endpoint:
         return None
@@ -285,6 +292,25 @@ def _resolve_grafana_client(
         api_key=grafana_api_key or "",
         username=grafana_username,
         password=grafana_password,
+        verify_ssl=verify_ssl,
+        ca_bundle=ca_bundle,
+    )
+
+
+def _resolve_grafana_client_from_kwargs(
+    grafana_endpoint: str | None,
+    grafana_api_key: str | None,
+    grafana_username: str = "",
+    grafana_password: str = "",
+    **kwargs: Any,
+):
+    return _resolve_grafana_client(
+        grafana_endpoint,
+        grafana_api_key,
+        grafana_username,
+        grafana_password,
+        verify_ssl=kwargs.get("verify_ssl", True),
+        ca_bundle=str(kwargs.get("ca_bundle") or ""),
     )
 
 
@@ -294,6 +320,8 @@ def _grafana_creds(grafana: dict) -> dict:
         "grafana_api_key": grafana.get("grafana_api_key") or grafana.get("api_key"),
         "grafana_username": grafana.get("username", ""),
         "grafana_password": grafana.get("password", ""),
+        "verify_ssl": grafana.get("verify_ssl", True),
+        "ca_bundle": str(grafana.get("ca_bundle") or ""),
     }
 
 
@@ -396,8 +424,12 @@ def query_grafana_logs(
             execution_run_id=execution_run_id,
         )
 
-    client = _resolve_grafana_client(
-        grafana_endpoint, grafana_api_key, grafana_username, grafana_password
+    client = _resolve_grafana_client_from_kwargs(
+        grafana_endpoint,
+        grafana_api_key,
+        grafana_username,
+        grafana_password,
+        **_kwargs,
     )
     if not client or not client.is_configured:
         return {
@@ -570,8 +602,12 @@ def query_grafana_metrics(
             service_name=service_name,
         )
 
-    client = _resolve_grafana_client(
-        grafana_endpoint, grafana_api_key, grafana_username, grafana_password
+    client = _resolve_grafana_client_from_kwargs(
+        grafana_endpoint,
+        grafana_api_key,
+        grafana_username,
+        grafana_password,
+        **_kwargs,
     )
     if not client or not client.is_configured:
         return {
@@ -658,7 +694,7 @@ def query_grafana_service_names(
     if grafana_backend is not None:
         return {"source": "grafana_loki_labels", "available": True, "service_names": []}
 
-    client = _resolve_grafana_client(grafana_endpoint, grafana_api_key)
+    client = _resolve_grafana_client_from_kwargs(grafana_endpoint, grafana_api_key, **_kwargs)
     if not client or not client.is_configured:
         return {
             "source": "grafana_loki_labels",
@@ -752,7 +788,7 @@ def query_grafana_traces(
             extract_pipeline_spans=_extract_pipeline_spans,
         )
 
-    client = _resolve_grafana_client(grafana_endpoint, grafana_api_key)
+    client = _resolve_grafana_client_from_kwargs(grafana_endpoint, grafana_api_key, **_kwargs)
     if not client or not client.is_configured:
         return {
             "source": "grafana_tempo",

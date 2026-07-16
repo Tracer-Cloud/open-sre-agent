@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 from pydantic import field_validator
 
 from config.strict_config import StrictConfigModel
+from integrations._validators import normalize_bool_str, normalize_str
 
 
 class GrafanaAccountConfig(StrictConfigModel):
@@ -21,6 +22,17 @@ class GrafanaAccountConfig(StrictConfigModel):
     description: str = ""
     username: str = ""
     password: str = ""
+    verify_ssl: bool = True
+    ca_bundle: str = ""
+
+    _normalize_ca_bundle = field_validator("ca_bundle", mode="before")(normalize_str())
+    _normalize_verify_ssl = field_validator("verify_ssl", mode="before")(normalize_bool_str())
+
+    @property
+    def ssl_verify(self) -> bool | str:
+        if self.ca_bundle:
+            return self.ca_bundle
+        return self.verify_ssl
 
     @field_validator("instance_url", mode="before")
     @classmethod

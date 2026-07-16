@@ -14,6 +14,7 @@ class FakeGrafanaClient(TempoMixin):
         self.is_configured = is_configured
         self.account_id = "test-account-123"
         self.tempo_datasource_uid = "tempo-uid-abc"
+        self.ssl_verify = True
 
     def _build_datasource_url(self, uid: str, path: str) -> str:
         return f"https://grafana.fake/api/datasources/uid/{uid}{path}"
@@ -138,6 +139,7 @@ class TestTempoMixin:
         assert span["name"] == "DB Query"
         assert span["attributes"]["db.system"] == "postgresql"
         assert span["attributes"]["http.status_code"] == 200
+        assert mock_requests_get.call_args.kwargs["verify"] is True
 
     @patch("integrations.grafana.tempo.requests.get")
     def test_get_trace_details_network_failure(self, mock_requests_get):

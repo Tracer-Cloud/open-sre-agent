@@ -401,6 +401,8 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 {
                     "endpoint": grafana_endpoint,
                     "api_key": grafana_api_key,
+                    "verify_ssl": os.getenv("GRAFANA_VERIFY_SSL", "true"),
+                    "ca_bundle": os.getenv("GRAFANA_CA_BUNDLE", "").strip(),
                 }
             )
         except Exception as exc:
@@ -412,6 +414,8 @@ def load_env_integrations() -> list[dict[str, Any]]:
                     {
                         "endpoint": grafana_config.endpoint,
                         "api_key": grafana_config.api_key,
+                        "verify_ssl": grafana_config.verify_ssl,
+                        "ca_bundle": grafana_config.ca_bundle,
                     },
                 )
             )
