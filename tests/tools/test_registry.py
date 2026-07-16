@@ -327,6 +327,40 @@ def test_github_workflow_skill_guidance_does_not_attach_to_unrelated_github_tool
     assert tool_def.skill_guidance == ""
 
 
+def test_architecture_audit_action_tools_are_registered() -> None:
+    tools_by_name = {
+        tool_def.name: tool_def for tool_def in registry_module.get_registered_tools("action")
+    }
+    for name in (
+        "architecture_clone_repo",
+        "architecture_cleanup_repo",
+        "architecture_save_observations",
+    ):
+        assert name in tools_by_name
+        assert tools_by_name[name].skill_guidance == ""
+    assert "scan_architecture_imports" not in tools_by_name
+    assert "scan_module_placement" not in tools_by_name
+    assert "find_architecture_violations" not in tools_by_name
+
+
+def test_architecture_audit_not_on_chat_or_investigation() -> None:
+    for surface in ("chat", "investigation"):
+        names = {tool_def.name for tool_def in registry_module.get_registered_tools(surface)}
+        assert "find_architecture_violations" not in names
+        assert "architecture_clone_repo" not in names
+        assert "architecture_save_observations" not in names
+
+
+def test_architecture_audit_skill_guidance_does_not_attach_to_unrelated_tools() -> None:
+    tools_by_name = {tool_def.name: tool_def for tool_def in registry_module.get_registered_tools()}
+
+    tool_def = tools_by_name["get_github_file_contents"]
+
+    assert "Required reply template" not in tool_def.skill_guidance
+    assert "Propose, do not execute" not in tool_def.skill_guidance
+    assert tool_def.skill_guidance == "" or "architecture-audit" not in tool_def.skill_guidance
+
+
 def test_python_execution_skill_guidance_does_not_attach_to_unrelated_tools() -> None:
     tools_by_name = {tool_def.name: tool_def for tool_def in registry_module.get_registered_tools()}
 

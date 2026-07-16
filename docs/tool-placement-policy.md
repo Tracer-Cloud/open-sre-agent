@@ -58,7 +58,7 @@ not `tools/system/` or `tools/cross_vendor/`):
 
 - `tools/community_followup_tool/`, `tools/git_deploy_timeline_tool/`,
   `tools/work_status_report_tool/` — GitHub-only.
-- `tools/slack_send_message_tool/` — Slack-only.
+- `integrations/slack/tools/slack_send_message_tool/` — Slack-only.
 - `tools/pi_coding_tool/` — Pi-only.
 
 Migrating these to `integrations/<vendor>/tools/` is in scope for T-18
@@ -70,7 +70,7 @@ Migrating these to `integrations/<vendor>/tools/` is in scope for T-18
 `tools/system/` and `tools/cross_vendor/` are ordinary packages discovered
 by `tools/registry.py`'s top-level walk of `tools/`. Each declares a
 `TOOL_MODULES` tuple in its `__init__.py` (the same manifest mechanism
-`tools/slack_send_message_tool/__init__.py` already uses for its own
+`integrations/slack/tools/slack_send_message_tool/__init__.py` already uses for its own
 `tool` submodule) listing the tool packages nested one level inside it.
 Adding a new system or cross-vendor tool means adding its package name to
 the relevant `TOOL_MODULES` tuple — no registry code changes required.

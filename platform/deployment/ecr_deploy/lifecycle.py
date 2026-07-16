@@ -11,7 +11,7 @@ from botocore.exceptions import ClientError
 
 from config.constants.paths import REPO_ROOT
 from platform.deployment.aws import ecr
-from platform.deployment.aws.client import DEFAULT_REGION
+from platform.deployment.aws.client import DEFAULT_REGION, assert_deploy_account
 from platform.deployment.aws.config import (
     ECR_DEFAULT_IMAGE_TAG,
     ECR_DOCKER_PLATFORM,
@@ -52,6 +52,8 @@ _ABORT_IF_EXISTS_ENV = "OPENSRE_DEPLOY_ABORT_IF_EXISTS"
 _IMAGE_URI_ENV = "OPENSRE_IMAGE_URI"
 _PURGE_ECR_ENV = "OPENSRE_DESTROY_PURGE_ECR"
 
+_EXTRA_ENV_KEYS_ENV = "OPENSRE_DEPLOY_EXTRA_ENV_KEYS"
+
 _CONTAINER_ENV_KEYS = (
     "TELEGRAM_BOT_TOKEN",
     "TELEGRAM_ALLOWED_USERS",
@@ -59,6 +61,7 @@ _CONTAINER_ENV_KEYS = (
     "SLACK_APP_TOKEN",
     "SLACK_ALLOWED_USERS",
     "SLACK_ALLOW_OPEN_WORKSPACE",
+    "SLACK_WEBHOOK_URL",
     "LLM_PROVIDER",
     "OPENAI_API_KEY",
     "ANTHROPIC_API_KEY",
@@ -66,9 +69,20 @@ _CONTAINER_ENV_KEYS = (
 )
 
 
+def _extra_env_keys() -> tuple[str, ...]:
+    """Additional env keys to ship, from OPENSRE_DEPLOY_EXTRA_ENV_KEYS (CSV).
+
+    Lets a deployment carry integration credentials (Grafana, Datadog, …) so
+    the deployed agent's tools become available, without hardcoding every
+    vendor's variables here.
+    """
+    raw = os.getenv(_EXTRA_ENV_KEYS_ENV, "")
+    return tuple(key.strip() for key in raw.split(",") if key.strip())
+
+
 def _collect_deploy_env_vars() -> dict[str, str]:
     env_vars: dict[str, str] = {}
-    for key in _CONTAINER_ENV_KEYS:
+    for key in (*_CONTAINER_ENV_KEYS, *_extra_env_keys()):
         val = os.getenv(key)
         if val:
             env_vars[key] = val
@@ -121,6 +135,7 @@ def build_image() -> str:
     Returns:
         The full ECR image URI (e.g. ``123….dkr.ecr.us-east-1.amazonaws.com/opensre:latest``).
     """
+    assert_deploy_account(REGION)
     stack = get_stack()
     start_time = time.time()
     print("=" * 60)
@@ -204,6 +219,7 @@ def deploy() -> dict[str, str]:
     Requires a pre-built ECR image. Run ``make build-image`` first, or set the
     ``OPENSRE_IMAGE_URI`` environment variable to an existing image URI.
     """
+    assert_deploy_account(REGION)
     validate_deploy_env()
 
     stack = get_stack()

@@ -129,7 +129,7 @@ These commands delegate to the same Click CLI you would run outside the REPL.
 | `/remote` | Connect to and operate remote deployed agents |
 | `/config` | Show or edit `~/.opensre/config.yml` |
 | `/cron` | Manage scheduled delivery jobs |
-| `/sentry` | Schedule automated Sentry morning digests (Telegram or Slack required) |
+| `/sentry` | Schedule automated Sentry morning digests or uptime watches (Telegram or Slack required) |
 | `/messaging` | Telegram pairing and allowlist |
 | `/hermes` | Hermes log tailing and incident escalation |
 | `/guardrails` | Sensitive-information guardrail rules |
@@ -947,9 +947,15 @@ Scheduled investigation or report delivery. See [Cron](/cron).
 /sentry digest schedule add --cron "0 8 * * *" --provider telegram --chat-id <id>
 /sentry digest schedule run <id>
 /sentry digest schedule remove <id>
+/sentry uptime check
+/sentry uptime watch list
+/sentry uptime watch add --cron "*/5 * * * *" --provider telegram --chat-id <id>
+/sentry uptime watch run <id>
+/sentry uptime watch remove <id>
 ```
 
-Automated Sentry morning digest delivery (#10). Requires Sentry plus Telegram or Slack configured for the chosen provider. See [Sentry](/sentry).
+Automated Sentry morning digest delivery (#10) and uptime watch notifications (#4032).
+Requires Sentry plus Telegram or Slack configured for the chosen provider. See [Sentry](/sentry).
 
 ### `/messaging`
 

@@ -180,3 +180,21 @@ class TestExecutor:
 
         assert result is False
         mock_deliver.assert_called_once()
+
+    def test_empty_message_skips_delivery(self) -> None:
+        task = ScheduledTask(
+            id="test_quiet_uptime",
+            kind=TaskKind.SENTRY_UPTIME_WATCH,
+            cron="*/5 * * * *",
+            provider=Provider.SLACK,
+            chat_id="C123",
+        )
+
+        with (
+            patch("platform.scheduler.executor.build_message", return_value=""),
+            patch("platform.scheduler.executor._deliver_slack") as mock_deliver,
+        ):
+            result = execute_task(task, "2026-01-01T09:00")
+
+        assert result is True
+        mock_deliver.assert_not_called()

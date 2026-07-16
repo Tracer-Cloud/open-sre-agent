@@ -110,3 +110,4 @@ class EffectiveIntegrations(StrictConfigModel):
     jenkins: EffectiveIntegrationEntry | None = None
     tempo: EffectiveIntegrationEntry | None = None
     temporal: EffectiveIntegrationEntry | None = None
+    kubernetes: EffectiveIntegrationEntry | None = None

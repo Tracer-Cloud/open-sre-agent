@@ -21,11 +21,9 @@ from surfaces.cli.constants import (
 class IntegrationServiceChoice(click.Choice):
     """``click.Choice`` that resolves integration-management service aliases.
 
-    Without this, passing an intuitive alias such as ``posthog`` (whose only
-    management flow is ``posthog_mcp``) fails the enum check with exit code 2
-    before ``cmd_setup``/``cmd_verify`` ever run. Resolving the alias here keeps
-    Click's friendly ``[[a|b|c]]`` usage/error display and shell completion while
-    accepting the canonical service name the handlers expect.
+    Applies ``resolve_management_service`` before the enum check so management-only
+    aliases (when defined) are accepted while keeping Click's friendly
+    ``[[a|b|c]]`` usage/error display and shell completion.
     """
 
     def convert(

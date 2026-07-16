@@ -119,6 +119,7 @@ def load_env_integration_services() -> list[str]:
     add("jira", _all_env("JIRA_BASE_URL", "JIRA_EMAIL", "JIRA_API_TOKEN"))
     add("discord", _env_is_set("DISCORD_BOT_TOKEN"))
     add("telegram", _env_is_set("TELEGRAM_BOT_TOKEN"))
+    add("slack", _any_env("SLACK_BOT_TOKEN", "SLACK_ACCESS_TOKEN"))
     add("smtp", _env_is_set("SMTP_HOST"))
     add("whatsapp", _all_env("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_WHATSAPP_FROM"))
     add(

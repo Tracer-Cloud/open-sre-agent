@@ -34,6 +34,7 @@ from integrations.config_models import (
     HoneycombIntegrationConfig,
     IncidentIoIntegrationConfig,
     JiraIntegrationConfig,
+    KubernetesIntegrationConfig,
     OpsGenieIntegrationConfig,
     PagerDutyIntegrationConfig,
     SlackWebhookConfig,
@@ -62,6 +63,7 @@ from integrations.incident_io import classify as _classify_incident_io
 from integrations.jenkins import classify as _classify_jenkins
 from integrations.jenkins import jenkins_config_from_env
 from integrations.jira import classify as _classify_jira
+from integrations.kubernetes import classify as _classify_kubernetes
 from integrations.mariadb import build_mariadb_config
 from integrations.mariadb import classify as _classify_mariadb
 from integrations.mongodb import build_mongodb_config
@@ -78,6 +80,8 @@ from integrations.opsgenie import classify as _classify_opsgenie
 from integrations.pagerduty import classify as _classify_pagerduty
 from integrations.postgresql import build_postgresql_config
 from integrations.postgresql import classify as _classify_postgresql
+from integrations.posthog import posthog_config_from_env
+from integrations.posthog.classify import classify as _classify_posthog
 from integrations.posthog_mcp import DEFAULT_POSTHOG_MCP_URL, build_posthog_mcp_config
 from integrations.posthog_mcp import classify as _classify_posthog_mcp
 from integrations.prefect import classify as _classify_prefect
@@ -89,6 +93,7 @@ from integrations.redis import classify as _classify_redis
 from integrations.redis import redis_config_from_env
 from integrations.registry import (
     DIRECT_CLASSIFIED_EFFECTIVE_SERVICES,
+    INTEGRATION_SPECS_BY_SERVICE,
     SKIP_CLASSIFIED_SERVICES,
     family_key,
     service_key,
@@ -99,6 +104,7 @@ from integrations.sentry_mcp import DEFAULT_SENTRY_MCP_URL, build_sentry_mcp_con
 from integrations.sentry_mcp import classify as _classify_sentry_mcp
 from integrations.signoz import classify as _classify_signoz
 from integrations.signoz import signoz_config_from_env
+from integrations.slack.classify import classify as _classify_slack
 from integrations.smtp import classify as _classify_smtp
 from integrations.snowflake import classify as _classify_snowflake
 from integrations.splunk import classify as _classify_splunk
@@ -254,9 +260,11 @@ _CLASSIFIERS: dict[str, _ClassifyFn] = {
     "jira": _classify_jira,
     "discord": _classify_discord,
     "telegram": _classify_telegram,
+    "slack": _classify_slack,
     "whatsapp": _classify_whatsapp,
     "twilio": _classify_twilio,
     "openclaw": _classify_openclaw,
+    "posthog": _classify_posthog,
     "posthog_mcp": _classify_posthog_mcp,
     "sentry_mcp": _classify_sentry_mcp,
     "x_mcp": _classify_x_mcp,
@@ -268,6 +276,7 @@ _CLASSIFIERS: dict[str, _ClassifyFn] = {
     "betterstack": _classify_betterstack,
     "azure_sql": _classify_azure_sql,
     "alertmanager": _classify_alertmanager,
+    "kubernetes": _classify_kubernetes,
     "argocd": _classify_argocd,
     "helm": _classify_helm,
     "victoria_logs": _classify_victoria_logs,
@@ -883,6 +892,18 @@ def load_env_integrations() -> list[dict[str, Any]]:
         else:
             integrations.append(_active_env_record("telegram", tg_config.model_dump()))
 
+    slack_bot_token = os.getenv("SLACK_BOT_TOKEN", "").strip()
+    slack_webhook_url = os.getenv("SLACK_WEBHOOK_URL", "").strip()
+    if slack_bot_token or slack_webhook_url:
+        slack_credentials = {
+            "webhook_url": slack_webhook_url,
+            "bot_token": slack_bot_token,
+            "app_token": os.getenv("SLACK_APP_TOKEN", "").strip(),
+        }
+        slack_view, _slack_key = _classify_slack(slack_credentials, record_id="env:slack")
+        if slack_view is not None:
+            integrations.append(_active_env_record("slack", slack_view))
+
     smtp_host = os.getenv("SMTP_HOST", "").strip()
     if smtp_host:
         try:
@@ -1010,6 +1031,18 @@ def load_env_integrations() -> list[dict[str, Any]]:
             )
         except Exception as exc:
             _report_env_loader_failure(exc, integration="openclaw")
+
+    try:
+        posthog_config = posthog_config_from_env()
+        if posthog_config is not None:
+            integrations.append(
+                _active_env_record(
+                    "posthog",
+                    posthog_config.model_dump(exclude={"integration_id"}),
+                )
+            )
+    except Exception as exc:
+        _report_env_loader_failure(exc, integration="posthog")
 
     posthog_mcp_mode = os.getenv("POSTHOG_MCP_MODE", "streamable-http").strip().lower()
     posthog_mcp_mode = posthog_mcp_mode or "streamable-http"
@@ -1384,6 +1417,27 @@ def load_env_integrations() -> list[dict[str, Any]]:
         except Exception as exc:
             _report_env_loader_failure(exc, integration="alertmanager")
 
+    _kubeconfig_path = os.getenv("KUBECONFIG", "").strip()
+    _kubeconfig_content = os.getenv("KUBECONFIG_CONTENT", "").strip()
+    if _kubeconfig_path or _kubeconfig_content:
+        try:
+            kubernetes_config = KubernetesIntegrationConfig.model_validate(
+                {
+                    "kubeconfig_path": _kubeconfig_path,
+                    "kubeconfig": _kubeconfig_content,
+                    "context": os.getenv("KUBECONFIG_CONTEXT", "").strip(),
+                    "namespace": os.getenv("KUBECONFIG_NAMESPACE", "default").strip() or "default",
+                }
+            )
+            integrations.append(
+                _active_env_record(
+                    "kubernetes",
+                    kubernetes_config.model_dump(exclude={"integration_id"}),
+                )
+            )
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="kubernetes")
+
     victoria_logs_url = os.getenv("VICTORIA_LOGS_URL", "").strip().rstrip("/")
     if victoria_logs_url:
         try:
@@ -1550,6 +1604,13 @@ def _publish_classified_effective_service(
 ) -> None:
     """Copy a directly classified service into the effective view."""
     resolved_integration = classified_integrations.get(service)
+    if resolved_integration is None:
+        spec = INTEGRATION_SPECS_BY_SERVICE.get(service)
+        if spec is not None:
+            for member in spec.family_members:
+                resolved_integration = classified_integrations.get(member)
+                if resolved_integration is not None:
+                    break
     config_dict = _config_as_dict(resolved_integration)
     if config_dict is None:
         return

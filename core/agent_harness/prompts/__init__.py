@@ -35,6 +35,7 @@ from core.agent_harness.prompts.skills_loader import (
 )
 
 __all__ = [
+    "SKILLS_HEADER",
     "_SYSTEM_PROMPT_BASE",
     "SKILLS_HEADER",
     "_build_observation_block",

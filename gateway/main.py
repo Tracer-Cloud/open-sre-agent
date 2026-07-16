@@ -7,7 +7,7 @@ Delegates to :func:`gateway.runtime.manager.main`.
 
 from __future__ import annotations
 
-from gateway.runtime.manager import main
+from app.entrypoints.gateway import main
 
 __all__ = ["main"]
 

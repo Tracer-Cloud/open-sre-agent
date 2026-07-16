@@ -12,6 +12,9 @@ from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStorage
 from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
 from gateway.runtime.turn_handler import GatewayTurnHandler
+from tests.core.agent.orchestration.cross_surface_parity_harness import (
+    RecordingGatewaySink,
+)
 
 
 def _patch_headless_agent(monkeypatch: Any, result: ShellTurnResult) -> MagicMock:
@@ -108,3 +111,89 @@ def test_turn_handler_skips_finalize_when_answer_was_streamed(monkeypatch: Any) 
     handler = GatewayTurnHandler(console=Console(force_terminal=False))
     handler("hi", SessionCore(storage=InMemorySessionStorage()), sink, logging.getLogger("test"))
     sink.finalize.assert_not_called()
+
+
+def test_turn_handler_forwards_sink_tool_hooks_to_agent(monkeypatch: Any) -> None:
+    """A sink carrying tool hooks (Slack's approval gate) wires them into the agent."""
+    agent_cls = _patch_headless_agent(monkeypatch, _empty_turn_result())
+    sink = MagicMock()
+    hooks = object()
+    sink.tool_hooks = hooks
+    handler = GatewayTurnHandler(console=Console(force_terminal=False))
+    handler("hi", SessionCore(storage=InMemorySessionStorage()), sink, logging.getLogger("test"))
+    assert agent_cls.call_args.kwargs["tool_hooks"] is hooks
+
+
+def test_turn_handler_tolerates_sinks_without_tool_hooks(monkeypatch: Any) -> None:
+    """Sinks without the attribute (Telegram) run unhooked, as before."""
+
+    class _BareSink:
+        def finalize(self, text: str) -> None:
+            self.finalized = text
+
+    agent_cls = _patch_headless_agent(monkeypatch, _empty_turn_result())
+    handler = GatewayTurnHandler(console=Console(force_terminal=False))
+    handler(
+        "hi", SessionCore(storage=InMemorySessionStorage()), _BareSink(), logging.getLogger("test")
+    )
+    assert agent_cls.call_args.kwargs["tool_hooks"] is None
+
+
+def test_turn_handler_disables_unsupported_gateway_capabilities() -> None:
+    session = SessionCore(storage=InMemorySessionStorage())
+    handler = GatewayTurnHandler(console=Console(force_terminal=False))
+
+    handler(
+        "hello",
+        session,
+        RecordingGatewaySink(),
+        logging.getLogger("test"),
+    )
+
+    assert session.available_capabilities["investigation"] == ()
+    assert session.available_capabilities["llm_provider"] == ()
+    assert session.available_capabilities["task_cancel"] == ()
+
+
+def test_turn_handler_preserves_supported_capabilities() -> None:
+    session = SessionCore(storage=InMemorySessionStorage())
+    session.available_capabilities.update(
+        {
+            "investigation": ("existing-investigation",),
+            "llm_provider": ("existing-provider",),
+            "task_cancel": ("existing-cancel",),
+            "shell_commands": ("shell",),
+            "custom_gateway_capability": ("enabled",),
+        }
+    )
+
+    handler = GatewayTurnHandler(console=Console(force_terminal=False))
+    handler(
+        "hello",
+        session,
+        RecordingGatewaySink(),
+        logging.getLogger("test.gateway.capabilities"),
+    )
+
+    assert session.available_capabilities["investigation"] == ()
+    assert session.available_capabilities["llm_provider"] == ()
+    assert session.available_capabilities["task_cancel"] == ()
+
+    assert session.available_capabilities["shell_commands"] == ("shell",)
+    assert session.available_capabilities["custom_gateway_capability"] == ("enabled",)
+
+
+def test_turn_handler_capability_gating_is_stable_across_turns() -> None:
+    session = SessionCore(storage=InMemorySessionStorage())
+    session.available_capabilities["shell_commands"] = ("shell",)
+
+    handler = GatewayTurnHandler(console=Console(force_terminal=False))
+    logger = logging.getLogger("test.gateway.capabilities")
+
+    handler("first turn", session, RecordingGatewaySink(), logger)
+    handler("second turn", session, RecordingGatewaySink(), logger)
+
+    assert session.available_capabilities["investigation"] == ()
+    assert session.available_capabilities["llm_provider"] == ()
+    assert session.available_capabilities["task_cancel"] == ()
+    assert session.available_capabilities["shell_commands"] == ("shell",)

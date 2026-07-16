@@ -19,7 +19,10 @@ from dataclasses import dataclass, replace
 from typing import Any
 
 from core.agent_harness.ports import SessionStore
-from core.agent_harness.session.integration_resolution import resolve_and_cache_integrations
+from core.agent_harness.session.integration_resolution import (
+    has_resolved_integrations,
+    resolve_and_cache_integrations,
+)
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 
 
@@ -51,8 +54,11 @@ def build_turn_plan(snapshot: TurnSnapshot, session: SessionStore) -> TurnPlan:
     view; downstream phases read it from the plan rather than re-checking, so the
     resolve-once contract holds even in that case (``resolve_and_cache`` also
     caches, so a repeat call would be a no-op regardless).
+
+    Metadata-only maps (underscore keys such as ``_gateway_chat_id``) are not a
+    resolved view — they must still trigger a real resolve.
     """
-    if not snapshot.resolved_integrations:
+    if not has_resolved_integrations(snapshot.resolved_integrations):
         snapshot = replace(snapshot, resolved_integrations=resolve_and_cache_integrations(session))
     return TurnPlan(snapshot=snapshot)
 

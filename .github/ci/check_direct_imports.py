@@ -44,66 +44,12 @@ _FORBIDDEN_DIRECT: dict[str, frozenset[str]] = {
 
 # Known direct violations being burned down — remove entries as fixes land.
 # Format: ``"source.module -> dest.module"`` (exact modules from the graph).
-_BASELINE_IGNORES: frozenset[str] = frozenset(
-    {
-        # Gateway hosts the interactive_shell runtime — pre-existing reuse
-        # to be burned down by extracting shared runtime primitives out of
-        # ``surfaces/interactive_shell/`` and into a layer below ``surfaces``.
-        "gateway.storage.session.resolver -> surfaces.interactive_shell.runtime.context",
-        # tools/interactive_shell action tools reach UP into surfaces/interactive_shell
-        # for runtime / command_registry / UI primitives. Clears when the action
-        # tools themselves are refactored to be UI-agnostic (e.g. return
-        # "approval-required" sentinels instead of calling execution_confirm
-        # directly) so the surface owns its own confirmation UX.
-        "tools.interactive_shell.actions.cli_command -> surfaces.interactive_shell.runtime.subprocess_runner",
-        # These shell action tools type against the shell ``Session`` (investigation_launch
-        # reads session.terminal.background_mode_enabled). Clears when they are made
-        # session-core-agnostic so they no longer import the shell session type.
-        "tools.interactive_shell.actions.investigation -> surfaces.interactive_shell.session",
-        "tools.interactive_shell.actions.sample_alert -> surfaces.interactive_shell.session",
-        "tools.interactive_shell.shared.investigation_launch -> surfaces.interactive_shell.session",
-        "tools.interactive_shell.actions.llm_provider -> surfaces.interactive_shell.command_registry",
-        "tools.interactive_shell.actions.llm_provider -> surfaces.interactive_shell.ui.execution_confirm",
-        "tools.interactive_shell.actions.slash -> surfaces.interactive_shell.command_registry",
-        "tools.interactive_shell.actions.slash -> surfaces.interactive_shell.command_registry.slash_catalog",
-        "tools.interactive_shell.actions.slash -> surfaces.interactive_shell.ui",
-        "tools.interactive_shell.actions.slash -> surfaces.interactive_shell.ui.execution_confirm",
-        "tools.interactive_shell.actions.slash -> surfaces.interactive_shell.utils.telemetry.turn_outcome",
-        "tools.interactive_shell.actions.task_cancel -> surfaces.interactive_shell.command_registry",
-        "tools.interactive_shell.actions.task_cancel -> surfaces.interactive_shell.runtime",
-        "tools.interactive_shell.actions.task_cancel -> surfaces.interactive_shell.ui.execution_confirm",
-        "tools.interactive_shell.implementation.claude_code_executor -> surfaces.interactive_shell.runtime",
-        "tools.interactive_shell.implementation.claude_code_executor -> surfaces.interactive_shell.runtime.subprocess_runner.task_streaming",
-        "tools.interactive_shell.implementation.claude_code_executor -> surfaces.interactive_shell.ui",
-        "tools.interactive_shell.implementation.claude_code_executor -> surfaces.interactive_shell.ui.execution_confirm",
-        "tools.interactive_shell.implementation.claude_code_executor -> surfaces.interactive_shell.utils.error_handling.exception_reporting",
-        "tools.interactive_shell.shell.runner -> surfaces.interactive_shell.runtime",
-        "tools.interactive_shell.shell.runner -> surfaces.interactive_shell.runtime.subprocess_runner.task_streaming",
-        "tools.interactive_shell.shell.runner -> surfaces.interactive_shell.ui",
-        "tools.interactive_shell.shell.runner -> surfaces.interactive_shell.ui.execution_confirm",
-        "tools.interactive_shell.shell.runner -> surfaces.interactive_shell.utils.error_handling.exception_reporting",
-        "tools.interactive_shell.synthetic.runner -> surfaces.interactive_shell.runtime",
-        "tools.interactive_shell.synthetic.runner -> surfaces.interactive_shell.runtime.subprocess_runner.task_streaming",
-        "tools.interactive_shell.synthetic.runner -> surfaces.interactive_shell.ui",
-        "tools.interactive_shell.synthetic.runner -> surfaces.interactive_shell.ui.execution_confirm",
-        "tools.interactive_shell.synthetic.runner -> surfaces.interactive_shell.utils.error_handling.exception_reporting",
-    }
-)
+_BASELINE_IGNORES: frozenset[str] = frozenset()
 
 # Function/class-body lazy imports that bypass the module-level graph.
 # Format matches ``_BASELINE_IGNORES``; burn down by moving shared code
 # below ``surfaces/`` or making tools UI-agnostic.
-_NESTED_BASELINE_IGNORES: frozenset[str] = frozenset(
-    {
-        "tools.interactive_shell.actions.investigation -> surfaces.interactive_shell.runtime.background.runner",
-        "tools.interactive_shell.actions.investigation -> surfaces.interactive_shell.runtime.investigation_adapter",
-        "tools.interactive_shell.actions.sample_alert -> surfaces.interactive_shell.runtime.background.runner",
-        "tools.interactive_shell.actions.sample_alert -> surfaces.interactive_shell.runtime.investigation_adapter",
-        "tools.interactive_shell.actions.llm_provider -> surfaces.cli.wizard.config",
-        # Nested only: runner.py also has a module-level ui import (see _BASELINE_IGNORES).
-        "tools.interactive_shell.shell.runner -> surfaces.interactive_shell.ui",
-    }
-)
+_NESTED_BASELINE_IGNORES: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)

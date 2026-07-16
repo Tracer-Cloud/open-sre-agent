@@ -93,6 +93,31 @@ def test_resolve_effective_integrations_includes_honeycomb_and_coralogix_env(
     assert effective["coralogix"]["config"]["application_name"] == "payments"
 
 
+def test_resolve_effective_integrations_includes_posthog_from_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("integrations.catalog.load_integrations", lambda: [])
+    monkeypatch.setenv("POSTHOG_PROJECT_ID", "123")
+    monkeypatch.setenv("POSTHOG_PERSONAL_API_KEY", "phx_test")
+
+    effective = resolve_effective_integrations()
+
+    assert effective["posthog"]["config"]["project_id"] == "123"
+    assert effective["posthog"]["config"]["personal_api_key"] == "phx_test"
+
+
+def test_resolve_effective_integrations_skips_posthog_without_credentials(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("integrations.catalog.load_integrations", lambda: [])
+    monkeypatch.delenv("POSTHOG_PROJECT_ID", raising=False)
+    monkeypatch.delenv("POSTHOG_PERSONAL_API_KEY", raising=False)
+
+    effective = resolve_effective_integrations()
+
+    assert "posthog" not in effective
+
+
 def test_resolve_effective_integrations_skips_snowflake_without_token(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

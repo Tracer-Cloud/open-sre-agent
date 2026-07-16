@@ -677,6 +677,24 @@ def _setup_sentry() -> None:
     )
 
 
+def _setup_posthog() -> None:
+    base_url = _p("PostHog API base URL", default="https://us.i.posthog.com")
+    project_id = _p("PostHog project ID")
+    personal_api_key = _p("PostHog personal API key (phx_...)", secret=True)
+    if not project_id or not personal_api_key:
+        _die("project_id and personal_api_key are required.")
+    upsert_integration(
+        "posthog",
+        {
+            "credentials": {
+                "base_url": base_url,
+                "project_id": project_id,
+                "personal_api_key": personal_api_key,
+            }
+        },
+    )
+
+
 def _setup_mongodb() -> None:
     connection_string = _p(
         "Connection string (e.g. mongodb+srv://user:pass@cluster.example.net)", secret=True
@@ -1302,6 +1320,37 @@ def _setup_pagerduty() -> None:
     )
 
 
+def _setup_kubernetes() -> None:
+    kubeconfig_path = _p(
+        "Kubeconfig file path (e.g. ~/.kube/config) — leave empty to paste inline YAML",
+        default="",
+    )
+    kubeconfig_content = ""
+    if not kubeconfig_path:
+        kubeconfig_content = _p(
+            "Paste raw kubeconfig YAML content (required if no file path given)",
+            default="",
+        )
+        if not kubeconfig_content:
+            _die("Either a kubeconfig file path or inline YAML content is required.")
+    context = _p(
+        "Kubeconfig context to use (leave empty to use the current-context from the file)",
+        default="",
+    )
+    namespace = _p("Default namespace", default="default")
+    upsert_integration(
+        "kubernetes",
+        {
+            "credentials": {
+                "kubeconfig_path": kubeconfig_path,
+                "kubeconfig": kubeconfig_content,
+                "context": context,
+                "namespace": namespace or "default",
+            }
+        },
+    )
+
+
 _HANDLERS: dict[str, Any] = {
     "alertmanager": _setup_alertmanager,
     "aws": _setup_aws,
@@ -1323,6 +1372,7 @@ _HANDLERS: dict[str, Any] = {
     "github": _setup_github,
     "gitlab": _setup_gitlab,
     "sentry": _setup_sentry,
+    "posthog": _setup_posthog,
     "mongodb": _setup_mongodb,
     "discord": _setup_discord,
     "telegram": _setup_telegram,
@@ -1340,6 +1390,7 @@ _HANDLERS: dict[str, Any] = {
     "jenkins": _setup_jenkins,
     "tempo": _setup_tempo,
     "pagerduty": _setup_pagerduty,
+    "kubernetes": _setup_kubernetes,
 }
 
 

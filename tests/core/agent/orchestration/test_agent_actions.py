@@ -15,10 +15,10 @@ from rich.console import Console
 
 import config.constants.platform as platform_module
 import surfaces.interactive_shell.runtime.action_turn as action_turn
+import surfaces.interactive_shell.runtime.llm_provider_adapter as llm_provider_adapter
 import surfaces.interactive_shell.runtime.shell_turn_execution as shell_turn_execution
+import surfaces.interactive_shell.runtime.slash_adapter as slash_adapter
 import surfaces.interactive_shell.runtime.subprocess_runner as subprocess_runner
-import tools.interactive_shell.actions.llm_provider as llm_provider_tool
-import tools.interactive_shell.actions.slash as slash_tool
 import tools.interactive_shell.shell.execution as shell_execution
 from core.llm.types import AgentLLMResponse, ToolCall
 from platform.common.task_types import TaskKind, TaskStatus
@@ -277,7 +277,7 @@ def test_execute_cli_actions_dispatches_planned_commands(monkeypatch: object) ->
         console.print(f"ran {command}")
         return True
 
-    monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
+    monkeypatch.setattr(slash_adapter, "dispatch_slash", _fake_dispatch)
 
     session = Session()
     console, buf = _capture()
@@ -344,7 +344,7 @@ def test_execute_cli_actions_skips_remaining_actions_when_cancelled(
         console.print(f"ran {command}")
         return True
 
-    monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
+    monkeypatch.setattr(slash_adapter, "dispatch_slash", _fake_dispatch)
 
     session = Session()
     inner_console, buf = _capture()
@@ -381,7 +381,7 @@ def test_execute_cli_actions_falls_through_for_local_llama_request(monkeypatch: 
         console.print(f"ran {command}")
         return True
 
-    monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
+    monkeypatch.setattr(slash_adapter, "dispatch_slash", _fake_dispatch)
 
     session = Session()
     console, _ = _capture()
@@ -401,7 +401,11 @@ def test_execute_cli_actions_switches_llm_provider(monkeypatch: object) -> None:
         console.print(f"switched to {provider}")
         return True
 
-    monkeypatch.setattr(llm_provider_tool, "switch_llm_provider", _fake_switch)
+    monkeypatch.setattr(
+        llm_provider_adapter,
+        "switch_llm_provider",
+        _fake_switch,
+    )
 
     session = Session()
     console, buf = _capture()
@@ -428,7 +432,11 @@ def test_execute_cli_actions_records_llm_provider_failure(monkeypatch: object) -
         console.print("missing credential")
         return False
 
-    monkeypatch.setattr(llm_provider_tool, "switch_llm_provider", _fake_switch)
+    monkeypatch.setattr(
+        llm_provider_adapter,
+        "switch_llm_provider",
+        _fake_switch,
+    )
 
     session = Session()
     console, _ = _capture()
@@ -466,9 +474,13 @@ def test_execute_cli_actions_sets_bare_model_for_active_provider(
         ),
     )
     monkeypatch.setattr(
-        llm_provider_tool,
+        llm_provider_adapter,
         "switch_reasoning_model",
-        lambda model, console: (reasoning_models.append(model), console.print(model), True)[2],
+        lambda model, console: (
+            reasoning_models.append(model),
+            console.print(model),
+            True,
+        )[2],
     )
 
     session = Session()
@@ -524,7 +536,7 @@ def test_execute_cli_actions_answers_discord_then_dispatches_datadog(
         console.print(f"ran {command}")
         return True
 
-    monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
+    monkeypatch.setattr(slash_adapter, "dispatch_slash", _fake_dispatch)
 
     session = Session()
     console, buf = _capture()
@@ -563,7 +575,7 @@ def test_compound_prompt_executes_all_supported_tasks(monkeypatch: object) -> No
         console.print(f"ran {command}")
         return True
 
-    monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
+    monkeypatch.setattr(slash_adapter, "dispatch_slash", _fake_dispatch)
 
     session = Session()
     console, buf = _capture()
@@ -615,7 +627,7 @@ def test_nitro_prompt_executes_remote_then_investigation(monkeypatch: object) ->
         investigation_payloads.append(alert_text)
         return {"root_cause": "hello world handled"}
 
-    monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
+    monkeypatch.setattr(slash_adapter, "dispatch_slash", _fake_dispatch)
     import surfaces.interactive_shell.runtime.investigation_adapter as investigation_adapter
 
     monkeypatch.setattr(
@@ -652,7 +664,7 @@ def test_services_version_deploy_prompt_executes_in_order(monkeypatch: object) -
         console.print(f"ran {command}")
         return True
 
-    monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
+    monkeypatch.setattr(slash_adapter, "dispatch_slash", _fake_dispatch)
 
     session = Session()
     console, buf = _capture()
@@ -775,7 +787,7 @@ def test_execute_cli_actions_lists_all_actions_before_synthetic_rds(monkeypatch:
         proc.returncode = 0
         return proc
 
-    monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
+    monkeypatch.setattr(slash_adapter, "dispatch_slash", _fake_dispatch)
     monkeypatch.setattr(
         "tools.interactive_shell.synthetic.runner.subprocess.Popen",
         _fake_popen,
@@ -903,7 +915,7 @@ def test_partial_match_executes_matched_clause_and_drops_unhandled(monkeypatch: 
         console.print(f"ran {command}")
         return True
 
-    monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
+    monkeypatch.setattr(slash_adapter, "dispatch_slash", _fake_dispatch)
 
     session = Session()
     console, buf = _capture()
@@ -1310,7 +1322,7 @@ def test_execute_cli_actions_executes_matched_clause_ignoring_unhandled(
         console.print(f"ran {command}")
         return True
 
-    monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
+    monkeypatch.setattr(slash_adapter, "dispatch_slash", _fake_dispatch)
 
     captured_planned: list[tuple[int, bool]] = []
     captured_executed: list[tuple[int, int, int]] = []

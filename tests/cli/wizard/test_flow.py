@@ -7,8 +7,13 @@ from unittest.mock import MagicMock
 import pytest
 
 from integrations.llm_cli.codex_oauth import CodexOAuthResult
-from surfaces.cli.wizard import _integration_configurators, _ui, flow, llm_credential
+from surfaces.cli.wizard import _ui, flow, llm_credential
 from surfaces.cli.wizard import store as wizard_store
+from surfaces.cli.wizard.configurators import chat_notifications as _chat_notifications_configurator
+from surfaces.cli.wizard.configurators import dagster as _dagster_configurator
+from surfaces.cli.wizard.configurators import github as _github_configurator
+from surfaces.cli.wizard.configurators import gitlab as _gitlab_configurator
+from surfaces.cli.wizard.configurators import observability as _observability_configurator
 from surfaces.cli.wizard.env_sync import sync_provider_env
 from surfaces.cli.wizard.probes import ProbeResult
 from surfaces.cli.wizard.validation import ValidationResult
@@ -214,12 +219,12 @@ def test_run_wizard_configures_optional_integrations(monkeypatch, tmp_path, caps
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(
-        _integration_configurators,
+        _observability_configurator,
         "validate_grafana_integration",
         lambda **_kwargs: flow.IntegrationHealthResult(ok=True, detail="Grafana ok"),
     )
     monkeypatch.setattr(
-        _integration_configurators,
+        _chat_notifications_configurator,
         "validate_slack_webhook",
         lambda **_kwargs: flow.IntegrationHealthResult(ok=True, detail="Slack ok"),
     )
@@ -231,9 +236,9 @@ def test_run_wizard_configures_optional_integrations(monkeypatch, tmp_path, caps
         synced_env_values.append(values)
         return tmp_path / ".env"
 
-    monkeypatch.setattr(_integration_configurators, "sync_env_values", _sync_env_values)
+    monkeypatch.setattr(_observability_configurator, "sync_env_values", _sync_env_values)
     monkeypatch.setattr(
-        _integration_configurators,
+        _observability_configurator,
         "upsert_integration",
         lambda service, payload: saved_integrations.append((service, payload)),
     )
@@ -289,7 +294,7 @@ def test_run_wizard_configures_honeycomb(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(
-        _integration_configurators,
+        _observability_configurator,
         "validate_honeycomb_integration",
         lambda **_kwargs: flow.IntegrationHealthResult(ok=True, detail="Honeycomb ok"),
     )
@@ -301,9 +306,9 @@ def test_run_wizard_configures_honeycomb(monkeypatch, tmp_path) -> None:
         synced_env_values.append(values)
         return tmp_path / ".env"
 
-    monkeypatch.setattr(_integration_configurators, "sync_env_values", _sync_env_values)
+    monkeypatch.setattr(_observability_configurator, "sync_env_values", _sync_env_values)
     monkeypatch.setattr(
-        _integration_configurators,
+        _observability_configurator,
         "upsert_integration",
         lambda service, payload: saved_integrations.append((service, payload)),
     )
@@ -365,7 +370,7 @@ def test_run_wizard_configures_coralogix(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(
-        _integration_configurators,
+        _observability_configurator,
         "validate_coralogix_integration",
         lambda **_kwargs: flow.IntegrationHealthResult(ok=True, detail="Coralogix ok"),
     )
@@ -377,9 +382,9 @@ def test_run_wizard_configures_coralogix(monkeypatch, tmp_path) -> None:
         synced_env_values.append(values)
         return tmp_path / ".env"
 
-    monkeypatch.setattr(_integration_configurators, "sync_env_values", _sync_env_values)
+    monkeypatch.setattr(_observability_configurator, "sync_env_values", _sync_env_values)
     monkeypatch.setattr(
-        _integration_configurators,
+        _observability_configurator,
         "upsert_integration",
         lambda service, payload: saved_integrations.append((service, payload)),
     )
@@ -438,7 +443,7 @@ def test_run_wizard_configures_dagster(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(
-        _integration_configurators,
+        _dagster_configurator,
         "validate_dagster_integration",
         lambda **_kwargs: flow.IntegrationHealthResult(ok=True, detail="Dagster ok"),
     )
@@ -450,14 +455,14 @@ def test_run_wizard_configures_dagster(monkeypatch, tmp_path) -> None:
         synced_env_values.append(values)
         return tmp_path / ".env"
 
-    monkeypatch.setattr(_integration_configurators, "sync_env_values", _sync_env_values)
+    monkeypatch.setattr(_dagster_configurator, "sync_env_values", _sync_env_values)
     monkeypatch.setattr(
-        _integration_configurators,
+        _dagster_configurator,
         "sync_env_secret",
         lambda key, value: synced_secrets.append((key, value)),
     )
     monkeypatch.setattr(
-        _integration_configurators,
+        _dagster_configurator,
         "upsert_integration",
         lambda service, payload: saved_integrations.append((service, payload)),
     )
@@ -509,7 +514,7 @@ def test_run_wizard_configures_dagster_oss_skips_secret(monkeypatch, tmp_path) -
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(
-        _integration_configurators,
+        _dagster_configurator,
         "validate_dagster_integration",
         lambda **_kwargs: flow.IntegrationHealthResult(ok=True, detail="Dagster ok"),
     )
@@ -517,18 +522,16 @@ def test_run_wizard_configures_dagster_oss_skips_secret(monkeypatch, tmp_path) -
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
     monkeypatch.setattr(_ui, "save_llm_api_key", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
-        _integration_configurators,
+        _dagster_configurator,
         "sync_env_values",
         lambda values, **_kwargs: synced_env_values.append(values) or (tmp_path / ".env"),
     )
     monkeypatch.setattr(
-        _integration_configurators,
+        _dagster_configurator,
         "sync_env_secret",
         lambda key, value: synced_secrets.append((key, value)),
     )
-    monkeypatch.setattr(
-        _integration_configurators, "upsert_integration", lambda *_args, **_kwargs: None
-    )
+    monkeypatch.setattr(_dagster_configurator, "upsert_integration", lambda *_args, **_kwargs: None)
 
     exit_code = flow.run_wizard()
 
@@ -576,7 +579,7 @@ def test_run_wizard_configures_slack_persists_webhook(monkeypatch, tmp_path) -> 
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(
-        _integration_configurators,
+        _chat_notifications_configurator,
         "validate_slack_webhook",
         lambda **_kwargs: flow.IntegrationHealthResult(ok=True, detail="Slack ok"),
     )
@@ -588,9 +591,9 @@ def test_run_wizard_configures_slack_persists_webhook(monkeypatch, tmp_path) -> 
         synced_env_values.append(values)
         return tmp_path / ".env"
 
-    monkeypatch.setattr(_integration_configurators, "sync_env_values", _sync_env_values)
+    monkeypatch.setattr(_chat_notifications_configurator, "sync_env_values", _sync_env_values)
     monkeypatch.setattr(
-        _integration_configurators,
+        _chat_notifications_configurator,
         "upsert_integration",
         lambda service, payload: saved_integrations.append((service, payload)),
     )
@@ -655,9 +658,7 @@ def test_run_wizard_dagster_retries_on_validation_failure(monkeypatch, tmp_path)
     monkeypatch.setattr(flow.questionary, "text", _mock_text)
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
-    monkeypatch.setattr(
-        _integration_configurators, "validate_dagster_integration", _validate_dagster
-    )
+    monkeypatch.setattr(_dagster_configurator, "validate_dagster_integration", _validate_dagster)
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
     monkeypatch.setattr(_ui, "save_llm_api_key", lambda *_args, **_kwargs: None)
@@ -666,14 +667,14 @@ def test_run_wizard_dagster_retries_on_validation_failure(monkeypatch, tmp_path)
         synced_env_values.append(values)
         return tmp_path / ".env"
 
-    monkeypatch.setattr(_integration_configurators, "sync_env_values", _sync_env_values)
+    monkeypatch.setattr(_dagster_configurator, "sync_env_values", _sync_env_values)
     monkeypatch.setattr(
-        _integration_configurators,
+        _dagster_configurator,
         "sync_env_secret",
         lambda key, value: synced_secrets.append((key, value)),
     )
     monkeypatch.setattr(
-        _integration_configurators,
+        _dagster_configurator,
         "upsert_integration",
         lambda service, payload: saved_integrations.append((service, payload)),
     )
@@ -749,7 +750,7 @@ def test_run_wizard_configures_github_mcp_and_sentry(monkeypatch, tmp_path, caps
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(
-        _integration_configurators,
+        _github_configurator,
         "validate_github_mcp_integration",
         lambda **_kwargs: flow.IntegrationHealthResult(ok=True, detail="GitHub MCP ok"),
     )
@@ -762,12 +763,12 @@ def test_run_wizard_configures_github_mcp_and_sentry(monkeypatch, tmp_path, caps
         return tmp_path / ".env"
 
     monkeypatch.setattr(
-        _integration_configurators,
+        _github_configurator,
         "sync_env_values",
         _sync_env_values,
     )
     monkeypatch.setattr(
-        _integration_configurators,
+        _github_configurator,
         "upsert_integration",
         lambda service, payload: saved_integrations.append((service, payload)),
     )
@@ -1680,7 +1681,7 @@ def test_run_wizard_configures_gitlab(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(
-        _integration_configurators,
+        _gitlab_configurator,
         "validate_gitlab_integration",
         lambda **_kwargs: flow.IntegrationHealthResult(ok=True, detail="GitLab ok"),
     )
@@ -1695,10 +1696,10 @@ def test_run_wizard_configures_gitlab(monkeypatch, tmp_path) -> None:
     def _sync_env_secret(key: str, value: str) -> None:
         synced_env_secrets.append((key, value))
 
-    monkeypatch.setattr(_integration_configurators, "sync_env_values", _sync_env_values)
-    monkeypatch.setattr(_integration_configurators, "sync_env_secret", _sync_env_secret)
+    monkeypatch.setattr(_gitlab_configurator, "sync_env_values", _sync_env_values)
+    monkeypatch.setattr(_gitlab_configurator, "sync_env_secret", _sync_env_secret)
     monkeypatch.setattr(
-        _integration_configurators,
+        _gitlab_configurator,
         "upsert_integration",
         lambda service, payload: saved_integrations.append((service, payload)),
     )
@@ -1769,7 +1770,7 @@ def test_run_wizard_gitlab_retries_on_validation_failure(monkeypatch, tmp_path) 
     monkeypatch.setattr(flow.questionary, "text", _mock_text)
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
-    monkeypatch.setattr(_integration_configurators, "validate_gitlab_integration", _validate_gitlab)
+    monkeypatch.setattr(_gitlab_configurator, "validate_gitlab_integration", _validate_gitlab)
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
     monkeypatch.setattr(_ui, "save_llm_api_key", lambda *_args, **_kwargs: None)
@@ -1781,10 +1782,10 @@ def test_run_wizard_gitlab_retries_on_validation_failure(monkeypatch, tmp_path) 
     def _sync_env_secret(key: str, value: str) -> None:
         synced_env_secrets.append((key, value))
 
-    monkeypatch.setattr(_integration_configurators, "sync_env_values", _sync_env_values)
-    monkeypatch.setattr(_integration_configurators, "sync_env_secret", _sync_env_secret)
+    monkeypatch.setattr(_gitlab_configurator, "sync_env_values", _sync_env_values)
+    monkeypatch.setattr(_gitlab_configurator, "sync_env_secret", _sync_env_secret)
     monkeypatch.setattr(
-        _integration_configurators,
+        _gitlab_configurator,
         "upsert_integration",
         lambda service, payload: saved_integrations.append((service, payload)),
     )
@@ -1928,7 +1929,7 @@ def test_run_wizard_configures_opensearch(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(
-        _integration_configurators,
+        _observability_configurator,
         "validate_opensearch_integration",
         lambda **_kwargs: flow.IntegrationHealthResult(ok=True, detail="OpenSearch ok"),
     )
@@ -1943,10 +1944,10 @@ def test_run_wizard_configures_opensearch(monkeypatch, tmp_path) -> None:
     def _sync_env_secret(key: str, value: str) -> None:
         synced_env_secrets.append((key, value))
 
-    monkeypatch.setattr(_integration_configurators, "sync_env_values", _sync_env_values)
-    monkeypatch.setattr(_integration_configurators, "sync_env_secret", _sync_env_secret)
+    monkeypatch.setattr(_observability_configurator, "sync_env_values", _sync_env_values)
+    monkeypatch.setattr(_observability_configurator, "sync_env_secret", _sync_env_secret)
     monkeypatch.setattr(
-        _integration_configurators,
+        _observability_configurator,
         "upsert_integration",
         lambda service, payload: saved_integrations.append((service, payload)),
     )
@@ -2026,7 +2027,7 @@ def test_run_wizard_opensearch_retries_on_validation_failure(monkeypatch, tmp_pa
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(
-        _integration_configurators, "validate_opensearch_integration", _validate_opensearch
+        _observability_configurator, "validate_opensearch_integration", _validate_opensearch
     )
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
@@ -2036,9 +2037,9 @@ def test_run_wizard_opensearch_retries_on_validation_failure(monkeypatch, tmp_pa
         synced_env_values.append(values)
         return tmp_path / ".env"
 
-    monkeypatch.setattr(_integration_configurators, "sync_env_values", _sync_env_values)
+    monkeypatch.setattr(_observability_configurator, "sync_env_values", _sync_env_values)
     monkeypatch.setattr(
-        _integration_configurators,
+        _observability_configurator,
         "upsert_integration",
         lambda service, payload: saved_integrations.append((service, payload)),
     )
@@ -2128,7 +2129,7 @@ def test_run_wizard_opensearch_rejects_empty_api_key(monkeypatch, tmp_path) -> N
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(
-        _integration_configurators, "validate_opensearch_integration", _validate_opensearch
+        _observability_configurator, "validate_opensearch_integration", _validate_opensearch
     )
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
@@ -2138,9 +2139,9 @@ def test_run_wizard_opensearch_rejects_empty_api_key(monkeypatch, tmp_path) -> N
         synced_env_values.append(values)
         return tmp_path / ".env"
 
-    monkeypatch.setattr(_integration_configurators, "sync_env_values", _sync_env_values)
+    monkeypatch.setattr(_observability_configurator, "sync_env_values", _sync_env_values)
     monkeypatch.setattr(
-        _integration_configurators,
+        _observability_configurator,
         "upsert_integration",
         lambda service, payload: saved_integrations.append((service, payload)),
     )
@@ -2225,7 +2226,7 @@ def test_run_wizard_opensearch_rejects_empty_basic_password(monkeypatch, tmp_pat
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(
-        _integration_configurators, "validate_opensearch_integration", _validate_opensearch
+        _observability_configurator, "validate_opensearch_integration", _validate_opensearch
     )
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
@@ -2235,9 +2236,9 @@ def test_run_wizard_opensearch_rejects_empty_basic_password(monkeypatch, tmp_pat
         synced_env_values.append(values)
         return tmp_path / ".env"
 
-    monkeypatch.setattr(_integration_configurators, "sync_env_values", _sync_env_values)
+    monkeypatch.setattr(_observability_configurator, "sync_env_values", _sync_env_values)
     monkeypatch.setattr(
-        _integration_configurators,
+        _observability_configurator,
         "upsert_integration",
         lambda service, payload: saved_integrations.append((service, payload)),
     )
@@ -2296,7 +2297,7 @@ def test_run_wizard_configures_telegram(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(
-        _integration_configurators,
+        _chat_notifications_configurator,
         "validate_telegram_bot",
         lambda **_kwargs: flow.IntegrationHealthResult(
             ok=True, detail="Connected to Telegram bot @opensre_bot."
@@ -2313,10 +2314,10 @@ def test_run_wizard_configures_telegram(monkeypatch, tmp_path) -> None:
     def _sync_env_secret(key: str, value: str) -> None:
         synced_env_secrets.append((key, value))
 
-    monkeypatch.setattr(_integration_configurators, "sync_env_values", _sync_env_values)
-    monkeypatch.setattr(_integration_configurators, "sync_env_secret", _sync_env_secret)
+    monkeypatch.setattr(_chat_notifications_configurator, "sync_env_values", _sync_env_values)
+    monkeypatch.setattr(_chat_notifications_configurator, "sync_env_secret", _sync_env_secret)
     monkeypatch.setattr(
-        _integration_configurators,
+        _chat_notifications_configurator,
         "upsert_integration",
         lambda service, payload: saved_integrations.append((service, payload)),
     )
@@ -2373,16 +2374,18 @@ def test_run_wizard_telegram_retries_on_validation_failure(monkeypatch, tmp_path
     monkeypatch.setattr(flow.questionary, "text", _mock_text)
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
-    monkeypatch.setattr(_integration_configurators, "validate_telegram_bot", _validate)
+    monkeypatch.setattr(_chat_notifications_configurator, "validate_telegram_bot", _validate)
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
     monkeypatch.setattr(_ui, "save_llm_api_key", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
-        _integration_configurators, "sync_env_values", lambda *_a, **_kw: tmp_path / ".env"
+        _chat_notifications_configurator, "sync_env_values", lambda *_a, **_kw: tmp_path / ".env"
     )
-    monkeypatch.setattr(_integration_configurators, "sync_env_secret", lambda *_a, **_kw: None)
     monkeypatch.setattr(
-        _integration_configurators,
+        _chat_notifications_configurator, "sync_env_secret", lambda *_a, **_kw: None
+    )
+    monkeypatch.setattr(
+        _chat_notifications_configurator,
         "upsert_integration",
         lambda service, payload: saved_integrations.append((service, payload)),
     )

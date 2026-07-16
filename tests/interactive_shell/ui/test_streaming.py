@@ -79,6 +79,25 @@ class TestNonTtyFallback:
         assert '{"actions"' not in output
 
 
+class TestDunderFilenameMarkdownEscape:
+    """``__init__.py`` must not be parsed as Markdown bold (was washing out
+    path-heavy list items to a different color than neighboring items).
+    """
+
+    def test_init_py_paths_keep_underscores_in_rendered_output(self) -> None:
+        console, buf = _tty_console()
+        text = (
+            "1. Leave module_utils/basic.py alone.\n\n"
+            "2. Split galaxy/collection/__init__.py and plugins/action/__init__.py.\n\n"
+            "3. Audit shims.\n"
+        )
+        stream_to_console(console, label="OpenSRE", chunks=_yield_chunks([text]))
+        visible = _strip_ansi(buf.getvalue())
+        assert "__init__.py" in visible
+        # Bold-only rendering of the old bug showed bare "init.py" without dunders.
+        assert "collection/init.py" not in visible.replace("__init__.py", "")
+
+
 class TestTtyParagraphRender:
     """On a terminal console paragraphs render as Markdown the moment
     each ``\\n\\n`` boundary closes them; the final paragraph is
