@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from core.llm.provider_errors import LLMResourceNotFoundError
+
 
 @dataclass(frozen=True)
 class LLMInvokeFailure:
@@ -133,7 +135,7 @@ def classify_provider_error_kind(message: str) -> str:
     if any(pattern in text for pattern in _QUOTA_PATTERNS):
         return "quota"
     if any(pattern in text for pattern in _NOT_CONFIGURED_PATTERNS) or (
-        "model" in text and "not found" in text
+        ("model" in text or "deployment" in text) and "not found" in text
     ):
         return "not_configured"
     return "provider_error"
@@ -204,6 +206,34 @@ def classify_llm_invoke_failure(exc: BaseException) -> LLMInvokeFailure | None:
 
     err_msg = str(exc).lower()
     raw = str(exc)
+
+    if isinstance(exc, LLMResourceNotFoundError):
+        if exc.provider == "azure-openai" and exc.resource_kind == "deployment":
+            from core.llm.providers.azure_openai import (
+                azure_openai_deployment_not_found_detail,
+            )
+
+            return LLMInvokeFailure(
+                user_message=(
+                    raw
+                    if "GET /openai/models" in raw
+                    else azure_openai_deployment_not_found_detail(deployment=exc.resource_name)
+                ),
+                tracker_message="Failed: Deployment not found",
+                remediation_steps=[
+                    "Set AZURE_OPENAI_*_MODEL to an Azure deployment name.",
+                    "Do not copy model IDs from GET /openai/models.",
+                    "Verify AZURE_OPENAI_BASE_URL points at the resource containing the deployment.",
+                ],
+            )
+        return LLMInvokeFailure(
+            user_message=raw,
+            tracker_message="Failed: Model not found",
+            remediation_steps=[
+                "Verify the configured model name and endpoint.",
+                "Confirm the model is available to this provider account.",
+            ],
+        )
 
     if ("model" in err_msg and "not found" in err_msg) or "404" in err_msg:
         if "anthropic" in err_msg and "was not found" in err_msg:

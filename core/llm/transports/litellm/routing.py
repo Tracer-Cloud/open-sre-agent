@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.llm.providers.azure_openai import (
+    azure_openai_deployment_not_found_detail,
     is_azure_openai_provider,
     resolve_azure_openai_request_kwargs,
 )
@@ -51,6 +52,13 @@ def build_litellm_agent_client(settings: Any, provider: str) -> LiteLLMAgentClie
             api_base=azure["api_base"],
             api_version=azure["api_version"],
             api_key_env=azure["api_key_env"],
+            provider_id="azure-openai",
+            provider_label="Azure OpenAI",
+            not_found_resource_kind="deployment",
+            not_found_resource_name=azure["litellm_model"].removeprefix("azure/"),
+            not_found_detail=azure_openai_deployment_not_found_detail(
+                deployment=azure["litellm_model"]
+            ),
         )
 
     if is_openai_compat_provider(provider):
@@ -119,6 +127,13 @@ def build_litellm_llm_client(
             api_base=azure["api_base"],
             api_version=azure["api_version"],
             api_key_env=azure["api_key_env"],
+            provider_id="azure-openai",
+            provider_label="Azure OpenAI",
+            not_found_resource_kind="deployment",
+            not_found_resource_name=azure["litellm_model"].removeprefix("azure/"),
+            not_found_detail=azure_openai_deployment_not_found_detail(
+                deployment=azure["litellm_model"]
+            ),
             usage_callback=usage_callback,
         )
 

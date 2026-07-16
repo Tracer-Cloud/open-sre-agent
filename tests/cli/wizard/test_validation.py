@@ -173,6 +173,27 @@ def test_validate_provider_credentials_returns_success_for_valid_openai_key(monk
     assert result.sample_response == "OpenSRE ready"
 
 
+def test_validate_azure_openai_reports_deployment_name_mismatch(monkeypatch) -> None:
+    error = RuntimeError("DeploymentNotFound: deployment does not exist")
+    error.status_code = 404  # type: ignore[attr-defined]
+    monkeypatch.setattr(
+        "surfaces.cli.wizard.validation.OpenAI",
+        lambda **_kwargs: _FakeOpenAIClient(error),
+    )
+    monkeypatch.setenv("AZURE_OPENAI_BASE_URL", "https://example.openai.azure.com")
+    monkeypatch.setenv("AZURE_OPENAI_API_VERSION", "2024-10-21")
+
+    result = validate_provider_credentials(
+        provider=PROVIDER_BY_VALUE["azure-openai"],
+        api_key="test-key",
+        model="gpt-4.1",
+    )
+
+    assert result.ok is False
+    assert "deployment 'gpt-4.1' was not found" in result.detail
+    assert "not a model ID returned by GET /openai/models" in result.detail
+
+
 def test_get_provider_base_url_deepseek() -> None:
     from config.config import DEEPSEEK_BASE_URL
 

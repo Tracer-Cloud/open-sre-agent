@@ -89,7 +89,11 @@ def _check_azure_openai(
     api_version: str,
 ) -> ValidationResult:
     """Validate Azure OpenAI credentials with a tiny chat completion."""
-    from core.llm.providers.azure_openai import normalize_azure_openai_base_url
+    from core.llm.providers.azure_openai import (
+        azure_openai_deployment_not_found_detail,
+        normalize_azure_openai_base_url,
+        resolve_azure_openai_api_version,
+    )
 
     normalized_base = normalize_azure_openai_base_url(base_url)
     if not normalized_base:
@@ -97,7 +101,6 @@ def _check_azure_openai(
             ok=False,
             detail="Azure OpenAI resource URL is missing. Set AZURE_OPENAI_BASE_URL.",
         )
-    from core.llm.providers.azure_openai import resolve_azure_openai_api_version
 
     resolved_api_version = resolve_azure_openai_api_version(api_version)
 
@@ -128,6 +131,14 @@ def _check_azure_openai(
     except openai_auth_error:
         return ValidationResult(ok=False, detail="Azure OpenAI rejected the API key.")
     except Exception as err:
+        err_text = str(err).lower()
+        if getattr(err, "status_code", None) == 404 or (
+            "not found" in err_text and "deployment" in err_text
+        ):
+            return ValidationResult(
+                ok=False,
+                detail=azure_openai_deployment_not_found_detail(deployment=model),
+            )
         return ValidationResult(ok=False, detail=f"Validation request failed: {err}")
 
 

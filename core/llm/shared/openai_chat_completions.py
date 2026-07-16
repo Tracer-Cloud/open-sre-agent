@@ -7,6 +7,7 @@ import time
 from collections.abc import Callable, Iterator
 from typing import Any
 
+from core.llm.provider_errors import LLMResourceNotFoundError
 from core.llm.shared.llm_retry import (
     extract_retry_after_seconds,
     maybe_raise_credit_exhausted,
@@ -222,7 +223,11 @@ def invoke_with_litellm_agent_retries(
     kwargs: dict[str, Any],
     *,
     provider_name: str,
+    provider_id: str | None = None,
     model: str,
+    resource_kind: str = "model",
+    resource_name: str | None = None,
+    resource_not_found_detail: str | None = None,
 ) -> Any:
     backoff = _RETRY_INITIAL_BACKOFF_SEC
     last_err: Exception | None = None
@@ -233,7 +238,13 @@ def invoke_with_litellm_agent_retries(
             if is_exception_named(err, "AuthenticationError"):
                 raise RuntimeError(f"{provider_name} authentication failed.") from err
             if is_exception_named(err, "NotFoundError"):
-                raise RuntimeError(f"{provider_name} model '{model}' not found.") from err
+                raise LLMResourceNotFoundError(
+                    provider=provider_id or provider_name,
+                    provider_label=provider_name,
+                    resource_kind=resource_kind,
+                    resource_name=resource_name or model,
+                    detail=resource_not_found_detail,
+                ) from err
             if is_exception_named(err, "PermissionDeniedError"):
                 raise RuntimeError(f"{provider_name} request forbidden: {err}") from err
             if is_exception_named(err, "BadRequestError"):
@@ -269,9 +280,13 @@ def invoke_with_litellm_llm_retries(
     kwargs: dict[str, Any],
     *,
     provider_label: str,
+    provider_id: str | None = None,
     api_key_env: str,
     model: str,
     on_model_fallback: Callable[[], dict[str, Any] | None],
+    resource_kind: str = "model",
+    resource_name: str | None = None,
+    resource_not_found_detail: str | None = None,
 ) -> Any:
     from platform.guardrails.engine import GuardrailBlockedError
 
@@ -292,9 +307,12 @@ def invoke_with_litellm_llm_retries(
                 if rebuilt is not None:
                     kwargs = rebuilt
                     continue
-                raise RuntimeError(
-                    f"{provider_label} model '{model}' was not found. "
-                    "Check your configured model name or endpoint."
+                raise LLMResourceNotFoundError(
+                    provider=provider_id or provider_label,
+                    provider_label=provider_label,
+                    resource_kind=resource_kind,
+                    resource_name=resource_name or model,
+                    detail=resource_not_found_detail,
                 ) from err
             if is_exception_named(err, "BadRequestError"):
                 message = str(getattr(err, "message", err))
@@ -336,9 +354,13 @@ def stream_with_litellm_retries(
     kwargs: dict[str, Any],
     *,
     provider_label: str,
+    provider_id: str | None = None,
     api_key_env: str,
     model: str,
     on_model_fallback: Callable[[], dict[str, Any] | None],
+    resource_kind: str = "model",
+    resource_name: str | None = None,
+    resource_not_found_detail: str | None = None,
 ) -> Iterator[str]:
     from platform.guardrails.engine import GuardrailBlockedError
 
@@ -367,9 +389,12 @@ def stream_with_litellm_retries(
                 if rebuilt is not None:
                     kwargs = rebuilt
                     continue
-                raise RuntimeError(
-                    f"{provider_label} model '{model}' was not found. "
-                    "Check your configured model name or endpoint."
+                raise LLMResourceNotFoundError(
+                    provider=provider_id or provider_label,
+                    provider_label=provider_label,
+                    resource_kind=resource_kind,
+                    resource_name=resource_name or model,
+                    detail=resource_not_found_detail,
                 ) from err
             if is_exception_named(err, "BadRequestError"):
                 message = str(getattr(err, "message", err))

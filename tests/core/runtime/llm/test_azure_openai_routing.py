@@ -29,6 +29,12 @@ def test_build_litellm_agent_client_for_azure_openai() -> None:
     assert client._api_base == "https://example.openai.azure.com"
     assert client._api_version == "2024-10-21"
     assert client._api_key_env == "AZURE_OPENAI_API_KEY"
+    assert client._provider_id == "azure-openai"
+    assert client.provider_name == "Azure OpenAI"
+    assert client._not_found_resource_kind == "deployment"
+    assert client._not_found_resource_name == "gpt-5.4-mini"
+    assert client._not_found_detail is not None
+    assert "not a model ID returned by GET /openai/models" in client._not_found_detail
 
 
 def test_build_litellm_llm_client_for_azure_openai() -> None:
@@ -43,6 +49,12 @@ def test_build_litellm_llm_client_for_azure_openai() -> None:
     assert client._api_base == "https://example.openai.azure.com"
     assert client._api_version == "2024-10-21"
     assert client._model_fallback == "azure/gpt-5.4-nano"
+    assert client._provider_id == "azure-openai"
+    assert client._provider_label == "Azure OpenAI"
+    assert client._not_found_resource_kind == "deployment"
+    assert client._not_found_resource_name == "gpt-5.4-mini"
+    assert client._not_found_detail is not None
+    assert "not a model ID returned by GET /openai/models" in client._not_found_detail
 
 
 def test_azure_openai_requires_base_url_in_settings() -> None:

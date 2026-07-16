@@ -57,6 +57,24 @@ def azure_openai_endpoint_configured() -> bool:
     return bool(base)
 
 
+def azure_openai_deployment_not_found_detail(
+    *,
+    deployment: str,
+) -> str:
+    """Build a pure user-facing hint for a missing Azure deployment."""
+    deployment_name = deployment.removeprefix("azure/").strip() or deployment
+    message = (
+        "Azure OpenAI deployment "
+        f"'{deployment_name}' was not found. "
+        "AZURE_OPENAI_*_MODEL must be the deployment name from your Azure resource, "
+        "not a model ID returned by GET /openai/models."
+    )
+    return (
+        message + " Find the deployment name in Azure AI Foundry or list it through "
+        "the Azure Resource Manager API."
+    )
+
+
 def resolve_azure_openai_request_kwargs(settings: Any, *, model_type: ModelType) -> dict[str, str]:
     """Resolve LiteLLM request fields for Azure OpenAI from runtime settings."""
     base_url = normalize_azure_openai_base_url(str(getattr(settings, "azure_openai_base_url", "")))
@@ -81,6 +99,7 @@ __all__ = [
     "AZURE_OPENAI_API_VERSION_ENV",
     "AZURE_OPENAI_BASE_URL_ENV",
     "AZURE_OPENAI_PROVIDER",
+    "azure_openai_deployment_not_found_detail",
     "azure_openai_endpoint_configured",
     "azure_openai_litellm_model",
     "is_azure_openai_provider",

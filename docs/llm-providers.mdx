@@ -186,7 +186,11 @@ Uses the OpenAI SDK. Reasoning models (`o1`, `o3`, `o4`, `gpt-5*`) automatically
 
 ### Azure OpenAI
 
-Azure OpenAI routes through LiteLLM. Model env vars hold **deployment names** from your Azure resource, not public OpenAI model IDs.
+Azure OpenAI routes through LiteLLM. Model env vars hold **deployment names** from your
+Azure resource, not public OpenAI model IDs. `GET /openai/models` only shows models
+available to the resource; seeing `gpt-4.1` there does not mean a deployment named
+`gpt-4.1` exists. Use the deployment name shown in Azure AI Foundry (for example,
+`prod-gpt-4-1`).
 
 ```bash
 export LLM_PROVIDER=azure-openai
@@ -198,9 +202,9 @@ export AZURE_OPENAI_API_KEY=...
 # export AZURE_OPENAI_API_VERSION=2024-10-21
 
 # Deployment names (must exist in your Azure resource):
-export AZURE_OPENAI_REASONING_MODEL=gpt-5.4-mini
-export AZURE_OPENAI_TOOLCALL_MODEL=gpt-5.4-mini
-export AZURE_OPENAI_CLASSIFICATION_MODEL=gpt-5.4-mini
+export AZURE_OPENAI_REASONING_MODEL=prod-gpt-4-1
+export AZURE_OPENAI_TOOLCALL_MODEL=prod-gpt-4-1
+export AZURE_OPENAI_CLASSIFICATION_MODEL=prod-gpt-4-1
 ```
 
 Quick setup:
@@ -214,11 +218,13 @@ Onboarding asks only for your **resource URL**, **API key**, and **reasoning dep
 In the REPL, switch provider or deployment like any other API provider:
 
 ```bash
-/model set azure-openai gpt-5.4-mini
-/model set azure-openai gpt-5.4-mini --toolcall-model gpt-5.4-nano
+/model set azure-openai prod-gpt-4-1
+/model set azure-openai prod-gpt-4-1 --toolcall-model=fast-gpt-4-1-mini
 ```
 
-Common deployment names in the onboarding picker include `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.4-nano`, `gpt-5-mini`, `gpt-4.1`, and `o3-mini`. Use custom names when your Azure deployment names differ (`allow_custom_models` is enabled).
+Azure deployment names are user-defined and can differ from their underlying model IDs.
+The onboarding picker contains common same-as-model examples for convenience, but use the
+custom-name option whenever your deployment has another name.
 
 ### OpenRouter
 

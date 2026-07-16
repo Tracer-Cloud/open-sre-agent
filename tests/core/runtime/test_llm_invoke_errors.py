@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
+from core.llm.provider_errors import LLMResourceNotFoundError
 from core.llm_invoke_errors import (
     LLM_PROVIDER_FAILURE_KINDS,
     _looks_like_timeout,
@@ -43,6 +44,22 @@ def test_classify_returns_none_for_credit_exhausted_so_it_propagates() -> None:
 
     err = LLMCreditExhaustedError("OpenAI credit exhausted: insufficient_quota")
     assert classify_llm_invoke_failure(err) is None
+
+
+def test_classify_azure_deployment_not_found_uses_deployment_guidance() -> None:
+    failure = classify_llm_invoke_failure(
+        LLMResourceNotFoundError(
+            provider="azure-openai",
+            provider_label="Azure OpenAI",
+            resource_kind="deployment",
+            resource_name="gpt-4.1",
+        )
+    )
+
+    assert failure is not None
+    assert "deployment 'gpt-4.1' was not found" in failure.user_message
+    assert "not a model ID returned by GET /openai/models" in failure.user_message
+    assert failure.tracker_message == "Failed: Deployment not found"
 
 
 def test_cli_auth_required_uses_unknown_provider_when_attr_missing() -> None:

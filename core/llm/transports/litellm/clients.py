@@ -56,6 +56,11 @@ class LiteLLMAgentClient:
         api_key_env: str | None = None,
         api_key_default: str = "",
         temperature: float | None = None,
+        provider_id: str | None = None,
+        provider_label: str = "LiteLLM",
+        not_found_resource_kind: str = "model",
+        not_found_resource_name: str | None = None,
+        not_found_detail: str | None = None,
         credential_resolver: Callable[[str], str] | None = None,
         completion_func: Callable[..., Any] | None = None,
     ) -> None:
@@ -66,6 +71,11 @@ class LiteLLMAgentClient:
         self._api_key_env = api_key_env
         self._api_key_default = api_key_default
         self._temperature = temperature
+        self._provider_id = provider_id
+        self.provider_name = provider_label
+        self._not_found_resource_kind = not_found_resource_kind
+        self._not_found_resource_name = not_found_resource_name
+        self._not_found_detail = not_found_detail
         self._credential_resolver = credential_resolver
         self._completion_func = completion_func
 
@@ -129,7 +139,11 @@ class LiteLLMAgentClient:
             self._completion,
             kwargs,
             provider_name=self.provider_name,
+            provider_id=self._provider_id,
             model=self._litellm_model,
+            resource_kind=self._not_found_resource_kind,
+            resource_name=self._not_found_resource_name,
+            resource_not_found_detail=self._not_found_detail,
         )
         return agent_response_from_completion(
             response,
@@ -156,6 +170,11 @@ class LiteLLMLLMClient:
         api_version: str | None = None,
         api_key_env: str | None = None,
         api_key_default: str = "",
+        provider_id: str | None = None,
+        provider_label: str | None = None,
+        not_found_resource_kind: str = "model",
+        not_found_resource_name: str | None = None,
+        not_found_detail: str | None = None,
         credential_resolver: Callable[[str], str] | None = None,
         completion_func: Callable[..., Any] | None = None,
         usage_callback: Callable[[str, int | None, int | None], object] | None = None,
@@ -169,12 +188,16 @@ class LiteLLMLLMClient:
         self._api_version = api_version
         self._api_key_env = api_key_env
         self._api_key_default = api_key_default
+        self._provider_id = provider_id
         self._credential_resolver = credential_resolver
         self._completion_func = completion_func
         self._usage_callback = usage_callback
         self._bound_tools: list[dict[str, Any]] = []
         label = (api_key_env or "").removesuffix("_API_KEY").replace("_", " ").title()
-        self._provider_label = label or "LiteLLM"
+        self._provider_label = provider_label or label or "LiteLLM"
+        self._not_found_resource_kind = not_found_resource_kind
+        self._not_found_resource_name = not_found_resource_name
+        self._not_found_detail = not_found_detail
 
     def with_config(self, **_kwargs: Any) -> LiteLLMLLMClient:
         return self
@@ -251,9 +274,13 @@ class LiteLLMLLMClient:
             self._completion,
             self._build_request_kwargs(prompt_or_messages),
             provider_label=self._provider_label,
+            provider_id=self._provider_id,
             api_key_env=self._api_key_env or "",
             model=self._litellm_model,
             on_model_fallback=lambda: self._rebuild_after_model_fallback(prompt_or_messages),
+            resource_kind=self._not_found_resource_kind,
+            resource_name=self._not_found_resource_name,
+            resource_not_found_detail=self._not_found_detail,
         )
         return llm_response_from_completion(
             response,
@@ -267,7 +294,11 @@ class LiteLLMLLMClient:
             self._completion,
             self._build_request_kwargs(prompt_or_messages),
             provider_label=self._provider_label,
+            provider_id=self._provider_id,
             api_key_env=self._api_key_env or "",
             model=self._litellm_model,
             on_model_fallback=lambda: self._rebuild_after_model_fallback(prompt_or_messages),
+            resource_kind=self._not_found_resource_kind,
+            resource_name=self._not_found_resource_name,
+            resource_not_found_detail=self._not_found_detail,
         )
