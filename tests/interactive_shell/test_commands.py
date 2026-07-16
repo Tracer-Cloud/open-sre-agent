@@ -785,6 +785,29 @@ class TestIntegrationsCommand:
         assert "unsupported verify target" in buf.getvalue()
         assert session.history[-1]["ok"] is False
 
+    def test_verify_servicenow_is_supported_target(self, monkeypatch: object) -> None:
+        # Regression for #3102: servicenow must pass the real
+        # SUPPORTED_VERIFY_SERVICES gate so "Is ServiceNow configured?"
+        # executes the verifier instead of "unsupported verify target".
+        verified: list[str] = []
+
+        def _verify_one(service: str) -> dict[str, str]:
+            verified.append(service)
+            return {
+                "service": service,
+                "source": "local store",
+                "status": "passed",
+                "detail": "Configured for ServiceNow at https://dev12345.service-now.com.",
+            }
+
+        monkeypatch.setattr(repl_data_module, "verify_integration", _verify_one)
+        session = Session()
+        console, buf = _capture()
+        dispatch_slash("/verify servicenow", session, console)
+        assert verified == ["servicenow"]
+        assert "servicenow" in buf.getvalue()
+        assert session.history[-1]["ok"] is True
+
     def test_verify_one_service_via_integrations(self, monkeypatch: object) -> None:
         verified: list[str] = []
 
