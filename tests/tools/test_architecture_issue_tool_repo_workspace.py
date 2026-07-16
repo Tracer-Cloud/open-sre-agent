@@ -51,11 +51,11 @@ def test_cloned_github_repo_requires_owner_and_repo() -> None:
         pass
 
 
-def test_architecture_workspace_dir_is_under_project_temp() -> None:
+def test_architecture_workspace_dir_is_under_opensre_tmp() -> None:
+    from config.constants.paths import OPENSRE_TMP_DIR
+
     workspace = architecture_workspace_dir()
-    assert workspace.name == "architecture_workspace"
-    assert workspace.parent.name == "opensre"
-    assert workspace.parent.parent.name == ".temp"
+    assert workspace == OPENSRE_TMP_DIR / "workspace"
 
 
 def test_cleanup_architecture_workspace_refuses_outside_path(tmp_path: Path) -> None:
@@ -64,7 +64,7 @@ def test_cleanup_architecture_workspace_refuses_outside_path(tmp_path: Path) -> 
 
 
 def test_cleanup_architecture_workspace_surfaces_rmtree_errors(tmp_path: Path) -> None:
-    workspace = tmp_path / "architecture_workspace"
+    workspace = tmp_path / "workspace"
     workspace.mkdir()
     (workspace / "stale.txt").write_text("x", encoding="utf-8")
 
@@ -85,7 +85,7 @@ def test_cleanup_architecture_workspace_surfaces_rmtree_errors(tmp_path: Path) -
 def test_prepare_architecture_workspace_surfaces_rmtree_errors(tmp_path: Path) -> None:
     from tools.architecture_issue_tool.repo_workspace import prepare_architecture_workspace
 
-    workspace = tmp_path / "architecture_workspace"
+    workspace = tmp_path / "workspace"
     workspace.mkdir()
     (workspace / "stale.txt").write_text("x", encoding="utf-8")
 
@@ -104,7 +104,7 @@ def test_prepare_architecture_workspace_surfaces_rmtree_errors(tmp_path: Path) -
 
 
 def test_cleanup_architecture_workspace_fails_if_path_still_exists(tmp_path: Path) -> None:
-    workspace = tmp_path / "architecture_workspace"
+    workspace = tmp_path / "workspace"
     workspace.mkdir()
 
     def _noop_rmtree(path: object, *args: object, **kwargs: object) -> None:
@@ -133,7 +133,7 @@ def test_cloned_github_repo_clones_and_cleans_up(
     mock_shallow_clone,
     tmp_path: Path,
 ) -> None:
-    workspace = tmp_path / ".temp" / "opensre" / "architecture_workspace"
+    workspace = tmp_path / "opensre" / "workspace"
     workspace.mkdir(parents=True)
     mock_prepare.return_value = workspace
 
@@ -168,7 +168,7 @@ def test_clone_github_repo_cleans_up_on_clone_failure(
     mock_shallow_clone,
     tmp_path: Path,
 ) -> None:
-    workspace = tmp_path / ".temp" / "opensre" / "architecture_workspace"
+    workspace = tmp_path / "opensre" / "workspace"
     workspace.mkdir(parents=True)
     (workspace / "stale.txt").write_text("x", encoding="utf-8")
     mock_prepare.return_value = workspace
@@ -192,7 +192,7 @@ def test_shallow_clone_sha_fetches_commit_directly(tmp_path: Path) -> None:
 
     from tools.architecture_issue_tool.repo_workspace import _shallow_clone
 
-    destination = tmp_path / "architecture_workspace"
+    destination = tmp_path / "workspace"
     sha = "abcdef0123456789abcdef0123456789abcdef01"
     calls: list[tuple[str, ...]] = []
 

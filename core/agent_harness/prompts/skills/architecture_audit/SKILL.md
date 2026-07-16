@@ -30,7 +30,7 @@ HARD RULES (violating any = failed turn):
 
 Compact sequence:
 1) architecture_clone_repo(owner, repo, ref?)
-   → workspace_root = .temp/opensre/architecture_workspace
+   → workspace_root = <system-temp>/opensre/workspace
    (If already in the target checkout and no owner/repo named, skip clone and
    use cwd as workspace_root; then skip cleanup.)
 
