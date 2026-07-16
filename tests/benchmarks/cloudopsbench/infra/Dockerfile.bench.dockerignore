@@ -1,4 +1,4 @@
-# Per-Dockerfile dockerignore for infra/bench/Dockerfile.bench (BuildKit feature).
+# Per-Dockerfile dockerignore for tests/benchmarks/cloudopsbench/infra/Dockerfile.bench (BuildKit feature).
 # Overrides the repo-root .dockerignore, which excludes `tests` entirely
 # (correct for the production Dockerfile, wrong for the bench Dockerfile).
 
@@ -55,7 +55,7 @@ tests/*
 !tests/__init__.py
 !tests/benchmarks
 # The bench Dockerfile COPYs entrypoint.sh from this path.
-!infra/bench/entrypoint.sh
+!tests/benchmarks/cloudopsbench/infra/entrypoint.sh
 
 # Exclude the downloaded State Snapshot dataset (~2.7 GB). It is
 # git-ignored and downloaded from Hugging Face at task start. Without
@@ -70,4 +70,4 @@ tasks/
 app/memories/
 
 # ---- Self ---- #
-infra/bench/Dockerfile.bench.dockerignore
+tests/benchmarks/cloudopsbench/infra/Dockerfile.bench.dockerignore

@@ -2,15 +2,25 @@
 
 AWS EC2 deployment and shared provisioning primitives for OpenSRE.
 
+**Scope: Telegram only.** All Slack deployment is Terraform, in the
+a separate Terraform module:
+a shared ECS cluster with one Fargate service per team. The EC2 paths here
+never ship `SLACK_*` variables: Socket Mode is single-consumer, so an EC2
+gateway holding Slack tokens would compete with the Fargate gateway for
+events.
+
 ## What's here
 
 | Path | Purpose |
 | --- | --- |
 | [`aws/`](aws/) | Shared AWS SDK primitives (`client`, `config`, VPC/SG, EC2/IAM, ECR, SSM). |
 | [`ecr_deploy/`](ecr_deploy/) | Docker/ECR EC2 provisioning: `opensre-web` + `opensre-gateway` on one instance. |
-| [`fargate/`](fargate/) | ECS Fargate + RDS layout (plan/dry-run; apply not implemented yet). |
-| [`gateway/`](gateway/) | AMI + systemd deployment path for the messaging gateway (Telegram and/or Slack; no Docker/ECR). See [gateway/README.md](gateway/README.md). |
+| [`gateway/`](gateway/) | AMI + systemd deployment path for the Telegram gateway (no Docker/ECR). See [gateway/README.md](gateway/README.md). |
 | `install-proxy/` | Install proxy utility (Cloudflare Worker). |
+
+The ECS Fargate backend (web API + Slack gateway) is **not** in this repo — it
+lives in a separate Terraform module
+(`slack/`, `make apply`).
 
 ## EC2 deploy commands
 
@@ -46,11 +56,13 @@ Copy [`.env.deploy.example`](../../.env.deploy.example) to `.env` in the repo ro
 | Variable | Required | Used by |
 | --- | --- | --- |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Yes (or role) | Provisioning |
-| `TELEGRAM_BOT_TOKEN` **or** `SLACK_BOT_TOKEN` + `SLACK_APP_TOKEN` | Yes (at least one chat gateway) | Gateway container |
-| `TELEGRAM_ALLOWED_USERS` | Recommended when Telegram is configured | Gateway pairing gate |
-| `SLACK_ALLOWED_USERS` | Recommended when Slack is configured (or `SLACK_ALLOW_OPEN_WORKSPACE=1`) | Gateway allowlist |
+| `TELEGRAM_BOT_TOKEN` | Yes | Gateway container |
+| `TELEGRAM_ALLOWED_USERS` | Recommended | Gateway pairing gate |
 | `LLM_PROVIDER` + API key | Yes | Both containers |
 | `EC2_KEY_NAME` | No | Optional SSH debug key pair |
+
+`SLACK_*` variables are ignored by the EC2 deploy (warning at validation) —
+deploy Slack with Terraform instead.
 
 ### What `make deploy` creates
 
@@ -62,7 +74,7 @@ One stack named `opensre-ec2`:
 - **IAM** instance profile — ECR pull, SSM, Bedrock (if used)
 - **Containers on the instance:**
   - `opensre-web` — `MODE=web`, port `8000`
-  - `opensre-gateway` — `MODE=gateway`, Telegram long-polling and/or Slack Socket Mode
+  - `opensre-gateway` — `MODE=gateway`, Telegram long-polling
 
 Outputs are written to `~/.opensre/deployments/opensre-ec2.json` (`InstanceId`, `PublicIpAddress`, `ImageUri`, etc.).
 
@@ -101,9 +113,9 @@ These Makefile targets provision **test-case** AWS stacks for the e2e suite, not
 
 The Terraform module for running Cloud-OpsBench on AWS Fargate lives with the
 benchmark code at
-[`infra/bench/`](../../infra/bench/).
+[`tests/benchmarks/cloudopsbench/infra/`](../../tests/benchmarks/cloudopsbench/infra/).
 The one-time Terraform state bootstrap script lives at
-[`infra/bench/scripts/bootstrap-bench-state.sh`](../../infra/bench/scripts/bootstrap-bench-state.sh).
-See that directory's [README](../../infra/bench/README.md)
+[`tests/benchmarks/cloudopsbench/infra/scripts/bootstrap-bench-state.sh`](../../tests/benchmarks/cloudopsbench/infra/scripts/bootstrap-bench-state.sh).
+See that directory's [README](../../tests/benchmarks/cloudopsbench/infra/README.md)
 and the benchmark runner guide at
 [`tests/benchmarks/cloudopsbench/README.md`](../../tests/benchmarks/cloudopsbench/README.md).

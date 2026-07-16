@@ -29,6 +29,10 @@ from platform.deployment.ecr_deploy.stack import GATEWAY_CONTAINER_NAME, WEB_CON
 logger = logging.getLogger(__name__)
 
 _ENV_DIR = "/etc/opensre"
+# Slack keys stay listed defensively: the EC2 deploy no longer collects them,
+# but if one arrives via OPENSRE_DEPLOY_EXTRA_ENV_KEYS it must never reach the
+# public web container. Slack itself deploys via Terraform only
+# (a separate Terraform module).
 _GATEWAY_ONLY_ENV_KEYS = frozenset(
     {
         "TELEGRAM_BOT_TOKEN",

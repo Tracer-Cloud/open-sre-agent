@@ -281,43 +281,18 @@ message, then swaps to ✅ (`white_check_mark`) when the reply is finalized.
 If Slack is not configured the daemon still runs the other components and
 `opensre gateway status` shows `slack: not configured`.
 
-### Deploying the gateway to a remote host
+### Deploying the Slack gateway to AWS
 
-Running the gateway on a server with `make deploy` (EC2) is different from local
-use: **the remote host cannot read your local machine's integration store /
-keychain**. Deploy validates that secrets are present as **plaintext env vars**
-in `.env`:
+**All Slack deployment is Terraform** — a per-team Fargate stack, managed
+separately from this repo. It runs the web API and the Slack gateway as ECS
+services on a shared cluster, injects `SLACK_BOT_TOKEN` / `SLACK_APP_TOKEN`
+from SSM SecureString at task start, and mounts persistent agent memory
+(S3 Files) at `/workspace/memories/`.
 
-```bash
-# Telegram-only, Slack-only, or both are accepted
-TELEGRAM_BOT_TOKEN=…                 # optional if Slack is fully set
-SLACK_BOT_TOKEN=xoxb-…
-SLACK_APP_TOKEN=xapp-…
-SLACK_ALLOWED_USERS=U0123ABCD
-ANTHROPIC_API_KEY=…                  # or your provider's key env
-```
-
-`make deploy` / `make deploy-gateway` require **at least one** of Telegram or
-Slack Socket Mode. Partial Slack config (bot token without app token) aborts.
-Missing allowlists are warnings (same shape as Telegram). Deploy health waits
-for the `[gateway] ready` log line (works for Telegram-only, Slack-only, or both).
-
-To give the deployed agent access to your observability integrations (so it
-can pull Grafana, Datadog, or other data when asked in Slack), put those
-credentials in `.env` too and list the variable names in
-`OPENSRE_DEPLOY_EXTRA_ENV_KEYS`:
-
-```bash
-GRAFANA_INSTANCE_URL=…
-GRAFANA_READ_TOKEN=…
-OPENSRE_DEPLOY_EXTRA_ENV_KEYS=GRAFANA_INSTANCE_URL,GRAFANA_READ_TOKEN
-```
-
-The deploy ships every listed variable to both containers; the matching agent
-tools become available automatically.
-
-Fargate/terraform under `infra/slack/terraform/` injects Slack secrets via SSM —
-see that README for the cloud path.
+The EC2 paths (`make deploy` / `make deploy-gateway`) are **Telegram-only**
+and ignore `SLACK_*` variables with a validation warning. This is deliberate:
+Socket Mode is single-consumer, so an EC2 gateway holding Slack tokens would
+compete with the Fargate gateway and split events between them.
 
 ---
 

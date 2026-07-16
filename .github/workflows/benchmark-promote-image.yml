@@ -5,7 +5,7 @@ name: Benchmark image — promote tag to task definition (any adapter)
 # config supplied to ``benchmark-run.yml`` picks which one runs.
 #
 # Manually-triggered workflow that runs `terraform apply -var=image_tag=<TAG>`
-# in infra/bench/ to register a new ECS task definition revision pointing at
+# in tests/benchmarks/cloudopsbench/infra/ to register a new ECS task definition revision pointing at
 # the chosen ECR image. This is the privileged "deploy" step that comes
 # between an image push (automatic) and a bench run (manual).
 #
@@ -17,12 +17,12 @@ name: Benchmark image — promote tag to task definition (any adapter)
 #   Actions → "Benchmark image — promote tag to task definition" → Run
 #
 # Pre-reqs (one-time):
-#   - infra/bench/ Terraform applied at least once. The opensre-bench-github-actions
+#   - tests/benchmarks/cloudopsbench/infra/ Terraform applied at least once. The opensre-bench-github-actions
 #     OIDC role's permissions (ecs:RegisterTaskDefinition, state-bucket read/write,
 #     lock-table read/write, iam:PassRole) are granted by the github_actions_run_bench
-#     inline policy in infra/bench/iam_oidc.tf — any apply of that module attaches them.
+#     inline policy in tests/benchmarks/cloudopsbench/infra/iam_oidc.tf — any apply of that module attaches them.
 #   - Repo secrets seeded into AWS Secrets Manager
-#   - Repo vars set (AWS_ACCOUNT_ID etc., see infra/bench/AWS_BENCH_SETUP.md step 4)
+#   - Repo vars set (AWS_ACCOUNT_ID etc., see tests/benchmarks/cloudopsbench/infra/AWS_BENCH_SETUP.md step 4)
 
 on:
   workflow_dispatch:
@@ -55,7 +55,7 @@ jobs:
           AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
         run: |
           if [ -z "${AWS_ACCOUNT_ID:-}" ]; then
-            echo "::error::Missing repo variable AWS_ACCOUNT_ID. See infra/bench/AWS_BENCH_SETUP.md."
+            echo "::error::Missing repo variable AWS_ACCOUNT_ID. See tests/benchmarks/cloudopsbench/infra/AWS_BENCH_SETUP.md."
             exit 1
           fi
 
@@ -88,7 +88,7 @@ jobs:
           terraform_version: 1.7.5
 
       - name: Terraform init
-        working-directory: infra/bench
+        working-directory: tests/benchmarks/cloudopsbench/infra
         run: terraform init -input=false
 
       - name: Terraform apply
@@ -104,7 +104,7 @@ jobs:
         # reconciliation to attempt rollbacks the workflow role isn't
         # permitted to perform (iam:DetachRolePolicy, iam:PutRolePolicy),
         # failing the run even when the task-def update itself succeeded.
-        working-directory: infra/bench
+        working-directory: tests/benchmarks/cloudopsbench/infra
         env:
           IMAGE_TAG: ${{ inputs.image_tag }}
         run: |
@@ -113,7 +113,7 @@ jobs:
             -var="image_tag=$IMAGE_TAG"
 
       - name: Surface the new task definition revision in the job summary
-        working-directory: infra/bench
+        working-directory: tests/benchmarks/cloudopsbench/infra
         env:
           IMAGE_TAG: ${{ inputs.image_tag }}
         run: |

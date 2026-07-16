@@ -1,7 +1,7 @@
 # Cache the CloudOpsBench corpus in S3 (design notes)
 
 > **Status:** implemented. `entrypoint.sh`, the Dockerfile changes,
-> `infra/bench/{fargate,iam_task,variables}.tf`, and the
+> `tests/benchmarks/cloudopsbench/infra/{fargate,iam_task,variables}.tf`, and the
 > `make mirror-cloudopsbench-s3` target all ship in the same PR.
 > See [infra/AWS_BENCH_SETUP.md](infra/AWS_BENCH_SETUP.md) for the one-time bootstrap
 > steps before the first Fargate run.
@@ -15,7 +15,7 @@
 Each ECS task currently has to fetch ~few hundred MB of CloudOpsBench
 data from Hugging Face at startup, because:
 
-1. `infra/bench/Dockerfile.bench` does NOT bake the dataset into the
+1. `tests/benchmarks/cloudopsbench/infra/Dockerfile.bench` does NOT bake the dataset into the
    image (and shouldn't — that would couple image rebuilds to dataset
    revisions and add ~500 MB to every push).
 2. The container's `ENTRYPOINT` jumps straight into the CLI with no
@@ -91,15 +91,15 @@ Replace the direct CLI entrypoint with a small bash wrapper that pulls
 the corpus from S3 first, then invokes the CLI:
 
 ```dockerfile
-# infra/bench/Dockerfile.bench (sketch)
-COPY infra/bench/entrypoint.sh /entrypoint.sh
+# tests/benchmarks/cloudopsbench/infra/Dockerfile.bench (sketch)
+COPY tests/benchmarks/cloudopsbench/infra/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
 ```
 
 ```bash
 #!/usr/bin/env bash
-# infra/bench/entrypoint.sh
+# tests/benchmarks/cloudopsbench/infra/entrypoint.sh
 set -euo pipefail
 
 CORPUS_REV="${BENCH_CORPUS_HF_REVISION:-}"

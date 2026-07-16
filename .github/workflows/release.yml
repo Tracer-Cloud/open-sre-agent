@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths-ignore:
       - "docs/**"
-      - "infra/bench/**"
+      - "tests/benchmarks/cloudopsbench/infra/**"
       - "platform/deployment/install-proxy/**"
       - "tests/e2e/kubernetes/helm/scripts/**"
       - "tests/**"

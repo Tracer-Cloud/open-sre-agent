@@ -6,7 +6,7 @@ GitHub-hosted runner for hours. This is the six-step setup before
 re-runs of the actual benchmark only need step 6.
 
 > **Whenever the upstream HF dataset gets a new revision**, re-run step 5
-> (mirror to S3) AND bump `corpus_hf_revision` in `infra/bench/variables.tf`
+> (mirror to S3) AND bump `corpus_hf_revision` in `tests/benchmarks/cloudopsbench/infra/variables.tf`
 > (or pass it as `-var=corpus_hf_revision=<new-sha>` to `terraform apply`).
 
 ## 1. Apply Terraform
@@ -15,7 +15,7 @@ Provisions the ECS cluster, S3 artifact bucket, Secrets Manager entries,
 IAM roles, CloudWatch log group, and OIDC trust for the GitHub Actions roles.
 
 ```bash
-cd infra/bench/
+cd tests/benchmarks/cloudopsbench/infra/
 terraform init
 terraform apply
 ```
@@ -51,7 +51,7 @@ These live under Settings → Secrets and variables → Actions → **Variables*
 (not Secrets — they're not sensitive). Grab the values from Terraform:
 
 ```bash
-cd infra/bench/
+cd tests/benchmarks/cloudopsbench/infra/
 echo "BENCH_ECS_CLUSTER             = $(terraform output -raw ecs_cluster_name)"
 echo "BENCH_TASK_DEFINITION_FAMILY  = $(terraform output -raw task_definition_family)"
 echo "BENCH_SUBNET_IDS              = $(terraform output -json subnet_ids | jq -r 'join(",")')"
@@ -76,7 +76,7 @@ make mirror-cloudopsbench-s3     # auto-detects HF revision SHA + uploads
 ```
 
 The output prints the HF revision SHA. If it differs from the default in
-`infra/bench/variables.tf` (`corpus_hf_revision`), update the default or
+`tests/benchmarks/cloudopsbench/infra/variables.tf` (`corpus_hf_revision`), update the default or
 override per apply: `terraform apply -var=corpus_hf_revision=<sha>`.
 
 The corpus bucket needs to exist before this step. Create it once if

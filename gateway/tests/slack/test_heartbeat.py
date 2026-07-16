@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+import time
 from pathlib import Path
 
 from gateway.slack.heartbeat import ConnectionHeartbeat
@@ -34,24 +35,28 @@ def test_start_writes_an_initial_heartbeat(tmp_path: Path) -> None:
 
 
 def test_ticker_refreshes_the_heartbeat_while_connection_is_alive(tmp_path: Path) -> None:
-    # Arrange: a live connection; signal once the ticker has run at least once.
+    # Arrange: a live connection; the ticker should keep refreshing the file.
     path = tmp_path / "gateway.heartbeat"
-    ticked = threading.Event()
+    heartbeat = ConnectionHeartbeat(path=str(path), is_alive=lambda: True, interval_seconds=0.01)
 
-    def is_alive() -> bool:
-        ticked.set()
-        return True
-
-    heartbeat = ConnectionHeartbeat(path=str(path), is_alive=is_alive, interval_seconds=0.01)
+    # Act: while the ticker keeps running, poll for the mtime to advance past
+    # the initial start() write. Polling (rather than a one-shot read in the
+    # narrow window after start()) tolerates a loaded runner where a tick may
+    # land before or after the baseline is captured.
     heartbeat.start()
-    initial_mtime_ns = path.stat().st_mtime_ns
+    try:
+        baseline_mtime_ns = path.stat().st_mtime_ns
+        advanced = False
+        for _ in range(200):  # up to ~2s at the 10ms tick interval
+            if path.stat().st_mtime_ns > baseline_mtime_ns:
+                advanced = True
+                break
+            time.sleep(0.01)
+    finally:
+        heartbeat.stop()
 
-    # Act: wait for a tick, then stop (join lets the in-flight touch complete).
-    assert ticked.wait(timeout=2.0)
-    heartbeat.stop()
-
-    # Assert: the file's mtime advanced past the initial start() write.
-    assert path.stat().st_mtime_ns > initial_mtime_ns
+    # Assert: the ticker refreshed the file at least once after start().
+    assert advanced
 
 
 def test_ticker_stops_refreshing_when_connection_is_not_alive(tmp_path: Path) -> None:

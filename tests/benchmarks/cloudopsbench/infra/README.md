@@ -1,4 +1,4 @@
-# `infra/bench/` — Cloud-OpsBench AWS environment
+# `tests/benchmarks/cloudopsbench/infra/` — Cloud-OpsBench AWS environment
 
 Terraform module that provisions the AWS resources for running Cloud-OpsBench
 on Fargate. Owned by the benchmark workstream (see project issue for context).
@@ -33,7 +33,7 @@ itself (chicken-and-egg). Use the bootstrap script — it's idempotent so safe
 to re-run:
 
 ```bash
-./infra/bench/scripts/bootstrap-bench-state.sh
+./tests/benchmarks/cloudopsbench/infra/scripts/bootstrap-bench-state.sh
 ```
 
 The script creates:
@@ -44,13 +44,13 @@ The script creates:
 Both in `us-east-1` by default. Override with env vars:
 
 ```bash
-AWS_REGION=us-west-2 TF_STATE_BUCKET=my-tfstate ./infra/bench/scripts/bootstrap-bench-state.sh
+AWS_REGION=us-west-2 TF_STATE_BUCKET=my-tfstate ./tests/benchmarks/cloudopsbench/infra/scripts/bootstrap-bench-state.sh
 ```
 
 Once bootstrap completes:
 
 ```bash
-cd infra/bench
+cd tests/benchmarks/cloudopsbench/infra
 terraform init
 terraform plan
 terraform apply
@@ -139,12 +139,12 @@ Live logs: `aws logs tail /ecs/opensre-bench --follow` (or via the AWS Console).
 
 ## Building and pushing the bench container image
 
-`infra/bench/Dockerfile.bench` builds the bench container (context is the repo root).
+`tests/benchmarks/cloudopsbench/infra/Dockerfile.bench` builds the bench container (context is the repo root).
 
 ```bash
 # From repo root
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-ECR_URL=$(cd infra/bench && terraform output -raw ecr_repository_url)
+ECR_URL=$(cd tests/benchmarks/cloudopsbench/infra && terraform output -raw ecr_repository_url)
 TAG=$(git rev-parse --short HEAD)         # or any unique value
 
 # Login to ECR
@@ -154,7 +154,7 @@ aws ecr get-login-password --region us-east-1 \
 # Build (linux/amd64 — Fargate runs amd64 unless you opt into ARM)
 docker buildx build \
   --platform linux/amd64 \
-  -f infra/bench/Dockerfile.bench \
+  -f tests/benchmarks/cloudopsbench/infra/Dockerfile.bench \
   -t "$ECR_URL:$TAG" \
   --load .
 
@@ -162,7 +162,7 @@ docker buildx build \
 docker push "$ECR_URL:$TAG"
 
 # Apply Terraform with the new tag
-cd infra/bench
+cd tests/benchmarks/cloudopsbench/infra
 terraform apply -var="image_tag=$TAG"
 ```
 

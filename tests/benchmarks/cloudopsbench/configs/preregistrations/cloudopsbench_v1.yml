@@ -16,7 +16,7 @@ cycle: cloudopsbench-v1-2026-06-05      # stamped at commit; locks the cycle ide
 target_corpus:
   benchmark: cloudopsbench
   hf_dataset: tracer-cloud/cloud-ops-bench-dataset
-  # Pinned HF commit SHA — matches BENCH_CORPUS_HF_REVISION in infra/bench/
+  # Pinned HF commit SHA — matches BENCH_CORPUS_HF_REVISION in tests/benchmarks/cloudopsbench/infra/
   # (the Fargate task pulls from s3://<corpus_bucket>/<this_sha>/). Mirrored
   # via `make mirror-cloudopsbench-s3` from a developer machine.
   hf_revision: ce0ded4f196f01e176cf1d69ec15c2db42b2a677

@@ -44,12 +44,12 @@ a separate S3 bucket. The bench Docker image is small (~200 MB) because the
 ~3 GB corpus is **not** baked into the image — it's pulled per task startup.
 
 **Prerequisites** (one-time, per AWS account):
-1. `cd infra/bench && terraform apply` — provisions ECR, ECS cluster, IAM roles, S3 buckets, secrets.
+1. `cd tests/benchmarks/cloudopsbench/infra && terraform apply` — provisions ECR, ECS cluster, IAM roles, S3 buckets, secrets.
 2. Seed LLM API keys via `Benchmark secret — seed GitHub repo secret into AWS Secrets Manager` (per provider).
 3. Seed the corpus into S3:
    ```bash
    make download-cloudopsbench-hf
-   BENCH_S3_BUCKET=$(cd infra/bench && terraform output -raw corpus_bucket_name) \
+   BENCH_S3_BUCKET=$(cd tests/benchmarks/cloudopsbench/infra && terraform output -raw corpus_bucket_name) \
      make mirror-cloudopsbench-s3
    ```
    The mirror is keyed by HF revision SHA so older revisions remain replayable.
@@ -123,7 +123,7 @@ s3://<results_bucket>/runs/<config>/<run-id>/
 — get the bucket name with:
 
 ```bash
-cd infra/bench && terraform output -raw results_bucket_name
+cd tests/benchmarks/cloudopsbench/infra && terraform output -raw results_bucket_name
 ```
 
 Tail live logs while the task runs:

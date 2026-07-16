@@ -47,7 +47,7 @@ variable "corpus_bucket_name" {
 }
 
 variable "corpus_hf_revision" {
-  description = "Hugging Face commit SHA pinned for this run. Must match a prefix that exists in s3://<corpus_bucket_name>/, populated by `make mirror-cloudopsbench-s3`. provenance.json records the same value so the artifact and the corpus are reproducibly paired. The default SHA must be present in S3 before the first Fargate run — see infra/bench/AWS_BENCH_SETUP.md."
+  description = "Hugging Face commit SHA pinned for this run. Must match a prefix that exists in s3://<corpus_bucket_name>/, populated by `make mirror-cloudopsbench-s3`. provenance.json records the same value so the artifact and the corpus are reproducibly paired. The default SHA must be present in S3 before the first Fargate run — see tests/benchmarks/cloudopsbench/infra/AWS_BENCH_SETUP.md."
   type        = string
   default     = "ce0ded4f196f01e176cf1d69ec15c2db42b2a677"
 

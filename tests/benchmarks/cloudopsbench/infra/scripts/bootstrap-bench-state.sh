@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Bootstrap the Terraform state backend for infra/bench/.
+# Bootstrap the Terraform state backend for tests/benchmarks/cloudopsbench/infra/.
 #
 # Creates the S3 bucket and DynamoDB lock table that hold Terraform state for
 # the bench module. Run ONCE per AWS account, before the first `terraform
-# init` in infra/bench/.
+# init` in tests/benchmarks/cloudopsbench/infra/.
 #
 # Idempotent — re-running on an already-bootstrapped account is a no-op.
 #
@@ -12,14 +12,14 @@
 #   - Bash 4+, jq optional
 #
 # Usage (from repo root):
-#   ./infra/bench/scripts/bootstrap-bench-state.sh
+#   ./tests/benchmarks/cloudopsbench/infra/scripts/bootstrap-bench-state.sh
 #
 # Override defaults via env vars:
-#   AWS_REGION=us-west-2 ./infra/bench/scripts/bootstrap-bench-state.sh
-#   TF_STATE_BUCKET=my-tfstate TF_LOCK_TABLE=my-tflock ./infra/bench/scripts/bootstrap-bench-state.sh
+#   AWS_REGION=us-west-2 ./tests/benchmarks/cloudopsbench/infra/scripts/bootstrap-bench-state.sh
+#   TF_STATE_BUCKET=my-tfstate TF_LOCK_TABLE=my-tflock ./tests/benchmarks/cloudopsbench/infra/scripts/bootstrap-bench-state.sh
 #
 # After this completes, run:
-#   cd infra/bench && terraform init && terraform plan
+#   cd tests/benchmarks/cloudopsbench/infra && terraform init && terraform plan
 
 set -euo pipefail
 
@@ -96,6 +96,6 @@ fi
 echo
 echo "Bootstrap complete."
 echo "Next steps:"
-echo "  cd infra/bench"
+echo "  cd tests/benchmarks/cloudopsbench/infra"
 echo "  terraform init"
 echo "  terraform plan"

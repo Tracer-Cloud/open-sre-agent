@@ -1,7 +1,14 @@
 ## Deployment
 
-OpenSRE has two primary deployment paths (both target AWS EC2) and a general hosted
-runtime option for ASGI-compatible platforms.
+OpenSRE has three deployment paths and a general hosted runtime option for
+ASGI-compatible platforms:
+
+- **Slack** — Terraform **only**, managed separately from this repo: deploys
+  the web API + Slack gateway as Fargate services on a shared ECS cluster. The
+  EC2 paths below never ship `SLACK_*` variables
+  (Socket Mode is single-consumer — a second consumer on EC2 would compete
+  with the Fargate gateway for events).
+- **Telegram** — the two EC2 paths below.
 
 ---
 
@@ -18,10 +25,13 @@ Copy [`.env.deploy.example`](.env.deploy.example) and export the required variab
 | Variable | Required | Used by |
 | -------- | -------- | ------- |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Yes (or role) | Provisioning |
-| `TELEGRAM_BOT_TOKEN` **or** `SLACK_BOT_TOKEN` + `SLACK_APP_TOKEN` | Yes (at least one chat gateway) | Gateway container |
-| `TELEGRAM_ALLOWED_USERS` | Recommended when Telegram is set | Gateway pairing gate |
-| `SLACK_ALLOWED_USERS` | Recommended when Slack is set (or `SLACK_ALLOW_OPEN_WORKSPACE=1`) | Gateway allowlist |
+| `TELEGRAM_BOT_TOKEN` | Yes | Gateway container |
+| `TELEGRAM_ALLOWED_USERS` | Recommended | Gateway pairing gate |
 | `LLM_PROVIDER` + API key | Yes | Both containers |
+
+`SLACK_*` variables are ignored by the EC2 deploy (validation warns) — Slack
+deploys via Terraform from the
+a separate Terraform module.
 
 ```bash
 # Step 1 — build and push Docker image to ECR (run once per code change):
@@ -51,11 +61,10 @@ Outputs (instance ID, public IP, image URI) are written to
 
 ---
 
-## Gateway Deploy — AMI + systemd (Telegram and/or Slack)
+## Gateway Deploy — AMI + systemd (Telegram)
 
-Runs the messaging gateway directly on EC2 as a systemd service — no Docker or ECR
-required. Telegram long polling and/or Slack Socket Mode start from the same process
-when their env vars are set. The gateway is baked into a custom AMI once; subsequent
+Runs the Telegram gateway directly on EC2 as a systemd service — no Docker or ECR
+required. The gateway is baked into a custom AMI once; subsequent
 deploys launch from that AMI in ~2–3 minutes.
 
 **Prerequisites:** AWS credentials with EC2 / IAM / SSM permissions. No Docker needed.
