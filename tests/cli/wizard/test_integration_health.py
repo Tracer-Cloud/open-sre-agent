@@ -21,6 +21,7 @@ from surfaces.cli.wizard.integration_health import (
     validate_honeycomb_integration,
     validate_incident_io_integration,
     validate_sentry_integration,
+    validate_servicenow_integration,
     validate_slack_webhook,
     validate_telegram_bot,
     validate_vercel_integration,
@@ -57,6 +58,7 @@ def test_legacy_integration_health_import_surface_still_exports_validators() -> 
         "validate_pagerduty_integration",
         "validate_sentry_integration",
         "validate_sentry_mcp_integration",
+        "validate_servicenow_integration",
         "validate_slack_webhook",
         "validate_splunk_integration",
         "validate_tempo_integration",
@@ -239,6 +241,75 @@ def test_validate_slack_webhook_fails_for_httpx_request_error(monkeypatch) -> No
 
     assert result.ok is False
     assert "slack webhook validation failed" in result.detail.lower()
+    assert "connection failed" in result.detail.lower()
+
+
+def test_validate_servicenow_integration_succeeds(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "surfaces.cli.wizard.integration_validators.http_probe_validators.httpx.get",
+        lambda *_args, **_kwargs: types.SimpleNamespace(status_code=200),
+    )
+
+    result = validate_servicenow_integration(
+        instance_url="https://dev12345.service-now.com/",
+        username="admin",
+        password="s3cret",
+    )
+
+    assert result.ok is True
+    assert "admin" in result.detail
+    assert "https://dev12345.service-now.com" in result.detail
+
+
+@pytest.mark.parametrize(
+    ("status_code", "expected_fragment"),
+    [
+        (401, "credentials invalid"),
+        (403, "cannot read the sys_user table"),
+        (404, "instance URL not found"),
+        (500, "unexpected status 500"),
+    ],
+)
+def test_validate_servicenow_integration_maps_http_errors(
+    monkeypatch,
+    status_code: int,
+    expected_fragment: str,
+) -> None:
+    monkeypatch.setattr(
+        "surfaces.cli.wizard.integration_validators.http_probe_validators.httpx.get",
+        lambda *_args, **_kwargs: types.SimpleNamespace(status_code=status_code),
+    )
+
+    result = validate_servicenow_integration(
+        instance_url="https://dev12345.service-now.com",
+        username="admin",
+        password="bad",
+    )
+
+    assert result.ok is False
+    assert expected_fragment in result.detail
+
+
+def test_validate_servicenow_integration_fails_for_httpx_request_error(monkeypatch) -> None:
+    def _raise_request_error(*_args, **_kwargs):
+        raise httpx.RequestError(
+            "connection failed",
+            request=httpx.Request("GET", "https://dev12345.service-now.com/api/now/table/sys_user"),
+        )
+
+    monkeypatch.setattr(
+        "surfaces.cli.wizard.integration_validators.http_probe_validators.httpx.get",
+        _raise_request_error,
+    )
+
+    result = validate_servicenow_integration(
+        instance_url="https://dev12345.service-now.com",
+        username="admin",
+        password="s3cret",
+    )
+
+    assert result.ok is False
+    assert "servicenow validation failed" in result.detail.lower()
     assert "connection failed" in result.detail.lower()
 
 

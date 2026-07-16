@@ -377,6 +377,41 @@ def test_integrations_verify_accepts_helm() -> None:
     mock_capture.assert_called_once_with("helm")
 
 
+def test_integrations_verify_accepts_servicenow() -> None:
+    runner = CliRunner()
+
+    with (
+        patch("surfaces.cli.commands.integrations.capture_integration_verified") as mock_capture,
+        patch("integrations.cli.cmd_verify", return_value=0) as mock_verify,
+    ):
+        result = runner.invoke(cli, ["integrations", "verify", "servicenow"])
+
+    assert result.exit_code == 0
+    mock_verify.assert_called_once_with(
+        "servicenow",
+        send_slack_test=False,
+    )
+    mock_capture.assert_called_once_with("servicenow")
+
+
+def test_integrations_setup_accepts_servicenow() -> None:
+    runner = CliRunner()
+
+    with (
+        patch("surfaces.cli.commands.integrations.capture_integration_setup_started"),
+        patch("surfaces.cli.commands.integrations.capture_integration_setup_completed"),
+        patch("surfaces.cli.commands.integrations.capture_integration_verified"),
+        patch("integrations.cli.cmd_setup") as mock_setup,
+        patch("integrations.cli.cmd_verify", return_value=0) as mock_verify,
+    ):
+        mock_setup.return_value = "servicenow"
+        result = runner.invoke(cli, ["integrations", "setup", "servicenow"])
+
+    assert result.exit_code == 0
+    mock_setup.assert_called_once_with("servicenow")
+    mock_verify.assert_called_once_with("servicenow")
+
+
 def test_verify_services_includes_previously_missing_integrations() -> None:
     # #1973 surfaced these names as registered in the runtime registry but
     # rejected by Click's positional-arg validator (the CLI's hardcoded
