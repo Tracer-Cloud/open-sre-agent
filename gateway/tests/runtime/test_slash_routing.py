@@ -10,10 +10,10 @@ from unittest.mock import MagicMock
 import pytest
 from rich.console import Console
 
-from app.entrypoints.gateway_slash import gateway_slash_ports_factory
 from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStorage
 from core.agent_harness.tools.action_tools import get_action_tool
+from gateway.runtime.slash_ports import gateway_slash_ports_factory
 from gateway.runtime.turn_handler import GatewayTurnHandler
 from tests.core.agent.orchestration.cross_surface_parity_harness import RecordingGatewaySink
 
