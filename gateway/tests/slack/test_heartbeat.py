@@ -78,3 +78,28 @@ def test_ticker_stops_refreshing_when_connection_is_not_alive(tmp_path: Path) ->
 
     # Assert: no refresh happened — mtime is still the initial start() write.
     assert path.stat().st_mtime_ns == initial_mtime_ns
+
+
+def test_start_after_stop_reactivates_the_ticker(tmp_path: Path) -> None:
+    # Arrange: a heartbeat that has already been through one start/stop cycle.
+    path = tmp_path / "gateway.heartbeat"
+    heartbeat = ConnectionHeartbeat(path=str(path), is_alive=lambda: True, interval_seconds=0.01)
+    heartbeat.start()
+    heartbeat.stop()
+
+    # Act: start again; the restarted ticker must run (not silently no-op on a
+    # stale stop flag), so poll for the mtime to advance past this start().
+    heartbeat.start()
+    try:
+        baseline_mtime_ns = path.stat().st_mtime_ns
+        advanced = False
+        for _ in range(200):  # up to ~2s at the 10ms tick interval
+            if path.stat().st_mtime_ns > baseline_mtime_ns:
+                advanced = True
+                break
+            time.sleep(0.01)
+    finally:
+        heartbeat.stop()
+
+    # Assert: the restarted ticker refreshed the file.
+    assert advanced

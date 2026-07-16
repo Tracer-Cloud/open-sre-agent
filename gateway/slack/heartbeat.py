@@ -50,6 +50,8 @@ class ConnectionHeartbeat:
 
     def start(self) -> None:
         """Write an initial heartbeat and begin refreshing it on the interval."""
+        # Clear the stop flag so a restart after stop() runs, not silently no-ops.
+        self._stop.clear()
         self.touch()
         self._thread = threading.Thread(
             target=self._run,
