@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any, NoReturn, cast
 
 import questionary
 
+from platform.common.url_validation import validate_https_or_loopback_http_url
 from platform.terminal.prompt_support import (
     QUESTIONARY_QMARK,
     questionary_prompt_style,
@@ -394,6 +395,16 @@ def _setup_servicenow() -> None:
     instance_url = _p("Instance URL (e.g. https://dev12345.service-now.com)")
     if not instance_url:
         _die("instance_url is required.")
+    # Fail here with an actionable message instead of storing a URL that
+    # classification would later reject silently (verify would say "missing").
+    try:
+        instance_url = validate_https_or_loopback_http_url(
+            instance_url.strip().rstrip("/"),
+            service_name="servicenow",
+            field_name="instance_url",
+        )
+    except ValueError as exc:
+        _die(str(exc))
     username = _p("Username")
     password = _p("Password", secret=True)
     if not username or not password:

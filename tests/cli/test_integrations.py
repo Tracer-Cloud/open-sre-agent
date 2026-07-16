@@ -2,9 +2,16 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+import pytest
 from click.testing import CliRunner
 
-from integrations.cli import _HANDLERS, _setup_openclaw, _setup_smtp, _setup_vercel
+from integrations.cli import (
+    _HANDLERS,
+    _setup_openclaw,
+    _setup_servicenow,
+    _setup_smtp,
+    _setup_vercel,
+)
 from surfaces.cli.__main__ import cli
 from surfaces.cli.constants import SETUP_SERVICES, VERIFY_SERVICES
 
@@ -145,6 +152,55 @@ def test_setup_openclaw_saves_credentials(monkeypatch) -> None:
             },
         )
     ]
+
+
+def test_setup_servicenow_saves_normalized_https_url(monkeypatch) -> None:
+    answers = iter(["https://dev12345.service-now.com/", "admin", "s3cret"])
+
+    def fake_p(_label: str, default: str = "", secret: bool = False) -> str:
+        return next(answers)
+
+    saved: list[tuple[str, dict[str, object]]] = []
+    monkeypatch.setattr("integrations.cli._p", fake_p)
+    monkeypatch.setattr(
+        "integrations.cli.upsert_integration",
+        lambda service, entry: saved.append((service, entry)),
+    )
+
+    _setup_servicenow()
+
+    assert _HANDLERS["servicenow"] is _setup_servicenow
+    assert saved == [
+        (
+            "servicenow",
+            {
+                "credentials": {
+                    "instance_url": "https://dev12345.service-now.com",
+                    "username": "admin",
+                    "password": "s3cret",
+                }
+            },
+        )
+    ]
+
+
+def test_setup_servicenow_rejects_plain_http_remote_url(monkeypatch) -> None:
+    # Regression for the silent-save gap: a plain-http remote URL must fail at
+    # setup with an actionable error, not be stored and dropped at classify.
+    monkeypatch.setattr(
+        "integrations.cli._p",
+        lambda _label, _default="", _secret=False: "http://dev12345.service-now.com",
+    )
+    saved: list[tuple[str, dict[str, object]]] = []
+    monkeypatch.setattr(
+        "integrations.cli.upsert_integration",
+        lambda service, entry: saved.append((service, entry)),
+    )
+
+    with pytest.raises(SystemExit):
+        _setup_servicenow()
+
+    assert saved == []
 
 
 def test_integrations_setup_accepts_telegram() -> None:
