@@ -32,12 +32,11 @@ COPY . /app
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir ".[postgresql]"
 
-# Run as a non-root user. uid/gid 1000 matches the S3 Files access point that
-# backs /workspace/memories, so mounted files keep stable ownership. /workspace
-# holds the persistent memory mount plus the ephemeral scratch area.
+# Run as a non-root user (uid/gid 1000). /workspace is the writable runtime
+# working area owned by that user.
 RUN groupadd --gid 1000 opensre \
     && useradd --uid 1000 --gid 1000 --create-home --shell /usr/sbin/nologin opensre \
-    && mkdir -p /workspace/memories /workspace/scratch \
+    && mkdir -p /workspace/scratch \
     && chown -R opensre:opensre /workspace
 
 ENV PORT=8000

@@ -2,12 +2,9 @@
 
 AWS EC2 deployment and shared provisioning primitives for OpenSRE.
 
-**Scope: Telegram only.** All Slack deployment is Terraform, in the
-a separate Terraform module:
-a shared ECS cluster with one Fargate service per team. The EC2 paths here
-never ship `SLACK_*` variables: Socket Mode is single-consumer, so an EC2
-gateway holding Slack tokens would compete with the Fargate gateway for
-events.
+**Scope: Telegram only.** Slack is deployed and operated separately, not from
+this repo. The EC2 paths here never ship `SLACK_*` variables: Socket Mode is
+single-consumer, so a second gateway holding the same tokens would split events.
 
 ## What's here
 
@@ -18,9 +15,8 @@ events.
 | [`gateway/`](gateway/) | AMI + systemd deployment path for the Telegram gateway (no Docker/ECR). See [gateway/README.md](gateway/README.md). |
 | `install-proxy/` | Install proxy utility (Cloudflare Worker). |
 
-The ECS Fargate backend (web API + Slack gateway) is **not** in this repo — it
-lives in a separate Terraform module
-(`slack/`, `make apply`).
+The Slack backend (web API + Slack gateway) is **not** in this repo — it is
+deployed and operated separately.
 
 ## EC2 deploy commands
 

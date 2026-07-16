@@ -64,10 +64,10 @@ def _aws_credentials_available() -> bool:
 def _collect_messaging_gateway_issues() -> tuple[list[DeployEnvIssue], list[DeployEnvIssue]]:
     """Validate the Telegram deploy env (the EC2 gateway is Telegram-only).
 
-    Slack Socket Mode deploys exclusively via Terraform in the
-    a separate Terraform module: Socket Mode is single-consumer, so
-    shipping Slack tokens to EC2 would compete with the Fargate gateway.
-    Tokens present in the deploy env are ignored with a warning, never shipped.
+    Slack is deployed and operated separately, not from this repo: Socket Mode
+    is single-consumer, so shipping Slack tokens to EC2 would compete with the
+    primary Slack gateway. Tokens present in the deploy env are ignored with a
+    warning, never shipped.
     """
     missing: list[DeployEnvIssue] = []
     warnings: list[DeployEnvIssue] = []

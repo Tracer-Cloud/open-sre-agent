@@ -3,11 +3,9 @@
 OpenSRE has three deployment paths and a general hosted runtime option for
 ASGI-compatible platforms:
 
-- **Slack** — Terraform **only**, managed separately from this repo: deploys
-  the web API + Slack gateway as Fargate services on a shared ECS cluster. The
-  EC2 paths below never ship `SLACK_*` variables
-  (Socket Mode is single-consumer — a second consumer on EC2 would compete
-  with the Fargate gateway for events).
+- **Slack** — deployed and operated separately, not from this repo. The EC2
+  paths below never ship `SLACK_*` variables (Socket Mode is single-consumer —
+  a second consumer would split events).
 - **Telegram** — the two EC2 paths below.
 
 ---

@@ -54,10 +54,9 @@ _PURGE_ECR_ENV = "OPENSRE_DESTROY_PURGE_ECR"
 
 _EXTRA_ENV_KEYS_ENV = "OPENSRE_DEPLOY_EXTRA_ENV_KEYS"
 
-# SLACK_* is intentionally absent: Slack deploys via Terraform only
-# (a separate Terraform module). Socket Mode is single-consumer — an
-# EC2 gateway holding Slack tokens would compete with the Fargate gateway for
-# events.
+# SLACK_* is intentionally absent: Slack is deployed and operated separately,
+# not from this repo. Socket Mode is single-consumer — an EC2 gateway holding
+# Slack tokens would compete with the primary Slack gateway for events.
 _CONTAINER_ENV_KEYS = (
     "TELEGRAM_BOT_TOKEN",
     "TELEGRAM_ALLOWED_USERS",

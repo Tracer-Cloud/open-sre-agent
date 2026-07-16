@@ -281,18 +281,15 @@ message, then swaps to ✅ (`white_check_mark`) when the reply is finalized.
 If Slack is not configured the daemon still runs the other components and
 `opensre gateway status` shows `slack: not configured`.
 
-### Deploying the Slack gateway to AWS
+### Deploying the Slack gateway
 
-**All Slack deployment is Terraform** — a per-team Fargate stack, managed
-separately from this repo. It runs the web API and the Slack gateway as ECS
-services on a shared cluster, injects `SLACK_BOT_TOKEN` / `SLACK_APP_TOKEN`
-from SSM SecureString at task start, and mounts persistent agent memory
-(S3 Files) at `/workspace/memories/`.
+The Slack gateway backend is deployed and operated separately — not from this
+repo. Configure the integration here (tokens and scopes above); provisioning the
+hosted backend is out of scope for this repo.
 
-The EC2 paths (`make deploy` / `make deploy-gateway`) are **Telegram-only**
-and ignore `SLACK_*` variables with a validation warning. This is deliberate:
-Socket Mode is single-consumer, so an EC2 gateway holding Slack tokens would
-compete with the Fargate gateway and split events between them.
+The EC2 paths (`make deploy` / `make deploy-gateway`) are **Telegram-only** and
+ignore `SLACK_*` variables with a validation warning: Slack Socket Mode is
+single-consumer, so a second gateway holding the same tokens would split events.
 
 ---
 
