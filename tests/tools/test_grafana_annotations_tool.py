@@ -169,7 +169,14 @@ def test_run_forwards_basic_auth_to_client() -> None:
             grafana_username="admin",
             grafana_password="secret",
         )
-    resolve.assert_called_once_with("http://grafana", None, "admin", "secret")
+    resolve.assert_called_once_with(
+        "http://grafana",
+        None,
+        "admin",
+        "secret",
+        verify_ssl=True,
+        ca_bundle="",
+    )
 
 
 def test_run_to_only_anchors_window_before_to() -> None:
