@@ -16,6 +16,7 @@ from surfaces.cli.wizard.integration_validators.http_probe_validators import (
     validate_discord_bot,
     validate_jira_integration,
     validate_notion_integration,
+    validate_servicenow_integration,
     validate_slack_webhook,
     validate_telegram_bot,
 )
@@ -69,6 +70,7 @@ __all__ = [
     "validate_posthog_integration",
     "validate_sentry_integration",
     "validate_sentry_mcp_integration",
+    "validate_servicenow_integration",
     "validate_slack_webhook",
     "validate_telegram_bot",
     "validate_splunk_integration",

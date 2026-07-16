@@ -41,6 +41,7 @@ from surfaces.cli.wizard.configurators.productivity import (
     _configure_google_docs,
     _configure_jira,
     _configure_notion,
+    _configure_servicenow,
 )
 from surfaces.cli.wizard.configurators.sentry import _configure_sentry, _configure_sentry_mcp
 from surfaces.cli.wizard.configurators.vercel import _configure_vercel
@@ -94,6 +95,7 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
         "dagster": _configure_dagster,
         "betterstack": _configure_betterstack,
         "jira": _configure_jira,
+        "servicenow": _configure_servicenow,
         "alertmanager": _configure_alertmanager,
         "opsgenie": _configure_opsgenie,
         "pagerduty": _configure_pagerduty,
@@ -125,6 +127,7 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
         "vercel": "vercel",
         "dagster": "dagster",
         "jira": "jira",
+        "servicenow": "servicenow",
         "alertmanager": "alertmanager",
         "opsgenie": "opsgenie",
         "pagerduty": "pagerduty",

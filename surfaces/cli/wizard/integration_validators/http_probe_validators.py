@@ -118,6 +118,46 @@ def validate_jira_integration(
         return IntegrationHealthResult(ok=False, detail=f"Jira validation failed: {err}")
 
 
+def validate_servicenow_integration(
+    *, instance_url: str, username: str, password: str
+) -> IntegrationHealthResult:
+    """Validate ServiceNow connectivity with a minimal authenticated table read."""
+    base_url = instance_url.rstrip("/")
+    try:
+        resp = httpx.get(
+            f"{base_url}/api/now/table/sys_user",
+            params={"sysparm_limit": 1, "sysparm_fields": "user_name"},
+            auth=(username, password),
+            headers={"Accept": "application/json"},
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            return IntegrationHealthResult(
+                ok=True, detail=f"ServiceNow connected as {username} at {base_url}."
+            )
+        if resp.status_code == 401:
+            return IntegrationHealthResult(
+                ok=False, detail="ServiceNow credentials invalid. Check username and password."
+            )
+        if resp.status_code == 403:
+            return IntegrationHealthResult(
+                ok=False,
+                detail=(
+                    "ServiceNow authenticated but the user cannot read the sys_user table. "
+                    "Grant a role with table read access (e.g. itil)."
+                ),
+            )
+        if resp.status_code == 404:
+            return IntegrationHealthResult(
+                ok=False, detail="ServiceNow instance URL not found. Check the URL."
+            )
+        return IntegrationHealthResult(
+            ok=False, detail=f"ServiceNow returned unexpected status {resp.status_code}."
+        )
+    except Exception as err:
+        return IntegrationHealthResult(ok=False, detail=f"ServiceNow validation failed: {err}")
+
+
 def validate_discord_bot(*, bot_token: str) -> IntegrationHealthResult:
     """Validate a Discord bot token by calling the /users/@me endpoint."""
     try:
