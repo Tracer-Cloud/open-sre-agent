@@ -103,6 +103,24 @@ class TestSlackCredentials:
         creds = resolve_slack_credentials({})
         assert creds == {}
 
+    def test_from_store_bot_token_fallback(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Socket Mode setup stores the token under bot_token, not access_token."""
+        monkeypatch.delenv("SLACK_WEBHOOK_URL", raising=False)
+        monkeypatch.delenv("SLACK_BOT_TOKEN", raising=False)
+        monkeypatch.delenv("SLACK_ACCESS_TOKEN", raising=False)
+
+        def fake_get_credential(service: str, key: str) -> str:
+            if service == "slack" and key == "bot_token":
+                return "xoxb-from-store"
+            return ""
+
+        monkeypatch.setattr(
+            "platform.scheduler.credentials._get_integration_credential",
+            fake_get_credential,
+        )
+        creds = resolve_slack_credentials({})
+        assert creds == {"access_token": "xoxb-from-store"}
+
 
 class TestDiscordCredentials:
     def test_from_params(self) -> None:

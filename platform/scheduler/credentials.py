@@ -67,12 +67,24 @@ def resolve_slack_credentials(task_params: dict[str, str]) -> dict[str, str]:
     if webhook:
         return webhook
 
-    return _resolve_credentials(
+    access_token = _resolve_credentials(
         {},
         service="slack",
         credential_key="access_token",
         env_vars=("SLACK_BOT_TOKEN", "SLACK_ACCESS_TOKEN"),
     )
+    if access_token:
+        return access_token
+
+    # Slack Socket Mode setup stores the bot token under "bot_token"
+    # (integrations/cli.py), not "access_token". An xoxb- bot token is a
+    # valid bearer credential for chat.postMessage, so surface it under the
+    # access_token key the delivery path expects.
+    bot_token = _get_integration_credential("slack", "bot_token")
+    if bot_token:
+        return {"access_token": bot_token}
+
+    return {}
 
 
 def resolve_discord_credentials(task_params: dict[str, str]) -> dict[str, str]:
