@@ -1,15 +1,15 @@
 name: terraform-opensre-backend (validate)
 
-# Runs terraform fmt + init + validate against infra/terraform/
-# on every PR that touches the backend infra. Validation only — no AWS
-# credentials, no plan, never apply. Apply is developer-local
-# (make deploy-fargate-apply); when plan-from-CI is wanted later, model the
-# OIDC role assumption on terraform-bench.yml.
+# Runs terraform fmt + init + validate against infra/slack/terraform/
+# (per-team stack and the shared cluster root) on every PR that touches the
+# backend infra. Validation only — no AWS credentials, no plan, never apply.
+# Apply is developer-local (make deploy-fargate-apply); when plan-from-CI is
+# wanted later, model the OIDC role assumption on terraform-bench.yml.
 
 on:
   pull_request:
     paths:
-      - "infra/terraform/**"
+      - "infra/slack/terraform/**"
       - ".github/workflows/terraform-opensre-backend.yml"
   workflow_dispatch:
 
@@ -27,7 +27,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: infra/terraform
+        working-directory: infra/slack/terraform
 
     env:
       TF_IN_AUTOMATION: "true"
@@ -45,8 +45,16 @@ jobs:
       - name: terraform fmt
         run: terraform fmt -check -recursive -no-color
 
-      - name: terraform init (no backend)
+      - name: terraform init (per-team stack, no backend)
         run: terraform init -backend=false -no-color
 
-      - name: terraform validate
+      - name: terraform validate (per-team stack)
         run: terraform validate -no-color
+
+      - name: terraform init (shared cluster, no backend)
+        run: terraform init -backend=false -no-color
+        working-directory: infra/slack/terraform/cluster
+
+      - name: terraform validate (shared cluster)
+        run: terraform validate -no-color
+        working-directory: infra/slack/terraform/cluster

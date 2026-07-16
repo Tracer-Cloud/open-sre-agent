@@ -2,9 +2,17 @@
 # Never commit real tokens. All secrets are marked sensitive in variables.tf
 # and stored in SSM SecureString at apply time.
 
-region     = "us-east-1"
-name_prefix = "opensre"
-image_uri  = "<account>.dkr.ecr.us-east-1.amazonaws.com/opensre:latest"
+region = "us-east-1"
+image_uri = "<account>.dkr.ecr.us-east-1.amazonaws.com/opensre:latest"
+
+# One shared cluster (created by ../cluster); one service per team on it.
+cluster_name = "opensre-shared"
+
+# Team identity. Convention: name_prefix = opensre-<env>-<team>. `env`+`team`
+# also name the memory bucket (opensre-memories-<env>-<team>) and tag resources.
+name_prefix = "opensre-dev-dogfood"
+team        = "dogfood"
+env         = "dev"
 
 llm_provider = "bedrock"
 

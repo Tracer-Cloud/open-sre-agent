@@ -1,6 +1,6 @@
 output "cluster_name" {
-  description = "ECS cluster running the OpenSRE services"
-  value       = aws_ecs_cluster.this.name
+  description = "Shared ECS cluster running this team's services"
+  value       = data.aws_ecs_cluster.shared.cluster_name
 }
 
 output "web_service_name" {
@@ -26,4 +26,14 @@ output "gateway_log_group" {
 output "web_endpoint" {
   description = "HTTPS endpoint for the web API (null without certificate_arn; point your DNS record here)"
   value       = length(aws_lb.web) > 0 ? "https://${aws_lb.web[0].dns_name}" : null
+}
+
+output "memories_bucket" {
+  description = "Per-team S3 bucket backing the persistent agent memory filesystem"
+  value       = aws_s3_bucket.memories.bucket
+}
+
+output "memories_file_system_arn" {
+  description = "ARN of the S3 Files filesystem mounted at /workspace/memories in every task"
+  value       = aws_s3files_file_system.memories.arn
 }
