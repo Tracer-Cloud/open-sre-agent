@@ -139,6 +139,7 @@
               "posthog-mcp",
               "sentry",
               "sentry-mcp",
+              "servicenow",
               "signoz",
               "tempo",
               "splunk",
