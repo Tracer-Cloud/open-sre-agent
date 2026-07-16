@@ -86,6 +86,15 @@ def test_install_ps1_contains_auto_onboarding_launch_hook() -> None:
     assert "[System.Console]::IsInputRedirected" in source
 
 
+def test_install_ps1_soft_installs_github_cli_via_winget() -> None:
+    source = INSTALL_PS1.read_text()
+
+    assert "function Ensure-OpenSreGithubCli" in source
+    assert "OPENSRE_SKIP_GH_INSTALL" in source
+    assert "winget install --id GitHub.cli" in source
+    assert "Ensure-OpenSreGithubCli" in source
+
+
 def test_install_ps1_keeps_download_urls_verbose_only() -> None:
     source = INSTALL_PS1.read_text()
 
