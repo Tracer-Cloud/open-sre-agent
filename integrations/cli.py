@@ -390,6 +390,26 @@ def _setup_opensearch() -> None:
     upsert_integration("opensearch", {"credentials": creds})
 
 
+def _setup_servicenow() -> None:
+    instance_url = _p("Instance URL (e.g. https://dev12345.service-now.com)")
+    if not instance_url:
+        _die("instance_url is required.")
+    username = _p("Username")
+    password = _p("Password", secret=True)
+    if not username or not password:
+        _die("username and password are required.")
+    upsert_integration(
+        "servicenow",
+        {
+            "credentials": {
+                "instance_url": instance_url,
+                "username": username,
+                "password": password,
+            }
+        },
+    )
+
+
 def _setup_rds() -> None:
     host = _p("Host (e.g. mydb.xxxx.us-east-1.rds.amazonaws.com)")
     port = _p("Port", default="5432")
@@ -1415,6 +1435,7 @@ _HANDLERS: dict[str, Any] = {
     "tempo": _setup_tempo,
     "pagerduty": _setup_pagerduty,
     "kubernetes": _setup_kubernetes,
+    "servicenow": _setup_servicenow,
 }
 
 

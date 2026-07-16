@@ -195,6 +195,14 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         verify_order=50,
     ),
     IntegrationSpec(
+        service="servicenow",
+        aliases=("service now", "service-now"),
+        has_verifier=True,
+        direct_effective=True,
+        setup_order=41,
+        verify_order=55,
+    ),
+    IntegrationSpec(
         service="discord",
         has_verifier=True,
         direct_effective=True,

@@ -73,6 +73,7 @@ class EffectiveIntegrations(StrictConfigModel):
     gitlab: EffectiveIntegrationEntry | None = None
     vercel: EffectiveIntegrationEntry | None = None
     jira: EffectiveIntegrationEntry | None = None
+    servicenow: EffectiveIntegrationEntry | None = None
     opsgenie: EffectiveIntegrationEntry | None = None
     pagerduty: EffectiveIntegrationEntry | None = None
     incident_io: EffectiveIntegrationEntry | None = None
