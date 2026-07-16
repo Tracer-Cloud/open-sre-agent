@@ -5,6 +5,7 @@ from __future__ import annotations
 import httpx
 
 from integrations.config_models import SlackWebhookConfig
+from platform.common.url_validation import validate_https_or_loopback_http_url
 
 from .shared import IntegrationHealthResult
 
@@ -122,7 +123,16 @@ def validate_servicenow_integration(
     *, instance_url: str, username: str, password: str
 ) -> IntegrationHealthResult:
     """Validate ServiceNow connectivity with a minimal authenticated table read."""
-    base_url = instance_url.rstrip("/")
+    # Refuse plaintext HTTP to non-loopback hosts before any request is made —
+    # the probe sends the password as HTTP Basic auth.
+    try:
+        base_url = validate_https_or_loopback_http_url(
+            instance_url.strip().rstrip("/"),
+            service_name="ServiceNow",
+            field_name="instance URL",
+        )
+    except ValueError as err:
+        return IntegrationHealthResult(ok=False, detail=str(err))
     try:
         resp = httpx.get(
             f"{base_url}/api/now/table/sys_user",

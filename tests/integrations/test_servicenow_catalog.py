@@ -120,13 +120,73 @@ def test_env_loader_skips_servicenow_without_credentials(
     assert effective.get("servicenow") is None
 
 
-def test_env_services_banner_lists_servicenow_without_keyring(
+def test_env_services_banner_requires_all_env_credentials(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("SERVICENOW_INSTANCE_URL", "https://dev12345.service-now.com")
     monkeypatch.setenv("SERVICENOW_USERNAME", "admin")
 
+    # URL + username alone must not read as configured: the verifier and the
+    # env loader both require a password, and the banner must agree with them.
+    assert "servicenow" not in load_env_integration_services()
+
+    monkeypatch.setenv("SERVICENOW_PASSWORD", "s3cret")
     assert "servicenow" in load_env_integration_services()
+
+
+def test_classify_servicenow_rejects_plain_http_for_remote_hosts() -> None:
+    resolved = classify_integrations(
+        [
+            {
+                "id": "servicenow-http",
+                "service": "servicenow",
+                "status": "active",
+                "credentials": {
+                    "instance_url": "http://dev12345.service-now.com",
+                    "username": "admin",
+                    "password": "s3cret",
+                },
+            }
+        ]
+    )
+    assert "servicenow" not in resolved
+
+
+def test_classify_servicenow_allows_http_loopback() -> None:
+    resolved = classify_integrations(
+        [
+            {
+                "id": "servicenow-local",
+                "service": "servicenow",
+                "status": "active",
+                "credentials": {
+                    "instance_url": "http://localhost:8080",
+                    "username": "admin",
+                    "password": "s3cret",
+                },
+            }
+        ]
+    )
+    assert resolved["servicenow"].instance_url == "http://localhost:8080"
+
+
+def test_classify_servicenow_falls_back_to_url_when_instance_url_blank() -> None:
+    resolved = classify_integrations(
+        [
+            {
+                "id": "servicenow-blank",
+                "service": "servicenow",
+                "status": "active",
+                "credentials": {
+                    "instance_url": "   ",
+                    "url": "https://dev9.service-now.com",
+                    "username": "ops",
+                    "password": "pw",
+                },
+            }
+        ]
+    )
+    assert resolved["servicenow"].instance_url == "https://dev9.service-now.com"
 
 
 def test_verify_servicenow_passes_with_full_config() -> None:

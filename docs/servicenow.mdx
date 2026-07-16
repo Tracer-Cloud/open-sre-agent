@@ -60,7 +60,7 @@ Add to `~/.opensre/integrations.json`:
 
 | Field | Description |
 | --- | --- |
-| `instance_url` | **Required.** Your ServiceNow instance URL (e.g., `https://dev12345.service-now.com`) |
+| `instance_url` | **Required.** Your ServiceNow instance URL (e.g., `https://dev12345.service-now.com`). Must use `https://` — plain `http://` is accepted only for localhost/loopback targets. |
 | `username` | **Required.** ServiceNow username for HTTP Basic authentication |
 | `password` | **Required.** Password for the user |
 
@@ -73,9 +73,10 @@ opensre integrations verify servicenow
 Expected output on success:
 
 ```
-Service: servicenow
-Status:  passed
-Detail:  Configured for ServiceNow at https://dev12345.service-now.com.
+SERVICE    │ SOURCE    │ STATUS   │ DETAIL
+━━━━━━━━━━━┿━━━━━━━━━━━┿━━━━━━━━━━┿━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+servicenow │ local env │ ✓ passed │ Configured for ServiceNow at
+           │           │          │ https://dev12345.service-now.com.
 ```
 
 This is a configuration-presence check (`instance_url`, `username`, and `password` are all set) rather than a live API call. The live connectivity check runs during onboarding wizard validation.

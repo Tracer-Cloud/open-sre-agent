@@ -862,7 +862,13 @@ def load_env_integrations() -> list[dict[str, Any]]:
 
     servicenow_instance_url = os.getenv("SERVICENOW_INSTANCE_URL", "").strip()
     servicenow_username = os.getenv("SERVICENOW_USERNAME", "").strip()
-    servicenow_password = resolve_env_credential("SERVICENOW_PASSWORD")
+    # Resolve the password (env, then OS keyring) only once the cheap env vars
+    # are present, so unconfigured installs never pay a keyring roundtrip here.
+    servicenow_password = (
+        resolve_env_credential("SERVICENOW_PASSWORD")
+        if servicenow_instance_url and servicenow_username
+        else ""
+    )
     if servicenow_instance_url and servicenow_username and servicenow_password:
         try:
             servicenow_config = ServiceNowIntegrationConfig.model_validate(

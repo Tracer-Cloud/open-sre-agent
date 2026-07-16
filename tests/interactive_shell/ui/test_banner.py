@@ -11,6 +11,11 @@ from surfaces.interactive_shell.ui.banner import banner_state as banner_state_mo
 from surfaces.interactive_shell.ui.components import rendering as rendering_module
 
 
+def test_integration_display_name_preserves_brand_casing() -> None:
+    assert banner_state_module.integration_display_name("servicenow") == "ServiceNow"
+    assert banner_state_module.integration_display_name("jira") == "Jira"
+
+
 def test_banner_shows_ollama_model(monkeypatch: object) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "ollama")
     monkeypatch.setenv("OLLAMA_MODEL", "qwen2.5:7b")

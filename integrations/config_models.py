@@ -764,7 +764,14 @@ class ServiceNowIntegrationConfig(StrictConfigModel):
     password: str
     integration_id: str = ""
 
-    _normalize_instance_url = field_validator("instance_url", mode="before")(normalize_url())
+    @field_validator("instance_url", mode="before")
+    @classmethod
+    def _normalize_instance_url(cls, value: object) -> str:
+        normalized = normalize_url()(value)
+        return validate_https_or_loopback_http_url(
+            normalized, service_name="servicenow", field_name="instance_url"
+        )
+
     _normalize_strs = field_validator("username", "password", "integration_id", mode="before")(
         normalize_str()
     )

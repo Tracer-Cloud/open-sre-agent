@@ -17,7 +17,8 @@ def classify(
     try:
         cfg = ServiceNowIntegrationConfig.model_validate(
             {
-                "instance_url": credentials.get("instance_url", "") or credentials.get("url", ""),
+                "instance_url": str(credentials.get("instance_url") or "").strip()
+                or str(credentials.get("url") or "").strip(),
                 "username": credentials.get("username", ""),
                 "password": credentials.get("password", ""),
                 "integration_id": record_id,

@@ -290,6 +290,25 @@ def test_validate_servicenow_integration_maps_http_errors(
     assert expected_fragment in result.detail
 
 
+def test_validate_servicenow_integration_rejects_plain_http_remote(monkeypatch) -> None:
+    def _fail_if_called(*_args, **_kwargs):
+        raise AssertionError("no request may be sent for a plaintext-HTTP remote URL")
+
+    monkeypatch.setattr(
+        "surfaces.cli.wizard.integration_validators.http_probe_validators.httpx.get",
+        _fail_if_called,
+    )
+
+    result = validate_servicenow_integration(
+        instance_url="http://dev12345.service-now.com",
+        username="admin",
+        password="s3cret",
+    )
+
+    assert result.ok is False
+    assert "https://" in result.detail
+
+
 def test_validate_servicenow_integration_fails_for_httpx_request_error(monkeypatch) -> None:
     def _raise_request_error(*_args, **_kwargs):
         raise httpx.RequestError(

@@ -99,7 +99,11 @@ def _configure_servicenow() -> tuple[str, str]:
             "ServiceNow username",
             default=_string_value(credentials.get("username")),
         )
-        password = _prompt_value("ServiceNow password", secret=True)
+        password = _prompt_value(
+            "ServiceNow password",
+            default=_string_value(credentials.get("password")),
+            secret=True,
+        )
 
         with _console.status("Validating ServiceNow connection...", spinner="dots"):
             result = validate_servicenow_integration(
