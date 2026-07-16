@@ -101,13 +101,9 @@ class TestDispatchSlash:
             *,
             check: bool,
             timeout: float | None,
-            capture_output: bool,
-            text: bool,
-            encoding: str,
-            errors: str,
             env: dict[str, str],
         ) -> subprocess.CompletedProcess[str]:
-            del check, capture_output, text, encoding, errors, env
+            del check, env
             assert timeout == m._UPDATE_SUBPROCESS_TIMEOUT_SECONDS
             raise subprocess.TimeoutExpired(cmd=cmd, timeout=timeout or 0.0)
 
@@ -2441,10 +2437,17 @@ class TestSlashValidatorFunctions:
 class TestRunCliCommand:
     """Regression: captured subprocess output must survive REPL prompt redraw."""
 
-    def test_timed_delegate_replays_stdout_through_console(
+    def test_timed_delegate_streams_to_the_real_terminal_without_buffering(
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
+        """A timeout alone must not force output capture.
+
+        /update sets ``subprocess_timeout`` as a hang safety net, not to request
+        buffering. Forcing capture here would swallow the install script's own
+        live progress until the whole subprocess exits; letting it inherit the
+        real TTY (like /onboard already does) keeps that progress visible live.
+        """
         from surfaces.interactive_shell.command_registry import cli_parity as m
 
         def _fake_run(
@@ -2452,28 +2455,18 @@ class TestRunCliCommand:
             *,
             check: bool,
             timeout: float | None,
-            capture_output: bool,
-            text: bool,
-            encoding: str,
-            errors: str,
             env: dict[str, str],
         ) -> subprocess.CompletedProcess[str]:
-            del check, timeout, text, encoding, errors
-            assert capture_output is True
+            del check
+            assert timeout == 30.0
             assert env["OPENSRE_PARENT_INTERACTIVE_SHELL"] == "1"
             assert cmd[:3] == [sys.executable, "-m", "surfaces.cli"]
             assert cmd[3:] == ["update"]
-            return subprocess.CompletedProcess(
-                cmd,
-                0,
-                stdout="  opensre 1.0.0 is already up to date.\n",
-                stderr="",
-            )
+            return subprocess.CompletedProcess(cmd, 0)
 
         monkeypatch.setattr(m.subprocess, "run", _fake_run)
-        console, buf = _capture()
+        console, _buf = _capture()
         assert m.run_cli_command(console, ["update"], subprocess_timeout=30.0) is True
-        assert "already up to date" in buf.getvalue()
 
     def test_config_delegate_captures_output(
         self,
