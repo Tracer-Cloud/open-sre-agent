@@ -27,7 +27,7 @@ Copy [`.env.deploy.example`](.env.deploy.example) and export the required variab
 | `TELEGRAM_ALLOWED_USERS` | Recommended | Gateway pairing gate |
 | `LLM_PROVIDER` + API key | Yes | Both containers |
 
-`SLACK_*` variables are ignored by the EC2 deploy (validation warns) — Slack is deployed and operated separately, not from this repo.x
+`SLACK_*` variables are ignored by the EC2 deploy (validation warns) — Slack is deployed and operated separately, not from this repo.
 
 ```bash
 # Step 1 — build and push Docker image to ECR (run once per code change):

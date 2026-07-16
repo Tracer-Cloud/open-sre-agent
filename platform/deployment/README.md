@@ -58,7 +58,7 @@ Copy [`.env.deploy.example`](../../.env.deploy.example) to `.env` in the repo ro
 | `EC2_KEY_NAME` | No | Optional SSH debug key pair |
 
 `SLACK_*` variables are ignored by the EC2 deploy (warning at validation) —
-deploy Slack with Terraform instead.
+Slack is deployed and operated separately, not from this repo.
 
 ### What `make deploy` creates
 

@@ -25,7 +25,7 @@ _MISSING_LABELS: dict[str, str] = {
 }
 _WARNING_LABELS: dict[str, str] = {
     "telegram_users": "Telegram allowed-users configuration (recommended)",
-    "slack_on_ec2": "Slack deploys via Terraform only (a separate Terraform module)",
+    "slack_on_ec2": "Slack is deployed and operated separately, not from this repo",
     "llm_provider_ec2": "LLM provider may not work inside EC2 containers",
 }
 

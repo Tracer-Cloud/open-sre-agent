@@ -1,8 +1,7 @@
 # `platform/deployment/gateway/`
 
 AMI + systemd deployment path for the OpenSRE **Telegram** gateway (long
-polling). Slack deploys via Terraform only, in the
-a separate Terraform module.
+polling). Slack is deployed and operated separately, not from this repo.
 
 This path is an alternative to the main Docker/ECR web+gateway deploy.
 It runs the gateway process directly on the EC2 host as a systemd service,
@@ -55,8 +54,7 @@ Copy [`.env.deploy.example`](../../../.env.deploy.example) and set
 | `TELEGRAM_ALLOWED_USERS` | Recommended | Gateway pairing gate |
 
 `SLACK_*` variables are ignored by this deploy path (validation warns) — Slack
-runs on Fargate via the
-a separate Terraform module.
+is deployed and operated separately, not from this repo.
 
 | `LLM_PROVIDER` + API key | Yes | Gateway service |
 | `OPENSRE_GATEWAY_GIT_REF` | No | Git ref to bake (default: local HEAD SHA) |

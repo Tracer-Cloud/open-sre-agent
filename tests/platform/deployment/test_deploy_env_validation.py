@@ -25,7 +25,7 @@ def test_validate_deploy_env_rejects_slack_only(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Slack deploys via Terraform only — an EC2 deploy without Telegram fails."""
+    """Slack is deployed separately — an EC2 deploy without Telegram fails."""
     monkeypatch.setenv("AWS_ACCESS_KEY_ID", "key")
     monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "secret")
     monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
@@ -43,7 +43,7 @@ def test_validate_deploy_env_rejects_slack_only(
 
     output = capsys.readouterr().out
     assert "MISSING: TELEGRAM_BOT_TOKEN" in output
-    assert "Slack deploys via Terraform only" in output
+    assert "Slack is deployed and operated separately" in output
 
 
 def test_validate_deploy_env_lists_missing_required_vars(
@@ -95,7 +95,7 @@ def test_validate_deploy_env_warns_that_slack_vars_are_ignored(
     prep.validate_deploy_env()
     output = capsys.readouterr().out
     assert "WARN: SLACK_BOT_TOKEN / SLACK_APP_TOKEN — ignored by the EC2 deploy" in output
-    assert "Slack deploys via Terraform only" in output
+    assert "Slack is deployed and operated separately" in output
 
 
 def test_validate_deploy_env_allows_bedrock_without_api_key(

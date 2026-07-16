@@ -1,8 +1,8 @@
 """Fixtures for EC2 deployment tests (web + gateway on one instance).
 
 These tests require AWS credentials and a Telegram bot token and should be
-skipped in CI. The EC2 deploy is Telegram-only — Slack deploys via Terraform
-(a separate Terraform module). Run manually with:
+skipped in CI. The EC2 deploy is Telegram-only — Slack is deployed and operated
+separately, not from this repo. Run manually with:
 pytest tests/deployment/ec2/ -v -s
 """
 
