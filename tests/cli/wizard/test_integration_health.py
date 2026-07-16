@@ -55,6 +55,8 @@ def test_legacy_integration_health_import_surface_still_exports_validators() -> 
         "validate_posthog_integration",
         "validate_posthog_mcp_integration",
         "validate_pagerduty_integration",
+        "validate_rocketchat",
+        "validate_rocketchat_webhook",
         "validate_sentry_integration",
         "validate_sentry_mcp_integration",
         "validate_slack_webhook",

@@ -87,6 +87,7 @@ class EffectiveIntegrations(StrictConfigModel):
     trello: EffectiveIntegrationEntry | None = None
     discord: EffectiveIntegrationEntry | None = None
     telegram: EffectiveIntegrationEntry | None = None
+    rocketchat: EffectiveIntegrationEntry | None = None
     smtp: EffectiveIntegrationEntry | None = None
     whatsapp: EffectiveIntegrationEntry | None = None
     twilio: EffectiveIntegrationEntry | None = None

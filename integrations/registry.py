@@ -209,6 +209,14 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         verify_order=26,
     ),
     IntegrationSpec(
+        service="rocketchat",
+        aliases=("rocket.chat", "rocket chat"),
+        has_verifier=True,
+        direct_effective=True,
+        setup_order=41,
+        verify_order=55,
+    ),
+    IntegrationSpec(
         service="whatsapp",
         has_verifier=True,
         direct_effective=True,

@@ -179,6 +179,7 @@
               "messaging/slack",
               "messaging/discord",
               "messaging/telegram",
+              "messaging/rocketchat",
               "messaging/whatsapp",
               "messaging/twilio-sms"
             ]

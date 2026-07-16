@@ -862,6 +862,46 @@ def _setup_telegram() -> None:
     print("    - opensre integrations verify telegram")
 
 
+def _setup_rocketchat() -> None:
+    from integrations.rocketchat.verifier import verify_rocketchat
+
+    server_url = _p("Rocket.Chat server URL (e.g. https://chat.example.com)")
+    auth_token = _p("Rocket.Chat personal access token (blank for webhook-only)", secret=True)
+    user_id = _p("Rocket.Chat user ID (blank for webhook-only)")
+    webhook_url = _p("Rocket.Chat incoming webhook URL (optional)", secret=True)
+    has_pat = bool(server_url and auth_token and user_id)
+    if not has_pat and not webhook_url:
+        _die("Provide either a webhook_url or all of server_url, auth_token, and user_id.")
+    default_channel = _p("Default channel (e.g. #incidents, optional)")
+    print("\n  Validating Rocket.Chat credentials...")
+    result = verify_rocketchat(
+        "setup",
+        {
+            "server_url": server_url,
+            "auth_token": auth_token,
+            "user_id": user_id,
+            "webhook_url": webhook_url,
+        },
+    )
+    if result["status"] != "passed":
+        _die(result["detail"])
+    print(f"  {result['detail']}")
+    upsert_integration(
+        "rocketchat",
+        {
+            "credentials": {
+                "server_url": server_url,
+                "auth_token": auth_token,
+                "user_id": user_id,
+                "webhook_url": webhook_url,
+                "default_channel": default_channel or None,
+            }
+        },
+    )
+    print("  Next:")
+    print("    - opensre integrations verify rocketchat")
+
+
 def _setup_smtp() -> None:
     host = _p("SMTP host (e.g. smtp.gmail.com)")
     from_address = _p("From email address")
@@ -1400,6 +1440,7 @@ _HANDLERS: dict[str, Any] = {
     "mongodb": _setup_mongodb,
     "discord": _setup_discord,
     "telegram": _setup_telegram,
+    "rocketchat": _setup_rocketchat,
     "smtp": _setup_smtp,
     "whatsapp": _setup_whatsapp,
     "twilio": _setup_twilio,

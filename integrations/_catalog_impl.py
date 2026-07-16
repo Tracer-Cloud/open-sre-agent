@@ -37,6 +37,7 @@ from integrations.config_models import (
     KubernetesIntegrationConfig,
     OpsGenieIntegrationConfig,
     PagerDutyIntegrationConfig,
+    RocketChatConfig,
     SlackWebhookConfig,
     SMTPIntegrationConfig,
     SplunkIntegrationConfig,
@@ -98,6 +99,7 @@ from integrations.registry import (
     family_key,
     service_key,
 )
+from integrations.rocketchat import classify as _classify_rocketchat
 from integrations.sentry import build_sentry_config
 from integrations.sentry import classify as _classify_sentry
 from integrations.sentry_mcp import DEFAULT_SENTRY_MCP_URL, build_sentry_mcp_config
@@ -260,6 +262,7 @@ _CLASSIFIERS: dict[str, _ClassifyFn] = {
     "jira": _classify_jira,
     "discord": _classify_discord,
     "telegram": _classify_telegram,
+    "rocketchat": _classify_rocketchat,
     "slack": _classify_slack,
     "whatsapp": _classify_whatsapp,
     "twilio": _classify_twilio,
@@ -891,6 +894,24 @@ def load_env_integrations() -> list[dict[str, Any]]:
             _report_env_loader_failure(exc, integration="telegram")
         else:
             integrations.append(_active_env_record("telegram", tg_config.model_dump()))
+
+    rocketchat_auth_token = os.getenv("ROCKETCHAT_AUTH_TOKEN", "").strip()
+    rocketchat_webhook_url = os.getenv("ROCKETCHAT_WEBHOOK_URL", "").strip()
+    if rocketchat_auth_token or rocketchat_webhook_url:
+        try:
+            rocketchat_config = RocketChatConfig.model_validate(
+                {
+                    "server_url": os.getenv("ROCKETCHAT_SERVER_URL", "").strip(),
+                    "auth_token": rocketchat_auth_token,
+                    "user_id": os.getenv("ROCKETCHAT_USER_ID", "").strip(),
+                    "webhook_url": rocketchat_webhook_url,
+                    "default_channel": os.getenv("ROCKETCHAT_DEFAULT_CHANNEL", "").strip() or None,
+                }
+            )
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="rocketchat")
+        else:
+            integrations.append(_active_env_record("rocketchat", rocketchat_config.model_dump()))
 
     slack_bot_token = os.getenv("SLACK_BOT_TOKEN", "").strip()
     slack_webhook_url = os.getenv("SLACK_WEBHOOK_URL", "").strip()

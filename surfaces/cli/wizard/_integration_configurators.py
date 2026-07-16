@@ -14,6 +14,7 @@ from surfaces.cli.wizard.configurators.alerting import (
 from surfaces.cli.wizard.configurators.aws import _configure_aws
 from surfaces.cli.wizard.configurators.chat_notifications import (
     _configure_discord,
+    _configure_rocketchat,
     _configure_slack,
     _configure_telegram,
 )
@@ -84,6 +85,7 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
         "slack": _configure_slack,
         "discord": _configure_discord,
         "telegram": _configure_telegram,
+        "rocketchat": _configure_rocketchat,
         "aws": _configure_aws,
         "github": _configure_github_mcp,
         "sentry": _configure_sentry,
@@ -116,6 +118,7 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
         "slack": "slack",
         "discord": "discord",
         "telegram": "telegram",
+        "rocketchat": "rocket.chat",
         "aws": "aws",
         "github": "github mcp",
         "sentry": "sentry",

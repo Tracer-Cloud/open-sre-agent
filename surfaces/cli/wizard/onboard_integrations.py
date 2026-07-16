@@ -146,6 +146,12 @@ ONBOARD_INTEGRATION_CHOICES: tuple[Choice, ...] = (
         hint="Post findings to a Telegram chat",
     ),
     Choice(
+        value="rocketchat",
+        label="Rocket.Chat",
+        group="Incident & Comms",
+        hint="Post findings to a Rocket.Chat channel",
+    ),
+    Choice(
         value="google_docs",
         label="Google Docs",
         group="Incident & Comms",
