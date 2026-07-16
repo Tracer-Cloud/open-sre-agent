@@ -40,6 +40,24 @@ class TestDigestDeliveryReadiness:
         assert slack_delivery_ready() is True
         assert delivery_provider_ready("slack") is True
 
+    def test_slack_ready_with_only_bot_token_stored(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Socket Mode setup stores only bot_token (no webhook, no env var)."""
+        monkeypatch.delenv("SLACK_WEBHOOK_URL", raising=False)
+        monkeypatch.delenv("SLACK_BOT_TOKEN", raising=False)
+        monkeypatch.delenv("SLACK_ACCESS_TOKEN", raising=False)
+
+        def fake_get_credential(service: str, key: str) -> str:
+            if service == "slack" and key == "bot_token":
+                return "xoxb-socket-mode"
+            return ""
+
+        monkeypatch.setattr(
+            "platform.scheduler.credentials._get_integration_credential",
+            fake_get_credential,
+        )
+        assert slack_delivery_ready() is True
+        assert delivery_provider_ready(Provider.SLACK) is True
+
     def test_none_ready(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
             "integrations.sentry.digest_delivery.resolve_telegram_credentials",
