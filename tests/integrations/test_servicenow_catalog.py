@@ -199,7 +199,7 @@ def test_verify_servicenow_passes_with_full_config() -> None:
         },
     )
     assert result["status"] == "passed"
-    assert "dev12345.service-now.com" in result["detail"]
+    assert result["detail"] == "Configured for ServiceNow at https://dev12345.service-now.com."
 
 
 def test_verify_servicenow_missing_without_credentials() -> None:

@@ -257,8 +257,7 @@ def test_validate_servicenow_integration_succeeds(monkeypatch) -> None:
     )
 
     assert result.ok is True
-    assert "admin" in result.detail
-    assert "https://dev12345.service-now.com" in result.detail
+    assert result.detail == "ServiceNow connected as admin at https://dev12345.service-now.com."
 
 
 @pytest.mark.parametrize(
