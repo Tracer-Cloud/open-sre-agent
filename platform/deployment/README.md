@@ -101,9 +101,9 @@ These Makefile targets provision **test-case** AWS stacks for the e2e suite, not
 
 The Terraform module for running Cloud-OpsBench on AWS Fargate lives with the
 benchmark code at
-[`tests/benchmarks/cloudopsbench/infra/`](../../tests/benchmarks/cloudopsbench/infra/).
+[`infra/bench/`](../../infra/bench/).
 The one-time Terraform state bootstrap script lives at
-[`tests/benchmarks/cloudopsbench/infra/scripts/bootstrap-bench-state.sh`](../../tests/benchmarks/cloudopsbench/infra/scripts/bootstrap-bench-state.sh).
-See that directory's [README](../../tests/benchmarks/cloudopsbench/infra/README.md)
+[`infra/bench/scripts/bootstrap-bench-state.sh`](../../infra/bench/scripts/bootstrap-bench-state.sh).
+See that directory's [README](../../infra/bench/README.md)
 and the benchmark runner guide at
 [`tests/benchmarks/cloudopsbench/README.md`](../../tests/benchmarks/cloudopsbench/README.md).

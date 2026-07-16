@@ -1,7 +1,7 @@
 # Container image for running Cloud-OpsBench on AWS Fargate.
 #
 # Build (from repo root):
-#   docker build -f tests/benchmarks/cloudopsbench/infra/Dockerfile.bench -t <ecr-url>:<tag> --platform linux/amd64 .
+#   docker build -f infra/bench/Dockerfile.bench -t <ecr-url>:<tag> --platform linux/amd64 .
 #
 # Push:
 #   aws ecr get-login-password --region us-east-1 \
@@ -122,7 +122,7 @@ COPY --from=builder --chown=bench:bench /app /app
 # Entrypoint wrapper: pulls the corpus from S3 before invoking the bench
 # CLI. Required env (set by the ECS task definition):
 #   BENCH_CORPUS_S3_BUCKET, BENCH_CORPUS_HF_REVISION
-COPY --chown=bench:bench tests/benchmarks/cloudopsbench/infra/entrypoint.sh /app/entrypoint.sh
+COPY --chown=bench:bench infra/bench/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh \
     && chown bench:bench /app
 # ^^^ chown the WORKDIR itself, not just its contents. Without this the bench
