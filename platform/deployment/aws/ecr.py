@@ -81,8 +81,13 @@ def build_and_push(
     build_args: dict[str, str] | None = None,
     region: str = DEFAULT_REGION,
     context_dir: Path | None = None,
+    extra_tags: tuple[str, ...] = (),
 ) -> str:
-    """Build a Docker image and push it to ECR. Returns the full image URI."""
+    """Build a Docker image and push it to ECR. Returns the full image URI.
+
+    ``extra_tags`` are pushed as additional tags of the same image (one build,
+    N tags) — e.g. a moving ``latest`` alongside an immutable git-SHA tag.
+    """
     docker_login(region)
 
     if dockerfile_path.is_file():
@@ -115,6 +120,11 @@ def build_and_push(
 
     subprocess.run(cmd, check=True)
     subprocess.run(["docker", "push", full_uri], check=True)
+
+    for extra_tag in extra_tags:
+        extra_uri = f"{repository_uri}:{extra_tag}"
+        subprocess.run(["docker", "tag", full_uri, extra_uri], check=True)
+        subprocess.run(["docker", "push", extra_uri], check=True)
 
     return full_uri
 

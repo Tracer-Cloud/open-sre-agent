@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import subprocess
 import time
 
 from botocore.exceptions import ClientError
@@ -123,15 +124,43 @@ def _resolve_image_uri() -> str:
     )
 
 
+def _image_tag() -> str:
+    """Git-pinned image tag: ``sha-<short-sha>``, ``-dirty`` when uncommitted.
+
+    Prod deploys pin this tag (``:latest`` is rejected there), so it must
+    identify the exact source: a build from a dirty working tree is marked
+    ``-dirty`` and can never masquerade as a reproducible release.
+    """
+    short_sha = subprocess.run(
+        ["git", "rev-parse", "--short", "HEAD"],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    dirty = subprocess.run(
+        ["git", "status", "--porcelain"],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    return f"sha-{short_sha}-dirty" if dirty else f"sha-{short_sha}"
+
+
 def build_image() -> str:
     """Build the Docker image and push it to ECR.
 
-    Saves the resulting image URI locally so subsequent ``make deploy`` calls
+    One build, two tags: an immutable-by-convention ``sha-<git-sha>`` (what
+    prod deploys pin; rollback is redeploying the previous SHA) plus a moving
+    ``latest`` for dev convenience.
+
+    Saves the SHA-tagged image URI locally so subsequent ``make deploy`` calls
     can reuse it without rebuilding. Run this once per code change, then call
     ``make deploy`` as many times as needed.
 
     Returns:
-        The full ECR image URI (e.g. ``123….dkr.ecr.us-east-1.amazonaws.com/opensre:latest``).
+        The full ECR image URI (e.g. ``123….dkr.ecr.us-east-1.amazonaws.com/opensre:sha-abc1234``).
     """
     assert_deploy_account(REGION)
     stack = get_stack()
@@ -145,14 +174,16 @@ def build_image() -> str:
     repo = ecr.create_repository(stack.ecr_repo_name, stack.stack_name, REGION)
     print(f"  - Repository: {repo['uri']}")
 
-    print("Building and pushing Docker image...")
+    tag = _image_tag()
+    print(f"Building and pushing Docker image ({tag} + {ECR_DEFAULT_IMAGE_TAG})...")
     image_uri = ecr.build_and_push(
         dockerfile_path=DOCKERFILE,
         repository_uri=repo["uri"],
-        tag=ECR_DEFAULT_IMAGE_TAG,
+        tag=tag,
         platform=ECR_DOCKER_PLATFORM,
         context_dir=REPO_ROOT,
         region=REGION,
+        extra_tags=(ECR_DEFAULT_IMAGE_TAG,),
     )
     save_image_uri(image_uri)
 
