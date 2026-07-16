@@ -27,6 +27,21 @@ build
 .cache
 __pycache__
 
+# Ignore Python virtualenvs (the image installs its own deps) and tool caches
+.venv
+.venv-*
+venv
+*.egg-info
+.mypy_cache
+.pytest_cache
+.ruff_cache
+htmlcov
+
+# Ignore Terraform working dirs and state
+**/.terraform
+*.tfstate
+*.tfstate.*
+
 # Ignore IDE and editor configurations
 .vscode
 .idea
