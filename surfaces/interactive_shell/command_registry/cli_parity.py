@@ -134,10 +134,10 @@ def run_cli_command(
                     f"[{ERROR}]CLI command exited with non-zero code {captured_result.returncode}[/]"
                 )
         else:
-            interactive_result = (
-                subprocess.run(cmd, check=False, timeout=subprocess_timeout, env=child_env)
-                if subprocess_timeout is not None
-                else subprocess.run(cmd, check=False, env=child_env)
+            # timeout=None is a no-op for subprocess.run, so this covers both the
+            # timed (/update) and untimed (/onboard) interactive callers.
+            interactive_result = subprocess.run(
+                cmd, check=False, timeout=subprocess_timeout, env=child_env
             )
             exit_code = interactive_result.returncode
             # The child wrote straight to the terminal, bypassing Rich, so Rich has no
@@ -157,6 +157,9 @@ def run_cli_command(
         console.print(f"[{ERROR}]error:[/] CLI command timed out")
     except KeyboardInterrupt:
         exit_code = None
+        # Same cursor hazard as the normal-exit path: Ctrl+C can land mid-line while
+        # a streamed child is mid-redraw of its own progress bar.
+        prepare_repl_output_line()
         console.print(f"[{DIM}]CLI command cancelled (Ctrl+C).[/]")
     except Exception as exc:
         exit_code = None

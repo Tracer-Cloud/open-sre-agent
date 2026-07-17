@@ -2665,9 +2665,10 @@ class TestRunCliCommand:
             cmd: list[str],
             *,
             check: bool,
+            timeout: float | None = None,
             env: dict[str, str],
         ) -> subprocess.CompletedProcess[str]:
-            del check
+            del check, timeout
             assert env["OPENSRE_PARENT_INTERACTIVE_SHELL"] == "1"
             captured.append(cmd)
             return subprocess.CompletedProcess(cmd, 0)
@@ -2701,9 +2702,10 @@ class TestRunCliCommand:
             cmd: list[str],
             *,
             check: bool,
+            timeout: float | None = None,
             env: dict[str, str],
         ) -> subprocess.CompletedProcess[str]:
-            del check
+            del check, timeout
             assert env["OPENSRE_PARENT_INTERACTIVE_SHELL"] == "1"
             captured.append(cmd)
             return subprocess.CompletedProcess(cmd, 0)
@@ -2726,9 +2728,10 @@ class TestRunCliCommand:
             cmd: list[str],
             *,
             check: bool,
+            timeout: float | None = None,
             env: dict[str, str],
         ) -> subprocess.CompletedProcess[str]:
-            del check
+            del check, timeout
             captured_envs.append(env)
             return subprocess.CompletedProcess(cmd, 0)
 
