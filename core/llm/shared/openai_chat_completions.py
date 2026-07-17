@@ -247,13 +247,9 @@ def invoke_with_litellm_agent_retries(
             if is_exception_named(err, "AuthenticationError"):
                 raise RuntimeError(f"{provider_name} authentication failed.") from err
             if is_exception_named(err, "NotFoundError"):
-                from core.llm.providers.azure_openai import is_azure_litellm_model
-
-                if is_azure_litellm_model(model):
-                    raise RuntimeError(
-                        _litellm_not_found_message(provider_label=provider_name, model=model)
-                    ) from err
-                raise RuntimeError(f"{provider_name} model '{model}' not found.") from err
+                raise RuntimeError(
+                    _litellm_not_found_message(provider_label=provider_name, model=model)
+                ) from err
             if is_exception_named(err, "PermissionDeniedError"):
                 raise RuntimeError(f"{provider_name} request forbidden: {err}") from err
             if is_exception_named(err, "BadRequestError"):

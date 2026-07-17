@@ -79,6 +79,7 @@ def ensure_endpoint_settings(provider: ProviderOption) -> dict[str, str] | None:
 def choose_azure_deployment(
     *,
     default: str | None,
+    model_env: str = "AZURE_OPENAI_REASONING_MODEL",
     back_on_cancel: bool = False,
 ) -> str:
     """Prompt for an Azure OpenAI deployment name from the user's resource."""
@@ -92,7 +93,7 @@ def choose_azure_deployment(
             "Enter the deployment name from the Azure portal.[/]"
         )
         return _prompt_value(
-            "Azure OpenAI deployment name (AZURE_OPENAI_REASONING_MODEL)",
+            f"Azure OpenAI deployment name ({model_env})",
             default=resolved_default,
             allow_empty=False,
             back_on_cancel=back_on_cancel,
@@ -125,7 +126,7 @@ def choose_azure_deployment(
         return selection
 
     return _prompt_value(
-        "Custom Azure OpenAI deployment name (AZURE_OPENAI_REASONING_MODEL)",
+        f"Custom Azure OpenAI deployment name ({model_env})",
         default=resolved_default,
         allow_empty=False,
         back_on_cancel=back_on_cancel,
@@ -142,7 +143,11 @@ def choose_provider_model(
 ) -> str:
     """Prompt for a model or Azure deployment after provider credentials are set."""
     if is_azure_openai_provider(provider.value):
-        return choose_azure_deployment(default=default, back_on_cancel=back_on_cancel)
+        return choose_azure_deployment(
+            default=default,
+            model_env=model_provider.model_env,
+            back_on_cancel=back_on_cancel,
+        )
     return _choose_model(
         model_provider,
         default=default,

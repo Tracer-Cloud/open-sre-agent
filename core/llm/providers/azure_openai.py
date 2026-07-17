@@ -74,7 +74,9 @@ def azure_deployments_list_curl_command(*, api_version: str = "") -> str:
 def is_azure_deployment_lookup_error(error: Exception) -> bool:
     """Return whether *error* likely indicates a missing Azure deployment."""
     message = str(error).lower()
-    return "404" in message or "not found" in message or "deployment" in message
+    return "404" in message or (
+        "not found" in message and ("deployment" in message or "azure" in message)
+    )
 
 
 def is_azure_openai_failure_message(message: str) -> bool:
@@ -131,9 +133,9 @@ def list_azure_openai_deployments(
             timeout=30.0,
         )
         response.raise_for_status()
+        payload = response.json()
     except Exception:
         return []
-    payload = response.json()
     deployments: list[str] = []
     for item in payload.get("data", []):
         if not isinstance(item, dict):
