@@ -819,7 +819,7 @@ def capture_github_login_abandoned(*, variant: str, reason: str) -> None:
 
 def capture_github_login_completed(username: str, *, variant: str | None = None) -> None:
     properties: Properties = {"github_username": username}
-    if variant:
+    if variant is not None:
         properties["github_gate_variant"] = variant
     _capture(Event.GITHUB_LOGIN_COMPLETED, properties)
 

@@ -225,7 +225,7 @@ def test_orchestrator_failure_then_decline_retry_skips_in_control(
         "authenticate_and_configure_github",
         lambda **_kwargs: GitHubLoginResult(ok=False, detail="cannot verify"),
     )
-    monkeypatch.setattr(flg, "_ask_retry", lambda _console: False)
+    monkeypatch.setattr(flg, "_ask_retry", lambda _console: "declined_retry")
     deferred: list[bool] = []
     monkeypatch.setattr(flg, "write_github_login_deferred", deferred.append)
     monkeypatch.setattr(flg, "capture_github_login_prompted", lambda **_kwargs: None)
@@ -272,7 +272,7 @@ def test_orchestrator_forced_decline_retry_aborts_startup(
         "authenticate_and_configure_github",
         lambda **_kwargs: GitHubLoginResult(ok=False, detail="cannot verify"),
     )
-    monkeypatch.setattr(flg, "_ask_retry", lambda _console: False)
+    monkeypatch.setattr(flg, "_ask_retry", lambda _console: "declined_retry")
     abandoned: list[tuple[str, str]] = []
     deferred: list[bool] = []
     monkeypatch.setattr(flg, "write_github_login_deferred", deferred.append)
@@ -289,6 +289,31 @@ def test_orchestrator_forced_decline_retry_aborts_startup(
     assert proceed is False
     assert deferred == []
     assert abandoned == [("forced", "declined_retry")]
+
+
+def test_orchestrator_forced_cancel_retry_aborts_startup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENSRE_GITHUB_GATE_VARIANT", "forced")
+    monkeypatch.setattr(
+        github_login_mod,
+        "authenticate_and_configure_github",
+        lambda **_kwargs: GitHubLoginResult(ok=False, detail="cannot verify"),
+    )
+    monkeypatch.setattr(flg, "_ask_retry", lambda _console: "cancelled")
+    abandoned: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        flg,
+        "capture_github_login_abandoned",
+        lambda *, variant, reason: abandoned.append((variant, reason)),
+    )
+    monkeypatch.setattr(flg, "capture_github_login_prompted", lambda **_kwargs: None)
+    monkeypatch.setattr(flg, "stamp_github_gate_variant", lambda _variant: None)
+
+    proceed = flg.require_github_login_on_first_launch(_console())
+
+    assert proceed is False
+    assert abandoned == [("forced", "cancelled")]
 
 
 def test_orchestrator_forced_success_proceeds(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -326,7 +351,7 @@ def test_orchestrator_retries_until_success(monkeypatch: pytest.MonkeyPatch) -> 
         return GitHubLoginResult(ok=True, username="octocat", detail="OK")
 
     monkeypatch.setattr(github_login_mod, "authenticate_and_configure_github", _login)
-    monkeypatch.setattr(flg, "_ask_retry", lambda _console: True)
+    monkeypatch.setattr(flg, "_ask_retry", lambda _console: "retry")
     monkeypatch.setattr(flg, "capture_github_login_completed", lambda _username, **_kwargs: None)
     monkeypatch.setattr(flg, "clear_github_login_deferral", lambda: None)
     monkeypatch.setattr(flg, "capture_github_login_prompted", lambda **_kwargs: None)

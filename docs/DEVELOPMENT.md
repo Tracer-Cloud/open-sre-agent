@@ -142,6 +142,8 @@ On the first interactive launch (all platforms, except CI/CD and test harnesses)
 
 Every gate exposure emits `github_login_prompted` with `github_gate_variant`. Outcomes are `github_login_completed`, `github_login_skipped` (control only), or `github_login_abandoned` (forced drop-off). The variant is also stamped as a persistent event property so later REPL events break down by cohort. On success OpenSRE sets `github_username` as a PostHog **person property** (via `$identify`/`$set`, which forces `$process_person_profile: True` for that one event — this is the only intentional PII OpenSRE sends). A configured GitHub integration suppresses re-prompting on later launches.
 
+Because bucketing is local and does not call PostHog feature flags, PostHog's built-in experiment exposure chart will not populate automatically. Configure `github_login_prompted` as the custom exposure event and use `github_gate_variant` as the breakdown/filter for funnels and trends.
+
 The existing kill-switches still apply: `OPENSRE_NO_TELEMETRY` / `DO_NOT_TRACK` make analytics calls no-ops, but the login itself still runs. Set `OPENSRE_SKIP_GITHUB_LOGIN=1` to bypass the login gate entirely (also auto-bypassed in CI — `CI=true`, `GITHUB_ACTIONS=true` — and in pytest).
 
 ### Kill-switch matrix

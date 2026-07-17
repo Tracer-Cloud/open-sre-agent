@@ -46,6 +46,9 @@ _SKIP_ENV_VAR = "OPENSRE_SKIP_GITHUB_LOGIN"
 _TRUTHY = frozenset({"1", "true", "yes", "on"})
 _SIGN_IN_CHOICE = "sign_in"
 _SKIP_CHOICE = "skip"
+_RETRY_CHOICE = "retry"
+_DECLINE_RETRY_CHOICE = "declined_retry"
+_CANCEL_RETRY_CHOICE = "cancelled"
 
 
 def _skip_requested() -> bool:
@@ -244,16 +247,16 @@ def _offer_github_login(_console: Console, *, allow_skip: bool) -> bool:
     return bool(choice == _SIGN_IN_CHOICE)
 
 
-def _ask_retry(_console: Console) -> bool:
+def _ask_retry(_console: Console) -> str:
     import questionary
 
     try:
         answer = questionary.confirm("Try GitHub sign-in again?", default=True).ask()
     except (EOFError, KeyboardInterrupt):
-        return False
+        return _CANCEL_RETRY_CHOICE
     if answer is None:
-        return False
-    return bool(answer)
+        return _CANCEL_RETRY_CHOICE
+    return _RETRY_CHOICE if answer else _DECLINE_RETRY_CHOICE
 
 
 def _attempt_login(console: Console, *, allow_skip: bool, variant: str) -> str:
@@ -313,10 +316,6 @@ def require_github_login_on_first_launch(console: Console | None = None) -> bool
         _print_skip_guidance(con)
         return True
 
-    if not allow_skip:
-        # Forced: no menu — go straight into device flow.
-        _offer_github_login(con, allow_skip=False)
-
     while True:
         outcome = _attempt_login(con, allow_skip=allow_skip, variant=variant)
         if outcome == "success":
@@ -330,13 +329,14 @@ def require_github_login_on_first_launch(console: Console | None = None) -> bool
             capture_github_login_abandoned(variant=variant, reason="cancelled")
             _print_forced_abort_guidance(con)
             return False
-        if not _ask_retry(con):
+        retry_decision = _ask_retry(con)
+        if retry_decision != _RETRY_CHOICE:
             if allow_skip:
                 capture_github_login_skipped(variant=variant)
                 _defer_github_login()
                 _print_skip_guidance(con)
                 return True
-            capture_github_login_abandoned(variant=variant, reason="declined_retry")
+            capture_github_login_abandoned(variant=variant, reason=retry_decision)
             _print_forced_abort_guidance(con)
             return False
 
