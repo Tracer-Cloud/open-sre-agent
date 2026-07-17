@@ -217,6 +217,20 @@ def is_exception_named(err: BaseException, *names: str) -> bool:
     return type(err).__name__ in names
 
 
+def _litellm_not_found_message(*, provider_label: str, model: str) -> str:
+    from core.llm.providers.azure_openai import (
+        format_azure_deployment_not_found_message,
+        is_azure_litellm_model,
+    )
+
+    if is_azure_litellm_model(model):
+        return format_azure_deployment_not_found_message(model)
+    return (
+        f"{provider_label} model '{model}' was not found. "
+        "Check your configured model name or endpoint."
+    )
+
+
 def invoke_with_litellm_agent_retries(
     completion_fn: Callable[..., Any],
     kwargs: dict[str, Any],
@@ -233,7 +247,9 @@ def invoke_with_litellm_agent_retries(
             if is_exception_named(err, "AuthenticationError"):
                 raise RuntimeError(f"{provider_name} authentication failed.") from err
             if is_exception_named(err, "NotFoundError"):
-                raise RuntimeError(f"{provider_name} model '{model}' not found.") from err
+                raise RuntimeError(
+                    _litellm_not_found_message(provider_label=provider_name, model=model)
+                ) from err
             if is_exception_named(err, "PermissionDeniedError"):
                 raise RuntimeError(f"{provider_name} request forbidden: {err}") from err
             if is_exception_named(err, "BadRequestError"):
@@ -293,8 +309,7 @@ def invoke_with_litellm_llm_retries(
                     kwargs = rebuilt
                     continue
                 raise RuntimeError(
-                    f"{provider_label} model '{model}' was not found. "
-                    "Check your configured model name or endpoint."
+                    _litellm_not_found_message(provider_label=provider_label, model=model)
                 ) from err
             if is_exception_named(err, "BadRequestError"):
                 message = str(getattr(err, "message", err))
@@ -368,8 +383,7 @@ def stream_with_litellm_retries(
                     kwargs = rebuilt
                     continue
                 raise RuntimeError(
-                    f"{provider_label} model '{model}' was not found. "
-                    "Check your configured model name or endpoint."
+                    _litellm_not_found_message(provider_label=provider_label, model=model)
                 ) from err
             if is_exception_named(err, "BadRequestError"):
                 message = str(getattr(err, "message", err))

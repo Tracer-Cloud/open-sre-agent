@@ -8,6 +8,7 @@ import logging
 from typing import Any
 
 from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.eks.eks_k8s_client import build_k8s_clients
 
 logger = logging.getLogger(__name__)
@@ -100,12 +101,7 @@ def get_eks_deployment_status(
         }
     except Exception as e:
         logger.error("[eks] get_eks_deployment_status FAILED: %s", e, exc_info=True)
-        return {
-            "source": "eks",
-            "available": False,
-            "deployment_name": deployment_name,
-            "error": str(e),
-        }
+        return tool_unavailable("eks", str(e), deployment_name=deployment_name)
 
 
 # ======== from tools/eks_describe_addon_tool/ ========
@@ -198,13 +194,7 @@ def describe_eks_addon(
                 "region": region,
             },
         )
-        return {
-            "source": "eks",
-            "available": False,
-            "cluster_name": cluster_name,
-            "addon_name": addon_name,
-            "error": str(e),
-        }
+        return tool_unavailable("eks", str(e), cluster_name=cluster_name, addon_name=addon_name)
     except Exception as e:
         report_run_error(
             e,
@@ -218,13 +208,7 @@ def describe_eks_addon(
                 "region": region,
             },
         )
-        return {
-            "source": "eks",
-            "available": False,
-            "cluster_name": cluster_name,
-            "addon_name": addon_name,
-            "error": str(e),
-        }
+        return tool_unavailable("eks", str(e), cluster_name=cluster_name, addon_name=addon_name)
 
 
 # ======== from tools/eks_describe_cluster_tool/ ========
@@ -312,7 +296,7 @@ def describe_eks_cluster(
             severity="warning",
             extras={"cluster_name": cluster_name, "region": region},
         )
-        return {"source": "eks", "available": False, "cluster_name": cluster_name, "error": str(e)}
+        return tool_unavailable("eks", str(e), cluster_name=cluster_name)
     except Exception as e:
         report_run_error(
             e,
@@ -322,7 +306,7 @@ def describe_eks_cluster(
             method="EKSClient.describe_cluster",
             extras={"cluster_name": cluster_name, "region": region},
         )
-        return {"source": "eks", "available": False, "cluster_name": cluster_name, "error": str(e)}
+        return tool_unavailable("eks", str(e), cluster_name=cluster_name)
 
 
 # ======== from tools/eks_events_tool/ ========
@@ -444,7 +428,7 @@ def get_eks_events(
             logger=logger,
             extras={"cluster_name": cluster_name, "namespace": namespace},
         )
-        return {"source": "eks", "available": False, "namespace": namespace, "error": str(e)}
+        return tool_unavailable("eks", str(e), namespace=namespace)
 
 
 # ======== from tools/eks_list_clusters_tool/ ========
@@ -526,7 +510,7 @@ def list_eks_clusters(
             severity="warning",
             extras={"role_arn": role_arn, "region": region},
         )
-        return {"source": "eks", "available": False, "clusters": [], "error": str(e)}
+        return tool_unavailable("eks", str(e), clusters=[])
     except Exception as e:
         report_run_error(
             e,
@@ -536,7 +520,7 @@ def list_eks_clusters(
             method="EKSClient.list_clusters",
             extras={"role_arn": role_arn, "region": region},
         )
-        return {"source": "eks", "available": False, "clusters": [], "error": str(e)}
+        return tool_unavailable("eks", str(e), clusters=[])
 
 
 # ======== from tools/eks_list_deployments_tool/ ========
@@ -647,7 +631,7 @@ def list_eks_deployments(
             logger=logger,
             extras={"cluster_name": cluster_name, "namespace": namespace},
         )
-        return {"source": "eks", "available": False, "namespace": namespace, "error": str(e)}
+        return tool_unavailable("eks", str(e), namespace=namespace)
 
 
 # ======== from tools/eks_list_namespaces_tool/ ========
@@ -737,7 +721,7 @@ def list_eks_namespaces(
             logger=logger,
             extras={"cluster_name": cluster_name},
         )
-        return {"source": "eks", "available": False, "cluster_name": cluster_name, "error": str(e)}
+        return tool_unavailable("eks", str(e), cluster_name=cluster_name)
 
 
 # ======== from tools/eks_list_pods_tool/ ========
@@ -908,7 +892,7 @@ def list_eks_pods(
             logger=logger,
             extras={"cluster_name": cluster_name, "namespace": namespace, "region": region},
         )
-        return {"source": "eks", "available": False, "namespace": namespace, "error": str(e)}
+        return tool_unavailable("eks", str(e), namespace=namespace)
 
 
 # ======== from tools/eks_node_health_tool/ ========
@@ -1031,7 +1015,7 @@ def get_eks_node_health(
             logger=logger,
             extras={"cluster_name": cluster_name, "region": region},
         )
-        return {"source": "eks", "available": False, "cluster_name": cluster_name, "error": str(e)}
+        return tool_unavailable("eks", str(e), cluster_name=cluster_name)
 
 
 # ======== from tools/eks_nodegroup_health_tool/ ========
@@ -1138,7 +1122,7 @@ def get_eks_nodegroup_health(
                 "nodegroup_name": current_nodegroup,
             },
         )
-        return {"source": "eks", "available": False, "cluster_name": cluster_name, "error": str(e)}
+        return tool_unavailable("eks", str(e), cluster_name=cluster_name)
     except Exception as e:
         report_run_error(
             e,
@@ -1152,7 +1136,7 @@ def get_eks_nodegroup_health(
                 "nodegroup_name": current_nodegroup,
             },
         )
-        return {"source": "eks", "available": False, "cluster_name": cluster_name, "error": str(e)}
+        return tool_unavailable("eks", str(e), cluster_name=cluster_name)
 
 
 # ======== from tools/eks_pod_logs_tool/ ========
@@ -1267,4 +1251,4 @@ def get_eks_pod_logs(
                 "pod_name": pod_name,
             },
         )
-        return {"source": "eks", "available": False, "pod_name": pod_name, "error": str(e)}
+        return tool_unavailable("eks", str(e), pod_name=pod_name)

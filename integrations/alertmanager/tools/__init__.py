@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.tool_framework.base import BaseTool
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.alertmanager.client import make_alertmanager_client
 
 _FIRING_STATES = {"active", "unprocessed"}
@@ -122,14 +123,13 @@ class AlertmanagerAlertsTool(BaseTool):
     ) -> dict[str, Any]:
         client = make_alertmanager_client(base_url, bearer_token, username, password)
         if client is None:
-            return {
-                "source": "alertmanager",
-                "available": False,
-                "error": "Alertmanager integration is not configured (missing base_url).",
-                "alerts": [],
-                "firing_alerts": [],
-                "total": 0,
-            }
+            return tool_unavailable(
+                "alertmanager",
+                "Alertmanager integration is not configured (missing base_url).",
+                alerts=[],
+                firing_alerts=[],
+                total=0,
+            )
 
         with client:
             result = client.list_alerts(
@@ -141,14 +141,13 @@ class AlertmanagerAlertsTool(BaseTool):
             )
 
         if not result.get("success"):
-            return {
-                "source": "alertmanager",
-                "available": False,
-                "error": result.get("error", "unknown error"),
-                "alerts": [],
-                "firing_alerts": [],
-                "total": 0,
-            }
+            return tool_unavailable(
+                "alertmanager",
+                result.get("error", "unknown error"),
+                alerts=[],
+                firing_alerts=[],
+                total=0,
+            )
 
         alerts = result.get("alerts", [])
         firing_alerts = [a for a in alerts if a.get("status", "").lower() in _FIRING_STATES]
@@ -256,27 +255,25 @@ class AlertmanagerSilencesTool(BaseTool):
     ) -> dict[str, Any]:
         client = make_alertmanager_client(base_url, bearer_token, username, password)
         if client is None:
-            return {
-                "source": "alertmanager_silences",
-                "available": False,
-                "error": "Alertmanager integration is not configured (missing base_url).",
-                "silences": [],
-                "active_silences": [],
-                "total": 0,
-            }
+            return tool_unavailable(
+                "alertmanager_silences",
+                "Alertmanager integration is not configured (missing base_url).",
+                silences=[],
+                active_silences=[],
+                total=0,
+            )
 
         with client:
             result = client.list_silences(limit=limit)
 
         if not result.get("success"):
-            return {
-                "source": "alertmanager_silences",
-                "available": False,
-                "error": result.get("error", "unknown error"),
-                "silences": [],
-                "active_silences": [],
-                "total": 0,
-            }
+            return tool_unavailable(
+                "alertmanager_silences",
+                result.get("error", "unknown error"),
+                silences=[],
+                active_silences=[],
+                total=0,
+            )
 
         return {
             "source": "alertmanager_silences",

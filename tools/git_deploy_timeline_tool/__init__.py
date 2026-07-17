@@ -24,6 +24,7 @@ from typing import Any
 
 from core.domain.types.incident_window import IncidentWindow
 from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.github.helpers import (
     github_creds,
     github_source_available,
@@ -233,13 +234,9 @@ def get_git_deploy_timeline(
         github_url, github_mode, github_token, github_command, github_args
     )
     if config is None:
-        return {
-            "source": "github",
-            "available": False,
-            "error": "GitHub MCP integration is not configured.",
-            "commits": [],
-            "window": {},
-        }
+        return tool_unavailable(
+            "github", "GitHub MCP integration is not configured.", commits=[], window={}
+        )
 
     # If neither since/until nor an explicit window-minutes was provided, try
     # to use the shared incident window from agent state. ``from_dict``

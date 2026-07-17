@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.sentry import get_sentry_issue
 from integrations.sentry.tools.sentry_search_issues_tool import (
     _resolve_config,
@@ -61,12 +62,7 @@ def get_sentry_issue_details(
     """Fetch full details for a Sentry issue."""
     config = _resolve_config(sentry_url, organization_slug, sentry_token, project_slug)
     if config is None:
-        return {
-            "source": "sentry",
-            "available": False,
-            "error": "Sentry integration is not configured.",
-            "issue": {},
-        }
+        return tool_unavailable("sentry", "Sentry integration is not configured.", issue={})
 
     issue = get_sentry_issue(config=config, issue_id=issue_id)
     return {"source": "sentry", "available": True, "issue": issue}

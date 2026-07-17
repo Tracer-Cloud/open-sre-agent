@@ -172,7 +172,6 @@ class LiteLLMLLMClient:
         self._credential_resolver = credential_resolver
         self._completion_func = completion_func
         self._usage_callback = usage_callback
-        self._bound_tools: list[dict[str, Any]] = []
         label = (api_key_env or "").removesuffix("_API_KEY").replace("_", " ").title()
         self._provider_label = label or "LiteLLM"
 
@@ -181,10 +180,6 @@ class LiteLLMLLMClient:
 
     def with_structured_output(self, model: type[BaseModel]) -> StructuredOutputClient:
         return StructuredOutputClient(self, model)
-
-    def bind_tools(self, tools: list[dict[str, Any]]) -> LiteLLMLLMClient:
-        self._bound_tools = [dict(item) for item in tools]
-        return self
 
     def _completion(self, **kwargs: Any) -> Any:
         if self._completion_func is not None:
@@ -236,9 +231,6 @@ class LiteLLMLLMClient:
             kwargs["api_version"] = self._api_version
         if self._temperature is not None:
             kwargs["temperature"] = self._temperature
-        if self._bound_tools:
-            kwargs["tools"] = self._bound_tools
-            kwargs["tool_choice"] = "auto"
         return kwargs
 
     def _rebuild_after_model_fallback(self, prompt_or_messages: Any) -> dict[str, Any] | None:
@@ -258,7 +250,7 @@ class LiteLLMLLMClient:
         return llm_response_from_completion(
             response,
             model=self._litellm_model,
-            bound_tools=bool(self._bound_tools),
+            bound_tools=False,
             usage_emit=self._usage_callback,
         )
 

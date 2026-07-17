@@ -6,6 +6,7 @@ from typing import Any
 
 from core.tool_framework.base import BaseTool
 from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.slack.bot_api import (
     bot_token_configured,
     join_channel,
@@ -73,14 +74,13 @@ class SlackJoinChannelTool(BaseTool):
 
         target, resolution_error = resolve_bot_token()
         if target is None:
-            return {
-                "source": SOURCE,
-                "available": False,
-                "status": "failed",
-                "error": resolution_error,
-                "error_type": "configuration_error",
-                "channel_id": "",
-            }
+            return tool_unavailable(
+                SOURCE,
+                resolution_error,
+                status="failed",
+                error_type="configuration_error",
+                channel_id="",
+            )
 
         resolved_id, resolve_error = resolve_channel_id(target, normalized_ref)
         if resolved_id is None:

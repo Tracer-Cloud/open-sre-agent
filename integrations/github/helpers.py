@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.github.mcp import (
     DEFAULT_GITHUB_MCP_MODE,
     GitHubMCPConfig,
@@ -81,13 +82,12 @@ def resolve_github_mcp_config(
 def normalize_github_tool_result(result: dict[str, Any]) -> dict[str, Any]:
     """Normalize GitHub tool result."""
     if result.get("is_error"):
-        return {
-            "source": "github",
-            "available": False,
-            "error": result.get("text") or "GitHub MCP tool call failed.",
-            "tool": result.get("tool"),
-            "arguments": result.get("arguments", {}),
-        }
+        return tool_unavailable(
+            "github",
+            result.get("text") or "GitHub MCP tool call failed.",
+            tool=result.get("tool"),
+            arguments=result.get("arguments", {}),
+        )
     return {
         "source": "github",
         "available": True,

@@ -422,6 +422,8 @@ def test_execute_tools_uses_availability_view_for_classified_integrations() -> N
         api_key="glsa_test",
         username="",
         password="",
+        verify_ssl=True,
+        ca_bundle="",
     )
 
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.tool_framework.base import BaseTool
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.config_models import KubernetesIntegrationConfig
 from integrations.kubernetes.client import _RESOURCE_DISPATCH, KubernetesClient
 
@@ -37,12 +38,9 @@ def _is_available(sources: dict[str, Any]) -> bool:
 
 
 def _missing_client_error(extra: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "source": "kubernetes",
-        "available": False,
-        "error": "Kubernetes integration is not configured (missing kubeconfig).",
-        **extra,
-    }
+    return tool_unavailable(
+        "kubernetes", "Kubernetes integration is not configured (missing kubeconfig).", **extra
+    )
 
 
 _SHARED_KUBECONFIG_PROPS: dict[str, Any] = {
@@ -142,13 +140,9 @@ class KubernetesListPodsTool(BaseTool):
                 namespace=namespace, label_selector=label_selector, limit=limit
             )
             if not result.get("success"):
-                return {
-                    "source": "kubernetes",
-                    "available": False,
-                    "error": result.get("error", "unknown error"),
-                    "pods": [],
-                    "total": 0,
-                }
+                return tool_unavailable(
+                    "kubernetes", result.get("error", "unknown error"), pods=[], total=0
+                )
             return {
                 "source": "kubernetes",
                 "available": True,
@@ -228,13 +222,12 @@ class KubernetesGetPodLogsTool(BaseTool):
         **_kwargs: Any,
     ) -> dict[str, Any]:
         if not pod_name:
-            return {
-                "source": "kubernetes",
-                "available": False,
-                "error": "pod_name is required; call kubernetes_list_pods first to find the pod name.",
-                "lines": [],
-                "total": 0,
-            }
+            return tool_unavailable(
+                "kubernetes",
+                "pod_name is required; call kubernetes_list_pods first to find the pod name.",
+                lines=[],
+                total=0,
+            )
         client = _make_client(
             {
                 "kubernetes": {
@@ -252,13 +245,9 @@ class KubernetesGetPodLogsTool(BaseTool):
                 namespace=namespace, pod_name=pod_name, container=container, tail_lines=tail_lines
             )
             if not result.get("success"):
-                return {
-                    "source": "kubernetes",
-                    "available": False,
-                    "error": result.get("error", "unknown error"),
-                    "lines": [],
-                    "total": 0,
-                }
+                return tool_unavailable(
+                    "kubernetes", result.get("error", "unknown error"), lines=[], total=0
+                )
             return {
                 "source": "kubernetes",
                 "available": True,
@@ -344,13 +333,9 @@ class KubernetesListDeploymentsTool(BaseTool):
         with client:
             result = client.list_deployments(namespace=namespace, limit=limit)
             if not result.get("success"):
-                return {
-                    "source": "kubernetes",
-                    "available": False,
-                    "error": result.get("error", "unknown error"),
-                    "deployments": [],
-                    "total": 0,
-                }
+                return tool_unavailable(
+                    "kubernetes", result.get("error", "unknown error"), deployments=[], total=0
+                )
             return {
                 "source": "kubernetes",
                 "available": True,
@@ -448,13 +433,9 @@ class KubernetesGetEventsTool(BaseTool):
                 namespace=namespace, field_selector=field_selector, limit=limit
             )
             if not result.get("success"):
-                return {
-                    "source": "kubernetes",
-                    "available": False,
-                    "error": result.get("error", "unknown error"),
-                    "events": [],
-                    "total": 0,
-                }
+                return tool_unavailable(
+                    "kubernetes", result.get("error", "unknown error"), events=[], total=0
+                )
             return {
                 "source": "kubernetes",
                 "available": True,
@@ -536,13 +517,9 @@ class KubernetesDescribePodTool(BaseTool):
         with client:
             result = client.describe_pod(namespace=namespace, pod_name=pod_name)
             if not result.get("success"):
-                return {
-                    "source": "kubernetes",
-                    "available": False,
-                    "error": result.get("error", "unknown error"),
-                    "spec": {},
-                    "status": {},
-                }
+                return tool_unavailable(
+                    "kubernetes", result.get("error", "unknown error"), spec={}, status={}
+                )
             return {
                 "source": "kubernetes",
                 "available": True,
@@ -634,13 +611,9 @@ class KubernetesListNodesTool(BaseTool):
         with client:
             result = client.list_nodes(limit=limit)
             if not result.get("success"):
-                return {
-                    "source": "kubernetes",
-                    "available": False,
-                    "error": result.get("error", "unknown error"),
-                    "nodes": [],
-                    "total": 0,
-                }
+                return tool_unavailable(
+                    "kubernetes", result.get("error", "unknown error"), nodes=[], total=0
+                )
             return {
                 "source": "kubernetes",
                 "available": True,
@@ -734,13 +707,9 @@ class KubernetesListServicesTool(BaseTool):
                 namespace=namespace, label_selector=label_selector, limit=limit
             )
             if not result.get("success"):
-                return {
-                    "source": "kubernetes",
-                    "available": False,
-                    "error": result.get("error", "unknown error"),
-                    "services": [],
-                    "total": 0,
-                }
+                return tool_unavailable(
+                    "kubernetes", result.get("error", "unknown error"), services=[], total=0
+                )
             return {
                 "source": "kubernetes",
                 "available": True,
@@ -824,13 +793,9 @@ class KubernetesListStatefulSetsTool(BaseTool):
         with client:
             result = client.list_statefulsets(namespace=namespace, limit=limit)
             if not result.get("success"):
-                return {
-                    "source": "kubernetes",
-                    "available": False,
-                    "error": result.get("error", "unknown error"),
-                    "statefulsets": [],
-                    "total": 0,
-                }
+                return tool_unavailable(
+                    "kubernetes", result.get("error", "unknown error"), statefulsets=[], total=0
+                )
             return {
                 "source": "kubernetes",
                 "available": True,
@@ -915,13 +880,9 @@ class KubernetesListDaemonSetsTool(BaseTool):
         with client:
             result = client.list_daemonsets(namespace=namespace, limit=limit)
             if not result.get("success"):
-                return {
-                    "source": "kubernetes",
-                    "available": False,
-                    "error": result.get("error", "unknown error"),
-                    "daemonsets": [],
-                    "total": 0,
-                }
+                return tool_unavailable(
+                    "kubernetes", result.get("error", "unknown error"), daemonsets=[], total=0
+                )
             return {
                 "source": "kubernetes",
                 "available": True,
@@ -1007,13 +968,9 @@ class KubernetesListIngressesTool(BaseTool):
         with client:
             result = client.list_ingresses(namespace=namespace, limit=limit)
             if not result.get("success"):
-                return {
-                    "source": "kubernetes",
-                    "available": False,
-                    "error": result.get("error", "unknown error"),
-                    "ingresses": [],
-                    "total": 0,
-                }
+                return tool_unavailable(
+                    "kubernetes", result.get("error", "unknown error"), ingresses=[], total=0
+                )
             return {
                 "source": "kubernetes",
                 "available": True,
@@ -1098,13 +1055,9 @@ class KubernetesListConfigMapsTool(BaseTool):
         with client:
             result = client.list_configmaps(namespace=namespace, limit=limit)
             if not result.get("success"):
-                return {
-                    "source": "kubernetes",
-                    "available": False,
-                    "error": result.get("error", "unknown error"),
-                    "configmaps": [],
-                    "total": 0,
-                }
+                return tool_unavailable(
+                    "kubernetes", result.get("error", "unknown error"), configmaps=[], total=0
+                )
             return {
                 "source": "kubernetes",
                 "available": True,
@@ -1202,14 +1155,13 @@ class KubernetesGetResourceTool(BaseTool):
                 resource_type=resource_type, name=name, namespace=namespace
             )
             if not result.get("success"):
-                return {
-                    "source": "kubernetes",
-                    "available": False,
-                    "error": result.get("error", "unknown error"),
-                    "resource": {},
-                    "resource_type": resource_type,
-                    "name": name,
-                }
+                return tool_unavailable(
+                    "kubernetes",
+                    result.get("error", "unknown error"),
+                    resource={},
+                    resource_type=resource_type,
+                    name=name,
+                )
             return {
                 "source": "kubernetes",
                 "available": True,

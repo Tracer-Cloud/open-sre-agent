@@ -157,36 +157,6 @@ class JsonlSessionStorage:
             {"tool": tool, "update": update, "tool_call_id": tool_call_id},
         )
 
-    def append_model_change(
-        self,
-        session_id: str,
-        *,
-        provider: str | None = None,
-        model: str | None = None,
-        reasoning_effort: str | None = None,
-    ) -> str:
-        return self._append_entry(
-            session_id,
-            "model_change",
-            {
-                "provider": provider,
-                "model": model,
-                "reasoning_effort": reasoning_effort,
-            },
-        )
-
-    def append_active_tools_change(
-        self,
-        session_id: str,
-        *,
-        active_tools: list[str],
-    ) -> str:
-        return self._append_entry(
-            session_id,
-            "active_tools_change",
-            {"active_tools": list(active_tools)},
-        )
-
     def append_compaction(
         self,
         session_id: str,
@@ -210,9 +180,6 @@ class JsonlSessionStorage:
                 "after_tokens": after_tokens,
             },
         )
-
-    def append_label(self, session_id: str, *, label: str) -> str:
-        return self._append_entry(session_id, "label", {"label": label})
 
     def append_custom_message(
         self,
@@ -335,11 +302,6 @@ class JsonlSessionStorage:
         # V2 session files are append-only; reopening just means future entries
         # continue from the current leaf.
         return
-
-    def current_leaf_id(self, session_id: str) -> str | None:
-        with contextlib.suppress(Exception):
-            return self._current_leaf_id(session_path(session_id))
-        return None
 
     def _append_entry(
         self,

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.bitbucket import list_commits
 from integrations.bitbucket.availability import bitbucket_available_or_backend
 from integrations.bitbucket.tools.bitbucket_search_code_tool import (
@@ -78,10 +79,5 @@ def list_bitbucket_commits(
         integration_id,
     )
     if config is None:
-        return {
-            "source": "bitbucket",
-            "available": False,
-            "error": "Bitbucket integration is not configured.",
-            "commits": [],
-        }
+        return tool_unavailable("bitbucket", "Bitbucket integration is not configured.", commits=[])
     return list_commits(config, repo_slug=repo_slug, path=path, limit=limit)

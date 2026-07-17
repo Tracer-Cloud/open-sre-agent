@@ -28,6 +28,7 @@ import httpx
 from pydantic import Field, field_validator
 
 from config.strict_config import StrictConfigModel
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
 
 logger = logging.getLogger(__name__)
@@ -260,14 +261,7 @@ def validate_betterstack_config(
 
 def _error_evidence(error: str, *, source: str = "") -> dict[str, Any]:
     """Standard error-shape dict returned by query functions on failure."""
-    return {
-        "source": "betterstack",
-        "available": False,
-        "error": error,
-        "betterstack_source": source,
-        "rows": [],
-        "row_count": 0,
-    }
+    return tool_unavailable("betterstack", error, betterstack_source=source, rows=[], row_count=0)
 
 
 def _validate_source_name(source: str) -> str | None:

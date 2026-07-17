@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.groundcover.availability import groundcover_available_or_backend
 from integrations.groundcover.client import GroundcoverClient
 from integrations.groundcover.helpers import (
@@ -154,20 +155,14 @@ def get_groundcover_query_reference(
         return cast("dict[str, Any]", groundcover_backend.get_query_reference())
 
     if _groundcover_client is None:
-        return {
-            "source": _QUERY_REF_SOURCE,
-            "available": False,
-            "reference": "",
-            "error": "groundcover integration not configured",
-        }
+        return tool_unavailable(
+            _QUERY_REF_SOURCE, "groundcover integration not configured", reference=""
+        )
     result = _groundcover_client.get_query_reference()
     if not result.get("success"):
-        return {
-            "source": _QUERY_REF_SOURCE,
-            "available": False,
-            "reference": "",
-            "error": result.get("error", "could not fetch gcQL reference"),
-        }
+        return tool_unavailable(
+            _QUERY_REF_SOURCE, result.get("error", "could not fetch gcQL reference"), reference=""
+        )
     return {
         "source": _QUERY_REF_SOURCE,
         "available": True,

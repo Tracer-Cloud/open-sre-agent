@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from integrations.llm_cli.codex_oauth import CodexOAuthResult
-from surfaces.cli.wizard import _ui, flow, llm_credential
+from surfaces.cli.wizard import _ui, azure_openai, flow, llm_credential
 from surfaces.cli.wizard import store as wizard_store
 from surfaces.cli.wizard.configurators import chat_notifications as _chat_notifications_configurator
 from surfaces.cli.wizard.configurators import dagster as _dagster_configurator
@@ -201,7 +201,7 @@ def test_run_wizard_configures_optional_integrations(monkeypatch, tmp_path, caps
             "grafana-token",
         ]
     )
-    text_responses = iter(["https://grafana.example.com"])
+    text_responses = iter(["https://grafana.example.com", ""])
 
     def _mock_password(*_args, **_kwargs):
         m = MagicMock()
@@ -213,9 +213,15 @@ def test_run_wizard_configures_optional_integrations(monkeypatch, tmp_path, caps
         m.ask.return_value = next(text_responses)
         return m
 
+    def _mock_confirm(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = True
+        return m
+
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
     monkeypatch.setattr(flow.questionary, "text", _mock_text)
+    monkeypatch.setattr(flow.questionary, "confirm", _mock_confirm)
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(
@@ -253,6 +259,8 @@ def test_run_wizard_configures_optional_integrations(monkeypatch, tmp_path, caps
                 "credentials": {
                     "endpoint": "https://grafana.example.com",
                     "api_key": "grafana-token",
+                    "verify_ssl": True,
+                    "ca_bundle": "",
                 }
             },
         )
@@ -260,6 +268,7 @@ def test_run_wizard_configures_optional_integrations(monkeypatch, tmp_path, caps
     assert synced_env_values == [
         {
             "GRAFANA_INSTANCE_URL": "https://grafana.example.com",
+            "GRAFANA_VERIFY_SSL": "true",
         },
     ]
     output = capsys.readouterr().out
@@ -2865,7 +2874,7 @@ def test_run_wizard_azure_llm_key_validation_runs_after_endpoint_prompt(
         m = MagicMock()
         if "Choose your LLM provider" in prompt:
             m.ask.return_value = "azure-openai"
-        elif "model" in prompt:
+        elif "deployment" in prompt.lower() or "model" in prompt:
             m.ask.return_value = "gpt-5.4-mini"
         elif "integration" in prompt.lower():
             m.ask.return_value = "skip"
@@ -2892,6 +2901,11 @@ def test_run_wizard_azure_llm_key_validation_runs_after_endpoint_prompt(
         synced_provider_env.append(kwargs)
         return tmp_path / ".env"
 
+    # Azure deployment discovery calls the live resource; stub it so the picker offers
+    # the deployment as a menu choice instead of hitting the network (#4117).
+    monkeypatch.setattr(
+        azure_openai, "discover_azure_openai_deployments_from_env", lambda: ["gpt-5.4-mini"]
+    )
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
     monkeypatch.setattr(flow.questionary, "text", _mock_text)
@@ -4314,7 +4328,7 @@ def test_run_wizard_azure_empty_key_input_never_persists_the_endpoint_placeholde
             m.ask.return_value = "azure-openai"
         elif "auth method" in prompt:
             m.ask.return_value = "api_key"
-        elif "model" in prompt:
+        elif "deployment" in prompt.lower() or "model" in prompt:
             m.ask.return_value = "gpt-5.4-mini"
         elif "integration" in prompt.lower():
             m.ask.return_value = "skip"
@@ -4337,6 +4351,9 @@ def test_run_wizard_azure_empty_key_input_never_persists_the_endpoint_placeholde
         validated_keys.append(api_key)
         return ValidationResult(ok=True, detail="Azure OpenAI API key validated.")
 
+    monkeypatch.setattr(
+        azure_openai, "discover_azure_openai_deployments_from_env", lambda: ["gpt-5.4-mini"]
+    )
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
     monkeypatch.setattr(flow.questionary, "text", _mock_text)
@@ -4571,7 +4588,9 @@ def test_prompt_validated_llm_credential_wizard_back_precedes_keyboard_interrupt
     monkeypatch.setattr(llm_credential, "validate_provider_credentials", _must_not_validate)
 
     provider = flow.PROVIDER_BY_VALUE["anthropic"]
-    outcome = llm_credential._prompt_validated_llm_credential(provider, model="claude-opus-4-7")
+    outcome, _model = llm_credential._prompt_validated_llm_credential(
+        provider, model="claude-opus-4-7", model_provider=provider
+    )
 
     assert outcome == "repick"
     assert "Setup cancelled." not in capsys.readouterr().out
@@ -4618,7 +4637,7 @@ def test_run_wizard_azure_endpoint_reprompted_on_retry_after_validation_failure(
             m.ask.return_value = "retry"
         elif "Choose your LLM provider" in prompt:
             m.ask.return_value = "azure-openai"
-        elif "model" in prompt:
+        elif "deployment" in prompt.lower() or "model" in prompt:
             m.ask.return_value = "gpt-5.4-mini"
         elif "integration" in prompt.lower():
             m.ask.return_value = "skip"
@@ -4646,6 +4665,9 @@ def test_run_wizard_azure_endpoint_reprompted_on_retry_after_validation_failure(
             return ValidationResult(ok=False, detail="Azure OpenAI rejected the request.")
         return ValidationResult(ok=True, detail="Azure OpenAI API key validated.")
 
+    monkeypatch.setattr(
+        azure_openai, "discover_azure_openai_deployments_from_env", lambda: ["gpt-5.4-mini"]
+    )
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
     monkeypatch.setattr(flow.questionary, "text", _mock_text)
@@ -4717,7 +4739,7 @@ def test_run_wizard_azure_endpoint_reprompted_on_repick_then_reselect(
             m.ask.return_value = "repick"
         elif "Choose your LLM provider" in prompt:
             m.ask.return_value = next(provider_responses)
-        elif "model" in prompt:
+        elif "deployment" in prompt.lower() or "model" in prompt:
             m.ask.return_value = "gpt-5.4-mini"
         elif "integration" in prompt.lower():
             m.ask.return_value = "skip"
@@ -4744,6 +4766,9 @@ def test_run_wizard_azure_endpoint_reprompted_on_repick_then_reselect(
             return ValidationResult(ok=False, detail="Azure OpenAI rejected the request.")
         return ValidationResult(ok=True, detail="Azure OpenAI API key validated.")
 
+    monkeypatch.setattr(
+        azure_openai, "discover_azure_openai_deployments_from_env", lambda: ["gpt-5.4-mini"]
+    )
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
     monkeypatch.setattr(flow.questionary, "text", _mock_text)

@@ -212,14 +212,6 @@ def get_llm_provider_api_key_env(provider: str | None = None) -> str | None:
     return LLM_PROVIDER_API_KEY_ENVS.get(provider_name)
 
 
-def get_llm_provider_api_key(provider: str | None = None) -> tuple[str | None, str]:
-    """Return an env API key only; Keychain reads are request-scoped now."""
-    env_var = get_llm_provider_api_key_env(provider)
-    if env_var is None:
-        return None, ""
-    return env_var, os.getenv(env_var, "").strip()
-
-
 def _llm_api_key_payload(provider: str) -> dict[str, str]:
     """Return no secrets; runtime resolves credentials request-time."""
     _ = provider

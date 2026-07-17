@@ -413,10 +413,12 @@ def _cmd_mcp(session: Session, console: Console, args: list[str]) -> bool:
     if sub == "disconnect":
         return _handle_remove(session, console, args[1] if len(args) > 1 else None)
 
-    console.print(
+    repl_print(
+        console,
         f"[{ERROR}]unknown subcommand:[/] {escape(sub)}  "
-        "(try [bold]/mcp list[/bold], [bold]/mcp connect[/bold], or [bold]/mcp disconnect[/bold])"
+        "(try [bold]/mcp list[/bold], [bold]/mcp connect[/bold], or [bold]/mcp disconnect[/bold])",
     )
+    session.mark_latest(ok=False, kind="slash")
     return True
 
 

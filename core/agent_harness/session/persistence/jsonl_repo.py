@@ -181,10 +181,6 @@ class JsonlSessionRepo:
         record, count = self.lookup_investigation(investigation_id_prefix)
         return record if count == 1 else None
 
-    def count_investigation_prefix_matches(self, prefix: str) -> int:
-        _, count = self.lookup_investigation(prefix)
-        return count
-
     @staticmethod
     def _summary(
         path: Path, header: dict[str, Any], entries: list[dict[str, Any]]

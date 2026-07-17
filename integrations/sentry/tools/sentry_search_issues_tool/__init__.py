@@ -8,6 +8,7 @@ import httpx
 
 from core.tool_framework.telemetry import report_run_error
 from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.sentry import (
     DEFAULT_SENTRY_ISSUE_LIMIT,
     SentryConfig,
@@ -115,12 +116,7 @@ def search_sentry_issues(
     """Search Sentry issues related to an incident or failure signature."""
     config = _resolve_config(sentry_url, organization_slug, sentry_token, project_slug)
     if config is None:
-        return {
-            "source": "sentry",
-            "available": False,
-            "error": "Sentry integration is not configured.",
-            "issues": [],
-        }
+        return tool_unavailable("sentry", "Sentry integration is not configured.", issues=[])
 
     try:
         issues = list_sentry_issues(
@@ -141,17 +137,16 @@ def search_sentry_issues(
                 "status_code": err.response.status_code,
             },
         )
-        return {
-            "source": "sentry",
-            "available": False,
-            "error": describe_sentry_api_error(
+        return tool_unavailable(
+            "sentry",
+            describe_sentry_api_error(
                 err,
                 query=query,
                 project_slug=config.project_slug,
             ),
-            "issues": [],
-            "query": query,
-        }
+            issues=[],
+            query=query,
+        )
     except Exception as err:
         report_run_error(
             err,
@@ -161,13 +156,9 @@ def search_sentry_issues(
             method="list_sentry_issues",
             extras={"query": query, "organization_slug": config.organization_slug},
         )
-        return {
-            "source": "sentry",
-            "available": False,
-            "error": f"Sentry issue search failed: {err}",
-            "issues": [],
-            "query": query,
-        }
+        return tool_unavailable(
+            "sentry", f"Sentry issue search failed: {err}", issues=[], query=query
+        )
 
     return _search_result_payload(issues, query=query, stats_period=stats_period, page_limit=limit)
 

@@ -281,43 +281,15 @@ message, then swaps to ✅ (`white_check_mark`) when the reply is finalized.
 If Slack is not configured the daemon still runs the other components and
 `opensre gateway status` shows `slack: not configured`.
 
-### Deploying the gateway to a remote host
+### Deploying the Slack gateway
 
-Running the gateway on a server with `make deploy` (EC2) is different from local
-use: **the remote host cannot read your local machine's integration store /
-keychain**. Deploy validates that secrets are present as **plaintext env vars**
-in `.env`:
+The Slack gateway backend is deployed and operated separately — not from this
+repo. Configure the integration here (tokens and scopes above); provisioning the
+hosted backend is out of scope for this repo.
 
-```bash
-# Telegram-only, Slack-only, or both are accepted
-TELEGRAM_BOT_TOKEN=…                 # optional if Slack is fully set
-SLACK_BOT_TOKEN=xoxb-…
-SLACK_APP_TOKEN=xapp-…
-SLACK_ALLOWED_USERS=U0123ABCD
-ANTHROPIC_API_KEY=…                  # or your provider's key env
-```
-
-`make deploy` / `make deploy-gateway` require **at least one** of Telegram or
-Slack Socket Mode. Partial Slack config (bot token without app token) aborts.
-Missing allowlists are warnings (same shape as Telegram). Deploy health waits
-for the `[gateway] ready` log line (works for Telegram-only, Slack-only, or both).
-
-To give the deployed agent access to your observability integrations (so it
-can pull Grafana, Datadog, or other data when asked in Slack), put those
-credentials in `.env` too and list the variable names in
-`OPENSRE_DEPLOY_EXTRA_ENV_KEYS`:
-
-```bash
-GRAFANA_INSTANCE_URL=…
-GRAFANA_READ_TOKEN=…
-OPENSRE_DEPLOY_EXTRA_ENV_KEYS=GRAFANA_INSTANCE_URL,GRAFANA_READ_TOKEN
-```
-
-The deploy ships every listed variable to both containers; the matching agent
-tools become available automatically.
-
-Fargate/terraform under `infra/terraform/` injects Slack secrets via SSM —
-see that README for the cloud path.
+The EC2 paths (`make deploy` / `make deploy-gateway`) are **Telegram-only** and
+ignore `SLACK_*` variables with a validation warning: Slack Socket Mode is
+single-consumer, so a second gateway holding the same tokens would split events.
 
 ---
 

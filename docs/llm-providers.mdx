@@ -209,7 +209,7 @@ Quick setup:
 opensre onboard   # choose Azure OpenAI; paste resource URL, API key, deployment
 ```
 
-Onboarding asks only for your **resource URL**, **API key**, and **reasoning deployment name**. OpenSRE sets `AZURE_OPENAI_API_VERSION=2024-10-21` and `OPENSRE_LLM_TRANSPORT=litellm` automatically unless you override them in `.env`.
+Onboarding asks for your **resource URL**, **API key**, then lists **deployments** from that resource for you to pick. OpenSRE sets `AZURE_OPENAI_API_VERSION=2024-10-21` and `OPENSRE_LLM_TRANSPORT=litellm` automatically unless you override them in `.env`.
 
 In the REPL, switch provider or deployment like any other API provider:
 
@@ -218,7 +218,7 @@ In the REPL, switch provider or deployment like any other API provider:
 /model set azure-openai gpt-5.4-mini --toolcall-model gpt-5.4-nano
 ```
 
-Common deployment names in the onboarding picker include `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.4-nano`, `gpt-5-mini`, `gpt-4.1`, and `o3-mini`. Use custom names when your Azure deployment names differ (`allow_custom_models` is enabled).
+If deployment discovery fails during onboarding, enter the deployment name manually — it must match a deployment in your Azure resource, not a model ID from `/openai/models`.
 
 ### OpenRouter
 

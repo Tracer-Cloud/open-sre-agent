@@ -10,6 +10,7 @@ import httpx
 
 from core.tool_framework.telemetry import report_run_error
 from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.tool_availability import tool_unavailable
 
 _DEFAULT_MAX_RESULTS = 100
 _MAX_HARD_LIMIT = 200
@@ -124,22 +125,12 @@ def query_openobserve_logs(
     """Fetch bounded evidence from OpenObserve."""
     base = base_url.strip().rstrip("/")
     if not base:
-        return {
-            "source": "openobserve",
-            "available": False,
-            "error": "Missing OpenObserve URL.",
-            "records": [],
-        }
+        return tool_unavailable("openobserve", "Missing OpenObserve URL.", records=[])
     auth_token = api_token.strip()
     user = username.strip()
     secret = password.strip()
     if not auth_token and not (user and secret):
-        return {
-            "source": "openobserve",
-            "available": False,
-            "error": "Missing OpenObserve credentials.",
-            "records": [],
-        }
+        return tool_unavailable("openobserve", "Missing OpenObserve credentials.", records=[])
 
     effective_limit = _bounded_limit(limit, max_results)
     now = datetime.now(UTC)
@@ -178,7 +169,7 @@ def query_openobserve_logs(
             method="httpx.post",
             extras={"endpoint": endpoint, "integration_id": integration_id},
         )
-        return {"source": "openobserve", "available": False, "error": str(err), "records": []}
+        return tool_unavailable("openobserve", str(err), records=[])
 
     records = _extract_records(body if isinstance(body, dict) else {})[:effective_limit]
     return {

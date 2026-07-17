@@ -24,6 +24,7 @@ from config.llm_auth.auth_method import (
     supports_oauth_auth_method,
 )
 from config.llm_auth.records import save_provider_auth_record
+from core.llm.providers.azure_openai import is_azure_openai_provider
 from integrations.llm_cli.binary_resolver import diagnose_binary_path
 from integrations.llm_cli.codex_oauth import CodexOAuthError, run_codex_oauth_login
 from platform.terminal.theme import (
@@ -38,7 +39,6 @@ from surfaces.cli.wizard._ui import (
     Choice,
     WizardBack,
     _choose,
-    _choose_model,
     _confirm,
     _console,
     _local_defaults,
@@ -48,6 +48,12 @@ from surfaces.cli.wizard._ui import (
     _render_saved_summary,
     _select_target_for_advanced,
     _step_header,
+)
+from surfaces.cli.wizard.azure_openai import (
+    choose_provider_model,
+)
+from surfaces.cli.wizard.azure_openai import (
+    ensure_endpoint_settings as ensure_azure_openai_endpoint_settings,
 )
 from surfaces.cli.wizard.config import PROVIDER_BY_VALUE, SUPPORTED_PROVIDERS, ProviderOption
 from surfaces.cli.wizard.configurators.github import (
@@ -64,7 +70,6 @@ from surfaces.cli.wizard.llm_credential import (
     UNVERIFIED,
     CredentialState,
     _credential_line_for_saved_summary,
-    _ensure_azure_openai_endpoint_settings,
     _persist_llm_credential_with_recovery,
     _prompt_validated_llm_credential,
     _provider_choice_label,
@@ -728,26 +733,34 @@ def run_wizard(_argv: list[str] | None = None) -> int:
         # provider default instead locks out anyone who picks a non-default model — an
         # Ollama user selecting a model they have pulled would be told to pull the
         # default model they never chose, on every retry.
+        #
+        # Azure is the exception: its "model" is a live deployment name discovered from
+        # the resource, so it needs the endpoint + key first. The deployment pick is
+        # therefore deferred into ``_prompt_validated_llm_credential`` (still before the
+        # validation probe), and skipped here.
         if change_provider:
-            try:
-                model = _choose_model(
-                    model_provider,
-                    default=model,
-                    prompt_label=(
-                        f"{_provider_choice_label(provider)} OAuth"
-                        if auth_method == OAUTH_AUTH_METHOD
-                        else _provider_choice_label(provider)
-                    ),
-                    back_on_cancel=True,
-                )
-            except WizardBack:
-                force_repick = True
-                continue
+            if not is_azure_openai_provider(provider.value):
+                try:
+                    model = choose_provider_model(
+                        provider,
+                        model_provider,
+                        default=model,
+                        prompt_label=(
+                            f"{_provider_choice_label(provider)} OAuth"
+                            if auth_method == OAUTH_AUTH_METHOD
+                            else _provider_choice_label(provider)
+                        ),
+                        back_on_cancel=True,
+                    )
+                except WizardBack:
+                    force_repick = True
+                    continue
         elif model_provider.models:
             current_display = model or "CLI default"
             _console.print(f"[{SECONDARY}]current model  {current_display}[/]")
             if _confirm("Change model?", default=False):
-                model = _choose_model(
+                model = choose_provider_model(
+                    provider,
                     model_provider,
                     default=model,
                     prompt_label=(
@@ -762,8 +775,11 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                 "cli",
                 "none",
             ):
-                credential_outcome = _prompt_validated_llm_credential(
-                    provider, model=model, session_env_sink=session_env_sink
+                credential_outcome, model = _prompt_validated_llm_credential(
+                    provider,
+                    model=model,
+                    model_provider=model_provider,
+                    session_env_sink=session_env_sink,
                 )
                 if credential_outcome == CANCEL:
                     return 1
@@ -780,7 +796,7 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                 # so this call short-circuits on the configured endpoint rather than
                 # re-prompting — its only job now is to hand the endpoint env back for the
                 # .env sync.
-                azure_env = _ensure_azure_openai_endpoint_settings(provider)
+                azure_env = ensure_azure_openai_endpoint_settings(provider)
                 if azure_env is None:
                     force_repick = True
                     continue
@@ -810,8 +826,11 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                         credential_state = UNSAVED
                     has_api_key = True
                 if not has_api_key:
-                    credential_outcome = _prompt_validated_llm_credential(
-                        provider, model=model, session_env_sink=session_env_sink
+                    credential_outcome, model = _prompt_validated_llm_credential(
+                        provider,
+                        model=model,
+                        model_provider=model_provider,
+                        session_env_sink=session_env_sink,
                     )
                     if credential_outcome == CANCEL:
                         return 1
@@ -827,7 +846,7 @@ def run_wizard(_argv: list[str] | None = None) -> int:
             # ``AZURE_OPENAI_BASE_URL`` in ``os.environ``, so this call short-circuits on the
             # configured endpoint instead of re-prompting — its only job now is to hand the
             # endpoint env back for the .env sync.
-            azure_env = _ensure_azure_openai_endpoint_settings(provider)
+            azure_env = ensure_azure_openai_endpoint_settings(provider)
             if azure_env is None:
                 force_repick = True
                 continue

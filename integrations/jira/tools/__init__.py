@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.tool_framework.base import BaseTool
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.jira.client import make_jira_client
 
 
@@ -74,39 +75,19 @@ class JiraAddCommentTool(BaseTool):
         **_kwargs: Any,
     ) -> dict[str, Any]:
         if not issue_key:
-            return {
-                "source": "jira",
-                "available": False,
-                "error": "issue_key is required.",
-                "comment_id": "",
-            }
+            return tool_unavailable("jira", "issue_key is required.", comment_id="")
 
         if not body:
-            return {
-                "source": "jira",
-                "available": False,
-                "error": "body is required.",
-                "comment_id": "",
-            }
+            return tool_unavailable("jira", "body is required.", comment_id="")
 
         client = make_jira_client(base_url, email, api_token)
         if client is None:
-            return {
-                "source": "jira",
-                "available": False,
-                "error": "Jira integration is not configured.",
-                "comment_id": "",
-            }
+            return tool_unavailable("jira", "Jira integration is not configured.", comment_id="")
 
         result = client.add_comment(issue_key=issue_key, body=body)
 
         if not result.get("success"):
-            return {
-                "source": "jira",
-                "available": False,
-                "error": result.get("error", "unknown error"),
-                "comment_id": "",
-            }
+            return tool_unavailable("jira", result.get("error", "unknown error"), comment_id="")
 
         return {
             "source": "jira",
@@ -219,13 +200,9 @@ class JiraCreateIssueTool(BaseTool):
     ) -> dict[str, Any]:
         client = make_jira_client(base_url, email, api_token, project_key)
         if client is None:
-            return {
-                "source": "jira",
-                "available": False,
-                "error": "Jira integration is not configured.",
-                "issue_key": "",
-                "url": "",
-            }
+            return tool_unavailable(
+                "jira", "Jira integration is not configured.", issue_key="", url=""
+            )
 
         result = client.create_issue(
             summary=summary,
@@ -236,13 +213,9 @@ class JiraCreateIssueTool(BaseTool):
         )
 
         if not result.get("success"):
-            return {
-                "source": "jira",
-                "available": False,
-                "error": result.get("error", "unknown error"),
-                "issue_key": "",
-                "url": "",
-            }
+            return tool_unavailable(
+                "jira", result.get("error", "unknown error"), issue_key="", url=""
+            )
 
         return {
             "source": "jira",
@@ -322,31 +295,20 @@ class JiraIssueDetailTool(BaseTool):
         **_kwargs: Any,
     ) -> dict[str, Any]:
         if not issue_key:
-            return {
-                "source": "jira",
-                "available": False,
-                "error": "issue_key is required. Run jira_search_issues first to find an issue key.",
-                "issue": {},
-            }
+            return tool_unavailable(
+                "jira",
+                "issue_key is required. Run jira_search_issues first to find an issue key.",
+                issue={},
+            )
 
         client = make_jira_client(base_url, email, api_token)
         if client is None:
-            return {
-                "source": "jira",
-                "available": False,
-                "error": "Jira integration is not configured.",
-                "issue": {},
-            }
+            return tool_unavailable("jira", "Jira integration is not configured.", issue={})
 
         result = client.get_issue(issue_key)
 
         if not result.get("success"):
-            return {
-                "source": "jira",
-                "available": False,
-                "error": result.get("error", "unknown error"),
-                "issue": {},
-            }
+            return tool_unavailable("jira", result.get("error", "unknown error"), issue={})
 
         return {
             "source": "jira",
@@ -449,24 +411,16 @@ class JiraSearchIssuesTool(BaseTool):
     ) -> dict[str, Any]:
         client = make_jira_client(base_url, email, api_token, project_key)
         if client is None:
-            return {
-                "source": "jira",
-                "available": False,
-                "error": "Jira integration is not configured.",
-                "issues": [],
-                "total": 0,
-            }
+            return tool_unavailable(
+                "jira", "Jira integration is not configured.", issues=[], total=0
+            )
 
         result = client.search_issues(jql=jql, max_results=max_results)
 
         if not result.get("success"):
-            return {
-                "source": "jira",
-                "available": False,
-                "error": result.get("error", "unknown error"),
-                "issues": [],
-                "total": 0,
-            }
+            return tool_unavailable(
+                "jira", result.get("error", "unknown error"), issues=[], total=0
+            )
 
         return {
             "source": "jira",

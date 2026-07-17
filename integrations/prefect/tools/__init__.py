@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.tool_framework.base import BaseTool
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.prefect.client import make_prefect_client
 
 _ERROR_KEYWORDS = ("error", "failed", "exception", "fatal", "crash", "traceback", "exitcode")
@@ -119,15 +120,14 @@ class PrefectFlowRunsTool(BaseTool):
         **_kwargs: Any,
     ) -> dict[str, Any]:
         if not (api_url or "").strip():
-            return {
-                "source": "prefect",
-                "available": False,
-                "error": "api_url is required to connect to Prefect.",
-                "flow_runs": [],
-                "failed_runs": [],
-                "logs": [],
-                "error_log_lines": [],
-            }
+            return tool_unavailable(
+                "prefect",
+                "api_url is required to connect to Prefect.",
+                flow_runs=[],
+                failed_runs=[],
+                logs=[],
+                error_log_lines=[],
+            )
 
         client = make_prefect_client(
             api_url=api_url,
@@ -136,30 +136,28 @@ class PrefectFlowRunsTool(BaseTool):
             workspace_id=workspace_id,
         )
         if client is None:
-            return {
-                "source": "prefect",
-                "available": False,
-                "error": "Prefect integration could not be initialized. Check your api_url.",
-                "flow_runs": [],
-                "failed_runs": [],
-                "logs": [],
-                "error_log_lines": [],
-            }
+            return tool_unavailable(
+                "prefect",
+                "Prefect integration could not be initialized. Check your api_url.",
+                flow_runs=[],
+                failed_runs=[],
+                logs=[],
+                error_log_lines=[],
+            )
 
         effective_states = states if states is not None else ["FAILED", "CRASHED"]
 
         with client:
             runs_result = client.get_flow_runs(limit=limit, states=effective_states)
             if not runs_result.get("success"):
-                return {
-                    "source": "prefect",
-                    "available": False,
-                    "error": runs_result.get("error", "Unknown error fetching flow runs."),
-                    "flow_runs": [],
-                    "failed_runs": [],
-                    "logs": [],
-                    "error_log_lines": [],
-                }
+                return tool_unavailable(
+                    "prefect",
+                    runs_result.get("error", "Unknown error fetching flow runs."),
+                    flow_runs=[],
+                    failed_runs=[],
+                    logs=[],
+                    error_log_lines=[],
+                )
 
             flow_runs: list[dict[str, Any]] = runs_result.get("flow_runs", [])
             failed_runs = [
@@ -312,15 +310,14 @@ class PrefectWorkerHealthTool(BaseTool):
         **_kwargs: Any,
     ) -> dict[str, Any]:
         if not (api_url or "").strip():
-            return {
-                "source": "prefect",
-                "available": False,
-                "error": "api_url is required to connect to Prefect.",
-                "work_pools": [],
-                "unhealthy_pools": [],
-                "workers": [],
-                "unhealthy_workers": [],
-            }
+            return tool_unavailable(
+                "prefect",
+                "api_url is required to connect to Prefect.",
+                work_pools=[],
+                unhealthy_pools=[],
+                workers=[],
+                unhealthy_workers=[],
+            )
 
         client = make_prefect_client(
             api_url=api_url,
@@ -329,28 +326,26 @@ class PrefectWorkerHealthTool(BaseTool):
             workspace_id=workspace_id,
         )
         if client is None:
-            return {
-                "source": "prefect",
-                "available": False,
-                "error": "Prefect integration could not be initialized. Check your api_url.",
-                "work_pools": [],
-                "unhealthy_pools": [],
-                "workers": [],
-                "unhealthy_workers": [],
-            }
+            return tool_unavailable(
+                "prefect",
+                "Prefect integration could not be initialized. Check your api_url.",
+                work_pools=[],
+                unhealthy_pools=[],
+                workers=[],
+                unhealthy_workers=[],
+            )
 
         with client:
             pools_result = client.get_work_pools(limit=pool_limit)
             if not pools_result.get("success"):
-                return {
-                    "source": "prefect",
-                    "available": False,
-                    "error": pools_result.get("error", "Unknown error fetching work pools."),
-                    "work_pools": [],
-                    "unhealthy_pools": [],
-                    "workers": [],
-                    "unhealthy_workers": [],
-                }
+                return tool_unavailable(
+                    "prefect",
+                    pools_result.get("error", "Unknown error fetching work pools."),
+                    work_pools=[],
+                    unhealthy_pools=[],
+                    workers=[],
+                    unhealthy_workers=[],
+                )
 
             work_pools: list[dict[str, Any]] = pools_result.get("work_pools", [])
             unhealthy_pools = [

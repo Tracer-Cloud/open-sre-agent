@@ -8,6 +8,7 @@ from typing import Any, cast
 from pydantic import BaseModel, Field
 
 from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.aws.aws_sdk_client import execute_aws_sdk_call
 from integrations.rds import (
     DEFAULT_RDS_REGION,
@@ -120,21 +121,19 @@ def describe_rds_instance(
             region,
             result.get("error"),
         )
-        return {
-            "source": "rds",
-            "available": False,
-            "db_instance_identifier": db_instance_identifier,
-            "error": "Failed to describe the RDS instance. Check server logs for details.",
-        }
+        return tool_unavailable(
+            "rds",
+            "Failed to describe the RDS instance. Check server logs for details.",
+            db_instance_identifier=db_instance_identifier,
+        )
 
     instances = (result.get("data") or {}).get("DBInstances") or []
     if not instances:
-        return {
-            "source": "rds",
-            "available": False,
-            "db_instance_identifier": db_instance_identifier,
-            "error": "No RDS instance found with the given identifier.",
-        }
+        return tool_unavailable(
+            "rds",
+            "No RDS instance found with the given identifier.",
+            db_instance_identifier=db_instance_identifier,
+        )
 
     if len(instances) > 1:
         logger.warning(

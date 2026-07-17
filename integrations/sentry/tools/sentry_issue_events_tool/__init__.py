@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.sentry import list_sentry_issue_events as sentry_list_issue_events
 from integrations.sentry.tools.sentry_search_issues_tool import (
     _resolve_config,
@@ -64,12 +65,7 @@ def list_sentry_issue_events(
     """List recent events for a Sentry issue."""
     config = _resolve_config(sentry_url, organization_slug, sentry_token, project_slug)
     if config is None:
-        return {
-            "source": "sentry",
-            "available": False,
-            "error": "Sentry integration is not configured.",
-            "events": [],
-        }
+        return tool_unavailable("sentry", "Sentry integration is not configured.", events=[])
 
     events = sentry_list_issue_events(config=config, issue_id=issue_id, limit=limit)
     return {"source": "sentry", "available": True, "events": events}

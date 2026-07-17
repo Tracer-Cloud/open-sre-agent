@@ -28,6 +28,8 @@ class SlackGatewaySettings(StrictConfigModel):
     # Slack's AI-app guidance: call chat.update at most once every 3 seconds.
     status_update_interval_seconds: float = Field(default=3.0, gt=0)
     turn_timeout_seconds: float = Field(default=240.0, gt=0)
+    # Empty uses the worker's default path; the container health check reads it.
+    heartbeat_path: str = ""
 
 
 class SlackGatewayEnv(BaseSettings):
@@ -48,6 +50,7 @@ class SlackGatewayEnv(BaseSettings):
     gateway_max_concurrent: int = Field(default=4, ge=1)
     gateway_status_update_interval_seconds: float = Field(default=3.0, gt=0)
     gateway_turn_timeout_seconds: float = Field(default=240.0, gt=0)
+    gateway_heartbeat_path: str = ""
 
     @field_validator("allowed_users", mode="before")
     @classmethod
@@ -159,4 +162,5 @@ def load_slack_gateway_settings() -> SlackGatewaySettings:
         max_concurrent_turns=env.gateway_max_concurrent,
         status_update_interval_seconds=env.gateway_status_update_interval_seconds,
         turn_timeout_seconds=env.gateway_turn_timeout_seconds,
+        heartbeat_path=env.gateway_heartbeat_path,
     )

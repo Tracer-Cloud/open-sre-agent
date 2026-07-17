@@ -33,12 +33,6 @@ _RUNTIME_LOGS_READ_ATTEMPTS = 3
 _RUNTIME_LOGS_READ_TIMEOUT_DEFAULT = 600.0
 
 
-def _scrub_log_fragment(value: object) -> str:
-    """Make user-controlled strings safe for single-line log records (avoid log injection)."""
-    text = str(value)
-    return text.replace("\r", "\\r").replace("\n", "\\n")
-
-
 def _safe_vercel_path_segment(raw: str) -> str | None:
     cleaned = (raw or "").strip()
     if not cleaned or len(cleaned) > _MAX_VERCEL_PATH_SEGMENT_LEN:

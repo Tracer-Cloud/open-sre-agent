@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.tool_framework.base import BaseTool
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.incident_io.client import make_incident_io_client
 
 
@@ -109,12 +110,9 @@ class IncidentIoIncidentsTool(BaseTool):
     ) -> dict[str, Any]:
         client = make_incident_io_client(api_key, region, base_url=base_url)
         if client is None:
-            return {
-                "source": "incident_io",
-                "available": False,
-                "success": False,
-                "error": "incident.io integration is not configured.",
-            }
+            return tool_unavailable(
+                "incident_io", "incident.io integration is not configured.", success=False
+            )
 
         normalized_action = (action or "context").strip().lower()
         with client:

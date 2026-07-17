@@ -210,6 +210,31 @@ def test_litellm_llm_client_invoke_stream_not_found_raises_without_retry(monkeyp
     assert sleeps == []
 
 
+def test_litellm_llm_client_invoke_stream_azure_not_found_mentions_deployment(
+    monkeypatch,
+) -> None:
+    attempts: list[bool] = []
+
+    def completion(**_kwargs: Any) -> Any:
+        attempts.append(True)
+        raise NotFoundError("deployment not found")
+
+    monkeypatch.setattr("core.llm.shared.openai_chat_completions.time.sleep", lambda _s: None)
+
+    client = LiteLLMLLMClient(
+        litellm_model="azure/gpt-4.1",
+        api_base="https://example.openai.azure.com",
+        api_key_env="AZURE_OPENAI_API_KEY",
+        credential_resolver=lambda _env: "key",
+        completion_func=completion,
+    )
+
+    with pytest.raises(RuntimeError, match="Azure OpenAI deployment 'gpt-4.1' was not found"):
+        list(client.invoke_stream("hi"))
+
+    assert len(attempts) == 1
+
+
 def test_litellm_llm_client_invoke_stream_retries_before_emit(monkeypatch) -> None:
     """Transient failure before any chunk is yielded should retry."""
     attempts: list[bool] = []

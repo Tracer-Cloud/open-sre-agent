@@ -206,6 +206,11 @@ def classify_llm_invoke_failure(exc: BaseException) -> LLMInvokeFailure | None:
     raw = str(exc)
 
     if ("model" in err_msg and "not found" in err_msg) or "404" in err_msg:
+        from core.llm.providers.azure_openai import (
+            azure_deployment_not_found_remediation_steps,
+            is_azure_openai_failure_message,
+        )
+
         if "anthropic" in err_msg and "was not found" in err_msg:
             return LLMInvokeFailure(
                 user_message=raw.strip()
@@ -218,6 +223,13 @@ def classify_llm_invoke_failure(exc: BaseException) -> LLMInvokeFailure | None:
                     ),
                     "Confirm the model ID is valid for your Anthropic account.",
                 ],
+            )
+        if "azure openai deployment" in err_msg or is_azure_openai_failure_message(raw):
+            return LLMInvokeFailure(
+                user_message=raw.strip()
+                or "The configured Azure OpenAI deployment was not found (404).",
+                tracker_message="Failed: Azure deployment not found",
+                remediation_steps=azure_deployment_not_found_remediation_steps(),
             )
         return LLMInvokeFailure(
             user_message=(

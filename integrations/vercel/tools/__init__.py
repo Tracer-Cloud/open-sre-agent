@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.tool_framework.base import BaseTool
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.vercel.client import make_vercel_client
 
 _ERROR_STATES = {"ERROR", "CANCELED"}
@@ -82,27 +83,25 @@ class VercelDeploymentStatusTool(BaseTool):
     ) -> dict[str, Any]:
         client = make_vercel_client(api_token, team_id)
         if client is None:
-            return {
-                "source": "vercel",
-                "available": False,
-                "error": "Vercel integration is not configured.",
-                "deployments": [],
-                "failed_deployments": [],
-                "total": 0,
-            }
+            return tool_unavailable(
+                "vercel",
+                "Vercel integration is not configured.",
+                deployments=[],
+                failed_deployments=[],
+                total=0,
+            )
 
         with client:
             result = client.list_deployments(project_id=project_id, limit=limit, state=state)
 
         if not result.get("success"):
-            return {
-                "source": "vercel",
-                "available": False,
-                "error": result.get("error", "unknown error"),
-                "deployments": [],
-                "failed_deployments": [],
-                "total": 0,
-            }
+            return tool_unavailable(
+                "vercel",
+                result.get("error", "unknown error"),
+                deployments=[],
+                failed_deployments=[],
+                total=0,
+            )
 
         deployments = result.get("deployments", [])
         failed = [d for d in deployments if d.get("state", "").upper() in _ERROR_STATES]
@@ -205,26 +204,24 @@ class VercelLogsTool(BaseTool):
         **_kwargs: Any,
     ) -> dict[str, Any]:
         if not deployment_id:
-            return {
-                "source": "vercel",
-                "available": False,
-                "error": "deployment_id is required to fetch logs. Run vercel_deployment_status first to find a deployment ID.",
-                "events": [],
-                "runtime_logs": [],
-                "error_events": [],
-                "deployment": {},
-            }
+            return tool_unavailable(
+                "vercel",
+                "deployment_id is required to fetch logs. Run vercel_deployment_status first to find a deployment ID.",
+                events=[],
+                runtime_logs=[],
+                error_events=[],
+                deployment={},
+            )
         client = make_vercel_client(api_token, team_id)
         if client is None:
-            return {
-                "source": "vercel",
-                "available": False,
-                "error": "Vercel integration is not configured.",
-                "events": [],
-                "runtime_logs": [],
-                "error_events": [],
-                "deployment": {},
-            }
+            return tool_unavailable(
+                "vercel",
+                "Vercel integration is not configured.",
+                events=[],
+                runtime_logs=[],
+                error_events=[],
+                deployment={},
+            )
 
         with client:
             deployment_result = client.get_deployment(deployment_id)

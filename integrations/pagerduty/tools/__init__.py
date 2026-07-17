@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.tool_framework.base import BaseTool
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.pagerduty.client import make_pagerduty_client
 
 
@@ -81,23 +82,18 @@ class PagerDutyIncidentDetailTool(BaseTool):
         **_kwargs: Any,
     ) -> dict[str, Any]:
         if not incident_id:
-            return {
-                "source": "pagerduty",
-                "available": False,
-                "error": "incident_id is required. Run pagerduty_incidents first to find an ID.",
-                "incident": {},
-                "log_entries": [],
-            }
+            return tool_unavailable(
+                "pagerduty",
+                "incident_id is required. Run pagerduty_incidents first to find an ID.",
+                incident={},
+                log_entries=[],
+            )
 
         client = make_pagerduty_client(api_key, base_url or None)
         if client is None:
-            return {
-                "source": "pagerduty",
-                "available": False,
-                "error": "PagerDuty integration is not configured.",
-                "incident": {},
-                "log_entries": [],
-            }
+            return tool_unavailable(
+                "pagerduty", "PagerDuty integration is not configured.", incident={}, log_entries=[]
+            )
 
         with client:
             incident_result = client.get_incident(incident_id)
@@ -110,13 +106,12 @@ class PagerDutyIncidentDetailTool(BaseTool):
                     log_entries = logs_result.get("log_entries", [])
 
         if not incident_result.get("success"):
-            return {
-                "source": "pagerduty",
-                "available": False,
-                "error": incident_result.get("error", "unknown error"),
-                "incident": {},
-                "log_entries": [],
-            }
+            return tool_unavailable(
+                "pagerduty",
+                incident_result.get("error", "unknown error"),
+                incident={},
+                log_entries=[],
+            )
 
         return {
             "source": "pagerduty",
@@ -239,14 +234,13 @@ class PagerDutyIncidentsTool(BaseTool):
     ) -> dict[str, Any]:
         client = make_pagerduty_client(api_key, base_url or None)
         if client is None:
-            return {
-                "source": "pagerduty",
-                "available": False,
-                "error": "PagerDuty integration is not configured.",
-                "incidents": [],
-                "active_incidents": [],
-                "total": 0,
-            }
+            return tool_unavailable(
+                "pagerduty",
+                "PagerDuty integration is not configured.",
+                incidents=[],
+                active_incidents=[],
+                total=0,
+            )
 
         with client:
             result = client.list_incidents(
@@ -259,14 +253,13 @@ class PagerDutyIncidentsTool(BaseTool):
             )
 
         if not result.get("success"):
-            return {
-                "source": "pagerduty",
-                "available": False,
-                "error": result.get("error", "unknown error"),
-                "incidents": [],
-                "active_incidents": [],
-                "total": 0,
-            }
+            return tool_unavailable(
+                "pagerduty",
+                result.get("error", "unknown error"),
+                incidents=[],
+                active_incidents=[],
+                total=0,
+            )
 
         incidents = result.get("incidents", [])
         active_incidents = [i for i in incidents if i.get("status", "").lower() in _ACTIVE_STATUSES]
@@ -357,13 +350,9 @@ class PagerDutyOnCallTool(BaseTool):
     ) -> dict[str, Any]:
         client = make_pagerduty_client(api_key, base_url or None)
         if client is None:
-            return {
-                "source": "pagerduty",
-                "available": False,
-                "error": "PagerDuty integration is not configured.",
-                "oncalls": [],
-                "total": 0,
-            }
+            return tool_unavailable(
+                "pagerduty", "PagerDuty integration is not configured.", oncalls=[], total=0
+            )
 
         with client:
             result = client.get_oncalls(
@@ -372,13 +361,9 @@ class PagerDutyOnCallTool(BaseTool):
             )
 
         if not result.get("success"):
-            return {
-                "source": "pagerduty",
-                "available": False,
-                "error": result.get("error", "unknown error"),
-                "oncalls": [],
-                "total": 0,
-            }
+            return tool_unavailable(
+                "pagerduty", result.get("error", "unknown error"), oncalls=[], total=0
+            )
 
         oncalls = result.get("oncalls", [])
         return {
@@ -467,27 +452,25 @@ class PagerDutyServicesTool(BaseTool):
     ) -> dict[str, Any]:
         client = make_pagerduty_client(api_key, base_url or None)
         if client is None:
-            return {
-                "source": "pagerduty",
-                "available": False,
-                "error": "PagerDuty integration is not configured.",
-                "services": [],
-                "service": {},
-                "total": 0,
-            }
+            return tool_unavailable(
+                "pagerduty",
+                "PagerDuty integration is not configured.",
+                services=[],
+                service={},
+                total=0,
+            )
 
         with client:
             if service_id:
                 result = client.get_service(service_id)
                 if not result.get("success"):
-                    return {
-                        "source": "pagerduty",
-                        "available": False,
-                        "error": result.get("error", "unknown error"),
-                        "services": [],
-                        "service": {},
-                        "total": 0,
-                    }
+                    return tool_unavailable(
+                        "pagerduty",
+                        result.get("error", "unknown error"),
+                        services=[],
+                        service={},
+                        total=0,
+                    )
                 service = result.get("service", {})
                 return {
                     "source": "pagerduty",
@@ -501,14 +484,9 @@ class PagerDutyServicesTool(BaseTool):
             result = client.list_services(limit=limit)
 
         if not result.get("success"):
-            return {
-                "source": "pagerduty",
-                "available": False,
-                "error": result.get("error", "unknown error"),
-                "services": [],
-                "service": {},
-                "total": 0,
-            }
+            return tool_unavailable(
+                "pagerduty", result.get("error", "unknown error"), services=[], service={}, total=0
+            )
 
         services = result.get("services", [])
         return {

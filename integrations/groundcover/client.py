@@ -39,25 +39,6 @@ _DEFAULT_SSE_READ_TIMEOUT = 120.0
 # read-only/idempotent, but we keep the retry budget tiny to fail fast.
 _MAX_CONNECT_RETRIES = 1
 
-# Public, read-only MCP tools OpenSRE depends on. Verification asserts these
-# exist so the provider fails closed if the token sees a narrower surface.
-EXPECTED_PUBLIC_TOOLS: tuple[str, ...] = (
-    "list_workspaces",
-    "get_gcql_reference",
-    "query_logs",
-    "query_traces",
-    "query_events",
-    "query_entities",
-    "query_issues",
-    "query_apm",
-    "query_metrics",
-    "query_monitors",
-    "search_logs_metadata",
-    "search_traces_metadata",
-    "search_events_metadata",
-    "search_metrics_metadata",
-)
-
 # Tools that must exist for verification to pass. We require the core discovery
 # surface; per-signal tools can vary slightly by deployment version.
 _REQUIRED_VERIFY_TOOLS: tuple[str, ...] = ("list_workspaces", "get_gcql_reference")

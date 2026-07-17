@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import math
-import re
 from collections.abc import Sequence
 from typing import Any
 
@@ -53,67 +52,6 @@ def investigation_llm_progress_hint(
     if iteration == 0:
         return f"Planning investigation ({cap}){tools_clause}"
     return f"Reviewing evidence ({cap}){tools_clause}"
-
-
-def _clean_markdown_line(line: str) -> str:
-    """Strip both bulleted lists (•, ●, -, —, *) and numbered lists (e.g. 1., 2))."""
-    stripped = line.strip()
-    prev = ""
-    while stripped != prev:
-        prev = stripped
-        stripped = re.sub(r"^[-•●—]\s+", "", stripped)
-        # Markdown ``* item`` list marker only — not ``*Italic Section:*`` headings.
-        stripped = re.sub(r"^\*\s+", "", stripped)
-        stripped = re.sub(r"^\d+[.)]\s+", "", stripped)
-    return stripped
-
-
-def _normalized_report_heading_inner(line: str) -> str:
-    """Normalize LLM report lines for heading keyword matching."""
-    s = line.strip()
-    while s.startswith("#"):
-        s = s[1:].strip()
-    if s.startswith("**"):
-        core = s[2:]
-        if core.endswith("**:"):
-            core = core[:-3]
-        elif core.endswith("**"):
-            core = core[:-2]
-        return core.strip()
-    if len(s) >= 2 and s.startswith("[") and s.endswith("]") and ":" not in s:
-        return s[1:-1].strip()
-    if (
-        len(s) >= 3
-        and s.startswith("*")
-        and s.endswith("*")
-        and not s.startswith("* ")
-        and "**" not in s
-    ):
-        inner = s[1:-1].strip()
-        if ":" in inner or len(inner.split()) >= 3:
-            return inner
-    return s.strip()
-
-
-def _report_line_looks_like_heading(line: str, *, inner: str) -> bool:
-    """True if the line uses a heading-like structure (not prose)."""
-    stripped = line.strip()
-    if stripped.startswith("#"):
-        return True
-    is_bracket = (
-        stripped.startswith("[") and stripped.rstrip().endswith("]") and ":" not in stripped
-    )
-    is_bold_md = stripped.startswith("**") and (stripped.endswith("**") or stripped.endswith("**:"))
-    wrapped_ast = (
-        len(stripped) >= 3
-        and stripped.startswith("*")
-        and stripped.endswith("*")
-        and not stripped.startswith("* ")
-        and "**" not in stripped
-        and (":" in stripped[1:-1] or len(stripped[1:-1].strip().split()) >= 3)
-    )
-    shouty = inner.isupper() and len(inner.replace(" ", "")) >= 8 and len(inner.split()) <= 14
-    return bool(is_bracket or is_bold_md or wrapped_ast or shouty)
 
 
 def _validity_score_percent(score: Any) -> str | None:

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Literal, cast
 
 from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.github.client import GitHubApiError, GitHubRestClient, resolve_github_token
 from integrations.github.helpers import github_creds, github_source_available
 from integrations.github.tools.workflow import (
@@ -140,14 +141,9 @@ def list_github_work_items(
             f"/repos/{owner}/{repo}/issues", params=params
         )
     except GitHubApiError as exc:
-        return {
-            "source": "github",
-            "available": False,
-            "error": str(exc),
-            "items": [],
-            "counts": _count_work_items([]),
-            "side_effects": [],
-        }
+        return tool_unavailable(
+            "github", str(exc), items=[], counts=_count_work_items([]), side_effects=[]
+        )
     items = [
         _normalize_issue(item).to_dict()
         for item in raw_items
@@ -304,14 +300,9 @@ def summarize_github_pr_status(
                     ]
             prs.append(_normalize_pull_request(detail_pr, check_runs).to_dict())
     except GitHubApiError as exc:
-        return {
-            "source": "github",
-            "available": False,
-            "error": str(exc),
-            "pull_requests": [],
-            "counts": _count_prs([]),
-            "side_effects": [],
-        }
+        return tool_unavailable(
+            "github", str(exc), pull_requests=[], counts=_count_prs([]), side_effects=[]
+        )
     return {
         "source": "github",
         "available": True,
@@ -461,12 +452,9 @@ def propose_github_issue_mutation_from_slack(
     **_kwargs: Any,
 ) -> dict[str, Any]:
     if operation in {"update", "close"} and issue_number is None:
-        return {
-            "source": "github",
-            "available": False,
-            "error": f"issue_number is required for {operation}",
-            "side_effects": [],
-        }
+        return tool_unavailable(
+            "github", f"issue_number is required for {operation}", side_effects=[]
+        )
     proposal = build_issue_mutation_proposal(
         owner=owner,
         repo=repo,
@@ -487,13 +475,9 @@ def propose_github_issue_mutation_from_slack(
 
 
 def _mutation_rejected(error: str) -> dict[str, Any]:
-    return {
-        "source": "github",
-        "available": False,
-        "executed": False,
-        "error": error,
-        "side_effect": "github_issue_mutation_rejected",
-    }
+    return tool_unavailable(
+        "github", error, executed=False, side_effect="github_issue_mutation_rejected"
+    )
 
 
 def _proposal_from_payload(
@@ -722,10 +706,9 @@ def execute_github_issue_mutation(
             "comment_already_recorded": comment_already_recorded,
         }
     except GitHubApiError as exc:
-        return {
-            "source": "github",
-            "available": False,
-            "executed": False,
-            "error": str(exc),
-            "side_effect": f"{parsed.operation}_github_issue_failed",
-        }
+        return tool_unavailable(
+            "github",
+            str(exc),
+            executed=False,
+            side_effect=f"{parsed.operation}_github_issue_failed",
+        )

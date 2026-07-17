@@ -203,23 +203,6 @@ GROQ_MODELS = (
     ModelOption(value="meta-llama/llama-4-scout-17b-16e-instruct", label="Llama 4 Scout 17B"),
 )
 
-# Azure OpenAI model values are deployment names in your resource.
-# Source: https://learn.microsoft.com/en-us/azure/ai-foundry/model-inference/concepts/models
-AZURE_OPENAI_MODELS = (
-    ModelOption(value=AZURE_OPENAI_REASONING_MODEL, label="gpt-5.4-mini deployment"),
-    ModelOption(value="gpt-5.6-sol", label="gpt-5.6-sol deployment"),
-    ModelOption(value="gpt-5.6-terra", label="gpt-5.6-terra deployment"),
-    ModelOption(value="gpt-5.6-luna", label="gpt-5.6-luna deployment"),
-    ModelOption(value="gpt-5.5", label="gpt-5.5 deployment"),
-    ModelOption(value="gpt-5.4", label="gpt-5.4 deployment"),
-    ModelOption(value="gpt-5.4-nano", label="gpt-5.4-nano deployment"),
-    ModelOption(value="gpt-5-mini", label="gpt-5-mini deployment"),
-    ModelOption(value="gpt-5", label="gpt-5 deployment"),
-    ModelOption(value="gpt-4.1", label="gpt-4.1 deployment"),
-    ModelOption(value="gpt-4.1-mini", label="gpt-4.1-mini deployment"),
-    ModelOption(value="o3-mini", label="o3-mini deployment"),
-)
-
 BEDROCK_MODELS = (
     ModelOption(
         value=BEDROCK_REASONING_MODEL,
@@ -715,7 +698,7 @@ SUPPORTED_PROVIDERS = (
         api_key_env="AZURE_OPENAI_API_KEY",
         model_env="AZURE_OPENAI_REASONING_MODEL",
         default_model=AZURE_OPENAI_REASONING_MODEL,
-        models=AZURE_OPENAI_MODELS,
+        models=(),
         legacy_model_env="AZURE_OPENAI_MODEL",
         toolcall_model_env="AZURE_OPENAI_TOOLCALL_MODEL",
         classification_model_env="AZURE_OPENAI_CLASSIFICATION_MODEL",

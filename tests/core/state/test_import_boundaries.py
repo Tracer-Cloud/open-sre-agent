@@ -63,7 +63,7 @@ def test_old_core_domain_state_import_path_is_removed() -> None:
     old_state_module = ".".join(("core", "domain", "state"))
     offenders: list[str] = []
     for path in tracked_python_files(str(root)):
-        if _is_ignored_scan_path(path, root):
+        if _is_ignored_scan_path(path, root) or not path.is_file():
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):

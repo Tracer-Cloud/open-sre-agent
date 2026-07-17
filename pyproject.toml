@@ -169,9 +169,6 @@ paths = [
   "surfaces",
   "tools",
 ]
-exclude = [
-  "tools/simple_tools.py",          # explicitly skipped by the registry
-]
 ignore_decorators = [
   "@*.command",          # Click / Typer subcommands
   "@*.group",

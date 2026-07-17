@@ -16,6 +16,7 @@ from typing import Final, Literal
 from rich.text import Text
 
 from config.llm_auth.auth_method import OAUTH_AUTH_METHOD, normalize_llm_auth_method
+from core.llm.providers.azure_openai import is_azure_openai_provider
 from platform.terminal.theme import (
     BRAND,
     DIM,
@@ -36,6 +37,12 @@ from surfaces.cli.wizard._ui import (
     _persist_llm_api_key,
     _prompt_value,
     _step,
+)
+from surfaces.cli.wizard.azure_openai import (
+    choose_provider_model,
+)
+from surfaces.cli.wizard.azure_openai import (
+    ensure_endpoint_settings as ensure_azure_openai_endpoint_settings,
 )
 from surfaces.cli.wizard.config import PROJECT_ENV_PATH, ProviderOption
 from surfaces.cli.wizard.env_sync import sync_env_values
@@ -292,68 +299,17 @@ def _persist_llm_credential_with_recovery(
     return CANCEL
 
 
-def _azure_openai_endpoint_env(provider: ProviderOption) -> dict[str, str]:
-    """Return Azure endpoint env vars, using the default API version when unset."""
-    from core.llm.providers.azure_openai import resolve_azure_openai_api_version
-
-    return {
-        provider.endpoint_env: os.getenv(provider.endpoint_env, "").strip(),
-        provider.api_version_env: resolve_azure_openai_api_version(),
-    }
-
-
-def _prompt_azure_openai_endpoint_settings(provider: ProviderOption) -> dict[str, str] | None:
-    """Collect Azure OpenAI resource URL during onboarding."""
-    from core.llm.providers.azure_openai import (
-        normalize_azure_openai_base_url,
-        resolve_azure_openai_api_version,
-    )
-
-    if not provider.endpoint_env or not provider.api_version_env:
-        return {}
-
-    _step("Azure endpoint")
-    try:
-        base_url = _prompt_value(
-            f"Azure OpenAI resource URL ({provider.endpoint_env})",
-            default=os.getenv(provider.endpoint_env, provider.credential_default),
-            secret=False,
-            back_on_cancel=True,
-        )
-    except WizardBack:
-        return None
-
-    normalized_base = normalize_azure_openai_base_url(base_url)
-    if not normalized_base:
-        _console.print(f"[{ERROR}]Azure OpenAI resource URL is required.[/]")
-        return None
-    return {
-        provider.endpoint_env: normalized_base,
-        provider.api_version_env: resolve_azure_openai_api_version(),
-    }
-
-
-def _ensure_azure_openai_endpoint_settings(provider: ProviderOption) -> dict[str, str] | None:
-    """Return Azure endpoint env vars, prompting when missing."""
-    from core.llm.providers.azure_openai import azure_openai_endpoint_configured
-
-    if provider.value != "azure-openai":
-        return {}
-    if azure_openai_endpoint_configured():
-        return _azure_openai_endpoint_env(provider)
-    return _prompt_azure_openai_endpoint_settings(provider)
-
-
 def _clear_azure_openai_endpoint_env(provider: ProviderOption) -> None:
     """Drop the Azure endpoint env vars so the endpoint is re-prompted next iteration.
 
     After an Azure validation failure the endpoint the user typed may be the wrong
-    resource URL, but ``_ensure_azure_openai_endpoint_settings`` short-circuits while
+    resource URL, but ``azure_openai.ensure_endpoint_settings`` short-circuits while
     ``azure_openai_endpoint_configured()`` still sees that stale value in ``os.environ``
     — so retry/repick would silently reuse the bad endpoint and never ask for a
     correction. Popping the endpoint env (azure-only) forces a fresh endpoint prompt.
+    ``azure_openai.py`` has no clear-endpoint delegate, so this #3591 helper stays local.
     """
-    if provider.value != "azure-openai":
+    if not is_azure_openai_provider(provider.value):
         return
     for env_key in (provider.endpoint_env, provider.api_version_env):
         if env_key:
@@ -364,12 +320,17 @@ def _prompt_validated_llm_credential(
     provider: ProviderOption,
     *,
     model: str,
+    model_provider: ProviderOption,
     session_env_sink: dict[str, str] | None = None,
-) -> CredentialOutcome:
+) -> tuple[CredentialOutcome, str]:
     """Prompt for, validate against ``model``, and persist one LLM credential.
 
-    ``model`` is the model the wizard is about to persist — never the provider default
-    — so the probe exercises exactly what the runtime will use.
+    Returns ``(outcome, model)``. For every non-Azure provider ``model`` is echoed back
+    unchanged (the caller picked it up front). For Azure OpenAI the deployment name is a
+    live value discovered from the resource, so it can only be chosen once the endpoint
+    and key exist: the pick happens here, after both are collected but **before** the
+    validation probe, so the returned ``model`` is still "the model the user picked,
+    validated" — the caller persists whatever comes back (#4117 discovery + #3591 order).
 
     ``repick`` = pick a different LLM provider (mirrors ``_run_cli_llm_onboarding``).
 
@@ -380,6 +341,7 @@ def _prompt_validated_llm_credential(
     label = _credential_prompt_label(provider)
     credential_display = f"{label} {provider.credential_label}"
     env_key = provider.api_key_env
+    is_azure = is_azure_openai_provider(provider.value)
     for _attempt in range(_LLM_CREDENTIAL_MAX_ATTEMPTS):
         try:
             value = _prompt_value(
@@ -393,20 +355,38 @@ def _prompt_validated_llm_credential(
                 back_on_cancel=True,
             )
         except WizardBack:  # must precede KeyboardInterrupt: WizardBack subclasses it
-            return REPICK
+            return REPICK, model
         except KeyboardInterrupt:
             _console.print(f"\n[{WARNING}]Setup cancelled.[/]")
-            return CANCEL
+            return CANCEL, model
 
-        azure_env = _ensure_azure_openai_endpoint_settings(provider)
+        azure_env = ensure_azure_openai_endpoint_settings(provider)
         if azure_env is None:  # endpoint back-out -> provider menu
-            return REPICK
-        os.environ.update(azure_env)  # endpoint env must exist before the validator reads it
+            return REPICK, model
+        os.environ.update(azure_env)  # endpoint env must exist before discovery/validation
+
+        if is_azure:
+            # Azure deployment discovery reads the key from the environment, so export it
+            # before the picker calls the live resource. The deployment is chosen here —
+            # after endpoint + key, before the validation probe — so the invariant
+            # "validate the model the user picked" holds while discovery has its creds.
+            os.environ[env_key] = value
+            try:
+                model = choose_provider_model(
+                    provider,
+                    model_provider,
+                    default=model,
+                    back_on_cancel=True,
+                )
+            except WizardBack:
+                # Backing out of the deployment pick returns to the provider menu; drop the
+                # endpoint so the re-selected Azure provider re-prompts it (#3591).
+                _clear_azure_openai_endpoint_env(provider)
+                return REPICK, model
 
         validation = _validate_llm_credential(provider, value=value, model=model)
         _render_credential_validation(label, model, validation)
         if not validation.ok:
-            is_azure = provider.value == "azure-openai"
             action = _recovery_action(
                 prompt=f"{credential_display} could not be verified. What next?",
                 # Azure re-enters the endpoint too: a wrong resource URL, not the key, is
@@ -440,15 +420,15 @@ def _prompt_validated_llm_credential(
                 # Same reason as retry: the re-selected Azure provider must re-prompt the
                 # endpoint instead of short-circuiting on the stale env var.
                 _clear_azure_openai_endpoint_env(provider)
-                return REPICK
+                return REPICK, model
             if action != SAVE_ANYWAY:
-                return CANCEL  # ESCAPE, or defensively: no other values are offered
+                return CANCEL, model  # ESCAPE, or defensively: no other values are offered
 
         outcome = _persist_llm_credential_with_recovery(
             provider, value, session_env_sink=session_env_sink
         )
         if outcome != OK:
-            return outcome
+            return outcome, model
         if not validation.ok:
             # Printed only after the write succeeded, so it never claims a save that
             # did not happen.
@@ -459,7 +439,7 @@ def _prompt_validated_llm_credential(
                 f"[{SECONDARY}]     If OpenSRE cannot reach {label}, "
                 f"rerun `opensre onboard` and re-enter it.[/]"
             )
-            return UNVERIFIED
-        return OK
+            return UNVERIFIED, model
+        return OK, model
     _console.print(f"[{WARNING}]  {GLYPH_WARNING}  Too many retry attempts. Aborting setup.[/]")
-    return CANCEL
+    return CANCEL, model
