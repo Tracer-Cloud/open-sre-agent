@@ -13,6 +13,40 @@
 - Do not keep compatibility-only forwarding modules after refactors. Once imports and tests
   are migrated, remove the old module path in the same change and use one canonical import path.
 
+### File placement (all packages)
+
+When adding or changing behavior, put code in the **owning module first** — not the nearest
+shared file that already imports something similar.
+
+| Kind of file | Should contain | Should not contain |
+| --- | --- | --- |
+| **Orchestration** (`flow.py`, `controller.py`, `lifecycle.py`, `factory.py`) | Stage ordering, wiring, dispatch to specialists | Vendor/provider/domain logic, API clients, heavy UI |
+| **Shared UI / prompts** (`_ui.py`, `prompts.py`, generic `validation.py`) | Reusable prompts, tables, rendering, thin dispatch | Logic for one provider, integration, or vendor |
+| **Domain / provider / vendor module** (`providers/<name>.py`, `surfaces/cli/wizard/<name>.py`, `integrations/<vendor>/`) | All behavior specific to that provider, vendor, or feature area | Unrelated providers or cross-cutting orchestration |
+| **Registry / catalog** (`config.py`, `*_catalog.py`, `provider_registry.py`) | Metadata, defaults, discovery tables | Live API calls, onboarding prompts, retry loops |
+
+**Rules:**
+
+1. **Two or more functions for the same provider, vendor, or feature area** → add or extend
+   a dedicated module (or subpackage) for that area. Do not grow a shared orchestration or UI
+   file with provider-specific branches.
+2. **Before editing a shared file**, check for an existing sibling pattern in the same
+   package (`local_llm/`, `providers/azure_openai.py`, `integrations/<vendor>/tools/`, etc.).
+   Match that layout before inventing a new one.
+3. **Keep dispatch thin.** Shared entrypoints (`validate_provider_credentials`, `get_llm`,
+   slash-command handlers) should delegate in a few lines; implementation lives downstream.
+4. **Respect package boundaries** in [ARCHITECTURE.md](docs/ARCHITECTURE.md). Surfaces compose
+   lower tiers; `core/` and `integrations/` do not import from `surfaces/`.
+5. **Package-local detail** lives in that package's `AGENTS.md` when present (e.g.
+   [`surfaces/cli/AGENTS.md`](surfaces/cli/AGENTS.md),
+   [`surfaces/interactive_shell/AGENTS.md`](surfaces/interactive_shell/AGENTS.md),
+   [`core/llm/AGENTS.md`](core/llm/AGENTS.md)). Read it before structural changes in that tree.
+6. **Tool location** follows [docs/tool-placement-policy.md](docs/tool-placement-policy.md)
+   (vendor-specific vs `tools/system/` vs cross-vendor).
+
+If a change would add a new provider-specific `if provider.value == ...` block to a file
+that already serves multiple providers, stop and extract a dedicated module instead.
+
 Before any push or PR creation follow [**CI.md**](CI.md) — lint, format, typecheck, and test commands all live there.
 
 When opening a PR, fill out the [**PR template**](.github/PULL_REQUEST_TEMPLATE.md) — it is not optional boilerplate; it has a required AI-usage disclosure section.
@@ -22,7 +56,7 @@ When opening a PR, fill out the [**PR template**](.github/PULL_REQUEST_TEMPLATE.
 | Path                                          | What it does                                                                                                                                                                                                                                                                                                                           |
 | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `core/`                                       | Investigation orchestration, context assembly, the shared runtime tool-calling loop, and domain logic (state, types, correlation rules). Includes `core/tool_framework/` — the `BaseTool` base class, `@tool` decorator, registered-tool primitives, error telemetry, skill-guidance helpers, and shared payload utilities (`utils/`). |
-| `surfaces/cli/`                               | Command-line interface, onboarding wizard, local LLM helpers, and CLI tests support.                                                                                                                                                                                                                                                   |
+| `surfaces/cli/`                               | Command-line interface, onboarding wizard, local LLM helpers, and CLI tests support. See [`surfaces/cli/AGENTS.md`](surfaces/cli/AGENTS.md).                                                                                                                                                                                                                                                   |
 | `surfaces/interactive_shell/`                 | Interactive terminal (REPL) loop, slash commands, chat/help surfaces, action-planning harness, and terminal UI.                                                                                                                                                                                                                        |
 | `integrations/`                               | Per-integration config normalization, verification, clients, helpers, store/catalog logic, the Hermes log pipeline, and per-vendor tool packages under `integrations/<vendor>/tools/`.                                                                                                                                                 |
 | `tools/`                                      | Tool registry, per-tool packages for cross-cutting tools that aren't vendor-specific (e.g. `tools/system/fleet_monitoring/`, `tools/system/watch_dog/`, `tools/system/sre_guidance_tool/`), and the interactive-shell action tools. Framework primitives (decorator, base class, utils) live in `core/tool_framework/`.                |
