@@ -848,6 +848,16 @@ class Analytics:
 _instance: Analytics | None = None
 
 
+def get_anonymous_id() -> str:
+    """Return the stable install-scoped analytics distinct id.
+
+    Used for offline experiment bucketing (no PostHog ``/decide`` call) so
+    variants stay sticky per install without a blocking network round-trip at
+    startup.
+    """
+    return _get_or_create_anonymous_id()
+
+
 def get_analytics() -> Analytics:
     global _instance
     if _instance is None:
