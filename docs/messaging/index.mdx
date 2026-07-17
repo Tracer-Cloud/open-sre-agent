@@ -1,9 +1,9 @@
 ---
 title: "Messaging"
-description: "Deliver investigation findings and trigger investigations from Slack, Discord, Telegram, WhatsApp, or Twilio SMS."
+description: "Deliver investigation findings and trigger investigations from Slack, Discord, Telegram, Rocket.Chat, WhatsApp, or Twilio SMS."
 ---
 
-OpenSRE can deliver investigation findings — and accept investigation triggers — through five messaging platforms. Pick the one that matches where your team already responds to incidents.
+OpenSRE can deliver investigation findings — and accept investigation triggers — through six messaging platforms. Pick the one that matches where your team already responds to incidents.
 
 ## Pick a platform
 
@@ -12,6 +12,7 @@ OpenSRE can deliver investigation findings — and accept investigation triggers
 | [**Slack**](/messaging/slack) | Teams already paged in Slack channels | ✅ Socket Mode chat via `opensre gateway start` (+ webhook delivery) | `opensre integrations setup slack` | ~10 min |
 | [**Discord**](/messaging/discord) | Communities and teams using Discord servers | ✅ `/investigate` slash command in any channel the bot is in | `opensre onboard` or `opensre integrations setup discord` | ~10 min |
 | [**Telegram**](/messaging/telegram) | Mobile-first and on-call rotations | ✅ DM text chat via `opensre gateway start` | `opensre onboard` or `opensre integrations setup telegram` | ~5 min |
+| [**Rocket.Chat**](/messaging/rocketchat) | Self-hosted and open-source workspaces | ❌ delivery only | `opensre onboard` or `opensre integrations setup rocketchat` | ~5 min |
 | [**WhatsApp**](/messaging/whatsapp) | Mobile alerting via Twilio WhatsApp | ❌ delivery only | `opensre integrations setup whatsapp` | ~5 min |
 | [**Twilio SMS**](/messaging/twilio-sms) | SMS paging via Twilio (separate from WhatsApp) | ❌ delivery only | `opensre integrations setup twilio` | ~5 min |
 
@@ -53,6 +54,13 @@ DISCORD_DEFAULT_CHANNEL_ID=
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_DEFAULT_CHAT_ID=
 TELEGRAM_ALLOWED_USERS=
+
+# Rocket.Chat (token mode and/or webhook mode)
+ROCKETCHAT_SERVER_URL=
+ROCKETCHAT_AUTH_TOKEN=
+ROCKETCHAT_USER_ID=
+ROCKETCHAT_DEFAULT_CHANNEL=
+ROCKETCHAT_WEBHOOK_URL=
 
 # WhatsApp (Twilio)
 TWILIO_ACCOUNT_SID=

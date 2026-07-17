@@ -198,6 +198,8 @@ All configuration options for OpenSRE can be set via environment variables. This
 | `GRAFANA_READ_TOKEN` | | Grafana API token | `integrations/_catalog_impl` |
 | `GRAFANA_LOKI_DATASOURCE_UID` | | UID of Loki datasource in Grafana | `.env.example` |
 | `GRAFANA_TEMPO_DATASOURCE_UID` | | UID of Tempo datasource in Grafana | `.env.example` |
+| `GRAFANA_VERIFY_SSL` | `true` | Verify Grafana SSL certificate | `integrations/_catalog_impl` |
+| `GRAFANA_CA_BUNDLE` | | Path to a CA bundle for Grafana TLS verification (self-signed/internal CA) | `integrations/_catalog_impl` |
 | `DD_API_KEY` | | Datadog API key | `integrations/_catalog_impl` |
 | `DD_APP_KEY` | | Datadog application key | `integrations/_catalog_impl` |
 | `DD_SITE` | `datadoghq.com` | Datadog site (us/eu) | `integrations/_catalog_impl` |
@@ -255,6 +257,11 @@ All configuration options for OpenSRE can be set via environment variables. This
 | `DISCORD_DEFAULT_CHANNEL_ID` | | Default Discord channel | `integrations/_catalog_impl` |
 | `TELEGRAM_BOT_TOKEN` | | Telegram bot token | `integrations/telegram/credentials`, `scheduler/credentials` |
 | `TELEGRAM_DEFAULT_CHAT_ID` | | Default Telegram chat ID | `integrations/telegram/credentials`, `integrations/_catalog_impl` |
+| `ROCKETCHAT_SERVER_URL` | | Rocket.Chat server base URL | `integrations/_catalog_impl` |
+| `ROCKETCHAT_AUTH_TOKEN` | | Rocket.Chat personal access token | `integrations/_catalog_impl` |
+| `ROCKETCHAT_USER_ID` | | Rocket.Chat user ID for the token | `integrations/_catalog_impl` |
+| `ROCKETCHAT_DEFAULT_CHANNEL` | | Default Rocket.Chat channel | `integrations/_catalog_impl` |
+| `ROCKETCHAT_WEBHOOK_URL` | | Rocket.Chat incoming webhook URL | `integrations/_catalog_impl` |
 | `TWILIO_ACCOUNT_SID` | | Twilio account SID | `integrations/_catalog_impl` |
 | `TWILIO_AUTH_TOKEN` | | Twilio auth token | `integrations/_catalog_impl` |
 | `TWILIO_WHATSAPP_FROM` | | WhatsApp sender number (Twilio) | `integrations/_catalog_impl` |

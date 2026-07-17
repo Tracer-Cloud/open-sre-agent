@@ -38,7 +38,6 @@ from surfaces.cli.wizard._ui import (
     Choice,
     WizardBack,
     _choose,
-    _choose_model,
     _confirm,
     _console,
     _local_defaults,
@@ -50,6 +49,12 @@ from surfaces.cli.wizard._ui import (
     _select_target_for_advanced,
     _step,
     _step_header,
+)
+from surfaces.cli.wizard.azure_openai import (
+    choose_provider_model,
+)
+from surfaces.cli.wizard.azure_openai import (
+    ensure_endpoint_settings as ensure_azure_openai_endpoint_settings,
 )
 from surfaces.cli.wizard.config import PROVIDER_BY_VALUE, SUPPORTED_PROVIDERS, ProviderOption
 from surfaces.cli.wizard.configurators.github import (
@@ -239,58 +244,6 @@ def _persist_llm_credential(provider: ProviderOption, value: str) -> bool:
         os.environ[provider.api_key_env] = value
         return True
     return _persist_llm_api_key(provider.api_key_env, value)
-
-
-def _azure_openai_endpoint_env(provider: ProviderOption) -> dict[str, str]:
-    """Return Azure endpoint env vars, using the default API version when unset."""
-    from core.llm.providers.azure_openai import resolve_azure_openai_api_version
-
-    return {
-        provider.endpoint_env: os.getenv(provider.endpoint_env, "").strip(),
-        provider.api_version_env: resolve_azure_openai_api_version(),
-    }
-
-
-def _prompt_azure_openai_endpoint_settings(provider: ProviderOption) -> dict[str, str] | None:
-    """Collect Azure OpenAI resource URL during onboarding."""
-    from core.llm.providers.azure_openai import (
-        normalize_azure_openai_base_url,
-        resolve_azure_openai_api_version,
-    )
-
-    if not provider.endpoint_env or not provider.api_version_env:
-        return {}
-
-    _step("Azure endpoint")
-    try:
-        base_url = _prompt_value(
-            f"Azure OpenAI resource URL ({provider.endpoint_env})",
-            default=os.getenv(provider.endpoint_env, provider.credential_default),
-            secret=False,
-            back_on_cancel=True,
-        )
-    except WizardBack:
-        return None
-
-    normalized_base = normalize_azure_openai_base_url(base_url)
-    if not normalized_base:
-        _console.print(f"[{ERROR}]Azure OpenAI resource URL is required.[/]")
-        return None
-    return {
-        provider.endpoint_env: normalized_base,
-        provider.api_version_env: resolve_azure_openai_api_version(),
-    }
-
-
-def _ensure_azure_openai_endpoint_settings(provider: ProviderOption) -> dict[str, str] | None:
-    """Return Azure endpoint env vars, prompting when missing."""
-    from core.llm.providers.azure_openai import azure_openai_endpoint_configured
-
-    if provider.value != "azure-openai":
-        return {}
-    if azure_openai_endpoint_configured():
-        return _azure_openai_endpoint_env(provider)
-    return _prompt_azure_openai_endpoint_settings(provider)
 
 
 def _subscription_login_command(
@@ -815,7 +768,7 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                     return 1
                 if not _persist_llm_credential(provider, api_key):
                     return 1
-                azure_env = _ensure_azure_openai_endpoint_settings(provider)
+                azure_env = ensure_azure_openai_endpoint_settings(provider)
                 if azure_env is None:
                     force_repick = True
                     continue
@@ -858,7 +811,7 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                         return 1
                     if not _persist_llm_credential(provider, api_key):
                         return 1
-            azure_env = _ensure_azure_openai_endpoint_settings(provider)
+            azure_env = ensure_azure_openai_endpoint_settings(provider)
             if azure_env is None:
                 force_repick = True
                 continue
@@ -867,7 +820,8 @@ def run_wizard(_argv: list[str] | None = None) -> int:
 
         if change_provider:
             try:
-                model = _choose_model(
+                model = choose_provider_model(
+                    provider,
                     model_provider,
                     default=model,
                     prompt_label=(
@@ -880,11 +834,12 @@ def run_wizard(_argv: list[str] | None = None) -> int:
             except WizardBack:
                 force_repick = True
                 continue
-        elif model_provider.models:
+        elif model_provider.models or provider.value == "azure-openai":
             current_display = model or "CLI default"
             _console.print(f"[{SECONDARY}]current model  {current_display}[/]")
             if _confirm("Change model?", default=False):
-                model = _choose_model(
+                model = choose_provider_model(
+                    provider,
                     model_provider,
                     default=model,
                     prompt_label=(

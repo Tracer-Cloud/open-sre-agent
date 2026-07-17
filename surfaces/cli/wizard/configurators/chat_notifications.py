@@ -16,6 +16,8 @@ from surfaces.cli.wizard._ui import (
 from surfaces.cli.wizard.env_sync import sync_env_secret, sync_env_values
 from surfaces.cli.wizard.integration_health import (
     validate_discord_bot,
+    validate_rocketchat,
+    validate_rocketchat_webhook,
     validate_slack_webhook,
     validate_telegram_bot,
 )
@@ -128,6 +130,99 @@ def _configure_discord() -> tuple[str, str]:
             )
             return "Discord", str(env_path)
         _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
+
+
+def _configure_rocketchat() -> tuple[str, str]:
+    _, credentials = _integration_defaults("rocketchat")
+    _console.print(
+        "\n[bold]Rocket.Chat Integration[/bold]\n"
+        f"[{SECONDARY}]Personal Access Token: create one under My Account > Personal Access "
+        "Tokens (the token page also shows your user ID). Incoming webhook: create one "
+        "under Administration > Integrations > Incoming.[/]\n"
+    )
+    mode = _choose(
+        "Rocket.Chat setup:",
+        [
+            Choice(value="token", label="Personal access token (dynamic channel targeting)"),
+            Choice(value="webhook", label="Incoming webhook (fixed destination)"),
+            Choice(value="both", label="Both token and webhook"),
+        ],
+        default="token",
+    )
+    creds = dict(credentials)
+    env_values: dict[str, str] = {}
+
+    if mode == "token" and creds.get("webhook_url"):
+        # Delivery prefers the webhook when both are set, so a stale webhook
+        # from a prior run would otherwise silently keep overriding this
+        # explicit token-only choice.
+        creds["webhook_url"] = None
+
+    if mode in {"token", "both"}:
+        while True:
+            server_url = _prompt_value(
+                "Rocket.Chat server URL (e.g. https://open.rocket.chat)",
+                default=_string_value(creds.get("server_url")),
+            )
+            auth_token = _prompt_value(
+                "Rocket.Chat personal access token",
+                default=_string_value(creds.get("auth_token")),
+                secret=True,
+            )
+            user_id = _prompt_value(
+                "Rocket.Chat user ID",
+                default=_string_value(creds.get("user_id")),
+            )
+            default_channel = _prompt_value(
+                "Default channel (e.g. #incidents, recommended for delivery)",
+                default=_string_value(creds.get("default_channel")),
+                allow_empty=True,
+            )
+            with _console.status("Validating Rocket.Chat credentials...", spinner="dots"):
+                result = validate_rocketchat(
+                    server_url=server_url, auth_token=auth_token, user_id=user_id
+                )
+            _render_integration_result("Rocket.Chat", result)
+            if result.ok:
+                creds["server_url"] = server_url
+                creds["auth_token"] = auth_token
+                creds["user_id"] = user_id
+                creds["default_channel"] = default_channel or None
+                sync_env_secret("ROCKETCHAT_AUTH_TOKEN", auth_token)
+                env_values["ROCKETCHAT_SERVER_URL"] = server_url
+                env_values["ROCKETCHAT_USER_ID"] = user_id
+                if default_channel:
+                    env_values["ROCKETCHAT_DEFAULT_CHANNEL"] = default_channel
+                else:
+                    _console.print(
+                        f"[{WARNING}]No default channel set — token-based report deliveries "
+                        "need ROCKETCHAT_DEFAULT_CHANNEL to send messages.[/]"
+                    )
+                break
+            _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
+
+    if mode in {"webhook", "both"}:
+        while True:
+            webhook_url = _prompt_value(
+                "Rocket.Chat incoming webhook URL",
+                default=_string_value(creds.get("webhook_url")),
+                secret=True,
+            )
+            with _console.status("Validating Rocket.Chat webhook...", spinner="dots"):
+                result = validate_rocketchat_webhook(webhook_url=webhook_url)
+            _render_integration_result("Rocket.Chat webhook", result)
+            if result.ok:
+                # The URL embeds its token, so it stays in the integration
+                # store only — like SLACK_WEBHOOK_URL, it is not synced to
+                # .env (sync_env_secret rejects keys not classified as
+                # sensitive, and *_URL is not).
+                creds["webhook_url"] = webhook_url
+                break
+            _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
+
+    upsert_integration("rocketchat", {"credentials": creds})
+    env_path = sync_env_values(env_values)
+    return "Rocket.Chat", str(env_path)
 
 
 def _configure_telegram() -> tuple[str, str]:

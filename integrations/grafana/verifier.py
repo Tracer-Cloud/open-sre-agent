@@ -20,7 +20,12 @@ def _discover_datasources(config: GrafanaIntegrationConfig) -> list[Any] | str:
     """
     url = f"{config.endpoint.rstrip('/')}/api/datasources"
     try:
-        response = requests.get(url, headers=config.auth_headers, timeout=10)
+        response = requests.get(
+            url,
+            headers=config.auth_headers,
+            timeout=10,
+            verify=config.ssl_verify,
+        )
         response.raise_for_status()
         return cast(list[Any], response.json())
     except requests.HTTPError as exc:

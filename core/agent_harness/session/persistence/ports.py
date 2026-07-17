@@ -129,6 +129,3 @@ class SessionRepo(Protocol):
 
     def load_investigation(self, prefix: str) -> dict[str, Any] | None:
         raise NotImplementedError
-
-    def count_investigation_prefix_matches(self, prefix: str) -> int:
-        raise NotImplementedError

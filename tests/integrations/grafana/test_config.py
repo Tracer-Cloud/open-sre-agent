@@ -54,3 +54,33 @@ def test_grafana_config_is_configured(url: str, token: str, expected: bool) -> N
         read_token=token,
     )
     assert config.is_configured is expected
+
+
+def test_grafana_config_ssl_verify_defaults_to_true() -> None:
+    config = GrafanaAccountConfig(
+        account_id="test",
+        instance_url="https://grafana.example.com",
+        read_token="secret",
+    )
+    assert config.ssl_verify is True
+
+
+def test_grafana_config_ssl_verify_respects_false() -> None:
+    config = GrafanaAccountConfig(
+        account_id="test",
+        instance_url="https://grafana.example.com",
+        read_token="secret",
+        verify_ssl=False,
+    )
+    assert config.ssl_verify is False
+
+
+def test_grafana_config_ssl_verify_ca_bundle_takes_precedence() -> None:
+    config = GrafanaAccountConfig(
+        account_id="test",
+        instance_url="https://grafana.example.com",
+        read_token="secret",
+        verify_ssl=True,
+        ca_bundle="/etc/ssl/internal-ca.pem",
+    )
+    assert config.ssl_verify == "/etc/ssl/internal-ca.pem"

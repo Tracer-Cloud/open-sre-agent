@@ -25,6 +25,21 @@ Official documentation: [<u>How to add a token to a service account in Grafana</
      ![Connect Grafana](/images/connect_grafana.png)
    </Frame>
 
+### Self-signed or internal CA certificates
+
+If your Grafana instance is self-hosted behind a certificate signed by an internal/private
+CA, `opensre onboard` will prompt:
+
+- **Verify SSL certificate?** — answer `No` to skip TLS verification entirely (only
+  recommended for local/lab instances).
+- **Path to CA bundle for SSL verification** — point this at a PEM file containing your
+  internal CA certificate to keep full TLS verification while trusting your organization's
+  CA. This is the recommended option for a real internal Grafana deployment, since it
+  still validates the certificate chain and hostname.
+
+These can also be set directly via `GRAFANA_VERIFY_SSL` (`true`/`false`) and
+`GRAFANA_CA_BUNDLE` (path to a PEM file) in `.env`.
+
 ## Local Grafana Setup (Minikube example)
 
 ### Steps

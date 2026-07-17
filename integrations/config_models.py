@@ -60,13 +60,28 @@ class GrafanaIntegrationConfig(StrictConfigModel):
     integration_id: str = ""
     username: str = ""
     password: str = ""
+    verify_ssl: bool = True
+    ca_bundle: str = ""
 
     _normalize_endpoint = field_validator("endpoint", mode="before")(normalize_url())
+    _normalize_ca_bundle = field_validator("ca_bundle", mode="before")(normalize_str())
+    _normalize_verify_ssl = field_validator("verify_ssl", mode="before")(normalize_bool_str())
 
     @property
     def is_local(self) -> bool:
         host = urlparse(self.endpoint).hostname or ""
         return host in _LOCAL_GRAFANA_HOSTS
+
+    @property
+    def ssl_verify(self) -> bool | str:
+        """Value to pass as ``requests``' ``verify=`` kwarg.
+
+        A configured CA bundle path takes precedence over the plain
+        verify/no-verify toggle, matching :class:`SplunkIntegrationConfig`.
+        """
+        if self.ca_bundle:
+            return self.ca_bundle
+        return self.verify_ssl
 
     @property
     def has_token(self) -> bool:
@@ -883,6 +898,57 @@ class TelegramBotConfig(StrictConfigModel):
         if not stripped:
             raise ValueError("bot_token cannot be empty or just whitespace")
         return stripped
+
+
+class RocketChatConfig(StrictConfigModel):
+    """Rocket.Chat runtime config.
+
+    Two delivery modes, either or both may be configured:
+
+    - Personal Access Token: ``server_url`` + ``auth_token`` + ``user_id``
+      (REST ``chat.postMessage``, dynamic channel targeting).
+    - Incoming webhook: ``webhook_url`` (fixed destination chosen when the
+      webhook is created in the Rocket.Chat admin).
+    """
+
+    server_url: str = ""
+    auth_token: str = ""
+    user_id: str = ""
+    webhook_url: str = ""
+    default_channel: str | None = None
+
+    @field_validator("server_url", mode="before")
+    @classmethod
+    def _normalize_server_url(cls, value: object) -> str:
+        stripped = str(value or "").strip().rstrip("/")
+        if stripped and not stripped.startswith(("http://", "https://")):
+            raise ValueError("server_url must start with http:// or https://")
+        return stripped
+
+    @field_validator("auth_token", "user_id", mode="before")
+    @classmethod
+    def _strip_credential(cls, value: object) -> str:
+        return str(value or "").strip()
+
+    @field_validator("webhook_url", mode="before")
+    @classmethod
+    def _normalize_webhook_url(cls, value: object) -> str:
+        stripped = str(value or "").strip()
+        if not stripped:
+            return ""
+        parsed = urlparse(stripped)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("webhook_url must be a valid HTTP(S) URL")
+        return stripped
+
+    @model_validator(mode="after")
+    def _require_pat_or_webhook(self) -> RocketChatConfig:
+        has_pat = bool(self.server_url and self.auth_token and self.user_id)
+        if not has_pat and not self.webhook_url:
+            raise ValueError(
+                "Rocket.Chat needs either webhook_url or all of server_url, auth_token, and user_id"
+            )
+        return self
 
 
 class WhatsAppConfig(StrictConfigModel):

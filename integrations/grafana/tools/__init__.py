@@ -78,6 +78,8 @@ def query_grafana_alert_rules(
     folder: str | None = None,
     grafana_endpoint: str | None = None,
     grafana_api_key: str | None = None,
+    grafana_verify_ssl: bool = True,
+    grafana_ca_bundle: str = "",
     grafana_backend: Any = None,
     **_kwargs: Any,
 ) -> dict:
@@ -93,7 +95,12 @@ def query_grafana_alert_rules(
             "raw": raw,
         }
 
-    client = _resolve_grafana_client(grafana_endpoint, grafana_api_key)
+    client = _resolve_grafana_client(
+        grafana_endpoint,
+        grafana_api_key,
+        grafana_verify_ssl=grafana_verify_ssl,
+        grafana_ca_bundle=grafana_ca_bundle,
+    )
     if not client or not client.is_configured:
         return tool_unavailable("grafana_alerts", "Grafana integration not configured", rules=[])
 
@@ -194,6 +201,8 @@ def query_grafana_annotations(
     grafana_api_key: str | None = None,
     grafana_username: str = "",
     grafana_password: str = "",
+    grafana_verify_ssl: bool = True,
+    grafana_ca_bundle: str = "",
     grafana_backend: Any = None,
     **_kwargs: Any,
 ) -> dict:
@@ -215,7 +224,12 @@ def query_grafana_annotations(
         }
 
     client = _resolve_grafana_client(
-        grafana_endpoint, grafana_api_key, grafana_username, grafana_password
+        grafana_endpoint,
+        grafana_api_key,
+        grafana_username,
+        grafana_password,
+        grafana_verify_ssl,
+        grafana_ca_bundle,
     )
     if not client or not client.is_configured:
         return tool_unavailable(
@@ -265,6 +279,8 @@ def _resolve_grafana_client(
     grafana_api_key: str | None = None,
     grafana_username: str = "",
     grafana_password: str = "",
+    grafana_verify_ssl: bool = True,
+    grafana_ca_bundle: str = "",
 ):
     if not grafana_endpoint:
         return None
@@ -273,6 +289,8 @@ def _resolve_grafana_client(
         api_key=grafana_api_key or "",
         username=grafana_username,
         password=grafana_password,
+        verify_ssl=grafana_verify_ssl,
+        ca_bundle=grafana_ca_bundle,
     )
 
 
@@ -282,6 +300,8 @@ def _grafana_creds(grafana: dict) -> dict:
         "grafana_api_key": grafana.get("grafana_api_key") or grafana.get("api_key"),
         "grafana_username": grafana.get("username", ""),
         "grafana_password": grafana.get("password", ""),
+        "grafana_verify_ssl": grafana.get("verify_ssl", True),
+        "grafana_ca_bundle": grafana.get("ca_bundle", ""),
     }
 
 
@@ -367,6 +387,8 @@ def query_grafana_logs(
     grafana_api_key: str | None = None,
     grafana_username: str = "",
     grafana_password: str = "",
+    grafana_verify_ssl: bool = True,
+    grafana_ca_bundle: str = "",
     pipeline_name: str | None = None,
     grafana_backend: Any = None,
     **_kwargs: Any,
@@ -385,7 +407,12 @@ def query_grafana_logs(
         )
 
     client = _resolve_grafana_client(
-        grafana_endpoint, grafana_api_key, grafana_username, grafana_password
+        grafana_endpoint,
+        grafana_api_key,
+        grafana_username,
+        grafana_password,
+        grafana_verify_ssl,
+        grafana_ca_bundle,
     )
     if not client or not client.is_configured:
         return tool_unavailable("grafana_loki", "Grafana integration not configured", logs=[])
@@ -520,6 +547,8 @@ def _query_grafana_metrics_available(sources: dict[str, dict]) -> bool:
         "grafana_api_key",
         "grafana_username",
         "grafana_password",
+        "grafana_verify_ssl",
+        "grafana_ca_bundle",
         "grafana_backend",
     ),
     is_available=_query_grafana_metrics_available,
@@ -532,6 +561,8 @@ def query_grafana_metrics(
     grafana_api_key: str | None = None,
     grafana_username: str = "",
     grafana_password: str = "",
+    grafana_verify_ssl: bool = True,
+    grafana_ca_bundle: str = "",
     grafana_backend: Any = None,
     **_kwargs: Any,
 ) -> dict:
@@ -544,7 +575,12 @@ def query_grafana_metrics(
         )
 
     client = _resolve_grafana_client(
-        grafana_endpoint, grafana_api_key, grafana_username, grafana_password
+        grafana_endpoint,
+        grafana_api_key,
+        grafana_username,
+        grafana_password,
+        grafana_verify_ssl,
+        grafana_ca_bundle,
     )
     if not client or not client.is_configured:
         return tool_unavailable("grafana_mimir", "Grafana integration not configured", metrics=[])
@@ -609,6 +645,8 @@ def _query_grafana_service_names_available(sources: dict[str, dict]) -> bool:
 def query_grafana_service_names(
     grafana_endpoint: str | None = None,
     grafana_api_key: str | None = None,
+    grafana_verify_ssl: bool = True,
+    grafana_ca_bundle: str = "",
     grafana_backend: Any = None,
     **_kwargs: Any,
 ) -> dict:
@@ -616,7 +654,12 @@ def query_grafana_service_names(
     if grafana_backend is not None:
         return {"source": "grafana_loki_labels", "available": True, "service_names": []}
 
-    client = _resolve_grafana_client(grafana_endpoint, grafana_api_key)
+    client = _resolve_grafana_client(
+        grafana_endpoint,
+        grafana_api_key,
+        grafana_verify_ssl=grafana_verify_ssl,
+        grafana_ca_bundle=grafana_ca_bundle,
+    )
     if not client or not client.is_configured:
         return tool_unavailable(
             "grafana_loki_labels", "Grafana integration not configured", service_names=[]
@@ -694,6 +737,8 @@ def query_grafana_traces(
     limit: int = 20,
     grafana_endpoint: str | None = None,
     grafana_api_key: str | None = None,
+    grafana_verify_ssl: bool = True,
+    grafana_ca_bundle: str = "",
     grafana_backend: Any = None,
     **_kwargs: Any,
 ) -> dict:
@@ -707,7 +752,12 @@ def query_grafana_traces(
             extract_pipeline_spans=_extract_pipeline_spans,
         )
 
-    client = _resolve_grafana_client(grafana_endpoint, grafana_api_key)
+    client = _resolve_grafana_client(
+        grafana_endpoint,
+        grafana_api_key,
+        grafana_verify_ssl=grafana_verify_ssl,
+        grafana_ca_bundle=grafana_ca_bundle,
+    )
     if not client or not client.is_configured:
         return tool_unavailable("grafana_tempo", "Grafana integration not configured", traces=[])
     if not client.tempo_datasource_uid:
