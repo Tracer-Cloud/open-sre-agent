@@ -33,6 +33,8 @@ def classify(
                 "api_key": credentials.get("api_key", ""),
                 "username": credentials.get("username", ""),
                 "password": credentials.get("password", ""),
+                "verify_ssl": credentials.get("verify_ssl", True),
+                "ca_bundle": credentials.get("ca_bundle", ""),
                 "integration_id": record_id,
             }
         )

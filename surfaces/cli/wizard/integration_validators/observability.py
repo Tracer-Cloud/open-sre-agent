@@ -18,16 +18,29 @@ from integrations.tempo import build_tempo_config, validate_tempo_config
 from .shared import IntegrationHealthResult
 
 
-def validate_grafana_integration(*, endpoint: str, api_key: str) -> IntegrationHealthResult:
+def validate_grafana_integration(
+    *,
+    endpoint: str,
+    api_key: str,
+    verify_ssl: bool = True,
+    ca_bundle: str = "",
+) -> IntegrationHealthResult:
     """Validate Grafana credentials by discovering datasource UIDs."""
     try:
         grafana_config = GrafanaIntegrationConfig.model_validate(
-            {"endpoint": endpoint, "api_key": api_key}
+            {
+                "endpoint": endpoint,
+                "api_key": api_key,
+                "verify_ssl": verify_ssl,
+                "ca_bundle": ca_bundle,
+            }
         )
         client = get_grafana_client_from_credentials(
             endpoint=grafana_config.endpoint,
             api_key=grafana_config.api_key,
             account_id="opensre_onboard_probe",
+            verify_ssl=grafana_config.verify_ssl,
+            ca_bundle=grafana_config.ca_bundle,
         )
         discovered = client.discover_datasource_uids()
         if not discovered:

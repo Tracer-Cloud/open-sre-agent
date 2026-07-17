@@ -198,6 +198,8 @@ All configuration options for OpenSRE can be set via environment variables. This
 | `GRAFANA_READ_TOKEN` | | Grafana API token | `integrations/_catalog_impl` |
 | `GRAFANA_LOKI_DATASOURCE_UID` | | UID of Loki datasource in Grafana | `.env.example` |
 | `GRAFANA_TEMPO_DATASOURCE_UID` | | UID of Tempo datasource in Grafana | `.env.example` |
+| `GRAFANA_VERIFY_SSL` | `true` | Verify Grafana SSL certificate | `integrations/_catalog_impl` |
+| `GRAFANA_CA_BUNDLE` | | Path to a CA bundle for Grafana TLS verification (self-signed/internal CA) | `integrations/_catalog_impl` |
 | `DD_API_KEY` | | Datadog API key | `integrations/_catalog_impl` |
 | `DD_APP_KEY` | | Datadog application key | `integrations/_catalog_impl` |
 | `DD_SITE` | `datadoghq.com` | Datadog site (us/eu) | `integrations/_catalog_impl` |

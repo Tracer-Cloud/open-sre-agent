@@ -188,6 +188,7 @@ class GrafanaClientBase:
                 url,
                 headers=self._get_auth_headers(),
                 timeout=10,
+                verify=self._config.ssl_verify,
             )
             response.raise_for_status()
             datasources = response.json()
@@ -290,6 +291,7 @@ class GrafanaClientBase:
                 url,
                 headers=self._get_auth_headers(),
                 timeout=10,
+                verify=self._config.ssl_verify,
             )
             response.raise_for_status()
             data = response.json()
@@ -347,6 +349,7 @@ class GrafanaClientBase:
                 headers=self._get_auth_headers(),
                 params=params,
                 timeout=10,
+                verify=self._config.ssl_verify,
             )
             response.raise_for_status()
             data = response.json()
@@ -374,6 +377,7 @@ class GrafanaClientBase:
             headers=self._get_auth_headers(),
             params=params,
             timeout=timeout,
+            verify=self._config.ssl_verify,
         )
         response.raise_for_status()
         result: dict[str, Any] = response.json()

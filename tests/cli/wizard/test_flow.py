@@ -187,7 +187,7 @@ def test_run_wizard_configures_optional_integrations(monkeypatch, tmp_path, caps
             "grafana-token",
         ]
     )
-    text_responses = iter(["https://grafana.example.com"])
+    text_responses = iter(["https://grafana.example.com", ""])
 
     def _mock_password(*_args, **_kwargs):
         m = MagicMock()
@@ -199,9 +199,15 @@ def test_run_wizard_configures_optional_integrations(monkeypatch, tmp_path, caps
         m.ask.return_value = next(text_responses)
         return m
 
+    def _mock_confirm(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = True
+        return m
+
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
     monkeypatch.setattr(flow.questionary, "text", _mock_text)
+    monkeypatch.setattr(flow.questionary, "confirm", _mock_confirm)
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(
@@ -239,6 +245,8 @@ def test_run_wizard_configures_optional_integrations(monkeypatch, tmp_path, caps
                 "credentials": {
                     "endpoint": "https://grafana.example.com",
                     "api_key": "grafana-token",
+                    "verify_ssl": True,
+                    "ca_bundle": "",
                 }
             },
         )
@@ -246,6 +254,7 @@ def test_run_wizard_configures_optional_integrations(monkeypatch, tmp_path, caps
     assert synced_env_values == [
         {
             "GRAFANA_INSTANCE_URL": "https://grafana.example.com",
+            "GRAFANA_VERIFY_SSL": "true",
         },
     ]
     output = capsys.readouterr().out
