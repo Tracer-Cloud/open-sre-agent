@@ -134,10 +134,8 @@ def run_cli_command(
                     f"[{ERROR}]CLI command exited with non-zero code {captured_result.returncode}[/]"
                 )
         else:
-            interactive_result = (
-                subprocess.run(cmd, check=False, timeout=subprocess_timeout, env=child_env)
-                if subprocess_timeout is not None
-                else subprocess.run(cmd, check=False, env=child_env)
+            interactive_result = subprocess.run(
+                cmd, check=False, timeout=subprocess_timeout, env=child_env
             )
             exit_code = interactive_result.returncode
             # The child wrote straight to the terminal, bypassing Rich, so Rich has no
