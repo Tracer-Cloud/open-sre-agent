@@ -152,6 +152,11 @@ def run_cli_command(
                 )
     except subprocess.TimeoutExpired as exc:
         exit_code = None
+        # Same cursor hazard as the normal-exit and KeyboardInterrupt paths, and the
+        # most likely one to actually hit it: the timeout exists specifically to
+        # kill a hung install script, i.e. a streamed child mid-redraw of its own
+        # progress bar.
+        prepare_repl_output_line()
         print_command_output(console, _decode_subprocess_stream(exc.stdout))
         print_command_output(console, _decode_subprocess_stream(exc.stderr), style=ERROR)
         console.print(f"[{ERROR}]error:[/] CLI command timed out")
