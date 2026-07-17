@@ -74,9 +74,10 @@ class _RocketChatReportDeliveryAdapter:
         )
         logger.debug("[publish] rocketchat delivery: posted=%s error=%s", posted, error)
         if not posted:
+            destination = channel or ("webhook" if webhook_url else "unknown")
             logger.warning(
-                "[publish] Rocket.Chat delivery failed: channel=%s error=%s",
-                channel,
+                "[publish] Rocket.Chat delivery failed: destination=%s error=%s",
+                destination,
                 error,
             )
         return True

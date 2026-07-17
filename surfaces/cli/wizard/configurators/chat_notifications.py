@@ -152,6 +152,12 @@ def _configure_rocketchat() -> tuple[str, str]:
     creds = dict(credentials)
     env_values: dict[str, str] = {}
 
+    if mode == "token" and creds.get("webhook_url"):
+        # Delivery prefers the webhook when both are set, so a stale webhook
+        # from a prior run would otherwise silently keep overriding this
+        # explicit token-only choice.
+        creds["webhook_url"] = None
+
     if mode in {"token", "both"}:
         while True:
             server_url = _prompt_value(
