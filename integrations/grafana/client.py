@@ -29,6 +29,8 @@ def get_grafana_client() -> GrafanaClient:
         endpoint=os.getenv("GRAFANA_INSTANCE_URL", "https://tracerbio.grafana.net"),
         api_key=os.getenv("GRAFANA_READ_TOKEN", ""),
         account_id="env_default",
+        verify_ssl=os.getenv("GRAFANA_VERIFY_SSL", "true").strip().lower() != "false",
+        ca_bundle=os.getenv("GRAFANA_CA_BUNDLE", "").strip(),
     )
 
 
