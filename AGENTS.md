@@ -70,13 +70,13 @@ Main packages one level deeper:
 
 ### Adding a Tool
 
-The tool registry auto-discovers modules under `tools/`, so the normal path is to add one module or package there and let discovery pick it up. See [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md) for the full file list and the detailed definition of done (package structure, contract/implementation rules, live-payload parsing, required docs/tests).
+The tool registry auto-discovers modules under `tools/`, so the normal path is to add one module or package there and let discovery pick it up. See [docs/adding-tools-and-integrations.md](docs/adding-tools-and-integrations.md) for the full file list and the detailed definition of done (package structure, contract/implementation rules, live-payload parsing, required docs/tests).
 
 Steps:
 
 1. Pick the simplest shape that fits the tool. Use a `BaseTool` subclass (from `core.tool_framework.base`) for richer behavior; use `@tool(...)` from `core.tool_framework.tool_decorator` for a lightweight function tool.
 2. Declare clear metadata: `name`, `description`, `source`, `input_schema`, and any `use_cases`, `requires`, `outputs`, or `retrieval_controls` you need.
-3. Before opening or approving the PR, follow [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md).
+3. Before opening or approving the PR, follow [docs/adding-tools-and-integrations.md](docs/adding-tools-and-integrations.md).
 
 ### Changing the investigation pipeline
 
@@ -109,13 +109,13 @@ Steps:
 
 ### Adding an Integration
 
-Integration work usually spans config normalization, verification, integration-local clients/helpers, tools, docs, and tests. See [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md) for the full file list, examples from the repo (Datadog, Grafana, Hermes), and the detailed definition of done (core completeness, investigation wiring, docs/tests, `make verify-integrations`, final demo gate).
+Integration work usually spans config normalization, verification, integration-local clients/helpers, tools, docs, and tests. See [docs/adding-tools-and-integrations.md](docs/adding-tools-and-integrations.md) for the full file list, examples from the repo (Datadog, Grafana, Hermes), and the detailed definition of done (core completeness, investigation wiring, docs/tests, `make verify-integrations`, final demo gate).
 
 Steps:
 
 1. Add the integration config and normalization logic first so the rest of the stack can consume a consistent shape.
 2. Wire the tool layer after the config path is stable.
-3. Before opening or approving the PR, follow [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md).
+3. Before opening or approving the PR, follow [docs/adding-tools-and-integrations.md](docs/adding-tools-and-integrations.md).
 
 ## 3. Footguns (common mistakes to avoid)
 
@@ -124,4 +124,5 @@ Steps:
 - Investigation tool schemas: draft-07 JSON Schema (e.g. `"type": ["object", "null"]`) can pass loose checks but fail the LLM API on first invoke because **all** available investigation tools are sent together. Normalize in the provider adapter and extend registry contract tests; see [docs/investigation-tool-calling.md](docs/investigation-tool-calling.md).
 - Interactive-shell action selection: do not implement regex/keyword/fuzzy intent routing or deterministic action bypasses around the action-agent path. See `surfaces/interactive_shell/AGENTS.md` ("Action Selection And Execution") for the full rule and the sanctioned literal-`/slash` exception.
 - Information exposure through an exception (CWE-209 / CodeQL `py/stack-trace-exposure`): never send an exception's detail — `str(exc)`, `repr(exc)`, `traceback.format_exc()`, `exc.args`, provider/model/field internals — to an **external surface**. External surfaces are HTTP responses (`JSONResponse`/`HTTPException.detail` in `gateway/http/`) and chat gateway messages delivered to Slack/Telegram users (`OutputSink.render_error` on the gateway sinks). Log full detail server-side (`logger` + `capture_exception`) and return a generic message or `type(exc).__name__` only. The local CLI/terminal sink is **not** external — it may show detail. Redact at the sink/response boundary, not per call site, so the shared turn engine keeps detail for local dev.
+- Cyclic imports (CodeQL `py/cyclic-import`): CodeQL counts **function-local** and `TYPE_CHECKING` imports as part of a cycle, so making an import lazy does **not** clear the alert. Break the cycle structurally — move the shared symbol (type, exception, helper) into a **leaf** module both sides import, and never add a back-edge from a lower-level module up to a higher-level one. Precedent: `surfaces/cli/wizard/validation_result.py` and `surfaces/cli/llm_auth/persist.py` exist only to hold shared symbols so `validation` ↔ `azure_openai` and `_ui` → `service` stay acyclic.
 

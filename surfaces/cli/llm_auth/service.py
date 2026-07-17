@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import subprocess
-from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -25,10 +24,8 @@ from config.llm_auth.records import (
     resolve_provider_auth_record,
     save_provider_auth_record,
 )
-from config.llm_credentials import (
-    save_llm_api_key,
-)
 from integrations.llm_cli.codex_oauth import CodexOAuthError, run_codex_oauth_login
+from surfaces.cli.llm_auth.persist import AuthSetupError, persist_api_key_secret
 from surfaces.cli.llm_auth.providers import (
     ProviderAuthProfile,
     provider_for_profile,
@@ -37,13 +34,6 @@ from surfaces.cli.llm_auth.providers import (
 from surfaces.cli.wizard.config import PROVIDER_BY_VALUE, ProviderOption
 from surfaces.cli.wizard.env_sync import sync_provider_env
 from surfaces.cli.wizard.validation import validate_provider_credentials
-
-
-class AuthSetupError(RuntimeError):
-    """Raised when provider auth setup cannot complete."""
-
-
-SaveSecret = Callable[[str, str], None]
 
 
 @dataclass(frozen=True)
@@ -84,19 +74,6 @@ def _save_auth_record(
         source=source,
         detail=detail,
     )
-
-
-def persist_api_key_secret(
-    env_var: str,
-    value: str,
-    *,
-    save_secret: SaveSecret = save_llm_api_key,
-) -> None:
-    """Persist one API-key secret through the shared auth service boundary."""
-    try:
-        save_secret(env_var, value)
-    except RuntimeError as exc:
-        raise AuthSetupError(str(exc)) from exc
 
 
 def configure_api_key_provider(

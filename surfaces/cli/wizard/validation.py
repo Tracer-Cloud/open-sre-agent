@@ -3,15 +3,14 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
 from typing import Any
 
 from surfaces.cli.wizard.config import ProviderOption
+from surfaces.cli.wizard.openai_client import load_openai_client
+from surfaces.cli.wizard.validation_result import ValidationResult
 
 Anthropic: Any | None = None
 AnthropicAuthError: type[Exception] | None = None
-OpenAI: Any | None = None
-OpenAIAuthError: type[Exception] | None = None
 
 
 def _load_anthropic_client() -> tuple[Any, type[Exception]]:
@@ -25,28 +24,6 @@ def _load_anthropic_client() -> tuple[Any, type[Exception]]:
         AnthropicAuthError = _AnthropicAuthError
 
     return Anthropic, AnthropicAuthError
-
-
-def _load_openai_client() -> tuple[Any, type[Exception]]:
-    global OpenAI, OpenAIAuthError
-
-    if OpenAI is None or OpenAIAuthError is None:
-        from openai import AuthenticationError as _OpenAIAuthError
-        from openai import OpenAI as _OpenAI
-
-        OpenAI = _OpenAI
-        OpenAIAuthError = _OpenAIAuthError
-
-    return OpenAI, OpenAIAuthError
-
-
-@dataclass(frozen=True)
-class ValidationResult:
-    """Result of validating a provider key."""
-
-    ok: bool
-    detail: str
-    sample_response: str = ""
 
 
 def _get_provider_base_url(provider_value: str) -> str | None:
@@ -153,7 +130,7 @@ def validate_provider_credentials(
         )
 
     anthropic_client_cls, anthropic_auth_error = _load_anthropic_client()
-    openai_client_cls, openai_auth_error = _load_openai_client()
+    openai_client_cls, openai_auth_error = load_openai_client()
 
     try:
         if provider.value == "anthropic":

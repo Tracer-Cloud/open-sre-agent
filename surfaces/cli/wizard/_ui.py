@@ -36,7 +36,7 @@ from platform.terminal.theme import (
     TEXT,
     WARNING,
 )
-from surfaces.cli.llm_auth.service import AuthSetupError, persist_api_key_secret
+from surfaces.cli.llm_auth.persist import AuthSetupError, persist_api_key_secret
 from surfaces.cli.wizard.config import PROVIDER_BY_VALUE, ProviderOption
 from surfaces.cli.wizard.integration_health import IntegrationHealthResult
 from surfaces.cli.wizard.probes import ProbeResult
