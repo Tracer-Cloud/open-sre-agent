@@ -173,6 +173,28 @@ def test_validate_provider_credentials_returns_success_for_valid_openai_key(monk
     assert result.sample_response == "OpenSRE ready"
 
 
+def test_validate_provider_credentials_azure_not_found_lists_deployments(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "surfaces.cli.wizard.validation.OpenAI",
+        lambda **_kwargs: _FakeOpenAIClient(RuntimeError("Error code: 404 - DeploymentNotFound")),
+    )
+    monkeypatch.setattr(
+        "surfaces.cli.wizard.azure_openai.list_azure_openai_deployments",
+        lambda **_kwargs: ["gpt-4.1-mini"],
+    )
+    monkeypatch.setenv("AZURE_OPENAI_BASE_URL", "https://example.openai.azure.com")
+
+    result = validate_provider_credentials(
+        provider=PROVIDER_BY_VALUE["azure-openai"],
+        api_key="good-key",
+        model="gpt-4.1",
+    )
+
+    assert result.ok is False
+    assert "deployment 'gpt-4.1'" in result.detail
+    assert "Available deployments: gpt-4.1-mini" in result.detail
+
+
 def test_get_provider_base_url_deepseek() -> None:
     from config.config import DEEPSEEK_BASE_URL
 
