@@ -16,7 +16,7 @@ keywords = ["sre", "devops", "incident", "rca", "llm", "ai", "agent", "observabi
 dependencies = [
     # Core AI/Agent
     "anthropic>=0.77.1",
-    "mcp>=1.27.0",
+    "mcp>=1.28.1",
     "openai>=2.0.0",
     "litellm>=1.90.0",
     # Data validation
