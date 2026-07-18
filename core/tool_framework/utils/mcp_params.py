@@ -15,7 +15,10 @@ __all__ = ["first_list", "first_string", "string_list"]
 def string_list(value: object) -> list[str]:
     if not isinstance(value, list):
         return []
-    return [str(item).strip() for item in value if str(item).strip()]
+    # An explicitly-None item (a normal value for an unset optional
+    # field) must be dropped, not coerced to the truthy string "None"
+    # that would be injected into MCP CLI args or environment values.
+    return [text for item in value if item is not None for text in [str(item).strip()] if text]
 
 
 def first_string(source: dict[str, object], *keys: str) -> str | None:

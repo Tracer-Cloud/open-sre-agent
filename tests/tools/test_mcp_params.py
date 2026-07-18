@@ -19,6 +19,12 @@ def test_string_list_coerces_non_string_items() -> None:
     assert string_list([123, "  ok  "]) == ["123", "ok"]
 
 
+def test_string_list_skips_none_items() -> None:
+    # An explicitly-None item (a normal value for an unset optional
+    # field) must be dropped, not coerced to the truthy "None".
+    assert string_list([None, "serve", None]) == ["serve"]
+
+
 def test_first_string_returns_first_non_empty_key_in_order() -> None:
     source = {"url": "https://example.com", "posthog_url": "https://ignored.example.com"}
     assert first_string(source, "posthog_url", "url") == "https://ignored.example.com"
