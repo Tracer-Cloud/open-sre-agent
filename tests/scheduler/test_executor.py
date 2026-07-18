@@ -116,6 +116,88 @@ class TestExecutor:
         assert result is True
         mock_deliver.assert_called_once()
 
+    def test_rocketchat_delivery_success(self) -> None:
+        task = ScheduledTask(
+            id="test_rc_01",
+            kind=TaskKind.DAILY_SUMMARY,
+            cron="0 9 * * *",
+            provider=Provider.ROCKETCHAT,
+            chat_id="#ops",
+        )
+
+        with (
+            patch(
+                "platform.scheduler.executor.build_message",
+                return_value="Scheduled report",
+            ),
+            patch("platform.scheduler.executor._deliver_rocketchat") as mock_deliver,
+        ):
+            mock_deliver.return_value = (True, "", "msg_rc")
+            result = execute_task(task, "2026-01-01T09:00")
+
+        assert result is True
+        mock_deliver.assert_called_once()
+
+    def test_rocketchat_delivery_posts_to_channel(self) -> None:
+        task = ScheduledTask(
+            id="test_rc_02",
+            kind=TaskKind.DAILY_SUMMARY,
+            cron="0 9 * * *",
+            provider=Provider.ROCKETCHAT,
+            chat_id="#ops",
+        )
+
+        with (
+            patch(
+                "platform.scheduler.executor.build_message",
+                return_value="<b>Scheduled</b> report",
+            ),
+            patch(
+                "platform.scheduler.executor.resolve_rocketchat_credentials",
+                return_value={
+                    "server_url": "https://chat.example.com",
+                    "auth_token": "tok",
+                    "user_id": "u1",
+                },
+            ),
+            patch("integrations.rocketchat.delivery.post_rocketchat_message") as mock_post,
+        ):
+            mock_post.return_value = (True, "", "msg_rc")
+            result = execute_task(task, "2026-01-01T09:00")
+
+        assert result is True
+        args = mock_post.call_args.args
+        assert args[0] == "https://chat.example.com"
+        assert args[1] == "#ops"
+        # HTML tags stripped — Rocket.Chat renders Markdown, not HTML.
+        assert args[2] == "Scheduled report"
+        assert args[3] == "tok"
+        assert args[4] == "u1"
+
+    def test_rocketchat_delivery_fails_without_token_credentials(self) -> None:
+        task = ScheduledTask(
+            id="test_rc_03",
+            kind=TaskKind.DAILY_SUMMARY,
+            cron="0 9 * * *",
+            provider=Provider.ROCKETCHAT,
+            chat_id="#ops",
+        )
+
+        with (
+            patch(
+                "platform.scheduler.executor.build_message",
+                return_value="Scheduled report",
+            ),
+            patch(
+                "platform.scheduler.executor.resolve_rocketchat_credentials",
+                return_value={"webhook_url": "https://chat.example.com/hooks/a/b"},
+            ),
+        ):
+            result = execute_task(task, "2026-01-01T09:00")
+
+        # Webhook-only setups cannot honor the task's explicit chat_id.
+        assert result is False
+
     def test_claim_dedup_prevents_double_execution(self) -> None:
         task = ScheduledTask(
             id="test_dedup",

@@ -156,6 +156,27 @@ Findings should appear in the configured channel as a message with an attachment
 
 ---
 
+## Scheduled deliveries (cron)
+
+With token credentials configured (Steps 1–4), Rocket.Chat can receive recurring reports:
+
+Interactive shell:
+
+```text
+/cron add --kind daily_summary --cron "0 9 * * 1-5" --tz America/Sao_Paulo --provider rocketchat --chat-id "#ops"
+```
+
+CLI:
+
+```bash
+opensre cron add --kind daily_summary --cron "0 9 * * 1-5" \
+  --tz America/Sao_Paulo --provider rocketchat --chat-id "#ops"
+```
+
+`--chat-id` is the Rocket.Chat destination (`#channel` or `@user`). Scheduled deliveries always target that explicit destination, so they require **token credentials** — an incoming webhook's destination is fixed at creation time and cannot honor `--chat-id`. See [Cron](/cron) for task kinds and scheduler daemon setup.
+
+---
+
 ## Troubleshooting
 
 `/integrations verify rocketchat` only calls `/api/v1/me`, so it surfaces credential errors but cannot detect channel-routing problems. Delivery-time errors only show up when an investigation actually posts; they appear in OpenSRE logs as `[rocketchat] post message failed: <error>`.

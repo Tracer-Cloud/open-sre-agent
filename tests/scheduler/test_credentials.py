@@ -6,8 +6,16 @@ import pytest
 
 from platform.scheduler.credentials import (
     resolve_discord_credentials,
+    resolve_rocketchat_credentials,
     resolve_slack_credentials,
     resolve_telegram_credentials,
+)
+
+_ROCKETCHAT_ENV_VARS = (
+    "ROCKETCHAT_SERVER_URL",
+    "ROCKETCHAT_AUTH_TOKEN",
+    "ROCKETCHAT_USER_ID",
+    "ROCKETCHAT_WEBHOOK_URL",
 )
 
 
@@ -125,4 +133,78 @@ class TestDiscordCredentials:
             lambda *_: "",
         )
         creds = resolve_discord_credentials({})
+        assert creds == {}
+
+
+class TestRocketChatCredentials:
+    def test_from_params(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # Keys resolve independently, so the store/env must be isolated even
+        # when params are provided — otherwise a locally configured
+        # webhook_url would leak into the result.
+        for env_var in _ROCKETCHAT_ENV_VARS:
+            monkeypatch.delenv(env_var, raising=False)
+        monkeypatch.setattr(
+            "platform.scheduler.credentials._get_integration_credential",
+            lambda *_: "",
+        )
+        creds = resolve_rocketchat_credentials(
+            {
+                "server_url": "https://chat.example.com",
+                "auth_token": "tok_from_params",
+                "user_id": "u1",
+            }
+        )
+        assert creds == {
+            "server_url": "https://chat.example.com",
+            "auth_token": "tok_from_params",
+            "user_id": "u1",
+        }
+
+    def test_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        for env_var in _ROCKETCHAT_ENV_VARS:
+            monkeypatch.delenv(env_var, raising=False)
+        monkeypatch.setenv("ROCKETCHAT_SERVER_URL", "https://chat.example.com")
+        monkeypatch.setenv("ROCKETCHAT_AUTH_TOKEN", "tok_from_env")
+        monkeypatch.setenv("ROCKETCHAT_USER_ID", "u_env")
+        monkeypatch.setattr(
+            "platform.scheduler.credentials._get_integration_credential",
+            lambda *_: "",
+        )
+        creds = resolve_rocketchat_credentials({})
+        assert creds == {
+            "server_url": "https://chat.example.com",
+            "auth_token": "tok_from_env",
+            "user_id": "u_env",
+        }
+
+    def test_webhook_only_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        for env_var in _ROCKETCHAT_ENV_VARS:
+            monkeypatch.delenv(env_var, raising=False)
+        monkeypatch.setenv("ROCKETCHAT_WEBHOOK_URL", "https://chat.example.com/hooks/a/b")
+        monkeypatch.setattr(
+            "platform.scheduler.credentials._get_integration_credential",
+            lambda *_: "",
+        )
+        creds = resolve_rocketchat_credentials({})
+        assert creds == {"webhook_url": "https://chat.example.com/hooks/a/b"}
+
+    def test_params_take_priority_over_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        for env_var in _ROCKETCHAT_ENV_VARS:
+            monkeypatch.delenv(env_var, raising=False)
+        monkeypatch.setenv("ROCKETCHAT_AUTH_TOKEN", "tok_from_env")
+        monkeypatch.setattr(
+            "platform.scheduler.credentials._get_integration_credential",
+            lambda *_: "",
+        )
+        creds = resolve_rocketchat_credentials({"auth_token": "tok_from_params"})
+        assert creds["auth_token"] == "tok_from_params"
+
+    def test_empty_when_nothing_configured(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        for env_var in _ROCKETCHAT_ENV_VARS:
+            monkeypatch.delenv(env_var, raising=False)
+        monkeypatch.setattr(
+            "platform.scheduler.credentials._get_integration_credential",
+            lambda *_: "",
+        )
+        creds = resolve_rocketchat_credentials({})
         assert creds == {}

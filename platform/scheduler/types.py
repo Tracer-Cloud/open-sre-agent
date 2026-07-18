@@ -38,6 +38,7 @@ class Provider(StrEnum):
     TELEGRAM = "telegram"
     SLACK = "slack"
     DISCORD = "discord"
+    ROCKETCHAT = "rocketchat"
 
 
 def _generate_task_id() -> str:

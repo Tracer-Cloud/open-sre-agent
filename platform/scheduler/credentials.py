@@ -88,6 +88,33 @@ def resolve_discord_credentials(task_params: dict[str, str]) -> dict[str, str]:
     )
 
 
+def resolve_rocketchat_credentials(task_params: dict[str, str]) -> dict[str, str]:
+    """Resolve Rocket.Chat credentials from task params, integration store, or env.
+
+    Priority: task.params > integration store > environment variable, applied
+    per key. Returns whichever of ``server_url``/``auth_token``/``user_id``
+    (token mode) and ``webhook_url`` (webhook mode) could be resolved; the
+    executor decides whether the combination is usable.
+    """
+    env_by_key = {
+        "server_url": "ROCKETCHAT_SERVER_URL",
+        "auth_token": "ROCKETCHAT_AUTH_TOKEN",
+        "user_id": "ROCKETCHAT_USER_ID",
+        "webhook_url": "ROCKETCHAT_WEBHOOK_URL",
+    }
+    resolved: dict[str, str] = {}
+    for key, env_var in env_by_key.items():
+        single = _resolve_credentials(
+            task_params,
+            service="rocketchat",
+            credential_key=key,
+            env_vars=(env_var,),
+        )
+        if single:
+            resolved.update(single)
+    return resolved
+
+
 def _resolve_credentials(
     task_params: dict[str, str],
     *,
@@ -133,6 +160,7 @@ def _get_integration_credential(service: str, key: str) -> str:
 
 __all__ = [
     "resolve_discord_credentials",
+    "resolve_rocketchat_credentials",
     "resolve_slack_credentials",
     "resolve_telegram_credentials",
 ]
