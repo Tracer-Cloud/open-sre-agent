@@ -64,6 +64,11 @@ def deliver_rocketchat_notification(record: BackgroundInvestigationRecord) -> st
             return "sent"
         return f"failed: {redact_token(error, webhook_url)}"
     if has_pat:
+        # Deliberately no webhook fallback here even when one is configured:
+        # token credentials say the user works in channel-targeting mode, so a
+        # missing default_channel is a configuration gap to surface, not a
+        # license to deliver to the webhook's fixed destination (same rule as
+        # the rocketchat_send_message tool and the cron provider).
         return (
             "missing rocketchat integration: no default_channel configured "
             "(set ROCKETCHAT_DEFAULT_CHANNEL or re-run setup)."

@@ -581,6 +581,47 @@ def test_deliver_background_notifications_marks_rocketchat_missing_channel(
     assert "default_channel" in results["rocketchat"]
 
 
+def test_deliver_background_notifications_pat_without_channel_never_falls_back_to_webhook(
+    monkeypatch,
+) -> None:
+    """Mixed config: full token credentials + webhook + no default_channel.
+
+    Token credentials mean channel-targeting mode, so the missing
+    default_channel is surfaced as a configuration gap — the webhook's fixed
+    destination is deliberately NOT used as a silent fallback (same routing
+    rule as the rocketchat_send_message tool and the cron provider).
+    """
+    entry = {
+        "rocketchat": {
+            "source": "local env",
+            "config": {
+                **_ROCKETCHAT_PAT_ENTRY["rocketchat"]["config"],
+                "default_channel": None,
+                "webhook_url": "https://chat.example.com/hooks/abc/def",
+            },
+        }
+    }
+    monkeypatch.setattr(
+        "integrations.catalog.resolve_effective_integrations",
+        lambda: entry,
+    )
+
+    def _explode_webhook(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("webhook must not be used as a fallback when PAT is configured")
+
+    monkeypatch.setattr(
+        "integrations.rocketchat.delivery.post_rocketchat_webhook",
+        _explode_webhook,
+    )
+
+    record = BackgroundInvestigationRecord(
+        task_id="bg-123", status="completed", command="free-text"
+    )
+    results = deliver_background_notifications(record=record, channels=("rocketchat",))
+    assert results["rocketchat"].startswith("missing rocketchat integration: ")
+    assert "default_channel" in results["rocketchat"]
+
+
 def test_deliver_background_notifications_redacts_rocketchat_token_from_failure(
     monkeypatch,
 ) -> None:
