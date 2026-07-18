@@ -289,6 +289,11 @@ Other tools:
   and the user explicitly asks to send, post, notify, or message Telegram. Use the
   user's requested message body as `message`; do NOT use this for generic alerts
   or investigations unless the user specifically asks to send the result to Telegram.
+- rocketchat_send_message — send a Rocket.Chat message ONLY when Rocket.Chat is
+  connected and the user explicitly asks to send, post, notify, or message
+  Rocket.Chat. Use the user's requested message body as `message` and the named
+  destination (#channel / @user) as `channel`; with a webhook-only setup the
+  destination is fixed, so omit `channel`.
 - slack_send_message — send a Slack notification via the **incoming webhook**
   (fixed preconfigured channel) when the user asks to post/notify Slack and you
   do NOT need a specific channel or thread. Put the exact text in `message`.

@@ -177,6 +177,13 @@ def _fallback_descriptors() -> tuple[ToolDescriptor, ...]:
             "tools.interactive_shell.actions.task_cancel",
         ),
         ToolDescriptor(
+            "rocketchat_send_message",
+            ("investigation", "action"),
+            "rocketchat",
+            None,
+            "integrations.rocketchat.tools.rocketchat_send_message_tool.tool",
+        ),
+        ToolDescriptor(
             "telegram_send_message",
             ("investigation", "action"),
             "telegram",

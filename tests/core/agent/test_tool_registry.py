@@ -177,6 +177,31 @@ def test_telegram_send_message_hidden_when_telegram_is_not_configured() -> None:
     assert "telegram_send_message" not in names
 
 
+def test_rocketchat_send_message_offered_when_rocketchat_is_configured() -> None:
+    session = Session()
+    session.configured_integrations = ("rocketchat",)
+    session.configured_integrations_known = True
+    names = {
+        spec["name"]
+        for spec in _tool_specs(
+            session,
+            resolved_integrations={
+                "rocketchat": {
+                    "server_url": "https://chat.example.com",
+                    "auth_token": "token",
+                    "user_id": "u1",
+                }
+            },
+        )
+    }
+    assert "rocketchat_send_message" in names
+
+
+def test_rocketchat_send_message_hidden_when_rocketchat_is_not_configured() -> None:
+    names = {spec["name"] for spec in _tool_specs(Session())}
+    assert "rocketchat_send_message" not in names
+
+
 def test_llm_set_provider_offered_by_default() -> None:
     """With no capability constraints (the production default), the planner is
     still offered the provider-switch tool."""

@@ -156,6 +156,39 @@ Findings should appear in the configured channel as a message with an attachment
 
 ---
 
+## Programmatic messaging: `rocketchat_send_message` tool
+
+When the Rocket.Chat integration is configured, OpenSRE exposes a
+`rocketchat_send_message` tool. The tool can send user-requested action
+messages, incident notifications, or follow-up updates to the configured
+default channel, or to an explicit `channel` when one is supplied. Ask in
+plain language from the interactive shell (for example: "send a Rocket.Chat
+message to the team that DB CPU is back below 70%").
+
+```json
+{
+  "name": "rocketchat_send_message",
+  "arguments": {
+    "channel": "#incidents",
+    "message": "DB CPU is back below 70%; keeping the incident open for 10 minutes."
+  }
+}
+```
+
+The tool resolves credentials internally from the integration store and
+`ROCKETCHAT_*` environment variables — the agent never sees them. In token
+mode an explicit `channel` (or the configured `default_channel`) is targeted
+via `chat.postMessage`; in webhook-only mode messages go to the webhook's
+fixed destination, and an explicit `channel` returns a configuration error
+instead of being silently ignored.
+
+Delivery is an external side effect and requires approval. The result includes
+a stable `status`, `sent`, `error_type`, `channel`, and `message_length` shape
+so follow-up tool calls can tell configuration failures from Rocket.Chat
+delivery failures.
+
+---
+
 ## Troubleshooting
 
 `/integrations verify rocketchat` only calls `/api/v1/me`, so it surfaces credential errors but cannot detect channel-routing problems. Delivery-time errors only show up when an investigation actually posts; they appear in OpenSRE logs as `[rocketchat] post message failed: <error>`.

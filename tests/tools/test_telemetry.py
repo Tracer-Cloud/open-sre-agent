@@ -1215,6 +1215,7 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "temporal_workflow_history",
         "temporal_workflows",
         "telegram_send_message",
+        "rocketchat_send_message",
         "twilio_notify",
         "vercel_deployment_logs",
         "vercel_deployment_status",
