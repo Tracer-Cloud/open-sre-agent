@@ -30,6 +30,17 @@ def test_first_string_skips_whitespace_only_values() -> None:
     assert first_string(source, "url", "mode") == "stdio"
 
 
+def test_first_string_skips_explicit_none_value() -> None:
+    # An explicitly-None key is a normal value for an unset optional
+    # field; it must fall through to the next alias, not return "None".
+    source = {"url": None, "mode": "stdio"}
+    assert first_string(source, "url", "mode") == "stdio"
+
+
+def test_first_string_returns_none_when_all_none() -> None:
+    assert first_string({"url": None, "mode": None}, "url", "mode") is None
+
+
 def test_first_string_returns_none_when_no_match() -> None:
     assert first_string({}, "url", "mode") is None
 

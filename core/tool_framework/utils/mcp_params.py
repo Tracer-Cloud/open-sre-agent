@@ -20,9 +20,15 @@ def string_list(value: object) -> list[str]:
 
 def first_string(source: dict[str, object], *keys: str) -> str | None:
     for key in keys:
-        value = str(source.get(key, "")).strip()
-        if value:
-            return value
+        # An explicitly-None value (a normal value for an unset optional
+        # field) must fall through to the next alias key, not become the
+        # truthy string "None" that would be injected as a token/URL.
+        value = source.get(key, "")
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text:
+            return text
     return None
 
 
