@@ -22,6 +22,11 @@ class RocketChatDeliveryTarget:
     channel: str = ""
     webhook_url: str = ""
 
+    @property
+    def display_channel(self) -> str:
+        """Destination for result payloads — never the webhook URL (it embeds a token)."""
+        return self.channel if self.mode == "token" else "<webhook destination>"
+
     def __repr__(self) -> str:
         return (
             "RocketChatDeliveryTarget("

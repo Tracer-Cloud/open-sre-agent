@@ -38,6 +38,6 @@ def sent_result(*, target: RocketChatDeliveryTarget, message_length: int) -> dic
         "sent": True,
         "error": "",
         "error_type": "",
-        "channel": target.channel if target.mode == "token" else "<webhook destination>",
+        "channel": target.display_channel,
         "message_length": message_length,
     }

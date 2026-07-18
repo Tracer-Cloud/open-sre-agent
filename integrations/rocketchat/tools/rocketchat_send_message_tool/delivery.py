@@ -11,8 +11,6 @@ from integrations.rocketchat.delivery import (
 from integrations.rocketchat.tools.rocketchat_send_message_tool.models import (
     RocketChatDeliveryTarget,
 )
-from platform.common.truncation import truncate
-from platform.notifications.limits import MAX_MESSAGE_SIZE
 
 
 def _resolved_config() -> dict[str, Any]:
@@ -42,41 +40,43 @@ def resolve_target(channel: str) -> tuple[RocketChatDeliveryTarget | None, str]:
     resolved_channel = channel or str(config.get("default_channel") or "")
     has_pat = bool(server_url and auth_token and user_id)
 
-    if has_pat and resolved_channel:
-        return (
-            RocketChatDeliveryTarget(
-                mode="token",
-                server_url=server_url,
-                auth_token=auth_token,
-                user_id=user_id,
-                channel=resolved_channel,
-            ),
-            "",
+    if has_pat:
+        if resolved_channel:
+            return (
+                RocketChatDeliveryTarget(
+                    mode="token",
+                    server_url=server_url,
+                    auth_token=auth_token,
+                    user_id=user_id,
+                    channel=resolved_channel,
+                ),
+                "",
+            )
+        # Never fall back to the webhook here: its destination was chosen at
+        # webhook-creation time and may not be where the caller expects a
+        # channel-less send to land.
+        return None, (
+            "No channel to deliver to: pass a channel or configure a default_channel "
+            "(ROCKETCHAT_DEFAULT_CHANNEL)."
         )
     if webhook_url:
-        if channel and not has_pat:
+        if channel:
             return None, (
                 "An explicit channel needs token credentials (server_url, auth_token, "
                 "user_id); the configured incoming webhook delivers to a fixed "
                 "destination chosen when the webhook was created."
             )
         return RocketChatDeliveryTarget(mode="webhook", webhook_url=webhook_url), ""
-    if has_pat:
-        return None, (
-            "No channel to deliver to: pass a channel or configure a default_channel "
-            "(ROCKETCHAT_DEFAULT_CHANNEL)."
-        )
     return None, "Rocket.Chat is not configured."
 
 
 def dispatch_message(message: str, target: RocketChatDeliveryTarget) -> tuple[bool, str]:
-    text = truncate(message, MAX_MESSAGE_SIZE, suffix="…")
     if target.mode == "webhook":
-        return post_rocketchat_webhook(target.webhook_url, text)
+        return post_rocketchat_webhook(target.webhook_url, message)
     ok, error, _message_id = post_rocketchat_message(
         target.server_url,
         target.channel,
-        text,
+        message,
         target.auth_token,
         target.user_id,
     )

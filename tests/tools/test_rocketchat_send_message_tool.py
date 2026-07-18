@@ -162,10 +162,12 @@ def test_run_truncates_long_messages(monkeypatch: pytest.MonkeyPatch) -> None:
         lambda *a, **_kw: captured.update(text=a[2]) or (True, "", "m-1"),  # type: ignore[func-returns-value]
     )
 
-    rocketchat_send_message.run(message="x" * 5000)
+    result = rocketchat_send_message.run(message="x" * 5000)
 
     assert len(captured["text"]) == 4096
     assert captured["text"].endswith("…")
+    # message_length reports what was actually delivered, not the raw input.
+    assert result["message_length"] == 4096
 
 
 # ---------------------------------------------------------------------------
@@ -199,6 +201,45 @@ def test_run_webhook_only_rejects_explicit_channel(monkeypatch: pytest.MonkeyPat
     assert result["status"] == "failed"
     assert result["error_type"] == "configuration_error"
     assert "fixed" in result["error"].lower()
+
+
+def test_run_webhook_delivery_failure_reports_display_channel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_config(monkeypatch, _WEBHOOK_CONFIG)
+    monkeypatch.setattr(
+        f"{_TOOL_PACKAGE}.delivery.post_rocketchat_webhook",
+        lambda *_a, **_kw: (False, "webhook disabled"),
+    )
+
+    result = rocketchat_send_message.run(message="hi")
+
+    assert result["status"] == "failed"
+    assert result["error_type"] == "delivery_error"
+    # Failure path mirrors the success path — never an empty channel and
+    # never the webhook URL (it embeds a token).
+    assert result["channel"] == "<webhook destination>"
+
+
+def test_run_pat_without_channel_errors_even_with_webhook_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A mixed PAT+webhook setup with no channel must not silently fall back
+    to the webhook's fixed destination."""
+    _patch_config(
+        monkeypatch,
+        {
+            **_PAT_CONFIG,
+            "default_channel": None,
+            "webhook_url": _WEBHOOK_CONFIG["webhook_url"],
+        },
+    )
+
+    result = rocketchat_send_message.run(message="hi")
+
+    assert result["status"] == "failed"
+    assert result["error_type"] == "configuration_error"
+    assert "channel" in result["error"].lower()
 
 
 def test_run_prefers_token_mode_when_both_configured(monkeypatch: pytest.MonkeyPatch) -> None:

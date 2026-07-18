@@ -68,7 +68,10 @@ class RocketChatSendMessageTool(BaseTool):
         "error": "error detail when status is 'failed'",
         "error_type": "stable failure class: validation_error, configuration_error, or delivery_error",
         "channel": "Rocket.Chat destination used for delivery ('<webhook destination>' in webhook mode)",
-        "message_length": "length of the normalized message submitted for delivery",
+        "message_length": (
+            "length of the message actually submitted for delivery "
+            "(after normalization and 4096-char truncation)"
+        ),
     }
 
     def is_available(self, sources: dict[str, Any]) -> bool:
@@ -115,7 +118,7 @@ class RocketChatSendMessageTool(BaseTool):
                 available=True,
                 error=error,
                 error_type="delivery_error",
-                channel=target.channel,
+                channel=target.display_channel,
                 message_length=len(normalized_message),
             )
         return sent_result(target=target, message_length=len(normalized_message))
