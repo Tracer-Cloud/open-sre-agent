@@ -20,6 +20,8 @@ class ProcessSample:
     from "the process is running but this user cannot read its fields"
     (``alive=True, accessible=False``, e.g. a transient
     ``psutil.AccessDenied``). A permission failure is not an exit.
+    A dead sample carries ``accessible=False`` too (a gone process has no
+    readable fields); check ``alive`` first.
     """
 
     pid: int
@@ -134,6 +136,8 @@ class ProcessMonitor:
         )
 
     def _dead_sample(self) -> ProcessSample:
+        # A gone process has no readable fields either, so a dead sample
+        # carries accessible=False to keep the pair consistent.
         return ProcessSample(
             pid=self._pid,
             name=self._name,
@@ -143,6 +147,7 @@ class ProcessMonitor:
             runtime_seconds=0.0,
             alive=False,
             started_at=self._started_at,
+            accessible=False,
         )
 
 

@@ -166,6 +166,7 @@ def test_process_monitor_returns_dead_sample_on_no_such_process(
 
     assert sample.pid == 123
     assert sample.alive is False
+    assert sample.accessible is False
     assert sample.cpu_percent == 0.0
 
 
@@ -214,3 +215,4 @@ def test_process_monitor_returns_dead_sample_when_process_vanishes_mid_sample(
 
     assert sample.pid == 123
     assert sample.alive is False
+    assert sample.accessible is False
