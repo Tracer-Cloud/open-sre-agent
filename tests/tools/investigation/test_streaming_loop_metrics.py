@@ -4,6 +4,7 @@ from typing import Any
 
 import pytest
 
+from config.constants.investigation import MAX_INVESTIGATION_LOOPS
 from platform.analytics.investigation_loop import (
     begin_investigation_loop_metrics_scope,
     bound_loop_metrics,
@@ -57,6 +58,34 @@ async def test_astream_failure_propagates_wrapped_stream_error(
     assert wrapped.loop_count == 5
     assert wrapped.iteration_cap == 20
     assert isinstance(wrapped.cause, RuntimeError)
+
+
+@pytest.mark.anyio
+async def test_astream_delivers_wrapped_error_when_stage_import_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A deferred stage import raising inside the try must not be swallowed.
+
+    If one of ``_run_pipeline``'s deferred imports fails, the except handler
+    used to reference ``state`` / ``loop_metrics_from_state`` which were bound
+    only inside the try, so the handler raised ``UnboundLocalError`` itself and
+    the real error was lost (the consumer saw a clean, empty end). The handler
+    must now deliver a wrapped ``InvestigationPipelineStreamError`` instead.
+    """
+    monkeypatch.setattr(
+        "tools.investigation.stages.resolve_integrations.resolve_integrations",
+        lambda _state: (_ for _ in ()).throw(ImportError("missing sdk")),
+    )
+
+    with pytest.raises(InvestigationPipelineStreamError) as exc_info:
+        async for _event in astream_investigation("alert text"):
+            pass
+
+    wrapped = exc_info.value
+    assert isinstance(wrapped.cause, ImportError)
+    # Defaults when the pipeline never reached a metrics read.
+    assert wrapped.loop_count == 0
+    assert wrapped.iteration_cap == MAX_INVESTIGATION_LOOPS
 
 
 def test_main_thread_bridge_binds_metrics_from_wrapped_stream_failure() -> None:
