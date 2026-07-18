@@ -59,7 +59,8 @@ You have two equivalent paths:
     SLACK_ALLOWED_USERS=U0123ABCD
     ```
     OpenSRE reads env as a fallback when no Slack entry exists in `~/.opensre/integrations.json`.
-    For gateway tokens, env wins over the store when both are set (same as Telegram).
+    Bot / app tokens use `resolve_env_credential` (process env, then OS keyring).
+    `SLACK_WEBHOOK_URL` is store/env only — never keyring.
   </Tab>
   <Tab title="Onboarding wizard">
     ```bash
@@ -67,8 +68,15 @@ You have two equivalent paths:
     ```
     Select **Slack** and choose webhook / Socket Mode / both. The wizard validates
     the webhook when configured, then persists credentials to the integration store.
+    Socket Mode tokens are dual-written to the OS keyring; the webhook URL is not.
   </Tab>
 </Tabs>
+
+<Note>
+**Credential resolution.** Store first when present. Then:
+`SLACK_BOT_TOKEN` / `SLACK_APP_TOKEN` → env then keyring;
+`SLACK_WEBHOOK_URL` → plain env only (never keyring).
+</Note>
 
 ---
 

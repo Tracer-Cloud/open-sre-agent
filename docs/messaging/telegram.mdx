@@ -140,10 +140,11 @@ OpenSRE picks these up at startup and registers Telegram as an active integratio
 <Note>
 **Credential resolution.** Every Telegram delivery surface — investigations,
 **background RCA completion notifications**, the scheduler, `/watchdog`,
-`/hermes watch`, and `/watch` — resolves the bot token
-in the same order: integration store → `TELEGRAM_BOT_TOKEN` env → system keyring;
-and the chat id as `--chat-id` → store `default_chat_id` →
-`TELEGRAM_DEFAULT_CHAT_ID` env. Either setup option above works for all of them.
+`/hermes watch`, and `/watch` — resolves the bot token the same way: integration
+store first, then `resolve_env_credential("TELEGRAM_BOT_TOKEN")` (process env,
+then OS keyring). Chat id is non-secret: `--chat-id` → store `default_chat_id` →
+`TELEGRAM_DEFAULT_CHAT_ID` env (plain `os.getenv`, never keyring). Either setup
+option above works for all of them.
 </Note>
 
 ---
@@ -272,7 +273,7 @@ is back below 70%").
 ```
 
 The tool resolves the bot token from the same credential chain as the watchdog:
-integration store, then `TELEGRAM_BOT_TOKEN`, then the system keyring.
+integration store, then `resolve_env_credential("TELEGRAM_BOT_TOKEN")` (env then keyring).
 If `chat_id` is omitted, it sends through the configured `default_chat_id`, so a
 user can ask OpenSRE to send a message through the configured Telegram bot
 without knowing or exposing the bot token.
