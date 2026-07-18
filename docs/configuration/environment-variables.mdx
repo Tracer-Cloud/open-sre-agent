@@ -156,10 +156,12 @@ the keyring via `sync_env_secret` so a cleared `.env` still works locally.
 
 **Exceptions (never keyring):** webhook and other `*_URL` values such as
 `SLACK_WEBHOOK_URL` and `ROCKETCHAT_WEBHOOK_URL` stay store / plain env only.
+They may still embed secret tokens — do not log them unmasked.
 Set `OPENSRE_DISABLE_KEYRING=1` to skip keyring reads and writes entirely.
 
 Contributor contract: [Credential resolution](https://github.com/Tracer-Cloud/opensre/blob/main/docs/adding-tools-and-integrations.md#credential-resolution)
-in *Adding tools and integrations*.
+in *Adding tools and integrations* (internal contributor markdown in the repo;
+not a Mintlify docs-site page).
 
 | Variable | Default | Description | Module |
 |----------|---------|-------------|--------|

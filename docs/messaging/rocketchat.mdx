@@ -85,7 +85,7 @@ opensre onboard
 Choose **Rocket.Chat** from the integration list, then pick **token**, **webhook**, or **both**. The wizard prompts for:
 
 - Token mode: **Server URL** (`ROCKETCHAT_SERVER_URL`), **personal access token** (OS keyring via `sync_env_secret`, not plain `.env`), **user ID** (`ROCKETCHAT_USER_ID`), and **default channel** (`ROCKETCHAT_DEFAULT_CHANNEL`)
-- Webhook mode: **webhook URL** — saved to the integration store (`~/.opensre/integrations.json`) and/or `ROCKETCHAT_WEBHOOK_URL` in `.env`; never written to the keyring (`*_URL` is non-secret config)
+- Webhook mode: **webhook URL** — saved to the integration store (`~/.opensre/integrations.json`) and/or `ROCKETCHAT_WEBHOOK_URL` in `.env`; never written to the keyring (`*_URL` is non-keyring config). The URL often embeds a token — treat it like a password for logging/masking.
 
 Credentials are also saved to `~/.opensre/integrations.json` via `upsert_integration("rocketchat", ...)`.
 
@@ -110,7 +110,7 @@ ROCKETCHAT_WEBHOOK_URL=https://chat.example.com/hooks/<id>/<token>
 | `ROCKETCHAT_AUTH_TOKEN` | Personal access token. Required for token mode. Resolved via env then keyring. |
 | `ROCKETCHAT_USER_ID` | User ID shown alongside the token. Required for token mode. |
 | `ROCKETCHAT_DEFAULT_CHANNEL` | Default delivery destination (`#channel` or `@user`). Required for token-mode delivery. |
-| `ROCKETCHAT_WEBHOOK_URL` | Incoming webhook URL. Store/env only — never keyring. Enables webhook mode on its own; preferred over token mode when both are set. |
+| `ROCKETCHAT_WEBHOOK_URL` | Incoming webhook URL. Store/env only — never keyring (still treat like a password when logging). Enables webhook mode on its own; preferred over token mode when both are set. |
 
 OpenSRE picks these up at startup and registers Rocket.Chat as an active integration.
 

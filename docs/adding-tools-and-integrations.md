@@ -88,23 +88,24 @@ Common failure modes to consider: grouped + ungrouped log content; nested/folder
 
 ### Credential resolution
 
-Secrets and non-secrets follow different write/read paths. Keep this contract when adding or changing an integration.
+Keyring-eligible secrets and non-keyring config follow different write/read paths.
+Keep this contract when adding or changing an integration.
 
 | Surface | Write (wizard / setup) | Read (runtime) |
 | --- | --- | --- |
 | Integration store (`~/.opensre/integrations.json`) | Always on setup | First (preferred) |
-| OS keyring | Sensitive secrets via `sync_env_secret` | Via `resolve_env_credential` when env is unset |
-| `.env` / process env | Non-secrets only (`*_URL`, user ids, channels, …) | Plain `os.getenv` is OK for non-secrets |
+| OS keyring | Keyring-eligible secrets via `sync_env_secret` | Via `resolve_env_credential` when env is unset |
+| `.env` / process env | Non-keyring config (`*_URL`, user ids, channels, …) | Plain `os.getenv` for that tier |
 
 **Hard rules for new code**
 
-- Never use bare `os.getenv` for a secret env name (`*_TOKEN`, `*_KEY`, `*_PASSWORD`, `*_SECRET`, connection strings, and similar). Use `resolve_env_credential` from `config.llm_credentials` (env first, then keyring).
-- Webhook / `*_URL` values are **never** keyring-backed. Read with store → plain `os.getenv` only. Never pass them through `resolve_env_credential` or `sync_env_secret` (wizard treats `*_URL` as non-sensitive).
+- Never use bare `os.getenv` for a keyring-eligible secret env name (`*_TOKEN`, `*_KEY`, `*_PASSWORD`, `*_SECRET`, connection strings, and similar). Use `resolve_env_credential` from `config.llm_credentials` (env first, then keyring).
+- Webhook / `*_URL` values are **never** keyring-backed (wizard routes them to store/`.env`, not `sync_env_secret`). Read with store → plain `os.getenv` only. Webhook URLs often **embed** a secret token — treat them like passwords for logging/masking, even though they are not keyring-eligible.
 - Leave `load_env_integration_services` plain-env-only (startup-safe; no keyring at boot).
 - Store still wins in `resolve_effective` / merge — env/keyring is the fallback tier only.
 - Set `OPENSRE_DISABLE_KEYRING=1` to skip keyring reads/writes (env and store still work).
 
-Canonical helpers: `resolve_env_credential` (env → keyring), `sync_env_secret` / `save_keyring_secret` (sensitive writes), `sync_env_values` (non-secrets only).
+Canonical helpers: `resolve_env_credential` (env → keyring), `sync_env_secret` / `save_keyring_secret` (keyring-eligible writes), `sync_env_values` (non-keyring `.env` keys only).
 
 ## 3. Investigation wiring
 
