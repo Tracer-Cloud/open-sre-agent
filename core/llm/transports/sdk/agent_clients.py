@@ -69,9 +69,9 @@ class AnthropicAgentClient:
         if client is None:
             from anthropic import Anthropic
 
-            from config.llm_credentials import resolve_llm_api_key
+            from config.llm_credentials import resolve_env_credential
 
-            resolver = credential_resolver or resolve_llm_api_key
+            resolver = credential_resolver or resolve_env_credential
             api_key = resolver("ANTHROPIC_API_KEY")
             self._client = Anthropic(api_key=api_key, timeout=AGENT_CLIENT_TIMEOUT_SEC)
         else:
@@ -462,9 +462,9 @@ class OpenAIAgentClient:
     ) -> None:
         from openai import OpenAI
 
-        from config.llm_credentials import resolve_llm_api_key
+        from config.llm_credentials import resolve_env_credential
 
-        resolver = credential_resolver or resolve_llm_api_key
+        resolver = credential_resolver or resolve_env_credential
         api_key = resolver(api_key_env) or api_key_default
         self._client = OpenAI(api_key=api_key, base_url=base_url, timeout=AGENT_CLIENT_TIMEOUT_SEC)
         self._model = model

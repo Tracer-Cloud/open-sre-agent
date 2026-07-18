@@ -6,6 +6,7 @@ import httpx
 
 from integrations.config_models import SlackWebhookConfig
 from platform.common.url_validation import validate_https_or_loopback_http_url
+from platform.notifications.redaction import redact_token
 
 from .shared import IntegrationHealthResult
 
@@ -261,16 +262,21 @@ def validate_telegram_bot(*, bot_token: str) -> IntegrationHealthResult:
     try:
         resp = httpx.get(f"https://api.telegram.org/bot{token}/getMe", timeout=10)
     except httpx.RequestError as err:
-        return IntegrationHealthResult(ok=False, detail=f"Telegram API unreachable: {err}")
+        # httpx embeds the request URL — which contains the bot token — in
+        # transport error messages, so redact before surfacing the detail.
+        safe_error = redact_token(str(err), token)
+        return IntegrationHealthResult(ok=False, detail=f"Telegram API unreachable: {safe_error}")
     except Exception as err:
-        return IntegrationHealthResult(ok=False, detail=f"Telegram API check failed: {err}")
+        safe_error = redact_token(str(err), token)
+        return IntegrationHealthResult(ok=False, detail=f"Telegram API check failed: {safe_error}")
 
     try:
         payload = resp.json()
     except Exception as err:
+        safe_error = redact_token(str(err), token)
         return IntegrationHealthResult(
             ok=False,
-            detail=f"Telegram API check failed: HTTP {resp.status_code} ({err}).",
+            detail=f"Telegram API check failed: HTTP {resp.status_code} ({safe_error}).",
         )
 
     if not payload.get("ok"):

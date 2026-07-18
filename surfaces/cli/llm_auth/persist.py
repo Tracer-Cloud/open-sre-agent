@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from config.llm_credentials import save_llm_api_key
+from config.llm_credentials import save_keyring_secret
 
 
 class AuthSetupError(RuntimeError):
@@ -23,7 +23,7 @@ def persist_api_key_secret(
     env_var: str,
     value: str,
     *,
-    save_secret: SaveSecret = save_llm_api_key,
+    save_secret: SaveSecret = save_keyring_secret,
 ) -> None:
     """Persist one API-key secret through the shared auth service boundary."""
     try:

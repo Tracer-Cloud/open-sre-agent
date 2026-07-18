@@ -400,7 +400,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
         grafana_api_key = ""
     else:
         grafana_endpoint = os.getenv("GRAFANA_INSTANCE_URL", "").strip()
-        grafana_api_key = os.getenv("GRAFANA_READ_TOKEN", "").strip()
+        grafana_api_key = resolve_env_credential("GRAFANA_READ_TOKEN")
     if grafana_endpoint and grafana_api_key:
         try:
             grafana_config = GrafanaIntegrationConfig.model_validate(
@@ -434,8 +434,8 @@ def load_env_integrations() -> list[dict[str, Any]]:
         datadog_app_key = ""
         datadog_site = ""
     else:
-        datadog_api_key = os.getenv("DD_API_KEY", "").strip()
-        datadog_app_key = os.getenv("DD_APP_KEY", "").strip()
+        datadog_api_key = resolve_env_credential("DD_API_KEY")
+        datadog_app_key = resolve_env_credential("DD_APP_KEY")
         datadog_site = os.getenv("DD_SITE", "datadoghq.com").strip() or "datadoghq.com"
     if datadog_api_key and datadog_app_key:
         try:
@@ -461,10 +461,9 @@ def load_env_integrations() -> list[dict[str, Any]]:
         integrations.append(groundcover_multi)
         groundcover_api_key = ""
     else:
-        groundcover_api_key = (
-            os.getenv("GROUNDCOVER_API_KEY", "").strip()
-            or os.getenv("GROUNDCOVER_MCP_TOKEN", "").strip()
-        )
+        groundcover_api_key = resolve_env_credential(
+            "GROUNDCOVER_API_KEY"
+        ) or resolve_env_credential("GROUNDCOVER_MCP_TOKEN")
     if groundcover_api_key:
         # The groundcover config validates the MCP URL (HTTPS-or-loopback), which
         # can raise on a bad GROUNDCOVER_MCP_URL. Guard it so one malformed value
@@ -494,7 +493,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
         integrations.append(honeycomb_multi)
         honeycomb_api_key = ""
     else:
-        honeycomb_api_key = os.getenv("HONEYCOMB_API_KEY", "").strip()
+        honeycomb_api_key = resolve_env_credential("HONEYCOMB_API_KEY")
     if honeycomb_api_key:
         try:
             honeycomb_config = HoneycombIntegrationConfig.model_validate(
@@ -519,7 +518,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
         integrations.append(coralogix_multi)
         coralogix_api_key = ""
     else:
-        coralogix_api_key = os.getenv("CORALOGIX_API_KEY", "").strip()
+        coralogix_api_key = resolve_env_credential("CORALOGIX_API_KEY")
     if coralogix_api_key:
         try:
             coralogix_config = CoralogixIntegrationConfig.model_validate(
@@ -553,9 +552,9 @@ def load_env_integrations() -> list[dict[str, Any]]:
         aws_role_arn = os.getenv("AWS_ROLE_ARN", "").strip()
         aws_external_id = os.getenv("AWS_EXTERNAL_ID", "").strip()
         aws_region = os.getenv("AWS_REGION", "us-east-1").strip() or "us-east-1"
-        aws_access_key_id = os.getenv("AWS_ACCESS_KEY_ID", "").strip()
-        aws_secret_access_key = os.getenv("AWS_SECRET_ACCESS_KEY", "").strip()
-        aws_session_token = os.getenv("AWS_SESSION_TOKEN", "").strip()
+        aws_access_key_id = resolve_env_credential("AWS_ACCESS_KEY_ID")
+        aws_secret_access_key = resolve_env_credential("AWS_SECRET_ACCESS_KEY")
+        aws_session_token = resolve_env_credential("AWS_SESSION_TOKEN")
     if aws_role_arn:
         try:
             aws_config = AWSIntegrationConfig.model_validate(
@@ -609,7 +608,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
     github_url = os.getenv("GITHUB_MCP_URL", "").strip()
     github_command = os.getenv("GITHUB_MCP_COMMAND", "").strip()
     github_args = os.getenv("GITHUB_MCP_ARGS", "").strip()
-    github_auth_token = os.getenv("GITHUB_MCP_AUTH_TOKEN", "").strip()
+    github_auth_token = resolve_env_credential("GITHUB_MCP_AUTH_TOKEN")
     github_toolsets = os.getenv("GITHUB_MCP_TOOLSETS", "").strip()
     if (github_mode == "stdio" and github_command) or (github_mode != "stdio" and github_url):
         github_config = build_github_mcp_config(
@@ -630,7 +629,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
         )
 
     sentry_org_slug = os.getenv("SENTRY_ORG_SLUG", "").strip()
-    sentry_auth_token = os.getenv("SENTRY_AUTH_TOKEN", "").strip()
+    sentry_auth_token = resolve_env_credential("SENTRY_AUTH_TOKEN")
     if sentry_org_slug and sentry_auth_token:
         sentry_config = build_sentry_config(
             {
@@ -659,7 +658,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
         )
         integrations.append(_active_env_record("gitlab", gitlab_config.model_dump()))
 
-    mongodb_connection_string = os.getenv("MONGODB_CONNECTION_STRING", "").strip()
+    mongodb_connection_string = resolve_env_credential("MONGODB_CONNECTION_STRING")
     if mongodb_connection_string:
         mongodb_config = build_mongodb_config(
             {
@@ -696,7 +695,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 else 5432,
                 "database": postgresql_database,
                 "username": os.getenv("POSTGRESQL_USERNAME", "postgres").strip() or "postgres",
-                "password": os.getenv("POSTGRESQL_PASSWORD", "").strip(),
+                "password": resolve_env_credential("POSTGRESQL_PASSWORD"),
                 "ssl_mode": os.getenv("POSTGRESQL_SSL_MODE", "prefer").strip() or "prefer",
             }
         )
@@ -716,9 +715,11 @@ def load_env_integrations() -> list[dict[str, Any]]:
         argocd_password = ""
     else:
         argocd_base_url = os.getenv("ARGOCD_BASE_URL", "").strip()
-        argocd_auth_token = os.getenv("ARGOCD_AUTH_TOKEN", os.getenv("ARGOCD_TOKEN", "")).strip()
+        argocd_auth_token = resolve_env_credential("ARGOCD_AUTH_TOKEN") or resolve_env_credential(
+            "ARGOCD_TOKEN"
+        )
         argocd_username = os.getenv("ARGOCD_USERNAME", "").strip()
-        argocd_password = os.getenv("ARGOCD_PASSWORD", "").strip()
+        argocd_password = resolve_env_credential("ARGOCD_PASSWORD")
     if argocd_base_url and (argocd_auth_token or (argocd_username and argocd_password)):
         try:
             argocd_config = ArgoCDIntegrationConfig.model_validate(
@@ -769,7 +770,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 )
             )
 
-    vercel_api_token = os.getenv("VERCEL_API_TOKEN", "").strip()
+    vercel_api_token = resolve_env_credential("VERCEL_API_TOKEN")
     if vercel_api_token:
         try:
             vercel_config = VercelConfig.model_validate(
@@ -788,7 +789,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 )
             )
 
-    opsgenie_api_key = os.getenv("OPSGENIE_API_KEY", "").strip()
+    opsgenie_api_key = resolve_env_credential("OPSGENIE_API_KEY")
     if opsgenie_api_key:
         try:
             opsgenie_config = OpsGenieIntegrationConfig.model_validate(
@@ -807,7 +808,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 )
             )
 
-    pagerduty_api_key = os.getenv("PAGERDUTY_API_KEY", "").strip()
+    pagerduty_api_key = resolve_env_credential("PAGERDUTY_API_KEY")
     if pagerduty_api_key:
         try:
             _envs: dict[str, Any] = {"api_key": pagerduty_api_key}
@@ -846,7 +847,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
 
     jira_base_url = os.getenv("JIRA_BASE_URL", "").strip()
     jira_email = os.getenv("JIRA_EMAIL", "").strip()
-    jira_api_token = os.getenv("JIRA_API_TOKEN", "").strip()
+    jira_api_token = resolve_env_credential("JIRA_API_TOKEN")
     jira_project_key = os.getenv("JIRA_PROJECT_KEY", "").strip()
     if jira_base_url and jira_email and jira_api_token:
         try:
@@ -917,7 +918,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
     if airflow_config is not None:
         integrations.append(_active_env_record("airflow", airflow_config.model_dump()))
 
-    telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+    telegram_bot_token = resolve_env_credential("TELEGRAM_BOT_TOKEN")
     if telegram_bot_token:
         try:
             tg_config = TelegramBotConfig.model_validate(
@@ -931,7 +932,8 @@ def load_env_integrations() -> list[dict[str, Any]]:
         else:
             integrations.append(_active_env_record("telegram", tg_config.model_dump()))
 
-    rocketchat_auth_token = os.getenv("ROCKETCHAT_AUTH_TOKEN", "").strip()
+    # PAT is keyring-backed via wizard sync_env_secret; webhook URL stays store/env only.
+    rocketchat_auth_token = resolve_env_credential("ROCKETCHAT_AUTH_TOKEN")
     rocketchat_webhook_url = os.getenv("ROCKETCHAT_WEBHOOK_URL", "").strip()
     if rocketchat_auth_token or rocketchat_webhook_url:
         try:
@@ -949,13 +951,13 @@ def load_env_integrations() -> list[dict[str, Any]]:
         else:
             integrations.append(_active_env_record("rocketchat", rocketchat_config.model_dump()))
 
-    slack_bot_token = os.getenv("SLACK_BOT_TOKEN", "").strip()
+    slack_bot_token = resolve_env_credential("SLACK_BOT_TOKEN")
     slack_webhook_url = os.getenv("SLACK_WEBHOOK_URL", "").strip()
     if slack_bot_token or slack_webhook_url:
         slack_credentials = {
             "webhook_url": slack_webhook_url,
             "bot_token": slack_bot_token,
-            "app_token": os.getenv("SLACK_APP_TOKEN", "").strip(),
+            "app_token": resolve_env_credential("SLACK_APP_TOKEN"),
         }
         slack_view, _slack_key = _classify_slack(slack_credentials, record_id="env:slack")
         if slack_view is not None:
@@ -982,8 +984,8 @@ def load_env_integrations() -> list[dict[str, Any]]:
 
     # Shared Twilio account credentials — consumed by both the WhatsApp and
     # the SMS env-bootstrap blocks below.
-    twilio_account_sid = os.getenv("TWILIO_ACCOUNT_SID", "").strip()
-    twilio_auth_token = os.getenv("TWILIO_AUTH_TOKEN", "").strip()
+    twilio_account_sid = resolve_env_credential("TWILIO_ACCOUNT_SID")
+    twilio_auth_token = resolve_env_credential("TWILIO_AUTH_TOKEN")
 
     whatsapp_from_number = os.getenv("TWILIO_WHATSAPP_FROM", "").strip()
     if twilio_account_sid and twilio_auth_token and whatsapp_from_number:
@@ -1033,8 +1035,8 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 )
             )
 
-    atlas_pub = os.getenv("MONGODB_ATLAS_PUBLIC_KEY", "").strip()
-    atlas_priv = os.getenv("MONGODB_ATLAS_PRIVATE_KEY", "").strip()
+    atlas_pub = resolve_env_credential("MONGODB_ATLAS_PUBLIC_KEY")
+    atlas_priv = resolve_env_credential("MONGODB_ATLAS_PRIVATE_KEY")
     atlas_project = os.getenv("MONGODB_ATLAS_PROJECT_ID", "").strip()
     if atlas_pub and atlas_priv and atlas_project:
         try:
@@ -1219,7 +1221,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
                     "port": os.getenv("MARIADB_PORT", "3306").strip(),
                     "database": mariadb_database,
                     "username": os.getenv("MARIADB_USERNAME", "").strip(),
-                    "password": os.getenv("MARIADB_PASSWORD", "").strip(),
+                    "password": resolve_env_credential("MARIADB_PASSWORD"),
                     "ssl": os.getenv("MARIADB_SSL", "true").strip().lower() in ("true", "1", "yes"),
                 }
             )
@@ -1238,7 +1240,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
             dagster_config = build_dagster_config(
                 {
                     "endpoint": dagster_endpoint,
-                    "api_token": os.getenv("DAGSTER_API_TOKEN", "").strip(),
+                    "api_token": resolve_env_credential("DAGSTER_API_TOKEN"),
                 }
             )
             integrations.append(
@@ -1259,7 +1261,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
                     "host": rabbitmq_host,
                     "management_port": os.getenv("RABBITMQ_MANAGEMENT_PORT", "15672").strip(),
                     "username": rabbitmq_username,
-                    "password": os.getenv("RABBITMQ_PASSWORD", ""),
+                    "password": resolve_env_credential("RABBITMQ_PASSWORD"),
                     "vhost": os.getenv("RABBITMQ_VHOST", "/").strip(),
                     "ssl": os.getenv("RABBITMQ_SSL", "false").strip().lower()
                     in ("true", "1", "yes"),
@@ -1297,7 +1299,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 {
                     "query_endpoint": bs_endpoint,
                     "username": bs_username,
-                    "password": os.getenv("BETTERSTACK_PASSWORD", ""),
+                    "password": resolve_env_credential("BETTERSTACK_PASSWORD"),
                     "sources": os.getenv("BETTERSTACK_SOURCES", ""),
                 }
             )
@@ -1321,7 +1323,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 else 3306,
                 "database": mysql_database,
                 "username": os.getenv("MYSQL_USERNAME", "root").strip() or "root",
-                "password": os.getenv("MYSQL_PASSWORD", "").strip(),
+                "password": resolve_env_credential("MYSQL_PASSWORD"),
                 "ssl_mode": os.getenv("MYSQL_SSL_MODE", "preferred").strip() or "preferred",
             }
         )
@@ -1342,7 +1344,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 "port": int(_az_port) if _az_port and _az_port.isdigit() else 1433,
                 "database": azure_sql_database,
                 "username": os.getenv("AZURE_SQL_USERNAME", "").strip(),
-                "password": os.getenv("AZURE_SQL_PASSWORD", "").strip(),
+                "password": resolve_env_credential("AZURE_SQL_PASSWORD"),
                 "driver": os.getenv("AZURE_SQL_DRIVER", "ODBC Driver 18 for SQL Server").strip(),
                 "encrypt": os.getenv("AZURE_SQL_ENCRYPT", "true").strip().lower()
                 in ("true", "1", "yes"),
@@ -1363,7 +1365,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 {
                     "workspace": bitbucket_workspace,
                     "username": os.getenv("BITBUCKET_USERNAME", "").strip(),
-                    "app_password": os.getenv("BITBUCKET_APP_PASSWORD", "").strip(),
+                    "app_password": resolve_env_credential("BITBUCKET_APP_PASSWORD"),
                     "base_url": os.getenv(
                         "BITBUCKET_BASE_URL", "https://api.bitbucket.org/2.0"
                     ).strip()
@@ -1377,7 +1379,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
         os.getenv("SNOWFLAKE_ACCOUNT_IDENTIFIER", "").strip()
         or os.getenv("SNOWFLAKE_ACCOUNT", "").strip()
     )
-    snowflake_token = os.getenv("SNOWFLAKE_TOKEN", "").strip()
+    snowflake_token = resolve_env_credential("SNOWFLAKE_TOKEN")
     if snowflake_account and snowflake_token:
         integrations.append(
             _active_env_record(
@@ -1385,7 +1387,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 {
                     "account_identifier": snowflake_account,
                     "user": os.getenv("SNOWFLAKE_USER", "").strip(),
-                    "password": os.getenv("SNOWFLAKE_PASSWORD", "").strip(),
+                    "password": resolve_env_credential("SNOWFLAKE_PASSWORD"),
                     "token": snowflake_token,
                     "warehouse": os.getenv("SNOWFLAKE_WAREHOUSE", "").strip(),
                     "role": os.getenv("SNOWFLAKE_ROLE", "").strip(),
@@ -1397,7 +1399,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
         )
 
     azure_workspace_id = os.getenv("AZURE_LOG_ANALYTICS_WORKSPACE_ID", "").strip()
-    azure_access_token = os.getenv("AZURE_LOG_ANALYTICS_TOKEN", "").strip()
+    azure_access_token = resolve_env_credential("AZURE_LOG_ANALYTICS_TOKEN")
     if azure_workspace_id and azure_access_token:
         integrations.append(
             _active_env_record(
@@ -1419,9 +1421,9 @@ def load_env_integrations() -> list[dict[str, Any]]:
         )
 
     openobserve_url = os.getenv("OPENOBSERVE_URL", "").strip()
-    openobserve_token = os.getenv("OPENOBSERVE_TOKEN", "").strip()
+    openobserve_token = resolve_env_credential("OPENOBSERVE_TOKEN")
     openobserve_username = os.getenv("OPENOBSERVE_USERNAME", "").strip()
-    openobserve_password = os.getenv("OPENOBSERVE_PASSWORD", "").strip()
+    openobserve_password = resolve_env_credential("OPENOBSERVE_PASSWORD")
     if openobserve_url and (openobserve_token or (openobserve_username and openobserve_password)):
         integrations.append(
             _active_env_record(
@@ -1460,9 +1462,9 @@ def load_env_integrations() -> list[dict[str, Any]]:
             alertmanager_config = AlertmanagerIntegrationConfig.model_validate(
                 {
                     "base_url": alertmanager_url,
-                    "bearer_token": os.getenv("ALERTMANAGER_BEARER_TOKEN", "").strip(),
+                    "bearer_token": resolve_env_credential("ALERTMANAGER_BEARER_TOKEN"),
                     "username": os.getenv("ALERTMANAGER_USERNAME", "").strip(),
-                    "password": os.getenv("ALERTMANAGER_PASSWORD", "").strip(),
+                    "password": resolve_env_credential("ALERTMANAGER_PASSWORD"),
                 }
             )
             integrations.append(
@@ -1475,7 +1477,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
             _report_env_loader_failure(exc, integration="alertmanager")
 
     _kubeconfig_path = os.getenv("KUBECONFIG", "").strip()
-    _kubeconfig_content = os.getenv("KUBECONFIG_CONTENT", "").strip()
+    _kubeconfig_content = resolve_env_credential("KUBECONFIG_CONTENT")
     if _kubeconfig_path or _kubeconfig_content:
         try:
             kubernetes_config = KubernetesIntegrationConfig.model_validate(
@@ -1518,7 +1520,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
         integrations.append(splunk_multi)
     else:
         splunk_url = os.getenv("SPLUNK_URL", "").strip()
-        splunk_token = os.getenv("SPLUNK_TOKEN", "").strip()
+        splunk_token = resolve_env_credential("SPLUNK_TOKEN")
         if splunk_url and splunk_token:
             try:
                 splunk_config = SplunkIntegrationConfig.model_validate(
@@ -1542,7 +1544,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 )
 
     supabase_url = os.getenv("SUPABASE_URL", "").strip()
-    supabase_service_key = os.getenv("SUPABASE_SERVICE_KEY", "").strip()
+    supabase_service_key = resolve_env_credential("SUPABASE_SERVICE_KEY")
     if supabase_url and supabase_service_key:
         try:
             sb_config = build_supabase_config(
@@ -1600,7 +1602,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
             temporal_config = TemporalConfig.model_validate(
                 {
                     "base_url": temporal_url,
-                    "api_key": os.getenv("TEMPORAL_API_KEY", "").strip(),
+                    "api_key": resolve_env_credential("TEMPORAL_API_KEY"),
                     "namespace": temporal_namespace,
                 }
             )
@@ -1800,7 +1802,7 @@ def resolve_effective_integrations(
             },
         )
     else:
-        jwt_token = os.getenv("JWT_TOKEN", "").strip()
+        jwt_token = resolve_env_credential("JWT_TOKEN")
         if jwt_token:
             effective["tracer"] = _effective_entry(
                 "local env",
@@ -1824,8 +1826,8 @@ def resolve_effective_integrations(
     else:
         slack_config = _slack_effective_config(
             webhook_url=os.getenv("SLACK_WEBHOOK_URL", "").strip(),
-            bot_token=os.getenv("SLACK_BOT_TOKEN", "").strip(),
-            app_token=os.getenv("SLACK_APP_TOKEN", "").strip(),
+            bot_token=resolve_env_credential("SLACK_BOT_TOKEN"),
+            app_token=resolve_env_credential("SLACK_APP_TOKEN"),
             webhook_label="SLACK_WEBHOOK_URL",
         )
         if slack_config:
@@ -1880,7 +1882,7 @@ def resolve_effective_integrations(
                     "security_protocol": os.getenv("KAFKA_SECURITY_PROTOCOL", "PLAINTEXT").strip(),
                     "sasl_mechanism": os.getenv("KAFKA_SASL_MECHANISM", "").strip(),
                     "sasl_username": os.getenv("KAFKA_SASL_USERNAME", "").strip(),
-                    "sasl_password": os.getenv("KAFKA_SASL_PASSWORD", "").strip(),
+                    "sasl_password": resolve_env_credential("KAFKA_SASL_PASSWORD"),
                 },
             )
 
@@ -1908,7 +1910,7 @@ def resolve_effective_integrations(
                     "port": int(os.getenv("CLICKHOUSE_PORT", "8123") or "8123"),
                     "database": os.getenv("CLICKHOUSE_DATABASE", "default").strip(),
                     "username": os.getenv("CLICKHOUSE_USER", "default").strip(),
-                    "password": os.getenv("CLICKHOUSE_PASSWORD", "").strip(),
+                    "password": resolve_env_credential("CLICKHOUSE_PASSWORD"),
                     "secure": os.getenv("CLICKHOUSE_SECURE", "false").strip().lower()
                     in ("true", "1", "yes"),
                 },

@@ -11,6 +11,7 @@ from typing import Any
 import httpx
 from pydantic import Field, field_validator
 
+from config.llm_credentials import resolve_env_credential
 from config.strict_config import StrictConfigModel
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
 
@@ -91,7 +92,7 @@ def build_sentry_config(raw: dict[str, Any] | None) -> SentryConfig:
 def sentry_config_from_env() -> SentryConfig | None:
     """Load a Sentry config from env vars."""
     organization_slug = os.getenv("SENTRY_ORG_SLUG", "").strip()
-    auth_token = os.getenv("SENTRY_AUTH_TOKEN", "").strip()
+    auth_token = resolve_env_credential("SENTRY_AUTH_TOKEN")
     if not organization_slug or not auth_token:
         return None
     return build_sentry_config(

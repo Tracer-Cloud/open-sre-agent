@@ -78,7 +78,7 @@ def test_list_azure_openai_deployments_parses_response(monkeypatch) -> None:
 def test_discover_azure_openai_deployments_from_env(monkeypatch) -> None:
     monkeypatch.setenv("AZURE_OPENAI_BASE_URL", "https://example.openai.azure.com")
     monkeypatch.setattr(
-        "config.llm_credentials.resolve_llm_api_key",
+        "config.llm_credentials.resolve_env_credential",
         lambda _env: "test-key",
     )
     monkeypatch.setattr(

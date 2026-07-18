@@ -5,6 +5,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
+from config.llm_credentials import resolve_env_credential
+
 DEFAULT_TRELLO_BASE_URL = "https://api.trello.com/1"
 
 
@@ -36,8 +38,8 @@ def build_trello_config(raw: dict[str, Any] | None) -> TrelloConfig:
 
 def trello_config_from_env() -> TrelloConfig | None:
     """Load a Trello config from env vars."""
-    api_key = os.getenv("TRELLO_API_KEY", "").strip()
-    token = os.getenv("TRELLO_TOKEN", "").strip()
+    api_key = resolve_env_credential("TRELLO_API_KEY")
+    token = resolve_env_credential("TRELLO_TOKEN")
     if not api_key or not token:
         return None
 
