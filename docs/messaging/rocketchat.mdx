@@ -156,6 +156,24 @@ Findings should appear in the configured channel as a message with an attachment
 
 ---
 
+## Background RCA completion notifications
+
+When the interactive shell runs investigations in background mode, Rocket.Chat can deliver the RCA summary as soon as a job finishes. Configure the integration first, then in the shell:
+
+```text
+/background on
+/background notify set rocketchat          # or: email,rocketchat
+/investigate datadog
+```
+
+On completion the summary — root cause, top analysis, next steps, and a short stats block — is posted as plain text, capped at 4,096 characters. Token mode posts to the configured `default_channel`; webhook-only setups deliver to the webhook's fixed destination.
+
+Confirm delivery with `/background show <task_id>`: the `notify` row reads `rocketchat:sent`, `rocketchat:failed: <error>`, or `rocketchat:missing rocketchat integration: …` when neither token credentials (with a default channel) nor a webhook is configured. A notification problem never fails the investigation itself.
+
+See [Background investigations](/background-investigations) for the full command set.
+
+---
+
 ## Troubleshooting
 
 `/integrations verify rocketchat` only calls `/api/v1/me`, so it surfaces credential errors but cannot detect channel-routing problems. Delivery-time errors only show up when an investigation actually posts; they appear in OpenSRE logs as `[rocketchat] post message failed: <error>`.
