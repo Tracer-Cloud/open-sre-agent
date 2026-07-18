@@ -703,6 +703,28 @@ def test_validate_telegram_bot_network_error(monkeypatch: pytest.MonkeyPatch) ->
     assert "unreachable" in result.detail.lower()
 
 
+def test_validate_telegram_bot_network_error_redacts_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """httpx embeds the request URL — which carries the bot token — in
+    transport error messages; the validator must redact it (CWE-209)."""
+    import httpx as _httpx
+
+    token = "123456:SECRET-TOKEN-ABC"
+
+    def _raise(*_a: object, **_kw: object) -> None:
+        raise _httpx.ConnectError(
+            f"[Errno 8] nodename nor servname provided for "
+            f"https://api.telegram.org/bot{token}/getMe"
+        )
+
+    monkeypatch.setattr("httpx.get", _raise)
+    result = validate_telegram_bot(bot_token=token)
+    assert result.ok is False
+    assert token not in result.detail
+    assert "<redacted>" in result.detail
+
+
 def test_validate_betterstack_integration_succeeds(monkeypatch) -> None:
     monkeypatch.setattr(
         "surfaces.cli.wizard.integration_validators.alerting.validate_betterstack_config",

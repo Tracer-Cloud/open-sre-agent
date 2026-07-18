@@ -527,11 +527,7 @@ See [Hermes](/hermes) for log tailing and incident classification setup.
 
 **`Telegram API check failed: 401 Client Error: Unauthorized for url: …`**
 
-The bot token is invalid or has been revoked. Generate a new one in BotFather (`/mybots → your bot → API Token → Revoke current token`) and update `.env`.
-
-<Warning>
-The verifier currently does not redact secrets from this error: the `for url:` portion of the message includes the bot token (Telegram's API endpoint embeds the token in the path). Redact the token before sharing this error in bug reports or chat. The verifier-side redaction fix is tracked separately from the wizard work — file a new issue if one does not yet exist.
-</Warning>
+The bot token is invalid or has been revoked. Generate a new one in BotFather (`/mybots → your bot → API Token → Revoke current token`) and update `.env`. The `for url:` portion of the message shows the token as `<redacted>` — Telegram's API endpoint embeds the token in the path, so the verifier scrubs it before surfacing the error.
 
 ### Errors that only surface during delivery
 
