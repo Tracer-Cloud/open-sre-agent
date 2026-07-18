@@ -27,6 +27,7 @@ import psutil
 _BYTES_PER_MIB = 1024 * 1024
 
 PROCESS_NOT_FOUND: tuple[type[BaseException], ...] = (psutil.NoSuchProcess,)
+PROCESS_INACCESSIBLE: tuple[type[BaseException], ...] = (psutil.AccessDenied,)
 PROCESS_INACCESSIBLE_OR_GONE: tuple[type[BaseException], ...] = (
     psutil.NoSuchProcess,
     psutil.AccessDenied,

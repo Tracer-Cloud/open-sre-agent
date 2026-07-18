@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import threading
+import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Protocol, runtime_checkable
 
 from platform.common.task_types import TaskRecord, TaskStatus
-from tools.system.fleet_monitoring.probe import probe
+from tools.system.fleet_monitoring.probe import pid_exists, probe
 
 
 @runtime_checkable
@@ -51,6 +52,7 @@ def run_watchdog(
         if on_alarm is not None:
             on_alarm(threshold, detail)
 
+    first_sample = True
     try:
         while True:
             if task.cancel_requested.is_set():
@@ -61,9 +63,22 @@ def run_watchdog(
             if snap is None:
                 if task.cancel_requested.is_set():
                     task.mark_cancelled()
-                elif task.status == TaskStatus.RUNNING:
+                    return
+                if pid_exists(watched_pid):
+                    # Alive but not introspectable (e.g. another user's
+                    # process, macOS hardened runtime). A permission
+                    # failure is not an exit: fail loudly up front, retry
+                    # when it appears mid-watch.
+                    if first_sample:
+                        task.mark_failed(f"cannot introspect pid {watched_pid} (permission denied)")
+                        return
+                    task.update_progress("no snapshot this tick (permission denied); retrying")
+                    time.sleep(sample_interval)
+                    continue
+                if task.status == TaskStatus.RUNNING:
                     task.mark_completed(result="target process exited")
                 return
+            first_sample = False
 
             runtime_s = max(0.0, (datetime.now(UTC) - snap.started_at).total_seconds())
             progress = (
