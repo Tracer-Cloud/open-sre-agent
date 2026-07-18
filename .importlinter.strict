@@ -34,6 +34,7 @@ ignore_imports =
     platform.observability.errors.sentry -> integrations.llm_cli.errors
     platform.scheduler.credentials -> integrations.catalog
     platform.scheduler.executor -> integrations.discord.delivery
+    platform.scheduler.executor -> integrations.rocketchat.delivery
     platform.scheduler.executor -> integrations.slack.delivery
     platform.scheduler.executor -> integrations.telegram.delivery
     platform.scheduler.executor -> integrations.telegram.formatting
