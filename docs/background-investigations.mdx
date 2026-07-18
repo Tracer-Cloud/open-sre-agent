@@ -11,7 +11,7 @@ When background mode is enabled:
 - new investigations run asynchronously
 - the shell stays free for more questions and follow-ups
 - completed RCAs are tracked in-session
-- completion notifications can be sent to email (via the [`smtp`](/smtp) integration), Telegram (via the [`telegram`](/messaging/telegram) integration), or both
+- completion notifications can be sent to email (via the [`smtp`](/smtp) integration), Telegram (via the [`telegram`](/messaging/telegram) integration), Rocket.Chat (via the [`rocketchat`](/messaging/rocketchat) integration), or any combination
 
 <Note>
 This first version is **session-local only**. If the REPL process exits,
@@ -31,7 +31,7 @@ in-flight background jobs stop with it.
 | `/background show <task_id>` | Show the RCA summary and the per-channel notification result for one job |
 | `/background use <task_id>` | Promote a completed job into the active follow-up context |
 | `/background notify list` | Show the channels a completed RCA is delivered to (default: **none**) |
-| `/background notify set <channel[,channel...]>` | Set completion channels — `email`, `telegram`, or `email,telegram` |
+| `/background notify set <channel[,channel...]>` | Set completion channels — `email`, `telegram`, `rocketchat`, or a comma-separated combination |
 
 ---
 
@@ -48,7 +48,7 @@ in-flight background jobs stop with it.
    notification is sent:**
 
 ```text
-/background notify set telegram    # or: email, or email,telegram
+/background notify set telegram    # or: email, rocketchat, or email,telegram
 /background notify list           # confirm
 ```
 
@@ -89,9 +89,10 @@ Notifications are **off by default** — pick your channels with `/background no
 | --- | --- | --- |
 | `email` | [`smtp`](/smtp) integration | `opensre integrations setup smtp` |
 | `telegram` | [`telegram`](/messaging/telegram) integration | `opensre integrations setup telegram` |
+| `rocketchat` | [`rocketchat`](/messaging/rocketchat) integration | `opensre integrations setup rocketchat` |
 
-Both channels send the same summary — **Root cause**, **Top analysis**, **What to do next**, plus a
-short internal stats section. Telegram messages are plain text and are capped at Telegram's 4,096-character
+All channels send the same summary — **Root cause**, **Top analysis**, **What to do next**, plus a
+short internal stats section. Telegram and Rocket.Chat messages are plain text and are capped at the 4,096-character
 limit.
 
 Check what was actually delivered with `/background show <task_id>`: the `notify` row shows one
