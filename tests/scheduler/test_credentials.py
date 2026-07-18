@@ -32,7 +32,7 @@ class TestTelegramCredentials:
             lambda *_: "",
         )
         monkeypatch.setattr(
-            "config.llm_credentials.resolve_env_credential",
+            "platform.scheduler.credentials.resolve_env_credential",
             lambda *_args, **_kwargs: "",
         )
         creds = resolve_telegram_credentials({})
@@ -46,7 +46,7 @@ class TestTelegramCredentials:
             lambda *_: "",
         )
         monkeypatch.setattr(
-            "config.llm_credentials.resolve_env_credential",
+            "platform.scheduler.credentials.resolve_env_credential",
             lambda *_args, **_kwargs: "from_keyring",
         )
         creds = resolve_telegram_credentials({})
@@ -100,8 +100,42 @@ class TestSlackCredentials:
             "platform.scheduler.credentials._get_integration_credential",
             lambda *_: "",
         )
+        monkeypatch.setattr(
+            "platform.scheduler.credentials.resolve_env_credential",
+            lambda *_args, **_kwargs: "",
+        )
         creds = resolve_slack_credentials({})
         assert creds == {}
+
+    def test_bot_token_from_keyring(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("SLACK_WEBHOOK_URL", raising=False)
+        monkeypatch.delenv("SLACK_BOT_TOKEN", raising=False)
+        monkeypatch.delenv("SLACK_ACCESS_TOKEN", raising=False)
+        monkeypatch.setattr(
+            "platform.scheduler.credentials._get_integration_credential",
+            lambda *_: "",
+        )
+        monkeypatch.setattr(
+            "platform.scheduler.credentials.resolve_env_credential",
+            lambda name, **_kwargs: "xoxb-from-keyring" if name == "SLACK_BOT_TOKEN" else "",
+        )
+        creds = resolve_slack_credentials({})
+        assert creds == {"access_token": "xoxb-from-keyring"}
+
+    def test_env_wins_over_keyring_for_bot_token(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("SLACK_WEBHOOK_URL", raising=False)
+        monkeypatch.setenv("SLACK_BOT_TOKEN", "xoxb-from-env")
+        monkeypatch.setattr(
+            "platform.scheduler.credentials._get_integration_credential",
+            lambda *_: "",
+        )
+        # resolve_env_credential prefers env; stub must still honor that contract.
+        monkeypatch.setattr(
+            "platform.scheduler.credentials.resolve_env_credential",
+            lambda name, **_kwargs: "xoxb-from-env" if name == "SLACK_BOT_TOKEN" else "",
+        )
+        creds = resolve_slack_credentials({})
+        assert creds == {"access_token": "xoxb-from-env"}
 
 
 class TestDiscordCredentials:
@@ -124,5 +158,22 @@ class TestDiscordCredentials:
             "platform.scheduler.credentials._get_integration_credential",
             lambda *_: "",
         )
+        monkeypatch.setattr(
+            "platform.scheduler.credentials.resolve_env_credential",
+            lambda *_args, **_kwargs: "",
+        )
         creds = resolve_discord_credentials({})
         assert creds == {}
+
+    def test_from_keyring(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("DISCORD_BOT_TOKEN", raising=False)
+        monkeypatch.setattr(
+            "platform.scheduler.credentials._get_integration_credential",
+            lambda *_: "",
+        )
+        monkeypatch.setattr(
+            "platform.scheduler.credentials.resolve_env_credential",
+            lambda *_args, **_kwargs: "discord_from_keyring",
+        )
+        creds = resolve_discord_credentials({})
+        assert creds == {"bot_token": "discord_from_keyring"}

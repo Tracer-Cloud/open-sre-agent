@@ -917,7 +917,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
     if airflow_config is not None:
         integrations.append(_active_env_record("airflow", airflow_config.model_dump()))
 
-    telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+    telegram_bot_token = resolve_env_credential("TELEGRAM_BOT_TOKEN")
     if telegram_bot_token:
         try:
             tg_config = TelegramBotConfig.model_validate(
@@ -931,7 +931,8 @@ def load_env_integrations() -> list[dict[str, Any]]:
         else:
             integrations.append(_active_env_record("telegram", tg_config.model_dump()))
 
-    rocketchat_auth_token = os.getenv("ROCKETCHAT_AUTH_TOKEN", "").strip()
+    # PAT is keyring-backed via wizard sync_env_secret; webhook URL stays store/env only.
+    rocketchat_auth_token = resolve_env_credential("ROCKETCHAT_AUTH_TOKEN")
     rocketchat_webhook_url = os.getenv("ROCKETCHAT_WEBHOOK_URL", "").strip()
     if rocketchat_auth_token or rocketchat_webhook_url:
         try:
@@ -949,13 +950,13 @@ def load_env_integrations() -> list[dict[str, Any]]:
         else:
             integrations.append(_active_env_record("rocketchat", rocketchat_config.model_dump()))
 
-    slack_bot_token = os.getenv("SLACK_BOT_TOKEN", "").strip()
+    slack_bot_token = resolve_env_credential("SLACK_BOT_TOKEN")
     slack_webhook_url = os.getenv("SLACK_WEBHOOK_URL", "").strip()
     if slack_bot_token or slack_webhook_url:
         slack_credentials = {
             "webhook_url": slack_webhook_url,
             "bot_token": slack_bot_token,
-            "app_token": os.getenv("SLACK_APP_TOKEN", "").strip(),
+            "app_token": resolve_env_credential("SLACK_APP_TOKEN"),
         }
         slack_view, _slack_key = _classify_slack(slack_credentials, record_id="env:slack")
         if slack_view is not None:
@@ -1824,8 +1825,8 @@ def resolve_effective_integrations(
     else:
         slack_config = _slack_effective_config(
             webhook_url=os.getenv("SLACK_WEBHOOK_URL", "").strip(),
-            bot_token=os.getenv("SLACK_BOT_TOKEN", "").strip(),
-            app_token=os.getenv("SLACK_APP_TOKEN", "").strip(),
+            bot_token=resolve_env_credential("SLACK_BOT_TOKEN"),
+            app_token=resolve_env_credential("SLACK_APP_TOKEN"),
             webhook_label="SLACK_WEBHOOK_URL",
         )
         if slack_config:

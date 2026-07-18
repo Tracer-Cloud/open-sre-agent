@@ -6,7 +6,6 @@ multiple tools share one client, charset headers, and error hints.
 
 from __future__ import annotations
 
-import os
 import re
 import threading
 import time
@@ -46,8 +45,14 @@ class SlackBotTarget:
 
 
 def resolve_bot_token() -> tuple[SlackBotTarget | None, str]:
-    """Resolve the Slack bot token from env first, then the integration store."""
-    env_token = os.getenv("SLACK_BOT_TOKEN", "").strip()
+    """Resolve the Slack bot token from env/keyring first, then the integration store.
+
+    ``resolve_env_credential`` checks process env then the OS keyring (wizard
+    ``sync_env_secret``), preserving the historical env-before-store order.
+    """
+    from config.llm_credentials import resolve_env_credential
+
+    env_token = resolve_env_credential("SLACK_BOT_TOKEN").strip()
     if env_token:
         return SlackBotTarget(bot_token=env_token), ""
 
@@ -89,8 +94,9 @@ def bot_token_configured(sources: dict[str, Any] | None = None) -> bool:
     INTEGRATIONS: none``) while ``SLACK_BOT_TOKEN`` / the store still have a
     usable token. ``resolve_bot_token`` already understands that shape.
     """
-    env_token = os.getenv("SLACK_BOT_TOKEN", "").strip()
-    if env_token:
+    from config.llm_credentials import resolve_env_credential
+
+    if resolve_env_credential("SLACK_BOT_TOKEN").strip():
         return True
     if _bot_token_from_slack_source((sources or {}).get("slack")):
         return True

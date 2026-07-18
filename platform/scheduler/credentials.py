@@ -2,23 +2,19 @@
 
 Resolves provider credentials from the integration store and environment
 rather than requiring them to be stored in task params.
+
+Secret env vars use ``resolve_env_credential`` (process env, then OS keyring)
+so wizard ``sync_env_secret`` writes are visible when the store is empty.
 """
 
 from __future__ import annotations
 
 import logging
-import os
 from typing import Any
 
+from config.llm_credentials import resolve_env_credential
+
 logger = logging.getLogger(__name__)
-
-
-try:
-    from keyring.errors import KeyringError as _KeyringError
-except ImportError:
-
-    class _KeyringError(Exception):  # type: ignore[no-redef]
-        """Fallback when keyring is not installed."""
 
 
 def resolve_telegram_credentials(task_params: dict[str, str]) -> dict[str, str]:
@@ -26,29 +22,20 @@ def resolve_telegram_credentials(task_params: dict[str, str]) -> dict[str, str]:
 
     Priority: task.params > integration store > environment variable > system keyring.
     """
-    token = task_params.get("bot_token", "").strip()
-    if token:
-        return {"bot_token": token}
-
-    token = _get_integration_credential("telegram", "bot_token")
-    if token:
-        return {"bot_token": token}
-
-    try:
-        from config.llm_credentials import resolve_env_credential
-
-        token = resolve_env_credential("TELEGRAM_BOT_TOKEN").strip()
-    except (ImportError, _KeyringError) as exc:
-        logger.debug("Failed to resolve Telegram credentials from keyring: %s", exc)
-        token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
-
-    return {"bot_token": token} if token else {}
+    return _resolve_credentials(
+        task_params,
+        service="telegram",
+        credential_key="bot_token",
+        env_vars=("TELEGRAM_BOT_TOKEN",),
+    )
 
 
 def resolve_slack_credentials(task_params: dict[str, str]) -> dict[str, str]:
-    """Resolve Slack credentials from task params, integration store, or env.
+    """Resolve Slack credentials from task params, integration store, env, or keyring.
 
-    Priority: task.params > integration store > environment variable.
+    Priority: task.params > integration store > environment variable > system keyring.
+    Webhook URLs are not keyring-backed; ``resolve_env_credential`` still checks
+    env first and returns empty from keyring when unset.
     """
     webhook_url = task_params.get("webhook_url", "")
     if webhook_url:
@@ -76,9 +63,9 @@ def resolve_slack_credentials(task_params: dict[str, str]) -> dict[str, str]:
 
 
 def resolve_discord_credentials(task_params: dict[str, str]) -> dict[str, str]:
-    """Resolve Discord bot_token from task params, integration store, or env.
+    """Resolve Discord bot_token from task params, integration store, env, or keyring.
 
-    Priority: task.params > integration store > environment variable.
+    Priority: task.params > integration store > environment variable > system keyring.
     """
     return _resolve_credentials(
         task_params,
@@ -95,7 +82,7 @@ def _resolve_credentials(
     credential_key: str,
     env_vars: tuple[str, ...],
 ) -> dict[str, str]:
-    """Resolve a single credential from task params, integration store, or env."""
+    """Resolve a single credential from task params, store, env, or keyring."""
     value = task_params.get(credential_key, "")
     if value:
         return {credential_key: value}
@@ -105,7 +92,7 @@ def _resolve_credentials(
         return {credential_key: value}
 
     for env_var in env_vars:
-        value = os.getenv(env_var, "")
+        value = resolve_env_credential(env_var).strip()
         if value:
             return {credential_key: value}
 
