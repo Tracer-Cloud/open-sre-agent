@@ -10,6 +10,7 @@ so wizard ``sync_env_secret`` writes are visible when the store is empty.
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
 from config.llm_credentials import resolve_env_credential
@@ -34,25 +35,23 @@ def resolve_slack_credentials(task_params: dict[str, str]) -> dict[str, str]:
     """Resolve Slack credentials from task params, integration store, env, or keyring.
 
     Priority: task.params > integration store > environment variable > system keyring.
-    Webhook URLs are not keyring-backed; ``resolve_env_credential`` still checks
-    env first and returns empty from keyring when unset.
+    Webhook URLs stay env/store only (not keyring-eligible as ``*_URL``).
     """
-    webhook_url = task_params.get("webhook_url", "")
+    webhook_url = task_params.get("webhook_url", "").strip()
     if webhook_url:
         return {"webhook_url": webhook_url}
 
-    access_token = task_params.get("access_token", "")
+    access_token = task_params.get("access_token", "").strip()
     if access_token:
         return {"access_token": access_token}
 
-    webhook = _resolve_credentials(
-        {},
-        service="slack",
-        credential_key="webhook_url",
-        env_vars=("SLACK_WEBHOOK_URL",),
-    )
-    if webhook:
-        return webhook
+    # Webhook: store then plain env — never resolve_env_credential / keyring.
+    store_webhook = _get_integration_credential("slack", "webhook_url").strip()
+    if store_webhook:
+        return {"webhook_url": store_webhook}
+    env_webhook = os.getenv("SLACK_WEBHOOK_URL", "").strip()
+    if env_webhook:
+        return {"webhook_url": env_webhook}
 
     return _resolve_credentials(
         {},

@@ -79,6 +79,11 @@ class TestSlackCredentials:
             "platform.scheduler.credentials._get_integration_credential",
             lambda *_: "",
         )
+        # Isolate from a local wizard keyring that may hold SLACK_BOT_TOKEN.
+        monkeypatch.setattr(
+            "platform.scheduler.credentials.resolve_env_credential",
+            lambda name, **_kwargs: "xoxp-from-access-env" if name == "SLACK_ACCESS_TOKEN" else "",
+        )
         creds = resolve_slack_credentials({})
         assert creds == {"access_token": "xoxp-from-access-env"}
 
@@ -89,8 +94,30 @@ class TestSlackCredentials:
             "platform.scheduler.credentials._get_integration_credential",
             lambda *_: "",
         )
+        monkeypatch.setattr(
+            "platform.scheduler.credentials.resolve_env_credential",
+            lambda name, **_kwargs: "xoxb-secondary" if name == "SLACK_BOT_TOKEN" else "",
+        )
         creds = resolve_slack_credentials({})
         assert creds == {"webhook_url": "https://hooks.slack.com/primary"}
+
+    def test_webhook_does_not_use_keyring(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("SLACK_WEBHOOK_URL", raising=False)
+        monkeypatch.delenv("SLACK_BOT_TOKEN", raising=False)
+        monkeypatch.delenv("SLACK_ACCESS_TOKEN", raising=False)
+        monkeypatch.setattr(
+            "platform.scheduler.credentials._get_integration_credential",
+            lambda *_: "",
+        )
+        # Even if keyring somehow held a webhook URL, scheduler must ignore it.
+        monkeypatch.setattr(
+            "platform.scheduler.credentials.resolve_env_credential",
+            lambda name, **_kwargs: (
+                "https://hooks.slack.com/from-keyring" if name == "SLACK_WEBHOOK_URL" else ""
+            ),
+        )
+        creds = resolve_slack_credentials({})
+        assert creds == {}
 
     def test_empty_when_nothing_configured(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("SLACK_WEBHOOK_URL", raising=False)
