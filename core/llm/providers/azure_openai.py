@@ -148,10 +148,10 @@ def list_azure_openai_deployments(
 
 def discover_azure_openai_deployments_from_env() -> list[str]:
     """Return deployment IDs from the configured Azure OpenAI resource."""
-    from config.llm_credentials import resolve_llm_api_key
+    from config.llm_credentials import resolve_env_credential
 
     base_url = os.getenv(AZURE_OPENAI_BASE_URL_ENV, "")
-    api_key = resolve_llm_api_key(AZURE_OPENAI_API_KEY_ENV) or ""
+    api_key = resolve_env_credential(AZURE_OPENAI_API_KEY_ENV) or ""
     return list_azure_openai_deployments(
         base_url=base_url,
         api_key=api_key,

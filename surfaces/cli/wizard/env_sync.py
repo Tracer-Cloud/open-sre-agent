@@ -12,7 +12,7 @@ from config.llm_auth.auth_method import LLM_AUTH_METHOD_ENV
 from config.llm_auth.credentials import delete as delete_provider_auth
 from config.llm_auth.credentials import save_api_key
 from config.llm_auth.provider_catalog import API_KEY_PROVIDER_ENVS
-from config.llm_credentials import delete_llm_api_key, save_llm_api_key
+from config.llm_credentials import delete_keyring_secret, save_keyring_secret
 from surfaces.cli.wizard.config import PROJECT_ENV_PATH, ProviderOption
 
 _ENV_ASSIGNMENT = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=")
@@ -97,13 +97,13 @@ def _persist_env_secret(key: str, value: str) -> bool:
         if provider:
             delete_provider_auth(provider)
         else:
-            delete_llm_api_key(key)
+            delete_keyring_secret(key)
         return True
     try:
         if provider:
             save_api_key(provider, normalized)
         else:
-            save_llm_api_key(key, normalized)
+            save_keyring_secret(key, normalized)
     except RuntimeError:
         return False
     return True

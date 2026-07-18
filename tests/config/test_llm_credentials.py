@@ -38,8 +38,21 @@ def test_resolve_env_credential_prefers_env_over_keyring(monkeypatch) -> None:
     previous_backend = keyring.get_keyring()
     keyring.set_keyring(MemoryKeyring())
     try:
-        llm_credentials.save_llm_api_key("GITLAB_ACCESS_TOKEN", "from-keyring")
+        llm_credentials.save_keyring_secret("GITLAB_ACCESS_TOKEN", "from-keyring")
         assert llm_credentials.resolve_env_credential("GITLAB_ACCESS_TOKEN") == "from-env"
+    finally:
+        keyring.set_keyring(previous_backend)
+
+
+def test_resolve_keyring_secret_reads_keyring_only(monkeypatch) -> None:
+    monkeypatch.setenv("GITLAB_ACCESS_TOKEN", "from-env")
+    monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
+
+    previous_backend = keyring.get_keyring()
+    keyring.set_keyring(MemoryKeyring())
+    try:
+        llm_credentials.save_keyring_secret("GITLAB_ACCESS_TOKEN", "from-keyring")
+        assert llm_credentials.resolve_keyring_secret("GITLAB_ACCESS_TOKEN") == "from-keyring"
     finally:
         keyring.set_keyring(previous_backend)
 
@@ -52,7 +65,7 @@ def test_unmanaged_llm_api_key_source_reports_env_keyring_and_none(monkeypatch) 
     keyring.set_keyring(MemoryKeyring())
     try:
         assert llm_api_key_source("EXPERIMENTAL_API_KEY") == "none"
-        llm_credentials.save_llm_api_key("EXPERIMENTAL_API_KEY", "from-keyring")
+        llm_credentials.save_keyring_secret("EXPERIMENTAL_API_KEY", "from-keyring")
         assert llm_api_key_source("EXPERIMENTAL_API_KEY") == "keyring"
         monkeypatch.setenv("EXPERIMENTAL_API_KEY", "from-env")
         assert llm_api_key_source("EXPERIMENTAL_API_KEY") == "env"

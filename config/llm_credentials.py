@@ -1,34 +1,34 @@
-"""Secure local storage helpers for LLM credentials."""
+"""Secure local storage helpers for OpenSRE secrets (LLM keys and integrations)."""
 
 from __future__ import annotations
 
 import os
 
 from config.llm_keyring import (
-    delete_llm_api_key,
+    delete_keyring_secret,
     delete_llm_credential_record,
     get_keyring_setup_instructions,
-    resolve_llm_api_key,
+    resolve_keyring_secret,
     resolve_llm_credential_record,
-    save_llm_api_key,
+    save_keyring_secret,
     save_llm_credential_record,
 )
 
 __all__ = [
-    "delete_llm_api_key",
+    "delete_keyring_secret",
     "delete_llm_credential_record",
     "get_keyring_setup_instructions",
     "resolve_env_credential",
-    "resolve_llm_api_key",
+    "resolve_keyring_secret",
     "resolve_llm_credential_record",
-    "save_llm_api_key",
+    "save_keyring_secret",
     "save_llm_credential_record",
 ]
 
 
 def resolve_env_credential(env_var: str, *, default: str = "") -> str:
-    """Resolve a credential from env first, then the local keychain."""
+    """Resolve a credential from process env first, then the OS keyring."""
     env_value = os.getenv(env_var, default).strip()
     if env_value:
         return env_value
-    return resolve_llm_api_key(env_var)
+    return resolve_keyring_secret(env_var)

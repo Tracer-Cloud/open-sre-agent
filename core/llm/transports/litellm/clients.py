@@ -86,9 +86,9 @@ class LiteLLMAgentClient:
             return None
         if self._credential_resolver is not None:
             return self._credential_resolver(self._api_key_env) or self._api_key_default
-        from config.llm_credentials import resolve_llm_api_key
+        from config.llm_credentials import resolve_env_credential
 
-        return resolve_llm_api_key(self._api_key_env) or self._api_key_default
+        return resolve_env_credential(self._api_key_env) or self._api_key_default
 
     def _build_request_kwargs(
         self,
@@ -191,9 +191,9 @@ class LiteLLMLLMClient:
             return None
         if self._credential_resolver is not None:
             return self._credential_resolver(self._api_key_env) or self._api_key_default
-        from config.llm_credentials import resolve_llm_api_key
+        from config.llm_credentials import resolve_env_credential
 
-        return resolve_llm_api_key(self._api_key_env) or self._api_key_default
+        return resolve_env_credential(self._api_key_env) or self._api_key_default
 
     def _activate_model_fallback(self) -> bool:
         fallback = self._model_fallback

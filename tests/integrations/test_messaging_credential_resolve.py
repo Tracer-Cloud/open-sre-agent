@@ -41,7 +41,7 @@ def test_telegram_loads_from_keyring_when_env_empty(
     monkeypatch: pytest.MonkeyPatch, memory_keyring: MemoryKeyring
 ) -> None:
     _clear_messaging_env(monkeypatch)
-    llm_credentials.save_llm_api_key("TELEGRAM_BOT_TOKEN", "111:KEYRING")
+    llm_credentials.save_keyring_secret("TELEGRAM_BOT_TOKEN", "111:KEYRING")
     records = load_env_integrations()
     telegram = next(r for r in records if r.get("service") == "telegram")
     assert telegram["credentials"]["bot_token"] == "111:KEYRING"
@@ -51,7 +51,7 @@ def test_telegram_env_wins_over_keyring(
     monkeypatch: pytest.MonkeyPatch, memory_keyring: MemoryKeyring
 ) -> None:
     _clear_messaging_env(monkeypatch)
-    llm_credentials.save_llm_api_key("TELEGRAM_BOT_TOKEN", "111:KEYRING")
+    llm_credentials.save_keyring_secret("TELEGRAM_BOT_TOKEN", "111:KEYRING")
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "111:ENV")
     records = load_env_integrations()
     telegram = next(r for r in records if r.get("service") == "telegram")
@@ -64,7 +64,7 @@ def test_rocketchat_pat_loads_from_keyring(
     _clear_messaging_env(monkeypatch)
     monkeypatch.setenv("ROCKETCHAT_SERVER_URL", "https://chat.example.com")
     monkeypatch.setenv("ROCKETCHAT_USER_ID", "u1")
-    llm_credentials.save_llm_api_key("ROCKETCHAT_AUTH_TOKEN", "pat-from-keyring")
+    llm_credentials.save_keyring_secret("ROCKETCHAT_AUTH_TOKEN", "pat-from-keyring")
     records = load_env_integrations()
     rocketchat = next(r for r in records if r.get("service") == "rocketchat")
     assert rocketchat["credentials"]["auth_token"] == "pat-from-keyring"
@@ -85,7 +85,7 @@ def test_slack_bot_token_loads_from_keyring(
     monkeypatch: pytest.MonkeyPatch, memory_keyring: MemoryKeyring
 ) -> None:
     _clear_messaging_env(monkeypatch)
-    llm_credentials.save_llm_api_key("SLACK_BOT_TOKEN", "xoxb-from-keyring")
+    llm_credentials.save_keyring_secret("SLACK_BOT_TOKEN", "xoxb-from-keyring")
     records = load_env_integrations()
     slack = next(r for r in records if r.get("service") == "slack")
     assert slack["credentials"]["bot_token"] == "xoxb-from-keyring"
@@ -111,7 +111,7 @@ def test_slack_bot_api_resolves_token_from_keyring(
         "integrations.catalog.resolve_effective_integrations",
         lambda: {},
     )
-    llm_credentials.save_llm_api_key("SLACK_BOT_TOKEN", "xoxb-bot-api-keyring")
+    llm_credentials.save_keyring_secret("SLACK_BOT_TOKEN", "xoxb-bot-api-keyring")
     target, error = resolve_bot_token()
     assert error == ""
     assert target is not None

@@ -238,7 +238,7 @@ def test_load_credentials_from_keyring(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
     monkeypatch.setenv("TELEGRAM_DEFAULT_CHAT_ID", "chat-1")
     monkeypatch.setattr(
-        "config.llm_credentials.resolve_llm_api_key",
+        "config.llm_credentials.resolve_env_credential",
         lambda env_var: "keyring-tok" if env_var == "TELEGRAM_BOT_TOKEN" else "",
     )
 
