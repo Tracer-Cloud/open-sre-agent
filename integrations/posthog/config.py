@@ -11,6 +11,7 @@ from config.constants.posthog import (
     DEFAULT_POSTHOG_TIMEOUT_SECONDS,
     DEFAULT_POSTHOG_URL,
 )
+from config.llm_credentials import resolve_env_credential
 from config.strict_config import StrictConfigModel
 
 
@@ -57,7 +58,7 @@ def build_posthog_config(raw: dict[str, Any] | None) -> PostHogConfig:
 
 def posthog_config_from_env() -> PostHogConfig | None:
     project_id = os.getenv("POSTHOG_PROJECT_ID", "").strip()
-    personal_api_key = os.getenv("POSTHOG_PERSONAL_API_KEY", "").strip()
+    personal_api_key = resolve_env_credential("POSTHOG_PERSONAL_API_KEY")
 
     if not project_id or not personal_api_key:
         return None

@@ -324,11 +324,11 @@ def _configure_tempo() -> tuple[str, str]:
             upsert_integration("tempo", {"credentials": creds})
             env_values: dict[str, str] = {"TEMPO_URL": url}
             if api_key:
-                env_values["TEMPO_API_KEY"] = api_key
+                sync_env_secret("TEMPO_API_KEY", api_key)
             if username:
                 env_values["TEMPO_USERNAME"] = username
             if password:
-                env_values["TEMPO_PASSWORD"] = password
+                sync_env_secret("TEMPO_PASSWORD", password)
             if org_id:
                 env_values["TEMPO_ORG_ID"] = org_id
             env_path = sync_env_values(env_values)

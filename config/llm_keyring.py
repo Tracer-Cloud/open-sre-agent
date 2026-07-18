@@ -83,12 +83,15 @@ def resolve_keyring_secret(env_var: str) -> str:
 
     Prefer :func:`config.llm_credentials.resolve_env_credential` when callers
     should also honor a process-env value.
+
+    Backend init failures (e.g. SecretService raising bare ``RuntimeError`` when
+    D-Bus is unset) are treated as miss — catalog/env loaders must not abort.
     """
     if keyring_is_disabled():
         return ""
     try:
         return read_keychain_secret(env_var)
-    except keyring.errors.KeyringError:
+    except (keyring.errors.KeyringError, RuntimeError, OSError):
         return ""
 
 

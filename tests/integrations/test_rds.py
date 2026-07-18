@@ -129,7 +129,11 @@ def test_load_env_integrations_skips_rds_when_db_id_missing() -> None:
     """Gap #1 — negative: with no RDS_DB_INSTANCE_IDENTIFIER, no rds record."""
     from integrations._catalog_impl import load_env_integrations
 
-    with patch.dict(os.environ, {"AWS_REGION": "us-west-2"}, clear=True):
+    with patch.dict(
+        os.environ,
+        {"AWS_REGION": "us-west-2", "OPENSRE_DISABLE_KEYRING": "1"},
+        clear=True,
+    ):
         env_records = load_env_integrations()
 
     assert not [r for r in env_records if r.get("service") == "rds"]
