@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+import requests
+
 from integrations.grafana.tools import query_grafana_alert_rules
 from tests.tools.conftest import BaseToolContract, mock_agent_state
 
@@ -80,3 +82,29 @@ def test_run_with_folder_filter() -> None:
         result = query_grafana_alert_rules(folder="my-folder", grafana_endpoint="http://grafana")
     assert result["folder_filter"] == "my-folder"
     mock_client.query_alert_rules.assert_called_once_with(folder="my-folder")
+
+
+def test_run_http_error_reports_unavailable_not_empty() -> None:
+    # Regression for #2944: an API failure must surface as available=False, not
+    # as an empty "0 alert rules" result the agent would read as healthy.
+    mock_client = MagicMock()
+    mock_client.is_configured = True
+    response = MagicMock(status_code=401)
+    mock_client.query_alert_rules.side_effect = requests.HTTPError(response=response)
+    with patch("integrations.grafana.tools._resolve_grafana_client", return_value=mock_client):
+        result = query_grafana_alert_rules(grafana_endpoint="http://grafana")
+    assert result["available"] is False
+    assert "401" in result["error"]
+    assert result["rules"] == []
+
+
+def test_run_connection_error_reports_unavailable() -> None:
+    # A transport error carries no response; the message falls back to the type.
+    mock_client = MagicMock()
+    mock_client.is_configured = True
+    mock_client.query_alert_rules.side_effect = requests.ConnectionError("dns failure")
+    with patch("integrations.grafana.tools._resolve_grafana_client", return_value=mock_client):
+        result = query_grafana_alert_rules(grafana_endpoint="http://grafana")
+    assert result["available"] is False
+    assert "ConnectionError" in result["error"]
+    assert result["rules"] == []

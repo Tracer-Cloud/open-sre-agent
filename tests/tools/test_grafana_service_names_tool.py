@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+import requests
+
 from integrations.grafana.tools import query_grafana_service_names
 from tests.tools.conftest import BaseToolContract, mock_agent_state
 
@@ -51,3 +53,17 @@ def test_run_happy_path() -> None:
     assert result["available"] is True
     assert result["service_names"] == ["svc-a", "svc-b"]
     mock_client.query_loki_label_values.assert_called_once_with("service_name")
+
+
+def test_run_http_error_reports_unavailable_not_empty() -> None:
+    # Regression for #2944: an API failure must surface as available=False, not
+    # as an empty "0 services" result the agent would read as healthy.
+    mock_client = MagicMock()
+    mock_client.is_configured = True
+    response = MagicMock(status_code=500)
+    mock_client.query_loki_label_values.side_effect = requests.HTTPError(response=response)
+    with patch("integrations.grafana.tools._resolve_grafana_client", return_value=mock_client):
+        result = query_grafana_service_names(grafana_endpoint="http://grafana")
+    assert result["available"] is False
+    assert "500" in result["error"]
+    assert result["service_names"] == []

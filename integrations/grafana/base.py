@@ -263,63 +263,69 @@ class GrafanaClientBase:
 
             logger.info("[grafana] Discovered datasource UIDs: %s", result)
             return result
-        except Exception as e:
+        except (requests.RequestException, ValueError) as e:
+            # Best-effort bootstrap: datasource discovery runs while the client is
+            # being constructed (see integrations/grafana/client.py). Raising here
+            # would break client creation even when the caller passed explicit
+            # datasource UIDs, so a failed discovery degrades to "none found".
+            # The query methods below no longer swallow — they surface failures so
+            # the agent can tell an API error apart from an empty result (#2944).
             logger.warning("[grafana] Failed to discover datasource UIDs: %s", e)
             return {}
 
     def query_loki_label_values(self, label: str = "service_name") -> list[str]:
-        """Query Loki for available values of a label."""
+        """Query Loki for available values of a label.
+
+        Raises ``requests.RequestException`` (or ``ValueError`` on a malformed
+        body) on API failure instead of returning ``[]`` so callers can tell a
+        real "no labels" apart from a connectivity/auth error (#2944).
+        """
         if not self.loki_datasource_uid:
             return []
         url = self._build_datasource_url(
             self.loki_datasource_uid,
             f"/loki/api/v1/label/{label}/values",
         )
-        try:
-            data = self._make_request(url)
-            values: list[str] = data.get("data", [])
-            return values
-        except Exception:
-            logger.debug("Failed to fetch Loki label values for %s", label, exc_info=True)
-            return []
+        data = self._make_request(url)
+        values: list[str] = data.get("data", [])
+        return values
 
     def query_alert_rules(self, folder: str | None = None) -> list[dict[str, Any]]:
-        """Query Grafana alert rules, optionally filtered by folder title."""
-        url = f"{self.instance_url}/api/ruler/grafana/api/v1/rules"
-        try:
-            response = requests.get(
-                url,
-                headers=self._get_auth_headers(),
-                timeout=10,
-                verify=self._config.ssl_verify,
-            )
-            response.raise_for_status()
-            data = response.json()
+        """Query Grafana alert rules, optionally filtered by folder title.
 
-            rules: list[dict[str, Any]] = []
-            for folder_name, groups in data.items():
-                if folder and folder.lower() not in folder_name.lower():
-                    continue
-                for group in groups:
-                    for rule in group.get("rules", []):
-                        rules.append(
-                            {
-                                "folder": folder_name,
-                                "group": group.get("name", ""),
-                                "rule_name": rule.get("grafana_alert", {}).get("title", ""),
-                                "condition": rule.get("grafana_alert", {}).get("condition", ""),
-                                "datasource_uid": _extract_datasource_uid(rule),
-                                "queries": _extract_rule_queries(rule),
-                                "state": rule.get("grafana_alert", {}).get("current_state", ""),
-                                "no_data_state": rule.get("grafana_alert", {}).get(
-                                    "no_data_state", ""
-                                ),
-                            }
-                        )
-            return rules
-        except Exception as e:
-            logger.warning("[grafana] Failed to query alert rules: %s", e)
-            return []
+        Raises ``requests.RequestException`` (or ``ValueError`` on a malformed
+        body) on API failure instead of returning ``[]`` so callers can tell a
+        real "no alert rules" apart from a connectivity/auth error (#2944).
+        """
+        url = f"{self.instance_url}/api/ruler/grafana/api/v1/rules"
+        response = requests.get(
+            url,
+            headers=self._get_auth_headers(),
+            timeout=10,
+            verify=self._config.ssl_verify,
+        )
+        response.raise_for_status()
+        data = response.json()
+
+        rules: list[dict[str, Any]] = []
+        for folder_name, groups in data.items():
+            if folder and folder.lower() not in folder_name.lower():
+                continue
+            for group in groups:
+                for rule in group.get("rules", []):
+                    rules.append(
+                        {
+                            "folder": folder_name,
+                            "group": group.get("name", ""),
+                            "rule_name": rule.get("grafana_alert", {}).get("title", ""),
+                            "condition": rule.get("grafana_alert", {}).get("condition", ""),
+                            "datasource_uid": _extract_datasource_uid(rule),
+                            "queries": _extract_rule_queries(rule),
+                            "state": rule.get("grafana_alert", {}).get("current_state", ""),
+                            "no_data_state": rule.get("grafana_alert", {}).get("no_data_state", ""),
+                        }
+                    )
+        return rules
 
     def query_annotations(
         self,
@@ -333,6 +339,10 @@ class GrafanaClientBase:
         Mirrors ``query_alert_rules``: a direct ``requests.get`` returning a list.
         ``/api/annotations`` responds with a JSON array, so ``_make_request`` (which
         returns a dict) is unsuitable here.
+
+        Raises ``requests.RequestException`` (or ``ValueError`` on a malformed
+        body) on API failure instead of returning ``[]`` so callers can tell a
+        real "no annotations" apart from a connectivity/auth error (#2944).
         """
         url = f"{self.instance_url}/api/annotations"
         params: dict[str, Any] = {
@@ -343,20 +353,16 @@ class GrafanaClientBase:
         }
         if tags:
             params["tags"] = tags  # requests repeats the param once per tag
-        try:
-            response = requests.get(
-                url,
-                headers=self._get_auth_headers(),
-                params=params,
-                timeout=10,
-                verify=self._config.ssl_verify,
-            )
-            response.raise_for_status()
-            data = response.json()
-            return [_map_annotation(item) for item in data if isinstance(item, dict)]
-        except Exception as e:
-            logger.warning("[grafana] Failed to query annotations: %s", e)
-            return []
+        response = requests.get(
+            url,
+            headers=self._get_auth_headers(),
+            params=params,
+            timeout=10,
+            verify=self._config.ssl_verify,
+        )
+        response.raise_for_status()
+        data = response.json()
+        return [_map_annotation(item) for item in data if isinstance(item, dict)]
 
     def _get_auth_headers(self) -> dict[str, str]:
         if self.username and self.password:
