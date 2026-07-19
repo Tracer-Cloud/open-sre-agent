@@ -303,6 +303,8 @@ class JsonlSessionStorage:
                     "ended_at": _now(),
                 },
             )
+            # Clear cache after flush to prevent unbounded growth in long-lived processes
+            self._last_entry_id_cache.pop(session.session_id, None)
 
     def reopen_session(self, _session_id: str) -> None:
         # V2 session files are append-only; reopening just means future entries
@@ -339,11 +341,13 @@ class JsonlSessionStorage:
             }
             with path.open("a", encoding="utf-8") as fh:
                 fh.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
-            # Update cache: for leaf entries, store parent_id (not entry_id) to preserve tree topology
-            if entry_type == "leaf":
-                self._last_entry_id_cache[session_id] = parent
-            else:
-                self._last_entry_id_cache[session_id] = entry_id
+            # Update cache only when we own the parent choice (no explicit branch)
+            if parent_id is None:
+                # For leaf entries, store parent_id (not entry_id) to preserve tree topology
+                if entry_type == "leaf":
+                    self._last_entry_id_cache[session_id] = parent
+                else:
+                    self._last_entry_id_cache[session_id] = entry_id
             return entry_id
         return ""
 
