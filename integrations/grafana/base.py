@@ -409,10 +409,9 @@ class GrafanaClientBase:
         extra_headers: dict[str, str] | None = None,
         timeout: int = 10,
     ) -> dict[str, Any]:
-        """POST JSON to a Grafana/Loki API endpoint. Returns raw Response.
-        Returns raw ``Response`` (not parsed JSON) because Loki push returns
-        ``204 No Content`` while annotation returns ``200`` with JSON.
-        Callers inspect ``status_code`` and call ``.json()`` if needed.
+        """POST JSON to a Grafana/Loki API endpoint. Returns parsed JSON
+        response body if present else returns an empty dict when the server
+        responds with 204 No Content or an empty body.
         """
         headers = {**self._get_auth_headers(), **(extra_headers or {})}
         headers.setdefault("Content-Type", "application/json")
@@ -424,5 +423,7 @@ class GrafanaClientBase:
             verify=self._config.ssl_verify,
         )
         response.raise_for_status()
+        if response.status_code == 204 or not response.content.strip():
+            return {}
         data: dict[str, Any] = response.json()
         return data
