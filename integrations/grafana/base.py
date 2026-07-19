@@ -365,16 +365,11 @@ class GrafanaClientBase:
             body["dashboardUID"] = dashboard_uid
 
         try:
-            resp = self._make_post_request(url, json_body=body)
-            resp.raise_for_status()
-            data = resp.json()
+            data = self._make_post_request(url, json_body=body)
             return {"success": True, "id": data.get("id")}
         except Exception as e:
-            error_msg = str(e)
-            if hasattr(e, "response") and e.response is not None:
-                error_msg = f"Annotation creation failed: {e.response.status_code}"
-            logger.warning("[grafana] Failed to create annotation: %s", error_msg)
-            return {"success": False, "error": error_msg}
+            logger.warning("[grafana] Failed to create annotation: %s", e)
+            return {"success": False, "error": str(e)}
 
     def _get_auth_headers(self) -> dict[str, str]:
         if self.username and self.password:
@@ -408,7 +403,7 @@ class GrafanaClientBase:
         *,
         extra_headers: dict[str, str] | None = None,
         timeout: int = 10,
-    ) -> requests.Response:
+    ) -> dict[str, Any]:
         """POST JSON to a Grafana/Loki API endpoint. Returns raw Response.
         Returns raw ``Response`` (not parsed JSON) because Loki push returns
         ``204 No Content`` while annotation returns ``200`` with JSON.
@@ -416,4 +411,13 @@ class GrafanaClientBase:
         """
         headers = {**self._get_auth_headers(), **(extra_headers or {})}
         headers.setdefault("Content-Type", "application/json")
-        return requests.post(url, json=json_body, headers=headers, timeout=timeout)
+        response = requests.post(
+            url,
+            headers=headers,
+            json=json_body,
+            timeout=timeout,
+            verify=self._config.ssl_verify,
+        )
+        response.raise_for_status()
+        data: dict[str, Any] = response.json()
+        return data
