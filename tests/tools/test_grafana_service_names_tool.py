@@ -67,3 +67,15 @@ def test_run_http_error_reports_unavailable_not_empty() -> None:
     assert result["available"] is False
     assert "500" in result["error"]
     assert result["service_names"] == []
+
+
+def test_run_connection_error_reports_unavailable() -> None:
+    # A transport error carries no response; the message falls back to the type.
+    mock_client = MagicMock()
+    mock_client.is_configured = True
+    mock_client.query_loki_label_values.side_effect = requests.ConnectionError("dns failure")
+    with patch("integrations.grafana.tools._resolve_grafana_client", return_value=mock_client):
+        result = query_grafana_service_names(grafana_endpoint="http://grafana")
+    assert result["available"] is False
+    assert "ConnectionError" in result["error"]
+    assert result["service_names"] == []

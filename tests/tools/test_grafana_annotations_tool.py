@@ -27,6 +27,18 @@ def test_run_http_error_reports_unavailable_not_empty() -> None:
     assert result["annotations"] == []
 
 
+def test_run_connection_error_reports_unavailable() -> None:
+    # A transport error carries no response; the message falls back to the type.
+    mock_client = MagicMock()
+    mock_client.is_configured = True
+    mock_client.query_annotations.side_effect = requests.ConnectionError("dns failure")
+    with patch("integrations.grafana.tools._resolve_grafana_client", return_value=mock_client):
+        result = query_grafana_annotations(grafana_endpoint="http://grafana")
+    assert result["available"] is False
+    assert "ConnectionError" in result["error"]
+    assert result["annotations"] == []
+
+
 class TestGrafanaAnnotationsToolContract(BaseToolContract):
     def get_tool_under_test(self):
         return query_grafana_annotations.__opensre_registered_tool__

@@ -52,6 +52,15 @@ class TestQueryAlertRulesErrors:
         with patch("integrations.grafana.base.requests.get", return_value=_ok_response({})):
             assert _client().query_alert_rules() == []
 
+    def test_malformed_shape_raises_valueerror(self) -> None:
+        # A 200 body of the wrong type (list, not object) must raise ValueError —
+        # the type the tool wrapper catches — not AttributeError from .items().
+        with (
+            patch("integrations.grafana.base.requests.get", return_value=_ok_response([1, 2])),
+            pytest.raises(ValueError),
+        ):
+            _client().query_alert_rules()
+
 
 class TestQueryAnnotationsErrors:
     def test_http_error_propagates(self) -> None:
@@ -64,6 +73,15 @@ class TestQueryAnnotationsErrors:
     def test_empty_response_still_returns_empty(self) -> None:
         with patch("integrations.grafana.base.requests.get", return_value=_ok_response([])):
             assert _client().query_annotations(from_ts=0, to_ts=1) == []
+
+    def test_malformed_shape_raises_valueerror(self) -> None:
+        # A dict body (annotations API returns an array) must raise ValueError, not
+        # silently yield [] by iterating dict keys — that would be a false negative.
+        with (
+            patch("integrations.grafana.base.requests.get", return_value=_ok_response({"a": 1})),
+            pytest.raises(ValueError),
+        ):
+            _client().query_annotations(from_ts=0, to_ts=1)
 
 
 class TestQueryLokiLabelValuesErrors:
@@ -82,6 +100,19 @@ class TestQueryLokiLabelValuesErrors:
             return_value=_ok_response({"data": []}),
         ):
             assert client.query_loki_label_values("service_name") == []
+
+    def test_malformed_shape_raises_valueerror(self) -> None:
+        # A non-object body (or a non-list "data") must raise ValueError so the
+        # tool wrapper reports unavailable instead of raising AttributeError.
+        client = _client(loki_datasource_uid="loki-uid")
+        with (
+            patch(
+                "integrations.grafana.base.requests.get",
+                return_value=_ok_response(["not", "a", "dict"]),
+            ),
+            pytest.raises(ValueError),
+        ):
+            client.query_loki_label_values("service_name")
 
 
 class TestDiscoverDatasourceUidsStaysBestEffort:

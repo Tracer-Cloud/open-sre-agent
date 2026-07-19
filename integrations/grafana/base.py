@@ -263,11 +263,13 @@ class GrafanaClientBase:
 
             logger.info("[grafana] Discovered datasource UIDs: %s", result)
             return result
-        except (requests.RequestException, ValueError) as e:
+        except (requests.RequestException, ValueError, TypeError, AttributeError) as e:
             # Best-effort bootstrap: datasource discovery runs while the client is
             # being constructed (see integrations/grafana/client.py). Raising here
             # would break client creation even when the caller passed explicit
             # datasource UIDs, so a failed discovery degrades to "none found".
+            # TypeError/AttributeError are included so a shape-changed body (e.g.
+            # a non-list payload) also degrades instead of breaking construction.
             # The query methods below no longer swallow — they surface failures so
             # the agent can tell an API error apart from an empty result (#2944).
             logger.warning("[grafana] Failed to discover datasource UIDs: %s", e)
@@ -287,7 +289,15 @@ class GrafanaClientBase:
             f"/loki/api/v1/label/{label}/values",
         )
         data = self._make_request(url)
-        values: list[str] = data.get("data", [])
+        if not isinstance(data, dict):
+            raise ValueError(
+                f"Grafana label-values response was {type(data).__name__}, expected object"
+            )
+        values = data.get("data", [])
+        if not isinstance(values, list):
+            raise ValueError(
+                f"Grafana label-values 'data' was {type(values).__name__}, expected array"
+            )
         return values
 
     def query_alert_rules(self, folder: str | None = None) -> list[dict[str, Any]]:
@@ -306,6 +316,10 @@ class GrafanaClientBase:
         )
         response.raise_for_status()
         data = response.json()
+        if not isinstance(data, dict):
+            raise ValueError(
+                f"Grafana alert-rules response was {type(data).__name__}, expected object"
+            )
 
         rules: list[dict[str, Any]] = []
         for folder_name, groups in data.items():
@@ -362,6 +376,10 @@ class GrafanaClientBase:
         )
         response.raise_for_status()
         data = response.json()
+        if not isinstance(data, list):
+            raise ValueError(
+                f"Grafana annotations response was {type(data).__name__}, expected array"
+            )
         return [_map_annotation(item) for item in data if isinstance(item, dict)]
 
     def _get_auth_headers(self) -> dict[str, str]:
