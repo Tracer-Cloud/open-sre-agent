@@ -50,9 +50,6 @@ class MutableAgentState:
         self._messages.append(("assistant", assistant_message))
         self._trim_messages()
 
-    def record_failure(self, user_message: str, error_text: str) -> None:
-        self.record_turn(user_message, error_text)
-
     def reset_observation(self) -> None:
         self._last_observation = None
 

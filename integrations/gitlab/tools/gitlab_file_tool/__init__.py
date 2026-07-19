@@ -7,6 +7,7 @@ from typing import Any
 
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.code_host_unavailable import code_host_unavailable_payload
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.gitlab import (
     get_gitlab_file,
 )
@@ -80,24 +81,20 @@ def get_gitlab_file_contents(
         file_path=file_path,
     )
     if result.get("size", 0) > 50_000:
-        return {
-            "source": "gitlab",
-            "available": False,
-            "error": f"File too large to read ({result['size']} bytes)",
-            "file": {},
-        }
+        return tool_unavailable(
+            "gitlab", f"File too large to read ({result['size']} bytes)", file={}
+        )
 
     content_raw = result.get("content", "")
     if content_raw:
         try:
             content_decoded = base64.b64decode(content_raw).decode("utf-8")
         except UnicodeDecodeError:
-            return {
-                "source": "gitlab",
-                "available": False,
-                "error": f"File '{file_path}' is not UTF-8 text (binary file); cannot display contents.",
-                "file": {},
-            }
+            return tool_unavailable(
+                "gitlab",
+                f"File '{file_path}' is not UTF-8 text (binary file); cannot display contents.",
+                file={},
+            )
     else:
         content_decoded = ""
 

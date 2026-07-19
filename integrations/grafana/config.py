@@ -21,11 +21,20 @@ class GrafanaAccountConfig(StrictConfigModel):
     description: str = ""
     username: str = ""
     password: str = ""
+    verify_ssl: bool = True
+    ca_bundle: str = ""
 
     @field_validator("instance_url", mode="before")
     @classmethod
     def _normalize_instance_url(cls, value: object) -> str:
         return str(value or "").strip().rstrip("/")
+
+    @property
+    def ssl_verify(self) -> bool | str:
+        """Value to pass as ``requests``' ``verify=`` kwarg."""
+        if self.ca_bundle:
+            return self.ca_bundle
+        return self.verify_ssl
 
     @property
     def uses_local_anonymous_auth(self) -> bool:

@@ -139,6 +139,16 @@ def test_system_prompt_routes_slack_teammate_reads_to_action_tools() -> None:
     assert "never slack_read_messages" in prompt
 
 
+def test_system_prompt_routes_github_cli_to_action_tools() -> None:
+    prompt = _SYSTEM_PROMPT_BASE.lower()
+    assert "github cli requests are action tools" in prompt
+    assert "not handoffs" in prompt
+    assert "call github_cli directly" in prompt
+    assert "from this info create an issue on github" in prompt
+    assert "github_cli is action-only" in prompt
+    assert "exception: github issue/pr/repo" in prompt
+
+
 def test_system_prompt_keeps_bare_alert_blob_as_handoff() -> None:
     prompt = _SYSTEM_PROMPT_BASE.lower()
     assert "a bare pasted alert blob with no instruction remains assistant_handoff" in prompt
@@ -202,6 +212,18 @@ def test_skills_loader_bundles_architecture_audit_skill() -> None:
     assert "architecture_save_observations" in block
     assert "shell_run" in block
     assert "Never end the turn with shell_run" in block
+
+
+def test_skills_loader_bundles_github_cli_skill() -> None:
+    cached_load_skills_block.cache_clear()
+    skill = skills_dir() / "github_cli" / "SKILL.md"
+    assert skill.is_file()
+
+    block = load_skills_block()
+    assert "GITHUB CLI SKILL" in block
+    assert "do NOT assistant_handoff" in block
+    assert "github_cli(args=" in block
+    assert "create an issue from that" in block
     assert "quiet=true" in block
     assert "four separate shell_run" in block or "Four separate" in block or "IMPORT pass" in block
     assert "IMPORT pass" in block
@@ -291,10 +313,17 @@ def test_system_prompt_requires_local_llama_handoff_tag() -> None:
 
 
 class _FakePrompts:
+    def surface(self) -> str:
+        return "interactive_shell"
+
     def cli_reference(self) -> str:
         return "cli reference"
 
     def agents_md(self) -> str:
+        return ""
+
+    def docs(self, query: str) -> str:
+        _ = query
         return ""
 
     def investigation_flow(self) -> str:
@@ -339,3 +368,47 @@ def test_local_llama_handoff_injects_setup_guidance_into_assistant_prompt() -> N
     assert "opensre onboard local_llm" in prompt
     assert "/onboard local_llm" in prompt
     assert "/model set ollama" in prompt
+
+
+class _FakePromptsWithDocs(_FakePrompts):
+    """Provider that echoes the retrieval query so the wiring can be asserted."""
+
+    def __init__(self) -> None:
+        self.docs_query: str | None = None
+
+    def docs(self, query: str) -> str:
+        self.docs_query = query
+        return "=== docs/messaging/telegram.mdx ===\nCreate a bot with @BotFather"
+
+
+def test_docs_grounding_reaches_assistant_prompt() -> None:
+    """The user's question is retrieved against docs and injected into the prompt.
+
+    Locks the wiring the harness-move refactor severed: a procedural setup
+    question must carry its documentation page into the LLM grounding so the
+    assistant answers with the out-of-tool steps instead of improvising.
+    """
+    message = "how do I set up the telegram bot?"
+    turn_snapshot = TurnSnapshot(
+        text=message,
+        conversation_messages=(),
+        configured_integrations=(),
+        configured_integrations_known=True,
+        last_state=None,
+        last_synthetic_observation_path=None,
+        reasoning_effort=None,
+    )
+    prompts = _FakePromptsWithDocs()
+
+    prompt = build_cli_agent_prompt_from_provider(
+        message=message,
+        prompts=prompts,
+        tool_observation=None,
+        tool_observation_on_screen=True,
+        turn_snapshot=turn_snapshot,
+    )
+
+    assert prompts.docs_query == message
+    assert "--- Documentation reference (docs/) ---" in prompt
+    assert "docs/messaging/telegram.mdx" in prompt
+    assert "@BotFather" in prompt

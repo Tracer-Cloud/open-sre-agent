@@ -84,8 +84,8 @@ def test_generic_alert_matches_relevant_integration_by_content() -> None:
     context = format_alert_context(
         {
             "alert_name": "High error rate in payments ETL",
+            "raw_alert": {},
             "alert_source": "generic",
-            "pipeline_name": "payments_etl",
             "severity": "critical",
             "message": "payments_etl is failing with repeated database connection errors",
             "resolved_integrations": {
@@ -101,8 +101,8 @@ def test_generic_alert_excludes_unrelated_integrations() -> None:
     context = format_alert_context(
         {
             "alert_name": "High error rate in payments ETL",
+            "raw_alert": {},
             "alert_source": "generic",
-            "pipeline_name": "payments_etl",
             "severity": "critical",
             "message": "payments_etl is failing with repeated database connection errors",
             "resolved_integrations": {
@@ -122,8 +122,8 @@ def test_generic_alert_without_signal_does_not_fan_out() -> None:
     context = format_alert_context(
         {
             "alert_name": "Something went wrong",
+            "raw_alert": {},
             "alert_source": "generic",
-            "pipeline_name": "widgets",
             "severity": "critical",
             "message": "an unexpected problem occurred",
             "resolved_integrations": {
@@ -143,12 +143,11 @@ def test_generic_alert_without_signal_does_not_fan_out() -> None:
 def test_generic_alert_honors_context_sources_annotation() -> None:
     context = format_alert_context(
         {
-            "alert_name": "Something went wrong",
             "alert_source": "generic",
-            "pipeline_name": "widgets",
             "severity": "critical",
             "message": "an unexpected problem occurred",
             "raw_alert": {
+                "alert_name": "Something went wrong",
                 "commonAnnotations": {"context_sources": "datadog"},
             },
             "resolved_integrations": {
@@ -165,8 +164,8 @@ def test_alert_context_uses_planned_actions_when_present() -> None:
     context = format_alert_context(
         {
             "alert_name": "High error rate",
+            "raw_alert": {},
             "alert_source": "generic",
-            "pipeline_name": "payments",
             "severity": "critical",
             "planned_actions": ["get_sre_guidance"],
             "plan_rationale": "Knowledge guidance is the selected fallback.",
@@ -186,8 +185,8 @@ def test_alert_context_uses_planned_actions_when_present() -> None:
 def test_relevant_sources_matches_db_symptom_and_excludes_unrelated() -> None:
     state = {
         "alert_name": "High error rate in payments ETL",
+        "raw_alert": {},
         "alert_source": "generic",
-        "pipeline_name": "payments_etl",
         "message": "payments_etl is failing with repeated database connection errors",
     }
     tools_by_source = {"postgresql": [], "vercel": [], "knowledge": []}
@@ -200,8 +199,8 @@ def test_relevant_sources_matches_db_symptom_and_excludes_unrelated() -> None:
 def test_relevant_sources_empty_when_no_content_signal() -> None:
     state = {
         "alert_name": "Something is wrong",
+        "raw_alert": {},
         "alert_source": "generic",
-        "pipeline_name": "mystery",
         "message": "an unexplained problem occurred",
     }
     tools_by_source = {"postgresql": [], "vercel": []}
@@ -211,11 +210,12 @@ def test_relevant_sources_empty_when_no_content_signal() -> None:
 
 def test_relevant_sources_honors_explicit_context_sources() -> None:
     state = {
-        "alert_name": "Something is wrong",
         "alert_source": "generic",
-        "pipeline_name": "mystery",
         "message": "an unexplained problem occurred",
-        "raw_alert": {"commonAnnotations": {"context_sources": "vercel"}},
+        "raw_alert": {
+            "alert_name": "Something is wrong",
+            "commonAnnotations": {"context_sources": "vercel"},
+        },
     }
     tools_by_source = {"postgresql": [], "vercel": []}
 
@@ -227,8 +227,8 @@ def test_alert_context_includes_incident_window_since_until_keys() -> None:
     context = format_alert_context(
         {
             "alert_name": "Kubernetes job failed",
+            "raw_alert": {},
             "alert_source": "generic",
-            "pipeline_name": "kubernetes_etl_pipeline",
             "severity": "critical",
             "incident_window": {
                 "since": "2026-02-18T22:10:00Z",
@@ -246,8 +246,8 @@ def test_alert_context_accepts_legacy_incident_window_start_end_keys() -> None:
     context = format_alert_context(
         {
             "alert_name": "Legacy window shape",
+            "raw_alert": {},
             "alert_source": "generic",
-            "pipeline_name": "widgets",
             "severity": "warning",
             "incident_window": {
                 "start": "2026-01-01T00:00:00Z",
@@ -263,8 +263,8 @@ def test_alert_context_points_to_primary_source_without_duplicating_tool_metadat
     context = format_alert_context(
         {
             "alert_name": "RDS latency spike",
+            "raw_alert": {},
             "alert_source": "rds",
-            "pipeline_name": "orders",
             "severity": "critical",
             "resolved_integrations": {
                 "rds": {"db_instance_identifier": "orders-db", "region": "us-east-1"},

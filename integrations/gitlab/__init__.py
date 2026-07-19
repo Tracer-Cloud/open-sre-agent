@@ -11,6 +11,7 @@ from urllib.parse import quote, urlsplit
 import httpx
 from pydantic import Field, field_validator
 
+from config.llm_credentials import resolve_env_credential
 from config.strict_config import StrictConfigModel
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
 
@@ -69,7 +70,7 @@ def build_gitlab_config(raw: dict[str, Any] | None) -> GitlabConfig:
 
 def gitlab_config_from_env() -> GitlabConfig | None:
     """Load a Gitlab config from env vars."""
-    auth_token = os.getenv("GITLAB_ACCESS_TOKEN", "").strip()
+    auth_token = resolve_env_credential("GITLAB_ACCESS_TOKEN")
     if not auth_token:
         return None
     return build_gitlab_config(

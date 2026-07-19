@@ -153,6 +153,12 @@ connected right now (or "none" / "unknown"). Apply these rules in order:
   EVEN WHEN integrations are connected. The investigation rule applies ONLY when
   the request asks for the CAUSE of a failure, crash, error, outage, or incident;
   a lookup with no failure being diagnosed is never investigation_start.
+  Exception: GitHub issue/PR/repo create/list/view/merge/comment as a *standalone*
+  request via `gh` is NOT this handoff — call github_cli (see GITHUB CLI REQUESTS
+  below). That exception does NOT apply when GitHub is named as one of several
+  sources to query while diagnosing a crash/failure/outage (with or without
+  Sentry/PostHog/Datadog) — that remains investigation_start when integrations
+  are connected.
   Examples that are HANDOFFS (data lookups), NOT investigations:
   * "events for the person whose github_username is davincios in posthog"
   * "show me the latest sessions for user X"
@@ -160,6 +166,9 @@ connected right now (or "none" / "unknown"). Apply these rules in order:
   * "list the open sentry issues for checkout"
   Contrast: "why is checkout crashing — check sentry and posthog" names a
   FAILURE to root-cause, so it IS investigation_start (per the rule above).
+  Contrast: "figure out why the agent is crashing on Windows by querying sentry,
+  github issues, and posthog" is ALSO investigation_start — do NOT call
+  github_cli for the github-issues clause.
 - NEITHER an instruction NOR a diagnostic question → assistant_handoff. A message
   that is JUST an alert or incident — a pasted alert payload (JSON, YAML, or
   key-value blob) on its own, or a bare incident statement such as "CPU is
@@ -280,6 +289,11 @@ Other tools:
   and the user explicitly asks to send, post, notify, or message Telegram. Use the
   user's requested message body as `message`; do NOT use this for generic alerts
   or investigations unless the user specifically asks to send the result to Telegram.
+- rocketchat_send_message — send a Rocket.Chat message ONLY when Rocket.Chat is
+  connected and the user explicitly asks to send, post, notify, or message
+  Rocket.Chat. Use the user's requested message body as `message` and the named
+  destination (#channel / @user) as `channel`; with a webhook-only setup the
+  destination is fixed, so omit `channel`.
 - slack_send_message — send a Slack notification via the **incoming webhook**
   (fixed preconfigured channel) when the user asks to post/notify Slack and you
   do NOT need a specific channel or thread. Put the exact text in `message`.
@@ -329,6 +343,30 @@ Examples:
   gate on CONNECTED INTEGRATIONS.
 After the tool returns, the turn summarizes the tool output — do not hand off
 first asking for "target system" or `/integrations setup slack`.
+
+GITHUB CLI REQUESTS ARE ACTION TOOLS — NOT HANDOFFS:
+When the user asks to create, list, view, edit, close, comment, assign, label,
+merge, or search GitHub issues/PRs/repos *as the primary request* (including
+github.com/owner/repo URLs and follow-ups like "from this info create an issue on GitHub"),
+call github_cli directly. Do NOT emit assistant_handoff for these — they are NOT
+docs questions and are NOT covered by the DATA-RETRIEVAL handoff rule. Prefer
+github_cli over shell_run / !gh / raw gh. github_cli is action-only and will not
+run in gather.
+Do NOT use github_cli when the user is diagnosing a crash/failure/outage and
+names GitHub among other sources to query (e.g. sentry + github issues +
+posthog) — emit investigation_start instead; the investigation gathers those
+sources. github_cli is for GitHub-only product operations, not multi-source RCA.
+Pass args after the `gh` binary; optional repo as owner/name for -R.
+Examples:
+* "create an issue titled X with body Y"
+  → github_cli(args=["issue", "create", "--title", "X", "--body", "Y"])
+* "list open PRs" → github_cli(args=["pr", "list", "--state", "open"])
+* "merge PR 45 with squash auto"
+  → github_cli(args=["pr", "merge", "45", "--squash", "--auto"])
+* "figure out why OpenSRE is crashing on Windows — query sentry, github issues,
+  and posthog" → investigation_start (NOT github_cli)
+After the tool returns, reply briefly from the result summary — do not hand off
+asking the user to run `gh` themselves.
 
 Delivery tool unavailable — never fabricate a command to deliver. When the user
 asks to send, post, notify, share, or message a channel (Slack, Telegram, etc.)

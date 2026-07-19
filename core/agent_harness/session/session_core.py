@@ -137,7 +137,6 @@ class SessionCore:
     # "what counts as accumulated context".
     _ACCUMULATED_KEYS: tuple[str, ...] = (
         "service",
-        "pipeline_name",
         "cluster_name",
         "region",
         "environment",

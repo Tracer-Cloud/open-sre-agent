@@ -36,7 +36,7 @@ def run_investigation_cli(
     *,
     raw_alert: dict[str, Any],
     opensre_evaluate: bool = False,
-    investigation_metadata: tuple[str, str, str] | None = None,
+    investigation_metadata: tuple[str, str] | None = None,
 ) -> dict[str, Any]:
     """Run the investigation and return the CLI-facing JSON payload.
 
@@ -45,8 +45,7 @@ def run_investigation_cli(
     structured ``OpenSREError`` messages. The run itself and the result shaping live in
     ``core`` so non-CLI surfaces can reuse them without importing ``cli``.
 
-    ``investigation_metadata`` is an optional ``(alert_name, pipeline_name, severity)``
-    tuple for initial state (e.g. HTTP request overrides) without mutating ``raw_alert``.
+    ``investigation_metadata`` is an optional ``(alert_name, severity)`` tuple.
     """
     check_llm_settings()
     from tools.investigation.capability import run_investigation_payload

@@ -55,7 +55,6 @@ def test_investigate_runs_pipeline_and_returns_report(
         json={
             "raw_alert": {"message": "Orders pipeline failed with timeout."},
             "alert_name": "etl-daily-orders-failure",
-            "pipeline_name": "etl_daily_orders",
             "severity": "critical",
         },
     )
@@ -68,7 +67,6 @@ def test_investigate_runs_pipeline_and_returns_report(
     assert captured["raw_alert"] == {"message": "Orders pipeline failed with timeout."}
     assert captured["investigation_metadata"] == (
         "etl-daily-orders-failure",
-        "etl_daily_orders",
         "critical",
     )
 
@@ -92,7 +90,7 @@ def test_investigate_resolves_metadata_from_raw_alert_when_overrides_missing(
     )
 
     assert resp.status_code == 200
-    assert captured["investigation_metadata"] == ("High CPU", "unknown", "warning")
+    assert captured["investigation_metadata"] == ("High CPU", "warning")
 
 
 def test_investigate_missing_raw_alert_returns_422(client: TestClient) -> None:

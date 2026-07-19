@@ -138,6 +138,7 @@ def _cmd_template(session: Session, console: Console, args: list[str]) -> bool:
         )
         return True
 
+    console.print(f"[{DIM}]template:[/] {escape(template_name)}")
     print_repl_json(console, json.dumps(payload, indent=2))
     return True
 

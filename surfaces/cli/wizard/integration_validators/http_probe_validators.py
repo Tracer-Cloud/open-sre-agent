@@ -5,6 +5,8 @@ from __future__ import annotations
 import httpx
 
 from integrations.config_models import SlackWebhookConfig
+from platform.common.url_validation import validate_https_or_loopback_http_url
+from platform.notifications.redaction import redact_token
 
 from .shared import IntegrationHealthResult
 
@@ -118,6 +120,55 @@ def validate_jira_integration(
         return IntegrationHealthResult(ok=False, detail=f"Jira validation failed: {err}")
 
 
+def validate_servicenow_integration(
+    *, instance_url: str, username: str, password: str
+) -> IntegrationHealthResult:
+    """Validate ServiceNow connectivity with a minimal authenticated table read."""
+    # Refuse plaintext HTTP to non-loopback hosts before any request is made —
+    # the probe sends the password as HTTP Basic auth.
+    try:
+        base_url = validate_https_or_loopback_http_url(
+            instance_url.strip().rstrip("/"),
+            service_name="ServiceNow",
+            field_name="instance URL",
+        )
+    except ValueError as err:
+        return IntegrationHealthResult(ok=False, detail=str(err))
+    try:
+        resp = httpx.get(
+            f"{base_url}/api/now/table/sys_user",
+            params={"sysparm_limit": 1, "sysparm_fields": "user_name"},
+            auth=(username, password),
+            headers={"Accept": "application/json"},
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            return IntegrationHealthResult(
+                ok=True, detail=f"ServiceNow connected as {username} at {base_url}."
+            )
+        if resp.status_code == 401:
+            return IntegrationHealthResult(
+                ok=False, detail="ServiceNow credentials invalid. Check username and password."
+            )
+        if resp.status_code == 403:
+            return IntegrationHealthResult(
+                ok=False,
+                detail=(
+                    "ServiceNow authenticated but the user cannot read the sys_user table. "
+                    "Grant a role with table read access (e.g. itil)."
+                ),
+            )
+        if resp.status_code == 404:
+            return IntegrationHealthResult(
+                ok=False, detail="ServiceNow instance URL not found. Check the URL."
+            )
+        return IntegrationHealthResult(
+            ok=False, detail=f"ServiceNow returned unexpected status {resp.status_code}."
+        )
+    except Exception as err:
+        return IntegrationHealthResult(ok=False, detail=f"ServiceNow validation failed: {err}")
+
+
 def validate_discord_bot(*, bot_token: str) -> IntegrationHealthResult:
     """Validate a Discord bot token by calling the /users/@me endpoint."""
     try:
@@ -139,6 +190,69 @@ def validate_discord_bot(*, bot_token: str) -> IntegrationHealthResult:
     )
 
 
+def validate_rocketchat_webhook(*, webhook_url: str) -> IntegrationHealthResult:
+    """Validate a Rocket.Chat incoming webhook with a non-posting reachability probe."""
+    url = webhook_url.strip()
+    if not url:
+        return IntegrationHealthResult(ok=False, detail="Missing webhook_url.")
+
+    try:
+        resp = httpx.get(url, timeout=10, follow_redirects=False)
+    except httpx.RequestError as err:
+        return IntegrationHealthResult(
+            ok=False, detail=f"Rocket.Chat webhook validation failed: {err}"
+        )
+
+    if resp.status_code == 404:
+        return IntegrationHealthResult(
+            ok=False, detail="Rocket.Chat webhook returned 404; the URL looks invalid."
+        )
+    if resp.status_code in {200, 400, 403, 405}:
+        return IntegrationHealthResult(
+            ok=True,
+            detail=f"Rocket.Chat webhook endpoint reachable (HTTP {resp.status_code}) "
+            "using a non-posting probe.",
+        )
+    return IntegrationHealthResult(
+        ok=False,
+        detail=f"Rocket.Chat webhook probe returned unexpected HTTP {resp.status_code}.",
+    )
+
+
+def validate_rocketchat(
+    *, server_url: str, auth_token: str, user_id: str
+) -> IntegrationHealthResult:
+    """Validate Rocket.Chat credentials by calling the /api/v1/me endpoint."""
+    base = server_url.strip().rstrip("/")
+    if not base:
+        return IntegrationHealthResult(ok=False, detail="Missing server_url.")
+    if not auth_token.strip() or not user_id.strip():
+        return IntegrationHealthResult(ok=False, detail="Missing auth_token or user_id.")
+
+    try:
+        resp = httpx.get(
+            f"{base}/api/v1/me",
+            headers={"X-Auth-Token": auth_token, "X-User-Id": user_id},
+            timeout=10,
+        )
+    except httpx.RequestError as err:
+        return IntegrationHealthResult(ok=False, detail=f"Rocket.Chat API unreachable: {err}")
+
+    if resp.status_code == 200:
+        try:
+            username = resp.json().get("username", "unknown")
+        except Exception:
+            username = "unknown"
+        return IntegrationHealthResult(ok=True, detail=f"Rocket.Chat authenticated as @{username}.")
+    if resp.status_code == 401:
+        return IntegrationHealthResult(
+            ok=False, detail="Rocket.Chat auth token or user ID is invalid or expired."
+        )
+    return IntegrationHealthResult(
+        ok=False, detail=f"Rocket.Chat API returned unexpected HTTP {resp.status_code}."
+    )
+
+
 def validate_telegram_bot(*, bot_token: str) -> IntegrationHealthResult:
     """Validate a Telegram bot token by calling the Bot API getMe endpoint."""
     token = bot_token.strip()
@@ -148,16 +262,21 @@ def validate_telegram_bot(*, bot_token: str) -> IntegrationHealthResult:
     try:
         resp = httpx.get(f"https://api.telegram.org/bot{token}/getMe", timeout=10)
     except httpx.RequestError as err:
-        return IntegrationHealthResult(ok=False, detail=f"Telegram API unreachable: {err}")
+        # httpx embeds the request URL — which contains the bot token — in
+        # transport error messages, so redact before surfacing the detail.
+        safe_error = redact_token(str(err), token)
+        return IntegrationHealthResult(ok=False, detail=f"Telegram API unreachable: {safe_error}")
     except Exception as err:
-        return IntegrationHealthResult(ok=False, detail=f"Telegram API check failed: {err}")
+        safe_error = redact_token(str(err), token)
+        return IntegrationHealthResult(ok=False, detail=f"Telegram API check failed: {safe_error}")
 
     try:
         payload = resp.json()
     except Exception as err:
+        safe_error = redact_token(str(err), token)
         return IntegrationHealthResult(
             ok=False,
-            detail=f"Telegram API check failed: HTTP {resp.status_code} ({err}).",
+            detail=f"Telegram API check failed: HTTP {resp.status_code} ({safe_error}).",
         )
 
     if not payload.get("ok"):

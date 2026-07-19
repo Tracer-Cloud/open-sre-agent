@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.tool_framework.base import BaseTool
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.config_models import HoneycombIntegrationConfig
 from integrations.honeycomb.client import HoneycombClient
 
@@ -86,12 +87,9 @@ class HoneycombTracesTool(BaseTool):
         )
         client = HoneycombClient(config)
         if not client.is_configured:
-            return {
-                "source": "honeycomb",
-                "available": False,
-                "error": "Honeycomb integration is not configured.",
-                "traces": [],
-            }
+            return tool_unavailable(
+                "honeycomb", "Honeycomb integration is not configured.", traces=[]
+            )
 
         result = client.query_traces(
             service_name=service_name,
@@ -100,12 +98,7 @@ class HoneycombTracesTool(BaseTool):
             limit=limit,
         )
         if not result.get("success"):
-            return {
-                "source": "honeycomb",
-                "available": False,
-                "error": result.get("error", "Unknown error"),
-                "traces": [],
-            }
+            return tool_unavailable("honeycomb", result.get("error", "Unknown error"), traces=[])
 
         traces = result.get("results", [])
         return {

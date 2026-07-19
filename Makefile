@@ -292,21 +292,6 @@ deploy:
 destroy:
 	$(PYTHON) -m platform.deployment.ecr_deploy.lifecycle destroy
 
-# Fargate backend (web API + Slack gateway) via Terraform — plan by default;
-# apply/destroy prompt for confirmation inside Terraform.
-TERRAFORM_DIR := infra/terraform
-
-deploy-fargate:
-	terraform -chdir=$(TERRAFORM_DIR) init -input=false
-	terraform -chdir=$(TERRAFORM_DIR) plan
-
-deploy-fargate-apply:
-	terraform -chdir=$(TERRAFORM_DIR) init -input=false
-	terraform -chdir=$(TERRAFORM_DIR) apply
-
-destroy-fargate:
-	terraform -chdir=$(TERRAFORM_DIR) destroy
-
 test-deploy:
 	$(PYTHON) -m pytest tests/deployment/ec2/ -v -s
 

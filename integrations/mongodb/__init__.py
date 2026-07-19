@@ -15,6 +15,7 @@ from typing import Any
 from pydantic import Field, field_validator
 
 from config.strict_config import StrictConfigModel
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
 
 logger = logging.getLogger(__name__)
@@ -167,7 +168,7 @@ def get_server_status(config: MongoDBConfig) -> dict[str, Any]:
     Read-only: uses the ``serverStatus`` admin command.
     """
     if not config.is_configured:
-        return {"source": "mongodb", "available": False, "error": "Not configured."}
+        return tool_unavailable("mongodb", "Not configured.")
 
     try:
         client = _get_client(config)
@@ -194,18 +195,17 @@ def get_server_status(config: MongoDBConfig) -> dict[str, Any]:
             client.close()
     except Exception as err:
         if getattr(err, "code", None) == 13:
-            return {
-                "source": "mongodb",
-                "available": False,
-                "error": "MongoDB user lacks admin privileges for serverStatus. Grant the 'clusterMonitor' role.",
-            }
+            return tool_unavailable(
+                "mongodb",
+                "MongoDB user lacks admin privileges for serverStatus. Grant the 'clusterMonitor' role.",
+            )
         report_validation_failure(
             err,
             logger=logger,
             integration="mongodb",
             method="get_server_status",
         )
-        return {"source": "mongodb", "available": False, "error": str(err)}
+        return tool_unavailable("mongodb", str(err))
 
 
 def get_current_ops(
@@ -218,7 +218,7 @@ def get_current_ops(
     Results are capped at ``config.max_results``.
     """
     if not config.is_configured:
-        return {"source": "mongodb", "available": False, "error": "Not configured."}
+        return tool_unavailable("mongodb", "Not configured.")
 
     threshold_microsecs = max(0, threshold_ms * 1000)
     try:
@@ -255,18 +255,17 @@ def get_current_ops(
             client.close()
     except Exception as err:
         if getattr(err, "code", None) == 13:
-            return {
-                "source": "mongodb",
-                "available": False,
-                "error": "MongoDB user lacks admin privileges for currentOp. Grant the 'clusterMonitor' role.",
-            }
+            return tool_unavailable(
+                "mongodb",
+                "MongoDB user lacks admin privileges for currentOp. Grant the 'clusterMonitor' role.",
+            )
         report_validation_failure(
             err,
             logger=logger,
             integration="mongodb",
             method="get_current_ops",
         )
-        return {"source": "mongodb", "available": False, "error": str(err)}
+        return tool_unavailable("mongodb", str(err))
 
 
 def get_rs_status(config: MongoDBConfig) -> dict[str, Any]:
@@ -276,7 +275,7 @@ def get_rs_status(config: MongoDBConfig) -> dict[str, Any]:
     Returns empty members list if the server is not part of a replica set.
     """
     if not config.is_configured:
-        return {"source": "mongodb", "available": False, "error": "Not configured."}
+        return tool_unavailable("mongodb", "Not configured.")
 
     try:
         client = _get_client(config)
@@ -317,18 +316,17 @@ def get_rs_status(config: MongoDBConfig) -> dict[str, Any]:
                 "note": "Server is not part of a replica set.",
             }
         if getattr(err, "code", None) == 13:
-            return {
-                "source": "mongodb",
-                "available": False,
-                "error": "MongoDB user lacks admin privileges for replSetGetStatus. Grant the 'clusterMonitor' role.",
-            }
+            return tool_unavailable(
+                "mongodb",
+                "MongoDB user lacks admin privileges for replSetGetStatus. Grant the 'clusterMonitor' role.",
+            )
         report_validation_failure(
             err,
             logger=logger,
             integration="mongodb",
             method="get_rs_status",
         )
-        return {"source": "mongodb", "available": False, "error": error_str}
+        return tool_unavailable("mongodb", error_str)
 
 
 def get_profiler_data(
@@ -342,13 +340,9 @@ def get_profiler_data(
     is not enabled (level 0).  Results capped at ``config.max_results``.
     """
     if not config.is_configured:
-        return {"source": "mongodb", "available": False, "error": "Not configured."}
+        return tool_unavailable("mongodb", "Not configured.")
     if not config.database:
-        return {
-            "source": "mongodb",
-            "available": False,
-            "error": "Database name is required for profiler data.",
-        }
+        return tool_unavailable("mongodb", "Database name is required for profiler data.")
 
     effective_limit = min(limit or config.max_results, config.max_results)
     try:
@@ -410,7 +404,7 @@ def get_profiler_data(
             integration="mongodb",
             method="get_profiler_data",
         )
-        return {"source": "mongodb", "available": False, "error": str(err)}
+        return tool_unavailable("mongodb", str(err))
 
 
 def get_collection_stats(
@@ -422,19 +416,11 @@ def get_collection_stats(
     Read-only: uses the ``collStats`` command.
     """
     if not config.is_configured:
-        return {"source": "mongodb", "available": False, "error": "Not configured."}
+        return tool_unavailable("mongodb", "Not configured.")
     if not config.database:
-        return {
-            "source": "mongodb",
-            "available": False,
-            "error": "Database name is required for collection stats.",
-        }
+        return tool_unavailable("mongodb", "Database name is required for collection stats.")
     if not collection:
-        return {
-            "source": "mongodb",
-            "available": False,
-            "error": "Collection name is required.",
-        }
+        return tool_unavailable("mongodb", "Collection name is required.")
 
     try:
         client = _get_client(config)
@@ -462,7 +448,7 @@ def get_collection_stats(
             integration="mongodb",
             method="get_collection_stats",
         )
-        return {"source": "mongodb", "available": False, "error": str(err)}
+        return tool_unavailable("mongodb", str(err))
 
 
 def classify(

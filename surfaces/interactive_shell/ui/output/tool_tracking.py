@@ -23,8 +23,7 @@ from surfaces.interactive_shell.ui.output.tool_details import (
 from surfaces.interactive_shell.ui.output.tool_details import (
     record_tool_summary as _record_tool_summary,
 )
-from surfaces.shared.tool_labels import tool_short_label, tool_source_label
-from tools.registry import resolve_tool_display_name
+from tools.registry import resolve_tool_activity_labels, resolve_tool_display_name
 
 
 def _is_repl_display(display: object) -> TypeGuard[_ReplEventLogDisplay]:
@@ -76,8 +75,7 @@ class ToolTrackingMixin:
         if self._silent:
             return
         _record_tool_summary(tool_name, self._tool_summary_counts, self._tool_summary_order)
-        source = tool_source_label(tool_name)
-        label = tool_short_label(tool_name, source)
+        source, label = resolve_tool_activity_labels(tool_name)
         current = f"{source} · {label}" if label else source
         self.update_subtext("investigation_agent", f"calling {current}...", duration=15.0)
         self.update_subtext("investigate", f"calling {current}...", duration=15.0)

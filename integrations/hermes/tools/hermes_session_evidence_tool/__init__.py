@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, cast
 
 from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.tool_availability import tool_unavailable
 
 
 def _extract_params(sources: dict[str, dict]) -> dict[str, Any]:
@@ -17,14 +18,11 @@ def _extract_params(sources: dict[str, dict]) -> dict[str, Any]:
 
 def _backend_or_error(hermes_backend: Any, tool_name: str) -> Any:
     if hermes_backend is None:
-        return {
-            "source": "hermes",
-            "available": False,
-            "error": (
-                f"{tool_name} requires a Hermes backend. Configure Hermes integration "
-                "or inject a fixture backend for synthetic/e2e runs."
-            ),
-        }
+        return tool_unavailable(
+            "hermes",
+            f"{tool_name} requires a Hermes backend. Configure Hermes integration "
+            "or inject a fixture backend for synthetic/e2e runs.",
+        )
     return hermes_backend
 
 

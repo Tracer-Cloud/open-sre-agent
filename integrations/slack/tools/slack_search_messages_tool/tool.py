@@ -6,6 +6,7 @@ from typing import Any
 
 from core.tool_framework.base import BaseTool
 from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.slack.bot_api import bot_token_configured, resolve_bot_token, search_messages
 from integrations.slack.tools.slack_read_messages_tool.constants import SOURCE
 
@@ -62,15 +63,14 @@ class SlackSearchMessagesTool(BaseTool):
     def run(self, query: str, count: int = 20, **_kwargs: Any) -> dict[str, Any]:
         target, resolution_error = resolve_bot_token()
         if target is None:
-            return {
-                "source": SOURCE,
-                "available": False,
-                "status": "failed",
-                "error": resolution_error,
-                "error_type": "configuration_error",
-                "matches": [],
-                "match_count": 0,
-            }
+            return tool_unavailable(
+                SOURCE,
+                resolution_error,
+                status="failed",
+                error_type="configuration_error",
+                matches=[],
+                match_count=0,
+            )
 
         matches, error = search_messages(target, query=query, count=count)
         if matches is None:

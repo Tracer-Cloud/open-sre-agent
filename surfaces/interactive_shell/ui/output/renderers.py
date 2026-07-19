@@ -112,14 +112,12 @@ def render_event(
 
 def render_investigation_header(
     alert_name: str,
-    pipeline_name: str,
     severity: str,
     alert_id: str | None = None,
 ) -> None:
     sev_color = ERROR if severity.lower() == "critical" else WARNING
     fields = [
         ("Alert     ", alert_name, f"bold {TEXT}"),
-        ("Pipeline  ", pipeline_name, BRAND),
         ("Severity  ", severity, f"bold {sev_color}"),
     ]
     if alert_id:

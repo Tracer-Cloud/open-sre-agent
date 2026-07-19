@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from click.testing import CliRunner
@@ -22,12 +22,24 @@ def test_gateway_requires_subcommand(runner: CliRunner) -> None:
 
 
 def test_gateway_start_foreground_runs_manager(runner: CliRunner) -> None:
-    with patch("gateway.runtime.manager.start_gateway") as mock_start:
+    with patch("surfaces.cli.gateway_entry.start_gateway") as mock_start:
         result = runner.invoke(cli, ["gateway", "start", "--foreground"])
 
     assert result.exit_code == 0
     mock_start.assert_called_once()
     assert "OpenSRE gateway" in result.output
+
+
+def test_gateway_entry_wires_slash_ports() -> None:
+    """Production entry must inject headless slash ports into GatewayManager."""
+    mock_manager = MagicMock()
+    with patch("gateway.runtime.manager.GatewayManager", return_value=mock_manager) as ctor:
+        from surfaces.cli.gateway_entry import main as entry_main
+
+        entry_main()
+
+    assert ctor.call_args.kwargs["slash_ports_factory"].__name__ == "gateway_slash_ports_factory"
+    mock_manager.start_gateway.assert_called_once_with(wait=True)
 
 
 def test_gateway_start_spawns_daemon(runner: CliRunner) -> None:

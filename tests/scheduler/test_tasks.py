@@ -229,3 +229,27 @@ class TestMessageBuilders:
 
         with pytest.raises(RuntimeError, match="Sentry morning digest failed"):
             tasks_mod.build_message(task)
+
+    def test_sentry_uptime_watch_uses_agent_runner_port(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        task = ScheduledTask(
+            id="uptime1",
+            kind=TaskKind.SENTRY_UPTIME_WATCH,
+            cron="*/5 * * * *",
+            provider=Provider.SLACK,
+            chat_id="C123",
+            params={"project_slug": "api"},
+        )
+        captured: dict[str, object] = {}
+
+        def _mock_agent_runner(payload: dict[str, object]) -> str:
+            captured.update(payload)
+            return "CRITICAL downtime: api"
+
+        monkeypatch.setattr("platform.scheduler.tasks.invoke_agent_runner", _mock_agent_runner)
+        msg = tasks_mod.build_message(task)
+        assert msg == "CRITICAL downtime: api"
+        assert captured["source"] == "scheduled_sentry_uptime_watch"
+        assert captured["task_id"] == "uptime1"
+        assert captured["project_slug"] == "api"

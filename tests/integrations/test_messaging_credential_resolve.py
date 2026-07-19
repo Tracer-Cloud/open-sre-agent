@@ -1,0 +1,118 @@
+"""Messaging catalog/env loaders resolve secrets via env then keyring."""
+
+from __future__ import annotations
+
+import keyring
+import pytest
+
+import config.llm_credentials as llm_credentials
+from integrations.catalog import load_env_integrations
+from tests.shared.keyring_backend import MemoryKeyring
+
+
+@pytest.fixture
+def memory_keyring(monkeypatch: pytest.MonkeyPatch) -> MemoryKeyring:
+    previous = keyring.get_keyring()
+    backend = MemoryKeyring()
+    keyring.set_keyring(backend)
+    monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
+    yield backend
+    keyring.set_keyring(previous)
+
+
+def _clear_messaging_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in (
+        "TELEGRAM_BOT_TOKEN",
+        "TELEGRAM_DEFAULT_CHAT_ID",
+        "ROCKETCHAT_AUTH_TOKEN",
+        "ROCKETCHAT_SERVER_URL",
+        "ROCKETCHAT_USER_ID",
+        "ROCKETCHAT_WEBHOOK_URL",
+        "ROCKETCHAT_DEFAULT_CHANNEL",
+        "SLACK_BOT_TOKEN",
+        "SLACK_APP_TOKEN",
+        "SLACK_WEBHOOK_URL",
+        "DISCORD_BOT_TOKEN",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+
+def test_telegram_loads_from_keyring_when_env_empty(
+    monkeypatch: pytest.MonkeyPatch, memory_keyring: MemoryKeyring
+) -> None:
+    _clear_messaging_env(monkeypatch)
+    llm_credentials.save_keyring_secret("TELEGRAM_BOT_TOKEN", "111:KEYRING")
+    records = load_env_integrations()
+    telegram = next(r for r in records if r.get("service") == "telegram")
+    assert telegram["credentials"]["bot_token"] == "111:KEYRING"
+
+
+def test_telegram_env_wins_over_keyring(
+    monkeypatch: pytest.MonkeyPatch, memory_keyring: MemoryKeyring
+) -> None:
+    _clear_messaging_env(monkeypatch)
+    llm_credentials.save_keyring_secret("TELEGRAM_BOT_TOKEN", "111:KEYRING")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "111:ENV")
+    records = load_env_integrations()
+    telegram = next(r for r in records if r.get("service") == "telegram")
+    assert telegram["credentials"]["bot_token"] == "111:ENV"
+
+
+def test_rocketchat_pat_loads_from_keyring(
+    monkeypatch: pytest.MonkeyPatch, memory_keyring: MemoryKeyring
+) -> None:
+    _clear_messaging_env(monkeypatch)
+    monkeypatch.setenv("ROCKETCHAT_SERVER_URL", "https://chat.example.com")
+    monkeypatch.setenv("ROCKETCHAT_USER_ID", "u1")
+    llm_credentials.save_keyring_secret("ROCKETCHAT_AUTH_TOKEN", "pat-from-keyring")
+    records = load_env_integrations()
+    rocketchat = next(r for r in records if r.get("service") == "rocketchat")
+    assert rocketchat["credentials"]["auth_token"] == "pat-from-keyring"
+
+
+def test_rocketchat_webhook_only_still_loads_without_keyring(
+    monkeypatch: pytest.MonkeyPatch, memory_keyring: MemoryKeyring
+) -> None:
+    _clear_messaging_env(monkeypatch)
+    monkeypatch.setenv("ROCKETCHAT_WEBHOOK_URL", "https://chat.example.com/hooks/a/b")
+    records = load_env_integrations()
+    rocketchat = next(r for r in records if r.get("service") == "rocketchat")
+    assert rocketchat["credentials"]["webhook_url"] == "https://chat.example.com/hooks/a/b"
+    assert rocketchat["credentials"].get("auth_token", "") in ("", None)
+
+
+def test_slack_bot_token_loads_from_keyring(
+    monkeypatch: pytest.MonkeyPatch, memory_keyring: MemoryKeyring
+) -> None:
+    _clear_messaging_env(monkeypatch)
+    llm_credentials.save_keyring_secret("SLACK_BOT_TOKEN", "xoxb-from-keyring")
+    records = load_env_integrations()
+    slack = next(r for r in records if r.get("service") == "slack")
+    assert slack["credentials"]["bot_token"] == "xoxb-from-keyring"
+
+
+def test_slack_webhook_only_still_loads_without_bot_token(
+    monkeypatch: pytest.MonkeyPatch, memory_keyring: MemoryKeyring
+) -> None:
+    _clear_messaging_env(monkeypatch)
+    monkeypatch.setenv("SLACK_WEBHOOK_URL", "https://hooks.slack.com/services/T/B/X")
+    records = load_env_integrations()
+    slack = next(r for r in records if r.get("service") == "slack")
+    assert slack["credentials"]["webhook_url"] == "https://hooks.slack.com/services/T/B/X"
+
+
+def test_slack_bot_api_resolves_token_from_keyring(
+    monkeypatch: pytest.MonkeyPatch, memory_keyring: MemoryKeyring
+) -> None:
+    from integrations.slack.bot_api import resolve_bot_token
+
+    _clear_messaging_env(monkeypatch)
+    monkeypatch.setattr(
+        "integrations.catalog.resolve_effective_integrations",
+        lambda: {},
+    )
+    llm_credentials.save_keyring_secret("SLACK_BOT_TOKEN", "xoxb-bot-api-keyring")
+    target, error = resolve_bot_token()
+    assert error == ""
+    assert target is not None
+    assert target.bot_token == "xoxb-bot-api-keyring"

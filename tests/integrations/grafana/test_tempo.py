@@ -7,6 +7,12 @@ from unittest.mock import Mock, patch
 from integrations.grafana.tempo import TempoMixin
 
 
+class _FakeAccountConfig:
+    """Minimal stand-in for GrafanaAccountConfig's ssl_verify property."""
+
+    ssl_verify: bool = True
+
+
 class FakeGrafanaClient(TempoMixin):
     """Fake Grafana client to test the TempoMixin."""
 
@@ -14,6 +20,7 @@ class FakeGrafanaClient(TempoMixin):
         self.is_configured = is_configured
         self.account_id = "test-account-123"
         self.tempo_datasource_uid = "tempo-uid-abc"
+        self._config = _FakeAccountConfig()
 
     def _build_datasource_url(self, uid: str, path: str) -> str:
         return f"https://grafana.fake/api/datasources/uid/{uid}{path}"

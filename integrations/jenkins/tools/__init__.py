@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.jenkins import jenkins_config_from_env
 from integrations.jenkins.client import JenkinsClient, make_jenkins_client
 
@@ -58,12 +59,9 @@ def _resolve_client(
 
 
 def _not_configured(payload_key: str) -> dict[str, Any]:
-    return {
-        "source": "jenkins",
-        "available": False,
-        "error": "jenkins integration is not configured.",
-        payload_key: [],
-    }
+    return tool_unavailable(
+        "jenkins", "jenkins integration is not configured.", **{payload_key: []}
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -133,12 +131,7 @@ def list_jenkins_builds(
     with client:
         result = client.list_builds(job_name, limit=limit, status=status)
     if not result.get("success"):
-        return {
-            "source": "jenkins",
-            "available": False,
-            "error": result.get("error", "unknown error"),
-            "builds": [],
-        }
+        return tool_unavailable("jenkins", result.get("error", "unknown error"), builds=[])
     return {
         "source": "jenkins",
         "available": True,
@@ -203,21 +196,11 @@ def get_jenkins_build_log(
     """Fetch the console log for a specific Jenkins build."""
     client = _resolve_client(jenkins_url, jenkins_user, jenkins_token)
     if client is None:
-        return {
-            "source": "jenkins",
-            "available": False,
-            "error": "jenkins integration is not configured.",
-            "log": "",
-        }
+        return tool_unavailable("jenkins", "jenkins integration is not configured.", log="")
     with client:
         result = client.get_build_log(job_name, build_number)
     if not result.get("success"):
-        return {
-            "source": "jenkins",
-            "available": False,
-            "error": result.get("error", "unknown error"),
-            "log": "",
-        }
+        return tool_unavailable("jenkins", result.get("error", "unknown error"), log="")
     return {
         "source": "jenkins",
         "available": True,
@@ -285,12 +268,7 @@ def get_jenkins_pipeline_stages(
     with client:
         result = client.get_pipeline_stages(job_name, build_number)
     if not result.get("success"):
-        return {
-            "source": "jenkins",
-            "available": False,
-            "error": result.get("error", "unknown error"),
-            "stages": [],
-        }
+        return tool_unavailable("jenkins", result.get("error", "unknown error"), stages=[])
     return {
         "source": "jenkins",
         "available": True,
@@ -346,12 +324,7 @@ def list_jenkins_jobs(
     with client:
         result = client.list_jobs()
     if not result.get("success"):
-        return {
-            "source": "jenkins",
-            "available": False,
-            "error": result.get("error", "unknown error"),
-            "jobs": [],
-        }
+        return tool_unavailable("jenkins", result.get("error", "unknown error"), jobs=[])
     return {
         "source": "jenkins",
         "available": True,
@@ -405,12 +378,7 @@ def list_jenkins_running_builds(
     with client:
         result = client.list_running_builds()
     if not result.get("success"):
-        return {
-            "source": "jenkins",
-            "available": False,
-            "error": result.get("error", "unknown error"),
-            "running_builds": [],
-        }
+        return tool_unavailable("jenkins", result.get("error", "unknown error"), running_builds=[])
     return {
         "source": "jenkins",
         "available": True,

@@ -7,7 +7,7 @@ from rich.text import Text
 from platform.observability.trace.redaction import format_json_preview
 from platform.terminal.theme import BRAND, DIM, HIGHLIGHT, SECONDARY, TEXT
 from surfaces.interactive_shell.ui.components.time_format import _elapsed_hms, _fmt_timing
-from surfaces.shared.tool_labels import tool_short_label, tool_source_label
+from tools.registry import resolve_tool_activity_labels
 
 __all__ = [
     "build_live_tool_detail_rows",
@@ -17,8 +17,6 @@ __all__ = [
     "make_tool_detail_record",
     "record_tool_summary",
     "tool_detail_body",
-    "tool_short_label",
-    "tool_source_label",
 ]
 
 
@@ -27,8 +25,7 @@ def record_tool_summary(
     summary_counts: dict[str, dict[str, int]],
     summary_order: list[tuple[str, str]],
 ) -> None:
-    source = tool_source_label(tool_name)
-    label = tool_short_label(tool_name, source)
+    source, label = resolve_tool_activity_labels(tool_name)
     source_counts = summary_counts.setdefault(source, {})
     if label not in source_counts:
         summary_order.append((source, label))
@@ -55,8 +52,7 @@ def format_tool_summary(
 
 
 def build_tool_call_line(tool_name: str, elapsed_ms: int, elapsed_total: float) -> Text:
-    source = tool_source_label(tool_name)
-    label = tool_short_label(tool_name, source)
+    source, label = resolve_tool_activity_labels(tool_name)
     call_display = f"{source} · {label}" if label else source
     t = Text()
     t.append(f"{_elapsed_hms(elapsed_total)}  ", style=SECONDARY)

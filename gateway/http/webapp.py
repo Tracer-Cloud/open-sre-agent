@@ -153,7 +153,14 @@ async def receive_alert(request: Request) -> JSONResponse:
             data["received_at"] = datetime.now(UTC)
         alert = IncomingAlert.model_validate(data)
     except (TypeError, ValidationError, ValueError) as exc:
-        return JSONResponse({"error": str(exc)}, status_code=400)
+        # Expected client error: log the full detail, return only the exception
+        # type (payload field names and model internals stay out of the
+        # response), and skip Sentry capture for routine 400s.
+        logger.warning("Alert payload rejected (%s): %s", type(exc).__name__, exc)
+        return JSONResponse(
+            {"error": f"invalid alert payload: {type(exc).__name__}"},
+            status_code=400,
+        )
 
     inbox = _alert_inbox()
     accepted = inbox.put(alert)
@@ -167,7 +174,6 @@ async def receive_alert(request: Request) -> JSONResponse:
 class InvestigateRequest(BaseModel):
     raw_alert: dict[str, Any]
     alert_name: str | None = None
-    pipeline_name: str | None = None
     severity: str | None = None
 
 
@@ -195,7 +201,6 @@ def investigate(req: InvestigateRequest, request: Request) -> InvestigateRespons
     investigation_metadata = resolve_investigation_context(
         raw_alert=req.raw_alert,
         alert_name=req.alert_name,
-        pipeline_name=req.pipeline_name,
         severity=req.severity,
     )
     try:

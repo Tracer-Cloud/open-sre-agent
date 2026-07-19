@@ -9,7 +9,8 @@ import httpx
 
 import integrations.posthog.client as client
 from integrations._validation_helpers import report_validation_failure
-from integrations.posthog.config import PostHogConfig
+from integrations.posthog.config import PostHogConfig, build_posthog_config
+from integrations.verification import register_validation_verifier
 
 logger = logging.getLogger(__name__)
 
@@ -49,3 +50,10 @@ def validate_posthog_config(config: PostHogConfig) -> PostHogValidationResult:
             method="validate_posthog_config",
         )
         return PostHogValidationResult(ok=False, detail=str(err))
+
+
+verify_posthog = register_validation_verifier(
+    "posthog",
+    build_config=build_posthog_config,
+    validate_config=validate_posthog_config,
+)

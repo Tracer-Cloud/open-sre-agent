@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.github.helpers import (
     github_creds,
     github_source_available,
@@ -92,12 +93,9 @@ def list_github_commits(
             github_url, github_mode, github_token, github_command, github_args
         )
         if config is None:
-            return {
-                "source": "github",
-                "available": False,
-                "error": "GitHub MCP integration is not configured.",
-                "commits": [],
-            }
+            return tool_unavailable(
+                "github", "GitHub MCP integration is not configured.", commits=[]
+            )
 
         arguments: dict[str, Any] = {"owner": owner, "repo": repo, "perPage": per_page}
         if path:
@@ -114,9 +112,4 @@ def list_github_commits(
         # the tool call and the background receive-loop fail simultaneously.
         # Catch here to ensure the tool always returns an error dict rather than raising.
         error_msg = _unwrap_exception_message(exc)
-        return {
-            "source": "github",
-            "available": False,
-            "error": error_msg,
-            "commits": [],
-        }
+        return tool_unavailable("github", error_msg, commits=[])

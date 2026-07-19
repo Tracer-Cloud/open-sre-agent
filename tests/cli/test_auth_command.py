@@ -5,7 +5,7 @@ from pathlib import Path
 import keyring
 from click.testing import CliRunner
 
-from config.llm_credentials import resolve_llm_api_key
+from config.llm_credentials import resolve_env_credential
 from surfaces.cli.__main__ import cli
 from surfaces.cli.llm_auth.service import AuthSetupResult
 from tests.shared.keyring_backend import MemoryKeyring
@@ -44,7 +44,7 @@ def test_auth_login_deepseek_stores_keyring_not_env(monkeypatch, tmp_path: Path)
 
         assert result.exit_code == 0, result.output
         assert "Authenticated: DeepSeek API key" in result.output
-        assert resolve_llm_api_key("DEEPSEEK_API_KEY") == "deepseek-secret"
+        assert resolve_env_credential("DEEPSEEK_API_KEY") == "deepseek-secret"
         env_content = env_path.read_text(encoding="utf-8")
         assert "LLM_PROVIDER=deepseek\n" in env_content
         assert "DEEPSEEK_API_KEY=" not in env_content
@@ -160,6 +160,6 @@ def test_auth_logout_deepseek_removes_keyring_secret(monkeypatch, tmp_path: Path
         result = CliRunner().invoke(cli, ["auth", "logout", "deepseek"])
 
         assert result.exit_code == 0, result.output
-        assert resolve_llm_api_key("DEEPSEEK_API_KEY") == ""
+        assert resolve_env_credential("DEEPSEEK_API_KEY") == ""
     finally:
         keyring.set_keyring(previous_backend)

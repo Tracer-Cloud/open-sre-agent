@@ -14,6 +14,7 @@ from typing import Any
 
 from pydantic import Field, field_validator
 
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations._relational import (
     RelationalConfigBase,
     env_int,
@@ -217,7 +218,7 @@ def get_server_status(config: MySQLConfig) -> dict[str, Any]:
     Read-only: uses SHOW GLOBAL STATUS and SHOW VARIABLES.
     """
     if not config.is_configured:
-        return {"source": "mysql", "available": False, "error": "Not configured."}
+        return tool_unavailable("mysql", "Not configured.")
 
     _STATUS_KEYS = frozenset(
         {
@@ -307,7 +308,7 @@ def get_server_status(config: MySQLConfig) -> dict[str, Any]:
             integration="mysql",
             method="get_server_status",
         )
-        return {"source": "mysql", "available": False, "error": str(err)}
+        return tool_unavailable("mysql", str(err))
 
 
 def get_current_processes(
@@ -320,7 +321,7 @@ def get_current_processes(
     Results are capped at config.max_results.
     """
     if not config.is_configured:
-        return {"source": "mysql", "available": False, "error": "Not configured."}
+        return tool_unavailable("mysql", "Not configured.")
 
     try:
         conn = _get_connection(config)
@@ -369,7 +370,7 @@ def get_current_processes(
             integration="mysql",
             method="get_current_processes",
         )
-        return {"source": "mysql", "available": False, "error": str(err)}
+        return tool_unavailable("mysql", str(err))
 
 
 def get_replication_status(config: MySQLConfig) -> dict[str, Any]:
@@ -380,7 +381,7 @@ def get_replication_status(config: MySQLConfig) -> dict[str, Any]:
     Returns a note if the server is not configured as a replica.
     """
     if not config.is_configured:
-        return {"source": "mysql", "available": False, "error": "Not configured."}
+        return tool_unavailable("mysql", "Not configured.")
 
     # Curated fields — includes both old (Slave_*) and new (Replica_*) column names
     _REPLICA_KEYS = (
@@ -449,7 +450,7 @@ def get_replication_status(config: MySQLConfig) -> dict[str, Any]:
             integration="mysql",
             method="get_replication_status",
         )
-        return {"source": "mysql", "available": False, "error": str(err)}
+        return tool_unavailable("mysql", str(err))
 
 
 def get_slow_queries(
@@ -463,7 +464,7 @@ def get_slow_queries(
     Returns an informative note if performance_schema is disabled.
     """
     if not config.is_configured:
-        return {"source": "mysql", "available": False, "error": "Not configured."}
+        return tool_unavailable("mysql", "Not configured.")
 
     # performance_schema timer uses picoseconds; convert threshold to picoseconds
     threshold_ps = int(threshold_ms * 1_000_000_000)
@@ -552,7 +553,7 @@ def get_slow_queries(
             integration="mysql",
             method="get_slow_queries",
         )
-        return {"source": "mysql", "available": False, "error": str(err)}
+        return tool_unavailable("mysql", str(err))
 
 
 def get_table_stats(
@@ -564,7 +565,7 @@ def get_table_stats(
     Results capped at config.max_results.
     """
     if not config.is_configured:
-        return {"source": "mysql", "available": False, "error": "Not configured."}
+        return tool_unavailable("mysql", "Not configured.")
 
     try:
         conn = _get_connection(config)
@@ -633,7 +634,7 @@ def get_table_stats(
             integration="mysql",
             method="get_table_stats",
         )
-        return {"source": "mysql", "available": False, "error": str(err)}
+        return tool_unavailable("mysql", str(err))
 
 
 def classify(credentials: dict[str, Any], record_id: str) -> tuple[MySQLConfig | None, str | None]:

@@ -59,7 +59,6 @@ def build_ingest_payload(state: InvestigationState) -> dict[str, Any]:
     investigation_output = {
         "org_id": state.get("org_id"),
         "alert_name": state.get("alert_name"),
-        "pipeline_name": state.get("pipeline_name") or "",
         "severity": _normalize_severity(state.get("severity")),
         "summary": state.get("summary")
         or state.get("problem_md")

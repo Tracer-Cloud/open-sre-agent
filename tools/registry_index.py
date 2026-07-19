@@ -136,7 +136,7 @@ def _fallback_descriptors() -> tuple[ToolDescriptor, ...]:
         ),
         ToolDescriptor(
             "slack_reply_message",
-            ("investigation", "chat", "action"),
+            ("investigation", "action"),
             "slack",
             None,
             "integrations.slack.tools.slack_reply_message_tool.tool",
@@ -150,7 +150,7 @@ def _fallback_descriptors() -> tuple[ToolDescriptor, ...]:
         ),
         ToolDescriptor(
             "slack_send_message",
-            ("investigation", "chat", "action"),
+            ("investigation", "action"),
             "slack",
             None,
             "integrations.slack.tools.slack_send_message_tool.tool",
@@ -177,8 +177,15 @@ def _fallback_descriptors() -> tuple[ToolDescriptor, ...]:
             "tools.interactive_shell.actions.task_cancel",
         ),
         ToolDescriptor(
+            "rocketchat_send_message",
+            ("investigation", "action"),
+            "rocketchat",
+            None,
+            "integrations.rocketchat.tools.rocketchat_send_message_tool.tool",
+        ),
+        ToolDescriptor(
             "telegram_send_message",
-            ("investigation", "chat", "action"),
+            ("investigation", "action"),
             "telegram",
             None,
             "integrations.telegram.tools.telegram_send_message_tool.tool",

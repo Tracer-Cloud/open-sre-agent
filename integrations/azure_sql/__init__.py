@@ -20,6 +20,7 @@ from typing import Any
 from pydantic import Field, field_validator
 
 from config.strict_config import StrictConfigModel
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
 from platform.common.truncation import truncate
 
@@ -245,7 +246,7 @@ def get_server_status(config: AzureSQLConfig) -> dict[str, Any]:
     Read-only: queries sys.dm_db_resource_stats and sys.database_service_objectives.
     """
     if not config.is_configured:
-        return {"source": "azure_sql", "available": False, "error": "Not configured."}
+        return tool_unavailable("azure_sql", "Not configured.")
 
     try:
         conn = _get_connection(config)
@@ -344,7 +345,7 @@ def get_server_status(config: AzureSQLConfig) -> dict[str, Any]:
             integration="azure_sql",
             method="get_server_status",
         )
-        return {"source": "azure_sql", "available": False, "error": str(err)}
+        return tool_unavailable("azure_sql", str(err))
 
 
 def get_current_queries(
@@ -357,7 +358,7 @@ def get_current_queries(
     Results are capped at config.max_results.
     """
     if not config.is_configured:
-        return {"source": "azure_sql", "available": False, "error": "Not configured."}
+        return tool_unavailable("azure_sql", "Not configured.")
 
     try:
         conn = _get_connection(config)
@@ -427,7 +428,7 @@ def get_current_queries(
             integration="azure_sql",
             method="get_current_queries",
         )
-        return {"source": "azure_sql", "available": False, "error": str(err)}
+        return tool_unavailable("azure_sql", str(err))
 
 
 def get_resource_stats(
@@ -441,7 +442,7 @@ def get_resource_stats(
     for identifying throttling and tier-limit hits.
     """
     if not config.is_configured:
-        return {"source": "azure_sql", "available": False, "error": "Not configured."}
+        return tool_unavailable("azure_sql", "Not configured.")
 
     try:
         conn = _get_connection(config)
@@ -514,7 +515,7 @@ def get_resource_stats(
             integration="azure_sql",
             method="get_resource_stats",
         )
-        return {"source": "azure_sql", "available": False, "error": str(err)}
+        return tool_unavailable("azure_sql", str(err))
 
 
 def get_slow_queries(
@@ -528,7 +529,7 @@ def get_slow_queries(
     Results capped at config.max_results, ordered by average elapsed time.
     """
     if not config.is_configured:
-        return {"source": "azure_sql", "available": False, "error": "Not configured."}
+        return tool_unavailable("azure_sql", "Not configured.")
 
     effective_limit = min(limit or config.max_results, config.max_results)
 
@@ -592,7 +593,7 @@ def get_slow_queries(
             integration="azure_sql",
             method="get_slow_queries",
         )
-        return {"source": "azure_sql", "available": False, "error": str(err)}
+        return tool_unavailable("azure_sql", str(err))
 
 
 def get_wait_stats(config: AzureSQLConfig) -> dict[str, Any]:
@@ -603,7 +604,7 @@ def get_wait_stats(config: AzureSQLConfig) -> dict[str, Any]:
     lock contention, IO bottlenecks, and network issues.
     """
     if not config.is_configured:
-        return {"source": "azure_sql", "available": False, "error": "Not configured."}
+        return tool_unavailable("azure_sql", "Not configured.")
 
     try:
         conn = _get_connection(config)
@@ -653,7 +654,7 @@ def get_wait_stats(config: AzureSQLConfig) -> dict[str, Any]:
             integration="azure_sql",
             method="get_wait_stats",
         )
-        return {"source": "azure_sql", "available": False, "error": str(err)}
+        return tool_unavailable("azure_sql", str(err))
 
 
 def classify(

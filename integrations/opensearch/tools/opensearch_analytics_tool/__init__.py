@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.elasticsearch.client import ElasticsearchClient, ElasticsearchConfig
 
 _DEFAULT_MAX_RESULTS = 100
@@ -79,12 +80,7 @@ def query_opensearch_analytics(
     """Fetch bounded logs from OpenSearch-compatible analytics endpoints."""
     endpoint = url.strip().rstrip("/")
     if not endpoint:
-        return {
-            "source": "opensearch",
-            "available": False,
-            "error": "Missing OpenSearch URL.",
-            "logs": [],
-        }
+        return tool_unavailable("opensearch", "Missing OpenSearch URL.", logs=[])
 
     effective_limit = _bounded_limit(limit, max_results)
     client = ElasticsearchClient(
@@ -103,12 +99,9 @@ def query_opensearch_analytics(
         index_pattern=index_pattern or "*",
     )
     if not result.get("success"):
-        return {
-            "source": "opensearch",
-            "available": False,
-            "error": str(result.get("error", "Unknown OpenSearch error.")),
-            "logs": [],
-        }
+        return tool_unavailable(
+            "opensearch", str(result.get("error", "Unknown OpenSearch error.")), logs=[]
+        )
 
     logs = result.get("logs", []) if isinstance(result.get("logs"), list) else []
     logs = [log for log in logs if isinstance(log, dict)][:effective_limit]

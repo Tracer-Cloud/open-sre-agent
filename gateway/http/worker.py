@@ -30,7 +30,6 @@ def _run_pipeline(trigger: dict[str, Any]) -> dict[str, Any]:
     investigation_metadata = resolve_investigation_context(
         raw_alert=raw_alert,
         alert_name=trigger.get("alert_name"),
-        pipeline_name=trigger.get("pipeline_name"),
         severity=trigger.get("severity"),
     )
     return run_investigation_payload(

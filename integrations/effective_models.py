@@ -73,6 +73,7 @@ class EffectiveIntegrations(StrictConfigModel):
     gitlab: EffectiveIntegrationEntry | None = None
     vercel: EffectiveIntegrationEntry | None = None
     jira: EffectiveIntegrationEntry | None = None
+    servicenow: EffectiveIntegrationEntry | None = None
     opsgenie: EffectiveIntegrationEntry | None = None
     pagerduty: EffectiveIntegrationEntry | None = None
     incident_io: EffectiveIntegrationEntry | None = None
@@ -87,6 +88,7 @@ class EffectiveIntegrations(StrictConfigModel):
     trello: EffectiveIntegrationEntry | None = None
     discord: EffectiveIntegrationEntry | None = None
     telegram: EffectiveIntegrationEntry | None = None
+    rocketchat: EffectiveIntegrationEntry | None = None
     smtp: EffectiveIntegrationEntry | None = None
     whatsapp: EffectiveIntegrationEntry | None = None
     twilio: EffectiveIntegrationEntry | None = None

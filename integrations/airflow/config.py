@@ -11,6 +11,7 @@ from urllib.parse import quote
 import httpx
 from pydantic import Field, field_validator
 
+from config.llm_credentials import resolve_env_credential
 from config.strict_config import StrictConfigModel
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
 
@@ -78,7 +79,7 @@ def build_airflow_config(raw: dict[str, Any] | None) -> AirflowConfig:
 def airflow_config_from_env() -> AirflowConfig | None:
     """Load an Airflow config from env vars."""
     username = os.getenv("AIRFLOW_USERNAME", "").strip()
-    auth_token = os.getenv("AIRFLOW_AUTH_TOKEN", "").strip()
+    auth_token = resolve_env_credential("AIRFLOW_AUTH_TOKEN")
 
     if not username and not auth_token:
         return None
@@ -88,7 +89,7 @@ def airflow_config_from_env() -> AirflowConfig | None:
             "base_url": os.getenv("AIRFLOW_BASE_URL", DEFAULT_AIRFLOW_BASE_URL).strip()
             or DEFAULT_AIRFLOW_BASE_URL,
             "username": username,
-            "password": os.getenv("AIRFLOW_PASSWORD", "").strip(),
+            "password": resolve_env_credential("AIRFLOW_PASSWORD"),
             "auth_token": auth_token,
             "timeout_seconds": os.getenv(
                 "AIRFLOW_TIMEOUT_SECONDS",

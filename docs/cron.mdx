@@ -1,6 +1,6 @@
 ---
 title: "Scheduled Deliveries (Cron)"
-description: "Cron-driven recurring reports to Telegram, Slack, and Discord"
+description: "Cron-driven recurring reports to Telegram, Slack, Discord, and Rocket.Chat"
 ---
 
 # Scheduled Deliveries
@@ -43,7 +43,7 @@ Create a new scheduled delivery task.
 | `--kind` | Yes | Task kind: `daily_summary`, `weekly_audit`, `incident_window_replay`, `synthetic_run`, `custom_investigation`, `github_pr_sweep` |
 | `--cron` | Yes | Cron expression (5 fields: minute hour day month day_of_week) |
 | `--tz` | No | IANA timezone (default: `UTC`). Examples: `Europe/London`, `US/Eastern`, `Asia/Kolkata` |
-| `--provider` | Yes | Messaging provider: `telegram`, `slack`, `discord` |
+| `--provider` | Yes | Messaging provider: `telegram`, `slack`, `discord`, `rocketchat` |
 | `--chat-id` | Yes | Target chat/channel ID for the provider |
 | `--window` | No | Lookback window in hours (default: `24`) |
 
@@ -110,9 +110,9 @@ This ensures exactly-once delivery even when multiple scheduler instances run co
 
 Credentials are resolved lazily at delivery time in this priority order:
 
-1. **Integration store** — `~/.opensre/integrations.json` (configured via `opensre integrations`)
-2. **Environment variables** — `TELEGRAM_BOT_TOKEN`, `SLACK_BOT_TOKEN`, `DISCORD_BOT_TOKEN`
-3. **Task params** — credentials stored in the task definition (not recommended)
+1. **Task params** — credentials stored in the task definition (not recommended)
+2. **Integration store** — `~/.opensre/integrations.json` (configured via `opensre integrations`)
+3. **Environment variables** — `TELEGRAM_BOT_TOKEN`, `SLACK_BOT_TOKEN`, `DISCORD_BOT_TOKEN`, `ROCKETCHAT_*`
 
 This means you don't need to pass credentials at `cron add` time — they're picked up from your existing integration configuration.
 

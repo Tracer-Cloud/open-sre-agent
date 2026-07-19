@@ -117,8 +117,18 @@ def load_env_integration_services() -> list[str]:
     add("pagerduty", _env_is_set("PAGERDUTY_API_KEY"))
     add("incident_io", _env_is_set("INCIDENT_IO_API_KEY"))
     add("jira", _all_env("JIRA_BASE_URL", "JIRA_EMAIL", "JIRA_API_TOKEN"))
+    add(
+        "servicenow",
+        _all_env("SERVICENOW_INSTANCE_URL", "SERVICENOW_USERNAME", "SERVICENOW_PASSWORD"),
+    )
     add("discord", _env_is_set("DISCORD_BOT_TOKEN"))
     add("telegram", _env_is_set("TELEGRAM_BOT_TOKEN"))
+    add(
+        "rocketchat",
+        _all_env("ROCKETCHAT_SERVER_URL", "ROCKETCHAT_AUTH_TOKEN", "ROCKETCHAT_USER_ID")
+        or _env_is_set("ROCKETCHAT_WEBHOOK_URL"),
+    )
+    add("slack", _any_env("SLACK_BOT_TOKEN", "SLACK_ACCESS_TOKEN"))
     add("smtp", _env_is_set("SMTP_HOST"))
     add("whatsapp", _all_env("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_WHATSAPP_FROM"))
     add(

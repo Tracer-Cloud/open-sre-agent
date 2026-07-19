@@ -9,33 +9,77 @@ into the input line.
 from __future__ import annotations
 
 import io
+from dataclasses import dataclass, field
+from typing import Any
 
 import pytest
 from rich.console import Console
 
 import tools.interactive_shell.actions.slash as slash_tool
-from core.agent_harness.tools.tool_context import (
-    ActionToolContext,
-)
+from core.agent_harness.tools.tool_context import ActionToolContext
 from surfaces.interactive_shell.session import Session
 
 
-def _ctx() -> tuple[ActionToolContext, io.StringIO, Session]:
+@dataclass
+class FakeSlashPorts:
+    """Controllable slash runtime adapter used by action-tool tests."""
+
+    tty: bool = True
+    dispatch_result: bool = True
+    dispatched: list[str] = field(default_factory=list)
+
+    def command_exists(self, _name: str) -> bool:
+        return True
+
+    def tty_interactive(self) -> bool:
+        return self.tty
+
+    def launching_message(self, command: str) -> str:
+        return f"[dim]Launching[/] [bold]{command}[/]…"
+
+    def format_turn_outcome(self, command: str, *, ok: bool) -> str:
+        status = "succeeded" if ok else "failed"
+        return f"slash {command} ({status})"
+
+    def execution_allowed(
+        self,
+        *,
+        policy: Any,
+        **_kwargs: Any,
+    ) -> bool:
+        del policy
+        return True
+
+    def dispatch(
+        self,
+        command: str,
+        **_kwargs: Any,
+    ) -> bool:
+        self.dispatched.append(command)
+        return self.dispatch_result
+
+
+def _ctx(
+    *,
+    ports: FakeSlashPorts | None = None,
+    request_exit: Any = None,
+) -> tuple[ActionToolContext, io.StringIO, Session, FakeSlashPorts]:
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False, highlight=False)
     session = Session()
-    return ActionToolContext(session=session, console=console), buf, session
+    resolved_ports = ports or FakeSlashPorts()
 
-
-def _record_dispatch(monkeypatch: pytest.MonkeyPatch) -> list[str]:
-    dispatched: list[str] = []
-
-    def _fake_dispatch(command: str, *_args: object, **_kwargs: object) -> bool:
-        dispatched.append(command)
-        return True
-
-    monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
-    return dispatched
+    return (
+        ActionToolContext(
+            session=session,
+            console=console,
+            request_exit=request_exit,
+            slash_ports=resolved_ports,
+        ),
+        buf,
+        session,
+        resolved_ports,
+    )
 
 
 @pytest.mark.parametrize(
@@ -50,21 +94,20 @@ def _record_dispatch(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     ],
 )
 def test_interactive_picker_command_is_deferred_to_exclusive_stdin(
-    monkeypatch: pytest.MonkeyPatch,
     command: str,
     args: list[str],
     expected: str,
 ) -> None:
-    """A planner-emitted inline-picker command must be queued for the next prompt
-    (exclusive stdin) instead of dispatched inline against the live prompt."""
-    monkeypatch.setattr(slash_tool, "repl_tty_interactive", lambda: True)
-    dispatched = _record_dispatch(monkeypatch)
+    """Picker commands are queued until the REPL owns exclusive stdin."""
+    ctx, buf, session, ports = _ctx(ports=FakeSlashPorts(tty=True))
 
-    ctx, buf, session = _ctx()
-    handled = slash_tool.execute_slash_tool({"command": command, "args": args}, ctx)
+    handled = slash_tool.execute_slash_tool(
+        {"command": command, "args": args},
+        ctx,
+    )
 
     assert handled is True
-    assert dispatched == []  # not run inline against the live prompt
+    assert ports.dispatched == []
     assert session.terminal.pending_prompt_default == expected
     assert session.terminal.pending_prompt_autosubmit is True
     assert session.history == []
@@ -72,59 +115,49 @@ def test_interactive_picker_command_is_deferred_to_exclusive_stdin(
     assert "Launching" in buf.getvalue()
 
 
-def test_interactive_picker_runs_inline_when_exclusive_stdin_active(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """When the REPL has already reserved exclusive stdin for this turn, picker
-    commands must dispatch inline instead of re-queueing (which would loop)."""
-    monkeypatch.setattr(slash_tool, "repl_tty_interactive", lambda: True)
-    dispatched = _record_dispatch(monkeypatch)
-
-    ctx, buf, session = _ctx()
+def test_interactive_picker_runs_inline_when_exclusive_stdin_active() -> None:
+    """An already-exclusive turn must dispatch inline instead of re-queueing."""
+    ctx, buf, session, ports = _ctx(ports=FakeSlashPorts(tty=True))
     session.terminal.exclusive_stdin_active = True
-    handled = slash_tool.execute_slash_tool({"command": "/integrations", "args": []}, ctx)
+
+    handled = slash_tool.execute_slash_tool(
+        {"command": "/integrations", "args": []},
+        ctx,
+    )
 
     assert handled is True
-    assert dispatched == ["/integrations"]
+    assert ports.dispatched == ["/integrations"]
     assert session.terminal.pending_prompt_default is None
     assert session.terminal.pending_prompt_autosubmit is False
     assert "Launching" not in buf.getvalue()
 
 
-def test_interactive_picker_runs_inline_when_not_a_tty(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Without an interactive TTY there is no live prompt to race; run inline."""
-    monkeypatch.setattr(slash_tool, "repl_tty_interactive", lambda: False)
-    dispatched = _record_dispatch(monkeypatch)
+def test_interactive_picker_runs_inline_when_not_a_tty() -> None:
+    """Without an interactive TTY there is no live prompt to race."""
+    ctx, _buf, session, ports = _ctx(ports=FakeSlashPorts(tty=False))
 
-    ctx, _buf, session = _ctx()
-    slash_tool.execute_slash_tool({"command": "/integrations", "args": ["remove", "github"]}, ctx)
+    slash_tool.execute_slash_tool(
+        {
+            "command": "/integrations",
+            "args": ["remove", "github"],
+        },
+        ctx,
+    )
 
-    assert dispatched == ["/integrations remove github"]
+    assert ports.dispatched == ["/integrations remove github"]
     assert session.terminal.pending_prompt_default is None
     assert session.terminal.pending_prompt_autosubmit is False
 
 
-def test_duplicate_slash_invoke_in_same_turn_is_ignored(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A second slash_invoke for the same command in one turn must not re-run it."""
-    monkeypatch.setattr(slash_tool, "repl_tty_interactive", lambda: True)
-    dispatch_calls: list[str] = []
-
-    def _fake_dispatch(command: str, *_args: object, **_kwargs: object) -> bool:
-        dispatch_calls.append(command)
-        return True
-
-    monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
-
-    ctx, _buf, session = _ctx()
+def test_duplicate_slash_invoke_in_same_turn_is_ignored() -> None:
+    """The same slash command must not execute twice in one agent turn."""
+    ctx, _buf, _session, ports = _ctx(ports=FakeSlashPorts(tty=True))
     args = {"command": "/integrations", "args": ["list"]}
+
     assert slash_tool.execute_slash_tool(args, ctx) is True
     assert slash_tool.execute_slash_tool(args, ctx) is True
 
-    assert dispatch_calls == ["/integrations list"]
+    assert ports.dispatched == ["/integrations list"]
 
 
 @pytest.mark.parametrize(
@@ -136,43 +169,37 @@ def test_duplicate_slash_invoke_in_same_turn_is_ignored(
     ],
 )
 def test_non_picker_slash_commands_run_inline_even_in_a_tty(
-    monkeypatch: pytest.MonkeyPatch,
     command: str,
     args: list[str],
 ) -> None:
-    """Read-only / table commands do not read raw stdin, so they still dispatch
-    inline and must not be deferred."""
-    monkeypatch.setattr(slash_tool, "repl_tty_interactive", lambda: True)
-    dispatched = _record_dispatch(monkeypatch)
+    """Commands that do not read raw stdin continue to run inline."""
+    ctx, _buf, session, ports = _ctx(ports=FakeSlashPorts(tty=True))
 
-    ctx, _buf, session = _ctx()
-    slash_tool.execute_slash_tool({"command": command, "args": args}, ctx)
+    slash_tool.execute_slash_tool(
+        {"command": command, "args": args},
+        ctx,
+    )
 
     expected = " ".join([command, *args]) if args else command
-    assert dispatched == [expected]
+    assert ports.dispatched == [expected]
     assert session.terminal.pending_prompt_default is None
     assert session.terminal.pending_prompt_autosubmit is False
 
 
-def test_exit_slash_requests_runtime_exit(monkeypatch: pytest.MonkeyPatch) -> None:
-    dispatched: list[str] = []
-
-    def _fake_dispatch(command: str, *_args: object, **_kwargs: object) -> bool:
-        dispatched.append(command)
-        return False
-
-    monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
-
+def test_exit_slash_requests_runtime_exit() -> None:
+    ports = FakeSlashPorts(dispatch_result=False)
     requested_exit: list[bool] = []
-    ctx, _buf, _session = _ctx()
-    ctx = ActionToolContext(
-        session=ctx.session,
-        console=ctx.console,
+
+    ctx, _buf, _session, _ports = _ctx(
+        ports=ports,
         request_exit=lambda: requested_exit.append(True),
     )
 
-    handled = slash_tool.execute_slash_tool({"command": "/quit", "args": []}, ctx)
+    handled = slash_tool.execute_slash_tool(
+        {"command": "/quit", "args": []},
+        ctx,
+    )
 
     assert handled is True
-    assert dispatched == ["/quit"]
+    assert ports.dispatched == ["/quit"]
     assert requested_exit == [True]

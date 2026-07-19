@@ -9,7 +9,6 @@ from core.domain.alerts.fields import (
     dict_value,
     first_present,
     iter_alert_blocks,
-    pipeline_name_value,
     severity_value,
 )
 
@@ -59,20 +58,16 @@ def test_alert_label_and_annotation_helpers_prefer_common_blocks() -> None:
 def test_alert_field_precedence_uses_raw_then_canonical_then_blocks() -> None:
     raw_alert = {
         "title": "Raw title",
-        "service": "raw-service",
         "canonical_alert": {
             "alert_name": "Canonical name",
-            "pipeline_name": "canonical-pipeline",
             "severity": "critical",
         },
         "commonLabels": {
             "alertname": "Label name",
-            "service": "label-service",
             "severity": "warning",
         },
         "commonAnnotations": {
             "summary": "Annotation summary",
-            "pipeline_name": "annotation-pipeline",
         },
     }
     labels = alert_labels(raw_alert)
@@ -87,14 +82,5 @@ def test_alert_field_precedence_uses_raw_then_canonical_then_blocks() -> None:
             canonical=canonical,
         )
         == "Raw title"
-    )
-    assert (
-        pipeline_name_value(
-            raw_alert,
-            labels=labels,
-            annotations=annotations,
-            canonical=canonical,
-        )
-        == "canonical-pipeline"
     )
     assert severity_value(raw_alert, labels=labels, canonical=canonical) == "critical"

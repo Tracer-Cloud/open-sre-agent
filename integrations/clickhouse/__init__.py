@@ -15,6 +15,7 @@ from typing import Any
 from pydantic import Field, field_validator
 
 from config.strict_config import StrictConfigModel
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations._validation_helpers import report_validation_failure
 
 logger = logging.getLogger(__name__)
@@ -169,7 +170,7 @@ def get_query_activity(
     Results capped at config.max_results.
     """
     if not config.is_configured:
-        return {"source": "clickhouse", "available": False, "error": "Not configured."}
+        return tool_unavailable("clickhouse", "Not configured.")
 
     effective_limit = min(limit or config.max_results, config.max_results)
     try:
@@ -222,7 +223,7 @@ def get_query_activity(
             integration="clickhouse",
             method="get_query_activity",
         )
-        return {"source": "clickhouse", "available": False, "error": str(err)}
+        return tool_unavailable("clickhouse", str(err))
 
 
 def get_system_health(config: ClickHouseConfig) -> dict[str, Any]:
@@ -231,7 +232,7 @@ def get_system_health(config: ClickHouseConfig) -> dict[str, Any]:
     Read-only: queries system tables for server health indicators.
     """
     if not config.is_configured:
-        return {"source": "clickhouse", "available": False, "error": "Not configured."}
+        return tool_unavailable("clickhouse", "Not configured.")
 
     try:
         client = _get_client(config)
@@ -270,7 +271,7 @@ def get_system_health(config: ClickHouseConfig) -> dict[str, Any]:
             integration="clickhouse",
             method="get_system_health",
         )
-        return {"source": "clickhouse", "available": False, "error": str(err)}
+        return tool_unavailable("clickhouse", str(err))
 
 
 def get_table_stats(
@@ -284,7 +285,7 @@ def get_table_stats(
     Results capped at config.max_results.
     """
     if not config.is_configured:
-        return {"source": "clickhouse", "available": False, "error": "Not configured."}
+        return tool_unavailable("clickhouse", "Not configured.")
 
     effective_limit = min(limit or config.max_results, config.max_results)
     target_db = database or config.database
@@ -334,4 +335,4 @@ def get_table_stats(
             integration="clickhouse",
             method="get_table_stats",
         )
-        return {"source": "clickhouse", "available": False, "error": str(err)}
+        return tool_unavailable("clickhouse", str(err))

@@ -8,6 +8,7 @@ import httpx
 
 from core.tool_framework.telemetry import report_run_error
 from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.tool_availability import tool_unavailable
 
 _DEFAULT_MAX_RESULTS = 50
 _MAX_HARD_LIMIT = 200
@@ -142,19 +143,9 @@ def query_snowflake_history(
     account = account_identifier.strip()
     bearer = token.strip()
     if not account:
-        return {
-            "source": "snowflake",
-            "available": False,
-            "error": "Missing account identifier.",
-            "rows": [],
-        }
+        return tool_unavailable("snowflake", "Missing account identifier.", rows=[])
     if not bearer:
-        return {
-            "source": "snowflake",
-            "available": False,
-            "error": "Missing Snowflake token.",
-            "rows": [],
-        }
+        return tool_unavailable("snowflake", "Missing Snowflake token.", rows=[])
 
     statement = _ensure_sql_limit(query, effective_limit)
     endpoint = f"https://{account}.snowflakecomputing.com/api/v2/statements"
@@ -189,7 +180,7 @@ def query_snowflake_history(
             method="httpx.post",
             extras={"account_identifier": account, "integration_id": integration_id},
         )
-        return {"source": "snowflake", "available": False, "error": str(err), "rows": []}
+        return tool_unavailable("snowflake", str(err), rows=[])
 
     rows = _normalize_rows(body)[:effective_limit]
     return {

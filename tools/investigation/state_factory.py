@@ -11,7 +11,6 @@ from core.domain.alerts.fields import (
     alert_name_value,
     canonical_alert,
     first_text,
-    pipeline_name_value,
     severity_value,
 )
 from core.domain.alerts.normalization import normalize_alert_payload
@@ -26,13 +25,12 @@ def make_initial_state(
     raw_alert: str | dict[str, Any],
     *,
     opensre_evaluate: bool = False,
-    investigation_metadata: tuple[str, str, str] | None = None,
+    investigation_metadata: tuple[str, str] | None = None,
 ) -> AgentState:
     """Create initial investigation state from the raw alert payload.
 
-    When ``investigation_metadata`` is set, it supplies ``(alert_name, pipeline_name,
-    severity)`` for initial state instead of deriving them only from ``raw_alert``.
-    Callers use this for HTTP/CLI overrides without mutating the alert dict.
+    When ``investigation_metadata`` is set, it supplies ``(alert_name, severity)``
+    for initial state instead of deriving them only from ``raw_alert``.
     """
     rubric = ""
     alert_payload: str | dict[str, Any] = raw_alert
@@ -50,16 +48,15 @@ def make_initial_state(
         alert_payload = normalize_alert_payload(alert_payload)
 
     if investigation_metadata is not None:
-        alert_name, pipeline_name, severity = investigation_metadata
+        alert_name, severity = investigation_metadata
     else:
-        alert_name, pipeline_name, severity = _resolve_alert_metadata(alert_payload)
+        alert_name, severity = _resolve_alert_metadata(alert_payload)
 
     state = AgentStateModel.model_validate(
         {
             **model_default_payload("mode", "messages"),
             "mode": "investigation",
             "alert_name": alert_name,
-            "pipeline_name": pipeline_name,
             "severity": severity,
             "raw_alert": alert_payload,
             "investigation_started_at": time.monotonic(),
@@ -70,10 +67,10 @@ def make_initial_state(
     return cast(AgentState, state.model_dump(mode="python", by_alias=True, exclude_none=True))
 
 
-def _resolve_alert_metadata(raw_alert: str | dict[str, Any]) -> tuple[str, str, str]:
-    """Best-effort defaults used until ``extract_alert`` does deeper parsing."""
+def _resolve_alert_metadata(raw_alert: str | dict[str, Any]) -> tuple[str, str]:
+    """Best-effort ``(alert_name, severity)`` until ``extract_alert`` parses deeper."""
     if not isinstance(raw_alert, dict):
-        return ("Incident", "unknown", "warning")
+        return ("Incident", "warning")
 
     labels = alert_labels(raw_alert)
     annotations = alert_annotations(raw_alert)
@@ -88,20 +85,11 @@ def _resolve_alert_metadata(raw_alert: str | dict[str, Any]) -> tuple[str, str, 
         ),
         default="Incident",
     )
-    pipeline_name = first_text(
-        pipeline_name_value(
-            raw_alert,
-            labels=labels,
-            annotations=annotations,
-            canonical=canonical,
-        ),
-        default="unknown",
-    )
     severity = first_text(
         severity_value(raw_alert, labels=labels, canonical=canonical),
         default="warning",
     )
-    return alert_name, pipeline_name, severity
+    return alert_name, severity
 
 
 def make_agent_incident_state(

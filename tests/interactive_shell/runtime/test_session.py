@@ -158,7 +158,6 @@ class TestSession:
         session.accumulate_from_state(
             {
                 "service": "orders-api",
-                "pipeline_name": "events_fact",
                 "cluster_name": "prod-us-east",
                 "region": "us-east-1",
                 "environment": "production",
@@ -168,7 +167,6 @@ class TestSession:
         )
         assert session.accumulated_context == {
             "service": "orders-api",
-            "pipeline_name": "events_fact",
             "cluster_name": "prod-us-east",
             "region": "us-east-1",
             "environment": "production",

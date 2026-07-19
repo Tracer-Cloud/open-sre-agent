@@ -341,9 +341,9 @@ def resolve_api_key_env_for_request(env_var: str) -> str:
     for provider, provider_env in API_KEY_PROVIDER_ENVS.items():
         if provider_env == normalized:
             return resolve_for_request(provider).api_key
-    from config.llm_keyring import resolve_llm_api_key
+    from config.llm_credentials import resolve_env_credential
 
-    return resolve_llm_api_key(normalized)
+    return resolve_env_credential(normalized)
 
 
 def save_api_key(provider: str, value: str, *, detail: str | None = None) -> None:
@@ -351,9 +351,9 @@ def save_api_key(provider: str, value: str, *, detail: str | None = None) -> Non
     spec = require_provider_spec(provider)
     if not spec.uses_open_sre_api_key:
         raise ValueError(f"{spec.value} does not use an OpenSRE-managed API key")
-    from config.llm_keyring import save_llm_api_key
+    from config.llm_keyring import save_keyring_secret
 
-    save_llm_api_key(spec.api_key_env, value)
+    save_keyring_secret(spec.api_key_env, value)
     save_provider_auth_record(
         provider=spec.value,
         auth_name=spec.value,
@@ -370,9 +370,9 @@ def delete(provider: str) -> None:
     """Delete OpenSRE-managed provider auth metadata and API key when applicable."""
     spec = require_provider_spec(provider)
     if spec.uses_open_sre_api_key:
-        from config.llm_keyring import delete_llm_api_key
+        from config.llm_keyring import delete_keyring_secret
 
-        delete_llm_api_key(spec.api_key_env)
+        delete_keyring_secret(spec.api_key_env)
     delete_provider_auth_record(spec.value)
 
 
@@ -444,7 +444,7 @@ def has_llm_api_key(env_var: str) -> bool:
     from config.llm_keyring import (
         keyring_is_disabled,
         macos_keychain_item_exists,
-        resolve_llm_api_key,
+        resolve_keyring_secret,
     )
 
     if has_api_key_env_status(env_var):
@@ -458,7 +458,7 @@ def has_llm_api_key(env_var: str) -> bool:
     item_exists = macos_keychain_item_exists(env_var)
     if item_exists is not None:
         return item_exists
-    return bool(resolve_llm_api_key(env_var))
+    return bool(resolve_keyring_secret(env_var))
 
 
 __all__ = [

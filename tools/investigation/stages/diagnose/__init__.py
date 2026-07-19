@@ -2,7 +2,7 @@
 
 Node contract:
     Entrypoint : diagnose(state: InvestigationState) -> dict[str, Any]
-    Reads      : agent_messages, evidence, alert_name, alert_source,
+    Reads      : agent_messages, evidence, alert_json, raw_alert, alert_source,
                  root_cause (idempotency guard — skips if already set)
     Writes     : root_cause, root_cause_category, causal_chain,
                  validated_claims, non_validated_claims, remediation_steps,

@@ -12,6 +12,7 @@ import logging
 from typing import Any, cast
 
 from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.aws.availability import ec2_available_or_backend
 from integrations.aws.aws_sdk_client import execute_aws_sdk_call
 from integrations.aws.topology_helper import (
@@ -116,11 +117,9 @@ def get_elb_target_health(
         )
 
     if not arns and not load_balancer_arn:
-        return {
-            "source": "ec2",
-            "available": False,
-            "error": "either target_group_arns/target_group_arn or load_balancer_arn is required",
-        }
+        return tool_unavailable(
+            "ec2", "either target_group_arns/target_group_arn or load_balancer_arn is required"
+        )
 
     tg_params: dict[str, Any] = (
         {"TargetGroupArns": arns} if arns else {"LoadBalancerArn": load_balancer_arn}
@@ -132,11 +131,9 @@ def get_elb_target_health(
         region=region,
     )
     if not groups_result.get("success"):
-        return {
-            "source": "ec2",
-            "available": False,
-            "error": "Failed to describe target groups. Check server logs for details.",
-        }
+        return tool_unavailable(
+            "ec2", "Failed to describe target groups. Check server logs for details."
+        )
     target_groups = (groups_result.get("data") or {}).get("TargetGroups") or []
 
     healthy_targets: list[dict[str, Any]] = []

@@ -16,6 +16,7 @@ from typing import Any, cast
 
 from pydantic import ValidationError
 
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations._validation_helpers import report_validation_failure
 from integrations.groundcover.client import (
     GroundcoverClient,
@@ -96,15 +97,7 @@ def make_client(creds: dict[str, Any]) -> GroundcoverClient | None:
 
 def unavailable(source: str, error: str, **extra: Any) -> dict[str, Any]:
     """Standard unavailable envelope (no MCP call was made or it failed)."""
-    return {
-        "source": source,
-        "available": False,
-        "data": [],
-        "summary": {},
-        "truncated": False,
-        "error": error,
-        **extra,
-    }
+    return tool_unavailable(source, error, data=[], summary={}, truncated=False, **extra)
 
 
 def needs_query(source: str) -> dict[str, Any]:
@@ -164,16 +157,15 @@ def build_envelope(
 ) -> dict[str, Any]:
     """Turn a GroundcoverToolResult into the normalized OpenSRE envelope."""
     if not result.success:
-        return {
-            "source": source,
-            "available": False,
-            "query": query,
-            "time_range": tr,
-            "data": [],
-            "summary": {},
-            "truncated": False,
-            "error": result.error or "groundcover query failed",
-        }
+        return tool_unavailable(
+            source,
+            result.error or "groundcover query failed",
+            query=query,
+            time_range=tr,
+            data=[],
+            summary={},
+            truncated=False,
+        )
 
     data = result.data
     truncated = any("truncat" in note.lower() for note in result.notes)

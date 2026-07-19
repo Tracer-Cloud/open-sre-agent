@@ -206,21 +206,52 @@ def _generic_tool_results(result: Any) -> list[tuple[ToolCall, Any]]:
     ]
 
 
+def _format_generic_tool_payload(tool_call: ToolCall, tool_result: Any) -> str:
+    """Build a user-visible summary for one non-self-recording tool result."""
+    details = getattr(tool_result, "details", None)
+    if isinstance(details, dict):
+        summary = details.get("summary")
+        if isinstance(summary, str) and summary.strip():
+            return summary.strip()
+        stdout = details.get("stdout")
+        if details.get("ok") and isinstance(stdout, str) and stdout.strip():
+            return stdout.strip()
+        error = details.get("error")
+        if error:
+            return str(error).strip()
+    if getattr(tool_result, "is_error", False):
+        return ""
+    content = _content_to_text(getattr(tool_result, "content", "")).strip()
+    if not content:
+        return ""
+    # Prefer a nested summary when the tool returned a JSON object payload.
+    try:
+        parsed = json.loads(content)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        parsed = None
+    if isinstance(parsed, dict):
+        summary = parsed.get("summary")
+        if isinstance(summary, str) and summary.strip():
+            return summary.strip()
+        if parsed.get("ok") and isinstance(parsed.get("stdout"), str) and parsed["stdout"].strip():
+            return str(parsed["stdout"]).strip()
+        if parsed.get("error"):
+            return str(parsed["error"]).strip()
+    args = public_tool_input(tool_call.input)
+    if args:
+        return (
+            f"{tool_call.name} input: {json.dumps(args, ensure_ascii=False, default=str)}"
+            f"\n{tool_call.name} result: {content}"
+        )
+    return f"{tool_call.name} result: {content}"
+
+
 def _response_text_from_generic_results(result: Any) -> str:
     chunks: list[str] = []
     for tool_call, tool_result in _generic_tool_results(result):
-        if getattr(tool_result, "is_error", False):
-            continue
-        content = _content_to_text(getattr(tool_result, "content", ""))
-        if content.strip():
-            args = public_tool_input(tool_call.input)
-            if args:
-                chunks.append(
-                    f"{tool_call.name} input: {json.dumps(args, ensure_ascii=False, default=str)}"
-                    f"\n{tool_call.name} result: {content.strip()}"
-                )
-            else:
-                chunks.append(f"{tool_call.name} result: {content.strip()}")
+        formatted = _format_generic_tool_payload(tool_call, tool_result)
+        if formatted:
+            chunks.append(formatted)
     return "\n".join(chunks)
 
 
@@ -563,16 +594,24 @@ def _run_action_agent_turn_body(
         for content in (str(public_tool_input(tc.input).get("content", "")).strip(),)
         if content
     )
+    final_text = str(getattr(result, "final_text", "") or "").strip()
+    generic_text = _response_text_from_generic_results(result)
+    hint = _pop_turn_outcome_hint(session)
+    # History entries are already rendered by self-recording tools (shell/slash/…).
+    # Console display uses final_text + generic results + hints only so users see
+    # github_cli / other registry tools without double-printing shell output.
+    # response_text still includes history for persistence / non-TTY surfaces.
+    display_chunks = [chunk for chunk in (final_text, generic_text, hint) if chunk]
     response_chunks = [
         chunk
         for chunk in (
             _response_text_from_history_entries(executed_entries),
-            _response_text_from_generic_results(result),
-            _pop_turn_outcome_hint(session),
+            final_text,
+            generic_text,
+            hint,
         )
         if chunk
     ]
-    final_text = (getattr(result, "final_text", "") or "").strip()
     # Prefer the agent's closing prose when it looks like a real reply (report /
     # multi-line Markdown). Short one-liners like "done" are common after a
     # single tool call and must not replace tool-derived response_text or get
@@ -591,6 +630,10 @@ def _run_action_agent_turn_body(
         session.last_command_observation = response_text
     if handled and use_final_text:
         output.stream(label="OpenSRE", chunks=iter([final_text]))
+    elif display_chunks:
+        output.print()
+        output.render_response_header("assistant")
+        output.print("\n".join(display_chunks))
     elif handled:
         output.print()
 

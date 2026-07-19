@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.tool_framework.base import BaseTool
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.temporal.client import TemporalClient, TemporalConfig
 
 
@@ -82,21 +83,15 @@ class TemporalNamespaceInfoTool(BaseTool):
         **_kwargs: Any,
     ) -> dict[str, Any]:
         if not base_url:
-            return {
-                "source": "temporal",
-                "available": False,
-                "error": "base_url is required to connect to Temporal.",
-            }
+            return tool_unavailable("temporal", "base_url is required to connect to Temporal.")
 
         config = TemporalConfig(base_url=base_url, api_key=api_key, namespace=namespace)
         with TemporalClient(config) as client:
             result = client.get_namespace_info()
             if not result.get("success"):
-                return {
-                    "source": "temporal",
-                    "available": False,
-                    "error": result.get("error", "Unknown error fetching namespace info."),
-                }
+                return tool_unavailable(
+                    "temporal", result.get("error", "Unknown error fetching namespace info.")
+                )
             return {
                 "source": "temporal",
                 "available": True,
@@ -202,13 +197,9 @@ class TemporalTaskQueueTool(BaseTool):
         **_kwargs: Any,
     ) -> dict[str, Any]:
         if not base_url:
-            return {
-                "source": "temporal",
-                "available": False,
-                "error": "base_url is required to connect to Temporal.",
-                "pollers": [],
-                "stats": {},
-            }
+            return tool_unavailable(
+                "temporal", "base_url is required to connect to Temporal.", pollers=[], stats={}
+            )
         if not task_queue_name:
             return {
                 "source": "temporal",
@@ -222,13 +213,12 @@ class TemporalTaskQueueTool(BaseTool):
         with TemporalClient(config) as client:
             result = client.describe_task_queue(task_queue_name=task_queue_name)
             if not result.get("success"):
-                return {
-                    "source": "temporal",
-                    "available": False,
-                    "error": result.get("error", "Unknown error describing task queue."),
-                    "pollers": [],
-                    "stats": {},
-                }
+                return tool_unavailable(
+                    "temporal",
+                    result.get("error", "Unknown error describing task queue."),
+                    pollers=[],
+                    stats={},
+                )
             return {
                 "source": "temporal",
                 "available": True,
@@ -342,12 +332,9 @@ class TemporalWorkflowHistoryTool(BaseTool):
         **_kwargs: Any,
     ) -> dict[str, Any]:
         if not base_url:
-            return {
-                "source": "temporal",
-                "available": False,
-                "error": "base_url is required to connect to Temporal.",
-                "events": [],
-            }
+            return tool_unavailable(
+                "temporal", "base_url is required to connect to Temporal.", events=[]
+            )
         if not workflow_id:
             return {
                 "source": "temporal",
@@ -364,12 +351,11 @@ class TemporalWorkflowHistoryTool(BaseTool):
                 next_page_token=next_page_token if next_page_token else None,
             )
             if not result.get("success"):
-                return {
-                    "source": "temporal",
-                    "available": False,
-                    "error": result.get("error", "Unknown error fetching workflow history."),
-                    "events": [],
-                }
+                return tool_unavailable(
+                    "temporal",
+                    result.get("error", "Unknown error fetching workflow history."),
+                    events=[],
+                )
             return {
                 "source": "temporal",
                 "available": True,
@@ -468,24 +454,20 @@ class TemporalWorkflowsTool(BaseTool):
         **_kwargs: Any,
     ) -> dict[str, Any]:
         if not base_url:
-            return {
-                "source": "temporal",
-                "available": False,
-                "error": "base_url is required to connect to Temporal.",
-                "executions": [],
-            }
+            return tool_unavailable(
+                "temporal", "base_url is required to connect to Temporal.", executions=[]
+            )
 
         config = TemporalConfig(base_url=base_url, api_key=api_key, namespace=namespace)
         with TemporalClient(config) as client:
             token = next_page_token if next_page_token else None
             result = client.list_workflow_executions(next_page_token=token)
             if not result.get("success"):
-                return {
-                    "source": "temporal",
-                    "available": False,
-                    "error": result.get("error", "Unknown error listing workflow executions."),
-                    "executions": [],
-                }
+                return tool_unavailable(
+                    "temporal",
+                    result.get("error", "Unknown error listing workflow executions."),
+                    executions=[],
+                )
             return {
                 "source": "temporal",
                 "available": True,

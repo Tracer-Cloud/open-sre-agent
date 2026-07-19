@@ -7,6 +7,7 @@ from enum import StrEnum
 from typing import Final
 
 from platform.analytics.provider import Properties
+from platform.analytics.runtime_context import is_ci_environment
 
 INVESTIGATION_EVENT_SCHEMA_VERSION: Final[int] = 1
 
@@ -51,11 +52,7 @@ def is_test_run() -> bool:
     if os.getenv("PYTEST_CURRENT_TEST"):
         return True
 
-    if os.getenv("GITHUB_ACTIONS", "").strip().lower() == "true":
-        return True
-
-    ci_value = os.getenv("CI", "").strip().lower()
-    return ci_value in {"1", "true", "yes"}
+    return is_ci_environment()
 
 
 def resolve_environment_tag() -> str:

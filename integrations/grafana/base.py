@@ -395,6 +395,7 @@ class GrafanaClientBase:
             headers=self._get_auth_headers(),
             params=params,
             timeout=timeout,
+            verify=self._config.ssl_verify,
         )
         response.raise_for_status()
         result: dict[str, Any] = response.json()

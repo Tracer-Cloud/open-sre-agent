@@ -25,10 +25,14 @@ def get_grafana_client() -> GrafanaClient:
     """Create a Grafana client from environment variables."""
     import os
 
+    from config.llm_credentials import resolve_env_credential
+
     return get_grafana_client_from_credentials(
         endpoint=os.getenv("GRAFANA_INSTANCE_URL", "https://tracerbio.grafana.net"),
-        api_key=os.getenv("GRAFANA_READ_TOKEN", ""),
+        api_key=resolve_env_credential("GRAFANA_READ_TOKEN"),
         account_id="env_default",
+        verify_ssl=os.getenv("GRAFANA_VERIFY_SSL", "true").strip().lower() != "false",
+        ca_bundle=os.getenv("GRAFANA_CA_BUNDLE", "").strip(),
     )
 
 
@@ -38,6 +42,8 @@ def get_grafana_client_from_credentials(
     account_id: str = "user_integration",
     username: str = "",
     password: str = "",
+    verify_ssl: bool = True,
+    ca_bundle: str = "",
 ) -> GrafanaClient:
     """Create a Grafana client from integration credentials."""
     cache_key = f"creds_{account_id}_{endpoint}"
@@ -50,6 +56,8 @@ def get_grafana_client_from_credentials(
         read_token=api_key,
         username=username,
         password=password,
+        verify_ssl=verify_ssl,
+        ca_bundle=ca_bundle,
     )
     client = GrafanaClient(config=config)
 
@@ -61,6 +69,8 @@ def get_grafana_client_from_credentials(
             read_token=api_key,
             username=username,
             password=password,
+            verify_ssl=verify_ssl,
+            ca_bundle=ca_bundle,
             loki_datasource_uid=discovered.get("loki_uid", ""),
             tempo_datasource_uid=discovered.get("tempo_uid", ""),
             mimir_datasource_uid=discovered.get("mimir_uid", ""),

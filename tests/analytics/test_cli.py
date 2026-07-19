@@ -142,11 +142,55 @@ def test_capture_github_login_completed(monkeypatch: pytest.MonkeyPatch) -> None
     stub = _StubAnalytics()
     monkeypatch.setattr(cli, "get_analytics", lambda: stub)
 
-    cli.capture_github_login_completed("octocat")
+    cli.capture_github_login_completed("octocat", variant="forced")
 
     assert stub.events == [
-        (Event.GITHUB_LOGIN_COMPLETED, {"github_username": "octocat"}),
+        (
+            Event.GITHUB_LOGIN_COMPLETED,
+            {"github_username": "octocat", "github_gate_variant": "forced"},
+        ),
     ]
+
+
+def test_assign_github_gate_variant_is_deterministic() -> None:
+    a = cli.assign_github_gate_variant("11111111-2222-3333-4444-555555555555")
+    b = cli.assign_github_gate_variant("11111111-2222-3333-4444-555555555555")
+    c = cli.assign_github_gate_variant("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+    assert a == b
+    assert a in {cli.GITHUB_GATE_VARIANT_CONTROL, cli.GITHUB_GATE_VARIANT_FORCED}
+    # Different ids should usually split; assert both variants exist across a sample.
+    variants = {
+        cli.assign_github_gate_variant(f"00000000-0000-0000-0000-{i:012d}") for i in range(40)
+    }
+    assert variants == {cli.GITHUB_GATE_VARIANT_CONTROL, cli.GITHUB_GATE_VARIANT_FORCED}
+    assert c in variants
+
+
+def test_resolve_github_gate_variant_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENSRE_GITHUB_GATE_VARIANT", "forced")
+    assert cli.resolve_github_gate_variant() == "forced"
+    monkeypatch.setenv("OPENSRE_GITHUB_GATE_VARIANT", "control")
+    assert cli.resolve_github_gate_variant() == "control"
+
+
+def test_capture_github_login_lifecycle_events(monkeypatch: pytest.MonkeyPatch) -> None:
+    stub = _StubAnalytics()
+    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
+
+    cli.capture_github_login_prompted(variant="control")
+    cli.capture_github_login_skipped(variant="control")
+    cli.capture_github_login_abandoned(variant="forced", reason="cancelled")
+    cli.stamp_github_gate_variant("forced")
+
+    assert stub.events == [
+        (Event.GITHUB_LOGIN_PROMPTED, {"github_gate_variant": "control"}),
+        (Event.GITHUB_LOGIN_SKIPPED, {"github_gate_variant": "control"}),
+        (
+            Event.GITHUB_LOGIN_ABANDONED,
+            {"github_gate_variant": "forced", "reason": "cancelled"},
+        ),
+    ]
+    assert stub.persistent_properties == {"github_gate_variant": "forced"}
 
 
 def test_build_cli_invoked_properties_includes_full_command_path() -> None:

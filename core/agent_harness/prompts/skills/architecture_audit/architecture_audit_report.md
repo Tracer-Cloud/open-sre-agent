@@ -46,3 +46,5 @@ Rules:
 1. {highest-priority refactor / follow-up}
 2. {next}
 3. {next or "none"}
+
+Would you like me to create github issues based on these findings? Just let me know.

@@ -1,8 +1,9 @@
 """Process entry for the OpenSRE messaging gateway.
 
-Started by the daemon as ``python -m gateway.main`` (also
-``opensre gateway start`` / ``opensre gateway start --foreground``).
-Delegates to :func:`gateway.runtime.manager.main`.
+Prefer ``python -m surfaces.cli.gateway_entry`` (what the daemon spawns): that
+composition root wires headless slash ports. This module keeps
+``python -m gateway.main`` working for callers that only need the manager
+boot path without the surfaces glue.
 """
 
 from __future__ import annotations

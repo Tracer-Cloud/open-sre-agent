@@ -79,6 +79,15 @@ def test_rejects_bot_echo_and_message_subtypes() -> None:
     assert parse_events_api_payload(_mention_payload(subtype="message_changed")) is None
 
 
+def test_accepts_file_share_and_thread_broadcast_subtypes() -> None:
+    # These subtypes still carry a real user mention and must be answered,
+    # not silently dropped like edit/join bookkeeping subtypes.
+    for subtype in ("file_share", "thread_broadcast"):
+        inbound = parse_events_api_payload(_mention_payload(subtype=subtype))
+        assert inbound is not None, f"{subtype} mention was dropped"
+        assert inbound.text == "check the checkout service"
+
+
 def test_rejects_channel_messages_without_mention() -> None:
     payload = _mention_payload(type="message", channel_type="channel")
     assert parse_events_api_payload(payload) is None
@@ -89,3 +98,60 @@ def test_rejects_payloads_missing_required_fields() -> None:
     assert parse_events_api_payload(_mention_payload(text="")) is None
     assert parse_events_api_payload(_mention_payload(user="")) is None
     assert parse_events_api_payload(_mention_payload(text="<@UBOT>")) is None
+
+
+def test_untagged_thread_reply_parses_but_not_addressed() -> None:
+    payload = {
+        "team_id": "T333",
+        "event": {
+            "type": "message",
+            "user": "U1",
+            "channel": "C2",
+            "ts": "200.2",
+            "thread_ts": "100.1",
+            "text": "and the second one?",
+        },
+    }
+    inbound = parse_events_api_payload(payload)
+    assert inbound is not None
+    assert inbound.addressed is False
+    assert inbound.thread_ts == "100.1"
+
+
+def test_untagged_top_level_channel_message_is_dropped() -> None:
+    payload = {
+        "team_id": "T333",
+        "event": {
+            "type": "message",
+            "user": "U1",
+            "channel": "C2",
+            "ts": "200.2",
+            "text": "chatter",
+        },
+    }
+    assert parse_events_api_payload(payload) is None
+
+
+def test_app_mention_is_addressed() -> None:
+    inbound = parse_events_api_payload(_mention_payload())
+    assert inbound is not None
+    assert inbound.addressed is True
+
+
+def test_untagged_reply_keeps_leading_human_mention() -> None:
+    """The attention gate must see '<@U2> …' to know the reply targets a human;
+    only addressed messages get their leading (bot) mention stripped."""
+    payload = {
+        "team_id": "T333",
+        "event": {
+            "type": "message",
+            "user": "U1",
+            "channel": "C2",
+            "ts": "200.2",
+            "thread_ts": "100.1",
+            "text": "<@U2> can you check the dashboard?",
+        },
+    }
+    inbound = parse_events_api_payload(payload)
+    assert inbound is not None
+    assert inbound.text == "<@U2> can you check the dashboard?"

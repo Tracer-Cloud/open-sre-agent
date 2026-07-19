@@ -1021,6 +1021,7 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         # dispatches to fix_sentry_issue and lets unexpected errors escape.
         "fix_sentry_issue_start",
         "generate_work_status_report",
+        "github_cli",
         "get_airflow_dag_runs",
         "get_airflow_metrics",
         "get_airflow_task_instances",
@@ -1150,6 +1151,7 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "list_jenkins_running_builds",
         "list_s3_objects",
         "list_sentry_issue_events",
+        "list_sentry_uptime_alerts",
         "llm_set_provider",
         "lookup_cloudtrail_events",
         "opsgenie_alert_detail",
@@ -1213,6 +1215,7 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "temporal_workflow_history",
         "temporal_workflows",
         "telegram_send_message",
+        "rocketchat_send_message",
         "twilio_notify",
         "vercel_deployment_logs",
         "vercel_deployment_status",

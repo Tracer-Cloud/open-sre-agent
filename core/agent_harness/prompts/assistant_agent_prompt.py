@@ -6,6 +6,10 @@ from typing import Any
 from core.agent_harness.prompts.rules import (
     AGENT_RESPONSE_THREE_TIER_RULE,
     CLI_ASSISTANT_MARKDOWN_RULE,
+    GATEWAY_MESSAGE_LAYOUT_RULE,
+    GATEWAY_RESPONSE_SHAPE_RULE,
+    GATEWAY_SETUP_GUIDANCE_RULE,
+    GATEWAY_TEAMMATE_PERSONA_RULE,
     INTERACTIVE_SHELL_TERMINOLOGY_RULE,
 )
 from core.agent_harness.prompts.runtime_facts import render_runtime_facts
@@ -142,17 +146,66 @@ def build_environment_block(
     return "--- Environment (current shell state) ---\n" + "\n".join(facts) + "\n\n"
 
 
+_CLI_PREAMBLE = (
+    "You are the OpenSRE terminal assistant. You help with OpenSRE CLI "
+    "usage, the interactive shell, and onboarding. Explicit slash commands "
+    "and command aliases execute before this assistant as argv, without "
+    "shell semantics; ordinary free text should be answered conversationally. "
+    "Users must prefix with ! for full-shell semantics (pipes, redirects, "
+    "mutating commands). Do not tell users the interactive shell cannot "
+    "execute commands. You do NOT run incident "
+    "investigations yourself "
+    "(those use the separate investigation pipeline), but you are grounded on "
+    "that pipeline's architecture below and can answer questions about its "
+    "stages and source files.\n"
+    "When the user wants to investigate an alert, tell them to paste "
+    "alert text, JSON, or a concrete incident description (errors, "
+    "services, symptoms). Mention `opensre investigate` and pasting "
+    "into this interactive shell.\n"
+)
+
+_GATEWAY_PREAMBLE = (
+    "You are OpenSRE, an AI production engineer teammate helping a colleague in "
+    "Slack. You answer questions and help with SRE/observability and general "
+    "production-engineering work directly in the conversation. You do NOT run the "
+    "incident investigation pipeline yourself (that is separate), but you are "
+    "grounded on its architecture below and can answer questions about its stages "
+    "and source files.\n"
+    "When someone wants a full investigation of an alert, ask them to paste the "
+    "alert text, JSON, or a concrete incident description (errors, services, "
+    "symptoms).\n"
+)
+
+
 def _build_system_prompt(
     reference: str,
     history: str,
     agents_md: str = "",
+    docs: str = "",
     investigation_flow: str = "",
     prior_investigation: str = "",
     prior_action_facts: str = "",
     environment: str = "",
+    surface: str = "interactive_shell",
 ) -> str:
     """Build the system prompt for one assistant turn."""
+    is_gateway = surface == "gateway"
+    preamble = _GATEWAY_PREAMBLE if is_gateway else _CLI_PREAMBLE
+    terminology_rule = GATEWAY_TEAMMATE_PERSONA_RULE if is_gateway else _TERMINOLOGY_RULE
+    setup_rule = GATEWAY_SETUP_GUIDANCE_RULE if is_gateway else _SETUP_GUIDANCE_RULE
+    response_shape_rule = GATEWAY_RESPONSE_SHAPE_RULE if is_gateway else _RESPONSE_SHAPE_RULE
+    layout_block = f"{GATEWAY_MESSAGE_LAYOUT_RULE}\n\n" if is_gateway else ""
     repo_map_block = f"--- Repo map (AGENTS.md) ---\n{agents_md}\n\n" if agents_md else ""
+    docs_block = (
+        "--- Documentation reference (docs/) ---\n"
+        "Relevant OpenSRE documentation pages for this question. When answering "
+        "how to configure or set up something, use these to give the complete "
+        "procedure — including steps that happen outside OpenSRE (creating "
+        "accounts, API keys, bots, OAuth apps, finding IDs) — not just the "
+        f"in-tool command. Do not invent steps beyond what these pages state.\n{docs}\n\n"
+        if docs
+        else ""
+    )
     investigation_flow_block = (
         f"--- Investigation flow reference ---\n{investigation_flow}\n\n"
         if investigation_flow
@@ -172,21 +225,7 @@ def _build_system_prompt(
         else ""
     )
     return (
-        "You are the OpenSRE terminal assistant. You help with OpenSRE CLI "
-        "usage, the interactive shell, and onboarding. Explicit slash commands "
-        "and command aliases execute before this assistant as argv, without "
-        "shell semantics; ordinary free text should be answered conversationally. "
-        "Users must prefix with ! for full-shell semantics (pipes, redirects, "
-        "mutating commands). Do not tell users the interactive shell cannot "
-        "execute commands. You do NOT run incident "
-        "investigations yourself "
-        "(those use the separate investigation pipeline), but you are grounded on "
-        "that pipeline's architecture below and can answer questions about its "
-        "stages and source files.\n"
-        "When the user wants to investigate an alert, tell them to paste "
-        "alert text, JSON, or a concrete incident description (errors, "
-        "services, symptoms). Mention `opensre investigate` and pasting "
-        "into this interactive shell.\n"
+        f"{preamble}"
         "Exception: if Recent CLI conversation ends with **Want me to:** and "
         "the user replies yes/sure/ok/please (or 'Yes — please …'), fulfill "
         "that offer from the prior turn — do NOT pivot to paste-an-alert / "
@@ -209,13 +248,15 @@ def _build_system_prompt(
         "those as available thread context for follow-up questions; do not ask the "
         "user to paste values that are already present there.\n\n"
         f"{_PRIOR_INVESTIGATION_FOLLOW_UP_RULE}\n\n"
-        f"{_SETUP_GUIDANCE_RULE}\n\n"
+        f"{setup_rule}\n\n"
         f"{_SOURCE_SCOPED_INVESTIGATION_RULE}\n\n"
         f"{_SENTRY_SUMMARY_RULE}\n\n"
-        f"{_RESPONSE_SHAPE_RULE}\n\n"
-        f"{_TERMINOLOGY_RULE}\n{_MARKDOWN_RULE}\n\n"
+        f"{response_shape_rule}\n\n"
+        f"{layout_block}"
+        f"{terminology_rule}\n{_MARKDOWN_RULE}\n\n"
         f"{environment}"
         f"--- CLI reference ---\n{reference}\n\n"
+        f"{docs_block}"
         f"{investigation_flow_block}"
         f"{prior_investigation_block}"
         f"{prior_action_facts_block}"

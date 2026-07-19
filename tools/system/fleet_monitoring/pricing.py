@@ -5,23 +5,60 @@
 sampler now keeps input/output/cache buckets, so pricing applies the
 right rate to each bucket instead of using the legacy 70/30 blend.
 
-The local price table is a vendored snapshot of the ``models.dev``
-catalog for the Claude Code / Codex models this dashboard supports,
-following CodexBar's offline-first approach. Unknown models return
-``None`` so the dashboard renders ``-`` rather than inventing a rate.
+Rates come from litellm's bundled community-maintained price table
+(~2.8k models) rather than a hand-vendored dict — see issue #4035. We
+read litellm's *local* snapshot directly from its packaged JSON file
+instead of the shared ``litellm.model_cost`` global: that global is a
+process-wide singleton populated from a live network fetch on
+whichever import touches it first, so depending on it would make our
+pricing nondeterministic based on unrelated import order elsewhere in
+the process (confirmed in practice — a live fetch elsewhere had
+already picked up a same-week model release our local snapshot didn't
+have yet). This module is imported unconditionally by the always-on
+dashboard sampler, so pricing lookups must stay a pure, deterministic
+offline dict read regardless of what else the process has imported,
+and must degrade to "no rates" rather than crash the sampler if the
+data file is ever missing. A tiny local override table covers the
+rare model litellm's snapshot hasn't picked up yet (a brand-new
+release, or a routing alias OpenAI/Anthropic don't publish as their
+own price-table row). Unknown models return ``None`` so the dashboard
+renders ``-`` rather than inventing a rate.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from dataclasses import dataclass
 from functools import lru_cache
+from importlib.resources import files
+from typing import Any, TypeGuard
 
-from tools.system.fleet_monitoring.meters import TokenUsage
+# litellm imports tiktoken and resolves an encoding at module load time; under
+# a frozen (PyInstaller) build that lookup fails unless this bootstrap runs
+# first. See core/llm/transports/litellm/frozen_tiktoken_bootstrap.py and
+# issue #3631 — this module now hits the same import path unconditionally.
+from core.llm.transports.litellm.frozen_tiktoken_bootstrap import (
+    ensure_tiktoken_encodings_discoverable,
+)
 
-#: ``models.dev`` pricing snapshot last refreshed for this vendored table.
-RATES_VERIFIED_AT = "2026-05-17"
+ensure_tiktoken_encodings_discoverable()
+
+from tools.system.fleet_monitoring.meters import TokenUsage  # noqa: E402
+
+#: litellm's bundled price/context-window snapshot. Read directly (see
+#: _litellm_local_cost_map) rather than via litellm.litellm_core_utils's
+#: GetModelCostMap — that class is a private internal, not covered by
+#: litellm's semver, and a rename there must not crash this always-on
+#: sampler. The filename itself is already a load-bearing contract
+#: elsewhere (tests/packaging/test_litellm_bundle_contract.py asserts it
+#: ships in frozen release builds).
+_LITELLM_LOCAL_PRICE_SNAPSHOT_FILENAME = "model_prices_and_context_window_backup.json"
+
+#: Kept for callers that logged/displayed the vendored-table refresh date.
+#: Rates are now sourced live (per-process) from litellm's own bundled table.
+RATES_VERIFIED_AT = "litellm model_cost (local snapshot)"
 
 _USD_PER_M = 1_000_000
 
@@ -98,167 +135,55 @@ def _price(
     )
 
 
-MODEL_PRICES: dict[str, ModelPrice] = {
-    # Anthropic / Claude Code. Values are USD per 1M tokens in
-    # models.dev; _price converts them to USD per token.
-    "claude-3-5-sonnet-20240620": _price(
-        3.00, 15.00, cache_read_usd_per_million=0.30, cache_write_usd_per_million=3.75
-    ),
+# Models confirmed absent from litellm's bundled price table (checked at
+# migration time — see issue #4035). This is an escape hatch for the rare
+# model litellm's table hasn't (yet, or ever again) picked up, not a general
+# config surface: entries here are only consulted after a direct litellm
+# lookup misses.
+_LOCAL_MODEL_PRICES: dict[str, ModelPrice] = {
+    # GPT-5.6 (GA 2026-07-09, #3931) — too new for litellm's bundled
+    # snapshot. Per 1M tokens, from
+    # https://developers.openai.com/api/docs/pricing: sol 5/30, terra
+    # 2.50/15, luna 1/6. Cached input is 90% off.
+    "gpt-5.6-sol": _price(5.00, 30.00, cache_read_usd_per_million=0.50),
+    "gpt-5.6-terra": _price(2.50, 15.00, cache_read_usd_per_million=0.25),
+    "gpt-5.6-luna": _price(1.00, 6.00, cache_read_usd_per_million=0.10),
+    # claude-3-5-sonnet-20241022 — retired, frozen historical rate. litellm's
+    # current table only keeps this generation under Bedrock-routed keys
+    # (e.g. anthropic.claude-3-5-sonnet-20241022-v2:0), not the bare
+    # direct-API id Claude Code CLI logs report.
     "claude-3-5-sonnet-20241022": _price(
         3.00, 15.00, cache_read_usd_per_million=0.30, cache_write_usd_per_million=3.75
     ),
-    "claude-3-5-haiku-20241022": _price(
-        0.80, 4.00, cache_read_usd_per_million=0.08, cache_write_usd_per_million=1.00
-    ),
-    "claude-3-5-haiku-latest": _price(
-        0.80, 4.00, cache_read_usd_per_million=0.08, cache_write_usd_per_million=1.00
-    ),
-    "claude-haiku-4-5": _price(
-        1.00, 5.00, cache_read_usd_per_million=0.10, cache_write_usd_per_million=1.25
-    ),
-    "claude-haiku-4-5-20251001": _price(
-        1.00, 5.00, cache_read_usd_per_million=0.10, cache_write_usd_per_million=1.25
-    ),
-    "claude-sonnet-4": _price(
-        3.00, 15.00, cache_read_usd_per_million=0.30, cache_write_usd_per_million=3.75
-    ),
-    "claude-sonnet-4-0": _price(
-        3.00, 15.00, cache_read_usd_per_million=0.30, cache_write_usd_per_million=3.75
-    ),
-    "claude-sonnet-4-20250514": _price(
-        3.00, 15.00, cache_read_usd_per_million=0.30, cache_write_usd_per_million=3.75
-    ),
-    "claude-sonnet-4-5": _price(
-        3.00, 15.00, cache_read_usd_per_million=0.30, cache_write_usd_per_million=3.75
-    ),
-    "claude-sonnet-4-5-20250929": _price(
-        3.00, 15.00, cache_read_usd_per_million=0.30, cache_write_usd_per_million=3.75
-    ),
-    "claude-sonnet-4-6": _price(
-        3.00, 15.00, cache_read_usd_per_million=0.30, cache_write_usd_per_million=3.75
-    ),
-    "claude-opus-4": _price(
-        15.00, 75.00, cache_read_usd_per_million=1.50, cache_write_usd_per_million=18.75
-    ),
-    "claude-opus-4-0": _price(
-        15.00, 75.00, cache_read_usd_per_million=1.50, cache_write_usd_per_million=18.75
-    ),
-    "claude-opus-4-20250514": _price(
-        15.00, 75.00, cache_read_usd_per_million=1.50, cache_write_usd_per_million=18.75
-    ),
-    "claude-opus-4-1": _price(
-        15.00, 75.00, cache_read_usd_per_million=1.50, cache_write_usd_per_million=18.75
-    ),
-    "claude-opus-4-1-20250805": _price(
-        15.00, 75.00, cache_read_usd_per_million=1.50, cache_write_usd_per_million=18.75
-    ),
-    "claude-opus-4-5": _price(
-        5.00, 25.00, cache_read_usd_per_million=0.50, cache_write_usd_per_million=6.25
-    ),
-    "claude-opus-4-5-20251101": _price(
-        5.00, 25.00, cache_read_usd_per_million=0.50, cache_write_usd_per_million=6.25
-    ),
-    "claude-opus-4-6": _price(
-        5.00, 25.00, cache_read_usd_per_million=0.50, cache_write_usd_per_million=6.25
-    ),
-    "claude-opus-4-7": _price(
-        5.00, 25.00, cache_read_usd_per_million=0.50, cache_write_usd_per_million=6.25
-    ),
-    "claude-fable-5": _price(
-        10.00, 50.00, cache_read_usd_per_million=1.00, cache_write_usd_per_million=12.50
-    ),
-    # OpenAI / Codex.
-    "gpt-4o": _price(2.50, 10.00, cache_read_usd_per_million=1.25),
-    "gpt-4o-2024-05-13": _price(5.00, 15.00),
-    "gpt-4o-2024-08-06": _price(2.50, 10.00, cache_read_usd_per_million=1.25),
-    "gpt-4o-2024-11-20": _price(2.50, 10.00, cache_read_usd_per_million=1.25),
-    "gpt-4o-mini": _price(0.15, 0.60, cache_read_usd_per_million=0.08),
-    "gpt-5": _price(1.25, 10.00, cache_read_usd_per_million=0.125),
-    "gpt-5-chat-latest": _price(1.25, 10.00),
-    "gpt-5-codex": _price(1.25, 10.00, cache_read_usd_per_million=0.125),
-    "gpt-5-mini": _price(0.25, 2.00, cache_read_usd_per_million=0.025),
-    "gpt-5-nano": _price(0.05, 0.40, cache_read_usd_per_million=0.005),
-    "gpt-5-pro": _price(15.00, 120.00),
-    "gpt-5.1": _price(1.25, 10.00, cache_read_usd_per_million=0.13),
-    "gpt-5.1-chat-latest": _price(1.25, 10.00, cache_read_usd_per_million=0.125),
-    "gpt-5.1-codex": _price(1.25, 10.00, cache_read_usd_per_million=0.125),
-    "gpt-5.1-codex-max": _price(1.25, 10.00, cache_read_usd_per_million=0.125),
-    "gpt-5.1-codex-mini": _price(0.25, 2.00, cache_read_usd_per_million=0.025),
-    "gpt-5.2": _price(1.75, 14.00, cache_read_usd_per_million=0.175),
-    "gpt-5.2-chat-latest": _price(1.75, 14.00, cache_read_usd_per_million=0.175),
-    "gpt-5.2-codex": _price(1.75, 14.00, cache_read_usd_per_million=0.175),
-    "gpt-5.2-pro": _price(21.00, 168.00),
-    "gpt-5.3-chat-latest": _price(1.75, 14.00, cache_read_usd_per_million=0.175),
-    "gpt-5.3-codex": _price(1.75, 14.00, cache_read_usd_per_million=0.175),
-    "gpt-5.3-codex-spark": _price(1.75, 14.00, cache_read_usd_per_million=0.175),
-    "gpt-5.4": _price(2.50, 15.00, cache_read_usd_per_million=0.25),
-    "gpt-5.4-mini": _price(0.75, 4.50, cache_read_usd_per_million=0.075),
-    "gpt-5.4-nano": _price(0.20, 1.25, cache_read_usd_per_million=0.02),
-    "gpt-5.4-pro": _price(30.00, 180.00),
-    "gpt-5.5": _price(5.00, 30.00, cache_read_usd_per_million=0.50),
-    "gpt-5.5-pro": _price(30.00, 180.00),
-    "gpt-5.6-luna": _price(1.00, 6.00, cache_read_usd_per_million=0.10),
-    "gpt-5.6-sol": _price(5.00, 30.00, cache_read_usd_per_million=0.50),
-    "gpt-5.6-terra": _price(2.50, 15.00, cache_read_usd_per_million=0.25),
-    "o3": _price(2.00, 8.00, cache_read_usd_per_million=0.50),
-    "o3-deep-research": _price(10.00, 40.00, cache_read_usd_per_million=2.50),
-    "o3-mini": _price(1.10, 4.40, cache_read_usd_per_million=0.55),
-    "o3-pro": _price(20.00, 80.00),
 }
 
-_UNSORTED_FAMILY_FALLBACKS: tuple[tuple[str, str], ...] = (
-    ("claude-3-5-sonnet", "claude-3-5-sonnet-20241022"),
-    ("claude-3-5-haiku", "claude-3-5-haiku-20241022"),
-    ("claude-haiku-4-5", "claude-haiku-4-5"),
-    ("claude-fable-5", "claude-fable-5"),
-    ("claude-sonnet-4-6", "claude-sonnet-4-6"),
-    ("claude-sonnet-4-5", "claude-sonnet-4-5"),
-    ("claude-sonnet-4", "claude-sonnet-4"),
-    ("claude-opus-4-7", "claude-opus-4-7"),
-    ("claude-opus-4-6", "claude-opus-4-6"),
-    ("claude-opus-4-5", "claude-opus-4-5"),
-    ("claude-opus-4-1", "claude-opus-4-1"),
-    ("claude-opus-4", "claude-opus-4"),
-    ("gpt-5.3-codex-spark", "gpt-5.3-codex-spark"),
-    ("gpt-5.3-codex", "gpt-5.3-codex"),
-    ("gpt-5.2-codex", "gpt-5.2-codex"),
-    ("gpt-5.1-codex-mini", "gpt-5.1-codex-mini"),
-    ("gpt-5.1-codex-max", "gpt-5.1-codex-max"),
-    ("gpt-5.1-codex", "gpt-5.1-codex"),
-    ("gpt-5-codex", "gpt-5-codex"),
-    ("gpt-5.6-terra", "gpt-5.6-terra"),
-    ("gpt-5.6-luna", "gpt-5.6-luna"),
-    ("gpt-5.6-sol", "gpt-5.6-sol"),
-    # OpenAI routes the bare `gpt-5.6` alias to Sol server-side. The three
-    # rows above are longer prefixes, so they still win for terra/luna.
-    ("gpt-5.6", "gpt-5.6-sol"),
-    ("gpt-5.5-pro", "gpt-5.5-pro"),
-    ("gpt-5.5", "gpt-5.5"),
-    ("gpt-5.4-mini", "gpt-5.4-mini"),
-    ("gpt-5.4-nano", "gpt-5.4-nano"),
-    ("gpt-5.4-pro", "gpt-5.4-pro"),
-    ("gpt-5.4", "gpt-5.4"),
-    ("gpt-5.2-pro", "gpt-5.2-pro"),
-    ("gpt-5.2", "gpt-5.2"),
-    ("gpt-5.1", "gpt-5.1"),
-    ("gpt-5-mini", "gpt-5-mini"),
-    ("gpt-5-nano", "gpt-5-nano"),
-    ("gpt-5-pro", "gpt-5-pro"),
-    ("gpt-5", "gpt-5"),
-    ("gpt-4o-mini", "gpt-4o-mini"),
-    ("gpt-4o", "gpt-4o"),
-    ("o3-deep-research", "o3-deep-research"),
-    ("o3-mini", "o3-mini"),
-    ("o3-pro", "o3-pro"),
-    ("o3", "o3"),
+# Longest-prefix-first so more specific tiers (e.g. ``gpt-5.6-terra``) win
+# over the bare ``gpt-5.6`` alias. Built programmatically so a future edit
+# cannot silently shadow a longer prefix with a shorter one.
+_LOCAL_FAMILY_FALLBACKS: tuple[tuple[str, str], ...] = tuple(
+    sorted(
+        (
+            ("gpt-5.6-sol", "gpt-5.6-sol"),
+            ("gpt-5.6-terra", "gpt-5.6-terra"),
+            ("gpt-5.6-luna", "gpt-5.6-luna"),
+            # OpenAI routes the bare ``gpt-5.6`` alias to Sol server-side.
+            ("gpt-5.6", "gpt-5.6-sol"),
+        ),
+        key=lambda item: len(item[0]),
+        reverse=True,
+    )
 )
 
-# Longest-prefix-first so more specific families win. Build it
-# programmatically so a future edit cannot silently shadow a longer
-# family with its shorter prefix.
-_FAMILY_FALLBACKS: tuple[tuple[str, str], ...] = tuple(
-    sorted(_UNSORTED_FAMILY_FALLBACKS, key=lambda item: len(item[0]), reverse=True)
-)
+# OpenSRE routes these providers through a generic OpenAI-compatible HTTP
+# client (core/llm/providers/openai_compat_providers.py) using the bare
+# configured model name — never litellm's own "<provider>/<model>" prefix
+# convention. litellm keys these two providers *under* that prefix
+# regardless (e.g. "groq/llama-3.3-70b-versatile"), so a bare candidate
+# would otherwise never match even though the model is genuinely priced.
+# Tried only as a last resort (see _lookup_price), and scoped to providers
+# OpenSRE actually configures — guessing a provider prefix for an arbitrary
+# open-weight model would risk silently picking a different host's price.
+_COMPAT_PROVIDER_PREFIXES: tuple[str, ...] = ("groq/", "minimax/")
 
 
 def usd_for_usage(
@@ -330,15 +255,42 @@ def usd_per_hour(
     return tokens_per_min * 60.0 * rate
 
 
+#: A candidate that still carries a hosting-surface routing artifact —
+#: a provider path segment (``bedrock/...``), an Anthropic vendor-prefixed
+#: Bedrock id (``us.anthropic....``), or a trailing Bedrock version suffix
+#: (``-v1:0``). litellm indexes these as their own keys (same rate as the
+#: bare id), so a raw candidate can resolve *before* the canonical
+#: direct-API form is tried — this predicate lets ``normalize_model_name``
+#: prefer the canonical form when both resolve.
+_ROUTING_SUFFIX_RE = re.compile(r"-v\d+:\d+$")
+
+
+def _is_canonical_candidate(candidate: str) -> bool:
+    return (
+        "/" not in candidate
+        and "@" not in candidate
+        and "anthropic." not in candidate
+        and not _ROUTING_SUFFIX_RE.search(candidate)
+    )
+
+
 def normalize_model_name(model: str | None) -> str | None:
     if model is None:
         return None
     candidates = _model_candidates(model)
+    resolving = [
+        candidate
+        for candidate in candidates
+        if _litellm_price(candidate) is not None or candidate in _LOCAL_MODEL_PRICES
+    ]
+    if resolving:
+        canonical = [candidate for candidate in resolving if _is_canonical_candidate(candidate)]
+        # Prefer the most specific canonical match (keeps a date suffix over
+        # the bare family alias); fall back to any resolving candidate if
+        # every match still carries a routing artifact.
+        return max(canonical or resolving, key=len)
     for candidate in candidates:
-        if candidate in MODEL_PRICES:
-            return candidate
-    for candidate in candidates:
-        for prefix, canonical_id in _FAMILY_FALLBACKS:
+        for prefix, canonical_id in _LOCAL_FAMILY_FALLBACKS:
             if candidate.startswith(prefix):
                 return canonical_id
     return candidates[0] if candidates else None
@@ -396,16 +348,91 @@ def _override_related_rate(
 def _lookup_price(model: str) -> ModelPrice | None:
     candidates = _model_candidates(model)
     for candidate in candidates:
-        direct = MODEL_PRICES.get(candidate)
-        if direct is not None:
-            return direct
+        price = _litellm_price(candidate)
+        if price is not None:
+            return price
+        local = _LOCAL_MODEL_PRICES.get(candidate)
+        if local is not None:
+            return local
     for candidate in candidates:
-        for prefix, canonical_id in _FAMILY_FALLBACKS:
+        for prefix, canonical_id in _LOCAL_FAMILY_FALLBACKS:
             if candidate.startswith(prefix):
-                resolved = MODEL_PRICES.get(canonical_id)
-                if resolved is not None:
-                    return resolved
+                return _LOCAL_MODEL_PRICES.get(canonical_id)
+    for candidate in candidates:
+        for provider_prefix in _COMPAT_PROVIDER_PREFIXES:
+            price = _litellm_price(f"{provider_prefix}{candidate}")
+            if price is not None:
+                return price
     return None
+
+
+@lru_cache(maxsize=1)
+def _litellm_local_cost_map() -> dict[str, Any]:
+    """litellm's bundled price snapshot, read directly (never the live fetch).
+
+    Deliberately bypasses the shared ``litellm.model_cost`` global — see the
+    module docstring for why that global isn't safe to depend on here. Reads
+    the packaged JSON file directly rather than through litellm's internal
+    ``GetModelCostMap`` class, and degrades to an empty table (every model
+    reports unpriced) instead of raising if the file is ever missing or
+    unreadable — this module is imported unconditionally by the always-on
+    dashboard sampler, so a data-loading hiccup must never crash it.
+
+    Keyed lowercase: our candidates are always lowercased (see
+    ``_model_candidates``), but litellm's own keys aren't uniformly
+    lowercase — e.g. MiniMax entries are ``minimax/MiniMax-M2.1``. A
+    case-sensitive ``dict.get`` would silently miss those.
+    """
+    try:
+        raw = json.loads(
+            files("litellm")
+            .joinpath(_LITELLM_LOCAL_PRICE_SNAPSHOT_FILENAME)
+            .read_text(encoding="utf-8")
+        )
+    except (OSError, ValueError):
+        logger.warning(
+            "litellm local price snapshot unavailable; pricing lookups will report unpriced",
+            exc_info=True,
+        )
+        return {}
+    if not isinstance(raw, dict):
+        return {}
+    return {key.lower(): value for key, value in raw.items()}
+
+
+def _litellm_price(candidate: str) -> ModelPrice | None:
+    """Look up a rate directly in litellm's local price snapshot.
+
+    Reads rate fields rather than calling ``litellm.cost_per_token()`` so we
+    keep per-bucket rates (not a computed amount) for the bucket math in
+    :func:`usd_for_usage`. A miss returns ``None`` — never invents a rate.
+    """
+    entry = _litellm_local_cost_map().get(candidate)
+    if not isinstance(entry, dict):
+        return None
+    input_rate = entry.get("input_cost_per_token")
+    output_rate = entry.get("output_cost_per_token")
+    if not _is_rate(input_rate) or not _is_rate(output_rate):
+        return None
+    return ModelPrice(
+        usd_per_input_token=float(input_rate),
+        usd_per_output_token=float(output_rate),
+        usd_per_cache_read_input_token=_optional_rate(entry.get("cache_read_input_token_cost")),
+        usd_per_cache_creation_input_token=_optional_rate(
+            entry.get("cache_creation_input_token_cost")
+        ),
+    )
+
+
+def _is_rate(value: object) -> TypeGuard[int | float]:
+    # bool is rejected explicitly because isinstance(True, int) is True —
+    # same guard as meters/__init__.py's safe_int, applied here so a stray
+    # boolean in litellm's JSON can't be silently read as a 1 USD/token rate.
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _optional_rate(value: object) -> float | None:
+    return float(value) if _is_rate(value) else None
 
 
 @lru_cache(maxsize=512)
@@ -420,7 +447,13 @@ def _model_candidates(raw: str) -> tuple[str, ...]:
     trimmed = raw.strip()
     append(trimmed)
     lower = trimmed.lower()
-    for prefix in ("openai/", "anthropic/", "anthropic."):
+    # ``azure/`` (unlike gemini/deepseek/groq) is worth stripping explicitly:
+    # Azure deployment names are arbitrary per customer, so falling back to
+    # the bare model name is the only way a deployment literally named after
+    # its underlying model (the common case) still resolves. The other
+    # providers' litellm entries already carry both the prefixed and bare
+    # form as distinct keys, so no stripping is needed for those.
+    for prefix in ("openai/", "anthropic/", "anthropic.", "azure/"):
         if lower.startswith(prefix):
             append(trimmed[len(prefix) :])
 
@@ -450,7 +483,6 @@ def _model_candidates(raw: str) -> tuple[str, ...]:
 
 
 __all__ = [
-    "MODEL_PRICES",
     "ModelPrice",
     "PriceOverride",
     "RATES_VERIFIED_AT",

@@ -113,9 +113,6 @@ class CLIBackedLLMClient:
         """JSON-schema prompt + parse; same contract as API `StructuredOutputClient`."""
         return StructuredOutputClient(self, model)
 
-    def bind_tools(self, _tools: list[Any]) -> CLIBackedLLMClient:
-        return self
-
     def invoke(self, prompt_or_messages: Any) -> LLMResponse:
         # max_tokens / model_type are stored for API parity but ignored here:
         # CLI adapters (e.g. codex exec) do not expose a scriptable token limit.

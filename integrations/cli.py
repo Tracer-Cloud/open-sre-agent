@@ -16,6 +16,11 @@ from typing import TYPE_CHECKING, Any, NoReturn, cast
 
 import questionary
 
+from platform.common.url_validation import validate_https_or_loopback_http_url
+from platform.terminal.prompt_support import (
+    QUESTIONARY_QMARK,
+    questionary_prompt_style,
+)
 from platform.terminal.theme import (
     ANSI_BOLD,
     ANSI_DIM,
@@ -86,12 +91,32 @@ _SECRET_KEYS = frozenset(
 )
 
 
+def _select(message: str, choices: list[Any], **kwargs: Any) -> Any:
+    return questionary.select(
+        message,
+        choices=choices,
+        qmark=QUESTIONARY_QMARK,
+        style=questionary_prompt_style(),
+        **kwargs,
+    ).ask()
+
+
+def _confirm(message: str, **kwargs: Any) -> Any:
+    return questionary.confirm(
+        message, qmark=QUESTIONARY_QMARK, style=questionary_prompt_style(), **kwargs
+    ).ask()
+
+
 def _p(label: str, default: str = "", secret: bool = False) -> str:
     try:
         if secret:
-            result = questionary.password(f"  {label}").ask()
+            result = questionary.password(
+                label, qmark=QUESTIONARY_QMARK, style=questionary_prompt_style()
+            ).ask()
         else:
-            result = questionary.text(f"  {label}", default=default).ask()
+            result = questionary.text(
+                label, default=default, qmark=QUESTIONARY_QMARK, style=questionary_prompt_style()
+            ).ask()
     except (EOFError, KeyboardInterrupt):
         print("\nAborted.")
         sys.exit(1)
@@ -110,15 +135,15 @@ def _prompt_github_repo_report_level() -> GitHubMcpDisplayDetailLevel:
     """Ask how much repository access detail to print after a successful validation."""
 
     try:
-        sel = questionary.select(
-            "  How much repository detail should we show?",
+        sel = _select(
+            "How much repository detail should we show?",
             choices=[
                 questionary.Choice("Brief (recommended) — no repo names", value="summary"),
                 questionary.Choice("Standard — scope summary only", value="standard"),
                 questionary.Choice("Expanded — include repo names", value="full"),
             ],
             default="summary",
-        ).ask()
+        )
     except (EOFError, KeyboardInterrupt):
         print("\nAborted.")
         sys.exit(1)
@@ -230,14 +255,14 @@ def _setup_coralogix() -> None:
 
 
 def _setup_aws() -> None:
-    choice = questionary.select(
+    choice = _select(
         "AWS authentication method:",
         choices=[
             questionary.Choice("IAM Role ARN", value="1"),
             questionary.Choice("Access Key + Secret", value="2"),
         ],
         instruction="(use arrow keys)",
-    ).ask()
+    )
     if choice is None:
         print("\nAborted.")
         sys.exit(1)
@@ -285,7 +310,7 @@ def _setup_slack() -> None:
     existing = get_integration("slack") or {}
     creds = dict(existing.get("credentials") or {})
 
-    mode = questionary.select(
+    mode = _select(
         "Slack setup:",
         choices=[
             questionary.Choice("Incoming webhook (outbound delivery)", value="webhook"),
@@ -293,7 +318,7 @@ def _setup_slack() -> None:
             questionary.Choice("Both webhook and Socket Mode", value="both"),
         ],
         instruction="(use arrow keys)",
-    ).ask()
+    )
     if mode is None:
         print("\nAborted.")
         sys.exit(1)
@@ -339,7 +364,7 @@ def _setup_opensearch() -> None:
     if not url:
         _die("url is required.")
     creds: dict[str, Any] = {"url": url}
-    auth_choice = questionary.select(
+    auth_choice = _select(
         "OpenSearch authentication method:",
         choices=[
             questionary.Choice("Username + Password (HTTP Basic Auth)", value="basic"),
@@ -347,7 +372,7 @@ def _setup_opensearch() -> None:
             questionary.Choice("None (security disabled)", value="none"),
         ],
         instruction="(use arrow keys)",
-    ).ask()
+    )
     if auth_choice is None:
         print("\nAborted.")
         sys.exit(1)
@@ -364,6 +389,36 @@ def _setup_opensearch() -> None:
         creds["username"] = username
         creds["password"] = password
     upsert_integration("opensearch", {"credentials": creds})
+
+
+def _setup_servicenow() -> None:
+    instance_url = _p("Instance URL (e.g. https://dev12345.service-now.com)")
+    if not instance_url:
+        _die("instance_url is required.")
+    # Fail here with an actionable message instead of storing a URL that
+    # classification would later reject silently (verify would say "missing").
+    try:
+        instance_url = validate_https_or_loopback_http_url(
+            instance_url.strip().rstrip("/"),
+            service_name="servicenow",
+            field_name="instance_url",
+        )
+    except ValueError as exc:
+        _die(str(exc))
+    username = _p("Username")
+    password = _p("Password", secret=True)
+    if not username or not password:
+        _die("username and password are required.")
+    upsert_integration(
+        "servicenow",
+        {
+            "credentials": {
+                "instance_url": instance_url,
+                "username": username,
+                "password": password,
+            }
+        },
+    )
 
 
 def _setup_rds() -> None:
@@ -494,8 +549,8 @@ def _setup_github_auth_token(mode: str) -> str:
             secret=True,
         )
 
-    auth_method = questionary.select(
-        "  How do you want to connect OpenSRE to GitHub?",
+    auth_method = _select(
+        "How do you want to connect OpenSRE to GitHub?",
         choices=[
             questionary.Choice(
                 "Sign in with GitHub in your browser (opens a page, enter a one-time code)",
@@ -505,7 +560,7 @@ def _setup_github_auth_token(mode: str) -> str:
             questionary.Choice("Skip — the MCP server authenticates upstream", value="none"),
         ],
         default="browser",
-    ).ask()
+    )
     if auth_method is None:
         print("\nAborted.")
         sys.exit(1)
@@ -543,8 +598,8 @@ def _github_advanced_setup(credentials: dict[str, Any]) -> tuple[str, str]:
     toolsets = _p("Toolsets", default=",".join(DEFAULT_GITHUB_MCP_TOOLSETS))
     credentials["toolsets"] = [part.strip() for part in toolsets.split(",") if part.strip()]
 
-    repo_view = questionary.select(
-        "  Which repository view should we use to verify access?",
+    repo_view = _select(
+        "Which repository view should we use to verify access?",
         choices=[
             questionary.Choice("Auto (recommended)", value="auto"),
             questionary.Choice("Your repositories", value="user"),
@@ -553,19 +608,19 @@ def _github_advanced_setup(credentials: dict[str, Any]) -> tuple[str, str]:
             questionary.Choice("Search: user:<your_login>", value="search_user"),
         ],
         default="auto",
-    ).ask()
+    )
     if repo_view is None:
         print("\nAborted.")
         sys.exit(1)
-    repo_visibility = questionary.select(
-        "  Filter repositories by visibility (best-effort)",
+    repo_visibility = _select(
+        "Filter repositories by visibility (best-effort)",
         choices=[
             questionary.Choice("Any (recommended)", value="any"),
             questionary.Choice("Public only", value="public"),
             questionary.Choice("Private only", value="private"),
         ],
         default="any",
-    ).ask()
+    )
     if repo_visibility is None:
         print("\nAborted.")
         sys.exit(1)
@@ -593,10 +648,10 @@ def _setup_github() -> str | None:
     )
 
     print("  Connect OpenSRE to GitHub through the hosted GitHub MCP server.")
-    advanced = questionary.confirm(
-        "  Customize advanced settings (transport, server URL, toolsets, repo scope)?",
+    advanced = _confirm(
+        "Customize advanced settings (transport, server URL, toolsets, repo scope)?",
         default=False,
-    ).ask()
+    )
     if advanced is None:
         print("\nAborted.")
         sys.exit(1)
@@ -677,20 +732,38 @@ def _setup_sentry() -> None:
     )
 
 
+def _setup_posthog() -> None:
+    base_url = _p("PostHog API base URL", default="https://us.i.posthog.com")
+    project_id = _p("PostHog project ID")
+    personal_api_key = _p("PostHog personal API key (phx_...)", secret=True)
+    if not project_id or not personal_api_key:
+        _die("project_id and personal_api_key are required.")
+    upsert_integration(
+        "posthog",
+        {
+            "credentials": {
+                "base_url": base_url,
+                "project_id": project_id,
+                "personal_api_key": personal_api_key,
+            }
+        },
+    )
+
+
 def _setup_mongodb() -> None:
     connection_string = _p(
         "Connection string (e.g. mongodb+srv://user:pass@cluster.example.net)", secret=True
     )
     database = _p("Database name")
     auth_source = _p("Auth source", default="admin")
-    tls_choice = questionary.select(
+    tls_choice = _select(
         "TLS enabled?",
         choices=[
             questionary.Choice("Yes", value="1"),
             questionary.Choice("No", value="0"),
         ],
         instruction="(use arrow keys)",
-    ).ask()
+    )
     if tls_choice is None:
         print("\nAborted.")
         sys.exit(1)
@@ -718,14 +791,14 @@ def _setup_redis() -> None:
     username = _p("Username (leave blank unless using Redis ACLs)")
     password = _p("Password (leave blank if not set)", secret=True)
     db_input = _p("Database number", default="0")
-    ssl_choice = questionary.select(
+    ssl_choice = _select(
         "Use TLS?",
         choices=[
             questionary.Choice("No", value="0"),
             questionary.Choice("Yes", value="1"),
         ],
         instruction="(use arrow keys)",
-    ).ask()
+    )
     if ssl_choice is None:
         print("\nAborted.")
         sys.exit(1)
@@ -818,6 +891,46 @@ def _setup_telegram() -> None:
     )
     print("  Next:")
     print("    - opensre integrations verify telegram")
+
+
+def _setup_rocketchat() -> None:
+    from integrations.rocketchat.verifier import verify_rocketchat
+
+    server_url = _p("Rocket.Chat server URL (e.g. https://chat.example.com)")
+    auth_token = _p("Rocket.Chat personal access token (blank for webhook-only)", secret=True)
+    user_id = _p("Rocket.Chat user ID (blank for webhook-only)")
+    webhook_url = _p("Rocket.Chat incoming webhook URL (optional)", secret=True)
+    has_pat = bool(server_url and auth_token and user_id)
+    if not has_pat and not webhook_url:
+        _die("Provide either a webhook_url or all of server_url, auth_token, and user_id.")
+    default_channel = _p("Default channel (e.g. #incidents, optional)")
+    print("\n  Validating Rocket.Chat credentials...")
+    result = verify_rocketchat(
+        "setup",
+        {
+            "server_url": server_url,
+            "auth_token": auth_token,
+            "user_id": user_id,
+            "webhook_url": webhook_url,
+        },
+    )
+    if result["status"] != "passed":
+        _die(result["detail"])
+    print(f"  {result['detail']}")
+    upsert_integration(
+        "rocketchat",
+        {
+            "credentials": {
+                "server_url": server_url,
+                "auth_token": auth_token,
+                "user_id": user_id,
+                "webhook_url": webhook_url,
+                "default_channel": default_channel or None,
+            }
+        },
+    )
+    print("  Next:")
+    print("    - opensre integrations verify rocketchat")
 
 
 def _setup_smtp() -> None:
@@ -1034,7 +1147,7 @@ def _setup_postgresql() -> None:
     port = _p("Port", default="5432")
     username = _p("Username", default="postgres")
     password = _p("Password", secret=True)
-    ssl_mode_choice = questionary.select(
+    ssl_mode_choice = _select(
         "SSL mode",
         choices=[
             questionary.Choice("prefer (recommended)", value="prefer"),
@@ -1042,7 +1155,7 @@ def _setup_postgresql() -> None:
             questionary.Choice("disable", value="disable"),
         ],
         instruction="(use arrow keys)",
-    ).ask()
+    )
     if ssl_mode_choice is None:
         print("\nAborted.")
         sys.exit(1)
@@ -1069,7 +1182,7 @@ def _setup_mysql() -> None:
     port = _p("Port", default="3306")
     username = _p("Username", default="root")
     password = _p("Password", secret=True)
-    ssl_mode_choice = questionary.select(
+    ssl_mode_choice = _select(
         "SSL mode",
         choices=[
             questionary.Choice("preferred (encrypted, no cert verification)", value="preferred"),
@@ -1077,7 +1190,7 @@ def _setup_mysql() -> None:
             questionary.Choice("disabled", value="disabled"),
         ],
         instruction="(use arrow keys)",
-    ).ask()
+    )
     if ssl_mode_choice is None:
         print("\nAborted.")
         sys.exit(1)
@@ -1122,14 +1235,14 @@ def _setup_mariadb() -> None:
     database = _p("Database name")
     username = _p("Username")
     password = _p("Password", secret=True)
-    ssl_choice = questionary.select(
+    ssl_choice = _select(
         "SSL enabled?",
         choices=[
             questionary.Choice("Yes", value="1"),
             questionary.Choice("No", value="0"),
         ],
         instruction="(use arrow keys)",
-    ).ask()
+    )
     if ssl_choice is None:
         print("\nAborted.")
         sys.exit(1)
@@ -1156,15 +1269,15 @@ def _setup_alertmanager() -> None:
     if not base_url:
         _die("base_url is required.")
 
-    auth_choice = questionary.select(
-        "  Authentication method:",
+    auth_choice = _select(
+        "Authentication method:",
         choices=[
             questionary.Choice("None (unauthenticated / internal network)", value="none"),
             questionary.Choice("Bearer token (reverse proxy auth)", value="bearer"),
             questionary.Choice("Basic auth (username + password)", value="basic"),
         ],
         instruction="(use arrow keys)",
-    ).ask()
+    )
     if auth_choice is None:
         print("\nAborted.")
         sys.exit(1)
@@ -1354,9 +1467,11 @@ _HANDLERS: dict[str, Any] = {
     "github": _setup_github,
     "gitlab": _setup_gitlab,
     "sentry": _setup_sentry,
+    "posthog": _setup_posthog,
     "mongodb": _setup_mongodb,
     "discord": _setup_discord,
     "telegram": _setup_telegram,
+    "rocketchat": _setup_rocketchat,
     "smtp": _setup_smtp,
     "whatsapp": _setup_whatsapp,
     "twilio": _setup_twilio,
@@ -1372,6 +1487,7 @@ _HANDLERS: dict[str, Any] = {
     "tempo": _setup_tempo,
     "pagerduty": _setup_pagerduty,
     "kubernetes": _setup_kubernetes,
+    "servicenow": _setup_servicenow,
 }
 
 
@@ -1433,14 +1549,14 @@ def _setup_azure_sql() -> None:
     username = _p("Username")
     password = _p("Password", secret=True)
     driver = _p("ODBC driver", default="ODBC Driver 18 for SQL Server")
-    encrypt_choice = questionary.select(
+    encrypt_choice = _select(
         "Encrypt connection?",
         choices=[
             questionary.Choice("Yes (recommended for Azure)", value="1"),
             questionary.Choice("No", value="0"),
         ],
         instruction="(use arrow keys)",
-    ).ask()
+    )
     if encrypt_choice is None:
         print("\nAborted.")
         sys.exit(1)
@@ -1473,11 +1589,11 @@ SUPPORTED_VERIFY = ", ".join(SUPPORTED_VERIFY_SERVICES)
 def cmd_setup(service: str | None) -> str:
     if not service:
         try:
-            service = questionary.select(
+            service = _select(
                 "Which service would you like to set up?",
                 choices=list(_SETUP_SERVICES),
                 instruction="(use arrow keys)",
-            ).ask()
+            )
         except (EOFError, KeyboardInterrupt):
             print("\nAborted.")
             sys.exit(1)
@@ -1549,7 +1665,7 @@ def cmd_remove(service: str | None) -> None:
     service = resolve_management_service(service)
     if not is_yes():
         try:
-            confirmed = questionary.confirm(f"  Remove '{service}'?", default=False).ask()
+            confirmed = _confirm(f"Remove '{service}'?", default=False)
         except (EOFError, KeyboardInterrupt):
             return
         if not confirmed:

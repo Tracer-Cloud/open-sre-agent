@@ -12,7 +12,6 @@ from typing import Any
 from core.domain.alerts.fields import (
     alert_name_value,
     first_present,
-    pipeline_name_value,
     severity_value,
 )
 
@@ -153,9 +152,6 @@ def normalize_alert_payload(raw_alert: dict[str, Any]) -> dict[str, Any]:
         "schema": "opensre.alert.v1",
         "alert_name": _to_text(
             alert_name_value(normalized, labels=labels, annotations=annotations)
-        ),
-        "pipeline_name": _to_text(
-            pipeline_name_value(normalized, labels=labels, annotations=annotations)
         ),
         "severity": _to_text(severity_value(normalized, labels=labels)),
         "alert_source": _to_text(normalized.get("alert_source")),

@@ -107,7 +107,6 @@ _ALERT_CONTEXT_TEMPLATE = """## Alert
 
 Alert name: {alert_name}
 Alert source: {alert_source}
-Service or pipeline: {pipeline_name}
 Severity: {severity}
 {extra}
 ## Connected integrations
@@ -146,7 +145,6 @@ def format_alert_context(
     from tools.registry import get_registered_tools
 
     alert_name = state.get("alert_name", "Unknown alert")
-    pipeline_name = state.get("pipeline_name", "Unknown pipeline")
     severity = state.get("severity", "unknown")
     alert_source = resolve_alert_source(state)
 
@@ -171,7 +169,6 @@ def format_alert_context(
     return _ALERT_CONTEXT_TEMPLATE.format(
         alert_name=alert_name,
         alert_source=alert_source or "unknown",
-        pipeline_name=pipeline_name,
         severity=severity,
         extra=extra,
         connected_integrations=connected_integrations,

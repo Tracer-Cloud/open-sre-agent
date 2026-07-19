@@ -935,6 +935,36 @@ function Get-OpenSreBinaryVersionInfo {
     }
 }
 
+function Ensure-OpenSreGithubCli {
+    # Soft dependency for github_cli chat tools. Never fails the OpenSRE install.
+    if (Get-Command gh -ErrorAction SilentlyContinue) {
+        return
+    }
+
+    $skip = [string]$env:OPENSRE_SKIP_GH_INSTALL
+    if ($skip -eq "1" -or $skip -eq "true" -or $skip -eq "TRUE" -or $skip -eq "yes" -or $skip -eq "YES" -or $skip -eq "on" -or $skip -eq "ON") {
+        Write-Warning "GitHub CLI (gh) is not on PATH; skipped install because OPENSRE_SKIP_GH_INSTALL is set."
+        Write-Warning "Install manually: winget install --id GitHub.cli  (or https://cli.github.com/)"
+        return
+    }
+
+    if (Get-Command winget -ErrorAction SilentlyContinue) {
+        Write-OpenSreLine -Message "Installing GitHub CLI (gh) for OpenSRE GitHub tools" -Color "Cyan"
+        try {
+            winget install --id GitHub.cli --exact --accept-package-agreements --accept-source-agreements
+            if ($LASTEXITCODE -eq 0) {
+                Write-OpenSreLine -Message "  OK Installed GitHub CLI (gh) via winget" -Color "Green"
+                return
+            }
+        }
+        catch {
+            # Soft dependency — fall through to the manual hint.
+        }
+    }
+
+    Write-Warning "Install manually: winget install --id GitHub.cli  (or https://cli.github.com/) for OpenSRE GitHub chat tools."
+}
+
 function Test-OpenSreAutoLaunchEnabled {
     $value = [string]$env:OPENSRE_AUTO_LAUNCH
     return -not ($value -eq "0" -or $value -eq "false" -or $value -eq "FALSE" -or $value -eq "no" -or $value -eq "NO" -or $value -eq "off" -or $value -eq "OFF")
@@ -1117,6 +1147,8 @@ function Install-OpenSre {
     if (-not (Test-OpenSreDirectoryOnPath -Directory $installDir)) {
         Write-Warning "Add $installDir to your PATH to run opensre from any terminal."
     }
+
+    Ensure-OpenSreGithubCli
 
     $exe = $binaryName.TrimEnd(".exe")
     $sep = "────────────────────────────────────────────"

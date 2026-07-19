@@ -17,6 +17,7 @@ from urllib.parse import urlparse
 from pydantic import Field, field_validator
 
 from config.strict_config import StrictConfigModel
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations._validation_helpers import report_classify_failure
 
 logger = logging.getLogger(__name__)
@@ -204,7 +205,7 @@ def get_service_health(config: SupabaseConfig) -> dict[str, Any]:
     breakdown so the agent can pinpoint which layer is degraded.
     """
     if not config.is_configured:
-        return {"source": "supabase", "available": False, "error": "Not configured."}
+        return tool_unavailable("supabase", "Not configured.")
 
     services: dict[str, Any] = {}
 
@@ -265,17 +266,13 @@ def get_storage_buckets(config: SupabaseConfig) -> dict[str, Any]:
     Results are capped at config.max_results.
     """
     if not config.is_configured:
-        return {"source": "supabase", "available": False, "error": "Not configured."}
+        return tool_unavailable("supabase", "Not configured.")
 
     try:
         status, body = _make_request(config, "/storage/v1/bucket")
 
         if status != 200:
-            return {
-                "source": "supabase",
-                "available": False,
-                "error": f"Storage API returned HTTP {status}.",
-            }
+            return tool_unavailable("supabase", f"Storage API returned HTTP {status}.")
 
         raw_buckets: list[dict[str, Any]] = body if isinstance(body, list) else []
         actual_total = len(raw_buckets)
@@ -304,7 +301,7 @@ def get_storage_buckets(config: SupabaseConfig) -> dict[str, Any]:
             "buckets": bucket_summaries,
         }
     except Exception as err:
-        return {"source": "supabase", "available": False, "error": str(err)}
+        return tool_unavailable("supabase", str(err))
 
 
 def classify(

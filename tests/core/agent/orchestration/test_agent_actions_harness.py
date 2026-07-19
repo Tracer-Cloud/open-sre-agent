@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 from rich.console import Console
 
-import tools.interactive_shell.actions.slash as slash_tool
+import surfaces.interactive_shell.runtime.slash_adapter as slash_adapter
 from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
 from core.agent_harness.turns.action_driver import (
     ActionTurnPlan,
@@ -81,7 +81,7 @@ def test_execute_with_harness_runs_slash_tool_call(monkeypatch) -> None:
         console.print(f"ran {command}")
         return True
 
-    monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
+    monkeypatch.setattr(slash_adapter, "dispatch_slash", _fake_dispatch)
     harness = ActionExecutionHarness(
         llm=FakeActionLLM([tool_response("slash_invoke", {"command": "/health", "args": []})])
     )
@@ -116,7 +116,12 @@ def test_generic_registered_action_tool_result_marks_turn_handled() -> None:
         run=lambda message: {"status": "sent", "message": message},
     )
     harness = ActionExecutionHarness(
-        llm=FakeActionLLM([tool_response("fake_send_message", {"message": "hello"})])
+        llm=FakeActionLLM(
+            [
+                tool_response("fake_send_message", {"message": "hello"}),
+                no_tool_response("Message sent."),
+            ]
+        )
     )
 
     result = run_action_agent_turn(
@@ -134,7 +139,49 @@ def test_generic_registered_action_tool_result_marks_turn_handled() -> None:
     assert result.executed_success_count == 1
     assert 'fake_send_message input: {"message": "hello"}' in result.response_text
     assert '"status": "sent"' in result.response_text
+    assert "Message sent." in result.response_text
     assert "fake_send_message" in harness.llm.tool_schema_names
+    printed = harness.console_buffer.getvalue()
+    assert "Message sent." in printed
+    assert "fake_send_message" in printed
+
+
+def test_generic_cli_style_stdout_is_printed_for_user() -> None:
+    tool = RegisteredTool(
+        name="fake_gh",
+        description="Fake gh.",
+        input_schema={
+            "type": "object",
+            "properties": {"args": {"type": "array", "items": {"type": "string"}}},
+            "required": ["args"],
+            "additionalProperties": False,
+        },
+        source="github",
+        surfaces=("action",),
+        run=lambda args: {
+            "ok": True,
+            "argv": ["gh", *args],
+            "exit_code": 0,
+            "stdout": "https://github.com/o/r/issues/1\n",
+            "stderr": "",
+        },
+    )
+    harness = ActionExecutionHarness(
+        llm=FakeActionLLM([tool_response("fake_gh", {"args": ["issue", "list"]})])
+    )
+
+    result = run_action_agent_turn(
+        "list issues",
+        Session(),
+        output=_OutputSink(harness.console),
+        tools=_GenericActionToolProvider(tool),
+        deps=harness.deps,
+        is_tty=False,
+    )
+
+    assert result.handled is True
+    assert "https://github.com/o/r/issues/1" in result.response_text
+    assert "https://github.com/o/r/issues/1" in harness.console_buffer.getvalue()
 
 
 def test_action_final_text_is_streamed_as_user_facing_response() -> None:
@@ -200,7 +247,7 @@ def test_literal_slash_command_dispatches_deterministically_without_llm(
         session.record("slash", command, ok=True)
         return True
 
-    monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
+    monkeypatch.setattr(slash_adapter, "dispatch_slash", _fake_dispatch)
     harness = ActionExecutionHarness(llm=FakeActionLLM([no_tool_response()]))
     session = Session()
 
@@ -233,7 +280,7 @@ def test_literal_slash_command_forwards_args_without_llm(monkeypatch) -> None:
         session.record("slash", command, ok=True)
         return True
 
-    monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
+    monkeypatch.setattr(slash_adapter, "dispatch_slash", _fake_dispatch)
     harness = ActionExecutionHarness(llm=FakeActionLLM([no_tool_response()]))
 
     result = run_action_tool_turn(
@@ -255,7 +302,7 @@ def test_natural_language_still_routes_through_action_agent(monkeypatch) -> None
     def _unexpected_dispatch(*_args: object, **_kwargs: object) -> bool:
         raise AssertionError("free-form text must not deterministically dispatch a slash command")
 
-    monkeypatch.setattr(slash_tool, "dispatch_slash", _unexpected_dispatch)
+    monkeypatch.setattr(slash_adapter, "dispatch_slash", _unexpected_dispatch)
     harness = ActionExecutionHarness(llm=FakeActionLLM([no_tool_response()]))
 
     result = run_action_tool_turn(

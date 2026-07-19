@@ -11,7 +11,7 @@ from botocore.exceptions import ClientError
 
 from config.constants.paths import REPO_ROOT
 from platform.deployment.aws import ecr
-from platform.deployment.aws.client import DEFAULT_REGION
+from platform.deployment.aws.client import DEFAULT_REGION, assert_deploy_account
 from platform.deployment.aws.config import (
     ECR_DEFAULT_IMAGE_TAG,
     ECR_DOCKER_PLATFORM,
@@ -54,14 +54,12 @@ _PURGE_ECR_ENV = "OPENSRE_DESTROY_PURGE_ECR"
 
 _EXTRA_ENV_KEYS_ENV = "OPENSRE_DEPLOY_EXTRA_ENV_KEYS"
 
+# SLACK_* is intentionally absent: Slack is deployed and operated separately,
+# not from this repo. Socket Mode is single-consumer — an EC2 gateway holding
+# Slack tokens would compete with the primary Slack gateway for events.
 _CONTAINER_ENV_KEYS = (
     "TELEGRAM_BOT_TOKEN",
     "TELEGRAM_ALLOWED_USERS",
-    "SLACK_BOT_TOKEN",
-    "SLACK_APP_TOKEN",
-    "SLACK_ALLOWED_USERS",
-    "SLACK_ALLOW_OPEN_WORKSPACE",
-    "SLACK_WEBHOOK_URL",
     "LLM_PROVIDER",
     "OPENAI_API_KEY",
     "ANTHROPIC_API_KEY",
@@ -135,6 +133,7 @@ def build_image() -> str:
     Returns:
         The full ECR image URI (e.g. ``123….dkr.ecr.us-east-1.amazonaws.com/opensre:latest``).
     """
+    assert_deploy_account(REGION)
     stack = get_stack()
     start_time = time.time()
     print("=" * 60)
@@ -218,6 +217,7 @@ def deploy() -> dict[str, str]:
     Requires a pre-built ECR image. Run ``make build-image`` first, or set the
     ``OPENSRE_IMAGE_URI`` environment variable to an existing image URI.
     """
+    assert_deploy_account(REGION)
     validate_deploy_env()
 
     stack = get_stack()

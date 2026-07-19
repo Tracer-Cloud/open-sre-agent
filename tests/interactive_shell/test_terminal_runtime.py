@@ -32,6 +32,9 @@ from surfaces.interactive_shell.command_registry import SLASH_COMMANDS, dispatch
 from surfaces.interactive_shell.runtime.core import confirmation as controller_runtime
 from surfaces.interactive_shell.runtime.core import state as loop_state
 from surfaces.interactive_shell.runtime.core import turn_detection as loop_turn_detection
+from surfaces.interactive_shell.runtime.investigation_adapter import (
+    repl_investigation_launch_ports,
+)
 from surfaces.interactive_shell.runtime.startup import initial_input as startup_initial_input
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui import input_prompt
@@ -451,9 +454,7 @@ def test_shell_completer_investigate_includes_template_hints() -> None:
     assert any(c.text == "splunk" for c in completions)
 
 
-def test_run_text_investigation_uses_background_launcher_when_mode_enabled(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_run_text_investigation_uses_background_launcher_when_mode_enabled() -> None:
     from rich.console import Console
 
     from tools.interactive_shell.actions.investigation import (
@@ -473,16 +474,29 @@ def test_run_text_investigation_uses_background_launcher_when_mode_enabled(
         launches.append((alert_text, display_command))
         return "bg123"
 
-    monkeypatch.setattr(
-        "surfaces.interactive_shell.runtime.background.runner.start_background_text_investigation",
-        _fake_start_background_text_investigation,
-    )
+    def _unexpected_sample_launcher(
+        *,
+        template_name: str,
+        session: Session,
+        console: Console,
+        display_command: str,
+    ) -> str:
+        _ = (template_name, session, console, display_command)
+        raise AssertionError("sample launcher should not run")
 
     session = Session()
     session.terminal.background_mode_enabled = True
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
 
-    run_text_investigation("High CPU alert", session, console)
+    run_text_investigation(
+        "High CPU alert",
+        session,
+        console,
+        ports=repl_investigation_launch_ports(
+            start_background_text=_fake_start_background_text_investigation,
+            start_background_sample=_unexpected_sample_launcher,
+        ),
+    )
 
     assert launches == [("High CPU alert", "background free-text investigation")]
     assert session.task_registry.list_recent(10) == []

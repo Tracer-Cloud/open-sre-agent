@@ -31,7 +31,7 @@ from tools.investigation.reporting.delivery.bootstrap import (
 
 logger = logging.getLogger(__name__)
 
-_EXTRACTED_STATE_FIELDS = ["alert_name", "pipeline_name", "severity", "alert_source", "problem_md"]
+_EXTRACTED_STATE_FIELDS = ["alert_name", "severity", "alert_source", "problem_md", "alert_json"]
 
 _EXTRACT_PROMPT = """Classify and extract fields from this alert message.
 
@@ -80,9 +80,9 @@ Message:
 def extract_alert(state: InvestigationState) -> dict[str, Any]:
     """Parse raw alert into structured state updates.
 
-    Returns a dict of state keys (alert_name, pipeline_name, severity, etc.)
-    suitable for merging into AgentState. Returns {"is_noise": True} when the
-    input is classified as noise.
+    Returns a dict of state keys (alert_name, severity, alert_json, problem_md,
+    etc.) suitable for merging into AgentState.
+    Returns {"is_noise": True} when the input is classified as noise.
     """
     tracker = get_tracker()
     tracker.start("extract_alert", "Classifying and extracting alert details")
@@ -124,12 +124,10 @@ def _handle_noise(state: InvestigationState, tracker: Any) -> dict[str, Any]:
 def _render_alert_summary(details: AlertDetails, raw_alert: Any) -> None:
     alert_id = raw_alert.get("alert_id") if isinstance(raw_alert, dict) else None
     debug_print(
-        f"Alert: {details.alert_name} | Pipeline: {details.pipeline_name} | "
-        f"Severity: {details.severity} | namespace={details.kube_namespace} | Alert ID: {alert_id}"
+        f"Alert: {details.alert_name} | Severity: {details.severity} | "
+        f"namespace={details.kube_namespace} | Alert ID: {alert_id}"
     )
-    render_investigation_header(
-        details.alert_name, details.pipeline_name, details.severity, alert_id=alert_id
-    )
+    render_investigation_header(details.alert_name, details.severity, alert_id=alert_id)
 
 
 def _build_alert_updates(
@@ -140,7 +138,6 @@ def _build_alert_updates(
     result: dict[str, Any] = {
         "is_noise": False,
         "alert_name": details.alert_name,
-        "pipeline_name": details.pipeline_name,
         "severity": details.severity,
         "alert_json": details.model_dump(),
         "raw_alert": enrich_raw_alert(raw_alert, details),

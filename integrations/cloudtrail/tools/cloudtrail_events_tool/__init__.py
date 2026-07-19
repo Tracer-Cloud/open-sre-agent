@@ -19,6 +19,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
 from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.aws.aws_sdk_client import execute_aws_sdk_call
 from integrations.cloudtrail import (
     DEFAULT_CLOUDTRAIL_REGION,
@@ -249,11 +250,9 @@ def lookup_cloudtrail_events(
             region,
             result.get("error"),
         )
-        return {
-            "source": "cloudtrail",
-            "available": False,
-            "error": "Failed to look up CloudTrail events. Check server logs for details.",
-        }
+        return tool_unavailable(
+            "cloudtrail", "Failed to look up CloudTrail events. Check server logs for details."
+        )
 
     data = result.get("data") or {}
     raw_events = data.get("Events") or []

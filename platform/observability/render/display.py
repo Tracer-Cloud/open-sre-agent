@@ -10,17 +10,16 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-InvestigationHeaderRenderer = Callable[[str, str, str, str | None], None]
+InvestigationHeaderRenderer = Callable[[str, str, str | None], None]
 InvestigationFooterRenderer = Callable[[], None]
 
 
 def _default_header_renderer(
     alert_name: str,
-    pipeline_name: str,
     severity: str,
     alert_id: str | None = None,
 ) -> None:
-    _ = (alert_name, pipeline_name, severity, alert_id)
+    _ = (alert_name, severity, alert_id)
 
 
 def _default_footer_renderer() -> None:
@@ -33,12 +32,11 @@ _footer_renderer: InvestigationFooterRenderer = _default_footer_renderer
 
 def render_investigation_header(
     alert_name: str,
-    pipeline_name: str,
     severity: str,
     alert_id: str | None = None,
 ) -> None:
     """Render the investigation start banner via the registered adapter."""
-    _header_renderer(alert_name, pipeline_name, severity, alert_id)
+    _header_renderer(alert_name, severity, alert_id)
 
 
 def render_completed_investigation_footer() -> None:

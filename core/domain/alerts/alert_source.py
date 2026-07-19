@@ -178,7 +178,6 @@ def collect_alert_text(state: dict[str, Any]) -> str:
     """Collect searchable alert text for deterministic source/tool matching."""
     parts: list[str] = [
         str(state.get("alert_name") or ""),
-        str(state.get("pipeline_name") or ""),
         str(state.get("message") or ""),
     ]
     raw = state.get("raw_alert")

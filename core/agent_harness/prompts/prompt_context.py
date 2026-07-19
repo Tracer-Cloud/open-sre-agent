@@ -12,6 +12,13 @@ from core.agent_harness.llm_resolution import resolve_provider_models
 from core.agent_harness.prompts import build_environment_block
 from platform.observability.trace.spans import component_span
 
+# Minimum retrieval score for a docs page to ground an assistant answer. A
+# genuine setup/config question scores ~30 on its page (slug + exact-slug +
+# title + heading hits); incidental single-token overlap scores ~1-4. A floor
+# of 8 requires at least a slug/title-level signal, so unrelated pages are
+# dropped rather than injected as excerpts.
+_DOCS_RELEVANCE_FLOOR = 8
+
 
 def load_llm_settings() -> Any | None:
     """Best-effort LLM settings load for prompt environment grounding."""
@@ -37,14 +44,40 @@ def supports_default_prompt_context(session: object) -> bool:
 class DefaultPromptContextProvider:
     """:class:`core.agent_harness.ports.PromptContextProvider` over session grounding."""
 
-    def __init__(self, session: Any) -> None:
+    def __init__(self, session: Any, *, surface: str = "interactive_shell") -> None:
         self._session = session
+        self._surface = surface
+
+    def surface(self) -> str:
+        return self._surface
+
+    def _visible_integrations(self) -> tuple[str, ...]:
+        """Integration names to advertise, minus any the surface asked to hide.
+
+        The gateway injects ``_gateway_hidden_integrations`` (the inactive chat
+        transports) so a Slack teammate does not surface Telegram, and vice
+        versa. Core stays transport-agnostic — it only applies the injected set.
+        """
+        names = tuple(self._session.configured_integrations)
+        cache = getattr(self._session, "resolved_integrations_cache", None) or {}
+        hidden = {str(n).strip().lower() for n in (cache.get("_gateway_hidden_integrations") or ())}
+        if not hidden:
+            return names
+        return tuple(name for name in names if name.strip().lower() not in hidden)
 
     def cli_reference(self) -> str:
         return ""
 
     def agents_md(self) -> str:
         return str(self._session.grounding.agents_md.build_text())
+
+    def docs(self, query: str) -> str:
+        # Only ground on a docs page the question strongly points at. A real
+        # setup question ("how do I set up telegram?") scores ~30 on its page;
+        # this floor drops incidental keyword overlap (e.g. "center a div"
+        # colliding with cost-center-mapping) so unrelated pages never leak into
+        # the answer. Below the floor the block is omitted entirely.
+        return str(self._session.grounding.docs.build_text(query, min_score=_DOCS_RELEVANCE_FLOOR))
 
     def investigation_flow(self) -> str:
         return build_investigation_flow_reference_text()
@@ -72,7 +105,7 @@ class DefaultPromptContextProvider:
                 metadata=cached if isinstance(cached, dict) and cached else None
             )
             return build_environment_block(
-                integrations=tuple(self._session.configured_integrations),
+                integrations=self._visible_integrations(),
                 known=self._session.configured_integrations_known,
                 llm_provider=llm_provider,
                 reasoning_model=reasoning_model,

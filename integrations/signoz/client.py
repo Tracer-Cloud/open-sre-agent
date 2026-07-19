@@ -13,6 +13,7 @@ from typing import Any, cast
 
 import httpx
 
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.signoz import SigNozConfig
 
 logger = logging.getLogger(__name__)
@@ -310,16 +311,15 @@ class SigNozClient:
                     "query_backend": "signoz_query_api",
                     "warning": error_message or f"Metric not found: {resolved_metric}",
                 }
-            return {
-                "source": "signoz_metrics",
-                "available": False,
-                "metric_name": metric_name,
-                "resolved_metric": resolved_metric,
-                "aggregation": aggregation,
-                "metrics": [],
-                "query_backend": "signoz_query_api",
-                "error": error_message,
-            }
+            return tool_unavailable(
+                "signoz_metrics",
+                error_message,
+                metric_name=metric_name,
+                resolved_metric=resolved_metric,
+                aggregation=aggregation,
+                metrics=[],
+                query_backend="signoz_query_api",
+            )
 
         response_json = response_json or {}
         query_data = self._unwrap_v5_query_data(response_json)
@@ -426,14 +426,9 @@ class SigNozClient:
 
         response_json, error_message = self._query_range_post(payload)
         if error_message:
-            return {
-                "source": "signoz_logs",
-                "available": False,
-                "total": 0,
-                "logs": [],
-                "query_backend": "signoz_query_api",
-                "error": error_message,
-            }
+            return tool_unavailable(
+                "signoz_logs", error_message, total=0, logs=[], query_backend="signoz_query_api"
+            )
 
         logs = [_parse_log_row(row) for row in self._parse_raw_rows(response_json or {})]
         return {
@@ -494,14 +489,9 @@ class SigNozClient:
 
         response_json, error_message = self._query_range_post(payload)
         if error_message:
-            return {
-                "source": "signoz_traces",
-                "available": False,
-                "total": 0,
-                "traces": [],
-                "query_backend": "signoz_query_api",
-                "error": error_message,
-            }
+            return tool_unavailable(
+                "signoz_traces", error_message, total=0, traces=[], query_backend="signoz_query_api"
+            )
 
         traces = [_parse_trace_row(row) for row in self._parse_raw_rows(response_json or {})]
         return {
@@ -561,12 +551,9 @@ class SigNozClient:
 
         response_json, error_message = self._query_range_post(payload)
         if error_message:
-            return {
-                "source": "signoz_traces",
-                "available": False,
-                "query_backend": "signoz_query_api",
-                "error": error_message,
-            }
+            return tool_unavailable(
+                "signoz_traces", error_message, query_backend="signoz_query_api"
+            )
 
         values = self._parse_scalar_by_query_name(response_json or {})
 
@@ -607,13 +594,7 @@ class SigNozClient:
         """Query SigNoz logs via Query Range API."""
         config_error = self._configuration_error()
         if config_error:
-            return {
-                "source": "signoz_logs",
-                "available": False,
-                "total": 0,
-                "logs": [],
-                "error": config_error,
-            }
+            return tool_unavailable("signoz_logs", config_error, total=0, logs=[])
 
         effective_limit = _clamp_limit(limit, self.config)
         start, end = _time_bounds(time_range_minutes)
@@ -639,15 +620,14 @@ class SigNozClient:
         resolved_metric = _CURATED_METRICS.get(metric_name, metric_name)
         config_error = self._configuration_error()
         if config_error:
-            return {
-                "source": "signoz_metrics",
-                "available": False,
-                "metric_name": metric_name,
-                "resolved_metric": resolved_metric,
-                "aggregation": aggregation,
-                "metrics": [],
-                "error": config_error,
-            }
+            return tool_unavailable(
+                "signoz_metrics",
+                config_error,
+                metric_name=metric_name,
+                resolved_metric=resolved_metric,
+                aggregation=aggregation,
+                metrics=[],
+            )
 
         effective_limit = _clamp_limit(limit, self.config)
         start, end = _time_bounds(time_range_minutes)
@@ -673,13 +653,7 @@ class SigNozClient:
         """Query SigNoz traces via Query Range API."""
         config_error = self._configuration_error()
         if config_error:
-            return {
-                "source": "signoz_traces",
-                "available": False,
-                "total": 0,
-                "traces": [],
-                "error": config_error,
-            }
+            return tool_unavailable("signoz_traces", config_error, total=0, traces=[])
 
         effective_limit = _clamp_limit(limit, self.config)
         start, end = _time_bounds(time_range_minutes)
@@ -701,11 +675,7 @@ class SigNozClient:
         """Return aggregate trace stats (error rate, p99 latency, call count)."""
         config_error = self._configuration_error()
         if config_error:
-            return {
-                "source": "signoz_traces",
-                "available": False,
-                "error": config_error,
-            }
+            return tool_unavailable("signoz_traces", config_error)
 
         start, end = _time_bounds(time_range_minutes)
         return self._query_trace_summary_via_api(service=service, start=start, end=end)

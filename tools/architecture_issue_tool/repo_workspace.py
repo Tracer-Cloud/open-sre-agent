@@ -13,12 +13,12 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
-from config.constants.paths import PROJECT_ROOT
+from config.constants.paths import OPENSRE_TMP_DIR, ensure_opensre_tmp_dir
 
 _GITHUB_HTTPS_BASE = "https://github.com/"
 _GIT_CLONE_TIMEOUT_SEC = 120.0
 _GIT_REMOTE_TIMEOUT_SEC = 15.0
-_ARCHITECTURE_WORKSPACE_DIR = PROJECT_ROOT / ".temp" / "opensre" / "architecture_workspace"
+_ARCHITECTURE_WORKSPACE_DIR = OPENSRE_TMP_DIR / "workspace"
 
 _SHA_REF_RE = re.compile(r"^[0-9a-fA-F]{7,40}$")
 
@@ -44,6 +44,7 @@ def github_remote_url(owner: str, repo: str) -> str:
 
 def architecture_workspace_dir() -> Path:
     """Return the fixed local directory used for architecture audit git clones."""
+    ensure_opensre_tmp_dir()
     return _ARCHITECTURE_WORKSPACE_DIR
 
 
@@ -297,7 +298,7 @@ def cloned_github_repo(
 
     When *local_path* is provided (tests/dev only), the path is yielded as-is and
     never deleted. Otherwise a shallow clone is created under
-    ``.temp/opensre/architecture_workspace`` and removed on exit.
+    ``OPENSRE_TMP_DIR/workspace`` and removed on exit.
     """
     workspace = clone_github_repo(
         owner,

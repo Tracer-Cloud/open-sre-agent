@@ -37,7 +37,7 @@ def test_llm_settings_from_env_does_not_read_secure_local_api_key(monkeypatch) -
     monkeypatch.setenv("LLM_PROVIDER", "openai")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setattr(
-        "config.llm_credentials.resolve_llm_api_key",
+        "config.llm_credentials.resolve_env_credential",
         lambda env_var: (_ for _ in ()).throw(AssertionError(f"unexpected lookup: {env_var}")),
     )
 
@@ -51,7 +51,7 @@ def test_llm_settings_from_env_does_not_probe_provider_keys(monkeypatch) -> None
     monkeypatch.setenv("LLM_PROVIDER", "openai")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setattr(
-        "config.llm_credentials.resolve_llm_api_key",
+        "config.llm_credentials.resolve_env_credential",
         lambda env_var: (_ for _ in ()).throw(AssertionError(f"unexpected lookup: {env_var}")),
     )
 

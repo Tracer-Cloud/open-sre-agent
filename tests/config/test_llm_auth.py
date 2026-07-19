@@ -9,7 +9,7 @@ from keyring.backend import KeyringBackend
 
 from config.llm_auth.credentials import resolve_for_request, status
 from config.llm_auth.records import resolve_provider_auth_record, save_provider_auth_record
-from config.llm_credentials import resolve_llm_api_key
+from config.llm_credentials import resolve_env_credential
 from integrations.llm_cli.base import CLIProbe
 from integrations.llm_cli.codex_oauth import CodexOAuthResult
 from surfaces.cli.llm_auth.providers import ProviderAuthProfile, resolve_auth_profile
@@ -57,7 +57,7 @@ def test_configure_deepseek_api_key_stores_keyring_and_nonsecret_env(
         )
 
         assert result.provider == "deepseek"
-        assert resolve_llm_api_key("DEEPSEEK_API_KEY") == "deepseek-secret"
+        assert resolve_env_credential("DEEPSEEK_API_KEY") == "deepseek-secret"
         env_content = env_path.read_text(encoding="utf-8")
         assert "LLM_PROVIDER=deepseek\n" in env_content
         assert "DEEPSEEK_REASONING_MODEL=deepseek-v4-flash\n" in env_content
@@ -87,7 +87,7 @@ def test_configure_api_key_does_not_store_when_validation_fails(
                 profile=resolve_auth_profile("deepseek"),
                 api_key="bad-key",
             )
-        assert resolve_llm_api_key("DEEPSEEK_API_KEY") == ""
+        assert resolve_env_credential("DEEPSEEK_API_KEY") == ""
     finally:
         keyring.set_keyring(previous_backend)
 

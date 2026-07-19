@@ -114,10 +114,8 @@ class TestGpt56CatalogPresence:
         values = {option.value for option in PROVIDER_BY_VALUE["openai"].models}
         assert model in values
 
-    @pytest.mark.parametrize("model", ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"])
-    def test_azure_picker_lists_every_tier(self, model: str) -> None:
-        values = {option.value for option in PROVIDER_BY_VALUE["azure-openai"].models}
-        assert model in values
+    def test_azure_provider_has_no_static_model_picker(self) -> None:
+        assert PROVIDER_BY_VALUE["azure-openai"].models == ()
 
     def test_openrouter_picker_uses_namespaced_ids(self) -> None:
         values = {option.value for option in PROVIDER_BY_VALUE["openrouter"].models}

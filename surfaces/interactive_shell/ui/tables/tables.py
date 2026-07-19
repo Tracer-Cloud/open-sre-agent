@@ -17,6 +17,10 @@ from platform.terminal.theme import (
     BOLD_BRAND,
     DIM,
     ERROR,
+    GLYPH_BULLET,
+    GLYPH_ERROR,
+    GLYPH_SUCCESS,
+    GLYPH_WARNING,
     HIGHLIGHT,
     WARNING,
 )
@@ -39,10 +43,22 @@ def status_style(status: str) -> str:
     return {
         "ok": HIGHLIGHT,
         "configured": HIGHLIGHT,
-        "missing": DIM,
-        "failed": WARNING,
+        "passed": HIGHLIGHT,
+        "missing": WARNING,
+        "failed": ERROR,
         "error": ERROR,
     }.get(status, DIM)
+
+
+def status_glyph(status: str) -> str:
+    return {
+        "ok": GLYPH_SUCCESS,
+        "configured": GLYPH_SUCCESS,
+        "passed": GLYPH_SUCCESS,
+        "missing": GLYPH_WARNING,
+        "failed": GLYPH_ERROR,
+        "error": GLYPH_ERROR,
+    }.get(status, GLYPH_BULLET)
 
 
 # ---------------------------------------------------------------------------
@@ -136,8 +152,19 @@ def _integration_row(r: dict[str, str]) -> tuple[str | Text, ...]:
     )
 
 
+_CONNECTED_STATUSES = frozenset({"ok", "configured", "passed"})
+
+
 def render_integrations_table(console: Console, results: list[dict[str, str]]) -> None:
-    rows = sorted(results, key=lambda r: r.get("service", ""))
+    # Connected integrations first (so the few a user has actually set up
+    # aren't buried among 50+ "missing" rows), alphabetical within each group.
+    rows = sorted(
+        results,
+        key=lambda r: (
+            r.get("status") not in _CONNECTED_STATUSES,
+            r.get("service", ""),
+        ),
+    )
     if not rows:
         repl_print(
             console, f"[{DIM}]no integrations configured.  try `opensre onboard` to add one.[/]"

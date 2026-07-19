@@ -53,7 +53,7 @@ def cron_command() -> None:
 )
 @click.option(
     "--provider",
-    type=click.Choice(["telegram", "slack", "discord"], case_sensitive=False),
+    type=click.Choice(["telegram", "slack", "discord", "rocketchat"], case_sensitive=False),
     required=True,
     help="Messaging provider for delivery.",
 )

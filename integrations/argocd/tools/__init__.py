@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.tool_framework.base import BaseTool
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.argocd.client import make_argocd_client
 
 
@@ -98,15 +99,14 @@ class ArgoCDApplicationDiffTool(BaseTool):
             verify_ssl=verify_ssl,
         )
         if client is None:
-            return {
-                "source": "argocd",
-                "available": False,
-                "error": "Argo CD integration is not configured (missing base_url or auth).",
-                "application_name": application_name,
-                "drift_detected": False,
-                "diffs": [],
-                "diff_count": 0,
-            }
+            return tool_unavailable(
+                "argocd",
+                "Argo CD integration is not configured (missing base_url or auth).",
+                application_name=application_name,
+                drift_detected=False,
+                diffs=[],
+                diff_count=0,
+            )
 
         with client:
             result = client.get_application_diff(
@@ -116,15 +116,14 @@ class ArgoCDApplicationDiffTool(BaseTool):
             )
 
         if not result.get("success"):
-            return {
-                "source": "argocd",
-                "available": False,
-                "error": result.get("error", "unknown error"),
-                "application_name": application_name,
-                "drift_detected": False,
-                "diffs": [],
-                "diff_count": 0,
-            }
+            return tool_unavailable(
+                "argocd",
+                result.get("error", "unknown error"),
+                application_name=application_name,
+                drift_detected=False,
+                diffs=[],
+                diff_count=0,
+            )
 
         return {
             "source": "argocd",
@@ -235,14 +234,13 @@ class ArgoCDApplicationStatusTool(BaseTool):
             verify_ssl=verify_ssl,
         )
         if client is None:
-            return {
-                "source": "argocd",
-                "available": False,
-                "error": "Argo CD integration is not configured (missing base_url or auth).",
-                "application": {},
-                "applications": [],
-                "recent_history": [],
-            }
+            return tool_unavailable(
+                "argocd",
+                "Argo CD integration is not configured (missing base_url or auth).",
+                application={},
+                applications=[],
+                recent_history=[],
+            )
 
         with client:
             if application_name:
@@ -255,14 +253,13 @@ class ArgoCDApplicationStatusTool(BaseTool):
                 result = client.list_applications(projects=[project] if project else None)
 
         if not result.get("success"):
-            return {
-                "source": "argocd",
-                "available": False,
-                "error": result.get("error", "unknown error"),
-                "application": {},
-                "applications": [],
-                "recent_history": [],
-            }
+            return tool_unavailable(
+                "argocd",
+                result.get("error", "unknown error"),
+                application={},
+                applications=[],
+                recent_history=[],
+            )
 
         return {
             "source": "argocd",

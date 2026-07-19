@@ -74,7 +74,6 @@ class AgentStateModel(StrictConfigModel):
     messages: list[ChatMessageModel] = Field(default_factory=list)
     is_noise: bool = False
     alert_name: str = ""
-    pipeline_name: str = ""
     severity: str = ""
     alert_source: str = ""
     raw_alert: str | dict[str, Any] = Field(default_factory=lambda: {})

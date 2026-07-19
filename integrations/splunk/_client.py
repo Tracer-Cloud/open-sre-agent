@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.splunk.client import SplunkClient, SplunkConfig
 
 
@@ -29,4 +30,4 @@ def make_client(
 
 def unavailable(source: str, empty_key: str, error: str, **extra: Any) -> dict[str, Any]:
     """Standardised unavailable response."""
-    return {"source": source, "available": False, "error": error, empty_key: [], **extra}
+    return tool_unavailable(source, error, **{empty_key: [], **extra})

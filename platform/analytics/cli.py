@@ -8,6 +8,7 @@ from collections.abc import Generator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
+from hashlib import sha256
 from typing import TYPE_CHECKING, Final
 from uuid import uuid4
 
@@ -760,8 +761,67 @@ def identify_github_username(username: str) -> None:
         capture_exception(exc)
 
 
-def capture_github_login_completed(username: str) -> None:
-    _capture(Event.GITHUB_LOGIN_COMPLETED, {"github_username": username})
+GITHUB_GATE_EXPERIMENT: Final[str] = "github_gate_v1"
+GITHUB_GATE_VARIANT_CONTROL: Final[str] = "control"
+GITHUB_GATE_VARIANT_FORCED: Final[str] = "forced"
+_GITHUB_GATE_VARIANTS: Final[frozenset[str]] = frozenset(
+    {GITHUB_GATE_VARIANT_CONTROL, GITHUB_GATE_VARIANT_FORCED}
+)
+GITHUB_GATE_VARIANT_ENV: Final[str] = "OPENSRE_GITHUB_GATE_VARIANT"
+
+
+def assign_github_gate_variant(anonymous_id: str) -> str:
+    """Deterministically assign ``control`` (skip allowed) or ``forced`` (no skip).
+
+    Buckets on the install anonymous id so the variant is sticky without a
+    PostHog feature-flag round-trip. Override with ``OPENSRE_GITHUB_GATE_VARIANT``.
+    """
+    digest = sha256(f"{GITHUB_GATE_EXPERIMENT}:{anonymous_id}".encode()).hexdigest()
+    return (
+        GITHUB_GATE_VARIANT_FORCED if int(digest[:8], 16) % 2 == 0 else GITHUB_GATE_VARIANT_CONTROL
+    )
+
+
+def resolve_github_gate_variant() -> str:
+    """Resolve the GitHub login-gate experiment variant for this install."""
+    override = os.getenv(GITHUB_GATE_VARIANT_ENV, "").strip().lower()
+    if override in _GITHUB_GATE_VARIANTS:
+        return override
+    from platform.analytics.provider import get_anonymous_id
+
+    return assign_github_gate_variant(get_anonymous_id())
+
+
+def stamp_github_gate_variant(variant: str) -> None:
+    """Persist ``github_gate_variant`` on every subsequent analytics event."""
+    if variant not in _GITHUB_GATE_VARIANTS:
+        return
+    try:
+        get_analytics().set_persistent_property("github_gate_variant", variant)
+    except Exception as exc:
+        capture_exception(exc)
+
+
+def capture_github_login_prompted(*, variant: str) -> None:
+    _capture(Event.GITHUB_LOGIN_PROMPTED, {"github_gate_variant": variant})
+
+
+def capture_github_login_skipped(*, variant: str) -> None:
+    _capture(Event.GITHUB_LOGIN_SKIPPED, {"github_gate_variant": variant})
+
+
+def capture_github_login_abandoned(*, variant: str, reason: str) -> None:
+    _capture(
+        Event.GITHUB_LOGIN_ABANDONED,
+        {"github_gate_variant": variant, "reason": reason},
+    )
+
+
+def capture_github_login_completed(username: str, *, variant: str | None = None) -> None:
+    properties: Properties = {"github_username": username}
+    if variant is not None:
+        properties["github_gate_variant"] = variant
+    _capture(Event.GITHUB_LOGIN_COMPLETED, properties)
 
 
 def capture_tests_picker_opened() -> None:

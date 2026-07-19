@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import Any, cast
 
 from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.signoz import SigNozConfig, signoz_extract_params
 from integrations.signoz.availability import signoz_available_or_backend
 from integrations.signoz.client import SigNozClient
@@ -113,12 +114,11 @@ def query_signoz_logs(
 
     config = SigNozConfig.model_validate(_kwargs)
     if not config.is_configured:
-        return {
-            "source": "signoz_logs",
-            "available": False,
-            "error": "SigNoz logs not configured. Provide SIGNOZ_URL and SIGNOZ_API_KEY.",
-            "logs": [],
-        }
+        return tool_unavailable(
+            "signoz_logs",
+            "SigNoz logs not configured. Provide SIGNOZ_URL and SIGNOZ_API_KEY.",
+            logs=[],
+        )
 
     client = SigNozClient(config)
     result = client.query_logs(
@@ -218,12 +218,11 @@ def query_signoz_metrics(
 
     config = SigNozConfig.model_validate(_kwargs)
     if not config.is_configured:
-        return {
-            "source": "signoz_metrics",
-            "available": False,
-            "error": ("SigNoz metrics not configured. Provide SIGNOZ_URL and SIGNOZ_API_KEY."),
-            "metrics": [],
-        }
+        return tool_unavailable(
+            "signoz_metrics",
+            "SigNoz metrics not configured. Provide SIGNOZ_URL and SIGNOZ_API_KEY.",
+            metrics=[],
+        )
 
     client = SigNozClient(config)
     return client.query_metrics(
@@ -313,12 +312,11 @@ def query_signoz_traces(
 
     config = SigNozConfig.model_validate(_kwargs)
     if not config.is_configured:
-        return {
-            "source": "signoz_traces",
-            "available": False,
-            "error": "SigNoz traces not configured. Provide SIGNOZ_URL and SIGNOZ_API_KEY.",
-            "traces": [],
-        }
+        return tool_unavailable(
+            "signoz_traces",
+            "SigNoz traces not configured. Provide SIGNOZ_URL and SIGNOZ_API_KEY.",
+            traces=[],
+        )
 
     client = SigNozClient(config)
     traces_result = client.query_traces(

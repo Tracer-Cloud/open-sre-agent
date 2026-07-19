@@ -77,6 +77,22 @@ def test_dispatch_invalid_subcommand_is_handled_by_command_handler(
     assert resolve_literal_slash_typo("/integrations bogus", SLASH_COMMANDS) is None
 
 
+@pytest.mark.parametrize("command_line", ["/integrations bogus", "/mcp bogus"])
+def test_dispatch_unknown_subcommand_records_turn_as_failed(
+    monkeypatch: pytest.MonkeyPatch,
+    command_line: str,
+) -> None:
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.command_registry.integrations.repl_data.load_verified_integrations",
+        lambda: [],
+    )
+    session = Session()
+    console, buf = _capture()
+    assert dispatch_slash(command_line, session, console, is_tty=False) is True
+    assert "unknown subcommand" in buf.getvalue().lower()
+    assert session.history[-1]["ok"] is False
+
+
 def test_subcommand_hints_ignores_usage_placeholders() -> None:
     resume = SLASH_COMMANDS["/resume"]
     assert subcommand_hints(resume) == ()
