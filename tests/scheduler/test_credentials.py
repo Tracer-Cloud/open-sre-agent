@@ -79,6 +79,42 @@ class TestSlackCredentials:
         creds = resolve_slack_credentials({})
         assert creds == {"webhook_url": "https://hooks.slack.com/from-env"}
 
+    def test_bot_token_from_store_socket_mode(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # Socket Mode setup persists the bot token under the store ``bot_token``
+        # key (not ``access_token``); resolution must find it there without
+        # requiring SLACK_BOT_TOKEN to also be exported. Regression for #4019.
+        monkeypatch.delenv("SLACK_WEBHOOK_URL", raising=False)
+        monkeypatch.delenv("SLACK_BOT_TOKEN", raising=False)
+        monkeypatch.delenv("SLACK_ACCESS_TOKEN", raising=False)
+        monkeypatch.setattr(
+            "platform.scheduler.credentials._get_integration_credential",
+            lambda _service, key: "xoxb-from-store" if key == "bot_token" else "",
+        )
+        monkeypatch.setattr(
+            "platform.scheduler.credentials.resolve_env_credential",
+            lambda *_args, **_kwargs: "",
+        )
+        creds = resolve_slack_credentials({})
+        assert creds == {"access_token": "xoxb-from-store"}
+
+    def test_store_access_token_key_takes_priority_over_bot_token(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("SLACK_WEBHOOK_URL", raising=False)
+        monkeypatch.delenv("SLACK_BOT_TOKEN", raising=False)
+        monkeypatch.delenv("SLACK_ACCESS_TOKEN", raising=False)
+        store = {"access_token": "xoxp-preferred", "bot_token": "xoxb-secondary"}
+        monkeypatch.setattr(
+            "platform.scheduler.credentials._get_integration_credential",
+            lambda _service, key: store.get(key, ""),
+        )
+        monkeypatch.setattr(
+            "platform.scheduler.credentials.resolve_env_credential",
+            lambda *_args, **_kwargs: "",
+        )
+        creds = resolve_slack_credentials({})
+        assert creds == {"access_token": "xoxp-preferred"}
+
     def test_from_env_access_token_fallback(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("SLACK_WEBHOOK_URL", raising=False)
         monkeypatch.delenv("SLACK_BOT_TOKEN", raising=False)
