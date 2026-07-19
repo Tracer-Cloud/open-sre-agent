@@ -225,8 +225,16 @@ def build_seed_calls(
             injected = tool.extract_params(tool_sources)
         except Exception:
             injected = {}
+        public_properties = tool.public_input_schema.get("properties", {})
+        if not isinstance(public_properties, dict):
+            public_properties = {}
+        public_input = {
+            key: value
+            for key, value in injected.items()
+            if key in public_properties and value is not None
+        }
         tool_id = new_tool_use_id() if use_converse_ids else f"seed_{tool.name}"
-        calls.append(ToolCall(id=tool_id, name=tool.name, input=public_tool_input(injected)))
+        calls.append(ToolCall(id=tool_id, name=tool.name, input=public_tool_input(public_input)))
 
     return calls
 

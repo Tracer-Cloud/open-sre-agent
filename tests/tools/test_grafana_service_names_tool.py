@@ -51,3 +51,18 @@ def test_run_happy_path() -> None:
     assert result["available"] is True
     assert result["service_names"] == ["svc-a", "svc-b"]
     mock_client.query_loki_label_values.assert_called_once_with("service_name")
+
+
+def test_run_forwards_basic_auth_to_client() -> None:
+    mock_client = MagicMock()
+    mock_client.is_configured = False
+    with patch(
+        "integrations.grafana.tools._resolve_grafana_client", return_value=mock_client
+    ) as resolve:
+        query_grafana_service_names(
+            grafana_endpoint="http://grafana",
+            grafana_username="admin",
+            grafana_password="secret",
+        )
+
+    resolve.assert_called_once_with("http://grafana", None, "admin", "secret", True, "")

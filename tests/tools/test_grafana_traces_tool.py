@@ -78,6 +78,22 @@ def test_run_happy_path() -> None:
     assert len(result["pipeline_spans"]) == 1
 
 
+def test_run_forwards_basic_auth_to_client() -> None:
+    mock_client = MagicMock()
+    mock_client.is_configured = False
+    with patch(
+        "integrations.grafana.tools._resolve_grafana_client", return_value=mock_client
+    ) as resolve:
+        query_grafana_traces(
+            service_name="svc",
+            grafana_endpoint="http://grafana",
+            grafana_username="admin",
+            grafana_password="secret",
+        )
+
+    resolve.assert_called_once_with("http://grafana", None, "admin", "secret", True, "")
+
+
 def test_run_with_injected_backend() -> None:
     backend = MagicMock()
     backend.query_traces.return_value = {
