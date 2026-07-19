@@ -31,10 +31,16 @@ class JsonlSessionStorage:
     tree entry with ``id``, ``parent_id``, ``timestamp``, and ``type``.
     """
 
+    def __init__(self) -> None:
+        """Initialize storage with per-session last-entry-ID cache."""
+        self._last_entry_id_cache: dict[str, str | None] = {}
+
     def open_session(self, session: SessionPersistenceSource) -> None:
         with contextlib.suppress(Exception):
             path = session_path(session.session_id)
             path.parent.mkdir(parents=True, exist_ok=True)
+            # Clear cache when truncating the file to avoid orphaned parent references
+            self._last_entry_id_cache.pop(session.session_id, None)
             record = {
                 "type": "session",
                 "version": 2,
@@ -316,7 +322,14 @@ class JsonlSessionStorage:
             if not path.exists():
                 return ""
             entry_id = _new_id()
-            parent = parent_id if parent_id is not None else self._current_leaf_id(path)
+            # Use cached last entry ID if available, otherwise compute it once
+            if parent_id is not None:
+                parent = parent_id
+            elif session_id in self._last_entry_id_cache:
+                parent = self._last_entry_id_cache[session_id]
+            else:
+                parent = self._current_leaf_id(path)
+                self._last_entry_id_cache[session_id] = parent
             record = {
                 "id": entry_id,
                 "parent_id": parent,
@@ -326,6 +339,11 @@ class JsonlSessionStorage:
             }
             with path.open("a", encoding="utf-8") as fh:
                 fh.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+            # Update cache: for leaf entries, store parent_id (not entry_id) to preserve tree topology
+            if entry_type == "leaf":
+                self._last_entry_id_cache[session_id] = parent
+            else:
+                self._last_entry_id_cache[session_id] = entry_id
             return entry_id
         return ""
 
