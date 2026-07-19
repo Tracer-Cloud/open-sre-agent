@@ -8,6 +8,7 @@ Registers into the platform-level delivery registry at import time so
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
 from pydantic import BaseModel
@@ -25,6 +26,94 @@ class _GrafanaReportDeliveryAdapter:
 
     name = "grafana"
 
+    def _resolve_sink_inputs(
+        self,
+        resolved: dict[str, Any],
+    ) -> tuple[Any | None, Any | None]:
+        """
+        Resolve Grafana client and log sink config for investigation delivery.
+
+        Returns (client, config) or (None, None) when nothing is deliverable.
+        Deliverable when ANY of:
+          - GRAFANA_LOKI_PUSH_URL is set (Loki-only mode)
+          - Grafana integration has a usable endpoint (annotation mode)
+        """
+        from integrations.grafana.log_sink import GrafanaLogSinkConfig
+
+        loki_push_url = os.getenv("GRAFANA_LOKI_PUSH_URL", "").strip()
+        loki_write_token = os.getenv("GRAFANA_WRITE_TOKEN", "").strip()
+
+        grafana = resolved.get("grafana") or resolved.get("grafana_local")
+        if not grafana:
+            logger.debug("[resolve-sink] no grafana integration configured")
+            # Check if Loki-only mode is available
+            if loki_push_url:
+                logger.debug("[resolve-sink] Loki-only mode: GRAFANA_LOKI_PUSH_URL is set")
+                config = GrafanaLogSinkConfig(
+                    push_to_loki=True,
+                    create_annotations=False,
+                    loki_push_url=loki_push_url,
+                    loki_write_token=loki_write_token,
+                )
+                return None, config
+            return None, None
+
+        # Handle both Pydantic model and plain dict forms
+        if isinstance(grafana, BaseModel):
+            creds = grafana.model_dump(exclude_none=True)
+        elif isinstance(grafana, dict):
+            creds = dict(grafana)
+        else:
+            logger.debug("[resolve-sink] unrecognized grafana creds type: %s", type(grafana))
+            if loki_push_url:
+                config = GrafanaLogSinkConfig(
+                    push_to_loki=True,
+                    create_annotations=False,
+                    loki_push_url=loki_push_url,
+                    loki_write_token=loki_write_token,
+                )
+                return None, config
+            return None, None
+
+        endpoint = creds.get("endpoint") or creds.get("grafana_endpoint") or ""
+        api_key = creds.get("api_key") or creds.get("grafana_api_key") or ""
+        username = creds.get("username", "")
+        password = creds.get("password", "")
+
+        client = None
+        create_annotations = False
+
+        # Build client only if endpoint is present
+        if endpoint:
+            from integrations.grafana.client import get_grafana_client_from_credentials
+
+            client = get_grafana_client_from_credentials(
+                endpoint=endpoint,
+                api_key=api_key,
+                account_id="investigation_sink",
+                username=username,
+                password=password,
+            )
+            create_annotations = client is not None
+
+        # If client is None and loki_push_url is empty -> return (None, None)
+        if client is None and not loki_push_url:
+            logger.debug(
+                "[resolve-sink] no deliverable sink: endpoint missing, client None, "
+                "and GRAFANA_LOKI_PUSH_URL not set"
+            )
+            return None, None
+
+        # Build config explicitly (do not rely on defaults alone)
+        config = GrafanaLogSinkConfig(
+            push_to_loki=True,
+            create_annotations=create_annotations,
+            loki_push_url=loki_push_url,
+            loki_write_token=loki_write_token,
+        )
+
+        return client, config
+
     def deliver(
         self,
         state: DeliveryContext,
@@ -36,47 +125,18 @@ class _GrafanaReportDeliveryAdapter:
         # resolved_integrations["grafana"] is a GrafanaIntegrationConfig
         # Pydantic model (or a dict in some test flows).
         resolved = state.get("resolved_integrations") or {}
-        grafana = (
-            resolved.get("grafana") or resolved.get("grafana_local")
-            if isinstance(resolved, dict)
-            else None
-        )
-        if not grafana:
-            logger.debug("[publish] grafana delivery: no grafana integration configured")
+        if not isinstance(resolved, dict):
+            resolved = {}
+        client, config = self._resolve_sink_inputs(resolved)
+
+        if client is None and config is None:
+            logger.debug("[publish] grafana delivery: nothing deliverable")
             return False
 
-        # Handle both Pydantic model and plain dict forms
-        if isinstance(grafana, BaseModel):
-            creds = grafana.model_dump(exclude_none=True)
-        elif isinstance(grafana, dict):
-            creds = dict(grafana)
-        else:
-            logger.debug("[publish] grafana delivery: unrecognized creds type %s", type(grafana))
-            return False
-
-        endpoint = creds.get("endpoint") or creds.get("grafana_endpoint") or ""
-        api_key = creds.get("api_key") or creds.get("grafana_api_key") or ""
-        username = creds.get("username", "")
-        password = creds.get("password", "")
-
-        if not endpoint:
-            logger.debug("[publish] grafana delivery: no endpoint configured")
-            return False
-
-        from integrations.grafana.client import get_grafana_client_from_credentials
         from integrations.grafana.log_sink import GrafanaLogSink
 
-        client = get_grafana_client_from_credentials(
-            endpoint=endpoint,
-            api_key=api_key,
-            account_id="investigation_sink",
-            username=username,
-            password=password,
-        )
-
-        sink = GrafanaLogSink(client)
-        sink.send_investigation_report(state, messages=messages)
-        return True
+        sink = GrafanaLogSink(client, config=config)
+        return sink.send_investigation_report(state, messages=messages)
 
 
 grafana_delivery_adapter = _GrafanaReportDeliveryAdapter()

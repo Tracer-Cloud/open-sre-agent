@@ -16,14 +16,16 @@ report and an optional Grafana annotation summarising the investigation.
 
 ## Configuration
 
-Environment variables (used when an integration record is not supplied):
+Environment variables (used for Loki push, including Loki-only mode without a
+Grafana integration):
 
 - `GRAFANA_LOKI_PUSH_URL` — full Loki push endpoint (e.g. `https://<host>/loki/api/v1/push`)
 - `GRAFANA_WRITE_TOKEN` — optional bearer token for pushing to Loki
 
 When used via the integrations catalog the Grafana integration credentials
 (`endpoint`, `api_key`, or `username`/`password`) are used to build a Grafana
-client for annotation creation.
+client for annotation creation. Loki-only setups can set only the env vars above;
+no Grafana integration record is required.
 
 ## Querying in Grafana Explore
 

@@ -38,7 +38,9 @@ def _sample_state():
         "severity": "critical",
         "root_cause": "db slowness",
         "remediation_steps": ["restart DB"],
-        "evidence": [{"k": "v"}],
+        "evidence": [
+            {"type": "log", "content": "db error log"},
+        ],
         "correlation": {"cid": "123"},
         "run_id": "run-1",
         "alert_source": "pagerduty",
@@ -235,3 +237,45 @@ def test_empty_state_no_crash(mock_post):
     payload = json.loads(line)
     assert payload["alert_name"] == ""
     assert payload["run_id"] == ""
+
+
+@patch("integrations.grafana.log_sink.requests.post")
+def test_loki_push_works_without_client(mock_post):
+    mock_post.return_value.status_code = 204
+    sink = GrafanaLogSink(
+        client=None,
+        config=GrafanaLogSinkConfig(
+            loki_push_url="https://loki.example.com",
+            create_annotations=False,
+        ),
+    )
+    assert (
+        sink.send_investigation_report(_sample_state(), messages={"slack_text": "summary"}) is True
+    )
+
+
+@patch("integrations.grafana.log_sink.requests.post")
+def test_annotation_skipped_without_client(mock_post):
+    mock_post.return_value.status_code = 204
+    sink = GrafanaLogSink(
+        client=None,
+        config=GrafanaLogSinkConfig(
+            create_annotations=True,
+            push_to_loki=False,
+        ),
+    )
+    assert (
+        sink.send_investigation_report(_sample_state(), messages={"slack_text": "summary"}) is False
+    )
+
+
+def test_loki_only_config_skips_annotations_without_client():
+    sink = GrafanaLogSink(
+        client=None,
+        config=GrafanaLogSinkConfig(
+            loki_push_url="https://loki.example.com",
+            push_to_loki=True,
+            create_annotations=False,
+        ),
+    )
+    assert sink._config.create_annotations is False

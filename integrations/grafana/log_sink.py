@@ -62,7 +62,7 @@ class GrafanaLogSink:
 
     def __init__(
         self,
-        client: GrafanaClientBase,
+        client: GrafanaClientBase | None = None,
         *,
         config: GrafanaLogSinkConfig | None = None,
     ) -> None:
@@ -149,6 +149,9 @@ class GrafanaLogSink:
 
     def _create_annotation(self, state: Mapping[str, Any], messages: Mapping[str, Any]) -> bool:
         """Create a Grafana annotation summarizing the investigation."""
+        if self._client is None:
+            logger.debug("[grafana-sink] Annotation skipped: no Grafana client configured")
+            return False
         try:
             severity = str(state.get("severity", "unknown")).lower()
             emoji = _SEVERITY_EMOJI.get(severity, "⚠️")
