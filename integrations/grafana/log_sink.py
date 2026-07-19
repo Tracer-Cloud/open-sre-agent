@@ -4,9 +4,11 @@ Converts investigation state into:
 1. Loki push streams (via direct Loki endpoint, not datasource proxy)
 2. Grafana annotations (via the existing Grafana client)
 
-Env vars consumed directly (not via the classify/resolve pipeline):
-- GRAFANA_LOKI_PUSH_URL: Loki push endpoint
-- GRAFANA_WRITE_TOKEN: Loki write auth token (separate from Grafana read token)
+Env vars:
+- GRAFANA_LOKI_PUSH_URL: Loki push endpoint (a *_URL value; read plain, never
+  keyring-backed, per docs/adding-tools-and-integrations.md#credential-resolution).
+- GRAFANA_WRITE_TOKEN: Loki write auth token (separate from Grafana read token).
+  A *_TOKEN secret, resolved env-then-keyring via ``resolve_env_credential``.
   If unset, falls back to the Grafana read_token for annotation creation.
 """
 
@@ -23,6 +25,7 @@ from typing import Any, Final
 import requests
 from requests import RequestException
 
+from config.llm_credentials import resolve_env_credential
 from integrations.grafana.base import GrafanaClientBase
 
 logger = logging.getLogger(__name__)
@@ -73,7 +76,7 @@ class GrafanaLogSink:
             self._config.loki_push_url or os.getenv("GRAFANA_LOKI_PUSH_URL", "").strip()
         )
         self._loki_write_token = (
-            self._config.loki_write_token or os.getenv("GRAFANA_WRITE_TOKEN", "").strip()
+            self._config.loki_write_token or resolve_env_credential("GRAFANA_WRITE_TOKEN").strip()
         )
 
     def send_investigation_report(
@@ -104,7 +107,13 @@ class GrafanaLogSink:
             headers: dict[str, str] = {"Content-Type": "application/json"}
             if self._loki_write_token:
                 headers["Authorization"] = f"Bearer {self._loki_write_token}"
-            resp = requests.post(url, json={"streams": streams}, headers=headers, timeout=10)
+            # Loki-only mode (no client) has no account-level TLS config to draw
+            # on, so default to verifying certs. When a Grafana client *is*
+            # configured, honor its ssl_verify (e.g. self-signed on-prem certs).
+            verify = getattr(self._client, "ssl_verify", True)
+            resp = requests.post(
+                url, json={"streams": streams}, headers=headers, timeout=10, verify=verify
+            )
             if resp.status_code in (200, 204):
                 return True
             resp.raise_for_status()

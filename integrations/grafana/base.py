@@ -88,6 +88,11 @@ class GrafanaClientBase:
     def is_configured(self) -> bool:
         return self._config.is_configured
 
+    @property
+    def ssl_verify(self) -> bool | str:
+        """Value to pass as ``requests``' ``verify=`` kwarg for this account."""
+        return self._config.ssl_verify
+
     def _build_datasource_url(self, datasource_uid: str, path: str) -> str:
         return f"{self.instance_url}/api/datasources/proxy/uid/{datasource_uid}{path}"
 

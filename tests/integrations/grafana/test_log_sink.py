@@ -110,6 +110,58 @@ def test_loki_push_success(mock_post):
 
 
 @patch("integrations.grafana.log_sink.requests.post")
+def test_loki_push_defaults_verify_true_without_client(mock_post):
+    """Loki-only mode (no Grafana client) has no ssl_verify source; defaults to True."""
+    mock_post.return_value.status_code = 204
+    sink = GrafanaLogSink(
+        client=None,
+        config=GrafanaLogSinkConfig(loki_push_url="https://loki.example.com"),
+    )
+    sink.send_investigation_report(_sample_state(), messages={"slack_text": "summary"})
+    assert mock_post.call_args.kwargs["verify"] is True
+
+
+@patch("integrations.grafana.log_sink.requests.post")
+def test_loki_push_honors_client_ssl_verify(mock_post):
+    """When a Grafana client is configured, Loki push must honor its ssl_verify
+
+    (e.g. self-signed on-prem certs with verify_ssl=False), not silently
+    default to True like a bare ``requests.post`` call.
+    """
+    mock_post.return_value.status_code = 204
+    client = GrafanaClientBase(
+        GrafanaAccountConfig(
+            account_id="test-account",
+            instance_url="https://grafana.internal",
+            read_token="test-token",
+            verify_ssl=False,
+        )
+    )
+    sink = GrafanaLogSink(
+        client,
+        config=GrafanaLogSinkConfig(
+            push_to_loki=True,
+            create_annotations=False,
+            loki_push_url="https://loki.example.com",
+        ),
+    )
+    sink.send_investigation_report(_sample_state(), messages={"slack_text": "summary"})
+    assert mock_post.call_args.kwargs["verify"] is False
+
+
+@patch("integrations.grafana.log_sink.resolve_env_credential")
+def test_loki_write_token_resolves_env_then_keyring(mock_resolve, monkeypatch):
+    """GRAFANA_WRITE_TOKEN is a *_TOKEN secret; must go through the credential
+    resolution helper (env then keyring), not a bare ``os.getenv``.
+    """
+    monkeypatch.delenv("GRAFANA_WRITE_TOKEN", raising=False)
+    mock_resolve.return_value = "keyring-token"
+    sink = GrafanaLogSink(config=GrafanaLogSinkConfig())
+    mock_resolve.assert_called_once_with("GRAFANA_WRITE_TOKEN")
+    assert sink._loki_write_token == "keyring-token"
+
+
+@patch("integrations.grafana.log_sink.requests.post")
 def test_loki_push_no_url_skips(mock_post, monkeypatch):
     monkeypatch.delenv("GRAFANA_LOKI_PUSH_URL", raising=False)
     sink = GrafanaLogSink(

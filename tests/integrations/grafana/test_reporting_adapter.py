@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -183,6 +184,26 @@ def test_loki_only_env_activates_without_grafana_integration(
     assert sink_factory.configs[0].loki_push_url == "https://loki.example.com"
     assert sink_factory.configs[0].loki_write_token == "write-tok"
     assert sink.calls == [{"state": state, "messages": messages}]
+
+
+def test_loki_write_token_uses_credential_resolution_helper(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """GRAFANA_WRITE_TOKEN is a *_TOKEN secret and must resolve via
+    ``resolve_env_credential`` (env then keyring), not a bare ``os.getenv``.
+    """
+    monkeypatch.setenv("GRAFANA_LOKI_PUSH_URL", "https://loki.example.com")
+    monkeypatch.delenv("GRAFANA_WRITE_TOKEN", raising=False)
+    _client_factory, sink_factory, _sink = _patch_adapter_deps(monkeypatch)
+    resolve_spy = MagicMock(return_value="keyring-tok")
+    monkeypatch.setattr(
+        "integrations.grafana.reporting_adapter.resolve_env_credential", resolve_spy
+    )
+    state = {"resolved_integrations": {}, "alert_name": "test-alert"}
+
+    assert grafana_delivery_adapter.deliver(state, messages={}, blocks=[]) is True
+    resolve_spy.assert_called_once_with("GRAFANA_WRITE_TOKEN")
+    assert sink_factory.configs[0].loki_write_token == "keyring-tok"
 
 
 def test_grafana_no_endpoint_but_loki_env_still_delivers(

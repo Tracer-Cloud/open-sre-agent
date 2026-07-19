@@ -13,6 +13,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from config.llm_credentials import resolve_env_credential
 from platform.reporting.delivery_registry import (
     DeliveryContext,
     register_delivery_adapter,
@@ -40,8 +41,11 @@ class _GrafanaReportDeliveryAdapter:
         """
         from integrations.grafana.log_sink import GrafanaLogSinkConfig
 
+        # GRAFANA_LOKI_PUSH_URL is a *_URL value (never keyring-backed); read
+        # it plain. GRAFANA_WRITE_TOKEN is a *_TOKEN secret and must resolve
+        # env-then-keyring per docs/adding-tools-and-integrations.md#credential-resolution.
         loki_push_url = os.getenv("GRAFANA_LOKI_PUSH_URL", "").strip()
-        loki_write_token = os.getenv("GRAFANA_WRITE_TOKEN", "").strip()
+        loki_write_token = resolve_env_credential("GRAFANA_WRITE_TOKEN").strip()
 
         grafana = resolved.get("grafana") or resolved.get("grafana_local")
         if not grafana:
