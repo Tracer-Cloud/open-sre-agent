@@ -53,22 +53,24 @@ def resolve_slack_credentials(task_params: dict[str, str]) -> dict[str, str]:
     if env_webhook:
         return {"webhook_url": env_webhook}
 
-    # Bot token from the store: Socket Mode setup persists the token under the
+    # Bot token: store then env. Socket Mode setup persists the token under the
     # ``bot_token`` key (integrations/cli.py ``_setup_slack``), matching the
-    # canonical readers in integrations/slack/bot_api.py. Older/webhook flows may
-    # use ``access_token``. Accept either store key and normalize to the
-    # ``access_token`` field the executor reads for chat.postMessage.
+    # canonical readers in integrations/slack/bot_api.py; older/webhook flows may
+    # use ``access_token``. Accept either store key (``access_token`` preferred)
+    # and normalize to the ``access_token`` field the executor reads for
+    # chat.postMessage. Handled inline rather than via ``_resolve_credentials``
+    # so the store is queried once per key instead of re-reading ``access_token``.
     for store_key in ("access_token", "bot_token"):
         store_token = _get_integration_credential("slack", store_key).strip()
         if store_token:
             return {"access_token": store_token}
 
-    return _resolve_credentials(
-        {},
-        service="slack",
-        credential_key="access_token",
-        env_vars=("SLACK_BOT_TOKEN", "SLACK_ACCESS_TOKEN"),
-    )
+    for env_var in ("SLACK_BOT_TOKEN", "SLACK_ACCESS_TOKEN"):
+        env_token = resolve_env_credential(env_var).strip()
+        if env_token:
+            return {"access_token": env_token}
+
+    return {}
 
 
 def resolve_discord_credentials(task_params: dict[str, str]) -> dict[str, str]:
