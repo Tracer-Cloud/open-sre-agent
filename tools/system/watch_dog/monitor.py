@@ -8,7 +8,11 @@ from datetime import UTC, datetime
 from typing import Protocol, runtime_checkable
 
 from platform.common.task_types import TaskRecord, TaskStatus
-from tools.system.fleet_monitoring.probe import probe
+from tools.system.fleet_monitoring.probe import pid_exists, probe
+
+# A denied snapshot can be a momentary race; tolerate a few consecutive
+# unreadable ticks for a still-live PID before declaring it inaccessible.
+_MAX_INACCESSIBLE_TICKS = 3
 
 
 @runtime_checkable
@@ -51,6 +55,8 @@ def run_watchdog(
         if on_alarm is not None:
             on_alarm(threshold, detail)
 
+    inaccessible_ticks = 0
+
     try:
         while True:
             if task.cancel_requested.is_set():
@@ -61,9 +67,25 @@ def run_watchdog(
             if snap is None:
                 if task.cancel_requested.is_set():
                     task.mark_cancelled()
-                elif task.status == TaskStatus.RUNNING:
-                    task.mark_completed(result="target process exited")
-                return
+                    return
+                if not pid_exists(watched_pid):
+                    if task.status == TaskStatus.RUNNING:
+                        task.mark_completed(result="target process exited")
+                    return
+                # PID is still alive but unreadable (e.g. a root-owned daemon
+                # on macOS). This is never a clean exit; tolerate a few ticks
+                # for a transient denial, then fail explicitly.
+                inaccessible_ticks += 1
+                if inaccessible_ticks >= _MAX_INACCESSIBLE_TICKS:
+                    if task.status == TaskStatus.RUNNING:
+                        task.mark_failed(
+                            f"target process {watched_pid} is running but cannot be "
+                            "inspected (permission denied)"
+                        )
+                    return
+                continue
+
+            inaccessible_ticks = 0
 
             runtime_s = max(0.0, (datetime.now(UTC) - snap.started_at).total_seconds())
             progress = (

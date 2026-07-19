@@ -4,12 +4,20 @@ from __future__ import annotations
 
 import re
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Protocol
 
 from platform.common.errors import OpenSREError
+from platform.common.exit_codes import ERROR
 from tools.system.fleet_monitoring import probe as process_probe
 from tools.system.watch_dog.config import WatchdogConfig
+
+# A permission denial can be a momentary race; retry a few times before
+# declaring the process permanently unreadable so a transient denial does
+# not abort a healthy watch.
+_DEFAULT_ACCESS_ATTEMPTS = 3
+_DEFAULT_ACCESS_RETRY_SECONDS = 0.5
 
 
 @dataclass(frozen=True)
@@ -41,26 +49,55 @@ class Sampler(Protocol):
 class ProcessMonitor:
     """Resolve and sample one process."""
 
-    def __init__(self, config: WatchdogConfig) -> None:
+    def __init__(
+        self,
+        config: WatchdogConfig,
+        *,
+        max_access_attempts: int = _DEFAULT_ACCESS_ATTEMPTS,
+        access_retry_seconds: float = _DEFAULT_ACCESS_RETRY_SECONDS,
+        sleep: Callable[[float], None] = time.sleep,
+    ) -> None:
         self._process = _resolve_process(config)
         self._pid = self._process.pid
         self._name = _safe_process_name(self._process)
         self._cmdline = _safe_cmdline(self._process)
         self._started_at = _safe_create_time(self._process)
+        self._max_access_attempts = max(1, max_access_attempts)
+        self._access_retry_seconds = access_retry_seconds
+        self._sleep = sleep
         self._warm_cpu_percent()
 
     def sample(self) -> ProcessSample:
-        """Capture CPU, RSS, runtime, and liveness for the target process."""
-        try:
-            if not self._process.is_running():
+        """Capture CPU, RSS, runtime, and liveness for the target process.
+
+        A ``NoSuchProcess`` (or an ``AccessDenied`` whose PID is already gone)
+        is a genuine exit and yields a dead sample. An ``AccessDenied`` while
+        the PID is still alive means the process is running but unreadable
+        (e.g. a root-owned daemon on macOS); that is never a clean exit, so we
+        retry a few times to ride out a transient denial and otherwise raise.
+        """
+        attempt = 0
+        while True:
+            try:
+                return self._read_sample()
+            except process_probe.PROCESS_NOT_FOUND:
                 return self._dead_sample()
-            name = self._process.name()
-            cmdline = tuple(self._process.cmdline())
-            cpu_percent = float(self._process.cpu_percent(interval=None))
-            rss_bytes = int(self._process.memory_info().rss)
-            started_at = float(self._process.create_time())
-        except process_probe.PROCESS_INACCESSIBLE_OR_GONE:
+            except process_probe.PROCESS_ACCESS_DENIED as exc:
+                if not process_probe.pid_exists(self._pid):
+                    return self._dead_sample()
+                attempt += 1
+                if attempt >= self._max_access_attempts:
+                    raise self._inaccessible_error() from exc
+                self._sleep(self._access_retry_seconds)
+
+    def _read_sample(self) -> ProcessSample:
+        if not self._process.is_running():
             return self._dead_sample()
+        name = self._process.name()
+        cmdline = tuple(self._process.cmdline())
+        cpu_percent = float(self._process.cpu_percent(interval=None))
+        rss_bytes = int(self._process.memory_info().rss)
+        started_at = float(self._process.create_time())
 
         return ProcessSample(
             pid=self._pid,
@@ -71,6 +108,18 @@ class ProcessMonitor:
             runtime_seconds=max(0.0, time.time() - started_at),
             alive=True,
             started_at=started_at,
+        )
+
+    def _inaccessible_error(self) -> OpenSREError:
+        label = self._name or "?"
+        return OpenSREError(
+            f"Process {self._pid} ({label}) is running but cannot be inspected "
+            "(permission denied).",
+            suggestion=(
+                "Re-run with sufficient privileges (for example under sudo) to monitor "
+                "this process, or target a process your user owns."
+            ),
+            exit_code=ERROR,
         )
 
     def _warm_cpu_percent(self) -> None:

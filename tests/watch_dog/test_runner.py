@@ -35,6 +35,13 @@ class _ExplodingSampler:
         raise AssertionError("watchdog sampled before credentials were validated")
 
 
+class _PermissionDeniedSampler:
+    def sample(self) -> ProcessSample:
+        raise OpenSREError(
+            "Process 123 (syslogd) is running but cannot be inspected (permission denied)."
+        )
+
+
 def _sample(
     *,
     cpu: float = 0.0,
@@ -105,6 +112,21 @@ def test_target_exit_before_alarm_does_not_dispatch() -> None:
     )
 
     assert code == SUCCESS
+    assert dispatcher.calls == []
+
+
+def test_permission_denied_does_not_report_target_exit() -> None:
+    dispatcher = _FakeDispatcher()
+
+    with pytest.raises(OpenSREError, match="cannot be inspected"):
+        run_watchdog(
+            WatchdogConfig(pid=123, max_cpu=90),
+            sampler=_PermissionDeniedSampler(),
+            dispatcher=dispatcher,
+            _sleep=lambda _seconds: None,
+            _clock=lambda: 100.0,
+        )
+
     assert dispatcher.calls == []
 
 

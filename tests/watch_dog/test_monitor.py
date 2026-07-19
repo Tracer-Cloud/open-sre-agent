@@ -76,6 +76,20 @@ class _AccessDeniedProcess(_FakeProcess):
         raise psutil.AccessDenied(self.pid)
 
 
+class _TransientAccessDeniedProcess(_FakeProcess):
+    """Denies ``memory_info`` a fixed number of times, then succeeds."""
+
+    def __init__(self, *args: object, denials: int = 1, **kwargs: object) -> None:
+        super().__init__(*args, **kwargs)  # type: ignore[arg-type]
+        self._denials = denials
+
+    def memory_info(self) -> _MemoryInfo:
+        if self._denials > 0:
+            self._denials -= 1
+            raise psutil.AccessDenied(self.pid)
+        return super().memory_info()
+
+
 def test_process_monitor_resolves_by_pid_and_warms_cpu(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -141,16 +155,68 @@ def test_process_monitor_returns_dead_sample_on_no_such_process(
     assert sample.cpu_percent == 0.0
 
 
-def test_process_monitor_returns_dead_sample_on_access_denied(
+def test_process_monitor_raises_when_denied_process_is_still_alive(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """A live-but-unreadable process must fail loudly, never look like an exit."""
+    process = _AccessDeniedProcess(123, "syslogd")
+    monkeypatch.setattr(
+        "tools.system.watch_dog.process_monitor.process_probe.process", lambda _pid: process
+    )
+    monkeypatch.setattr(
+        "tools.system.watch_dog.process_monitor.process_probe.pid_exists", lambda _pid: True
+    )
+
+    monitor = ProcessMonitor(
+        WatchdogConfig(pid=123, max_cpu=90),
+        max_access_attempts=2,
+        sleep=lambda _seconds: None,
+    )
+
+    with pytest.raises(OpenSREError, match="cannot be inspected"):
+        monitor.sample()
+
+
+def test_process_monitor_returns_dead_sample_when_denied_process_is_gone(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """AccessDenied that races an exit (PID no longer exists) is a real exit."""
     process = _AccessDeniedProcess(123, "python")
     monkeypatch.setattr(
         "tools.system.watch_dog.process_monitor.process_probe.process", lambda _pid: process
     )
+    monkeypatch.setattr(
+        "tools.system.watch_dog.process_monitor.process_probe.pid_exists", lambda _pid: False
+    )
 
-    monitor = ProcessMonitor(WatchdogConfig(pid=123, max_cpu=90))
+    monitor = ProcessMonitor(
+        WatchdogConfig(pid=123, max_cpu=90),
+        sleep=lambda _seconds: None,
+    )
     sample = monitor.sample()
 
     assert sample.pid == 123
     assert sample.alive is False
+
+
+def test_process_monitor_retries_transient_denial_then_samples(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A transient denial is retried and yields a normal live sample."""
+    process = _TransientAccessDeniedProcess(123, "python", denials=1)
+    monkeypatch.setattr(
+        "tools.system.watch_dog.process_monitor.process_probe.process", lambda _pid: process
+    )
+    monkeypatch.setattr(
+        "tools.system.watch_dog.process_monitor.process_probe.pid_exists", lambda _pid: True
+    )
+
+    monitor = ProcessMonitor(
+        WatchdogConfig(pid=123, max_cpu=90),
+        max_access_attempts=3,
+        sleep=lambda _seconds: None,
+    )
+    sample = monitor.sample()
+
+    assert sample.alive is True
+    assert sample.rss_bytes == 1024

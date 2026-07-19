@@ -230,4 +230,67 @@ def test_run_watchdog_once_without_thresholds_exits(monkeypatch: pytest.MonkeyPa
     )
     assert task.status == TaskStatus.COMPLETED
     assert task.result == "single sample (once)"
+
+
+def test_run_watchdog_marks_completed_when_process_gone(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unreadable snapshot for a PID that no longer exists is a real exit."""
+    from platform.common.task_registry import TaskRegistry
+    from tools.system.watch_dog.monitor import run_watchdog
+
+    reg = TaskRegistry()
+    task = reg.create(TaskKind.WATCHDOG, command="watchdog pid=1")
+    task.mark_running()
+    dispatcher = MagicMock()
+    dispatcher.dispatch = MagicMock(return_value=True)
+
+    monkeypatch.setattr("tools.system.watch_dog.monitor.probe", lambda *_a, **_kw: None)
+    monkeypatch.setattr("tools.system.watch_dog.monitor.pid_exists", lambda _pid: False)
+
+    run_watchdog(
+        task=task,
+        watched_pid=1,
+        interval_seconds=0.01,
+        max_cpu=None,
+        max_runtime_seconds=None,
+        max_rss_mib=None,
+        once=False,
+        dispatcher=dispatcher,
+        on_alarm=None,
+    )
+    assert task.status == TaskStatus.COMPLETED
+    assert task.result == "target process exited"
+
+
+def test_run_watchdog_marks_failed_when_process_unreadable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A live PID whose snapshot is denied must fail, not report a clean exit."""
+    from platform.common.task_registry import TaskRegistry
+    from tools.system.watch_dog.monitor import run_watchdog
+
+    reg = TaskRegistry()
+    task = reg.create(TaskKind.WATCHDOG, command="watchdog pid=1")
+    task.mark_running()
+    dispatcher = MagicMock()
+    dispatcher.dispatch = MagicMock(return_value=True)
+
+    monkeypatch.setattr("tools.system.watch_dog.monitor.probe", lambda *_a, **_kw: None)
+    monkeypatch.setattr("tools.system.watch_dog.monitor.pid_exists", lambda _pid: True)
+
+    run_watchdog(
+        task=task,
+        watched_pid=1,
+        interval_seconds=0.01,
+        max_cpu=None,
+        max_runtime_seconds=None,
+        max_rss_mib=None,
+        once=False,
+        dispatcher=dispatcher,
+        on_alarm=None,
+    )
+    assert task.status == TaskStatus.FAILED
+    assert task.result != "target process exited"
+    assert "cannot be inspected" in (task.error or "")
     dispatcher.dispatch.assert_not_called()
