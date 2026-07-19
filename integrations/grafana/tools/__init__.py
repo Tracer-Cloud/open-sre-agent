@@ -4,12 +4,15 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import requests
 
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.tool_availability import tool_unavailable
+
+logger = logging.getLogger(__name__)
 
 # Grafana client query methods raise on API failure (#2944); these are the
 # exception types a failed request or a malformed response body produces.
@@ -27,6 +30,17 @@ def _grafana_failure_message(what: str, err: Exception) -> str:
     if status:
         return f"Grafana {what} query failed: HTTP {status}"
     return f"Grafana {what} query failed: {type(err).__name__}"
+
+
+def _grafana_unavailable(source: str, what: str, err: Exception, **extra: Any) -> dict[str, Any]:
+    """Log the API failure server-side and return the tool-unavailable envelope.
+
+    The log line carries full exception detail (server-side only) — restoring the
+    warning the base client emitted before it stopped swallowing (#2944) — while
+    the returned envelope's error is limited to status/type (CWE-209).
+    """
+    logger.warning("[grafana] %s query failed: %s", what, err)
+    return tool_unavailable(source, _grafana_failure_message(what, err), **extra)
 
 
 def _query_grafana_alert_rules_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
@@ -126,9 +140,7 @@ def query_grafana_alert_rules(
     try:
         rules = client.query_alert_rules(folder=folder)
     except _GRAFANA_API_ERRORS as e:
-        return tool_unavailable(
-            "grafana_alerts", _grafana_failure_message("alert-rules", e), rules=[]
-        )
+        return _grafana_unavailable("grafana_alerts", "alert-rules", e, rules=[])
     return {
         "source": "grafana_alerts",
         "available": True,
@@ -273,9 +285,7 @@ def query_grafana_annotations(
     try:
         annotations = client.query_annotations(from_ts=from_ts, to_ts=to_ts, tags=tags, limit=limit)
     except _GRAFANA_API_ERRORS as e:
-        return tool_unavailable(
-            "grafana_annotations", _grafana_failure_message("annotations", e), annotations=[]
-        )
+        return _grafana_unavailable("grafana_annotations", "annotations", e, annotations=[])
     return {
         "source": "grafana_annotations",
         "available": True,
@@ -697,10 +707,8 @@ def query_grafana_service_names(
     try:
         service_names = client.query_loki_label_values("service_name")
     except _GRAFANA_API_ERRORS as e:
-        return tool_unavailable(
-            "grafana_loki_labels",
-            _grafana_failure_message("service-name labels", e),
-            service_names=[],
+        return _grafana_unavailable(
+            "grafana_loki_labels", "service-name labels", e, service_names=[]
         )
     return {
         "source": "grafana_loki_labels",

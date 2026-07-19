@@ -108,3 +108,19 @@ def test_run_connection_error_reports_unavailable() -> None:
     assert result["available"] is False
     assert "ConnectionError" in result["error"]
     assert result["rules"] == []
+
+
+def test_run_api_failure_logs_warning(caplog) -> None:
+    # The failure must leave a server-side trace (the base client used to log
+    # before it stopped swallowing); the agent-facing envelope is not enough.
+    import logging
+
+    mock_client = MagicMock()
+    mock_client.is_configured = True
+    mock_client.query_alert_rules.side_effect = requests.ConnectionError("dns failure")
+    with (
+        patch("integrations.grafana.tools._resolve_grafana_client", return_value=mock_client),
+        caplog.at_level(logging.WARNING, logger="integrations.grafana.tools"),
+    ):
+        query_grafana_alert_rules(grafana_endpoint="http://grafana")
+    assert any("alert-rules query failed" in r.message for r in caplog.records)
