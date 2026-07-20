@@ -4,11 +4,8 @@ from __future__ import annotations
 
 from rich.console import Console
 
-from integrations.sentry.digest_delivery import (
-    delivery_provider_ready,
-    digest_delivery_setup_hint,
-)
 from platform.harness_ports import configured_integration_services
+from platform.scheduler.delivery import delivery_provider_ready, delivery_setup_hint
 from platform.scheduler.types import Provider
 
 _console = Console()
@@ -30,7 +27,7 @@ def require_digest_delivery_provider(provider: str) -> None:
     provider_enum = Provider(provider)
     if delivery_provider_ready(provider_enum):
         return
-    _console.print(f"[red]{digest_delivery_setup_hint(provider_enum)}[/red]")
+    _console.print(f"[red]{delivery_setup_hint(provider_enum)}[/red]")
     raise SystemExit(1)
 
 

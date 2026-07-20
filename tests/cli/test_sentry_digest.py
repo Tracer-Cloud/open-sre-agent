@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from click.testing import CliRunner
 
-from integrations.sentry.digest_delivery import SENTRY_DIGEST_SUPPORTED_PROVIDERS
+from platform.scheduler.delivery import SUPPORTED_DELIVERY_PROVIDERS
 from surfaces.cli.commands.sentry_digest import _PROVIDER_CHOICES, sentry_command
 
 
 def test_sentry_provider_choices_match_supported_providers_constant() -> None:
     """Discord has no digest readiness/send path, so it must stay excluded."""
-    assert set(_PROVIDER_CHOICES) == {p.value for p in SENTRY_DIGEST_SUPPORTED_PROVIDERS}
+    assert set(_PROVIDER_CHOICES) == {p.value for p in SUPPORTED_DELIVERY_PROVIDERS}
     assert "discord" not in _PROVIDER_CHOICES
 
 

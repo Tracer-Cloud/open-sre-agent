@@ -1,4 +1,9 @@
-"""Delivery readiness checks for scheduled Sentry digest tasks."""
+"""Delivery readiness checks for scheduled task messages (provider-generic).
+
+Shared by every scheduled-report feature (Sentry digests, PostHog metric
+reports, ...). Lives in ``platform.scheduler`` rather than any single vendor
+package so integrations depend downward on it instead of on each other.
+"""
 
 from __future__ import annotations
 
@@ -9,10 +14,11 @@ from platform.scheduler.credentials import (
 )
 from platform.scheduler.types import Provider
 
-# Providers Sentry digest delivery actually implements. Discord is a member of
-# Provider (cron delivery supports it) but has no digest readiness/send path
-# here, so it's deliberately excluded rather than exposed as a broken choice.
-SENTRY_DIGEST_SUPPORTED_PROVIDERS: tuple[Provider, ...] = (
+# Providers scheduled-report delivery actually implements. Discord is a member
+# of Provider (cron delivery supports it) but has no delivery readiness/send
+# path here, so it's deliberately excluded rather than exposed as a broken
+# choice.
+SUPPORTED_DELIVERY_PROVIDERS: tuple[Provider, ...] = (
     Provider.TELEGRAM,
     Provider.SLACK,
     Provider.ROCKETCHAT,
@@ -43,7 +49,7 @@ def rocketchat_delivery_ready() -> bool:
 
 
 def delivery_provider_ready(provider: Provider | str) -> bool:
-    """Return True when ``provider`` can deliver scheduled digest messages."""
+    """Return True when ``provider`` can deliver scheduled messages."""
     name = provider.value if isinstance(provider, Provider) else str(provider).strip().lower()
     if name == Provider.TELEGRAM.value:
         return telegram_delivery_ready()
@@ -54,12 +60,12 @@ def delivery_provider_ready(provider: Provider | str) -> bool:
     return False
 
 
-def any_digest_delivery_ready() -> bool:
-    """Return True when at least one supported digest delivery provider is configured."""
+def any_delivery_ready() -> bool:
+    """Return True when at least one supported delivery provider is configured."""
     return telegram_delivery_ready() or slack_delivery_ready() or rocketchat_delivery_ready()
 
 
-def digest_delivery_setup_hint(provider: Provider | str | None = None) -> str:
+def delivery_setup_hint(provider: Provider | str | None = None) -> str:
     """Human-readable setup guidance when delivery is not configured."""
     if provider is not None:
         name = provider.value if isinstance(provider, Provider) else str(provider).strip().lower()
@@ -81,17 +87,17 @@ def digest_delivery_setup_hint(provider: Provider | str | None = None) -> str:
                 "target an explicit --chat-id)."
             )
     return (
-        "No digest delivery channel is configured. Connect Telegram, Slack, or Rocket.Chat "
+        "No delivery channel is configured. Connect Telegram, Slack, or Rocket.Chat "
         "first (`opensre integrations setup telegram`, `opensre integrations setup slack`, "
         "or `opensre integrations setup rocketchat`)."
     )
 
 
 __all__ = [
-    "SENTRY_DIGEST_SUPPORTED_PROVIDERS",
-    "any_digest_delivery_ready",
+    "SUPPORTED_DELIVERY_PROVIDERS",
+    "any_delivery_ready",
     "delivery_provider_ready",
-    "digest_delivery_setup_hint",
+    "delivery_setup_hint",
     "rocketchat_delivery_ready",
     "slack_delivery_ready",
     "telegram_delivery_ready",
