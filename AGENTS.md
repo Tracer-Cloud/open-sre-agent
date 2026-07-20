@@ -10,6 +10,9 @@
 
 - Use strict typing, follow DRY principle
 - One clear purpose per file (separation of concerns)
+- Use named constants for HTTP status codes (`http.HTTPStatus`, e.g.
+  `HTTPStatus.PAYMENT_REQUIRED`) in both source and tests — never hardcoded
+  numeric literals like `402`.
 - Do not keep compatibility-only forwarding modules after refactors. Once imports and tests
   are migrated, remove the old module path in the same change and use one canonical import path.
 

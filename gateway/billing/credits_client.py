@@ -18,6 +18,7 @@ import functools
 import logging
 import os
 from enum import Enum
+from http import HTTPStatus
 from typing import Any
 
 import httpx
@@ -130,7 +131,7 @@ def _classify_response(response: httpx.Response, *, reason: str) -> CreditsOutco
     402 → DENIED (the one refuse-the-user state); 2xx → ALLOWED; anything else
     → UNAVAILABLE, so callers fail open on server errors.
     """
-    if response.status_code == 402:
+    if response.status_code == HTTPStatus.PAYMENT_REQUIRED:
         body = _json_dict(response)
         logger.info(
             "[credits] denied reason=%s balance=%s required=%s",

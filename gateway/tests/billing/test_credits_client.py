@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from http import HTTPStatus
 from typing import Any
 
 import httpx
@@ -53,7 +54,9 @@ def test_402_is_denied(monkeypatch: pytest.MonkeyPatch) -> None:
     # Arrange: the ledger reports a shortfall.
     monkeypatch.setattr(
         "gateway.billing.credits_client.httpx.post",
-        lambda *_a, **_k: httpx.Response(402, json={"balance": 0, "required": 1}),
+        lambda *_a, **_k: httpx.Response(
+            HTTPStatus.PAYMENT_REQUIRED, json={"balance": 0, "required": 1}
+        ),
     )
 
     # Act
@@ -68,7 +71,7 @@ def test_2xx_is_allowed(monkeypatch: pytest.MonkeyPatch) -> None:
     # Arrange: the ledger consumes a credit and returns the remaining balance.
     monkeypatch.setattr(
         "gateway.billing.credits_client.httpx.post",
-        lambda *_a, **_k: httpx.Response(200, json={"balance": 41.5, "consumed": 1}),
+        lambda *_a, **_k: httpx.Response(HTTPStatus.OK, json={"balance": 41.5, "consumed": 1}),
     )
 
     # Act
@@ -98,7 +101,7 @@ def test_5xx_is_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
     # Arrange: a server error from the ledger (any non-402, non-2xx status).
     monkeypatch.setattr(
         "gateway.billing.credits_client.httpx.post",
-        lambda *_a, **_k: httpx.Response(500, json={}),
+        lambda *_a, **_k: httpx.Response(HTTPStatus.INTERNAL_SERVER_ERROR, json={}),
     )
 
     # Act
@@ -115,7 +118,7 @@ def test_request_matches_webapp_contract(monkeypatch: pytest.MonkeyPatch) -> Non
 
     def capture(url: str, **kwargs: Any) -> httpx.Response:
         calls.append({"url": url, **kwargs})
-        return httpx.Response(200, json={"balance": 9, "consumed": 2.5})
+        return httpx.Response(HTTPStatus.OK, json={"balance": 9, "consumed": 2.5})
 
     monkeypatch.setattr("gateway.billing.credits_client.httpx.post", capture)
 
@@ -145,7 +148,7 @@ def test_metadata_cannot_override_billing_fields(monkeypatch: pytest.MonkeyPatch
 
     def capture(_url: str, **kwargs: Any) -> httpx.Response:
         calls.append(kwargs)
-        return httpx.Response(200, json={"balance": 1})
+        return httpx.Response(HTTPStatus.OK, json={"balance": 1})
 
     monkeypatch.setattr("gateway.billing.credits_client.httpx.post", capture)
 
