@@ -30,6 +30,7 @@ USAGE_SECRET_ENV = "AGENT_USAGE_SECRET"
 ORGANIZATION_ID_ENV = "OPENSRE_ORGANIZATION_ID"
 
 _TIMEOUT_SECONDS = 5.0
+_CONSUME_PATH = "/api/credits/consume"
 
 
 class CreditsOutcome(Enum):
@@ -83,26 +84,30 @@ def consume_credits(
     base_url = _env(WEBAPP_URL_ENV).rstrip("/")
     secret = _env(USAGE_SECRET_ENV)
     org = (organization_id or organization_id_for_silo()).strip()
-    missing = [
-        name
-        for name, is_set in (
-            (WEBAPP_URL_ENV, bool(base_url)),
-            (USAGE_SECRET_ENV, bool(secret)),
-            (ORGANIZATION_ID_ENV, bool(org)),
-        )
-        if not is_set
-    ]
+
+    missing: list[str] = []
+    if not base_url:
+        missing.append(WEBAPP_URL_ENV)
+    if not secret:
+        missing.append(USAGE_SECRET_ENV)
+    if not org:
+        missing.append(ORGANIZATION_ID_ENV)
     if missing:
         _log_metering_disabled_once(", ".join(missing))
         return CreditsOutcome.UNCONFIGURED
 
-    payload: dict[str, Any] = {"amount": amount, "organizationId": org, "reason": reason}
-    if metadata:
-        payload.update(metadata)
+    # Metadata is spread first so the billing-critical fields always win and can
+    # never be overwritten by a supplemental key.
+    payload: dict[str, Any] = {
+        **(metadata or {}),
+        "amount": amount,
+        "organizationId": org,
+        "reason": reason,
+    }
 
     try:
         response = httpx.post(
-            f"{base_url}/api/credits/consume",
+            f"{base_url}{_CONSUME_PATH}",
             json=payload,
             headers={"Authorization": f"Bearer {secret}"},
             timeout=_TIMEOUT_SECONDS,
@@ -116,6 +121,15 @@ def consume_credits(
         )
         return CreditsOutcome.UNAVAILABLE
 
+    return _classify_response(response, reason=reason)
+
+
+def _classify_response(response: httpx.Response, *, reason: str) -> CreditsOutcome:
+    """Map a ledger HTTP response to an outcome.
+
+    402 → DENIED (the one refuse-the-user state); 2xx → ALLOWED; anything else
+    → UNAVAILABLE, so callers fail open on server errors.
+    """
     if response.status_code == 402:
         body = _json_dict(response)
         logger.info(

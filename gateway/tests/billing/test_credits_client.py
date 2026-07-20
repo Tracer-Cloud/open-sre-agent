@@ -136,3 +136,30 @@ def test_request_matches_webapp_contract(monkeypatch: pytest.MonkeyPatch) -> Non
         "reason": "investigation",
         "investigationId": "inv-1",
     }
+
+
+@pytest.mark.usefixtures("metering_on")
+def test_metadata_cannot_override_billing_fields(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Arrange: hostile metadata tries to zero the charge and swap the org/reason.
+    calls: list[dict[str, Any]] = []
+
+    def capture(_url: str, **kwargs: Any) -> httpx.Response:
+        calls.append(kwargs)
+        return httpx.Response(200, json={"balance": 1})
+
+    monkeypatch.setattr("gateway.billing.credits_client.httpx.post", capture)
+
+    # Act
+    consume_credits(
+        organization_id="org_real",
+        amount=1.0,
+        reason="slack_turn",
+        metadata={"amount": 0, "organizationId": "org_injected", "reason": "free_ride"},
+    )
+
+    # Assert: the injected markers never reach the ledger; core fields keep their
+    # real values (a zero-credit charge to another org must be impossible).
+    (sent,) = calls
+    assert sent["json"]["amount"] == 1.0
+    assert sent["json"]["organizationId"] == "org_real"
+    assert sent["json"]["reason"] == "slack_turn"
