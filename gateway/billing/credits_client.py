@@ -53,12 +53,13 @@ def organization_id_for_silo() -> str:
 
 
 @functools.cache
-def _log_metering_disabled_once(missing: str) -> None:
-    """Log which env vars are unset once per process (idempotent via cache).
+def _log_metering_disabled_once() -> None:
+    """Log once per process that metering is off because config is incomplete.
 
-    ``missing`` holds only env-var names, never their values.
+    The message is static — no env value or name is interpolated — so the
+    warning can never carry a secret into the logs.
     """
-    logger.info("[credits] metering disabled: %s not set", missing)
+    logger.info("[credits] metering disabled: required configuration is not fully set")
 
 
 def consume_credits(
@@ -86,15 +87,8 @@ def consume_credits(
     secret = _env(USAGE_SECRET_ENV)
     org = (organization_id or organization_id_for_silo()).strip()
 
-    missing: list[str] = []
-    if not base_url:
-        missing.append(WEBAPP_URL_ENV)
-    if not secret:
-        missing.append(USAGE_SECRET_ENV)
-    if not org:
-        missing.append(ORGANIZATION_ID_ENV)
-    if missing:
-        _log_metering_disabled_once(", ".join(missing))
+    if not (base_url and secret and org):
+        _log_metering_disabled_once()
         return CreditsOutcome.UNCONFIGURED
 
     # Metadata is spread first so the billing-critical fields always win and can
