@@ -164,6 +164,7 @@ def build_connected_tool_context(
         if not key.startswith("_")
         and (isinstance(value, BaseModel) or (isinstance(value, dict) and value))
     )
+    connected_source_set = set(connected_integrations)
     connected_families = {family_key(key) for key in connected_integrations}
 
     sources: dict[str, dict[str, Any]] = {}
@@ -172,7 +173,7 @@ def build_connected_tool_context(
         source_info = sources.setdefault(
             source,
             {
-                "connected": source in connected_integrations
+                "connected": source in connected_source_set
                 or family_key(source) in connected_families,
                 "tools": [],
             },
@@ -182,7 +183,7 @@ def build_connected_tool_context(
     return {
         "connected_integrations": connected_integrations,
         "available_sources": sources,
-        "available_action_names": [tool.name for tool in sorted(tools, key=lambda item: item.name)],
+        "available_action_names": sorted(tool.name for tool in tools),
     }
 
 

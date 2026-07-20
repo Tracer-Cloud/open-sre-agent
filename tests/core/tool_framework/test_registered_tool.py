@@ -155,6 +155,30 @@ def test_public_input_schema_empty_injected_unchanged() -> None:
     assert rt.public_input_schema == rt.input_schema
 
 
+def test_public_input_schema_is_cached_and_isolated_from_source() -> None:
+    def run(query: str, token: str) -> dict[str, Any]:
+        return {}
+
+    rt = RegisteredTool(
+        name="cached_tool",
+        description="Tool whose public schema is computed once",
+        input_schema={
+            "type": "object",
+            "properties": {"query": {"type": "string"}, "token": {"type": "string"}},
+            "required": ["query", "token"],
+        },
+        source="grafana",
+        run=run,
+        injected_params=("token",),
+    )
+
+    # Cached: repeated access returns the same object (no per-call deepcopy).
+    assert rt.public_input_schema is rt.public_input_schema
+    # And the cache did not mutate the source schema (injected param still present there).
+    assert "token" in rt.input_schema["properties"]
+    assert "token" not in rt.public_input_schema["properties"]
+
+
 # ---------------------------------------------------------------------------
 # validate_public_input
 # ---------------------------------------------------------------------------

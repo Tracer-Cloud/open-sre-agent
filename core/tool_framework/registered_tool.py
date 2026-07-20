@@ -6,6 +6,7 @@ import inspect
 from collections.abc import Callable, Iterable
 from copy import deepcopy
 from dataclasses import dataclass, field
+from functools import cached_property
 from typing import Any, cast
 
 from pydantic import BaseModel
@@ -137,9 +138,14 @@ class RegisteredTool:
             for param, info in props.items()
         }
 
-    @property
+    @cached_property
     def public_input_schema(self) -> dict[str, Any]:
-        """Return a schema exposed to the model (without injected params)."""
+        """Return the schema exposed to the model (without injected params).
+
+        Computed once per tool and cached: ``input_schema`` and
+        ``injected_params`` are fixed at construction, so this is invariant.
+        Treat the result as read-only — it is shared across callers.
+        """
         schema = deepcopy(self.input_schema)
         properties = schema.get("properties")
         if not isinstance(properties, dict):

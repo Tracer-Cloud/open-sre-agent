@@ -124,7 +124,6 @@ def execute_tool_calls(
             return _execute_one_tool_call(
                 tc,
                 tool_map=tool_map,
-                tools=tools,
                 tool_sources=tool_sources,
                 resolved_integrations=resolved_integrations,
                 runtime_resources=runtime_resources,
@@ -195,7 +194,6 @@ def _execute_one_tool_call(
     tc: ToolCall,
     *,
     tool_map: dict[str, RuntimeTool],
-    tools: Sequence[RuntimeTool],
     tool_sources: dict[str, Any],
     resolved_integrations: dict[str, Any],
     runtime_resources: dict[str, Any],
@@ -216,7 +214,7 @@ def _execute_one_tool_call(
             logger.debug("tool_call validation_error name=%s id=%s", tc.name, tc.id)
             return _error_result(validation_error, metadata={"tool_name": tc.name})
 
-        source = tool_source(tools, tc.name)
+        source = str(getattr(tool, "source", "unknown"))
         span_attrs["source"] = source
         request = ToolExecutionRequest(
             tool_call=tc,

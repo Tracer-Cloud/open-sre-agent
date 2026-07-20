@@ -89,8 +89,10 @@ def _apply_budget(
     budget = _tool_budget(state)
     selected = candidates[:budget]
     excluded_candidates = candidates[budget:]
+    positive_set = set(positive)
+    fallback_set = set(fallback)
     not_candidates = [
-        action for action in scored if action not in positive and action not in fallback
+        action for action in scored if action not in positive_set and action not in fallback_set
     ]
     return selected, excluded_candidates + not_candidates
 
