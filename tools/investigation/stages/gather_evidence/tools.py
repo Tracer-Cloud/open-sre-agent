@@ -225,6 +225,9 @@ def build_seed_calls(
             injected = tool.extract_params(tool_sources)
         except Exception:
             injected = {}
+        # Seed calls are validated against the public schema before execution.
+        # Keep only declared arguments and omit None for optional fields, where
+        # absence is valid but an explicit null may violate the declared type.
         public_properties = tool.public_input_schema.get("properties", {})
         if not isinstance(public_properties, dict):
             public_properties = {}
