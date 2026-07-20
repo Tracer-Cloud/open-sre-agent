@@ -14,6 +14,7 @@ choose what UNCONFIGURED (metering off, e.g. dev setups) and UNAVAILABLE
 
 from __future__ import annotations
 
+import functools
 import logging
 import os
 from enum import Enum
@@ -29,9 +30,6 @@ USAGE_SECRET_ENV = "AGENT_USAGE_SECRET"
 ORGANIZATION_ID_ENV = "OPENSRE_ORGANIZATION_ID"
 
 _TIMEOUT_SECONDS = 5.0
-
-# Metering-disabled is logged once per process, not once per turn.
-_unconfigured_logged = False
 
 
 class CreditsOutcome(Enum):
@@ -52,11 +50,12 @@ def organization_id_for_silo() -> str:
     return _env(ORGANIZATION_ID_ENV)
 
 
-def _log_unconfigured_once(missing: str) -> None:
-    global _unconfigured_logged
-    if _unconfigured_logged:
-        return
-    _unconfigured_logged = True
+@functools.cache
+def _log_metering_disabled_once(missing: str) -> None:
+    """Log which env vars are unset once per process (idempotent via cache).
+
+    ``missing`` holds only env-var names, never their values.
+    """
     logger.info("[credits] metering disabled: %s not set", missing)
 
 
@@ -86,15 +85,15 @@ def consume_credits(
     org = (organization_id or organization_id_for_silo()).strip()
     missing = [
         name
-        for name, value in (
-            (WEBAPP_URL_ENV, base_url),
-            (USAGE_SECRET_ENV, secret),
-            (ORGANIZATION_ID_ENV, org),
+        for name, is_set in (
+            (WEBAPP_URL_ENV, bool(base_url)),
+            (USAGE_SECRET_ENV, bool(secret)),
+            (ORGANIZATION_ID_ENV, bool(org)),
         )
-        if not value
+        if not is_set
     ]
     if missing:
-        _log_unconfigured_once(", ".join(missing))
+        _log_metering_disabled_once(", ".join(missing))
         return CreditsOutcome.UNCONFIGURED
 
     payload: dict[str, Any] = {"amount": amount, "organizationId": org, "reason": reason}
