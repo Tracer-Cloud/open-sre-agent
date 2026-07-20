@@ -172,11 +172,13 @@ def test_public_input_schema_is_cached_and_isolated_from_source() -> None:
         injected_params=("token",),
     )
 
-    # Cached: repeated access returns the same object (no per-call deepcopy).
-    assert rt.public_input_schema is rt.public_input_schema
+    # Cached: two accesses return the same object (no per-call deepcopy).
+    first = rt.public_input_schema
+    second = rt.public_input_schema
+    assert first is second
     # And the cache did not mutate the source schema (injected param still present there).
     assert "token" in rt.input_schema["properties"]
-    assert "token" not in rt.public_input_schema["properties"]
+    assert "token" not in first["properties"]
 
 
 # ---------------------------------------------------------------------------
