@@ -139,13 +139,10 @@ class RegisteredTool:
         }
 
     @cached_property
-    def public_input_schema(self) -> dict[str, Any]:
-        """Return the schema exposed to the model (without injected params).
-
-        Computed once per tool and cached: ``input_schema`` and
-        ``injected_params`` are fixed at construction, so this is invariant.
-        Treat the result as read-only — it is shared across callers.
-        """
+    def _public_input_schema(self) -> dict[str, Any]:
+        """Deepcopy + prune injected params once; the shared cache behind
+        ``public_input_schema``. ``input_schema`` / ``injected_params`` are fixed
+        at construction, so this is invariant."""
         schema = deepcopy(self.input_schema)
         properties = schema.get("properties")
         if not isinstance(properties, dict):
@@ -156,6 +153,16 @@ class RegisteredTool:
         if isinstance(required, list):
             schema["required"] = [name for name in required if name not in self.injected_params]
         return schema
+
+    @property
+    def public_input_schema(self) -> dict[str, Any]:
+        """Return the schema exposed to the model (without injected params).
+
+        The pruned schema is computed once (the expensive recursive deepcopy is
+        cached); a shallow copy is returned so callers may reassign or pop
+        top-level keys without corrupting the shared cache.
+        """
+        return dict(self._public_input_schema)
 
     def validate_public_input(self, payload: dict[str, Any]) -> str | None:
         """Validate model-provided input against this tool's public schema."""
