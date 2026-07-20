@@ -187,3 +187,6 @@ opensre-ci-fix/
 *.tfstate.*
 *.tfvars
 crash.log
+
+# Local-only Cursor agent rules — never commit/push these
+.cursor/rules/local-rules.mdc

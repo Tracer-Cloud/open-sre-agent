@@ -10,6 +10,12 @@ from unittest.mock import patch
 
 import pytest
 
+from gateway.billing.credits_client import (
+    ORGANIZATION_ID_ENV,
+    USAGE_SECRET_ENV,
+    WEBAPP_URL_ENV,
+    CreditsOutcome,
+)
 from gateway.slack.dispatcher import _SlackTurnDispatcher
 from gateway.slack.events import SlackInboundMessage
 from gateway.slack.settings import SlackGatewaySettings
@@ -25,6 +31,13 @@ def _isolate_slack_integration_store():
         patch(f"{_SECURITY}.upsert_instance"),
     ):
         yield
+
+
+@pytest.fixture(autouse=True)
+def _metering_unconfigured(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Credit metering must never fire real HTTP from dispatcher tests."""
+    for name in (WEBAPP_URL_ENV, USAGE_SECRET_ENV, ORGANIZATION_ID_ENV):
+        monkeypatch.delenv(name, raising=False)
 
 
 class _FakeMessagingClient:
@@ -176,6 +189,55 @@ def test_unauthorized_user_gets_denial_reply_and_no_turn() -> None:
     assert "not authorized" in denial
     assert "U1" not in denial
     assert "SLACK_" not in denial
+
+
+def test_out_of_credits_blocks_turn_with_short_reply(monkeypatch: pytest.MonkeyPatch) -> None:
+    messaging = _FakeMessagingClient()
+    resolver = _FakeSessionResolver()
+    turns: list[str] = []
+    reasons: list[str] = []
+
+    def deny(**kwargs: Any) -> CreditsOutcome:
+        reasons.append(kwargs["reason"])
+        return CreditsOutcome.DENIED
+
+    monkeypatch.setattr("gateway.slack.dispatcher.consume_credits", deny)
+
+    _dispatcher(
+        settings=_settings(["U1"]),
+        messaging=messaging,
+        resolver=resolver,
+        handler=lambda text, *_args: turns.append(text),
+    ).dispatch(_inbound())
+
+    assert turns == []
+    assert reasons == ["slack_turn"]
+    # Short thread reply; no balances or env details leak to the channel.
+    assert messaging.posts[0]["text"] == "Out of credits — top up in the OpenSRE console."
+    assert messaging.posts[0]["thread_ts"] == "100.1"
+
+
+@pytest.mark.parametrize(
+    "outcome", [CreditsOutcome.ALLOWED, CreditsOutcome.UNCONFIGURED, CreditsOutcome.UNAVAILABLE]
+)
+def test_non_denied_credit_outcomes_run_the_turn(
+    monkeypatch: pytest.MonkeyPatch, outcome: CreditsOutcome
+) -> None:
+    """Fail-open: metering off or a webapp outage must never block a turn."""
+    messaging = _FakeMessagingClient()
+    resolver = _FakeSessionResolver()
+    turns: list[str] = []
+    monkeypatch.setattr("gateway.slack.dispatcher.consume_credits", lambda **_kw: outcome)
+
+    def handler(text: str, _session: Any, sink: Any, _logger: logging.Logger) -> None:
+        turns.append(text)
+        sink.finalize("done")
+
+    _dispatcher(
+        settings=_settings(["U1"]), messaging=messaging, resolver=resolver, handler=handler
+    ).dispatch(_inbound())
+
+    assert len(turns) == 1
 
 
 def test_conversation_locks_are_pruned_at_cap(monkeypatch: pytest.MonkeyPatch) -> None:

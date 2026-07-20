@@ -10,6 +10,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 
 from core.agent_harness.session import SessionCore
+from gateway.billing.credits_client import CreditsOutcome, consume_credits
 from gateway.runtime.sink_protocol import GatewayAgentCallback
 from gateway.slack.approvals import (
     ApprovalBroker,
@@ -46,6 +47,10 @@ _MAX_CONVERSATION_LOCKS = 1024
 _DENIAL_REPLY = "You're not authorized to use this bot. Ask an admin to add you."
 _NEW_SESSION_REPLY = "Started a new session."
 _TURN_TIMEOUT_MESSAGE = "This is taking longer than expected. Please try again."
+# Only an explicit 402 from the credit ledger posts this; UNCONFIGURED /
+# UNAVAILABLE outcomes run the turn instead, so a misconfiguration or webapp
+# outage never masquerades to users as "out of credits".
+_CREDITS_DENIED_MESSAGE = "Out of credits — top up in the OpenSRE console."
 
 
 @dataclass
@@ -229,6 +234,19 @@ class _SlackTurnDispatcher:
             )
             session = self._apply_inbound_decision(inbound, decision)
             if session is None:
+                return
+
+            # Metering: only an explicit webapp denial (402) blocks the turn,
+            # so a config error can never masquerade to users as "out of
+            # credits". UNCONFIGURED (dev setups without metering env) and
+            # UNAVAILABLE (webapp outage) proceed — fail-open is the intended
+            # policy so a billing outage never silences the Slack coworker.
+            if consume_credits(reason="slack_turn") is CreditsOutcome.DENIED:
+                self._logger.info(
+                    "[slack-gateway] turn denied: out of credits channel=%s",
+                    inbound.channel_id,
+                )
+                self._post(inbound, _CREDITS_DENIED_MESSAGE)
                 return
 
             # Never log message bodies — audit hashes live in messaging_security.

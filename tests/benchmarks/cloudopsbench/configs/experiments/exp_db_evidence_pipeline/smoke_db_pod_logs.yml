@@ -31,8 +31,7 @@
 # follow-up ablation can attribute the lift between layers. The
 # coordinated-pair design is the load-bearing experimental unit.
 #
-# Motivation (full triage in
-# ~/DevBox/tracer-cloud/opensre-notes/cloudopsbench-experiments-chain.md §10-11):
+# Motivation:
 #   - 50.6% of Runtime opensre+llm losses (118 of 233) are DB-localization
 #     failures on the default-predictor + trimmed-prompt + vocab-fixed
 #     baseline.

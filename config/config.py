@@ -70,6 +70,28 @@ CLERK_CONFIG_PROD = ClerkConfig(
     issuer="https://clerk.tracer.cloud",
 )
 
+# Env vars injected by the org-silo infra (ECS task definition) to point JWT
+# verification at the silo's own Clerk instance instead of the defaults above.
+CLERK_ISSUER_ENV = "CLERK_ISSUER"
+CLERK_JWKS_URL_ENV = "CLERK_JWKS_URL"
+
+
+def get_clerk_config_override() -> ClerkConfig | None:
+    """Return the Clerk instance configured via CLERK_ISSUER / CLERK_JWKS_URL.
+
+    The org-silo infra injects these per deployment; when ``CLERK_ISSUER`` is
+    unset, callers fall back to the hardcoded ``CLERK_CONFIG_DEV`` /
+    ``CLERK_CONFIG_PROD`` defaults. ``CLERK_JWKS_URL`` defaults to the
+    issuer's standard ``/.well-known/jwks.json`` path when omitted. Read at
+    call time (not import time) so env loaded by ``bootstrap_opensre_env``
+    and test monkeypatching are honored.
+    """
+    issuer = os.getenv(CLERK_ISSUER_ENV, "").strip().rstrip("/")
+    if not issuer:
+        return None
+    jwks_url = os.getenv(CLERK_JWKS_URL_ENV, "").strip() or f"{issuer}/.well-known/jwks.json"
+    return ClerkConfig(jwks_url=jwks_url, issuer=issuer)
+
 
 def get_environment() -> Environment:
     """Get current environment from ENV variable.

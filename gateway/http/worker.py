@@ -9,6 +9,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from gateway.billing.credits_client import CreditsOutcome, consume_credits
 from gateway.http.artifacts import upload_report_to_s3, write_local_report
 from gateway.http.investigation_store import InvestigationStatus, InvestigationStore
 
@@ -61,6 +62,19 @@ class InvestigationWorker:
         record = self._store.claim_next_queued()
         if record is None:
             return False
+        # Metering: only an explicit webapp denial (402) skips the run.
+        # UNCONFIGURED (dev setups without metering env) and UNAVAILABLE
+        # (webapp outage) proceed — fail-open is the intended policy so a
+        # billing outage never stalls queued investigations.
+        outcome = consume_credits(record.clerk_org_id, reason="investigation")
+        if outcome is CreditsOutcome.DENIED:
+            logger.info("[investigations] denied %s: insufficient credits", record.id)
+            self._store.finish(
+                record.id,
+                status=InvestigationStatus.FAILED,
+                error="insufficient_credits",
+            )
+            return True
         try:
             result = self._runner(record.trigger)
             local_path = write_local_report(record.id, result, base_dir=self._artifacts_dir)

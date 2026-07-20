@@ -58,9 +58,7 @@ The benefits:
 
 Older configs from the first ~6 weeks of bench work are still flat at
 `configs/*.yml`. They map to historical experiments (some rejected, some
-baseline) per
-[`~/DevBox/tracer-cloud/opensre-notes/cloudopsbench-experiments-chain.md`](../../../../opensre-notes/cloudopsbench-experiments-chain.md).
-Migrating each into an `experiments/exp_<name>/` folder is a lazy
+baseline). Migrating each into an `experiments/exp_<name>/` folder is a lazy
 follow-up — not blocking. Mapping below for future reference:
 
 | Flat config | Likely experiment folder |

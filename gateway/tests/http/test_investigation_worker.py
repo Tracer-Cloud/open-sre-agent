@@ -6,9 +6,22 @@ from typing import Any
 
 import pytest
 
+from gateway.billing.credits_client import (
+    ORGANIZATION_ID_ENV,
+    USAGE_SECRET_ENV,
+    WEBAPP_URL_ENV,
+    CreditsOutcome,
+)
 from gateway.http.artifacts import ARTIFACTS_BUCKET_ENV, upload_report_to_s3
 from gateway.http.investigation_store import InMemoryInvestigationStore, InvestigationStatus
 from gateway.http.worker import WORKER_ENABLED_ENV, InvestigationWorker, worker_enabled
+
+
+@pytest.fixture(autouse=True)
+def _metering_unconfigured(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Credit metering must never fire real HTTP from worker tests."""
+    for name in (WEBAPP_URL_ENV, USAGE_SECRET_ENV, ORGANIZATION_ID_ENV):
+        monkeypatch.delenv(name, raising=False)
 
 
 def _queued(store: InMemoryInvestigationStore, org: str = "org_a") -> str:
@@ -52,6 +65,55 @@ def test_run_once_marks_failed_on_runner_error(tmp_path: Path) -> None:
     assert record is not None
     assert record.status is InvestigationStatus.FAILED
     assert record.error == "RuntimeError"
+
+
+def test_run_once_credit_denial_skips_pipeline_and_marks_failed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = InMemoryInvestigationStore()
+    investigation_id = _queued(store)
+    runs: list[dict[str, Any]] = []
+    denials: list[tuple[str | None, str]] = []
+
+    def deny(organization_id: str | None = None, **kwargs: Any) -> CreditsOutcome:
+        denials.append((organization_id, kwargs["reason"]))
+        return CreditsOutcome.DENIED
+
+    monkeypatch.setattr("gateway.http.worker.consume_credits", deny)
+    worker = InvestigationWorker(
+        store,
+        runner=lambda trigger: runs.append(trigger) or {},
+        artifacts_dir=tmp_path,
+    )
+
+    assert worker.run_once() is True
+
+    assert runs == []
+    # The record's own org is metered, not the silo default.
+    assert denials == [("org_a", "investigation")]
+    record = store.get(investigation_id)
+    assert record is not None
+    assert record.status is InvestigationStatus.FAILED
+    assert record.error == "insufficient_credits"
+
+
+def test_run_once_proceeds_when_credits_unavailable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Fail-open: a webapp outage must not stall queued investigations."""
+    store = InMemoryInvestigationStore()
+    investigation_id = _queued(store)
+    monkeypatch.setattr(
+        "gateway.http.worker.consume_credits",
+        lambda *_a, **_k: CreditsOutcome.UNAVAILABLE,
+    )
+    worker = InvestigationWorker(store, runner=lambda _t: {"report": "ok"}, artifacts_dir=tmp_path)
+
+    assert worker.run_once() is True
+
+    record = store.get(investigation_id)
+    assert record is not None
+    assert record.status is InvestigationStatus.COMPLETED
 
 
 def test_run_once_returns_false_when_queue_empty(tmp_path: Path) -> None:
