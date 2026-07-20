@@ -25,6 +25,14 @@ def _stub_managed_llm_secret_persistence(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setattr(_ui, "save_api_key", lambda *_args, **_kwargs: None)
 
 
+@pytest.fixture(autouse=True)
+def _isolate_integration_store(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    """Wizard reads existing config via ``integrations.store``; point it at an
+    empty temp store so tests never read the developer's real integrations
+    (e.g. a live Slack bot token) as pre-existing defaults."""
+    monkeypatch.setattr("integrations.store.STORE_PATH", tmp_path / "integrations.json")
+
+
 def test_run_wizard_advanced_remote_falls_back_to_local(monkeypatch, tmp_path, capsys) -> None:
     # advanced -> falls back to local -> change provider? Yes -> pick anthropic -> skip integrations
     select_responses = iter(
