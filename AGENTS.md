@@ -13,6 +13,12 @@
 - Use named constants for HTTP status codes (`http.HTTPStatus`, e.g.
   `HTTPStatus.PAYMENT_REQUIRED`) in both source and tests — never hardcoded
   numeric literals like `402`.
+- Env-var names and shared static constants live under `config/`, never inline
+  in a feature module or duplicated across files. Put a pure static constant in
+  a domain module under `config/constants/` (e.g. `config/constants/billing.py`)
+  and re-export it via `config/constants/__init__.py`; keep an env name in
+  `config/config.py` only when a resolver function *in that module* consumes it
+  (e.g. the Clerk / Azure OpenAI env names read by `config.config` helpers).
 - Do not keep compatibility-only forwarding modules after refactors. Once imports and tests
   are migrated, remove the old module path in the same change and use one canonical import path.
 
