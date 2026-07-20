@@ -24,6 +24,29 @@
 - Do not keep compatibility-only forwarding modules after refactors. Once imports and tests
   are migrated, remove the old module path in the same change and use one canonical import path.
 
+### Performance (algorithms & data structures)
+
+Apply on the **hot path** (per-request / per-iteration / per-tool-call); leave cold
+code simple. Complexity must be deliberate — the simplest structure that meets the
+asymptotic need, and no more.
+
+- **Membership / dedup in a loop → `set`/`dict`, never `x in list`.** List `in` is
+  O(n); a set is O(1). (frozen dataclasses are hashable, so `set()` works on them.)
+- **Resolve once, reuse.** Don't re-scan for something already looked up — if you
+  fetched an object from a map, read its fields directly instead of a second linear
+  scan. Build an O(1) `{name: obj}` map instead of scanning a list by name.
+- **No `deepcopy` / `json.dumps` on the hot path.** If the result is invariant after
+  construction, compute it once (`functools.cached_property` / a stored field) and
+  treat it read-only. Verify no caller mutates a shared cached object first.
+- **Sort the light thing, once.** Sort keys/names (strings), not heavy objects, and
+  don't re-sort the same collection twice for two outputs.
+- **Right structure for the job:** `collections.deque` for queues/both-ends,
+  `heapq` for top-k, `bisect` for sorted search, `OrderedDict.move_to_end` /
+  `functools.lru_cache` for bounded caches, `"".join(parts)` never `+=` in a loop.
+- **Behavior-preserving refactors are TDD-guarded:** add a characterization test that
+  pins the observable behavior, confirm it passes on the *pre*-refactor code, then
+  keep it green through the change. Optimize only after; keep any benchmark in the PR.
+
 ### File placement (all packages)
 
 When adding or changing behavior, put code in the **owning module first** — not the nearest
