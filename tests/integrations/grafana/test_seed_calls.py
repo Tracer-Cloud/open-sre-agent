@@ -9,6 +9,7 @@ import pytest
 
 from integrations.config_models import GrafanaIntegrationConfig
 from integrations.grafana import tools as grafana_tools
+from integrations.grafana.tools import _GRAFANA_RUNTIME_PARAMS
 from tools.investigation.stages.gather_evidence.tools import build_seed_calls
 
 GRAFANA_TOOL_FUNCTIONS: tuple[Callable[..., dict[str, Any]], ...] = (
@@ -20,15 +21,7 @@ GRAFANA_TOOL_FUNCTIONS: tuple[Callable[..., dict[str, Any]], ...] = (
     grafana_tools.query_grafana_traces,
 )
 
-GRAFANA_RUNTIME_PARAMS = {
-    "grafana_endpoint",
-    "grafana_api_key",
-    "grafana_username",
-    "grafana_password",
-    "grafana_verify_ssl",
-    "grafana_ca_bundle",
-    "grafana_backend",
-}
+GRAFANA_RUNTIME_PARAMS = set(_GRAFANA_RUNTIME_PARAMS)
 
 
 def _tool_id(tool_function: Callable[..., dict[str, Any]]) -> str:
