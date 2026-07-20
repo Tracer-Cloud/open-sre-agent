@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from config.config import (
+from config.constants.llm import (
     AZURE_OPENAI_API_KEY_ENV,
     AZURE_OPENAI_API_VERSION_ENV,
     AZURE_OPENAI_BASE_URL_ENV,

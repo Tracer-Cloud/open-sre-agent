@@ -5,6 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
+from config.constants.llm import (
+    AZURE_OPENAI_API_KEY_ENV,
+    AZURE_OPENAI_API_VERSION_ENV,
+    AZURE_OPENAI_BASE_URL_ENV,
+)
+
 CredentialKind = Literal["api_key", "cli", "ambient", "local"]
 
 
@@ -122,13 +128,13 @@ PROVIDER_SPECS: tuple[ProviderSpec, ...] = (
         value="azure-openai",
         label="Azure OpenAI",
         credential_kind="api_key",
-        api_key_env="AZURE_OPENAI_API_KEY",
+        api_key_env=AZURE_OPENAI_API_KEY_ENV,
         model_env="AZURE_OPENAI_REASONING_MODEL",
         legacy_model_env="AZURE_OPENAI_MODEL",
         toolcall_model_env="AZURE_OPENAI_TOOLCALL_MODEL",
         classification_model_env="AZURE_OPENAI_CLASSIFICATION_MODEL",
-        endpoint_env="AZURE_OPENAI_BASE_URL",
-        api_version_env="AZURE_OPENAI_API_VERSION",
+        endpoint_env=AZURE_OPENAI_BASE_URL_ENV,
+        api_version_env=AZURE_OPENAI_API_VERSION_ENV,
         allow_custom_models=True,
     ),
     ProviderSpec(

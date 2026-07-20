@@ -13,6 +13,10 @@ from typing import Literal
 
 from pydantic import Field, ValidationError, field_validator, model_validator
 
+from config.constants.llm import (
+    AZURE_OPENAI_API_VERSION_ENV,
+    AZURE_OPENAI_BASE_URL_ENV,
+)
 from config.llm_auth.auth_method import (
     LLM_AUTH_METHOD_ENV,
     effective_llm_provider,
@@ -167,11 +171,6 @@ AZURE_OPENAI_REASONING_MODEL = "gpt-5.4-mini"
 AZURE_OPENAI_CLASSIFICATION_MODEL = "gpt-5.4-mini"
 AZURE_OPENAI_TOOLCALL_MODEL = "gpt-5.4-mini"
 DEFAULT_AZURE_OPENAI_API_VERSION = "2024-10-21"
-
-# Azure OpenAI connection env vars (read by both this module and the provider).
-AZURE_OPENAI_BASE_URL_ENV = "AZURE_OPENAI_BASE_URL"
-AZURE_OPENAI_API_VERSION_ENV = "AZURE_OPENAI_API_VERSION"
-AZURE_OPENAI_API_KEY_ENV = "AZURE_OPENAI_API_KEY"
 
 # Base URLs for OpenAI-compatible providers
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"

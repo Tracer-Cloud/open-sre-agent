@@ -7,6 +7,47 @@ import pytest
 from config.constants import get_store_path
 
 
+def test_billing_env_var_names_are_the_infra_contract() -> None:
+    """Pin the credit-metering env-var names to the exact strings the org-silo
+    infra injects — a rename here silently disables metering in production."""
+    # Arrange / Act
+    from config.constants import billing
+
+    # Assert
+    assert billing.WEBAPP_URL_ENV == "OPENSRE_WEBAPP_URL"
+    assert billing.USAGE_SECRET_ENV == "AGENT_USAGE_SECRET"
+    assert billing.ORGANIZATION_ID_ENV == "OPENSRE_ORGANIZATION_ID"
+    assert billing.CREDITS_HTTP_TIMEOUT_SECONDS == 5.0
+
+
+def test_llm_env_var_names_are_the_infra_contract() -> None:
+    """Pin the Azure OpenAI connection env-var names to their exact strings."""
+    # Arrange / Act
+    from config.constants import llm
+
+    # Assert
+    assert llm.AZURE_OPENAI_BASE_URL_ENV == "AZURE_OPENAI_BASE_URL"
+    assert llm.AZURE_OPENAI_API_VERSION_ENV == "AZURE_OPENAI_API_VERSION"
+    assert llm.AZURE_OPENAI_API_KEY_ENV == "AZURE_OPENAI_API_KEY"
+
+
+def test_provider_catalog_and_wizard_share_the_same_azure_constants() -> None:
+    """The Azure spec + wizard option must reference the one set of constants,
+    not re-typed literals, so they cannot drift apart."""
+    # Arrange
+    from config.constants import llm
+    from config.llm_auth.provider_catalog import require_provider_spec
+    from surfaces.cli.wizard.config import SUPPORTED_PROVIDERS
+
+    spec = require_provider_spec("azure-openai")
+    (option,) = [opt for opt in SUPPORTED_PROVIDERS if opt.value == "azure-openai"]
+
+    # Act / Assert: both sides equal the centralized constants.
+    assert spec.api_key_env == option.api_key_env == llm.AZURE_OPENAI_API_KEY_ENV
+    assert spec.endpoint_env == option.endpoint_env == llm.AZURE_OPENAI_BASE_URL_ENV
+    assert spec.api_version_env == option.api_version_env == llm.AZURE_OPENAI_API_VERSION_ENV
+
+
 def test_get_store_path_honors_env_override(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

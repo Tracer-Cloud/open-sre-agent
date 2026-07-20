@@ -20,6 +20,11 @@ from config.config import (
     OPENAI_REASONING_MODEL,
     OPENROUTER_REASONING_MODEL,
 )
+from config.constants.llm import (
+    AZURE_OPENAI_API_KEY_ENV,
+    AZURE_OPENAI_API_VERSION_ENV,
+    AZURE_OPENAI_BASE_URL_ENV,
+)
 from config.llm_auth.provider_catalog import require_provider_spec
 from config.local_env import PROJECT_ROOT as PROJECT_ROOT
 from config.local_env import get_project_env_path
@@ -695,15 +700,15 @@ SUPPORTED_PROVIDERS = (
         value="azure-openai",
         label="Azure OpenAI",
         group="Hosted providers",
-        api_key_env="AZURE_OPENAI_API_KEY",
+        api_key_env=AZURE_OPENAI_API_KEY_ENV,
         model_env="AZURE_OPENAI_REASONING_MODEL",
         default_model=AZURE_OPENAI_REASONING_MODEL,
         models=(),
         legacy_model_env="AZURE_OPENAI_MODEL",
         toolcall_model_env="AZURE_OPENAI_TOOLCALL_MODEL",
         classification_model_env="AZURE_OPENAI_CLASSIFICATION_MODEL",
-        endpoint_env="AZURE_OPENAI_BASE_URL",
-        api_version_env="AZURE_OPENAI_API_VERSION",
+        endpoint_env=AZURE_OPENAI_BASE_URL_ENV,
+        api_version_env=AZURE_OPENAI_API_VERSION_ENV,
         credential_default="https://your-resource.openai.azure.com",
         allow_custom_models=True,
     ),
