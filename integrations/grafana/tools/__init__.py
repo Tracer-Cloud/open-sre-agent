@@ -385,8 +385,6 @@ def _query_grafana_logs_available(sources: dict[str, dict]) -> bool:
             "limit": {"type": "integer", "default": 100},
             "grafana_endpoint": {"type": "string"},
             "grafana_api_key": {"type": "string"},
-            "grafana_username": {"type": "string"},
-            "grafana_password": {"type": "string"},
             "pipeline_name": {"type": "string"},
         },
         "required": ["service_name"],
