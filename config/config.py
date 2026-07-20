@@ -168,6 +168,11 @@ AZURE_OPENAI_CLASSIFICATION_MODEL = "gpt-5.4-mini"
 AZURE_OPENAI_TOOLCALL_MODEL = "gpt-5.4-mini"
 DEFAULT_AZURE_OPENAI_API_VERSION = "2024-10-21"
 
+# Azure OpenAI connection env vars (read by both this module and the provider).
+AZURE_OPENAI_BASE_URL_ENV = "AZURE_OPENAI_BASE_URL"
+AZURE_OPENAI_API_VERSION_ENV = "AZURE_OPENAI_API_VERSION"
+AZURE_OPENAI_API_KEY_ENV = "AZURE_OPENAI_API_KEY"
+
 # Base URLs for OpenAI-compatible providers
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"  # no /v1 — DeepSeek serves the OpenAI-compatible API at the root path
@@ -357,9 +362,9 @@ def _llm_settings_env_payload(provider: str) -> dict[str, object]:
             os.getenv("GROQ_MODEL", GROQ_TOOLCALL_MODEL),
         ).strip()
         or GROQ_TOOLCALL_MODEL,
-        "azure_openai_base_url": os.getenv("AZURE_OPENAI_BASE_URL", "").strip(),
+        "azure_openai_base_url": os.getenv(AZURE_OPENAI_BASE_URL_ENV, "").strip(),
         "azure_openai_api_version": os.getenv(
-            "AZURE_OPENAI_API_VERSION", DEFAULT_AZURE_OPENAI_API_VERSION
+            AZURE_OPENAI_API_VERSION_ENV, DEFAULT_AZURE_OPENAI_API_VERSION
         ).strip()
         or DEFAULT_AZURE_OPENAI_API_VERSION,
         "azure_openai_reasoning_model": os.getenv(

@@ -23,14 +23,15 @@ from typing import Any
 
 import httpx
 
+from config.constants.billing import (
+    CREDITS_HTTP_TIMEOUT_SECONDS,
+    ORGANIZATION_ID_ENV,
+    USAGE_SECRET_ENV,
+    WEBAPP_URL_ENV,
+)
+
 logger = logging.getLogger(__name__)
 
-# Env vars injected by the org-silo infra (ECS task definition).
-WEBAPP_URL_ENV = "OPENSRE_WEBAPP_URL"
-USAGE_SECRET_ENV = "AGENT_USAGE_SECRET"
-ORGANIZATION_ID_ENV = "OPENSRE_ORGANIZATION_ID"
-
-_TIMEOUT_SECONDS = 5.0
 _CONSUME_PATH = "/api/credits/consume"
 
 
@@ -105,7 +106,7 @@ def consume_credits(
             f"{base_url}{_CONSUME_PATH}",
             json=payload,
             headers={"Authorization": f"Bearer {secret}"},
-            timeout=_TIMEOUT_SECONDS,
+            timeout=CREDITS_HTTP_TIMEOUT_SECONDS,
         )
     except Exception as exc:
         logger.warning(

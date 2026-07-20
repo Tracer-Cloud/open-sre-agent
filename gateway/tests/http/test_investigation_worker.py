@@ -6,12 +6,8 @@ from typing import Any
 
 import pytest
 
-from gateway.billing.credits_client import (
-    ORGANIZATION_ID_ENV,
-    USAGE_SECRET_ENV,
-    WEBAPP_URL_ENV,
-    CreditsOutcome,
-)
+from config.constants.billing import ORGANIZATION_ID_ENV, USAGE_SECRET_ENV, WEBAPP_URL_ENV
+from gateway.billing.credits_client import CreditsOutcome
 from gateway.http.artifacts import ARTIFACTS_BUCKET_ENV, upload_report_to_s3
 from gateway.http.investigation_store import InMemoryInvestigationStore, InvestigationStatus
 from gateway.http.worker import WORKER_ENABLED_ENV, InvestigationWorker, worker_enabled

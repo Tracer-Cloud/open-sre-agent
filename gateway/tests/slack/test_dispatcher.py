@@ -10,12 +10,8 @@ from unittest.mock import patch
 
 import pytest
 
-from gateway.billing.credits_client import (
-    ORGANIZATION_ID_ENV,
-    USAGE_SECRET_ENV,
-    WEBAPP_URL_ENV,
-    CreditsOutcome,
-)
+from config.constants.billing import ORGANIZATION_ID_ENV, USAGE_SECRET_ENV, WEBAPP_URL_ENV
+from gateway.billing.credits_client import CreditsOutcome
 from gateway.slack.dispatcher import _SlackTurnDispatcher
 from gateway.slack.events import SlackInboundMessage
 from gateway.slack.settings import SlackGatewaySettings
