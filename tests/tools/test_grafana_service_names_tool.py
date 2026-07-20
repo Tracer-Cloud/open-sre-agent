@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from integrations.grafana.tools import query_grafana_service_names
 from tests.tools.conftest import BaseToolContract, mock_agent_state
 
@@ -53,7 +55,20 @@ def test_run_happy_path() -> None:
     mock_client.query_loki_label_values.assert_called_once_with("service_name")
 
 
-def test_run_forwards_basic_auth_to_client() -> None:
+@pytest.mark.parametrize(
+    ("api_key", "username", "password"),
+    [
+        (None, "admin", "secret"),
+        ("glsa_test", "", ""),
+        (None, "", ""),
+    ],
+    ids=("basic-auth", "api-key", "anonymous"),
+)
+def test_run_forwards_auth_to_client(
+    api_key: str | None,
+    username: str,
+    password: str,
+) -> None:
     mock_client = MagicMock()
     mock_client.is_configured = False
     with patch(
@@ -61,8 +76,9 @@ def test_run_forwards_basic_auth_to_client() -> None:
     ) as resolve:
         query_grafana_service_names(
             grafana_endpoint="http://grafana",
-            grafana_username="admin",
-            grafana_password="secret",
+            grafana_api_key=api_key,
+            grafana_username=username,
+            grafana_password=password,
         )
 
-    resolve.assert_called_once_with("http://grafana", None, "admin", "secret", True, "")
+    resolve.assert_called_once_with("http://grafana", api_key, username, password, True, "")
