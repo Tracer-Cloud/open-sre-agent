@@ -31,6 +31,40 @@ def _darwin_platform() -> str:
     return "Darwin"
 
 
+def test_status_vertex_ai_configured_when_project_env_set(monkeypatch) -> None:
+    monkeypatch.setenv("VERTEX_AI_PROJECT", "my-gcp-project")
+    monkeypatch.setenv("VERTEX_AI_LOCATION", "europe-west1")
+    monkeypatch.delenv("AWS_REGION", raising=False)
+    monkeypatch.delenv("AWS_DEFAULT_REGION", raising=False)
+
+    result = status("vertex-ai")
+
+    assert result.configured is True
+    assert result.source == "ambient"
+    assert "VERTEX_AI_PROJECT" in result.detail
+
+
+def test_status_vertex_ai_not_configured_without_project(monkeypatch) -> None:
+    monkeypatch.delenv("VERTEX_AI_PROJECT", raising=False)
+
+    result = status("vertex-ai")
+
+    assert result.configured is False
+    assert result.source == "none"
+
+
+def test_status_bedrock_ignores_vertex_project_env(monkeypatch) -> None:
+    """The ambient status branch must not cross-check unrelated providers' env vars."""
+    monkeypatch.setenv("VERTEX_AI_PROJECT", "my-gcp-project")
+    monkeypatch.delenv("AWS_REGION", raising=False)
+    monkeypatch.delenv("AWS_DEFAULT_REGION", raising=False)
+
+    result = status("bedrock")
+
+    assert result.configured is False
+    assert "AWS_REGION" in result.detail
+
+
 def test_resolve_env_credential_prefers_env_over_keyring(monkeypatch) -> None:
     monkeypatch.setenv("GITLAB_ACCESS_TOKEN", "from-env")
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)

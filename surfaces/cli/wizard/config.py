@@ -19,6 +19,7 @@ from config.config import (
     NVIDIA_REASONING_MODEL,
     OPENAI_REASONING_MODEL,
     OPENROUTER_REASONING_MODEL,
+    VERTEX_AI_REASONING_MODEL,
 )
 from config.llm_auth.provider_catalog import require_provider_spec
 from config.local_env import PROJECT_ROOT as PROJECT_ROOT
@@ -248,6 +249,12 @@ BEDROCK_MODELS = (
         value="mistral.mistral-large-3-675b-instruct",
         label="Mistral Large 3 675B Instruct (on-demand)",
     ),
+)
+
+VERTEX_AI_MODELS = (
+    ModelOption(value=VERTEX_AI_REASONING_MODEL, label="Gemini 2.5 Pro (Vertex) — default"),
+    ModelOption(value="gemini-2.5-flash", label="Gemini 2.5 Flash (Vertex)"),
+    ModelOption(value="gemini-2.5-flash-lite", label="Gemini 2.5 Flash-Lite (Vertex)"),
 )
 
 OLLAMA_MODELS = (
@@ -675,6 +682,27 @@ SUPPORTED_PROVIDERS = (
         credential_secret=False,
         # credential_kind="none" causes flow.py to skip the credential prompt
         # entirely.  Region is picked up from AWS_DEFAULT_REGION / ~/.aws/config.
+        credential_kind="none",
+        allow_custom_models=True,
+    ),
+    ProviderOption(
+        value="vertex-ai",
+        label="Google Vertex AI (ADC auth)",
+        group="Hosted providers",
+        # Intentionally empty: Vertex AI authenticates via Google Application
+        # Default Credentials (gcloud ADC, a service-account key, or GCE/GKE
+        # metadata) — no API key to prompt for, same as Bedrock's IAM auth.
+        api_key_env="",
+        model_env="VERTEX_AI_REASONING_MODEL",
+        default_model=VERTEX_AI_REASONING_MODEL,
+        models=VERTEX_AI_MODELS,
+        toolcall_model_env="VERTEX_AI_TOOLCALL_MODEL",
+        classification_model_env="VERTEX_AI_CLASSIFICATION_MODEL",
+        credential_label="GCP project + region (uses Application Default Credentials)",
+        credential_secret=False,
+        # credential_kind="none" causes flow.py to skip the credential prompt
+        # entirely. Project/region are picked up from VERTEX_AI_PROJECT /
+        # VERTEX_AI_LOCATION, set outside the wizard (same as Bedrock's region).
         credential_kind="none",
         allow_custom_models=True,
     ),

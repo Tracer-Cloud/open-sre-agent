@@ -200,6 +200,23 @@ def status(provider: str) -> CredentialStatus:
         )
 
     if spec.credential_kind == "ambient":
+        if spec.project_env:
+            project = _env_value(spec.project_env)
+            location = _env_value(spec.location_env) if spec.location_env else ""
+            location_detail = f", location {location}" if location else ""
+            return CredentialStatus(
+                provider=spec.value,
+                configured=bool(project),
+                source="ambient" if project else "none",
+                verified=bool(project),
+                stale=False,
+                detail=(
+                    f"{spec.project_env} is configured ({project}{location_detail}); "
+                    f"{spec.label} uses Google Application Default Credentials."
+                    if project
+                    else f"{spec.project_env} is not set."
+                ),
+            )
         region = os.getenv("AWS_REGION", "").strip() or os.getenv("AWS_DEFAULT_REGION", "").strip()
         return CredentialStatus(
             provider=spec.value,
