@@ -996,6 +996,7 @@ class TestModelCommand:
         env_path = tmp_path / ".env"
         store_path = self._redirect_wizard_store(monkeypatch, tmp_path)
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
+        monkeypatch.setattr("config.env_file.PROJECT_ENV_PATH", env_path)
         monkeypatch.setattr(model_cmd, "repl_tty_interactive", lambda: True)
         selections = iter(["set", "anthropic", "__provider_default__"])
         monkeypatch.setattr(model_cmd, "repl_choose_one", lambda **_: next(selections))
@@ -1059,6 +1060,7 @@ class TestModelCommand:
         import surfaces.cli.wizard.env_sync as env_sync
 
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", tmp_path / ".env")
+        monkeypatch.setattr("config.env_file.PROJECT_ENV_PATH", tmp_path / ".env")
         store_path = self._redirect_wizard_store(monkeypatch, tmp_path)
         reset_calls: list[str] = []
         monkeypatch.setattr(
@@ -1096,6 +1098,7 @@ class TestModelCommand:
         env_path = tmp_path / ".env"
         store_path = self._redirect_wizard_store(monkeypatch, tmp_path)
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
+        monkeypatch.setattr("config.env_file.PROJECT_ENV_PATH", env_path)
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
         # Keyring lookups in CI / sandboxes are flaky; force the helper into
@@ -1135,6 +1138,7 @@ class TestModelCommand:
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
+        monkeypatch.setattr("config.env_file.PROJECT_ENV_PATH", env_path)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
         session = Session()
         session.record("slash", "/model set anthropic not-a-real-model-xyz")
@@ -1159,6 +1163,7 @@ class TestModelCommand:
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
+        monkeypatch.setattr("config.env_file.PROJECT_ENV_PATH", env_path)
         monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
 
         console, buf = _capture()
@@ -1183,6 +1188,7 @@ class TestModelCommand:
         env_path = tmp_path / ".env"
         store_path = self._redirect_wizard_store(monkeypatch, tmp_path)
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
+        monkeypatch.setattr("config.env_file.PROJECT_ENV_PATH", env_path)
         monkeypatch.setenv("LLM_PROVIDER", "openai")
 
         console, buf = _capture()
@@ -1209,6 +1215,7 @@ class TestModelCommand:
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
+        monkeypatch.setattr("config.env_file.PROJECT_ENV_PATH", env_path)
         monkeypatch.setenv("LLM_PROVIDER", "openai")
 
         dispatch_slash("/model set gpt 5.5", Session(), _capture()[0])
@@ -1234,6 +1241,7 @@ class TestModelCommand:
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
+        monkeypatch.setattr("config.env_file.PROJECT_ENV_PATH", env_path)
         monkeypatch.setenv("LLM_PROVIDER", "openai")
 
         console, buf = _capture()
@@ -1257,6 +1265,7 @@ class TestModelCommand:
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
+        monkeypatch.setattr("config.env_file.PROJECT_ENV_PATH", env_path)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
 
         console, buf = _capture()
@@ -1283,6 +1292,7 @@ class TestModelCommand:
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
+        monkeypatch.setattr("config.env_file.PROJECT_ENV_PATH", env_path)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
         console, buf = _capture()
         dispatch_slash(
@@ -1309,6 +1319,7 @@ class TestModelCommand:
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
+        monkeypatch.setattr("config.env_file.PROJECT_ENV_PATH", env_path)
         monkeypatch.setenv("LLM_PROVIDER", "anthropic")
         monkeypatch.setenv("ANTHROPIC_REASONING_MODEL", "not-a-real-model-xyz")
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
@@ -1333,6 +1344,7 @@ class TestModelCommand:
         import surfaces.cli.wizard.env_sync as env_sync
 
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", tmp_path / ".env")
+        monkeypatch.setattr("config.env_file.PROJECT_ENV_PATH", tmp_path / ".env")
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
         console, buf = _capture()
         dispatch_slash("/model set anthropic --made-up-flag x", Session(), console)
@@ -1353,6 +1365,7 @@ class TestModelCommand:
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
+        monkeypatch.setattr("config.env_file.PROJECT_ENV_PATH", env_path)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
         console, buf = _capture()
         dispatch_slash("/model set anthropic --toolcall-model", Session(), console)
@@ -1372,6 +1385,7 @@ class TestModelCommand:
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
+        monkeypatch.setattr("config.env_file.PROJECT_ENV_PATH", env_path)
         reset_calls: list[str] = []
         monkeypatch.setattr(
             "core.llm.factory.reset_llm_clients", lambda: reset_calls.append("reset")
@@ -1406,6 +1420,7 @@ class TestModelCommand:
         import surfaces.cli.wizard.env_sync as env_sync
 
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", tmp_path / ".env")
+        monkeypatch.setattr("config.env_file.PROJECT_ENV_PATH", tmp_path / ".env")
         monkeypatch.setenv("LLM_PROVIDER", "codex")
         console, buf = _capture()
         dispatch_slash("/model toolcall set gpt-5.4", Session(), console)
@@ -1420,6 +1435,7 @@ class TestModelCommand:
         import surfaces.cli.wizard.env_sync as env_sync
 
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", tmp_path / ".env")
+        monkeypatch.setattr("config.env_file.PROJECT_ENV_PATH", tmp_path / ".env")
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
         console, buf = _capture()
         dispatch_slash("/model switch anthropic", Session(), console)

@@ -6,12 +6,10 @@ import stat
 import keyring
 import pytest
 
+from config.env_file import is_sensitive_env_key, sync_env_secret, sync_env_values
 from config.llm_credentials import resolve_env_credential
 from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
 from surfaces.cli.wizard.env_sync import (
-    _is_sensitive_env_key,
-    sync_env_secret,
-    sync_env_values,
     sync_provider_env,
     sync_reasoning_model_env,
 )
@@ -51,7 +49,7 @@ def _redirect_wizard_store(tmp_path, monkeypatch) -> None:
     ],
 )
 def test_is_sensitive_env_key_marks_secrets(key: str) -> None:
-    assert _is_sensitive_env_key(key) is True
+    assert is_sensitive_env_key(key) is True
 
 
 @pytest.mark.parametrize(
@@ -71,7 +69,7 @@ def test_is_sensitive_env_key_marks_secrets(key: str) -> None:
     ],
 )
 def test_is_sensitive_env_key_leaves_non_secrets(key: str) -> None:
-    assert _is_sensitive_env_key(key) is False
+    assert is_sensitive_env_key(key) is False
 
 
 def test_sync_provider_env_updates_provider_specific_keys(tmp_path, monkeypatch) -> None:
@@ -584,7 +582,7 @@ def test_sync_env_values_permission_error(tmp_path) -> None:
 
 
 def test_strip_keyring_backed_secret_lines_removes_all_sensitive_lines() -> None:
-    from surfaces.cli.wizard.env_sync import _strip_keyring_backed_secret_lines
+    from config.env_file import strip_secret_env_lines
 
     lines = [
         "TELEGRAM_BOT_TOKEN=fallback\n",
@@ -592,7 +590,7 @@ def test_strip_keyring_backed_secret_lines_removes_all_sensitive_lines() -> None
         "DD_SITE=old\n",
     ]
 
-    kept = _strip_keyring_backed_secret_lines(lines)
+    kept = strip_secret_env_lines(lines)
 
     assert kept == ["DD_SITE=old\n"]
 
