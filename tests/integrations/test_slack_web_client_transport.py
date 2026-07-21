@@ -98,6 +98,37 @@ def test_client_error_is_not_retried(monkeypatch: pytest.MonkeyPatch) -> None:
     assert len(client.calls) == 1
 
 
+def test_idempotent_request_retries_on_server_error(
+    monkeypatch: pytest.MonkeyPatch, no_sleep: None
+) -> None:
+    # Arrange: a transient 5xx followed by success.
+    client = _install(monkeypatch, [_FakeResponse(500), _FakeResponse(200, {"ok": True})])
+
+    # Act: a read is safe to retry on an uncertain failure.
+    payload, err = web_client._request_json("GET", "conversations.list", "xoxb-x")
+
+    # Assert: it retried and returned the eventual success.
+    assert err == "" and payload == {"ok": True}
+    assert len(client.calls) == 2
+
+
+def test_non_idempotent_write_not_retried_on_server_error(
+    monkeypatch: pytest.MonkeyPatch, no_sleep: None
+) -> None:
+    # Arrange: a 5xx (outcome unknown — Slack may have posted) then a would-be
+    # duplicate success that must never be consumed.
+    duplicate_send = _FakeResponse(200, {"ok": True, "ts": "should-not-be-sent-twice"})
+    client = _install(monkeypatch, [_FakeResponse(500), duplicate_send])
+
+    # Act: a write declares itself non-idempotent.
+    payload, err = web_client._request_json("POST", "chat.postMessage", "xoxb-x", idempotent=False)
+
+    # Assert: it stopped after the first attempt — the duplicate was not sent.
+    assert payload is None
+    assert "HTTP 500" in err
+    assert len(client.calls) == 1
+
+
 def test_shared_client_is_reused(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(web_client, "_client", None)
     first = web_client._shared_client()

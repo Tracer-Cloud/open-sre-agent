@@ -32,13 +32,15 @@ def _result(
     list_title: str = "",
     lists: list[dict[str, str]] | None = None,
     items: list[dict[str, Any]] | None = None,
+    truncated: bool = False,
     error: str = "",
     error_type: str = "",
 ) -> dict[str, Any]:
     """Build a ``slack_read_list`` payload for the ``available=True`` paths.
 
     ``error`` / ``error_type`` are included only when set, so success payloads
-    stay free of empty error keys.
+    stay free of empty error keys. ``truncated`` marks a partial row read so the
+    agent does not treat the returned rows as the whole list.
     """
     rows = items or []
     payload: dict[str, Any] = {
@@ -50,6 +52,7 @@ def _result(
         "lists": lists or [],
         "items": rows,
         "item_count": len(rows),
+        "truncated": truncated,
     }
     if error:
         payload["error"] = error
@@ -171,7 +174,7 @@ class SlackReadListTool(BaseTool):
             )
 
         clamped = max(1, min(int(limit or DEFAULT_ITEM_LIMIT), MAX_ITEM_LIMIT))
-        items, error = fetch_slack_list_items(
+        items, error, truncated = fetch_slack_list_items(
             target,
             list_id=resolved_id,
             limit=clamped,
@@ -192,6 +195,7 @@ class SlackReadListTool(BaseTool):
             list_title=list_title,
             lists=lists,
             items=items,
+            truncated=truncated,
         )
 
     def _resolve_list_id(

@@ -186,6 +186,7 @@ def _request_json(
     *,
     params: dict[str, Any] | None = None,
     json_body: dict[str, Any] | None = None,
+    idempotent: bool = True,
 ) -> tuple[dict[str, Any] | None, str]:
     """Call one Slack Web API method, retrying transient failures.
 
@@ -193,6 +194,12 @@ def _request_json(
     errors in ``payload["ok"]`` for callers to classify), or ``(None, detail)``
     with a specific reason — rate-limit, timeout, HTTP status, or bad payload —
     so callers can surface an actionable hint instead of a generic failure.
+
+    Set ``idempotent=False`` for writes whose repeat would be visible (e.g.
+    ``chat.postMessage``). A timeout or 5xx means the outcome is unknown — Slack
+    has no idempotency key, so such a request is not retried and the failure is
+    returned for the caller to decide. Rate-limit (429) is always retried: Slack
+    rejected the call without applying it, so a retry cannot duplicate.
     """
     client = _shared_client()
     headers = {"Authorization": f"Bearer {token}"}
@@ -230,6 +237,8 @@ def _request_json(
                 if not isinstance(payload, dict):
                     return None, f"Slack {path} returned an unexpected payload."
                 return payload, ""
+        if not idempotent:
+            return None, last_error
         if attempt < _MAX_REQUEST_ATTEMPTS - 1:
             time.sleep(_DEFAULT_RETRY_WAIT_SECONDS)
     return None, last_error
@@ -436,7 +445,9 @@ def post_channel_message(
     body: dict[str, str] = {"channel": channel_id, "text": text}
     if thread_ts:
         body["thread_ts"] = thread_ts
-    payload, req_err = _request_json("POST", "chat.postMessage", target.bot_token, json_body=body)
+    payload, req_err = _request_json(
+        "POST", "chat.postMessage", target.bot_token, json_body=body, idempotent=False
+    )
     if payload is None:
         return False, req_err
     if not payload.get("ok"):
@@ -538,18 +549,24 @@ def fetch_slack_list_items(
     list_id: str,
     limit: int = 50,
     include_archived: bool = False,
-) -> tuple[list[dict[str, Any]] | None, str]:
-    """Read rows from a Slack List (``slackLists.items.list``)."""
+) -> tuple[list[dict[str, Any]] | None, str, bool]:
+    """Read rows from a Slack List (``slackLists.items.list``).
+
+    Returns ``(rows, error, truncated)``. ``truncated`` is true when the list
+    has more rows beyond the safety bound, so the caller does not present a
+    partial read as the whole list.
+    """
     lid = str(list_id or "").strip().upper()
     if not lid:
-        return None, "list_id cannot be empty."
+        return None, "list_id cannot be empty.", False
     if not _LIST_ID_RE.match(lid):
-        return None, "list_id must be a Slack List id (F…)."
+        return None, "list_id must be a Slack List id (F…).", False
 
     want = max(1, min(int(limit), _MAX_LIST_ITEMS))
     items: list[dict[str, Any]] = []
     cursor = ""
-    for _ in range(_MAX_LIST_ITEM_PAGES):
+    truncated = False
+    for page in range(_MAX_LIST_ITEM_PAGES):
         body: dict[str, Any] = {"list_id": lid, "limit": min(want - len(items), 100)}
         if cursor:
             body["cursor"] = cursor
@@ -562,17 +579,17 @@ def fetch_slack_list_items(
             json_body=body,
         )
         if payload is None:
-            return None, req_err
+            return None, req_err, False
         if not payload.get("ok"):
             error = str(payload.get("error") or "unknown_error")
-            return None, _api_error_hint(error, context="lists")
+            return None, _api_error_hint(error, context="lists"), False
 
         for raw in payload.get("items") or []:
             if not isinstance(raw, dict):
                 continue
             items.append(_normalize_list_item(raw))
             if len(items) >= want:
-                return items, ""
+                return items, "", False
 
         meta = payload.get("response_metadata")
         next_cursor = ""
@@ -581,7 +598,9 @@ def fetch_slack_list_items(
         if not next_cursor:
             break
         cursor = next_cursor
-    return items, ""
+        if page == _MAX_LIST_ITEM_PAGES - 1:
+            truncated = True
+    return items, "", truncated
 
 
 def _normalize_list_item(raw: dict[str, Any]) -> dict[str, Any]:

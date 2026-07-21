@@ -38,6 +38,7 @@ def test_reads_items_when_list_id_provided(
                 }
             ],
             "",
+            False,
         ),
     )
 
@@ -86,6 +87,7 @@ def test_discovers_single_list_by_name(
                 }
             ],
             "",
+            False,
         ),
     )
 
@@ -114,9 +116,9 @@ def test_multiple_matches_returns_candidates_without_guessing(
     )
     called: list[Any] = []
 
-    def _should_not_fetch(*_a: Any, **_k: Any) -> tuple[None, str]:
+    def _should_not_fetch(*_a: Any, **_k: Any) -> tuple[None, str, bool]:
         called.append(True)
-        return None, "should not be called"
+        return None, "should not be called", False
 
     monkeypatch.setattr(
         "integrations.slack.tools.slack_read_list_tool.tool.fetch_slack_list_items",
@@ -140,7 +142,7 @@ def test_env_default_list_id(monkeypatch: pytest.MonkeyPatch, tool: SlackReadLis
     )
     monkeypatch.setattr(
         "integrations.slack.tools.slack_read_list_tool.tool.fetch_slack_list_items",
-        lambda _t, **kw: ([], "") if kw["list_id"] == "FENVLIST1" else (None, "bad"),
+        lambda _t, **kw: ([], "", False) if kw["list_id"] == "FENVLIST1" else (None, "bad", False),
     )
 
     result = tool.run()

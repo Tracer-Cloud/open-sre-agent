@@ -156,9 +156,10 @@ def test_fetch_slack_list_items_normalizes_rows(
         ],
     )
 
-    items, err = web_client.fetch_slack_list_items(target, list_id="FTASKS123", limit=10)
+    items, err, truncated = web_client.fetch_slack_list_items(target, list_id="FTASKS123", limit=10)
 
     assert err == ""
+    assert truncated is False
     assert items is not None
     assert len(items) == 1
     row = items[0]
@@ -170,7 +171,7 @@ def test_fetch_slack_list_items_normalizes_rows(
 
 
 def test_fetch_slack_list_items_rejects_bad_id(target: web_client.SlackBotTarget) -> None:
-    items, err = web_client.fetch_slack_list_items(target, list_id="C12345678")
+    items, err, _truncated = web_client.fetch_slack_list_items(target, list_id="C12345678")
     assert items is None
     assert "F…" in err or "F..." in err or "F" in err
 
@@ -180,7 +181,7 @@ def test_fetch_slack_list_items_missing_lists_scope(
 ) -> None:
     _install(monkeypatch, [_FakeResponse(200, {"ok": False, "error": "missing_scope"})])
 
-    items, err = web_client.fetch_slack_list_items(target, list_id="FABCDEFGH1")
+    items, err, _truncated = web_client.fetch_slack_list_items(target, list_id="FABCDEFGH1")
 
     assert items is None
     assert "lists:read" in err
@@ -197,9 +198,36 @@ def test_fetch_slack_list_items_uppercases_lowercase_list_id(
     )
 
     # Act
-    items, err = web_client.fetch_slack_list_items(target, list_id="ftasks123")
+    items, err, _truncated = web_client.fetch_slack_list_items(target, list_id="ftasks123")
 
     # Assert: the call proceeded and sent the uppercased id.
     assert err == ""
     assert items == []
     assert client.calls[0][2]["json"]["list_id"] == "FTASKS123"
+
+
+def test_fetch_slack_list_items_flags_truncation_at_page_bound(
+    monkeypatch: pytest.MonkeyPatch, target: web_client.SlackBotTarget
+) -> None:
+    # Arrange: every page returns one row and always advertises another cursor,
+    # so the list never exhausts within the page safety bound.
+    one_more_page = _FakeResponse(
+        200,
+        {
+            "ok": True,
+            "items": [{"id": "R", "list_id": "FTASKS123", "fields": []}],
+            "response_metadata": {"next_cursor": "more"},
+        },
+    )
+    _install(monkeypatch, [one_more_page] * (web_client._MAX_LIST_ITEM_PAGES + 2))
+
+    # Act: request more rows than the bounded pages can supply.
+    items, err, truncated = web_client.fetch_slack_list_items(
+        target, list_id="FTASKS123", limit=web_client._MAX_LIST_ITEMS
+    )
+
+    # Assert: a partial read is reported as truncated, not as the whole list.
+    assert err == ""
+    assert items is not None
+    assert len(items) == web_client._MAX_LIST_ITEM_PAGES
+    assert truncated is True
