@@ -25,6 +25,39 @@ _LIST_ID_RE = re.compile(r"^F[A-Z0-9]{5,}$", re.IGNORECASE)
 _LIST_URL_ID_RE = re.compile(r"/(F[A-Z0-9]{5,})\b", re.IGNORECASE)
 
 
+def _result(
+    *,
+    status: str,
+    list_id: str = "",
+    list_title: str = "",
+    lists: list[dict[str, str]] | None = None,
+    items: list[dict[str, Any]] | None = None,
+    error: str = "",
+    error_type: str = "",
+) -> dict[str, Any]:
+    """Build a ``slack_read_list`` payload for the ``available=True`` paths.
+
+    ``error`` / ``error_type`` are included only when set, so success payloads
+    stay free of empty error keys.
+    """
+    rows = items or []
+    payload: dict[str, Any] = {
+        "source": SOURCE,
+        "available": True,
+        "status": status,
+        "list_id": list_id,
+        "list_title": list_title,
+        "lists": lists or [],
+        "items": rows,
+        "item_count": len(rows),
+    }
+    if error:
+        payload["error"] = error
+    if error_type:
+        payload["error_type"] = error_type
+    return payload
+
+
 class SlackReadListTool(BaseTool):
     """Find Slack Lists by name and/or read their rows (lists:read + files:read)."""
 
@@ -121,33 +154,21 @@ class SlackReadListTool(BaseTool):
             target, list_id=list_id, name_query=name_query
         )
         if resolve_error:
-            return {
-                "source": SOURCE,
-                "available": True,
-                "status": "failed",
-                "error": resolve_error,
-                "error_type": "validation_error" if "must be" in resolve_error else "api_error",
-                "list_id": resolved_id,
-                "list_title": list_title,
-                "lists": lists,
-                "items": [],
-                "item_count": 0,
-            }
+            return _result(
+                status="failed",
+                list_id=resolved_id,
+                list_title=list_title,
+                lists=lists,
+                error=resolve_error,
+                error_type="validation_error" if "must be" in resolve_error else "api_error",
+            )
         if not resolved_id:
             # Multiple matches — return candidates, do not guess.
-            return {
-                "source": SOURCE,
-                "available": True,
-                "status": "read",
-                "list_id": "",
-                "list_title": "",
-                "lists": lists,
-                "items": [],
-                "item_count": 0,
-                "error": (
-                    "Multiple Slack Lists matched; pass list_id to read one." if lists else ""
-                ),
-            }
+            return _result(
+                status="read",
+                lists=lists,
+                error="Multiple Slack Lists matched; pass list_id to read one." if lists else "",
+            )
 
         clamped = max(1, min(int(limit or DEFAULT_ITEM_LIMIT), MAX_ITEM_LIMIT))
         items, error = fetch_slack_list_items(
@@ -157,28 +178,21 @@ class SlackReadListTool(BaseTool):
             include_archived=bool(include_archived),
         )
         if items is None:
-            return {
-                "source": SOURCE,
-                "available": True,
-                "status": "failed",
-                "error": error,
-                "error_type": "api_error",
-                "list_id": resolved_id,
-                "list_title": list_title,
-                "lists": lists,
-                "items": [],
-                "item_count": 0,
-            }
-        return {
-            "source": SOURCE,
-            "available": True,
-            "status": "read",
-            "list_id": resolved_id,
-            "list_title": list_title,
-            "lists": lists,
-            "items": items,
-            "item_count": len(items),
-        }
+            return _result(
+                status="failed",
+                list_id=resolved_id,
+                list_title=list_title,
+                lists=lists,
+                error=error,
+                error_type="api_error",
+            )
+        return _result(
+            status="read",
+            list_id=resolved_id,
+            list_title=list_title,
+            lists=lists,
+            items=items,
+        )
 
     def _resolve_list_id(
         self,

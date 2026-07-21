@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import os
+from http import HTTPStatus
 from typing import Any
 
 import httpx
@@ -64,7 +65,7 @@ def fetch_webapp_org_integrations(
         logger.warning("[webapp-vault] request failed", exc_info=True)
         return None
 
-    if response.status_code != 200:
+    if response.status_code != HTTPStatus.OK:
         logger.warning(
             "[webapp-vault] HTTP %s from integrations vault",
             response.status_code,
