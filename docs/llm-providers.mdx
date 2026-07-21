@@ -116,6 +116,8 @@ OpenAI-compatible providers continue to use Chat Completions.
 
 For providers beyond this list, LiteLLM supports [100+ backends](https://docs.litellm.ai/docs/providers). OpenSRE only wires the slugs above today — use one of them, or open an issue if you need another first-class provider.
 
+If you run a remote [LiteLLM Proxy](https://docs.litellm.ai/docs/simple_proxy), the transport setting here is unrelated — use `LLM_PROVIDER=openai` with `OPENAI_BASE_URL` instead. See [LiteLLM Proxy / Gateway](#litellm-proxy--gateway).
+
 ## Login and secret storage
 
 Use `opensre auth` for provider login without writing secrets to `.env`:
@@ -183,6 +185,27 @@ export OPENAI_TOOLCALL_MODEL=gpt-5.4-mini
 ```
 
 Uses the OpenAI SDK. Reasoning models (`o1`, `o3`, `o4`, `gpt-5*`) automatically use `max_completion_tokens` instead of `max_tokens`.
+
+#### LiteLLM Proxy / Gateway
+
+[LiteLLM Proxy](https://docs.litellm.ai/docs/simple_proxy) and other OpenAI-compatible
+gateways speak the OpenAI API, so the `openai` provider works for the integration. Point
+`OPENAI_BASE_URL` at your gateway:
+
+```bash
+export LLM_PROVIDER=openai
+export OPENAI_API_KEY=sk-your-proxy-key
+export OPENAI_BASE_URL=https://your-litellm-proxy.example.com/
+
+# Model names your proxy exposes:
+export OPENAI_REASONING_MODEL=gpt-4o
+export OPENAI_TOOLCALL_MODEL=gpt-4o-mini
+```
+
+The OpenAI SDK picks up `OPENAI_BASE_URL` from the environment automatically. 
+
+The onboarding wizard does not prompt for a base URL for the `openai` provider, so
+set `OPENAI_BASE_URL` and model env vars in `.env` by hand after running `opensre onboard`.
 
 ### Azure OpenAI
 
