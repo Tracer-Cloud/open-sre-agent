@@ -15,7 +15,7 @@ from surfaces.interactive_shell.runtime.startup.first_launch_github import (
     require_startup_github_login,
 )
 from surfaces.interactive_shell.runtime.startup.initial_input import run_initial_input
-from surfaces.interactive_shell.ui.banner import render_banner
+from surfaces.interactive_shell.ui.banner import render_ready_box, render_splash
 from surfaces.interactive_shell.ui.input_prompt import build_prompt_session
 from tools.system.fleet_monitoring.sweep import run_startup_sweep
 
@@ -87,7 +87,8 @@ def run_repl(
 
     try:
         if not initial_input:
-            render_banner(_console)
+            render_splash(_console)
+            render_ready_box(_console)
             if not require_startup_github_login(_console):
                 return 0
 

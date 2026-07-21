@@ -11,7 +11,6 @@ from core.agent_harness.session.terminal_access import (
     exclusive_stdin_active,
     session_terminal,
     set_auto_command,
-    set_turn_outcome_hint,
 )
 from core.agent_harness.tools.tool_context import (
     ActionToolContext,
@@ -122,10 +121,12 @@ def execute_slash_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
         # live prompt: set_auto_command re-submits it as a deterministic turn
         # the loop dispatches with exclusive stdin, so no CPR replies leak in.
         # Do not record a slash history row here — dispatch_slash will record when
-        # the queued command runs. Attach a turn hint for this turn's analytics.
-        ctx.console.print(ctx.slash_ports.launching_message(escape(stripped)))
+        # the queued command runs.
+        #
+        # Nothing is printed: set_auto_command prefills the prompt and submits it,
+        # so the command is already echoed on the input line. Announcing it here
+        # as well showed the same command twice before it had even run.
         set_auto_command(ctx.session, stripped)
-        set_turn_outcome_hint(ctx.session, f"queued {stripped} for exclusive stdin dispatch")
         return True
 
     plan = plan_foreground_tool("slash", "slash")
@@ -146,7 +147,14 @@ def execute_slash_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
         )
         return True
 
-    ctx.console.print(f"[bold]$ {escape(stripped)}[/bold]")
+    # Announce the command unless the input line already did. Exclusive stdin is
+    # only reserved for a *literally typed* slash command (see
+    # ``turn_needs_exclusive_stdin``), so when it is active the prompt above
+    # already shows this command and a banner would repeat it. On every other
+    # path the agent resolved free text into a slash — nothing was echoed, and
+    # this banner is the only indication of what is about to run.
+    if not exclusive_stdin_active(ctx.session):
+        ctx.console.print(f"[bold]$ {escape(stripped)}[/bold]")
     _dispatch_and_translate_exit(
         stripped,
         ctx,

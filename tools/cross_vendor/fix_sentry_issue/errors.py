@@ -13,13 +13,7 @@ ERR_EXECUTION = "execution_error"
 
 # Shipping (PR-open) failure categories. Only reachable when open_pr is requested.
 ERR_SHIP_DISABLED = "ship_disabled"
-ERR_GIT_UNAVAILABLE = "git_unavailable"
-ERR_NOT_A_GIT_REPO = "not_a_git_repo"
 ERR_NO_CHANGES = "no_changes"
-ERR_PROTECTED_BRANCH = "protected_branch"
-ERR_BRANCH_FAILED = "branch_failed"
-ERR_COMMIT_FAILED = "commit_failed"
-ERR_PUSH_FAILED = "push_failed"
 ERR_GITHUB_TOKEN = "github_token_missing"
 ERR_PR_FAILED = "pr_failed"
 

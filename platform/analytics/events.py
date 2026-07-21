@@ -72,11 +72,6 @@ class Event(StrEnum):
     UPDATE_COMPLETED = "update_completed"
     UPDATE_FAILED = "update_failed"
 
-    # Deploy
-    DEPLOY_STARTED = "deploy_started"
-    DEPLOY_COMPLETED = "deploy_completed"
-    DEPLOY_FAILED = "deploy_failed"
-
     # Local agent monitoring (Monitor Local Agents feature)
     AGENT_SECRET_DETECTED = "agent_secret_detected"
     AGENT_KILLED = "agent_killed"

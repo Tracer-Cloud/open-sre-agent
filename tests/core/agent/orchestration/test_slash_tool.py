@@ -34,9 +34,6 @@ class FakeSlashPorts:
     def tty_interactive(self) -> bool:
         return self.tty
 
-    def launching_message(self, command: str) -> str:
-        return f"[dim]Launching[/] [bold]{command}[/]…"
-
     def format_turn_outcome(self, command: str, *, ok: bool) -> str:
         status = "succeeded" if ok else "failed"
         return f"slash {command} ({status})"
@@ -111,8 +108,9 @@ def test_interactive_picker_command_is_deferred_to_exclusive_stdin(
     assert session.terminal.pending_prompt_default == expected
     assert session.terminal.pending_prompt_autosubmit is True
     assert session.history == []
-    assert session.terminal._turn_outcome_hint == f"queued {expected} for exclusive stdin dispatch"
-    assert "Launching" in buf.getvalue()
+    # Nothing is printed: the prefilled prompt line is the only announcement,
+    # so the command is not shown twice before it runs.
+    assert buf.getvalue() == ""
 
 
 def test_interactive_picker_runs_inline_when_exclusive_stdin_active() -> None:
@@ -129,7 +127,20 @@ def test_interactive_picker_runs_inline_when_exclusive_stdin_active() -> None:
     assert ports.dispatched == ["/integrations"]
     assert session.terminal.pending_prompt_default is None
     assert session.terminal.pending_prompt_autosubmit is False
-    assert "Launching" not in buf.getvalue()
+    # Exclusive stdin means the user typed this slash literally, so the prompt
+    # line already shows it — announcing it again would be the third rendering
+    # of one command.
+    assert buf.getvalue() == ""
+
+
+def test_agent_resolved_slash_announces_itself() -> None:
+    """Free text resolved into a slash has no prompt echo, so it must announce."""
+    ctx, buf, session, ports = _ctx(ports=FakeSlashPorts(tty=True))
+
+    slash_tool.execute_slash_tool({"command": "/health", "args": []}, ctx)
+
+    assert ports.dispatched == ["/health"]
+    assert "$ /health" in buf.getvalue()
 
 
 def test_interactive_picker_runs_inline_when_not_a_tty() -> None:

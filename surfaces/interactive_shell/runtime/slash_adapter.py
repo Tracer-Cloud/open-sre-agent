@@ -13,7 +13,7 @@ from surfaces.interactive_shell.command_registry.slash_catalog import (
     slash_invoke_tool_description,
 )
 from surfaces.interactive_shell.session import Session
-from surfaces.interactive_shell.ui import BOLD_BRAND, DIM, repl_tty_interactive
+from surfaces.interactive_shell.ui import repl_tty_interactive
 from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
 from surfaces.interactive_shell.utils.telemetry.turn_outcome import (
     format_terminal_turn_outcome,
@@ -32,9 +32,6 @@ class SlashPorts(Protocol):
         raise NotImplementedError
 
     def tty_interactive(self) -> bool:
-        raise NotImplementedError
-
-    def launching_message(self, command: str) -> str:
         raise NotImplementedError
 
     def format_turn_outcome(
@@ -83,9 +80,6 @@ class ReplSlashPorts:
 
     def tty_interactive(self) -> bool:
         return repl_tty_interactive()
-
-    def launching_message(self, command: str) -> str:
-        return f"[{DIM}]Launching[/] [{BOLD_BRAND}]{command}[/]…"
 
     def format_turn_outcome(
         self,
@@ -145,9 +139,6 @@ class HeadlessSlashPorts(ReplSlashPorts):
 
     def tty_interactive(self) -> bool:
         return False
-
-    def launching_message(self, command: str) -> str:
-        return f"Launching {command}…"
 
     def format_turn_outcome(
         self,

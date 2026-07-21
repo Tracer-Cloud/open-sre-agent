@@ -2,43 +2,9 @@
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
-from pydantic import Field, field_validator
-
 from config.strict_config import StrictConfigModel
-
-
-class IntegrationInstance(StrictConfigModel):
-    """One named instance of a provider."""
-
-    name: str = "default"
-    tags: dict[str, str] = Field(default_factory=dict)
-    credentials: dict[str, Any] = Field(default_factory=dict)
-
-    @field_validator("name", mode="before")
-    @classmethod
-    def _normalize_name(cls, value: object) -> str:
-        text = str(value or "default").strip().lower()
-        return text or "default"
-
-    @field_validator("tags", mode="before")
-    @classmethod
-    def _normalize_tags(cls, value: object) -> dict[str, str]:
-        if not isinstance(value, dict):
-            return {}
-        normalized: dict[str, str] = {}
-        for key, value_text in value.items():
-            normalized_key = str(key).strip().lower()
-            normalized_value = str(value_text).strip().lower()
-            if (
-                normalized_key
-                and normalized_value
-                and re.match(r"^[a-z][a-z0-9_-]*$", normalized_key)
-            ):
-                normalized[normalized_key] = normalized_value
-        return normalized
 
 
 class EffectiveIntegrationEntry(StrictConfigModel):

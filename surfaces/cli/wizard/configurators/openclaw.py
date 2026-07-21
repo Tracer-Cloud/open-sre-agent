@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from urllib.parse import urlparse
 
+from config.env_file import sync_env_secret, sync_env_values
 from integrations.store import upsert_integration
 from platform.terminal.theme import HIGHLIGHT, SECONDARY
 from surfaces.cli.wizard._ui import (
@@ -14,7 +15,6 @@ from surfaces.cli.wizard._ui import (
     _render_integration_result,
     _string_value,
 )
-from surfaces.cli.wizard.env_sync import sync_env_secret, sync_env_values
 from surfaces.cli.wizard.integration_health import validate_openclaw_integration
 
 DEFAULT_OPENCLAW_MCP_URL = "http://127.0.0.1:18789/"

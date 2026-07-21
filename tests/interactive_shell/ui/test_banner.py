@@ -22,7 +22,8 @@ def test_banner_shows_ollama_model(monkeypatch: object) -> None:
     console_file = io.StringIO()
     console = Console(file=console_file, force_terminal=False, highlight=False)
 
-    banner_module.render_banner(console)
+    banner_module.render_splash(console)
+    banner_module.render_ready_box(console)
 
     output = console_file.getvalue()
     assert "ollama" in output

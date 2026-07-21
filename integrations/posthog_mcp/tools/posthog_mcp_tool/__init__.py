@@ -11,9 +11,9 @@ from __future__ import annotations
 
 from core.tool_framework.telemetry import report_run_error
 from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.mcp_bridge import unavailable_response
 from core.tool_framework.utils.mcp_params import first_list, first_string
 from core.tool_framework.utils.mcp_tool_listing import build_mcp_tool_listing
-from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.posthog_mcp import (
     PostHogMCPConfig,
     PostHogMCPToolCallResult,
@@ -37,12 +37,7 @@ def _unavailable_response(
     tool_name: str | None = None,
     arguments: PostHogMCPParams | None = None,
 ) -> PostHogMCPResponse:
-    payload: PostHogMCPResponse = tool_unavailable("posthog_mcp", error)
-    if tool_name:
-        payload["tool"] = tool_name
-    if arguments is not None:
-        payload["arguments"] = arguments
-    return payload
+    return unavailable_response("posthog_mcp", error, tool_name=tool_name, arguments=arguments)
 
 
 _KNOWN_POSTHOG_MCP_MODES = frozenset({"stdio", "sse", "streamable-http"})

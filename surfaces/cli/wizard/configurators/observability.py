@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from config.env_file import sync_env_secret, sync_env_values
 from integrations.store import remove_integration, upsert_integration
 from platform.terminal.theme import DIM, ERROR, GLYPH_ERROR, HIGHLIGHT, SECONDARY
 from surfaces.cli.wizard._ui import (
@@ -14,7 +15,6 @@ from surfaces.cli.wizard._ui import (
     _render_integration_result,
     _string_value,
 )
-from surfaces.cli.wizard.env_sync import sync_env_secret, sync_env_values
 from surfaces.cli.wizard.integration_health import (
     validate_coralogix_integration,
     validate_datadog_integration,

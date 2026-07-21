@@ -15,6 +15,7 @@ import questionary
 from rich.text import Text
 
 import surfaces.cli.wizard._integration_configurators as _integration_configurators_module
+from config.env_file import sync_env_values
 from config.llm_auth.auth_method import (
     API_KEY_AUTH_METHOD,
     OAUTH_AUTH_METHOD,
@@ -61,7 +62,7 @@ from surfaces.cli.wizard.configurators.github import (
     DEFAULT_GITHUB_MCP_MODE,
     DEFAULT_GITHUB_MCP_URL,
 )
-from surfaces.cli.wizard.env_sync import sync_env_values, sync_provider_env
+from surfaces.cli.wizard.env_sync import sync_provider_env
 from surfaces.cli.wizard.integration_health import IntegrationHealthResult
 from surfaces.cli.wizard.probes import ProbeResult, probe_local_target, probe_remote_target
 from surfaces.cli.wizard.store import get_store_path, save_local_config
