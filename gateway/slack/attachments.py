@@ -14,7 +14,7 @@ from collections.abc import Callable
 
 import httpx
 
-from core.llm.vision import describe_image, is_supported_image
+from core.llm.image_description import describe_image, is_supported_image
 from gateway.slack.events import SlackInboundFile
 
 logger = logging.getLogger(__name__)

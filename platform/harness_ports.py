@@ -32,6 +32,7 @@ RemoteIntegrationsFetcher = Callable[[str, str], list[dict[str, Any]]]
 LoadIntegrationsFn = Callable[[], list[dict[str, Any]]]
 IntegrationStorePathFn = Callable[[], str]
 LoadEnvIntegrationsFn = Callable[[], list[dict[str, Any]]]
+WebappVaultFetcherFn = Callable[[], list[dict[str, Any]] | None]
 ClassifyIntegrationsFn = Callable[[list[dict[str, Any]]], dict[str, Any]]
 MergeLocalIntegrationsFn = Callable[
     [list[dict[str, Any]], list[dict[str, Any]]], list[dict[str, Any]]
@@ -82,6 +83,10 @@ def _default_configured_services() -> tuple[str, ...]:
     return ()
 
 
+def _default_fetch_webapp_vault() -> list[dict[str, Any]] | None:
+    return None
+
+
 _fetch_remote: RemoteIntegrationsFetcher = _default_fetch_remote
 _load_integrations: LoadIntegrationsFn = _default_load_integrations
 _store_path: IntegrationStorePathFn = _default_store_path
@@ -90,6 +95,7 @@ _classify_integrations: ClassifyIntegrationsFn = _default_classify_integrations
 _merge_local_integrations: MergeLocalIntegrationsFn = _default_merge_local
 _merge_integrations_by_service: MergeIntegrationsByServiceFn = _default_merge_by_service
 _configured_integration_services: ConfiguredIntegrationServicesFn = _default_configured_services
+_fetch_webapp_vault: WebappVaultFetcherFn = _default_fetch_webapp_vault
 
 
 def set_remote_integrations_fetcher(fetcher: RemoteIntegrationsFetcher) -> None:
@@ -114,10 +120,12 @@ def set_integration_resolution_adapters(
     merge_local_integrations: MergeLocalIntegrationsFn | None = None,
     merge_integrations_by_service: MergeIntegrationsByServiceFn | None = None,
     configured_services: ConfiguredIntegrationServicesFn | None = None,
+    fetch_webapp_vault: WebappVaultFetcherFn | None = None,
 ) -> None:
     global _load_integrations, _store_path, _load_env_integrations
     global _classify_integrations, _merge_local_integrations
     global _merge_integrations_by_service, _configured_integration_services
+    global _fetch_webapp_vault
     if load_integrations is not None:
         _load_integrations = load_integrations
     if integration_store_path is not None:
@@ -132,6 +140,8 @@ def set_integration_resolution_adapters(
         _merge_integrations_by_service = merge_integrations_by_service
     if configured_services is not None:
         _configured_integration_services = configured_services
+    if fetch_webapp_vault is not None:
+        _fetch_webapp_vault = fetch_webapp_vault
 
 
 class IntegrationResolutionRequest(BaseModel):
@@ -218,12 +228,7 @@ def _resolve_from_webapp_vault_or_local() -> IntegrationResolutionResult:
     Merge order is vault → store → env so ops can still override a vault
     secret with ``GITHUB_MCP_AUTH_TOKEN`` (etc.) on the task definition.
     """
-    try:
-        from integrations.webapp_vault import fetch_webapp_org_integrations
-    except Exception:
-        return _resolve_from_local_sources()
-
-    remote = fetch_webapp_org_integrations()
+    remote = _fetch_webapp_vault()
     if remote is None:
         return _resolve_from_local_sources()
     if not remote:

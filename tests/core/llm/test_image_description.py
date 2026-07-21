@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.llm.vision import describe_image, is_supported_image
+from core.llm.image_description import describe_image, is_supported_image
 
 
 class _FakeBlock:
