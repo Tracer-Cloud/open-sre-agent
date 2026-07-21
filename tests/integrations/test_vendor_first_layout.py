@@ -37,6 +37,9 @@ ALLOWED_FLAT_MODULES = frozenset(
         "selectors.py",
         "store.py",
         "verify.py",
+        # Cross-cutting credential-resolution infra (fetches every vendor's org
+        # creds from the webapp vault), not a vendor — like store.py / registry.py.
+        "webapp_vault.py",
     }
 )
 

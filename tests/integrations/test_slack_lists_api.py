@@ -7,7 +7,6 @@ from typing import Any
 import pytest
 
 import integrations.slack.bot_api as bot_api
-from integrations.slack.bot_api import SlackBotTarget
 
 
 class _FakeResponse:
@@ -41,8 +40,8 @@ class _FakeClient:
 
 
 @pytest.fixture
-def target() -> SlackBotTarget:
-    return SlackBotTarget(bot_token="xoxb-test")
+def target() -> bot_api.SlackBotTarget:
+    return bot_api.SlackBotTarget(bot_token="xoxb-test")
 
 
 def _install(monkeypatch: pytest.MonkeyPatch, script: list[Any]) -> _FakeClient:
@@ -52,7 +51,7 @@ def _install(monkeypatch: pytest.MonkeyPatch, script: list[Any]) -> _FakeClient:
 
 
 def test_find_slack_lists_filters_filetype_list_and_name(
-    monkeypatch: pytest.MonkeyPatch, target: SlackBotTarget
+    monkeypatch: pytest.MonkeyPatch, target: bot_api.SlackBotTarget
 ) -> None:
     _install(
         monkeypatch,
@@ -102,7 +101,7 @@ def test_find_slack_lists_filters_filetype_list_and_name(
 
 
 def test_find_slack_lists_missing_scope_hint(
-    monkeypatch: pytest.MonkeyPatch, target: SlackBotTarget
+    monkeypatch: pytest.MonkeyPatch, target: bot_api.SlackBotTarget
 ) -> None:
     _install(monkeypatch, [_FakeResponse(200, {"ok": False, "error": "missing_scope"})])
 
@@ -113,7 +112,7 @@ def test_find_slack_lists_missing_scope_hint(
 
 
 def test_fetch_slack_list_items_normalizes_rows(
-    monkeypatch: pytest.MonkeyPatch, target: SlackBotTarget
+    monkeypatch: pytest.MonkeyPatch, target: bot_api.SlackBotTarget
 ) -> None:
     _install(
         monkeypatch,
@@ -170,14 +169,14 @@ def test_fetch_slack_list_items_normalizes_rows(
     assert row["due_date"] == "2026-07-20"
 
 
-def test_fetch_slack_list_items_rejects_bad_id(target: SlackBotTarget) -> None:
+def test_fetch_slack_list_items_rejects_bad_id(target: bot_api.SlackBotTarget) -> None:
     items, err = bot_api.fetch_slack_list_items(target, list_id="C12345678")
     assert items is None
     assert "F…" in err or "F..." in err or "F" in err
 
 
 def test_fetch_slack_list_items_missing_lists_scope(
-    monkeypatch: pytest.MonkeyPatch, target: SlackBotTarget
+    monkeypatch: pytest.MonkeyPatch, target: bot_api.SlackBotTarget
 ) -> None:
     _install(monkeypatch, [_FakeResponse(200, {"ok": False, "error": "missing_scope"})])
 
