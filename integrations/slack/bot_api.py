@@ -540,7 +540,7 @@ def fetch_slack_list_items(
     include_archived: bool = False,
 ) -> tuple[list[dict[str, Any]] | None, str]:
     """Read rows from a Slack List (``slackLists.items.list``)."""
-    lid = str(list_id or "").strip()
+    lid = str(list_id or "").strip().upper()
     if not lid:
         return None, "list_id cannot be empty."
     if not _LIST_ID_RE.match(lid):

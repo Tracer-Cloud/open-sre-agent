@@ -184,3 +184,22 @@ def test_fetch_slack_list_items_missing_lists_scope(
 
     assert items is None
     assert "lists:read" in err
+
+
+def test_fetch_slack_list_items_uppercases_lowercase_list_id(
+    monkeypatch: pytest.MonkeyPatch, target: bot_api.SlackBotTarget
+) -> None:
+    # Arrange: a structurally valid but lowercase id must be accepted (uppercased),
+    # not rejected with the "must be a Slack List id" error.
+    client = _install(
+        monkeypatch,
+        [_FakeResponse(200, {"ok": True, "items": [], "response_metadata": {"next_cursor": ""}})],
+    )
+
+    # Act
+    items, err = bot_api.fetch_slack_list_items(target, list_id="ftasks123")
+
+    # Assert: the call proceeded and sent the uppercased id.
+    assert err == ""
+    assert items == []
+    assert client.calls[0][2]["json"]["list_id"] == "FTASKS123"

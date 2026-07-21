@@ -15,6 +15,9 @@ logger = logging.getLogger(__name__)
 
 _SUPPORTED_IMAGE_MIMES = frozenset({"image/png", "image/jpeg", "image/gif", "image/webp"})
 _VISION_MAX_TOKENS = 1024
+# Explicit cap so an image attachment can't stall a gateway turn on the SDK's
+# ~60s default; the caller degrades to a "could not describe" line on timeout.
+_VISION_TIMEOUT_SECONDS = 20.0
 _VISION_PROMPT = (
     "You are assisting an SRE. Describe this image concisely and extract any text, "
     "error messages, metric values, timestamps, and what it depicts. Be factual and "
@@ -48,7 +51,10 @@ def describe_image(
 
             from config.llm_credentials import resolve_env_credential
 
-            client = Anthropic(api_key=resolve_env_credential("ANTHROPIC_API_KEY"))
+            client = Anthropic(
+                api_key=resolve_env_credential("ANTHROPIC_API_KEY"),
+                timeout=_VISION_TIMEOUT_SECONDS,
+            )
         if model is None:
             from config.config import ANTHROPIC_TOOLCALL_MODEL
 
