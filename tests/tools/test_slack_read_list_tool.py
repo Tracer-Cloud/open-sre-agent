@@ -73,7 +73,18 @@ def test_discovers_single_list_by_name(
     monkeypatch.setattr(
         "integrations.slack.tools.slack_read_list_tool.tool.fetch_slack_list_items",
         lambda _t, **kw: (
-            [{"id": "Rec1", "list_id": kw["list_id"], "name": "Row", "assignees": [], "status": "", "due_date": "", "archived": False, "fields": {}}],
+            [
+                {
+                    "id": "Rec1",
+                    "list_id": kw["list_id"],
+                    "name": "Row",
+                    "assignees": [],
+                    "status": "",
+                    "due_date": "",
+                    "archived": False,
+                    "fields": {},
+                }
+            ],
             "",
         ),
     )
@@ -121,9 +132,7 @@ def test_multiple_matches_returns_candidates_without_guessing(
     assert "Multiple" in result.get("error", "")
 
 
-def test_env_default_list_id(
-    monkeypatch: pytest.MonkeyPatch, tool: SlackReadListTool
-) -> None:
+def test_env_default_list_id(monkeypatch: pytest.MonkeyPatch, tool: SlackReadListTool) -> None:
     monkeypatch.setenv("SLACK_TEAM_TASKS_LIST_ID", "FENVLIST1")
     monkeypatch.setattr(
         "integrations.slack.tools.slack_read_list_tool.tool.resolve_bot_token",
