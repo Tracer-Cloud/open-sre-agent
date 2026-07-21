@@ -1,13 +1,17 @@
-"""One-shot image → text description via a vision-capable model.
+"""One-shot image → text description via the configured LLM provider.
 
 Lets text-only surfaces (e.g. the Slack gateway) support image attachments
 without threading image content blocks through the whole turn pipeline: the
 image is described once here and the description is inlined as plain text.
+
+The call is routed through the provider that ``get_llm`` resolved — each
+vision-capable client (Anthropic, OpenAI-family) implements ``describe_image``
+with its own image-block format. Providers without vision support degrade to
+``None`` (the caller names the file but does not inline a description).
 """
 
 from __future__ import annotations
 
-import base64
 import logging
 from typing import Any
 
@@ -30,63 +34,43 @@ def is_supported_image(mimetype: str) -> bool:
     return mimetype.split(";", 1)[0].strip().lower() in _SUPPORTED_IMAGE_MIMES
 
 
-def describe_image(
+def _configured_agent() -> Any:
+    """Return the agent client for the configured LLM provider."""
+    from core.llm.factory import get_llm
+    from core.llm.types import LLMRole
+
+    return get_llm(LLMRole.AGENT)
+
+
+def describe_image_via_provider(
     image_bytes: bytes,
     mimetype: str,
     *,
-    client: Any | None = None,
-    model: str | None = None,
+    agent: Any | None = None,
 ) -> str | None:
-    """Return a text description of an image, or None on any failure.
+    """Describe an image via the configured provider's vision model, or ``None``.
 
-    ``client`` is injectable so callers/tests can supply a fake; production
-    builds an Anthropic client from ``ANTHROPIC_API_KEY``.
+    ``agent`` is injectable for tests; production resolves the configured agent
+    client via ``get_llm``. Returns ``None`` for unsupported images, providers
+    without a ``describe_image`` capability, or any transport/provider failure.
     """
     mime = mimetype.split(";", 1)[0].strip().lower()
     if mime not in _SUPPORTED_IMAGE_MIMES or not image_bytes:
         return None
     try:
-        if client is None:
-            from anthropic import Anthropic
-
-            from config.llm_credentials import resolve_env_credential
-
-            client = Anthropic(
-                api_key=resolve_env_credential("ANTHROPIC_API_KEY"),
-                timeout=_VISION_TIMEOUT_SECONDS,
-            )
-        if model is None:
-            from config.config import ANTHROPIC_TOOLCALL_MODEL
-
-            model = ANTHROPIC_TOOLCALL_MODEL
-        # Raw block dicts (the Anthropic SDK's typed param union is stricter than
-        # the wire format it accepts), so the payload is Any-typed.
-        messages: Any = [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": _VISION_PROMPT},
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": mime,
-                            "data": base64.b64encode(image_bytes).decode("ascii"),
-                        },
-                    },
-                ],
-            }
-        ]
-        response = client.messages.create(
-            model=model, max_tokens=_VISION_MAX_TOKENS, messages=messages
+        if agent is None:
+            agent = _configured_agent()
+        describe = getattr(agent, "describe_image", None)
+        if not callable(describe):
+            logger.info("[vision] configured LLM provider has no image support")
+            return None
+        return describe(
+            image_bytes,
+            mime,
+            prompt=_VISION_PROMPT,
+            max_tokens=_VISION_MAX_TOKENS,
+            timeout=_VISION_TIMEOUT_SECONDS,
         )
     except Exception as exc:  # noqa: BLE001 - any provider/transport failure degrades to None
         logger.warning("[vision] describe_image failed: %s", type(exc).__name__)
         return None
-
-    parts = [
-        block.text
-        for block in getattr(response, "content", [])
-        if getattr(block, "type", "") == "text" and getattr(block, "text", "")
-    ]
-    return "\n".join(parts).strip() or None

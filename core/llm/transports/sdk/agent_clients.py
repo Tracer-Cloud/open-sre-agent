@@ -86,6 +86,44 @@ class AnthropicAgentClient:
     def tool_schemas(self, tools: list[Any]) -> list[dict[str, Any]]:
         return [_anthropic_tool_schema(t) for t in tools]
 
+    def describe_image(
+        self,
+        image_bytes: bytes,
+        mimetype: str,
+        *,
+        prompt: str,
+        max_tokens: int,
+        timeout: float,
+    ) -> str | None:
+        """Return a text description of an image via this provider's vision model."""
+        import base64
+
+        messages: Any = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": mimetype,
+                            "data": base64.b64encode(image_bytes).decode("ascii"),
+                        },
+                    },
+                ],
+            }
+        ]
+        response = self._client.messages.create(
+            model=self._model, max_tokens=max_tokens, timeout=timeout, messages=messages
+        )
+        parts = [
+            block.text
+            for block in getattr(response, "content", [])
+            if getattr(block, "type", "") == "text" and getattr(block, "text", "")
+        ]
+        return "\n".join(parts).strip() or None
+
     def invoke(
         self,
         messages: list[dict[str, Any]],
@@ -485,6 +523,37 @@ class OpenAIAgentClient:
 
     def tool_schemas(self, tools: list[Any]) -> list[dict[str, Any]]:
         return build_openai_tool_specs(tools)
+
+    def describe_image(
+        self,
+        image_bytes: bytes,
+        mimetype: str,
+        *,
+        prompt: str,
+        max_tokens: int,
+        timeout: float,
+    ) -> str | None:
+        """Return a text description of an image via this provider's vision model."""
+        import base64
+
+        data_url = f"data:{mimetype};base64,{base64.b64encode(image_bytes).decode('ascii')}"
+        messages: Any = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": data_url}},
+                ],
+            }
+        ]
+        response = self._client.chat.completions.create(
+            model=self._model, max_tokens=max_tokens, timeout=timeout, messages=messages
+        )
+        choices = getattr(response, "choices", [])
+        if not choices:
+            return None
+        content = getattr(choices[0].message, "content", "") or ""
+        return content.strip() or None
 
     def invoke(
         self,

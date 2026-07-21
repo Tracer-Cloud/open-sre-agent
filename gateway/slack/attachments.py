@@ -14,7 +14,7 @@ from collections.abc import Callable
 
 import httpx
 
-from core.llm.image_description import describe_image, is_supported_image
+from core.llm.image_description import describe_image_via_provider, is_supported_image
 from gateway.slack.events import SlackInboundFile
 
 logger = logging.getLogger(__name__)
@@ -138,7 +138,7 @@ def build_files_context(
     token: str,
     *,
     downloader: Downloader = download_file,
-    describer: Describer = describe_image,
+    describer: Describer = describe_image_via_provider,
 ) -> str:
     """Render shared files as a text block appended to the turn prompt.
 
