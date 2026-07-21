@@ -10,6 +10,7 @@ vars.
 from __future__ import annotations
 
 import dataclasses
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -46,6 +47,9 @@ class _Recorder:
         self.saved: list[tuple[str, dict[str, Any]]] = []
         self.keyring: list[tuple[str, str]] = []
         self.env_values: list[dict[str, str]] = []
+        # Optional hooks so a test can observe write *ordering*, not just content.
+        self.on_store: Callable[[], None] = lambda: None
+        self.on_env: Callable[[], None] = lambda: None
 
 
 @pytest.fixture
@@ -54,13 +58,14 @@ def recorder(monkeypatch: pytest.MonkeyPatch) -> _Recorder:
 
     def _sync_env_values(values: dict[str, str], **_kwargs: Any) -> Path:
         rec.env_values.append(dict(values))
+        rec.on_env()
         return _ENV_PATH
 
-    monkeypatch.setattr(
-        setup_flow,
-        "upsert_integration",
-        lambda service, payload: rec.saved.append((service, payload)),
-    )
+    def _upsert(service: str, payload: dict[str, Any]) -> None:
+        rec.saved.append((service, payload))
+        rec.on_store()
+
+    monkeypatch.setattr(setup_flow, "upsert_integration", _upsert)
     monkeypatch.setattr(
         setup_flow, "sync_env_secret", lambda key, value: rec.keyring.append((key, value))
     )
@@ -72,7 +77,6 @@ def test_success_writes_store_keyring_and_env(recorder: _Recorder) -> None:
     outcome = apply_setup(_SPEC, {"api_token": "tok-1", "room": "ops", "note": "hi"})
 
     assert outcome.ok is True
-    assert outcome.saved is True
     assert outcome.env_path == _ENV_PATH
     assert recorder.saved == [
         ("demo", {"credentials": {"api_token": "tok-1", "room": "ops", "note": "hi"}})
@@ -87,7 +91,6 @@ def test_missing_required_field_fails_before_any_write(recorder: _Recorder) -> N
     outcome = apply_setup(_SPEC, {"api_token": "tok-1", "room": "  "})
 
     assert outcome.ok is False
-    assert outcome.saved is False
     assert outcome.detail == "Demo room is required."
     assert (recorder.saved, recorder.keyring, recorder.env_values) == ([], [], [])
 
@@ -139,6 +142,34 @@ def test_resolve_failure_aborts_setup(recorder: _Recorder) -> None:
     assert outcome.ok is False
     assert outcome.detail == "Cannot reach @ops."
     assert (recorder.saved, recorder.keyring, recorder.env_values) == ([], [], [])
+
+
+def test_env_is_written_before_the_store(recorder: _Recorder) -> None:
+    """Ordering matters: a store-only write is the state this module prevents."""
+    order: list[str] = []
+    recorder.on_store = lambda: order.append("store")
+    recorder.on_env = lambda: order.append("env")
+
+    apply_setup(_SPEC, {"api_token": "tok-1", "room": "ops"})
+
+    assert order == ["env", "store"]
+
+
+def test_unwritable_env_persists_nothing_and_reports_the_failure(
+    monkeypatch: pytest.MonkeyPatch, recorder: _Recorder
+) -> None:
+    """An unwritable .env must not leave credentials in the store alone."""
+
+    def _boom(_values: dict[str, str], **_kwargs: Any) -> Path:
+        raise PermissionError("Cannot write to /etc/.env: permission denied.")
+
+    monkeypatch.setattr(setup_flow, "sync_env_values", _boom)
+
+    outcome = apply_setup(_SPEC, {"api_token": "tok-1", "room": "ops"})
+
+    assert outcome.ok is False
+    assert "permission denied" in outcome.detail
+    assert recorder.saved == []
 
 
 def test_spec_without_a_verifier_still_configures(recorder: _Recorder) -> None:

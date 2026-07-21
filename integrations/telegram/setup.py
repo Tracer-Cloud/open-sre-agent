@@ -50,6 +50,7 @@ TELEGRAM_SETUP = IntegrationSetupSpec(
         SetupField(
             name=DEFAULT_CHAT_ID_FIELD,
             label="Default chat ID",
+            prompt="Default chat ID or @channelname",
             env_var=TELEGRAM_DEFAULT_CHAT_ID_ENV,
         ),
     ),

@@ -58,7 +58,14 @@ class SetupField:
     """Key under the integration store's ``credentials`` mapping."""
 
     label: str
-    """Human-readable field name, used in prompts and in "X is required" errors."""
+    """Human-readable field name, used in "X is required" errors."""
+
+    prompt: str = ""
+    """Question text when collecting this field interactively; defaults to *label*.
+
+    Kept separate so the question can carry guidance ("Default chat ID or
+    @channelname") while the error stays terse ("Default chat ID is required.").
+    """
 
     env_var: str | None = None
     """Env var this field mirrors, or ``None`` to keep it store-only.
@@ -73,6 +80,11 @@ class SetupField:
 
     secret: bool = False
     """Whether collection surfaces should mask this field while it is typed."""
+
+    @property
+    def question(self) -> str:
+        """The text to prompt with."""
+        return self.prompt or self.label
 
 
 @dataclass(frozen=True)
@@ -105,9 +117,13 @@ class SetupOutcome:
     """What :func:`apply_setup` did, in a shape every surface can render."""
 
     ok: bool
+    """True only when the credentials were verified *and* persisted."""
+
     detail: str
-    saved: bool = False
+    """Renderable sentence for the user — the verifier's message, or why it failed."""
+
     env_path: Path | None = None
+    """The ``.env`` written; always set when *ok*, never set otherwise."""
 
 
 def _collect_credentials(
@@ -147,6 +163,9 @@ def _persist_env(spec: IntegrationSetupSpec, credentials: dict[str, str | None])
     ``.env`` is rewritten even when no field targets it: the rewrite also strips
     any stale secret assignments left by an older setup (see
     :func:`config.env_file.sync_env_values`).
+
+    Raises whatever the writers raise — notably ``PermissionError`` from
+    :func:`config.env_file.write_env_lines` on an unwritable ``.env``.
     """
     env_values: dict[str, str] = {}
     for field in spec.fields:
@@ -186,9 +205,19 @@ def apply_setup(
         credentials = resolved.credentials
         detail = " ".join(part for part in (detail, resolved.note) if part)
 
+    # Env/keyring before the store, so no failure can leave the store-only state
+    # this module exists to prevent. If the env write fails nothing is persisted
+    # at all; if the store write failed afterwards, credential resolution still
+    # falls back to the environment, so the integration keeps working.
+    try:
+        env_path = _persist_env(spec, credentials)
+    except (OSError, RuntimeError) as exc:
+        # A local CLI/wizard surface, so the detail may name the actual cause
+        # (usually an unwritable .env). Nothing has been persisted at this point.
+        return SetupOutcome(ok=False, detail=f"Could not save {spec.service} credentials: {exc}")
+
     upsert_integration(spec.service, {"credentials": credentials})
-    env_path = _persist_env(spec, credentials)
-    return SetupOutcome(ok=True, detail=detail, saved=True, env_path=env_path)
+    return SetupOutcome(ok=True, detail=detail, env_path=env_path)
 
 
 __all__ = [

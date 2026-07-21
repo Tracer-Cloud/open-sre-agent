@@ -5,11 +5,7 @@ from __future__ import annotations
 from config.env_file import sync_env_secret, sync_env_values
 from integrations.setup_flow import apply_setup
 from integrations.store import upsert_integration
-from integrations.telegram.setup import (
-    BOT_TOKEN_FIELD,
-    DEFAULT_CHAT_ID_FIELD,
-    TELEGRAM_SETUP,
-)
+from integrations.telegram.setup import TELEGRAM_SETUP
 from platform.terminal.theme import ERROR, GLYPH_ERROR, SECONDARY, WARNING
 from surfaces.cli.wizard._ui import (
     Choice,
@@ -240,23 +236,24 @@ def _configure_telegram() -> tuple[str, str]:
         "via getUpdates. See docs/messaging/telegram for details.[/]\n"
     )
     while True:
-        bot_token = _prompt_value(
-            "Telegram bot token",
-            default=_string_value(credentials.get("bot_token")),
-            secret=True,
-        )
-        default_chat_id = _prompt_value(
-            "Default chat ID or @channelname",
-            default=_string_value(credentials.get("default_chat_id")),
-        )
-        with _console.status("Validating Telegram credentials...", spinner="dots"):
-            outcome = apply_setup(
-                TELEGRAM_SETUP,
-                {BOT_TOKEN_FIELD: bot_token, DEFAULT_CHAT_ID_FIELD: default_chat_id},
+        values = {
+            field.name: _prompt_value(
+                field.question,
+                default=_string_value(credentials.get(field.name)),
+                secret=field.secret,
+                allow_empty=not field.required,
             )
+            for field in TELEGRAM_SETUP.fields
+        }
+        with _console.status("Validating Telegram credentials...", spinner="dots"):
+            outcome = apply_setup(TELEGRAM_SETUP, values)
         _render_integration_result(
             "Telegram", IntegrationHealthResult(ok=outcome.ok, detail=outcome.detail)
         )
         if outcome.ok:
+            # apply_setup always resolves an .env path on success; narrow for mypy
+            # and fail loudly rather than returning the string "None" if it ever
+            # stops doing so.
+            assert outcome.env_path is not None, "apply_setup returned ok=True without an env_path"
             return "Telegram", str(outcome.env_path)
         _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")

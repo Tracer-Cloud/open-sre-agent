@@ -30,6 +30,7 @@ from platform.terminal.theme import (
 
 if TYPE_CHECKING:
     from integrations.github.mcp import GitHubMcpDisplayDetailLevel
+    from integrations.setup_flow import IntegrationSetupSpec
 
 from integrations.gitlab import DEFAULT_GITLAB_BASE_URL
 from integrations.openclaw import build_openclaw_config, validate_openclaw_config
@@ -868,26 +869,35 @@ def _setup_discord() -> None:
     _register_discord_slash_command(application_id, bot_token)
 
 
-def _setup_telegram() -> None:
-    from integrations.setup_flow import apply_setup
-    from integrations.telegram.setup import (
-        BOT_TOKEN_FIELD,
-        DEFAULT_CHAT_ID_FIELD,
-        TELEGRAM_SETUP,
-    )
+def _run_spec_setup(spec: IntegrationSetupSpec) -> None:
+    """Prompt for a spec's fields, then validate, verify, and persist them.
 
-    bot_token = _p("Telegram bot token", secret=True)
-    default_chat_id = _p("Default chat ID or @channelname")
-    print("\n  Validating Telegram credentials...")
-    outcome = apply_setup(
-        TELEGRAM_SETUP,
-        {BOT_TOKEN_FIELD: bot_token, DEFAULT_CHAT_ID_FIELD: default_chat_id},
-    )
+    Each field is checked as it is answered so a blank required value fails
+    immediately, rather than after the user has worked through the rest of the
+    prompts.
+    """
+    from integrations.setup_flow import apply_setup
+
+    values: dict[str, str | None] = {}
+    for field in spec.fields:
+        value = _p(field.question, secret=field.secret)
+        if not value and field.required:
+            _die(f"{field.label} is required.")
+        values[field.name] = value
+
+    print(f"\n  Validating {spec.service} credentials...")
+    outcome = apply_setup(spec, values)
     if not outcome.ok:
         _die(outcome.detail)
     print(f"  {outcome.detail}")
     print("  Next:")
-    print("    - opensre integrations verify telegram")
+    print(f"    - opensre integrations verify {spec.service}")
+
+
+def _setup_telegram() -> None:
+    from integrations.telegram.setup import TELEGRAM_SETUP
+
+    _run_spec_setup(TELEGRAM_SETUP)
 
 
 def _setup_rocketchat() -> None:

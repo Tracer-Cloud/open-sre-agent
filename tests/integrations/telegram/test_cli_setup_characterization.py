@@ -170,14 +170,17 @@ def test_unreachable_chat_exits_without_saving(
     assert (telegram.store, telegram.keyring, telegram.env) == ([], [], [])
 
 
-def test_blank_token_exits_before_verifying_or_saving(
+def test_blank_token_exits_before_the_next_prompt(
     monkeypatch: pytest.MonkeyPatch, telegram: _Telegram
 ) -> None:
-    _prompts(monkeypatch, telegram, "", _CHAT_REFERENCE)
+    """Fail on the field that is blank, not after working through the rest."""
+    _prompts(monkeypatch, telegram, "")
 
     with pytest.raises(SystemExit):
         cli._setup_telegram()
 
+    # Only the token was asked for — the chat id prompt is never reached.
+    assert [label for label, _secret in telegram.asked] == ["Telegram bot token"]
     assert telegram.verified == []
     assert telegram.store == []
 
