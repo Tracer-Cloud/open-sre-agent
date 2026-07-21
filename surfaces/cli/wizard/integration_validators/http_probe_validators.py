@@ -6,7 +6,6 @@ import httpx
 
 from integrations.config_models import SlackWebhookConfig
 from platform.common.url_validation import validate_https_or_loopback_http_url
-from platform.notifications.redaction import redact_token
 
 from .shared import IntegrationHealthResult
 
@@ -251,39 +250,3 @@ def validate_rocketchat(
     return IntegrationHealthResult(
         ok=False, detail=f"Rocket.Chat API returned unexpected HTTP {resp.status_code}."
     )
-
-
-def validate_telegram_bot(*, bot_token: str) -> IntegrationHealthResult:
-    """Validate a Telegram bot token by calling the Bot API getMe endpoint."""
-    token = bot_token.strip()
-    if not token:
-        return IntegrationHealthResult(ok=False, detail="Missing bot_token.")
-
-    try:
-        resp = httpx.get(f"https://api.telegram.org/bot{token}/getMe", timeout=10)
-    except httpx.RequestError as err:
-        # httpx embeds the request URL — which contains the bot token — in
-        # transport error messages, so redact before surfacing the detail.
-        safe_error = redact_token(str(err), token)
-        return IntegrationHealthResult(ok=False, detail=f"Telegram API unreachable: {safe_error}")
-    except Exception as err:
-        safe_error = redact_token(str(err), token)
-        return IntegrationHealthResult(ok=False, detail=f"Telegram API check failed: {safe_error}")
-
-    try:
-        payload = resp.json()
-    except Exception as err:
-        safe_error = redact_token(str(err), token)
-        return IntegrationHealthResult(
-            ok=False,
-            detail=f"Telegram API check failed: HTTP {resp.status_code} ({safe_error}).",
-        )
-
-    if not payload.get("ok"):
-        description = payload.get("description", "unknown error")
-        return IntegrationHealthResult(ok=False, detail=f"Telegram API check failed: {description}")
-
-    user = payload.get("result", {})
-    username = str(user.get("username", "")).strip()
-    label = f"@{username}" if username else "unknown"
-    return IntegrationHealthResult(ok=True, detail=f"Connected to Telegram bot {label}.")

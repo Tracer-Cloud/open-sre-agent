@@ -20,7 +20,6 @@ from surfaces.cli.wizard.integration_validators.http_probe_validators import (
     validate_rocketchat_webhook,
     validate_servicenow_integration,
     validate_slack_webhook,
-    validate_telegram_bot,
 )
 from surfaces.cli.wizard.integration_validators.jenkins import validate_jenkins_integration
 from surfaces.cli.wizard.integration_validators.mcp_validators import (
@@ -76,7 +75,6 @@ __all__ = [
     "validate_sentry_mcp_integration",
     "validate_servicenow_integration",
     "validate_slack_webhook",
-    "validate_telegram_bot",
     "validate_splunk_integration",
     "validate_tempo_integration",
     "validate_vercel_integration",

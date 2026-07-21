@@ -869,26 +869,23 @@ def _setup_discord() -> None:
 
 
 def _setup_telegram() -> None:
-    from integrations.telegram.verifier import verify_telegram
+    from integrations.setup_flow import apply_setup
+    from integrations.telegram.setup import (
+        BOT_TOKEN_FIELD,
+        DEFAULT_CHAT_ID_FIELD,
+        TELEGRAM_SETUP,
+    )
 
     bot_token = _p("Telegram bot token", secret=True)
-    if not bot_token:
-        _die("bot_token is required.")
-    default_chat_id = _p("Default chat ID (optional)")
-    print("\n  Validating Telegram bot token...")
-    result = verify_telegram("setup", {"bot_token": bot_token})
-    if result["status"] != "passed":
-        _die(result["detail"])
-    print(f"  {result['detail']}")
-    upsert_integration(
-        "telegram",
-        {
-            "credentials": {
-                "bot_token": bot_token,
-                "default_chat_id": default_chat_id or None,
-            }
-        },
+    default_chat_id = _p("Default chat ID or @channelname")
+    print("\n  Validating Telegram credentials...")
+    outcome = apply_setup(
+        TELEGRAM_SETUP,
+        {BOT_TOKEN_FIELD: bot_token, DEFAULT_CHAT_ID_FIELD: default_chat_id},
     )
+    if not outcome.ok:
+        _die(outcome.detail)
+    print(f"  {outcome.detail}")
     print("  Next:")
     print("    - opensre integrations verify telegram")
 

@@ -57,7 +57,14 @@ The bot can deliver to three kinds of destinations. Pick the one that fits your 
 
 ## Step 3: Find your `chat_id`
 
-The **chat ID** identifies where the bot should post.
+The **chat ID** identifies where the bot should post. It is **required** — a bot
+token on its own passes verification but cannot deliver anything.
+
+<Tip>
+**Public channel or supergroup?** Skip this step. Setup accepts the `@name`
+directly (for example `@acme_alerts`) and resolves it to the numeric id for you.
+Private groups and DMs have no `@name`, so they still need the steps below.
+</Tip>
 
 1. Send any message in the destination chat — for a channel, post anything; for a DM, send `/start` to your bot.
 2. In a browser, open:
@@ -102,10 +109,24 @@ opensre onboard
 
 Choose **Telegram** from the integration list. The wizard prompts for:
 
-- **Bot token** — stored in the system keyring (not plain `.env`)
-- **Default chat ID** — written to `.env` as `TELEGRAM_DEFAULT_CHAT_ID`
+- **Bot token** (required) — stored in the system keyring (not plain `.env`)
+- **Default chat ID or `@channelname`** (required) — resolved to the numeric id, then
+  written to `.env` as `TELEGRAM_DEFAULT_CHAT_ID`
 
 Credentials are also saved to `~/.opensre/integrations.json` via `upsert_integration("telegram", ...)`.
+
+Both prompts are validated before anything is saved: the token against `getMe`,
+the chat against `getChat`. A chat the bot cannot reach — the usual cause being
+that the bot was never added to the channel — fails setup here rather than at the
+first alert. Every setup surface (`opensre onboard`, `opensre integrations setup
+telegram`, and the interactive shell) writes all three tiers, so a Telegram
+integration configured through any of them also satisfies the `make deploy`
+preflight, which reads environment variables.
+
+<Note>
+`getChat` proves the bot can *see* the chat, not that it may post there. A bot
+still needs the **Post Messages** admin permission on a channel (Step 2).
+</Note>
 
 Non-interactive setup:
 

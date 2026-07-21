@@ -6,7 +6,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
+import integrations.setup_flow as _setup_flow
 from integrations.llm_cli.codex_oauth import CodexOAuthResult
+from integrations.setup_flow import ResolvedCredentials
 from surfaces.cli.wizard import _ui, flow
 from surfaces.cli.wizard import store as wizard_store
 from surfaces.cli.wizard.configurators import chat_notifications as _chat_notifications_configurator
@@ -17,6 +19,27 @@ from surfaces.cli.wizard.configurators import observability as _observability_co
 from surfaces.cli.wizard.env_sync import sync_provider_env
 from surfaces.cli.wizard.probes import ProbeResult
 from tests.integrations.llm_cli.testing_helpers import write_fake_runnable_cli_bin
+
+
+def _stub_telegram_setup(monkeypatch: pytest.MonkeyPatch, verify) -> None:
+    """Swap the Telegram spec's network hooks, keeping its real field definitions.
+
+    ``_configure_telegram`` runs the shared setup flow, so the seam is the spec
+    rather than a validator function: *verify* stands in for the Bot API
+    ``getMe`` probe, and the chat-id resolution is short-circuited to echo back
+    whatever the user typed.
+    """
+    import dataclasses
+
+    monkeypatch.setattr(
+        _chat_notifications_configurator,
+        "TELEGRAM_SETUP",
+        dataclasses.replace(
+            _chat_notifications_configurator.TELEGRAM_SETUP,
+            verify=verify,
+            resolve=lambda credentials: ResolvedCredentials(credentials=credentials),
+        ),
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -2300,12 +2323,12 @@ def test_run_wizard_configures_telegram(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(flow.questionary, "text", _mock_text)
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
-    monkeypatch.setattr(
-        _chat_notifications_configurator,
-        "validate_telegram_bot",
-        lambda **_kwargs: flow.IntegrationHealthResult(
-            ok=True, detail="Connected to Telegram bot @opensre_bot."
-        ),
+    _stub_telegram_setup(
+        monkeypatch,
+        lambda _source, _config: {
+            "status": "passed",
+            "detail": "Connected to Telegram bot @opensre_bot.",
+        },
     )
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
@@ -2318,10 +2341,10 @@ def test_run_wizard_configures_telegram(monkeypatch, tmp_path) -> None:
     def _sync_env_secret(key: str, value: str) -> None:
         synced_env_secrets.append((key, value))
 
-    monkeypatch.setattr(_chat_notifications_configurator, "sync_env_values", _sync_env_values)
-    monkeypatch.setattr(_chat_notifications_configurator, "sync_env_secret", _sync_env_secret)
+    monkeypatch.setattr(_setup_flow, "sync_env_values", _sync_env_values)
+    monkeypatch.setattr(_setup_flow, "sync_env_secret", _sync_env_secret)
     monkeypatch.setattr(
-        _chat_notifications_configurator,
+        _setup_flow,
         "upsert_integration",
         lambda service, payload: saved_integrations.append((service, payload)),
     )
@@ -2366,30 +2389,26 @@ def test_run_wizard_telegram_retries_on_validation_failure(monkeypatch, tmp_path
         m.ask.return_value = next(text_responses)
         return m
 
-    def _validate(**_kwargs):
+    def _validate(_source, _config):
         nonlocal validation_call_count
         validation_call_count += 1
         if validation_call_count == 1:
-            return flow.IntegrationHealthResult(ok=False, detail="Telegram API check failed.")
-        return flow.IntegrationHealthResult(ok=True, detail="Connected to Telegram bot @bot.")
+            return {"status": "failed", "detail": "Telegram API check failed."}
+        return {"status": "passed", "detail": "Connected to Telegram bot @bot."}
 
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
     monkeypatch.setattr(flow.questionary, "text", _mock_text)
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
-    monkeypatch.setattr(_chat_notifications_configurator, "validate_telegram_bot", _validate)
+    _stub_telegram_setup(monkeypatch, _validate)
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
     monkeypatch.setattr(_ui, "save_keyring_secret", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(_setup_flow, "sync_env_values", lambda *_a, **_kw: tmp_path / ".env")
+    monkeypatch.setattr(_setup_flow, "sync_env_secret", lambda *_a, **_kw: None)
     monkeypatch.setattr(
-        _chat_notifications_configurator, "sync_env_values", lambda *_a, **_kw: tmp_path / ".env"
-    )
-    monkeypatch.setattr(
-        _chat_notifications_configurator, "sync_env_secret", lambda *_a, **_kw: None
-    )
-    monkeypatch.setattr(
-        _chat_notifications_configurator,
+        _setup_flow,
         "upsert_integration",
         lambda service, payload: saved_integrations.append((service, payload)),
     )

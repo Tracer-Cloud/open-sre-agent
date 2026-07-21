@@ -35,6 +35,10 @@ from config.constants.sentry import (
     SENTRY_MAX_BREADCRUMBS,
     SENTRY_TRACES_SAMPLE_RATE,
 )
+from config.constants.telegram import (
+    TELEGRAM_BOT_TOKEN_ENV,
+    TELEGRAM_DEFAULT_CHAT_ID_ENV,
+)
 
 __all__ = [
     "AZURE_OPENAI_API_KEY_ENV",
@@ -56,6 +60,8 @@ __all__ = [
     "SENTRY_IN_APP_INCLUDE",
     "SENTRY_MAX_BREADCRUMBS",
     "SENTRY_TRACES_SAMPLE_RATE",
+    "TELEGRAM_BOT_TOKEN_ENV",
+    "TELEGRAM_DEFAULT_CHAT_ID_ENV",
     "USAGE_SECRET_ENV",
     "WEBAPP_URL_ENV",
     "ensure_opensre_tmp_dir",
