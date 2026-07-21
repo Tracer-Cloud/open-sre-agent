@@ -144,6 +144,48 @@ def test_resolve_failure_aborts_setup(recorder: _Recorder) -> None:
     assert (recorder.saved, recorder.keyring, recorder.env_values) == ([], [], [])
 
 
+def test_clearing_an_optional_field_clears_every_tier(recorder: _Recorder) -> None:
+    """Blank values are written through, not skipped.
+
+    Skipping would leave the old value in ``.env`` while the store recorded
+    ``None`` — and credential resolution falls back to the environment when the
+    store is empty, so the cleared value would keep resolving.
+    """
+    spec = IntegrationSetupSpec(
+        service="demo",
+        fields=(
+            SetupField(name="api_token", label="Token", env_var="DEMO_API_TOKEN", secret=True),
+            SetupField(name="room", label="Room", env_var="DEMO_ROOM", required=False),
+        ),
+        verify=_passing,
+    )
+
+    apply_setup(spec, {"api_token": "tok-1", "room": ""})
+
+    assert recorder.saved[0][1]["credentials"]["room"] is None
+    assert recorder.env_values == [{"DEMO_ROOM": ""}]
+
+
+def test_clearing_an_optional_secret_clears_the_keyring(recorder: _Recorder) -> None:
+    spec = IntegrationSetupSpec(
+        service="demo",
+        fields=(
+            SetupField(
+                name="api_token",
+                label="Token",
+                env_var="DEMO_API_TOKEN",
+                secret=True,
+                required=False,
+            ),
+        ),
+        verify=_passing,
+    )
+
+    apply_setup(spec, {"api_token": ""})
+
+    assert recorder.keyring == [("DEMO_API_TOKEN", "")]
+
+
 def test_env_is_written_before_the_store(recorder: _Recorder) -> None:
     """Ordering matters: a store-only write is the state this module prevents."""
     order: list[str] = []

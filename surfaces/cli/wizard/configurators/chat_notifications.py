@@ -233,7 +233,10 @@ def _configure_telegram() -> tuple[str, str]:
         "\n[bold]Telegram Integration[/bold]\n"
         f"[{SECONDARY}]Create a bot with @BotFather, then add it to the chat it should post "
         "in. For a public channel the @name is enough; otherwise find the numeric chat id "
-        "via getUpdates. See docs/messaging/telegram for details.[/]\n"
+        "via getUpdates. See docs/messaging/telegram for details.\n"
+        "Both answers are required — Telegram cannot deliver without a chat. Press Ctrl+C to "
+        "skip Telegram and continue onboarding; `opensre integrations setup telegram` picks it "
+        "up later.[/]\n"
     )
     while True:
         values = {

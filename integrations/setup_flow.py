@@ -171,12 +171,15 @@ def _persist_env(spec: IntegrationSetupSpec, credentials: dict[str, str | None])
     for field in spec.fields:
         if not field.env_var:
             continue
+        # Blank values are written through rather than skipped, so clearing an
+        # optional field clears every tier. Skipping would leave the previous
+        # value in ``.env`` while the store recorded ``None``, and credential
+        # resolution falls back to the environment when the store is empty — so
+        # the value the user just cleared would keep resolving.
         value = credentials.get(field.name) or ""
         if is_sensitive_env_key(field.env_var):
-            # A blank value clears the keyring entry, so a cleared optional
-            # secret does not keep resolving from a previous run.
             sync_env_secret(field.env_var, value)
-        elif value:
+        else:
             env_values[field.env_var] = value
     return sync_env_values(env_values)
 
