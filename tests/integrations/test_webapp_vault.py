@@ -97,7 +97,7 @@ def test_resolve_integrations_merges_webapp_vault(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setenv(ORGANIZATION_ID_ENV, "org_1")
     monkeypatch.setattr(
         "integrations.webapp_vault.fetch_webapp_org_integrations",
-        lambda organization_id=None: [
+        lambda: [
             {
                 "id": "int_gh",
                 "service": "github",

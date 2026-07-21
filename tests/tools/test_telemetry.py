@@ -1198,6 +1198,7 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "slack_capture_task",
         "slack_join_channel",
         "slack_list_team_members",
+        "slack_read_list",
         "slack_read_messages",
         "slack_reply_message",
         "slack_search_messages",

@@ -18,7 +18,11 @@ dependencies = [
     "anthropic>=0.77.1",
     "mcp>=1.28.1",
     "openai>=2.0.0",
-    "litellm>=1.90.0",
+    # Held at 1.90.x: 1.93.0 ships a Rust extension with no cp314 wheel (breaks
+    # uv builds on Python 3.14) and changes the model price table (breaks the
+    # gpt-5.6 alias pricing). 1.90.0 is the last version verified green here.
+    # Lift once the wheel + pricing are resolved upstream.
+    "litellm>=1.90.0,<1.91.0",
     # Data validation
     "pydantic>=2.12.5,<3",
     "pydantic-settings>=2.12.0,<3",
