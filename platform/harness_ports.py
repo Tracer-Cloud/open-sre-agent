@@ -597,6 +597,7 @@ def reset_harness_ports() -> None:
         merge_local_integrations=_default_merge_local,
         merge_integrations_by_service=_default_merge_by_service,
         configured_services=_default_configured_services,
+        fetch_webapp_vault=_default_fetch_webapp_vault,
     )
     set_tool_registry(_EmptyToolRegistry())
     set_investigation_tools_adapter(get_investigation_tools=_default_investigation_tools)

@@ -65,6 +65,22 @@ def test_registered_fetcher_is_invoked() -> None:
     assert result == [{"service": "grafana", "config": {}}]
 
 
+def test_reset_restores_webapp_vault_fetcher_default() -> None:
+    # Arrange: register a distinctive fetcher that must not survive a reset —
+    # if it leaks, every later test sees this instead of the noop default.
+    def _sentinel_vault() -> list[dict[str, object]]:
+        return [{"service": "leaked-vault-marker"}]
+
+    harness_ports.set_integration_resolution_adapters(fetch_webapp_vault=_sentinel_vault)
+    assert harness_ports._fetch_webapp_vault is _sentinel_vault
+
+    # Act
+    harness_ports.reset_harness_ports()
+
+    # Assert: the noop default is restored, not the leaked sentinel.
+    assert harness_ports._fetch_webapp_vault is harness_ports._default_fetch_webapp_vault
+
+
 def test_install_harness_ports_wires_catalog_and_registry() -> None:
     output_boundary.install_harness_ports()
 
