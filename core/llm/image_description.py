@@ -36,8 +36,7 @@ def is_supported_image(mimetype: str) -> bool:
 
 def _configured_agent() -> Any:
     """Return the agent client for the configured LLM provider."""
-    from core.llm.factory import get_llm
-    from core.llm.types import LLMRole
+    from core.llm.factory import LLMRole, get_llm
 
     return get_llm(LLMRole.AGENT)
 
@@ -64,13 +63,14 @@ def describe_image_via_provider(
         if not callable(describe):
             logger.info("[vision] configured LLM provider has no image support")
             return None
-        return describe(
+        description: str | None = describe(
             image_bytes,
             mime,
             prompt=_VISION_PROMPT,
             max_tokens=_VISION_MAX_TOKENS,
             timeout=_VISION_TIMEOUT_SECONDS,
         )
+        return description
     except Exception as exc:  # noqa: BLE001 - any provider/transport failure degrades to None
         logger.warning("[vision] describe_image failed: %s", type(exc).__name__)
         return None
