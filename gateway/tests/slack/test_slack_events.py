@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from gateway.slack.events import parse_events_api_payload
+import pytest
+
+from gateway.slack.events import SlackInboundFile, parse_events_api_payload
 
 
 def _mention_payload(**event_overrides: Any) -> dict[str, Any]:
@@ -221,3 +223,57 @@ def test_malformed_file_entries_are_skipped() -> None:
 
     assert inbound is not None
     assert [file.id for file in inbound.files] == ["F1"]
+
+
+def _single_file(**overrides: Any) -> SlackInboundFile:
+    """Parse one file dict (with overrides) through the public payload path."""
+    inbound = parse_events_api_payload(_file_share_payload([_file(**overrides)], text="hi"))
+    assert inbound is not None
+    assert len(inbound.files) == 1
+    return inbound.files[0]
+
+
+def test_file_name_falls_back_to_title_then_id() -> None:
+    # Arrange/Act: a file with no name but a title.
+    from_title = _single_file(name=None, title="Checkout Log")
+    # Act: a file with neither name nor title.
+    from_id = _single_file(name=None, title=None)
+
+    # Assert: title fills in for a missing name; id is the last resort.
+    assert from_title.name == "Checkout Log"
+    assert from_id.name == "F1"
+
+
+def test_file_mimetype_defaults_to_octet_stream_when_missing() -> None:
+    assert _single_file(mimetype=None).mimetype == "application/octet-stream"
+
+
+def test_file_url_private_falls_back_to_download_url() -> None:
+    # Arrange/Act: no url_private, but a url_private_download is present.
+    file = _single_file(url_private=None, url_private_download="https://files.slack.com/dl/F1")
+
+    # Assert: the download URL is used.
+    assert file.url_private == "https://files.slack.com/dl/F1"
+
+
+def test_file_blank_id_is_skipped() -> None:
+    # Arrange/Act: a whitespace-only id is not a usable id.
+    inbound = parse_events_api_payload(_file_share_payload([_file(id="   ")], text="hi"))
+
+    # Assert: the file is dropped (text keeps the message alive).
+    assert inbound is not None
+    assert inbound.files == ()
+
+
+@pytest.mark.parametrize(
+    ("raw_size", "expected"),
+    [
+        (2048, 2048),
+        ("2048", 2048),  # Slack sometimes sends numeric strings
+        (None, 0),  # missing → 0
+        ("not-a-number", 0),  # invalid → 0
+        (-5, 0),  # negative → clamped to 0
+    ],
+)
+def test_file_size_is_coerced_to_non_negative_int(raw_size: Any, expected: int) -> None:
+    assert _single_file(size=raw_size).size == expected

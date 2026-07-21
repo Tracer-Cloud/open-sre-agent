@@ -350,10 +350,10 @@ class _SlackTurnDispatcher:
                             seeded,
                         )
                 agent_text = _agent_text_with_slack_context(inbound)
-                if inbound.files:
-                    files_context = _slack_files_context(inbound.files, self._logger)
-                    if files_context:
-                        agent_text = f"{agent_text}\n\n{files_context}"
+                if inbound.files and (
+                    files_context := _slack_files_context(inbound.files, self._logger)
+                ):
+                    agent_text = f"{agent_text}\n\n{files_context}"
                 self._handler(agent_text, session, sink, self._logger)
             except Exception:
                 self._logger.exception(

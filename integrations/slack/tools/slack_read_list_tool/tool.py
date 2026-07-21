@@ -21,8 +21,12 @@ from integrations.slack.web_client import (
     resolve_bot_token,
 )
 
-_LIST_ID_RE = re.compile(r"^F[A-Z0-9]{5,}$", re.IGNORECASE)
-_LIST_URL_ID_RE = re.compile(r"/(F[A-Z0-9]{5,})\b", re.IGNORECASE)
+# A Slack List id is a file id: the letter "F" then 5+ alphanumerics (e.g. "F0123ABCD").
+_SLACK_LIST_ID_CHARS = r"F[A-Z0-9]{5,}"
+# Matches a value that is itself a bare list id.
+_SLACK_LIST_ID_RE = re.compile(rf"^{_SLACK_LIST_ID_CHARS}$", re.IGNORECASE)
+# Extracts a list id embedded in a Slack List URL path (e.g. ".../lists/F0123ABCD").
+_SLACK_LIST_ID_IN_URL_RE = re.compile(rf"/({_SLACK_LIST_ID_CHARS})\b", re.IGNORECASE)
 
 
 def _result(
@@ -54,11 +58,29 @@ def _result(
         "item_count": len(rows),
         "truncated": truncated,
     }
-    if error:
-        payload["error"] = error
-    if error_type:
-        payload["error_type"] = error_type
+    for key, value in (("error", error), ("error_type", error_type)):
+        if value:
+            payload[key] = value
     return payload
+
+
+# What _resolve_list_id returns: (list_id, list_title, candidate lists, error).
+_ListResolution = tuple[str, str, list[dict[str, str]], str]
+
+
+def _unresolved(error: str, *, candidates: list[dict[str, str]] | None = None) -> _ListResolution:
+    """No single list chosen — an error, or (empty error) ambiguous candidates."""
+    return "", "", candidates or [], error
+
+
+def _resolved(list_id: str) -> _ListResolution:
+    """A list id resolved directly from input or the env default."""
+    return list_id, "", [], ""
+
+
+def _matched(row: dict[str, str], candidates: list[dict[str, str]]) -> _ListResolution:
+    """A single matched list row, carrying the candidate set for context."""
+    return row["list_id"], row.get("title") or row.get("name") or "", candidates, ""
 
 
 class SlackReadListTool(BaseTool):
@@ -156,47 +178,25 @@ class SlackReadListTool(BaseTool):
         resolved_id, list_title, lists, resolve_error = self._resolve_list_id(
             target, list_id=list_id, name_query=name_query
         )
+        identity: dict[str, Any] = {
+            "list_id": resolved_id,
+            "list_title": list_title,
+            "lists": lists,
+        }
         if resolve_error:
-            return _result(
-                status="failed",
-                list_id=resolved_id,
-                list_title=list_title,
-                lists=lists,
-                error=resolve_error,
-                error_type="validation_error" if "must be" in resolve_error else "api_error",
-            )
+            kind = "validation_error" if "must be" in resolve_error else "api_error"
+            return _result(status="failed", **identity, error=resolve_error, error_type=kind)
         if not resolved_id:
-            # Multiple matches — return candidates, do not guess.
-            return _result(
-                status="read",
-                lists=lists,
-                error="Multiple Slack Lists matched; pass list_id to read one." if lists else "",
-            )
+            multiple = "Multiple Slack Lists matched; pass list_id to read one." if lists else ""
+            return _result(status="read", lists=lists, error=multiple)
 
         clamped = max(1, min(int(limit or DEFAULT_ITEM_LIMIT), MAX_ITEM_LIMIT))
         items, error, truncated = fetch_slack_list_items(
-            target,
-            list_id=resolved_id,
-            limit=clamped,
-            include_archived=bool(include_archived),
+            target, list_id=resolved_id, limit=clamped, include_archived=bool(include_archived)
         )
         if items is None:
-            return _result(
-                status="failed",
-                list_id=resolved_id,
-                list_title=list_title,
-                lists=lists,
-                error=error,
-                error_type="api_error",
-            )
-        return _result(
-            status="read",
-            list_id=resolved_id,
-            list_title=list_title,
-            lists=lists,
-            items=items,
-            truncated=truncated,
-        )
+            return _result(status="failed", **identity, error=error, error_type="api_error")
+        return _result(status="read", **identity, items=items, truncated=truncated)
 
     def _resolve_list_id(
         self,
@@ -204,38 +204,30 @@ class SlackReadListTool(BaseTool):
         *,
         list_id: str,
         name_query: str,
-    ) -> tuple[str, str, list[dict[str, str]], str]:
+    ) -> _ListResolution:
         explicit = _extract_list_id(list_id)
         if list_id.strip() and not explicit:
-            return "", "", [], "list_id must be a Slack List id (F…) or List URL."
+            return _unresolved("list_id must be a Slack List id (F…) or List URL.")
         if explicit:
-            return explicit, "", [], ""
+            return _resolved(explicit)
 
-        env_default = str(os.environ.get("SLACK_TEAM_TASKS_LIST_ID") or "").strip()
-        env_id = _extract_list_id(env_default)
+        env_id = _extract_list_id(str(os.environ.get("SLACK_TEAM_TASKS_LIST_ID") or "").strip())
         query = str(name_query or "").strip()
         if not query and env_id:
-            return env_id, "", [], ""
-        if not query:
-            query = "team tasks"
+            return _resolved(env_id)
+        query = query or "team tasks"
 
         found, err = find_slack_lists(target, name_query=query, limit=10)
         if found is None:
-            return "", "", [], err
+            return _unresolved(err)
         if not found:
-            return (
-                "",
-                "",
-                [],
-                (
-                    f"No Slack Lists matched {query!r}. Pass list_id (F…) from the "
-                    "List URL, or set SLACK_TEAM_TASKS_LIST_ID."
-                ),
+            return _unresolved(
+                f"No Slack Lists matched {query!r}. Pass list_id (F…) from the "
+                "List URL, or set SLACK_TEAM_TASKS_LIST_ID."
             )
         if len(found) == 1:
-            only = found[0]
-            return only["list_id"], only.get("title") or only.get("name") or "", found, ""
-        # Prefer an exact title match (case-insensitive) when several hit.
+            return _matched(found[0], found)
+        # Prefer an exact title/name match (case-insensitive) when several hit.
         exact = [
             row
             for row in found
@@ -243,9 +235,8 @@ class SlackReadListTool(BaseTool):
             or query.lower() == (row.get("name") or "").lower()
         ]
         if len(exact) == 1:
-            only = exact[0]
-            return only["list_id"], only.get("title") or only.get("name") or "", found, ""
-        return "", "", found, ""
+            return _matched(exact[0], found)
+        return _unresolved("", candidates=found)
 
 
 def _extract_list_id(raw: str) -> str:
@@ -253,9 +244,9 @@ def _extract_list_id(raw: str) -> str:
     if not text:
         return ""
     upper = text.upper()
-    if _LIST_ID_RE.match(upper):
+    if _SLACK_LIST_ID_RE.match(upper):
         return upper
-    match = _LIST_URL_ID_RE.search(upper)
+    match = _SLACK_LIST_ID_IN_URL_RE.search(upper)
     if match:
         return match.group(1)
     return ""

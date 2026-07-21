@@ -31,7 +31,8 @@ _MAX_TEXT_CHARS_PER_MESSAGE = 2_000
 _MAX_LIST_DISCOVERY_PAGES = 5
 _MAX_LIST_ITEM_PAGES = 5
 _MAX_LIST_ITEMS = 100
-_LIST_ID_RE = re.compile(r"^F[A-Z0-9]{5,}$")
+# A Slack List id is a file id: the letter "F" then 5+ alphanumerics (e.g. "F0123ABCD").
+_SLACK_LIST_ID_RE = re.compile(r"^F[A-Z0-9]{5,}$")
 
 # Slack channel/DM/group IDs look like C0123ABCD — not bare names like "devs".
 _CHANNEL_ID_RE = re.compile(r"^[CDG][A-Z0-9]{8,}$")
@@ -559,7 +560,7 @@ def fetch_slack_list_items(
     lid = str(list_id or "").strip().upper()
     if not lid:
         return None, "list_id cannot be empty.", False
-    if not _LIST_ID_RE.match(lid):
+    if not _SLACK_LIST_ID_RE.match(lid):
         return None, "list_id must be a Slack List id (F…).", False
 
     want = max(1, min(int(limit), _MAX_LIST_ITEMS))

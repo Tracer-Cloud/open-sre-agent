@@ -105,29 +105,36 @@ def parse_events_api_payload(payload: Mapping[str, Any]) -> SlackInboundMessage 
 
 
 def _parse_files(raw_files: Any) -> tuple[SlackInboundFile, ...]:
-    """Keep file objects that have an id (url optional — download can use files.info)."""
+    """Parse Slack's ``files`` array, keeping only entries with an id."""
     if not isinstance(raw_files, Sequence) or isinstance(raw_files, (str, bytes)):
         return ()
-    out: list[SlackInboundFile] = []
-    for item in raw_files:
-        if not isinstance(item, Mapping):
-            continue
-        file_id = str(item.get("id") or "").strip()
-        if not file_id:
-            continue
-        try:
-            size = int(item.get("size") or 0)
-        except (TypeError, ValueError):
-            size = 0
-        if size < 0:
-            size = 0
-        out.append(
-            SlackInboundFile(
-                id=file_id,
-                name=str(item.get("name") or item.get("title") or file_id),
-                mimetype=str(item.get("mimetype") or "application/octet-stream"),
-                size=size,
-                url_private=str(item.get("url_private") or item.get("url_private_download") or ""),
-            )
-        )
-    return tuple(out)
+    parsed = (_parse_file(item) for item in raw_files)
+    return tuple(file for file in parsed if file is not None)
+
+
+def _parse_file(item: Any) -> SlackInboundFile | None:
+    """Build one inbound file from a raw Slack file dict, or ``None`` if it has no id.
+
+    ``url_private`` is optional — a download can fall back to ``files.info``.
+    """
+    if not isinstance(item, Mapping):
+        return None
+    file_id = str(item.get("id") or "").strip()
+    if not file_id:
+        return None
+    return SlackInboundFile(
+        id=file_id,
+        name=str(item.get("name") or item.get("title") or file_id),
+        mimetype=str(item.get("mimetype") or "application/octet-stream"),
+        size=_parse_size(item.get("size")),
+        url_private=str(item.get("url_private") or item.get("url_private_download") or ""),
+    )
+
+
+def _parse_size(raw_size: Any) -> int:
+    """Coerce a raw file size to a non-negative int (0 when missing or invalid)."""
+    try:
+        size = int(raw_size or 0)
+    except (TypeError, ValueError):
+        return 0
+    return max(size, 0)

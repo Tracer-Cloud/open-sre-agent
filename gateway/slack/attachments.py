@@ -133,6 +133,49 @@ def download_file(file: SlackInboundFile, token: str) -> bytes | None:
         return None
 
 
+def _budgeted_section(header: str, raw_text: str, remaining: int) -> tuple[str, int]:
+    """Scrub and truncate ``raw_text`` to the remaining budget under ``header``.
+
+    Returns the rendered section and the character count it consumed.
+    """
+    body = _scrub_secrets(raw_text)[:remaining]
+    return f"{header}\n{body}", len(body)
+
+
+def _render_file(
+    file: SlackInboundFile,
+    token: str,
+    remaining: int,
+    *,
+    downloader: Downloader,
+    describer: Describer,
+) -> tuple[str, int]:
+    """Render one attachment as a prompt section plus the characters it consumed.
+
+    Unreadable files and every failure path render as a one-line note that costs
+    no budget; text files and described images render their scrubbed body against
+    ``remaining``.
+    """
+    label = file.name or file.id
+    readable_text = is_text_file(file)
+    image = is_supported_image(file.mimetype)
+    if not (readable_text or image):
+        return f"- {label} ({file.mimetype or 'binary'}) — not readable", 0
+    if remaining <= 0:
+        return f"- {label} — omitted (attachment budget exhausted)", 0
+    data = downloader(file, token)
+    if data is None:
+        return f"- {label} — could not be downloaded", 0
+    if readable_text:
+        header = f"--- attached file: {label} ---"
+        return _budgeted_section(header, extract_text(file, data) or "", remaining)
+    description = describer(data, file.mimetype)
+    if not description:
+        return f"- {label} ({file.mimetype}) — image could not be described", 0
+    header = f"--- image: {label} (vision description) ---"
+    return _budgeted_section(header, description, remaining)
+
+
 def build_files_context(
     files: tuple[SlackInboundFile, ...],
     token: str,
@@ -152,29 +195,9 @@ def build_files_context(
     sections: list[str] = []
     remaining = _MAX_TOTAL_CHARS
     for file in files:
-        label = file.name or file.id
-        readable_text = is_text_file(file)
-        image = is_supported_image(file.mimetype)
-        if not (readable_text or image):
-            sections.append(f"- {label} ({file.mimetype or 'binary'}) — not readable")
-            continue
-        if remaining <= 0:
-            sections.append(f"- {label} — omitted (attachment budget exhausted)")
-            continue
-        data = downloader(file, token)
-        if data is None:
-            sections.append(f"- {label} — could not be downloaded")
-            continue
-        if readable_text:
-            body = _scrub_secrets(extract_text(file, data) or "")[:remaining]
-            remaining -= len(body)
-            sections.append(f"--- attached file: {label} ---\n{body}")
-            continue
-        description = describer(data, file.mimetype)
-        if not description:
-            sections.append(f"- {label} ({file.mimetype}) — image could not be described")
-            continue
-        body = _scrub_secrets(description)[:remaining]
-        remaining -= len(body)
-        sections.append(f"--- image: {label} (vision description) ---\n{body}")
+        section, consumed = _render_file(
+            file, token, remaining, downloader=downloader, describer=describer
+        )
+        remaining -= consumed
+        sections.append(section)
     return "Attached files:\n" + "\n".join(sections)
