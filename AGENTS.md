@@ -24,6 +24,40 @@
 - Do not keep compatibility-only forwarding modules after refactors. Once imports and tests
   are migrated, remove the old module path in the same change and use one canonical import path.
 
+### Docs under `docs/`
+
+`docs/` is **user-facing**. Write for someone configuring the product, not for
+someone who has read the diff. Ask of every sentence: *does this change what the
+reader does?* If not, cut it.
+
+Leave out:
+
+- **Vendor API endpoints and internal function names.** "The token is checked
+  against `getMe`" / "saved via `upsert_integration(...)`" — the reader calls
+  neither.
+- **Where a value is stored internally**, unless they must set it themselves.
+  Keyring vs `.env` vs the integration store is our problem, not theirs.
+- **The bug a change fixed**, and the mechanism behind it. That belongs in the PR
+  description and the module docstring.
+- **Restating what a code block already shows.**
+
+Keep:
+
+- **What is required vs optional**, and what happens when something is skipped.
+- **Shortcuts that save real work** ("a public channel's `@name` works, so you can
+  skip finding the numeric id").
+- **Gotchas that are invisible until they bite** ("the bot must be an admin to
+  post").
+- Exact commands, env-var names, and values the reader types or sets.
+
+Say it in the reader's terms: "a chat the bot was never added to fails during
+setup", not "`getChat` returns `ok: false`".
+
+Deep technical detail still gets written down — in the module docstring, the PR
+description, or a page under `docs/` explicitly aimed at contributors (e.g.
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)). It just does not belong on a
+setup page.
+
 ### Performance (algorithms & data structures)
 
 Apply on the **hot path** (per-request / per-iteration / per-tool-call); leave cold
