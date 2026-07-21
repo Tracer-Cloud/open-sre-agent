@@ -7,7 +7,6 @@ import types
 import pytest
 
 import integrations.telegram.chat_lookup as chat_lookup
-from integrations.telegram.chat_lookup import resolve_chat_id
 
 _TOKEN = "123456:SECRET-TOKEN-ABC"
 
@@ -34,7 +33,9 @@ def test_channel_username_resolves_to_the_numeric_id(monkeypatch: pytest.MonkeyP
         },
     )
 
-    numeric_id, description, error = resolve_chat_id(bot_token=_TOKEN, chat_id="@acme_alerts")
+    numeric_id, description, error = chat_lookup.resolve_chat_id(
+        bot_token=_TOKEN, chat_id="@acme_alerts"
+    )
 
     assert error == ""
     assert numeric_id == "-1001234567890"
@@ -48,7 +49,9 @@ def test_numeric_id_is_accepted_and_confirmed(monkeypatch: pytest.MonkeyPatch) -
         {"ok": True, "result": {"id": -100999, "title": "SRE On-call", "type": "supergroup"}},
     )
 
-    numeric_id, description, error = resolve_chat_id(bot_token=_TOKEN, chat_id=" -100999 ")
+    numeric_id, description, error = chat_lookup.resolve_chat_id(
+        bot_token=_TOKEN, chat_id=" -100999 "
+    )
 
     assert error == ""
     assert numeric_id == "-100999"
@@ -65,7 +68,7 @@ def test_direct_message_falls_back_to_the_account_name(monkeypatch: pytest.Monke
         },
     )
 
-    _, description, error = resolve_chat_id(bot_token=_TOKEN, chat_id="555")
+    _, description, error = chat_lookup.resolve_chat_id(bot_token=_TOKEN, chat_id="555")
 
     assert error == ""
     assert description == "Priya B (private)"
@@ -75,7 +78,7 @@ def test_unreachable_chat_is_an_error_not_a_silent_pass(monkeypatch: pytest.Monk
     """The failure this check exists for: bot was never added to the channel."""
     _respond(monkeypatch, {"ok": False, "description": "chat not found"})
 
-    numeric_id, _, error = resolve_chat_id(bot_token=_TOKEN, chat_id="@typo_channel")
+    numeric_id, _, error = chat_lookup.resolve_chat_id(bot_token=_TOKEN, chat_id="@typo_channel")
 
     assert numeric_id == ""
     assert "@typo_channel" in error
@@ -83,7 +86,7 @@ def test_unreachable_chat_is_an_error_not_a_silent_pass(monkeypatch: pytest.Monk
 
 
 def test_blank_reference_is_rejected_without_calling_the_api() -> None:
-    numeric_id, _, error = resolve_chat_id(bot_token=_TOKEN, chat_id="   ")
+    numeric_id, _, error = chat_lookup.resolve_chat_id(bot_token=_TOKEN, chat_id="   ")
 
     assert numeric_id == ""
     assert "Missing chat id" in error
@@ -95,7 +98,7 @@ def test_transport_error_never_echoes_the_bot_token(monkeypatch: pytest.MonkeyPa
 
     monkeypatch.setattr(chat_lookup.requests, "get", _boom)
 
-    _, _, error = resolve_chat_id(bot_token=_TOKEN, chat_id="@acme_alerts")
+    _, _, error = chat_lookup.resolve_chat_id(bot_token=_TOKEN, chat_id="@acme_alerts")
 
     assert _TOKEN not in error
     assert "<redacted>" in error

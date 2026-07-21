@@ -15,7 +15,6 @@ import types
 import pytest
 
 import integrations.telegram.verifier as verifier_module
-from integrations.telegram.verifier import verify_telegram
 
 _TOKEN = "123456:SECRET-TOKEN-ABC"
 
@@ -41,14 +40,14 @@ def _raise(monkeypatch: pytest.MonkeyPatch, error: Exception) -> None:
 def test_reports_the_bot_username_on_success(monkeypatch: pytest.MonkeyPatch) -> None:
     _respond(monkeypatch, {"ok": True, "result": {"username": "opensre_bot"}})
 
-    result = verify_telegram("setup", {"bot_token": _TOKEN})
+    result = verifier_module.verify_telegram("setup", {"bot_token": _TOKEN})
 
     assert result["status"] == "passed"
     assert "opensre_bot" in result["detail"]
 
 
 def test_missing_token_is_reported_without_calling_the_api() -> None:
-    result = verify_telegram("setup", {"bot_token": "   "})
+    result = verifier_module.verify_telegram("setup", {"bot_token": "   "})
 
     assert result["status"] == "missing"
     assert "missing" in result["detail"].lower()
@@ -57,7 +56,7 @@ def test_missing_token_is_reported_without_calling_the_api() -> None:
 def test_api_level_rejection_surfaces_the_description(monkeypatch: pytest.MonkeyPatch) -> None:
     _respond(monkeypatch, {"ok": False, "description": "Unauthorized"})
 
-    result = verify_telegram("setup", {"bot_token": "bad-token"})
+    result = verifier_module.verify_telegram("setup", {"bot_token": "bad-token"})
 
     assert result["status"] == "failed"
     assert "unauthorized" in result["detail"].lower()
@@ -66,7 +65,7 @@ def test_api_level_rejection_surfaces_the_description(monkeypatch: pytest.Monkey
 def test_network_error_is_reported_as_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     _raise(monkeypatch, ConnectionError("connection refused"))
 
-    result = verify_telegram("setup", {"bot_token": _TOKEN})
+    result = verifier_module.verify_telegram("setup", {"bot_token": _TOKEN})
 
     assert result["status"] == "failed"
     assert "connection refused" in result["detail"]
@@ -79,7 +78,7 @@ def test_network_error_never_echoes_the_bot_token(monkeypatch: pytest.MonkeyPatc
         ConnectionError(f"HTTPSConnectionPool: url: https://api.telegram.org/bot{_TOKEN}/getMe"),
     )
 
-    result = verify_telegram("setup", {"bot_token": _TOKEN})
+    result = verifier_module.verify_telegram("setup", {"bot_token": _TOKEN})
 
     assert result["status"] == "failed"
     assert _TOKEN not in result["detail"]

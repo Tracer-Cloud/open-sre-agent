@@ -17,19 +17,15 @@ from typing import Any
 import pytest
 
 import integrations.setup_flow as setup_flow
-from integrations.setup_flow import (
-    IntegrationSetupSpec,
-    ResolvedCredentials,
-    SetupField,
-    apply_setup,
-)
 
 _ENV_PATH = Path("/tmp/opensre-test/.env")
 
 _FIELDS = (
-    SetupField(name="api_token", label="Demo API token", env_var="DEMO_API_TOKEN", secret=True),
-    SetupField(name="room", label="Demo room", env_var="DEMO_ROOM"),
-    SetupField(name="note", label="Demo note", required=False),
+    setup_flow.SetupField(
+        name="api_token", label="Demo API token", env_var="DEMO_API_TOKEN", secret=True
+    ),
+    setup_flow.SetupField(name="room", label="Demo room", env_var="DEMO_ROOM"),
+    setup_flow.SetupField(name="note", label="Demo note", required=False),
 )
 
 
@@ -37,7 +33,7 @@ def _passing(_source: str, _config: dict[str, str]) -> dict[str, str]:
     return {"status": "passed", "detail": "Demo connected."}
 
 
-_SPEC = IntegrationSetupSpec(service="demo", fields=_FIELDS, verify=_passing)
+_SPEC = setup_flow.IntegrationSetupSpec(service="demo", fields=_FIELDS, verify=_passing)
 
 
 class _Recorder:
@@ -74,7 +70,7 @@ def recorder(monkeypatch: pytest.MonkeyPatch) -> _Recorder:
 
 
 def test_success_writes_store_keyring_and_env(recorder: _Recorder) -> None:
-    outcome = apply_setup(_SPEC, {"api_token": "tok-1", "room": "ops", "note": "hi"})
+    outcome = setup_flow.apply_setup(_SPEC, {"api_token": "tok-1", "room": "ops", "note": "hi"})
 
     assert outcome.ok is True
     assert outcome.env_path == _ENV_PATH
@@ -88,7 +84,7 @@ def test_success_writes_store_keyring_and_env(recorder: _Recorder) -> None:
 
 
 def test_missing_required_field_fails_before_any_write(recorder: _Recorder) -> None:
-    outcome = apply_setup(_SPEC, {"api_token": "tok-1", "room": "  "})
+    outcome = setup_flow.apply_setup(_SPEC, {"api_token": "tok-1", "room": "  "})
 
     assert outcome.ok is False
     assert outcome.detail == "Demo room is required."
@@ -96,7 +92,7 @@ def test_missing_required_field_fails_before_any_write(recorder: _Recorder) -> N
 
 
 def test_optional_field_left_blank_is_stored_as_none(recorder: _Recorder) -> None:
-    apply_setup(_SPEC, {"api_token": "tok-1", "room": "ops"})
+    setup_flow.apply_setup(_SPEC, {"api_token": "tok-1", "room": "ops"})
 
     assert recorder.saved[0][1]["credentials"]["note"] is None
 
@@ -107,7 +103,7 @@ def test_failed_verification_persists_nothing(recorder: _Recorder) -> None:
 
     spec = dataclasses.replace(_SPEC, verify=_rejecting)
 
-    outcome = apply_setup(spec, {"api_token": "bad", "room": "ops"})
+    outcome = setup_flow.apply_setup(spec, {"api_token": "bad", "room": "ops"})
 
     assert outcome.ok is False
     assert outcome.detail == "Demo rejected the token."
@@ -117,12 +113,12 @@ def test_failed_verification_persists_nothing(recorder: _Recorder) -> None:
 def test_resolve_step_rewrites_credentials_before_they_are_stored(recorder: _Recorder) -> None:
     spec = dataclasses.replace(
         _SPEC,
-        resolve=lambda creds: ResolvedCredentials(
+        resolve=lambda creds: setup_flow.ResolvedCredentials(
             credentials={**creds, "room": "-100999"}, note="Delivering to Ops (channel)."
         ),
     )
 
-    outcome = apply_setup(spec, {"api_token": "tok-1", "room": "@ops"})
+    outcome = setup_flow.apply_setup(spec, {"api_token": "tok-1", "room": "@ops"})
 
     assert outcome.ok is True
     assert outcome.detail == "Demo connected. Delivering to Ops (channel)."
@@ -134,10 +130,12 @@ def test_resolve_step_rewrites_credentials_before_they_are_stored(recorder: _Rec
 def test_resolve_failure_aborts_setup(recorder: _Recorder) -> None:
     spec = dataclasses.replace(
         _SPEC,
-        resolve=lambda _creds: ResolvedCredentials(credentials={}, error="Cannot reach @ops."),
+        resolve=lambda _creds: setup_flow.ResolvedCredentials(
+            credentials={}, error="Cannot reach @ops."
+        ),
     )
 
-    outcome = apply_setup(spec, {"api_token": "tok-1", "room": "@ops"})
+    outcome = setup_flow.apply_setup(spec, {"api_token": "tok-1", "room": "@ops"})
 
     assert outcome.ok is False
     assert outcome.detail == "Cannot reach @ops."
@@ -151,26 +149,28 @@ def test_clearing_an_optional_field_clears_every_tier(recorder: _Recorder) -> No
     ``None`` — and credential resolution falls back to the environment when the
     store is empty, so the cleared value would keep resolving.
     """
-    spec = IntegrationSetupSpec(
+    spec = setup_flow.IntegrationSetupSpec(
         service="demo",
         fields=(
-            SetupField(name="api_token", label="Token", env_var="DEMO_API_TOKEN", secret=True),
-            SetupField(name="room", label="Room", env_var="DEMO_ROOM", required=False),
+            setup_flow.SetupField(
+                name="api_token", label="Token", env_var="DEMO_API_TOKEN", secret=True
+            ),
+            setup_flow.SetupField(name="room", label="Room", env_var="DEMO_ROOM", required=False),
         ),
         verify=_passing,
     )
 
-    apply_setup(spec, {"api_token": "tok-1", "room": ""})
+    setup_flow.apply_setup(spec, {"api_token": "tok-1", "room": ""})
 
     assert recorder.saved[0][1]["credentials"]["room"] is None
     assert recorder.env_values == [{"DEMO_ROOM": ""}]
 
 
 def test_clearing_an_optional_secret_clears_the_keyring(recorder: _Recorder) -> None:
-    spec = IntegrationSetupSpec(
+    spec = setup_flow.IntegrationSetupSpec(
         service="demo",
         fields=(
-            SetupField(
+            setup_flow.SetupField(
                 name="api_token",
                 label="Token",
                 env_var="DEMO_API_TOKEN",
@@ -181,7 +181,7 @@ def test_clearing_an_optional_secret_clears_the_keyring(recorder: _Recorder) -> 
         verify=_passing,
     )
 
-    apply_setup(spec, {"api_token": ""})
+    setup_flow.apply_setup(spec, {"api_token": ""})
 
     assert recorder.keyring == [("DEMO_API_TOKEN", "")]
 
@@ -192,7 +192,7 @@ def test_env_is_written_before_the_store(recorder: _Recorder) -> None:
     recorder.on_store = lambda: order.append("store")
     recorder.on_env = lambda: order.append("env")
 
-    apply_setup(_SPEC, {"api_token": "tok-1", "room": "ops"})
+    setup_flow.apply_setup(_SPEC, {"api_token": "tok-1", "room": "ops"})
 
     assert order == ["env", "store"]
 
@@ -207,7 +207,7 @@ def test_unwritable_env_persists_nothing_and_reports_the_failure(
 
     monkeypatch.setattr(setup_flow, "sync_env_values", _boom)
 
-    outcome = apply_setup(_SPEC, {"api_token": "tok-1", "room": "ops"})
+    outcome = setup_flow.apply_setup(_SPEC, {"api_token": "tok-1", "room": "ops"})
 
     assert outcome.ok is False
     assert "permission denied" in outcome.detail
@@ -218,7 +218,7 @@ def test_spec_without_a_verifier_still_configures(recorder: _Recorder) -> None:
     """An integration with nothing to verify against must not be unconfigurable."""
     spec = dataclasses.replace(_SPEC, verify=None)
 
-    outcome = apply_setup(spec, {"api_token": "tok-1", "room": "ops"})
+    outcome = setup_flow.apply_setup(spec, {"api_token": "tok-1", "room": "ops"})
 
     assert outcome.ok is True
     assert outcome.detail == ""

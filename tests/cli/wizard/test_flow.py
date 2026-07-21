@@ -8,7 +8,6 @@ import pytest
 
 import integrations.setup_flow as _setup_flow
 from integrations.llm_cli.codex_oauth import CodexOAuthResult
-from integrations.setup_flow import ResolvedCredentials
 from surfaces.cli.wizard import _ui, flow
 from surfaces.cli.wizard import store as wizard_store
 from surfaces.cli.wizard.configurators import chat_notifications as _chat_notifications_configurator
@@ -37,7 +36,7 @@ def _stub_telegram_setup(monkeypatch: pytest.MonkeyPatch, verify) -> None:
         dataclasses.replace(
             _chat_notifications_configurator.TELEGRAM_SETUP,
             verify=verify,
-            resolve=lambda credentials: ResolvedCredentials(credentials=credentials),
+            resolve=lambda credentials: _setup_flow.ResolvedCredentials(credentials=credentials),
         ),
     )
 

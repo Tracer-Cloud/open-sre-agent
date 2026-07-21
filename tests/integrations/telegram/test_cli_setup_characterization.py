@@ -29,7 +29,6 @@ import pytest
 import integrations.cli as cli
 import integrations.setup_flow as setup_flow
 import integrations.telegram.setup as telegram_setup
-from integrations.setup_flow import ResolvedCredentials
 
 _TOKEN = "123456789:AAExampleSecretTokenValue"
 _CHAT_REFERENCE = "@acme_alerts"
@@ -62,10 +61,10 @@ def telegram(monkeypatch: pytest.MonkeyPatch) -> _Telegram:
         run.verified.append(dict(config))
         return {"status": run.verify_status, "detail": run.verify_detail}
 
-    def _fake_resolve(credentials: dict[str, str | None]) -> ResolvedCredentials:
+    def _fake_resolve(credentials: dict[str, str | None]) -> setup_flow.ResolvedCredentials:
         if run.resolve_error:
-            return ResolvedCredentials(credentials={}, error=run.resolve_error)
-        return ResolvedCredentials(
+            return setup_flow.ResolvedCredentials(credentials={}, error=run.resolve_error)
+        return setup_flow.ResolvedCredentials(
             credentials={**credentials, "default_chat_id": _CHAT_ID}, note=_RESOLVED_NOTE
         )
 
