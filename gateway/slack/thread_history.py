@@ -11,7 +11,7 @@ import logging
 import re
 from typing import Any
 
-from integrations.slack.bot_api import (
+from integrations.slack.web_client import (
     fetch_channel_messages,
     resolve_bot_token,
 )

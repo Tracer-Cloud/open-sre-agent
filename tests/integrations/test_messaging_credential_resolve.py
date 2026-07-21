@@ -101,10 +101,10 @@ def test_slack_webhook_only_still_loads_without_bot_token(
     assert slack["credentials"]["webhook_url"] == "https://hooks.slack.com/services/T/B/X"
 
 
-def test_slack_bot_api_resolves_token_from_keyring(
+def test_slack_web_client_resolves_token_from_keyring(
     monkeypatch: pytest.MonkeyPatch, memory_keyring: MemoryKeyring
 ) -> None:
-    from integrations.slack.bot_api import resolve_bot_token
+    from integrations.slack.web_client import resolve_bot_token
 
     _clear_messaging_env(monkeypatch)
     monkeypatch.setattr(

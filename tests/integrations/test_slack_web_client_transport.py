@@ -1,4 +1,4 @@
-"""Transport-layer tests for integrations.slack.bot_api: retries, rate limits, reuse."""
+"""Transport-layer tests for integrations.slack.web_client: retries, rate limits, reuse."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from typing import Any
 import httpx
 import pytest
 
-import integrations.slack.bot_api as bot_api
+import integrations.slack.web_client as web_client
 
 
 class _FakeResponse:
@@ -47,18 +47,18 @@ class _FakeClient:
 
 @pytest.fixture
 def no_sleep(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(bot_api.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(web_client.time, "sleep", lambda _s: None)
 
 
 def _install(monkeypatch: pytest.MonkeyPatch, script: list[Any]) -> _FakeClient:
     client = _FakeClient(script)
-    monkeypatch.setattr(bot_api, "_shared_client", lambda: client)
+    monkeypatch.setattr(web_client, "_shared_client", lambda: client)
     return client
 
 
 def test_success_returns_payload(monkeypatch: pytest.MonkeyPatch) -> None:
     _install(monkeypatch, [_FakeResponse(200, {"ok": True, "x": 1})])
-    payload, err = bot_api._request_json("GET", "auth.test", "xoxb-x")
+    payload, err = web_client._request_json("GET", "auth.test", "xoxb-x")
     assert err == "" and payload == {"ok": True, "x": 1}
 
 
@@ -67,7 +67,7 @@ def test_rate_limit_retries_then_succeeds(monkeypatch: pytest.MonkeyPatch, no_sl
         monkeypatch,
         [_FakeResponse(429, headers={"Retry-After": "0"}), _FakeResponse(200, {"ok": True})],
     )
-    payload, err = bot_api._request_json("GET", "conversations.list", "xoxb-x")
+    payload, err = web_client._request_json("GET", "conversations.list", "xoxb-x")
     assert err == "" and payload == {"ok": True}
     assert len(client.calls) == 2
 
@@ -76,7 +76,7 @@ def test_rate_limit_exhausted_reports_specific_error(
     monkeypatch: pytest.MonkeyPatch, no_sleep: None
 ) -> None:
     _install(monkeypatch, [_FakeResponse(429, headers={"Retry-After": "0"})] * 3)
-    payload, err = bot_api._request_json("GET", "users.list", "xoxb-x")
+    payload, err = web_client._request_json("GET", "users.list", "xoxb-x")
     assert payload is None
     assert "rate-limited" in err
 
@@ -85,23 +85,23 @@ def test_timeout_retries_then_gives_specific_error(
     monkeypatch: pytest.MonkeyPatch, no_sleep: None
 ) -> None:
     _install(monkeypatch, [httpx.TimeoutException("t")] * 3)
-    payload, err = bot_api._request_json("GET", "conversations.history", "xoxb-x")
+    payload, err = web_client._request_json("GET", "conversations.history", "xoxb-x")
     assert payload is None
     assert "timed out" in err
 
 
 def test_client_error_is_not_retried(monkeypatch: pytest.MonkeyPatch) -> None:
     client = _install(monkeypatch, [_FakeResponse(403)])
-    payload, err = bot_api._request_json("POST", "chat.postMessage", "xoxb-x")
+    payload, err = web_client._request_json("POST", "chat.postMessage", "xoxb-x")
     assert payload is None
     assert "HTTP 403" in err
     assert len(client.calls) == 1
 
 
 def test_shared_client_is_reused(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(bot_api, "_client", None)
-    first = bot_api._shared_client()
-    second = bot_api._shared_client()
+    monkeypatch.setattr(web_client, "_client", None)
+    first = web_client._shared_client()
+    second = web_client._shared_client()
     assert first is second
 
 
@@ -116,9 +116,9 @@ def test_thread_too_long_returns_error_not_stale(monkeypatch: pytest.MonkeyPatch
             "response_metadata": {"next_cursor": "more"},
         },
     )
-    _install(monkeypatch, [page] * (bot_api._MAX_THREAD_PAGES + 2))
-    messages, error = bot_api._fetch_thread_replies(
-        bot_api.SlackBotTarget(bot_token="xoxb-x"), channel_id="C1", parent="1.0", limit=50
+    _install(monkeypatch, [page] * (web_client._MAX_THREAD_PAGES + 2))
+    messages, error = web_client._fetch_thread_replies(
+        web_client.SlackBotTarget(bot_token="xoxb-x"), channel_id="C1", parent="1.0", limit=50
     )
     assert messages is None
     assert "too long" in error

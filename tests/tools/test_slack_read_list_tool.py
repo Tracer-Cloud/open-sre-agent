@@ -6,8 +6,8 @@ from typing import Any
 
 import pytest
 
-from integrations.slack.bot_api import SlackBotTarget
 from integrations.slack.tools.slack_read_list_tool.tool import SlackReadListTool
+from integrations.slack.web_client import SlackBotTarget
 
 
 @pytest.fixture

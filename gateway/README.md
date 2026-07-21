@@ -57,7 +57,7 @@ Three things that are easy to mix up:
 - **Gateway** — one specific surface: the always-on process that connects a chat app
   to the agent. It speaks **Telegram** (long poll) and **Slack** (Socket Mode).
 - **Integrations + tools** — the *outbound* / teammate side: the agent reading and
-  posting in Slack. Shared client: `integrations/slack/bot_api.py`. Tools:
+  posting in Slack. Shared client: `integrations/slack/web_client.py`. Tools:
   `slack_send_message` (webhook), `slack_reply_message` (bot token, any channel),
   `slack_read_messages` (history / thread), `slack_list_team_members` (roster).
   See `docs/messaging/slack.mdx` for OAuth scopes.

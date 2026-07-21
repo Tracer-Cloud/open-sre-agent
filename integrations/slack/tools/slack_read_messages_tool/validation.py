@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from integrations.slack.bot_api import normalize_channel_ref
 from integrations.slack.tools.slack_read_messages_tool.constants import (
     DEFAULT_MESSAGE_LIMIT,
     MAX_MESSAGE_LIMIT,
 )
+from integrations.slack.web_client import normalize_channel_ref
 
 
 def validate_channel_id(channel_id: str) -> tuple[bool, str, str]:

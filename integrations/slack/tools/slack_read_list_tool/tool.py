@@ -9,16 +9,16 @@ from typing import Any
 from core.tool_framework.base import BaseTool
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.tool_availability import tool_unavailable
-from integrations.slack.bot_api import (
-    bot_token_configured,
-    fetch_slack_list_items,
-    find_slack_lists,
-    resolve_bot_token,
-)
 from integrations.slack.tools.slack_read_list_tool.constants import (
     DEFAULT_ITEM_LIMIT,
     MAX_ITEM_LIMIT,
     SOURCE,
+)
+from integrations.slack.web_client import (
+    bot_token_configured,
+    fetch_slack_list_items,
+    find_slack_lists,
+    resolve_bot_token,
 )
 
 _LIST_ID_RE = re.compile(r"^F[A-Z0-9]{5,}$", re.IGNORECASE)

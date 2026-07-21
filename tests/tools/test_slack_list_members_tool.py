@@ -6,11 +6,11 @@ from typing import Any
 
 import pytest
 
-from integrations.slack.bot_api import SlackBotTarget, fetch_team_members
 from integrations.slack.tools.slack_list_members_tool import (
     SlackListTeamMembersTool,
     slack_list_team_members,
 )
+from integrations.slack.web_client import SlackBotTarget, fetch_team_members
 
 
 class _FakeResponse:
@@ -38,7 +38,9 @@ class _FakeClient:
 
 
 def _install_fake_client(monkeypatch: Any, responder: Any) -> None:
-    monkeypatch.setattr("integrations.slack.bot_api._shared_client", lambda: _FakeClient(responder))
+    monkeypatch.setattr(
+        "integrations.slack.web_client._shared_client", lambda: _FakeClient(responder)
+    )
 
 
 def test_metadata_is_read_only_without_approval() -> None:
@@ -153,7 +155,7 @@ def test_is_available_falls_back_to_store_when_sources_empty(
 ) -> None:
     monkeypatch.delenv("SLACK_BOT_TOKEN", raising=False)
     monkeypatch.setattr(
-        "integrations.slack.bot_api.resolve_bot_token",
+        "integrations.slack.web_client.resolve_bot_token",
         lambda: (SlackBotTarget(bot_token="xoxb-from-store"), ""),
     )
     assert SlackListTeamMembersTool().is_available({}) is True

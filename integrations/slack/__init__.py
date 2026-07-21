@@ -5,7 +5,8 @@ Outbound delivery and bot-token Web API helpers for agent tools.
 
 from __future__ import annotations
 
-from integrations.slack.bot_api import (
+from integrations.slack.classify import classify
+from integrations.slack.web_client import (
     SlackBotTarget,
     add_reaction,
     bot_token_configured,
@@ -19,7 +20,6 @@ from integrations.slack.bot_api import (
     resolve_channel_id,
     search_messages,
 )
-from integrations.slack.classify import classify
 
 __all__ = [
     "SlackBotTarget",

@@ -400,7 +400,7 @@ def _slack_files_context(files: tuple[SlackInboundFile, ...], logger: logging.Lo
     fail-safe — a missing token drops attachments rather than failing the turn).
     """
     from gateway.slack.attachments import build_files_context
-    from integrations.slack.bot_api import resolve_bot_token
+    from integrations.slack.web_client import resolve_bot_token
 
     target, detail = resolve_bot_token()
     if target is None:

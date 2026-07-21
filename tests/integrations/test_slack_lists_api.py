@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-import integrations.slack.bot_api as bot_api
+import integrations.slack.web_client as web_client
 
 
 class _FakeResponse:
@@ -40,18 +40,18 @@ class _FakeClient:
 
 
 @pytest.fixture
-def target() -> bot_api.SlackBotTarget:
-    return bot_api.SlackBotTarget(bot_token="xoxb-test")
+def target() -> web_client.SlackBotTarget:
+    return web_client.SlackBotTarget(bot_token="xoxb-test")
 
 
 def _install(monkeypatch: pytest.MonkeyPatch, script: list[Any]) -> _FakeClient:
     client = _FakeClient(script)
-    monkeypatch.setattr(bot_api, "_shared_client", lambda: client)
+    monkeypatch.setattr(web_client, "_shared_client", lambda: client)
     return client
 
 
 def test_find_slack_lists_filters_filetype_list_and_name(
-    monkeypatch: pytest.MonkeyPatch, target: bot_api.SlackBotTarget
+    monkeypatch: pytest.MonkeyPatch, target: web_client.SlackBotTarget
 ) -> None:
     _install(
         monkeypatch,
@@ -87,7 +87,7 @@ def test_find_slack_lists_filters_filetype_list_and_name(
         ],
     )
 
-    found, err = bot_api.find_slack_lists(target, name_query="team tasks", limit=10)
+    found, err = web_client.find_slack_lists(target, name_query="team tasks", limit=10)
 
     assert err == ""
     assert found == [
@@ -101,18 +101,18 @@ def test_find_slack_lists_filters_filetype_list_and_name(
 
 
 def test_find_slack_lists_missing_scope_hint(
-    monkeypatch: pytest.MonkeyPatch, target: bot_api.SlackBotTarget
+    monkeypatch: pytest.MonkeyPatch, target: web_client.SlackBotTarget
 ) -> None:
     _install(monkeypatch, [_FakeResponse(200, {"ok": False, "error": "missing_scope"})])
 
-    found, err = bot_api.find_slack_lists(target, name_query="tasks")
+    found, err = web_client.find_slack_lists(target, name_query="tasks")
 
     assert found is None
     assert "files:read" in err
 
 
 def test_fetch_slack_list_items_normalizes_rows(
-    monkeypatch: pytest.MonkeyPatch, target: bot_api.SlackBotTarget
+    monkeypatch: pytest.MonkeyPatch, target: web_client.SlackBotTarget
 ) -> None:
     _install(
         monkeypatch,
@@ -156,7 +156,7 @@ def test_fetch_slack_list_items_normalizes_rows(
         ],
     )
 
-    items, err = bot_api.fetch_slack_list_items(target, list_id="FTASKS123", limit=10)
+    items, err = web_client.fetch_slack_list_items(target, list_id="FTASKS123", limit=10)
 
     assert err == ""
     assert items is not None
@@ -169,25 +169,25 @@ def test_fetch_slack_list_items_normalizes_rows(
     assert row["due_date"] == "2026-07-20"
 
 
-def test_fetch_slack_list_items_rejects_bad_id(target: bot_api.SlackBotTarget) -> None:
-    items, err = bot_api.fetch_slack_list_items(target, list_id="C12345678")
+def test_fetch_slack_list_items_rejects_bad_id(target: web_client.SlackBotTarget) -> None:
+    items, err = web_client.fetch_slack_list_items(target, list_id="C12345678")
     assert items is None
     assert "F…" in err or "F..." in err or "F" in err
 
 
 def test_fetch_slack_list_items_missing_lists_scope(
-    monkeypatch: pytest.MonkeyPatch, target: bot_api.SlackBotTarget
+    monkeypatch: pytest.MonkeyPatch, target: web_client.SlackBotTarget
 ) -> None:
     _install(monkeypatch, [_FakeResponse(200, {"ok": False, "error": "missing_scope"})])
 
-    items, err = bot_api.fetch_slack_list_items(target, list_id="FABCDEFGH1")
+    items, err = web_client.fetch_slack_list_items(target, list_id="FABCDEFGH1")
 
     assert items is None
     assert "lists:read" in err
 
 
 def test_fetch_slack_list_items_uppercases_lowercase_list_id(
-    monkeypatch: pytest.MonkeyPatch, target: bot_api.SlackBotTarget
+    monkeypatch: pytest.MonkeyPatch, target: web_client.SlackBotTarget
 ) -> None:
     # Arrange: a structurally valid but lowercase id must be accepted (uppercased),
     # not rejected with the "must be a Slack List id" error.
@@ -197,7 +197,7 @@ def test_fetch_slack_list_items_uppercases_lowercase_list_id(
     )
 
     # Act
-    items, err = bot_api.fetch_slack_list_items(target, list_id="ftasks123")
+    items, err = web_client.fetch_slack_list_items(target, list_id="ftasks123")
 
     # Assert: the call proceeded and sent the uppercased id.
     assert err == ""
