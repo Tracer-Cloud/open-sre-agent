@@ -26,7 +26,7 @@ from surfaces.cli.wizard.integration_validators.shared import IntegrationHealthR
 
 _TOKEN = "123456789:AAExampleSecretTokenValue"
 _CHAT_ID = "-1001234567890"
-_ENV_PATH = Path("/tmp/opensre-test/.env")
+_ENV_PATH = Path("sentinel.env")
 
 
 class _RecordingConsole:

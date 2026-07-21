@@ -542,6 +542,25 @@ def test_sync_env_values_rejects_sensitive_keys(tmp_path) -> None:
         sync_env_values({"GITLAB_ACCESS_TOKEN": "secret"}, env_path=env_path)
 
 
+def test_set_env_value_rejects_sensitive_keys_with_value_error() -> None:
+    from config.env_file import set_env_value
+
+    with pytest.raises(ValueError, match="sync_env_secret"):
+        set_env_value(["FOO=bar\n"], "GITLAB_ACCESS_TOKEN", "secret")
+
+
+def test_sync_env_secret_raises_when_keyring_unavailable(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "config.env_file.save_keyring_secret",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            RuntimeError("Secure local credential storage is unavailable on this machine.")
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="Failed to persist.*system keyring"):
+        sync_env_secret("GITLAB_ACCESS_TOKEN", "gl-secret-token")
+
+
 def test_sync_env_values_routes_secrets_to_keyring(tmp_path, monkeypatch) -> None:
     monkeypatch.delenv("GITLAB_ACCESS_TOKEN", raising=False)
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)

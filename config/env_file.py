@@ -139,7 +139,7 @@ def _persist_env_secret(key: str, value: str) -> bool:
 def set_env_value(lines: list[str], key: str, value: str) -> list[str]:
     """Return ``lines`` with ``key`` assigned to ``value`` (appended when absent)."""
     if is_sensitive_env_key(key):
-        raise RuntimeError(
+        raise ValueError(
             f"Refusing to write sensitive env key {key!r} to .env; use sync_env_secret()."
         )
     updated: list[str] = []
@@ -183,10 +183,18 @@ def write_env_lines(target_path: Path, lines: list[str]) -> None:
 
 
 def sync_env_secret(key: str, value: str) -> None:
-    """Persist a sensitive env value in the system keyring, not in ``.env``."""
+    """Persist a sensitive env value in the system keyring, not in ``.env``.
+
+    Raises ``RuntimeError`` when the keyring backend cannot store the secret so
+    callers never treat a dropped credential as a successful write.
+    """
     if not is_sensitive_env_key(key):
         raise ValueError(f"{key!r} is not classified as sensitive; use sync_env_values instead.")
-    _persist_env_secret(key, value)
+    if not _persist_env_secret(key, value):
+        raise RuntimeError(
+            f"Failed to persist {key!r} to the system keyring; "
+            "secure local credential storage is unavailable."
+        )
 
 
 def sync_env_values(
