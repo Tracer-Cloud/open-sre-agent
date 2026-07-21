@@ -147,7 +147,14 @@ def execute_slash_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
         )
         return True
 
-    ctx.console.print(f"[bold]$ {escape(stripped)}[/bold]")
+    # Announce the command unless the input line already did. Exclusive stdin is
+    # only reserved for a *literally typed* slash command (see
+    # ``turn_needs_exclusive_stdin``), so when it is active the prompt above
+    # already shows this command and a banner would repeat it. On every other
+    # path the agent resolved free text into a slash — nothing was echoed, and
+    # this banner is the only indication of what is about to run.
+    if not exclusive_stdin_active(ctx.session):
+        ctx.console.print(f"[bold]$ {escape(stripped)}[/bold]")
     _dispatch_and_translate_exit(
         stripped,
         ctx,

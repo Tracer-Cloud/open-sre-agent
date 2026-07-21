@@ -127,9 +127,20 @@ def test_interactive_picker_runs_inline_when_exclusive_stdin_active() -> None:
     assert ports.dispatched == ["/integrations"]
     assert session.terminal.pending_prompt_default is None
     assert session.terminal.pending_prompt_autosubmit is False
-    # Running inline has no prompt echo to rely on, so this path does announce
-    # the command it is about to dispatch.
-    assert "$ /integrations" in buf.getvalue()
+    # Exclusive stdin means the user typed this slash literally, so the prompt
+    # line already shows it — announcing it again would be the third rendering
+    # of one command.
+    assert buf.getvalue() == ""
+
+
+def test_agent_resolved_slash_announces_itself() -> None:
+    """Free text resolved into a slash has no prompt echo, so it must announce."""
+    ctx, buf, session, ports = _ctx(ports=FakeSlashPorts(tty=True))
+
+    slash_tool.execute_slash_tool({"command": "/health", "args": []}, ctx)
+
+    assert ports.dispatched == ["/health"]
+    assert "$ /health" in buf.getvalue()
 
 
 def test_interactive_picker_runs_inline_when_not_a_tty() -> None:
