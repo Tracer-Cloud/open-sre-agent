@@ -128,6 +128,13 @@ def _fallback_descriptors() -> tuple[ToolDescriptor, ...]:
             "integrations.slack.tools.slack_list_members_tool.tool",
         ),
         ToolDescriptor(
+            "slack_read_list",
+            ("investigation", "chat", "action"),
+            "slack",
+            None,
+            "integrations.slack.tools.slack_read_list_tool.tool",
+        ),
+        ToolDescriptor(
             "slack_read_messages",
             ("investigation", "chat", "action"),
             "slack",

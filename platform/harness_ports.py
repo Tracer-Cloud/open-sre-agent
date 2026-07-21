@@ -197,7 +197,7 @@ def resolve_integrations_with_metadata(
         if not org_id:
             org_id = _decode_org_id_from_token(env_token)
         if not org_id:
-            return _resolve_from_local_sources()
+            return _resolve_from_webapp_vault_or_local()
         try:
             all_integrations = fetch_remote_integrations(org_id=org_id, auth_token=env_token)
         except Exception:
@@ -206,10 +206,49 @@ def resolve_integrations_with_metadata(
                 org_id,
                 exc_info=True,
             )
-            return _resolve_from_local_sources()
+            return _resolve_from_webapp_vault_or_local()
         return _resolve_remote_with_local_fallback(all_integrations)
 
-    return _resolve_from_local_sources()
+    return _resolve_from_webapp_vault_or_local()
+
+
+def _resolve_from_webapp_vault_or_local() -> IntegrationResolutionResult:
+    """Silo path: pull org vault from opensre-webapp, else local store/env.
+
+    Merge order is vault → store → env so ops can still override a vault
+    secret with ``GITHUB_MCP_AUTH_TOKEN`` (etc.) on the task definition.
+    """
+    try:
+        from integrations.webapp_vault import fetch_webapp_org_integrations
+    except Exception:
+        return _resolve_from_local_sources()
+
+    remote = fetch_webapp_org_integrations()
+    if remote is None:
+        return _resolve_from_local_sources()
+    if not remote:
+        # Explicit empty vault — still allow local/env overlays (e.g. Slack SSM).
+        return _resolve_from_local_sources()
+
+    store_integrations = _load_integrations()
+    env_integrations = _load_env_integrations()
+    integrations = _merge_integrations_by_service(
+        remote,
+        store_integrations,
+        env_integrations,
+    )
+    resolved = _classify_integrations(integrations)
+    services = [service for service in resolved if not service.startswith("_")]
+    return IntegrationResolutionResult(
+        resolved_integrations=resolved,
+        progress_message=(
+            f"Resolved integrations from webapp vault"
+            f"{', store' if store_integrations else ''}"
+            f"{', env' if env_integrations else ''}: {services}"
+            if services
+            else "No active integrations found"
+        ),
+    )
 
 
 def _resolved_message(resolved: dict[str, Any]) -> str:

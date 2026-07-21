@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -17,8 +17,19 @@ _HANDLED_MESSAGE_SUBTYPES = frozenset({"file_share", "thread_broadcast"})
 
 
 @dataclass(frozen=True)
+class SlackInboundFile:
+    """One Slack file attached to an inbound message (metadata only)."""
+
+    id: str
+    name: str
+    mimetype: str
+    size: int
+    url_private: str
+
+
+@dataclass(frozen=True)
 class SlackInboundMessage:
-    """Normalized inbound Slack mention or DM text."""
+    """Normalized inbound Slack mention or DM text (plus optional files)."""
 
     team_id: str
     user_id: str
@@ -30,6 +41,7 @@ class SlackInboundMessage:
     # reply in a channel thread, which is only answered when the bot is already
     # active in that thread.
     addressed: bool = True
+    files: tuple[SlackInboundFile, ...] = ()
 
     @property
     def conversation_key(self) -> str:
@@ -76,7 +88,8 @@ def parse_events_api_payload(payload: Mapping[str, Any]) -> SlackInboundMessage 
     # An unaddressed reply keeps its leading mention: "<@U2> can you look" is
     # aimed at a human, and the attention gate must be able to see that.
     text = text.strip()
-    if not (team_id and user_id and channel_id and ts and text):
+    files = _parse_files(event.get("files"))
+    if not (team_id and user_id and channel_id and ts and (text or files)):
         return None
 
     return SlackInboundMessage(
@@ -87,4 +100,34 @@ def parse_events_api_payload(payload: Mapping[str, Any]) -> SlackInboundMessage 
         thread_ts=raw_thread_ts or ts,
         text=text,
         addressed=addressed,
+        files=files,
     )
+
+
+def _parse_files(raw_files: Any) -> tuple[SlackInboundFile, ...]:
+    """Keep file objects that have an id (url optional — download can use files.info)."""
+    if not isinstance(raw_files, Sequence) or isinstance(raw_files, (str, bytes)):
+        return ()
+    out: list[SlackInboundFile] = []
+    for item in raw_files:
+        if not isinstance(item, Mapping):
+            continue
+        file_id = str(item.get("id") or "").strip()
+        if not file_id:
+            continue
+        try:
+            size = int(item.get("size") or 0)
+        except (TypeError, ValueError):
+            size = 0
+        if size < 0:
+            size = 0
+        out.append(
+            SlackInboundFile(
+                id=file_id,
+                name=str(item.get("name") or item.get("title") or file_id),
+                mimetype=str(item.get("mimetype") or "application/octet-stream"),
+                size=size,
+                url_private=str(item.get("url_private") or item.get("url_private_download") or ""),
+            )
+        )
+    return tuple(out)

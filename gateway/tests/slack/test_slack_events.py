@@ -155,3 +155,69 @@ def test_untagged_reply_keeps_leading_human_mention() -> None:
     inbound = parse_events_api_payload(payload)
     assert inbound is not None
     assert inbound.text == "<@U2> can you check the dashboard?"
+
+
+def _file(**overrides: Any) -> dict[str, Any]:
+    payload = {
+        "id": "F1",
+        "name": "checkout.log",
+        "mimetype": "text/plain",
+        "size": 1024,
+        "url_private": "https://files.slack.com/files-pri/T333-F1/checkout.log",
+    }
+    payload.update(overrides)
+    return payload
+
+
+def _file_share_payload(files: list[Any], text: str = "") -> dict[str, Any]:
+    return {
+        "team_id": "T333",
+        "event": {
+            "type": "message",
+            "subtype": "file_share",
+            "channel_type": "im",
+            "user": "U111",
+            "channel": "D222",
+            "ts": "1700000000.000200",
+            "text": text,
+            "files": files,
+        },
+    }
+
+
+def test_file_share_with_caption_carries_files_and_text() -> None:
+    inbound = parse_events_api_payload(_file_share_payload([_file()], text="see attached"))
+
+    assert inbound is not None
+    assert inbound.text == "see attached"
+    assert len(inbound.files) == 1
+    assert inbound.files[0].id == "F1"
+    assert inbound.files[0].name == "checkout.log"
+    assert inbound.files[0].mimetype == "text/plain"
+    assert inbound.files[0].url_private.endswith("checkout.log")
+
+
+def test_file_only_message_with_no_caption_is_not_dropped() -> None:
+    # Regression: a file shared with no caption must still produce a message,
+    # instead of being dropped by the text-required guard.
+    inbound = parse_events_api_payload(_file_share_payload([_file()], text=""))
+
+    assert inbound is not None
+    assert inbound.text == ""
+    assert len(inbound.files) == 1
+
+
+def test_message_with_neither_text_nor_files_is_ignored() -> None:
+    assert parse_events_api_payload(_file_share_payload([], text="")) is None
+
+
+def test_malformed_file_entries_are_skipped() -> None:
+    files = [
+        {"id": "F1", "url_private": "https://files.slack.com/x/F1"},  # minimal valid
+        {"name": "no-id-or-url"},  # missing id + url → skipped
+        "not-a-dict",  # skipped
+    ]
+    inbound = parse_events_api_payload(_file_share_payload(files, text="hi"))
+
+    assert inbound is not None
+    assert [file.id for file in inbound.files] == ["F1"]

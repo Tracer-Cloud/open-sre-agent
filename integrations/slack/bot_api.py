@@ -28,6 +28,10 @@ _MAX_CHANNEL_LIST_PAGES = 10
 # Thread reads: paginate replies to the last page (bounded) for recent replies.
 _MAX_THREAD_PAGES = 25
 _MAX_TEXT_CHARS_PER_MESSAGE = 2_000
+_MAX_LIST_DISCOVERY_PAGES = 5
+_MAX_LIST_ITEM_PAGES = 5
+_MAX_LIST_ITEMS = 100
+_LIST_ID_RE = re.compile(r"^F[A-Z0-9]{5,}$")
 
 # Slack channel/DM/group IDs look like C0123ABCD — not bare names like "devs".
 _CHANNEL_ID_RE = re.compile(r"^[CDG][A-Z0-9]{8,}$")
@@ -133,6 +137,14 @@ def _api_error_hint(error: str, *, context: str) -> str:
             ),
             "search": ("The Slack app lacks search:read. Add it and reinstall the app."),
             "reactions": ("The Slack app lacks reactions:write. Add it and reinstall the app."),
+            "files": (
+                "The Slack app lacks the files:read scope (needed to discover Slack "
+                "Lists / download attachments). Add it and reinstall the app."
+            ),
+            "lists": (
+                "The Slack app lacks the lists:read scope (needed to read Slack List "
+                "rows). Add it and reinstall the app."
+            ),
         }.get(
             context,
             "The Slack app is missing a required OAuth scope. Reinstall after adding scopes.",
@@ -454,6 +466,193 @@ def join_channel(target: SlackBotTarget, *, channel_id: str) -> tuple[bool, str]
             )
         return False, _api_error_hint(error, context="join")
     return True, ""
+
+
+def find_slack_lists(
+    target: SlackBotTarget,
+    *,
+    name_query: str = "",
+    limit: int = 20,
+) -> tuple[list[dict[str, str]] | None, str]:
+    """Discover Slack Lists visible to the bot (``files.list``, filetype=list).
+
+    Slack Lists are file objects (``F…`` ids). There is no dedicated
+    ``lists.list`` method; discovery uses ``files.list`` + client-side filter.
+    Optional ``name_query`` keeps case-insensitive substring matches on
+    ``name`` / ``title``.
+    """
+    needle = str(name_query or "").strip().lower()
+    want = max(1, min(int(limit), 50))
+    found: list[dict[str, str]] = []
+    page = 1
+    for _ in range(_MAX_LIST_DISCOVERY_PAGES):
+        payload, req_err = _request_json(
+            "GET",
+            "files.list",
+            target.bot_token,
+            params={"count": 100, "page": page, "types": "all"},
+        )
+        if payload is None:
+            return None, req_err
+        if not payload.get("ok"):
+            error = str(payload.get("error") or "unknown_error")
+            return None, _api_error_hint(error, context="files")
+
+        for raw in payload.get("files") or []:
+            if not isinstance(raw, dict):
+                continue
+            filetype = str(raw.get("filetype") or "").lower()
+            mimetype = str(raw.get("mimetype") or "").lower()
+            if filetype != "list" and "slack-list" not in mimetype:
+                continue
+            list_id = str(raw.get("id") or "").strip()
+            if not list_id:
+                continue
+            title = str(raw.get("title") or raw.get("name") or list_id)
+            name = str(raw.get("name") or title)
+            if needle and needle not in title.lower() and needle not in name.lower():
+                continue
+            found.append(
+                {
+                    "list_id": list_id,
+                    "name": name,
+                    "title": title,
+                    "permalink": str(raw.get("permalink") or ""),
+                }
+            )
+            if len(found) >= want:
+                return found, ""
+
+        raw_paging = payload.get("paging")
+        paging = raw_paging if isinstance(raw_paging, dict) else {}
+        pages = int(paging.get("pages") or 1)
+        if page >= pages:
+            break
+        page += 1
+    return found, ""
+
+
+def fetch_slack_list_items(
+    target: SlackBotTarget,
+    *,
+    list_id: str,
+    limit: int = 50,
+    include_archived: bool = False,
+) -> tuple[list[dict[str, Any]] | None, str]:
+    """Read rows from a Slack List (``slackLists.items.list``)."""
+    lid = str(list_id or "").strip()
+    if not lid:
+        return None, "list_id cannot be empty."
+    if not _LIST_ID_RE.match(lid):
+        return None, "list_id must be a Slack List id (F…)."
+
+    want = max(1, min(int(limit), _MAX_LIST_ITEMS))
+    items: list[dict[str, Any]] = []
+    cursor = ""
+    for _ in range(_MAX_LIST_ITEM_PAGES):
+        body: dict[str, Any] = {"list_id": lid, "limit": min(want - len(items), 100)}
+        if cursor:
+            body["cursor"] = cursor
+        if include_archived:
+            body["archived"] = True
+        payload, req_err = _request_json(
+            "POST",
+            "slackLists.items.list",
+            target.bot_token,
+            json_body=body,
+        )
+        if payload is None:
+            return None, req_err
+        if not payload.get("ok"):
+            error = str(payload.get("error") or "unknown_error")
+            return None, _api_error_hint(error, context="lists")
+
+        for raw in payload.get("items") or []:
+            if not isinstance(raw, dict):
+                continue
+            items.append(_normalize_list_item(raw))
+            if len(items) >= want:
+                return items, ""
+
+        meta = payload.get("response_metadata")
+        next_cursor = ""
+        if isinstance(meta, dict):
+            next_cursor = str(meta.get("next_cursor") or "").strip()
+        if not next_cursor:
+            break
+        cursor = next_cursor
+    return items, ""
+
+
+def _normalize_list_item(raw: dict[str, Any]) -> dict[str, Any]:
+    """Flatten a List row into a stable agent-facing dict."""
+    fields_out: dict[str, Any] = {}
+    name = ""
+    assignees: list[str] = []
+    status = ""
+    due_date = ""
+    for field in raw.get("fields") or []:
+        if not isinstance(field, dict):
+            continue
+        key = str(field.get("key") or field.get("column_id") or "").strip()
+        if not key:
+            continue
+        text = str(field.get("text") or "").strip()
+        users = [str(u) for u in (field.get("user") or []) if u]
+        dates = [str(d) for d in (field.get("date") or []) if d]
+        selects = [str(s) for s in (field.get("select") or []) if s]
+        value: Any = text
+        if users:
+            value = users
+        elif dates:
+            value = dates[0] if len(dates) == 1 else dates
+        elif selects:
+            value = selects[0] if len(selects) == 1 else selects
+        elif field.get("number"):
+            nums = field.get("number") or []
+            value = nums[0] if isinstance(nums, list) and len(nums) == 1 else nums
+        elif field.get("checkbox") is not None:
+            boxes = field.get("checkbox") or []
+            value = boxes[0] if isinstance(boxes, list) and boxes else field.get("value")
+        elif "value" in field and not text:
+            value = field.get("value")
+        fields_out[key] = value
+
+        key_l = key.lower()
+        if (
+            text
+            and not name
+            and (
+                key_l in ("name", "title", "task", "rich_text_notes", "todo_text")
+                or "name" in key_l
+                or key_l.endswith("_notes")
+            )
+        ):
+            name = text
+        if users and (key_l in ("owner", "assignee", "assignees") or "assign" in key_l):
+            assignees.extend(users)
+        if selects and not status and (key_l == "status" or "status" in key_l):
+            status = selects[0]
+        if dates and not due_date and (key_l in ("date", "due", "due_date") or "due" in key_l):
+            due_date = dates[0]
+
+    if not name:
+        # Fall back to the first non-empty text field.
+        for value in fields_out.values():
+            if isinstance(value, str) and value.strip():
+                name = value.strip()
+                break
+
+    return {
+        "id": str(raw.get("id") or ""),
+        "list_id": str(raw.get("list_id") or ""),
+        "name": name,
+        "assignees": list(dict.fromkeys(assignees)),
+        "status": status,
+        "due_date": due_date,
+        "archived": bool(raw.get("archived")),
+        "fields": fields_out,
+    }
 
 
 def search_messages(

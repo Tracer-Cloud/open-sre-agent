@@ -198,16 +198,33 @@ HTTPS URL is required — the gateway holds an outbound websocket.
 | `app_mentions:read` | Gateway `@mention` inbound |
 | `chat:write` | Gateway replies + `slack_reply_message` |
 | `im:history` | Gateway DMs + reading DM history |
-| `channels:history` | `slack_read_messages` in public channels |
+| `channels:history` | `slack_read_messages` + thread seeding in public channels |
 | `groups:history` | `slack_read_messages` in private channels |
 | `mpim:history` | `slack_read_messages` in multi-party DMs |
-| `channels:read` | Resolve `#channel-name` → ID |
 | `groups:read` | Resolve private channel names |
-| `im:read` / `mpim:read` | List DMs when resolving names |
-| `users:read` | `slack_list_team_members` |
-| `search:read` | `slack_search_messages` |
-| `channels:join` | `slack_join_channel` (public channels) |
-| `reactions:write` | Gateway ack reactions + `slack_add_reaction` |
+| `groups:write` | Manage / create private channels |
+| `files:read` | Inbound file-attachment downloads + discover Slack Lists (`files.list`) |
+| `files:write` | Upload files as the bot |
+| `lists:read` | `slack_read_list` — read Slack List rows (`slackLists.items.list`) |
+| `search:read.public` | `slack_search_messages` in public channels |
+| `search:read.private` | Search private channels |
+| `search:read.im` | Search DMs |
+| `search:read.mpim` | Search group DMs |
+| `search:read.files` | Search files |
+| `search:read.users` | Search users |
+| `usergroups:read` | View workspace user groups |
+| `users.profile:read` | Speaker profile details |
+| `users:read` | `slack_list_team_members` + user lookup |
+
+<Note>
+Add these only if you use the feature — they are not in the current app config:
+`reactions:write` (gateway ack 👀 / ✓ reactions + `slack_add_reaction`),
+`channels:read` / `im:read` / `mpim:read` (resolve `#channel-name` and DM names
+→ ID), and `channels:join` (`slack_join_channel`).
+</Note>
+
+Optional env: `SLACK_TEAM_TASKS_LIST_ID` (`F…`) so `slack_read_list` can open the
+default team-tasks List without a name search.
 
 Reinstall the app after adding scopes so the bot token picks them up.
 

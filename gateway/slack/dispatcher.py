@@ -24,7 +24,7 @@ from gateway.slack.client import (
     mark_turn_failed,
     mark_turn_working,
 )
-from gateway.slack.events import SlackInboundMessage
+from gateway.slack.events import SlackInboundFile, SlackInboundMessage
 from gateway.slack.output_sink import SlackOutputSink
 from gateway.slack.security import (
     SlackInboundDecision,
@@ -350,6 +350,10 @@ class _SlackTurnDispatcher:
                             seeded,
                         )
                 agent_text = _agent_text_with_slack_context(inbound)
+                if inbound.files:
+                    files_context = _slack_files_context(inbound.files, self._logger)
+                    if files_context:
+                        agent_text = f"{agent_text}\n\n{files_context}"
                 self._handler(agent_text, session, sink, self._logger)
             except Exception:
                 self._logger.exception(
@@ -387,6 +391,22 @@ class _SlackTurnDispatcher:
                     channel=inbound.channel_id,
                     timestamp=inbound.ts,
                 )
+
+
+def _slack_files_context(files: tuple[SlackInboundFile, ...], logger: logging.Logger) -> str:
+    """Download shared files and render them as text for the turn prompt.
+
+    Returns an empty string when the bot token is unavailable (metering-style
+    fail-safe — a missing token drops attachments rather than failing the turn).
+    """
+    from gateway.slack.attachments import build_files_context
+    from integrations.slack.bot_api import resolve_bot_token
+
+    target, detail = resolve_bot_token()
+    if target is None:
+        logger.info("[slack-gateway] skipping %d file(s): %s", len(files), detail)
+        return ""
+    return build_files_context(files, target.bot_token)
 
 
 def _agent_text_with_slack_context(inbound: SlackInboundMessage) -> str:
