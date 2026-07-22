@@ -519,6 +519,7 @@ def capture_gateway_turn_failed(
         "duration_ms": round(duration_ms),
         "duration_bucket": _bucket_duration_ms(duration_ms),
         "error_type": error_type,
+        "surface_missing": not bool(surface),
     }
     if surface:
         props["surface"] = surface
@@ -684,8 +685,8 @@ def track_investigation(
     token = _INVESTIGATION_TRACKING_DEPTH.set(depth + 1)
     loop_metrics_token = begin_investigation_loop_metrics_scope() if depth == 0 else None
     session_id = str(getattr(session, "session_id", "") or "") or None
-    # Bind session for the full lifecycle so background threads still stamp
-    # session_id (ContextVars do not cross threads unless rebound here).
+    # Bind session for the full lifecycle so nested pipeline work (and callers
+    # that did not bind usage context) still stamp session_id explicitly.
     with bound_usage_context(session_id=session_id):
         tracker: InvestigationTracker
         if depth > 0:

@@ -77,13 +77,18 @@ class InvestigationWorker:
         try:
             from platform.analytics.cli import track_investigation
             from platform.analytics.source import EntrypointSource, TriggerMode
-            from platform.analytics.usage_context import bound_usage_context
+            from platform.analytics.usage_context import (
+                bound_usage_context,
+                ensure_process_session_id,
+            )
 
             org_id = (record.clerk_org_id or "").strip() or None
             with (
                 bound_usage_context(
                     organization_id=org_id,
-                    session_id=record.id,
+                    # Process session groups HTTP investigations for this worker;
+                    # keep investigation_id as the per-run identifier.
+                    session_id=ensure_process_session_id(),
                 ),
                 track_investigation(
                     entrypoint=EntrypointSource.REMOTE_HTTP,
