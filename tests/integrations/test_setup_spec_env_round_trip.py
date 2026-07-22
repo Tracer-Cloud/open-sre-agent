@@ -116,23 +116,34 @@ def persisted(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> _Persisted:
     return written
 
 
+# Left in place by the wipe below: process/runtime plumbing that unrelated
+# code (subprocess calls, a keyring backend resolving a config path under
+# $HOME) may need, and that no vendor's env_var is ever named after. Keeping
+# this list short and explicit — rather than only clearing known vendor names
+# — is what lets the wipe still catch a *wrong* env_var: the credential names
+# are exactly what must be guaranteed absent unless apply_setup wrote them.
+_ENV_PLUMBING = frozenset({"HOME", "PATH", "TMPDIR", "TMP", "TEMP", "LANG", "LC_ALL", "USER"})
+
+
 def _restore_environment(written: _Persisted, monkeypatch: pytest.MonkeyPatch) -> None:
     """Reproduce the environment a later process would start with.
 
-    Every existing env var is cleared first. ``tests/conftest.py`` loads the
-    developer's real local ``.env`` into ``os.environ`` for the whole test
-    session, so without this a spec whose ``env_var`` is wrong can still
-    "round-trip" — not from what this test just persisted, but from a
-    same-named value already sitting in that real ``.env`` (Twilio's shared
-    account vars are a real example: a wrong ``env_var`` still resolved
-    because the correct name happened to already be set for real).
+    Every existing env var is cleared first (aside from ``_ENV_PLUMBING``).
+    ``tests/conftest.py`` loads the developer's real local ``.env`` into
+    ``os.environ`` for the whole test session, so without this a spec whose
+    ``env_var`` is wrong can still "round-trip" — not from what this test just
+    persisted, but from a same-named value already sitting in that real
+    ``.env`` (Twilio's shared account vars are a real example: a wrong
+    ``env_var`` still resolved because the correct name happened to already be
+    set for real).
 
     Keyring secrets are seeded straight into ``os.environ`` because
     ``resolve_env_credential`` checks the environment first — which is what a
     deploy, and this assertion, ultimately depend on.
     """
     for key in list(os.environ):
-        monkeypatch.delenv(key, raising=False)
+        if key not in _ENV_PLUMBING:
+            monkeypatch.delenv(key, raising=False)
     # The wipe above also removes the root conftest's OPENSRE_DISABLE_KEYRING;
     # put it back so an unset field falling through to resolve_keyring_secret
     # still misses cleanly instead of touching a real OS keyring.
