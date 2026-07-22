@@ -12,8 +12,10 @@ from typing import Any
 AUTOMERGE_LABEL = "automerge"
 AUTOMERGE_WORKFLOW_NAME = "Auto-merge"
 AUTOMERGE_JOB_CHECK_NAME = "Merge when CI is green"
-# External Mintlify app check; flaky on doc-only wording and not a merge blocker.
-AUTOMERGE_SKIPPED_CHECK_SUBSTRINGS = ("vale-spellcheck",)
+# External app checks that are not Actions workflow_run triggers. Waiting on them
+# strands labeled PRs after the last CI retry (seen with Greptile on #4196).
+# Greptile remains a human gate: add `automerge` only after review is done.
+AUTOMERGE_SKIPPED_CHECK_SUBSTRINGS = ("vale-spellcheck", "greptile")
 CHECK_RUN_PENDING_STATUSES = frozenset({"IN_PROGRESS", "QUEUED", "PENDING", "WAITING", "REQUESTED"})
 CHECK_RUN_ALLOWED_CONCLUSIONS = frozenset({"SUCCESS", "SKIPPED", "NEUTRAL"})
 STATUS_CONTEXT_PENDING_STATES = frozenset({"PENDING", "EXPECTED"})
