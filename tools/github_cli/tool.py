@@ -94,10 +94,8 @@ def _normalize_args(args: list[str] | None) -> list[str]:
         "Running gh via shell_run or !gh",
         "Printing or logging the GitHub token",
         "Inventing repo lists without calling github_cli",
-        "Multi-source RCA that names github issues with Sentry/PostHog/Datadog "
-        "(use investigation_start)",
-        "Figuring out why an agent/service is crashing by querying sentry, github "
-        "issues, and posthog (use investigation_start)",
+        "Multi-source RCA naming github issues with Sentry/PostHog/Datadog (use investigation_start)",
+        "Diagnosing a crash via sentry, github issues, and posthog (use investigation_start)",
     ],
     surfaces=("action",),
     side_effect_level="mutating",

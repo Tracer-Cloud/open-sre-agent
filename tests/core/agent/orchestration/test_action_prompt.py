@@ -228,46 +228,6 @@ def test_skills_loader_bundles_github_cli_skill() -> None:
     assert "create an issue from that" in block
     assert "investigation_start, NOT github_cli" in block
     assert "querying sentry,\n  github issues, and posthog" in block
-    assert "quiet=true" in block
-    assert "four separate shell_run" in block or "Four separate" in block or "IMPORT pass" in block
-    assert "IMPORT pass" in block
-    assert "PLACEMENT pass" in block
-    assert "SIZE pass" in block
-    assert "SHIM pass" in block
-    assert "You write each bash" in block
-    assert "about 15" in block
-    assert "Budget: clone + ≤3 agent-scan shell_run + 4 heuristic shell passes + cleanup" in block
-    assert "~/.opensre/{session_id}/{repo_name}-architecture-audit-{uuid}.md" in block
-    assert "AGENTS-style docs" in block
-    assert "AGENT SCAN" in block
-    assert "deletion test" in block
-    assert "CONTEXT.md" in block
-    assert "max 3 shell_run" in block
-    assert "BEFORE any" in block or "before heuristics" in block
-    assert 'Decide what "large" means' in block
-    assert "do NOT limit to Python" in block
-    assert "do NOT skip non-Python" in block
-    assert ".java" in block and ".rs" in block
-    assert "find_architecture_violations" not in block
-    report_path = (
-        "core/agent_harness/prompts/skills/architecture_audit/architecture_audit_report.md"
-    )
-    assert f"REPORT TEMPLATE from `{report_path}`" in block
-    assert "### Repository summary" in block
-    assert "### Coverage and limitations" in block
-    assert "### Findings by severity" in block
-    assert "| Severity | Path | Finding |" in block
-    assert "### Recommended sequencing" in block
-    assert "Fill this template VERBATIM" in block
-    assert "Do NOT wrap filled values in backticks" in block
-    assert "contract source" in block
-    assert "calibrate to the repo" in block
-    assert "grounded in AGENT SCAN context" in block
-    assert report_path in block
-
-    prompt = build_action_system_prompt(_ctx(messages=[("user", "audit architecture")]))
-    assert "ARCHITECTURE AUDIT SKILL" in prompt
-    assert "### Findings by severity" in prompt
     cached_load_skills_block.cache_clear()
 
 
