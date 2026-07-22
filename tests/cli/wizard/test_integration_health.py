@@ -17,10 +17,8 @@ from surfaces.cli.wizard.integration_health import (
     validate_github_mcp_integration,
     validate_grafana_integration,
     validate_incident_io_integration,
-    validate_sentry_integration,
     validate_servicenow_integration,
     validate_slack_webhook,
-    validate_vercel_integration,
 )
 
 
@@ -35,7 +33,6 @@ def test_legacy_integration_health_import_surface_still_exports_validators() -> 
         "validate_dagster_integration",
         "validate_discord_bot",
         "validate_github_mcp_integration",
-        "validate_gitlab_integration",
         "validate_google_docs_integration",
         "validate_grafana_integration",
         "validate_incident_io_integration",
@@ -45,18 +42,15 @@ def test_legacy_integration_health_import_surface_still_exports_validators() -> 
         "validate_openclaw_integration",
         "validate_opensearch_integration",
         "validate_opsgenie_integration",
-        "validate_posthog_integration",
         "validate_posthog_mcp_integration",
         "validate_pagerduty_integration",
         "validate_rocketchat",
         "validate_rocketchat_webhook",
-        "validate_sentry_integration",
         "validate_sentry_mcp_integration",
         "validate_servicenow_integration",
         "validate_slack_webhook",
         "validate_splunk_integration",
         "validate_tempo_integration",
-        "validate_vercel_integration",
     }
 
     assert set(module.__all__) == expected_exports
@@ -366,23 +360,6 @@ def test_validate_github_mcp_integration_uses_shared_validator(monkeypatch) -> N
     assert result.github_mcp.authenticated_user == "ghuser"
 
 
-def test_validate_sentry_integration_uses_shared_validator(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "surfaces.cli.wizard.integration_validators.sentry.validate_sentry_config",
-        lambda _config: types.SimpleNamespace(ok=True, detail="Sentry ok"),
-    )
-
-    result = validate_sentry_integration(
-        base_url="https://sentry.io",
-        organization_slug="demo-org",
-        auth_token="sntrys_test",
-        project_slug="payments",
-    )
-
-    assert result.ok is True
-    assert result.detail == "Sentry ok"
-
-
 def test_validate_dagster_integration_uses_shared_validator(monkeypatch) -> None:
     monkeypatch.setattr(
         "surfaces.cli.wizard.integration_validators.dagster.validate_dagster_config",
@@ -429,80 +406,6 @@ class _FakeVercelClient:
 
     def list_projects(self) -> dict:
         return self._result
-
-
-def test_validate_vercel_integration_succeeds(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "surfaces.cli.wizard.integration_validators.vercel.VercelClient",
-        lambda _config: _FakeVercelClient(
-            {"success": True, "projects": [{"id": "p1"}], "total": 1}
-        ),
-    )
-
-    result = validate_vercel_integration(api_token="tok_test")
-
-    assert result.ok is True
-    assert "1 project" in result.detail
-
-
-def test_validate_vercel_integration_succeeds_with_team_id(monkeypatch) -> None:
-    captured: dict = {}
-
-    class _CapturingClient:
-        def __init__(self, config) -> None:
-            captured["team_id"] = config.team_id
-
-        def __enter__(self) -> _CapturingClient:
-            return self
-
-        def __exit__(self, *_: object) -> None:
-            pass
-
-        def list_projects(self) -> dict:
-            return {"success": True, "projects": [], "total": 0}
-
-    monkeypatch.setattr(
-        "surfaces.cli.wizard.integration_validators.vercel.VercelClient",
-        _CapturingClient,
-    )
-
-    result = validate_vercel_integration(api_token="tok_test", team_id="team_xyz")
-
-    assert result.ok is True
-    assert captured["team_id"] == "team_xyz"
-
-
-def test_validate_vercel_integration_fails_on_api_error(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "surfaces.cli.wizard.integration_validators.vercel.VercelClient",
-        lambda _config: _FakeVercelClient({"success": False, "error": "HTTP 401: unauthorized"}),
-    )
-
-    result = validate_vercel_integration(api_token="bad_token")
-
-    assert result.ok is False
-    assert "401" in result.detail
-
-
-def test_validate_vercel_integration_fails_with_empty_token() -> None:
-    result = validate_vercel_integration(api_token="")
-
-    assert result.ok is False
-    assert "required" in result.detail.lower()
-
-
-def test_validate_vercel_integration_surfaces_exception(monkeypatch) -> None:
-    def _raise(_config):
-        raise RuntimeError("network unreachable")
-
-    monkeypatch.setattr(
-        "surfaces.cli.wizard.integration_validators.vercel.VercelClient",
-        _raise,
-    )
-
-    result = validate_vercel_integration(api_token="tok_test")
-
-    assert result.ok is False
 
 
 # ---------------------------------------------------------------------------

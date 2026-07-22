@@ -32,7 +32,6 @@ if TYPE_CHECKING:
     from integrations.github.mcp import GitHubMcpDisplayDetailLevel
     from integrations.setup_flow import IntegrationSetupSpec
 
-from integrations.gitlab import DEFAULT_GITLAB_BASE_URL
 from integrations.openclaw import build_openclaw_config, validate_openclaw_config
 from integrations.posthog_mcp import (
     DEFAULT_POSTHOG_MCP_URL,
@@ -199,23 +198,9 @@ def _setup_datadog() -> None:
 
 
 def _setup_groundcover() -> None:
-    api_key = _p("Service-account API key", secret=True)
-    mcp_url = _p("MCP URL", default="https://mcp.groundcover.com/api/mcp")
-    tenant_uuid = _p("Tenant UUID (optional, for multi-workspace accounts)")
-    backend_id = _p("Backend ID (optional, for multi-backend tenants)")
-    timezone = _p("Timezone", default="UTC")
-    if not api_key:
-        _die("api_key is required.")
-    credentials: dict[str, str] = {
-        "api_key": api_key,
-        "mcp_url": mcp_url,
-        "timezone": timezone,
-    }
-    if tenant_uuid:
-        credentials["tenant_uuid"] = tenant_uuid
-    if backend_id:
-        credentials["backend_id"] = backend_id
-    upsert_integration("groundcover", {"credentials": credentials})
+    from integrations.groundcover.setup import GROUNDCOVER_SETUP
+
+    _run_spec_setup(GROUNDCOVER_SETUP)
 
 
 def _setup_honeycomb() -> None:
@@ -428,11 +413,9 @@ def _setup_tracer() -> None:
 
 
 def _setup_vercel() -> None:
-    api_token = _p("Vercel API token", secret=True)
-    team_id = _p("Team ID (optional for personal accounts)")
-    if not api_token:
-        _die("api_token is required.")
-    upsert_integration("vercel", {"credentials": {"api_token": api_token, "team_id": team_id}})
+    from integrations.vercel.setup import VERCEL_SETUP
+
+    _run_spec_setup(VERCEL_SETUP)
 
 
 def _setup_betterstack() -> None:
@@ -680,50 +663,21 @@ def _setup_github() -> str | None:
 
 
 def _setup_gitlab() -> None:
-    base_url = _p("Gitlab base URL", default=DEFAULT_GITLAB_BASE_URL)
-    auth_token = _p("Gitlab access token", secret=True)
-    upsert_integration(
-        "gitlab",
-        {"credentials": {"base_url": base_url, "auth_token": auth_token}},
-    )
+    from integrations.gitlab.setup import GITLAB_SETUP
+
+    _run_spec_setup(GITLAB_SETUP)
 
 
 def _setup_sentry() -> None:
-    base_url = _p("Sentry URL", default="https://sentry.io")
-    organization_slug = _p("Organization slug")
-    auth_token = _p("Auth token", secret=True)
-    project_slug = _p("Project slug (optional)")
-    if not organization_slug or not auth_token:
-        _die("organization_slug and auth_token are required.")
-    upsert_integration(
-        "sentry",
-        {
-            "credentials": {
-                "base_url": base_url,
-                "organization_slug": organization_slug,
-                "auth_token": auth_token,
-                "project_slug": project_slug,
-            }
-        },
-    )
+    from integrations.sentry.setup import SENTRY_SETUP
+
+    _run_spec_setup(SENTRY_SETUP)
 
 
 def _setup_posthog() -> None:
-    base_url = _p("PostHog API base URL", default="https://us.i.posthog.com")
-    project_id = _p("PostHog project ID")
-    personal_api_key = _p("PostHog personal API key (phx_...)", secret=True)
-    if not project_id or not personal_api_key:
-        _die("project_id and personal_api_key are required.")
-    upsert_integration(
-        "posthog",
-        {
-            "credentials": {
-                "base_url": base_url,
-                "project_id": project_id,
-                "personal_api_key": personal_api_key,
-            }
-        },
-    )
+    from integrations.posthog.setup import POSTHOG_SETUP
+
+    _run_spec_setup(POSTHOG_SETUP)
 
 
 def _setup_mongodb() -> None:

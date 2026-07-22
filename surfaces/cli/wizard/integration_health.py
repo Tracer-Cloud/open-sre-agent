@@ -11,7 +11,6 @@ from surfaces.cli.wizard.integration_validators.alerting import (
 )
 from surfaces.cli.wizard.integration_validators.aws import validate_aws_integration
 from surfaces.cli.wizard.integration_validators.dagster import validate_dagster_integration
-from surfaces.cli.wizard.integration_validators.gitlab import validate_gitlab_integration
 from surfaces.cli.wizard.integration_validators.http_probe_validators import (
     validate_discord_bot,
     validate_jira_integration,
@@ -34,13 +33,10 @@ from surfaces.cli.wizard.integration_validators.observability import (
     validate_splunk_integration,
     validate_tempo_integration,
 )
-from surfaces.cli.wizard.integration_validators.posthog import validate_posthog_integration
 from surfaces.cli.wizard.integration_validators.productivity import (
     validate_google_docs_integration,
 )
-from surfaces.cli.wizard.integration_validators.sentry import validate_sentry_integration
 from surfaces.cli.wizard.integration_validators.shared import IntegrationHealthResult
-from surfaces.cli.wizard.integration_validators.vercel import validate_vercel_integration
 
 __all__ = [
     "IntegrationHealthResult",
@@ -50,7 +46,6 @@ __all__ = [
     "validate_dagster_integration",
     "validate_discord_bot",
     "validate_github_mcp_integration",
-    "validate_gitlab_integration",
     "validate_google_docs_integration",
     "validate_grafana_integration",
     "validate_incident_io_integration",
@@ -62,14 +57,11 @@ __all__ = [
     "validate_posthog_mcp_integration",
     "validate_opsgenie_integration",
     "validate_pagerduty_integration",
-    "validate_posthog_integration",
     "validate_rocketchat",
     "validate_rocketchat_webhook",
-    "validate_sentry_integration",
     "validate_sentry_mcp_integration",
     "validate_servicenow_integration",
     "validate_slack_webhook",
     "validate_splunk_integration",
     "validate_tempo_integration",
-    "validate_vercel_integration",
 ]

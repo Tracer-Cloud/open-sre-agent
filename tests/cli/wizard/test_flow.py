@@ -1718,8 +1718,11 @@ def test_run_wizard_configures_gitlab(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(
         _gitlab_configurator,
-        "validate_gitlab_integration",
-        lambda **_kwargs: flow.IntegrationHealthResult(ok=True, detail="GitLab ok"),
+        "GITLAB_SETUP",
+        dataclasses.replace(
+            _gitlab_configurator.GITLAB_SETUP,
+            verify=lambda _source, _config: {"status": "passed", "detail": "GitLab ok"},
+        ),
     )
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
@@ -1732,10 +1735,10 @@ def test_run_wizard_configures_gitlab(monkeypatch, tmp_path) -> None:
     def _sync_env_secret(key: str, value: str) -> None:
         synced_env_secrets.append((key, value))
 
-    monkeypatch.setattr(_gitlab_configurator, "sync_env_values", _sync_env_values)
-    monkeypatch.setattr(_gitlab_configurator, "sync_env_secret", _sync_env_secret)
+    monkeypatch.setattr(_setup_flow, "sync_env_values", _sync_env_values)
+    monkeypatch.setattr(_setup_flow, "sync_env_secret", _sync_env_secret)
     monkeypatch.setattr(
-        _gitlab_configurator,
+        _setup_flow,
         "upsert_integration",
         lambda service, payload: saved_integrations.append((service, payload)),
     )
@@ -1794,19 +1797,23 @@ def test_run_wizard_gitlab_retries_on_validation_failure(monkeypatch, tmp_path) 
         m.ask.return_value = next(text_responses)
         return m
 
-    def _validate_gitlab(**_kwargs):
+    def _verify_gitlab(_source, _config):
         nonlocal validation_call_count
         validation_call_count += 1
         if validation_call_count == 1:
-            return flow.IntegrationHealthResult(ok=False, detail="Unauthorized")
-        return flow.IntegrationHealthResult(ok=True, detail="GitLab ok")
+            return {"status": "failed", "detail": "Unauthorized"}
+        return {"status": "passed", "detail": "GitLab ok"}
 
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
     monkeypatch.setattr(flow.questionary, "text", _mock_text)
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
-    monkeypatch.setattr(_gitlab_configurator, "validate_gitlab_integration", _validate_gitlab)
+    monkeypatch.setattr(
+        _gitlab_configurator,
+        "GITLAB_SETUP",
+        dataclasses.replace(_gitlab_configurator.GITLAB_SETUP, verify=_verify_gitlab),
+    )
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
     monkeypatch.setattr(_ui, "save_keyring_secret", lambda *_args, **_kwargs: None)
@@ -1818,10 +1825,10 @@ def test_run_wizard_gitlab_retries_on_validation_failure(monkeypatch, tmp_path) 
     def _sync_env_secret(key: str, value: str) -> None:
         synced_env_secrets.append((key, value))
 
-    monkeypatch.setattr(_gitlab_configurator, "sync_env_values", _sync_env_values)
-    monkeypatch.setattr(_gitlab_configurator, "sync_env_secret", _sync_env_secret)
+    monkeypatch.setattr(_setup_flow, "sync_env_values", _sync_env_values)
+    monkeypatch.setattr(_setup_flow, "sync_env_secret", _sync_env_secret)
     monkeypatch.setattr(
-        _gitlab_configurator,
+        _setup_flow,
         "upsert_integration",
         lambda service, payload: saved_integrations.append((service, payload)),
     )

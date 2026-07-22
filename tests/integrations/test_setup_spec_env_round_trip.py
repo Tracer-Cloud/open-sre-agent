@@ -29,8 +29,13 @@ from config.env_file import env_assignment_key, read_env_lines, sync_env_values
 from integrations._catalog_impl import load_env_integrations
 from integrations.coralogix.setup import CORALOGIX_SETUP
 from integrations.datadog.setup import DATADOG_SETUP
+from integrations.gitlab.setup import GITLAB_SETUP
+from integrations.groundcover.setup import GROUNDCOVER_SETUP
 from integrations.honeycomb.setup import HONEYCOMB_SETUP
+from integrations.posthog.setup import POSTHOG_SETUP
+from integrations.sentry.setup import SENTRY_SETUP
 from integrations.telegram.setup import TELEGRAM_SETUP
+from integrations.vercel.setup import VERCEL_SETUP
 
 # A distinct, recognizable value per field, so two fields of the same
 # integration swapping places fails instead of coincidentally matching. Values
@@ -49,10 +54,43 @@ _SUBMITTED: dict[str, dict[str, str]] = {
         "application_name": "checkout",
         "subsystem_name": "api",
     },
+    "groundcover": {
+        "api_key": "gc-api-key",
+        "mcp_url": "https://mcp.eu.groundcover.com/api/mcp",
+        "tenant_uuid": "11111111-2222-3333-4444-555555555555",
+        "backend_id": "gc-backend-7",
+        "timezone": "Europe/Berlin",
+    },
+    "gitlab": {
+        "base_url": "https://gitlab.example.com/api/v4",
+        "auth_token": "glpat-gitlab-token",
+    },
+    "sentry": {
+        "base_url": "https://sentry.example.com",
+        "organization_slug": "checkout-org",
+        "auth_token": "sntrys-sentry-token",
+        "project_slug": "checkout-api",
+    },
+    "posthog": {
+        "base_url": "https://eu.i.posthog.com",
+        "project_id": "40182",
+        "personal_api_key": "phx-posthog-key",
+    },
+    "vercel": {"api_token": "vercel-api-token", "team_id": "team_abc123"},
     "telegram": {"bot_token": "123456:tg-bot-token", "default_chat_id": "-1001234567890"},
 }
 
-_SPECS = [DATADOG_SETUP, HONEYCOMB_SETUP, CORALOGIX_SETUP, TELEGRAM_SETUP]
+_SPECS = [
+    CORALOGIX_SETUP,
+    DATADOG_SETUP,
+    GITLAB_SETUP,
+    GROUNDCOVER_SETUP,
+    HONEYCOMB_SETUP,
+    POSTHOG_SETUP,
+    SENTRY_SETUP,
+    TELEGRAM_SETUP,
+    VERCEL_SETUP,
+]
 
 
 @dataclasses.dataclass
