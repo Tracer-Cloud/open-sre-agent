@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from config.env_file import sync_env_secret, sync_env_values
 from integrations.sentry import get_sentry_auth_recommendations
+from integrations.sentry.setup import SENTRY_SETUP
 from integrations.store import upsert_integration
 from platform.terminal.theme import HIGHLIGHT, SECONDARY
 from surfaces.cli.wizard._ui import (
@@ -14,14 +15,11 @@ from surfaces.cli.wizard._ui import (
     _render_integration_result,
     _string_value,
 )
-from surfaces.cli.wizard.integration_health import (
-    validate_sentry_integration,
-    validate_sentry_mcp_integration,
-)
+from surfaces.cli.wizard.configurators.spec_configurator import configure_from_spec
+from surfaces.cli.wizard.integration_health import validate_sentry_mcp_integration
 
 DEFAULT_SENTRY_MCP_URL = "https://mcp.sentry.dev/mcp"
 DEFAULT_SENTRY_MCP_MODE = "streamable-http"
-DEFAULT_SENTRY_URL = "https://sentry.io"
 
 
 def _configure_sentry_mcp() -> tuple[str, str]:
@@ -113,56 +111,13 @@ def _configure_sentry_mcp() -> tuple[str, str]:
 
 
 def _configure_sentry() -> tuple[str, str]:
-    _, credentials = _integration_defaults("sentry")
     guidance = get_sentry_auth_recommendations()
-    _console.print(
-        f"[{SECONDARY}]Recommended: "
-        f"{guidance['recommended_token_type']} from {guidance['where_to_create']}. "
-        f"{guidance['fallback_token_type']} only if you need broader scopes.[/]"
+    return configure_from_spec(
+        SENTRY_SETUP,
+        title="Sentry",
+        intro=(
+            f"[{SECONDARY}]Recommended: "
+            f"{guidance['recommended_token_type']} from {guidance['where_to_create']}. "
+            f"{guidance['fallback_token_type']} only if you need broader scopes.[/]"
+        ),
     )
-
-    while True:
-        base_url = _prompt_value(
-            "Sentry base URL",
-            default=_string_value(credentials.get("base_url"), DEFAULT_SENTRY_URL),
-        )
-        organization_slug = _prompt_value(
-            "Sentry organization slug",
-            default=_string_value(credentials.get("organization_slug")),
-        )
-        project_slug = _prompt_value(
-            "Sentry project slug (optional)",
-            default=_string_value(credentials.get("project_slug")),
-            allow_empty=True,
-        )
-        auth_token = _prompt_value(
-            "Sentry auth token",
-            default=_string_value(credentials.get("auth_token")),
-            secret=True,
-        )
-
-        with _console.status("Validating Sentry integration...", spinner="dots"):
-            result = validate_sentry_integration(
-                base_url=base_url,
-                organization_slug=organization_slug,
-                auth_token=auth_token,
-                project_slug=project_slug,
-            )
-        _render_integration_result("Sentry", result)
-        if result.ok:
-            credentials = {
-                "base_url": base_url,
-                "organization_slug": organization_slug,
-                "auth_token": auth_token,
-                "project_slug": project_slug,
-            }
-            upsert_integration("sentry", {"credentials": credentials})
-            env_path = sync_env_values(
-                {
-                    "SENTRY_URL": base_url,
-                    "SENTRY_ORG_SLUG": organization_slug,
-                    "SENTRY_PROJECT_SLUG": project_slug,
-                }
-            )
-            return "Sentry", str(env_path)
-        _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")

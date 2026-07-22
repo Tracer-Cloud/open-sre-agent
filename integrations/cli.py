@@ -32,7 +32,6 @@ if TYPE_CHECKING:
     from integrations.github.mcp import GitHubMcpDisplayDetailLevel
     from integrations.setup_flow import IntegrationSetupSpec
 
-from integrations.gitlab import DEFAULT_GITLAB_BASE_URL
 from integrations.openclaw import build_openclaw_config, validate_openclaw_config
 from integrations.posthog_mcp import (
     DEFAULT_POSTHOG_MCP_URL,
@@ -199,23 +198,9 @@ def _setup_datadog() -> None:
 
 
 def _setup_groundcover() -> None:
-    api_key = _p("Service-account API key", secret=True)
-    mcp_url = _p("MCP URL", default="https://mcp.groundcover.com/api/mcp")
-    tenant_uuid = _p("Tenant UUID (optional, for multi-workspace accounts)")
-    backend_id = _p("Backend ID (optional, for multi-backend tenants)")
-    timezone = _p("Timezone", default="UTC")
-    if not api_key:
-        _die("api_key is required.")
-    credentials: dict[str, str] = {
-        "api_key": api_key,
-        "mcp_url": mcp_url,
-        "timezone": timezone,
-    }
-    if tenant_uuid:
-        credentials["tenant_uuid"] = tenant_uuid
-    if backend_id:
-        credentials["backend_id"] = backend_id
-    upsert_integration("groundcover", {"credentials": credentials})
+    from integrations.groundcover.setup import GROUNDCOVER_SETUP
+
+    _run_spec_setup(GROUNDCOVER_SETUP)
 
 
 def _setup_honeycomb() -> None:
@@ -420,19 +405,15 @@ def _setup_rds() -> None:
 
 
 def _setup_tracer() -> None:
-    base_url = _p("Tracer web app URL", default="http://localhost:3000")
-    jwt_token = _p("JWT token", secret=True)
-    if not base_url or not jwt_token:
-        _die("base_url and jwt_token are required.")
-    upsert_integration("tracer", {"credentials": {"base_url": base_url, "jwt_token": jwt_token}})
+    from integrations.tracer.setup import TRACER_SETUP
+
+    _run_spec_setup(TRACER_SETUP)
 
 
 def _setup_vercel() -> None:
-    api_token = _p("Vercel API token", secret=True)
-    team_id = _p("Team ID (optional for personal accounts)")
-    if not api_token:
-        _die("api_token is required.")
-    upsert_integration("vercel", {"credentials": {"api_token": api_token, "team_id": team_id}})
+    from integrations.vercel.setup import VERCEL_SETUP
+
+    _run_spec_setup(VERCEL_SETUP)
 
 
 def _setup_betterstack() -> None:
@@ -461,19 +442,9 @@ def _setup_betterstack() -> None:
 
 
 def _setup_incident_io() -> None:
-    api_key = _p("incident.io API key", secret=True)
-    base_url = _p("API base URL override (optional)")
-    if not api_key:
-        _die("api_key is required.")
-    upsert_integration(
-        "incident_io",
-        {
-            "credentials": {
-                "api_key": api_key,
-                "base_url": base_url,
-            }
-        },
-    )
+    from integrations.incident_io.setup import INCIDENT_IO_SETUP
+
+    _run_spec_setup(INCIDENT_IO_SETUP)
 
 
 def _github_browser_authorize() -> str | None:
@@ -680,50 +651,21 @@ def _setup_github() -> str | None:
 
 
 def _setup_gitlab() -> None:
-    base_url = _p("Gitlab base URL", default=DEFAULT_GITLAB_BASE_URL)
-    auth_token = _p("Gitlab access token", secret=True)
-    upsert_integration(
-        "gitlab",
-        {"credentials": {"base_url": base_url, "auth_token": auth_token}},
-    )
+    from integrations.gitlab.setup import GITLAB_SETUP
+
+    _run_spec_setup(GITLAB_SETUP)
 
 
 def _setup_sentry() -> None:
-    base_url = _p("Sentry URL", default="https://sentry.io")
-    organization_slug = _p("Organization slug")
-    auth_token = _p("Auth token", secret=True)
-    project_slug = _p("Project slug (optional)")
-    if not organization_slug or not auth_token:
-        _die("organization_slug and auth_token are required.")
-    upsert_integration(
-        "sentry",
-        {
-            "credentials": {
-                "base_url": base_url,
-                "organization_slug": organization_slug,
-                "auth_token": auth_token,
-                "project_slug": project_slug,
-            }
-        },
-    )
+    from integrations.sentry.setup import SENTRY_SETUP
+
+    _run_spec_setup(SENTRY_SETUP)
 
 
 def _setup_posthog() -> None:
-    base_url = _p("PostHog API base URL", default="https://us.i.posthog.com")
-    project_id = _p("PostHog project ID")
-    personal_api_key = _p("PostHog personal API key (phx_...)", secret=True)
-    if not project_id or not personal_api_key:
-        _die("project_id and personal_api_key are required.")
-    upsert_integration(
-        "posthog",
-        {
-            "credentials": {
-                "base_url": base_url,
-                "project_id": project_id,
-                "personal_api_key": personal_api_key,
-            }
-        },
-    )
+    from integrations.posthog.setup import POSTHOG_SETUP
+
+    _run_spec_setup(POSTHOG_SETUP)
 
 
 def _setup_mongodb() -> None:
@@ -1157,23 +1099,9 @@ def _setup_mysql() -> None:
 
 
 def _setup_mongodb_atlas() -> None:
-    api_public_key = _p("Atlas API public key")
-    api_private_key = _p("Atlas API private key", secret=True)
-    project_id = _p("Atlas project ID (group ID)")
-    base_url = _p("Atlas API base URL", default="https://cloud.mongodb.com/api/atlas/v2")
-    if not api_public_key or not api_private_key or not project_id:
-        _die("api_public_key, api_private_key, and project_id are required.")
-    upsert_integration(
-        "mongodb_atlas",
-        {
-            "credentials": {
-                "api_public_key": api_public_key,
-                "api_private_key": api_private_key,
-                "project_id": project_id,
-                "base_url": base_url,
-            }
-        },
-    )
+    from integrations.mongodb_atlas.setup import MONGODB_ATLAS_SETUP
+
+    _run_spec_setup(MONGODB_ATLAS_SETUP)
 
 
 def _setup_mariadb() -> None:
@@ -1247,70 +1175,21 @@ def _setup_alertmanager() -> None:
 
 
 def _setup_signoz() -> None:
-    url = _p("SigNoz URL (e.g. http://localhost:8080 for local Docker)")
-    api_key = _p("SigNoz API key (service account key)", secret=True)
+    from integrations.signoz.setup import SIGNOZ_SETUP
 
-    if not (url and api_key):
-        _die("SigNoz URL and API key are required.")
-
-    upsert_integration(
-        "signoz",
-        {
-            "credentials": {
-                "url": url,
-                "api_key": api_key,
-            }
-        },
-    )
+    _run_spec_setup(SIGNOZ_SETUP)
 
 
 def _setup_jenkins() -> None:
-    base_url = _p("Jenkins URL (e.g. http://localhost:8080)")
-    username = _p("Jenkins username")
-    api_token = _p("Jenkins API token", secret=True)
+    from integrations.jenkins.setup import JENKINS_SETUP
 
-    if not (base_url and username and api_token):
-        _die("Jenkins URL, username, and API token are required.")
-
-    upsert_integration(
-        "jenkins",
-        {
-            "credentials": {
-                "base_url": base_url,
-                "username": username,
-                "api_token": api_token,
-            }
-        },
-    )
+    _run_spec_setup(JENKINS_SETUP)
 
 
 def _setup_helm() -> None:
-    helm_path = _p("Helm binary path or name", default="helm")
-    if not helm_path:
-        _die("helm_path is required.")
-    kube_context = _p(
-        "Kubernetes context (optional, passed as --kube-context)",
-        default="",
-    )
-    kubeconfig = _p(
-        "Kubeconfig file path (optional, passed as --kubeconfig)",
-        default="",
-    )
-    default_namespace = _p(
-        "Default namespace when alerts do not specify one (optional)",
-        default="",
-    )
-    upsert_integration(
-        "helm",
-        {
-            "credentials": {
-                "helm_path": helm_path,
-                "kube_context": kube_context,
-                "kubeconfig": kubeconfig,
-                "default_namespace": default_namespace,
-            }
-        },
-    )
+    from integrations.helm.setup import HELM_SETUP
+
+    _run_spec_setup(HELM_SETUP)
 
 
 def _setup_tempo() -> None:
@@ -1320,21 +1199,9 @@ def _setup_tempo() -> None:
 
 
 def _setup_pagerduty() -> None:
-    api_key = _p("PagerDuty API key", secret=True)
-    base_url = _p("API base URL override (optional)")
-    if not api_key:
-        _die("api_key is required.")
-    if not base_url:
-        base_url = "https://api.pagerduty.com"
-    upsert_integration(
-        "pagerduty",
-        {
-            "credentials": {
-                "api_key": api_key,
-                "base_url": base_url,
-            }
-        },
-    )
+    from integrations.pagerduty.setup import PAGERDUTY_SETUP
+
+    _run_spec_setup(PAGERDUTY_SETUP)
 
 
 def _setup_kubernetes() -> None:
@@ -1414,49 +1281,18 @@ _HANDLERS: dict[str, Any] = {
 
 
 def _setup_dagster() -> None:
-    endpoint = _p(
-        "Dagster GraphQL endpoint "
-        "(e.g. http://localhost:3000 or https://<org>.dagster.plus/<deployment>)"
-    )
-    if not endpoint:
-        _die("endpoint is required.")
-    api_token = _p(
-        "Dagster Cloud API token (leave empty for local OSS Dagster with no auth)",
-        secret=True,
-    )
-    upsert_integration(
-        "dagster",
-        {
-            "credentials": {
-                "endpoint": endpoint,
-                "api_token": api_token,
-            }
-        },
-    )
+    from integrations.dagster.setup import DAGSTER_SETUP
+
+    _run_spec_setup(DAGSTER_SETUP)
 
 
 _HANDLERS["dagster"] = _setup_dagster
 
 
 def _setup_temporal() -> None:
-    base_url = _p("Temporal HTTP API base URL (e.g. http://localhost:7243)")
-    if not base_url:
-        _die("base_url is required.")
-    namespace = _p("Temporal namespace", default="default")
-    api_key = _p(
-        "Temporal API key (leave empty for unauthenticated self-hosted clusters)",
-        secret=True,
-    )
-    upsert_integration(
-        "temporal",
-        {
-            "credentials": {
-                "base_url": base_url,
-                "namespace": namespace or "default",
-                "api_key": api_key,
-            }
-        },
-    )
+    from integrations.temporal.setup import TEMPORAL_SETUP
+
+    _run_spec_setup(TEMPORAL_SETUP)
 
 
 _HANDLERS["temporal"] = _setup_temporal

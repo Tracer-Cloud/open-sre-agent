@@ -103,6 +103,29 @@ def test_probe_access_success(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "1 project" in result.detail
 
 
+def test_probe_access_reports_the_api_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Setup refuses to persist on a failed probe, so the reason has to survive."""
+    monkeypatch.setattr(
+        VercelClient,
+        "list_projects",
+        lambda _self: {"success": False, "error": "HTTP 403: forbidden"},
+    )
+
+    result = _client().probe_access()
+
+    assert result.status == "failed"
+    assert "403" in result.detail
+
+
+def test_probe_access_without_a_token_reports_missing_not_failed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A blank token is an unconfigured integration, not a rejected credential."""
+    result = VercelClient(VercelConfig(api_token="")).probe_access()
+
+    assert result.status == "missing"
+
+
 def test_list_projects_success(monkeypatch: pytest.MonkeyPatch) -> None:
     payload = {
         "projects": [
