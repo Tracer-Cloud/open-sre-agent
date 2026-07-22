@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -140,7 +141,7 @@ def test_setup_openclaw_saves_credentials(monkeypatch) -> None:
     )
     monkeypatch.setattr(
         "integrations.setup_flow.sync_env_values",
-        lambda *_args, **_kwargs: type("Path", (), {"__str__": lambda self: "/tmp/.env"})(),
+        lambda *_args, **_kwargs: Path("/tmp/.env"),
     )
     monkeypatch.setattr(
         openclaw_setup,
@@ -191,7 +192,7 @@ def test_setup_servicenow_saves_normalized_https_url(monkeypatch) -> None:
     )
     monkeypatch.setattr(
         "integrations.setup_flow.sync_env_values",
-        lambda *_args, **_kwargs: type("Path", (), {"__str__": lambda self: "/tmp/.env"})(),
+        lambda *_args, **_kwargs: Path("/tmp/.env"),
     )
     monkeypatch.setattr(
         "integrations.servicenow.verifier.httpx.get",
@@ -220,7 +221,7 @@ def test_setup_servicenow_rejects_plain_http_remote_url(monkeypatch) -> None:
     # setup with an actionable error, not be stored and dropped at classify.
     monkeypatch.setattr(
         "integrations.cli._p",
-        lambda _label, default="", secret=False: "http://dev12345.service-now.com",
+        lambda *_args, **_kwargs: "http://dev12345.service-now.com",
     )
     saved: list[tuple[str, dict[str, object]]] = []
     monkeypatch.setattr(
@@ -233,7 +234,7 @@ def test_setup_servicenow_rejects_plain_http_remote_url(monkeypatch) -> None:
     )
     monkeypatch.setattr(
         "integrations.setup_flow.sync_env_values",
-        lambda *_args, **_kwargs: type("Path", (), {"__str__": lambda self: "/tmp/.env"})(),
+        lambda *_args, **_kwargs: Path("/tmp/.env"),
     )
 
     with pytest.raises(SystemExit):
