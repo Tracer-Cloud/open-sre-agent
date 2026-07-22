@@ -15,6 +15,7 @@ from gateway.telegram.output_sink import GatewayOutputSink
 from gateway.telegram.poller.client import TelegramBotClient
 from gateway.telegram.session_rotation import resolve_or_rotate_session
 from gateway.telegram.settings import GatewaySettings, TelegramInboundMessage
+from platform.analytics.usage_context import SURFACE_TELEGRAM, bound_usage_context
 
 logger = logging.getLogger(__name__)
 
@@ -67,12 +68,18 @@ async def handle_polled_inbound_telegram_message(
         )
 
         event_loop = loop or asyncio.get_running_loop()
-        await event_loop.run_in_executor(
-            executor,
-            lambda: handle_callback_to_gateway_agent(
-                event.text,
-                session,
-                sink,
-                logger,
-            ),
-        )
+
+        def _run_turn() -> None:
+            with bound_usage_context(
+                surface=SURFACE_TELEGRAM,
+                session_id=session.session_id,
+                user_id=event.user_id or None,
+            ):
+                handle_callback_to_gateway_agent(
+                    event.text,
+                    session,
+                    sink,
+                    logger,
+                )
+
+        await event_loop.run_in_executor(executor, _run_turn)

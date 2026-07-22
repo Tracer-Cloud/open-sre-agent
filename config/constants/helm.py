@@ -1,0 +1,15 @@
+"""Helm environment variable names."""
+
+from __future__ import annotations
+
+HELM_PATH_ENV = "HELM_PATH"
+HELM_KUBE_CONTEXT_ENV = "HELM_KUBE_CONTEXT"
+HELM_KUBECONFIG_ENV = "HELM_KUBECONFIG"
+HELM_NAMESPACE_ENV = "HELM_NAMESPACE"
+
+__all__ = [
+    "HELM_KUBECONFIG_ENV",
+    "HELM_KUBE_CONTEXT_ENV",
+    "HELM_NAMESPACE_ENV",
+    "HELM_PATH_ENV",
+]

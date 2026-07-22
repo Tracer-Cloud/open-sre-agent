@@ -44,6 +44,7 @@ from mcp.client.stdio import stdio_client  # type: ignore[import-not-found]
 from pydantic import Field, field_validator, model_validator
 from typing_extensions import TypedDict
 
+from config.constants.x_mcp import X_MCP_AUTH_TOKEN_ENV, X_MCP_URL_ENV
 from config.strict_config import StrictConfigModel
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
 from integrations.mcp_streamable_http_compat import streamable_http_client
@@ -196,9 +197,9 @@ def build_x_mcp_config(raw: Mapping[str, object] | None) -> XMCPConfig:
 def x_mcp_config_from_env() -> XMCPConfig | None:
     """Load an X MCP config from environment variables."""
     mode = os.getenv("X_MCP_MODE", DEFAULT_X_MCP_MODE).strip().lower()
-    url = os.getenv("X_MCP_URL", "").strip()
+    url = os.getenv(X_MCP_URL_ENV, "").strip()
     command = os.getenv("X_MCP_COMMAND", "").strip()
-    auth_token = os.getenv("X_MCP_AUTH_TOKEN", "").strip()
+    auth_token = os.getenv(X_MCP_AUTH_TOKEN_ENV, "").strip()
     bearer_token = os.getenv("X_BEARER_TOKEN", "").strip()
     args_env = os.getenv("X_MCP_ARGS", "").strip()
 

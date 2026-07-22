@@ -21,6 +21,7 @@ from typing import Any
 from rich.console import Console
 
 from platform.analytics.repl_context import bound_repl_turn_context
+from platform.analytics.usage_context import SURFACE_CLI, bound_usage_context
 from platform.observability.trace.spans import bind_session_trace, emit_thread_boundary
 from surfaces.interactive_shell.runtime.agent_presentation import (
     AgentEvent,
@@ -143,10 +144,13 @@ async def _run_agent_turn_loop(
         # (``action_agent -> core.agent``) before the first turn is queued.
         from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 
-        with bound_repl_turn_context(
-            session_id=runtime.session.session_id,
-            turn_kind=_AGENT_TURN_KIND,
-            prompt_turn_id=recorder.turn_id if recorder is not None else None,
+        with (
+            bound_usage_context(surface=SURFACE_CLI),
+            bound_repl_turn_context(
+                session_id=runtime.session.session_id,
+                turn_kind=_AGENT_TURN_KIND,
+                prompt_turn_id=recorder.turn_id if recorder is not None else None,
+            ),
         ):
             await asyncio.to_thread(
                 execute_shell_turn,

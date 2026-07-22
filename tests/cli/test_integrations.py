@@ -10,8 +10,6 @@ from integrations.cli import (
     _HANDLERS,
     _setup_openclaw,
     _setup_servicenow,
-    _setup_smtp,
-    _setup_vercel,
 )
 from surfaces.cli.__main__ import cli
 from surfaces.cli.constants import SETUP_SERVICES, VERIFY_SERVICES
@@ -93,30 +91,6 @@ def test_integrations_setup_accepts_openclaw() -> None:
     mock_setup.assert_called_once_with("openclaw")
     mock_verify.assert_called_once_with("openclaw")
     mock_capture.assert_not_called()
-
-
-def test_setup_vercel_saves_credentials(monkeypatch) -> None:
-    answers = iter(["vcp_test_token", "team_123"])
-
-    def fake_p(_label: str, default: str = "", secret: bool = False) -> str:
-        return next(answers)
-
-    saved: list[tuple[str, dict[str, object]]] = []
-    monkeypatch.setattr("integrations.cli._p", fake_p)
-    monkeypatch.setattr(
-        "integrations.cli.upsert_integration",
-        lambda service, entry: saved.append((service, entry)),
-    )
-
-    _setup_vercel()
-
-    assert _HANDLERS["vercel"] is _setup_vercel
-    assert saved == [
-        (
-            "vercel",
-            {"credentials": {"api_token": "vcp_test_token", "team_id": "team_123"}},
-        )
-    ]
 
 
 def test_setup_openclaw_saves_credentials(monkeypatch) -> None:
@@ -313,50 +287,6 @@ def test_integrations_setup_accepts_smtp() -> None:
     assert result.exit_code == 0
     mock_setup.assert_called_once_with("smtp")
     mock_verify.assert_called_once_with("smtp")
-
-
-def test_setup_smtp_saves_credentials(monkeypatch) -> None:
-    answers = iter(
-        [
-            "smtp.example.com",
-            "opensre@example.com",
-            "587",
-            "starttls",
-            "mailer",
-            "secret",
-            "team@example.com",
-        ]
-    )
-
-    def fake_p(_label: str, default: str = "", secret: bool = False) -> str:
-        return next(answers)
-
-    saved: list[tuple[str, dict[str, object]]] = []
-    monkeypatch.setattr("integrations.cli._p", fake_p)
-    monkeypatch.setattr(
-        "integrations.cli.upsert_integration",
-        lambda service, entry: saved.append((service, entry)),
-    )
-
-    _setup_smtp()
-
-    assert _HANDLERS["smtp"] is _setup_smtp
-    assert saved == [
-        (
-            "smtp",
-            {
-                "credentials": {
-                    "host": "smtp.example.com",
-                    "port": 587,
-                    "security": "starttls",
-                    "username": "mailer",
-                    "password": "secret",
-                    "from_address": "opensre@example.com",
-                    "default_to": "team@example.com",
-                }
-            },
-        )
-    ]
 
 
 def test_integrations_setup_skips_auto_verify_for_unverifiable_service() -> None:

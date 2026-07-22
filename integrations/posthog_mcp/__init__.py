@@ -39,6 +39,11 @@ from mcp.client.stdio import stdio_client  # type: ignore[import-not-found]
 from pydantic import Field, field_validator, model_validator
 from typing_extensions import TypedDict
 
+from config.constants.posthog_mcp import (
+    POSTHOG_MCP_AUTH_TOKEN_ENV,
+    POSTHOG_MCP_PROJECT_ID_ENV,
+    POSTHOG_MCP_URL_ENV,
+)
 from config.strict_config import StrictConfigModel
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
 from integrations.mcp_streamable_http_compat import streamable_http_client
@@ -225,9 +230,9 @@ def build_posthog_mcp_config(raw: Mapping[str, object] | None) -> PostHogMCPConf
 def posthog_mcp_config_from_env() -> PostHogMCPConfig | None:
     """Load a PostHog MCP config from environment variables."""
     mode = os.getenv("POSTHOG_MCP_MODE", DEFAULT_POSTHOG_MCP_MODE).strip().lower()
-    url = os.getenv("POSTHOG_MCP_URL", "").strip()
+    url = os.getenv(POSTHOG_MCP_URL_ENV, "").strip()
     command = os.getenv("POSTHOG_MCP_COMMAND", "").strip()
-    auth_token = os.getenv("POSTHOG_MCP_AUTH_TOKEN", "").strip()
+    auth_token = os.getenv(POSTHOG_MCP_AUTH_TOKEN_ENV, "").strip()
     args_env = os.getenv("POSTHOG_MCP_ARGS", "").strip()
     read_only_env = os.getenv("POSTHOG_MCP_READ_ONLY", "").strip().lower()
 
@@ -252,7 +257,7 @@ def posthog_mcp_config_from_env() -> PostHogMCPConfig | None:
             "args": [part for part in args_env.split() if part],
             "auth_token": auth_token,
             "organization_id": os.getenv("POSTHOG_MCP_ORGANIZATION_ID", "").strip(),
-            "project_id": os.getenv("POSTHOG_MCP_PROJECT_ID", "").strip(),
+            "project_id": os.getenv(POSTHOG_MCP_PROJECT_ID_ENV, "").strip(),
             "features": os.getenv("POSTHOG_MCP_FEATURES", "").strip(),
             "read_only": read_only,
         }

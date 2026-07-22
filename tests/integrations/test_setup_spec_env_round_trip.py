@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import dataclasses
 import functools
+import os
 from pathlib import Path
 from typing import Any
 
@@ -26,23 +27,41 @@ import pytest
 
 import integrations.setup_flow as setup_flow
 from config.env_file import env_assignment_key, read_env_lines, sync_env_values
-from integrations._catalog_impl import load_env_integrations
+from integrations._catalog_impl import load_env_integrations, resolve_effective_integrations
 from integrations.betterstack.setup import BETTERSTACK_SETUP
 from integrations.coralogix.setup import CORALOGIX_SETUP
+from integrations.dagster.setup import DAGSTER_SETUP
 from integrations.datadog.setup import DATADOG_SETUP
+from integrations.gitlab.setup import GITLAB_SETUP
+from integrations.groundcover.setup import GROUNDCOVER_SETUP
+from integrations.helm.setup import HELM_SETUP
 from integrations.honeycomb.setup import HONEYCOMB_SETUP
+from integrations.incident_io.setup import INCIDENT_IO_SETUP
+from integrations.jenkins.setup import JENKINS_SETUP
+from integrations.mongodb_atlas.setup import MONGODB_ATLAS_SETUP
 from integrations.mysql.setup import MYSQL_SETUP
 from integrations.openclaw.setup import OPENCLAW_SETUP
+from integrations.pagerduty.setup import PAGERDUTY_SETUP
 from integrations.postgresql.setup import POSTGRESQL_SETUP
+from integrations.posthog.setup import POSTHOG_SETUP
+from integrations.posthog_mcp.setup import POSTHOG_MCP_SETUP
+from integrations.sentry.setup import SENTRY_SETUP
+from integrations.sentry_mcp.setup import SENTRY_MCP_SETUP
 from integrations.servicenow.setup import SERVICENOW_SETUP
+from integrations.signoz.setup import SIGNOZ_SETUP
+from integrations.smtp.setup import SMTP_SETUP
 from integrations.telegram.setup import TELEGRAM_SETUP
+from integrations.tempo.setup import TEMPO_SETUP
+from integrations.temporal.setup import TEMPORAL_SETUP
+from integrations.tracer.setup import TRACER_SETUP
+from integrations.vercel.setup import VERCEL_SETUP
+from integrations.whatsapp.setup import WHATSAPP_SETUP
+from integrations.x_mcp.setup import X_MCP_SETUP
 
 # A distinct, recognizable value per field, so two fields of the same
 # integration swapping places fails instead of coincidentally matching. Values
 # are deliberately non-default (EU hosts, a named dataset) — a default would
 # still "round-trip" through a spec that wrote nothing at all.
-# Constant fields are included at their fixed values so the field-set assert
-# stays exact; apply_setup ignores submitted overrides for those names.
 _SUBMITTED: dict[str, dict[str, str]] = {
     "datadog": {"api_key": "dd-api-key", "app_key": "dd-app-key", "site": "datadoghq.eu"},
     "honeycomb": {
@@ -56,7 +75,93 @@ _SUBMITTED: dict[str, dict[str, str]] = {
         "application_name": "checkout",
         "subsystem_name": "api",
     },
+    "groundcover": {
+        "api_key": "gc-api-key",
+        "mcp_url": "https://mcp.eu.groundcover.com/api/mcp",
+        "tenant_uuid": "11111111-2222-3333-4444-555555555555",
+        "backend_id": "gc-backend-7",
+        "timezone": "Europe/Berlin",
+    },
+    "gitlab": {
+        "base_url": "https://gitlab.example.com/api/v4",
+        "auth_token": "glpat-gitlab-token",
+    },
+    "sentry": {
+        "base_url": "https://sentry.example.com",
+        "organization_slug": "checkout-org",
+        "auth_token": "sntrys-sentry-token",
+        "project_slug": "checkout-api",
+    },
+    "posthog": {
+        "base_url": "https://eu.i.posthog.com",
+        "project_id": "40182",
+        "personal_api_key": "phx-posthog-key",
+    },
+    "vercel": {"api_token": "vercel-api-token", "team_id": "team_abc123"},
     "telegram": {"bot_token": "123456:tg-bot-token", "default_chat_id": "-1001234567890"},
+    "incident_io": {"api_key": "iio-api-key", "base_url": "https://api.eu.incident.io"},
+    "tracer": {"base_url": "https://tracer.example.com", "jwt_token": "tracer-jwt-token"},
+    "mongodb_atlas": {
+        "api_public_key": "atlas-public-key",
+        "api_private_key": "atlas-private-key",
+        "project_id": "60f1a2b3c4d5e6f7a8b9c0d1",
+        "base_url": "https://cloud-eu.mongodb.com/api/atlas/v2",
+    },
+    "signoz": {"url": "https://signoz.example.com", "api_key": "signoz-api-key"},
+    "jenkins": {
+        "base_url": "https://jenkins.example.com",
+        "username": "ci-bot",
+        "api_token": "jenkins-api-token",
+    },
+    "pagerduty": {"api_key": "pd-api-key", "base_url": "https://api.eu.pagerduty.com"},
+    "dagster": {"endpoint": "https://checkout.dagster.cloud/prod", "api_token": "dagster-token"},
+    "temporal": {
+        "base_url": "https://temporal.example.com",
+        "namespace": "checkout-prod",
+        "api_key": "temporal-api-key",
+    },
+    "helm": {
+        "helm_path": "/opt/homebrew/bin/helm",
+        "kube_context": "checkout-prod",
+        "kubeconfig": "/home/ci/.kube/config",
+        "default_namespace": "checkout",
+    },
+    "smtp": {
+        "host": "smtp.eu.example.com",
+        "port": "2525",
+        "security": "ssl",
+        "username": "reports@example.com",
+        "password": "smtp-secret",
+        "from_address": "reports@example.com",
+        "default_to": "oncall@example.com",
+    },
+    "whatsapp": {
+        "account_sid": "AC-checkout-sid",
+        "auth_token": "twilio-auth-token",
+        "from_number": "whatsapp:+14155238886",
+        "default_to": "+15551234567",
+    },
+    "tempo": {
+        "url": "https://tempo.eu.example.com",
+        "api_key": "tempo-bearer-token",
+        "username": "tempo-user",
+        "password": "tempo-password",
+        "org_id": "checkout-tenant",
+    },
+    "posthog_mcp": {
+        "url": "https://mcp.eu.posthog.com/mcp",
+        "auth_token": "phx_mcp_personal_api_key",
+        "project_id": "checkout-project",
+    },
+    "sentry_mcp": {
+        "url": "https://mcp.eu.sentry.dev/mcp",
+        "auth_token": "sentry-user-auth-token",
+        "host": "sentry.checkout.internal",
+    },
+    "x_mcp": {
+        "url": "https://x-mcp.checkout.internal/mcp",
+        "auth_token": "x-mcp-tunnel-token",
+    },
     "betterstack": {
         "query_endpoint": "https://eu-nbg-2-connect.betterstackdata.com",
         "username": "bs-user",
@@ -78,7 +183,7 @@ _SUBMITTED: dict[str, dict[str, str]] = {
     "postgresql": {
         "host": "postgres.eu.example.com",
         "database": "checkout",
-        "port": "5433",
+        "port": "5432",
         "username": "opensre",
         "password": "pg-password",
         "ssl_mode": "require",
@@ -86,18 +191,45 @@ _SUBMITTED: dict[str, dict[str, str]] = {
     "mysql": {
         "host": "mysql.eu.example.com",
         "database": "checkout",
-        "port": "3307",
+        "port": "3306",
         "username": "opensre",
         "password": "mysql-password",
         "ssl_mode": "required",
     },
 }
 
+# Helm's env-only catalog discovery additionally gates on ``OSRE_HELM_INTEGRATION``
+# (see integrations/helm/setup.py) — a manual opt-in unrelated to any SetupField,
+# so it is set alongside the persisted values rather than through apply_setup.
+_EXTRA_ENV: dict[str, dict[str, str]] = {
+    "helm": {"OSRE_HELM_INTEGRATION": "true"},
+}
+
 _SPECS = [
-    DATADOG_SETUP,
-    HONEYCOMB_SETUP,
     CORALOGIX_SETUP,
+    DAGSTER_SETUP,
+    DATADOG_SETUP,
+    GITLAB_SETUP,
+    GROUNDCOVER_SETUP,
+    HELM_SETUP,
+    HONEYCOMB_SETUP,
+    INCIDENT_IO_SETUP,
+    JENKINS_SETUP,
+    MONGODB_ATLAS_SETUP,
+    PAGERDUTY_SETUP,
+    POSTHOG_SETUP,
+    SENTRY_SETUP,
+    SIGNOZ_SETUP,
+    SMTP_SETUP,
     TELEGRAM_SETUP,
+    TEMPO_SETUP,
+    TEMPORAL_SETUP,
+    TRACER_SETUP,
+    VERCEL_SETUP,
+    WHATSAPP_SETUP,
+    POSTHOG_MCP_SETUP,
+    SENTRY_MCP_SETUP,
+    X_MCP_SETUP,
     BETTERSTACK_SETUP,
     OPENCLAW_SETUP,
     SERVICENOW_SETUP,
@@ -133,28 +265,44 @@ def persisted(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> _Persisted:
     return written
 
 
+# Left in place by the wipe below: process/runtime plumbing that unrelated
+# code (subprocess calls, a keyring backend resolving a config path under
+# $HOME) may need, and that no vendor's env_var is ever named after. Keeping
+# this list short and explicit — rather than only clearing known vendor names
+# — is what lets the wipe still catch a *wrong* env_var: the credential names
+# are exactly what must be guaranteed absent unless apply_setup wrote them.
+_ENV_PLUMBING = frozenset({"HOME", "PATH", "TMPDIR", "TMP", "TEMP", "LANG", "LC_ALL", "USER"})
+
+
 def _restore_environment(written: _Persisted, monkeypatch: pytest.MonkeyPatch) -> None:
     """Reproduce the environment a later process would start with.
+
+    Every existing env var is cleared first (aside from ``_ENV_PLUMBING``).
+    ``tests/conftest.py`` loads the developer's real local ``.env`` into
+    ``os.environ`` for the whole test session, so without this a spec whose
+    ``env_var`` is wrong can still "round-trip" — not from what this test just
+    persisted, but from a same-named value already sitting in that real
+    ``.env`` (Twilio's shared account vars are a real example: a wrong
+    ``env_var`` still resolved because the correct name happened to already be
+    set for real).
 
     Keyring secrets are seeded straight into ``os.environ`` because
     ``resolve_env_credential`` checks the environment first — which is what a
     deploy, and this assertion, ultimately depend on.
     """
+    for key in list(os.environ):
+        if key not in _ENV_PLUMBING:
+            monkeypatch.delenv(key, raising=False)
+    # The wipe above also removes the root conftest's OPENSRE_DISABLE_KEYRING;
+    # put it back so an unset field falling through to resolve_keyring_secret
+    # still misses cleanly instead of touching a real OS keyring.
+    monkeypatch.setenv("OPENSRE_DISABLE_KEYRING", "1")
     for key, value in written.secrets.items():
         monkeypatch.setenv(key, value)
     for line in read_env_lines(written.env_path):
         key = env_assignment_key(line)
         if key:
             monkeypatch.setenv(key, line.split("=", 1)[1].strip())
-
-
-def _catalog_credentials(service: str) -> dict[str, Any]:
-    for record in load_env_integrations():
-        if record.get("service") == service:
-            credentials = record.get("credentials")
-            assert isinstance(credentials, dict)
-            return credentials
-    raise AssertionError(f"{service} was not discovered from the environment")
 
 
 def _matches_catalog_value(got: Any, expected: str) -> bool:
@@ -168,6 +316,27 @@ def _matches_catalog_value(got: Any, expected: str) -> bool:
             return list(got) == [part.strip() for part in expected.split(",") if part.strip()]
         return list(got) == [part for part in expected.split() if part]
     return str(got) == expected
+
+
+def _catalog_credentials(service: str) -> dict[str, Any]:
+    # Tracer is the one integration whose env-only discovery lives outside
+    # ``load_env_integrations`` entirely — it is a top-level fallback inside
+    # ``resolve_effective_integrations`` (see ``_catalog_impl.py``), not a
+    # per-vendor block in the env loader. ``store_integrations=[]`` keeps this
+    # off the real local store.
+    if service == "tracer":
+        entry = resolve_effective_integrations(store_integrations=[]).get("tracer")
+        if not isinstance(entry, dict):
+            raise AssertionError(f"{service} was not discovered from the environment")
+        config = entry.get("config")
+        assert isinstance(config, dict)
+        return config
+    for record in load_env_integrations():
+        if record.get("service") == service:
+            credentials = record.get("credentials")
+            assert isinstance(credentials, dict)
+            return credentials
+    raise AssertionError(f"{service} was not discovered from the environment")
 
 
 @pytest.mark.parametrize("spec", _SPECS, ids=lambda spec: spec.service)
@@ -188,6 +357,8 @@ def test_persisted_credentials_are_read_back_by_the_catalog(
     assert outcome.ok, outcome.detail
 
     _restore_environment(persisted, monkeypatch)
+    for key, value in _EXTRA_ENV.get(spec.service, {}).items():
+        monkeypatch.setenv(key, value)
 
     resolved = _catalog_credentials(spec.service)
     for field in spec.fields:

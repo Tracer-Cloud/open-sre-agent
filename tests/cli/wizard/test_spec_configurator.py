@@ -110,6 +110,21 @@ def test_a_stored_value_is_prefilled_over_the_spec_default(run: _Run) -> None:
     assert prefilled["Demo site"] == "stored.example.com"
 
 
+def test_a_stored_list_value_is_joined_as_the_prompt_prefill(run: _Run) -> None:
+    """Legacy store rows may keep list credentials (e.g. Better Stack sources)."""
+    run.stored = {
+        "api_key": "stored-key",
+        "site": "stored.example.com",
+        "note": ["t1_checkout", "t2_api"],
+    }
+    run.answers = {}
+
+    spec_configurator.configure_from_spec(_SPEC, title="Demo")
+
+    note = next(entry for entry in run.asked if entry["label"] == "Demo note")
+    assert note["default"] == "t1_checkout,t2_api"
+
+
 def test_secret_fields_are_marked_for_masking(run: _Run) -> None:
     run.answers = {"Demo API key": "key-1"}
 

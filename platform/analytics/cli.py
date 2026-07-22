@@ -28,6 +28,7 @@ from platform.analytics.source import (
     TriggerMode,
     build_source_properties,
 )
+from platform.analytics.usage_context import SURFACE_CLI
 from platform.observability.errors.sentry import capture_exception
 
 if TYPE_CHECKING:
@@ -467,7 +468,55 @@ def build_cli_invoked_properties(
 
 
 def capture_cli_invoked(properties: Properties | None = None) -> None:
-    _capture(Event.CLI_INVOKED, properties)
+    # Whole-process default for local CLI; gateway binds surface per turn instead.
+    try:
+        analytics = get_analytics()
+        analytics.set_persistent_property("surface", SURFACE_CLI)
+        analytics.capture(Event.CLI_INVOKED, properties)
+    except Exception as exc:
+        capture_exception(exc)
+
+
+def capture_gateway_turn_started(*, surface: str) -> None:
+    """Mark the start of one Slack/Telegram gateway agent turn."""
+    _capture(Event.GATEWAY_TURN_STARTED, {"surface": surface})
+
+
+def capture_gateway_turn_completed(
+    *,
+    surface: str,
+    duration_ms: float,
+    answered: bool,
+    final_intent: str | None = None,
+) -> None:
+    """Mark successful completion of one gateway agent turn."""
+    props: Properties = {
+        "surface": surface,
+        "duration_ms": round(duration_ms),
+        "duration_bucket": _bucket_duration_ms(duration_ms),
+        "answered": answered,
+    }
+    if final_intent:
+        props["final_intent"] = final_intent
+    _capture(Event.GATEWAY_TURN_COMPLETED, props)
+
+
+def capture_gateway_turn_failed(
+    *,
+    surface: str,
+    duration_ms: float,
+    error_type: str,
+) -> None:
+    """Mark a failed gateway agent turn (exception during dispatch)."""
+    _capture(
+        Event.GATEWAY_TURN_FAILED,
+        {
+            "surface": surface,
+            "duration_ms": round(duration_ms),
+            "duration_bucket": _bucket_duration_ms(duration_ms),
+            "error_type": error_type,
+        },
+    )
 
 
 def capture_repl_execution_policy_decision(properties: Properties | None = None) -> None:
@@ -735,12 +784,22 @@ def identify_github_username(username: str) -> None:
 
 
 GITHUB_GATE_EXPERIMENT: Final[str] = "github_gate_v1"
+GITHUB_GATE_VERSION: Final[str] = "1"
 GITHUB_GATE_VARIANT_CONTROL: Final[str] = "control"
 GITHUB_GATE_VARIANT_FORCED: Final[str] = "forced"
 _GITHUB_GATE_VARIANTS: Final[frozenset[str]] = frozenset(
     {GITHUB_GATE_VARIANT_CONTROL, GITHUB_GATE_VARIANT_FORCED}
 )
 GITHUB_GATE_VARIANT_ENV: Final[str] = "OPENSRE_GITHUB_GATE_VARIANT"
+
+# Real user-skip sources (never used for CI/test/env bypasses).
+GITHUB_SKIP_SOURCE_MENU: Final[str] = "menu"
+GITHUB_SKIP_SOURCE_ESCAPE: Final[str] = "escape"
+GITHUB_SKIP_SOURCE_DECLINE_RETRY: Final[str] = "decline_retry"
+
+GITHUB_FAIL_DEVICE_FLOW: Final[str] = "device_flow_unavailable"
+GITHUB_FAIL_TRANSPORT: Final[str] = "transport_error"
+GITHUB_FAIL_VERIFY: Final[str] = "access_unverified"
 
 
 def assign_github_gate_variant(anonymous_id: str) -> str:
@@ -765,35 +824,90 @@ def resolve_github_gate_variant() -> str:
     return assign_github_gate_variant(get_anonymous_id())
 
 
+def github_gate_experiment_properties(variant: str, **extra: object) -> Properties:
+    """Shared experiment fields for GitHub gate exposure/outcome events."""
+    properties: Properties = {
+        "experiment_key": GITHUB_GATE_EXPERIMENT,
+        "variant": variant,
+        "gate_version": GITHUB_GATE_VERSION,
+        # Backward-compatible alias used by existing dashboards / persistent stamp.
+        "github_gate_variant": variant,
+    }
+    for key, value in extra.items():
+        if value is None:
+            continue
+        properties[key] = value  # type: ignore[assignment]
+    return properties
+
+
 def stamp_github_gate_variant(variant: str) -> None:
-    """Persist ``github_gate_variant`` on every subsequent analytics event."""
+    """Persist experiment fields on every subsequent analytics event.
+
+    Downstream events such as ``investigation_started`` inherit ``variant`` /
+    ``github_gate_variant`` via the anonymous ``distinct_id`` session, so
+    completed-vs-skipped and forced-vs-control cohorts can be joined without
+    using ``github_username``.
+    """
     if variant not in _GITHUB_GATE_VARIANTS:
         return
     try:
-        get_analytics().set_persistent_property("github_gate_variant", variant)
+        analytics = get_analytics()
+        for key, value in github_gate_experiment_properties(variant).items():
+            analytics.set_persistent_property(key, value)  # type: ignore[arg-type]
     except Exception as exc:
         capture_exception(exc)
 
 
+def capture_github_login_gate_shown(*, variant: str) -> None:
+    """Exposure event: gate was rendered to an eligible interactive install."""
+    _capture(Event.GITHUB_LOGIN_GATE_SHOWN, github_gate_experiment_properties(variant))
+
+
 def capture_github_login_prompted(*, variant: str) -> None:
-    _capture(Event.GITHUB_LOGIN_PROMPTED, {"github_gate_variant": variant})
+    """Legacy alias for :func:`capture_github_login_gate_shown`.
+
+    Emits both ``github_login_gate_shown`` (canonical) and ``github_login_prompted``
+    (backward compatible) with identical experiment properties so existing
+    PostHog boards keep working during the rename.
+
+    Do **not** combine both event names in the same funnel step or ``event IN
+    (...)`` filter — each gate presentation produces two events and that query
+    would double-count exposures. Prefer ``github_login_gate_shown`` for new
+    boards; keep ``github_login_prompted`` only for legacy charts that have not
+    migrated yet.
+    """
+    props = github_gate_experiment_properties(variant)
+    _capture(Event.GITHUB_LOGIN_GATE_SHOWN, props)
+    _capture(Event.GITHUB_LOGIN_PROMPTED, props)
 
 
-def capture_github_login_skipped(*, variant: str) -> None:
-    _capture(Event.GITHUB_LOGIN_SKIPPED, {"github_gate_variant": variant})
+def capture_github_login_skipped(*, variant: str, skip_source: str) -> None:
+    """User chose to skip (menu / Escape / decline retry). Never for CI bypasses."""
+    _capture(
+        Event.GITHUB_LOGIN_SKIPPED,
+        github_gate_experiment_properties(variant, skip_source=skip_source),
+    )
 
 
 def capture_github_login_abandoned(*, variant: str, reason: str) -> None:
     _capture(
         Event.GITHUB_LOGIN_ABANDONED,
-        {"github_gate_variant": variant, "reason": reason},
+        github_gate_experiment_properties(variant, reason=reason),
+    )
+
+
+def capture_github_login_failed(*, variant: str, reason_category: str) -> None:
+    """Non-terminal failure during a gate attempt (device flow / transport / verify)."""
+    _capture(
+        Event.GITHUB_LOGIN_FAILED,
+        github_gate_experiment_properties(variant, reason_category=reason_category),
     )
 
 
 def capture_github_login_completed(username: str, *, variant: str | None = None) -> None:
     properties: Properties = {"github_username": username}
     if variant is not None:
-        properties["github_gate_variant"] = variant
+        properties.update(github_gate_experiment_properties(variant))
     _capture(Event.GITHUB_LOGIN_COMPLETED, properties)
 
 
