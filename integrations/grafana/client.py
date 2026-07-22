@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
+from collections import OrderedDict
+from dataclasses import dataclass
+from threading import Lock
 
 from integrations.grafana.base import GrafanaClientBase
 from integrations.grafana.config import GrafanaAccountConfig
@@ -12,13 +16,77 @@ from integrations.grafana.tempo import TempoMixin
 
 logger = logging.getLogger(__name__)
 
-_grafana_client_cache: dict[str, GrafanaClient] = {}
+_MAX_GRAFANA_CLIENT_CACHE_SIZE = 64
+
+
+@dataclass(frozen=True, slots=True)
+class _GrafanaClientCacheKey:
+    """Connection identity without retaining raw credentials in the key."""
+
+    account_id: str
+    instance_url: str
+    credentials_fingerprint: str
+    verify_ssl: bool
+    ca_bundle: str
+
+
+_grafana_client_cache: OrderedDict[_GrafanaClientCacheKey, GrafanaClient] = OrderedDict()
+_grafana_client_cache_lock = Lock()
 
 
 class GrafanaClient(LokiMixin, TempoMixin, MimirMixin, GrafanaClientBase):
     """Unified client for querying Grafana Cloud Loki, Tempo, and Mimir."""
 
     pass
+
+
+def _credentials_fingerprint(config: GrafanaAccountConfig) -> str:
+    """Hash length-prefixed auth fields so cache keys never contain secrets."""
+    digest = hashlib.sha256()
+    for value in (config.read_token, config.username, config.password):
+        encoded = value.encode("utf-8")
+        digest.update(len(encoded).to_bytes(8, byteorder="big"))
+        digest.update(encoded)
+    return digest.hexdigest()
+
+
+def _client_cache_key(config: GrafanaAccountConfig) -> _GrafanaClientCacheKey:
+    return _GrafanaClientCacheKey(
+        account_id=config.account_id,
+        instance_url=config.instance_url,
+        credentials_fingerprint=_credentials_fingerprint(config),
+        verify_ssl=config.verify_ssl,
+        ca_bundle=config.ca_bundle,
+    )
+
+
+def _get_cached_client(cache_key: _GrafanaClientCacheKey) -> GrafanaClient | None:
+    with _grafana_client_cache_lock:
+        client = _grafana_client_cache.get(cache_key)
+        if client is not None:
+            _grafana_client_cache.move_to_end(cache_key)
+        return client
+
+
+def _cache_client(cache_key: _GrafanaClientCacheKey, client: GrafanaClient) -> GrafanaClient:
+    """Cache a client, preferring one concurrently created for the same config."""
+    with _grafana_client_cache_lock:
+        existing = _grafana_client_cache.get(cache_key)
+        if existing is not None:
+            _grafana_client_cache.move_to_end(cache_key)
+            return existing
+
+        _grafana_client_cache[cache_key] = client
+        _grafana_client_cache.move_to_end(cache_key)
+        while len(_grafana_client_cache) > _MAX_GRAFANA_CLIENT_CACHE_SIZE:
+            _grafana_client_cache.popitem(last=False)
+        return client
+
+
+def clear_grafana_client_cache() -> None:
+    """Clear cached clients after integration lifecycle changes or in tests."""
+    with _grafana_client_cache_lock:
+        _grafana_client_cache.clear()
 
 
 def get_grafana_client() -> GrafanaClient:
@@ -46,26 +114,27 @@ def get_grafana_client_from_credentials(
     ca_bundle: str = "",
 ) -> GrafanaClient:
     """Create a Grafana client from integration credentials."""
-    cache_key = f"creds_{account_id}_{endpoint}"
-    if cache_key in _grafana_client_cache:
-        return _grafana_client_cache[cache_key]
-
     config = GrafanaAccountConfig(
         account_id=account_id,
-        instance_url=endpoint.rstrip("/"),
+        instance_url=endpoint,
         read_token=api_key,
         username=username,
         password=password,
         verify_ssl=verify_ssl,
         ca_bundle=ca_bundle,
     )
+    cache_key = _client_cache_key(config)
+    cached_client = _get_cached_client(cache_key)
+    if cached_client is not None:
+        return cached_client
+
     client = GrafanaClient(config=config)
 
     discovered = client.discover_datasource_uids()
     if discovered:
         config = GrafanaAccountConfig(
             account_id=account_id,
-            instance_url=endpoint.rstrip("/"),
+            instance_url=endpoint,
             read_token=api_key,
             username=username,
             password=password,
@@ -89,5 +158,4 @@ def get_grafana_client_from_credentials(
             account_id,
         )
 
-    _grafana_client_cache[cache_key] = client
-    return client
+    return _cache_client(cache_key, client)
