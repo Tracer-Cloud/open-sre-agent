@@ -42,6 +42,15 @@ def _stub_telegram_setup(monkeypatch: pytest.MonkeyPatch, verify) -> None:
     )
 
 
+def _stub_dagster_setup(monkeypatch: pytest.MonkeyPatch, verify) -> None:
+    """Swap the Dagster spec's verifier, keeping its real field definitions."""
+    monkeypatch.setattr(
+        _dagster_configurator,
+        "DAGSTER_SETUP",
+        dataclasses.replace(_dagster_configurator.DAGSTER_SETUP, verify=verify),
+    )
+
+
 @pytest.fixture(autouse=True)
 def _stub_managed_llm_secret_persistence(monkeypatch: pytest.MonkeyPatch) -> None:
     """Wizard flow tests should not touch the developer's real keychain."""
@@ -486,10 +495,8 @@ def test_run_wizard_configures_dagster(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(flow.questionary, "text", _mock_text)
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
-    monkeypatch.setattr(
-        _dagster_configurator,
-        "validate_dagster_integration",
-        lambda **_kwargs: flow.IntegrationHealthResult(ok=True, detail="Dagster ok"),
+    _stub_dagster_setup(
+        monkeypatch, lambda _source, _config: {"status": "passed", "detail": "Dagster ok"}
     )
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
@@ -499,14 +506,14 @@ def test_run_wizard_configures_dagster(monkeypatch, tmp_path) -> None:
         synced_env_values.append(values)
         return tmp_path / ".env"
 
-    monkeypatch.setattr(_dagster_configurator, "sync_env_values", _sync_env_values)
+    monkeypatch.setattr(_setup_flow, "sync_env_values", _sync_env_values)
     monkeypatch.setattr(
-        _dagster_configurator,
+        _setup_flow,
         "sync_env_secret",
         lambda key, value: synced_secrets.append((key, value)),
     )
     monkeypatch.setattr(
-        _dagster_configurator,
+        _setup_flow,
         "upsert_integration",
         lambda service, payload: saved_integrations.append((service, payload)),
     )
@@ -557,31 +564,31 @@ def test_run_wizard_configures_dagster_oss_skips_secret(monkeypatch, tmp_path) -
     monkeypatch.setattr(flow.questionary, "text", _mock_text)
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
-    monkeypatch.setattr(
-        _dagster_configurator,
-        "validate_dagster_integration",
-        lambda **_kwargs: flow.IntegrationHealthResult(ok=True, detail="Dagster ok"),
+    _stub_dagster_setup(
+        monkeypatch, lambda _source, _config: {"status": "passed", "detail": "Dagster ok"}
     )
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
     monkeypatch.setattr(_ui, "save_keyring_secret", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
-        _dagster_configurator,
+        _setup_flow,
         "sync_env_values",
         lambda values, **_kwargs: synced_env_values.append(values) or (tmp_path / ".env"),
     )
     monkeypatch.setattr(
-        _dagster_configurator,
+        _setup_flow,
         "sync_env_secret",
         lambda key, value: synced_secrets.append((key, value)),
     )
-    monkeypatch.setattr(_dagster_configurator, "upsert_integration", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(_setup_flow, "upsert_integration", lambda *_args, **_kwargs: None)
 
     exit_code = flow.run_wizard()
 
     assert exit_code == 0
     assert synced_env_values == [{"DAGSTER_ENDPOINT": "http://localhost:3000"}]
-    assert synced_secrets == []  # OSS path: no token
+    # OSS path: token is blank, but apply_setup still mirrors it through so a
+    # previously-set secret is cleared rather than left stale.
+    assert synced_secrets == [("DAGSTER_API_TOKEN", "")]
 
 
 def test_run_wizard_configures_slack_persists_webhook(monkeypatch, tmp_path) -> None:
@@ -688,21 +695,19 @@ def test_run_wizard_dagster_retries_on_validation_failure(monkeypatch, tmp_path)
         m.ask.return_value = next(text_responses)
         return m
 
-    def _validate_dagster(**_kwargs):
+    def _validate_dagster(_source: str, _config: dict) -> dict[str, str]:
         nonlocal validation_call_count
         validation_call_count += 1
         if validation_call_count < 3:
-            return flow.IntegrationHealthResult(
-                ok=False, detail="Dagster GraphQL probe failed: HTTP 401"
-            )
-        return flow.IntegrationHealthResult(ok=True, detail="Dagster ok")
+            return {"status": "failed", "detail": "Dagster GraphQL probe failed: HTTP 401"}
+        return {"status": "passed", "detail": "Dagster ok"}
 
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
     monkeypatch.setattr(flow.questionary, "text", _mock_text)
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
-    monkeypatch.setattr(_dagster_configurator, "validate_dagster_integration", _validate_dagster)
+    _stub_dagster_setup(monkeypatch, _validate_dagster)
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
     monkeypatch.setattr(_ui, "save_keyring_secret", lambda *_args, **_kwargs: None)
@@ -711,14 +716,14 @@ def test_run_wizard_dagster_retries_on_validation_failure(monkeypatch, tmp_path)
         synced_env_values.append(values)
         return tmp_path / ".env"
 
-    monkeypatch.setattr(_dagster_configurator, "sync_env_values", _sync_env_values)
+    monkeypatch.setattr(_setup_flow, "sync_env_values", _sync_env_values)
     monkeypatch.setattr(
-        _dagster_configurator,
+        _setup_flow,
         "sync_env_secret",
         lambda key, value: synced_secrets.append((key, value)),
     )
     monkeypatch.setattr(
-        _dagster_configurator,
+        _setup_flow,
         "upsert_integration",
         lambda service, payload: saved_integrations.append((service, payload)),
     )

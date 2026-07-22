@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from config.env_file import sync_env_secret, sync_env_values
+from config.env_file import sync_env_values
+from integrations.incident_io.setup import INCIDENT_IO_SETUP
+from integrations.pagerduty.setup import PAGERDUTY_SETUP
 from integrations.store import upsert_integration
 from platform.terminal.theme import ERROR, SECONDARY
 from surfaces.cli.wizard._ui import (
@@ -15,12 +17,11 @@ from surfaces.cli.wizard._ui import (
     _render_integration_result,
     _string_value,
 )
+from surfaces.cli.wizard.configurators.spec_configurator import configure_from_spec
 from surfaces.cli.wizard.integration_health import (
     validate_alertmanager_integration,
     validate_betterstack_integration,
-    validate_incident_io_integration,
     validate_opsgenie_integration,
-    validate_pagerduty_integration,
 )
 
 
@@ -146,60 +147,8 @@ def _configure_opsgenie() -> tuple[str, str]:
 
 
 def _configure_pagerduty() -> tuple[str, str]:
-    _, credentials = _integration_defaults("pagerduty")
-    while True:
-        api_key = _prompt_value(
-            "PagerDuty API key",
-            default=_string_value(credentials.get("api_key")),
-            secret=True,
-        )
-        base_url = _prompt_value(
-            "PagerDuty API base URL (press Enter to use default)",
-            default=_string_value(credentials.get("base_url"), "https://api.pagerduty.com"),
-        )
-        with _console.status("Validating PagerDuty integration...", spinner="dots"):
-            result = validate_pagerduty_integration(api_key=api_key, base_url=base_url)
-        _render_integration_result("PagerDuty", result)
-        if result.ok:
-            upsert_integration(
-                "pagerduty",
-                {"credentials": {"api_key": api_key, "base_url": base_url}},
-            )
-            env_path = sync_env_values({})
-            return "PagerDuty", str(env_path)
-        _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
+    return configure_from_spec(PAGERDUTY_SETUP, title="PagerDuty")
 
 
 def _configure_incident_io() -> tuple[str, str]:
-    _, credentials = _integration_defaults("incident_io")
-    while True:
-        api_key = _prompt_value(
-            "incident.io API key",
-            default=_string_value(credentials.get("api_key")),
-            secret=True,
-        )
-        base_url = _prompt_value(
-            "API base URL override (optional)",
-            default=_string_value(credentials.get("base_url")),
-            allow_empty=True,
-        )
-        with _console.status("Validating incident.io integration...", spinner="dots"):
-            result = validate_incident_io_integration(
-                api_key=api_key,
-                base_url=base_url,
-            )
-        _render_integration_result("incident.io", result)
-        if result.ok:
-            credentials_payload = {
-                "api_key": api_key,
-                "base_url": base_url,
-            }
-            upsert_integration("incident_io", {"credentials": credentials_payload})
-            sync_env_secret("INCIDENT_IO_API_KEY", api_key)
-            env_path = sync_env_values(
-                {
-                    "INCIDENT_IO_BASE_URL": base_url,
-                }
-            )
-            return "incident.io", str(env_path)
-        _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
+    return configure_from_spec(INCIDENT_IO_SETUP, title="incident.io")

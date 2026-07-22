@@ -27,9 +27,18 @@ import pytest
 
 import integrations.cli as cli
 import integrations.coralogix.setup as coralogix_setup
+import integrations.dagster.setup as dagster_setup
 import integrations.datadog.setup as datadog_setup
+import integrations.helm.setup as helm_setup
 import integrations.honeycomb.setup as honeycomb_setup
+import integrations.incident_io.setup as incident_io_setup
+import integrations.jenkins.setup as jenkins_setup
+import integrations.mongodb_atlas.setup as mongodb_atlas_setup
+import integrations.pagerduty.setup as pagerduty_setup
 import integrations.setup_flow as setup_flow
+import integrations.signoz.setup as signoz_setup
+import integrations.temporal.setup as temporal_setup
+import integrations.tracer.setup as tracer_setup
 
 _ANSWERS: dict[str, dict[str, str]] = {
     "datadog": {"api_key": "dd-api-key", "app_key": "dd-app-key", "site": "datadoghq.eu"},
@@ -44,6 +53,33 @@ _ANSWERS: dict[str, dict[str, str]] = {
         "application_name": "checkout",
         "subsystem_name": "api",
     },
+    "incident_io": {"api_key": "iio-api-key", "base_url": "https://api.eu.incident.io"},
+    "tracer": {"base_url": "https://tracer.example.com", "jwt_token": "tracer-jwt-token"},
+    "mongodb_atlas": {
+        "api_public_key": "atlas-public-key",
+        "api_private_key": "atlas-private-key",
+        "project_id": "60f1a2b3c4d5e6f7a8b9c0d1",
+        "base_url": "https://cloud-eu.mongodb.com/api/atlas/v2",
+    },
+    "signoz": {"url": "https://signoz.example.com", "api_key": "signoz-api-key"},
+    "jenkins": {
+        "base_url": "https://jenkins.example.com",
+        "username": "ci-bot",
+        "api_token": "jenkins-api-token",
+    },
+    "pagerduty": {"api_key": "pd-api-key", "base_url": "https://api.eu.pagerduty.com"},
+    "dagster": {"endpoint": "https://checkout.dagster.cloud/prod", "api_token": "dagster-token"},
+    "temporal": {
+        "base_url": "https://temporal.example.com",
+        "namespace": "checkout-prod",
+        "api_key": "temporal-api-key",
+    },
+    "helm": {
+        "helm_path": "/opt/homebrew/bin/helm",
+        "kube_context": "checkout-prod",
+        "kubeconfig": "/home/ci/.kube/config",
+        "default_namespace": "checkout",
+    },
 }
 
 # (spec module, spec attribute, CLI handler) — the attribute is patched rather
@@ -52,7 +88,26 @@ _CASES = [
     pytest.param(datadog_setup, "DATADOG_SETUP", cli._setup_datadog, id="datadog"),
     pytest.param(honeycomb_setup, "HONEYCOMB_SETUP", cli._setup_honeycomb, id="honeycomb"),
     pytest.param(coralogix_setup, "CORALOGIX_SETUP", cli._setup_coralogix, id="coralogix"),
+    pytest.param(incident_io_setup, "INCIDENT_IO_SETUP", cli._setup_incident_io, id="incident_io"),
+    pytest.param(tracer_setup, "TRACER_SETUP", cli._setup_tracer, id="tracer"),
+    pytest.param(
+        mongodb_atlas_setup, "MONGODB_ATLAS_SETUP", cli._setup_mongodb_atlas, id="mongodb_atlas"
+    ),
+    pytest.param(signoz_setup, "SIGNOZ_SETUP", cli._setup_signoz, id="signoz"),
+    pytest.param(jenkins_setup, "JENKINS_SETUP", cli._setup_jenkins, id="jenkins"),
+    pytest.param(pagerduty_setup, "PAGERDUTY_SETUP", cli._setup_pagerduty, id="pagerduty"),
+    pytest.param(dagster_setup, "DAGSTER_SETUP", cli._setup_dagster, id="dagster"),
+    pytest.param(temporal_setup, "TEMPORAL_SETUP", cli._setup_temporal, id="temporal"),
+    pytest.param(helm_setup, "HELM_SETUP", cli._setup_helm, id="helm"),
 ]
+
+# HELM_SETUP has no field that is both required and defaultless (``helm_path``
+# defaults to "helm"; everything else is optional). DAGSTER_SETUP's ``endpoint``
+# now carries the same default the wizard configurator always offered
+# ("http://localhost:3000"), and ``api_token`` is optional. Neither spec can
+# produce the "blank required field with no default" scenario the last test
+# below exercises — excluded there only.
+_BLANK_REQUIRED_CASES = [case for case in _CASES if case.id not in {"helm", "dagster"}]
 
 
 @dataclasses.dataclass
@@ -173,7 +228,7 @@ def test_failed_verification_exits_without_saving(
     assert (run.store, run.keyring, run.env) == ([], [], [])
 
 
-@pytest.mark.parametrize(("module", "attr", "handler"), _CASES)
+@pytest.mark.parametrize(("module", "attr", "handler"), _BLANK_REQUIRED_CASES)
 def test_blank_required_field_exits_before_the_next_prompt(
     monkeypatch: pytest.MonkeyPatch, run: _Run, module: Any, attr: str, handler: Any
 ) -> None:

@@ -66,6 +66,8 @@ def test_is_sensitive_env_key_marks_secrets(key: str) -> None:
         "OPENAI_TOKEN_LIMIT",
         # Explicit exception: a public discord key is not sensitive.
         "DISCORD_PUBLIC_KEY",
+        # Explicit exception: paired with a private key, not a secret itself.
+        "MONGODB_ATLAS_PUBLIC_KEY",
     ],
 )
 def test_is_sensitive_env_key_leaves_non_secrets(key: str) -> None:
