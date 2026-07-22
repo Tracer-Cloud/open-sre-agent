@@ -34,13 +34,14 @@ def _reset_analytics(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     monkeypatch.setattr(provider, "_ANONYMOUS_ID_PATH", tmp_path / "anonymous_id")
     monkeypatch.setattr(provider, "_FIRST_RUN_PATH", tmp_path / "installed")
     monkeypatch.setattr(provider.atexit, "register", lambda _func: None)
-    import platform.analytics.usage_context as usage_context
+    import sys
 
-    usage_context._PROCESS_SESSION_ID = None
+    usage_ctx = sys.modules["platform.analytics.usage_context"]
+    usage_ctx._PROCESS_SESSION_ID = None
     yield
     provider.shutdown_analytics(flush=False)
     provider._instance = None
-    usage_context._PROCESS_SESSION_ID = None
+    usage_ctx._PROCESS_SESSION_ID = None
 
 
 def _stub_httpx_client(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, object]]:

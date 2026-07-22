@@ -45,13 +45,15 @@ def run_text_investigation(
         from platform.analytics.cli import track_investigation
         from platform.analytics.source import EntrypointSource, TriggerMode
 
-        with track_investigation(
-            entrypoint=EntrypointSource.CLI_PASTE,
-            trigger_mode=TriggerMode.PASTE,
-            interactive=True,
-            session=session,  # type: ignore[arg-type]
-            investigation_target=alert_text[:120] or None,
-        ) as tracker:
+        with (
+            track_investigation(
+                entrypoint=EntrypointSource.CLI_PASTE,
+                trigger_mode=TriggerMode.PASTE,
+                interactive=True,
+                session=session,  # type: ignore[arg-type]
+                investigation_target=alert_text[:120] or None,
+            ) as tracker
+        ):
             final_state = ports.run_text_investigation(
                 alert_text=alert_text,
                 context_overrides=session.accumulated_context or None,
