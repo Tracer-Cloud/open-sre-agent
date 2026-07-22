@@ -470,8 +470,11 @@ def build_cli_invoked_properties(
 def capture_cli_invoked(properties: Properties | None = None) -> None:
     # Whole-process default for local CLI; gateway binds surface per turn instead.
     try:
+        from platform.analytics.usage_context import ensure_process_session_id
+
         analytics = get_analytics()
         analytics.set_persistent_property("surface", SURFACE_CLI)
+        ensure_process_session_id()
         analytics.capture(Event.CLI_INVOKED, properties)
     except Exception as exc:
         capture_exception(exc)
@@ -672,56 +675,62 @@ def track_investigation(
     session: SessionCore | None = None,
 ) -> Generator[InvestigationTracker]:
     """Capture investigation lifecycle once, with nested-call dedupe."""
+    from platform.analytics.usage_context import bound_usage_context
+
     depth = _INVESTIGATION_TRACKING_DEPTH.get()
     token = _INVESTIGATION_TRACKING_DEPTH.set(depth + 1)
     loop_metrics_token = begin_investigation_loop_metrics_scope() if depth == 0 else None
-    tracker: InvestigationTracker
-    if depth > 0:
-        tracker = InvestigationTracker(shared_properties={}, enabled=False)
-    else:
-        resolved_id = investigation_id or str(uuid4())
-        shared_properties = build_source_properties(
-            entrypoint=entrypoint,
-            trigger_mode=trigger_mode,
-            investigation_id=resolved_id,
-        )
-        if investigation_target:
-            shared_properties["investigation_target"] = investigation_target
-        if session is not None:
-            session.last_investigation_id = resolved_id
-        _capture(
-            Event.INVESTIGATION_STARTED,
-            _investigation_started_properties(
-                input_path=input_path,
-                input_json=input_json,
-                interactive=interactive,
-                evaluate_requested=evaluate_requested,
-                shared_properties=shared_properties,
-            ),
-        )
-        tracker = InvestigationTracker(shared_properties=shared_properties, enabled=True)
+    session_id = str(getattr(session, "session_id", "") or "") or None
+    # Bind session for the full lifecycle so background threads still stamp
+    # session_id (ContextVars do not cross threads unless rebound here).
+    with bound_usage_context(session_id=session_id):
+        tracker: InvestigationTracker
+        if depth > 0:
+            tracker = InvestigationTracker(shared_properties={}, enabled=False)
+        else:
+            resolved_id = investigation_id or str(uuid4())
+            shared_properties = build_source_properties(
+                entrypoint=entrypoint,
+                trigger_mode=trigger_mode,
+                investigation_id=resolved_id,
+            )
+            if investigation_target:
+                shared_properties["investigation_target"] = investigation_target
+            if session is not None:
+                session.last_investigation_id = resolved_id
+            _capture(
+                Event.INVESTIGATION_STARTED,
+                _investigation_started_properties(
+                    input_path=input_path,
+                    input_json=input_json,
+                    interactive=interactive,
+                    evaluate_requested=evaluate_requested,
+                    shared_properties=shared_properties,
+                ),
+            )
+            tracker = InvestigationTracker(shared_properties=shared_properties, enabled=True)
 
-    try:
-        yielded = tracker
-        yield yielded
-    except Exception as exc:
-        failure_message = str(exc).strip()[:500]
-        failure_detail = "".join(traceback.format_exception_only(exc)).strip()[:500]
-        capture_investigation_failed(
-            tracker=yielded,
-            failure_type=type(exc).__name__,
-            failure_message=failure_message or type(exc).__name__,
-            failure_detail=failure_detail or None,
-            investigation_target=investigation_target,
-        )
-        raise
-    else:
-        if not yielded.failed and not yielded.completed:
-            capture_investigation_completed(tracker=yielded)
-    finally:
-        _INVESTIGATION_TRACKING_DEPTH.reset(token)
-        if depth == 0 and loop_metrics_token is not None:
-            reset_investigation_loop_metrics(loop_metrics_token)
+        try:
+            yielded = tracker
+            yield yielded
+        except Exception as exc:
+            failure_message = str(exc).strip()[:500]
+            failure_detail = "".join(traceback.format_exception_only(exc)).strip()[:500]
+            capture_investigation_failed(
+                tracker=yielded,
+                failure_type=type(exc).__name__,
+                failure_message=failure_message or type(exc).__name__,
+                failure_detail=failure_detail or None,
+                investigation_target=investigation_target,
+            )
+            raise
+        else:
+            if not yielded.failed and not yielded.completed:
+                capture_investigation_completed(tracker=yielded)
+        finally:
+            _INVESTIGATION_TRACKING_DEPTH.reset(token)
+            if depth == 0 and loop_metrics_token is not None:
+                reset_investigation_loop_metrics(loop_metrics_token)
 
 
 def capture_integration_setup_started(service: str) -> None:

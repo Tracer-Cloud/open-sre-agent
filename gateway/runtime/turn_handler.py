@@ -93,7 +93,14 @@ class GatewayTurnHandler:
     ) -> None:
         session.available_capabilities.update(dict.fromkeys(_UNSUPPORTED_GATEWAY_CAPABILITIES, ()))
         session_id = getattr(session, "session_id", None)
-        surface = get_surface() or "gateway"
+        surface = get_surface()
+        if surface not in {"cli", "slack", "telegram"}:
+            # Require transport binding (Slack/Telegram dispatchers). Do not invent
+            # a non-canonical surface that breaks channel breakdowns.
+            logger.warning(
+                "gateway_turn missing surface binding; analytics events will omit surface"
+            )
+            surface = None
         started = time.monotonic()
 
         with (
@@ -101,7 +108,8 @@ class GatewayTurnHandler:
             traced_session(session_id, component="gateway_turn"),
         ):
             try:
-                capture_gateway_turn_started(surface=surface)
+                if surface:
+                    capture_gateway_turn_started(surface=surface)
                 agent = self._agent_for_turn(text=text, session=session, sink=sink, logger=logger)
                 turn_result = agent.dispatch(text)
                 outbound_text = (
@@ -118,18 +126,20 @@ class GatewayTurnHandler:
                 # even when the turn produced no text.
                 if not turn_result.answered:
                     sink.finalize(outbound_text or "I didn't have anything to add for that.")
-                capture_gateway_turn_completed(
-                    surface=surface,
-                    duration_ms=(time.monotonic() - started) * 1000.0,
-                    answered=bool(turn_result.answered),
-                    final_intent=str(turn_result.final_intent or "") or None,
-                )
+                if surface:
+                    capture_gateway_turn_completed(
+                        surface=surface,
+                        duration_ms=(time.monotonic() - started) * 1000.0,
+                        answered=bool(turn_result.answered),
+                        final_intent=str(turn_result.final_intent or "") or None,
+                    )
             except Exception as exc:
-                capture_gateway_turn_failed(
-                    surface=surface,
-                    duration_ms=(time.monotonic() - started) * 1000.0,
-                    error_type=type(exc).__name__,
-                )
+                if surface:
+                    capture_gateway_turn_failed(
+                        surface=surface,
+                        duration_ms=(time.monotonic() - started) * 1000.0,
+                        error_type=type(exc).__name__,
+                    )
                 raise
 
     def _agent_for_turn(

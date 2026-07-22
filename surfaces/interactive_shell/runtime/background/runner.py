@@ -117,57 +117,63 @@ def _start_background_investigation(
     session.terminal.background_investigations[task.task_id] = record
 
     def _worker() -> None:
-        try:
-            with track_investigation(
-                entrypoint=EntrypointSource.CLI_REPL_FILE,
-                trigger_mode=TriggerMode.FILE,
-                input_path=input_path,
-                interactive=True,
-                investigation_id=investigation_id,
-                investigation_target=investigation_target or None,
-                session=session,
-            ) as tracker:
-                final_state = run_fn(cancel_requested=task.cancel_requested, **kwargs)
-                tracker.record_loop_metrics_from_state(final_state)
-            root = str(final_state.get("root_cause") or "")
-            record.status = "completed"
-            record.root_cause = root
-            record.top_analysis = _top_analysis(final_state)
-            record.next_steps = _next_steps(final_state)
-            record.stats = _stats(final_state)
-            record.final_state = dict(final_state)
-            record.notification_results = deliver_background_notifications(
-                record=record,
-                channels=session.terminal.background_notification_preferences.channels,
-            )
-            task.mark_completed(result=root)
-            session.terminal.enqueue_background_notice(
-                f"[{HIGHLIGHT}]background investigation complete[/] "
-                f"[{DIM}]— task {escape(task.task_id)} ready; "
-                f"use[/] [{HIGHLIGHT}]/background show {escape(task.task_id)}[/]",
-            )
-        except KeyboardInterrupt:
-            record.status = "cancelled"
-            task.mark_cancelled()
-            session.terminal.enqueue_background_notice(
-                f"[{WARNING}]background investigation cancelled[/] "
-                f"[{DIM}]for task {escape(task.task_id)}.[/]",
-            )
-        except OpenSREError as exc:
-            record.status = "failed"
-            task.mark_failed(str(exc))
-            session.terminal.enqueue_background_notice(
-                f"[{ERROR}]background investigation failed[/] "
-                f"[{DIM}]for task {escape(task.task_id)}:[/] {escape(str(exc))}",
-            )
-        except Exception as exc:  # noqa: BLE001
-            record.status = "failed"
-            task.mark_failed(str(exc))
-            report_exception(exc, context="surfaces.interactive_shell.background_investigation")
-            session.terminal.enqueue_background_notice(
-                f"[{ERROR}]background investigation failed[/] "
-                f"[{DIM}]for task {escape(task.task_id)}:[/] {escape(str(exc))}",
-            )
+        from platform.analytics.usage_context import SURFACE_CLI, bound_usage_context
+
+        with bound_usage_context(
+            surface=SURFACE_CLI,
+            session_id=session.session_id,
+        ):
+            try:
+                with track_investigation(
+                    entrypoint=EntrypointSource.CLI_REPL_FILE,
+                    trigger_mode=TriggerMode.FILE,
+                    input_path=input_path,
+                    interactive=True,
+                    investigation_id=investigation_id,
+                    investigation_target=investigation_target or None,
+                    session=session,
+                ) as tracker:
+                    final_state = run_fn(cancel_requested=task.cancel_requested, **kwargs)
+                    tracker.record_loop_metrics_from_state(final_state)
+                root = str(final_state.get("root_cause") or "")
+                record.status = "completed"
+                record.root_cause = root
+                record.top_analysis = _top_analysis(final_state)
+                record.next_steps = _next_steps(final_state)
+                record.stats = _stats(final_state)
+                record.final_state = dict(final_state)
+                record.notification_results = deliver_background_notifications(
+                    record=record,
+                    channels=session.terminal.background_notification_preferences.channels,
+                )
+                task.mark_completed(result=root)
+                session.terminal.enqueue_background_notice(
+                    f"[{HIGHLIGHT}]background investigation complete[/] "
+                    f"[{DIM}]— task {escape(task.task_id)} ready; "
+                    f"use[/] [{HIGHLIGHT}]/background show {escape(task.task_id)}[/]",
+                )
+            except KeyboardInterrupt:
+                record.status = "cancelled"
+                task.mark_cancelled()
+                session.terminal.enqueue_background_notice(
+                    f"[{WARNING}]background investigation cancelled[/] "
+                    f"[{DIM}]for task {escape(task.task_id)}.[/]",
+                )
+            except OpenSREError as exc:
+                record.status = "failed"
+                task.mark_failed(str(exc))
+                session.terminal.enqueue_background_notice(
+                    f"[{ERROR}]background investigation failed[/] "
+                    f"[{DIM}]for task {escape(task.task_id)}:[/] {escape(str(exc))}",
+                )
+            except Exception as exc:  # noqa: BLE001
+                record.status = "failed"
+                task.mark_failed(str(exc))
+                report_exception(exc, context="surfaces.interactive_shell.background_investigation")
+                session.terminal.enqueue_background_notice(
+                    f"[{ERROR}]background investigation failed[/] "
+                    f"[{DIM}]for task {escape(task.task_id)}:[/] {escape(str(exc))}",
+                )
 
     thread = threading.Thread(
         target=_worker,

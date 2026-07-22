@@ -38,7 +38,10 @@ def run_initial_input(
         render_submitted_prompt(console, session, stripped)
         recorder = PromptRecorder.start(session=session, text=stripped, turn_kind=_TURN_KIND)
         with (
-            bound_usage_context(surface=SURFACE_CLI),
+            bound_usage_context(
+                surface=SURFACE_CLI,
+                session_id=session.session_id,
+            ),
             bound_repl_turn_context(
                 session_id=session.session_id,
                 turn_kind=_TURN_KIND,

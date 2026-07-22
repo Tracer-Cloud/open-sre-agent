@@ -145,7 +145,10 @@ async def _run_agent_turn_loop(
         from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 
         with (
-            bound_usage_context(surface=SURFACE_CLI),
+            bound_usage_context(
+                surface=SURFACE_CLI,
+                session_id=runtime.session.session_id,
+            ),
             bound_repl_turn_context(
                 session_id=runtime.session.session_id,
                 turn_kind=_AGENT_TURN_KIND,
