@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import json
 import os
 from unittest.mock import MagicMock
@@ -297,6 +298,7 @@ def test_run_wizard_configures_honeycomb(monkeypatch, tmp_path) -> None:
     text_responses = iter(["prod-api", "https://api.honeycomb.io"])
     saved_integrations: list[tuple[str, dict]] = []
     synced_env_values: list[dict[str, str]] = []
+    synced_env_secrets: list[tuple[str, str]] = []
 
     def _mock_select(*_args, **_kwargs):
         m = MagicMock()
@@ -320,8 +322,11 @@ def test_run_wizard_configures_honeycomb(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(
         _observability_configurator,
-        "validate_honeycomb_integration",
-        lambda **_kwargs: flow.IntegrationHealthResult(ok=True, detail="Honeycomb ok"),
+        "HONEYCOMB_SETUP",
+        dataclasses.replace(
+            _observability_configurator.HONEYCOMB_SETUP,
+            verify=lambda _source, _config: {"status": "passed", "detail": "Honeycomb ok"},
+        ),
     )
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
@@ -331,9 +336,12 @@ def test_run_wizard_configures_honeycomb(monkeypatch, tmp_path) -> None:
         synced_env_values.append(values)
         return tmp_path / ".env"
 
-    monkeypatch.setattr(_observability_configurator, "sync_env_values", _sync_env_values)
+    monkeypatch.setattr(_setup_flow, "sync_env_values", _sync_env_values)
     monkeypatch.setattr(
-        _observability_configurator,
+        _setup_flow, "sync_env_secret", lambda key, value: synced_env_secrets.append((key, value))
+    )
+    monkeypatch.setattr(
+        _setup_flow,
         "upsert_integration",
         lambda service, payload: saved_integrations.append((service, payload)),
     )
@@ -359,6 +367,8 @@ def test_run_wizard_configures_honeycomb(monkeypatch, tmp_path) -> None:
             "HONEYCOMB_API_URL": "https://api.honeycomb.io",
         }
     ]
+    # The wizard previously wrote the dataset and URL but dropped the key entirely.
+    assert synced_env_secrets == [("HONEYCOMB_API_KEY", "hny_test")]
 
 
 def test_run_wizard_configures_coralogix(monkeypatch, tmp_path) -> None:
@@ -373,6 +383,7 @@ def test_run_wizard_configures_coralogix(monkeypatch, tmp_path) -> None:
     )
     saved_integrations: list[tuple[str, dict]] = []
     synced_env_values: list[dict[str, str]] = []
+    synced_env_secrets: list[tuple[str, str]] = []
 
     def _mock_select(*_args, **_kwargs):
         m = MagicMock()
@@ -396,8 +407,11 @@ def test_run_wizard_configures_coralogix(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(
         _observability_configurator,
-        "validate_coralogix_integration",
-        lambda **_kwargs: flow.IntegrationHealthResult(ok=True, detail="Coralogix ok"),
+        "CORALOGIX_SETUP",
+        dataclasses.replace(
+            _observability_configurator.CORALOGIX_SETUP,
+            verify=lambda _source, _config: {"status": "passed", "detail": "Coralogix ok"},
+        ),
     )
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
@@ -407,9 +421,12 @@ def test_run_wizard_configures_coralogix(monkeypatch, tmp_path) -> None:
         synced_env_values.append(values)
         return tmp_path / ".env"
 
-    monkeypatch.setattr(_observability_configurator, "sync_env_values", _sync_env_values)
+    monkeypatch.setattr(_setup_flow, "sync_env_values", _sync_env_values)
     monkeypatch.setattr(
-        _observability_configurator,
+        _setup_flow, "sync_env_secret", lambda key, value: synced_env_secrets.append((key, value))
+    )
+    monkeypatch.setattr(
+        _setup_flow,
         "upsert_integration",
         lambda service, payload: saved_integrations.append((service, payload)),
     )
@@ -437,6 +454,8 @@ def test_run_wizard_configures_coralogix(monkeypatch, tmp_path) -> None:
             "CORALOGIX_SUBSYSTEM_NAME": "worker",
         }
     ]
+    # The wizard previously wrote the URL and filters but dropped the key entirely.
+    assert synced_env_secrets == [("CORALOGIX_API_KEY", "cx_test")]
 
 
 def test_run_wizard_configures_dagster(monkeypatch, tmp_path) -> None:

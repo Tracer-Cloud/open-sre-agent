@@ -802,7 +802,16 @@ def test_onboard_interactive_smoke_cli_provider_repick_when_unauthenticated(
 
 
 @pytest.mark.skipif(os.name == "nt", reason="interactive smoke uses POSIX PTYs")
-def test_integrations_setup_datadog_interactive_smoke(cli_sandbox: CliSandbox) -> None:
+def test_integrations_setup_datadog_rejects_credentials_that_do_not_verify(
+    cli_sandbox: CliSandbox,
+) -> None:
+    """Placeholder keys must leave nothing behind, on any tier.
+
+    This used to save first and verify afterwards, so a typo'd key overwrote a
+    working integration and the command still reported ``Saved``. The shared
+    setup flow verifies before it persists; with keys the Datadog API rejects,
+    the store and ``.env`` are expected to stay untouched.
+    """
     result = _run_cli_pty(
         cli_sandbox,
         "integrations",
@@ -810,22 +819,17 @@ def test_integrations_setup_datadog_interactive_smoke(cli_sandbox: CliSandbox) -
         "datadog",
         actions=[
             PtyAction(expect="API key", send=b"dd-api-key\r"),
-            PtyAction(expect="Application key", send=b"dd-app-key\r"),
+            PtyAction(expect="application key", send=b"dd-app-key\r"),
             PtyAction(expect="Site", send=b"\r"),
         ],
         # Setup runs verify against the Datadog API; CI runners can exceed 20s.
         timeout=45.0,
     )
 
-    assert "Saved" in result.stdout
-    # Setup saves credentials then runs verify; placeholder keys fail the Datadog API check.
-    assert result.exit_code in (0, 1)
-
-    integrations = cli_sandbox.read_integrations()
-    assert len(integrations) == 1
-    assert integrations[0]["service"] == "datadog"
-    # v2 store shape: credentials live inside the default instance.
-    assert integrations[0]["instances"][0]["credentials"]["site"] == "datadoghq.com"
+    assert result.exit_code == 1
+    assert "Saved" not in result.stdout
+    assert cli_sandbox.read_integrations() == []
+    assert "DD_SITE" not in cli_sandbox.read_project_env()
 
 
 @pytest.mark.skipif(os.name == "nt", reason="interactive smoke uses POSIX PTYs")

@@ -3,15 +3,10 @@
 from __future__ import annotations
 
 from integrations.config_models import (
-    CoralogixIntegrationConfig,
     GrafanaIntegrationConfig,
-    HoneycombIntegrationConfig,
 )
-from integrations.coralogix.client import CoralogixClient
-from integrations.datadog.client import DatadogClient, DatadogConfig
 from integrations.elasticsearch.client import ElasticsearchClient, ElasticsearchConfig
 from integrations.grafana.client import get_grafana_client_from_credentials
-from integrations.honeycomb.client import HoneycombClient
 from integrations.splunk.client import SplunkClient, SplunkConfig
 from integrations.tempo import build_tempo_config, validate_tempo_config
 
@@ -56,111 +51,6 @@ def validate_grafana_integration(
         )
     except Exception as err:
         return IntegrationHealthResult(ok=False, detail=f"Grafana validation failed: {err}")
-
-
-def validate_datadog_integration(
-    *, api_key: str, app_key: str, site: str
-) -> IntegrationHealthResult:
-    """Validate Datadog credentials with a monitor list request."""
-    client = DatadogClient(DatadogConfig(api_key=api_key, app_key=app_key, site=site))
-    result = client.list_monitors()
-    if result.get("success"):
-        return IntegrationHealthResult(
-            ok=True,
-            detail=f"Datadog validated against {site}; fetched {result.get('total', 0)} monitors.",
-        )
-    return IntegrationHealthResult(
-        ok=False,
-        detail=f"Datadog validation failed: {result.get('error', 'unknown error')}",
-    )
-
-
-def validate_honeycomb_integration(
-    *,
-    api_key: str,
-    dataset: str,
-    base_url: str,
-) -> IntegrationHealthResult:
-    """Validate Honeycomb credentials with auth and a lightweight query."""
-    try:
-        honeycomb_config = HoneycombIntegrationConfig.model_validate(
-            {
-                "api_key": api_key,
-                "dataset": dataset,
-                "base_url": base_url,
-            }
-        )
-    except Exception as err:
-        return IntegrationHealthResult(ok=False, detail=str(err))
-
-    client = HoneycombClient(honeycomb_config)
-    auth_result = client.validate_access()
-    if not auth_result.get("success"):
-        return IntegrationHealthResult(
-            ok=False,
-            detail=f"Honeycomb auth failed: {auth_result.get('error', 'unknown error')}",
-        )
-
-    query_result = client.run_query(
-        {"calculations": [{"op": "COUNT"}], "time_range": 900},
-        limit=1,
-    )
-    if not query_result.get("success"):
-        return IntegrationHealthResult(
-            ok=False,
-            detail=f"Honeycomb query failed: {query_result.get('error', 'unknown error')}",
-        )
-
-    return IntegrationHealthResult(
-        ok=True,
-        detail=(
-            f"Honeycomb validated against dataset {honeycomb_config.dataset} "
-            f"at {honeycomb_config.base_url}."
-        ),
-    )
-
-
-def validate_coralogix_integration(
-    *,
-    api_key: str,
-    base_url: str,
-    application_name: str = "",
-    subsystem_name: str = "",
-) -> IntegrationHealthResult:
-    """Validate Coralogix access with a lightweight DataPrime query."""
-    try:
-        coralogix_config = CoralogixIntegrationConfig.model_validate(
-            {
-                "api_key": api_key,
-                "base_url": base_url,
-                "application_name": application_name,
-                "subsystem_name": subsystem_name,
-            }
-        )
-    except Exception as err:
-        return IntegrationHealthResult(ok=False, detail=str(err))
-
-    client = CoralogixClient(coralogix_config)
-    result = client.validate_access()
-    if not result.get("success"):
-        return IntegrationHealthResult(
-            ok=False,
-            detail=f"Coralogix validation failed: {result.get('error', 'unknown error')}",
-        )
-
-    scope: list[str] = []
-    if coralogix_config.application_name:
-        scope.append(f"application {coralogix_config.application_name}")
-    if coralogix_config.subsystem_name:
-        scope.append(f"subsystem {coralogix_config.subsystem_name}")
-    scope_suffix = f" ({', '.join(scope)})" if scope else ""
-    return IntegrationHealthResult(
-        ok=True,
-        detail=(
-            f"Coralogix validated against {coralogix_config.base_url}{scope_suffix}; "
-            f"DataPrime returned {result.get('total', 0)} row(s)."
-        ),
-    )
 
 
 def validate_splunk_integration(

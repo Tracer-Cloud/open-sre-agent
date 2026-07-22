@@ -9,6 +9,22 @@ from collections.abc import Callable
 from typing import Any
 
 from config.config import get_tracer_base_url
+from config.constants.coralogix import (
+    CORALOGIX_API_KEY_ENV,
+    CORALOGIX_APPLICATION_NAME_ENV,
+    CORALOGIX_BASE_URL_ENV,
+    CORALOGIX_SUBSYSTEM_NAME_ENV,
+)
+from config.constants.datadog import (
+    DATADOG_API_KEY_ENV,
+    DATADOG_APP_KEY_ENV,
+    DATADOG_SITE_ENV,
+)
+from config.constants.honeycomb import (
+    HONEYCOMB_API_KEY_ENV,
+    HONEYCOMB_BASE_URL_ENV,
+    HONEYCOMB_DATASET_ENV,
+)
 from config.llm_credentials import resolve_env_credential
 from integrations.airflow.config import airflow_config_from_env
 from integrations.airflow.config import classify as _classify_airflow
@@ -22,6 +38,7 @@ from integrations.betterstack import build_betterstack_config
 from integrations.betterstack import classify as _classify_betterstack
 from integrations.bitbucket import classify as _classify_bitbucket
 from integrations.config_models import (
+    DEFAULT_DATADOG_SITE,
     AlertmanagerIntegrationConfig,
     ArgoCDIntegrationConfig,
     AWSIntegrationConfig,
@@ -434,9 +451,11 @@ def load_env_integrations() -> list[dict[str, Any]]:
         datadog_app_key = ""
         datadog_site = ""
     else:
-        datadog_api_key = resolve_env_credential("DD_API_KEY")
-        datadog_app_key = resolve_env_credential("DD_APP_KEY")
-        datadog_site = os.getenv("DD_SITE", "datadoghq.com").strip() or "datadoghq.com"
+        datadog_api_key = resolve_env_credential(DATADOG_API_KEY_ENV)
+        datadog_app_key = resolve_env_credential(DATADOG_APP_KEY_ENV)
+        datadog_site = (
+            os.getenv(DATADOG_SITE_ENV, DEFAULT_DATADOG_SITE).strip() or DEFAULT_DATADOG_SITE
+        )
     if datadog_api_key and datadog_app_key:
         try:
             datadog_config = DatadogIntegrationConfig.model_validate(
@@ -493,14 +512,14 @@ def load_env_integrations() -> list[dict[str, Any]]:
         integrations.append(honeycomb_multi)
         honeycomb_api_key = ""
     else:
-        honeycomb_api_key = resolve_env_credential("HONEYCOMB_API_KEY")
+        honeycomb_api_key = resolve_env_credential(HONEYCOMB_API_KEY_ENV)
     if honeycomb_api_key:
         try:
             honeycomb_config = HoneycombIntegrationConfig.model_validate(
                 {
                     "api_key": honeycomb_api_key,
-                    "dataset": os.getenv("HONEYCOMB_DATASET", "").strip(),
-                    "base_url": os.getenv("HONEYCOMB_API_URL", "").strip(),
+                    "dataset": os.getenv(HONEYCOMB_DATASET_ENV, "").strip(),
+                    "base_url": os.getenv(HONEYCOMB_BASE_URL_ENV, "").strip(),
                 }
             )
         except Exception as exc:
@@ -518,15 +537,15 @@ def load_env_integrations() -> list[dict[str, Any]]:
         integrations.append(coralogix_multi)
         coralogix_api_key = ""
     else:
-        coralogix_api_key = resolve_env_credential("CORALOGIX_API_KEY")
+        coralogix_api_key = resolve_env_credential(CORALOGIX_API_KEY_ENV)
     if coralogix_api_key:
         try:
             coralogix_config = CoralogixIntegrationConfig.model_validate(
                 {
                     "api_key": coralogix_api_key,
-                    "base_url": os.getenv("CORALOGIX_API_URL", "").strip(),
-                    "application_name": os.getenv("CORALOGIX_APPLICATION_NAME", "").strip(),
-                    "subsystem_name": os.getenv("CORALOGIX_SUBSYSTEM_NAME", "").strip(),
+                    "base_url": os.getenv(CORALOGIX_BASE_URL_ENV, "").strip(),
+                    "application_name": os.getenv(CORALOGIX_APPLICATION_NAME_ENV, "").strip(),
+                    "subsystem_name": os.getenv(CORALOGIX_SUBSYSTEM_NAME_ENV, "").strip(),
                 }
             )
         except Exception as exc:

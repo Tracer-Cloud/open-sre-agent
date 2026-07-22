@@ -12,13 +12,10 @@ from integrations.github.mcp import GitHubMCPValidationResult
 from surfaces.cli.wizard.integration_health import (
     validate_aws_integration,
     validate_betterstack_integration,
-    validate_coralogix_integration,
     validate_dagster_integration,
-    validate_datadog_integration,
     validate_discord_bot,
     validate_github_mcp_integration,
     validate_grafana_integration,
-    validate_honeycomb_integration,
     validate_incident_io_integration,
     validate_sentry_integration,
     validate_servicenow_integration,
@@ -35,15 +32,12 @@ def test_legacy_integration_health_import_surface_still_exports_validators() -> 
         "validate_alertmanager_integration",
         "validate_aws_integration",
         "validate_betterstack_integration",
-        "validate_coralogix_integration",
         "validate_dagster_integration",
-        "validate_datadog_integration",
         "validate_discord_bot",
         "validate_github_mcp_integration",
         "validate_gitlab_integration",
         "validate_google_docs_integration",
         "validate_grafana_integration",
-        "validate_honeycomb_integration",
         "validate_incident_io_integration",
         "validate_jenkins_integration",
         "validate_jira_integration",
@@ -78,14 +72,6 @@ class _FakeGrafanaClient:
         return self._discovered
 
 
-class _FakeDatadogClient:
-    def __init__(self, result: dict[str, object]) -> None:
-        self._result = result
-
-    def list_monitors(self) -> dict[str, object]:
-        return self._result
-
-
 def test_validate_grafana_integration_succeeds_when_datasources_are_discovered(monkeypatch) -> None:
     monkeypatch.setattr(
         "surfaces.cli.wizard.integration_validators.observability.get_grafana_client_from_credentials",
@@ -108,50 +94,6 @@ def test_validate_grafana_integration_fails_when_no_datasources_are_found(monkey
 
     assert result.ok is False
     assert "no datasources" in result.detail.lower()
-
-
-def test_validate_datadog_integration_succeeds(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "surfaces.cli.wizard.integration_validators.observability.DatadogClient",
-        lambda _config: _FakeDatadogClient({"success": True, "total": 7}),
-    )
-
-    result = validate_datadog_integration(api_key="dd-api", app_key="dd-app", site="datadoghq.com")
-
-    assert result.ok is True
-    assert "fetched 7 monitors" in result.detail.lower()
-
-
-def test_validate_datadog_integration_fails(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "surfaces.cli.wizard.integration_validators.observability.DatadogClient",
-        lambda _config: _FakeDatadogClient({"success": False, "error": "HTTP 403"}),
-    )
-
-    result = validate_datadog_integration(api_key="dd-api", app_key="dd-app", site="datadoghq.com")
-
-    assert result.ok is False
-    assert "http 403" in result.detail.lower()
-
-
-def test_validate_honeycomb_integration_succeeds(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "surfaces.cli.wizard.integration_validators.observability.HoneycombClient.validate_access",
-        lambda _self: {"success": True, "environment": {"slug": "prod"}},
-    )
-    monkeypatch.setattr(
-        "surfaces.cli.wizard.integration_validators.observability.HoneycombClient.run_query",
-        lambda _self, *_args, **_kwargs: {"success": True, "results": [{}]},
-    )
-
-    result = validate_honeycomb_integration(
-        api_key="hny_test",
-        dataset="prod-api",
-        base_url="https://api.honeycomb.io",
-    )
-
-    assert result.ok is True
-    assert "dataset prod-api" in result.detail.lower()
 
 
 def test_validate_incident_io_integration_succeeds(monkeypatch) -> None:
@@ -177,23 +119,6 @@ def test_validate_incident_io_integration_succeeds(monkeypatch) -> None:
 
     assert result.ok is True
     assert "api key accepted" in result.detail.lower()
-
-
-def test_validate_coralogix_integration_fails(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "surfaces.cli.wizard.integration_validators.observability.CoralogixClient.validate_access",
-        lambda _self: {"success": False, "error": "HTTP 401"},
-    )
-
-    result = validate_coralogix_integration(
-        api_key="cx_test",
-        base_url="https://api.coralogix.com",
-        application_name="payments",
-        subsystem_name="worker",
-    )
-
-    assert result.ok is False
-    assert "http 401" in result.detail.lower()
 
 
 @pytest.mark.parametrize("status_code", [200, 400, 403, 405])

@@ -22,6 +22,7 @@ from platform.common.url_validation import validate_https_or_loopback_http_url
 _LOCAL_GRAFANA_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0"}
 DEFAULT_GROUNDCOVER_MCP_URL = "https://mcp.groundcover.com/api/mcp"
 DEFAULT_GROUNDCOVER_TIMEZONE = "UTC"
+DEFAULT_DATADOG_SITE = "datadoghq.com"
 DEFAULT_HONEYCOMB_BASE_URL = "https://api.honeycomb.io"
 DEFAULT_HONEYCOMB_DATASET = "__all__"
 DEFAULT_CORALOGIX_BASE_URL = "https://api.coralogix.com"
@@ -122,11 +123,11 @@ class DatadogIntegrationConfig(StrictConfigModel):
 
     api_key: str
     app_key: str
-    site: str = "datadoghq.com"
+    site: str = DEFAULT_DATADOG_SITE
     integration_id: str = ""
 
     _normalize_site = field_validator("site", mode="before")(
-        normalize_with_default("datadoghq.com")
+        normalize_with_default(DEFAULT_DATADOG_SITE)
     )
 
     @property

@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from config.env_file import sync_env_secret, sync_env_values
+from integrations.coralogix.setup import CORALOGIX_SETUP
+from integrations.datadog.setup import DATADOG_SETUP
+from integrations.honeycomb.setup import HONEYCOMB_SETUP
 from integrations.store import remove_integration, upsert_integration
 from platform.terminal.theme import DIM, ERROR, GLYPH_ERROR, HIGHLIGHT, SECONDARY
 from surfaces.cli.wizard._ui import (
@@ -15,11 +18,9 @@ from surfaces.cli.wizard._ui import (
     _render_integration_result,
     _string_value,
 )
+from surfaces.cli.wizard.configurators.spec_flow import configure_from_spec
 from surfaces.cli.wizard.integration_health import (
-    validate_coralogix_integration,
-    validate_datadog_integration,
     validate_grafana_integration,
-    validate_honeycomb_integration,
     validate_opensearch_integration,
     validate_splunk_integration,
     validate_tempo_integration,
@@ -147,124 +148,15 @@ def _configure_grafana_local() -> tuple[str, str]:
 
 
 def _configure_datadog() -> tuple[str, str]:
-    _, credentials = _integration_defaults("datadog")
-    while True:
-        api_key = _prompt_value(
-            "Datadog API key",
-            default=_string_value(credentials.get("api_key")),
-            secret=True,
-        )
-        app_key = _prompt_value(
-            "Datadog application key",
-            default=_string_value(credentials.get("app_key")),
-            secret=True,
-        )
-        site = _prompt_value(
-            "Datadog site",
-            default=_string_value(credentials.get("site"), "datadoghq.com"),
-        )
-        with _console.status("Validating Datadog integration...", spinner="dots"):
-            result = validate_datadog_integration(api_key=api_key, app_key=app_key, site=site)
-        _render_integration_result("Datadog", result)
-        if result.ok:
-            upsert_integration(
-                "datadog",
-                {"credentials": {"api_key": api_key, "app_key": app_key, "site": site}},
-            )
-            env_path = sync_env_values({})
-            return "Datadog", str(env_path)
-        _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
+    return configure_from_spec(DATADOG_SETUP, title="Datadog")
 
 
 def _configure_honeycomb() -> tuple[str, str]:
-    _, credentials = _integration_defaults("honeycomb")
-    while True:
-        api_key = _prompt_value(
-            "Honeycomb configuration API key",
-            default=_string_value(credentials.get("api_key")),
-            secret=True,
-        )
-        dataset = _prompt_value(
-            "Honeycomb dataset slug or __all__",
-            default=_string_value(credentials.get("dataset"), "__all__"),
-        )
-        base_url = _prompt_value(
-            "Honeycomb API URL",
-            default=_string_value(credentials.get("base_url"), "https://api.honeycomb.io"),
-        )
-        with _console.status("Validating Honeycomb integration...", spinner="dots"):
-            result = validate_honeycomb_integration(
-                api_key=api_key,
-                dataset=dataset,
-                base_url=base_url,
-            )
-        _render_integration_result("Honeycomb", result)
-        if result.ok:
-            upsert_integration(
-                "honeycomb",
-                {"credentials": {"api_key": api_key, "dataset": dataset, "base_url": base_url}},
-            )
-            env_path = sync_env_values(
-                {
-                    "HONEYCOMB_DATASET": dataset,
-                    "HONEYCOMB_API_URL": base_url,
-                }
-            )
-            return "Honeycomb", str(env_path)
-        _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
+    return configure_from_spec(HONEYCOMB_SETUP, title="Honeycomb")
 
 
 def _configure_coralogix() -> tuple[str, str]:
-    _, credentials = _integration_defaults("coralogix")
-    while True:
-        api_key = _prompt_value(
-            "Coralogix DataPrime API key",
-            default=_string_value(credentials.get("api_key")),
-            secret=True,
-        )
-        base_url = _prompt_value(
-            "Coralogix API URL",
-            default=_string_value(credentials.get("base_url"), "https://api.coralogix.com"),
-        )
-        application_name = _prompt_value(
-            "Coralogix application name (optional)",
-            default=_string_value(credentials.get("application_name")),
-            allow_empty=True,
-        )
-        subsystem_name = _prompt_value(
-            "Coralogix subsystem name (optional)",
-            default=_string_value(credentials.get("subsystem_name")),
-            allow_empty=True,
-        )
-        with _console.status("Validating Coralogix integration...", spinner="dots"):
-            result = validate_coralogix_integration(
-                api_key=api_key,
-                base_url=base_url,
-                application_name=application_name,
-                subsystem_name=subsystem_name,
-            )
-        _render_integration_result("Coralogix", result)
-        if result.ok:
-            upsert_integration(
-                "coralogix",
-                {
-                    "credentials": {
-                        "api_key": api_key,
-                        "base_url": base_url,
-                        "application_name": application_name,
-                        "subsystem_name": subsystem_name,
-                    }
-                },
-            )
-            env_path = sync_env_values(
-                {
-                    "CORALOGIX_API_URL": base_url,
-                    "CORALOGIX_APPLICATION_NAME": application_name,
-                    "CORALOGIX_SUBSYSTEM_NAME": subsystem_name,
-                }
-            )
-            return "Coralogix", str(env_path)
-        _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
+    return configure_from_spec(CORALOGIX_SETUP, title="Coralogix")
 
 
 def _configure_tempo() -> tuple[str, str]:
