@@ -13,6 +13,10 @@ from typing import Protocol
 
 import click
 
+from integrations.rocketchat.alarms import RocketChatAlarmDispatcher
+from integrations.rocketchat.credentials import (
+    load_credentials_from_env as load_rocketchat_credentials_from_env,
+)
 from integrations.telegram.alarms import AlarmDispatcher
 from integrations.telegram.credentials import load_credentials_from_env
 from platform.common.exit_codes import ERROR, SUCCESS
@@ -89,7 +93,10 @@ def run_watchdog(
         return SUCCESS
 
 
-def _build_dispatcher(config: WatchdogConfig) -> AlarmDispatcher:
+def _build_dispatcher(config: WatchdogConfig) -> Dispatcher:
+    if config.provider == "rocketchat":
+        rc_creds = load_rocketchat_credentials_from_env(channel_override=config.chat_id)
+        return RocketChatAlarmDispatcher(rc_creds, cooldown_seconds=config.cooldown)
     creds = load_credentials_from_env(chat_id_override=config.chat_id)
     return AlarmDispatcher(creds, cooldown_seconds=config.cooldown, parse_mode="HTML")
 
