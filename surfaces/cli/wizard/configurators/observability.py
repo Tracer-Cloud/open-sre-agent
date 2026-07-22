@@ -7,6 +7,7 @@ from integrations.coralogix.setup import CORALOGIX_SETUP
 from integrations.datadog.setup import DATADOG_SETUP
 from integrations.honeycomb.setup import HONEYCOMB_SETUP
 from integrations.store import remove_integration, upsert_integration
+from integrations.tempo.setup import TEMPO_SETUP
 from platform.terminal.theme import DIM, ERROR, GLYPH_ERROR, HIGHLIGHT, SECONDARY
 from surfaces.cli.wizard._ui import (
     Choice,
@@ -23,7 +24,6 @@ from surfaces.cli.wizard.integration_health import (
     validate_grafana_integration,
     validate_opensearch_integration,
     validate_splunk_integration,
-    validate_tempo_integration,
 )
 
 
@@ -159,73 +159,14 @@ def _configure_coralogix() -> tuple[str, str]:
     return configure_from_spec(CORALOGIX_SETUP, title="Coralogix")
 
 
+_TEMPO_INTRO = (
+    f"[{SECONDARY}]Tempo commonly runs without auth behind a gateway — a URL alone is enough.\n"
+    "For auth, provide either a bearer token OR a username/password (not both).[/]"
+)
+
+
 def _configure_tempo() -> tuple[str, str]:
-    _, credentials = _integration_defaults("tempo")
-    _console.print(
-        f"[{SECONDARY}]Tempo commonly runs without auth behind a gateway — a URL alone is enough.[/]"
-    )
-    _console.print(
-        f"[{SECONDARY}]For auth, provide either a bearer token OR a username/password (not both).[/]"
-    )
-    while True:
-        url = _prompt_value(
-            "Tempo URL (e.g. http://localhost:3200)",
-            default=_string_value(credentials.get("url")),
-        )
-        api_key = _prompt_value(
-            "Tempo bearer token (optional, leave blank if using basic auth or none)",
-            default=_string_value(credentials.get("api_key")),
-            secret=True,
-            allow_empty=True,
-        )
-        username = _prompt_value(
-            "Tempo username (optional, for basic auth)",
-            default=_string_value(credentials.get("username")),
-            allow_empty=True,
-        )
-        password = _prompt_value(
-            "Tempo password (optional, for basic auth)",
-            default=_string_value(credentials.get("password")),
-            secret=True,
-            allow_empty=True,
-        )
-        org_id = _prompt_value(
-            "Tempo tenant / X-Scope-OrgID (optional, leave blank if single-tenant)",
-            default=_string_value(credentials.get("org_id")),
-            allow_empty=True,
-        )
-        with _console.status("Validating Tempo integration...", spinner="dots"):
-            result = validate_tempo_integration(
-                url=url,
-                api_key=api_key,
-                username=username,
-                password=password,
-                org_id=org_id,
-            )
-        _render_integration_result("Tempo", result)
-        if result.ok:
-            creds: dict[str, str] = {"url": url}
-            if api_key:
-                creds["api_key"] = api_key
-            if username:
-                creds["username"] = username
-            if password:
-                creds["password"] = password
-            if org_id:
-                creds["org_id"] = org_id
-            upsert_integration("tempo", {"credentials": creds})
-            env_values: dict[str, str] = {"TEMPO_URL": url}
-            if api_key:
-                sync_env_secret("TEMPO_API_KEY", api_key)
-            if username:
-                env_values["TEMPO_USERNAME"] = username
-            if password:
-                sync_env_secret("TEMPO_PASSWORD", password)
-            if org_id:
-                env_values["TEMPO_ORG_ID"] = org_id
-            env_path = sync_env_values(env_values)
-            return "Tempo", str(env_path)
-        _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
+    return configure_from_spec(TEMPO_SETUP, title="Tempo", intro=_TEMPO_INTRO)
 
 
 def _configure_splunk() -> tuple[str, str]:

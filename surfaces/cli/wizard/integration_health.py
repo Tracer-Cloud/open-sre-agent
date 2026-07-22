@@ -32,7 +32,6 @@ from surfaces.cli.wizard.integration_validators.observability import (
     validate_grafana_integration,
     validate_opensearch_integration,
     validate_splunk_integration,
-    validate_tempo_integration,
 )
 from surfaces.cli.wizard.integration_validators.posthog import validate_posthog_integration
 from surfaces.cli.wizard.integration_validators.productivity import (
@@ -70,6 +69,5 @@ __all__ = [
     "validate_servicenow_integration",
     "validate_slack_webhook",
     "validate_splunk_integration",
-    "validate_tempo_integration",
     "validate_vercel_integration",
 ]

@@ -30,6 +30,9 @@ import integrations.coralogix.setup as coralogix_setup
 import integrations.datadog.setup as datadog_setup
 import integrations.honeycomb.setup as honeycomb_setup
 import integrations.setup_flow as setup_flow
+import integrations.smtp.setup as smtp_setup
+import integrations.tempo.setup as tempo_setup
+import integrations.whatsapp.setup as whatsapp_setup
 
 _ANSWERS: dict[str, dict[str, str]] = {
     "datadog": {"api_key": "dd-api-key", "app_key": "dd-app-key", "site": "datadoghq.eu"},
@@ -44,6 +47,28 @@ _ANSWERS: dict[str, dict[str, str]] = {
         "application_name": "checkout",
         "subsystem_name": "api",
     },
+    "smtp": {
+        "host": "smtp.eu.example.com",
+        "from_address": "reports@example.com",
+        "port": "2525",
+        "security": "ssl",
+        "username": "reports@example.com",
+        "password": "smtp-secret",
+        "default_to": "oncall@example.com",
+    },
+    "whatsapp": {
+        "account_sid": "AC-checkout-sid",
+        "auth_token": "twilio-auth-token",
+        "from_number": "whatsapp:+14155238886",
+        "default_to": "+15551234567",
+    },
+    "tempo": {
+        "url": "https://tempo.eu.example.com",
+        "api_key": "tempo-bearer-token",
+        "username": "tempo-user",
+        "password": "tempo-password",
+        "org_id": "checkout-tenant",
+    },
 }
 
 # (spec module, spec attribute, CLI handler) — the attribute is patched rather
@@ -52,6 +77,9 @@ _CASES = [
     pytest.param(datadog_setup, "DATADOG_SETUP", cli._setup_datadog, id="datadog"),
     pytest.param(honeycomb_setup, "HONEYCOMB_SETUP", cli._setup_honeycomb, id="honeycomb"),
     pytest.param(coralogix_setup, "CORALOGIX_SETUP", cli._setup_coralogix, id="coralogix"),
+    pytest.param(smtp_setup, "SMTP_SETUP", cli._setup_smtp, id="smtp"),
+    pytest.param(whatsapp_setup, "WHATSAPP_SETUP", cli._setup_whatsapp, id="whatsapp"),
+    pytest.param(tempo_setup, "TEMPO_SETUP", cli._setup_tempo, id="tempo"),
 ]
 
 

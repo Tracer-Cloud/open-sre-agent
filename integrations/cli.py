@@ -918,52 +918,15 @@ def _setup_rocketchat() -> None:
 
 
 def _setup_smtp() -> None:
-    host = _p("SMTP host (e.g. smtp.gmail.com)")
-    from_address = _p("From email address")
-    if not host or not from_address:
-        _die("host and from_address are required.")
+    from integrations.smtp.setup import SMTP_SETUP
 
-    port = _parse_port(_p("SMTP port", default="587"), default=587)
-    security = (_p("Security mode (starttls/ssl/none)", default="starttls") or "starttls").strip()
-    username = _p("Username (optional)")
-    password = _p("Password (optional; leave blank when username is blank)", secret=True)
-    if bool(username) != bool(password):
-        _die("username and password must both be set, or both be empty.")
-
-    upsert_integration(
-        "smtp",
-        {
-            "credentials": {
-                "host": host,
-                "port": port,
-                "security": security,
-                "username": username,
-                "password": password,
-                "from_address": from_address,
-                "default_to": _p("Default recipient email (optional)") or None,
-            }
-        },
-    )
+    _run_spec_setup(SMTP_SETUP)
 
 
 def _setup_whatsapp() -> None:
-    account_sid = _p("Twilio Account SID (starts with AC...)")
-    auth_token = _p("Twilio Auth Token", secret=True)
-    from_number = _p("Twilio WhatsApp From number (e.g. whatsapp:+14155238886)")
-    default_to = _p("Default recipient phone number (optional, e.g. +1234567890)")
-    if not account_sid or not auth_token or not from_number:
-        _die("account_sid, auth_token, and from_number are required.")
-    upsert_integration(
-        "whatsapp",
-        {
-            "credentials": {
-                "account_sid": account_sid,
-                "auth_token": auth_token,
-                "from_number": from_number,
-                "default_to": default_to,
-            }
-        },
-    )
+    from integrations.whatsapp.setup import WHATSAPP_SETUP
+
+    _run_spec_setup(WHATSAPP_SETUP)
 
 
 def _setup_twilio() -> None:
@@ -1351,34 +1314,9 @@ def _setup_helm() -> None:
 
 
 def _setup_tempo() -> None:
-    from integrations.tempo import build_tempo_config, validate_tempo_config
+    from integrations.tempo.setup import TEMPO_SETUP
 
-    url = _p("Tempo URL (e.g. http://localhost:3200 for local Docker)")
-    if not url:
-        _die("Tempo URL is required.")
-
-    api_key = _p(
-        "Tempo bearer token (optional, leave blank if using basic auth or none)", secret=True
-    )
-    username = _p("Tempo username (optional, for basic auth)")
-    password = _p("Tempo password (optional, for basic auth)", secret=True)
-    org_id = _p("Tempo tenant / X-Scope-OrgID (optional, leave blank if single-tenant)")
-
-    credentials: dict[str, str] = {"url": url}
-    if api_key:
-        credentials["api_key"] = api_key
-    if username:
-        credentials["username"] = username
-    if password:
-        credentials["password"] = password
-    if org_id:
-        credentials["org_id"] = org_id
-
-    result = validate_tempo_config(build_tempo_config(credentials))
-    if not result.ok:
-        _die(f"Tempo validation failed: {result.detail}")
-
-    upsert_integration("tempo", {"credentials": credentials})
+    _run_spec_setup(TEMPO_SETUP)
 
 
 def _setup_pagerduty() -> None:

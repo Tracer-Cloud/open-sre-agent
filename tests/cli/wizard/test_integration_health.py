@@ -55,7 +55,6 @@ def test_legacy_integration_health_import_surface_still_exports_validators() -> 
         "validate_servicenow_integration",
         "validate_slack_webhook",
         "validate_splunk_integration",
-        "validate_tempo_integration",
         "validate_vercel_integration",
     }
 

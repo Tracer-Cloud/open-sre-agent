@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import dataclasses
 import functools
+import os
 from pathlib import Path
 from typing import Any
 
@@ -30,7 +31,10 @@ from integrations._catalog_impl import load_env_integrations
 from integrations.coralogix.setup import CORALOGIX_SETUP
 from integrations.datadog.setup import DATADOG_SETUP
 from integrations.honeycomb.setup import HONEYCOMB_SETUP
+from integrations.smtp.setup import SMTP_SETUP
 from integrations.telegram.setup import TELEGRAM_SETUP
+from integrations.tempo.setup import TEMPO_SETUP
+from integrations.whatsapp.setup import WHATSAPP_SETUP
 
 # A distinct, recognizable value per field, so two fields of the same
 # integration swapping places fails instead of coincidentally matching. Values
@@ -50,9 +54,39 @@ _SUBMITTED: dict[str, dict[str, str]] = {
         "subsystem_name": "api",
     },
     "telegram": {"bot_token": "123456:tg-bot-token", "default_chat_id": "-1001234567890"},
+    "smtp": {
+        "host": "smtp.eu.example.com",
+        "port": "2525",
+        "security": "ssl",
+        "username": "reports@example.com",
+        "password": "smtp-secret",
+        "from_address": "reports@example.com",
+        "default_to": "oncall@example.com",
+    },
+    "whatsapp": {
+        "account_sid": "AC-checkout-sid",
+        "auth_token": "twilio-auth-token",
+        "from_number": "whatsapp:+14155238886",
+        "default_to": "+15551234567",
+    },
+    "tempo": {
+        "url": "https://tempo.eu.example.com",
+        "api_key": "tempo-bearer-token",
+        "username": "tempo-user",
+        "password": "tempo-password",
+        "org_id": "checkout-tenant",
+    },
 }
 
-_SPECS = [DATADOG_SETUP, HONEYCOMB_SETUP, CORALOGIX_SETUP, TELEGRAM_SETUP]
+_SPECS = [
+    DATADOG_SETUP,
+    HONEYCOMB_SETUP,
+    CORALOGIX_SETUP,
+    SMTP_SETUP,
+    TELEGRAM_SETUP,
+    TEMPO_SETUP,
+    WHATSAPP_SETUP,
+]
 
 
 @dataclasses.dataclass
@@ -85,10 +119,24 @@ def persisted(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> _Persisted:
 def _restore_environment(written: _Persisted, monkeypatch: pytest.MonkeyPatch) -> None:
     """Reproduce the environment a later process would start with.
 
+    Every existing env var is cleared first. ``tests/conftest.py`` loads the
+    developer's real local ``.env`` into ``os.environ`` for the whole test
+    session, so without this a spec whose ``env_var`` is wrong can still
+    "round-trip" — not from what this test just persisted, but from a
+    same-named value already sitting in that real ``.env`` (Twilio's shared
+    account vars are a real example: a wrong ``env_var`` still resolved
+    because the correct name happened to already be set for real).
+
     Keyring secrets are seeded straight into ``os.environ`` because
     ``resolve_env_credential`` checks the environment first — which is what a
     deploy, and this assertion, ultimately depend on.
     """
+    for key in list(os.environ):
+        monkeypatch.delenv(key, raising=False)
+    # The wipe above also removes the root conftest's OPENSRE_DISABLE_KEYRING;
+    # put it back so an unset field falling through to resolve_keyring_secret
+    # still misses cleanly instead of touching a real OS keyring.
+    monkeypatch.setenv("OPENSRE_DISABLE_KEYRING", "1")
     for key, value in written.secrets.items():
         monkeypatch.setenv(key, value)
     for line in read_env_lines(written.env_path):
@@ -127,7 +175,11 @@ def test_persisted_credentials_are_read_back_by_the_catalog(
 
     resolved = _catalog_credentials(spec.service)
     for field in spec.fields:
-        assert resolved.get(field.name) == submitted[field.name], (
+        # str(...) on both sides: env vars are always strings, and a config
+        # model may legitimately coerce one back to a number (SMTP's port) —
+        # that is a type normalization, not the persistence bug this test
+        # guards against.
+        assert str(resolved.get(field.name)) == str(submitted[field.name]), (
             f"{spec.service}.{field.name} was persisted as {field.env_var!r}, "
             "which the catalog does not read back into that credential"
         )
