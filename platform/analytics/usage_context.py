@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import threading
 from collections.abc import Iterator
 from contextvars import ContextVar, Token
 from typing import Final
@@ -30,6 +31,9 @@ type Properties = dict[str, JsonValue]
 SURFACE_CLI: Final[str] = "cli"
 SURFACE_SLACK: Final[str] = "slack"
 SURFACE_TELEGRAM: Final[str] = "telegram"
+CANONICAL_SURFACES: Final[frozenset[str]] = frozenset(
+    {SURFACE_CLI, SURFACE_SLACK, SURFACE_TELEGRAM}
+)
 ORGANIZATION_GROUP_TYPE: Final[str] = "organization"
 
 _SURFACE: ContextVar[str | None] = ContextVar("analytics_surface", default=None)
@@ -40,13 +44,16 @@ _ORGANIZATION_ID: ContextVar[str | None] = ContextVar("analytics_organization_id
 # Process-scoped fallback for one-shot CLI workloads (e.g. ``opensre investigate``)
 # that never enter a REPL session. Bound ContextVar / REPL session_id always win.
 _PROCESS_SESSION_ID: str | None = None
+_PROCESS_SESSION_ID_LOCK = threading.Lock()
 
 
 def ensure_process_session_id() -> str:
     """Return a stable session id for this process, minting one on first use."""
     global _PROCESS_SESSION_ID
     if _PROCESS_SESSION_ID is None:
-        _PROCESS_SESSION_ID = str(uuid4())
+        with _PROCESS_SESSION_ID_LOCK:
+            if _PROCESS_SESSION_ID is None:
+                _PROCESS_SESSION_ID = str(uuid4())
     return _PROCESS_SESSION_ID
 
 

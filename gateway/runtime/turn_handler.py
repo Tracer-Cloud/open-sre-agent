@@ -35,7 +35,11 @@ from platform.analytics.cli import (
     capture_gateway_turn_failed,
     capture_gateway_turn_started,
 )
-from platform.analytics.usage_context import bound_usage_context, get_surface
+from platform.analytics.usage_context import (
+    CANONICAL_SURFACES,
+    bound_usage_context,
+    get_surface,
+)
 from platform.observability.trace.spans import traced_session
 
 SlashPortsFactory = Callable[[], Any]
@@ -94,12 +98,10 @@ class GatewayTurnHandler:
         session.available_capabilities.update(dict.fromkeys(_UNSUPPORTED_GATEWAY_CAPABILITIES, ()))
         session_id = getattr(session, "session_id", None)
         surface = get_surface()
-        if surface not in {"cli", "slack", "telegram"}:
+        if surface not in CANONICAL_SURFACES:
             # Require transport binding (Slack/Telegram dispatchers). Do not invent
             # a non-canonical surface that breaks channel breakdowns.
-            logger.warning(
-                "gateway_turn missing surface binding; analytics events will omit surface"
-            )
+            logger.warning("gateway_turn missing surface binding; started/completed omit surface")
             surface = None
         started = time.monotonic()
 
@@ -134,12 +136,13 @@ class GatewayTurnHandler:
                         final_intent=str(turn_result.final_intent or "") or None,
                     )
             except Exception as exc:
-                if surface:
-                    capture_gateway_turn_failed(
-                        surface=surface,
-                        duration_ms=(time.monotonic() - started) * 1000.0,
-                        error_type=type(exc).__name__,
-                    )
+                # Always emit failure analytics (surface optional) so miswired
+                # transports remain visible in PostHog.
+                capture_gateway_turn_failed(
+                    surface=surface,
+                    duration_ms=(time.monotonic() - started) * 1000.0,
+                    error_type=type(exc).__name__,
+                )
                 raise
 
     def _agent_for_turn(

@@ -78,12 +78,15 @@ def run_incident_investigation(
         SURFACE_CLI,
         bound_usage_context,
         ensure_process_session_id,
+        get_surface,
     )
 
     alert = build_alert_from_incident(incident)
+    # Preserve an outer Slack/Telegram surface if already bound; default to CLI
+    # for standalone Hermes watch processes.
     with (
         bound_usage_context(
-            surface=SURFACE_CLI,
+            surface=None if get_surface() else SURFACE_CLI,
             session_id=ensure_process_session_id(),
         ),
         track_investigation(

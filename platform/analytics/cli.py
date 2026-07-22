@@ -506,20 +506,23 @@ def capture_gateway_turn_completed(
 
 def capture_gateway_turn_failed(
     *,
-    surface: str,
+    surface: str | None,
     duration_ms: float,
     error_type: str,
 ) -> None:
-    """Mark a failed gateway agent turn (exception during dispatch)."""
-    _capture(
-        Event.GATEWAY_TURN_FAILED,
-        {
-            "surface": surface,
-            "duration_ms": round(duration_ms),
-            "duration_bucket": _bucket_duration_ms(duration_ms),
-            "error_type": error_type,
-        },
-    )
+    """Mark a failed gateway agent turn (exception during dispatch).
+
+    ``surface`` may be omitted when transport context was unbound so failures
+    still land in PostHog for regression detection.
+    """
+    props: Properties = {
+        "duration_ms": round(duration_ms),
+        "duration_bucket": _bucket_duration_ms(duration_ms),
+        "error_type": error_type,
+    }
+    if surface:
+        props["surface"] = surface
+    _capture(Event.GATEWAY_TURN_FAILED, props)
 
 
 def capture_repl_execution_policy_decision(properties: Properties | None = None) -> None:
