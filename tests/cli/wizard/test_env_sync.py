@@ -590,6 +590,29 @@ def test_sync_env_values_routes_secrets_to_keyring(tmp_path, monkeypatch) -> Non
         keyring.set_keyring(previous_backend)
 
 
+def test_sync_env_secret_with_blank_value_deletes_the_stored_secret(monkeypatch) -> None:
+    """A field cleared back to blank must remove the old keyring entry, not just skip writing.
+
+    apply_setup calls sync_env_secret for every secret field on every save,
+    submitted or not (see integrations/setup_flow.py:_persist_env) — so clearing
+    an optional token in the UI has to reach here as a real deletion.
+    """
+    monkeypatch.delenv("DAGSTER_API_TOKEN", raising=False)
+    monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
+
+    previous_backend = keyring.get_keyring()
+    keyring.set_keyring(MemoryKeyring())
+    try:
+        sync_env_secret("DAGSTER_API_TOKEN", "dag_stale_token")
+        assert resolve_env_credential("DAGSTER_API_TOKEN") == "dag_stale_token"
+
+        sync_env_secret("DAGSTER_API_TOKEN", "")
+
+        assert resolve_env_credential("DAGSTER_API_TOKEN") == ""
+    finally:
+        keyring.set_keyring(previous_backend)
+
+
 @pytest.mark.skipif(_SKIP_AS_ROOT, reason="root bypasses file permission checks")
 def test_sync_env_values_permission_error(tmp_path) -> None:
     env_path = tmp_path / ".env"
