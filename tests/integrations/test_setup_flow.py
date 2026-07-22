@@ -97,6 +97,64 @@ def test_optional_field_left_blank_is_stored_as_none(recorder: _Recorder) -> Non
     assert recorder.saved[0][1]["credentials"]["note"] is None
 
 
+def test_blank_field_falls_back_to_its_default(recorder: _Recorder) -> None:
+    """The default applies in the flow, not only as a prompt prefill.
+
+    A surface that never prompts — an agent filling fields from a conversation —
+    must land on the same credentials as someone pressing enter at the CLI.
+    """
+    spec = dataclasses.replace(
+        _SPEC,
+        fields=(
+            _FIELDS[0],
+            setup_flow.SetupField(
+                name="room", label="Demo room", env_var="DEMO_ROOM", default="general"
+            ),
+        ),
+    )
+
+    setup_flow.apply_setup(spec, {"api_token": "tok-1", "room": ""})
+
+    assert recorder.saved[0][1]["credentials"]["room"] == "general"
+    assert recorder.env_values == [{"DEMO_ROOM": "general"}]
+
+
+def test_a_submitted_value_wins_over_the_default(recorder: _Recorder) -> None:
+    spec = dataclasses.replace(
+        _SPEC,
+        fields=(
+            _FIELDS[0],
+            setup_flow.SetupField(
+                name="room", label="Demo room", env_var="DEMO_ROOM", default="general"
+            ),
+        ),
+    )
+
+    setup_flow.apply_setup(spec, {"api_token": "tok-1", "room": "incidents"})
+
+    assert recorder.saved[0][1]["credentials"]["room"] == "incidents"
+
+
+def test_a_required_field_with_a_default_is_never_missing(recorder: _Recorder) -> None:
+    spec = dataclasses.replace(
+        _SPEC,
+        fields=(
+            _FIELDS[0],
+            setup_flow.SetupField(
+                name="room",
+                label="Demo room",
+                env_var="DEMO_ROOM",
+                default="general",
+                required=True,
+            ),
+        ),
+    )
+
+    outcome = setup_flow.apply_setup(spec, {"api_token": "tok-1"})
+
+    assert outcome.ok is True
+
+
 def test_failed_verification_persists_nothing(recorder: _Recorder) -> None:
     def _rejecting(_source: str, _config: dict[str, str]) -> dict[str, str]:
         return {"status": "failed", "detail": "Demo rejected the token."}

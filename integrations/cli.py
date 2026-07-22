@@ -193,14 +193,9 @@ def _setup_grafana() -> None:
 
 
 def _setup_datadog() -> None:
-    api_key = _p("API key", secret=True)
-    app_key = _p("Application key", secret=True)
-    site = _p("Site", default="datadoghq.com")
-    if not api_key or not app_key:
-        _die("api_key and app_key are required.")
-    upsert_integration(
-        "datadog", {"credentials": {"api_key": api_key, "app_key": app_key, "site": site}}
-    )
+    from integrations.datadog.setup import DATADOG_SETUP
+
+    _run_spec_setup(DATADOG_SETUP)
 
 
 def _setup_groundcover() -> None:
@@ -224,35 +219,15 @@ def _setup_groundcover() -> None:
 
 
 def _setup_honeycomb() -> None:
-    api_key = _p("Configuration API key", secret=True)
-    dataset = _p("Dataset slug or __all__", default="__all__")
-    base_url = _p("API URL", default="https://api.honeycomb.io")
-    if not api_key:
-        _die("api_key is required.")
-    upsert_integration(
-        "honeycomb",
-        {"credentials": {"api_key": api_key, "dataset": dataset, "base_url": base_url}},
-    )
+    from integrations.honeycomb.setup import HONEYCOMB_SETUP
+
+    _run_spec_setup(HONEYCOMB_SETUP)
 
 
 def _setup_coralogix() -> None:
-    api_key = _p("DataPrime API key", secret=True)
-    base_url = _p("API URL", default="https://api.coralogix.com")
-    application_name = _p("Application name (optional)")
-    subsystem_name = _p("Subsystem name (optional)")
-    if not api_key or not base_url:
-        _die("api_key and base_url are required.")
-    upsert_integration(
-        "coralogix",
-        {
-            "credentials": {
-                "api_key": api_key,
-                "base_url": base_url,
-                "application_name": application_name,
-                "subsystem_name": subsystem_name,
-            }
-        },
-    )
+    from integrations.coralogix.setup import CORALOGIX_SETUP
+
+    _run_spec_setup(CORALOGIX_SETUP)
 
 
 def _setup_aws() -> None:
@@ -880,8 +855,10 @@ def _run_spec_setup(spec: IntegrationSetupSpec) -> None:
 
     values: dict[str, str | None] = {}
     for field in spec.fields:
-        value = _p(field.question, secret=field.secret)
-        if not value and field.required:
+        value = _p(field.question, default=field.default, secret=field.secret)
+        # A field with a default is never missing — apply_setup substitutes it —
+        # so only a defaultless required field can fail here.
+        if not value and field.required and not field.default:
             _die(f"{field.label} is required.")
         values[field.name] = value
 

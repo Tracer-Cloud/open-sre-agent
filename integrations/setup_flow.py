@@ -75,6 +75,16 @@ class SetupField:
     else to ``.env``. Fields do not get to choose.
     """
 
+    default: str = ""
+    """Value to use when the field is submitted blank.
+
+    Applied in :func:`apply_setup`, not just offered as a prompt prefill, so a
+    surface that never prompts — the wizard reusing a stored value, an agent
+    filling fields from a conversation — lands on the same credentials as
+    someone pressing enter at the CLI. A field with a default is therefore
+    never missing, whatever *required* says.
+    """
+
     required: bool = True
     """When true, a blank value fails setup instead of being stored as ``None``."""
 
@@ -136,7 +146,7 @@ def _collect_credentials(
     """
     credentials: dict[str, str | None] = {}
     for field in spec.fields:
-        value = (values.get(field.name) or "").strip()
+        value = (values.get(field.name) or "").strip() or field.default
         if not value and field.required:
             return {}, f"{field.label} is required."
         credentials[field.name] = value or None
