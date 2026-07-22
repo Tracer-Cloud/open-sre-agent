@@ -25,12 +25,18 @@ from typing import Any
 
 import pytest
 
+import integrations.betterstack.setup as betterstack_setup
 import integrations.cli as cli
 import integrations.coralogix.setup as coralogix_setup
 import integrations.datadog.setup as datadog_setup
 import integrations.honeycomb.setup as honeycomb_setup
+import integrations.mysql.setup as mysql_setup
+import integrations.openclaw.setup as openclaw_setup
+import integrations.postgresql.setup as postgresql_setup
+import integrations.servicenow.setup as servicenow_setup
 import integrations.setup_flow as setup_flow
 
+# Answers for *prompted* fields only. Constant fields are injected by the flow.
 _ANSWERS: dict[str, dict[str, str]] = {
     "datadog": {"api_key": "dd-api-key", "app_key": "dd-app-key", "site": "datadoghq.eu"},
     "honeycomb": {
@@ -44,6 +50,34 @@ _ANSWERS: dict[str, dict[str, str]] = {
         "application_name": "checkout",
         "subsystem_name": "api",
     },
+    "betterstack": {
+        "query_endpoint": "https://eu-nbg-2-connect.betterstackdata.com",
+        "username": "bs-user",
+        "password": "bs-password",
+        "sources": "t1_checkout,t2_api",
+    },
+    "openclaw": {"command": "openclaw", "args": "mcp serve"},
+    "servicenow": {
+        "instance_url": "https://dev12345.service-now.com",
+        "username": "opensre",
+        "password": "sn-password",
+    },
+    "postgresql": {
+        "host": "postgres.eu.example.com",
+        "database": "checkout",
+        "port": "5432",
+        "username": "opensre",
+        "password": "pg-password",
+        "ssl_mode": "require",
+    },
+    "mysql": {
+        "host": "mysql.eu.example.com",
+        "database": "checkout",
+        "port": "3306",
+        "username": "opensre",
+        "password": "mysql-password",
+        "ssl_mode": "required",
+    },
 }
 
 # (spec module, spec attribute, CLI handler) — the attribute is patched rather
@@ -52,6 +86,11 @@ _CASES = [
     pytest.param(datadog_setup, "DATADOG_SETUP", cli._setup_datadog, id="datadog"),
     pytest.param(honeycomb_setup, "HONEYCOMB_SETUP", cli._setup_honeycomb, id="honeycomb"),
     pytest.param(coralogix_setup, "CORALOGIX_SETUP", cli._setup_coralogix, id="coralogix"),
+    pytest.param(betterstack_setup, "BETTERSTACK_SETUP", cli._setup_betterstack, id="betterstack"),
+    pytest.param(openclaw_setup, "OPENCLAW_SETUP", cli._setup_openclaw, id="openclaw"),
+    pytest.param(servicenow_setup, "SERVICENOW_SETUP", cli._setup_servicenow, id="servicenow"),
+    pytest.param(postgresql_setup, "POSTGRESQL_SETUP", cli._setup_postgresql, id="postgresql"),
+    pytest.param(mysql_setup, "MYSQL_SETUP", cli._setup_mysql, id="mysql"),
 ]
 
 
@@ -86,6 +125,22 @@ def run(monkeypatch: pytest.MonkeyPatch) -> _Run:
     return state
 
 
+def _prompted(spec: setup_flow.IntegrationSetupSpec) -> list[setup_flow.SetupField]:
+    return [field for field in spec.fields if not field.is_constant]
+
+
+def _expected_credentials(
+    spec: setup_flow.IntegrationSetupSpec, answers: dict[str, str]
+) -> dict[str, str | None]:
+    credentials: dict[str, str | None] = {}
+    for field in spec.fields:
+        if field.is_constant:
+            credentials[field.name] = field.constant
+        else:
+            credentials[field.name] = answers[field.name]
+    return credentials
+
+
 def _install(
     monkeypatch: pytest.MonkeyPatch, module: Any, attr: str, state: _Run, blank: str = ""
 ) -> setup_flow.IntegrationSetupSpec:
@@ -102,7 +157,7 @@ def _install(
     monkeypatch.setattr(module, attr, spec)
 
     answers = _ANSWERS[spec.service]
-    queue = ["" if field.name == blank else answers[field.name] for field in spec.fields]
+    queue = ["" if field.name == blank else answers[field.name] for field in _prompted(spec)]
 
     def _fake_p(label: str, default: str = "", secret: bool = False) -> str:
         state.asked.append((label, default, secret))
@@ -117,14 +172,15 @@ def test_prompts_follow_the_spec_and_mask_only_secret_fields(
     monkeypatch: pytest.MonkeyPatch, run: _Run, module: Any, attr: str, handler: Any
 ) -> None:
     spec = _install(monkeypatch, module, attr, run)
+    prompted = _prompted(spec)
 
     handler()
 
     assert [label for label, _default, _secret in run.asked] == [
-        field.question for field in spec.fields
+        field.question for field in prompted
     ]
     assert [secret for _label, _default, secret in run.asked] == [
-        field.secret for field in spec.fields
+        field.secret for field in prompted
     ]
 
 
@@ -138,7 +194,7 @@ def test_defaults_are_offered_as_prompt_prefills(
     handler()
 
     assert [default for _label, default, _secret in run.asked] == [
-        field.default for field in spec.fields
+        field.default for field in _prompted(spec)
     ]
 
 
@@ -148,13 +204,22 @@ def test_credentials_reach_the_keyring_and_env_not_just_the_store(
 ) -> None:
     spec = _install(monkeypatch, module, attr, run)
     answers = _ANSWERS[spec.service]
+    expected = _expected_credentials(spec, answers)
 
     handler()
 
-    assert run.store == [(spec.service, {"credentials": dict(answers)})]
-    secret_fields = {f.env_var: answers[f.name] for f in spec.fields if f.secret}
+    assert run.store == [(spec.service, {"credentials": expected})]
+    secret_fields = {
+        f.env_var: (f.constant if f.is_constant else answers[f.name])
+        for f in spec.fields
+        if f.secret and f.env_var
+    }
     assert dict(run.keyring) == secret_fields
-    plain_fields = {f.env_var: answers[f.name] for f in spec.fields if f.env_var and not f.secret}
+    plain_fields = {
+        f.env_var: (f.constant if f.is_constant else answers[f.name])
+        for f in spec.fields
+        if f.env_var and not f.secret
+    }
     assert run.env == [plain_fields]
 
 
@@ -179,11 +244,15 @@ def test_blank_required_field_exits_before_the_next_prompt(
 ) -> None:
     """Fail on the field that is blank, not after working through the rest."""
     spec = getattr(module, attr)
-    first_required = next(f for f in spec.fields if f.required and not f.default)
+    prompted = _prompted(spec)
+    try:
+        first_required = next(f for f in prompted if f.required and not f.default)
+    except StopIteration:
+        pytest.skip(f"{spec.service} has no required prompted field without a default")
     _install(monkeypatch, module, attr, run, blank=first_required.name)
 
     with pytest.raises(SystemExit):
         handler()
 
-    assert len(run.asked) == 1 + [f.name for f in spec.fields].index(first_required.name)
+    assert len(run.asked) == 1 + [f.name for f in prompted].index(first_required.name)
     assert (run.verified, run.store) == ([], [])

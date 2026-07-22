@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from config.env_file import sync_env_secret, sync_env_values
+from config.env_file import sync_env_values
+from integrations.servicenow.setup import SERVICENOW_SETUP
 from integrations.store import upsert_integration
 from platform.terminal.theme import SECONDARY
 from surfaces.cli.wizard._ui import (
@@ -12,11 +13,11 @@ from surfaces.cli.wizard._ui import (
     _render_integration_result,
     _string_value,
 )
+from surfaces.cli.wizard.configurators.spec_configurator import configure_from_spec
 from surfaces.cli.wizard.integration_health import (
     validate_google_docs_integration,
     validate_jira_integration,
     validate_notion_integration,
-    validate_servicenow_integration,
 )
 
 
@@ -83,56 +84,15 @@ def _configure_jira() -> tuple[str, str]:
 
 
 def _configure_servicenow() -> tuple[str, str]:
-    _, credentials = _integration_defaults("servicenow")
-    _console.print("\n[bold]ServiceNow Integration[/bold]")
-    _console.print(
-        "Use a user with read access to the sys_user table "
-        "(a free developer instance from https://developer.servicenow.com works).\n"
+    return configure_from_spec(
+        SERVICENOW_SETUP,
+        title="ServiceNow",
+        intro=(
+            "\n[bold]ServiceNow Integration[/bold]\n"
+            "Use a user with read access to the sys_user table "
+            "(a free developer instance from https://developer.servicenow.com works).\n"
+        ),
     )
-
-    while True:
-        instance_url = _prompt_value(
-            "ServiceNow instance URL (e.g. https://dev12345.service-now.com)",
-            default=_string_value(credentials.get("instance_url")),
-        )
-        username = _prompt_value(
-            "ServiceNow username",
-            default=_string_value(credentials.get("username")),
-        )
-        password = _prompt_value(
-            "ServiceNow password",
-            default=_string_value(credentials.get("password")),
-            secret=True,
-        )
-
-        with _console.status("Validating ServiceNow connection...", spinner="dots"):
-            result = validate_servicenow_integration(
-                instance_url=instance_url,
-                username=username,
-                password=password,
-            )
-        _render_integration_result("ServiceNow", result)
-
-        if result.ok:
-            upsert_integration(
-                "servicenow",
-                {
-                    "credentials": {
-                        "instance_url": instance_url,
-                        "username": username,
-                        "password": password,
-                    }
-                },
-            )
-            sync_env_secret("SERVICENOW_PASSWORD", password)
-            env_path = sync_env_values(
-                {
-                    "SERVICENOW_INSTANCE_URL": instance_url,
-                    "SERVICENOW_USERNAME": username,
-                }
-            )
-            return "ServiceNow", str(env_path)
-        _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
 
 
 def _configure_google_docs() -> tuple[str, str]:

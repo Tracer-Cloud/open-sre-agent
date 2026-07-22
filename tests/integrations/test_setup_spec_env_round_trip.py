@@ -27,15 +27,22 @@ import pytest
 import integrations.setup_flow as setup_flow
 from config.env_file import env_assignment_key, read_env_lines, sync_env_values
 from integrations._catalog_impl import load_env_integrations
+from integrations.betterstack.setup import BETTERSTACK_SETUP
 from integrations.coralogix.setup import CORALOGIX_SETUP
 from integrations.datadog.setup import DATADOG_SETUP
 from integrations.honeycomb.setup import HONEYCOMB_SETUP
+from integrations.mysql.setup import MYSQL_SETUP
+from integrations.openclaw.setup import OPENCLAW_SETUP
+from integrations.postgresql.setup import POSTGRESQL_SETUP
+from integrations.servicenow.setup import SERVICENOW_SETUP
 from integrations.telegram.setup import TELEGRAM_SETUP
 
 # A distinct, recognizable value per field, so two fields of the same
 # integration swapping places fails instead of coincidentally matching. Values
 # are deliberately non-default (EU hosts, a named dataset) — a default would
 # still "round-trip" through a spec that wrote nothing at all.
+# Constant fields are included at their fixed values so the field-set assert
+# stays exact; apply_setup ignores submitted overrides for those names.
 _SUBMITTED: dict[str, dict[str, str]] = {
     "datadog": {"api_key": "dd-api-key", "app_key": "dd-app-key", "site": "datadoghq.eu"},
     "honeycomb": {
@@ -50,9 +57,53 @@ _SUBMITTED: dict[str, dict[str, str]] = {
         "subsystem_name": "api",
     },
     "telegram": {"bot_token": "123456:tg-bot-token", "default_chat_id": "-1001234567890"},
+    "betterstack": {
+        "query_endpoint": "https://eu-nbg-2-connect.betterstackdata.com",
+        "username": "bs-user",
+        "password": "bs-password",
+        "sources": "t1_checkout,t2_api",
+    },
+    "openclaw": {
+        "mode": "stdio",
+        "command": "openclaw",
+        "args": "mcp serve",
+        "url": "",
+        "auth_token": "",
+    },
+    "servicenow": {
+        "instance_url": "https://dev12345.service-now.com",
+        "username": "opensre",
+        "password": "sn-password",
+    },
+    "postgresql": {
+        "host": "postgres.eu.example.com",
+        "database": "checkout",
+        "port": "5433",
+        "username": "opensre",
+        "password": "pg-password",
+        "ssl_mode": "require",
+    },
+    "mysql": {
+        "host": "mysql.eu.example.com",
+        "database": "checkout",
+        "port": "3307",
+        "username": "opensre",
+        "password": "mysql-password",
+        "ssl_mode": "required",
+    },
 }
 
-_SPECS = [DATADOG_SETUP, HONEYCOMB_SETUP, CORALOGIX_SETUP, TELEGRAM_SETUP]
+_SPECS = [
+    DATADOG_SETUP,
+    HONEYCOMB_SETUP,
+    CORALOGIX_SETUP,
+    TELEGRAM_SETUP,
+    BETTERSTACK_SETUP,
+    OPENCLAW_SETUP,
+    SERVICENOW_SETUP,
+    POSTGRESQL_SETUP,
+    MYSQL_SETUP,
+]
 
 
 @dataclasses.dataclass
@@ -106,6 +157,19 @@ def _catalog_credentials(service: str) -> dict[str, Any]:
     raise AssertionError(f"{service} was not discovered from the environment")
 
 
+def _matches_catalog_value(got: Any, expected: str) -> bool:
+    """Compare across env-string ↔ catalog-model normalizations.
+
+    Ports become ints; comma/space-separated hints become sequences. Neither
+    change is a persistence bug — the names and values still round-trip.
+    """
+    if isinstance(got, (list, tuple)):
+        if "," in expected:
+            return list(got) == [part.strip() for part in expected.split(",") if part.strip()]
+        return list(got) == [part for part in expected.split() if part]
+    return str(got) == expected
+
+
 @pytest.mark.parametrize("spec", _SPECS, ids=lambda spec: spec.service)
 def test_persisted_credentials_are_read_back_by_the_catalog(
     spec: setup_flow.IntegrationSetupSpec, persisted: _Persisted, monkeypatch: pytest.MonkeyPatch
@@ -127,7 +191,7 @@ def test_persisted_credentials_are_read_back_by_the_catalog(
 
     resolved = _catalog_credentials(spec.service)
     for field in spec.fields:
-        assert resolved.get(field.name) == submitted[field.name], (
+        assert _matches_catalog_value(resolved.get(field.name), submitted[field.name]), (
             f"{spec.service}.{field.name} was persisted as {field.env_var!r}, "
             "which the catalog does not read back into that credential"
         )

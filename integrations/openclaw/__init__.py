@@ -120,6 +120,8 @@ class OpenClawConfig(StrictConfigModel):
     def _normalize_args(cls, value: object) -> tuple[str, ...]:
         if value is None:
             return ()
+        if isinstance(value, str):
+            return tuple(part for part in value.split() if part.strip())
         if not isinstance(value, (list, tuple, set)):
             return ()
         return tuple(str(arg).strip() for arg in value if str(arg).strip())

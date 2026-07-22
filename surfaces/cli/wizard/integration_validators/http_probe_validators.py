@@ -5,7 +5,6 @@ from __future__ import annotations
 import httpx
 
 from integrations.config_models import SlackWebhookConfig
-from platform.common.url_validation import validate_https_or_loopback_http_url
 
 from .shared import IntegrationHealthResult
 
@@ -123,49 +122,14 @@ def validate_servicenow_integration(
     *, instance_url: str, username: str, password: str
 ) -> IntegrationHealthResult:
     """Validate ServiceNow connectivity with a minimal authenticated table read."""
-    # Refuse plaintext HTTP to non-loopback hosts before any request is made —
-    # the probe sends the password as HTTP Basic auth.
-    try:
-        base_url = validate_https_or_loopback_http_url(
-            instance_url.strip().rstrip("/"),
-            service_name="ServiceNow",
-            field_name="instance URL",
+    from integrations.servicenow.verifier import build_servicenow_config, validate_servicenow_config
+
+    outcome = validate_servicenow_config(
+        build_servicenow_config(
+            {"instance_url": instance_url, "username": username, "password": password}
         )
-    except ValueError as err:
-        return IntegrationHealthResult(ok=False, detail=str(err))
-    try:
-        resp = httpx.get(
-            f"{base_url}/api/now/table/sys_user",
-            params={"sysparm_limit": 1, "sysparm_fields": "user_name"},
-            auth=(username, password),
-            headers={"Accept": "application/json"},
-            timeout=10,
-        )
-        if resp.status_code == 200:
-            return IntegrationHealthResult(
-                ok=True, detail=f"ServiceNow connected as {username} at {base_url}."
-            )
-        if resp.status_code == 401:
-            return IntegrationHealthResult(
-                ok=False, detail="ServiceNow credentials invalid. Check username and password."
-            )
-        if resp.status_code == 403:
-            return IntegrationHealthResult(
-                ok=False,
-                detail=(
-                    "ServiceNow authenticated but the user cannot read the sys_user table. "
-                    "Grant a role with table read access (e.g. itil)."
-                ),
-            )
-        if resp.status_code == 404:
-            return IntegrationHealthResult(
-                ok=False, detail="ServiceNow instance URL not found. Check the URL."
-            )
-        return IntegrationHealthResult(
-            ok=False, detail=f"ServiceNow returned unexpected status {resp.status_code}."
-        )
-    except Exception as err:
-        return IntegrationHealthResult(ok=False, detail=f"ServiceNow validation failed: {err}")
+    )
+    return IntegrationHealthResult(ok=outcome.ok, detail=outcome.detail)
 
 
 def validate_discord_bot(*, bot_token: str) -> IntegrationHealthResult:

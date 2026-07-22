@@ -39,8 +39,12 @@ def configure_from_spec(
     if intro:
         _console.print(intro)
     while True:
-        values = {
-            field.name: _prompt_value(
+        values: dict[str, str | None] = {}
+        for field in spec.fields:
+            if field.is_constant:
+                values[field.name] = field.constant
+                continue
+            values[field.name] = _prompt_value(
                 field.question,
                 # A stored value wins over the spec's default, so re-running
                 # onboarding is a series of enters rather than a retype.
@@ -51,8 +55,6 @@ def configure_from_spec(
                 # so a defaulted field never re-prompts and never returns blank.
                 allow_empty=not field.required,
             )
-            for field in spec.fields
-        }
         with _console.status(f"Validating {title} credentials...", spinner="dots"):
             outcome = apply_setup(spec, values)
         _render_integration_result(

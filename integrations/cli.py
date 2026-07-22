@@ -16,7 +16,6 @@ from typing import TYPE_CHECKING, Any, NoReturn, cast
 
 import questionary
 
-from platform.common.url_validation import validate_https_or_loopback_http_url
 from platform.terminal.prompt_support import (
     QUESTIONARY_QMARK,
     questionary_prompt_style,
@@ -33,7 +32,6 @@ if TYPE_CHECKING:
     from integrations.setup_flow import IntegrationSetupSpec
 
 from integrations.gitlab import DEFAULT_GITLAB_BASE_URL
-from integrations.openclaw import build_openclaw_config, validate_openclaw_config
 from integrations.posthog_mcp import (
     DEFAULT_POSTHOG_MCP_URL,
     build_posthog_mcp_config,
@@ -368,33 +366,9 @@ def _setup_opensearch() -> None:
 
 
 def _setup_servicenow() -> None:
-    instance_url = _p("Instance URL (e.g. https://dev12345.service-now.com)")
-    if not instance_url:
-        _die("instance_url is required.")
-    # Fail here with an actionable message instead of storing a URL that
-    # classification would later reject silently (verify would say "missing").
-    try:
-        instance_url = validate_https_or_loopback_http_url(
-            instance_url.strip().rstrip("/"),
-            service_name="servicenow",
-            field_name="instance_url",
-        )
-    except ValueError as exc:
-        _die(str(exc))
-    username = _p("Username")
-    password = _p("Password", secret=True)
-    if not username or not password:
-        _die("username and password are required.")
-    upsert_integration(
-        "servicenow",
-        {
-            "credentials": {
-                "instance_url": instance_url,
-                "username": username,
-                "password": password,
-            }
-        },
-    )
+    from integrations.servicenow.setup import SERVICENOW_SETUP
+
+    _run_spec_setup(SERVICENOW_SETUP)
 
 
 def _setup_rds() -> None:
@@ -436,28 +410,9 @@ def _setup_vercel() -> None:
 
 
 def _setup_betterstack() -> None:
-    query_endpoint = _p(
-        "Better Stack SQL query endpoint (e.g. https://eu-nbg-2-connect.betterstackdata.com)"
-    )
-    username = _p("Better Stack username (Integrations > Connect ClickHouse HTTP client)")
-    password = _p("Better Stack password", secret=True)
-    sources_raw = _p(
-        "Better Stack sources, comma-separated base IDs from dashboard (optional hint for the planner)"
-    )
-    if not query_endpoint or not username:
-        _die("query_endpoint and username are required.")
-    sources = [part.strip() for part in (sources_raw or "").split(",") if part.strip()]
-    upsert_integration(
-        "betterstack",
-        {
-            "credentials": {
-                "query_endpoint": query_endpoint,
-                "username": username,
-                "password": password,
-                "sources": sources,
-            }
-        },
-    )
+    from integrations.betterstack.setup import BETTERSTACK_SETUP
+
+    _run_spec_setup(BETTERSTACK_SETUP)
 
 
 def _setup_incident_io() -> None:
@@ -855,6 +810,9 @@ def _run_spec_setup(spec: IntegrationSetupSpec) -> None:
 
     values: dict[str, str | None] = {}
     for field in spec.fields:
+        if field.is_constant:
+            values[field.name] = field.constant
+            continue
         value = _p(field.question, default=field.default, secret=field.secret)
         # A field with a default is never missing — apply_setup substitutes it —
         # so only a defaultless required field can fail here.
@@ -1003,30 +961,9 @@ def _setup_twilio() -> None:
 
 
 def _setup_openclaw() -> None:
-    # Transport is fixed to stdio (the local OpenClaw bridge). In practice it is the
-    # only mode anyone selects, so the transport prompt was removed on purpose — do
-    # NOT reintroduce a transport selection or a remote streamable-http/SSE branch.
-    mode = "stdio"
-    credentials: dict[str, Any] = {"mode": mode}
-    command = _p("OpenClaw bridge command", default="openclaw")
-    args = _p("OpenClaw bridge args", default="mcp serve")
-    if not command:
-        _die("command is required for stdio mode.")
-    credentials["command"] = command
-    credentials["args"] = [part for part in args.split() if part]
-    credentials["url"] = ""
-    credentials["auth_token"] = ""
+    from integrations.openclaw.setup import OPENCLAW_SETUP
 
-    print("\n  Validating OpenClaw bridge...")
-    config = build_openclaw_config(credentials)
-    result = validate_openclaw_config(config)
-    print(f"  {result.detail}")
-    if not result.ok:
-        sys.exit(1)
-
-    upsert_integration("openclaw", {"credentials": credentials})
-    print("  Next:")
-    print("    - opensre integrations verify openclaw")
+    _run_spec_setup(OPENCLAW_SETUP)
     print("    - uv run opensre investigate -i tests/fixtures/openclaw_test_alert.json")
     print("    - for accurate RCA, also configure Grafana/Datadog and GitHub")
 
@@ -1124,73 +1061,15 @@ def _setup_x_mcp() -> None:
 
 
 def _setup_postgresql() -> None:
-    host = _p("Host (e.g. localhost or postgres.example.com)")
-    database = _p("Database name")
-    if not host or not database:
-        _die("host and database are required.")
-    port = _p("Port", default="5432")
-    username = _p("Username", default="postgres")
-    password = _p("Password", secret=True)
-    ssl_mode_choice = _select(
-        "SSL mode",
-        choices=[
-            questionary.Choice("prefer (recommended)", value="prefer"),
-            questionary.Choice("require", value="require"),
-            questionary.Choice("disable", value="disable"),
-        ],
-        instruction="(use arrow keys)",
-    )
-    if ssl_mode_choice is None:
-        print("\nAborted.")
-        sys.exit(1)
-    upsert_integration(
-        "postgresql",
-        {
-            "credentials": {
-                "host": host,
-                "port": int(port) if port.isdigit() else 5432,
-                "database": database,
-                "username": username or "postgres",
-                "password": password,
-                "ssl_mode": ssl_mode_choice,
-            }
-        },
-    )
+    from integrations.postgresql.setup import POSTGRESQL_SETUP
+
+    _run_spec_setup(POSTGRESQL_SETUP)
 
 
 def _setup_mysql() -> None:
-    host = _p("Host (e.g. localhost or mysql.example.com)")
-    database = _p("Database name")
-    if not host or not database:
-        _die("host and database are required.")
-    port = _p("Port", default="3306")
-    username = _p("Username", default="root")
-    password = _p("Password", secret=True)
-    ssl_mode_choice = _select(
-        "SSL mode",
-        choices=[
-            questionary.Choice("preferred (encrypted, no cert verification)", value="preferred"),
-            questionary.Choice("required", value="required"),
-            questionary.Choice("disabled", value="disabled"),
-        ],
-        instruction="(use arrow keys)",
-    )
-    if ssl_mode_choice is None:
-        print("\nAborted.")
-        sys.exit(1)
-    upsert_integration(
-        "mysql",
-        {
-            "credentials": {
-                "host": host,
-                "port": int(port) if port.isdigit() else 3306,
-                "database": database,
-                "username": username or "root",
-                "password": password,
-                "ssl_mode": ssl_mode_choice,
-            }
-        },
-    )
+    from integrations.mysql.setup import MYSQL_SETUP
+
+    _run_spec_setup(MYSQL_SETUP)
 
 
 def _setup_mongodb_atlas() -> None:

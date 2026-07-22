@@ -155,6 +155,47 @@ def test_a_required_field_with_a_default_is_never_missing(recorder: _Recorder) -
     assert outcome.ok is True
 
 
+def test_constant_field_is_persisted_and_ignores_submitted_values(recorder: _Recorder) -> None:
+    """A constant is never prompted for and cannot be overridden by the caller."""
+    spec = dataclasses.replace(
+        _SPEC,
+        fields=(
+            _FIELDS[0],
+            _FIELDS[1],
+            setup_flow.SetupField(
+                name="mode",
+                label="Demo mode",
+                env_var="DEMO_MODE",
+                constant="stdio",
+            ),
+        ),
+    )
+
+    outcome = setup_flow.apply_setup(
+        spec, {"api_token": "tok-1", "room": "ops", "mode": "streamable-http"}
+    )
+
+    assert outcome.ok is True
+    assert recorder.saved[0][1]["credentials"]["mode"] == "stdio"
+    assert recorder.env_values == [{"DEMO_ROOM": "ops", "DEMO_MODE": "stdio"}]
+
+
+def test_constant_empty_string_is_kept(recorder: _Recorder) -> None:
+    """Empty constants stay empty rather than becoming None."""
+    spec = dataclasses.replace(
+        _SPEC,
+        fields=(
+            _FIELDS[0],
+            _FIELDS[1],
+            setup_flow.SetupField(name="url", label="Demo URL", constant=""),
+        ),
+    )
+
+    setup_flow.apply_setup(spec, {"api_token": "tok-1", "room": "ops"})
+
+    assert recorder.saved[0][1]["credentials"]["url"] == ""
+
+
 def test_failed_verification_persists_nothing(recorder: _Recorder) -> None:
     def _rejecting(_source: str, _config: dict[str, str]) -> dict[str, str]:
         return {"status": "failed", "detail": "Demo rejected the token."}

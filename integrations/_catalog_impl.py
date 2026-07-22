@@ -9,6 +9,12 @@ from collections.abc import Callable
 from typing import Any
 
 from config.config import get_tracer_base_url
+from config.constants.betterstack import (
+    BETTERSTACK_PASSWORD_ENV,
+    BETTERSTACK_QUERY_ENDPOINT_ENV,
+    BETTERSTACK_SOURCES_ENV,
+    BETTERSTACK_USERNAME_ENV,
+)
 from config.constants.coralogix import (
     CORALOGIX_API_KEY_ENV,
     CORALOGIX_APPLICATION_NAME_ENV,
@@ -24,6 +30,34 @@ from config.constants.honeycomb import (
     HONEYCOMB_API_KEY_ENV,
     HONEYCOMB_BASE_URL_ENV,
     HONEYCOMB_DATASET_ENV,
+)
+from config.constants.mysql import (
+    MYSQL_DATABASE_ENV,
+    MYSQL_HOST_ENV,
+    MYSQL_PASSWORD_ENV,
+    MYSQL_PORT_ENV,
+    MYSQL_SSL_MODE_ENV,
+    MYSQL_USERNAME_ENV,
+)
+from config.constants.openclaw import (
+    OPENCLAW_MCP_ARGS_ENV,
+    OPENCLAW_MCP_AUTH_TOKEN_ENV,
+    OPENCLAW_MCP_COMMAND_ENV,
+    OPENCLAW_MCP_MODE_ENV,
+    OPENCLAW_MCP_URL_ENV,
+)
+from config.constants.postgresql import (
+    POSTGRESQL_DATABASE_ENV,
+    POSTGRESQL_HOST_ENV,
+    POSTGRESQL_PASSWORD_ENV,
+    POSTGRESQL_PORT_ENV,
+    POSTGRESQL_SSL_MODE_ENV,
+    POSTGRESQL_USERNAME_ENV,
+)
+from config.constants.servicenow import (
+    SERVICENOW_INSTANCE_URL_ENV,
+    SERVICENOW_PASSWORD_ENV,
+    SERVICENOW_USERNAME_ENV,
 )
 from config.llm_credentials import resolve_env_credential
 from integrations.airflow.config import airflow_config_from_env
@@ -703,19 +737,19 @@ def load_env_integrations() -> list[dict[str, Any]]:
             )
         )
 
-    postgresql_host = os.getenv("POSTGRESQL_HOST", "").strip()
-    postgresql_database = os.getenv("POSTGRESQL_DATABASE", "").strip()
+    postgresql_host = os.getenv(POSTGRESQL_HOST_ENV, "").strip()
+    postgresql_database = os.getenv(POSTGRESQL_DATABASE_ENV, "").strip()
     if postgresql_host and postgresql_database:
         postgresql_config = build_postgresql_config(
             {
                 "host": postgresql_host,
                 "port": int(_pg_port)
-                if (_pg_port := os.getenv("POSTGRESQL_PORT", "").strip()) and _pg_port.isdigit()
+                if (_pg_port := os.getenv(POSTGRESQL_PORT_ENV, "").strip()) and _pg_port.isdigit()
                 else 5432,
                 "database": postgresql_database,
-                "username": os.getenv("POSTGRESQL_USERNAME", "postgres").strip() or "postgres",
-                "password": resolve_env_credential("POSTGRESQL_PASSWORD"),
-                "ssl_mode": os.getenv("POSTGRESQL_SSL_MODE", "prefer").strip() or "prefer",
+                "username": os.getenv(POSTGRESQL_USERNAME_ENV, "postgres").strip() or "postgres",
+                "password": resolve_env_credential(POSTGRESQL_PASSWORD_ENV),
+                "ssl_mode": os.getenv(POSTGRESQL_SSL_MODE_ENV, "prefer").strip() or "prefer",
             }
         )
         integrations.append(
@@ -888,12 +922,12 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 )
             )
 
-    servicenow_instance_url = os.getenv("SERVICENOW_INSTANCE_URL", "").strip()
-    servicenow_username = os.getenv("SERVICENOW_USERNAME", "").strip()
+    servicenow_instance_url = os.getenv(SERVICENOW_INSTANCE_URL_ENV, "").strip()
+    servicenow_username = os.getenv(SERVICENOW_USERNAME_ENV, "").strip()
     # Resolve the password (env, then OS keyring) only once the cheap env vars
     # are present, so unconfigured installs never pay a keyring roundtrip here.
     servicenow_password = (
-        resolve_env_credential("SERVICENOW_PASSWORD")
+        resolve_env_credential(SERVICENOW_PASSWORD_ENV)
         if servicenow_instance_url and servicenow_username
         else ""
     )
@@ -1079,9 +1113,9 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 )
             )
 
-    openclaw_url = os.getenv("OPENCLAW_MCP_URL", "").strip()
-    openclaw_command = os.getenv("OPENCLAW_MCP_COMMAND", "").strip()
-    openclaw_mode = os.getenv("OPENCLAW_MCP_MODE", "streamable-http").strip().lower()
+    openclaw_url = os.getenv(OPENCLAW_MCP_URL_ENV, "").strip()
+    openclaw_command = os.getenv(OPENCLAW_MCP_COMMAND_ENV, "").strip()
+    openclaw_mode = os.getenv(OPENCLAW_MCP_MODE_ENV, "streamable-http").strip().lower()
     openclaw_mode = openclaw_mode or "streamable-http"
     if (openclaw_mode == "stdio" and openclaw_command) or (
         openclaw_mode != "stdio" and openclaw_url
@@ -1093,9 +1127,11 @@ def load_env_integrations() -> list[dict[str, Any]]:
                     "mode": openclaw_mode,
                     "command": openclaw_command,
                     "args": [
-                        part for part in os.getenv("OPENCLAW_MCP_ARGS", "").strip().split() if part
+                        part
+                        for part in os.getenv(OPENCLAW_MCP_ARGS_ENV, "").strip().split()
+                        if part
                     ],
-                    "auth_token": resolve_env_credential("OPENCLAW_MCP_AUTH_TOKEN"),
+                    "auth_token": resolve_env_credential(OPENCLAW_MCP_AUTH_TOKEN_ENV),
                 }
             )
             integrations.append(
@@ -1310,16 +1346,16 @@ def load_env_integrations() -> list[dict[str, Any]]:
             )
         )
 
-    bs_endpoint = os.getenv("BETTERSTACK_QUERY_ENDPOINT", "").strip()
-    bs_username = os.getenv("BETTERSTACK_USERNAME", "").strip()
+    bs_endpoint = os.getenv(BETTERSTACK_QUERY_ENDPOINT_ENV, "").strip()
+    bs_username = os.getenv(BETTERSTACK_USERNAME_ENV, "").strip()
     if bs_endpoint and bs_username:
         try:
             bs_config = build_betterstack_config(
                 {
                     "query_endpoint": bs_endpoint,
                     "username": bs_username,
-                    "password": resolve_env_credential("BETTERSTACK_PASSWORD"),
-                    "sources": os.getenv("BETTERSTACK_SOURCES", ""),
+                    "password": resolve_env_credential(BETTERSTACK_PASSWORD_ENV),
+                    "sources": os.getenv(BETTERSTACK_SOURCES_ENV, ""),
                 }
             )
             integrations.append(
@@ -1331,19 +1367,19 @@ def load_env_integrations() -> list[dict[str, Any]]:
         except Exception as exc:
             _report_env_loader_failure(exc, integration="betterstack")
 
-    mysql_host = os.getenv("MYSQL_HOST", "").strip()
-    mysql_database = os.getenv("MYSQL_DATABASE", "").strip()
+    mysql_host = os.getenv(MYSQL_HOST_ENV, "").strip()
+    mysql_database = os.getenv(MYSQL_DATABASE_ENV, "").strip()
     if mysql_host and mysql_database:
         mysql_config = build_mysql_config(
             {
                 "host": mysql_host,
                 "port": int(_mysql_port)
-                if (_mysql_port := os.getenv("MYSQL_PORT", "").strip()) and _mysql_port.isdigit()
+                if (_mysql_port := os.getenv(MYSQL_PORT_ENV, "").strip()) and _mysql_port.isdigit()
                 else 3306,
                 "database": mysql_database,
-                "username": os.getenv("MYSQL_USERNAME", "root").strip() or "root",
-                "password": resolve_env_credential("MYSQL_PASSWORD"),
-                "ssl_mode": os.getenv("MYSQL_SSL_MODE", "preferred").strip() or "preferred",
+                "username": os.getenv(MYSQL_USERNAME_ENV, "root").strip() or "root",
+                "password": resolve_env_credential(MYSQL_PASSWORD_ENV),
+                "ssl_mode": os.getenv(MYSQL_SSL_MODE_ENV, "preferred").strip() or "preferred",
             }
         )
         integrations.append(

@@ -91,10 +91,24 @@ class SetupField:
     secret: bool = False
     """Whether collection surfaces should mask this field while it is typed."""
 
+    constant: str | None = None
+    """Fixed value that is always persisted and never prompted.
+
+    When set, collection surfaces skip this field and :func:`apply_setup`
+    ignores any submitted value under *name*. Use for transport modes and
+    other values the user must not choose — OpenClaw's ``stdio`` mode, for
+    example, whose config-model default is ``streamable-http``.
+    """
+
     @property
     def question(self) -> str:
         """The text to prompt with."""
         return self.prompt or self.label
+
+    @property
+    def is_constant(self) -> bool:
+        """True when this field is fixed rather than collected."""
+        return self.constant is not None
 
 
 @dataclass(frozen=True)
@@ -142,10 +156,15 @@ def _collect_credentials(
     """Normalize submitted values, or return the first missing required field.
 
     The spec is authoritative: fields it declares are the credentials that get
-    stored, and anything else in *values* is ignored.
+    stored, and anything else in *values* is ignored. Constant fields always
+    take their fixed value, even when *values* supplies something else.
     """
     credentials: dict[str, str | None] = {}
     for field in spec.fields:
+        if field.is_constant:
+            # Keep "" as "" — OpenClaw's empty url/auth_token are intentional.
+            credentials[field.name] = field.constant
+            continue
         value = (values.get(field.name) or "").strip() or field.default
         if not value and field.required:
             return {}, f"{field.label} is required."
