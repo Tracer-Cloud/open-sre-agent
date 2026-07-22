@@ -285,11 +285,18 @@ def test_persisted_credentials_are_read_back_by_the_catalog(
 
     resolved = _catalog_credentials(spec.service)
     for field in spec.fields:
+        actual = resolved.get(field.name)
+        # Missing catalog keys must fail even if a future ``_SUBMITTED`` entry
+        # accidentally uses the literal string ``"None"`` (``str(None) == "None"``).
+        assert actual is not None, (
+            f"{spec.service}.{field.name} was persisted as {field.env_var!r}, "
+            "which the catalog does not read back into that credential"
+        )
         # str(...) on both sides: env vars are always strings, and a config
         # model may legitimately coerce one back to a number (SMTP's port) —
         # that is a type normalization, not the persistence bug this test
         # guards against.
-        assert str(resolved.get(field.name)) == str(submitted[field.name]), (
+        assert str(actual) == str(submitted[field.name]), (
             f"{spec.service}.{field.name} was persisted as {field.env_var!r}, "
             "which the catalog does not read back into that credential"
         )
