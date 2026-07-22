@@ -20,11 +20,15 @@ from tests.core.agent.orchestration.cross_surface_parity_harness import (
 
 @pytest.fixture(autouse=True)
 def _stub_gateway_turn_analytics(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("gateway.runtime.turn_handler.capture_gateway_turn_started", lambda **_: None)
+    monkeypatch.setattr(
+        "gateway.runtime.turn_handler.capture_gateway_turn_started", lambda **_: None
+    )
     monkeypatch.setattr(
         "gateway.runtime.turn_handler.capture_gateway_turn_completed", lambda **_: None
     )
-    monkeypatch.setattr("gateway.runtime.turn_handler.capture_gateway_turn_failed", lambda **_: None)
+    monkeypatch.setattr(
+        "gateway.runtime.turn_handler.capture_gateway_turn_failed", lambda **_: None
+    )
 
 
 def _patch_headless_agent(monkeypatch: Any, result: ShellTurnResult) -> MagicMock:

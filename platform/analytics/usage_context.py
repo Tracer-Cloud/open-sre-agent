@@ -34,9 +34,7 @@ ORGANIZATION_GROUP_TYPE: Final[str] = "organization"
 _SURFACE: ContextVar[str | None] = ContextVar("analytics_surface", default=None)
 _SESSION_ID: ContextVar[str | None] = ContextVar("analytics_session_id", default=None)
 _USER_ID: ContextVar[str | None] = ContextVar("analytics_user_id", default=None)
-_ORGANIZATION_ID: ContextVar[str | None] = ContextVar(
-    "analytics_organization_id", default=None
-)
+_ORGANIZATION_ID: ContextVar[str | None] = ContextVar("analytics_organization_id", default=None)
 
 
 def get_surface() -> str | None:
@@ -140,7 +138,7 @@ def merge_usage_enrichment(properties: Properties) -> Properties:
         groups[ORGANIZATION_GROUP_TYPE] = org.strip()
         merged["$groups"] = groups
     elif "$groups" not in merged:
-        groups = enrichment.get("$groups")
-        if isinstance(groups, dict):
-            merged["$groups"] = groups
+        enrichment_groups = enrichment.get("$groups")
+        if isinstance(enrichment_groups, dict):
+            merged["$groups"] = enrichment_groups
     return merged

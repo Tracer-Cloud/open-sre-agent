@@ -186,9 +186,7 @@ def test_capture_github_login_lifecycle_events(monkeypatch: pytest.MonkeyPatch) 
     cli.capture_github_login_prompted(variant="control")
     cli.capture_github_login_skipped(variant="control", skip_source=cli.GITHUB_SKIP_SOURCE_MENU)
     cli.capture_github_login_abandoned(variant="forced", reason="cancelled")
-    cli.capture_github_login_failed(
-        variant="forced", reason_category=cli.GITHUB_FAIL_DEVICE_FLOW
-    )
+    cli.capture_github_login_failed(variant="forced", reason_category=cli.GITHUB_FAIL_DEVICE_FLOW)
     cli.stamp_github_gate_variant("forced")
 
     exp_control = cli.github_gate_experiment_properties("control")

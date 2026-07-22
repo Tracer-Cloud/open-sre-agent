@@ -411,9 +411,11 @@ def require_github_login_on_first_launch(console: Console | None = None) -> bool
             _defer_github_login()
             _print_skip_guidance(con)
             return True
-        emit_terminal(
-            lambda: capture_github_login_abandoned(variant=variant, reason=retry_decision)
-        )
+
+        def _abandon(reason: str = retry_decision) -> None:
+            capture_github_login_abandoned(variant=variant, reason=reason)
+
+        emit_terminal(_abandon)
         _print_forced_abort_guidance(con)
         return False
 
