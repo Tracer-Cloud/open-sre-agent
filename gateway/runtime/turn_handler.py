@@ -100,8 +100,8 @@ class GatewayTurnHandler:
             bound_usage_context(session_id=session_id),
             traced_session(session_id, component="gateway_turn"),
         ):
-            capture_gateway_turn_started(surface=surface)
             try:
+                capture_gateway_turn_started(surface=surface)
                 agent = self._agent_for_turn(text=text, session=session, sink=sink, logger=logger)
                 turn_result = agent.dispatch(text)
                 outbound_text = (

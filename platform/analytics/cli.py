@@ -869,6 +869,12 @@ def capture_github_login_prompted(*, variant: str) -> None:
     Emits both ``github_login_gate_shown`` (canonical) and ``github_login_prompted``
     (backward compatible) with identical experiment properties so existing
     PostHog boards keep working during the rename.
+
+    Do **not** combine both event names in the same funnel step or ``event IN
+    (...)`` filter — each gate presentation produces two events and that query
+    would double-count exposures. Prefer ``github_login_gate_shown`` for new
+    boards; keep ``github_login_prompted`` only for legacy charts that have not
+    migrated yet.
     """
     props = github_gate_experiment_properties(variant)
     _capture(Event.GITHUB_LOGIN_GATE_SHOWN, props)

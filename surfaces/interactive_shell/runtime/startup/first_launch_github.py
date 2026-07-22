@@ -128,8 +128,11 @@ def clear_github_login_deferral() -> None:
 
 def _propagate_username(username: str, *, variant: str) -> None:
     # ``authenticate_and_configure_github`` already calls identify_github_username
-    # when a username is present; always emit the login lifecycle event here.
-    capture_github_login_completed(username or "", variant=variant)
+    # when a username is present; only emit the one-time login lifecycle event
+    # when we have a non-empty username so PostHog completed cohorts stay clean.
+    if not username:
+        return
+    capture_github_login_completed(username, variant=variant)
 
 
 def _print_intro(console: Console, *, allow_skip: bool) -> None:

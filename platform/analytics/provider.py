@@ -714,6 +714,7 @@ class Analytics:
         self._worker_alive = not self._disabled
         self._persistent_properties: Properties = {}
         self._identified_organization_groups: set[str] = set()
+        self._org_group_lock = threading.Lock()
 
         if not self._disabled:
             # Never block interpreter exit on PostHog; callers that need a
@@ -803,9 +804,12 @@ class Analytics:
         if not isinstance(org, str):
             return
         org_id = org.strip()
-        if not org_id or org_id in self._identified_organization_groups:
+        if not org_id:
             return
-        self._identified_organization_groups.add(org_id)
+        with self._org_group_lock:
+            if org_id in self._identified_organization_groups:
+                return
+            self._identified_organization_groups.add(org_id)
         self.group_identify(
             ORGANIZATION_GROUP_TYPE,
             org_id,

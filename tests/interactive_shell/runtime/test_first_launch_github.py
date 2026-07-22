@@ -178,6 +178,33 @@ def test_orchestrator_success_proceeds_and_propagates(monkeypatch: pytest.Monkey
     assert cleared == [True]
 
 
+def test_orchestrator_success_without_username_skips_completed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Auth can succeed without a resolvable username; do not pollute completed."""
+    monkeypatch.setenv("OPENSRE_GITHUB_GATE_VARIANT", "control")
+    monkeypatch.setattr(flg, "_offer_github_login", lambda _console, **_kwargs: "sign_in")
+    monkeypatch.setattr(
+        github_login_mod,
+        "authenticate_and_configure_github",
+        lambda **_kwargs: GitHubLoginResult(ok=True, username="", detail="OK"),
+    )
+    completed: list[tuple[str, str | None]] = []
+    monkeypatch.setattr(
+        flg,
+        "capture_github_login_completed",
+        lambda username, *, variant=None: completed.append((username, variant)),
+    )
+    monkeypatch.setattr(flg, "clear_github_login_deferral", lambda: None)
+    monkeypatch.setattr(flg, "capture_github_login_prompted", lambda **_kwargs: None)
+    monkeypatch.setattr(flg, "stamp_github_gate_variant", lambda _variant: None)
+
+    proceed = flg.require_github_login_on_first_launch(_console())
+
+    assert proceed is True
+    assert completed == []
+
+
 def test_orchestrator_skip_at_menu_proceeds_in_control(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("OPENSRE_GITHUB_GATE_VARIANT", "control")
     monkeypatch.setattr(flg, "_offer_github_login", lambda _console, **_kwargs: "skip_menu")
