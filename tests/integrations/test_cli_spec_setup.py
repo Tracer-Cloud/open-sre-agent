@@ -30,7 +30,6 @@ import integrations.coralogix.setup as coralogix_setup
 import integrations.datadog.setup as datadog_setup
 import integrations.honeycomb.setup as honeycomb_setup
 import integrations.setup_flow as setup_flow
-from integrations.setup_flow import IntegrationSetupSpec
 
 _ANSWERS: dict[str, dict[str, str]] = {
     "datadog": {"api_key": "dd-api-key", "app_key": "dd-app-key", "site": "datadoghq.eu"},
@@ -89,7 +88,7 @@ def run(monkeypatch: pytest.MonkeyPatch) -> _Run:
 
 def _install(
     monkeypatch: pytest.MonkeyPatch, module: Any, attr: str, state: _Run, blank: str = ""
-) -> IntegrationSetupSpec:
+) -> setup_flow.IntegrationSetupSpec:
     """Swap in a stub verifier and script ``_p`` with this vendor's answers.
 
     Pass *blank* to answer one field with an empty string instead.

@@ -30,7 +30,6 @@ from integrations._catalog_impl import load_env_integrations
 from integrations.coralogix.setup import CORALOGIX_SETUP
 from integrations.datadog.setup import DATADOG_SETUP
 from integrations.honeycomb.setup import HONEYCOMB_SETUP
-from integrations.setup_flow import IntegrationSetupSpec
 from integrations.telegram.setup import TELEGRAM_SETUP
 
 # A distinct, recognizable value per field, so two fields of the same
@@ -109,7 +108,7 @@ def _catalog_credentials(service: str) -> dict[str, Any]:
 
 @pytest.mark.parametrize("spec", _SPECS, ids=lambda spec: spec.service)
 def test_persisted_credentials_are_read_back_by_the_catalog(
-    spec: IntegrationSetupSpec, persisted: _Persisted, monkeypatch: pytest.MonkeyPatch
+    spec: setup_flow.IntegrationSetupSpec, persisted: _Persisted, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     submitted = _SUBMITTED[spec.service]
     assert {field.name for field in spec.fields} == set(submitted), (
