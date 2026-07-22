@@ -30,7 +30,10 @@ from integrations._catalog_impl import load_env_integrations
 from integrations.coralogix.setup import CORALOGIX_SETUP
 from integrations.datadog.setup import DATADOG_SETUP
 from integrations.honeycomb.setup import HONEYCOMB_SETUP
+from integrations.posthog_mcp.setup import POSTHOG_MCP_SETUP
+from integrations.sentry_mcp.setup import SENTRY_MCP_SETUP
 from integrations.telegram.setup import TELEGRAM_SETUP
+from integrations.x_mcp.setup import X_MCP_SETUP
 
 # A distinct, recognizable value per field, so two fields of the same
 # integration swapping places fails instead of coincidentally matching. Values
@@ -50,9 +53,31 @@ _SUBMITTED: dict[str, dict[str, str]] = {
         "subsystem_name": "api",
     },
     "telegram": {"bot_token": "123456:tg-bot-token", "default_chat_id": "-1001234567890"},
+    "posthog_mcp": {
+        "url": "https://mcp.eu.posthog.com/mcp",
+        "auth_token": "phx_mcp_personal_api_key",
+        "project_id": "checkout-project",
+    },
+    "sentry_mcp": {
+        "url": "https://mcp.eu.sentry.dev/mcp",
+        "auth_token": "sentry-user-auth-token",
+        "host": "sentry.checkout.internal",
+    },
+    "x_mcp": {
+        "url": "https://x-mcp.checkout.internal/mcp",
+        "auth_token": "x-mcp-tunnel-token",
+    },
 }
 
-_SPECS = [DATADOG_SETUP, HONEYCOMB_SETUP, CORALOGIX_SETUP, TELEGRAM_SETUP]
+_SPECS = [
+    DATADOG_SETUP,
+    HONEYCOMB_SETUP,
+    CORALOGIX_SETUP,
+    TELEGRAM_SETUP,
+    POSTHOG_MCP_SETUP,
+    SENTRY_MCP_SETUP,
+    X_MCP_SETUP,
+]
 
 
 @dataclasses.dataclass

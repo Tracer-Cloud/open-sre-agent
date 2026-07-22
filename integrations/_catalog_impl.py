@@ -25,6 +25,17 @@ from config.constants.honeycomb import (
     HONEYCOMB_BASE_URL_ENV,
     HONEYCOMB_DATASET_ENV,
 )
+from config.constants.posthog_mcp import (
+    POSTHOG_MCP_AUTH_TOKEN_ENV,
+    POSTHOG_MCP_PROJECT_ID_ENV,
+    POSTHOG_MCP_URL_ENV,
+)
+from config.constants.sentry_mcp import (
+    SENTRY_MCP_AUTH_TOKEN_ENV,
+    SENTRY_MCP_HOST_ENV,
+    SENTRY_MCP_URL_ENV,
+)
+from config.constants.x_mcp import X_MCP_AUTH_TOKEN_ENV, X_MCP_URL_ENV
 from config.llm_credentials import resolve_env_credential
 from integrations.airflow.config import airflow_config_from_env
 from integrations.airflow.config import classify as _classify_airflow
@@ -1125,8 +1136,8 @@ def load_env_integrations() -> list[dict[str, Any]]:
     posthog_mcp_mode = os.getenv("POSTHOG_MCP_MODE", "streamable-http").strip().lower()
     posthog_mcp_mode = posthog_mcp_mode or "streamable-http"
     posthog_mcp_command = os.getenv("POSTHOG_MCP_COMMAND", "").strip()
-    posthog_mcp_token = resolve_env_credential("POSTHOG_MCP_AUTH_TOKEN")
-    posthog_mcp_url = os.getenv("POSTHOG_MCP_URL", "").strip()
+    posthog_mcp_token = resolve_env_credential(POSTHOG_MCP_AUTH_TOKEN_ENV)
+    posthog_mcp_url = os.getenv(POSTHOG_MCP_URL_ENV, "").strip()
     if posthog_mcp_mode != "stdio" and posthog_mcp_token and not posthog_mcp_url:
         posthog_mcp_url = DEFAULT_POSTHOG_MCP_URL
     if (posthog_mcp_mode == "stdio" and posthog_mcp_command) or (
@@ -1145,7 +1156,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
                     ],
                     "auth_token": posthog_mcp_token,
                     "organization_id": os.getenv("POSTHOG_MCP_ORGANIZATION_ID", "").strip(),
-                    "project_id": os.getenv("POSTHOG_MCP_PROJECT_ID", "").strip(),
+                    "project_id": os.getenv(POSTHOG_MCP_PROJECT_ID_ENV, "").strip(),
                     "features": os.getenv("POSTHOG_MCP_FEATURES", "").strip(),
                     "read_only": read_only,
                 }
@@ -1165,8 +1176,8 @@ def load_env_integrations() -> list[dict[str, Any]]:
     sentry_mcp_mode = os.getenv("SENTRY_MCP_MODE", "streamable-http").strip().lower()
     sentry_mcp_mode = sentry_mcp_mode or "streamable-http"
     sentry_mcp_command = os.getenv("SENTRY_MCP_COMMAND", "").strip()
-    sentry_mcp_token = resolve_env_credential("SENTRY_MCP_AUTH_TOKEN")
-    sentry_mcp_url = os.getenv("SENTRY_MCP_URL", "").strip()
+    sentry_mcp_token = resolve_env_credential(SENTRY_MCP_AUTH_TOKEN_ENV)
+    sentry_mcp_url = os.getenv(SENTRY_MCP_URL_ENV, "").strip()
     if sentry_mcp_mode != "stdio" and sentry_mcp_token and not sentry_mcp_url:
         sentry_mcp_url = DEFAULT_SENTRY_MCP_URL
     if (sentry_mcp_mode == "stdio" and sentry_mcp_command) or (
@@ -1182,7 +1193,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
                         part for part in os.getenv("SENTRY_MCP_ARGS", "").strip().split() if part
                     ],
                     "auth_token": sentry_mcp_token,
-                    "host": os.getenv("SENTRY_MCP_HOST", "").strip(),
+                    "host": os.getenv(SENTRY_MCP_HOST_ENV, "").strip(),
                     "organization_slug": os.getenv("SENTRY_MCP_ORGANIZATION_SLUG", "").strip(),
                     "project_slug": os.getenv("SENTRY_MCP_PROJECT_SLUG", "").strip(),
                     "skills": os.getenv("SENTRY_MCP_SKILLS", "").strip(),
@@ -1203,9 +1214,9 @@ def load_env_integrations() -> list[dict[str, Any]]:
     x_mcp_mode = os.getenv("X_MCP_MODE", "streamable-http").strip().lower()
     x_mcp_mode = x_mcp_mode or "streamable-http"
     x_mcp_command = os.getenv("X_MCP_COMMAND", "").strip()
-    x_mcp_token = resolve_env_credential("X_MCP_AUTH_TOKEN")
+    x_mcp_token = resolve_env_credential(X_MCP_AUTH_TOKEN_ENV)
     x_mcp_bearer_token = resolve_env_credential("X_BEARER_TOKEN")
-    x_mcp_url = os.getenv("X_MCP_URL", "").strip()
+    x_mcp_url = os.getenv(X_MCP_URL_ENV, "").strip()
     if (x_mcp_mode == "stdio" and x_mcp_command) or (x_mcp_mode != "stdio" and x_mcp_url):
         try:
             x_mcp_config = build_x_mcp_config(

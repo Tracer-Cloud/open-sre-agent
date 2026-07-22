@@ -34,17 +34,7 @@ if TYPE_CHECKING:
 
 from integrations.gitlab import DEFAULT_GITLAB_BASE_URL
 from integrations.openclaw import build_openclaw_config, validate_openclaw_config
-from integrations.posthog_mcp import (
-    DEFAULT_POSTHOG_MCP_URL,
-    build_posthog_mcp_config,
-    validate_posthog_mcp_config,
-)
 from integrations.registry import SUPPORTED_SETUP_SERVICES, resolve_management_service
-from integrations.sentry_mcp import (
-    DEFAULT_SENTRY_MCP_URL,
-    build_sentry_mcp_config,
-    validate_sentry_mcp_config,
-)
 from integrations.store import (
     STORE_PATH,
     get_integration,
@@ -57,11 +47,6 @@ from integrations.verify import (
     format_verification_results,
     verification_exit_code,
     verify_integrations,
-)
-from integrations.x_mcp import (
-    DEFAULT_X_MCP_URL,
-    build_x_mcp_config,
-    validate_x_mcp_config,
 )
 
 _B = ANSI_BOLD
@@ -1032,95 +1017,21 @@ def _setup_openclaw() -> None:
 
 
 def _setup_posthog_mcp() -> None:
-    # Transport is fixed to Streamable HTTP (the hosted PostHog MCP server). In
-    # practice it is the only mode anyone selects, so the transport prompt was removed
-    # on purpose — do NOT reintroduce a transport selection or a stdio branch here.
-    mode = "streamable-http"
-    credentials: dict[str, Any] = {"mode": mode, "read_only": True}
-    url = _p("PostHog MCP URL", default=DEFAULT_POSTHOG_MCP_URL)
-    if not url:
-        _die("url is required for remote MCP modes.")
-    credentials["url"] = url
-    credentials["command"] = ""
-    credentials["args"] = []
+    from integrations.posthog_mcp.setup import POSTHOG_MCP_SETUP
 
-    credentials["auth_token"] = _p("PostHog personal API key (MCP Server preset)", secret=True)
-    if not credentials["auth_token"]:
-        _die("a personal API key is required for the hosted PostHog MCP server.")
-    credentials["project_id"] = _p("PostHog project ID (optional)", default="")
-
-    print("\n  Validating PostHog MCP...")
-    config = build_posthog_mcp_config(credentials)
-    result = validate_posthog_mcp_config(config)
-    print(f"  {result.detail}")
-    if not result.ok:
-        sys.exit(1)
-
-    upsert_integration("posthog_mcp", {"credentials": credentials})
-    print("  Next:")
-    print("    - opensre integrations verify posthog_mcp")
+    _run_spec_setup(POSTHOG_MCP_SETUP)
 
 
 def _setup_sentry_mcp() -> None:
-    # Transport is fixed to Streamable HTTP (the hosted Sentry MCP server). In
-    # practice it is the only mode anyone selects, so the transport prompt was removed
-    # on purpose — do NOT reintroduce a transport selection or a stdio branch here.
-    mode = "streamable-http"
-    credentials: dict[str, Any] = {"mode": mode}
-    url = _p("Sentry MCP URL", default=DEFAULT_SENTRY_MCP_URL)
-    if not url:
-        _die("url is required for remote MCP modes.")
-    credentials["url"] = url
-    credentials["command"] = ""
-    credentials["args"] = []
+    from integrations.sentry_mcp.setup import SENTRY_MCP_SETUP
 
-    credentials["auth_token"] = _p("Sentry user auth token", secret=True)
-    if not credentials["auth_token"]:
-        _die("a user auth token is required for the hosted Sentry MCP server.")
-    credentials["host"] = _p("Self-hosted Sentry host (optional)", default="")
-
-    print("\n  Validating Sentry MCP...")
-    config = build_sentry_mcp_config(credentials)
-    result = validate_sentry_mcp_config(config)
-    print(f"  {result.detail}")
-    if not result.ok:
-        sys.exit(1)
-
-    upsert_integration("sentry_mcp", {"credentials": credentials})
-    print("  Next:")
-    print("    - opensre integrations verify sentry_mcp")
+    _run_spec_setup(SENTRY_MCP_SETUP)
 
 
 def _setup_x_mcp() -> None:
-    # X's MCP server (https://github.com/xdevplatform/xmcp) runs locally by
-    # default, optionally tunneled for remote access — it is not an
-    # always-on hosted endpoint like PostHog/Sentry's. Streamable HTTP is
-    # the transport used by both a bare local server and a tunneled one, so
-    # it stays the default here; do NOT add a transport prompt.
-    mode = "streamable-http"
-    credentials: dict[str, Any] = {"mode": mode}
-    url = _p("X MCP URL", default=DEFAULT_X_MCP_URL)
-    if not url:
-        _die("url is required for remote MCP modes.")
-    credentials["url"] = url
-    credentials["command"] = ""
-    credentials["args"] = []
+    from integrations.x_mcp.setup import X_MCP_SETUP
 
-    credentials["auth_token"] = _p(
-        "Auth token for a tunneled/proxied endpoint (optional)", secret=True, default=""
-    )
-    credentials["bearer_token"] = ""
-
-    print("\n  Validating X MCP...")
-    config = build_x_mcp_config(credentials)
-    result = validate_x_mcp_config(config)
-    print(f"  {result.detail}")
-    if not result.ok:
-        sys.exit(1)
-
-    upsert_integration("x_mcp", {"credentials": credentials})
-    print("  Next:")
-    print("    - opensre integrations verify x_mcp")
+    _run_spec_setup(X_MCP_SETUP)
 
 
 def _setup_postgresql() -> None:

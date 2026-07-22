@@ -44,6 +44,11 @@ from config.constants.posthog import (
     POSTHOG_CAPTURE_API_KEY,
     POSTHOG_HOST,
 )
+from config.constants.posthog_mcp import (
+    POSTHOG_MCP_AUTH_TOKEN_ENV,
+    POSTHOG_MCP_PROJECT_ID_ENV,
+    POSTHOG_MCP_URL_ENV,
+)
 from config.constants.sentry import (
     SENTRY_DSN,
     SENTRY_ERROR_SAMPLE_RATE,
@@ -51,10 +56,16 @@ from config.constants.sentry import (
     SENTRY_MAX_BREADCRUMBS,
     SENTRY_TRACES_SAMPLE_RATE,
 )
+from config.constants.sentry_mcp import (
+    SENTRY_MCP_AUTH_TOKEN_ENV,
+    SENTRY_MCP_HOST_ENV,
+    SENTRY_MCP_URL_ENV,
+)
 from config.constants.telegram import (
     TELEGRAM_BOT_TOKEN_ENV,
     TELEGRAM_DEFAULT_CHAT_ID_ENV,
 )
+from config.constants.x_mcp import X_MCP_AUTH_TOKEN_ENV, X_MCP_URL_ENV
 
 __all__ = [
     "AZURE_OPENAI_API_KEY_ENV",
@@ -81,15 +92,23 @@ __all__ = [
     "ORGANIZATION_ID_ENV",
     "POSTHOG_CAPTURE_API_KEY",
     "POSTHOG_HOST",
+    "POSTHOG_MCP_AUTH_TOKEN_ENV",
+    "POSTHOG_MCP_PROJECT_ID_ENV",
+    "POSTHOG_MCP_URL_ENV",
     "SENTRY_DSN",
     "SENTRY_ERROR_SAMPLE_RATE",
     "SENTRY_IN_APP_INCLUDE",
     "SENTRY_MAX_BREADCRUMBS",
+    "SENTRY_MCP_AUTH_TOKEN_ENV",
+    "SENTRY_MCP_HOST_ENV",
+    "SENTRY_MCP_URL_ENV",
     "SENTRY_TRACES_SAMPLE_RATE",
     "TELEGRAM_BOT_TOKEN_ENV",
     "TELEGRAM_DEFAULT_CHAT_ID_ENV",
     "USAGE_SECRET_ENV",
     "WEBAPP_URL_ENV",
+    "X_MCP_AUTH_TOKEN_ENV",
+    "X_MCP_URL_ENV",
     "ensure_opensre_tmp_dir",
     "get_store_path",
 ]

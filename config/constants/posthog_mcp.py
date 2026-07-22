@@ -1,0 +1,13 @@
+"""PostHog MCP environment variable names."""
+
+from __future__ import annotations
+
+POSTHOG_MCP_URL_ENV = "POSTHOG_MCP_URL"
+POSTHOG_MCP_AUTH_TOKEN_ENV = "POSTHOG_MCP_AUTH_TOKEN"
+POSTHOG_MCP_PROJECT_ID_ENV = "POSTHOG_MCP_PROJECT_ID"
+
+__all__ = [
+    "POSTHOG_MCP_AUTH_TOKEN_ENV",
+    "POSTHOG_MCP_PROJECT_ID_ENV",
+    "POSTHOG_MCP_URL_ENV",
+]

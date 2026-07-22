@@ -29,7 +29,10 @@ import integrations.cli as cli
 import integrations.coralogix.setup as coralogix_setup
 import integrations.datadog.setup as datadog_setup
 import integrations.honeycomb.setup as honeycomb_setup
+import integrations.posthog_mcp.setup as posthog_mcp_setup
+import integrations.sentry_mcp.setup as sentry_mcp_setup
 import integrations.setup_flow as setup_flow
+import integrations.x_mcp.setup as x_mcp_setup
 
 _ANSWERS: dict[str, dict[str, str]] = {
     "datadog": {"api_key": "dd-api-key", "app_key": "dd-app-key", "site": "datadoghq.eu"},
@@ -44,6 +47,20 @@ _ANSWERS: dict[str, dict[str, str]] = {
         "application_name": "checkout",
         "subsystem_name": "api",
     },
+    "posthog_mcp": {
+        "url": "https://mcp.eu.posthog.com/mcp",
+        "auth_token": "phx_mcp_personal_api_key",
+        "project_id": "checkout-project",
+    },
+    "sentry_mcp": {
+        "url": "https://mcp.eu.sentry.dev/mcp",
+        "auth_token": "sentry-user-auth-token",
+        "host": "sentry.checkout.internal",
+    },
+    "x_mcp": {
+        "url": "https://x-mcp.checkout.internal/mcp",
+        "auth_token": "x-mcp-tunnel-token",
+    },
 }
 
 # (spec module, spec attribute, CLI handler) — the attribute is patched rather
@@ -52,6 +69,9 @@ _CASES = [
     pytest.param(datadog_setup, "DATADOG_SETUP", cli._setup_datadog, id="datadog"),
     pytest.param(honeycomb_setup, "HONEYCOMB_SETUP", cli._setup_honeycomb, id="honeycomb"),
     pytest.param(coralogix_setup, "CORALOGIX_SETUP", cli._setup_coralogix, id="coralogix"),
+    pytest.param(posthog_mcp_setup, "POSTHOG_MCP_SETUP", cli._setup_posthog_mcp, id="posthog_mcp"),
+    pytest.param(sentry_mcp_setup, "SENTRY_MCP_SETUP", cli._setup_sentry_mcp, id="sentry_mcp"),
+    pytest.param(x_mcp_setup, "X_MCP_SETUP", cli._setup_x_mcp, id="x_mcp"),
 ]
 
 
@@ -179,7 +199,10 @@ def test_blank_required_field_exits_before_the_next_prompt(
 ) -> None:
     """Fail on the field that is blank, not after working through the rest."""
     spec = getattr(module, attr)
-    first_required = next(f for f in spec.fields if f.required and not f.default)
+    try:
+        first_required = next(f for f in spec.fields if f.required and not f.default)
+    except StopIteration:
+        pytest.skip(f"{spec.service} has no required field without a default")
     _install(monkeypatch, module, attr, run, blank=first_required.name)
 
     with pytest.raises(SystemExit):
