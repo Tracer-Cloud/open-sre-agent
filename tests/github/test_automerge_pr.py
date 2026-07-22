@@ -148,3 +148,25 @@ def test_ignores_mintlify_vale_spellcheck_failure() -> None:
     )
     assert green is True
     assert reason == "all checks green"
+
+
+def test_ignores_greptile_review_while_running() -> None:
+    """Greptile is external; waiting on it strands PRs after the last Actions retry."""
+    green, reason = automerge_pr._checks_are_green(
+        [
+            {
+                "__typename": "CheckRun",
+                "name": "quality (ubuntu-latest)",
+                "status": "COMPLETED",
+                "conclusion": "SUCCESS",
+            },
+            {
+                "__typename": "CheckRun",
+                "name": "Greptile Review",
+                "status": "IN_PROGRESS",
+                "conclusion": None,
+            },
+        ]
+    )
+    assert green is True
+    assert reason == "all checks green"

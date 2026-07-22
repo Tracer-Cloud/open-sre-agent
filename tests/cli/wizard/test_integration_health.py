@@ -12,15 +12,11 @@ from integrations.github.mcp import GitHubMCPValidationResult
 from surfaces.cli.wizard.integration_health import (
     validate_aws_integration,
     validate_betterstack_integration,
-    validate_dagster_integration,
     validate_discord_bot,
     validate_github_mcp_integration,
     validate_grafana_integration,
-    validate_incident_io_integration,
-    validate_sentry_integration,
     validate_servicenow_integration,
     validate_slack_webhook,
-    validate_vercel_integration,
 )
 
 
@@ -32,31 +28,22 @@ def test_legacy_integration_health_import_surface_still_exports_validators() -> 
         "validate_alertmanager_integration",
         "validate_aws_integration",
         "validate_betterstack_integration",
-        "validate_dagster_integration",
         "validate_discord_bot",
         "validate_github_mcp_integration",
-        "validate_gitlab_integration",
         "validate_google_docs_integration",
         "validate_grafana_integration",
-        "validate_incident_io_integration",
-        "validate_jenkins_integration",
         "validate_jira_integration",
         "validate_notion_integration",
         "validate_openclaw_integration",
         "validate_opensearch_integration",
         "validate_opsgenie_integration",
-        "validate_posthog_integration",
         "validate_posthog_mcp_integration",
-        "validate_pagerduty_integration",
         "validate_rocketchat",
         "validate_rocketchat_webhook",
-        "validate_sentry_integration",
         "validate_sentry_mcp_integration",
         "validate_servicenow_integration",
         "validate_slack_webhook",
         "validate_splunk_integration",
-        "validate_tempo_integration",
-        "validate_vercel_integration",
     }
 
     assert set(module.__all__) == expected_exports
@@ -94,31 +81,6 @@ def test_validate_grafana_integration_fails_when_no_datasources_are_found(monkey
 
     assert result.ok is False
     assert "no datasources" in result.detail.lower()
-
-
-def test_validate_incident_io_integration_succeeds(monkeypatch) -> None:
-    class _FakeIncidentIoClient:
-        def __init__(self, _config) -> None:
-            pass
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *_args) -> None:
-            pass
-
-        def list_incidents(self, **_kwargs):
-            return {"success": True}
-
-    monkeypatch.setattr(
-        "surfaces.cli.wizard.integration_validators.alerting.IncidentIoClient",
-        _FakeIncidentIoClient,
-    )
-
-    result = validate_incident_io_integration(api_key="iio_test")
-
-    assert result.ok is True
-    assert "api key accepted" in result.detail.lower()
 
 
 @pytest.mark.parametrize("status_code", [200, 400, 403, 405])
@@ -364,145 +326,6 @@ def test_validate_github_mcp_integration_uses_shared_validator(monkeypatch) -> N
     assert "Repositories returned (probe): 1" in result.detail
     assert result.github_mcp is not None
     assert result.github_mcp.authenticated_user == "ghuser"
-
-
-def test_validate_sentry_integration_uses_shared_validator(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "surfaces.cli.wizard.integration_validators.sentry.validate_sentry_config",
-        lambda _config: types.SimpleNamespace(ok=True, detail="Sentry ok"),
-    )
-
-    result = validate_sentry_integration(
-        base_url="https://sentry.io",
-        organization_slug="demo-org",
-        auth_token="sntrys_test",
-        project_slug="payments",
-    )
-
-    assert result.ok is True
-    assert result.detail == "Sentry ok"
-
-
-def test_validate_dagster_integration_uses_shared_validator(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "surfaces.cli.wizard.integration_validators.dagster.validate_dagster_config",
-        lambda _config: types.SimpleNamespace(
-            ok=True, detail="Connected to Dagster version mock-1.0."
-        ),
-    )
-
-    result = validate_dagster_integration(
-        endpoint="http://localhost:3000/graphql",
-        api_token="",
-    )
-
-    assert result.ok is True
-    assert result.detail == "Connected to Dagster version mock-1.0."
-
-
-def test_validate_dagster_integration_surfaces_failure(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "surfaces.cli.wizard.integration_validators.dagster.validate_dagster_config",
-        lambda _config: types.SimpleNamespace(
-            ok=False, detail="Dagster GraphQL probe failed: HTTP 401"
-        ),
-    )
-
-    result = validate_dagster_integration(
-        endpoint="https://demo.dagster.cloud/graphql",
-        api_token="bad",
-    )
-
-    assert result.ok is False
-    assert "HTTP 401" in result.detail
-
-
-class _FakeVercelClient:
-    def __init__(self, result: dict) -> None:
-        self._result = result
-
-    def __enter__(self) -> _FakeVercelClient:
-        return self
-
-    def __exit__(self, *_: object) -> None:
-        pass
-
-    def list_projects(self) -> dict:
-        return self._result
-
-
-def test_validate_vercel_integration_succeeds(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "surfaces.cli.wizard.integration_validators.vercel.VercelClient",
-        lambda _config: _FakeVercelClient(
-            {"success": True, "projects": [{"id": "p1"}], "total": 1}
-        ),
-    )
-
-    result = validate_vercel_integration(api_token="tok_test")
-
-    assert result.ok is True
-    assert "1 project" in result.detail
-
-
-def test_validate_vercel_integration_succeeds_with_team_id(monkeypatch) -> None:
-    captured: dict = {}
-
-    class _CapturingClient:
-        def __init__(self, config) -> None:
-            captured["team_id"] = config.team_id
-
-        def __enter__(self) -> _CapturingClient:
-            return self
-
-        def __exit__(self, *_: object) -> None:
-            pass
-
-        def list_projects(self) -> dict:
-            return {"success": True, "projects": [], "total": 0}
-
-    monkeypatch.setattr(
-        "surfaces.cli.wizard.integration_validators.vercel.VercelClient",
-        _CapturingClient,
-    )
-
-    result = validate_vercel_integration(api_token="tok_test", team_id="team_xyz")
-
-    assert result.ok is True
-    assert captured["team_id"] == "team_xyz"
-
-
-def test_validate_vercel_integration_fails_on_api_error(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "surfaces.cli.wizard.integration_validators.vercel.VercelClient",
-        lambda _config: _FakeVercelClient({"success": False, "error": "HTTP 401: unauthorized"}),
-    )
-
-    result = validate_vercel_integration(api_token="bad_token")
-
-    assert result.ok is False
-    assert "401" in result.detail
-
-
-def test_validate_vercel_integration_fails_with_empty_token() -> None:
-    result = validate_vercel_integration(api_token="")
-
-    assert result.ok is False
-    assert "required" in result.detail.lower()
-
-
-def test_validate_vercel_integration_surfaces_exception(monkeypatch) -> None:
-    def _raise(_config):
-        raise RuntimeError("network unreachable")
-
-    monkeypatch.setattr(
-        "surfaces.cli.wizard.integration_validators.vercel.VercelClient",
-        _raise,
-    )
-
-    result = validate_vercel_integration(api_token="tok_test")
-
-    assert result.ok is False
 
 
 # ---------------------------------------------------------------------------

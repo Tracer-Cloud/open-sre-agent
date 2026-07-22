@@ -4,11 +4,16 @@ Transport-agnostic — it takes ``(text, session, sink, logger)`` and drives the
 shared headless dispatch, then finalizes any outbound text on the sink. It knows
 nothing about Telegram (or any specific transport); the composition root builds
 one of these and hands it to whichever poller runs.
+
+Transports bind ``surface`` / ``user_id`` via
+:func:`platform.analytics.usage_context.bound_usage_context` before calling this
+handler so org-level analytics can attribute sessions by channel.
 """
 
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import Callable
 from typing import Any
 
@@ -25,6 +30,12 @@ from core.agent_harness.turns.headless_dispatch import HeadlessAgent
 from gateway.runtime.headless_subprocess_presenter import headless_subprocess_presenter_factory
 from gateway.runtime.sink_protocol import GatewaySink
 from gateway.runtime.status_messages import status_from_tool_start
+from platform.analytics.cli import (
+    capture_gateway_turn_completed,
+    capture_gateway_turn_failed,
+    capture_gateway_turn_started,
+)
+from platform.analytics.usage_context import bound_usage_context, get_surface
 from platform.observability.trace.spans import traced_session
 
 SlashPortsFactory = Callable[[], Any]
@@ -81,24 +92,45 @@ class GatewayTurnHandler:
         logger: logging.Logger,
     ) -> None:
         session.available_capabilities.update(dict.fromkeys(_UNSUPPORTED_GATEWAY_CAPABILITIES, ()))
+        session_id = getattr(session, "session_id", None)
+        surface = get_surface() or "gateway"
+        started = time.monotonic()
 
-        with traced_session(getattr(session, "session_id", None), component="gateway_turn"):
-            agent = self._agent_for_turn(text=text, session=session, sink=sink, logger=logger)
-            turn_result = agent.dispatch(text)
-            outbound_text = (
-                turn_result.assistant_response_text or turn_result.action_result.response_text
-            ).strip()
-            logger.debug(
-                "gateway_turn done intent=%s answered=%s outbound_chars=%s",
-                turn_result.final_intent,
-                turn_result.answered,
-                len(outbound_text),
-            )
-            # A streamed answer (answered=True) already resolved the placeholder status
-            # via the sink. Otherwise always finalize so the placeholder never hangs —
-            # even when the turn produced no text.
-            if not turn_result.answered:
-                sink.finalize(outbound_text or "I didn't have anything to add for that.")
+        with (
+            bound_usage_context(session_id=session_id),
+            traced_session(session_id, component="gateway_turn"),
+        ):
+            try:
+                capture_gateway_turn_started(surface=surface)
+                agent = self._agent_for_turn(text=text, session=session, sink=sink, logger=logger)
+                turn_result = agent.dispatch(text)
+                outbound_text = (
+                    turn_result.assistant_response_text or turn_result.action_result.response_text
+                ).strip()
+                logger.debug(
+                    "gateway_turn done intent=%s answered=%s outbound_chars=%s",
+                    turn_result.final_intent,
+                    turn_result.answered,
+                    len(outbound_text),
+                )
+                # A streamed answer (answered=True) already resolved the placeholder status
+                # via the sink. Otherwise always finalize so the placeholder never hangs —
+                # even when the turn produced no text.
+                if not turn_result.answered:
+                    sink.finalize(outbound_text or "I didn't have anything to add for that.")
+                capture_gateway_turn_completed(
+                    surface=surface,
+                    duration_ms=(time.monotonic() - started) * 1000.0,
+                    answered=bool(turn_result.answered),
+                    final_intent=str(turn_result.final_intent or "") or None,
+                )
+            except Exception as exc:
+                capture_gateway_turn_failed(
+                    surface=surface,
+                    duration_ms=(time.monotonic() - started) * 1000.0,
+                    error_type=type(exc).__name__,
+                )
+                raise
 
     def _agent_for_turn(
         self,

@@ -10,6 +10,10 @@ from pydantic import Field, field_validator
 from config.constants.posthog import (
     DEFAULT_POSTHOG_TIMEOUT_SECONDS,
     DEFAULT_POSTHOG_URL,
+    POSTHOG_BASE_URL_ENV,
+    POSTHOG_PERSONAL_API_KEY_ENV,
+    POSTHOG_PROJECT_ID_ENV,
+    POSTHOG_TIMEOUT_SECONDS_ENV,
 )
 from config.llm_credentials import resolve_env_credential
 from config.strict_config import StrictConfigModel
@@ -57,19 +61,19 @@ def build_posthog_config(raw: dict[str, Any] | None) -> PostHogConfig:
 
 
 def posthog_config_from_env() -> PostHogConfig | None:
-    project_id = os.getenv("POSTHOG_PROJECT_ID", "").strip()
-    personal_api_key = resolve_env_credential("POSTHOG_PERSONAL_API_KEY")
+    project_id = os.getenv(POSTHOG_PROJECT_ID_ENV, "").strip()
+    personal_api_key = resolve_env_credential(POSTHOG_PERSONAL_API_KEY_ENV)
 
     if not project_id or not personal_api_key:
         return None
 
     return build_posthog_config(
         {
-            "base_url": os.getenv("POSTHOG_BASE_URL", DEFAULT_POSTHOG_URL),
+            "base_url": os.getenv(POSTHOG_BASE_URL_ENV, DEFAULT_POSTHOG_URL),
             "project_id": project_id,
             "personal_api_key": personal_api_key,
             "timeout_seconds": os.getenv(
-                "POSTHOG_TIMEOUT_SECONDS", str(DEFAULT_POSTHOG_TIMEOUT_SECONDS)
+                POSTHOG_TIMEOUT_SECONDS_ENV, str(DEFAULT_POSTHOG_TIMEOUT_SECONDS)
             ),
         }
     )

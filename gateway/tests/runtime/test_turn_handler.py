@@ -6,6 +6,7 @@ import logging
 from typing import Any
 from unittest.mock import MagicMock
 
+import pytest
 from rich.console import Console
 
 from core.agent_harness.session import SessionCore
@@ -15,6 +16,19 @@ from gateway.runtime.turn_handler import GatewayTurnHandler
 from tests.core.agent.orchestration.cross_surface_parity_harness import (
     RecordingGatewaySink,
 )
+
+
+@pytest.fixture(autouse=True)
+def _stub_gateway_turn_analytics(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "gateway.runtime.turn_handler.capture_gateway_turn_started", lambda **_: None
+    )
+    monkeypatch.setattr(
+        "gateway.runtime.turn_handler.capture_gateway_turn_completed", lambda **_: None
+    )
+    monkeypatch.setattr(
+        "gateway.runtime.turn_handler.capture_gateway_turn_failed", lambda **_: None
+    )
 
 
 def _patch_headless_agent(monkeypatch: Any, result: ShellTurnResult) -> MagicMock:
@@ -197,3 +211,30 @@ def test_turn_handler_capability_gating_is_stable_across_turns() -> None:
     assert session.available_capabilities["llm_provider"] == ()
     assert session.available_capabilities["task_cancel"] == ()
     assert session.available_capabilities["shell_commands"] == ("shell",)
+
+
+def test_turn_handler_emits_gateway_turn_analytics(monkeypatch: Any) -> None:
+    started: list[dict[str, object]] = []
+    completed: list[dict[str, object]] = []
+
+    monkeypatch.setattr(
+        "gateway.runtime.turn_handler.capture_gateway_turn_started",
+        lambda **kwargs: started.append(kwargs),
+    )
+    monkeypatch.setattr(
+        "gateway.runtime.turn_handler.capture_gateway_turn_completed",
+        lambda **kwargs: completed.append(kwargs),
+    )
+    _patch_headless_agent(monkeypatch, _empty_turn_result())
+
+    from platform.analytics.usage_context import SURFACE_SLACK, bound_usage_context
+
+    session = SessionCore(storage=InMemorySessionStorage())
+    handler = GatewayTurnHandler(console=Console(force_terminal=False))
+    with bound_usage_context(surface=SURFACE_SLACK, user_id="U1"):
+        handler("hi", session, MagicMock(), logging.getLogger("test"))
+
+    assert started == [{"surface": SURFACE_SLACK}]
+    assert len(completed) == 1
+    assert completed[0]["surface"] == SURFACE_SLACK
+    assert completed[0]["answered"] is False

@@ -8,7 +8,6 @@ from integrations.config_models import (
 from integrations.elasticsearch.client import ElasticsearchClient, ElasticsearchConfig
 from integrations.grafana.client import get_grafana_client_from_credentials
 from integrations.splunk.client import SplunkClient, SplunkConfig
-from integrations.tempo import build_tempo_config, validate_tempo_config
 
 from .shared import IntegrationHealthResult
 
@@ -78,31 +77,6 @@ def validate_splunk_integration(
         ok=False,
         detail=f"Splunk validation failed: {result.get('error', 'unknown error')}",
     )
-
-
-def validate_tempo_integration(
-    *,
-    url: str,
-    api_key: str = "",
-    username: str = "",
-    password: str = "",
-    org_id: str = "",
-) -> IntegrationHealthResult:
-    """Validate Tempo connectivity via the tag-search endpoint."""
-    try:
-        config = build_tempo_config(
-            {
-                "url": url,
-                "api_key": api_key,
-                "username": username,
-                "password": password,
-                "org_id": org_id,
-            }
-        )
-    except Exception as err:
-        return IntegrationHealthResult(ok=False, detail=f"Tempo config invalid: {err}")
-    result = validate_tempo_config(config)
-    return IntegrationHealthResult(ok=result.ok, detail=result.detail)
 
 
 def validate_opensearch_integration(

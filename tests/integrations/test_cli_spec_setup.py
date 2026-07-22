@@ -27,11 +27,28 @@ import pytest
 
 import integrations.cli as cli
 import integrations.coralogix.setup as coralogix_setup
+import integrations.dagster.setup as dagster_setup
 import integrations.datadog.setup as datadog_setup
+import integrations.gitlab.setup as gitlab_setup
+import integrations.groundcover.setup as groundcover_setup
+import integrations.helm.setup as helm_setup
 import integrations.honeycomb.setup as honeycomb_setup
+import integrations.incident_io.setup as incident_io_setup
+import integrations.jenkins.setup as jenkins_setup
+import integrations.mongodb_atlas.setup as mongodb_atlas_setup
+import integrations.pagerduty.setup as pagerduty_setup
+import integrations.posthog.setup as posthog_setup
 import integrations.posthog_mcp.setup as posthog_mcp_setup
+import integrations.sentry.setup as sentry_setup
 import integrations.sentry_mcp.setup as sentry_mcp_setup
 import integrations.setup_flow as setup_flow
+import integrations.signoz.setup as signoz_setup
+import integrations.smtp.setup as smtp_setup
+import integrations.tempo.setup as tempo_setup
+import integrations.temporal.setup as temporal_setup
+import integrations.tracer.setup as tracer_setup
+import integrations.vercel.setup as vercel_setup
+import integrations.whatsapp.setup as whatsapp_setup
 import integrations.x_mcp.setup as x_mcp_setup
 
 _ANSWERS: dict[str, dict[str, str]] = {
@@ -46,6 +63,78 @@ _ANSWERS: dict[str, dict[str, str]] = {
         "base_url": "https://api.eu2.coralogix.com",
         "application_name": "checkout",
         "subsystem_name": "api",
+    },
+    "groundcover": {
+        "api_key": "gc-api-key",
+        "mcp_url": "https://mcp.eu.groundcover.com/api/mcp",
+        "tenant_uuid": "11111111-2222-3333-4444-555555555555",
+        "backend_id": "gc-backend-7",
+        "timezone": "Europe/Berlin",
+    },
+    "gitlab": {
+        "base_url": "https://gitlab.example.com/api/v4",
+        "auth_token": "glpat-gitlab-token",
+    },
+    "sentry": {
+        "base_url": "https://sentry.example.com",
+        "organization_slug": "checkout-org",
+        "auth_token": "sntrys-sentry-token",
+        "project_slug": "checkout-api",
+    },
+    "posthog": {
+        "base_url": "https://eu.i.posthog.com",
+        "project_id": "40182",
+        "personal_api_key": "phx-posthog-key",
+    },
+    "vercel": {"api_token": "vercel-api-token", "team_id": "team_abc123"},
+    "incident_io": {"api_key": "iio-api-key", "base_url": "https://api.eu.incident.io"},
+    "tracer": {"base_url": "https://tracer.example.com", "jwt_token": "tracer-jwt-token"},
+    "mongodb_atlas": {
+        "api_public_key": "atlas-public-key",
+        "api_private_key": "atlas-private-key",
+        "project_id": "60f1a2b3c4d5e6f7a8b9c0d1",
+        "base_url": "https://cloud-eu.mongodb.com/api/atlas/v2",
+    },
+    "signoz": {"url": "https://signoz.example.com", "api_key": "signoz-api-key"},
+    "jenkins": {
+        "base_url": "https://jenkins.example.com",
+        "username": "ci-bot",
+        "api_token": "jenkins-api-token",
+    },
+    "pagerduty": {"api_key": "pd-api-key", "base_url": "https://api.eu.pagerduty.com"},
+    "dagster": {"endpoint": "https://checkout.dagster.cloud/prod", "api_token": "dagster-token"},
+    "temporal": {
+        "base_url": "https://temporal.example.com",
+        "namespace": "checkout-prod",
+        "api_key": "temporal-api-key",
+    },
+    "helm": {
+        "helm_path": "/opt/homebrew/bin/helm",
+        "kube_context": "checkout-prod",
+        "kubeconfig": "/home/ci/.kube/config",
+        "default_namespace": "checkout",
+    },
+    "smtp": {
+        "host": "smtp.eu.example.com",
+        "from_address": "reports@example.com",
+        "port": "2525",
+        "security": "ssl",
+        "username": "reports@example.com",
+        "password": "smtp-secret",
+        "default_to": "oncall@example.com",
+    },
+    "whatsapp": {
+        "account_sid": "AC-checkout-sid",
+        "auth_token": "twilio-auth-token",
+        "from_number": "whatsapp:+14155238886",
+        "default_to": "+15551234567",
+    },
+    "tempo": {
+        "url": "https://tempo.eu.example.com",
+        "api_key": "tempo-bearer-token",
+        "username": "tempo-user",
+        "password": "tempo-password",
+        "org_id": "checkout-tenant",
     },
     "posthog_mcp": {
         "url": "https://mcp.eu.posthog.com/mcp",
@@ -69,10 +158,37 @@ _CASES = [
     pytest.param(datadog_setup, "DATADOG_SETUP", cli._setup_datadog, id="datadog"),
     pytest.param(honeycomb_setup, "HONEYCOMB_SETUP", cli._setup_honeycomb, id="honeycomb"),
     pytest.param(coralogix_setup, "CORALOGIX_SETUP", cli._setup_coralogix, id="coralogix"),
+    pytest.param(groundcover_setup, "GROUNDCOVER_SETUP", cli._setup_groundcover, id="groundcover"),
+    pytest.param(gitlab_setup, "GITLAB_SETUP", cli._setup_gitlab, id="gitlab"),
+    pytest.param(sentry_setup, "SENTRY_SETUP", cli._setup_sentry, id="sentry"),
+    pytest.param(posthog_setup, "POSTHOG_SETUP", cli._setup_posthog, id="posthog"),
+    pytest.param(vercel_setup, "VERCEL_SETUP", cli._setup_vercel, id="vercel"),
+    pytest.param(incident_io_setup, "INCIDENT_IO_SETUP", cli._setup_incident_io, id="incident_io"),
+    pytest.param(tracer_setup, "TRACER_SETUP", cli._setup_tracer, id="tracer"),
+    pytest.param(
+        mongodb_atlas_setup, "MONGODB_ATLAS_SETUP", cli._setup_mongodb_atlas, id="mongodb_atlas"
+    ),
+    pytest.param(signoz_setup, "SIGNOZ_SETUP", cli._setup_signoz, id="signoz"),
+    pytest.param(jenkins_setup, "JENKINS_SETUP", cli._setup_jenkins, id="jenkins"),
+    pytest.param(pagerduty_setup, "PAGERDUTY_SETUP", cli._setup_pagerduty, id="pagerduty"),
+    pytest.param(dagster_setup, "DAGSTER_SETUP", cli._setup_dagster, id="dagster"),
+    pytest.param(temporal_setup, "TEMPORAL_SETUP", cli._setup_temporal, id="temporal"),
+    pytest.param(helm_setup, "HELM_SETUP", cli._setup_helm, id="helm"),
+    pytest.param(smtp_setup, "SMTP_SETUP", cli._setup_smtp, id="smtp"),
+    pytest.param(whatsapp_setup, "WHATSAPP_SETUP", cli._setup_whatsapp, id="whatsapp"),
+    pytest.param(tempo_setup, "TEMPO_SETUP", cli._setup_tempo, id="tempo"),
     pytest.param(posthog_mcp_setup, "POSTHOG_MCP_SETUP", cli._setup_posthog_mcp, id="posthog_mcp"),
     pytest.param(sentry_mcp_setup, "SENTRY_MCP_SETUP", cli._setup_sentry_mcp, id="sentry_mcp"),
     pytest.param(x_mcp_setup, "X_MCP_SETUP", cli._setup_x_mcp, id="x_mcp"),
 ]
+
+# HELM_SETUP has no field that is both required and defaultless (``helm_path``
+# defaults to "helm"; everything else is optional). DAGSTER_SETUP's ``endpoint``
+# now carries the same default the wizard configurator always offered
+# ("http://localhost:3000"), and ``api_token`` is optional. Neither spec can
+# produce the "blank required field with no default" scenario the last test
+# below exercises — excluded there only.
+_BLANK_REQUIRED_CASES = [case for case in _CASES if case.id not in {"helm", "dagster"}]
 
 
 @dataclasses.dataclass
@@ -193,7 +309,7 @@ def test_failed_verification_exits_without_saving(
     assert (run.store, run.keyring, run.env) == ([], [], [])
 
 
-@pytest.mark.parametrize(("module", "attr", "handler"), _CASES)
+@pytest.mark.parametrize(("module", "attr", "handler"), _BLANK_REQUIRED_CASES)
 def test_blank_required_field_exits_before_the_next_prompt(
     monkeypatch: pytest.MonkeyPatch, run: _Run, module: Any, attr: str, handler: Any
 ) -> None:
@@ -210,3 +326,10 @@ def test_blank_required_field_exits_before_the_next_prompt(
 
     assert len(run.asked) == 1 + [f.name for f in spec.fields].index(first_required.name)
     assert (run.verified, run.store) == ([], [])
+
+
+@pytest.mark.parametrize(("module", "attr", "handler"), _CASES)
+def test_handler_is_registered_for_the_service(module: Any, attr: str, handler: Any) -> None:
+    """The dispatch entry is what makes `integrations setup <service>` reachable."""
+    spec = getattr(module, attr)
+    assert cli._HANDLERS[spec.service] is handler
