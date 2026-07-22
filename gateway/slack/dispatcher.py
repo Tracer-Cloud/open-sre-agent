@@ -37,6 +37,7 @@ from gateway.slack.thread_history import (
     session_needs_thread_seed,
 )
 from gateway.storage import SessionResolver
+from platform.analytics.usage_context import SURFACE_SLACK, bound_usage_context
 
 _ROTATE_SESSION = "__ROTATE_SESSION__"
 
@@ -354,7 +355,12 @@ class _SlackTurnDispatcher:
                     files_context := _slack_files_context(inbound.files, self._logger)
                 ):
                     agent_text = f"{agent_text}\n\n{files_context}"
-                self._handler(agent_text, session, sink, self._logger)
+                with bound_usage_context(
+                    surface=SURFACE_SLACK,
+                    session_id=session.session_id,
+                    user_id=inbound.user_id or None,
+                ):
+                    self._handler(agent_text, session, sink, self._logger)
             except Exception:
                 self._logger.exception(
                     "[slack-gateway] turn ERRORED after %.1fs channel=%s session=%s",
