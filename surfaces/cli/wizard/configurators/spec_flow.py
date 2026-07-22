@@ -37,8 +37,13 @@ def configure_from_spec(
         values = {
             field.name: _prompt_value(
                 field.question,
+                # A stored value wins over the spec's default, so re-running
+                # onboarding is a series of enters rather than a retype.
                 default=_string_value(credentials.get(field.name), field.default),
                 secret=field.secret,
+                # Only reached when the field has no default to fall back on:
+                # _prompt_value substitutes the default before it consults this,
+                # so a defaulted field never re-prompts and never returns blank.
                 allow_empty=not field.required,
             )
             for field in spec.fields
