@@ -27,7 +27,7 @@ import pytest
 
 import integrations.setup_flow as setup_flow
 import surfaces.cli.wizard.configurators.chat_notifications as chat_notifications
-import surfaces.cli.wizard.configurators.spec_flow as spec_flow
+import surfaces.cli.wizard.configurators.spec_configurator as spec_configurator
 
 _TOKEN = "123456789:AAExampleSecretTokenValue"
 _CHAT_REFERENCE = "@acme_alerts"
@@ -105,10 +105,10 @@ def wizard(monkeypatch: pytest.MonkeyPatch) -> _Wizard:
             note="Delivering to Acme Alerts (channel).",
         )
 
-    monkeypatch.setattr(spec_flow, "_console", run.console)
-    monkeypatch.setattr(spec_flow, "_integration_defaults", lambda _s: ({}, {}))
-    monkeypatch.setattr(spec_flow, "_prompt_value", _fake_prompt)
-    monkeypatch.setattr(spec_flow, "_render_integration_result", lambda *_a: None)
+    monkeypatch.setattr(spec_configurator, "_console", run.console)
+    monkeypatch.setattr(spec_configurator, "_integration_defaults", lambda _s: ({}, {}))
+    monkeypatch.setattr(spec_configurator, "_prompt_value", _fake_prompt)
+    monkeypatch.setattr(spec_configurator, "_render_integration_result", lambda *_a: None)
     monkeypatch.setattr(
         chat_notifications,
         "TELEGRAM_SETUP",

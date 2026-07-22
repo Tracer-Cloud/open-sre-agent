@@ -16,7 +16,7 @@ from typing import Any
 import pytest
 
 import integrations.setup_flow as setup_flow
-import surfaces.cli.wizard.configurators.spec_flow as spec_flow
+import surfaces.cli.wizard.configurators.spec_configurator as spec_configurator
 
 _ENV_PATH = Path("/tmp/opensre-test/.env")
 
@@ -62,9 +62,9 @@ def run(monkeypatch: pytest.MonkeyPatch) -> _Run:
         # Mirror the real _prompt_value: a blank answer falls back to the default.
         return state.answers.get(label, "") or default
 
-    monkeypatch.setattr(spec_flow, "_prompt_value", _fake_prompt_value)
-    monkeypatch.setattr(spec_flow, "_integration_defaults", lambda _s: ({}, state.stored))
-    monkeypatch.setattr(spec_flow, "_render_integration_result", lambda *_a: None)
+    monkeypatch.setattr(spec_configurator, "_prompt_value", _fake_prompt_value)
+    monkeypatch.setattr(spec_configurator, "_integration_defaults", lambda _s: ({}, state.stored))
+    monkeypatch.setattr(spec_configurator, "_render_integration_result", lambda *_a: None)
     monkeypatch.setattr(setup_flow, "upsert_integration", lambda *_a: None)
     monkeypatch.setattr(setup_flow, "sync_env_secret", lambda *_a: None)
     monkeypatch.setattr(setup_flow, "sync_env_values", lambda *_a, **_kw: _ENV_PATH)
@@ -80,7 +80,7 @@ def test_blank_answer_to_a_defaulted_field_is_accepted(run: _Run) -> None:
     """
     run.answers = {"Demo API key": "key-1"}
 
-    title, env_path = spec_flow.configure_from_spec(_SPEC, title="Demo")
+    title, env_path = spec_configurator.configure_from_spec(_SPEC, title="Demo")
 
     assert (title, env_path) == ("Demo", str(_ENV_PATH))
     site = next(entry for entry in run.asked if entry["label"] == "Demo site")
@@ -91,7 +91,7 @@ def test_blank_answer_to_a_defaulted_field_is_accepted(run: _Run) -> None:
 def test_optional_field_without_a_default_may_be_left_empty(run: _Run) -> None:
     run.answers = {"Demo API key": "key-1"}
 
-    spec_flow.configure_from_spec(_SPEC, title="Demo")
+    spec_configurator.configure_from_spec(_SPEC, title="Demo")
 
     note = next(entry for entry in run.asked if entry["label"] == "Demo note")
     assert note["allow_empty"] is True
@@ -103,7 +103,7 @@ def test_a_stored_value_is_prefilled_over_the_spec_default(run: _Run) -> None:
     run.stored = {"api_key": "stored-key", "site": "stored.example.com"}
     run.answers = {}
 
-    spec_flow.configure_from_spec(_SPEC, title="Demo")
+    spec_configurator.configure_from_spec(_SPEC, title="Demo")
 
     prefilled = {entry["label"]: entry["default"] for entry in run.asked}
     assert prefilled["Demo API key"] == "stored-key"
@@ -113,7 +113,7 @@ def test_a_stored_value_is_prefilled_over_the_spec_default(run: _Run) -> None:
 def test_secret_fields_are_marked_for_masking(run: _Run) -> None:
     run.answers = {"Demo API key": "key-1"}
 
-    spec_flow.configure_from_spec(_SPEC, title="Demo")
+    spec_configurator.configure_from_spec(_SPEC, title="Demo")
 
     assert {entry["label"]: entry["secret"] for entry in run.asked} == {
         "Demo API key": True,
@@ -130,7 +130,7 @@ def test_failed_verification_re_asks_instead_of_leaving_the_wizard(run: _Run) ->
     )
     run.answers = {"Demo API key": "key-1"}
 
-    title, _env_path = spec_flow.configure_from_spec(spec, title="Demo")
+    title, _env_path = spec_configurator.configure_from_spec(spec, title="Demo")
 
     assert title == "Demo"
     # Three fields asked twice: the first round failed, the second succeeded.

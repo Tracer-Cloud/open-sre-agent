@@ -1,4 +1,9 @@
-"""The onboarding wizard's collection loop for a spec-driven integration.
+"""The onboarding wizard's configurator for any spec-driven integration.
+
+This is the *collection* half of setup, and the counterpart to
+:mod:`integrations.setup_flow`: that module takes values someone already
+gathered and decides where they are persisted, while this one is what asks the
+user for them.
 
 Every configurator built on an :class:`~integrations.setup_flow.IntegrationSetupSpec`
 does the same three things — prompt for each field (prefilled from whatever is

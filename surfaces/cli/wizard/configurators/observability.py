@@ -18,7 +18,7 @@ from surfaces.cli.wizard._ui import (
     _render_integration_result,
     _string_value,
 )
-from surfaces.cli.wizard.configurators.spec_flow import configure_from_spec
+from surfaces.cli.wizard.configurators.spec_configurator import configure_from_spec
 from surfaces.cli.wizard.integration_health import (
     validate_grafana_integration,
     validate_opensearch_integration,
