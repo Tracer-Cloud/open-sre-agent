@@ -42,6 +42,17 @@ class TestDigestDeliveryReadiness:
         assert delivery_provider_ready("slack") is True
 
     def test_rocketchat_ready_with_full_token_trio(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # Isolate telegram/slack too: any_digest_delivery_ready() must read
+        # True because of Rocket.Chat specifically, not because a real
+        # TELEGRAM_BOT_TOKEN/SLACK_WEBHOOK_URL happens to be set locally.
+        monkeypatch.setattr(
+            "integrations.sentry.digest_delivery.resolve_telegram_credentials",
+            lambda _params: {},
+        )
+        monkeypatch.setattr(
+            "integrations.sentry.digest_delivery.resolve_slack_credentials",
+            lambda _params: {},
+        )
         monkeypatch.setattr(
             "integrations.sentry.digest_delivery.resolve_rocketchat_credentials",
             lambda _params: {
