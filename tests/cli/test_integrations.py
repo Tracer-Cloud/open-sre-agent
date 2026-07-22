@@ -10,7 +10,6 @@ from integrations.cli import (
     _setup_openclaw,
     _setup_servicenow,
     _setup_smtp,
-    _setup_vercel,
 )
 from surfaces.cli.__main__ import cli
 from surfaces.cli.constants import SETUP_SERVICES, VERIFY_SERVICES
@@ -92,30 +91,6 @@ def test_integrations_setup_accepts_openclaw() -> None:
     mock_setup.assert_called_once_with("openclaw")
     mock_verify.assert_called_once_with("openclaw")
     mock_capture.assert_not_called()
-
-
-def test_setup_vercel_saves_credentials(monkeypatch) -> None:
-    answers = iter(["vcp_test_token", "team_123"])
-
-    def fake_p(_label: str, default: str = "", secret: bool = False) -> str:
-        return next(answers)
-
-    saved: list[tuple[str, dict[str, object]]] = []
-    monkeypatch.setattr("integrations.cli._p", fake_p)
-    monkeypatch.setattr(
-        "integrations.cli.upsert_integration",
-        lambda service, entry: saved.append((service, entry)),
-    )
-
-    _setup_vercel()
-
-    assert _HANDLERS["vercel"] is _setup_vercel
-    assert saved == [
-        (
-            "vercel",
-            {"credentials": {"api_token": "vcp_test_token", "team_id": "team_123"}},
-        )
-    ]
 
 
 def test_setup_openclaw_saves_credentials(monkeypatch) -> None:

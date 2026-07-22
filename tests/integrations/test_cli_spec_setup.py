@@ -29,16 +29,21 @@ import integrations.cli as cli
 import integrations.coralogix.setup as coralogix_setup
 import integrations.dagster.setup as dagster_setup
 import integrations.datadog.setup as datadog_setup
+import integrations.gitlab.setup as gitlab_setup
+import integrations.groundcover.setup as groundcover_setup
 import integrations.helm.setup as helm_setup
 import integrations.honeycomb.setup as honeycomb_setup
 import integrations.incident_io.setup as incident_io_setup
 import integrations.jenkins.setup as jenkins_setup
 import integrations.mongodb_atlas.setup as mongodb_atlas_setup
 import integrations.pagerduty.setup as pagerduty_setup
+import integrations.posthog.setup as posthog_setup
+import integrations.sentry.setup as sentry_setup
 import integrations.setup_flow as setup_flow
 import integrations.signoz.setup as signoz_setup
 import integrations.temporal.setup as temporal_setup
 import integrations.tracer.setup as tracer_setup
+import integrations.vercel.setup as vercel_setup
 
 _ANSWERS: dict[str, dict[str, str]] = {
     "datadog": {"api_key": "dd-api-key", "app_key": "dd-app-key", "site": "datadoghq.eu"},
@@ -53,6 +58,29 @@ _ANSWERS: dict[str, dict[str, str]] = {
         "application_name": "checkout",
         "subsystem_name": "api",
     },
+    "groundcover": {
+        "api_key": "gc-api-key",
+        "mcp_url": "https://mcp.eu.groundcover.com/api/mcp",
+        "tenant_uuid": "11111111-2222-3333-4444-555555555555",
+        "backend_id": "gc-backend-7",
+        "timezone": "Europe/Berlin",
+    },
+    "gitlab": {
+        "base_url": "https://gitlab.example.com/api/v4",
+        "auth_token": "glpat-gitlab-token",
+    },
+    "sentry": {
+        "base_url": "https://sentry.example.com",
+        "organization_slug": "checkout-org",
+        "auth_token": "sntrys-sentry-token",
+        "project_slug": "checkout-api",
+    },
+    "posthog": {
+        "base_url": "https://eu.i.posthog.com",
+        "project_id": "40182",
+        "personal_api_key": "phx-posthog-key",
+    },
+    "vercel": {"api_token": "vercel-api-token", "team_id": "team_abc123"},
     "incident_io": {"api_key": "iio-api-key", "base_url": "https://api.eu.incident.io"},
     "tracer": {"base_url": "https://tracer.example.com", "jwt_token": "tracer-jwt-token"},
     "mongodb_atlas": {
@@ -88,6 +116,11 @@ _CASES = [
     pytest.param(datadog_setup, "DATADOG_SETUP", cli._setup_datadog, id="datadog"),
     pytest.param(honeycomb_setup, "HONEYCOMB_SETUP", cli._setup_honeycomb, id="honeycomb"),
     pytest.param(coralogix_setup, "CORALOGIX_SETUP", cli._setup_coralogix, id="coralogix"),
+    pytest.param(groundcover_setup, "GROUNDCOVER_SETUP", cli._setup_groundcover, id="groundcover"),
+    pytest.param(gitlab_setup, "GITLAB_SETUP", cli._setup_gitlab, id="gitlab"),
+    pytest.param(sentry_setup, "SENTRY_SETUP", cli._setup_sentry, id="sentry"),
+    pytest.param(posthog_setup, "POSTHOG_SETUP", cli._setup_posthog, id="posthog"),
+    pytest.param(vercel_setup, "VERCEL_SETUP", cli._setup_vercel, id="vercel"),
     pytest.param(incident_io_setup, "INCIDENT_IO_SETUP", cli._setup_incident_io, id="incident_io"),
     pytest.param(tracer_setup, "TRACER_SETUP", cli._setup_tracer, id="tracer"),
     pytest.param(
@@ -242,3 +275,10 @@ def test_blank_required_field_exits_before_the_next_prompt(
 
     assert len(run.asked) == 1 + [f.name for f in spec.fields].index(first_required.name)
     assert (run.verified, run.store) == ([], [])
+
+
+@pytest.mark.parametrize(("module", "attr", "handler"), _CASES)
+def test_handler_is_registered_for_the_service(module: Any, attr: str, handler: Any) -> None:
+    """The dispatch entry is what makes `integrations setup <service>` reachable."""
+    spec = getattr(module, attr)
+    assert cli._HANDLERS[spec.service] is handler

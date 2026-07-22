@@ -30,16 +30,21 @@ from integrations._catalog_impl import load_env_integrations, resolve_effective_
 from integrations.coralogix.setup import CORALOGIX_SETUP
 from integrations.dagster.setup import DAGSTER_SETUP
 from integrations.datadog.setup import DATADOG_SETUP
+from integrations.gitlab.setup import GITLAB_SETUP
+from integrations.groundcover.setup import GROUNDCOVER_SETUP
 from integrations.helm.setup import HELM_SETUP
 from integrations.honeycomb.setup import HONEYCOMB_SETUP
 from integrations.incident_io.setup import INCIDENT_IO_SETUP
 from integrations.jenkins.setup import JENKINS_SETUP
 from integrations.mongodb_atlas.setup import MONGODB_ATLAS_SETUP
 from integrations.pagerduty.setup import PAGERDUTY_SETUP
+from integrations.posthog.setup import POSTHOG_SETUP
+from integrations.sentry.setup import SENTRY_SETUP
 from integrations.signoz.setup import SIGNOZ_SETUP
 from integrations.telegram.setup import TELEGRAM_SETUP
 from integrations.temporal.setup import TEMPORAL_SETUP
 from integrations.tracer.setup import TRACER_SETUP
+from integrations.vercel.setup import VERCEL_SETUP
 
 # A distinct, recognizable value per field, so two fields of the same
 # integration swapping places fails instead of coincidentally matching. Values
@@ -58,6 +63,29 @@ _SUBMITTED: dict[str, dict[str, str]] = {
         "application_name": "checkout",
         "subsystem_name": "api",
     },
+    "groundcover": {
+        "api_key": "gc-api-key",
+        "mcp_url": "https://mcp.eu.groundcover.com/api/mcp",
+        "tenant_uuid": "11111111-2222-3333-4444-555555555555",
+        "backend_id": "gc-backend-7",
+        "timezone": "Europe/Berlin",
+    },
+    "gitlab": {
+        "base_url": "https://gitlab.example.com/api/v4",
+        "auth_token": "glpat-gitlab-token",
+    },
+    "sentry": {
+        "base_url": "https://sentry.example.com",
+        "organization_slug": "checkout-org",
+        "auth_token": "sntrys-sentry-token",
+        "project_slug": "checkout-api",
+    },
+    "posthog": {
+        "base_url": "https://eu.i.posthog.com",
+        "project_id": "40182",
+        "personal_api_key": "phx-posthog-key",
+    },
+    "vercel": {"api_token": "vercel-api-token", "team_id": "team_abc123"},
     "telegram": {"bot_token": "123456:tg-bot-token", "default_chat_id": "-1001234567890"},
     "incident_io": {"api_key": "iio-api-key", "base_url": "https://api.eu.incident.io"},
     "tracer": {"base_url": "https://tracer.example.com", "jwt_token": "tracer-jwt-token"},
@@ -96,19 +124,24 @@ _EXTRA_ENV: dict[str, dict[str, str]] = {
 }
 
 _SPECS = [
+    CORALOGIX_SETUP,
     DAGSTER_SETUP,
     DATADOG_SETUP,
-    CORALOGIX_SETUP,
+    GITLAB_SETUP,
+    GROUNDCOVER_SETUP,
     HELM_SETUP,
     HONEYCOMB_SETUP,
     INCIDENT_IO_SETUP,
     JENKINS_SETUP,
     MONGODB_ATLAS_SETUP,
     PAGERDUTY_SETUP,
+    POSTHOG_SETUP,
+    SENTRY_SETUP,
     SIGNOZ_SETUP,
     TELEGRAM_SETUP,
     TEMPORAL_SETUP,
     TRACER_SETUP,
+    VERCEL_SETUP,
 ]
 
 

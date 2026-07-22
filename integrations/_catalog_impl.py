@@ -20,11 +20,28 @@ from config.constants.datadog import (
     DATADOG_APP_KEY_ENV,
     DATADOG_SITE_ENV,
 )
+from config.constants.gitlab import GITLAB_AUTH_TOKEN_ENV, GITLAB_BASE_URL_ENV
+from config.constants.groundcover import (
+    GROUNDCOVER_API_KEY_ENV,
+    GROUNDCOVER_BACKEND_ID_ENV,
+    GROUNDCOVER_MCP_TOKEN_ENV,
+    GROUNDCOVER_MCP_URL_ENV,
+    GROUNDCOVER_TENANT_UUID_ENV,
+    GROUNDCOVER_TIMEZONE_ENV,
+)
 from config.constants.honeycomb import (
     HONEYCOMB_API_KEY_ENV,
     HONEYCOMB_BASE_URL_ENV,
     HONEYCOMB_DATASET_ENV,
 )
+from config.constants.sentry import (
+    DEFAULT_SENTRY_BASE_URL,
+    SENTRY_AUTH_TOKEN_ENV,
+    SENTRY_BASE_URL_ENV,
+    SENTRY_ORGANIZATION_SLUG_ENV,
+    SENTRY_PROJECT_SLUG_ENV,
+)
+from config.constants.vercel import VERCEL_API_TOKEN_ENV, VERCEL_TEAM_ID_ENV
 from config.llm_credentials import resolve_env_credential
 from integrations.airflow.config import airflow_config_from_env
 from integrations.airflow.config import classify as _classify_airflow
@@ -481,8 +498,8 @@ def load_env_integrations() -> list[dict[str, Any]]:
         groundcover_api_key = ""
     else:
         groundcover_api_key = resolve_env_credential(
-            "GROUNDCOVER_API_KEY"
-        ) or resolve_env_credential("GROUNDCOVER_MCP_TOKEN")
+            GROUNDCOVER_API_KEY_ENV
+        ) or resolve_env_credential(GROUNDCOVER_MCP_TOKEN_ENV)
     if groundcover_api_key:
         # The groundcover config validates the MCP URL (HTTPS-or-loopback), which
         # can raise on a bad GROUNDCOVER_MCP_URL. Guard it so one malformed value
@@ -491,10 +508,10 @@ def load_env_integrations() -> list[dict[str, Any]]:
             groundcover_config = GroundcoverIntegrationConfig.model_validate(
                 {
                     "api_key": groundcover_api_key,
-                    "mcp_url": os.getenv("GROUNDCOVER_MCP_URL", "").strip(),
-                    "tenant_uuid": os.getenv("GROUNDCOVER_TENANT_UUID", "").strip(),
-                    "backend_id": os.getenv("GROUNDCOVER_BACKEND_ID", "").strip(),
-                    "timezone": os.getenv("GROUNDCOVER_TIMEZONE", "").strip(),
+                    "mcp_url": os.getenv(GROUNDCOVER_MCP_URL_ENV, "").strip(),
+                    "tenant_uuid": os.getenv(GROUNDCOVER_TENANT_UUID_ENV, "").strip(),
+                    "backend_id": os.getenv(GROUNDCOVER_BACKEND_ID_ENV, "").strip(),
+                    "timezone": os.getenv(GROUNDCOVER_TIMEZONE_ENV, "").strip(),
                 }
             )
         except Exception as exc:
@@ -647,16 +664,16 @@ def load_env_integrations() -> list[dict[str, Any]]:
             )
         )
 
-    sentry_org_slug = os.getenv("SENTRY_ORG_SLUG", "").strip()
-    sentry_auth_token = resolve_env_credential("SENTRY_AUTH_TOKEN")
+    sentry_org_slug = os.getenv(SENTRY_ORGANIZATION_SLUG_ENV, "").strip()
+    sentry_auth_token = resolve_env_credential(SENTRY_AUTH_TOKEN_ENV)
     if sentry_org_slug and sentry_auth_token:
         sentry_config = build_sentry_config(
             {
-                "base_url": os.getenv("SENTRY_URL", "https://sentry.io").strip()
-                or "https://sentry.io",
+                "base_url": os.getenv(SENTRY_BASE_URL_ENV, DEFAULT_SENTRY_BASE_URL).strip()
+                or DEFAULT_SENTRY_BASE_URL,
                 "organization_slug": sentry_org_slug,
                 "auth_token": sentry_auth_token,
-                "project_slug": os.getenv("SENTRY_PROJECT_SLUG", "").strip(),
+                "project_slug": os.getenv(SENTRY_PROJECT_SLUG_ENV, "").strip(),
             }
         )
         integrations.append(
@@ -666,11 +683,11 @@ def load_env_integrations() -> list[dict[str, Any]]:
             )
         )
 
-    gitlab_access_token = resolve_env_credential("GITLAB_ACCESS_TOKEN")
+    gitlab_access_token = resolve_env_credential(GITLAB_AUTH_TOKEN_ENV)
     if gitlab_access_token:
         gitlab_config = build_gitlab_config(
             {
-                "base_url": os.getenv("GITLAB_BASE_URL", DEFAULT_GITLAB_BASE_URL).strip()
+                "base_url": os.getenv(GITLAB_BASE_URL_ENV, DEFAULT_GITLAB_BASE_URL).strip()
                 or DEFAULT_GITLAB_BASE_URL,
                 "auth_token": gitlab_access_token,
             }
@@ -789,13 +806,13 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 )
             )
 
-    vercel_api_token = resolve_env_credential("VERCEL_API_TOKEN")
+    vercel_api_token = resolve_env_credential(VERCEL_API_TOKEN_ENV)
     if vercel_api_token:
         try:
             vercel_config = VercelConfig.model_validate(
                 {
                     "api_token": vercel_api_token,
-                    "team_id": os.getenv("VERCEL_TEAM_ID", "").strip(),
+                    "team_id": os.getenv(VERCEL_TEAM_ID_ENV, "").strip(),
                 }
             )
         except Exception as exc:
