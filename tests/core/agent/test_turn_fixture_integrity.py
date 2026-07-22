@@ -342,7 +342,10 @@ def test_is_full_selection_recognizes_full_aliases() -> None:
         assert not is_full_selection(spec)
 
 
-def test_max_runs_cap_defaults_to_one_and_honors_uncapped_tokens() -> None:
+def test_max_runs_cap_defaults_to_one_and_honors_uncapped_tokens(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("TURN_MAX_RUNS", raising=False)
     assert max_runs_cap(None) == 1
     assert max_runs_cap("3") == 3
     for uncapped in ("0", "all", "off", "none", ""):
