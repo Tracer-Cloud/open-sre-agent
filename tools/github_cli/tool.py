@@ -75,16 +75,18 @@ def _normalize_args(args: list[str] | None) -> list[str]:
     source="github",
     description=(
         "Run GitHub CLI (`gh`) with OpenSRE-configured auth — reads and writes. "
-        "Use for issue/PR create, list, view, assign, label, merge, repo list, "
-        "and gh api. Prefer this over shell_run / !gh / raw gh. "
-        "Pass args after the gh binary; optional repo as owner/name for -R. "
-        "After the call, reply from the result summary — plain prose for simple "
-        "confirms; chat-like markdown bullets for multi-item reads (not report "
-        "tables/headers). Not raw JSON/GraphQL dumps."
+        "Use ONLY for GitHub-only product operations: issue/PR create, list, view, "
+        "assign, label, merge, repo list, and gh api. Prefer this over shell_run / "
+        "!gh / raw gh. Do NOT use when diagnosing a crash/failure/outage and GitHub "
+        "is one of several sources to query (e.g. sentry + github issues + posthog) "
+        "— emit investigation_start instead. Pass args after the gh binary; optional "
+        "repo as owner/name for -R. After the call, reply from the result summary — "
+        "plain prose for simple confirms; chat-like markdown bullets for multi-item "
+        "reads (not report tables/headers). Not raw JSON/GraphQL dumps."
     ),
     use_cases=[
         "Creating a GitHub issue (title/body/assignee/labels) when the user asks",
-        "Listing or viewing GitHub issues and pull requests via gh",
+        "Listing or viewing GitHub issues and pull requests via gh as a standalone request",
         "Inspecting repository metadata or listing accessible repos",
         "Editing, closing, commenting, or merging via gh",
     ],
@@ -92,6 +94,10 @@ def _normalize_args(args: list[str] | None) -> list[str]:
         "Running gh via shell_run or !gh",
         "Printing or logging the GitHub token",
         "Inventing repo lists without calling github_cli",
+        "Multi-source RCA that names github issues with Sentry/PostHog/Datadog "
+        "(use investigation_start)",
+        "Figuring out why an agent/service is crashing by querying sentry, github "
+        "issues, and posthog (use investigation_start)",
     ],
     surfaces=("action",),
     side_effect_level="mutating",

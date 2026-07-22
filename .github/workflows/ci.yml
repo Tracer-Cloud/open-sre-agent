@@ -140,7 +140,10 @@ jobs:
             # ``test_live_turn_execution_oracle``) that need the openai pin —
             # plus the static ``test_import_boundaries`` guard the surfaces
             # restructure (#3299) added.
+            # Honour fixture ``runs`` majority voting for flaky live LLM plans
+            # (default TURN_MAX_RUNS=1 would collapse runs:5 fixtures to 1/1).
             llm_provider: openai
+            turn_max_runs: all
             pytest_paths: >-
               tests/cli
               tests/interactive_shell
@@ -190,6 +193,9 @@ jobs:
     env:
       # Per-shard LLM provider for live_llm contracts; defaults to anthropic.
       LLM_PROVIDER: ${{ matrix.llm_provider || 'anthropic' }}
+      # cli-runtime sets turn_max_runs=all so live planning/oracle fixtures keep
+      # majority voting; other shards leave the default single-run cap.
+      TURN_MAX_RUNS: ${{ matrix.turn_max_runs || '1' }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       JWT_TOKEN: ${{ secrets.JWT_TOKEN }}

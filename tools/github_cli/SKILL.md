@@ -1,20 +1,23 @@
 ---
 name: github-cli
 description: >
-  Default GitHub skill for the action agent. Use github_cli for any GitHub
-  request — create/list/view issues and PRs, assign, labels, repos, releases,
-  checks, github.com/owner/repo URLs, or gh api. Prefer over shell_run/!gh.
-  Never assistant_handoff these to gather — github_cli is action-only.
+  GitHub-only product ops via github_cli (issues/PRs/repos/gh api). Prefer over
+  shell_run/!gh. Never hand off to gather. Not for multi-source crash/RCA that
+  names github issues with Sentry/PostHog — use investigation_start.
 tools:
   - github_cli
 ---
 
 # github-cli
 
-Authenticated `gh` for OpenSRE. Reads and writes — no approval gate. Prefer over
-`shell_run` / `!gh`. Pass `args` after `gh`; optional `repo` as `owner/name` → `-R`.
-Blocked top-level: `auth`, `extension`, `workflow`, `run`, `secret`,
-`codespace`, `ssh-key`, `gpg-key`, `config`.
+Authenticated `gh` (read/write, no approval). Pass `args` after `gh`; optional
+`repo` as `owner/name` → `-R`. Blocked: `auth`, `extension`, `workflow`, `run`,
+`secret`, `codespace`, `ssh-key`, `gpg-key`, `config`.
+
+## Do NOT use for multi-source RCA
+
+Diagnosing a crash/failure/outage and naming GitHub among other sources
+(sentry + github issues + posthog) → `investigation_start`, never `github_cli`.
 
 ## Capabilities
 
@@ -29,13 +32,9 @@ Blocked top-level: `auth`, `extension`, `workflow`, `run`, `secret`,
 
 ## After github_cli returns
 
-Use `summary` when present. Reply short and chat-like.
-
-- **Simple** (create/close/comment/merge, URL/`#n`): plain prose, one sentence.
-- **Structured reads**: light chat markdown — short lead-in + bullets
-  (`* #42 — title`); no tables/headers.
-- **Mutate extras:** at most 2–4 bullets. No GraphQL/JSON dumps. No "I found:".
-- **Failure:** one sentence from `error` / `error_type` — say it failed to run.
+Use `summary`. Simple confirms: plain prose. Structured reads: light chat
+markdown — short lead-in + bullets. Mutate extras: ≤4 bullets. No GraphQL/JSON
+dumps. Failures: one sentence from `error` / `error_type` — say it failed to run.
 
 ## Prefer dedicated tools when they clearly fit
 

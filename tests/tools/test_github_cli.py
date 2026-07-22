@@ -157,6 +157,9 @@ def test_github_cli_runs_mutate_without_approval() -> None:
     assert tool.surfaces == ("action",)
     assert "investigation" not in tool.surfaces
     assert "chat" not in tool.surfaces
+    assert "investigation_start" in tool.description
+    assert "multi-source" in tool.description.lower() or "several sources" in tool.description
+    assert any("investigation_start" in example for example in tool.anti_examples)
 
     with patch(
         "tools.github_cli.tool.run_gh",

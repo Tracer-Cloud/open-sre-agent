@@ -2,22 +2,25 @@
 GITHUB CLI SKILL — interactive-shell action agent:
 ══════════════════════════════════════════════════════════
 
+Do NOT use this skill for:
+- Live incident RCA (investigation_start) — including multi-source asks that
+  name github issues alongside Sentry/PostHog/Datadog while diagnosing a crash
+  (e.g. "figure out why the agent is crashing on Windows by querying sentry,
+  github issues, and posthog" → investigation_start, NOT github_cli)
+- Observability lookups (Sentry/Datadog/Grafana/PostHog) — those stay handoffs
+- Slack → GitHub propose/execute mutations (workflow tools)
+- Architecture audit (architecture_* tools + architecture audit skill)
+
 WHEN TO USE (call github_cli; do NOT assistant_handoff):
 - Create / list / view / edit / close / comment / assign / label GitHub issues
+  as a *standalone* GitHub-only request (not one clause of a multi-source RCA)
 - Create / list / view / merge / comment / checks on pull requests
 - Repo list/view, releases, labels, workflow runs, search, or gh api
 - github.com/owner/repo URLs or "open an issue / merge this PR" requests
 - Follow-ups like "create an issue from that" after a prior scan/report
 
-Do NOT use this skill for:
-- Live incident RCA (investigation_start) — including multi-source asks that
-  name github issues alongside Sentry/PostHog/Datadog while diagnosing a crash
-- Observability lookups (Sentry/Datadog/Grafana/PostHog) — those stay handoffs
-- Slack → GitHub propose/execute mutations (workflow tools)
-- Architecture audit (architecture_* tools + architecture audit skill)
-
 HARD RULES:
-- Prefer github_cli over shell_run / !gh / raw gh.
+- Prefer github_cli over shell_run / !gh / raw gh for GitHub-only ops.
 - Never emit assistant_handoff for these requests just to "let gather create the
   issue" — github_cli is action-only and will not run in gather.
 - Never call github_cli with auth / extension / workflow / run / secret /
@@ -38,3 +41,5 @@ Compact examples:
    github_cli(args=["pr", "merge", "45", "--squash", "--auto"], repo?)
 4) "comment on issue 12: …" →
    github_cli(args=["issue", "comment", "12", "--body", "…"], repo?)
+5) "figure out why OpenSRE is crashing on Windows — query sentry, github issues,
+   and posthog" → investigation_start (NOT github_cli)

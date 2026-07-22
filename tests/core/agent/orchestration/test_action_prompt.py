@@ -147,6 +147,8 @@ def test_system_prompt_routes_github_cli_to_action_tools() -> None:
     assert "from this info create an issue on github" in prompt
     assert "github_cli is action-only" in prompt
     assert "exception: github issue/pr/repo" in prompt
+    assert "not multi-source rca" in prompt
+    assert "investigation_start (not github_cli)" in prompt
 
 
 def test_system_prompt_keeps_bare_alert_blob_as_handoff() -> None:
@@ -224,6 +226,8 @@ def test_skills_loader_bundles_github_cli_skill() -> None:
     assert "do NOT assistant_handoff" in block
     assert "github_cli(args=" in block
     assert "create an issue from that" in block
+    assert "investigation_start, NOT github_cli" in block
+    assert "querying sentry,\n  github issues, and posthog" in block
     assert "quiet=true" in block
     assert "four separate shell_run" in block or "Four separate" in block or "IMPORT pass" in block
     assert "IMPORT pass" in block
