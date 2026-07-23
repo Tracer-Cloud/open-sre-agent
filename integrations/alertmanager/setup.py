@@ -1,8 +1,10 @@
 """What Alertmanager needs before it is considered configured.
 
-Auth used to be a branching select (none / bearer / basic). Every auth field is
-independently optional — same shape as Tempo — but bearer and basic must not be
-combined (the catalog model rejects that). ``validate`` enforces the XOR early.
+Auth is a picker (none / bearer / basic): bearer and basic must not be combined
+(the catalog model rejects that), so a single choice keeps them mutually
+exclusive. ``validate`` still enforces the XOR for any collection surface that
+skips the picker. The URL is always asked; the picker only scopes the auth
+fields.
 """
 
 from __future__ import annotations
@@ -14,7 +16,7 @@ from config.constants.alertmanager import (
     ALERTMANAGER_USERNAME_ENV,
 )
 from integrations.alertmanager.verifier import verify_alertmanager
-from integrations.setup_flow import IntegrationSetupSpec, SetupField
+from integrations.setup_flow import IntegrationSetupSpec, SetupField, SetupMode
 
 BASE_URL_FIELD = "base_url"
 BEARER_TOKEN_FIELD = "bearer_token"
@@ -41,7 +43,7 @@ ALERTMANAGER_SETUP = IntegrationSetupSpec(
         SetupField(
             name=BEARER_TOKEN_FIELD,
             label="Bearer token",
-            prompt="Bearer token (optional, leave blank if using basic auth or none)",
+            prompt="Bearer token",
             env_var=ALERTMANAGER_BEARER_TOKEN_ENV,
             secret=True,
             required=False,
@@ -49,17 +51,31 @@ ALERTMANAGER_SETUP = IntegrationSetupSpec(
         SetupField(
             name=USERNAME_FIELD,
             label="Username",
-            prompt="Username (optional, for basic auth)",
+            prompt="Username",
             env_var=ALERTMANAGER_USERNAME_ENV,
             required=False,
         ),
         SetupField(
             name=PASSWORD_FIELD,
             label="Password",
-            prompt="Password (optional, for basic auth)",
+            prompt="Password",
             env_var=ALERTMANAGER_PASSWORD_ENV,
             secret=True,
             required=False,
+        ),
+    ),
+    mode_prompt="Authentication method:",
+    modes=(
+        SetupMode(value="none", label="None (unauthenticated / internal network)"),
+        SetupMode(
+            value="bearer",
+            label="Bearer token (reverse proxy auth)",
+            fields=(BEARER_TOKEN_FIELD,),
+        ),
+        SetupMode(
+            value="basic",
+            label="Basic auth (username + password)",
+            fields=(USERNAME_FIELD, PASSWORD_FIELD),
         ),
     ),
     validate=_reject_dual_auth,

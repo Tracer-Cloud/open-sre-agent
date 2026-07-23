@@ -18,6 +18,8 @@ from __future__ import annotations
 from integrations.setup_flow import IntegrationSetupSpec, apply_setup
 from platform.terminal.theme import SECONDARY
 from surfaces.cli.wizard._ui import (
+    Choice,
+    _choose,
     _console,
     _integration_defaults,
     _joined_values,
@@ -40,10 +42,23 @@ def configure_from_spec(
     if intro:
         _console.print(intro)
     while True:
+        mode: str | None = None
+        if spec.mode_prompt:
+            mode = _choose(
+                spec.mode_prompt,
+                [Choice(value=m.value, label=m.label) for m in spec.modes],
+                default=spec.modes[0].value,
+            )
+        collectable = {field.name for field in spec.collectable_fields(mode)}
         values: dict[str, str | None] = {}
         for field in spec.fields:
             if field.is_constant:
                 values[field.name] = field.constant
+                continue
+            if field.name not in collectable:
+                # Gated field for an unchosen mode: clear it rather than prompt,
+                # so switching modes turns the other mode's credentials off.
+                values[field.name] = ""
                 continue
             stored = credentials.get(field.name)
             # Prefer a joined list when the store still has a sequence (e.g. Better

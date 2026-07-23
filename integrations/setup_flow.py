@@ -67,6 +67,31 @@ FinalizeFn = Callable[[dict[str, str | None]], str]
 
 
 @dataclass(frozen=True)
+class SetupMode:
+    """One choice in an integration's setup picker, and the fields it collects.
+
+    Some integrations offer mutually distinct ways to configure the same
+    service — Slack's webhook / Socket Mode, an auth method that is bearer *or*
+    basic. Rather than ask every field and hope the user leaves the irrelevant
+    ones blank, a mode names the subset that applies to that choice. Fields not
+    listed in the picked mode are cleared, not prompted.
+    """
+
+    value: str
+    """Stable identifier returned by the picker."""
+
+    label: str
+    """Human-readable option text."""
+
+    fields: tuple[str, ...] = ()
+    """:attr:`SetupField.name` values collected when this mode is chosen.
+
+    A mode with no fields is a valid choice that collects nothing beyond the
+    integration's always-on fields — Alertmanager's "None (unauthenticated)".
+    """
+
+
+@dataclass(frozen=True)
 class SetupField:
     """One credential an integration needs, and where it is persisted."""
 
@@ -134,6 +159,23 @@ class IntegrationSetupSpec:
     service: str
     fields: tuple[SetupField, ...]
 
+    mode_prompt: str = ""
+    """Question shown by the setup picker, or ``""`` for no picker (flat prompts).
+
+    Set together with :attr:`modes` when a service is configured in mutually
+    distinct ways (Slack's webhook / Socket Mode, an auth-method choice) and
+    prompting every field at once would be confusing.
+    """
+
+    modes: tuple[SetupMode, ...] = ()
+    """The picker's choices; empty when :attr:`mode_prompt` is unset.
+
+    Collection surfaces show the picker, then prompt only the always-on fields
+    (those in no mode) plus the chosen mode's fields — see
+    :meth:`collectable_fields`. Persistence is unchanged: :func:`apply_setup`
+    never sees the mode, only the resulting values.
+    """
+
     validate: ValidateFn | None = None
     """Optional cross-field check, run after collection and before verification.
 
@@ -170,6 +212,22 @@ class IntegrationSetupSpec:
     returns a note for the success detail and a failure is surfaced there rather
     than rolling back the save.
     """
+
+    def collectable_fields(self, mode: str | None) -> tuple[SetupField, ...]:
+        """Fields a collection surface should prompt for under *mode*.
+
+        Without :attr:`modes`, that is every field. With modes it is the
+        always-on fields (in no mode) plus the chosen mode's fields; a
+        mode-gated field belonging to some *other* mode is omitted, so the
+        surface clears it rather than prompting for it. An unknown or ``None``
+        *mode* selects no gated fields — only the always-on ones.
+        """
+        if not self.modes:
+            return self.fields
+        gated = {name for one in self.modes for name in one.fields}
+        chosen = next((one for one in self.modes if one.value == mode), None)
+        selected = set(chosen.fields) if chosen else set()
+        return tuple(f for f in self.fields if f.name not in gated or f.name in selected)
 
 
 @dataclass(frozen=True)
@@ -304,6 +362,7 @@ __all__ = [
     "ResolveFn",
     "ResolvedCredentials",
     "SetupField",
+    "SetupMode",
     "SetupOutcome",
     "ValidateFn",
     "apply_setup",

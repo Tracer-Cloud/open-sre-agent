@@ -35,6 +35,33 @@ def _passing(_source: str, _config: dict[str, str]) -> dict[str, str]:
 
 _SPEC = setup_flow.IntegrationSetupSpec(service="demo", fields=_FIELDS, verify=_passing)
 
+# A picker spec: ``room`` is always collected; ``api_token`` and ``note`` each
+# belong to one mode.
+_MODED_SPEC = dataclasses.replace(
+    _SPEC,
+    mode_prompt="Demo setup:",
+    modes=(
+        setup_flow.SetupMode(value="token", label="API token", fields=("api_token",)),
+        setup_flow.SetupMode(value="note", label="Just a note", fields=("note",)),
+    ),
+)
+
+
+def test_collectable_fields_without_modes_returns_every_field() -> None:
+    assert _SPEC.collectable_fields("anything") == _FIELDS
+
+
+def test_collectable_fields_returns_always_fields_plus_chosen_mode() -> None:
+    names = [f.name for f in _MODED_SPEC.collectable_fields("token")]
+    # ``room`` is in no mode (always asked); ``api_token`` is the chosen mode;
+    # ``note`` belongs to the other mode and is dropped.
+    assert names == ["api_token", "room"]
+
+
+def test_collectable_fields_for_unknown_mode_keeps_only_always_fields() -> None:
+    names = [f.name for f in _MODED_SPEC.collectable_fields(None)]
+    assert names == ["room"]
+
 
 class _Recorder:
     """Captures every write the flow performs."""

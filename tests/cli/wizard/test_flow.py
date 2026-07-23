@@ -599,11 +599,12 @@ def test_run_wizard_configures_slack_persists_webhook(monkeypatch, tmp_path) -> 
     readable afterwards). The webhook is a secret, so it belongs in the store,
     not `.env` — `sync_env_values` is called with an empty mapping.
     """
-    select_responses = iter(["quickstart", "anthropic", "api_key", "claude-opus-4-7", "slack"])
-    # webhook_url, bot_token, app_token are all secret prompts.
-    password_responses = iter(
-        ["llm-secret", "https://hooks.slack.com/services/T0/B0/XXXXX", "", ""]
+    # Pick the "webhook" mode: only the webhook URL is prompted; the socket
+    # tokens are cleared, not asked.
+    select_responses = iter(
+        ["quickstart", "anthropic", "api_key", "claude-opus-4-7", "slack", "webhook"]
     )
+    password_responses = iter(["llm-secret", "https://hooks.slack.com/services/T0/B0/XXXXX"])
     saved_integrations: list[tuple[str, dict]] = []
     synced_env_values: list[dict[str, str]] = []
     synced_env_secrets: list[tuple[str, str]] = []
@@ -1958,10 +1959,13 @@ def test_run_wizard_switches_provider_and_keeps_store_and_env_in_sync(
 
 
 def test_run_wizard_configures_opensearch(monkeypatch, tmp_path) -> None:
-    """Happy path: URL + basic auth (blank API key) persists through apply_setup."""
-    select_responses = iter(["quickstart", "anthropic", "api_key", "claude-opus-4-7", "opensearch"])
-    # api_key (secret, blank) then password
-    password_responses = iter(["llm-secret", "", "secret-pass"])
+    """Happy path: URL + basic-auth mode persists through apply_setup."""
+    select_responses = iter(
+        ["quickstart", "anthropic", "api_key", "claude-opus-4-7", "opensearch", "basic"]
+    )
+    # basic mode prompts url + username (text) and password (secret); api_key is
+    # not asked (it belongs to another mode) and clears.
+    password_responses = iter(["llm-secret", "secret-pass"])
     text_responses = iter(["https://my-cluster.example.com", "admin"])
     saved_integrations: list[tuple[str, dict]] = []
     synced_env_values: list[dict[str, str]] = []
@@ -2048,8 +2052,11 @@ def test_run_wizard_configures_opensearch(monkeypatch, tmp_path) -> None:
 
 def test_run_wizard_opensearch_retries_on_validation_failure(monkeypatch, tmp_path) -> None:
     """When OpenSearch verification fails the first time, the wizard retries and succeeds."""
-    select_responses = iter(["quickstart", "anthropic", "api_key", "claude-opus-4-7", "opensearch"])
-    password_responses = iter(["llm-secret", "", "wrong-pass", "", "correct-pass"])
+    # basic mode is re-picked on the retry.
+    select_responses = iter(
+        ["quickstart", "anthropic", "api_key", "claude-opus-4-7", "opensearch", "basic", "basic"]
+    )
+    password_responses = iter(["llm-secret", "wrong-pass", "correct-pass"])
     text_responses = iter(
         [
             "https://my-cluster.example.com",
@@ -2139,13 +2146,14 @@ def test_run_wizard_opensearch_retries_on_validation_failure(monkeypatch, tmp_pa
 def test_run_wizard_opensearch_allows_url_only_when_auth_blank(monkeypatch, tmp_path) -> None:
     """Blank API key and blank basic auth is intentional (no-auth / gateway).
 
-    The pre-spec wizard used an auth-mode select and rejected an empty API key
-    when that mode was chosen. Flat optional fields treat blank auth as
-    URL-only configuration — same shape as Tempo.
+    The "none" mode configures the cluster URL-only; the auth fields are cleared,
+    not prompted.
     """
-    select_responses = iter(["quickstart", "anthropic", "api_key", "claude-opus-4-7", "opensearch"])
-    password_responses = iter(["llm-secret", "", ""])
-    text_responses = iter(["https://my-cluster.example.com", ""])
+    select_responses = iter(
+        ["quickstart", "anthropic", "api_key", "claude-opus-4-7", "opensearch", "none"]
+    )
+    password_responses = iter(["llm-secret"])
+    text_responses = iter(["https://my-cluster.example.com"])
     saved_integrations: list[tuple[str, dict]] = []
     verification_call_count = 0
 
@@ -2223,10 +2231,14 @@ def test_run_wizard_opensearch_rejects_empty_basic_password(monkeypatch, tmp_pat
     persist and omit Authorization at runtime. Spec validate requires both
     basic-auth halves (or neither).
     """
-    select_responses = iter(["quickstart", "anthropic", "api_key", "claude-opus-4-7", "opensearch"])
-    # First attempt: blank api_key, username, empty password → validate fails.
-    # Retry: blank api_key, username, real password → verify once.
-    password_responses = iter(["llm-secret", "", "", "", "real-pass"])
+    # basic mode both times: username without a password fails validate; the
+    # retry supplies the password.
+    select_responses = iter(
+        ["quickstart", "anthropic", "api_key", "claude-opus-4-7", "opensearch", "basic", "basic"]
+    )
+    # First attempt: username, empty password → validate fails.
+    # Retry: username, real password → verify once.
+    password_responses = iter(["llm-secret", "", "real-pass"])
     text_responses = iter(
         [
             "https://my-cluster.example.com",

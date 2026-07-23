@@ -565,18 +565,45 @@ def _setup_discord() -> None:
 def _run_spec_setup(spec: IntegrationSetupSpec) -> None:
     """Prompt for a spec's fields, then validate, verify, and persist them.
 
+    Fields are prefilled from the stored credentials so re-running setup is a
+    series of enters, not a retype, and never silently drops a value the user
+    did not re-type. When the spec declares a picker (``mode_prompt``), only the
+    chosen mode's fields are asked; fields belonging to another mode are cleared.
+
     Each field is checked as it is answered so a blank required value fails
     immediately, rather than after the user has worked through the rest of the
     prompts.
     """
     from integrations.setup_flow import apply_setup
+    from integrations.store import get_integration
+
+    stored = (get_integration(spec.service) or {}).get("credentials") or {}
+
+    mode: str | None = None
+    if spec.mode_prompt:
+        mode = _select(
+            spec.mode_prompt,
+            choices=[questionary.Choice(m.label, value=m.value) for m in spec.modes],
+            instruction="(use arrow keys)",
+        )
+        if mode is None:
+            print("\nAborted.")
+            sys.exit(1)
+
+    collectable = {field.name for field in spec.collectable_fields(mode)}
 
     values: dict[str, str | None] = {}
     for field in spec.fields:
         if field.is_constant:
             values[field.name] = field.constant
             continue
-        value = _p(field.question, default=field.default, secret=field.secret)
+        if field.name not in collectable:
+            # Gated field for an unchosen mode: clear it rather than prompt, so
+            # switching modes turns the other mode's credentials off.
+            values[field.name] = ""
+            continue
+        default = str(stored.get(field.name) or "") or field.default
+        value = _p(field.question, default=default, secret=field.secret)
         # A field with a default is never missing — apply_setup substitutes it —
         # so only a defaultless required field can fail here.
         if not value and field.required and not field.default:
