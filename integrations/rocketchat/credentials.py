@@ -54,7 +54,15 @@ def _store_default_channel() -> str:
         if not isinstance(config, dict):
             return ""
         return str(config.get("default_channel") or "").strip()
-    except (ImportError, KeyError, TypeError, ValueError, OSError, RuntimeError) as exc:
+    except (
+        ImportError,
+        AttributeError,
+        KeyError,
+        TypeError,
+        ValueError,
+        OSError,
+        RuntimeError,
+    ) as exc:
         logger.debug(
             "Failed to resolve Rocket.Chat default_channel from the store: %s",
             exc,

@@ -174,3 +174,15 @@ def test_real_store_default_channel_resilient_to_store_failure(
     from integrations.rocketchat.credentials import _store_default_channel
 
     assert _store_default_channel() == ""
+
+
+def test_real_store_default_channel_resilient_to_none_return(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """resolve_effective_integrations() returning None (not a dict) must not
+    raise AttributeError from the unguarded .get('rocketchat', {}) call."""
+    monkeypatch.setattr("integrations.catalog.resolve_effective_integrations", lambda: None)
+
+    from integrations.rocketchat.credentials import _store_default_channel
+
+    assert _store_default_channel() == ""
