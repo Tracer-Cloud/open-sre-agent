@@ -255,6 +255,15 @@ VERTEX_AI_MODELS = (
     ModelOption(value=VERTEX_AI_REASONING_MODEL, label="Gemini 2.5 Pro (Vertex) — default"),
     ModelOption(value="gemini-2.5-flash", label="Gemini 2.5 Flash (Vertex)"),
     ModelOption(value="gemini-2.5-flash-lite", label="Gemini 2.5 Flash-Lite (Vertex)"),
+    # Gemini 3.x is Preview-only in Vertex Model Garden as of the July 2026 release
+    # notes (docs.cloud.google.com/vertex-ai/generative-ai/docs/release-notes) — not
+    # curated as the default. Same IDs as the direct Gemini provider's GEMINI_MODELS,
+    # since Vertex serves Gemini under the same publisher-model IDs.
+    ModelOption(value="gemini-3.1-pro-preview", label="Gemini 3.1 Pro (Vertex, preview)"),
+    ModelOption(value="gemini-3-flash-preview", label="Gemini 3 Flash (Vertex, preview)"),
+    ModelOption(
+        value="gemini-3.1-flash-lite-preview", label="Gemini 3.1 Flash-Lite (Vertex, preview)"
+    ),
 )
 
 OLLAMA_MODELS = (

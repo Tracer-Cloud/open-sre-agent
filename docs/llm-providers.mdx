@@ -349,6 +349,11 @@ Always routed through LiteLLM (like Azure OpenAI) as `vertex_ai/<model>`. Curate
 model choices are Gemini models served via Vertex; any other Vertex-supported
 model ID also works by typing it directly (`allow_custom_models`).
 
+The default (`gemini-2.5-pro`/`-flash`/`-flash-lite`) is the GA Gemini generation.
+Gemini 3.x (`gemini-3.1-pro-preview`, `gemini-3-flash-preview`,
+`gemini-3.1-flash-lite-preview`) is selectable in the wizard but is Preview-only
+in Vertex Model Garden as of mid-2026 — expect availability and pricing to change.
+
 ### Ollama (local)
 
 ```bash

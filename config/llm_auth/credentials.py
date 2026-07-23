@@ -121,7 +121,16 @@ def _probe_vertex_ai_ambient(spec: ProviderSpec) -> _AmbientProbeResult:
             detail=f"Could not resolve Google Application Default Credentials: {exc}",
         )
 
-    project = project_hint or discovered_project or "auto-discovered"
+    project = project_hint or discovered_project
+    if not project:
+        return _AmbientProbeResult(
+            ok=False,
+            detail=(
+                "Google Application Default Credentials resolved, but no GCP project "
+                "could be determined (ADC did not discover one and VERTEX_AI_PROJECT is "
+                "not set). Set VERTEX_AI_PROJECT — Vertex AI requests require a project."
+            ),
+        )
     return _AmbientProbeResult(
         ok=True,
         detail=(

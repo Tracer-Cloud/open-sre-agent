@@ -75,6 +75,25 @@ def test_status_vertex_ai_configured_via_metadata_without_project_env(monkeypatc
     assert "discovered-project" in result.detail
 
 
+def test_status_vertex_ai_not_configured_when_adc_resolves_without_project(
+    monkeypatch,
+) -> None:
+    """ADC succeeding is not enough — a request still needs a resolvable project.
+
+    Regression test: this used to fall back to a display-only "auto-discovered"
+    placeholder and report configured=True, even though request routing has no
+    project to send and the subsequent LiteLLM call would fail.
+    """
+    monkeypatch.delenv("VERTEX_AI_PROJECT", raising=False)
+    monkeypatch.setattr(google.auth, "default", lambda: (object(), None))
+
+    result = status("vertex-ai")
+
+    assert result.configured is False
+    assert result.source == "none"
+    assert "VERTEX_AI_PROJECT" in result.detail
+
+
 def test_status_bedrock_ignores_vertex_project_env(monkeypatch) -> None:
     """The ambient status branch must not cross-check unrelated providers' env vars."""
     monkeypatch.setenv("VERTEX_AI_PROJECT", "my-gcp-project")
