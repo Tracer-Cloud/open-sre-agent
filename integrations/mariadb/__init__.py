@@ -8,12 +8,20 @@ timeouts enforced, result sizes capped.
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass
 from typing import Any
 
 from pydantic import Field, field_validator
 
+from config.constants.mariadb import (
+    MARIADB_DATABASE_ENV,
+    MARIADB_HOST_ENV,
+    MARIADB_PASSWORD_ENV,
+    MARIADB_PORT_ENV,
+    MARIADB_SSL_ENV,
+    MARIADB_USERNAME_ENV,
+)
+from config.llm_credentials import resolve_env_credential
 from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations._relational import RelationalConfigBase, env_bool, env_str
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
@@ -71,17 +79,17 @@ def build_mariadb_config(raw: dict[str, Any] | None) -> MariaDBConfig:
 
 def mariadb_config_from_env() -> MariaDBConfig | None:
     """Load a MariaDB config from env vars."""
-    host = env_str("MARIADB_HOST")
+    host = env_str(MARIADB_HOST_ENV)
     if not host:
         return None
     return build_mariadb_config(
         {
             "host": host,
-            "port": env_str("MARIADB_PORT", str(DEFAULT_MARIADB_PORT)),
-            "database": env_str("MARIADB_DATABASE"),
-            "username": env_str("MARIADB_USERNAME"),
-            "password": os.getenv("MARIADB_PASSWORD", "").strip(),
-            "ssl": env_bool("MARIADB_SSL", True),
+            "port": env_str(MARIADB_PORT_ENV, str(DEFAULT_MARIADB_PORT)),
+            "database": env_str(MARIADB_DATABASE_ENV),
+            "username": env_str(MARIADB_USERNAME_ENV),
+            "password": resolve_env_credential(MARIADB_PASSWORD_ENV) or "",
+            "ssl": env_bool(MARIADB_SSL_ENV, True),
         }
     )
 

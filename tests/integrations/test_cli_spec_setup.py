@@ -36,6 +36,8 @@ import integrations.helm.setup as helm_setup
 import integrations.honeycomb.setup as honeycomb_setup
 import integrations.incident_io.setup as incident_io_setup
 import integrations.jenkins.setup as jenkins_setup
+import integrations.mariadb.setup as mariadb_setup
+import integrations.mongodb.setup as mongodb_setup
 import integrations.mongodb_atlas.setup as mongodb_atlas_setup
 import integrations.mysql.setup as mysql_setup
 import integrations.openclaw.setup as openclaw_setup
@@ -43,6 +45,7 @@ import integrations.pagerduty.setup as pagerduty_setup
 import integrations.postgresql.setup as postgresql_setup
 import integrations.posthog.setup as posthog_setup
 import integrations.posthog_mcp.setup as posthog_mcp_setup
+import integrations.redis.setup as redis_setup
 import integrations.sentry.setup as sentry_setup
 import integrations.sentry_mcp.setup as sentry_mcp_setup
 import integrations.servicenow.setup as servicenow_setup
@@ -184,6 +187,28 @@ _ANSWERS: dict[str, dict[str, str]] = {
         "password": "mysql-password",
         "ssl_mode": "required",
     },
+    "mariadb": {
+        "host": "mariadb.eu.example.com",
+        "database": "checkout",
+        "port": "3306",
+        "username": "opensre",
+        "password": "mariadb-password",
+        "ssl": "false",
+    },
+    "mongodb": {
+        "connection_string": "mongodb+srv://opensre:secret@cluster.eu.example.net",
+        "database": "checkout",
+        "auth_source": "admin",
+        "tls": "true",
+    },
+    "redis": {
+        "host": "redis.eu.example.com",
+        "port": "6380",
+        "username": "opensre",
+        "password": "redis-password",
+        "db": "2",
+        "ssl": "true",
+    },
 }
 
 # (spec module, spec attribute, CLI handler) — the attribute is patched rather
@@ -219,6 +244,9 @@ _CASES = [
     pytest.param(servicenow_setup, "SERVICENOW_SETUP", cli._setup_servicenow, id="servicenow"),
     pytest.param(postgresql_setup, "POSTGRESQL_SETUP", cli._setup_postgresql, id="postgresql"),
     pytest.param(mysql_setup, "MYSQL_SETUP", cli._setup_mysql, id="mysql"),
+    pytest.param(mariadb_setup, "MARIADB_SETUP", cli._setup_mariadb, id="mariadb"),
+    pytest.param(mongodb_setup, "MONGODB_SETUP", cli._setup_mongodb, id="mongodb"),
+    pytest.param(redis_setup, "REDIS_SETUP", cli._setup_redis, id="redis"),
 ]
 
 

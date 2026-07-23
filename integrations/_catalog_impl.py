@@ -40,6 +40,20 @@ from config.constants.honeycomb import (
     HONEYCOMB_BASE_URL_ENV,
     HONEYCOMB_DATASET_ENV,
 )
+from config.constants.mariadb import (
+    MARIADB_DATABASE_ENV,
+    MARIADB_HOST_ENV,
+    MARIADB_PASSWORD_ENV,
+    MARIADB_PORT_ENV,
+    MARIADB_SSL_ENV,
+    MARIADB_USERNAME_ENV,
+)
+from config.constants.mongodb import (
+    MONGODB_AUTH_SOURCE_ENV,
+    MONGODB_CONNECTION_STRING_ENV,
+    MONGODB_DATABASE_ENV,
+    MONGODB_TLS_ENV,
+)
 from config.constants.mysql import (
     MYSQL_DATABASE_ENV,
     MYSQL_HOST_ENV,
@@ -739,14 +753,14 @@ def load_env_integrations() -> list[dict[str, Any]]:
         )
         integrations.append(_active_env_record("gitlab", gitlab_config.model_dump()))
 
-    mongodb_connection_string = resolve_env_credential("MONGODB_CONNECTION_STRING")
+    mongodb_connection_string = resolve_env_credential(MONGODB_CONNECTION_STRING_ENV)
     if mongodb_connection_string:
         mongodb_config = build_mongodb_config(
             {
                 "connection_string": mongodb_connection_string,
-                "database": os.getenv("MONGODB_DATABASE", "").strip(),
-                "auth_source": os.getenv("MONGODB_AUTH_SOURCE", "admin").strip() or "admin",
-                "tls": os.getenv("MONGODB_TLS", "true").strip().lower() in ("true", "1", "yes"),
+                "database": os.getenv(MONGODB_DATABASE_ENV, "").strip(),
+                "auth_source": os.getenv(MONGODB_AUTH_SOURCE_ENV, "admin").strip() or "admin",
+                "tls": os.getenv(MONGODB_TLS_ENV, "true").strip().lower() in ("true", "1", "yes"),
             }
         )
         integrations.append(
@@ -1294,18 +1308,19 @@ def load_env_integrations() -> list[dict[str, Any]]:
         except Exception as exc:
             _report_env_loader_failure(exc, integration="x_mcp")
 
-    mariadb_host = os.getenv("MARIADB_HOST", "").strip()
-    mariadb_database = os.getenv("MARIADB_DATABASE", "").strip()
+    mariadb_host = os.getenv(MARIADB_HOST_ENV, "").strip()
+    mariadb_database = os.getenv(MARIADB_DATABASE_ENV, "").strip()
     if mariadb_host and mariadb_database:
         try:
             mariadb_config = build_mariadb_config(
                 {
                     "host": mariadb_host,
-                    "port": os.getenv("MARIADB_PORT", "3306").strip(),
+                    "port": os.getenv(MARIADB_PORT_ENV, "3306").strip(),
                     "database": mariadb_database,
-                    "username": os.getenv("MARIADB_USERNAME", "").strip(),
-                    "password": resolve_env_credential("MARIADB_PASSWORD"),
-                    "ssl": os.getenv("MARIADB_SSL", "true").strip().lower() in ("true", "1", "yes"),
+                    "username": os.getenv(MARIADB_USERNAME_ENV, "").strip(),
+                    "password": resolve_env_credential(MARIADB_PASSWORD_ENV),
+                    "ssl": os.getenv(MARIADB_SSL_ENV, "true").strip().lower()
+                    in ("true", "1", "yes"),
                 }
             )
             integrations.append(

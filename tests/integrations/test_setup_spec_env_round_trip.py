@@ -38,6 +38,8 @@ from integrations.helm.setup import HELM_SETUP
 from integrations.honeycomb.setup import HONEYCOMB_SETUP
 from integrations.incident_io.setup import INCIDENT_IO_SETUP
 from integrations.jenkins.setup import JENKINS_SETUP
+from integrations.mariadb.setup import MARIADB_SETUP
+from integrations.mongodb.setup import MONGODB_SETUP
 from integrations.mongodb_atlas.setup import MONGODB_ATLAS_SETUP
 from integrations.mysql.setup import MYSQL_SETUP
 from integrations.openclaw.setup import OPENCLAW_SETUP
@@ -45,6 +47,7 @@ from integrations.pagerduty.setup import PAGERDUTY_SETUP
 from integrations.postgresql.setup import POSTGRESQL_SETUP
 from integrations.posthog.setup import POSTHOG_SETUP
 from integrations.posthog_mcp.setup import POSTHOG_MCP_SETUP
+from integrations.redis.setup import REDIS_SETUP
 from integrations.sentry.setup import SENTRY_SETUP
 from integrations.sentry_mcp.setup import SENTRY_MCP_SETUP
 from integrations.servicenow.setup import SERVICENOW_SETUP
@@ -196,6 +199,28 @@ _SUBMITTED: dict[str, dict[str, str]] = {
         "password": "mysql-password",
         "ssl_mode": "required",
     },
+    "mariadb": {
+        "host": "mariadb.eu.example.com",
+        "database": "checkout",
+        "port": "3307",
+        "username": "opensre",
+        "password": "mariadb-password",
+        "ssl": "false",
+    },
+    "mongodb": {
+        "connection_string": "mongodb+srv://opensre:secret@cluster.eu.example.net",
+        "database": "checkout",
+        "auth_source": "opensre",
+        "tls": "true",
+    },
+    "redis": {
+        "host": "redis.eu.example.com",
+        "port": "6380",
+        "username": "opensre",
+        "password": "redis-password",
+        "db": "2",
+        "ssl": "true",
+    },
 }
 
 # Helm's env-only catalog discovery additionally gates on ``OSRE_HELM_INTEGRATION``
@@ -235,6 +260,9 @@ _SPECS = [
     SERVICENOW_SETUP,
     POSTGRESQL_SETUP,
     MYSQL_SETUP,
+    MARIADB_SETUP,
+    MONGODB_SETUP,
+    REDIS_SETUP,
 ]
 
 
@@ -308,9 +336,12 @@ def _restore_environment(written: _Persisted, monkeypatch: pytest.MonkeyPatch) -
 def _matches_catalog_value(got: Any, expected: str) -> bool:
     """Compare across env-string ↔ catalog-model normalizations.
 
-    Ports become ints; comma/space-separated hints become sequences. Neither
-    change is a persistence bug — the names and values still round-trip.
+    Ports become ints; bools become True/False; comma/space-separated hints
+    become sequences. Neither change is a persistence bug — the names and
+    values still round-trip.
     """
+    if isinstance(got, bool):
+        return got is (expected.strip().lower() in ("true", "1", "yes"))
     if isinstance(got, (list, tuple)):
         if "," in expected:
             return list(got) == [part.strip() for part in expected.split(",") if part.strip()]

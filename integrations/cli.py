@@ -609,79 +609,15 @@ def _setup_posthog() -> None:
 
 
 def _setup_mongodb() -> None:
-    connection_string = _p(
-        "Connection string (e.g. mongodb+srv://user:pass@cluster.example.net)", secret=True
-    )
-    database = _p("Database name")
-    auth_source = _p("Auth source", default="admin")
-    tls_choice = _select(
-        "TLS enabled?",
-        choices=[
-            questionary.Choice("Yes", value="1"),
-            questionary.Choice("No", value="0"),
-        ],
-        instruction="(use arrow keys)",
-    )
-    if tls_choice is None:
-        print("\nAborted.")
-        sys.exit(1)
-    tls = tls_choice == "1"
-    if not connection_string:
-        _die("connection_string is required.")
-    upsert_integration(
-        "mongodb",
-        {
-            "credentials": {
-                "connection_string": connection_string,
-                "database": database,
-                "auth_source": auth_source,
-                "tls": tls,
-            }
-        },
-    )
+    from integrations.mongodb.setup import MONGODB_SETUP
+
+    _run_spec_setup(MONGODB_SETUP)
 
 
 def _setup_redis() -> None:
-    host = _p("Host (e.g. localhost or redis.example.net)")
-    if not host:
-        _die("host is required.")
-    port_input = _p("Port", default="6379")
-    username = _p("Username (leave blank unless using Redis ACLs)")
-    password = _p("Password (leave blank if not set)", secret=True)
-    db_input = _p("Database number", default="0")
-    ssl_choice = _select(
-        "Use TLS?",
-        choices=[
-            questionary.Choice("No", value="0"),
-            questionary.Choice("Yes", value="1"),
-        ],
-        instruction="(use arrow keys)",
-    )
-    if ssl_choice is None:
-        print("\nAborted.")
-        sys.exit(1)
-    ssl = ssl_choice == "1"
-    try:
-        port = int(port_input)
-    except (TypeError, ValueError):
-        _die(f"port: {port_input} is invalid")
-    try:
-        db = int(db_input)
-    except (TypeError, ValueError):
-        _die(f"db: {db_input} is invalid")
-    upsert_integration(
-        "redis",
-        {
-            "credentials": {
-                "host": host,
-                "port": port,
-                "username": username,
-                "password": password,
-                "db": db,
-                "ssl": ssl,
-            }
-        },
-    )
+    from integrations.redis.setup import REDIS_SETUP
+
+    _run_spec_setup(REDIS_SETUP)
 
 
 def _register_discord_slash_command(application_id: str, bot_token: str) -> None:
@@ -895,38 +831,9 @@ def _setup_mongodb_atlas() -> None:
 
 
 def _setup_mariadb() -> None:
-    host = _p("Host (e.g. db.example.com)")
-    port = _p("Port", default="3306")
-    database = _p("Database name")
-    username = _p("Username")
-    password = _p("Password", secret=True)
-    ssl_choice = _select(
-        "SSL enabled?",
-        choices=[
-            questionary.Choice("Yes", value="1"),
-            questionary.Choice("No", value="0"),
-        ],
-        instruction="(use arrow keys)",
-    )
-    if ssl_choice is None:
-        print("\nAborted.")
-        sys.exit(1)
-    ssl = ssl_choice == "1"
-    if not host or not database or not username:
-        _die("host, database, and username are required.")
-    upsert_integration(
-        "mariadb",
-        {
-            "credentials": {
-                "host": host,
-                "port": _parse_port(port),
-                "database": database,
-                "username": username,
-                "password": password,
-                "ssl": ssl,
-            }
-        },
-    )
+    from integrations.mariadb.setup import MARIADB_SETUP
+
+    _run_spec_setup(MARIADB_SETUP)
 
 
 def _setup_alertmanager() -> None:
