@@ -214,18 +214,31 @@ def _format_alarm_message_html(sample: ProcessSample, breach: ThresholdBreach) -
     )
 
 
+def _md_code(value: str) -> str:
+    """Wrap *value* in a backtick code span, neutralizing inner backticks.
+
+    A literal backtick in the value (e.g. a shell command using command
+    substitution like `` echo `date` ``) would otherwise terminate the code
+    span early and render the rest of the field as unformatted text. Swap it
+    for the visually similar U+02CB MODIFIER LETTER GRAVE ACCENT, matching
+    how the HTML formatter's html.escape() neutralizes markup characters in
+    the same fields.
+    """
+    return f"`{value.replace('`', 'ˋ')}`"
+
+
 def _format_alarm_message_markdown(sample: ProcessSample, breach: ThresholdBreach) -> str:
     started, command = _alarm_started_and_command(sample)
 
     return "\n".join(
         [
             "**🚨 OpenSRE Watchdog Alarm**",
-            f"**host**       `{socket.gethostname()}`",
-            f"**pid**        `{sample.pid}`  (`{sample.name or '-'}`)",
-            f"**cmd**        `{command}`",
-            f"**threshold**  `{_format_threshold_breach(breach)}`",
-            f"**runtime**    `{_format_duration(sample.runtime_seconds)}`",
-            f"**started**    `{started}`",
+            f"**host**       {_md_code(socket.gethostname())}",
+            f"**pid**        {_md_code(str(sample.pid))}  ({_md_code(sample.name or '-')})",
+            f"**cmd**        {_md_code(command)}",
+            f"**threshold**  {_md_code(_format_threshold_breach(breach))}",
+            f"**runtime**    {_md_code(_format_duration(sample.runtime_seconds))}",
+            f"**started**    {_md_code(started)}",
         ]
     )
 
