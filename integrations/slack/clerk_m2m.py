@@ -23,6 +23,7 @@ import logging
 import os
 import threading
 import time
+from dataclasses import dataclass
 from http import HTTPStatus
 from typing import Any
 
@@ -41,12 +42,41 @@ logger = logging.getLogger(__name__)
 
 _M2M_TOKENS_PATH = "/v1/m2m_tokens"
 
+
+@dataclass
+class _TokenCache:
+    """The minted token with the expiry and secret it belongs to.
+
+    The three fields are only ever valid together — a token means nothing
+    without the secret it was minted from and the expiry it is bound to — so
+    they are read and replaced as one unit.
+    """
+
+    token: str = ""
+    expiry_epoch: float = 0.0
+    secret: str = ""
+
+    def is_usable_for(self, secret: str) -> bool:
+        """True when the cached token was minted from ``secret`` and is not near expiry."""
+        return bool(
+            self.token
+            and self.secret == secret
+            and time.time() < self.expiry_epoch - M2M_TOKEN_REFRESH_MARGIN_SECONDS
+        )
+
+    def replace(self, *, token: str, expiry_epoch: float, secret: str) -> None:
+        self.token = token
+        self.expiry_epoch = expiry_epoch
+        self.secret = secret
+
+    def clear(self) -> None:
+        self.replace(token="", expiry_epoch=0.0, secret="")
+
+
 # In-process cache, keyed by machine secret so a rotated secret can't serve a
 # stale token. Guarded by a lock: the gateway runs turns on a thread pool.
 _lock = threading.Lock()
-_cached_token: str = ""
-_cached_expiry_epoch: float = 0.0
-_cached_secret: str = ""
+_cache = _TokenCache()
 
 
 def _base_url() -> str:
@@ -66,22 +96,14 @@ def mint_agent_m2m_token(*, force_refresh: bool = False) -> str:
         return ""
 
     with _lock:
-        global _cached_token, _cached_expiry_epoch, _cached_secret
-        fresh_enough = (
-            _cached_token
-            and _cached_secret == secret
-            and time.time() < _cached_expiry_epoch - M2M_TOKEN_REFRESH_MARGIN_SECONDS
-        )
-        if fresh_enough and not force_refresh:
-            return _cached_token
+        if _cache.is_usable_for(secret) and not force_refresh:
+            return _cache.token
 
         minted = _mint(secret)
         if minted is None:
             return ""
         token, expiry_epoch = minted
-        _cached_token = token
-        _cached_expiry_epoch = expiry_epoch
-        _cached_secret = secret
+        _cache.replace(token=token, expiry_epoch=expiry_epoch, secret=secret)
         return token
 
 
@@ -137,8 +159,5 @@ def _json_dict(response: httpx.Response) -> dict[str, Any]:
 
 def clear_m2m_token_cache() -> None:
     """Drop the in-process token cache (used by tests and after rotation)."""
-    global _cached_token, _cached_expiry_epoch, _cached_secret
     with _lock:
-        _cached_token = ""
-        _cached_expiry_epoch = 0.0
-        _cached_secret = ""
+        _cache.clear()
