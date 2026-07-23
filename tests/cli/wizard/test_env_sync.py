@@ -46,6 +46,8 @@ def _redirect_wizard_store(tmp_path, monkeypatch) -> None:
         "CREDENTIAL",
         # Substring-based sensitives.
         "DATABASE_CONNECTION_STRING",
+        # Inline kubeconfig YAML embeds credentials; path-only KUBECONFIG does not.
+        "KUBECONFIG_CONTENT",
     ],
 )
 def test_is_sensitive_env_key_marks_secrets(key: str) -> None:
@@ -68,6 +70,9 @@ def test_is_sensitive_env_key_marks_secrets(key: str) -> None:
         "DISCORD_PUBLIC_KEY",
         # Explicit exception: paired with a private key, not a secret itself.
         "MONGODB_ATLAS_PUBLIC_KEY",
+        # Path to a kubeconfig file is not the credential itself.
+        "KUBECONFIG",
+        "HELM_KUBECONFIG",
     ],
 )
 def test_is_sensitive_env_key_leaves_non_secrets(key: str) -> None:

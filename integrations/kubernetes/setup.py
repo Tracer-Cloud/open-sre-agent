@@ -4,6 +4,9 @@ Kubeconfig can be a file path *or* pasted inline YAML. A picker scopes which
 of those two is collected; the either/or rule lives in the Kubernetes client
 probe (``is_configured`` / ``missing``), so setup and health checks agree for
 any surface that skips the picker. Context and namespace are always asked.
+
+Inline YAML is mirrored to the keyring (it embeds bearer tokens / client keys);
+the file-path field stays in ``.env``.
 """
 
 from __future__ import annotations
@@ -37,6 +40,10 @@ KUBERNETES_SETUP = IntegrationSetupSpec(
             label="Inline kubeconfig YAML",
             prompt="Paste raw kubeconfig YAML content",
             env_var=KUBECONFIG_CONTENT_ENV,
+            # Keyring: the YAML embeds bearer tokens / client keys / certs.
+            # ``is_sensitive_env_key("KUBECONFIG_CONTENT")`` routes it there;
+            # the path-only ``KUBECONFIG`` field stays in ``.env``.
+            secret=True,
             required=False,
         ),
         SetupField(

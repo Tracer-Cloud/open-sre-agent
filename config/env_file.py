@@ -59,7 +59,12 @@ _SENSITIVE_TERMINAL_TOKENS: frozenset[str] = frozenset(
         "credentials",
     }
 )
-_SENSITIVE_SUBSTRINGS: tuple[str, ...] = ("connection_string",)
+_SENSITIVE_SUBSTRINGS: tuple[str, ...] = (
+    "connection_string",
+    # Inline kubeconfig YAML embeds bearer tokens / client keys / certs; the
+    # path-only ``KUBECONFIG`` env var does not match this needle.
+    "kubeconfig_content",
+)
 
 
 @dataclass(frozen=True)

@@ -11,7 +11,6 @@ from click.testing import CliRunner
 import integrations.setup_flow as setup_flow
 from integrations.cli import _setup_github, cmd_setup
 from integrations.github.mcp import GitHubMCPValidationResult
-from integrations.setup_flow import SetupOutcome
 from surfaces.cli.__main__ import cli
 
 
@@ -65,10 +64,10 @@ def test_setup_github_prints_connected_and_saves_on_validation_success(
 
     saved: list[dict] = []
 
-    def _fake_apply(_spec: object, values: object) -> SetupOutcome:
+    def _fake_apply(_spec: object, values: object) -> setup_flow.SetupOutcome:
         assert isinstance(values, dict)
         saved.append(values)
-        return SetupOutcome(ok=True, detail="ok", env_path=Path("/tmp/.env"))
+        return setup_flow.SetupOutcome(ok=True, detail="ok", env_path=Path("/tmp/.env"))
 
     _patch_apply_setup(monkeypatch, _fake_apply)
 
@@ -122,10 +121,10 @@ def test_setup_github_simple_path_uses_hosted_defaults(
 
     saved: list[dict] = []
 
-    def _fake_apply(_spec: object, values: object) -> SetupOutcome:
+    def _fake_apply(_spec: object, values: object) -> setup_flow.SetupOutcome:
         assert isinstance(values, dict)
         saved.append(values)
-        return SetupOutcome(ok=True, detail="ok", env_path=Path("/tmp/.env"))
+        return setup_flow.SetupOutcome(ok=True, detail="ok", env_path=Path("/tmp/.env"))
 
     _patch_apply_setup(monkeypatch, _fake_apply)
 
@@ -172,7 +171,7 @@ def test_setup_github_exits_without_save_on_validation_failure(
         ),
     )
 
-    def _apply_should_not_run(*_a: object, **_k: object) -> SetupOutcome:
+    def _apply_should_not_run(*_a: object, **_k: object) -> setup_flow.SetupOutcome:
         raise AssertionError("apply_setup should not be called when validation fails")
 
     _patch_apply_setup(monkeypatch, _apply_should_not_run)
@@ -214,7 +213,7 @@ def test_cmd_setup_github_skips_saved_line_on_validation_failure(
         ),
     )
 
-    def _apply_should_not_run(*_a: object, **_k: object) -> SetupOutcome:
+    def _apply_should_not_run(*_a: object, **_k: object) -> setup_flow.SetupOutcome:
         raise AssertionError("apply_setup should not be called when validation fails")
 
     _patch_apply_setup(monkeypatch, _apply_should_not_run)
@@ -258,8 +257,8 @@ def test_cmd_setup_github_prints_saved_after_success(
         ),
     )
 
-    def _fake_apply(_spec: object, _values: object) -> SetupOutcome:
-        return SetupOutcome(ok=True, detail="ok", env_path=Path("/tmp/.env"))
+    def _fake_apply(_spec: object, _values: object) -> setup_flow.SetupOutcome:
+        return setup_flow.SetupOutcome(ok=True, detail="ok", env_path=Path("/tmp/.env"))
 
     _patch_apply_setup(monkeypatch, _fake_apply)
 
