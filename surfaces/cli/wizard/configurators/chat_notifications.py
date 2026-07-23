@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from config.env_file import sync_env_secret, sync_env_values
+from integrations.slack.setup import SLACK_SETUP
 from integrations.store import upsert_integration
 from integrations.telegram.setup import TELEGRAM_SETUP
-from platform.terminal.theme import ERROR, GLYPH_ERROR, SECONDARY, WARNING
+from platform.terminal.theme import SECONDARY, WARNING
 from surfaces.cli.wizard._ui import (
     Choice,
     _choose,
@@ -20,62 +21,19 @@ from surfaces.cli.wizard.integration_health import (
     validate_discord_bot,
     validate_rocketchat,
     validate_rocketchat_webhook,
-    validate_slack_webhook,
 )
 
 
 def _configure_slack() -> tuple[str, str]:
-    _, credentials = _integration_defaults("slack")
-    mode = _choose(
-        "Slack setup:",
-        [
-            Choice(value="webhook", label="Incoming webhook (outbound delivery)"),
-            Choice(value="socket", label="Socket Mode bot (two-way gateway chat)"),
-            Choice(value="both", label="Both webhook and Socket Mode"),
-        ],
-        default="webhook",
+    return configure_from_spec(
+        SLACK_SETUP,
+        title="Slack",
+        intro=(
+            "\n[bold]Slack Integration[/bold]\n"
+            "Provide a webhook URL for outbound delivery, Socket Mode tokens "
+            "(xoxb- + xapp-) for two-way gateway chat, or both.\n"
+        ),
     )
-    creds = dict(credentials)
-
-    if mode in {"webhook", "both"}:
-        while True:
-            webhook_url = _prompt_value(
-                "Slack webhook URL",
-                default=_string_value(creds.get("webhook_url")),
-                secret=True,
-            )
-            with _console.status("Validating Slack webhook...", spinner="dots"):
-                result = validate_slack_webhook(webhook_url=webhook_url)
-            _render_integration_result("Slack webhook", result)
-            if result.ok:
-                creds["webhook_url"] = webhook_url
-                break
-            _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
-
-    if mode in {"socket", "both"}:
-        bot_token = _prompt_value(
-            "Slack bot token (xoxb-…)",
-            default=_string_value(creds.get("bot_token")),
-            secret=True,
-        )
-        app_token = _prompt_value(
-            "Slack app-level token (xapp-…)",
-            default=_string_value(creds.get("app_token")),
-            secret=True,
-        )
-        if not bot_token.startswith("xoxb-") or not app_token.startswith("xapp-"):
-            _console.print(
-                f"[{ERROR}]{GLYPH_ERROR} Socket Mode needs xoxb- bot token and xapp- app token.[/]"
-            )
-            raise SystemExit(1)
-        creds["bot_token"] = bot_token
-        creds["app_token"] = app_token
-        sync_env_secret("SLACK_BOT_TOKEN", bot_token)
-        sync_env_secret("SLACK_APP_TOKEN", app_token)
-
-    upsert_integration("slack", {"credentials": creds})
-    env_path = sync_env_values({})
-    return "Slack", str(env_path)
 
 
 def _configure_discord() -> tuple[str, str]:

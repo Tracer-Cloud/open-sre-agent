@@ -9,6 +9,21 @@ from collections.abc import Callable
 from typing import Any
 
 from config.config import get_tracer_base_url
+from config.constants.alertmanager import (
+    ALERTMANAGER_BEARER_TOKEN_ENV,
+    ALERTMANAGER_PASSWORD_ENV,
+    ALERTMANAGER_URL_ENV,
+    ALERTMANAGER_USERNAME_ENV,
+)
+from config.constants.azure_sql import (
+    AZURE_SQL_DATABASE_ENV,
+    AZURE_SQL_DRIVER_ENV,
+    AZURE_SQL_ENCRYPT_ENV,
+    AZURE_SQL_PASSWORD_ENV,
+    AZURE_SQL_PORT_ENV,
+    AZURE_SQL_SERVER_ENV,
+    AZURE_SQL_USERNAME_ENV,
+)
 from config.constants.betterstack import (
     BETTERSTACK_PASSWORD_ENV,
     BETTERSTACK_QUERY_ENDPOINT_ENV,
@@ -27,6 +42,12 @@ from config.constants.datadog import (
     DATADOG_SITE_ENV,
 )
 from config.constants.gitlab import GITLAB_AUTH_TOKEN_ENV, GITLAB_BASE_URL_ENV
+from config.constants.grafana import (
+    GRAFANA_CA_BUNDLE_ENV,
+    GRAFANA_INSTANCE_URL_ENV,
+    GRAFANA_READ_TOKEN_ENV,
+    GRAFANA_VERIFY_SSL_ENV,
+)
 from config.constants.groundcover import (
     GROUNDCOVER_API_KEY_ENV,
     GROUNDCOVER_BACKEND_ID_ENV,
@@ -69,6 +90,12 @@ from config.constants.openclaw import (
     OPENCLAW_MCP_MODE_ENV,
     OPENCLAW_MCP_URL_ENV,
 )
+from config.constants.opensearch import (
+    OPENSEARCH_API_KEY_ENV,
+    OPENSEARCH_PASSWORD_ENV,
+    OPENSEARCH_URL_ENV,
+    OPENSEARCH_USERNAME_ENV,
+)
 from config.constants.postgresql import (
     POSTGRESQL_DATABASE_ENV,
     POSTGRESQL_HOST_ENV,
@@ -99,6 +126,7 @@ from config.constants.servicenow import (
     SERVICENOW_PASSWORD_ENV,
     SERVICENOW_USERNAME_ENV,
 )
+from config.constants.slack import SLACK_APP_TOKEN_ENV, SLACK_BOT_TOKEN_ENV
 from config.constants.vercel import VERCEL_API_TOKEN_ENV, VERCEL_TEAM_ID_ENV
 from config.constants.x_mcp import X_MCP_AUTH_TOKEN_ENV, X_MCP_URL_ENV
 from config.llm_credentials import resolve_env_credential
@@ -492,17 +520,17 @@ def load_env_integrations() -> list[dict[str, Any]]:
         grafana_endpoint = ""
         grafana_api_key = ""
     else:
-        grafana_endpoint = os.getenv("GRAFANA_INSTANCE_URL", "").strip()
-        grafana_api_key = resolve_env_credential("GRAFANA_READ_TOKEN")
+        grafana_endpoint = os.getenv(GRAFANA_INSTANCE_URL_ENV, "").strip()
+        grafana_api_key = resolve_env_credential(GRAFANA_READ_TOKEN_ENV)
     if grafana_endpoint and grafana_api_key:
         try:
             grafana_config = GrafanaIntegrationConfig.model_validate(
                 {
                     "endpoint": grafana_endpoint,
                     "api_key": grafana_api_key,
-                    "verify_ssl": os.getenv("GRAFANA_VERIFY_SSL", "true").strip().lower()
+                    "verify_ssl": os.getenv(GRAFANA_VERIFY_SSL_ENV, "true").strip().lower()
                     != "false",
-                    "ca_bundle": os.getenv("GRAFANA_CA_BUNDLE", "").strip(),
+                    "ca_bundle": os.getenv(GRAFANA_CA_BUNDLE_ENV, "").strip(),
                 }
             )
         except Exception as exc:
@@ -1046,13 +1074,13 @@ def load_env_integrations() -> list[dict[str, Any]]:
         else:
             integrations.append(_active_env_record("rocketchat", rocketchat_config.model_dump()))
 
-    slack_bot_token = resolve_env_credential("SLACK_BOT_TOKEN")
+    slack_bot_token = resolve_env_credential(SLACK_BOT_TOKEN_ENV)
     slack_webhook_url = os.getenv("SLACK_WEBHOOK_URL", "").strip()
     if slack_bot_token or slack_webhook_url:
         slack_credentials = {
             "webhook_url": slack_webhook_url,
             "bot_token": slack_bot_token,
-            "app_token": resolve_env_credential("SLACK_APP_TOKEN"),
+            "app_token": resolve_env_credential(SLACK_APP_TOKEN_ENV),
         }
         slack_view, _slack_key = _classify_slack(slack_credentials, record_id="env:slack")
         if slack_view is not None:
@@ -1432,19 +1460,19 @@ def load_env_integrations() -> list[dict[str, Any]]:
             )
         )
 
-    azure_sql_server = os.getenv("AZURE_SQL_SERVER", "").strip()
-    azure_sql_database = os.getenv("AZURE_SQL_DATABASE", "").strip()
+    azure_sql_server = os.getenv(AZURE_SQL_SERVER_ENV, "").strip()
+    azure_sql_database = os.getenv(AZURE_SQL_DATABASE_ENV, "").strip()
     if azure_sql_server and azure_sql_database:
-        _az_port = os.getenv("AZURE_SQL_PORT", "").strip()
+        _az_port = os.getenv(AZURE_SQL_PORT_ENV, "").strip()
         azure_sql_config = build_azure_sql_config(
             {
                 "server": azure_sql_server,
                 "port": int(_az_port) if _az_port and _az_port.isdigit() else 1433,
                 "database": azure_sql_database,
-                "username": os.getenv("AZURE_SQL_USERNAME", "").strip(),
-                "password": resolve_env_credential("AZURE_SQL_PASSWORD"),
-                "driver": os.getenv("AZURE_SQL_DRIVER", "ODBC Driver 18 for SQL Server").strip(),
-                "encrypt": os.getenv("AZURE_SQL_ENCRYPT", "true").strip().lower()
+                "username": os.getenv(AZURE_SQL_USERNAME_ENV, "").strip(),
+                "password": resolve_env_credential(AZURE_SQL_PASSWORD_ENV),
+                "driver": os.getenv(AZURE_SQL_DRIVER_ENV, "ODBC Driver 18 for SQL Server").strip(),
+                "encrypt": os.getenv(AZURE_SQL_ENCRYPT_ENV, "true").strip().lower()
                 in ("true", "1", "yes"),
             }
         )
@@ -1538,31 +1566,31 @@ def load_env_integrations() -> list[dict[str, Any]]:
             )
         )
 
-    opensearch_url = os.getenv("OPENSEARCH_URL", "").strip()
+    opensearch_url = os.getenv(OPENSEARCH_URL_ENV, "").strip()
     if opensearch_url:
         integrations.append(
             _active_env_record(
                 "opensearch",
                 {
                     "url": opensearch_url.rstrip("/"),
-                    "api_key": resolve_env_credential("OPENSEARCH_API_KEY"),
-                    "username": os.getenv("OPENSEARCH_USERNAME", "").strip(),
-                    "password": resolve_env_credential("OPENSEARCH_PASSWORD"),
+                    "api_key": resolve_env_credential(OPENSEARCH_API_KEY_ENV),
+                    "username": os.getenv(OPENSEARCH_USERNAME_ENV, "").strip(),
+                    "password": resolve_env_credential(OPENSEARCH_PASSWORD_ENV),
                     "index_pattern": os.getenv("OPENSEARCH_INDEX_PATTERN", "*").strip() or "*",
                     "max_results": safe_int(os.getenv("OPENSEARCH_MAX_RESULTS", "100"), 100),
                 },
             )
         )
 
-    alertmanager_url = os.getenv("ALERTMANAGER_URL", "").strip().rstrip("/")
+    alertmanager_url = os.getenv(ALERTMANAGER_URL_ENV, "").strip().rstrip("/")
     if alertmanager_url:
         try:
             alertmanager_config = AlertmanagerIntegrationConfig.model_validate(
                 {
                     "base_url": alertmanager_url,
-                    "bearer_token": resolve_env_credential("ALERTMANAGER_BEARER_TOKEN"),
-                    "username": os.getenv("ALERTMANAGER_USERNAME", "").strip(),
-                    "password": resolve_env_credential("ALERTMANAGER_PASSWORD"),
+                    "bearer_token": resolve_env_credential(ALERTMANAGER_BEARER_TOKEN_ENV),
+                    "username": os.getenv(ALERTMANAGER_USERNAME_ENV, "").strip(),
+                    "password": resolve_env_credential(ALERTMANAGER_PASSWORD_ENV),
                 }
             )
             integrations.append(
@@ -1924,8 +1952,8 @@ def resolve_effective_integrations(
     else:
         slack_config = _slack_effective_config(
             webhook_url=os.getenv("SLACK_WEBHOOK_URL", "").strip(),
-            bot_token=resolve_env_credential("SLACK_BOT_TOKEN"),
-            app_token=resolve_env_credential("SLACK_APP_TOKEN"),
+            bot_token=resolve_env_credential(SLACK_BOT_TOKEN_ENV),
+            app_token=resolve_env_credential(SLACK_APP_TOKEN_ENV),
             webhook_label="SLACK_WEBHOOK_URL",
         )
         if slack_config:

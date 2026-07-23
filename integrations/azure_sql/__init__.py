@@ -19,6 +19,16 @@ from typing import Any
 
 from pydantic import Field, field_validator
 
+from config.constants.azure_sql import (
+    AZURE_SQL_DATABASE_ENV,
+    AZURE_SQL_DRIVER_ENV,
+    AZURE_SQL_ENCRYPT_ENV,
+    AZURE_SQL_PASSWORD_ENV,
+    AZURE_SQL_PORT_ENV,
+    AZURE_SQL_SERVER_ENV,
+    AZURE_SQL_USERNAME_ENV,
+)
+from config.llm_credentials import resolve_env_credential
 from config.strict_config import StrictConfigModel
 from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
@@ -93,20 +103,20 @@ def build_azure_sql_config(raw: dict[str, Any] | None) -> AzureSQLConfig:
 
 def azure_sql_config_from_env() -> AzureSQLConfig | None:
     """Load an Azure SQL config from env vars."""
-    server = os.getenv("AZURE_SQL_SERVER", "").strip()
-    database = os.getenv("AZURE_SQL_DATABASE", "").strip()
+    server = os.getenv(AZURE_SQL_SERVER_ENV, "").strip()
+    database = os.getenv(AZURE_SQL_DATABASE_ENV, "").strip()
     if not server or not database:
         return None
-    _port = os.getenv("AZURE_SQL_PORT", "").strip()
+    _port = os.getenv(AZURE_SQL_PORT_ENV, "").strip()
     return build_azure_sql_config(
         {
             "server": server,
             "port": int(_port) if _port.isdigit() else DEFAULT_AZURE_SQL_PORT,
             "database": database,
-            "username": os.getenv("AZURE_SQL_USERNAME", "").strip(),
-            "password": os.getenv("AZURE_SQL_PASSWORD", "").strip(),
-            "driver": os.getenv("AZURE_SQL_DRIVER", DEFAULT_AZURE_SQL_DRIVER).strip(),
-            "encrypt": os.getenv("AZURE_SQL_ENCRYPT", "true").strip().lower()
+            "username": os.getenv(AZURE_SQL_USERNAME_ENV, "").strip(),
+            "password": resolve_env_credential(AZURE_SQL_PASSWORD_ENV) or "",
+            "driver": os.getenv(AZURE_SQL_DRIVER_ENV, DEFAULT_AZURE_SQL_DRIVER).strip(),
+            "encrypt": os.getenv(AZURE_SQL_ENCRYPT_ENV, "true").strip().lower()
             in ("true", "1", "yes"),
         }
     )

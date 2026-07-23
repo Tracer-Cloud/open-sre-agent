@@ -25,12 +25,15 @@ from typing import Any
 
 import pytest
 
+import integrations.alertmanager.setup as alertmanager_setup
+import integrations.azure_sql.setup as azure_sql_setup
 import integrations.betterstack.setup as betterstack_setup
 import integrations.cli as cli
 import integrations.coralogix.setup as coralogix_setup
 import integrations.dagster.setup as dagster_setup
 import integrations.datadog.setup as datadog_setup
 import integrations.gitlab.setup as gitlab_setup
+import integrations.grafana.setup as grafana_setup
 import integrations.groundcover.setup as groundcover_setup
 import integrations.helm.setup as helm_setup
 import integrations.honeycomb.setup as honeycomb_setup
@@ -41,16 +44,19 @@ import integrations.mongodb.setup as mongodb_setup
 import integrations.mongodb_atlas.setup as mongodb_atlas_setup
 import integrations.mysql.setup as mysql_setup
 import integrations.openclaw.setup as openclaw_setup
+import integrations.opensearch.setup as opensearch_setup
 import integrations.pagerduty.setup as pagerduty_setup
 import integrations.postgresql.setup as postgresql_setup
 import integrations.posthog.setup as posthog_setup
 import integrations.posthog_mcp.setup as posthog_mcp_setup
+import integrations.rds.setup as rds_setup
 import integrations.redis.setup as redis_setup
 import integrations.sentry.setup as sentry_setup
 import integrations.sentry_mcp.setup as sentry_mcp_setup
 import integrations.servicenow.setup as servicenow_setup
 import integrations.setup_flow as setup_flow
 import integrations.signoz.setup as signoz_setup
+import integrations.slack.setup as slack_setup
 import integrations.smtp.setup as smtp_setup
 import integrations.tempo.setup as tempo_setup
 import integrations.temporal.setup as temporal_setup
@@ -209,6 +215,43 @@ _ANSWERS: dict[str, dict[str, str]] = {
         "db": "2",
         "ssl": "true",
     },
+    "azure_sql": {
+        "server": "checkout.database.windows.net",
+        "database": "checkout",
+        "port": "1433",
+        "username": "opensre",
+        "password": "azure-sql-password",
+        "driver": "ODBC Driver 18 for SQL Server",
+        "encrypt": "true",
+    },
+    "grafana": {
+        "endpoint": "https://checkout.grafana.net",
+        "api_key": "glsa_grafana_token",
+        "verify_ssl": "true",
+        "ca_bundle": "/etc/ssl/certs/checkout-ca.pem",
+    },
+    "alertmanager": {
+        # Bearer XOR basic — catalog rejects both together.
+        "base_url": "https://alertmanager.checkout.internal",
+        "bearer_token": "am-bearer",
+        "username": "",
+        "password": "",
+    },
+    "opensearch": {
+        "url": "https://opensearch.checkout.internal:9200",
+        "api_key": "os-api-key",
+        "username": "",
+        "password": "",
+    },
+    "rds": {
+        "db_instance_identifier": "checkout-prod",
+        "region": "eu-west-1",
+    },
+    "slack": {
+        "webhook_url": "https://hooks.slack.com/services/T/B/xxx",
+        "bot_token": "xoxb-test-bot-token",
+        "app_token": "xapp-test-app-token",
+    },
 }
 
 # (spec module, spec attribute, CLI handler) — the attribute is patched rather
@@ -247,6 +290,14 @@ _CASES = [
     pytest.param(mariadb_setup, "MARIADB_SETUP", cli._setup_mariadb, id="mariadb"),
     pytest.param(mongodb_setup, "MONGODB_SETUP", cli._setup_mongodb, id="mongodb"),
     pytest.param(redis_setup, "REDIS_SETUP", cli._setup_redis, id="redis"),
+    pytest.param(azure_sql_setup, "AZURE_SQL_SETUP", cli._setup_azure_sql, id="azure_sql"),
+    pytest.param(grafana_setup, "GRAFANA_SETUP", cli._setup_grafana, id="grafana"),
+    pytest.param(
+        alertmanager_setup, "ALERTMANAGER_SETUP", cli._setup_alertmanager, id="alertmanager"
+    ),
+    pytest.param(opensearch_setup, "OPENSEARCH_SETUP", cli._setup_opensearch, id="opensearch"),
+    pytest.param(rds_setup, "RDS_SETUP", cli._setup_rds, id="rds"),
+    pytest.param(slack_setup, "SLACK_SETUP", cli._setup_slack, id="slack"),
 ]
 
 
@@ -293,7 +344,8 @@ def _expected_credentials(
         if field.is_constant:
             credentials[field.name] = field.constant
         else:
-            credentials[field.name] = answers[field.name]
+            # apply_setup stores blank optional answers as None, not "".
+            credentials[field.name] = answers[field.name] or None
     return credentials
 
 

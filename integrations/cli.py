@@ -167,11 +167,9 @@ def _mask(obj: Any) -> Any:
 
 
 def _setup_grafana() -> None:
-    endpoint = _p("Instance URL (e.g. https://myorg.grafana.net)")
-    api_key = _p("Service account token", secret=True)
-    if not endpoint or not api_key:
-        _die("endpoint and api_key are required.")
-    upsert_integration("grafana", {"credentials": {"endpoint": endpoint, "api_key": api_key}})
+    from integrations.grafana.setup import GRAFANA_SETUP
+
+    _run_spec_setup(GRAFANA_SETUP)
 
 
 def _setup_datadog() -> None:
@@ -242,97 +240,15 @@ def _setup_aws() -> None:
 
 
 def _setup_slack() -> None:
-    """Configure Slack delivery webhook and/or Socket Mode gateway tokens.
+    from integrations.slack.setup import SLACK_SETUP
 
-    Mirrors Telegram setup: credentials land in the integration store so
-    ``load_slack_gateway_settings`` and outbound delivery can read them.
-    Existing credentials are merged so re-running setup does not wipe the
-    other mode.
-    """
-    from integrations.store import get_integration
-
-    existing = get_integration("slack") or {}
-    creds = dict(existing.get("credentials") or {})
-
-    mode = _select(
-        "Slack setup:",
-        choices=[
-            questionary.Choice("Incoming webhook (outbound delivery)", value="webhook"),
-            questionary.Choice("Socket Mode bot (two-way gateway chat)", value="socket"),
-            questionary.Choice("Both webhook and Socket Mode", value="both"),
-        ],
-        instruction="(use arrow keys)",
-    )
-    if mode is None:
-        print("\nAborted.")
-        sys.exit(1)
-
-    if mode in {"webhook", "both"}:
-        webhook_url = _p(
-            "Slack webhook URL",
-            secret=True,
-            default=str(creds.get("webhook_url") or ""),
-        )
-        if not webhook_url:
-            _die("webhook_url is required for webhook setup.")
-        creds["webhook_url"] = webhook_url
-
-    if mode in {"socket", "both"}:
-        bot_token = _p(
-            "Slack bot token (xoxb-…)",
-            secret=True,
-            default=str(creds.get("bot_token") or ""),
-        )
-        app_token = _p(
-            "Slack app-level token (xapp-…)",
-            secret=True,
-            default=str(creds.get("app_token") or ""),
-        )
-        if not bot_token or not app_token:
-            _die("bot_token and app_token are required for Socket Mode setup.")
-        if not bot_token.startswith("xoxb-"):
-            _die("bot_token must start with xoxb-")
-        if not app_token.startswith("xapp-"):
-            _die("app_token must start with xapp-")
-        creds["bot_token"] = bot_token
-        creds["app_token"] = app_token
-        print("\n  Next for the gateway:")
-        print("    - opensre messaging allow -p slack -u <U…>")
-        print("    - opensre gateway start")
-
-    upsert_integration("slack", {"credentials": creds})
+    _run_spec_setup(SLACK_SETUP)
 
 
 def _setup_opensearch() -> None:
-    url = _p("URL (e.g. https://my-cluster.us-east-1.es.amazonaws.com)")
-    if not url:
-        _die("url is required.")
-    creds: dict[str, Any] = {"url": url}
-    auth_choice = _select(
-        "OpenSearch authentication method:",
-        choices=[
-            questionary.Choice("Username + Password (HTTP Basic Auth)", value="basic"),
-            questionary.Choice("API key", value="api_key"),
-            questionary.Choice("None (security disabled)", value="none"),
-        ],
-        instruction="(use arrow keys)",
-    )
-    if auth_choice is None:
-        print("\nAborted.")
-        sys.exit(1)
-    if auth_choice == "api_key":
-        api_key = _p("API key", secret=True)
-        if not api_key:
-            _die("api_key is required.")
-        creds["api_key"] = api_key
-    elif auth_choice == "basic":
-        username = _p("Username", default="admin")
-        password = _p("Password", secret=True)
-        if not username or not password:
-            _die("username and password are required for basic auth.")
-        creds["username"] = username
-        creds["password"] = password
-    upsert_integration("opensearch", {"credentials": creds})
+    from integrations.opensearch.setup import OPENSEARCH_SETUP
+
+    _run_spec_setup(OPENSEARCH_SETUP)
 
 
 def _setup_servicenow() -> None:
@@ -342,25 +258,9 @@ def _setup_servicenow() -> None:
 
 
 def _setup_rds() -> None:
-    host = _p("Host (e.g. mydb.xxxx.us-east-1.rds.amazonaws.com)")
-    port = _p("Port", default="5432")
-    database = _p("Database name")
-    username = _p("Username")
-    password = _p("Password", secret=True)
-    if not host or not database or not username:
-        _die("host, database, and username are required.")
-    upsert_integration(
-        "rds",
-        {
-            "credentials": {
-                "host": host,
-                "port": int(port) if port.isdigit() else 5432,
-                "database": database,
-                "username": username,
-                "password": password,
-            }
-        },
-    )
+    from integrations.rds.setup import RDS_SETUP
+
+    _run_spec_setup(RDS_SETUP)
 
 
 def _setup_tracer() -> None:
@@ -837,38 +737,9 @@ def _setup_mariadb() -> None:
 
 
 def _setup_alertmanager() -> None:
-    base_url = _p("Alertmanager URL (e.g. http://alertmanager:9093)")
-    if not base_url:
-        _die("base_url is required.")
+    from integrations.alertmanager.setup import ALERTMANAGER_SETUP
 
-    auth_choice = _select(
-        "Authentication method:",
-        choices=[
-            questionary.Choice("None (unauthenticated / internal network)", value="none"),
-            questionary.Choice("Bearer token (reverse proxy auth)", value="bearer"),
-            questionary.Choice("Basic auth (username + password)", value="basic"),
-        ],
-        instruction="(use arrow keys)",
-    )
-    if auth_choice is None:
-        print("\nAborted.")
-        sys.exit(1)
-
-    credentials: dict[str, Any] = {"base_url": base_url}
-
-    if auth_choice == "bearer":
-        bearer_token = _p("Bearer token", secret=True)
-        if not bearer_token:
-            _die("Bearer token is required for bearer auth.")
-        credentials["bearer_token"] = bearer_token
-    elif auth_choice == "basic":
-        username = _p("Username")
-        if not username:
-            _die("Username is required for basic auth.")
-        credentials["username"] = username
-        credentials["password"] = _p("Password", secret=True)
-
-    upsert_integration("alertmanager", {"credentials": credentials})
+    _run_spec_setup(ALERTMANAGER_SETUP)
 
 
 def _setup_signoz() -> None:
@@ -996,40 +867,9 @@ _HANDLERS["temporal"] = _setup_temporal
 
 
 def _setup_azure_sql() -> None:
-    server = _p("Server (e.g. myserver.database.windows.net)")
-    database = _p("Database name")
-    if not server or not database:
-        _die("server and database are required.")
-    port = _p("Port", default="1433")
-    username = _p("Username")
-    password = _p("Password", secret=True)
-    driver = _p("ODBC driver", default="ODBC Driver 18 for SQL Server")
-    encrypt_choice = _select(
-        "Encrypt connection?",
-        choices=[
-            questionary.Choice("Yes (recommended for Azure)", value="1"),
-            questionary.Choice("No", value="0"),
-        ],
-        instruction="(use arrow keys)",
-    )
-    if encrypt_choice is None:
-        print("\nAborted.")
-        sys.exit(1)
-    encrypt = encrypt_choice == "1"
-    upsert_integration(
-        "azure_sql",
-        {
-            "credentials": {
-                "server": server,
-                "port": _parse_port(port, default=1433),
-                "database": database,
-                "username": username,
-                "password": password,
-                "driver": driver or "ODBC Driver 18 for SQL Server",
-                "encrypt": encrypt,
-            }
-        },
-    )
+    from integrations.azure_sql.setup import AZURE_SQL_SETUP
+
+    _run_spec_setup(AZURE_SQL_SETUP)
 
 
 _HANDLERS["azure_sql"] = _setup_azure_sql

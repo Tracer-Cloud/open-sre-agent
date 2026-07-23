@@ -28,11 +28,14 @@ import pytest
 import integrations.setup_flow as setup_flow
 from config.env_file import env_assignment_key, read_env_lines, sync_env_values
 from integrations._catalog_impl import load_env_integrations, resolve_effective_integrations
+from integrations.alertmanager.setup import ALERTMANAGER_SETUP
+from integrations.azure_sql.setup import AZURE_SQL_SETUP
 from integrations.betterstack.setup import BETTERSTACK_SETUP
 from integrations.coralogix.setup import CORALOGIX_SETUP
 from integrations.dagster.setup import DAGSTER_SETUP
 from integrations.datadog.setup import DATADOG_SETUP
 from integrations.gitlab.setup import GITLAB_SETUP
+from integrations.grafana.setup import GRAFANA_SETUP
 from integrations.groundcover.setup import GROUNDCOVER_SETUP
 from integrations.helm.setup import HELM_SETUP
 from integrations.honeycomb.setup import HONEYCOMB_SETUP
@@ -43,15 +46,18 @@ from integrations.mongodb.setup import MONGODB_SETUP
 from integrations.mongodb_atlas.setup import MONGODB_ATLAS_SETUP
 from integrations.mysql.setup import MYSQL_SETUP
 from integrations.openclaw.setup import OPENCLAW_SETUP
+from integrations.opensearch.setup import OPENSEARCH_SETUP
 from integrations.pagerduty.setup import PAGERDUTY_SETUP
 from integrations.postgresql.setup import POSTGRESQL_SETUP
 from integrations.posthog.setup import POSTHOG_SETUP
 from integrations.posthog_mcp.setup import POSTHOG_MCP_SETUP
+from integrations.rds.setup import RDS_SETUP
 from integrations.redis.setup import REDIS_SETUP
 from integrations.sentry.setup import SENTRY_SETUP
 from integrations.sentry_mcp.setup import SENTRY_MCP_SETUP
 from integrations.servicenow.setup import SERVICENOW_SETUP
 from integrations.signoz.setup import SIGNOZ_SETUP
+from integrations.slack.setup import SLACK_SETUP
 from integrations.smtp.setup import SMTP_SETUP
 from integrations.telegram.setup import TELEGRAM_SETUP
 from integrations.tempo.setup import TEMPO_SETUP
@@ -221,6 +227,44 @@ _SUBMITTED: dict[str, dict[str, str]] = {
         "db": "2",
         "ssl": "true",
     },
+    "azure_sql": {
+        "server": "checkout.database.windows.net",
+        "database": "checkout",
+        "port": "1433",
+        "username": "opensre",
+        "password": "azure-sql-password",
+        "driver": "ODBC Driver 18 for SQL Server",
+        "encrypt": "true",
+    },
+    "grafana": {
+        "endpoint": "https://checkout.grafana.net",
+        "api_key": "glsa_grafana_token",
+        "verify_ssl": "true",
+        "ca_bundle": "/etc/ssl/certs/checkout-ca.pem",
+    },
+    "alertmanager": {
+        # Catalog rejects bearer + basic together; exercise bearer alone.
+        "base_url": "https://alertmanager.checkout.internal",
+        "bearer_token": "am-bearer",
+        "username": "",
+        "password": "",
+    },
+    "opensearch": {
+        "url": "https://opensearch.checkout.internal:9200",
+        "api_key": "os-api-key",
+        "username": "",
+        "password": "",
+    },
+    "rds": {
+        "db_instance_identifier": "checkout-prod",
+        "region": "eu-west-1",
+    },
+    "slack": {
+        # Webhook is store-only (no env_var); Socket Mode tokens round-trip via env.
+        "webhook_url": "",
+        "bot_token": "xoxb-test-token",
+        "app_token": "xapp-test-token",
+    },
 }
 
 # Helm's env-only catalog discovery additionally gates on ``OSRE_HELM_INTEGRATION``
@@ -263,6 +307,12 @@ _SPECS = [
     MARIADB_SETUP,
     MONGODB_SETUP,
     REDIS_SETUP,
+    AZURE_SQL_SETUP,
+    GRAFANA_SETUP,
+    ALERTMANAGER_SETUP,
+    OPENSEARCH_SETUP,
+    RDS_SETUP,
+    SLACK_SETUP,
 ]
 
 
@@ -338,8 +388,11 @@ def _matches_catalog_value(got: Any, expected: str) -> bool:
 
     Ports become ints; bools become True/False; comma/space-separated hints
     become sequences. Neither change is a persistence bug — the names and
-    values still round-trip.
+    values still round-trip. An absent optional credential (``None``) matches
+    a blank submitted value — classifiers often omit empty keys.
     """
+    if got is None:
+        return expected == ""
     if isinstance(got, bool):
         return got is (expected.strip().lower() in ("true", "1", "yes"))
     if isinstance(got, (list, tuple)):
