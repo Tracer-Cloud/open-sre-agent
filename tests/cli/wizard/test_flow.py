@@ -769,8 +769,7 @@ def test_run_wizard_configures_github_mcp_and_sentry(monkeypatch, tmp_path, caps
             "api_key",
             "claude-opus-4-7",
             "github",
-            flow.DEFAULT_GITHUB_MCP_MODE,
-            "token",
+            "token",  # auth method (browser / token / none)
             "auto",
             "any",
             "summary",
@@ -790,6 +789,7 @@ def test_run_wizard_configures_github_mcp_and_sentry(monkeypatch, tmp_path, caps
     )
     saved_integrations: list[tuple[str, dict]] = []
     synced_env_values: list[dict[str, str]] = []
+    synced_env_secrets: list[tuple[str, str]] = []
 
     def _mock_select(*_args, **_kwargs):
         m = MagicMock()
@@ -824,13 +824,16 @@ def test_run_wizard_configures_github_mcp_and_sentry(monkeypatch, tmp_path, caps
         synced_env_values.append(values)
         return tmp_path / ".env"
 
+    # Persist goes through apply_setup → setup_flow writers (not the old
+    # configurator-local sync_env_values / upsert_integration imports).
+    monkeypatch.setattr(_setup_flow, "sync_env_values", _sync_env_values)
     monkeypatch.setattr(
-        _github_configurator,
-        "sync_env_values",
-        _sync_env_values,
+        _setup_flow,
+        "sync_env_secret",
+        lambda key, value: synced_env_secrets.append((key, value)),
     )
     monkeypatch.setattr(
-        _github_configurator,
+        _setup_flow,
         "upsert_integration",
         lambda service, payload: saved_integrations.append((service, payload)),
     )
@@ -843,22 +846,20 @@ def test_run_wizard_configures_github_mcp_and_sentry(monkeypatch, tmp_path, caps
             "github",
             {
                 "credentials": {
-                    "url": flow.DEFAULT_GITHUB_MCP_URL,
                     "mode": flow.DEFAULT_GITHUB_MCP_MODE,
+                    "url": flow.DEFAULT_GITHUB_MCP_URL,
                     "auth_token": "ghp_test",
-                    "command": "",
-                    "args": [],
-                    "toolsets": ["repos", "issues", "pull_requests", "actions", "search"],
+                    "toolsets": "repos,issues,pull_requests,actions,search",
+                    "username": None,
                 }
             },
         ),
     ]
+    assert synced_env_secrets == [("GITHUB_MCP_AUTH_TOKEN", "ghp_test")]
     assert synced_env_values == [
         {
-            "GITHUB_MCP_URL": flow.DEFAULT_GITHUB_MCP_URL,
             "GITHUB_MCP_MODE": flow.DEFAULT_GITHUB_MCP_MODE,
-            "GITHUB_MCP_COMMAND": "",
-            "GITHUB_MCP_ARGS": "",
+            "GITHUB_MCP_URL": flow.DEFAULT_GITHUB_MCP_URL,
             "GITHUB_MCP_TOOLSETS": "repos,issues,pull_requests,actions,search",
         },
     ]
