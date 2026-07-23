@@ -1,8 +1,9 @@
 """What OpenSearch needs before it is considered configured.
 
 Auth used to be a branching select (basic / api_key / none). Every auth field is
-independently optional — same shape as Tempo — and the presence/probe path is
-what rejects a broken combination.
+independently optional — same shape as Tempo — but half-filled basic auth is
+rejected early: a username without a password (or the reverse) would otherwise
+persist and send unauthenticated requests against a secured cluster.
 """
 
 from __future__ import annotations
@@ -20,6 +21,16 @@ URL_FIELD = "url"
 API_KEY_FIELD = "api_key"
 USERNAME_FIELD = "username"
 PASSWORD_FIELD = "password"
+
+
+def _reject_incomplete_basic(credentials: dict[str, str | None]) -> str:
+    """Require both basic-auth halves, or neither."""
+    user = credentials.get(USERNAME_FIELD)
+    password = credentials.get(PASSWORD_FIELD)
+    if bool(user) != bool(password):
+        return "Provide both username and password for basic auth, or leave both blank."
+    return ""
+
 
 OPENSEARCH_SETUP = IntegrationSetupSpec(
     service="opensearch",
@@ -54,6 +65,7 @@ OPENSEARCH_SETUP = IntegrationSetupSpec(
             required=False,
         ),
     ),
+    validate=_reject_incomplete_basic,
     verify=verify_opensearch,
 )
 

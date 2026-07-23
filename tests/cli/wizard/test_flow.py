@@ -215,6 +215,7 @@ def test_run_wizard_configures_optional_integrations(monkeypatch, tmp_path, caps
     select_responses = iter(["quickstart", "anthropic", "api_key", "claude-opus-4-7", "grafana"])
     saved_integrations: list[tuple[str, dict]] = []
     synced_env_values: list[dict[str, str]] = []
+    synced_env_secrets: list[tuple[str, str]] = []
 
     def _mock_select(*_args, **_kwargs):
         m = MagicMock()
@@ -227,7 +228,8 @@ def test_run_wizard_configures_optional_integrations(monkeypatch, tmp_path, caps
             "grafana-token",
         ]
     )
-    text_responses = iter(["https://grafana.example.com", ""])
+    # endpoint, verify_ssl (Enter → default "true"), ca_bundle (blank)
+    text_responses = iter(["https://grafana.example.com", "", ""])
 
     def _mock_password(*_args, **_kwargs):
         m = MagicMock()
@@ -239,26 +241,18 @@ def test_run_wizard_configures_optional_integrations(monkeypatch, tmp_path, caps
         m.ask.return_value = next(text_responses)
         return m
 
-    def _mock_confirm(*_args, **_kwargs):
-        m = MagicMock()
-        m.ask.return_value = True
-        return m
-
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
     monkeypatch.setattr(flow.questionary, "text", _mock_text)
-    monkeypatch.setattr(flow.questionary, "confirm", _mock_confirm)
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(
         _observability_configurator,
-        "validate_grafana_integration",
-        lambda **_kwargs: flow.IntegrationHealthResult(ok=True, detail="Grafana ok"),
-    )
-    monkeypatch.setattr(
-        _chat_notifications_configurator,
-        "validate_slack_webhook",
-        lambda **_kwargs: flow.IntegrationHealthResult(ok=True, detail="Slack ok"),
+        "GRAFANA_SETUP",
+        dataclasses.replace(
+            _observability_configurator.GRAFANA_SETUP,
+            verify=lambda _source, _config: {"status": "passed", "detail": "Grafana ok"},
+        ),
     )
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
@@ -268,9 +262,12 @@ def test_run_wizard_configures_optional_integrations(monkeypatch, tmp_path, caps
         synced_env_values.append(values)
         return tmp_path / ".env"
 
-    monkeypatch.setattr(_observability_configurator, "sync_env_values", _sync_env_values)
+    monkeypatch.setattr(_setup_flow, "sync_env_values", _sync_env_values)
     monkeypatch.setattr(
-        _observability_configurator,
+        _setup_flow, "sync_env_secret", lambda key, value: synced_env_secrets.append((key, value))
+    )
+    monkeypatch.setattr(
+        _setup_flow,
         "upsert_integration",
         lambda service, payload: saved_integrations.append((service, payload)),
     )
@@ -285,16 +282,18 @@ def test_run_wizard_configures_optional_integrations(monkeypatch, tmp_path, caps
                 "credentials": {
                     "endpoint": "https://grafana.example.com",
                     "api_key": "grafana-token",
-                    "verify_ssl": True,
-                    "ca_bundle": "",
+                    "verify_ssl": "true",
+                    "ca_bundle": None,
                 }
             },
         )
     ]
+    assert synced_env_secrets == [("GRAFANA_READ_TOKEN", "grafana-token")]
     assert synced_env_values == [
         {
             "GRAFANA_INSTANCE_URL": "https://grafana.example.com",
             "GRAFANA_VERIFY_SSL": "true",
+            "GRAFANA_CA_BUNDLE": "",
         },
     ]
     output = capsys.readouterr().out
@@ -600,13 +599,14 @@ def test_run_wizard_configures_slack_persists_webhook(monkeypatch, tmp_path) -> 
     readable afterwards). The webhook is a secret, so it belongs in the store,
     not `.env` — `sync_env_values` is called with an empty mapping.
     """
-    select_responses = iter(
-        ["quickstart", "anthropic", "api_key", "claude-opus-4-7", "slack", "webhook"]
+    select_responses = iter(["quickstart", "anthropic", "api_key", "claude-opus-4-7", "slack"])
+    # webhook_url, bot_token, app_token are all secret prompts.
+    password_responses = iter(
+        ["llm-secret", "https://hooks.slack.com/services/T0/B0/XXXXX", "", ""]
     )
-    # webhook_url is prompted with secret=True, so it comes from the password mock.
-    password_responses = iter(["llm-secret", "https://hooks.slack.com/services/T0/B0/XXXXX"])
     saved_integrations: list[tuple[str, dict]] = []
     synced_env_values: list[dict[str, str]] = []
+    synced_env_secrets: list[tuple[str, str]] = []
 
     def _mock_select(*_args, **_kwargs):
         m = MagicMock()
@@ -619,7 +619,6 @@ def test_run_wizard_configures_slack_persists_webhook(monkeypatch, tmp_path) -> 
         return m
 
     def _mock_text(*_args, **_kwargs):
-        # Slack has no plain-text prompt; guard against an unexpected one.
         m = MagicMock()
         m.ask.return_value = ""
         return m
@@ -631,8 +630,11 @@ def test_run_wizard_configures_slack_persists_webhook(monkeypatch, tmp_path) -> 
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(
         _chat_notifications_configurator,
-        "validate_slack_webhook",
-        lambda **_kwargs: flow.IntegrationHealthResult(ok=True, detail="Slack ok"),
+        "SLACK_SETUP",
+        dataclasses.replace(
+            _chat_notifications_configurator.SLACK_SETUP,
+            verify=lambda _source, _config: {"status": "passed", "detail": "Slack ok"},
+        ),
     )
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
@@ -642,9 +644,12 @@ def test_run_wizard_configures_slack_persists_webhook(monkeypatch, tmp_path) -> 
         synced_env_values.append(values)
         return tmp_path / ".env"
 
-    monkeypatch.setattr(_chat_notifications_configurator, "sync_env_values", _sync_env_values)
+    monkeypatch.setattr(_setup_flow, "sync_env_values", _sync_env_values)
     monkeypatch.setattr(
-        _chat_notifications_configurator,
+        _setup_flow, "sync_env_secret", lambda key, value: synced_env_secrets.append((key, value))
+    )
+    monkeypatch.setattr(
+        _setup_flow,
         "upsert_integration",
         lambda service, payload: saved_integrations.append((service, payload)),
     )
@@ -655,11 +660,18 @@ def test_run_wizard_configures_slack_persists_webhook(monkeypatch, tmp_path) -> 
     assert saved_integrations == [
         (
             "slack",
-            {"credentials": {"webhook_url": "https://hooks.slack.com/services/T0/B0/XXXXX"}},
+            {
+                "credentials": {
+                    "webhook_url": "https://hooks.slack.com/services/T0/B0/XXXXX",
+                    "bot_token": None,
+                    "app_token": None,
+                }
+            },
         )
     ]
-    # Webhook is a secret: it goes to the store, not `.env`.
+    # Webhook is store-only; blank Socket Mode tokens still clear keyring slots.
     assert synced_env_values == [{}]
+    assert synced_env_secrets == [("SLACK_BOT_TOKEN", ""), ("SLACK_APP_TOKEN", "")]
 
 
 def test_run_wizard_dagster_retries_on_validation_failure(monkeypatch, tmp_path) -> None:
@@ -1946,11 +1958,10 @@ def test_run_wizard_switches_provider_and_keeps_store_and_env_in_sync(
 
 
 def test_run_wizard_configures_opensearch(monkeypatch, tmp_path) -> None:
-    """Happy path: user picks opensearch, enters URL + basic auth, all gets persisted."""
-    select_responses = iter(
-        ["quickstart", "anthropic", "api_key", "claude-opus-4-7", "opensearch", "basic"]
-    )
-    password_responses = iter(["llm-secret", "secret-pass"])
+    """Happy path: URL + basic auth (blank API key) persists through apply_setup."""
+    select_responses = iter(["quickstart", "anthropic", "api_key", "claude-opus-4-7", "opensearch"])
+    # api_key (secret, blank) then password
+    password_responses = iter(["llm-secret", "", "secret-pass"])
     text_responses = iter(["https://my-cluster.example.com", "admin"])
     saved_integrations: list[tuple[str, dict]] = []
     synced_env_values: list[dict[str, str]] = []
@@ -1978,8 +1989,11 @@ def test_run_wizard_configures_opensearch(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(
         _observability_configurator,
-        "validate_opensearch_integration",
-        lambda **_kwargs: flow.IntegrationHealthResult(ok=True, detail="OpenSearch ok"),
+        "OPENSEARCH_SETUP",
+        dataclasses.replace(
+            _observability_configurator.OPENSEARCH_SETUP,
+            verify=lambda _source, _config: {"status": "passed", "detail": "OpenSearch ok"},
+        ),
     )
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
@@ -1989,13 +2003,12 @@ def test_run_wizard_configures_opensearch(monkeypatch, tmp_path) -> None:
         synced_env_values.append(values)
         return tmp_path / ".env"
 
-    def _sync_env_secret(key: str, value: str) -> None:
-        synced_env_secrets.append((key, value))
-
-    monkeypatch.setattr(_observability_configurator, "sync_env_values", _sync_env_values)
-    monkeypatch.setattr(_observability_configurator, "sync_env_secret", _sync_env_secret)
+    monkeypatch.setattr(_setup_flow, "sync_env_values", _sync_env_values)
     monkeypatch.setattr(
-        _observability_configurator,
+        _setup_flow, "sync_env_secret", lambda key, value: synced_env_secrets.append((key, value))
+    )
+    monkeypatch.setattr(
+        _setup_flow,
         "upsert_integration",
         lambda service, payload: saved_integrations.append((service, payload)),
     )
@@ -2014,13 +2027,17 @@ def test_run_wizard_configures_opensearch(monkeypatch, tmp_path) -> None:
             {
                 "credentials": {
                     "url": "https://my-cluster.example.com",
+                    "api_key": None,
                     "username": "admin",
                     "password": "secret-pass",
                 }
             },
         )
     ]
-    assert synced_env_secrets == [("OPENSEARCH_PASSWORD", "secret-pass")]
+    assert synced_env_secrets == [
+        ("OPENSEARCH_API_KEY", ""),
+        ("OPENSEARCH_PASSWORD", "secret-pass"),
+    ]
     assert synced_env_values == [
         {
             "OPENSEARCH_URL": "https://my-cluster.example.com",
@@ -2030,11 +2047,9 @@ def test_run_wizard_configures_opensearch(monkeypatch, tmp_path) -> None:
 
 
 def test_run_wizard_opensearch_retries_on_validation_failure(monkeypatch, tmp_path) -> None:
-    """When OpenSearch validation fails the first time, the wizard retries and succeeds."""
-    select_responses = iter(
-        ["quickstart", "anthropic", "api_key", "claude-opus-4-7", "opensearch", "basic", "basic"]
-    )
-    password_responses = iter(["llm-secret", "wrong-pass", "correct-pass"])
+    """When OpenSearch verification fails the first time, the wizard retries and succeeds."""
+    select_responses = iter(["quickstart", "anthropic", "api_key", "claude-opus-4-7", "opensearch"])
+    password_responses = iter(["llm-secret", "", "wrong-pass", "", "correct-pass"])
     text_responses = iter(
         [
             "https://my-cluster.example.com",
@@ -2045,7 +2060,7 @@ def test_run_wizard_opensearch_retries_on_validation_failure(monkeypatch, tmp_pa
     )
     saved_integrations: list[tuple[str, dict]] = []
     synced_env_values: list[dict[str, str]] = []
-    validation_call_count = 0
+    verification_call_count = 0
 
     def _mock_select(*_args, **_kwargs):
         m = MagicMock()
@@ -2062,12 +2077,12 @@ def test_run_wizard_opensearch_retries_on_validation_failure(monkeypatch, tmp_pa
         m.ask.return_value = next(text_responses)
         return m
 
-    def _validate_opensearch(**_kwargs):
-        nonlocal validation_call_count
-        validation_call_count += 1
-        if validation_call_count == 1:
-            return flow.IntegrationHealthResult(ok=False, detail="HTTP 401: unauthorized")
-        return flow.IntegrationHealthResult(ok=True, detail="OpenSearch ok")
+    def _verify_opensearch(_source, _config):
+        nonlocal verification_call_count
+        verification_call_count += 1
+        if verification_call_count == 1:
+            return {"status": "failed", "detail": "HTTP 401: unauthorized"}
+        return {"status": "passed", "detail": "OpenSearch ok"}
 
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
@@ -2075,22 +2090,24 @@ def test_run_wizard_opensearch_retries_on_validation_failure(monkeypatch, tmp_pa
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(
-        _observability_configurator, "validate_opensearch_integration", _validate_opensearch
+        _observability_configurator,
+        "OPENSEARCH_SETUP",
+        dataclasses.replace(
+            _observability_configurator.OPENSEARCH_SETUP, verify=_verify_opensearch
+        ),
     )
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
     monkeypatch.setattr(_ui, "save_keyring_secret", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(
-        _observability_configurator, "sync_env_secret", lambda *_args, **_kwargs: None
-    )
+    monkeypatch.setattr(_setup_flow, "sync_env_secret", lambda *_args, **_kwargs: None)
 
     def _sync_env_values(values: dict[str, str], **_kwargs):
         synced_env_values.append(values)
         return tmp_path / ".env"
 
-    monkeypatch.setattr(_observability_configurator, "sync_env_values", _sync_env_values)
+    monkeypatch.setattr(_setup_flow, "sync_env_values", _sync_env_values)
     monkeypatch.setattr(
-        _observability_configurator,
+        _setup_flow,
         "upsert_integration",
         lambda service, payload: saved_integrations.append((service, payload)),
     )
@@ -2103,13 +2120,14 @@ def test_run_wizard_opensearch_retries_on_validation_failure(monkeypatch, tmp_pa
     exit_code = flow.run_wizard()
 
     assert exit_code == 0
-    assert validation_call_count == 2
+    assert verification_call_count == 2
     assert saved_integrations == [
         (
             "opensearch",
             {
                 "credentials": {
                     "url": "https://my-cluster.example.com",
+                    "api_key": None,
                     "username": "admin",
                     "password": "correct-pass",
                 }
@@ -2118,41 +2136,18 @@ def test_run_wizard_opensearch_retries_on_validation_failure(monkeypatch, tmp_pa
     ]
 
 
-def test_run_wizard_opensearch_rejects_empty_api_key(monkeypatch, tmp_path) -> None:
-    """When user picks api_key auth but enters an empty key, the wizard rejects it.
+def test_run_wizard_opensearch_allows_url_only_when_auth_blank(monkeypatch, tmp_path) -> None:
+    """Blank API key and blank basic auth is intentional (no-auth / gateway).
 
-    Regression for the silent-credential-drop bug: on a cluster with security
-    disabled the validator probe would return 200, result.ok would be True,
-    and the integration would persist as URL-only — discarding the user's
-    chosen auth method without any visible error.
-
-    The wizard now guards against empty api_key explicitly (before the probe
-    runs) and re-prompts with a clear error message. Verified by checking
-    that validation is only called once the user supplies a non-empty key.
+    The pre-spec wizard used an auth-mode select and rejected an empty API key
+    when that mode was chosen. Flat optional fields treat blank auth as
+    URL-only configuration — same shape as Tempo.
     """
-    # User picks: opensearch -> api_key auth -> (rejected, empty) -> api_key auth retry
-    select_responses = iter(
-        [
-            "quickstart",
-            "anthropic",
-            "api_key",
-            "claude-opus-4-7",
-            "opensearch",
-            "api_key",
-            "api_key",
-        ]
-    )
-    # First api_key prompt: empty (rejected). Second: valid key.
-    password_responses = iter(["llm-secret", "", "valid-api-key"])
-    text_responses = iter(
-        [
-            "https://my-cluster.example.com",
-            "https://my-cluster.example.com",
-        ]
-    )
+    select_responses = iter(["quickstart", "anthropic", "api_key", "claude-opus-4-7", "opensearch"])
+    password_responses = iter(["llm-secret", "", ""])
+    text_responses = iter(["https://my-cluster.example.com", ""])
     saved_integrations: list[tuple[str, dict]] = []
-    synced_env_values: list[dict[str, str]] = []
-    validation_call_count = 0
+    verification_call_count = 0
 
     def _mock_select(*_args, **_kwargs):
         m = MagicMock()
@@ -2169,10 +2164,10 @@ def test_run_wizard_opensearch_rejects_empty_api_key(monkeypatch, tmp_path) -> N
         m.ask.return_value = next(text_responses)
         return m
 
-    def _validate_opensearch(**_kwargs):
-        nonlocal validation_call_count
-        validation_call_count += 1
-        return flow.IntegrationHealthResult(ok=True, detail="OpenSearch ok")
+    def _verify_opensearch(_source, _config):
+        nonlocal verification_call_count
+        verification_call_count += 1
+        return {"status": "passed", "detail": "OpenSearch ok"}
 
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
@@ -2180,22 +2175,19 @@ def test_run_wizard_opensearch_rejects_empty_api_key(monkeypatch, tmp_path) -> N
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(
-        _observability_configurator, "validate_opensearch_integration", _validate_opensearch
+        _observability_configurator,
+        "OPENSEARCH_SETUP",
+        dataclasses.replace(
+            _observability_configurator.OPENSEARCH_SETUP, verify=_verify_opensearch
+        ),
     )
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
     monkeypatch.setattr(_ui, "save_keyring_secret", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(_setup_flow, "sync_env_secret", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(_setup_flow, "sync_env_values", lambda *_a, **_kw: tmp_path / ".env")
     monkeypatch.setattr(
-        _observability_configurator, "sync_env_secret", lambda *_args, **_kwargs: None
-    )
-
-    def _sync_env_values(values: dict[str, str], **_kwargs):
-        synced_env_values.append(values)
-        return tmp_path / ".env"
-
-    monkeypatch.setattr(_observability_configurator, "sync_env_values", _sync_env_values)
-    monkeypatch.setattr(
-        _observability_configurator,
+        _setup_flow,
         "upsert_integration",
         lambda service, payload: saved_integrations.append((service, payload)),
     )
@@ -2208,16 +2200,16 @@ def test_run_wizard_opensearch_rejects_empty_api_key(monkeypatch, tmp_path) -> N
     exit_code = flow.run_wizard()
 
     assert exit_code == 0
-    # Validator should only be called once — after the user supplies a real key.
-    # The empty-key attempt must be blocked before reaching the probe.
-    assert validation_call_count == 1
+    assert verification_call_count == 1
     assert saved_integrations == [
         (
             "opensearch",
             {
                 "credentials": {
                     "url": "https://my-cluster.example.com",
-                    "api_key": "valid-api-key",
+                    "api_key": None,
+                    "username": None,
+                    "password": None,
                 }
             },
         )
@@ -2225,23 +2217,16 @@ def test_run_wizard_opensearch_rejects_empty_api_key(monkeypatch, tmp_path) -> N
 
 
 def test_run_wizard_opensearch_rejects_empty_basic_password(monkeypatch, tmp_path) -> None:
-    """When user picks basic auth but leaves password empty, the wizard rejects it.
+    """Username without password is rejected by validate before the probe.
 
-    Companion regression for the half-credential bug: ElasticsearchConfig.headers
-    silently drops the Authorization header when either half of Basic Auth is
-    empty, so the agent would send unauthenticated requests against a
-    security-enabled cluster and fail with a confusing 401.
-
-    The wizard now guards against half-populated Basic Auth before the probe
-    runs and re-prompts with a clear error message. Verified by checking that
-    validation is only called once the user supplies both halves.
+    Companion regression for the half-credential bug: a username alone would
+    persist and omit Authorization at runtime. Spec validate requires both
+    basic-auth halves (or neither).
     """
-    # User picks: opensearch -> basic auth -> (rejected, empty pass) -> basic auth retry
-    select_responses = iter(
-        ["quickstart", "anthropic", "api_key", "claude-opus-4-7", "opensearch", "basic", "basic"]
-    )
-    # First password prompt: empty (rejected). Second attempt: valid password.
-    password_responses = iter(["llm-secret", "", "real-pass"])
+    select_responses = iter(["quickstart", "anthropic", "api_key", "claude-opus-4-7", "opensearch"])
+    # First attempt: blank api_key, username, empty password → validate fails.
+    # Retry: blank api_key, username, real password → verify once.
+    password_responses = iter(["llm-secret", "", "", "", "real-pass"])
     text_responses = iter(
         [
             "https://my-cluster.example.com",
@@ -2251,8 +2236,7 @@ def test_run_wizard_opensearch_rejects_empty_basic_password(monkeypatch, tmp_pat
         ]
     )
     saved_integrations: list[tuple[str, dict]] = []
-    synced_env_values: list[dict[str, str]] = []
-    validation_call_count = 0
+    verification_call_count = 0
 
     def _mock_select(*_args, **_kwargs):
         m = MagicMock()
@@ -2269,10 +2253,10 @@ def test_run_wizard_opensearch_rejects_empty_basic_password(monkeypatch, tmp_pat
         m.ask.return_value = next(text_responses)
         return m
 
-    def _validate_opensearch(**_kwargs):
-        nonlocal validation_call_count
-        validation_call_count += 1
-        return flow.IntegrationHealthResult(ok=True, detail="OpenSearch ok")
+    def _verify_opensearch(_source, _config):
+        nonlocal verification_call_count
+        verification_call_count += 1
+        return {"status": "passed", "detail": "OpenSearch ok"}
 
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
@@ -2280,22 +2264,19 @@ def test_run_wizard_opensearch_rejects_empty_basic_password(monkeypatch, tmp_pat
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(
-        _observability_configurator, "validate_opensearch_integration", _validate_opensearch
+        _observability_configurator,
+        "OPENSEARCH_SETUP",
+        dataclasses.replace(
+            _observability_configurator.OPENSEARCH_SETUP, verify=_verify_opensearch
+        ),
     )
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
     monkeypatch.setattr(_ui, "save_keyring_secret", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(_setup_flow, "sync_env_secret", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(_setup_flow, "sync_env_values", lambda *_a, **_kw: tmp_path / ".env")
     monkeypatch.setattr(
-        _observability_configurator, "sync_env_secret", lambda *_args, **_kwargs: None
-    )
-
-    def _sync_env_values(values: dict[str, str], **_kwargs):
-        synced_env_values.append(values)
-        return tmp_path / ".env"
-
-    monkeypatch.setattr(_observability_configurator, "sync_env_values", _sync_env_values)
-    monkeypatch.setattr(
-        _observability_configurator,
+        _setup_flow,
         "upsert_integration",
         lambda service, payload: saved_integrations.append((service, payload)),
     )
@@ -2308,15 +2289,15 @@ def test_run_wizard_opensearch_rejects_empty_basic_password(monkeypatch, tmp_pat
     exit_code = flow.run_wizard()
 
     assert exit_code == 0
-    # Validator should only be called once — after the user supplies both halves.
-    # The empty-password attempt must be blocked before reaching the probe.
-    assert validation_call_count == 1
+    # First attempt fails validate (no verify); second attempt verifies once.
+    assert verification_call_count == 1
     assert saved_integrations == [
         (
             "opensearch",
             {
                 "credentials": {
                     "url": "https://my-cluster.example.com",
+                    "api_key": None,
                     "username": "admin",
                     "password": "real-pass",
                 }
