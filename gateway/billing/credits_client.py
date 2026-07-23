@@ -2,7 +2,7 @@
 
 Contract:
   POST {OPENSRE_WEBAPP_URL}/api/credits/consume
-  Authorization: Bearer {AGENT_USAGE_SECRET}
+  Authorization: Bearer <machine token, or the shared secret>
   body: {"amount": <number>, "organizationId": <org>, "reason": <str>}
   Success (2xx): {"balance", "consumed", "reason"}.
   Shortfall: HTTP 402 with {"error": "insufficient_credits", "balance", "required"}.

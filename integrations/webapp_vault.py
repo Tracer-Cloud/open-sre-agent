@@ -2,11 +2,13 @@
 
 Contract mirrors credits metering:
   GET {OPENSRE_WEBAPP_URL}/api/agent/integrations?organizationId=…
-  Authorization: Bearer {mt_… from CLERK_MACHINE_SECRET_KEY}
+  Authorization: Bearer <machine token>
   Success: {"success": true, "data": [{id, service, status, name, credentials}, …]}
 
-This route accepts an M2M token only. The shared secret cannot prove which
-tenant is asking, so a request carrying it gets 401.
+This route accepts an org-scoped machine token only. The shared secret cannot
+prove which tenant is asking, so a request carrying it gets 401. The machine
+secret itself is never sent here — it is exchanged with Clerk for the token
+this header carries.
 
 Used by the gateway when resolving integrations for Slack/Telegram turns so
 org-admins can connect GitHub (etc.) in the webapp without SSM per secret.

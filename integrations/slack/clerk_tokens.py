@@ -7,7 +7,7 @@ in-process until shortly before expiry — minting is on the hot path (every
 metered turn / vault fetch), so the token is reused across calls.
 
   POST {CLERK_API_BASE_URL}/v1/m2m_tokens
-  Authorization: Bearer {machine secret key}
+  Authorization: Bearer <machine secret key>
   body: {"token_format": "opaque", "seconds_until_expiration": <ttl>}
   → {"token": "mt_…", "expiration": <unix ms> | "expires_in": <sec>, "subject": "mch_…"}
 
