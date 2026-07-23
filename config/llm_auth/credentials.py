@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal
 
@@ -48,6 +49,14 @@ class CredentialStatus:
 
 
 @dataclass(frozen=True)
+class _AmbientProbeResult:
+    """Outcome of an actual (not env-presence-only) ambient credential check."""
+
+    ok: bool
+    detail: str
+
+
+@dataclass(frozen=True)
 class CredentialResolution:
     """Request-time credential resolution for one provider."""
 
@@ -84,6 +93,58 @@ def _normalize_source(raw: str | None, *, fallback: CredentialSource) -> Credent
 
 def _env_value(env_var: str) -> str:
     return os.getenv(env_var, "").strip()
+
+
+def _probe_vertex_ai_ambient(spec: ProviderSpec) -> _AmbientProbeResult:
+    """Attempt real Google ADC resolution; env vars alone do not prove ADC works."""
+    import google.auth
+    from google.auth.exceptions import DefaultCredentialsError
+
+    project_hint = _env_value(spec.project_env) if spec.project_env else ""
+    location = _env_value(spec.location_env) if spec.location_env else ""
+    location_detail = f", location {location}" if location else ""
+
+    try:
+        _credentials, discovered_project = google.auth.default()
+    except DefaultCredentialsError as exc:
+        return _AmbientProbeResult(
+            ok=False,
+            detail=(
+                f"Google Application Default Credentials are not configured ({exc}). "
+                "Run `gcloud auth application-default login` or set "
+                "GOOGLE_APPLICATION_CREDENTIALS."
+            ),
+        )
+    except Exception as exc:
+        return _AmbientProbeResult(
+            ok=False,
+            detail=f"Could not resolve Google Application Default Credentials: {exc}",
+        )
+
+    project = project_hint or discovered_project or "auto-discovered"
+    return _AmbientProbeResult(
+        ok=True,
+        detail=(
+            f"Google Application Default Credentials resolved (project {project}"
+            f"{location_detail}); {spec.label} uses ADC."
+        ),
+    )
+
+
+def _probe_bedrock_ambient(spec: ProviderSpec) -> _AmbientProbeResult:
+    region = os.getenv("AWS_REGION", "").strip() or os.getenv("AWS_DEFAULT_REGION", "").strip()
+    if not region:
+        return _AmbientProbeResult(detail="AWS_REGION or AWS_DEFAULT_REGION is not set.", ok=False)
+    return _AmbientProbeResult(
+        ok=True,
+        detail=f"AWS region is configured ({region}); {spec.label} uses the AWS credential chain.",
+    )
+
+
+_AMBIENT_PROBES: dict[str, Callable[[ProviderSpec], _AmbientProbeResult]] = {
+    "vertex-ai": _probe_vertex_ai_ambient,
+    "bedrock": _probe_bedrock_ambient,
+}
 
 
 def _source_status(provider: str, source: CredentialSource, detail: str) -> CredentialStatus:
@@ -200,35 +261,34 @@ def status(provider: str) -> CredentialStatus:
         )
 
     if spec.credential_kind == "ambient":
-        if spec.project_env:
-            project = _env_value(spec.project_env)
-            location = _env_value(spec.location_env) if spec.location_env else ""
-            location_detail = f", location {location}" if location else ""
+        ambient_probe = _AMBIENT_PROBES.get(spec.value)
+        if ambient_probe is None:
             return CredentialStatus(
-                provider=spec.value,
-                configured=bool(project),
-                source="ambient" if project else "none",
-                verified=bool(project),
-                stale=False,
-                detail=(
-                    f"{spec.project_env} is configured ({project}{location_detail}); "
-                    f"{spec.label} uses Google Application Default Credentials."
-                    if project
-                    else f"{spec.project_env} is not set."
-                ),
+                spec.value,
+                False,
+                "unknown",
+                False,
+                False,
+                "No ambient credential probe registered.",
             )
-        region = os.getenv("AWS_REGION", "").strip() or os.getenv("AWS_DEFAULT_REGION", "").strip()
+        try:
+            result = ambient_probe(spec)
+        except Exception as exc:
+            return CredentialStatus(
+                spec.value,
+                False,
+                "unknown",
+                False,
+                False,
+                f"{spec.label} ambient credential check failed unexpectedly: {exc}",
+            )
         return CredentialStatus(
             provider=spec.value,
-            configured=bool(region),
-            source="ambient" if region else "none",
-            verified=bool(region),
+            configured=result.ok,
+            source="ambient" if result.ok else "none",
+            verified=result.ok,
             stale=False,
-            detail=(
-                f"AWS region is configured ({region}); Bedrock uses the AWS credential chain."
-                if region
-                else "AWS_REGION or AWS_DEFAULT_REGION is not set."
-            ),
+            detail=result.detail,
         )
 
     if spec.credential_kind == "local":
