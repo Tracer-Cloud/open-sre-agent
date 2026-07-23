@@ -25,5 +25,5 @@ CREDITS_HTTP_TIMEOUT_SECONDS: Final[float] = 5.0
 
 # Minted M2M tokens are short-lived and cached in-process; refresh slightly
 # before expiry so a token can't lapse mid-request.
-M2M_TOKEN_TTL_SECONDS: Final[int] = 3600
-M2M_TOKEN_REFRESH_MARGIN_SECONDS: Final[int] = 60
+MACHINE_TOKEN_TTL_SECONDS: Final[int] = 3600
+MACHINE_TOKEN_REFRESH_MARGIN_SECONDS: Final[int] = 60

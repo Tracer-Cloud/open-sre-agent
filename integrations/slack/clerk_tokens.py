@@ -33,9 +33,9 @@ from config.constants.billing import (
     CLERK_API_BASE_URL_DEFAULT,
     CLERK_API_BASE_URL_ENV,
     CREDITS_HTTP_TIMEOUT_SECONDS,
-    M2M_TOKEN_REFRESH_MARGIN_SECONDS,
-    M2M_TOKEN_TTL_SECONDS,
     MACHINE_SECRET_ENV,
+    MACHINE_TOKEN_REFRESH_MARGIN_SECONDS,
+    MACHINE_TOKEN_TTL_SECONDS,
 )
 
 logger = logging.getLogger(__name__)
@@ -61,7 +61,7 @@ class _TokenCache:
         return bool(
             self.token
             and self.secret == secret
-            and time.time() < self.expiry_epoch - M2M_TOKEN_REFRESH_MARGIN_SECONDS
+            and time.time() < self.expiry_epoch - MACHINE_TOKEN_REFRESH_MARGIN_SECONDS
         )
 
     def replace(self, *, token: str, expiry_epoch: float, secret: str) -> None:
@@ -79,11 +79,11 @@ _lock = threading.Lock()
 _cache = _TokenCache()
 
 
-def _base_url() -> str:
+def _clerk_base_url() -> str:
     return (os.getenv(CLERK_API_BASE_URL_ENV) or CLERK_API_BASE_URL_DEFAULT).rstrip("/")
 
 
-def mint_agent_m2m_token(*, force_refresh: bool = False) -> str:
+def webapp_access_token(*, force_refresh: bool = False) -> str:
     """Return a valid `mt_` token for this silo, minting/refreshing as needed.
 
     Reuses the in-process cache until near expiry. ``force_refresh`` mints a
@@ -99,7 +99,7 @@ def mint_agent_m2m_token(*, force_refresh: bool = False) -> str:
         if _cache.is_usable_for(secret) and not force_refresh:
             return _cache.token
 
-        minted = _mint(secret)
+        minted = _request_new_token(secret)
         if minted is None:
             return ""
         token, expiry_epoch = minted
@@ -107,14 +107,14 @@ def mint_agent_m2m_token(*, force_refresh: bool = False) -> str:
         return token
 
 
-def _mint(secret: str) -> tuple[str, float] | None:
+def _request_new_token(secret: str) -> tuple[str, float] | None:
     """POST to Clerk to create an M2M token. Returns (token, expiry_epoch) or None."""
     try:
         response = httpx.post(
-            f"{_base_url()}{_M2M_TOKENS_PATH}",
+            f"{_clerk_base_url()}{_M2M_TOKENS_PATH}",
             json={
                 "token_format": "opaque",
-                "seconds_until_expiration": M2M_TOKEN_TTL_SECONDS,
+                "seconds_until_expiration": MACHINE_TOKEN_TTL_SECONDS,
             },
             headers={"Authorization": f"Bearer {secret}"},
             timeout=CREDITS_HTTP_TIMEOUT_SECONDS,
@@ -133,10 +133,10 @@ def _mint(secret: str) -> tuple[str, float] | None:
         logger.warning("[clerk-m2m] mint response missing token")
         return None
 
-    return token, _expiry_epoch(body)
+    return token, _parse_expiry_epoch(body)
 
 
-def _expiry_epoch(body: dict[str, Any]) -> float:
+def _parse_expiry_epoch(body: dict[str, Any]) -> float:
     """Best-effort expiry (epoch seconds). Accepts `expires_in` (seconds from
     now) or `expiration` (unix ms); falls back to the requested TTL so the
     cache still refreshes sensibly if the field is absent/unparseable."""
@@ -146,7 +146,7 @@ def _expiry_epoch(body: dict[str, Any]) -> float:
     expiration = body.get("expiration")
     if isinstance(expiration, (int, float)) and expiration > 0:
         return float(expiration) / 1000.0
-    return time.time() + M2M_TOKEN_TTL_SECONDS
+    return time.time() + MACHINE_TOKEN_TTL_SECONDS
 
 
 def _json_dict(response: httpx.Response) -> dict[str, Any]:
@@ -157,7 +157,7 @@ def _json_dict(response: httpx.Response) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
-def clear_m2m_token_cache() -> None:
+def clear_token_cache() -> None:
     """Drop the in-process token cache (used by tests and after rotation)."""
     with _lock:
         _cache.clear()

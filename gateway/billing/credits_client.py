@@ -28,7 +28,7 @@ from config.constants.billing import (
     ORGANIZATION_ID_ENV,
     WEBAPP_URL_ENV,
 )
-from integrations.slack.agent_auth import agent_auth_token
+from integrations.slack.webapp_auth import webapp_bearer_token
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +85,7 @@ def consume_credits(
         transport errors or any other HTTP status.
     """
     base_url = _env(WEBAPP_URL_ENV).rstrip("/")
-    token = agent_auth_token()
+    token = webapp_bearer_token()
     org = (organization_id or organization_id_for_silo()).strip()
 
     if not (base_url and token and org):

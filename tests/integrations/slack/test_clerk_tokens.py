@@ -7,20 +7,20 @@ from typing import Any
 import httpx
 import pytest
 
-import integrations.slack.clerk_m2m as clerk_m2m
+import integrations.slack.clerk_tokens as clerk_tokens
 from config.constants.billing import MACHINE_SECRET_ENV
 
 
 @pytest.fixture(autouse=True)
 def _clear_cache() -> None:
-    clerk_m2m.clear_m2m_token_cache()
+    clerk_tokens.clear_token_cache()
     yield
-    clerk_m2m.clear_m2m_token_cache()
+    clerk_tokens.clear_token_cache()
 
 
 def test_mint_empty_without_machine_secret(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv(MACHINE_SECRET_ENV, raising=False)
-    assert clerk_m2m.mint_agent_m2m_token() == ""
+    assert clerk_tokens.webapp_access_token() == ""
 
 
 def test_mint_posts_to_clerk_and_caches(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -41,10 +41,10 @@ def test_mint_posts_to_clerk_and_caches(monkeypatch: pytest.MonkeyPatch) -> None
         calls.append({"url": url, **kwargs})
         return _Resp()
 
-    monkeypatch.setattr(clerk_m2m.httpx, "post", fake_post)
+    monkeypatch.setattr(clerk_tokens.httpx, "post", fake_post)
 
-    assert clerk_m2m.mint_agent_m2m_token() == "mt_abc"
-    assert clerk_m2m.mint_agent_m2m_token() == "mt_abc"
+    assert clerk_tokens.webapp_access_token() == "mt_abc"
+    assert clerk_tokens.webapp_access_token() == "mt_abc"
     assert len(calls) == 1
     assert calls[0]["url"] == "https://api.clerk.com/v1/m2m_tokens"
     assert calls[0]["headers"]["Authorization"] == "Bearer ak_test_secret"
@@ -66,16 +66,16 @@ def test_mint_force_refresh(monkeypatch: pytest.MonkeyPatch) -> None:
         def text(self) -> str:
             return ""
 
-    monkeypatch.setattr(clerk_m2m.httpx, "post", lambda *_a, **_k: _Resp())
-    assert clerk_m2m.mint_agent_m2m_token() == "mt_1"
-    assert clerk_m2m.mint_agent_m2m_token(force_refresh=True) == "mt_2"
+    monkeypatch.setattr(clerk_tokens.httpx, "post", lambda *_a, **_k: _Resp())
+    assert clerk_tokens.webapp_access_token() == "mt_1"
+    assert clerk_tokens.webapp_access_token(force_refresh=True) == "mt_2"
 
 
 def test_mint_http_error_returns_empty(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(MACHINE_SECRET_ENV, "ak_test_secret")
     monkeypatch.setattr(
-        clerk_m2m.httpx,
+        clerk_tokens.httpx,
         "post",
         lambda *_a, **_k: (_ for _ in ()).throw(httpx.ConnectError("down")),
     )
-    assert clerk_m2m.mint_agent_m2m_token() == ""
+    assert clerk_tokens.webapp_access_token() == ""
