@@ -169,6 +169,15 @@ def configured_integration_services() -> list[str]:
     login). Never raises; returns an empty list on any failure so callers can
     treat it as best-effort.
     """
+    try:
+        store_records = load_integrations()
+    except Exception:
+        store_records = []
+    return _configured_service_names(store_records=store_records)
+
+
+def _configured_service_names(*, store_records: list[dict[str, Any]]) -> list[str]:
+    """Merge env-visible and active store services into one deduplicated list."""
     services: list[str] = []
 
     try:
@@ -180,10 +189,6 @@ def configured_integration_services() -> list[str]:
         if service:
             services.append(service)
 
-    try:
-        store_records = load_integrations()
-    except Exception:
-        store_records = []
     for record in store_records:
         if str(record.get("status", "active")).strip().lower() != "active":
             continue
@@ -191,7 +196,7 @@ def configured_integration_services() -> list[str]:
         if service:
             services.append(service)
 
-    return list(dict.fromkeys(services))  # deduplicate, preserve order
+    return list(dict.fromkeys(services))
 
 
 # Hosted MCP integrations that strictly require a personal API token when not
@@ -227,15 +232,16 @@ def configured_integration_health() -> list[tuple[str, str]]:
     Performs no network verification (startup stays fast) and never raises; on
     any failure each service falls back to ``"ok"`` so the banner still lists it.
     """
-    services = configured_integration_services()
-    if not services:
-        return []
-
-    store_config_by_service: dict[str, dict[str, Any]] = {}
     try:
         store_records = load_integrations()
     except Exception:
         store_records = []
+
+    services = _configured_service_names(store_records=store_records)
+    if not services:
+        return []
+
+    store_config_by_service: dict[str, dict[str, Any]] = {}
     for record in store_records:
         if str(record.get("status", "active")).strip().lower() != "active":
             continue

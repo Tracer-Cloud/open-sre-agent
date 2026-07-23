@@ -114,9 +114,7 @@ class TestConfiguredIntegrationHealth:
     """
 
     def test_ok_when_classified_into_usable_config(self, monkeypatch: Any) -> None:
-        monkeypatch.setattr(
-            catalog, "configured_integration_services", lambda: ["datadog", "gitlab"]
-        )
+        monkeypatch.setattr(catalog, "load_env_integration_services", lambda: ["datadog", "gitlab"])
         monkeypatch.setattr(catalog, "load_integrations", list)
         assert catalog.configured_integration_health() == [
             ("datadog", "ok"),
@@ -124,7 +122,7 @@ class TestConfiguredIntegrationHealth:
         ]
 
     def test_hosted_mcp_without_token_is_incomplete(self, monkeypatch: Any) -> None:
-        monkeypatch.setattr(catalog, "configured_integration_services", lambda: ["posthog_mcp"])
+        monkeypatch.setattr(catalog, "load_env_integration_services", list)
         monkeypatch.setattr(
             catalog,
             "load_integrations",
@@ -149,7 +147,7 @@ class TestConfiguredIntegrationHealth:
         assert catalog.configured_integration_health() == [("posthog_mcp", "incomplete")]
 
     def test_hosted_mcp_with_token_is_ok(self, monkeypatch: Any) -> None:
-        monkeypatch.setattr(catalog, "configured_integration_services", lambda: ["posthog_mcp"])
+        monkeypatch.setattr(catalog, "load_env_integration_services", list)
         monkeypatch.setattr(
             catalog,
             "load_integrations",
@@ -175,7 +173,7 @@ class TestConfiguredIntegrationHealth:
 
     def test_stdio_mcp_without_token_is_ok(self, monkeypatch: Any) -> None:
         # stdio MCP authenticates via the local subprocess, so no token is needed.
-        monkeypatch.setattr(catalog, "configured_integration_services", lambda: ["posthog_mcp"])
+        monkeypatch.setattr(catalog, "load_env_integration_services", list)
         monkeypatch.setattr(
             catalog,
             "load_integrations",
@@ -198,19 +196,20 @@ class TestConfiguredIntegrationHealth:
     def test_non_mcp_empty_token_field_is_not_flagged(self, monkeypatch: Any) -> None:
         # Only the hosted-MCP token rule applies; an unrelated service that
         # classified successfully stays "ok" even if it lacks an auth_token key.
-        monkeypatch.setattr(catalog, "configured_integration_services", lambda: ["github"])
+        monkeypatch.setattr(catalog, "load_env_integration_services", lambda: ["github"])
         monkeypatch.setattr(catalog, "load_integrations", list)
         assert catalog.configured_integration_health() == [("github", "ok")]
 
     def test_empty_when_no_integrations(self, monkeypatch: Any) -> None:
-        monkeypatch.setattr(catalog, "configured_integration_services", list)
+        monkeypatch.setattr(catalog, "load_env_integration_services", list)
+        monkeypatch.setattr(catalog, "load_integrations", list)
         assert catalog.configured_integration_health() == []
 
     def test_defaults_ok_when_store_load_raises(self, monkeypatch: Any) -> None:
         def _boom() -> list[dict[str, Any]]:
             raise RuntimeError("store unreadable")
 
-        monkeypatch.setattr(catalog, "configured_integration_services", lambda: ["datadog"])
+        monkeypatch.setattr(catalog, "load_env_integration_services", lambda: ["datadog"])
         monkeypatch.setattr(catalog, "load_integrations", _boom)
         # Resolution failure must not crash the banner or alarm the user: when
         # health can't be determined offline, every service falls back to "ok".
@@ -220,8 +219,34 @@ class TestConfiguredIntegrationHealth:
         def _resolve_should_not_run() -> dict[str, Any]:
             raise AssertionError("startup health must not resolve secrets")
 
-        monkeypatch.setattr(catalog, "configured_integration_services", lambda: ["datadog"])
+        monkeypatch.setattr(catalog, "load_env_integration_services", lambda: ["datadog"])
         monkeypatch.setattr(catalog, "load_integrations", list)
         monkeypatch.setattr(catalog, "resolve_effective_integrations", _resolve_should_not_run)
 
         assert catalog.configured_integration_health() == [("datadog", "ok")]
+
+    def test_health_loads_store_at_most_once(self, monkeypatch: Any) -> None:
+        calls = 0
+
+        def counting_load() -> list[dict[str, Any]]:
+            nonlocal calls
+            calls += 1
+            return [
+                {
+                    "service": "github",
+                    "status": "active",
+                    "instances": [
+                        {
+                            "name": "default",
+                            "tags": {},
+                            "credentials": {"token": "ghp_test"},
+                        }
+                    ],
+                }
+            ]
+
+        monkeypatch.setattr(catalog, "load_env_integration_services", list)
+        monkeypatch.setattr(catalog, "load_integrations", counting_load)
+
+        assert catalog.configured_integration_health() == [("github", "ok")]
+        assert calls == 1
