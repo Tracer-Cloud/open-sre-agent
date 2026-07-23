@@ -29,11 +29,13 @@ import integrations.setup_flow as setup_flow
 from config.env_file import env_assignment_key, read_env_lines, sync_env_values
 from integrations._catalog_impl import load_env_integrations, resolve_effective_integrations
 from integrations.alertmanager.setup import ALERTMANAGER_SETUP
+from integrations.aws.setup import AWS_SETUP
 from integrations.azure_sql.setup import AZURE_SQL_SETUP
 from integrations.betterstack.setup import BETTERSTACK_SETUP
 from integrations.coralogix.setup import CORALOGIX_SETUP
 from integrations.dagster.setup import DAGSTER_SETUP
 from integrations.datadog.setup import DATADOG_SETUP
+from integrations.github.setup import GITHUB_SETUP
 from integrations.gitlab.setup import GITLAB_SETUP
 from integrations.grafana.setup import GRAFANA_SETUP
 from integrations.groundcover.setup import GROUNDCOVER_SETUP
@@ -41,6 +43,7 @@ from integrations.helm.setup import HELM_SETUP
 from integrations.honeycomb.setup import HONEYCOMB_SETUP
 from integrations.incident_io.setup import INCIDENT_IO_SETUP
 from integrations.jenkins.setup import JENKINS_SETUP
+from integrations.kubernetes.setup import KUBERNETES_SETUP
 from integrations.mariadb.setup import MARIADB_SETUP
 from integrations.mongodb.setup import MONGODB_SETUP
 from integrations.mongodb_atlas.setup import MONGODB_ATLAS_SETUP
@@ -63,6 +66,7 @@ from integrations.telegram.setup import TELEGRAM_SETUP
 from integrations.tempo.setup import TEMPO_SETUP
 from integrations.temporal.setup import TEMPORAL_SETUP
 from integrations.tracer.setup import TRACER_SETUP
+from integrations.twilio.setup import TWILIO_SETUP
 from integrations.vercel.setup import VERCEL_SETUP
 from integrations.whatsapp.setup import WHATSAPP_SETUP
 from integrations.x_mcp.setup import X_MCP_SETUP
@@ -265,6 +269,29 @@ _SUBMITTED: dict[str, dict[str, str]] = {
         "bot_token": "xoxb-test-token",
         "app_token": "xapp-test-token",
     },
+    "aws": {
+        # Keys mode — role fields cleared. Catalog hydrates flat access-key credentials.
+        "region": "eu-west-1",
+        "role_arn": "",
+        "external_id": "",
+        "access_key_id": "AKIAEXAMPLEKEYID01",
+        "secret_access_key": "aws-secret-access-key",
+        "session_token": "aws-session-token",
+    },
+    "github": {
+        "mode": "streamable-http",
+        "url": "https://api.githubcopilot.com/mcp/",
+        "auth_token": "gho_github_token",
+        "toolsets": "repos,issues,pull_requests",
+        # Store-only; env bootstrap never writes a username.
+        "username": "",
+    },
+    "kubernetes": {
+        "kubeconfig_path": "/tmp/opensre-test-kubeconfig",
+        "kubeconfig": "",
+        "context": "checkout-prod",
+        "namespace": "opensre",
+    },
 }
 
 # Helm's env-only catalog discovery additionally gates on ``OSRE_HELM_INTEGRATION``
@@ -313,6 +340,9 @@ _SPECS = [
     OPENSEARCH_SETUP,
     RDS_SETUP,
     SLACK_SETUP,
+    AWS_SETUP,
+    GITHUB_SETUP,
+    KUBERNETES_SETUP,
 ]
 
 
@@ -450,3 +480,32 @@ def test_persisted_credentials_are_read_back_by_the_catalog(
             f"{spec.service}.{field.name} was persisted as {field.env_var!r}, "
             "which the catalog does not read back into that credential"
         )
+
+
+def test_twilio_persisted_credentials_are_read_back_by_the_catalog(
+    persisted: _Persisted, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Twilio stores SMS fields flat; the catalog rehydrates a nested ``sms`` dict."""
+    submitted = {
+        "account_sid": "ACtwilioaccountsid0001",
+        "auth_token": "twilio-auth-token",
+        "from_number": "+14155551234",
+        "messaging_service_sid": "",
+        "default_to": "+14155559876",
+    }
+    assert {field.name for field in TWILIO_SETUP.fields} == set(submitted)
+
+    outcome = setup_flow.apply_setup(
+        dataclasses.replace(TWILIO_SETUP, verify=None, resolve=None), submitted
+    )
+    assert outcome.ok, outcome.detail
+
+    _restore_environment(persisted, monkeypatch)
+    resolved = _catalog_credentials("twilio")
+    assert resolved.get("account_sid") == submitted["account_sid"]
+    assert resolved.get("auth_token") == submitted["auth_token"]
+    sms = resolved.get("sms") or {}
+    assert isinstance(sms, dict)
+    assert sms.get("from_number") == submitted["from_number"]
+    assert sms.get("messaging_service_sid") == submitted["messaging_service_sid"]
+    assert sms.get("default_to") == submitted["default_to"]

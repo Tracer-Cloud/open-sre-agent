@@ -37,7 +37,6 @@ from integrations.store import (
     get_integration,
     list_integrations,
     remove_integration,
-    upsert_integration,
 )
 from integrations.verify import (
     SUPPORTED_VERIFY_SERVICES,
@@ -197,46 +196,9 @@ def _setup_coralogix() -> None:
 
 
 def _setup_aws() -> None:
-    choice = _select(
-        "AWS authentication method:",
-        choices=[
-            questionary.Choice("IAM Role ARN", value="1"),
-            questionary.Choice("Access Key + Secret", value="2"),
-        ],
-        instruction="(use arrow keys)",
-    )
-    if choice is None:
-        print("\nAborted.")
-        sys.exit(1)
-    region = _p("Region", default="us-east-1")
-    if choice == "1":
-        role_arn = _p("IAM Role ARN")
-        if not role_arn:
-            _die("role_arn is required.")
-        upsert_integration(
-            "aws",
-            {
-                "role_arn": role_arn,
-                "external_id": _p("External ID (optional)"),
-                "credentials": {"region": region},
-            },
-        )
-    else:
-        access_key = _p("AWS_ACCESS_KEY_ID", secret=True)
-        secret_key = _p("AWS_SECRET_ACCESS_KEY", secret=True)
-        if not access_key or not secret_key:
-            _die("access_key and secret_key are required.")
-        upsert_integration(
-            "aws",
-            {
-                "credentials": {
-                    "access_key_id": access_key,
-                    "secret_access_key": secret_key,
-                    "session_token": _p("Session token (optional)"),
-                    "region": region,
-                }
-            },
-        )
+    from integrations.aws.setup import AWS_SETUP
+
+    _run_spec_setup(AWS_SETUP)
 
 
 def _setup_slack() -> None:
@@ -420,7 +382,13 @@ def _setup_github() -> str | None:
     Returns the authenticated GitHub login on success (``None`` if the validated
     result carried no login), so callers like the first-launch gate can propagate
     the username. Exits the process on validation failure.
+
+    Collection stays custom (browser OAuth + optional repo-scope probes). Persist
+    goes through :func:`integrations.setup_flow.apply_setup` so the token lands
+    in the keyring and the non-secrets in ``.env``, not just the store.
     """
+    import dataclasses
+
     from integrations.github.mcp import (
         DEFAULT_GITHUB_MCP_MODE,
         DEFAULT_GITHUB_MCP_TOOLSETS,
@@ -433,6 +401,8 @@ def _setup_github() -> str | None:
         print_github_mcp_validation_report,
         validate_github_mcp_config,
     )
+    from integrations.github.setup import GITHUB_SETUP
+    from integrations.setup_flow import apply_setup
 
     print("  Connect OpenSRE to GitHub through the hosted GitHub MCP server.")
     advanced = _confirm(
@@ -477,16 +447,26 @@ def _setup_github() -> str | None:
             print(f"  {line}")
         sys.exit(1)
 
-    if result.authenticated_user:
-        # Persist the resolved GitHub login as a non-secret credential field so
-        # surfaces like the welcome banner can greet the user by their GitHub
-        # handle instead of the local system username.
-        credentials["username"] = result.authenticated_user
-    upsert_integration("github", {"credentials": credentials})
-    if result.authenticated_user:
-        from platform.analytics.cli import identify_github_username
+    toolsets = credentials.get("toolsets") or []
+    if isinstance(toolsets, str):
+        toolsets_value = toolsets
+    else:
+        toolsets_value = ",".join(str(part).strip() for part in toolsets if str(part).strip())
 
-        identify_github_username(result.authenticated_user)
+    # Already verified above (with optional repo-scope probes). Skip the spec's
+    # simpler probe so we do not hit the hosted server twice.
+    outcome = apply_setup(
+        dataclasses.replace(GITHUB_SETUP, verify=None),
+        {
+            "mode": str(credentials.get("mode") or DEFAULT_GITHUB_MCP_MODE),
+            "url": str(credentials.get("url") or DEFAULT_GITHUB_MCP_URL),
+            "auth_token": str(credentials.get("auth_token") or ""),
+            "toolsets": toolsets_value,
+            "username": result.authenticated_user or "",
+        },
+    )
+    if not outcome.ok:
+        _die(outcome.detail)
     return result.authenticated_user
 
 
@@ -612,35 +592,9 @@ def _setup_twilio() -> None:
 
     WhatsApp delivery is configured separately via ``setup whatsapp``.
     """
-    account_sid = _p("Twilio Account SID (starts with AC...)")
-    auth_token = _p("Twilio Auth Token", secret=True)
-    if not account_sid or not auth_token:
-        _die("account_sid and auth_token are required.")
+    from integrations.twilio.setup import TWILIO_SETUP
 
-    sms_from = _p(
-        "Twilio SMS From number (E.164, e.g. +14155551234; leave blank to use a Messaging Service SID)"
-    )
-    messaging_service_sid = ""
-    if not sms_from:
-        messaging_service_sid = _p("Twilio Messaging Service SID (starts with MG...)")
-        if not messaging_service_sid:
-            _die("SMS requires either a from_number or a messaging_service_sid.")
-
-    upsert_integration(
-        "twilio",
-        {
-            "credentials": {
-                "account_sid": account_sid,
-                "auth_token": auth_token,
-                "sms": {
-                    "enabled": True,
-                    "from_number": sms_from,
-                    "messaging_service_sid": messaging_service_sid,
-                    "default_to": _p("Default SMS recipient (optional, E.164)") or None,
-                },
-            }
-        },
-    )
+    _run_spec_setup(TWILIO_SETUP)
 
 
 def _setup_openclaw() -> None:
@@ -730,34 +684,9 @@ def _setup_pagerduty() -> None:
 
 
 def _setup_kubernetes() -> None:
-    kubeconfig_path = _p(
-        "Kubeconfig file path (e.g. ~/.kube/config) — leave empty to paste inline YAML",
-        default="",
-    )
-    kubeconfig_content = ""
-    if not kubeconfig_path:
-        kubeconfig_content = _p(
-            "Paste raw kubeconfig YAML content (required if no file path given)",
-            default="",
-        )
-        if not kubeconfig_content:
-            _die("Either a kubeconfig file path or inline YAML content is required.")
-    context = _p(
-        "Kubeconfig context to use (leave empty to use the current-context from the file)",
-        default="",
-    )
-    namespace = _p("Default namespace", default="default")
-    upsert_integration(
-        "kubernetes",
-        {
-            "credentials": {
-                "kubeconfig_path": kubeconfig_path,
-                "kubeconfig": kubeconfig_content,
-                "context": context,
-                "namespace": namespace or "default",
-            }
-        },
-    )
+    from integrations.kubernetes.setup import KUBERNETES_SETUP
+
+    _run_spec_setup(KUBERNETES_SETUP)
 
 
 _HANDLERS: dict[str, Any] = {

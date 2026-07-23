@@ -15,6 +15,14 @@ from config.constants.alertmanager import (
     ALERTMANAGER_URL_ENV,
     ALERTMANAGER_USERNAME_ENV,
 )
+from config.constants.aws import (
+    AWS_ACCESS_KEY_ID_ENV,
+    AWS_EXTERNAL_ID_ENV,
+    AWS_REGION_ENV,
+    AWS_ROLE_ARN_ENV,
+    AWS_SECRET_ACCESS_KEY_ENV,
+    AWS_SESSION_TOKEN_ENV,
+)
 from config.constants.azure_sql import (
     AZURE_SQL_DATABASE_ENV,
     AZURE_SQL_DRIVER_ENV,
@@ -41,6 +49,14 @@ from config.constants.datadog import (
     DATADOG_APP_KEY_ENV,
     DATADOG_SITE_ENV,
 )
+from config.constants.github import (
+    GITHUB_MCP_ARGS_ENV,
+    GITHUB_MCP_AUTH_TOKEN_ENV,
+    GITHUB_MCP_COMMAND_ENV,
+    GITHUB_MCP_MODE_ENV,
+    GITHUB_MCP_TOOLSETS_ENV,
+    GITHUB_MCP_URL_ENV,
+)
 from config.constants.gitlab import GITLAB_AUTH_TOKEN_ENV, GITLAB_BASE_URL_ENV
 from config.constants.grafana import (
     GRAFANA_CA_BUNDLE_ENV,
@@ -60,6 +76,12 @@ from config.constants.honeycomb import (
     HONEYCOMB_API_KEY_ENV,
     HONEYCOMB_BASE_URL_ENV,
     HONEYCOMB_DATASET_ENV,
+)
+from config.constants.kubernetes import (
+    KUBECONFIG_CONTENT_ENV,
+    KUBECONFIG_CONTEXT_ENV,
+    KUBECONFIG_NAMESPACE_ENV,
+    KUBECONFIG_PATH_ENV,
 )
 from config.constants.mariadb import (
     MARIADB_DATABASE_ENV,
@@ -127,6 +149,15 @@ from config.constants.servicenow import (
     SERVICENOW_USERNAME_ENV,
 )
 from config.constants.slack import SLACK_APP_TOKEN_ENV, SLACK_BOT_TOKEN_ENV
+from config.constants.twilio import (
+    TWILIO_ACCOUNT_SID_ENV,
+    TWILIO_AUTH_TOKEN_ENV,
+    TWILIO_SMS_DEFAULT_TO_ENV,
+    TWILIO_SMS_FROM_ENV,
+    TWILIO_SMS_MESSAGING_SERVICE_SID_ENV,
+    TWILIO_WHATSAPP_FROM_ENV,
+    WHATSAPP_DEFAULT_TO_ENV,
+)
 from config.constants.vercel import VERCEL_API_TOKEN_ENV, VERCEL_TEAM_ID_ENV
 from config.constants.x_mcp import X_MCP_AUTH_TOKEN_ENV, X_MCP_URL_ENV
 from config.llm_credentials import resolve_env_credential
@@ -672,12 +703,12 @@ def load_env_integrations() -> list[dict[str, Any]]:
         aws_secret_access_key = ""
         aws_session_token = ""
     else:
-        aws_role_arn = os.getenv("AWS_ROLE_ARN", "").strip()
-        aws_external_id = os.getenv("AWS_EXTERNAL_ID", "").strip()
-        aws_region = os.getenv("AWS_REGION", "us-east-1").strip() or "us-east-1"
-        aws_access_key_id = resolve_env_credential("AWS_ACCESS_KEY_ID")
-        aws_secret_access_key = resolve_env_credential("AWS_SECRET_ACCESS_KEY")
-        aws_session_token = resolve_env_credential("AWS_SESSION_TOKEN")
+        aws_role_arn = os.getenv(AWS_ROLE_ARN_ENV, "").strip()
+        aws_external_id = os.getenv(AWS_EXTERNAL_ID_ENV, "").strip()
+        aws_region = os.getenv(AWS_REGION_ENV, "us-east-1").strip() or "us-east-1"
+        aws_access_key_id = resolve_env_credential(AWS_ACCESS_KEY_ID_ENV)
+        aws_secret_access_key = resolve_env_credential(AWS_SECRET_ACCESS_KEY_ENV)
+        aws_session_token = resolve_env_credential(AWS_SESSION_TOKEN_ENV)
     if aws_role_arn:
         try:
             aws_config = AWSIntegrationConfig.model_validate(
@@ -727,12 +758,12 @@ def load_env_integrations() -> list[dict[str, Any]]:
                     )
                 )
 
-    github_mode = os.getenv("GITHUB_MCP_MODE", "streamable-http").strip() or "streamable-http"
-    github_url = os.getenv("GITHUB_MCP_URL", "").strip()
-    github_command = os.getenv("GITHUB_MCP_COMMAND", "").strip()
-    github_args = os.getenv("GITHUB_MCP_ARGS", "").strip()
-    github_auth_token = resolve_env_credential("GITHUB_MCP_AUTH_TOKEN")
-    github_toolsets = os.getenv("GITHUB_MCP_TOOLSETS", "").strip()
+    github_mode = os.getenv(GITHUB_MCP_MODE_ENV, "streamable-http").strip() or "streamable-http"
+    github_url = os.getenv(GITHUB_MCP_URL_ENV, "").strip()
+    github_command = os.getenv(GITHUB_MCP_COMMAND_ENV, "").strip()
+    github_args = os.getenv(GITHUB_MCP_ARGS_ENV, "").strip()
+    github_auth_token = resolve_env_credential(GITHUB_MCP_AUTH_TOKEN_ENV)
+    github_toolsets = os.getenv(GITHUB_MCP_TOOLSETS_ENV, "").strip()
     if (github_mode == "stdio" and github_command) or (github_mode != "stdio" and github_url):
         github_config = build_github_mcp_config(
             {
@@ -1107,10 +1138,10 @@ def load_env_integrations() -> list[dict[str, Any]]:
 
     # Shared Twilio account credentials — consumed by both the WhatsApp and
     # the SMS env-bootstrap blocks below.
-    twilio_account_sid = resolve_env_credential("TWILIO_ACCOUNT_SID")
-    twilio_auth_token = resolve_env_credential("TWILIO_AUTH_TOKEN")
+    twilio_account_sid = resolve_env_credential(TWILIO_ACCOUNT_SID_ENV)
+    twilio_auth_token = resolve_env_credential(TWILIO_AUTH_TOKEN_ENV)
 
-    whatsapp_from_number = os.getenv("TWILIO_WHATSAPP_FROM", "").strip()
+    whatsapp_from_number = os.getenv(TWILIO_WHATSAPP_FROM_ENV, "").strip()
     if twilio_account_sid and twilio_auth_token and whatsapp_from_number:
         try:
             wa_config = WhatsAppConfig.model_validate(
@@ -1118,7 +1149,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
                     "account_sid": twilio_account_sid,
                     "auth_token": twilio_auth_token,
                     "from_number": whatsapp_from_number,
-                    "default_to": os.getenv("WHATSAPP_DEFAULT_TO", "").strip() or None,
+                    "default_to": os.getenv(WHATSAPP_DEFAULT_TO_ENV, "").strip() or None,
                 }
             )
         except Exception as exc:
@@ -1129,8 +1160,8 @@ def load_env_integrations() -> list[dict[str, Any]]:
     # Twilio SMS integration — independent of the legacy WhatsApp record.
     # Hydrated when account+token are present AND an SMS sender is set
     # (a from_number or a Messaging Service SID).
-    twilio_sms_from = os.getenv("TWILIO_SMS_FROM", "").strip()
-    twilio_sms_messaging_service = os.getenv("TWILIO_SMS_MESSAGING_SERVICE_SID", "").strip()
+    twilio_sms_from = os.getenv(TWILIO_SMS_FROM_ENV, "").strip()
+    twilio_sms_messaging_service = os.getenv(TWILIO_SMS_MESSAGING_SERVICE_SID_ENV, "").strip()
     if (
         twilio_account_sid
         and twilio_auth_token
@@ -1143,7 +1174,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 "enabled": True,
                 "from_number": twilio_sms_from,
                 "messaging_service_sid": twilio_sms_messaging_service,
-                "default_to": os.getenv("TWILIO_SMS_DEFAULT_TO", "").strip() or None,
+                "default_to": os.getenv(TWILIO_SMS_DEFAULT_TO_ENV, "").strip() or None,
             },
         }
         try:
@@ -1602,16 +1633,17 @@ def load_env_integrations() -> list[dict[str, Any]]:
         except Exception as exc:
             _report_env_loader_failure(exc, integration="alertmanager")
 
-    _kubeconfig_path = os.getenv("KUBECONFIG", "").strip()
-    _kubeconfig_content = resolve_env_credential("KUBECONFIG_CONTENT")
+    _kubeconfig_path = os.getenv(KUBECONFIG_PATH_ENV, "").strip()
+    _kubeconfig_content = resolve_env_credential(KUBECONFIG_CONTENT_ENV)
     if _kubeconfig_path or _kubeconfig_content:
         try:
             kubernetes_config = KubernetesIntegrationConfig.model_validate(
                 {
                     "kubeconfig_path": _kubeconfig_path,
                     "kubeconfig": _kubeconfig_content,
-                    "context": os.getenv("KUBECONFIG_CONTEXT", "").strip(),
-                    "namespace": os.getenv("KUBECONFIG_NAMESPACE", "default").strip() or "default",
+                    "context": os.getenv(KUBECONFIG_CONTEXT_ENV, "").strip(),
+                    "namespace": os.getenv(KUBECONFIG_NAMESPACE_ENV, "default").strip()
+                    or "default",
                 }
             )
             integrations.append(
