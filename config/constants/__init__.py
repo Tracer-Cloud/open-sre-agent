@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from config.constants.billing import (
     CREDITS_HTTP_TIMEOUT_SECONDS,
+    MACHINE_SECRET_ENV,
     ORGANIZATION_ID_ENV,
     USAGE_SECRET_ENV,
     WEBAPP_URL_ENV,
@@ -49,6 +50,7 @@ __all__ = [
     "DEFAULT_POSTHOG_URL",
     "INTEGRATIONS_STORE_PATH",
     "IS_WINDOWS",
+    "MACHINE_SECRET_ENV",
     "MAX_INVESTIGATION_LOOPS",
     "OPENSRE_HOME_DIR",
     "OPENSRE_TMP_DIR",

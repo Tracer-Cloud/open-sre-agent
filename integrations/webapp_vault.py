@@ -2,8 +2,11 @@
 
 Contract mirrors credits metering:
   GET {OPENSRE_WEBAPP_URL}/api/agent/integrations?organizationId=…
-  Authorization: Bearer {AGENT_USAGE_SECRET}
+  Authorization: Bearer {mt_… from CLERK_MACHINE_SECRET_KEY}
   Success: {"success": true, "data": [{id, service, status, name, credentials}, …]}
+
+This route accepts an M2M token only. The shared secret cannot prove which
+tenant is asking, so a request carrying it gets 401.
 
 Used by the gateway when resolving integrations for Slack/Telegram turns so
 org-admins can connect GitHub (etc.) in the webapp without SSM per secret.
@@ -20,10 +23,12 @@ import httpx
 
 from config.constants.billing import (
     CREDITS_HTTP_TIMEOUT_SECONDS,
+    MACHINE_SECRET_ENV,
     ORGANIZATION_ID_ENV,
     USAGE_SECRET_ENV,
     WEBAPP_URL_ENV,
 )
+from integrations.slack.agent_auth import agent_auth_token
 
 logger = logging.getLogger(__name__)
 
@@ -35,8 +40,13 @@ def _env(name: str) -> str:
 
 
 def webapp_vault_configured() -> bool:
-    """True when silo env has everything needed to call the webapp vault."""
-    return bool(_env(WEBAPP_URL_ENV) and _env(USAGE_SECRET_ENV) and _env(ORGANIZATION_ID_ENV))
+    """True when silo env has everything needed to call the webapp vault.
+
+    Checks that *a* credential is configured rather than resolving one, so this
+    stays a cheap env read — resolving would mint an M2M token over the network.
+    """
+    has_credential = bool(_env(MACHINE_SECRET_ENV) or _env(USAGE_SECRET_ENV))
+    return bool(_env(WEBAPP_URL_ENV) and has_credential and _env(ORGANIZATION_ID_ENV))
 
 
 def fetch_webapp_org_integrations(
@@ -48,9 +58,9 @@ def fetch_webapp_org_integrations(
     to local/env. An empty list means the org has no exportable integrations.
     """
     base_url = _env(WEBAPP_URL_ENV).rstrip("/")
-    secret = _env(USAGE_SECRET_ENV)
+    token = agent_auth_token()
     org = (organization_id or _env(ORGANIZATION_ID_ENV)).strip()
-    if not (base_url and secret and org):
+    if not (base_url and token and org):
         return None
 
     url = f"{base_url}{_INTEGRATIONS_PATH}"
@@ -58,7 +68,7 @@ def fetch_webapp_org_integrations(
         response = httpx.get(
             url,
             params={"organizationId": org},
-            headers={"Authorization": f"Bearer {secret}"},
+            headers={"Authorization": f"Bearer {token}"},
             timeout=CREDITS_HTTP_TIMEOUT_SECONDS,
         )
     except httpx.HTTPError:
