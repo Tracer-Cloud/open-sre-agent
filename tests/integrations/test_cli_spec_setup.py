@@ -401,9 +401,8 @@ def test_blank_required_field_exits_before_the_next_prompt(
     """Fail on the field that is blank, not after working through the rest."""
     spec = getattr(module, attr)
     prompted = _prompted(spec)
-    try:
-        first_required = next(f for f in prompted if f.required and not f.default)
-    except StopIteration:
+    first_required = next((f for f in prompted if f.required and not f.default), None)
+    if first_required is None:
         pytest.skip(f"{spec.service} has no required prompted field without a default")
     _install(monkeypatch, module, attr, run, blank=first_required.name)
 
