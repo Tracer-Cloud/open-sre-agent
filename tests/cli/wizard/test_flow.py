@@ -2172,9 +2172,14 @@ def test_run_wizard_opensearch_allows_url_only_when_auth_blank(monkeypatch, tmp_
         m.ask.return_value = next(text_responses)
         return m
 
-    def _verify_opensearch(_source, _config):
+    def _verify_opensearch(_source, config):
+        # Mirror verify_opensearch's basic-auth completeness check (no network).
         nonlocal verification_call_count
         verification_call_count += 1
+        username = config.get("username", "")
+        password = config.get("password", "")
+        if bool(username) != bool(password):
+            return {"status": "failed", "detail": "Provide both username and password."}
         return {"status": "passed", "detail": "OpenSearch ok"}
 
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
@@ -2225,19 +2230,20 @@ def test_run_wizard_opensearch_allows_url_only_when_auth_blank(monkeypatch, tmp_
 
 
 def test_run_wizard_opensearch_rejects_empty_basic_password(monkeypatch, tmp_path) -> None:
-    """Username without password is rejected by validate before the probe.
+    """Username without password is rejected by the verifier.
 
     Companion regression for the half-credential bug: a username alone would
-    persist and omit Authorization at runtime. Spec validate requires both
-    basic-auth halves (or neither).
+    persist and omit Authorization at runtime. verify_opensearch requires both
+    basic-auth halves (or neither), so the wizard re-prompts on the first
+    attempt and only persists once both are supplied.
     """
-    # basic mode both times: username without a password fails validate; the
+    # basic mode both times: username without a password fails verification; the
     # retry supplies the password.
     select_responses = iter(
         ["quickstart", "anthropic", "api_key", "claude-opus-4-7", "opensearch", "basic", "basic"]
     )
-    # First attempt: username, empty password → validate fails.
-    # Retry: username, real password → verify once.
+    # First attempt: username, empty password → verifier fails.
+    # Retry: username, real password → verifier passes.
     password_responses = iter(["llm-secret", "", "real-pass"])
     text_responses = iter(
         [
@@ -2265,9 +2271,14 @@ def test_run_wizard_opensearch_rejects_empty_basic_password(monkeypatch, tmp_pat
         m.ask.return_value = next(text_responses)
         return m
 
-    def _verify_opensearch(_source, _config):
+    def _verify_opensearch(_source, config):
+        # Mirror verify_opensearch's basic-auth completeness check (no network).
         nonlocal verification_call_count
         verification_call_count += 1
+        username = config.get("username", "")
+        password = config.get("password", "")
+        if bool(username) != bool(password):
+            return {"status": "failed", "detail": "Provide both username and password."}
         return {"status": "passed", "detail": "OpenSearch ok"}
 
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
@@ -2301,8 +2312,8 @@ def test_run_wizard_opensearch_rejects_empty_basic_password(monkeypatch, tmp_pat
     exit_code = flow.run_wizard()
 
     assert exit_code == 0
-    # First attempt fails validate (no verify); second attempt verifies once.
-    assert verification_call_count == 1
+    # First attempt fails the verifier's basic-auth check; the retry passes.
+    assert verification_call_count == 2
     assert saved_integrations == [
         (
             "opensearch",

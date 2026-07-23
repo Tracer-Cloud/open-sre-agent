@@ -25,6 +25,7 @@ from config.constants.betterstack import (
 )
 from config.constants.billing import (
     CREDITS_HTTP_TIMEOUT_SECONDS,
+    MACHINE_SECRET_ENV,
     ORGANIZATION_ID_ENV,
     USAGE_SECRET_ENV,
     WEBAPP_URL_ENV,
@@ -278,6 +279,7 @@ __all__ = [
     "JENKINS_API_TOKEN_ENV",
     "JENKINS_BASE_URL_ENV",
     "JENKINS_USERNAME_ENV",
+    "MACHINE_SECRET_ENV",
     "MAX_INVESTIGATION_LOOPS",
     "MARIADB_DATABASE_ENV",
     "MARIADB_HOST_ENV",

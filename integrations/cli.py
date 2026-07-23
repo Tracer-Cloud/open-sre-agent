@@ -520,46 +520,10 @@ def _setup_redis() -> None:
     _run_spec_setup(REDIS_SETUP)
 
 
-def _register_discord_slash_command(application_id: str, bot_token: str) -> None:
-    import httpx
-
-    url = f"https://discord.com/api/v10/applications/{application_id}/commands"
-    payload = {
-        "name": "investigate",
-        "description": "Trigger an OpenSRE investigation",
-        "options": [
-            {
-                "name": "alert",
-                "description": "Alert JSON or description",
-                "type": 3,
-                "required": True,
-            }
-        ],
-    }
-    resp = httpx.put(url, json=[payload], headers={"Authorization": f"Bot {bot_token}"}, timeout=10)
-    if resp.is_success:
-        print("  ✓ /investigate slash command registered.")
-    else:
-        print(f"  ⚠ Slash command registration failed ({resp.status_code}): {resp.text}")
-
-
 def _setup_discord() -> None:
-    bot_token = _p("Discord bot token", secret=True)
-    application_id = _p("Discord application ID")
-    public_key = _p("Discord public key (from Developer Portal)")
-    default_channel_id = _p("Default channel ID (optional)")
-    upsert_integration(
-        "discord",
-        {
-            "credentials": {
-                "bot_token": bot_token,
-                "application_id": application_id,
-                "public_key": public_key,
-                "default_channel_id": default_channel_id,
-            }
-        },
-    )
-    _register_discord_slash_command(application_id, bot_token)
+    from integrations.discord.setup import DISCORD_SETUP
+
+    _run_spec_setup(DISCORD_SETUP)
 
 
 def _run_spec_setup(spec: IntegrationSetupSpec) -> None:
@@ -626,43 +590,9 @@ def _setup_telegram() -> None:
 
 
 def _setup_rocketchat() -> None:
-    from integrations.rocketchat.verifier import verify_rocketchat
+    from integrations.rocketchat.setup import ROCKETCHAT_SETUP
 
-    server_url = _p("Rocket.Chat server URL (e.g. https://chat.example.com)")
-    auth_token = _p("Rocket.Chat personal access token (blank for webhook-only)", secret=True)
-    user_id = _p("Rocket.Chat user ID (blank for webhook-only)")
-    webhook_url = _p("Rocket.Chat incoming webhook URL (optional)", secret=True)
-    has_pat = bool(server_url and auth_token and user_id)
-    if not has_pat and not webhook_url:
-        _die("Provide either a webhook_url or all of server_url, auth_token, and user_id.")
-    default_channel = _p("Default channel (e.g. #incidents, optional)")
-    print("\n  Validating Rocket.Chat credentials...")
-    result = verify_rocketchat(
-        "setup",
-        {
-            "server_url": server_url,
-            "auth_token": auth_token,
-            "user_id": user_id,
-            "webhook_url": webhook_url,
-        },
-    )
-    if result["status"] != "passed":
-        _die(result["detail"])
-    print(f"  {result['detail']}")
-    upsert_integration(
-        "rocketchat",
-        {
-            "credentials": {
-                "server_url": server_url,
-                "auth_token": auth_token,
-                "user_id": user_id,
-                "webhook_url": webhook_url,
-                "default_channel": default_channel or None,
-            }
-        },
-    )
-    print("  Next:")
-    print("    - opensre integrations verify rocketchat")
+    _run_spec_setup(ROCKETCHAT_SETUP)
 
 
 def _setup_smtp() -> None:

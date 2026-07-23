@@ -15,9 +15,24 @@ def test_billing_env_var_names_are_the_infra_contract() -> None:
 
     # Assert
     assert billing.WEBAPP_URL_ENV == "OPENSRE_WEBAPP_URL"
+    assert billing.MACHINE_SECRET_ENV == "CLERK_MACHINE_SECRET_KEY"
     assert billing.USAGE_SECRET_ENV == "AGENT_USAGE_SECRET"
     assert billing.ORGANIZATION_ID_ENV == "OPENSRE_ORGANIZATION_ID"
     assert billing.CREDITS_HTTP_TIMEOUT_SECONDS == 5.0
+
+
+def test_constants_module_stays_a_leaf() -> None:
+    """``config`` sits at the bottom layer, so the billing constants must not
+    reach up into another package — that would form an import cycle."""
+    # Arrange / Act
+    from pathlib import Path as _Path
+
+    source = _Path("config/constants/billing.py").read_text(encoding="utf-8")
+
+    # Assert: no upward import of a sibling top-level package.
+    for package in ("integrations", "gateway", "core", "platform", "tools", "surfaces"):
+        assert f"import {package}" not in source
+        assert f"from {package}" not in source
 
 
 def test_llm_env_var_names_are_the_infra_contract() -> None:

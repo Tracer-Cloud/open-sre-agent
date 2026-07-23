@@ -5,9 +5,10 @@ Setting an integration up happens on three surfaces — the onboarding wizard
 interactive-shell action tools. Each one only differs in how it *collects*
 values; what has to happen afterwards is identical:
 
-1. every required field is present, and any cross-field rule holds (optional,
-   integration-specific — see :attr:`IntegrationSetupSpec.validate`),
-2. the credentials actually work (the integration's verifier),
+1. every required field is present,
+2. the credentials actually work (the integration's verifier — which is also
+   where a rule spanning several fields belongs, so an incomplete combination
+   is rejected by the same prober that runs on health checks),
 3. references the user typed are resolved to what the runtime needs (optional,
    integration-specific — see :attr:`IntegrationSetupSpec.resolve`),
 4. they are persisted to **every** tier that reads them — the integration
@@ -52,12 +53,6 @@ class ResolvedCredentials:
 
 
 ResolveFn = Callable[[dict[str, str | None]], ResolvedCredentials]
-
-# Cross-field check run before verification. Returns "" when the credentials are
-# acceptable, or a user-facing sentence explaining why they are not — used for
-# constraints ``SetupField.required`` cannot express, like "one of these groups
-# must be complete".
-ValidateFn = Callable[[dict[str, str | None]], str]
 
 # Side effect run after the credentials are persisted, for setup that has to
 # reach past the store (registering a webhook, a slash command, …). Returns an
@@ -174,16 +169,6 @@ class IntegrationSetupSpec:
     (those in no mode) plus the chosen mode's fields — see
     :meth:`collectable_fields`. Persistence is unchanged: :func:`apply_setup`
     never sees the mode, only the resulting values.
-    """
-
-    validate: ValidateFn | None = None
-    """Optional cross-field check, run after collection and before verification.
-
-    ``SetupField.required`` only expresses "this one field is mandatory". Use
-    this for constraints that span fields — Slack accepts a webhook URL *or*
-    the bot/app token pair, which is neither field being individually required.
-    Mark those fields ``required=False`` and enforce the real rule here. Runs
-    before the verifier so an impossible combination fails without a network call.
     """
 
     verify: VerifierFn | None = None
@@ -320,11 +305,6 @@ def apply_setup(
     if missing:
         return SetupOutcome(ok=False, detail=missing)
 
-    if spec.validate is not None:
-        invalid = spec.validate(credentials)
-        if invalid:
-            return SetupOutcome(ok=False, detail=invalid)
-
     verified, detail = _verify(spec, credentials)
     if not verified:
         return SetupOutcome(ok=False, detail=detail)
@@ -364,6 +344,5 @@ __all__ = [
     "SetupField",
     "SetupMode",
     "SetupOutcome",
-    "ValidateFn",
     "apply_setup",
 ]

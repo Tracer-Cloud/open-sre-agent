@@ -2,7 +2,7 @@
 
 Contract:
   POST {OPENSRE_WEBAPP_URL}/api/credits/consume
-  Authorization: Bearer {AGENT_USAGE_SECRET}
+  Authorization: Bearer <machine token, or the shared secret>
   body: {"amount": <number>, "organizationId": <org>, "reason": <str>}
   Success (2xx): {"balance", "consumed", "reason"}.
   Shortfall: HTTP 402 with {"error": "insufficient_credits", "balance", "required"}.
@@ -26,9 +26,9 @@ import httpx
 from config.constants.billing import (
     CREDITS_HTTP_TIMEOUT_SECONDS,
     ORGANIZATION_ID_ENV,
-    USAGE_SECRET_ENV,
     WEBAPP_URL_ENV,
 )
+from integrations.slack.webapp_auth import webapp_bearer_token
 
 logger = logging.getLogger(__name__)
 
@@ -85,10 +85,10 @@ def consume_credits(
         transport errors or any other HTTP status.
     """
     base_url = _env(WEBAPP_URL_ENV).rstrip("/")
-    secret = _env(USAGE_SECRET_ENV)
+    token = webapp_bearer_token()
     org = (organization_id or organization_id_for_silo()).strip()
 
-    if not (base_url and secret and org):
+    if not (base_url and token and org):
         _log_metering_disabled_once()
         return CreditsOutcome.UNCONFIGURED
 
@@ -105,7 +105,7 @@ def consume_credits(
         response = httpx.post(
             f"{base_url}{_CONSUME_PATH}",
             json=payload,
-            headers={"Authorization": f"Bearer {secret}"},
+            headers={"Authorization": f"Bearer {token}"},
             timeout=CREDITS_HTTP_TIMEOUT_SECONDS,
         )
     except Exception as exc:

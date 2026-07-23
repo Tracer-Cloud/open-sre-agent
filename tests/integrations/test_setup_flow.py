@@ -351,37 +351,6 @@ def test_spec_without_a_verifier_still_configures(recorder: _Recorder) -> None:
     assert recorder.saved != []
 
 
-def test_validate_hook_blocks_before_verify_and_persist(recorder: _Recorder) -> None:
-    """A cross-field rule fails setup up front, with no probe and no write."""
-    verified: list[bool] = []
-
-    def _record_verify(_source: str, _config: dict[str, str]) -> dict[str, str]:
-        verified.append(True)
-        return {"status": "passed", "detail": "ok"}
-
-    spec = dataclasses.replace(
-        _SPEC,
-        verify=_record_verify,
-        validate=lambda _credentials: "Provide the other thing instead.",
-    )
-
-    outcome = setup_flow.apply_setup(spec, {"api_token": "tok-1", "room": "ops"})
-
-    assert outcome.ok is False
-    assert outcome.detail == "Provide the other thing instead."
-    assert verified == []  # never reached the verifier
-    assert (recorder.saved, recorder.keyring, recorder.env_values) == ([], [], [])
-
-
-def test_validate_hook_allows_setup_when_it_returns_blank(recorder: _Recorder) -> None:
-    spec = dataclasses.replace(_SPEC, validate=lambda _credentials: "")
-
-    outcome = setup_flow.apply_setup(spec, {"api_token": "tok-1", "room": "ops"})
-
-    assert outcome.ok is True
-    assert recorder.saved != []
-
-
 def test_finalize_hook_runs_after_persist_and_appends_its_note(recorder: _Recorder) -> None:
     saved_before_finalize: list[bool] = []
 

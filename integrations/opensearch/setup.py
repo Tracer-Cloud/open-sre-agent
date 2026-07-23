@@ -1,10 +1,10 @@
 """What OpenSearch needs before it is considered configured.
 
 Auth is a picker (basic / api_key / none). The picker scopes which fields are
-asked; ``validate`` still rejects half-filled basic auth (a username without a
-password, or the reverse) for any collection surface that skips the picker,
-since that would persist and send unauthenticated requests against a secured
-cluster. The URL is always asked.
+asked; half-filled basic auth (a username without a password, or the reverse) is
+rejected by :func:`integrations.opensearch.verifier.verify_opensearch`, so setup
+and the health check agree for any surface that skips the picker. The URL is
+always asked.
 """
 
 from __future__ import annotations
@@ -22,15 +22,6 @@ URL_FIELD = "url"
 API_KEY_FIELD = "api_key"
 USERNAME_FIELD = "username"
 PASSWORD_FIELD = "password"
-
-
-def _reject_incomplete_basic(credentials: dict[str, str | None]) -> str:
-    """Require both basic-auth halves, or neither."""
-    user = credentials.get(USERNAME_FIELD)
-    password = credentials.get(PASSWORD_FIELD)
-    if bool(user) != bool(password):
-        return "Provide both username and password for basic auth, or leave both blank."
-    return ""
 
 
 OPENSEARCH_SETUP = IntegrationSetupSpec(
@@ -76,7 +67,6 @@ OPENSEARCH_SETUP = IntegrationSetupSpec(
         SetupMode(value="api_key", label="API key", fields=(API_KEY_FIELD,)),
         SetupMode(value="none", label="None (security disabled)"),
     ),
-    validate=_reject_incomplete_basic,
     verify=verify_opensearch,
 )
 
