@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import patch
 
+import pytest
 from click.testing import CliRunner
 
-from integrations.cli import _HANDLERS, _setup_openclaw, _setup_smtp, _setup_vercel
+from integrations.cli import (
+    _HANDLERS,
+    _setup_openclaw,
+    _setup_servicenow,
+)
 from surfaces.cli.__main__ import cli
 from surfaces.cli.constants import SETUP_SERVICES, VERIFY_SERVICES
 
@@ -87,31 +93,11 @@ def test_integrations_setup_accepts_openclaw() -> None:
     mock_capture.assert_not_called()
 
 
-def test_setup_vercel_saves_credentials(monkeypatch) -> None:
-    answers = iter(["vcp_test_token", "team_123"])
-
-    def fake_p(_label: str, default: str = "", secret: bool = False) -> str:
-        return next(answers)
-
-    saved: list[tuple[str, dict[str, object]]] = []
-    monkeypatch.setattr("integrations.cli._p", fake_p)
-    monkeypatch.setattr(
-        "integrations.cli.upsert_integration",
-        lambda service, entry: saved.append((service, entry)),
-    )
-
-    _setup_vercel()
-
-    assert _HANDLERS["vercel"] is _setup_vercel
-    assert saved == [
-        (
-            "vercel",
-            {"credentials": {"api_token": "vcp_test_token", "team_id": "team_123"}},
-        )
-    ]
-
-
 def test_setup_openclaw_saves_credentials(monkeypatch) -> None:
+    import dataclasses
+
+    import integrations.openclaw.setup as openclaw_setup
+
     answers = iter(["openclaw", "mcp serve"])
 
     def fake_p(_label: str, default: str = "", secret: bool = False) -> str:
@@ -120,12 +106,24 @@ def test_setup_openclaw_saves_credentials(monkeypatch) -> None:
     saved: list[tuple[str, dict[str, object]]] = []
     monkeypatch.setattr("integrations.cli._p", fake_p)
     monkeypatch.setattr(
-        "integrations.cli.upsert_integration",
+        "integrations.setup_flow.upsert_integration",
         lambda service, entry: saved.append((service, entry)),
     )
     monkeypatch.setattr(
-        "integrations.cli.validate_openclaw_config",
-        lambda _config: type("Result", (), {"ok": True, "detail": "ok"})(),
+        "integrations.setup_flow.sync_env_secret",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        "integrations.setup_flow.sync_env_values",
+        lambda *_args, **_kwargs: Path("/tmp/.env"),
+    )
+    monkeypatch.setattr(
+        openclaw_setup,
+        "OPENCLAW_SETUP",
+        dataclasses.replace(
+            openclaw_setup.OPENCLAW_SETUP,
+            verify=lambda _source, _config: {"status": "passed", "detail": "ok"},
+        ),
     )
 
     _setup_openclaw()
@@ -138,13 +136,85 @@ def test_setup_openclaw_saves_credentials(monkeypatch) -> None:
                 "credentials": {
                     "mode": "stdio",
                     "command": "openclaw",
-                    "args": ["mcp", "serve"],
+                    "args": "mcp serve",
                     "url": "",
                     "auth_token": "",
                 }
             },
         )
     ]
+
+
+def test_setup_servicenow_saves_normalized_https_url(monkeypatch) -> None:
+    answers = iter(["https://dev12345.service-now.com/", "admin", "s3cret"])
+
+    def fake_p(_label: str, default: str = "", secret: bool = False) -> str:
+        return next(answers)
+
+    class _Resp:
+        status_code = 200
+
+    saved: list[tuple[str, dict[str, object]]] = []
+    monkeypatch.setattr("integrations.cli._p", fake_p)
+    monkeypatch.setattr(
+        "integrations.setup_flow.upsert_integration",
+        lambda service, entry: saved.append((service, entry)),
+    )
+    monkeypatch.setattr(
+        "integrations.setup_flow.sync_env_secret",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        "integrations.setup_flow.sync_env_values",
+        lambda *_args, **_kwargs: Path("/tmp/.env"),
+    )
+    monkeypatch.setattr(
+        "integrations.servicenow.verifier.httpx.get",
+        lambda *_args, **_kwargs: _Resp(),
+    )
+
+    _setup_servicenow()
+
+    assert _HANDLERS["servicenow"] is _setup_servicenow
+    assert saved == [
+        (
+            "servicenow",
+            {
+                "credentials": {
+                    "instance_url": "https://dev12345.service-now.com",
+                    "username": "admin",
+                    "password": "s3cret",
+                }
+            },
+        )
+    ]
+
+
+def test_setup_servicenow_rejects_plain_http_remote_url(monkeypatch) -> None:
+    # Regression for the silent-save gap: a plain-http remote URL must fail at
+    # setup with an actionable error, not be stored and dropped at classify.
+    monkeypatch.setattr(
+        "integrations.cli._p",
+        lambda *_args, **_kwargs: "http://dev12345.service-now.com",
+    )
+    saved: list[tuple[str, dict[str, object]]] = []
+    monkeypatch.setattr(
+        "integrations.setup_flow.upsert_integration",
+        lambda service, entry: saved.append((service, entry)),
+    )
+    monkeypatch.setattr(
+        "integrations.setup_flow.sync_env_secret",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        "integrations.setup_flow.sync_env_values",
+        lambda *_args, **_kwargs: Path("/tmp/.env"),
+    )
+
+    with pytest.raises(SystemExit):
+        _setup_servicenow()
+
+    assert saved == []
 
 
 def test_integrations_setup_accepts_telegram() -> None:
@@ -217,50 +287,6 @@ def test_integrations_setup_accepts_smtp() -> None:
     assert result.exit_code == 0
     mock_setup.assert_called_once_with("smtp")
     mock_verify.assert_called_once_with("smtp")
-
-
-def test_setup_smtp_saves_credentials(monkeypatch) -> None:
-    answers = iter(
-        [
-            "smtp.example.com",
-            "opensre@example.com",
-            "587",
-            "starttls",
-            "mailer",
-            "secret",
-            "team@example.com",
-        ]
-    )
-
-    def fake_p(_label: str, default: str = "", secret: bool = False) -> str:
-        return next(answers)
-
-    saved: list[tuple[str, dict[str, object]]] = []
-    monkeypatch.setattr("integrations.cli._p", fake_p)
-    monkeypatch.setattr(
-        "integrations.cli.upsert_integration",
-        lambda service, entry: saved.append((service, entry)),
-    )
-
-    _setup_smtp()
-
-    assert _HANDLERS["smtp"] is _setup_smtp
-    assert saved == [
-        (
-            "smtp",
-            {
-                "credentials": {
-                    "host": "smtp.example.com",
-                    "port": 587,
-                    "security": "starttls",
-                    "username": "mailer",
-                    "password": "secret",
-                    "from_address": "opensre@example.com",
-                    "default_to": "team@example.com",
-                }
-            },
-        )
-    ]
 
 
 def test_integrations_setup_skips_auto_verify_for_unverifiable_service() -> None:
@@ -375,6 +401,41 @@ def test_integrations_verify_accepts_helm() -> None:
         send_slack_test=False,
     )
     mock_capture.assert_called_once_with("helm")
+
+
+def test_integrations_verify_accepts_servicenow() -> None:
+    runner = CliRunner()
+
+    with (
+        patch("surfaces.cli.commands.integrations.capture_integration_verified") as mock_capture,
+        patch("integrations.cli.cmd_verify", return_value=0) as mock_verify,
+    ):
+        result = runner.invoke(cli, ["integrations", "verify", "servicenow"])
+
+    assert result.exit_code == 0
+    mock_verify.assert_called_once_with(
+        "servicenow",
+        send_slack_test=False,
+    )
+    mock_capture.assert_called_once_with("servicenow")
+
+
+def test_integrations_setup_accepts_servicenow() -> None:
+    runner = CliRunner()
+
+    with (
+        patch("surfaces.cli.commands.integrations.capture_integration_setup_started"),
+        patch("surfaces.cli.commands.integrations.capture_integration_setup_completed"),
+        patch("surfaces.cli.commands.integrations.capture_integration_verified"),
+        patch("integrations.cli.cmd_setup") as mock_setup,
+        patch("integrations.cli.cmd_verify", return_value=0) as mock_verify,
+    ):
+        mock_setup.return_value = "servicenow"
+        result = runner.invoke(cli, ["integrations", "setup", "servicenow"])
+
+    assert result.exit_code == 0
+    mock_setup.assert_called_once_with("servicenow")
+    mock_verify.assert_called_once_with("servicenow")
 
 
 def test_verify_services_includes_previously_missing_integrations() -> None:

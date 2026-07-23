@@ -190,11 +190,6 @@ def extract_infrastructure_assets(ctx: ReportContext) -> dict[str, Any]:
     if batch_job_queue:
         assets["batch_service"] = {"queue": batch_job_queue, "definition": batch_job_definition}
 
-    # Extract pipeline/workflow info (Prefect, Airflow, etc.)
-    pipeline_name = ctx.get("pipeline_name")
-    if pipeline_name and pipeline_name != "unknown":
-        assets["pipeline"] = pipeline_name
-
     # Extract CloudWatch log groups (multiple possible)
     log_groups = []
 

@@ -10,6 +10,7 @@ from typing import Any
 import httpx
 from pydantic import Field, field_validator
 
+from config.llm_credentials import resolve_env_credential
 from config.strict_config import StrictConfigModel
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
 
@@ -62,7 +63,7 @@ def build_jenkins_config(raw: dict[str, Any] | None) -> JenkinsConfig:
 def jenkins_config_from_env() -> JenkinsConfig | None:
     """Load a Jenkins config from env vars."""
     base_url = os.getenv("JENKINS_URL", "").strip()
-    api_token = os.getenv("JENKINS_API_TOKEN", "").strip()
+    api_token = resolve_env_credential("JENKINS_API_TOKEN")
     if not base_url or not api_token:
         return None
     return build_jenkins_config(

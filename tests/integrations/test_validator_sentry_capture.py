@@ -19,6 +19,13 @@ outer except (or are deliberate version-detection fallbacks):
 
 - ``mysql.get_replication_status`` inner ``stmt_err`` (MySQL <8.0.22 fallback)
 - ``mariadb.get_replication_status`` inner ``stmt_err`` (analogous)
+
+Some vendors no longer inline the broad-except: relational diagnostics can
+delegate the whole connect/query/error lifecycle to the shared
+``read_only_query`` wrapper in ``integrations/_relational.py``. Those cases set
+``decorated_with`` and are checked for the decorator instead; the wrapper's own
+reporting is asserted once in
+:func:`test_shared_read_only_wrapper_reports_failures`.
 """
 
 from __future__ import annotations
@@ -39,6 +46,9 @@ class MigrationCase:
     function: str  # outer function name (may include "."-separated nested suffix)
     integration: str  # expected tag.integration
     method: str  # expected tag.method
+    # When set, the function delegates its broad-except to this decorator (the
+    # shared `read_only_query` binding) instead of inlining one.
+    decorated_with: str | None = None
 
 
 CASES: tuple[MigrationCase, ...] = (
@@ -188,15 +198,44 @@ CASES: tuple[MigrationCase, ...] = (
     MigrationCase(
         "integrations/mysql.py", "validate_mysql_config", "mysql", "validate_mysql_config"
     ),
-    MigrationCase("integrations/mysql.py", "get_server_status", "mysql", "get_server_status"),
+    # MySQL diagnostics delegate the connect/query/error lifecycle to the shared
+    # `read_only_query` wrapper, so they carry the decorator instead of an
+    # inline broad-except.
     MigrationCase(
-        "integrations/mysql.py", "get_current_processes", "mysql", "get_current_processes"
+        "integrations/mysql.py",
+        "get_server_status",
+        "mysql",
+        "get_server_status",
+        decorated_with="_read_only",
     ),
     MigrationCase(
-        "integrations/mysql.py", "get_replication_status", "mysql", "get_replication_status"
+        "integrations/mysql.py",
+        "get_current_processes",
+        "mysql",
+        "get_current_processes",
+        decorated_with="_read_only",
     ),
-    MigrationCase("integrations/mysql.py", "get_slow_queries", "mysql", "get_slow_queries"),
-    MigrationCase("integrations/mysql.py", "get_table_stats", "mysql", "get_table_stats"),
+    MigrationCase(
+        "integrations/mysql.py",
+        "get_replication_status",
+        "mysql",
+        "get_replication_status",
+        decorated_with="_read_only",
+    ),
+    MigrationCase(
+        "integrations/mysql.py",
+        "get_slow_queries",
+        "mysql",
+        "get_slow_queries",
+        decorated_with="_read_only",
+    ),
+    MigrationCase(
+        "integrations/mysql.py",
+        "get_table_stats",
+        "mysql",
+        "get_table_stats",
+        decorated_with="_read_only",
+    ),
     # mariadb
     MigrationCase(
         "integrations/mariadb.py",
@@ -340,6 +379,25 @@ def _calls_to(handler: ast.ExceptHandler, func_name: str) -> list[ast.Call]:
     return matches
 
 
+def _decorator_names(fn: ast.FunctionDef) -> set[str]:
+    """Return the bare names of a function's decorators (``@foo`` and ``@foo(...)``)."""
+    names: set[str] = set()
+    for node in fn.decorator_list:
+        target = node.func if isinstance(node, ast.Call) else node
+        if isinstance(target, ast.Name):
+            names.add(target.id)
+    return names
+
+
+def _kwarg_has_name(call: ast.Call, key: str, expected: str) -> bool:
+    """True when ``key=`` is passed the non-literal expression ``expected``."""
+    for kw in call.keywords:
+        if kw.arg != key:
+            continue
+        return ast.unparse(kw.value) == expected
+    return False
+
+
 def _kwarg_str(call: ast.Call, key: str) -> str | None:
     for kw in call.keywords:
         if kw.arg == key and isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str):
@@ -369,6 +427,17 @@ def test_broad_except_calls_report_validation_failure(case: MigrationCase) -> No
     fn = _find_function(tree, case.function)
     assert fn is not None, f"function {case.function} not found in {case.module_path}"
 
+    if case.decorated_with:
+        # The broad-except lives in the shared wrapper, which reports with
+        # integration=<vendor> and method=<wrapped fn name>. Assert the
+        # delegation is in place; the wrapper itself is covered by
+        # test_shared_read_only_wrapper_reports_failures.
+        assert case.decorated_with in _decorator_names(fn), (
+            f"{case.module_path}::{case.function} is expected to delegate error "
+            f"reporting via @{case.decorated_with}, but that decorator is missing"
+        )
+        return
+
     handlers = _broad_except_handlers(fn)
     assert handlers, f"no `except Exception` handlers in {case.module_path}::{case.function}"
 
@@ -390,6 +459,37 @@ def test_broad_except_calls_report_validation_failure(case: MigrationCase) -> No
         f"{case.module_path}::{case.function} reports the same "
         f"(integration={case.integration!r}, method={case.method!r}) "
         f"{len(matching_calls)} times; expected exactly once"
+    )
+
+
+def test_shared_read_only_wrapper_reports_failures() -> None:
+    """The shared relational wrapper must report on its broad-except.
+
+    Cases with ``decorated_with`` set delegate their error handling here, so
+    this is the single place that coverage is proven for all of them. The tags
+    are dynamic — ``integration`` is the bound vendor name and ``method`` is the
+    wrapped function's ``__name__`` — so assert on the expressions, not literals.
+    """
+    source = (_REPO_ROOT / "integrations/_relational.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+
+    wrapper = _find_function(tree, "wrapper")
+    assert wrapper is not None, "read_only_query no longer defines its `wrapper` closure"
+
+    handlers = _broad_except_handlers(wrapper)
+    assert handlers, "read_only_query's wrapper has no `except Exception` handler"
+
+    calls = [c for h in handlers for c in _calls_to(h, "report_validation_failure")]
+    assert len(calls) == 1, (
+        f"read_only_query's wrapper should report exactly once; found {len(calls)}"
+    )
+
+    call = calls[0]
+    assert _kwarg_has_name(call, "integration", "integration"), (
+        "wrapper must tag the bound vendor name as integration="
+    )
+    assert _kwarg_has_name(call, "method", "fn.__name__"), (
+        "wrapper must tag the wrapped function's name as method="
     )
 
 

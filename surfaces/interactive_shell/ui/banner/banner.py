@@ -1,7 +1,7 @@
-"""Splash screen, agent ready-state box, and REPL launch banner.
+"""Splash screen and agent ready-state box for the REPL launch banner.
 
-Three exported entry points
----------------------------
+Two exported entry points
+-------------------------
 render_splash(console, first_run=False)
     Branded startup screen with the Braille logomark and optional security gate.
     Called once when the CLI starts.
@@ -11,10 +11,6 @@ render_ready_box(console, session=None)
       left  → ◉ OpenSRE · provider · model · mode · cwd
       right → "Tips for getting started" + "What's new"
     Called after the splash and on /clear, /welcome, and greeting aliases.
-
-render_banner(console)
-    Backward-compatible shim: render_splash + render_ready_box in one call.
-    Existing callers continue to work unchanged.
 
 Rendered output legend (colour roles)
 --------------------------------------
@@ -336,21 +332,3 @@ def render_ready_box(
     console.print()
     console.print(build_ready_panel(console, session=session))
     console.print()
-
-
-# ── Backward-compatible shim ──────────────────────────────────────────────────
-
-
-def render_banner(console: Console | None = None) -> None:
-    """Render splash + ready-state box in one call (legacy entry point).
-
-    Existing callers (main.run_repl) continue to work unchanged.
-    """
-    _console = console or Console(
-        highlight=False,
-        force_terminal=True,
-        color_system="truecolor",
-        legacy_windows=False,
-    )
-    render_splash(_console)
-    render_ready_box(_console)

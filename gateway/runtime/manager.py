@@ -192,7 +192,12 @@ class GatewayManager:
 
 
 def start_gateway(*, wait: bool = True) -> GatewayManager:
-    """Compatibility wrapper for existing CLI/import callers."""
+    """Compatibility wrapper for existing CLI/import callers.
+
+    Production boot with slash ports goes through
+    :mod:`surfaces.cli.gateway_entry` (surfaces may import gateway; the reverse
+    is forbidden).
+    """
     return GatewayManager().start_gateway(wait=wait)
 
 

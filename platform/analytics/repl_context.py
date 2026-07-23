@@ -46,16 +46,6 @@ def reset_cli_session_id(token: Token[str | None]) -> None:
     _CLI_SESSION_ID.reset(token)
 
 
-def reset_cli_turn_kind(token: Token[str | None]) -> None:
-    """Restore the previous ``cli_turn_kind`` binding."""
-    _CLI_TURN_KIND.reset(token)
-
-
-def reset_prompt_turn_id(token: Token[str | None]) -> None:
-    """Restore the previous ``prompt_turn_id`` binding."""
-    _PROMPT_TURN_ID.reset(token)
-
-
 @contextlib.contextmanager
 def bound_repl_turn_context(
     *,

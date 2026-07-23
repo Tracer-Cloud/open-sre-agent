@@ -89,12 +89,7 @@ def node_correlate_upstream(
             return {"correlation": existing}
 
     raw_alert = _raw_alert_dict(state)
-    service_name = str(
-        raw_alert.get("service")
-        or raw_alert.get("service_name")
-        or state.get("pipeline_name")
-        or "unknown"
-    )
+    service_name = str(raw_alert.get("service") or raw_alert.get("service_name") or "unknown")
     alert_id = str(raw_alert.get("id") or raw_alert.get("alert_id") or "unknown")
     try:
         window_start, window_end = _incident_window(state)

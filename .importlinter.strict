@@ -34,12 +34,13 @@ ignore_imports =
     platform.observability.errors.sentry -> integrations.llm_cli.errors
     platform.scheduler.credentials -> integrations.catalog
     platform.scheduler.executor -> integrations.discord.delivery
+    platform.scheduler.executor -> integrations.rocketchat.delivery
     platform.scheduler.executor -> integrations.slack.delivery
     platform.scheduler.executor -> integrations.telegram.delivery
     platform.scheduler.executor -> integrations.telegram.formatting
     # surfaces -> gateway (cli + repl gateway commands)
     surfaces.cli.commands.gateway -> gateway.runtime.daemon
-    surfaces.cli.commands.gateway -> gateway.runtime.manager
+    surfaces.cli.gateway_entry -> gateway.runtime.manager
     surfaces.interactive_shell.command_registry.gateway_cmds -> gateway.runtime.daemon
     surfaces.interactive_shell.controller -> gateway.http.web_server
     # tools -> integrations (T-4 debt — vendor tools / reporting)
@@ -61,7 +62,9 @@ ignore_imports =
     tools.interactive_shell.implementation.claude_code_executor -> integrations.llm_cli.claude_code
     tools.interactive_shell.implementation.claude_code_executor -> integrations.llm_cli.subprocess_env
     tools.investigation.reporting.delivery.bootstrap -> integrations.discord.reporting_adapter
+    tools.investigation.reporting.delivery.bootstrap -> integrations.grafana.reporting_adapter
     tools.investigation.reporting.delivery.bootstrap -> integrations.openclaw.reporting_adapter
+    tools.investigation.reporting.delivery.bootstrap -> integrations.rocketchat.reporting_adapter
     tools.investigation.reporting.delivery.bootstrap -> integrations.slack.reporting_adapter
     tools.investigation.reporting.delivery.bootstrap -> integrations.telegram.reporting_adapter
     tools.investigation.reporting.delivery.bootstrap -> integrations.twilio.reporting_adapter

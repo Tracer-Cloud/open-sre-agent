@@ -1,4 +1,10 @@
-"""Low-level keyring storage for LLM credentials and auth metadata."""
+"""Low-level OS keyring storage for OpenSRE secrets.
+
+Historically named for LLM API keys; the same store backs integration secrets
+(``TELEGRAM_BOT_TOKEN``, ``ROCKETCHAT_AUTH_TOKEN``, etc.) via
+``save_keyring_secret`` / ``resolve_env_credential``. The keyring service id
+remains ``opensre.llm`` so existing entries keep resolving.
+"""
 
 from __future__ import annotations
 
@@ -66,22 +72,26 @@ def read_keychain_secret(env_var: str) -> str:
 
     Callers that must tell "genuinely absent" apart from "keychain backend
     could not be reached right now" (e.g. deciding whether to persist a
-    credential as stale) should use this instead of ``resolve_llm_api_key``,
+    credential as stale) should use this instead of ``resolve_keyring_secret``,
     which collapses both cases to ``""``.
     """
     return (keyring.get_password(_KEYRING_SERVICE, env_var) or "").strip()
 
 
-def resolve_llm_api_key(env_var: str) -> str:
-    """Resolve an LLM API key from env first, then the local keychain."""
-    env_value = os.getenv(env_var, "").strip()
-    if env_value:
-        return env_value
+def resolve_keyring_secret(env_var: str) -> str:
+    """Read a secret from the OS keyring only (empty if missing/disabled/error).
+
+    Prefer :func:`config.llm_credentials.resolve_env_credential` when callers
+    should also honor a process-env value.
+
+    Backend init failures (e.g. SecretService raising bare ``RuntimeError`` when
+    D-Bus is unset) are treated as miss — catalog/env loaders must not abort.
+    """
     if keyring_is_disabled():
         return ""
     try:
         return read_keychain_secret(env_var)
-    except keyring.errors.KeyringError:
+    except (keyring.errors.KeyringError, RuntimeError, OSError):
         return ""
 
 
@@ -132,11 +142,11 @@ def get_keyring_setup_instructions(env_var: str) -> tuple[str, ...]:
     )
 
 
-def save_llm_api_key(env_var: str, value: str) -> None:
-    """Persist an LLM API key in the user's system keychain."""
+def save_keyring_secret(env_var: str, value: str) -> None:
+    """Persist a secret in the user's system keychain under ``env_var``."""
     normalized = value.strip()
     if not normalized:
-        delete_llm_api_key(env_var)
+        delete_keyring_secret(env_var)
         return
     if keyring_is_disabled():
         raise RuntimeError("Secure local credential storage is disabled on this machine.")
@@ -148,8 +158,8 @@ def save_llm_api_key(env_var: str, value: str) -> None:
         ) from exc
 
 
-def delete_llm_api_key(env_var: str) -> None:
-    """Remove an LLM API key from the user's system keychain if present."""
+def delete_keyring_secret(env_var: str) -> None:
+    """Remove a secret from the user's system keychain if present."""
     if keyring_is_disabled():
         return
     try:

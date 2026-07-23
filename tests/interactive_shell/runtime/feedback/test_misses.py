@@ -82,7 +82,7 @@ def test_record_miss_returns_none_and_warns_on_write_failure(
 
 def test_record_miss_persists_to_jsonl(opensre_home: Path) -> None:
     feedback = _feedback_dict()
-    final_state = {"pipeline_name": "checkout/api", "severity": "critical"}
+    final_state = {"severity": "critical"}
 
     rec = record_miss(
         feedback,
@@ -92,7 +92,7 @@ def test_record_miss_persists_to_jsonl(opensre_home: Path) -> None:
 
     assert rec is not None
     assert rec["taxonomy"] == "retrieval_gap"
-    assert rec["pipeline_name"] == "checkout/api"
+    assert "pipeline_name" not in rec
     assert rec["severity"] == "critical"
     assert rec["feedback_id"] == "fb-001"
 
@@ -237,7 +237,6 @@ def test_to_benchmark_scenario_carries_rubric() -> None:
         miss_id="m-1",
         run_id="r-1",
         alert_name="checkout-api 5xx",
-        pipeline_name="checkout/api",
         severity="critical",
         timestamp="2026-06-02T10:00:00+00:00",
         taxonomy="retrieval_gap",
@@ -249,7 +248,7 @@ def test_to_benchmark_scenario_carries_rubric() -> None:
 
     assert scenario["alert_name"] == "checkout-api 5xx"
     assert scenario["title"].startswith("[Regression]")
-    assert scenario["pipeline_name"] == "checkout/api"
+    assert "pipeline_name" not in scenario
     assert scenario["severity"] == "critical"
     assert scenario["_meta"]["miss_id"] == "m-1"
     assert scenario["_meta"]["taxonomy"] == "retrieval_gap"

@@ -2,7 +2,7 @@
 title: "OpenSRE"
 ---
 
-OpenSRE is agentic alert investigation for production systems. It connects to your tools, systems and knowledge bases to investigate incidents before your team gets pages. OpenSRE delivers automated root cause analysis and recommended fixes directly to Slack, PagerDuty, or wherever your team communicates, so engineers of all skill-levels and seniority can resolve incidents fast.
+OpenSRE is agentic alert investigation for production systems. It connects to your observability stack, infrastructure, and knowledge bases to investigate incidents before your team gets paged — then delivers root-cause analysis and recommended fixes to Slack, PagerDuty, or local files.
 
 <div className="index-transition-note">
   <p className="index-transition-note-label">Tracer to OpenSRE</p>
@@ -23,47 +23,57 @@ OpenSRE is agentic alert investigation for production systems. It connects to yo
   </Card>
 </CardGroup>
 
+## First 5 minutes
+
+```bash
+# Install (macOS / Linux)
+curl -fsSL https://install.opensre.com | bash
+
+# Configure LLM + integrations
+opensre onboard
+
+# Run a sample investigation
+opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
+```
+
+After the run completes, open the generated artifacts:
+
+- `problem.md` — incident framing
+- `theory/hypothesis_*.md` — hypotheses tested during the run
+- `report.md` — root cause, confidence, and next steps
+
+Or export JSON for automation:
+
+```bash
+opensre investigate -i <alert-file> --output ./rca.json
+```
+
+**Interactive shell** — run `opensre` with no subcommand to describe incidents in plain language and use slash commands (`/help`, `/verify datadog`, `/investigate`).
+
+<Tip>
+  Stuck? See [Quickstart troubleshooting](/quickstart#troubleshooting) (Docker running, `make` installed, LLM configured).
+</Tip>
+
 ## Start here
 
 <CardGroup cols={2}>
   <Card title="Investigations" icon="magnifying-glass" href="/investigation-overview">
     Alert ingestion, evidence collection, masking, and remote runtime workflows.
   </Card>
-  {/* Tracer tab hidden — to re-enable, restore the Tracer tab in docs/docs.json and
-      uncomment below.
-  <Card title="Monitoring" icon="chart-line" href="/introduction-monitoring">
-    Workflow monitoring, tutorials, framework support, and operational use cases.
+  <Card title="Showcase" icon="photo-film" href="/showcase">
+    Sample outputs, quickstart demos, and CloudOpsBench benchmark walkthrough.
   </Card>
-  <Card title="Platform" icon="layers-group" href="/technology/end-to-end">
-    OpenSRE architecture, product capabilities, deployment targets, and comparisons.
-  </Card>
-  */}
-  {/* Changelog disabled — daily-update workflow removed (PR #1409). To re-enable, restore the
-      Changelog tab in docs/docs.json and uncomment below.
-  <Card title="Daily updates" icon="newspaper" href="/daily-updates/overview">
-    Follow product progress and recent documentation changes.
-  </Card>
-  */}
 </CardGroup>
-
-## What it does
-
-OpenSRE enables teams to resolve incidents quickly without sacrificing fix quality or team capacity. With OpenSRE, you can:
-
-- **Stop investigating, start fixing.** When an alert fires, OpenSRE immediately pulls context from your observability tools, infrastructure, and knowledge bases. It checks recent deploys, queries logs and metrics, builds multiple root cause hypotheses, and tests them in parallel. By the time you open your laptop, you already know what broke and why.
-- **Ship the right fix, not the fast one.** When you're on-call and the pressure's on, you ship the patch that makes the alert go away. OpenSRE takes investigation off your plate so you have the time and context to fix the actual problem instead of papering over it.
-- **Give everyone the context that's usually stuck in one person's head.** Complex systems often need the engineer who built them to debug them. OpenSRE surfaces the same depth of analysis – what failed, what changed, what caused the cascade – so whoever's on-call can understand root cause without needing to page the one person who just knows.
 
 ## How it works
 
 When an alert fires, OpenSRE autonomously:
 
-1. **Ingests the alert.** Picks up alerts from your metrics, logs, traces, or incident systems and normalizes them into a single investigation.
-2. **Assembles context.** Pulls in service ownership, dependencies, recent deploys, config changes, and baselines.
-3. **Frames the problem.** Identifies impacted components, plausible failure modes, and investigation objectives.
-4. **Investigates in a loop.** Plans queries, executes them against your observability and production tooling, and synthesizes evidence into evolving hypotheses.
-5. **Decides when to stop.** Evaluates hypothesis confidence, remaining uncertainty, and whether further investigation is likely to change the outcome.
-6. **Delivers a report.** Sends likely root causes, supporting evidence, and recommended next actions to Slack, PagerDuty, or wherever your team communicates.
+1. **Ingests the alert** from metrics, logs, traces, or incident systems
+2. **Assembles context** — ownership, deploys, dependencies, baselines
+3. **Plans evidence collection** across connected integrations
+4. **Investigates in a loop** — queries tools, updates hypotheses, stops when confidence is high enough
+5. **Delivers a report** to Slack, local files, or your configured messaging channel
 
 <div className="index-diagram-frame">
   <div className="index-diagram-kicker">Investigation workflow</div>
@@ -73,3 +83,5 @@ When an alert fires, OpenSRE autonomously:
     className="index-diagram-image"
   />
 </div>
+
+See [How an investigation works](/how-investigations-work) for a plain-language walkthrough of each stage.

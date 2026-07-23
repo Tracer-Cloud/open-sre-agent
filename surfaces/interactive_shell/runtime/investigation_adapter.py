@@ -240,6 +240,10 @@ class ReplInvestigationLaunchPorts:
         exception_context: str,
         target: str,
     ) -> ForegroundInvestigationResult:
+        from surfaces.interactive_shell.utils.telemetry.investigation_analytics import (
+            publish_investigation_outcome_analytics,
+        )
+
         outcome = run_foreground_investigation(
             session=cast(Session, session),
             console=console,
@@ -248,6 +252,7 @@ class ReplInvestigationLaunchPorts:
             exception_context=exception_context,
             target=target,
         )
+        publish_investigation_outcome_analytics(outcome)
         return ForegroundInvestigationResult(status=outcome.status)
 
 

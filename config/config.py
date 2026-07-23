@@ -13,6 +13,10 @@ from typing import Literal
 
 from pydantic import Field, ValidationError, field_validator, model_validator
 
+from config.constants.llm import (
+    AZURE_OPENAI_API_VERSION_ENV,
+    AZURE_OPENAI_BASE_URL_ENV,
+)
 from config.llm_auth.auth_method import (
     LLM_AUTH_METHOD_ENV,
     effective_llm_provider,
@@ -69,6 +73,28 @@ CLERK_CONFIG_PROD = ClerkConfig(
     jwks_url="https://clerk.tracer.cloud/.well-known/jwks.json",
     issuer="https://clerk.tracer.cloud",
 )
+
+# Env vars injected by the org-silo infra (ECS task definition) to point JWT
+# verification at the silo's own Clerk instance instead of the defaults above.
+CLERK_ISSUER_ENV = "CLERK_ISSUER"
+CLERK_JWKS_URL_ENV = "CLERK_JWKS_URL"
+
+
+def get_clerk_config_override() -> ClerkConfig | None:
+    """Return the Clerk instance configured via CLERK_ISSUER / CLERK_JWKS_URL.
+
+    The org-silo infra injects these per deployment; when ``CLERK_ISSUER`` is
+    unset, callers fall back to the hardcoded ``CLERK_CONFIG_DEV`` /
+    ``CLERK_CONFIG_PROD`` defaults. ``CLERK_JWKS_URL`` defaults to the
+    issuer's standard ``/.well-known/jwks.json`` path when omitted. Read at
+    call time (not import time) so env loaded by ``bootstrap_opensre_env``
+    and test monkeypatching are honored.
+    """
+    issuer = os.getenv(CLERK_ISSUER_ENV, "").strip().rstrip("/")
+    if not issuer:
+        return None
+    jwks_url = os.getenv(CLERK_JWKS_URL_ENV, "").strip() or f"{issuer}/.well-known/jwks.json"
+    return ClerkConfig(jwks_url=jwks_url, issuer=issuer)
 
 
 def get_environment() -> Environment:
@@ -335,9 +361,9 @@ def _llm_settings_env_payload(provider: str) -> dict[str, object]:
             os.getenv("GROQ_MODEL", GROQ_TOOLCALL_MODEL),
         ).strip()
         or GROQ_TOOLCALL_MODEL,
-        "azure_openai_base_url": os.getenv("AZURE_OPENAI_BASE_URL", "").strip(),
+        "azure_openai_base_url": os.getenv(AZURE_OPENAI_BASE_URL_ENV, "").strip(),
         "azure_openai_api_version": os.getenv(
-            "AZURE_OPENAI_API_VERSION", DEFAULT_AZURE_OPENAI_API_VERSION
+            AZURE_OPENAI_API_VERSION_ENV, DEFAULT_AZURE_OPENAI_API_VERSION
         ).strip()
         or DEFAULT_AZURE_OPENAI_API_VERSION,
         "azure_openai_reasoning_model": os.getenv(

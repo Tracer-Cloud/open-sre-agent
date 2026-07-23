@@ -58,6 +58,18 @@ def run_watchdog(
                     click.echo(f"watchdog: target exited pid={sample.pid}")
                 return SUCCESS
 
+            if not sample.accessible:
+                # The process is still running but denied this read
+                # (transient psutil.AccessDenied). Retry next tick rather
+                # than mis-reporting an exit or alarming on zeroed metrics.
+                if config.verbose:
+                    click.echo(
+                        f"watchdog: sample inaccessible pid={sample.pid} "
+                        "(permission denied); retrying"
+                    )
+                _sleep(config.interval)
+                continue
+
             now = _clock()
             breaches = _evaluate_thresholds(config, sample, cpu_window=cpu_window, now=now)
             if config.verbose:

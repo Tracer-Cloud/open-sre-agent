@@ -128,6 +128,13 @@ def _fallback_descriptors() -> tuple[ToolDescriptor, ...]:
             "integrations.slack.tools.slack_list_members_tool.tool",
         ),
         ToolDescriptor(
+            "slack_read_list",
+            ("investigation", "chat", "action"),
+            "slack",
+            None,
+            "integrations.slack.tools.slack_read_list_tool.tool",
+        ),
+        ToolDescriptor(
             "slack_read_messages",
             ("investigation", "chat", "action"),
             "slack",
@@ -175,6 +182,13 @@ def _fallback_descriptors() -> tuple[ToolDescriptor, ...]:
             "interactive_shell",
             None,
             "tools.interactive_shell.actions.task_cancel",
+        ),
+        ToolDescriptor(
+            "rocketchat_send_message",
+            ("investigation", "action"),
+            "rocketchat",
+            None,
+            "integrations.rocketchat.tools.rocketchat_send_message_tool.tool",
         ),
         ToolDescriptor(
             "telegram_send_message",

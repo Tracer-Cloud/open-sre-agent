@@ -79,6 +79,11 @@ def _available_investigation_tools(resolved_integrations: dict[str, Any]) -> lis
     ]
 
 
+def _is_candidate(action: PlannedInvestigationAction) -> bool:
+    """A scored action eligible for selection: a positive score, or a fallback tool."""
+    return action.score > 0 or action.name in FALLBACK_TOOL_NAMES
+
+
 def _apply_budget(
     state: dict[str, Any],
     scored: list[PlannedInvestigationAction],
@@ -89,9 +94,7 @@ def _apply_budget(
     budget = _tool_budget(state)
     selected = candidates[:budget]
     excluded_candidates = candidates[budget:]
-    not_candidates = [
-        action for action in scored if action not in positive and action not in fallback
-    ]
+    not_candidates = [action for action in scored if not _is_candidate(action)]
     return selected, excluded_candidates + not_candidates
 
 

@@ -60,7 +60,6 @@ def _require_org(claims_organization: str | None) -> str:
 class CreateInvestigationRequest(BaseModel):
     raw_alert: dict[str, Any] = Field(default_factory=dict)
     alert_name: str | None = None
-    pipeline_name: str | None = None
     severity: str | None = None
     workspace_id: str | None = None
 
@@ -93,7 +92,6 @@ def create_investigation(
     trigger = {
         "raw_alert": body.raw_alert,
         "alert_name": body.alert_name,
-        "pipeline_name": body.pipeline_name,
         "severity": body.severity,
     }
     record = store.create(

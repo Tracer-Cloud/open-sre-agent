@@ -174,7 +174,6 @@ async def receive_alert(request: Request) -> JSONResponse:
 class InvestigateRequest(BaseModel):
     raw_alert: dict[str, Any]
     alert_name: str | None = None
-    pipeline_name: str | None = None
     severity: str | None = None
 
 
@@ -202,7 +201,6 @@ def investigate(req: InvestigateRequest, request: Request) -> InvestigateRespons
     investigation_metadata = resolve_investigation_context(
         raw_alert=req.raw_alert,
         alert_name=req.alert_name,
-        pipeline_name=req.pipeline_name,
         severity=req.severity,
     )
     try:

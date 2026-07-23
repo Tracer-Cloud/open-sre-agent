@@ -448,6 +448,275 @@ def test_deliver_background_notifications_telegram_body_passes_through_unescaped
     assert "&gt;" not in body
 
 
+# --- Rocket.Chat -------------------------------------------------------------
+#
+# Same patching rule as the telegram cases: patch the SOURCE modules, because
+# the implementation lazily imports inside the branch.
+
+_ROCKETCHAT_PAT_ENTRY = {
+    "rocketchat": {
+        "source": "local env",
+        "config": {
+            "server_url": "https://chat.example.com",
+            "auth_token": "tok",
+            "user_id": "u1",
+            "default_channel": "#incidents",
+            "webhook_url": "",
+        },
+    }
+}
+
+_ROCKETCHAT_WEBHOOK_ENTRY = {
+    "rocketchat": {
+        "source": "local env",
+        "config": {
+            "server_url": "",
+            "auth_token": "",
+            "user_id": "",
+            "default_channel": None,
+            "webhook_url": "https://chat.example.com/hooks/abc/def",
+        },
+    }
+}
+
+
+def test_deliver_background_notifications_sends_rocketchat_via_token(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "integrations.catalog.resolve_effective_integrations",
+        lambda: dict(_ROCKETCHAT_PAT_ENTRY),
+    )
+
+    captured: dict[str, object] = {}
+
+    def _fake_post(
+        server_url: str, channel: str, text: str, auth_token: str, user_id: str
+    ) -> tuple[bool, str, str]:
+        captured.update(server_url=server_url, channel=channel, text=text)
+        return True, "", "m-1"
+
+    monkeypatch.setattr(
+        "integrations.rocketchat.delivery.post_rocketchat_message",
+        _fake_post,
+    )
+
+    record = BackgroundInvestigationRecord(
+        task_id="bg-123",
+        status="completed",
+        command="/investigate checkout-latency",
+        root_cause="ROOTSENTINEL postgres connection pool saturation",
+        top_analysis=("TOPANALYSISSENTINEL rds cpu spike",),
+        next_steps=("NEXTSTEPSENTINEL raise pool size",),
+        stats={"tool_call_count": 4, "investigation_loop_count": 2, "validity_score": 0.8},
+    )
+
+    results = deliver_background_notifications(record=record, channels=("rocketchat",))
+
+    assert results == {"rocketchat": "sent"}
+    assert captured["server_url"] == "https://chat.example.com"
+    assert captured["channel"] == "#incidents"
+    body = str(captured["text"])
+    assert "ROOTSENTINEL" in body
+    assert "NEXTSTEPSENTINEL" in body
+
+
+def test_deliver_background_notifications_sends_rocketchat_via_webhook_when_no_pat(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        "integrations.catalog.resolve_effective_integrations",
+        lambda: dict(_ROCKETCHAT_WEBHOOK_ENTRY),
+    )
+
+    captured: dict[str, object] = {}
+
+    def _fake_webhook(webhook_url: str, text: str) -> tuple[bool, str]:
+        captured.update(webhook_url=webhook_url, text=text)
+        return True, ""
+
+    monkeypatch.setattr(
+        "integrations.rocketchat.delivery.post_rocketchat_webhook",
+        _fake_webhook,
+    )
+
+    record = BackgroundInvestigationRecord(
+        task_id="bg-123", status="completed", command="free-text", root_cause="boom"
+    )
+    results = deliver_background_notifications(record=record, channels=("rocketchat",))
+
+    assert results == {"rocketchat": "sent"}
+    assert captured["webhook_url"] == "https://chat.example.com/hooks/abc/def"
+
+
+def test_deliver_background_notifications_marks_missing_rocketchat(monkeypatch) -> None:
+    monkeypatch.setattr("integrations.catalog.resolve_effective_integrations", lambda: {})
+    record = BackgroundInvestigationRecord(
+        task_id="bg-123", status="completed", command="free-text"
+    )
+    results = deliver_background_notifications(record=record, channels=("rocketchat",))
+    assert results["rocketchat"].startswith("missing rocketchat integration: ")
+
+
+def test_deliver_background_notifications_marks_rocketchat_missing_channel(
+    monkeypatch,
+) -> None:
+    """Token credentials without a default_channel cannot pick a destination."""
+    entry = {
+        "rocketchat": {
+            "source": "local env",
+            "config": {
+                **_ROCKETCHAT_PAT_ENTRY["rocketchat"]["config"],
+                "default_channel": None,
+            },
+        }
+    }
+    monkeypatch.setattr(
+        "integrations.catalog.resolve_effective_integrations",
+        lambda: entry,
+    )
+    record = BackgroundInvestigationRecord(
+        task_id="bg-123", status="completed", command="free-text"
+    )
+    results = deliver_background_notifications(record=record, channels=("rocketchat",))
+    assert results["rocketchat"].startswith("missing rocketchat integration: ")
+    assert "default_channel" in results["rocketchat"]
+
+
+def test_deliver_background_notifications_pat_without_channel_never_falls_back_to_webhook(
+    monkeypatch,
+) -> None:
+    """Mixed config: full token credentials + webhook + no default_channel.
+
+    Token credentials mean channel-targeting mode, so the missing
+    default_channel is surfaced as a configuration gap — the webhook's fixed
+    destination is deliberately NOT used as a silent fallback (same routing
+    rule as the rocketchat_send_message tool and the cron provider).
+    """
+    entry = {
+        "rocketchat": {
+            "source": "local env",
+            "config": {
+                **_ROCKETCHAT_PAT_ENTRY["rocketchat"]["config"],
+                "default_channel": None,
+                "webhook_url": "https://chat.example.com/hooks/abc/def",
+            },
+        }
+    }
+    monkeypatch.setattr(
+        "integrations.catalog.resolve_effective_integrations",
+        lambda: entry,
+    )
+
+    def _explode_webhook(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("webhook must not be used as a fallback when PAT is configured")
+
+    monkeypatch.setattr(
+        "integrations.rocketchat.delivery.post_rocketchat_webhook",
+        _explode_webhook,
+    )
+
+    record = BackgroundInvestigationRecord(
+        task_id="bg-123", status="completed", command="free-text"
+    )
+    results = deliver_background_notifications(record=record, channels=("rocketchat",))
+    assert results["rocketchat"].startswith("missing rocketchat integration: ")
+    assert "default_channel" in results["rocketchat"]
+
+
+def test_deliver_background_notifications_redacts_rocketchat_token_from_failure(
+    monkeypatch,
+) -> None:
+    """Failure detail lands in the record and `/background show` — the token must
+    never survive into the result, mirroring the telegram redaction contract."""
+    auth_token = "RC-HAPPYTOKEN"
+    entry = {
+        "rocketchat": {
+            "source": "local env",
+            "config": {
+                **_ROCKETCHAT_PAT_ENTRY["rocketchat"]["config"],
+                "auth_token": auth_token,
+            },
+        }
+    }
+    monkeypatch.setattr(
+        "integrations.catalog.resolve_effective_integrations",
+        lambda: entry,
+    )
+    monkeypatch.setattr(
+        "integrations.rocketchat.delivery.post_rocketchat_message",
+        lambda *_args, **_kwargs: (False, f"502 Bad Gateway echoing {auth_token}", ""),
+    )
+
+    record = BackgroundInvestigationRecord(
+        task_id="bg-123", status="completed", command="free-text", root_cause="boom"
+    )
+    results = deliver_background_notifications(record=record, channels=("rocketchat",))
+
+    assert auth_token not in results["rocketchat"]
+    assert "<redacted>" in results["rocketchat"]
+    assert results["rocketchat"].startswith("failed: ")
+    assert "502 Bad Gateway" in results["rocketchat"]
+
+
+def test_deliver_background_notifications_rocketchat_body_keeps_actionable_tail(
+    monkeypatch,
+) -> None:
+    """Same 4096 budget rule as telegram: the actionable tail must survive."""
+    monkeypatch.setattr(
+        "integrations.catalog.resolve_effective_integrations",
+        lambda: dict(_ROCKETCHAT_PAT_ENTRY),
+    )
+
+    captured: dict[str, object] = {}
+
+    def _fake_post(*args: object, **_kwargs: object) -> tuple[bool, str, str]:
+        captured["text"] = args[2]
+        return True, "", "m-1"
+
+    monkeypatch.setattr(
+        "integrations.rocketchat.delivery.post_rocketchat_message",
+        _fake_post,
+    )
+
+    record = BackgroundInvestigationRecord(
+        task_id="bg-123",
+        status="completed",
+        command="/investigate " + "c" * 5_000,
+        root_cause="r" * 6_000,
+        top_analysis=tuple(f"analysis {i} " + "a" * 500 for i in range(12)),
+        next_steps=tuple(f"NEXTSTEPSENTINEL{i} " + "n" * 500 for i in range(12)),
+        stats={"tool_call_count": 4, "investigation_loop_count": 2, "validity_score": 0.8},
+    )
+
+    results = deliver_background_notifications(record=record, channels=("rocketchat",))
+    assert results == {"rocketchat": "sent"}
+
+    body = str(captured["text"])
+    assert len(body) <= 4096
+    assert "What to do next" in body
+    assert "NEXTSTEPSENTINEL0" in body
+
+
+def test_notifications_module_does_not_eagerly_import_rocketchat() -> None:
+    """Rocket.Chat loads only when its channel is processed (same rule as telegram)."""
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import surfaces.interactive_shell.runtime.background.notifications as n; "
+                "import sys; "
+                "assert 'integrations.rocketchat.delivery' not in sys.modules; "
+                "print('OK: rocketchat not eagerly imported')"
+            ),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert "OK: rocketchat not eagerly imported" in completed.stdout
+
+
 def test_notifications_module_does_not_eagerly_import_telegram() -> None:
     """AC-11 (corrected, dotted-module sys.modules check): telegram loads only when processed.
 

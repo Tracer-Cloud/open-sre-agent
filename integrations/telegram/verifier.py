@@ -7,6 +7,7 @@ from typing import Any
 import requests
 
 from integrations.verification import register_verifier, result
+from platform.notifications.redaction import redact_token
 
 
 @register_verifier("telegram")
@@ -20,7 +21,12 @@ def verify_telegram(source: str, config: dict[str, Any]) -> dict[str, str]:
         response.raise_for_status()
         payload = response.json()
     except Exception as exc:
-        return result("telegram", source, "failed", f"Telegram API check failed: {exc}")
+        # requests embeds the full URL — which contains the bot token — in
+        # HTTPError/ConnectionError messages (e.g. "401 ... for url:
+        # https://api.telegram.org/bot<token>/getMe"), so the token must be
+        # redacted before the detail reaches the verify output.
+        safe_error = redact_token(str(exc), bot_token)
+        return result("telegram", source, "failed", f"Telegram API check failed: {safe_error}")
 
     if not payload.get("ok"):
         return result(

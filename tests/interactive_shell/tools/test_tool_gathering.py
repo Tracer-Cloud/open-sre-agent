@@ -200,12 +200,8 @@ def test_format_gathering_progress_line_escapes_display_and_hint_markup(
     monkeypatch: Any,
 ) -> None:
     monkeypatch.setattr(
-        "surfaces.interactive_shell.runtime.integration_tool_gathering.tool_source_label",
-        lambda _name: "Grafana [prod]",
-    )
-    monkeypatch.setattr(
-        "surfaces.interactive_shell.runtime.integration_tool_gathering.tool_short_label",
-        lambda _name, _source: "Mimir",
+        "surfaces.interactive_shell.runtime.integration_tool_gathering.resolve_tool_activity_labels",
+        lambda _name: ("Grafana [prod]", "Mimir"),
     )
 
     line = _format_gathering_progress_line(

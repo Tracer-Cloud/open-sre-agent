@@ -19,16 +19,25 @@ _LARGE_MARKER = splash_layout.BRAILLE_LOGO_LARGE[1]
 _SMALL_MARKER = splash_layout.BRAILLE_LOGO_SMALL[1]
 
 
-def _render_splash(width: int) -> Console:
-    console = Console(
+def _make_console(width: int) -> Console:
+    # Pin height and no_color: Rich 15 ignores an explicit width when height is
+    # unset under TERM=dumb/unknown, and NO_COLOR=1 (common in CI/agent shells)
+    # would otherwise strip the ANSI this suite asserts on.
+    return Console(
         file=io.StringIO(),
         record=True,
         width=width,
+        height=40,
         force_terminal=True,
         color_system="truecolor",
         highlight=False,
         legacy_windows=False,
+        no_color=False,
     )
+
+
+def _render_splash(width: int) -> Console:
+    console = _make_console(width)
     banner_module.render_splash(console, first_run=False)
     return console
 
@@ -103,15 +112,7 @@ def test_ready_box_shortcut_lines_stay_within_width() -> None:
     # The welcome panel below the splash carries the /help, /doctor shortcuts;
     # its box must stay aligned and never exceed the terminal width.
     for width in (120, 80, 50):
-        console = Console(
-            file=io.StringIO(),
-            record=True,
-            width=width,
-            force_terminal=True,
-            color_system="truecolor",
-            highlight=False,
-            legacy_windows=False,
-        )
+        console = _make_console(width)
         banner_module.render_ready_box(console)
         plain = console.export_text(styles=False)
         box_lines = [line for line in plain.splitlines() if line.startswith(("╭", "│", "╰"))]

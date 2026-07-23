@@ -672,7 +672,7 @@ def execute_github_issue_mutation(
                 body={"body": comment_body},
             )
         if parsed.operation == "update":
-            patch_body = {
+            patch_body: dict[str, Any] = {
                 key: parsed.payload[key]
                 for key in ("title", "labels", "assignees")
                 if key in parsed.payload

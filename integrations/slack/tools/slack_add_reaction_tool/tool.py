@@ -6,14 +6,14 @@ from typing import Any
 
 from core.tool_framework.base import BaseTool
 from core.tool_framework.tool_decorator import tool
-from integrations.slack.bot_api import (
+from integrations.slack.tools.slack_read_messages_tool.constants import SOURCE
+from integrations.slack.tools.slack_read_messages_tool.validation import validate_channel_id
+from integrations.slack.web_client import (
     add_reaction,
     bot_token_configured,
     resolve_bot_token,
     resolve_channel_id,
 )
-from integrations.slack.tools.slack_read_messages_tool.constants import SOURCE
-from integrations.slack.tools.slack_read_messages_tool.validation import validate_channel_id
 
 
 class SlackAddReactionTool(BaseTool):

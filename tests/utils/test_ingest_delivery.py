@@ -142,10 +142,9 @@ class TestBuildIngestPayload:
     def test_full_payload_shape(self) -> None:
         state: dict[str, Any] = {
             "org_id": "org-1",
-            "alert_name": "checkout-api 5xx",
-            "pipeline_name": "p-1",
             "severity": "Critical",
             "summary": "rate of 5xx spiked",
+            "alert_name": "checkout-api 5xx",
             "raw_alert": {"source": "datadog", "fingerprint": "fp-1", "fired_at": "ts"},
             "root_cause": "rds disk full",
             "validity_score": 87,
@@ -160,7 +159,7 @@ class TestBuildIngestPayload:
         meta = payload["metadata"]
         assert out["org_id"] == "org-1"
         assert out["alert_name"] == "checkout-api 5xx"
-        assert out["pipeline_name"] == "p-1"
+        assert "pipeline_name" not in out
         assert out["severity"] == "critical"
         assert out["summary"] == "rate of 5xx spiked"
         assert out["raw_alert"]["fingerprint"] == "fp-1"

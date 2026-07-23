@@ -17,10 +17,6 @@ from platform.terminal.theme import (
     BOLD_BRAND,
     DIM,
     ERROR,
-    GLYPH_BULLET,
-    GLYPH_ERROR,
-    GLYPH_SUCCESS,
-    GLYPH_WARNING,
     HIGHLIGHT,
     WARNING,
 )
@@ -48,17 +44,6 @@ def status_style(status: str) -> str:
         "failed": ERROR,
         "error": ERROR,
     }.get(status, DIM)
-
-
-def status_glyph(status: str) -> str:
-    return {
-        "ok": GLYPH_SUCCESS,
-        "configured": GLYPH_SUCCESS,
-        "passed": GLYPH_SUCCESS,
-        "missing": GLYPH_WARNING,
-        "failed": GLYPH_ERROR,
-        "error": GLYPH_ERROR,
-    }.get(status, GLYPH_BULLET)
 
 
 # ---------------------------------------------------------------------------

@@ -13,7 +13,6 @@ Layering rule: surfaces may import from ``core/``, ``tools/``,
 ``surfaces/`` (it sits at the top of the dependency stack).
 
 See ``docs/ARCHITECTURE.md`` for the full layering contract and
-``opensre-notes/v0.2-ai-production-engineer/t1-design-doc.md`` for the
 restructure rationale.
 """
 

@@ -20,7 +20,7 @@ from platform.terminal.theme import (
     TEXT,
     WARNING,
 )
-from surfaces.interactive_shell.ui.banner import render_banner, render_ready_box
+from surfaces.interactive_shell.ui.banner import render_ready_box
 from surfaces.interactive_shell.ui.components import (
     print_valid_choice_list,
     repl_choose_one,
@@ -114,7 +114,6 @@ __all__ = [
     "print_repl_table",
     "render_agents_table",
     "refresh_welcome_poster",
-    "render_banner",
     "render_ready_box",
     "render_integrations_table",
     "render_mcp_table",

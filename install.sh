@@ -499,6 +499,54 @@ need_cmd() {
   command -v "$1" >/dev/null 2>&1 || die "'$1' is required but was not found in PATH."
 }
 
+skip_github_cli_install() {
+  case "${OPENSRE_SKIP_GH_INSTALL:-}" in
+    1|true|TRUE|yes|YES|on|ON)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+ensure_github_cli() {
+  # Soft dependency for github_cli chat tools. Never fails the OpenSRE install.
+  if command -v gh >/dev/null 2>&1; then
+    if install_verbose; then
+      log "GitHub CLI (gh) already on PATH: $(command -v gh)"
+    fi
+    return 0
+  fi
+
+  if skip_github_cli_install; then
+    warn "GitHub CLI (gh) is not on PATH; skipped install because OPENSRE_SKIP_GH_INSTALL is set."
+    warn "Install from https://cli.github.com/ for OpenSRE GitHub chat tools."
+    return 0
+  fi
+
+  step "Installing GitHub CLI (gh) for OpenSRE GitHub tools"
+
+  if command -v brew >/dev/null 2>&1; then
+    if brew install gh; then
+      success "Installed GitHub CLI (gh) via Homebrew"
+      return 0
+    fi
+    warn "Homebrew failed to install gh. Install manually from https://cli.github.com/"
+    return 0
+  fi
+
+  if command -v apt-get >/dev/null 2>&1; then
+    # Soft dependency only — never require sudo for the OpenSRE installer.
+    warn "GitHub CLI (gh) is missing and apt is available but auto-install needs sudo."
+    warn "Install manually: apt install gh  (or https://cli.github.com/) for OpenSRE GitHub chat tools."
+    return 0
+  fi
+
+  warn "GitHub CLI (gh) is not on PATH and no supported package manager was found."
+  warn "Install from https://cli.github.com/ for OpenSRE GitHub chat tools."
+}
+
 require_prerequisites() {
   need_cmd curl
   need_cmd grep
@@ -1348,6 +1396,7 @@ print_install_confirmation() {
 finish_install() {
   print_install_confirmation
   ensure_on_path
+  ensure_github_cli
   print_success_screen "$installed_version"
   launch_onboarding_after_install
 }

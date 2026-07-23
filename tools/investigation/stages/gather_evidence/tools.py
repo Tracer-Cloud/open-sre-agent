@@ -9,7 +9,6 @@ from core.domain.alerts.alert_source import (
     SECONDARY_TOOL_SOURCES,
     primary_sources_for_alert,
     relevant_sources_for_alert,
-    resolve_alert_source,
     seed_tool_sources_for_alert,
 )
 from core.llm.types import ToolCall
@@ -165,6 +164,7 @@ def build_connected_tool_context(
         if not key.startswith("_")
         and (isinstance(value, BaseModel) or (isinstance(value, dict) and value))
     )
+    connected_source_set = set(connected_integrations)
     connected_families = {family_key(key) for key in connected_integrations}
 
     sources: dict[str, dict[str, Any]] = {}
@@ -173,7 +173,7 @@ def build_connected_tool_context(
         source_info = sources.setdefault(
             source,
             {
-                "connected": source in connected_integrations
+                "connected": source in connected_source_set
                 or family_key(source) in connected_families,
                 "tools": [],
             },
@@ -183,7 +183,7 @@ def build_connected_tool_context(
     return {
         "connected_integrations": connected_integrations,
         "available_sources": sources,
-        "available_action_names": [tool.name for tool in sorted(tools, key=lambda item: item.name)],
+        "available_action_names": sorted(tool.name for tool in tools),
     }
 
 
@@ -225,14 +225,21 @@ def build_seed_calls(
             injected = tool.extract_params(tool_sources)
         except Exception:
             injected = {}
+        # Seed calls are validated against the public schema before execution.
+        # Keep only declared arguments and omit None for optional fields, where
+        # absence is valid but an explicit null may violate the declared type.
+        public_properties = tool.public_input_schema.get("properties", {})
+        if not isinstance(public_properties, dict):
+            public_properties = {}
+        public_input = {
+            key: value
+            for key, value in injected.items()
+            if key in public_properties and value is not None
+        }
         tool_id = new_tool_use_id() if use_converse_ids else f"seed_{tool.name}"
-        calls.append(ToolCall(id=tool_id, name=tool.name, input=public_tool_input(injected)))
+        calls.append(ToolCall(id=tool_id, name=tool.name, input=public_tool_input(public_input)))
 
     return calls
-
-
-def get_alert_source(state: dict[str, Any]) -> str:
-    return resolve_alert_source(state)
 
 
 def tool_event_payload(tc: ToolCall, *, output: Any | None = None) -> dict[str, Any]:

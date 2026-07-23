@@ -105,30 +105,6 @@ class NotionClient:
             )
             return {"success": False, "error": str(exc)}
 
-    def update_page(
-        self,
-        page_id: str,
-        content: str,
-    ) -> dict[str, Any]:
-        """Append content blocks to an existing Notion page."""
-        payload = {
-            "children": [_paragraph(content)],
-        }
-        try:
-            with self._get_client() as client:
-                resp = client.patch(f"/blocks/{page_id}/children", json=payload)
-                resp.raise_for_status()
-                return {"success": True, "page_id": page_id}
-        except httpx.HTTPStatusError as exc:
-            capture_service_error(exc, logger=logger, integration="notion", method="update_page")
-            return {
-                "success": False,
-                "error": f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
-            }
-        except Exception as exc:
-            capture_service_error(exc, logger=logger, integration="notion", method="update_page")
-            return {"success": False, "error": str(exc)}
-
 
 def _heading(text: str) -> dict:
     return {

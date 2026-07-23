@@ -287,6 +287,22 @@ class TestBetterStackHelpers:
         params["sources"].append("t2")
         assert original == ["t1"]
 
+    def test_extract_params_normalizes_comma_string_sources(self) -> None:
+        """Setup-flow persistence writes a comma-string; must not character-iterate."""
+        params = betterstack_extract_params({"betterstack": {"sources": "t1_checkout, t2_api"}})
+        assert params["sources"] == ["t1_checkout", "t2_api"]
+
+    def test_is_available_true_with_comma_string_sources(self) -> None:
+        assert betterstack_is_available(
+            {
+                "betterstack": {
+                    "query_endpoint": "https://eu.example",
+                    "username": "u",
+                    "sources": "t1_checkout",
+                }
+            }
+        )
+
 
 class TestValidateBetterStackConfig:
     def test_returns_not_configured_when_missing_creds(self) -> None:

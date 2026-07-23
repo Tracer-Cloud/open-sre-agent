@@ -10,6 +10,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 
 from core.agent_harness.session import SessionCore
+from gateway.billing.credits_client import CreditsOutcome, consume_credits
 from gateway.runtime.sink_protocol import GatewayAgentCallback
 from gateway.slack.approvals import (
     ApprovalBroker,
@@ -23,7 +24,7 @@ from gateway.slack.client import (
     mark_turn_failed,
     mark_turn_working,
 )
-from gateway.slack.events import SlackInboundMessage
+from gateway.slack.events import SlackInboundFile, SlackInboundMessage
 from gateway.slack.output_sink import SlackOutputSink
 from gateway.slack.security import (
     SlackInboundDecision,
@@ -36,6 +37,7 @@ from gateway.slack.thread_history import (
     session_needs_thread_seed,
 )
 from gateway.storage import SessionResolver
+from platform.analytics.usage_context import SURFACE_SLACK, bound_usage_context
 
 _ROTATE_SESSION = "__ROTATE_SESSION__"
 
@@ -46,6 +48,10 @@ _MAX_CONVERSATION_LOCKS = 1024
 _DENIAL_REPLY = "You're not authorized to use this bot. Ask an admin to add you."
 _NEW_SESSION_REPLY = "Started a new session."
 _TURN_TIMEOUT_MESSAGE = "This is taking longer than expected. Please try again."
+# Only an explicit 402 from the credit ledger posts this; UNCONFIGURED /
+# UNAVAILABLE outcomes run the turn instead, so a misconfiguration or webapp
+# outage never masquerades to users as "out of credits".
+_CREDITS_DENIED_MESSAGE = "Out of credits — top up in the OpenSRE console."
 
 
 @dataclass
@@ -231,6 +237,19 @@ class _SlackTurnDispatcher:
             if session is None:
                 return
 
+            # Metering: only an explicit webapp denial (402) blocks the turn,
+            # so a config error can never masquerade to users as "out of
+            # credits". UNCONFIGURED (dev setups without metering env) and
+            # UNAVAILABLE (webapp outage) proceed — fail-open is the intended
+            # policy so a billing outage never silences the Slack coworker.
+            if consume_credits(reason="slack_turn") is CreditsOutcome.DENIED:
+                self._logger.info(
+                    "[slack-gateway] turn denied: out of credits channel=%s",
+                    inbound.channel_id,
+                )
+                self._post(inbound, _CREDITS_DENIED_MESSAGE)
+                return
+
             # Never log message bodies — audit hashes live in messaging_security.
             # ts vs thread_ts distinguishes a new mention (ts == thread_ts) from a
             # threaded reply — key to diagnosing session continuity.
@@ -332,7 +351,16 @@ class _SlackTurnDispatcher:
                             seeded,
                         )
                 agent_text = _agent_text_with_slack_context(inbound)
-                self._handler(agent_text, session, sink, self._logger)
+                if inbound.files and (
+                    files_context := _slack_files_context(inbound.files, self._logger)
+                ):
+                    agent_text = f"{agent_text}\n\n{files_context}"
+                with bound_usage_context(
+                    surface=SURFACE_SLACK,
+                    session_id=session.session_id,
+                    user_id=inbound.user_id or None,
+                ):
+                    self._handler(agent_text, session, sink, self._logger)
             except Exception:
                 self._logger.exception(
                     "[slack-gateway] turn ERRORED after %.1fs channel=%s session=%s",
@@ -369,6 +397,22 @@ class _SlackTurnDispatcher:
                     channel=inbound.channel_id,
                     timestamp=inbound.ts,
                 )
+
+
+def _slack_files_context(files: tuple[SlackInboundFile, ...], logger: logging.Logger) -> str:
+    """Download shared files and render them as text for the turn prompt.
+
+    Returns an empty string when the bot token is unavailable (metering-style
+    fail-safe — a missing token drops attachments rather than failing the turn).
+    """
+    from gateway.slack.attachments import build_files_context
+    from integrations.slack.web_client import resolve_bot_token
+
+    target, detail = resolve_bot_token()
+    if target is None:
+        logger.info("[slack-gateway] skipping %d file(s): %s", len(files), detail)
+        return ""
+    return build_files_context(files, target.bot_token)
 
 
 def _agent_text_with_slack_context(inbound: SlackInboundMessage) -> str:

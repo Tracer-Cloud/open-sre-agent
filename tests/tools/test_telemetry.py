@@ -1021,6 +1021,7 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         # dispatches to fix_sentry_issue and lets unexpected errors escape.
         "fix_sentry_issue_start",
         "generate_work_status_report",
+        "github_cli",
         "get_airflow_dag_runs",
         "get_airflow_metrics",
         "get_airflow_task_instances",
@@ -1197,6 +1198,7 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "slack_capture_task",
         "slack_join_channel",
         "slack_list_team_members",
+        "slack_read_list",
         "slack_read_messages",
         "slack_reply_message",
         "slack_search_messages",
@@ -1214,6 +1216,7 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "temporal_workflow_history",
         "temporal_workflows",
         "telegram_send_message",
+        "rocketchat_send_message",
         "twilio_notify",
         "vercel_deployment_logs",
         "vercel_deployment_status",

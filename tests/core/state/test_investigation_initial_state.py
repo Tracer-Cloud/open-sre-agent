@@ -14,7 +14,7 @@ def test_make_initial_state_validates_and_sets_defaults() -> None:
 
     assert state["mode"] == "investigation"
     assert state["alert_name"] == "Incident"
-    assert state["pipeline_name"] == "unknown"
+    assert "pipeline_name" not in state
     assert state["severity"] == "warning"
     raw_alert = state["raw_alert"]
     assert isinstance(raw_alert, dict)
@@ -29,10 +29,10 @@ def test_make_initial_state_validates_and_sets_defaults() -> None:
 def test_make_initial_state_investigation_metadata_override() -> None:
     state = make_initial_state(
         {"description": "cpu spike"},
-        investigation_metadata=("Production CPU Spike", "checkout", "high"),
+        investigation_metadata=("Production CPU Spike", "high"),
     )
     assert state["alert_name"] == "Production CPU Spike"
-    assert state["pipeline_name"] == "checkout"
+    assert "pipeline_name" not in state
     assert state["severity"] == "high"
     ra = state["raw_alert"]
     assert isinstance(ra, dict)
@@ -101,6 +101,11 @@ def test_agent_state_model_rejects_unknown_fields() -> None:
         AgentStateModel.model_validate({"mode": "chat", "mesages": []})
 
 
+def test_agent_state_model_rejects_pipeline_name() -> None:
+    with pytest.raises(ValidationError, match="pipeline_name"):
+        AgentStateModel.model_validate({"mode": "investigation", "pipeline_name": "x"})
+
+
 def test_make_initial_state_normalizes_datadog_tags_and_process_fields() -> None:
     state = make_initial_state(
         raw_alert={
@@ -153,8 +158,10 @@ def test_make_initial_state_uses_existing_annotations_and_labels_for_canonical_f
 
     canonical = raw_alert["canonical_alert"]
     assert canonical["alert_name"] == "[FIRING] CPU high"
-    assert canonical["pipeline_name"] == "payments_etl"
+    assert "pipeline_name" not in canonical
     assert canonical["severity"] == "critical"
+    assert state["alert_name"] == "[FIRING] CPU high"
+    assert "pipeline_name" not in state
 
 
 def test_make_initial_state_keeps_common_labels_and_canonical_labels_separate() -> None:

@@ -197,8 +197,8 @@ def switch_toolcall_model(
     provider_name: str | None = None,
 ) -> bool:
     """Set the toolcall model for the active (or named) provider."""
+    from config.env_file import sync_env_values
     from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
-    from surfaces.cli.wizard.env_sync import sync_env_values
 
     raw_name = provider_name if provider_name else os.getenv("LLM_PROVIDER", "anthropic")
     resolved_name = (raw_name or "anthropic").strip().lower()

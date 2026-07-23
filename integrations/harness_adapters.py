@@ -7,6 +7,7 @@ from pathlib import Path
 
 
 def register_harness_adapters() -> None:
+    import integrations.webapp_vault as webapp_vault
     from integrations.catalog import (
         classify_integrations,
         configured_integration_services,
@@ -31,6 +32,7 @@ def register_harness_adapters() -> None:
         merge_local_integrations=merge_local_integrations,
         merge_integrations_by_service=merge_integrations_by_service,
         configured_services=lambda: tuple(configured_integration_services()),
+        fetch_webapp_vault=lambda: webapp_vault.fetch_webapp_org_integrations(),
     )
 
     def _infer(

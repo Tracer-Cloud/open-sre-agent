@@ -43,7 +43,6 @@ class AlertInputSlice(TypedDict, total=False):
 
     is_noise: bool
     alert_name: str
-    pipeline_name: str
     severity: str
     alert_source: str
     raw_alert: str | dict[str, Any]

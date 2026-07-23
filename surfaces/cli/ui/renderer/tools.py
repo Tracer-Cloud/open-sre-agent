@@ -1,9 +1,4 @@
-"""Tool-call event-payload extraction helpers.
-
-Source/label formatting (``tool_source_label``, ``tool_short_label``) moved
-to ``surfaces.shared.tool_labels`` (T-21) — it was identical to the
-interactive shell's copy.
-"""
+"""Tool-call event-payload extraction helpers."""
 
 from __future__ import annotations
 

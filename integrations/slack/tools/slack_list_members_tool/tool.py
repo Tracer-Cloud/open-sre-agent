@@ -7,8 +7,12 @@ from typing import Any
 from core.tool_framework.base import BaseTool
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.tool_availability import tool_unavailable
-from integrations.slack.bot_api import bot_token_configured, fetch_team_members, resolve_bot_token
 from integrations.slack.tools.slack_read_messages_tool.constants import SOURCE
+from integrations.slack.web_client import (
+    bot_token_configured,
+    fetch_team_members,
+    resolve_bot_token,
+)
 
 
 class SlackListTeamMembersTool(BaseTool):

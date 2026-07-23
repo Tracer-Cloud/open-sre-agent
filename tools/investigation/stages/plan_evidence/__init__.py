@@ -2,7 +2,7 @@
 
 Node contract:
     Entrypoint : plan_actions(state: InvestigationState) -> dict[str, Any]
-    Reads      : resolved_integrations, alert_name, alert_source, raw_alert,
+    Reads      : resolved_integrations, alert_json, alert_source, raw_alert,
                  retrieval_controls, is_noise
     Writes     : planned_actions, plan_rationale, retrieval_controls, plan_audit,
                  connected_tool_context (for investigate stage)

@@ -104,6 +104,12 @@ ONBOARD_INTEGRATION_CHOICES: tuple[Choice, ...] = (
         hint="File and update incident tickets automatically",
     ),
     Choice(
+        value="servicenow",
+        label="ServiceNow",
+        group="Incident & Comms",
+        hint="Connect a ServiceNow instance and verify its credentials",
+    ),
+    Choice(
         value="alertmanager",
         label="Alertmanager",
         group="Incident & Comms",
@@ -144,6 +150,12 @@ ONBOARD_INTEGRATION_CHOICES: tuple[Choice, ...] = (
         label="Telegram",
         group="Incident & Comms",
         hint="Post findings to a Telegram chat",
+    ),
+    Choice(
+        value="rocketchat",
+        label="Rocket.Chat",
+        group="Incident & Comms",
+        hint="Post findings to a Rocket.Chat channel",
     ),
     Choice(
         value="google_docs",

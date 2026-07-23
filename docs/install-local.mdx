@@ -42,6 +42,14 @@ When you run the installer from an interactive terminal — including the piped 
 curl -fsSL https://install.opensre.com | OPENSRE_AUTO_LAUNCH=0 bash
 ```
 
+The curl installer also soft-installs the [GitHub CLI](https://cli.github.com/) (`gh`) when it is missing (via Homebrew or apt). The Windows PowerShell installer does the same via `winget install --id GitHub.cli`. OpenSRE's `github_cli` chat tools need `gh` on `PATH`. Skip that step with:
+
+```bash
+curl -fsSL https://install.opensre.com | OPENSRE_SKIP_GH_INSTALL=1 bash
+```
+
+Homebrew installs pull `gh` automatically via `depends_on "gh"` in the OpenSRE formula.
+
 ### 2) Enter the OpenSRE shell
 
 ```bash

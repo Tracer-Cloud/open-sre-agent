@@ -4,10 +4,7 @@ from __future__ import annotations
 
 from integrations.alertmanager.client import make_alertmanager_client
 from integrations.betterstack import build_betterstack_config, validate_betterstack_config
-from integrations.config_models import IncidentIoIntegrationConfig, PagerDutyIntegrationConfig
-from integrations.incident_io.client import IncidentIoClient
 from integrations.opsgenie.client import OpsGenieClient, OpsGenieConfig
-from integrations.pagerduty.client import PagerDutyClient
 
 from .shared import IntegrationHealthResult
 
@@ -100,60 +97,4 @@ def validate_opsgenie_integration(
         return IntegrationHealthResult(
             ok=False,
             detail=f"OpsGenie validation failed: {err}",
-        )
-
-
-def validate_pagerduty_integration(
-    *,
-    api_key: str,
-    base_url: str,
-) -> IntegrationHealthResult:
-    """Validate Pagerduty connectivity by listing alerts."""
-    if not api_key:
-        return IntegrationHealthResult(ok=False, detail="PagerDuty API key is required.")
-    try:
-        config = PagerDutyIntegrationConfig(api_key=api_key, base_url=base_url)
-        with PagerDutyClient(config) as client:
-            result = client.list_incidents(limit=1)
-        if result.get("success"):
-            return IntegrationHealthResult(
-                ok=True,
-                detail="Connected to PagerDuty; API key accepted.",
-            )
-        return IntegrationHealthResult(
-            ok=False,
-            detail=f"PagerDuty validation failed: {result.get('error', 'unknown error')}",
-        )
-    except Exception as err:
-        return IntegrationHealthResult(
-            ok=False,
-            detail=f"PagerDuty validation failed: {str(err).replace(api_key, '[REDACTED]')}",
-        )
-
-
-def validate_incident_io_integration(
-    *,
-    api_key: str,
-    base_url: str = "",
-) -> IntegrationHealthResult:
-    """Validate incident.io connectivity by listing one incident."""
-    if not api_key:
-        return IntegrationHealthResult(ok=False, detail="incident.io API key is required.")
-    try:
-        config = IncidentIoIntegrationConfig(api_key=api_key, base_url=base_url)
-        with IncidentIoClient(config) as client:
-            result = client.list_incidents(status_category="", page_size=1)
-        if result.get("success"):
-            return IntegrationHealthResult(
-                ok=True,
-                detail="incident.io validated; API key accepted.",
-            )
-        return IntegrationHealthResult(
-            ok=False,
-            detail=f"incident.io validation failed: {result.get('error', 'unknown error')}",
-        )
-    except Exception as err:
-        return IntegrationHealthResult(
-            ok=False,
-            detail=f"incident.io validation failed: {str(err).replace(api_key, '[REDACTED]')}",
         )

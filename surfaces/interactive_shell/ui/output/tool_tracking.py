@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING, Any, Protocol, TypeGuard, runtime_checkable
+from typing import TYPE_CHECKING, Any, TypeGuard
 
 from rich.text import Text
 
@@ -23,25 +23,13 @@ from surfaces.interactive_shell.ui.output.tool_details import (
 from surfaces.interactive_shell.ui.output.tool_details import (
     record_tool_summary as _record_tool_summary,
 )
-from surfaces.shared.tool_labels import tool_short_label, tool_source_label
-from tools.registry import resolve_tool_display_name
+from tools.registry import resolve_tool_activity_labels, resolve_tool_display_name
 
 
 def _is_repl_display(display: object) -> TypeGuard[_ReplEventLogDisplay]:
     from surfaces.interactive_shell.ui.output.repl_display import _ReplEventLogDisplay
 
     return isinstance(display, _ReplEventLogDisplay)
-
-
-@runtime_checkable
-class ToolTrackingSupport(Protocol):
-    """Interface that concrete classes must satisfy to use :class:`ToolTrackingMixin`."""
-
-    def update_subtext(self, node_name: str, text: str, duration: float = 4.0) -> None:
-        raise NotImplementedError
-
-    def print_above_renderable(self, renderable: Any) -> None:
-        raise NotImplementedError
 
 
 class ToolTrackingMixin:
@@ -76,8 +64,7 @@ class ToolTrackingMixin:
         if self._silent:
             return
         _record_tool_summary(tool_name, self._tool_summary_counts, self._tool_summary_order)
-        source = tool_source_label(tool_name)
-        label = tool_short_label(tool_name, source)
+        source, label = resolve_tool_activity_labels(tool_name)
         current = f"{source} · {label}" if label else source
         self.update_subtext("investigation_agent", f"calling {current}...", duration=15.0)
         self.update_subtext("investigate", f"calling {current}...", duration=15.0)

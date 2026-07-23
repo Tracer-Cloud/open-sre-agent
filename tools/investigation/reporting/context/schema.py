@@ -16,7 +16,6 @@ class ReportContext(TypedDict, total=False):
     """
 
     # Core RCA results
-    pipeline_name: str
     alert_name: str | None
     root_cause: str
     validated_claims: list[dict]

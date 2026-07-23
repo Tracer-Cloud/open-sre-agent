@@ -1,0 +1,16 @@
+"""Coralogix environment variable names."""
+
+from __future__ import annotations
+
+CORALOGIX_API_KEY_ENV = "CORALOGIX_API_KEY"
+# Mirrors the ``base_url`` credential; the names deliberately differ.
+CORALOGIX_BASE_URL_ENV = "CORALOGIX_API_URL"
+CORALOGIX_APPLICATION_NAME_ENV = "CORALOGIX_APPLICATION_NAME"
+CORALOGIX_SUBSYSTEM_NAME_ENV = "CORALOGIX_SUBSYSTEM_NAME"
+
+__all__ = [
+    "CORALOGIX_API_KEY_ENV",
+    "CORALOGIX_APPLICATION_NAME_ENV",
+    "CORALOGIX_BASE_URL_ENV",
+    "CORALOGIX_SUBSYSTEM_NAME_ENV",
+]

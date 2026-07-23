@@ -118,6 +118,20 @@ def validate_jira_integration(
         return IntegrationHealthResult(ok=False, detail=f"Jira validation failed: {err}")
 
 
+def validate_servicenow_integration(
+    *, instance_url: str, username: str, password: str
+) -> IntegrationHealthResult:
+    """Validate ServiceNow connectivity with a minimal authenticated table read."""
+    from integrations.servicenow.verifier import build_servicenow_config, validate_servicenow_config
+
+    outcome = validate_servicenow_config(
+        build_servicenow_config(
+            {"instance_url": instance_url, "username": username, "password": password}
+        )
+    )
+    return IntegrationHealthResult(ok=outcome.ok, detail=outcome.detail)
+
+
 def validate_discord_bot(*, bot_token: str) -> IntegrationHealthResult:
     """Validate a Discord bot token by calling the /users/@me endpoint."""
     try:
@@ -139,32 +153,64 @@ def validate_discord_bot(*, bot_token: str) -> IntegrationHealthResult:
     )
 
 
-def validate_telegram_bot(*, bot_token: str) -> IntegrationHealthResult:
-    """Validate a Telegram bot token by calling the Bot API getMe endpoint."""
-    token = bot_token.strip()
-    if not token:
-        return IntegrationHealthResult(ok=False, detail="Missing bot_token.")
+def validate_rocketchat_webhook(*, webhook_url: str) -> IntegrationHealthResult:
+    """Validate a Rocket.Chat incoming webhook with a non-posting reachability probe."""
+    url = webhook_url.strip()
+    if not url:
+        return IntegrationHealthResult(ok=False, detail="Missing webhook_url.")
 
     try:
-        resp = httpx.get(f"https://api.telegram.org/bot{token}/getMe", timeout=10)
+        resp = httpx.get(url, timeout=10, follow_redirects=False)
     except httpx.RequestError as err:
-        return IntegrationHealthResult(ok=False, detail=f"Telegram API unreachable: {err}")
-    except Exception as err:
-        return IntegrationHealthResult(ok=False, detail=f"Telegram API check failed: {err}")
-
-    try:
-        payload = resp.json()
-    except Exception as err:
         return IntegrationHealthResult(
-            ok=False,
-            detail=f"Telegram API check failed: HTTP {resp.status_code} ({err}).",
+            ok=False, detail=f"Rocket.Chat webhook validation failed: {err}"
         )
 
-    if not payload.get("ok"):
-        description = payload.get("description", "unknown error")
-        return IntegrationHealthResult(ok=False, detail=f"Telegram API check failed: {description}")
+    if resp.status_code == 404:
+        return IntegrationHealthResult(
+            ok=False, detail="Rocket.Chat webhook returned 404; the URL looks invalid."
+        )
+    if resp.status_code in {200, 400, 403, 405}:
+        return IntegrationHealthResult(
+            ok=True,
+            detail=f"Rocket.Chat webhook endpoint reachable (HTTP {resp.status_code}) "
+            "using a non-posting probe.",
+        )
+    return IntegrationHealthResult(
+        ok=False,
+        detail=f"Rocket.Chat webhook probe returned unexpected HTTP {resp.status_code}.",
+    )
 
-    user = payload.get("result", {})
-    username = str(user.get("username", "")).strip()
-    label = f"@{username}" if username else "unknown"
-    return IntegrationHealthResult(ok=True, detail=f"Connected to Telegram bot {label}.")
+
+def validate_rocketchat(
+    *, server_url: str, auth_token: str, user_id: str
+) -> IntegrationHealthResult:
+    """Validate Rocket.Chat credentials by calling the /api/v1/me endpoint."""
+    base = server_url.strip().rstrip("/")
+    if not base:
+        return IntegrationHealthResult(ok=False, detail="Missing server_url.")
+    if not auth_token.strip() or not user_id.strip():
+        return IntegrationHealthResult(ok=False, detail="Missing auth_token or user_id.")
+
+    try:
+        resp = httpx.get(
+            f"{base}/api/v1/me",
+            headers={"X-Auth-Token": auth_token, "X-User-Id": user_id},
+            timeout=10,
+        )
+    except httpx.RequestError as err:
+        return IntegrationHealthResult(ok=False, detail=f"Rocket.Chat API unreachable: {err}")
+
+    if resp.status_code == 200:
+        try:
+            username = resp.json().get("username", "unknown")
+        except Exception:
+            username = "unknown"
+        return IntegrationHealthResult(ok=True, detail=f"Rocket.Chat authenticated as @{username}.")
+    if resp.status_code == 401:
+        return IntegrationHealthResult(
+            ok=False, detail="Rocket.Chat auth token or user ID is invalid or expired."
+        )
+    return IntegrationHealthResult(
+        ok=False, detail=f"Rocket.Chat API returned unexpected HTTP {resp.status_code}."
+    )

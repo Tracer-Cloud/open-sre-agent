@@ -28,7 +28,7 @@ from surfaces.cli.wizard._ui import (
 
 if TYPE_CHECKING:
     from surfaces.cli.wizard.config import ProviderOption
-    from surfaces.cli.wizard.validation import ValidationResult
+    from surfaces.cli.wizard.validation_result import ValidationResult
 
 
 def endpoint_env(provider: ProviderOption) -> dict[str, str]:
@@ -187,7 +187,8 @@ def validate_credentials(
     api_version: str,
 ) -> ValidationResult:
     """Validate Azure OpenAI credentials with a tiny chat completion."""
-    from surfaces.cli.wizard.validation import ValidationResult, _load_openai_client
+    from surfaces.cli.wizard.openai_client import load_openai_client
+    from surfaces.cli.wizard.validation_result import ValidationResult
 
     normalized_base = normalize_azure_openai_base_url(base_url)
     if not normalized_base:
@@ -197,7 +198,7 @@ def validate_credentials(
         )
 
     resolved_api_version = resolve_azure_openai_api_version(api_version)
-    openai_client_cls, openai_auth_error = _load_openai_client()
+    openai_client_cls, openai_auth_error = load_openai_client()
     azure_base = f"{normalized_base}/openai/deployments/{deployment}"
     try:
         client = openai_client_cls(

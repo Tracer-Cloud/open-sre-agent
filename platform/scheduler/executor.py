@@ -8,6 +8,7 @@ import re
 from platform.scheduler.claim_store import complete_run, try_claim
 from platform.scheduler.credentials import (
     resolve_discord_credentials,
+    resolve_rocketchat_credentials,
     resolve_slack_credentials,
     resolve_telegram_credentials,
 )
@@ -104,6 +105,8 @@ def _deliver(
         return _deliver_slack(task, message)
     elif task.provider == Provider.DISCORD:
         return _deliver_discord(task, message)
+    elif task.provider == Provider.ROCKETCHAT:
+        return _deliver_rocketchat(task, message)
     else:
         return False, f"Unsupported provider: {task.provider}", ""
 
@@ -213,6 +216,48 @@ def _deliver_discord(task: ScheduledTask, message: str) -> tuple[bool, str, str]
     }
     ok, error = send_discord_report(plain_message, discord_ctx)
     return ok, error, ""
+
+
+def _deliver_rocketchat(task: ScheduledTask, message: str) -> tuple[bool, str, str]:
+    """Deliver via Rocket.Chat's REST API to the task's channel.
+
+    Requires token credentials (server_url + auth_token + user_id): scheduled
+    tasks carry an explicit ``chat_id`` destination, which an incoming
+    webhook's fixed destination cannot honor — so the webhook mode is
+    deliberately not used here (same rule as the rocketchat_send_message
+    tool).
+    """
+    creds = resolve_rocketchat_credentials(task.params)
+    server_url = creds.get("server_url", "")
+    auth_token = creds.get("auth_token", "")
+    user_id = creds.get("user_id", "")
+    if not (server_url and auth_token and user_id):
+        if creds.get("webhook_url"):
+            return (
+                False,
+                "Rocket.Chat scheduled delivery targets an explicit channel, which "
+                "needs token credentials (server_url, auth_token, user_id); the "
+                "incoming webhook's destination is fixed and cannot honor chat_id",
+                "",
+            )
+        return False, "Missing server_url, auth_token, or user_id for Rocket.Chat", ""
+    if not task.chat_id:
+        return False, "Missing chat_id (channel) for Rocket.Chat", ""
+
+    from integrations.rocketchat.delivery import post_rocketchat_message
+    from platform.common.truncation import truncate
+    from platform.notifications.limits import MAX_MESSAGE_SIZE
+
+    # Strip HTML tags — Rocket.Chat uses Markdown, not HTML
+    plain_message = truncate(_strip_html(message), MAX_MESSAGE_SIZE, suffix="…")
+    ok, error, msg_id = post_rocketchat_message(
+        server_url,
+        task.chat_id,
+        plain_message,
+        auth_token,
+        user_id,
+    )
+    return (True, "", msg_id) if ok else (False, error, "")
 
 
 def _record_failure(task: ScheduledTask, fire_time: str, error: str) -> None:

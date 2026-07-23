@@ -10,7 +10,6 @@ from tools.investigation.reporting.formatters.report import (
 
 def _make_state() -> dict:
     return {
-        "pipeline_name": "checkout-service",
         "alert_name": "Checkout latency spike",
         "root_cause": "Checkout service was throttled by the upstream API cluster.",
         "root_cause_category": "dependency_failure",
@@ -59,7 +58,6 @@ def test_format_telegram_message_does_not_treat_lonely_asterisk_as_bold() -> Non
     state = _make_state()
     state["severity"] = "warning"
     state["alert_name"] = "Unit"
-    state["pipeline_name"] = "pipe"
     state["root_cause"] = "Check 2 * 3 = 6 before scaling"
     ctx = build_report_context(state)
     body = format_telegram_message(ctx)
@@ -71,7 +69,6 @@ def test_format_telegram_message_renders_double_star_bold_in_root_cause() -> Non
     state = _make_state()
     state["severity"] = "high"
     state["alert_name"] = "HighMemory"
-    state["pipeline_name"] = "checkout"
     state["root_cause"] = "The pod **api-server** exhausted its memory limit"
     ctx = build_report_context(state)
     body = format_telegram_message(ctx)
@@ -85,14 +82,13 @@ def test_format_telegram_message_omits_banner_only_root_cause() -> None:
     state = _make_state()
     state["severity"] = "info"
     state["alert_name"] = "[synthetic-k8s] Scheduled Health Check — payments-api"
-    state["pipeline_name"] = "k8s-eks-synthetic"
     state["root_cause"] = (
         "[synthetic-k8s] Scheduled Health Check — payments-api on k8s-eks-synthetic "
         "(severity: info)"
     )
     ctx = build_report_context(state)
     body = format_telegram_message(ctx)
-    assert body.count("k8s-eks-synthetic") == 1
+    assert "k8s-eks-synthetic" not in body
     assert "Scheduled Health Check — payments-api on k8s-eks-synthetic (severity: info)" not in body
 
 

@@ -22,6 +22,7 @@ from platform.common.url_validation import validate_https_or_loopback_http_url
 _LOCAL_GRAFANA_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0"}
 DEFAULT_GROUNDCOVER_MCP_URL = "https://mcp.groundcover.com/api/mcp"
 DEFAULT_GROUNDCOVER_TIMEZONE = "UTC"
+DEFAULT_DATADOG_SITE = "datadoghq.com"
 DEFAULT_HONEYCOMB_BASE_URL = "https://api.honeycomb.io"
 DEFAULT_HONEYCOMB_DATASET = "__all__"
 DEFAULT_CORALOGIX_BASE_URL = "https://api.coralogix.com"
@@ -122,11 +123,11 @@ class DatadogIntegrationConfig(StrictConfigModel):
 
     api_key: str
     app_key: str
-    site: str = "datadoghq.com"
+    site: str = DEFAULT_DATADOG_SITE
     integration_id: str = ""
 
     _normalize_site = field_validator("site", mode="before")(
-        normalize_with_default("datadoghq.com")
+        normalize_with_default(DEFAULT_DATADOG_SITE)
     )
 
     @property
@@ -527,36 +528,6 @@ class HelmIntegrationConfig(StrictConfigModel):
         return bool(str(self.helm_path or "").strip())
 
 
-class GitLabIntegrationConfig(StrictConfigModel):
-    """Normalized GitLab credentials used by resolution and verification flows."""
-
-    url: str
-    access_token: str
-    integration_id: str = ""
-
-
-# ---------------------------------------------------------------------------
-# Error Tracking & APM
-# ---------------------------------------------------------------------------
-
-
-class SentryIntegrationConfig(StrictConfigModel):
-    """Normalized Sentry credentials — kept for type-check consumers."""
-
-    base_url: str = "https://sentry.io"
-    organization_slug: str = ""
-    auth_token: str = ""
-    project_slug: str = ""
-    integration_id: str = ""
-
-    _normalize_base_url = field_validator("base_url", mode="before")(
-        normalize_url("https://sentry.io")
-    )
-    _normalize_strs = field_validator(
-        "organization_slug", "auth_token", "project_slug", mode="before"
-    )(normalize_str())
-
-
 # ---------------------------------------------------------------------------
 # Databases — Relational
 # ---------------------------------------------------------------------------
@@ -602,42 +573,6 @@ class MySQLIntegrationConfig(StrictConfigModel):
     )
 
 
-class MariaDBIntegrationConfig(StrictConfigModel):
-    """Normalized MariaDB credentials used by resolution and verification flows."""
-
-    host: str
-    port: int = 3306
-    database: str
-    username: str
-    password: str = ""
-    ssl: bool = True
-    integration_id: str = ""
-
-    _normalize_strs = field_validator("host", "database", "username", mode="before")(
-        normalize_str()
-    )
-
-
-class AzureSQLIntegrationConfig(StrictConfigModel):
-    """Normalized Azure SQL Database credentials used by resolution and verification flows."""
-
-    server: str
-    port: int = 1433
-    database: str
-    username: str = ""
-    password: str = ""
-    driver: str = "ODBC Driver 18 for SQL Server"
-    encrypt: bool = True
-    integration_id: str = ""
-
-    _normalize_strs = field_validator("server", "database", "username", mode="before")(
-        normalize_str()
-    )
-    _normalize_driver = field_validator("driver", mode="before")(
-        normalize_with_default("ODBC Driver 18 for SQL Server")
-    )
-
-
 # ---------------------------------------------------------------------------
 # Databases — Document / NoSQL
 # ---------------------------------------------------------------------------
@@ -674,44 +609,6 @@ class RedisIntegrationConfig(StrictConfigModel):
     _normalize_host = field_validator("host", mode="before")(normalize_str())
     _normalize_username = field_validator("username", mode="before")(normalize_str())
     _normalize_password = field_validator("password", mode="before")(normalize_str())
-
-
-class MongoDBAtlasIntegrationConfig(StrictConfigModel):
-    """Normalized MongoDB Atlas API credentials used by resolution and verification flows."""
-
-    api_public_key: str
-    api_private_key: str
-    project_id: str
-    base_url: str = "https://cloud.mongodb.com/api/atlas/v2"
-    integration_id: str = ""
-
-    _normalize_strs = field_validator(
-        "api_public_key", "api_private_key", "project_id", mode="before"
-    )(normalize_str())
-    _normalize_base_url = field_validator("base_url", mode="before")(
-        normalize_url("https://cloud.mongodb.com/api/atlas/v2")
-    )
-
-
-# ---------------------------------------------------------------------------
-# Message Queues
-# ---------------------------------------------------------------------------
-
-
-class RabbitMQIntegrationConfig(StrictConfigModel):
-    """Normalized RabbitMQ Management API credentials used by resolution and verification flows."""
-
-    host: str
-    management_port: int = 15672
-    username: str
-    password: str = ""
-    vhost: str = "/"
-    ssl: bool = False
-    verify_ssl: bool = True
-    integration_id: str = ""
-
-    _normalize_strs = field_validator("host", "username", mode="before")(normalize_str())
-    _normalize_vhost = field_validator("vhost", mode="before")(normalize_with_default("/"))
 
 
 # ---------------------------------------------------------------------------
@@ -771,24 +668,33 @@ class JiraIntegrationConfig(StrictConfigModel):
         return f"{self.base_url}/rest/api/3"
 
 
-class NotionIntegrationConfig(StrictConfigModel):
-    """Normalized Notion credentials used by resolution and verification flows."""
+class ServiceNowIntegrationConfig(StrictConfigModel):
+    """Normalized ServiceNow credentials used by resolution and verification flows."""
 
-    api_key: str
-    database_id: str
+    instance_url: str
+    username: str
+    password: str
     integration_id: str = ""
 
-    _normalize_strs = field_validator("api_key", "database_id", mode="before")(normalize_str())
+    @field_validator("instance_url", mode="before")
+    @classmethod
+    def _normalize_instance_url(cls, value: object) -> str:
+        normalized = normalize_url()(value)
+        return validate_https_or_loopback_http_url(
+            normalized, service_name="servicenow", field_name="instance_url"
+        )
 
+    _normalize_strs = field_validator("username", "password", "integration_id", mode="before")(
+        normalize_str()
+    )
 
-class TrelloIntegrationConfig(StrictConfigModel):
-    """Normalized Trello credentials."""
+    @property
+    def auth(self) -> tuple[str, str]:
+        return (self.username, self.password)
 
-    api_key: str
-    api_token: str
-    integration_id: str = ""
-
-    _normalize_strs = field_validator("api_key", "api_token", mode="before")(normalize_str())
+    @property
+    def api_base(self) -> str:
+        return f"{self.instance_url}/api/now"
 
 
 class GoogleDocsIntegrationConfig(StrictConfigModel):
@@ -869,6 +775,57 @@ class TelegramBotConfig(StrictConfigModel):
         if not stripped:
             raise ValueError("bot_token cannot be empty or just whitespace")
         return stripped
+
+
+class RocketChatConfig(StrictConfigModel):
+    """Rocket.Chat runtime config.
+
+    Two delivery modes, either or both may be configured:
+
+    - Personal Access Token: ``server_url`` + ``auth_token`` + ``user_id``
+      (REST ``chat.postMessage``, dynamic channel targeting).
+    - Incoming webhook: ``webhook_url`` (fixed destination chosen when the
+      webhook is created in the Rocket.Chat admin).
+    """
+
+    server_url: str = ""
+    auth_token: str = ""
+    user_id: str = ""
+    webhook_url: str = ""
+    default_channel: str | None = None
+
+    @field_validator("server_url", mode="before")
+    @classmethod
+    def _normalize_server_url(cls, value: object) -> str:
+        stripped = str(value or "").strip().rstrip("/")
+        if stripped and not stripped.startswith(("http://", "https://")):
+            raise ValueError("server_url must start with http:// or https://")
+        return stripped
+
+    @field_validator("auth_token", "user_id", mode="before")
+    @classmethod
+    def _strip_credential(cls, value: object) -> str:
+        return str(value or "").strip()
+
+    @field_validator("webhook_url", mode="before")
+    @classmethod
+    def _normalize_webhook_url(cls, value: object) -> str:
+        stripped = str(value or "").strip()
+        if not stripped:
+            return ""
+        parsed = urlparse(stripped)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("webhook_url must be a valid HTTP(S) URL")
+        return stripped
+
+    @model_validator(mode="after")
+    def _require_pat_or_webhook(self) -> RocketChatConfig:
+        has_pat = bool(self.server_url and self.auth_token and self.user_id)
+        if not has_pat and not self.webhook_url:
+            raise ValueError(
+                "Rocket.Chat needs either webhook_url or all of server_url, auth_token, and user_id"
+            )
+        return self
 
 
 class WhatsAppConfig(StrictConfigModel):

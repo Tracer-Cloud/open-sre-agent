@@ -13,7 +13,6 @@ from core.domain.alerts.fields import (
     alert_labels,
     alert_name_value,
     canonical_alert,
-    pipeline_name_value,
     severity_value,
 )
 
@@ -35,7 +34,6 @@ class AlertDetails(BaseModel):
 
     is_noise: bool = Field(default=False)
     alert_name: str = Field(default="unknown")
-    pipeline_name: str = Field(default="unknown")
     severity: str = Field(default="unknown")
     alert_source: str | None = Field(default=None)
     environment: str | None = Field(default=None)
@@ -87,7 +85,6 @@ def needs_full_json_prompt(raw_alert: dict[str, Any]) -> bool:
 def fallback_details(state: Mapping[str, Any], raw_alert: Any) -> AlertDetails:
     """Best-effort field extraction when the LLM path is unavailable."""
     alert_name = state.get("alert_name", "unknown")
-    pipeline_name = state.get("pipeline_name", "unknown")
     severity = state.get("severity", "unknown")
 
     if isinstance(raw_alert, dict):
@@ -102,13 +99,6 @@ def fallback_details(state: Mapping[str, Any], raw_alert: Any) -> AlertDetails:
             canonical=canonical,
             fallback=alert_name,
         )
-        pipeline_name = pipeline_name_value(
-            raw_alert,
-            labels=labels,
-            annotations=annotations,
-            canonical=canonical,
-            fallback=pipeline_name,
-        )
         severity = severity_value(
             raw_alert,
             labels=labels,
@@ -119,7 +109,6 @@ def fallback_details(state: Mapping[str, Any], raw_alert: Any) -> AlertDetails:
     return AlertDetails(
         is_noise=False,
         alert_name=alert_name or "unknown",
-        pipeline_name=pipeline_name or "unknown",
         severity=severity or "unknown",
     )
 
@@ -128,7 +117,7 @@ def make_problem_md(details: AlertDetails) -> str:
     """Build the operator-facing problem markdown header from extracted details."""
     parts = [
         f"# {details.alert_name}",
-        f"Pipeline: {details.pipeline_name} | Severity: {details.severity}",
+        f"Severity: {details.severity}",
     ]
     if details.kube_namespace:
         parts.append(f"Namespace: {details.kube_namespace}")
@@ -148,6 +137,16 @@ def enrich_raw_alert(raw_alert: Any, details: AlertDetails) -> Any:
         value = getattr(details, field_name)
         if value:
             enriched[field_name] = value
+
+    if details.alert_name and details.alert_name != "unknown":
+        enriched["alert_name"] = details.alert_name
+
+    canonical = enriched.get("canonical_alert")
+    if isinstance(canonical, dict):
+        updated_canonical = dict(canonical)
+        if details.alert_name and details.alert_name != "unknown":
+            updated_canonical["alert_name"] = details.alert_name
+        enriched["canonical_alert"] = updated_canonical
 
     if details.alert_source and prior_source not in CANONICAL_ALERT_SOURCES:
         enriched["alert_source"] = details.alert_source

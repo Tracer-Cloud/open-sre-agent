@@ -14,7 +14,15 @@ from tools.system.watch_dog.config import WatchdogConfig
 
 @dataclass(frozen=True)
 class ProcessSample:
-    """A point-in-time process resource sample."""
+    """A point-in-time process resource sample.
+
+    ``accessible`` distinguishes "the process is gone" (``alive=False``)
+    from "the process is running but this user cannot read its fields"
+    (``alive=True, accessible=False``, e.g. a transient
+    ``psutil.AccessDenied``). A permission failure is not an exit.
+    A dead sample carries ``accessible=False`` too (a gone process has no
+    readable fields); check ``alive`` first.
+    """
 
     pid: int
     name: str
@@ -24,6 +32,7 @@ class ProcessSample:
     runtime_seconds: float
     alive: bool
     started_at: float | None = None
+    accessible: bool = True
 
     @property
     def command(self) -> str:
@@ -48,9 +57,16 @@ class ProcessMonitor:
         self._cmdline = _safe_cmdline(self._process)
         self._started_at = _safe_create_time(self._process)
         self._warm_cpu_percent()
+        self._assert_introspectable()
 
     def sample(self) -> ProcessSample:
-        """Capture CPU, RSS, runtime, and liveness for the target process."""
+        """Capture CPU, RSS, runtime, and liveness for the target process.
+
+        A gone process yields ``alive=False``. A process that is still
+        running but denies field access (transient ``psutil.AccessDenied``)
+        yields ``alive=True, accessible=False`` so the caller can retry
+        instead of reporting a false exit.
+        """
         try:
             if not self._process.is_running():
                 return self._dead_sample()
@@ -59,8 +75,10 @@ class ProcessMonitor:
             cpu_percent = float(self._process.cpu_percent(interval=None))
             rss_bytes = int(self._process.memory_info().rss)
             started_at = float(self._process.create_time())
-        except process_probe.PROCESS_INACCESSIBLE_OR_GONE:
+        except process_probe.PROCESS_NOT_FOUND:
             return self._dead_sample()
+        except process_probe.PROCESS_INACCESSIBLE:
+            return self._inaccessible_sample()
 
         return ProcessSample(
             pid=self._pid,
@@ -79,7 +97,47 @@ class ProcessMonitor:
         except process_probe.PROCESS_ERROR:
             return
 
+    def _assert_introspectable(self) -> None:
+        """Fail fast when the resolved process denies field access.
+
+        A process owned by another user (a service account daemon, a
+        root-owned container) resolves by name/pid but raises
+        ``psutil.AccessDenied`` on every field read, so its thresholds
+        could never be evaluated. Surface that as a configuration error
+        up front instead of a false "target exited" on the first sample.
+        """
+        try:
+            self._process.memory_info()
+        except process_probe.PROCESS_INACCESSIBLE as exc:
+            raise OpenSREError(
+                f"Process {self._pid} ({self._name or 'unknown'}) is running but cannot "
+                "be introspected (permission denied).",
+                suggestion=(
+                    "Re-run with privileges matching the target process "
+                    "(for example via sudo) so CPU/RSS/runtime can be sampled."
+                ),
+            ) from exc
+        except process_probe.PROCESS_NOT_FOUND:
+            # Already gone: the first sample() reports the exit honestly.
+            return
+
+    def _inaccessible_sample(self) -> ProcessSample:
+        runtime = max(0.0, time.time() - self._started_at) if self._started_at else 0.0
+        return ProcessSample(
+            pid=self._pid,
+            name=self._name,
+            cmdline=self._cmdline,
+            cpu_percent=0.0,
+            rss_bytes=0,
+            runtime_seconds=runtime,
+            alive=True,
+            started_at=self._started_at,
+            accessible=False,
+        )
+
     def _dead_sample(self) -> ProcessSample:
+        # A gone process has no readable fields either, so a dead sample
+        # carries accessible=False to keep the pair consistent.
         return ProcessSample(
             pid=self._pid,
             name=self._name,
@@ -89,6 +147,7 @@ class ProcessMonitor:
             runtime_seconds=0.0,
             alive=False,
             started_at=self._started_at,
+            accessible=False,
         )
 
 

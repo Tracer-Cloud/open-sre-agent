@@ -6,12 +6,6 @@ from typing import Any
 
 from core.tool_framework.base import BaseTool
 from core.tool_framework.tool_decorator import tool
-from integrations.slack.bot_api import (
-    bot_token_configured,
-    fetch_channel_messages,
-    resolve_bot_token,
-    resolve_channel_id,
-)
 from integrations.slack.tools.slack_read_messages_tool.constants import (
     DEFAULT_MESSAGE_LIMIT,
     SOURCE,
@@ -20,6 +14,12 @@ from integrations.slack.tools.slack_read_messages_tool.results import failed_res
 from integrations.slack.tools.slack_read_messages_tool.validation import (
     clamp_limit,
     validate_channel_id,
+)
+from integrations.slack.web_client import (
+    bot_token_configured,
+    fetch_channel_messages,
+    resolve_bot_token,
+    resolve_channel_id,
 )
 
 

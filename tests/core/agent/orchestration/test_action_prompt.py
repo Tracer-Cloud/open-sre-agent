@@ -139,6 +139,16 @@ def test_system_prompt_routes_slack_teammate_reads_to_action_tools() -> None:
     assert "never slack_read_messages" in prompt
 
 
+def test_system_prompt_routes_github_cli_to_action_tools() -> None:
+    prompt = _SYSTEM_PROMPT_BASE.lower()
+    assert "github cli requests are action tools" in prompt
+    assert "not handoffs" in prompt
+    assert "call github_cli directly" in prompt
+    assert "from this info create an issue on github" in prompt
+    assert "github_cli is action-only" in prompt
+    assert "exception: github issue/pr/repo" in prompt
+
+
 def test_system_prompt_keeps_bare_alert_blob_as_handoff() -> None:
     prompt = _SYSTEM_PROMPT_BASE.lower()
     assert "a bare pasted alert blob with no instruction remains assistant_handoff" in prompt
@@ -202,6 +212,18 @@ def test_skills_loader_bundles_architecture_audit_skill() -> None:
     assert "architecture_save_observations" in block
     assert "shell_run" in block
     assert "Never end the turn with shell_run" in block
+
+
+def test_skills_loader_bundles_github_cli_skill() -> None:
+    cached_load_skills_block.cache_clear()
+    skill = skills_dir() / "github_cli" / "SKILL.md"
+    assert skill.is_file()
+
+    block = load_skills_block()
+    assert "GITHUB CLI SKILL" in block
+    assert "do NOT assistant_handoff" in block
+    assert "github_cli(args=" in block
+    assert "create an issue from that" in block
     assert "quiet=true" in block
     assert "four separate shell_run" in block or "Four separate" in block or "IMPORT pass" in block
     assert "IMPORT pass" in block

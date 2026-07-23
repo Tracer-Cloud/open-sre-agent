@@ -18,6 +18,15 @@ It is designed for situations where a failed deploy, a flaky test, or a broken s
 
 This integration uses the same GitHub MCP credentials as the existing GitHub setup when available.
 
+### Setup
+
+```bash
+opensre integrations setup github
+opensre integrations verify github
+```
+
+Ensure the GitHub MCP toolsets include `actions` (default: `repos,issues,pull_requests,actions`).
+
 ### Required
 
 - `GITHUB_MCP_AUTH_TOKEN` (or a GitHub token supplied via the GitHub MCP integration)
@@ -28,6 +37,27 @@ This integration uses the same GitHub MCP credentials as the existing GitHub set
 - `GITHUB_MCP_MODE`, `GITHUB_MCP_COMMAND`, `GITHUB_MCP_ARGS` for stdio-based MCP setups
 
 If no token is configured, GitHub Actions tools will report that the GitHub integration is unavailable.
+
+## Verify
+
+```bash
+opensre integrations verify github
+```
+
+Confirm the verify output mentions Actions tools. Then test from the REPL:
+
+```text
+> list recent failed workflow runs for Tracer-Cloud/opensre
+```
+
+## Troubleshooting
+
+| Symptom | Fix |
+| --- | --- |
+| **GitHub integration unavailable** | Run `opensre integrations setup github` and verify token scopes include `repo` |
+| **No workflow runs returned** | Confirm `owner`/`repo` match the repository; check token access to private repos |
+| **Step log empty** | Use `job_id` and exact `step_name` from `list_github_actions_run_jobs` |
+| **MCP connection failed** | Verify `GITHUB_MCP_URL` is reachable; see [GitHub troubleshooting](/github#troubleshooting) |
 
 ## Available tools
 

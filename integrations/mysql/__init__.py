@@ -14,11 +14,11 @@ from typing import Any
 
 from pydantic import Field, field_validator
 
-from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations._relational import (
     RelationalConfigBase,
     env_int,
     env_str,
+    read_only_query,
     resolve_stored_or_env_config,
 )
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
@@ -161,6 +161,10 @@ def _get_connection(config: MySQLConfig) -> Any:
     )
 
 
+# Owns the connect/query/error lifecycle for every read-only diagnostic below.
+_read_only = read_only_query(integration="mysql", logger=logger, connect=_get_connection)
+
+
 def validate_mysql_config(config: MySQLConfig) -> MySQLValidationResult:
     """Validate MySQL connectivity with a lightweight query."""
     if not config.host:
@@ -212,14 +216,12 @@ def mysql_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     }
 
 
-def get_server_status(config: MySQLConfig) -> dict[str, Any]:
+@_read_only
+def get_server_status(cursor: Any, _config: MySQLConfig) -> dict[str, Any]:
     """Retrieve server status (connections, uptime, InnoDB buffer pool metrics).
 
     Read-only: uses SHOW GLOBAL STATUS and SHOW VARIABLES.
     """
-    if not config.is_configured:
-        return tool_unavailable("mysql", "Not configured.")
-
     _STATUS_KEYS = frozenset(
         {
             "Threads_connected",
@@ -251,67 +253,55 @@ def get_server_status(config: MySQLConfig) -> dict[str, Any]:
         }
     )
 
-    try:
-        conn = _get_connection(config)
-        try:
-            with conn.cursor() as cur:
-                cur.execute("SHOW GLOBAL STATUS")
-                all_status = {row["Variable_name"]: row["Value"] for row in cur.fetchall()}
-                metrics = {k: all_status[k] for k in sorted(_STATUS_KEYS) if k in all_status}
+    cursor.execute("SHOW GLOBAL STATUS")
+    all_status = {row["Variable_name"]: row["Value"] for row in cursor.fetchall()}
+    metrics = {k: all_status[k] for k in sorted(_STATUS_KEYS) if k in all_status}
 
-                cur.execute(
-                    "SHOW VARIABLES WHERE Variable_name IN ("
-                    + ", ".join(f"'{k}'" for k in sorted(_VARIABLE_KEYS))
-                    + ")"
-                )
-                variables = {row["Variable_name"]: row["Value"] for row in cur.fetchall()}
+    cursor.execute(
+        "SHOW VARIABLES WHERE Variable_name IN ("
+        + ", ".join(f"'{k}'" for k in sorted(_VARIABLE_KEYS))
+        + ")"
+    )
+    variables = {row["Variable_name"]: row["Value"] for row in cursor.fetchall()}
 
-                # Calculate InnoDB buffer pool hit ratio
-                pool_reads = int(all_status.get("Innodb_buffer_pool_reads", 0))
-                pool_requests = int(all_status.get("Innodb_buffer_pool_read_requests", 0))
-                pool_hit_ratio = 0.0
-                if pool_requests > 0:
-                    pool_hit_ratio = round((1 - pool_reads / pool_requests) * 100, 2)
+    # Calculate InnoDB buffer pool hit ratio
+    pool_reads = int(all_status.get("Innodb_buffer_pool_reads", 0))
+    pool_requests = int(all_status.get("Innodb_buffer_pool_read_requests", 0))
+    pool_hit_ratio = 0.0
+    if pool_requests > 0:
+        pool_hit_ratio = round((1 - pool_reads / pool_requests) * 100, 2)
 
-                return {
-                    "source": "mysql",
-                    "available": True,
-                    "version": variables.get("version", "unknown"),
-                    "version_comment": variables.get("version_comment", ""),
-                    "uptime_seconds": int(all_status.get("Uptime", 0)),
-                    "connections": {
-                        "current": int(all_status.get("Threads_connected", 0)),
-                        "running": int(all_status.get("Threads_running", 0)),
-                        "max": int(variables.get("max_connections", 0)),
-                        "max_used": int(all_status.get("Max_used_connections", 0)),
-                        "aborted_clients": int(all_status.get("Aborted_clients", 0)),
-                        "aborted_connects": int(all_status.get("Aborted_connects", 0)),
-                    },
-                    "queries": {
-                        "total": int(all_status.get("Questions", 0)),
-                        "slow": int(all_status.get("Slow_queries", 0)),
-                    },
-                    "innodb": {
-                        "buffer_pool_size_bytes": int(variables.get("innodb_buffer_pool_size", 0)),
-                        "buffer_pool_hit_ratio_percent": pool_hit_ratio,
-                        "row_lock_waits": int(all_status.get("Innodb_row_lock_waits", 0)),
-                        "deadlocks": int(all_status.get("Innodb_deadlocks", 0)),
-                    },
-                    "metrics": metrics,
-                }
-        finally:
-            conn.close()
-    except Exception as err:
-        report_validation_failure(
-            err,
-            logger=logger,
-            integration="mysql",
-            method="get_server_status",
-        )
-        return tool_unavailable("mysql", str(err))
+    return {
+        "source": "mysql",
+        "available": True,
+        "version": variables.get("version", "unknown"),
+        "version_comment": variables.get("version_comment", ""),
+        "uptime_seconds": int(all_status.get("Uptime", 0)),
+        "connections": {
+            "current": int(all_status.get("Threads_connected", 0)),
+            "running": int(all_status.get("Threads_running", 0)),
+            "max": int(variables.get("max_connections", 0)),
+            "max_used": int(all_status.get("Max_used_connections", 0)),
+            "aborted_clients": int(all_status.get("Aborted_clients", 0)),
+            "aborted_connects": int(all_status.get("Aborted_connects", 0)),
+        },
+        "queries": {
+            "total": int(all_status.get("Questions", 0)),
+            "slow": int(all_status.get("Slow_queries", 0)),
+        },
+        "innodb": {
+            "buffer_pool_size_bytes": int(variables.get("innodb_buffer_pool_size", 0)),
+            "buffer_pool_hit_ratio_percent": pool_hit_ratio,
+            "row_lock_waits": int(all_status.get("Innodb_row_lock_waits", 0)),
+            "deadlocks": int(all_status.get("Innodb_deadlocks", 0)),
+        },
+        "metrics": metrics,
+    }
 
 
+@_read_only
 def get_current_processes(
+    cursor: Any,
     config: MySQLConfig,
     threshold_seconds: int = 1,
 ) -> dict[str, Any]:
@@ -320,69 +310,50 @@ def get_current_processes(
     Read-only: queries information_schema.PROCESSLIST.
     Results are capped at config.max_results.
     """
-    if not config.is_configured:
-        return tool_unavailable("mysql", "Not configured.")
-
-    try:
-        conn = _get_connection(config)
-        try:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    SELECT ID, USER, HOST, DB, COMMAND, TIME, STATE, INFO
-                    FROM information_schema.PROCESSLIST
-                    WHERE COMMAND != 'Sleep'
-                      AND ID != CONNECTION_ID()
-                      AND TIME >= %s
-                    ORDER BY TIME DESC
-                    LIMIT %s
-                    """,
-                    (threshold_seconds, config.max_results),
-                )
-                processes = []
-                for row in cur.fetchall():
-                    processes.append(
-                        {
-                            "id": row["ID"],
-                            "user": row["USER"],
-                            "host": row["HOST"] or "",
-                            "database": row["DB"] or "",
-                            "command": row["COMMAND"],
-                            "time_seconds": row["TIME"] or 0,
-                            "state": row["STATE"] or "",
-                            "query": truncate(row["INFO"] or "", _QUERY_TRUNCATE_LEN),
-                        }
-                    )
-
-                return {
-                    "source": "mysql",
-                    "available": True,
-                    "threshold_seconds": threshold_seconds,
-                    "total_processes": len(processes),
-                    "processes": processes,
-                }
-        finally:
-            conn.close()
-    except Exception as err:
-        report_validation_failure(
-            err,
-            logger=logger,
-            integration="mysql",
-            method="get_current_processes",
+    cursor.execute(
+        """
+        SELECT ID, USER, HOST, DB, COMMAND, TIME, STATE, INFO
+        FROM information_schema.PROCESSLIST
+        WHERE COMMAND != 'Sleep'
+          AND ID != CONNECTION_ID()
+          AND TIME >= %s
+        ORDER BY TIME DESC
+        LIMIT %s
+        """,
+        (threshold_seconds, config.max_results),
+    )
+    processes = []
+    for row in cursor.fetchall():
+        processes.append(
+            {
+                "id": row["ID"],
+                "user": row["USER"],
+                "host": row["HOST"] or "",
+                "database": row["DB"] or "",
+                "command": row["COMMAND"],
+                "time_seconds": row["TIME"] or 0,
+                "state": row["STATE"] or "",
+                "query": truncate(row["INFO"] or "", _QUERY_TRUNCATE_LEN),
+            }
         )
-        return tool_unavailable("mysql", str(err))
+
+    return {
+        "source": "mysql",
+        "available": True,
+        "threshold_seconds": threshold_seconds,
+        "total_processes": len(processes),
+        "processes": processes,
+    }
 
 
-def get_replication_status(config: MySQLConfig) -> dict[str, Any]:
+@_read_only
+def get_replication_status(cursor: Any, _config: MySQLConfig) -> dict[str, Any]:
     """Retrieve replication status (replica IO/SQL thread health, lag).
 
     Read-only: uses SHOW REPLICA STATUS (MySQL 8.0.22+) with fallback to
     SHOW SLAVE STATUS for older versions.
     Returns a note if the server is not configured as a replica.
     """
-    if not config.is_configured:
-        return tool_unavailable("mysql", "Not configured.")
-
     # Curated fields — includes both old (Slave_*) and new (Replica_*) column names
     _REPLICA_KEYS = (
         "Replica_IO_Running",
@@ -403,57 +374,45 @@ def get_replication_status(config: MySQLConfig) -> dict[str, Any]:
         "Exec_Master_Log_Pos",
     )
 
-    try:
-        conn = _get_connection(config)
+    rows: list[dict[str, Any]] = []
+
+    # MySQL 8.0.22+ uses SHOW REPLICA STATUS; older uses SHOW SLAVE STATUS
+    for stmt in ("SHOW REPLICA STATUS", "SHOW SLAVE STATUS"):
         try:
-            with conn.cursor() as cur:
-                rows: list[dict[str, Any]] = []
+            cursor.execute(stmt)
+            rows = list(cursor.fetchall())
+            break
+        except Exception as stmt_err:
+            import pymysql as _pymysql
 
-                # MySQL 8.0.22+ uses SHOW REPLICA STATUS; older uses SHOW SLAVE STATUS
-                for stmt in ("SHOW REPLICA STATUS", "SHOW SLAVE STATUS"):
-                    try:
-                        cur.execute(stmt)
-                        rows = list(cur.fetchall())
-                        break
-                    except Exception as stmt_err:
-                        import pymysql as _pymysql
+            if isinstance(stmt_err, _pymysql.err.ProgrammingError):
+                # SHOW REPLICA STATUS not supported on MySQL < 8.0.22; try SHOW SLAVE STATUS fallback
+                continue
+            raise
 
-                        if isinstance(stmt_err, _pymysql.err.ProgrammingError):
-                            # SHOW REPLICA STATUS not supported on MySQL < 8.0.22; try SHOW SLAVE STATUS fallback
-                            continue
-                        raise
+    if not rows:
+        return {
+            "source": "mysql",
+            "available": True,
+            "note": "This server is not configured as a replica.",
+            "replicas": [],
+        }
 
-                if not rows:
-                    return {
-                        "source": "mysql",
-                        "available": True,
-                        "note": "This server is not configured as a replica.",
-                        "replicas": [],
-                    }
+    replicas = []
+    for row in rows:
+        replicas.append({k: row[k] for k in _REPLICA_KEYS if k in row})
 
-                replicas = []
-                for row in rows:
-                    replicas.append({k: row[k] for k in _REPLICA_KEYS if k in row})
-
-                return {
-                    "source": "mysql",
-                    "available": True,
-                    "replica_count": len(replicas),
-                    "replicas": replicas,
-                }
-        finally:
-            conn.close()
-    except Exception as err:
-        report_validation_failure(
-            err,
-            logger=logger,
-            integration="mysql",
-            method="get_replication_status",
-        )
-        return tool_unavailable("mysql", str(err))
+    return {
+        "source": "mysql",
+        "available": True,
+        "replica_count": len(replicas),
+        "replicas": replicas,
+    }
 
 
+@_read_only
 def get_slow_queries(
+    cursor: Any,
     config: MySQLConfig,
     threshold_ms: float = 1000.0,
 ) -> dict[str, Any]:
@@ -463,100 +422,78 @@ def get_slow_queries(
     Results capped at config.max_results.
     Returns an informative note if performance_schema is disabled.
     """
-    if not config.is_configured:
-        return tool_unavailable("mysql", "Not configured.")
-
     # performance_schema timer uses picoseconds; convert threshold to picoseconds
     threshold_ps = int(threshold_ms * 1_000_000_000)
 
-    try:
-        conn = _get_connection(config)
-        try:
-            with conn.cursor() as cur:
-                # Check if performance_schema is enabled
-                cur.execute("SELECT @@performance_schema")
-                row = cur.fetchone()
-                if not row or not list(row.values())[0]:
-                    return {
-                        "source": "mysql",
-                        "available": True,
-                        "performance_schema_available": False,
-                        "note": (
-                            "performance_schema is disabled. "
-                            "Enable it in my.cnf to collect slow query data."
-                        ),
-                        "queries": [],
-                    }
+    # Check if performance_schema is enabled
+    cursor.execute("SELECT @@performance_schema")
+    row = cursor.fetchone()
+    if not row or not list(row.values())[0]:
+        return {
+            "source": "mysql",
+            "available": True,
+            "performance_schema_available": False,
+            "note": (
+                "performance_schema is disabled. Enable it in my.cnf to collect slow query data."
+            ),
+            "queries": [],
+        }
 
-                cur.execute(
-                    """
-                    SELECT
-                        DIGEST_TEXT,
-                        SCHEMA_NAME,
-                        COUNT_STAR,
-                        ROUND(AVG_TIMER_WAIT / 1000000000, 3) AS avg_time_ms,
-                        ROUND(SUM_TIMER_WAIT / 1000000000, 3) AS total_time_ms,
-                        ROUND(MIN_TIMER_WAIT / 1000000000, 3) AS min_time_ms,
-                        ROUND(MAX_TIMER_WAIT / 1000000000, 3) AS max_time_ms,
-                        SUM_ROWS_EXAMINED,
-                        SUM_ROWS_SENT,
-                        SUM_NO_INDEX_USED,
-                        SUM_NO_GOOD_INDEX_USED
-                    FROM performance_schema.events_statements_summary_by_digest
-                    WHERE AVG_TIMER_WAIT >= %s
-                    ORDER BY AVG_TIMER_WAIT DESC
-                    LIMIT %s
-                    """,
-                    (threshold_ps, config.max_results),
-                )
+    cursor.execute(
+        """
+        SELECT
+            DIGEST_TEXT,
+            SCHEMA_NAME,
+            COUNT_STAR,
+            ROUND(AVG_TIMER_WAIT / 1000000000, 3) AS avg_time_ms,
+            ROUND(SUM_TIMER_WAIT / 1000000000, 3) AS total_time_ms,
+            ROUND(MIN_TIMER_WAIT / 1000000000, 3) AS min_time_ms,
+            ROUND(MAX_TIMER_WAIT / 1000000000, 3) AS max_time_ms,
+            SUM_ROWS_EXAMINED,
+            SUM_ROWS_SENT,
+            SUM_NO_INDEX_USED,
+            SUM_NO_GOOD_INDEX_USED
+        FROM performance_schema.events_statements_summary_by_digest
+        WHERE AVG_TIMER_WAIT >= %s
+        ORDER BY AVG_TIMER_WAIT DESC
+        LIMIT %s
+        """,
+        (threshold_ps, config.max_results),
+    )
 
-                queries = []
-                for row in cur.fetchall():
-                    queries.append(
-                        {
-                            "digest_text": truncate(row["DIGEST_TEXT"] or "", _QUERY_TRUNCATE_LEN),
-                            "schema_name": row["SCHEMA_NAME"] or "",
-                            "count": row["COUNT_STAR"] or 0,
-                            "avg_time_ms": float(row["avg_time_ms"])
-                            if row["avg_time_ms"] is not None
-                            else 0.0,
-                            "total_time_ms": float(row["total_time_ms"])
-                            if row["total_time_ms"] is not None
-                            else 0.0,
-                            "min_time_ms": float(row["min_time_ms"])
-                            if row["min_time_ms"] is not None
-                            else 0.0,
-                            "max_time_ms": float(row["max_time_ms"])
-                            if row["max_time_ms"] is not None
-                            else 0.0,
-                            "rows_examined": row["SUM_ROWS_EXAMINED"] or 0,
-                            "rows_sent": row["SUM_ROWS_SENT"] or 0,
-                            "no_index_used": row["SUM_NO_INDEX_USED"] or 0,
-                            "no_good_index_used": row["SUM_NO_GOOD_INDEX_USED"] or 0,
-                        }
-                    )
-
-                return {
-                    "source": "mysql",
-                    "available": True,
-                    "performance_schema_available": True,
-                    "threshold_ms": threshold_ms,
-                    "total_queries": len(queries),
-                    "queries": queries,
-                }
-        finally:
-            conn.close()
-    except Exception as err:
-        report_validation_failure(
-            err,
-            logger=logger,
-            integration="mysql",
-            method="get_slow_queries",
+    queries = []
+    for row in cursor.fetchall():
+        queries.append(
+            {
+                "digest_text": truncate(row["DIGEST_TEXT"] or "", _QUERY_TRUNCATE_LEN),
+                "schema_name": row["SCHEMA_NAME"] or "",
+                "count": row["COUNT_STAR"] or 0,
+                "avg_time_ms": float(row["avg_time_ms"]) if row["avg_time_ms"] is not None else 0.0,
+                "total_time_ms": float(row["total_time_ms"])
+                if row["total_time_ms"] is not None
+                else 0.0,
+                "min_time_ms": float(row["min_time_ms"]) if row["min_time_ms"] is not None else 0.0,
+                "max_time_ms": float(row["max_time_ms"]) if row["max_time_ms"] is not None else 0.0,
+                "rows_examined": row["SUM_ROWS_EXAMINED"] or 0,
+                "rows_sent": row["SUM_ROWS_SENT"] or 0,
+                "no_index_used": row["SUM_NO_INDEX_USED"] or 0,
+                "no_good_index_used": row["SUM_NO_GOOD_INDEX_USED"] or 0,
+            }
         )
-        return tool_unavailable("mysql", str(err))
+
+    return {
+        "source": "mysql",
+        "available": True,
+        "performance_schema_available": True,
+        "threshold_ms": threshold_ms,
+        "total_queries": len(queries),
+        "queries": queries,
+    }
 
 
+@_read_only
 def get_table_stats(
+    cursor: Any,
     config: MySQLConfig,
 ) -> dict[str, Any]:
     """Retrieve table statistics (size, row counts) from information_schema.
@@ -564,77 +501,54 @@ def get_table_stats(
     Read-only: queries information_schema.TABLES for the configured database.
     Results capped at config.max_results.
     """
-    if not config.is_configured:
-        return tool_unavailable("mysql", "Not configured.")
+    cursor.execute(
+        """
+        SELECT
+            TABLE_NAME,
+            ENGINE,
+            TABLE_ROWS,
+            ROUND(DATA_LENGTH / 1024 / 1024, 3) AS data_mb,
+            ROUND(INDEX_LENGTH / 1024 / 1024, 3) AS index_mb,
+            ROUND((DATA_LENGTH + INDEX_LENGTH) / 1024 / 1024, 3) AS total_mb,
+            AUTO_INCREMENT,
+            TABLE_COLLATION,
+            CREATE_TIME,
+            UPDATE_TIME
+        FROM information_schema.TABLES
+        WHERE TABLE_SCHEMA = %s
+          AND TABLE_TYPE = 'BASE TABLE'
+        ORDER BY (DATA_LENGTH + INDEX_LENGTH) DESC
+        LIMIT %s
+        """,
+        (config.database, config.max_results),
+    )
 
-    try:
-        conn = _get_connection(config)
-        try:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    SELECT
-                        TABLE_NAME,
-                        ENGINE,
-                        TABLE_ROWS,
-                        ROUND(DATA_LENGTH / 1024 / 1024, 3) AS data_mb,
-                        ROUND(INDEX_LENGTH / 1024 / 1024, 3) AS index_mb,
-                        ROUND((DATA_LENGTH + INDEX_LENGTH) / 1024 / 1024, 3) AS total_mb,
-                        AUTO_INCREMENT,
-                        TABLE_COLLATION,
-                        CREATE_TIME,
-                        UPDATE_TIME
-                    FROM information_schema.TABLES
-                    WHERE TABLE_SCHEMA = %s
-                      AND TABLE_TYPE = 'BASE TABLE'
-                    ORDER BY (DATA_LENGTH + INDEX_LENGTH) DESC
-                    LIMIT %s
-                    """,
-                    (config.database, config.max_results),
-                )
-
-                tables = []
-                for row in cur.fetchall():
-                    tables.append(
-                        {
-                            "table_name": row["TABLE_NAME"],
-                            "engine": row["ENGINE"] or "",
-                            "row_count_estimate": row["TABLE_ROWS"] or 0,
-                            "size": {
-                                "data_mb": float(row["data_mb"])
-                                if row["data_mb"] is not None
-                                else 0.0,
-                                "index_mb": float(row["index_mb"])
-                                if row["index_mb"] is not None
-                                else 0.0,
-                                "total_mb": float(row["total_mb"])
-                                if row["total_mb"] is not None
-                                else 0.0,
-                            },
-                            "auto_increment": row["AUTO_INCREMENT"],
-                            "collation": row["TABLE_COLLATION"] or "",
-                            "created_at": str(row["CREATE_TIME"]) if row["CREATE_TIME"] else None,
-                            "updated_at": str(row["UPDATE_TIME"]) if row["UPDATE_TIME"] else None,
-                        }
-                    )
-
-                return {
-                    "source": "mysql",
-                    "available": True,
-                    "database": config.database,
-                    "total_tables": len(tables),
-                    "tables": tables,
-                }
-        finally:
-            conn.close()
-    except Exception as err:
-        report_validation_failure(
-            err,
-            logger=logger,
-            integration="mysql",
-            method="get_table_stats",
+    tables = []
+    for row in cursor.fetchall():
+        tables.append(
+            {
+                "table_name": row["TABLE_NAME"],
+                "engine": row["ENGINE"] or "",
+                "row_count_estimate": row["TABLE_ROWS"] or 0,
+                "size": {
+                    "data_mb": float(row["data_mb"]) if row["data_mb"] is not None else 0.0,
+                    "index_mb": float(row["index_mb"]) if row["index_mb"] is not None else 0.0,
+                    "total_mb": float(row["total_mb"]) if row["total_mb"] is not None else 0.0,
+                },
+                "auto_increment": row["AUTO_INCREMENT"],
+                "collation": row["TABLE_COLLATION"] or "",
+                "created_at": str(row["CREATE_TIME"]) if row["CREATE_TIME"] else None,
+                "updated_at": str(row["UPDATE_TIME"]) if row["UPDATE_TIME"] else None,
+            }
         )
-        return tool_unavailable("mysql", str(err))
+
+    return {
+        "source": "mysql",
+        "available": True,
+        "database": config.database,
+        "total_tables": len(tables),
+        "tables": tables,
+    }
 
 
 def classify(credentials: dict[str, Any], record_id: str) -> tuple[MySQLConfig | None, str | None]:

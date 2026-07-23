@@ -75,7 +75,7 @@ def run_investigation(
     resolved_integrations: dict[str, Any] | None = None,
     openclaw_context: dict[str, Any] | None = None,
     opensre_evaluate: bool = False,
-    investigation_metadata: tuple[str, str, str] | None = None,
+    investigation_metadata: tuple[str, str] | None = None,
     agent_class: type[ConnectedInvestigationAgent] | None = None,
 ) -> AgentState:
     """Run the investigation from a raw alert payload. Pure function: inputs in, state out.
@@ -85,8 +85,7 @@ def run_investigation(
         resolved_integrations: Optional pre-resolved integrations dict. When provided,
             integration resolution is skipped — useful for synthetic testing where a
             FixtureGrafanaBackend should be injected without real credential resolution.
-        investigation_metadata: Optional ``(alert_name, pipeline_name, severity)`` for
-            initial state; avoids copying those fields onto ``raw_alert``.
+        investigation_metadata: Optional ``(alert_name, severity)`` for AgentState.
         agent_class: Optional override for the investigation agent class. Defaults
             to ``ConnectedInvestigationAgent``. Callers that need a custom
             termination policy, structured-stage progression, or other
@@ -121,13 +120,12 @@ def resolve_investigation_context(
     *,
     raw_alert: dict[str, Any],
     alert_name: str | None,
-    pipeline_name: str | None,
     severity: str | None,
-) -> tuple[str, str, str]:
-    """Resolve ``(alert_name, pipeline_name, severity)`` from overrides and payload defaults.
+) -> tuple[str, str]:
+    """Resolve ``(alert_name, severity)`` from overrides and payload defaults.
 
-    Pure helper shared by every delivery surface (CLI, HTTP server, MCP); overrides win,
-    then the raw alert's own fields, then common labels, then sensible fallbacks.
+    Pure helper shared by every delivery surface (CLI, HTTP server, MCP);
+    overrides win, then the raw alert's own fields, then common labels.
     """
     labels = raw_alert.get("commonLabels") or raw_alert.get("labels") or {}
     labels = labels if isinstance(labels, dict) else {}
@@ -140,13 +138,6 @@ def resolve_investigation_context(
         or canonical.get("alert_name")
         or labels.get("alertname")
         or "Incident",
-        pipeline_name
-        or raw_alert.get("pipeline_name")
-        or canonical.get("pipeline_name")
-        or labels.get("pipeline_name")
-        or labels.get("pipeline")
-        or labels.get("service")
-        or "unknown",
         severity
         or raw_alert.get("severity")
         or canonical.get("severity")
@@ -198,7 +189,7 @@ def run_investigation_payload(
     *,
     raw_alert: str | dict[str, Any],
     opensre_evaluate: bool = False,
-    investigation_metadata: tuple[str, str, str] | None = None,
+    investigation_metadata: tuple[str, str] | None = None,
 ) -> dict[str, Any]:
     """Run an investigation and return the serializable result payload.
 
@@ -207,8 +198,7 @@ def run_investigation_payload(
     CLI produces without depending on the ``cli`` package, so callers no longer have
     to reach up into ``cli.investigation`` to run an investigation.
 
-    ``investigation_metadata`` is an optional ``(alert_name, pipeline_name, severity)``
-    tuple for initial state (e.g. HTTP request overrides) without mutating ``raw_alert``.
+    ``investigation_metadata`` is an optional ``(alert_name, severity)`` tuple.
     """
     state = run_investigation(
         raw_alert,
@@ -222,7 +212,7 @@ async def astream_investigation(
     raw_alert: str | dict[str, Any],
     *,
     opensre_evaluate: bool = False,
-    investigation_metadata: tuple[str, str, str] | None = None,
+    investigation_metadata: tuple[str, str] | None = None,
 ) -> AsyncIterator[Any]:
     """Stream investigation events in real time.
 
@@ -333,11 +323,7 @@ async def astream_investigation(
                 _make_node_event(
                     "on_chain_end",
                     "extract_alert",
-                    {
-                        "output": {
-                            k: state.get(k) for k in ("alert_name", "pipeline_name", "severity")
-                        }
-                    },
+                    {"output": {k: state.get(k) for k in ("alert_name", "severity")}},
                 )
             )
 

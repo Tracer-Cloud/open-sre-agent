@@ -12,7 +12,6 @@ from typing import Any
 from config.constants import OPENSRE_HOME_DIR
 
 STACK_NAME = "opensre-gateway"
-WEB_PROCESS_NAME = "opensre-web"
 GATEWAY_PROCESS_NAME = "opensre-gateway"
 
 _STACK_SUFFIX_ENV = "OPENSRE_STACK_SUFFIX"

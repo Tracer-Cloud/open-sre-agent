@@ -65,6 +65,7 @@ EvidenceSource = Literal[
     "slack",
     "twilio",
     "telegram",
+    "rocketchat",
     "redis",
     "temporal",
     "kubernetes",

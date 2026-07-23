@@ -1,7 +1,7 @@
 """Background (daemon) lifecycle for the OpenSRE gateway process.
 
 The CLI and the interactive shell both drive the daemon through these helpers:
-a detached ``python -m gateway.main`` child whose output is captured in
+a detached ``python -m surfaces.cli.gateway_entry`` child whose output is captured in
 ``~/.opensre/gateway/gateway.log`` and whose PID is tracked in ``gateway.pid``.
 The running process reports per-component state (web app, Telegram chat, task
 scheduler) through ``components.json``.
@@ -54,7 +54,7 @@ def start_gateway_daemon(
     GATEWAY_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
     with GATEWAY_LOG_FILE.open("ab") as log:
         process = subprocess.Popen(
-            argv or (sys.executable, "-m", "gateway.main"),
+            argv or (sys.executable, "-m", "surfaces.cli.gateway_entry"),
             stdin=subprocess.DEVNULL,
             stdout=log,
             stderr=subprocess.STDOUT,

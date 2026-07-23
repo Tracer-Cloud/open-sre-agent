@@ -138,8 +138,8 @@ def test_collect_alert_text_lowercases_and_joins_fields() -> None:
     assert "problem" in text
 
 
-def test_collect_alert_text_includes_pipeline_name() -> None:
-    text = collect_alert_text({"pipeline_name": "CheckoutPipeline", "alert_name": "Latency"})
+def test_collect_alert_text_includes_raw_alert_title() -> None:
+    text = collect_alert_text({"alert_name": "Latency", "raw_alert": {"title": "CheckoutPipeline"}})
     assert "checkoutpipeline" in text
     assert "latency" in text
 

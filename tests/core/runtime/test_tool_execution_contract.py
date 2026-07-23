@@ -38,6 +38,7 @@ def _tool(
     execute: Any | None = None,
     execution_mode: str | None = None,
     parallel_safe: bool = True,
+    source: str = "agent",
 ) -> AgentTool:
     return AgentTool(
         name=name,
@@ -46,6 +47,7 @@ def _tool(
         execute=execute or (lambda args, _ctx: {"value": args["value"]}),
         execution_mode=execution_mode,  # type: ignore[arg-type]
         parallel_safe=parallel_safe,
+        source=source,
     )
 
 
@@ -110,6 +112,30 @@ def test_before_hook_can_block_with_structured_result() -> None:
     assert result.is_error is True
     assert result.content == "blocked"
     assert result.details == {"policy": "deny"}
+
+
+def test_before_hook_receives_executed_tools_source() -> None:
+    # Arrange: capture the source handed to the before-hook. The source must be
+    # the executed tool's own source, resolved O(1) via the tool_map — not a
+    # linear scan, and never "unknown" for a known tool.
+    captured: dict[str, str] = {}
+
+    def before(request: ToolExecutionRequest) -> BeforeToolCallResult | None:
+        captured["source"] = request.source
+        return None
+
+    tool = _tool("dd_echo", source="datadog")
+
+    # Act
+    execute_tool_calls(
+        [_call("dd_echo", "ok")],
+        [tool],
+        {},
+        hooks=ToolExecutionHooks(before_tool_call=before),
+    )
+
+    # Assert
+    assert captured["source"] == "datadog"
 
 
 def test_after_hook_can_patch_result_and_terminate() -> None:

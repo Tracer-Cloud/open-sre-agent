@@ -9,6 +9,16 @@ from typing import Any
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.tool_availability import tool_unavailable
 
+_GRAFANA_RUNTIME_PARAMS = (
+    "grafana_endpoint",
+    "grafana_api_key",
+    "grafana_username",
+    "grafana_password",
+    "grafana_verify_ssl",
+    "grafana_ca_bundle",
+    "grafana_backend",
+)
+
 
 def _query_grafana_alert_rules_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     grafana = _grafana_source(sources)
@@ -71,6 +81,7 @@ def _normalize_backend_alert_rules(raw: dict[str, Any]) -> list[dict[str, Any]]:
         },
         "required": [],
     },
+    injected_params=_GRAFANA_RUNTIME_PARAMS,
     is_available=_query_grafana_alert_rules_available,
     extract_params=_query_grafana_alert_rules_extract_params,
 )
@@ -78,6 +89,8 @@ def query_grafana_alert_rules(
     folder: str | None = None,
     grafana_endpoint: str | None = None,
     grafana_api_key: str | None = None,
+    grafana_username: str = "",
+    grafana_password: str = "",
     grafana_verify_ssl: bool = True,
     grafana_ca_bundle: str = "",
     grafana_backend: Any = None,
@@ -98,8 +111,10 @@ def query_grafana_alert_rules(
     client = _resolve_grafana_client(
         grafana_endpoint,
         grafana_api_key,
-        grafana_verify_ssl=grafana_verify_ssl,
-        grafana_ca_bundle=grafana_ca_bundle,
+        grafana_username,
+        grafana_password,
+        grafana_verify_ssl,
+        grafana_ca_bundle,
     )
     if not client or not client.is_configured:
         return tool_unavailable("grafana_alerts", "Grafana integration not configured", rules=[])
@@ -190,6 +205,7 @@ def _iso_to_epoch_ms(value: str) -> int:
         },
         "required": [],
     },
+    injected_params=_GRAFANA_RUNTIME_PARAMS,
     is_available=_query_grafana_annotations_available,
     extract_params=_query_grafana_annotations_extract_params,
 )
@@ -369,12 +385,11 @@ def _query_grafana_logs_available(sources: dict[str, dict]) -> bool:
             "limit": {"type": "integer", "default": 100},
             "grafana_endpoint": {"type": "string"},
             "grafana_api_key": {"type": "string"},
-            "grafana_username": {"type": "string"},
-            "grafana_password": {"type": "string"},
             "pipeline_name": {"type": "string"},
         },
         "required": ["service_name"],
     },
+    injected_params=_GRAFANA_RUNTIME_PARAMS,
     is_available=_query_grafana_logs_available,
     extract_params=_query_grafana_logs_extract_params,
 )
@@ -542,15 +557,7 @@ def _query_grafana_metrics_available(sources: dict[str, dict]) -> bool:
     anti_examples=["Use this tool for pod logs or deployment status."],
     input_model=QueryGrafanaMetricsInput,
     output_model=QueryGrafanaMetricsOutput,
-    injected_params=(
-        "grafana_endpoint",
-        "grafana_api_key",
-        "grafana_username",
-        "grafana_password",
-        "grafana_verify_ssl",
-        "grafana_ca_bundle",
-        "grafana_backend",
-    ),
+    injected_params=_GRAFANA_RUNTIME_PARAMS,
     is_available=_query_grafana_metrics_available,
     extract_params=_query_grafana_metrics_extract_params,
 )
@@ -639,12 +646,15 @@ def _query_grafana_service_names_available(sources: dict[str, dict]) -> bool:
         },
         "required": [],
     },
+    injected_params=_GRAFANA_RUNTIME_PARAMS,
     is_available=_query_grafana_service_names_available,
     extract_params=_query_grafana_service_names_extract_params,
 )
 def query_grafana_service_names(
     grafana_endpoint: str | None = None,
     grafana_api_key: str | None = None,
+    grafana_username: str = "",
+    grafana_password: str = "",
     grafana_verify_ssl: bool = True,
     grafana_ca_bundle: str = "",
     grafana_backend: Any = None,
@@ -657,8 +667,10 @@ def query_grafana_service_names(
     client = _resolve_grafana_client(
         grafana_endpoint,
         grafana_api_key,
-        grafana_verify_ssl=grafana_verify_ssl,
-        grafana_ca_bundle=grafana_ca_bundle,
+        grafana_username,
+        grafana_password,
+        grafana_verify_ssl,
+        grafana_ca_bundle,
     )
     if not client or not client.is_configured:
         return tool_unavailable(
@@ -728,6 +740,7 @@ def _query_grafana_traces_available(sources: dict[str, dict]) -> bool:
         },
         "required": ["service_name"],
     },
+    injected_params=_GRAFANA_RUNTIME_PARAMS,
     is_available=_query_grafana_traces_available,
     extract_params=_query_grafana_traces_extract_params,
 )
@@ -737,6 +750,8 @@ def query_grafana_traces(
     limit: int = 20,
     grafana_endpoint: str | None = None,
     grafana_api_key: str | None = None,
+    grafana_username: str = "",
+    grafana_password: str = "",
     grafana_verify_ssl: bool = True,
     grafana_ca_bundle: str = "",
     grafana_backend: Any = None,
@@ -755,8 +770,10 @@ def query_grafana_traces(
     client = _resolve_grafana_client(
         grafana_endpoint,
         grafana_api_key,
-        grafana_verify_ssl=grafana_verify_ssl,
-        grafana_ca_bundle=grafana_ca_bundle,
+        grafana_username,
+        grafana_password,
+        grafana_verify_ssl,
+        grafana_ca_bundle,
     )
     if not client or not client.is_configured:
         return tool_unavailable("grafana_tempo", "Grafana integration not configured", traces=[])

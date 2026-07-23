@@ -16,7 +16,7 @@ from surfaces.interactive_shell.ui import (
     repl_table,
 )
 
-_ALLOWED_NOTIFY_CHANNELS = ("email", "telegram")
+_ALLOWED_NOTIFY_CHANNELS = ("email", "telegram", "rocketchat")
 _BACKGROUND_FIRST_ARGS: tuple[tuple[str, str], ...] = (
     ("on", "enable background investigation mode"),
     ("off", "disable background investigation mode"),

@@ -20,18 +20,18 @@ class DummyMimirClient(MimirMixin):
 
         # Mock the internal base methods to intercept network calls
         self._build_datasource_url = MagicMock(return_value="https://fake-grafana.com/api/v1/query")
-        self._make_request = MagicMock()
+        self._make_get_request = MagicMock()
 
 
 def test_query_mimir_plain_metric():
     """Test query construction for a plain metric without a service filter."""
     client = DummyMimirClient()
-    client._make_request.return_value = {"data": {"result": []}}
+    client._make_get_request.return_value = {"data": {"result": []}}
 
     client.query_mimir("cpu_usage_total")
 
     # Verify PromQL exact match (Requirement: Mimir query construction is protected)
-    client._make_request.assert_called_once_with(
+    client._make_get_request.assert_called_once_with(
         "https://fake-grafana.com/api/v1/query", params={"query": "cpu_usage_total"}
     )
 
@@ -39,12 +39,12 @@ def test_query_mimir_plain_metric():
 def test_query_mimir_service_filtered():
     """Test query construction when a service_name filter is provided."""
     client = DummyMimirClient()
-    client._make_request.return_value = {"data": {"result": []}}
+    client._make_get_request.return_value = {"data": {"result": []}}
 
     client.query_mimir("cpu_usage_total", service_name="backend-api")
 
     # Verify PromQL bracket injection (Requirement: Service filtering is tested)
-    client._make_request.assert_called_once_with(
+    client._make_get_request.assert_called_once_with(
         "https://fake-grafana.com/api/v1/query",
         params={"query": 'cpu_usage_total{service_name="backend-api"}'},
     )
@@ -65,7 +65,7 @@ def test_query_mimir_result_normalization():
             ]
         }
     }
-    client._make_request.return_value = fake_api_response
+    client._make_get_request.return_value = fake_api_response
 
     result = client.query_mimir("cpu_usage_total")
 
@@ -90,14 +90,14 @@ def test_query_mimir_not_configured():
     # Requirement: Not-configured cases
     assert result["success"] is False
     assert "not configured" in result["error"]
-    client._make_request.assert_not_called()
+    client._make_get_request.assert_not_called()
 
 
 def test_query_mimir_exception_handling():
     """Test that network exceptions are caught and wrapped in a safe error envelope."""
     client = DummyMimirClient()
 
-    client._make_request.side_effect = Exception("Network timeout")
+    client._make_get_request.side_effect = Exception("Network timeout")
 
     result = client.query_mimir("cpu_usage_total")
 
@@ -120,7 +120,7 @@ def test_query_mimir_http_exception_handling():
     mock_exception.response = mock_response
 
     # 3. Force the mock client to crash using our custom exception
-    client._make_request.side_effect = mock_exception
+    client._make_get_request.side_effect = mock_exception
 
     result = client.query_mimir("cpu_usage_total")
 

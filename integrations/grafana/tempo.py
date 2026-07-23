@@ -52,7 +52,7 @@ class TempoMixin:
         }
 
         try:
-            data = self._make_request(url, params=params)
+            data = self._make_get_request(url, params=params)
             traces = data.get("traces", [])
 
             enriched_traces = []

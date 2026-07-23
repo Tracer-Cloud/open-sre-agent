@@ -133,13 +133,11 @@ def to_benchmark_scenario(miss: MissRecord) -> dict[str, Any]:
         },
         "title": f"[Regression] {alert_name}",
         "alert_name": alert_name,
-        "pipeline_name": miss.get("pipeline_name", ""),
         "severity": miss.get("severity") or "warning",
         "alert_source": "closed_loop_learning",
         "message": detail or alert_name,
         "text": detail or alert_name,
         "commonLabels": {
-            "pipeline_name": miss.get("pipeline_name", ""),
             "severity": miss.get("severity") or "warning",
             "taxonomy": taxonomy,
         },

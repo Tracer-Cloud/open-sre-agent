@@ -26,6 +26,7 @@ from surfaces.interactive_shell.runtime.subprocess_runner import (
     start_background_cli_task,
 )
 from surfaces.interactive_shell.ui import DIM, ERROR, print_command_output
+from surfaces.interactive_shell.ui.components.choice_menu import prepare_repl_output_line
 from surfaces.interactive_shell.utils.telemetry.turn_outcome import format_wizard_cli_outcome
 
 _UPDATE_SUBPROCESS_TIMEOUT_SECONDS = 300
@@ -76,15 +77,19 @@ def run_cli_command(
     ``subprocess_timeout`` caps how long ``subprocess.run`` waits before raising
     :class:`~subprocess.TimeoutExpired`. Interactive flows use ``None`` so the
     child can prompt as long as needed; callers that hit the network without a
-    TTY (like ``opensre update``) pass a bounded timeout.
+    guaranteed response (like ``opensre update``) pass a bounded timeout. The
+    timeout applies whether or not output is captured — it no longer forces
+    capture, so a long-running network command can still stream live to the
+    real TTY (e.g. the install script's own progress output during an update)
+    while still being killed if it hangs.
 
     ``capture_output`` (default ``False``) makes the helper capture stdout/stderr
-    and replay them through ``console`` even without a timeout. Set this for
-    non-interactive delegated commands (e.g. ``opensre tests list``) so their
-    output appears inside the REPL buffer instead of bypassing ``console.print``
-    via the child's inherited stdout FD. Interactive commands like ``onboard``
-    must leave this ``False`` so the child's prompts stay attached to the real
-    TTY. Capture is also enabled automatically whenever a timeout is set.
+    and replay them through ``console``. Set this for non-interactive delegated
+    commands (e.g. ``opensre tests list``) so their output appears inside the
+    REPL buffer instead of bypassing ``console.print`` via the child's inherited
+    stdout FD. Interactive commands, and commands whose child prints its own
+    terminal-aware progress UI (``onboard``, ``update``), must leave this
+    ``False`` so the child's output stays attached to the real TTY.
 
     **Return value:** Reports subprocess success for headless/gateway sessions
     (``session`` with no terminal facet) so slash analytics can show failure.
@@ -99,7 +104,7 @@ def run_cli_command(
     console.print()
     cmd = build_opensre_cli_argv(args)
     headless = session is not None and session_terminal(session) is None
-    should_capture = capture_output or subprocess_timeout is not None or headless
+    should_capture = capture_output or headless
     if headless and subprocess_timeout is None:
         subprocess_timeout = _HEADLESS_CLI_SUBPROCESS_TIMEOUT_SECONDS
     child_env = os.environ.copy()
@@ -129,19 +134,37 @@ def run_cli_command(
                     f"[{ERROR}]CLI command exited with non-zero code {captured_result.returncode}[/]"
                 )
         else:
-            interactive_result = subprocess.run(cmd, check=False, env=child_env)
+            # timeout=None is a no-op for subprocess.run, so this covers both the
+            # timed (/update) and untimed (/onboard) interactive callers.
+            interactive_result = subprocess.run(
+                cmd, check=False, timeout=subprocess_timeout, env=child_env
+            )
             exit_code = interactive_result.returncode
+            # The child wrote straight to the terminal, bypassing Rich, so Rich has no
+            # idea where the cursor ended up (e.g. mid-line after a \r-redrawn progress
+            # bar). Force a fresh line before resuming Rich output, or the blank line
+            # below just terminates the child's last line instead of being a real gap.
+            prepare_repl_output_line()
+            console.print()
             if interactive_result.returncode != 0:
                 console.print(
                     f"[{ERROR}]CLI command exited with non-zero code {interactive_result.returncode}[/]"
                 )
     except subprocess.TimeoutExpired as exc:
         exit_code = None
+        # Same cursor hazard as the normal-exit and KeyboardInterrupt paths, and the
+        # most likely one to actually hit it: the timeout exists specifically to
+        # kill a hung install script, i.e. a streamed child mid-redraw of its own
+        # progress bar.
+        prepare_repl_output_line()
         print_command_output(console, _decode_subprocess_stream(exc.stdout))
         print_command_output(console, _decode_subprocess_stream(exc.stderr), style=ERROR)
         console.print(f"[{ERROR}]error:[/] CLI command timed out")
     except KeyboardInterrupt:
         exit_code = None
+        # Same cursor hazard as the normal-exit path: Ctrl+C can land mid-line while
+        # a streamed child is mid-redraw of its own progress bar.
+        prepare_repl_output_line()
         console.print(f"[{DIM}]CLI command cancelled (Ctrl+C).[/]")
     except Exception as exc:
         exit_code = None

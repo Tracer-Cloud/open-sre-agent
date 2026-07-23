@@ -48,6 +48,15 @@ def test_extract_params_maps_fields() -> None:
     assert params["grafana_endpoint"] == "https://grafana.example.com"
 
 
+def test_basic_auth_is_runtime_only() -> None:
+    rt = query_grafana_logs.__opensre_registered_tool__
+    basic_auth_params = {"grafana_username", "grafana_password"}
+    properties = rt.input_schema.get("properties", {})
+
+    assert basic_auth_params.isdisjoint(properties)
+    assert basic_auth_params <= set(rt.injected_params)
+
+
 def test_extract_params_accepts_catalog_grafana_shape() -> None:
     rt = query_grafana_logs.__opensre_registered_tool__
     params = rt.extract_params(

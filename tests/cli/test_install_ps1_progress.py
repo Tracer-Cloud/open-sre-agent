@@ -86,6 +86,15 @@ def test_install_ps1_contains_auto_onboarding_launch_hook() -> None:
     assert "[System.Console]::IsInputRedirected" in source
 
 
+def test_install_ps1_soft_installs_github_cli_via_winget() -> None:
+    source = INSTALL_PS1.read_text()
+
+    assert "function Ensure-OpenSreGithubCli" in source
+    assert "OPENSRE_SKIP_GH_INSTALL" in source
+    assert "winget install --id GitHub.cli" in source
+    assert "Ensure-OpenSreGithubCli" in source
+
+
 def test_install_ps1_keeps_download_urls_verbose_only() -> None:
     source = INSTALL_PS1.read_text()
 
@@ -104,7 +113,37 @@ def test_install_ps1_uses_bounded_short_progress_labels() -> None:
     assert "downloading archive" in source
     assert "verifying checksum" in source
     assert '" " * 100' not in source
-    assert '[System.Console]::Write("`r{0}`r{1}"' in source
+    # The -f expression must be fully parenthesized before Console.Write, otherwise
+    # PowerShell steals the second -f argument as a Write parameter (issue #4188).
+    assert '[System.Console]::Write(("`r{0}`r{1}" -f (" " * $clearWidth), $content))' in source
+
+
+def test_install_ps1_progress_format_survives_console_write_precedence() -> None:
+    """Regression for #4188: Console.Write + -f comma precedence on Windows."""
+    shell = _powershell()
+    if shell is None:
+        pytest.skip("PowerShell is not installed in this environment.")
+
+    # Mirror Write-OpenSreProgressLine's format call. The unparenthesized form
+    # throws FormatException; the parenthesized form used in install.ps1 must succeed.
+    script = textwrap.dedent(
+        r"""
+        $ErrorActionPreference = 'Stop'
+        $clearWidth = 40
+        $content = '  / #### Installing OpenSRE downloading archive 5%'
+        [System.Console]::Write(("`r{0}`r{1}" -f (" " * $clearWidth), $content))
+        Write-Output 'FORMAT_OK'
+        """
+    )
+
+    result = subprocess.run(
+        [shell, "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "FORMAT_OK" in (result.stdout + result.stderr)
 
 
 def test_install_ps1_dot_sources_when_powershell_available() -> None:

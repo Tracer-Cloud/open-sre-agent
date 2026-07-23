@@ -17,10 +17,10 @@ def test_needs_full_json_prompt_for_alertmanager_shape() -> None:
 def test_fallback_details_reads_alertmanager_labels() -> None:
     raw_alert = {
         "commonLabels": {"alertname": "DiskFull", "severity": "critical", "service": "api"},
-        "commonAnnotations": {"pipeline_name": "billing"},
+        "commonAnnotations": {"summary": "disk pressure"},
     }
     details = fallback_details({}, raw_alert)
     assert details.alert_name == "DiskFull"
-    assert details.pipeline_name == "api"
     assert details.severity == "critical"
     assert details.is_noise is False
+    assert "pipeline_name" not in details.model_fields

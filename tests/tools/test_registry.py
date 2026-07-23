@@ -1038,3 +1038,18 @@ def test_registry_canonical_tool_wins_when_external_package_redefines_name(
     finally:
         registry_module._external_tool_packages[:] = saved
         registry_module.clear_tool_registry_cache()
+
+
+def test_resolve_tool_activity_labels_uses_registry_metadata() -> None:
+    assert registry_module.resolve_tool_activity_labels("query_grafana_metrics") == (
+        "Grafana",
+        "Mimir",
+    )
+    assert registry_module.resolve_tool_activity_labels("get_sre_guidance") == (
+        "Knowledge",
+        "SRE runbook",
+    )
+    assert registry_module.resolve_tool_activity_labels("query_grafana_mystery") == (
+        "Tools",
+        "query grafana mystery",
+    )

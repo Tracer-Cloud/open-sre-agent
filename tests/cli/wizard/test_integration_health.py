@@ -12,18 +12,11 @@ from integrations.github.mcp import GitHubMCPValidationResult
 from surfaces.cli.wizard.integration_health import (
     validate_aws_integration,
     validate_betterstack_integration,
-    validate_coralogix_integration,
-    validate_dagster_integration,
-    validate_datadog_integration,
     validate_discord_bot,
     validate_github_mcp_integration,
     validate_grafana_integration,
-    validate_honeycomb_integration,
-    validate_incident_io_integration,
-    validate_sentry_integration,
+    validate_servicenow_integration,
     validate_slack_webhook,
-    validate_telegram_bot,
-    validate_vercel_integration,
 )
 
 
@@ -35,32 +28,22 @@ def test_legacy_integration_health_import_surface_still_exports_validators() -> 
         "validate_alertmanager_integration",
         "validate_aws_integration",
         "validate_betterstack_integration",
-        "validate_coralogix_integration",
-        "validate_dagster_integration",
-        "validate_datadog_integration",
         "validate_discord_bot",
-        "validate_telegram_bot",
         "validate_github_mcp_integration",
-        "validate_gitlab_integration",
         "validate_google_docs_integration",
         "validate_grafana_integration",
-        "validate_honeycomb_integration",
-        "validate_incident_io_integration",
-        "validate_jenkins_integration",
         "validate_jira_integration",
         "validate_notion_integration",
         "validate_openclaw_integration",
         "validate_opensearch_integration",
         "validate_opsgenie_integration",
-        "validate_posthog_integration",
         "validate_posthog_mcp_integration",
-        "validate_pagerduty_integration",
-        "validate_sentry_integration",
+        "validate_rocketchat",
+        "validate_rocketchat_webhook",
         "validate_sentry_mcp_integration",
+        "validate_servicenow_integration",
         "validate_slack_webhook",
         "validate_splunk_integration",
-        "validate_tempo_integration",
-        "validate_vercel_integration",
     }
 
     assert set(module.__all__) == expected_exports
@@ -74,14 +57,6 @@ class _FakeGrafanaClient:
 
     def discover_datasource_uids(self) -> dict[str, str]:
         return self._discovered
-
-
-class _FakeDatadogClient:
-    def __init__(self, result: dict[str, object]) -> None:
-        self._result = result
-
-    def list_monitors(self) -> dict[str, object]:
-        return self._result
 
 
 def test_validate_grafana_integration_succeeds_when_datasources_are_discovered(monkeypatch) -> None:
@@ -106,92 +81,6 @@ def test_validate_grafana_integration_fails_when_no_datasources_are_found(monkey
 
     assert result.ok is False
     assert "no datasources" in result.detail.lower()
-
-
-def test_validate_datadog_integration_succeeds(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "surfaces.cli.wizard.integration_validators.observability.DatadogClient",
-        lambda _config: _FakeDatadogClient({"success": True, "total": 7}),
-    )
-
-    result = validate_datadog_integration(api_key="dd-api", app_key="dd-app", site="datadoghq.com")
-
-    assert result.ok is True
-    assert "fetched 7 monitors" in result.detail.lower()
-
-
-def test_validate_datadog_integration_fails(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "surfaces.cli.wizard.integration_validators.observability.DatadogClient",
-        lambda _config: _FakeDatadogClient({"success": False, "error": "HTTP 403"}),
-    )
-
-    result = validate_datadog_integration(api_key="dd-api", app_key="dd-app", site="datadoghq.com")
-
-    assert result.ok is False
-    assert "http 403" in result.detail.lower()
-
-
-def test_validate_honeycomb_integration_succeeds(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "surfaces.cli.wizard.integration_validators.observability.HoneycombClient.validate_access",
-        lambda _self: {"success": True, "environment": {"slug": "prod"}},
-    )
-    monkeypatch.setattr(
-        "surfaces.cli.wizard.integration_validators.observability.HoneycombClient.run_query",
-        lambda _self, *_args, **_kwargs: {"success": True, "results": [{}]},
-    )
-
-    result = validate_honeycomb_integration(
-        api_key="hny_test",
-        dataset="prod-api",
-        base_url="https://api.honeycomb.io",
-    )
-
-    assert result.ok is True
-    assert "dataset prod-api" in result.detail.lower()
-
-
-def test_validate_incident_io_integration_succeeds(monkeypatch) -> None:
-    class _FakeIncidentIoClient:
-        def __init__(self, _config) -> None:
-            pass
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *_args) -> None:
-            pass
-
-        def list_incidents(self, **_kwargs):
-            return {"success": True}
-
-    monkeypatch.setattr(
-        "surfaces.cli.wizard.integration_validators.alerting.IncidentIoClient",
-        _FakeIncidentIoClient,
-    )
-
-    result = validate_incident_io_integration(api_key="iio_test")
-
-    assert result.ok is True
-    assert "api key accepted" in result.detail.lower()
-
-
-def test_validate_coralogix_integration_fails(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "surfaces.cli.wizard.integration_validators.observability.CoralogixClient.validate_access",
-        lambda _self: {"success": False, "error": "HTTP 401"},
-    )
-
-    result = validate_coralogix_integration(
-        api_key="cx_test",
-        base_url="https://api.coralogix.com",
-        application_name="payments",
-        subsystem_name="worker",
-    )
-
-    assert result.ok is False
-    assert "http 401" in result.detail.lower()
 
 
 @pytest.mark.parametrize("status_code", [200, 400, 403, 405])
@@ -239,6 +128,93 @@ def test_validate_slack_webhook_fails_for_httpx_request_error(monkeypatch) -> No
 
     assert result.ok is False
     assert "slack webhook validation failed" in result.detail.lower()
+    assert "connection failed" in result.detail.lower()
+
+
+def test_validate_servicenow_integration_succeeds(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "surfaces.cli.wizard.integration_validators.http_probe_validators.httpx.get",
+        lambda *_args, **_kwargs: types.SimpleNamespace(status_code=200),
+    )
+
+    result = validate_servicenow_integration(
+        instance_url="https://dev12345.service-now.com/",
+        username="admin",
+        password="s3cret",
+    )
+
+    assert result.ok is True
+    assert result.detail == "ServiceNow connected as admin at https://dev12345.service-now.com."
+
+
+@pytest.mark.parametrize(
+    ("status_code", "expected_fragment"),
+    [
+        (401, "credentials invalid"),
+        (403, "cannot read the sys_user table"),
+        (404, "instance URL not found"),
+        (500, "unexpected status 500"),
+    ],
+)
+def test_validate_servicenow_integration_maps_http_errors(
+    monkeypatch,
+    status_code: int,
+    expected_fragment: str,
+) -> None:
+    monkeypatch.setattr(
+        "surfaces.cli.wizard.integration_validators.http_probe_validators.httpx.get",
+        lambda *_args, **_kwargs: types.SimpleNamespace(status_code=status_code),
+    )
+
+    result = validate_servicenow_integration(
+        instance_url="https://dev12345.service-now.com",
+        username="admin",
+        password="bad",
+    )
+
+    assert result.ok is False
+    assert expected_fragment in result.detail
+
+
+def test_validate_servicenow_integration_rejects_plain_http_remote(monkeypatch) -> None:
+    def _fail_if_called(*_args, **_kwargs):
+        raise AssertionError("no request may be sent for a plaintext-HTTP remote URL")
+
+    monkeypatch.setattr(
+        "surfaces.cli.wizard.integration_validators.http_probe_validators.httpx.get",
+        _fail_if_called,
+    )
+
+    result = validate_servicenow_integration(
+        instance_url="http://dev12345.service-now.com",
+        username="admin",
+        password="s3cret",
+    )
+
+    assert result.ok is False
+    assert "https://" in result.detail
+
+
+def test_validate_servicenow_integration_fails_for_httpx_request_error(monkeypatch) -> None:
+    def _raise_request_error(*_args, **_kwargs):
+        raise httpx.RequestError(
+            "connection failed",
+            request=httpx.Request("GET", "https://dev12345.service-now.com/api/now/table/sys_user"),
+        )
+
+    monkeypatch.setattr(
+        "surfaces.cli.wizard.integration_validators.http_probe_validators.httpx.get",
+        _raise_request_error,
+    )
+
+    result = validate_servicenow_integration(
+        instance_url="https://dev12345.service-now.com",
+        username="admin",
+        password="s3cret",
+    )
+
+    assert result.ok is False
+    assert "servicenow validation failed" in result.detail.lower()
     assert "connection failed" in result.detail.lower()
 
 
@@ -352,145 +328,6 @@ def test_validate_github_mcp_integration_uses_shared_validator(monkeypatch) -> N
     assert result.github_mcp.authenticated_user == "ghuser"
 
 
-def test_validate_sentry_integration_uses_shared_validator(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "surfaces.cli.wizard.integration_validators.sentry.validate_sentry_config",
-        lambda _config: types.SimpleNamespace(ok=True, detail="Sentry ok"),
-    )
-
-    result = validate_sentry_integration(
-        base_url="https://sentry.io",
-        organization_slug="demo-org",
-        auth_token="sntrys_test",
-        project_slug="payments",
-    )
-
-    assert result.ok is True
-    assert result.detail == "Sentry ok"
-
-
-def test_validate_dagster_integration_uses_shared_validator(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "surfaces.cli.wizard.integration_validators.dagster.validate_dagster_config",
-        lambda _config: types.SimpleNamespace(
-            ok=True, detail="Connected to Dagster version mock-1.0."
-        ),
-    )
-
-    result = validate_dagster_integration(
-        endpoint="http://localhost:3000/graphql",
-        api_token="",
-    )
-
-    assert result.ok is True
-    assert result.detail == "Connected to Dagster version mock-1.0."
-
-
-def test_validate_dagster_integration_surfaces_failure(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "surfaces.cli.wizard.integration_validators.dagster.validate_dagster_config",
-        lambda _config: types.SimpleNamespace(
-            ok=False, detail="Dagster GraphQL probe failed: HTTP 401"
-        ),
-    )
-
-    result = validate_dagster_integration(
-        endpoint="https://demo.dagster.cloud/graphql",
-        api_token="bad",
-    )
-
-    assert result.ok is False
-    assert "HTTP 401" in result.detail
-
-
-class _FakeVercelClient:
-    def __init__(self, result: dict) -> None:
-        self._result = result
-
-    def __enter__(self) -> _FakeVercelClient:
-        return self
-
-    def __exit__(self, *_: object) -> None:
-        pass
-
-    def list_projects(self) -> dict:
-        return self._result
-
-
-def test_validate_vercel_integration_succeeds(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "surfaces.cli.wizard.integration_validators.vercel.VercelClient",
-        lambda _config: _FakeVercelClient(
-            {"success": True, "projects": [{"id": "p1"}], "total": 1}
-        ),
-    )
-
-    result = validate_vercel_integration(api_token="tok_test")
-
-    assert result.ok is True
-    assert "1 project" in result.detail
-
-
-def test_validate_vercel_integration_succeeds_with_team_id(monkeypatch) -> None:
-    captured: dict = {}
-
-    class _CapturingClient:
-        def __init__(self, config) -> None:
-            captured["team_id"] = config.team_id
-
-        def __enter__(self) -> _CapturingClient:
-            return self
-
-        def __exit__(self, *_: object) -> None:
-            pass
-
-        def list_projects(self) -> dict:
-            return {"success": True, "projects": [], "total": 0}
-
-    monkeypatch.setattr(
-        "surfaces.cli.wizard.integration_validators.vercel.VercelClient",
-        _CapturingClient,
-    )
-
-    result = validate_vercel_integration(api_token="tok_test", team_id="team_xyz")
-
-    assert result.ok is True
-    assert captured["team_id"] == "team_xyz"
-
-
-def test_validate_vercel_integration_fails_on_api_error(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "surfaces.cli.wizard.integration_validators.vercel.VercelClient",
-        lambda _config: _FakeVercelClient({"success": False, "error": "HTTP 401: unauthorized"}),
-    )
-
-    result = validate_vercel_integration(api_token="bad_token")
-
-    assert result.ok is False
-    assert "401" in result.detail
-
-
-def test_validate_vercel_integration_fails_with_empty_token() -> None:
-    result = validate_vercel_integration(api_token="")
-
-    assert result.ok is False
-    assert "required" in result.detail.lower()
-
-
-def test_validate_vercel_integration_surfaces_exception(monkeypatch) -> None:
-    def _raise(_config):
-        raise RuntimeError("network unreachable")
-
-    monkeypatch.setattr(
-        "surfaces.cli.wizard.integration_validators.vercel.VercelClient",
-        _raise,
-    )
-
-    result = validate_vercel_integration(api_token="tok_test")
-
-    assert result.ok is False
-
-
 # ---------------------------------------------------------------------------
 # validate_discord_bot
 # ---------------------------------------------------------------------------
@@ -543,71 +380,6 @@ def test_validate_discord_bot_network_error(monkeypatch: pytest.MonkeyPatch) -> 
 
     monkeypatch.setattr("httpx.get", _raise)
     result = validate_discord_bot(bot_token="some-token")
-    assert result.ok is False
-    assert "unreachable" in result.detail.lower()
-
-
-# ---------------------------------------------------------------------------
-# validate_telegram_bot
-# ---------------------------------------------------------------------------
-
-
-def test_validate_telegram_bot_succeeds(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        "httpx.get",
-        lambda *_a, **_kw: types.SimpleNamespace(
-            status_code=200,
-            json=lambda: {"ok": True, "result": {"username": "opensre_bot"}},
-        ),
-    )
-    result = validate_telegram_bot(bot_token="123:ABC")
-    assert result.ok is True
-    assert "opensre_bot" in result.detail
-
-
-def test_validate_telegram_bot_missing_token() -> None:
-    result = validate_telegram_bot(bot_token="   ")
-    assert result.ok is False
-    assert "missing" in result.detail.lower()
-
-
-def test_validate_telegram_bot_api_not_ok(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        "httpx.get",
-        lambda *_a, **_kw: types.SimpleNamespace(
-            status_code=200,
-            json=lambda: {"ok": False, "description": "Unauthorized"},
-        ),
-    )
-    result = validate_telegram_bot(bot_token="bad-token")
-    assert result.ok is False
-    assert "unauthorized" in result.detail.lower()
-
-
-def test_validate_telegram_bot_http_error_includes_api_description(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(
-        "httpx.get",
-        lambda *_a, **_kw: types.SimpleNamespace(
-            status_code=401,
-            json=lambda: {"ok": False, "description": "Unauthorized"},
-        ),
-    )
-    result = validate_telegram_bot(bot_token="bad-token")
-    assert result.ok is False
-    assert "unauthorized" in result.detail.lower()
-    assert "http 401" not in result.detail.lower()
-
-
-def test_validate_telegram_bot_network_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    import httpx as _httpx
-
-    def _raise(*_a: object, **_kw: object) -> None:
-        raise _httpx.RequestError("connection refused")
-
-    monkeypatch.setattr("httpx.get", _raise)
-    result = validate_telegram_bot(bot_token="123:ABC")
     assert result.ok is False
     assert "unreachable" in result.detail.lower()
 
