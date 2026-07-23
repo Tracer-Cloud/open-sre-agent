@@ -14,6 +14,13 @@ from typing import Any
 
 from pydantic import Field, field_validator
 
+from config.constants.mongodb import (
+    MONGODB_AUTH_SOURCE_ENV,
+    MONGODB_CONNECTION_STRING_ENV,
+    MONGODB_DATABASE_ENV,
+    MONGODB_TLS_ENV,
+)
+from config.llm_credentials import resolve_env_credential
 from config.strict_config import StrictConfigModel
 from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
@@ -72,15 +79,15 @@ def build_mongodb_config(raw: dict[str, Any] | None) -> MongoDBConfig:
 
 def mongodb_config_from_env() -> MongoDBConfig | None:
     """Load a MongoDB config from env vars."""
-    connection_string = os.getenv("MONGODB_CONNECTION_STRING", "").strip()
+    connection_string = resolve_env_credential(MONGODB_CONNECTION_STRING_ENV)
     if not connection_string:
         return None
     return build_mongodb_config(
         {
             "connection_string": connection_string,
-            "database": os.getenv("MONGODB_DATABASE", "").strip(),
-            "auth_source": os.getenv("MONGODB_AUTH_SOURCE", DEFAULT_MONGODB_AUTH_SOURCE).strip(),
-            "tls": os.getenv("MONGODB_TLS", "true").strip().lower() in ("true", "1", "yes"),
+            "database": os.getenv(MONGODB_DATABASE_ENV, "").strip(),
+            "auth_source": os.getenv(MONGODB_AUTH_SOURCE_ENV, DEFAULT_MONGODB_AUTH_SOURCE).strip(),
+            "tls": os.getenv(MONGODB_TLS_ENV, "true").strip().lower() in ("true", "1", "yes"),
         }
     )
 

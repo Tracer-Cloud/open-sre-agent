@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from config.env_file import sync_env_secret, sync_env_values
-from integrations.setup_flow import apply_setup
 from integrations.store import upsert_integration
 from integrations.telegram.setup import TELEGRAM_SETUP
 from platform.terminal.theme import ERROR, GLYPH_ERROR, SECONDARY, WARNING
@@ -16,13 +15,13 @@ from surfaces.cli.wizard._ui import (
     _render_integration_result,
     _string_value,
 )
+from surfaces.cli.wizard.configurators.spec_configurator import configure_from_spec
 from surfaces.cli.wizard.integration_health import (
     validate_discord_bot,
     validate_rocketchat,
     validate_rocketchat_webhook,
     validate_slack_webhook,
 )
-from surfaces.cli.wizard.integration_validators.shared import IntegrationHealthResult
 
 
 def _configure_slack() -> tuple[str, str]:
@@ -228,35 +227,16 @@ def _configure_rocketchat() -> tuple[str, str]:
 
 
 def _configure_telegram() -> tuple[str, str]:
-    _, credentials = _integration_defaults("telegram")
-    _console.print(
-        "\n[bold]Telegram Integration[/bold]\n"
-        f"[{SECONDARY}]Create a bot with @BotFather, then add it to the chat it should post "
-        "in. For a public channel the @name is enough; otherwise find the numeric chat id "
-        "via getUpdates. See docs/messaging/telegram for details.\n"
-        "Both answers are required — Telegram cannot deliver without a chat. Press Ctrl+C to "
-        "skip Telegram and continue onboarding; `opensre integrations setup telegram` picks it "
-        "up later.[/]\n"
+    return configure_from_spec(
+        TELEGRAM_SETUP,
+        title="Telegram",
+        intro=(
+            "\n[bold]Telegram Integration[/bold]\n"
+            f"[{SECONDARY}]Create a bot with @BotFather, then add it to the chat it should post "
+            "in. For a public channel the @name is enough; otherwise find the numeric chat id "
+            "via getUpdates. See docs/messaging/telegram for details.\n"
+            "Both answers are required — Telegram cannot deliver without a chat. Press Ctrl+C to "
+            "skip Telegram and continue onboarding; `opensre integrations setup telegram` picks "
+            "it up later.[/]\n"
+        ),
     )
-    while True:
-        values = {
-            field.name: _prompt_value(
-                field.question,
-                default=_string_value(credentials.get(field.name)),
-                secret=field.secret,
-                allow_empty=not field.required,
-            )
-            for field in TELEGRAM_SETUP.fields
-        }
-        with _console.status("Validating Telegram credentials...", spinner="dots"):
-            outcome = apply_setup(TELEGRAM_SETUP, values)
-        _render_integration_result(
-            "Telegram", IntegrationHealthResult(ok=outcome.ok, detail=outcome.detail)
-        )
-        if outcome.ok:
-            # apply_setup always resolves an .env path on success; narrow for mypy
-            # and fail loudly rather than returning the string "None" if it ever
-            # stops doing so.
-            assert outcome.env_path is not None, "apply_setup returned ok=True without an env_path"
-            return "Telegram", str(outcome.env_path)
-        _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")

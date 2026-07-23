@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import subprocess
 
+import google.auth
 import keyring
+from google.auth.exceptions import DefaultCredentialsError
 
 import config.llm_credentials as llm_credentials
 import config.llm_keyring as llm_keyring
@@ -29,6 +31,79 @@ def _security_tool_path(name: str) -> str:
 
 def _darwin_platform() -> str:
     return "Darwin"
+
+
+def test_status_vertex_ai_configured_when_adc_resolves(monkeypatch) -> None:
+    monkeypatch.setenv("VERTEX_AI_PROJECT", "my-gcp-project")
+    monkeypatch.setenv("VERTEX_AI_LOCATION", "europe-west1")
+    monkeypatch.setattr(google.auth, "default", lambda: (object(), "my-gcp-project"))
+
+    result = status("vertex-ai")
+
+    assert result.configured is True
+    assert result.source == "ambient"
+    assert "my-gcp-project" in result.detail
+
+
+def test_status_vertex_ai_not_configured_when_adc_missing_despite_project_env(
+    monkeypatch,
+) -> None:
+    """VERTEX_AI_PROJECT being set is not proof that ADC actually resolves."""
+    monkeypatch.setenv("VERTEX_AI_PROJECT", "my-gcp-project")
+
+    def _raise_no_adc() -> tuple[object, str | None]:
+        raise DefaultCredentialsError("no ADC found")
+
+    monkeypatch.setattr(google.auth, "default", _raise_no_adc)
+
+    result = status("vertex-ai")
+
+    assert result.configured is False
+    assert result.source == "none"
+
+
+def test_status_vertex_ai_configured_via_metadata_without_project_env(monkeypatch) -> None:
+    """ADC discovered through GCE/GKE metadata counts even with no project env set."""
+    monkeypatch.delenv("VERTEX_AI_PROJECT", raising=False)
+    monkeypatch.delenv("VERTEX_AI_LOCATION", raising=False)
+    monkeypatch.setattr(google.auth, "default", lambda: (object(), "discovered-project"))
+
+    result = status("vertex-ai")
+
+    assert result.configured is True
+    assert result.source == "ambient"
+    assert "discovered-project" in result.detail
+
+
+def test_status_vertex_ai_not_configured_when_adc_resolves_without_project(
+    monkeypatch,
+) -> None:
+    """ADC succeeding is not enough — a request still needs a resolvable project.
+
+    Regression test: this used to fall back to a display-only "auto-discovered"
+    placeholder and report configured=True, even though request routing has no
+    project to send and the subsequent LiteLLM call would fail.
+    """
+    monkeypatch.delenv("VERTEX_AI_PROJECT", raising=False)
+    monkeypatch.setattr(google.auth, "default", lambda: (object(), None))
+
+    result = status("vertex-ai")
+
+    assert result.configured is False
+    assert result.source == "none"
+    assert "VERTEX_AI_PROJECT" in result.detail
+
+
+def test_status_bedrock_ignores_vertex_project_env(monkeypatch) -> None:
+    """The ambient status branch must not cross-check unrelated providers' env vars."""
+    monkeypatch.setenv("VERTEX_AI_PROJECT", "my-gcp-project")
+    monkeypatch.delenv("AWS_REGION", raising=False)
+    monkeypatch.delenv("AWS_DEFAULT_REGION", raising=False)
+
+    result = status("bedrock")
+
+    assert result.configured is False
+    assert "AWS_REGION" in result.detail
 
 
 def test_resolve_env_credential_prefers_env_over_keyring(monkeypatch) -> None:

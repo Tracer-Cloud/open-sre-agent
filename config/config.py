@@ -185,6 +185,12 @@ BEDROCK_REASONING_MODEL = "us.anthropic.claude-sonnet-4-6"
 BEDROCK_CLASSIFICATION_MODEL = "us.anthropic.claude-sonnet-4-6"
 BEDROCK_TOOLCALL_MODEL = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
+# Google Vertex AI model constants (Gemini models served via Vertex; ADC auth)
+VERTEX_AI_REASONING_MODEL = "gemini-2.5-pro"
+VERTEX_AI_CLASSIFICATION_MODEL = "gemini-2.5-flash"
+VERTEX_AI_TOOLCALL_MODEL = "gemini-2.5-flash-lite"
+DEFAULT_VERTEX_AI_LOCATION = "us-central1"
+
 # Ollama local model constants
 DEFAULT_OLLAMA_MODEL = "llama3.2"
 DEFAULT_OLLAMA_HOST = "http://localhost:11434"
@@ -201,6 +207,7 @@ LLMProvider = Literal[
     "minimax",
     "groq",
     "azure-openai",
+    "vertex-ai",
     "codex",
     "cursor",
     "claude-code",
@@ -221,6 +228,7 @@ PROVIDER_ANTHROPIC: LLMProvider = "anthropic"
 PROVIDER_OPENAI: LLMProvider = "openai"
 PROVIDER_BEDROCK: LLMProvider = "bedrock"
 PROVIDER_OLLAMA: LLMProvider = "ollama"
+PROVIDER_VERTEX_AI: LLMProvider = "vertex-ai"
 
 
 def get_configured_llm_provider() -> str:
@@ -393,6 +401,24 @@ def _llm_settings_env_payload(provider: str) -> dict[str, object]:
             "BEDROCK_TOOLCALL_MODEL", BEDROCK_TOOLCALL_MODEL
         ).strip()
         or BEDROCK_TOOLCALL_MODEL,
+        "vertex_ai_project": os.getenv("VERTEX_AI_PROJECT", "").strip(),
+        "vertex_ai_location": os.getenv("VERTEX_AI_LOCATION", DEFAULT_VERTEX_AI_LOCATION).strip()
+        or DEFAULT_VERTEX_AI_LOCATION,
+        "vertex_ai_reasoning_model": os.getenv(
+            "VERTEX_AI_REASONING_MODEL",
+            os.getenv("VERTEX_AI_MODEL", VERTEX_AI_REASONING_MODEL),
+        ).strip()
+        or VERTEX_AI_REASONING_MODEL,
+        "vertex_ai_classification_model": os.getenv(
+            "VERTEX_AI_CLASSIFICATION_MODEL",
+            os.getenv("VERTEX_AI_MODEL", VERTEX_AI_CLASSIFICATION_MODEL),
+        ).strip()
+        or VERTEX_AI_CLASSIFICATION_MODEL,
+        "vertex_ai_toolcall_model": os.getenv(
+            "VERTEX_AI_TOOLCALL_MODEL",
+            os.getenv("VERTEX_AI_MODEL", VERTEX_AI_TOOLCALL_MODEL),
+        ).strip()
+        or VERTEX_AI_TOOLCALL_MODEL,
         "ollama_model": os.getenv("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL).strip()
         or DEFAULT_OLLAMA_MODEL,
         "ollama_host": os.getenv("OLLAMA_HOST", DEFAULT_OLLAMA_HOST).strip() or DEFAULT_OLLAMA_HOST,
@@ -447,6 +473,11 @@ class LLMSettings(StrictConfigModel):
     bedrock_reasoning_model: str = BEDROCK_REASONING_MODEL
     bedrock_classification_model: str = BEDROCK_CLASSIFICATION_MODEL
     bedrock_toolcall_model: str = BEDROCK_TOOLCALL_MODEL
+    vertex_ai_project: str = ""
+    vertex_ai_location: str = DEFAULT_VERTEX_AI_LOCATION
+    vertex_ai_reasoning_model: str = VERTEX_AI_REASONING_MODEL
+    vertex_ai_classification_model: str = VERTEX_AI_CLASSIFICATION_MODEL
+    vertex_ai_toolcall_model: str = VERTEX_AI_TOOLCALL_MODEL
     max_tokens: int = Field(default=DEFAULT_MAX_TOKENS, gt=0)
 
     @field_validator("ollama_host", mode="before")
@@ -673,6 +704,13 @@ BEDROCK_LLM_CONFIG = LLMModelConfig(
     reasoning_model=BEDROCK_REASONING_MODEL,
     classification_model=BEDROCK_CLASSIFICATION_MODEL,
     toolcall_model=BEDROCK_TOOLCALL_MODEL,
+    max_tokens=DEFAULT_MAX_TOKENS,
+)
+
+VERTEX_AI_LLM_CONFIG = LLMModelConfig(
+    reasoning_model=VERTEX_AI_REASONING_MODEL,
+    classification_model=VERTEX_AI_CLASSIFICATION_MODEL,
+    toolcall_model=VERTEX_AI_TOOLCALL_MODEL,
     max_tokens=DEFAULT_MAX_TOKENS,
 )
 

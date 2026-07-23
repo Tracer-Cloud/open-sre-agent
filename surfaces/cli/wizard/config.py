@@ -19,6 +19,7 @@ from config.config import (
     NVIDIA_REASONING_MODEL,
     OPENAI_REASONING_MODEL,
     OPENROUTER_REASONING_MODEL,
+    VERTEX_AI_REASONING_MODEL,
 )
 from config.constants.llm import (
     AZURE_OPENAI_API_KEY_ENV,
@@ -252,6 +253,21 @@ BEDROCK_MODELS = (
     ModelOption(
         value="mistral.mistral-large-3-675b-instruct",
         label="Mistral Large 3 675B Instruct (on-demand)",
+    ),
+)
+
+VERTEX_AI_MODELS = (
+    ModelOption(value=VERTEX_AI_REASONING_MODEL, label="Gemini 2.5 Pro (Vertex) — default"),
+    ModelOption(value="gemini-2.5-flash", label="Gemini 2.5 Flash (Vertex)"),
+    ModelOption(value="gemini-2.5-flash-lite", label="Gemini 2.5 Flash-Lite (Vertex)"),
+    # Gemini 3.x is Preview-only in Vertex Model Garden as of the July 2026 release
+    # notes (docs.cloud.google.com/vertex-ai/generative-ai/docs/release-notes) — not
+    # curated as the default. Same IDs as the direct Gemini provider's GEMINI_MODELS,
+    # since Vertex serves Gemini under the same publisher-model IDs.
+    ModelOption(value="gemini-3.1-pro-preview", label="Gemini 3.1 Pro (Vertex, preview)"),
+    ModelOption(value="gemini-3-flash-preview", label="Gemini 3 Flash (Vertex, preview)"),
+    ModelOption(
+        value="gemini-3.1-flash-lite-preview", label="Gemini 3.1 Flash-Lite (Vertex, preview)"
     ),
 )
 
@@ -680,6 +696,27 @@ SUPPORTED_PROVIDERS = (
         credential_secret=False,
         # credential_kind="none" causes flow.py to skip the credential prompt
         # entirely.  Region is picked up from AWS_DEFAULT_REGION / ~/.aws/config.
+        credential_kind="none",
+        allow_custom_models=True,
+    ),
+    ProviderOption(
+        value="vertex-ai",
+        label="Google Vertex AI (ADC auth)",
+        group="Hosted providers",
+        # Intentionally empty: Vertex AI authenticates via Google Application
+        # Default Credentials (gcloud ADC, a service-account key, or GCE/GKE
+        # metadata) — no API key to prompt for, same as Bedrock's IAM auth.
+        api_key_env="",
+        model_env="VERTEX_AI_REASONING_MODEL",
+        default_model=VERTEX_AI_REASONING_MODEL,
+        models=VERTEX_AI_MODELS,
+        toolcall_model_env="VERTEX_AI_TOOLCALL_MODEL",
+        classification_model_env="VERTEX_AI_CLASSIFICATION_MODEL",
+        credential_label="GCP project + region (uses Application Default Credentials)",
+        credential_secret=False,
+        # credential_kind="none" causes flow.py to skip the credential prompt
+        # entirely. Project/region are picked up from VERTEX_AI_PROJECT /
+        # VERTEX_AI_LOCATION, set outside the wizard (same as Bedrock's region).
         credential_kind="none",
         allow_custom_models=True,
     ),

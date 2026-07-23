@@ -72,8 +72,30 @@ def run_incident_investigation(
     :class:`TelegramSink` maps it to an operator-visible "attempted (failed)"
     marker.
     """
+    from platform.analytics.cli import track_investigation
+    from platform.analytics.source import EntrypointSource, TriggerMode
+    from platform.analytics.usage_context import (
+        SURFACE_CLI,
+        bound_usage_context,
+        ensure_process_session_id,
+        get_surface,
+    )
+
     alert = build_alert_from_incident(incident)
-    state = run_investigation(alert)
+    # Preserve an outer Slack/Telegram surface if already bound; default to CLI
+    # for standalone Hermes watch processes.
+    with (
+        bound_usage_context(
+            surface=None if get_surface() else SURFACE_CLI,
+            session_id=ensure_process_session_id(),
+        ),
+        track_investigation(
+            entrypoint=EntrypointSource.CLI_COMMAND,
+            trigger_mode=TriggerMode.SERVICE_RUNTIME,
+            investigation_target=incident.title[:120] or None,
+        ),
+    ):
+        state = run_investigation(alert)
     return _extract_summary(state)
 
 

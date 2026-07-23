@@ -75,7 +75,30 @@ class InvestigationWorker:
             )
             return True
         try:
-            result = self._runner(record.trigger)
+            from platform.analytics.cli import track_investigation
+            from platform.analytics.source import EntrypointSource, TriggerMode
+            from platform.analytics.usage_context import (
+                bound_usage_context,
+                ensure_process_session_id,
+            )
+
+            org_id = (record.clerk_org_id or "").strip() or None
+            with (
+                bound_usage_context(
+                    organization_id=org_id,
+                    # Process session groups HTTP investigations for this worker;
+                    # keep investigation_id as the per-run identifier.
+                    session_id=ensure_process_session_id(),
+                ),
+                track_investigation(
+                    entrypoint=EntrypointSource.REMOTE_HTTP,
+                    trigger_mode=TriggerMode.SERVICE_RUNTIME,
+                    investigation_id=record.id,
+                    investigation_target=str((record.trigger or {}).get("alert_name") or "")
+                    or None,
+                ),
+            ):
+                result = self._runner(record.trigger)
             local_path = write_local_report(record.id, result, base_dir=self._artifacts_dir)
             s3_key = upload_report_to_s3(
                 local_path, org_id=record.clerk_org_id, investigation_id=record.id

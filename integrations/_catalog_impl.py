@@ -9,6 +9,98 @@ from collections.abc import Callable
 from typing import Any
 
 from config.config import get_tracer_base_url
+from config.constants.betterstack import (
+    BETTERSTACK_PASSWORD_ENV,
+    BETTERSTACK_QUERY_ENDPOINT_ENV,
+    BETTERSTACK_SOURCES_ENV,
+    BETTERSTACK_USERNAME_ENV,
+)
+from config.constants.coralogix import (
+    CORALOGIX_API_KEY_ENV,
+    CORALOGIX_APPLICATION_NAME_ENV,
+    CORALOGIX_BASE_URL_ENV,
+    CORALOGIX_SUBSYSTEM_NAME_ENV,
+)
+from config.constants.datadog import (
+    DATADOG_API_KEY_ENV,
+    DATADOG_APP_KEY_ENV,
+    DATADOG_SITE_ENV,
+)
+from config.constants.gitlab import GITLAB_AUTH_TOKEN_ENV, GITLAB_BASE_URL_ENV
+from config.constants.groundcover import (
+    GROUNDCOVER_API_KEY_ENV,
+    GROUNDCOVER_BACKEND_ID_ENV,
+    GROUNDCOVER_MCP_TOKEN_ENV,
+    GROUNDCOVER_MCP_URL_ENV,
+    GROUNDCOVER_TENANT_UUID_ENV,
+    GROUNDCOVER_TIMEZONE_ENV,
+)
+from config.constants.honeycomb import (
+    HONEYCOMB_API_KEY_ENV,
+    HONEYCOMB_BASE_URL_ENV,
+    HONEYCOMB_DATASET_ENV,
+)
+from config.constants.mariadb import (
+    MARIADB_DATABASE_ENV,
+    MARIADB_HOST_ENV,
+    MARIADB_PASSWORD_ENV,
+    MARIADB_PORT_ENV,
+    MARIADB_SSL_ENV,
+    MARIADB_USERNAME_ENV,
+)
+from config.constants.mongodb import (
+    MONGODB_AUTH_SOURCE_ENV,
+    MONGODB_CONNECTION_STRING_ENV,
+    MONGODB_DATABASE_ENV,
+    MONGODB_TLS_ENV,
+)
+from config.constants.mysql import (
+    MYSQL_DATABASE_ENV,
+    MYSQL_HOST_ENV,
+    MYSQL_PASSWORD_ENV,
+    MYSQL_PORT_ENV,
+    MYSQL_SSL_MODE_ENV,
+    MYSQL_USERNAME_ENV,
+)
+from config.constants.openclaw import (
+    OPENCLAW_MCP_ARGS_ENV,
+    OPENCLAW_MCP_AUTH_TOKEN_ENV,
+    OPENCLAW_MCP_COMMAND_ENV,
+    OPENCLAW_MCP_MODE_ENV,
+    OPENCLAW_MCP_URL_ENV,
+)
+from config.constants.postgresql import (
+    POSTGRESQL_DATABASE_ENV,
+    POSTGRESQL_HOST_ENV,
+    POSTGRESQL_PASSWORD_ENV,
+    POSTGRESQL_PORT_ENV,
+    POSTGRESQL_SSL_MODE_ENV,
+    POSTGRESQL_USERNAME_ENV,
+)
+from config.constants.posthog_mcp import (
+    POSTHOG_MCP_AUTH_TOKEN_ENV,
+    POSTHOG_MCP_PROJECT_ID_ENV,
+    POSTHOG_MCP_URL_ENV,
+)
+from config.constants.sentry import (
+    DEFAULT_SENTRY_BASE_URL,
+    SENTRY_AUTH_TOKEN_ENV,
+    SENTRY_BASE_URL_ENV,
+    SENTRY_ORGANIZATION_SLUG_ENV,
+    SENTRY_PROJECT_SLUG_ENV,
+)
+from config.constants.sentry_mcp import (
+    SENTRY_MCP_AUTH_TOKEN_ENV,
+    SENTRY_MCP_HOST_ENV,
+    SENTRY_MCP_URL_ENV,
+)
+from config.constants.servicenow import (
+    SERVICENOW_INSTANCE_URL_ENV,
+    SERVICENOW_PASSWORD_ENV,
+    SERVICENOW_USERNAME_ENV,
+)
+from config.constants.vercel import VERCEL_API_TOKEN_ENV, VERCEL_TEAM_ID_ENV
+from config.constants.x_mcp import X_MCP_AUTH_TOKEN_ENV, X_MCP_URL_ENV
 from config.llm_credentials import resolve_env_credential
 from integrations.airflow.config import airflow_config_from_env
 from integrations.airflow.config import classify as _classify_airflow
@@ -22,6 +114,7 @@ from integrations.betterstack import build_betterstack_config
 from integrations.betterstack import classify as _classify_betterstack
 from integrations.bitbucket import classify as _classify_bitbucket
 from integrations.config_models import (
+    DEFAULT_DATADOG_SITE,
     AlertmanagerIntegrationConfig,
     ArgoCDIntegrationConfig,
     AWSIntegrationConfig,
@@ -434,9 +527,11 @@ def load_env_integrations() -> list[dict[str, Any]]:
         datadog_app_key = ""
         datadog_site = ""
     else:
-        datadog_api_key = resolve_env_credential("DD_API_KEY")
-        datadog_app_key = resolve_env_credential("DD_APP_KEY")
-        datadog_site = os.getenv("DD_SITE", "datadoghq.com").strip() or "datadoghq.com"
+        datadog_api_key = resolve_env_credential(DATADOG_API_KEY_ENV)
+        datadog_app_key = resolve_env_credential(DATADOG_APP_KEY_ENV)
+        datadog_site = (
+            os.getenv(DATADOG_SITE_ENV, DEFAULT_DATADOG_SITE).strip() or DEFAULT_DATADOG_SITE
+        )
     if datadog_api_key and datadog_app_key:
         try:
             datadog_config = DatadogIntegrationConfig.model_validate(
@@ -462,8 +557,8 @@ def load_env_integrations() -> list[dict[str, Any]]:
         groundcover_api_key = ""
     else:
         groundcover_api_key = resolve_env_credential(
-            "GROUNDCOVER_API_KEY"
-        ) or resolve_env_credential("GROUNDCOVER_MCP_TOKEN")
+            GROUNDCOVER_API_KEY_ENV
+        ) or resolve_env_credential(GROUNDCOVER_MCP_TOKEN_ENV)
     if groundcover_api_key:
         # The groundcover config validates the MCP URL (HTTPS-or-loopback), which
         # can raise on a bad GROUNDCOVER_MCP_URL. Guard it so one malformed value
@@ -472,10 +567,10 @@ def load_env_integrations() -> list[dict[str, Any]]:
             groundcover_config = GroundcoverIntegrationConfig.model_validate(
                 {
                     "api_key": groundcover_api_key,
-                    "mcp_url": os.getenv("GROUNDCOVER_MCP_URL", "").strip(),
-                    "tenant_uuid": os.getenv("GROUNDCOVER_TENANT_UUID", "").strip(),
-                    "backend_id": os.getenv("GROUNDCOVER_BACKEND_ID", "").strip(),
-                    "timezone": os.getenv("GROUNDCOVER_TIMEZONE", "").strip(),
+                    "mcp_url": os.getenv(GROUNDCOVER_MCP_URL_ENV, "").strip(),
+                    "tenant_uuid": os.getenv(GROUNDCOVER_TENANT_UUID_ENV, "").strip(),
+                    "backend_id": os.getenv(GROUNDCOVER_BACKEND_ID_ENV, "").strip(),
+                    "timezone": os.getenv(GROUNDCOVER_TIMEZONE_ENV, "").strip(),
                 }
             )
         except Exception as exc:
@@ -493,14 +588,14 @@ def load_env_integrations() -> list[dict[str, Any]]:
         integrations.append(honeycomb_multi)
         honeycomb_api_key = ""
     else:
-        honeycomb_api_key = resolve_env_credential("HONEYCOMB_API_KEY")
+        honeycomb_api_key = resolve_env_credential(HONEYCOMB_API_KEY_ENV)
     if honeycomb_api_key:
         try:
             honeycomb_config = HoneycombIntegrationConfig.model_validate(
                 {
                     "api_key": honeycomb_api_key,
-                    "dataset": os.getenv("HONEYCOMB_DATASET", "").strip(),
-                    "base_url": os.getenv("HONEYCOMB_API_URL", "").strip(),
+                    "dataset": os.getenv(HONEYCOMB_DATASET_ENV, "").strip(),
+                    "base_url": os.getenv(HONEYCOMB_BASE_URL_ENV, "").strip(),
                 }
             )
         except Exception as exc:
@@ -518,15 +613,15 @@ def load_env_integrations() -> list[dict[str, Any]]:
         integrations.append(coralogix_multi)
         coralogix_api_key = ""
     else:
-        coralogix_api_key = resolve_env_credential("CORALOGIX_API_KEY")
+        coralogix_api_key = resolve_env_credential(CORALOGIX_API_KEY_ENV)
     if coralogix_api_key:
         try:
             coralogix_config = CoralogixIntegrationConfig.model_validate(
                 {
                     "api_key": coralogix_api_key,
-                    "base_url": os.getenv("CORALOGIX_API_URL", "").strip(),
-                    "application_name": os.getenv("CORALOGIX_APPLICATION_NAME", "").strip(),
-                    "subsystem_name": os.getenv("CORALOGIX_SUBSYSTEM_NAME", "").strip(),
+                    "base_url": os.getenv(CORALOGIX_BASE_URL_ENV, "").strip(),
+                    "application_name": os.getenv(CORALOGIX_APPLICATION_NAME_ENV, "").strip(),
+                    "subsystem_name": os.getenv(CORALOGIX_SUBSYSTEM_NAME_ENV, "").strip(),
                 }
             )
         except Exception as exc:
@@ -628,16 +723,16 @@ def load_env_integrations() -> list[dict[str, Any]]:
             )
         )
 
-    sentry_org_slug = os.getenv("SENTRY_ORG_SLUG", "").strip()
-    sentry_auth_token = resolve_env_credential("SENTRY_AUTH_TOKEN")
+    sentry_org_slug = os.getenv(SENTRY_ORGANIZATION_SLUG_ENV, "").strip()
+    sentry_auth_token = resolve_env_credential(SENTRY_AUTH_TOKEN_ENV)
     if sentry_org_slug and sentry_auth_token:
         sentry_config = build_sentry_config(
             {
-                "base_url": os.getenv("SENTRY_URL", "https://sentry.io").strip()
-                or "https://sentry.io",
+                "base_url": os.getenv(SENTRY_BASE_URL_ENV, DEFAULT_SENTRY_BASE_URL).strip()
+                or DEFAULT_SENTRY_BASE_URL,
                 "organization_slug": sentry_org_slug,
                 "auth_token": sentry_auth_token,
-                "project_slug": os.getenv("SENTRY_PROJECT_SLUG", "").strip(),
+                "project_slug": os.getenv(SENTRY_PROJECT_SLUG_ENV, "").strip(),
             }
         )
         integrations.append(
@@ -647,25 +742,25 @@ def load_env_integrations() -> list[dict[str, Any]]:
             )
         )
 
-    gitlab_access_token = resolve_env_credential("GITLAB_ACCESS_TOKEN")
+    gitlab_access_token = resolve_env_credential(GITLAB_AUTH_TOKEN_ENV)
     if gitlab_access_token:
         gitlab_config = build_gitlab_config(
             {
-                "base_url": os.getenv("GITLAB_BASE_URL", DEFAULT_GITLAB_BASE_URL).strip()
+                "base_url": os.getenv(GITLAB_BASE_URL_ENV, DEFAULT_GITLAB_BASE_URL).strip()
                 or DEFAULT_GITLAB_BASE_URL,
                 "auth_token": gitlab_access_token,
             }
         )
         integrations.append(_active_env_record("gitlab", gitlab_config.model_dump()))
 
-    mongodb_connection_string = resolve_env_credential("MONGODB_CONNECTION_STRING")
+    mongodb_connection_string = resolve_env_credential(MONGODB_CONNECTION_STRING_ENV)
     if mongodb_connection_string:
         mongodb_config = build_mongodb_config(
             {
                 "connection_string": mongodb_connection_string,
-                "database": os.getenv("MONGODB_DATABASE", "").strip(),
-                "auth_source": os.getenv("MONGODB_AUTH_SOURCE", "admin").strip() or "admin",
-                "tls": os.getenv("MONGODB_TLS", "true").strip().lower() in ("true", "1", "yes"),
+                "database": os.getenv(MONGODB_DATABASE_ENV, "").strip(),
+                "auth_source": os.getenv(MONGODB_AUTH_SOURCE_ENV, "admin").strip() or "admin",
+                "tls": os.getenv(MONGODB_TLS_ENV, "true").strip().lower() in ("true", "1", "yes"),
             }
         )
         integrations.append(
@@ -684,19 +779,19 @@ def load_env_integrations() -> list[dict[str, Any]]:
             )
         )
 
-    postgresql_host = os.getenv("POSTGRESQL_HOST", "").strip()
-    postgresql_database = os.getenv("POSTGRESQL_DATABASE", "").strip()
+    postgresql_host = os.getenv(POSTGRESQL_HOST_ENV, "").strip()
+    postgresql_database = os.getenv(POSTGRESQL_DATABASE_ENV, "").strip()
     if postgresql_host and postgresql_database:
         postgresql_config = build_postgresql_config(
             {
                 "host": postgresql_host,
                 "port": int(_pg_port)
-                if (_pg_port := os.getenv("POSTGRESQL_PORT", "").strip()) and _pg_port.isdigit()
+                if (_pg_port := os.getenv(POSTGRESQL_PORT_ENV, "").strip()) and _pg_port.isdigit()
                 else 5432,
                 "database": postgresql_database,
-                "username": os.getenv("POSTGRESQL_USERNAME", "postgres").strip() or "postgres",
-                "password": resolve_env_credential("POSTGRESQL_PASSWORD"),
-                "ssl_mode": os.getenv("POSTGRESQL_SSL_MODE", "prefer").strip() or "prefer",
+                "username": os.getenv(POSTGRESQL_USERNAME_ENV, "postgres").strip() or "postgres",
+                "password": resolve_env_credential(POSTGRESQL_PASSWORD_ENV),
+                "ssl_mode": os.getenv(POSTGRESQL_SSL_MODE_ENV, "prefer").strip() or "prefer",
             }
         )
         integrations.append(
@@ -770,13 +865,13 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 )
             )
 
-    vercel_api_token = resolve_env_credential("VERCEL_API_TOKEN")
+    vercel_api_token = resolve_env_credential(VERCEL_API_TOKEN_ENV)
     if vercel_api_token:
         try:
             vercel_config = VercelConfig.model_validate(
                 {
                     "api_token": vercel_api_token,
-                    "team_id": os.getenv("VERCEL_TEAM_ID", "").strip(),
+                    "team_id": os.getenv(VERCEL_TEAM_ID_ENV, "").strip(),
                 }
             )
         except Exception as exc:
@@ -869,12 +964,12 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 )
             )
 
-    servicenow_instance_url = os.getenv("SERVICENOW_INSTANCE_URL", "").strip()
-    servicenow_username = os.getenv("SERVICENOW_USERNAME", "").strip()
+    servicenow_instance_url = os.getenv(SERVICENOW_INSTANCE_URL_ENV, "").strip()
+    servicenow_username = os.getenv(SERVICENOW_USERNAME_ENV, "").strip()
     # Resolve the password (env, then OS keyring) only once the cheap env vars
     # are present, so unconfigured installs never pay a keyring roundtrip here.
     servicenow_password = (
-        resolve_env_credential("SERVICENOW_PASSWORD")
+        resolve_env_credential(SERVICENOW_PASSWORD_ENV)
         if servicenow_instance_url and servicenow_username
         else ""
     )
@@ -1060,9 +1155,9 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 )
             )
 
-    openclaw_url = os.getenv("OPENCLAW_MCP_URL", "").strip()
-    openclaw_command = os.getenv("OPENCLAW_MCP_COMMAND", "").strip()
-    openclaw_mode = os.getenv("OPENCLAW_MCP_MODE", "streamable-http").strip().lower()
+    openclaw_url = os.getenv(OPENCLAW_MCP_URL_ENV, "").strip()
+    openclaw_command = os.getenv(OPENCLAW_MCP_COMMAND_ENV, "").strip()
+    openclaw_mode = os.getenv(OPENCLAW_MCP_MODE_ENV, "streamable-http").strip().lower()
     openclaw_mode = openclaw_mode or "streamable-http"
     if (openclaw_mode == "stdio" and openclaw_command) or (
         openclaw_mode != "stdio" and openclaw_url
@@ -1074,9 +1169,11 @@ def load_env_integrations() -> list[dict[str, Any]]:
                     "mode": openclaw_mode,
                     "command": openclaw_command,
                     "args": [
-                        part for part in os.getenv("OPENCLAW_MCP_ARGS", "").strip().split() if part
+                        part
+                        for part in os.getenv(OPENCLAW_MCP_ARGS_ENV, "").strip().split()
+                        if part
                     ],
-                    "auth_token": resolve_env_credential("OPENCLAW_MCP_AUTH_TOKEN"),
+                    "auth_token": resolve_env_credential(OPENCLAW_MCP_AUTH_TOKEN_ENV),
                 }
             )
             integrations.append(
@@ -1106,8 +1203,8 @@ def load_env_integrations() -> list[dict[str, Any]]:
     posthog_mcp_mode = os.getenv("POSTHOG_MCP_MODE", "streamable-http").strip().lower()
     posthog_mcp_mode = posthog_mcp_mode or "streamable-http"
     posthog_mcp_command = os.getenv("POSTHOG_MCP_COMMAND", "").strip()
-    posthog_mcp_token = resolve_env_credential("POSTHOG_MCP_AUTH_TOKEN")
-    posthog_mcp_url = os.getenv("POSTHOG_MCP_URL", "").strip()
+    posthog_mcp_token = resolve_env_credential(POSTHOG_MCP_AUTH_TOKEN_ENV)
+    posthog_mcp_url = os.getenv(POSTHOG_MCP_URL_ENV, "").strip()
     if posthog_mcp_mode != "stdio" and posthog_mcp_token and not posthog_mcp_url:
         posthog_mcp_url = DEFAULT_POSTHOG_MCP_URL
     if (posthog_mcp_mode == "stdio" and posthog_mcp_command) or (
@@ -1126,7 +1223,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
                     ],
                     "auth_token": posthog_mcp_token,
                     "organization_id": os.getenv("POSTHOG_MCP_ORGANIZATION_ID", "").strip(),
-                    "project_id": os.getenv("POSTHOG_MCP_PROJECT_ID", "").strip(),
+                    "project_id": os.getenv(POSTHOG_MCP_PROJECT_ID_ENV, "").strip(),
                     "features": os.getenv("POSTHOG_MCP_FEATURES", "").strip(),
                     "read_only": read_only,
                 }
@@ -1146,8 +1243,8 @@ def load_env_integrations() -> list[dict[str, Any]]:
     sentry_mcp_mode = os.getenv("SENTRY_MCP_MODE", "streamable-http").strip().lower()
     sentry_mcp_mode = sentry_mcp_mode or "streamable-http"
     sentry_mcp_command = os.getenv("SENTRY_MCP_COMMAND", "").strip()
-    sentry_mcp_token = resolve_env_credential("SENTRY_MCP_AUTH_TOKEN")
-    sentry_mcp_url = os.getenv("SENTRY_MCP_URL", "").strip()
+    sentry_mcp_token = resolve_env_credential(SENTRY_MCP_AUTH_TOKEN_ENV)
+    sentry_mcp_url = os.getenv(SENTRY_MCP_URL_ENV, "").strip()
     if sentry_mcp_mode != "stdio" and sentry_mcp_token and not sentry_mcp_url:
         sentry_mcp_url = DEFAULT_SENTRY_MCP_URL
     if (sentry_mcp_mode == "stdio" and sentry_mcp_command) or (
@@ -1163,7 +1260,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
                         part for part in os.getenv("SENTRY_MCP_ARGS", "").strip().split() if part
                     ],
                     "auth_token": sentry_mcp_token,
-                    "host": os.getenv("SENTRY_MCP_HOST", "").strip(),
+                    "host": os.getenv(SENTRY_MCP_HOST_ENV, "").strip(),
                     "organization_slug": os.getenv("SENTRY_MCP_ORGANIZATION_SLUG", "").strip(),
                     "project_slug": os.getenv("SENTRY_MCP_PROJECT_SLUG", "").strip(),
                     "skills": os.getenv("SENTRY_MCP_SKILLS", "").strip(),
@@ -1184,9 +1281,9 @@ def load_env_integrations() -> list[dict[str, Any]]:
     x_mcp_mode = os.getenv("X_MCP_MODE", "streamable-http").strip().lower()
     x_mcp_mode = x_mcp_mode or "streamable-http"
     x_mcp_command = os.getenv("X_MCP_COMMAND", "").strip()
-    x_mcp_token = resolve_env_credential("X_MCP_AUTH_TOKEN")
+    x_mcp_token = resolve_env_credential(X_MCP_AUTH_TOKEN_ENV)
     x_mcp_bearer_token = resolve_env_credential("X_BEARER_TOKEN")
-    x_mcp_url = os.getenv("X_MCP_URL", "").strip()
+    x_mcp_url = os.getenv(X_MCP_URL_ENV, "").strip()
     if (x_mcp_mode == "stdio" and x_mcp_command) or (x_mcp_mode != "stdio" and x_mcp_url):
         try:
             x_mcp_config = build_x_mcp_config(
@@ -1211,18 +1308,19 @@ def load_env_integrations() -> list[dict[str, Any]]:
         except Exception as exc:
             _report_env_loader_failure(exc, integration="x_mcp")
 
-    mariadb_host = os.getenv("MARIADB_HOST", "").strip()
-    mariadb_database = os.getenv("MARIADB_DATABASE", "").strip()
+    mariadb_host = os.getenv(MARIADB_HOST_ENV, "").strip()
+    mariadb_database = os.getenv(MARIADB_DATABASE_ENV, "").strip()
     if mariadb_host and mariadb_database:
         try:
             mariadb_config = build_mariadb_config(
                 {
                     "host": mariadb_host,
-                    "port": os.getenv("MARIADB_PORT", "3306").strip(),
+                    "port": os.getenv(MARIADB_PORT_ENV, "3306").strip(),
                     "database": mariadb_database,
-                    "username": os.getenv("MARIADB_USERNAME", "").strip(),
-                    "password": resolve_env_credential("MARIADB_PASSWORD"),
-                    "ssl": os.getenv("MARIADB_SSL", "true").strip().lower() in ("true", "1", "yes"),
+                    "username": os.getenv(MARIADB_USERNAME_ENV, "").strip(),
+                    "password": resolve_env_credential(MARIADB_PASSWORD_ENV),
+                    "ssl": os.getenv(MARIADB_SSL_ENV, "true").strip().lower()
+                    in ("true", "1", "yes"),
                 }
             )
             integrations.append(
@@ -1291,16 +1389,16 @@ def load_env_integrations() -> list[dict[str, Any]]:
             )
         )
 
-    bs_endpoint = os.getenv("BETTERSTACK_QUERY_ENDPOINT", "").strip()
-    bs_username = os.getenv("BETTERSTACK_USERNAME", "").strip()
+    bs_endpoint = os.getenv(BETTERSTACK_QUERY_ENDPOINT_ENV, "").strip()
+    bs_username = os.getenv(BETTERSTACK_USERNAME_ENV, "").strip()
     if bs_endpoint and bs_username:
         try:
             bs_config = build_betterstack_config(
                 {
                     "query_endpoint": bs_endpoint,
                     "username": bs_username,
-                    "password": resolve_env_credential("BETTERSTACK_PASSWORD"),
-                    "sources": os.getenv("BETTERSTACK_SOURCES", ""),
+                    "password": resolve_env_credential(BETTERSTACK_PASSWORD_ENV),
+                    "sources": os.getenv(BETTERSTACK_SOURCES_ENV, ""),
                 }
             )
             integrations.append(
@@ -1312,19 +1410,19 @@ def load_env_integrations() -> list[dict[str, Any]]:
         except Exception as exc:
             _report_env_loader_failure(exc, integration="betterstack")
 
-    mysql_host = os.getenv("MYSQL_HOST", "").strip()
-    mysql_database = os.getenv("MYSQL_DATABASE", "").strip()
+    mysql_host = os.getenv(MYSQL_HOST_ENV, "").strip()
+    mysql_database = os.getenv(MYSQL_DATABASE_ENV, "").strip()
     if mysql_host and mysql_database:
         mysql_config = build_mysql_config(
             {
                 "host": mysql_host,
                 "port": int(_mysql_port)
-                if (_mysql_port := os.getenv("MYSQL_PORT", "").strip()) and _mysql_port.isdigit()
+                if (_mysql_port := os.getenv(MYSQL_PORT_ENV, "").strip()) and _mysql_port.isdigit()
                 else 3306,
                 "database": mysql_database,
-                "username": os.getenv("MYSQL_USERNAME", "root").strip() or "root",
-                "password": resolve_env_credential("MYSQL_PASSWORD"),
-                "ssl_mode": os.getenv("MYSQL_SSL_MODE", "preferred").strip() or "preferred",
+                "username": os.getenv(MYSQL_USERNAME_ENV, "root").strip() or "root",
+                "password": resolve_env_credential(MYSQL_PASSWORD_ENV),
+                "ssl_mode": os.getenv(MYSQL_SSL_MODE_ENV, "preferred").strip() or "preferred",
             }
         )
         integrations.append(

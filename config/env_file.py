@@ -38,7 +38,11 @@ from config.local_env import get_project_env_path
 PROJECT_ENV_PATH = get_project_env_path()
 
 _ENV_ASSIGNMENT = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=")
-_NON_SECRET_ENV_KEYS: frozenset[str] = frozenset({"DISCORD_PUBLIC_KEY"})
+# Names whose terminal token would otherwise flag them sensitive, but whose
+# value is meant to be public: Discord's public key verifies signatures rather
+# than authenticating, and MongoDB Atlas's public key is a paired identifier
+# next to a private key, not a secret on its own.
+_NON_SECRET_ENV_KEYS: frozenset[str] = frozenset({"DISCORD_PUBLIC_KEY", "MONGODB_ATLAS_PUBLIC_KEY"})
 # Underscore-separated terminal tokens that mark an env var as sensitive.
 # Matching the terminal component (rather than a substring or a fixed suffix
 # like ``_token``) catches both ``GITLAB_ACCESS_TOKEN`` and a bare ``TOKEN``

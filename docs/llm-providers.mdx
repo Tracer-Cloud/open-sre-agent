@@ -21,6 +21,7 @@ OpenSRE is provider-agnostic: bring your own model. Selection is controlled by t
 | NVIDIA NIM   | `nvidia`       | `NVIDIA_API_KEY`                | `meta/llama-3.1-405b-instruct`                | `meta/llama-3.1-8b-instruct`                    |
 | MiniMax      | `minimax`      | `MINIMAX_API_KEY`               | `MiniMax-M3`                                  | `MiniMax-M2.7-highspeed`                        |
 | Amazon Bedrock| `bedrock`     | AWS IAM (`AWS_REGION`)          | `us.anthropic.claude-sonnet-4-6`              | `us.anthropic.claude-haiku-4-5-20251001-v1:0`   |
+| Google Vertex AI | `vertex-ai` | Google ADC (`VERTEX_AI_PROJECT`) | `gemini-2.5-pro`                            | `gemini-2.5-flash-lite`                         |
 | Ollama (local)| `ollama`     | None (local daemon)             | `llama3.2`                                    | `llama3.2`                                      |
 | GitHub Copilot CLI| `copilot`| `copilot login` or `gh auth login` (CLI) | Copilot CLI default                           | Copilot CLI default                             |
 | xAI Groq API key | `groq`      | `GROQ_API_KEY`                  | `llama-3.3-70b-versatile`                     | `llama-3.1-8b-instant`                          |
@@ -109,6 +110,7 @@ When `OPENSRE_LLM_TRANSPORT=litellm` (or when using `LLM_PROVIDER=azure-openai`)
 | `groq` | OpenAI-compatible SDK | `openai/<model>` + Groq base URL | Opt-in |
 | `ollama` | OpenAI-compatible SDK | `openai/<model>` + `${OLLAMA_HOST}/v1` | Opt-in |
 | `azure-openai` | — | `azure/<deployment>` | **Always** via LiteLLM |
+| `vertex-ai` | — | `vertex_ai/<model>` | **Always** via LiteLLM; uses Google ADC |
 
 The native OpenAI SDK transport uses the Responses API for GPT-5.6 agent tool calls, including
 replaying reasoning and function-call items between tool steps. Older OpenAI models and
@@ -324,6 +326,33 @@ No API key — auth uses the AWS credential chain (environment variables, shared
 - **Application inference profile** ARNs (`…:application-inference-profile/…`) do not encode the vendor in the ID; those are always sent through **Converse**, which works for any backing model in the profile.
 
 Defaults in `config/config.py` are US cross-region inference profile IDs for Anthropic Claude; override with IDs or ARNs that are **inference-access enabled** in your account and region.
+
+### Google Vertex AI
+
+```bash
+export LLM_PROVIDER=vertex-ai
+export VERTEX_AI_PROJECT=my-gcp-project
+# Optional (defaults to us-central1):
+export VERTEX_AI_LOCATION=us-central1
+# Optional overrides:
+export VERTEX_AI_REASONING_MODEL=gemini-2.5-pro
+export VERTEX_AI_TOOLCALL_MODEL=gemini-2.5-flash-lite
+```
+
+No API key — auth uses Google Application Default Credentials (ADC): run
+`gcloud auth application-default login`, or set `GOOGLE_APPLICATION_CREDENTIALS`
+to a service-account key file, or rely on the ambient GCE/GKE metadata server.
+Your principal needs the Vertex AI User IAM role (or equivalent) in the
+configured project.
+
+Always routed through LiteLLM (like Azure OpenAI) as `vertex_ai/<model>`. Curated
+model choices are Gemini models served via Vertex; any other Vertex-supported
+model ID also works by typing it directly (`allow_custom_models`).
+
+The default (`gemini-2.5-pro`/`-flash`/`-flash-lite`) is the GA Gemini generation.
+Gemini 3.x (`gemini-3.1-pro-preview`, `gemini-3-flash-preview`,
+`gemini-3.1-flash-lite-preview`) is selectable in the wizard but is Preview-only
+in Vertex Model Garden as of mid-2026 — expect availability and pricing to change.
 
 ### Ollama (local)
 

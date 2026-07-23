@@ -75,16 +75,40 @@ class SetupField:
     else to ``.env``. Fields do not get to choose.
     """
 
+    default: str = ""
+    """Value to use when the field is submitted blank.
+
+    Applied in :func:`apply_setup`, not just offered as a prompt prefill, so a
+    surface that never prompts — the wizard reusing a stored value, an agent
+    filling fields from a conversation — lands on the same credentials as
+    someone pressing enter at the CLI. A field with a default is therefore
+    never missing, whatever *required* says.
+    """
+
     required: bool = True
     """When true, a blank value fails setup instead of being stored as ``None``."""
 
     secret: bool = False
     """Whether collection surfaces should mask this field while it is typed."""
 
+    constant: str | None = None
+    """Fixed value that is always persisted and never prompted.
+
+    When set, collection surfaces skip this field and :func:`apply_setup`
+    ignores any submitted value under *name*. Use for transport modes and
+    other values the user must not choose — OpenClaw's ``stdio`` mode, for
+    example, whose config-model default is ``streamable-http``.
+    """
+
     @property
     def question(self) -> str:
         """The text to prompt with."""
         return self.prompt or self.label
+
+    @property
+    def is_constant(self) -> bool:
+        """True when this field is fixed rather than collected."""
+        return self.constant is not None
 
 
 @dataclass(frozen=True)
@@ -132,11 +156,16 @@ def _collect_credentials(
     """Normalize submitted values, or return the first missing required field.
 
     The spec is authoritative: fields it declares are the credentials that get
-    stored, and anything else in *values* is ignored.
+    stored, and anything else in *values* is ignored. Constant fields always
+    take their fixed value, even when *values* supplies something else.
     """
     credentials: dict[str, str | None] = {}
     for field in spec.fields:
-        value = (values.get(field.name) or "").strip()
+        if field.is_constant:
+            # Keep "" as "" — OpenClaw's empty url/auth_token are intentional.
+            credentials[field.name] = field.constant
+            continue
+        value = (values.get(field.name) or "").strip() or field.default
         if not value and field.required:
             return {}, f"{field.label} is required."
         credentials[field.name] = value or None
