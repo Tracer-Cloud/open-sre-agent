@@ -838,6 +838,22 @@ def test_resolve_effective_integrations_includes_vercel_from_env(
     assert vercel["source"] == "local env"
 
 
+def test_resolve_effective_integrations_includes_railway_from_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("integrations.catalog.load_integrations", lambda: [])
+    monkeypatch.setenv("RAILWAY_PROJECT", "project_env")
+    monkeypatch.setenv("RAILWAY_SERVICE", "service_env")
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
+
+    effective = resolve_effective_integrations()
+
+    railway = effective.get("railway")
+    assert railway is not None
+    assert railway["config"]["project"] == "project_env"
+    assert railway["source"] == "local env"
+
+
 def test_resolve_effective_integrations_skips_invalid_slack_env_url(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:

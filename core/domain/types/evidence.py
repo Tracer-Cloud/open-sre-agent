@@ -44,6 +44,7 @@ EvidenceSource = Literal[
     "x_mcp",
     "mysql",
     "rabbitmq",
+    "railway",
     "betterstack",
     "snowflake",
     "azure",

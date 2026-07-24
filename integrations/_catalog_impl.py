@@ -189,6 +189,7 @@ from integrations.config_models import (
     KubernetesIntegrationConfig,
     OpsGenieIntegrationConfig,
     PagerDutyIntegrationConfig,
+    RailwayIntegrationConfig,
     RocketChatConfig,
     ServiceNowIntegrationConfig,
     SlackWebhookConfig,
@@ -241,6 +242,7 @@ from integrations.posthog_mcp import classify as _classify_posthog_mcp
 from integrations.prefect import classify as _classify_prefect
 from integrations.rabbitmq import build_rabbitmq_config
 from integrations.rabbitmq import classify as _classify_rabbitmq
+from integrations.railway import classify as _classify_railway
 from integrations.rds import classify as _classify_rds
 from integrations.rds import rds_config_from_env
 from integrations.redis import classify as _classify_redis
@@ -450,6 +452,7 @@ _CLASSIFIERS: dict[str, _ClassifyFn] = {
     "temporal": _classify_temporal,
     "smtp": _classify_smtp,
     "prefect": _classify_prefect,
+    "railway": _classify_railway,
 }
 
 
@@ -544,6 +547,21 @@ def _active_env_record(
 def load_env_integrations() -> list[dict[str, Any]]:
     """Build integration records from local environment variables."""
     integrations: list[dict[str, Any]] = []
+
+    railway_token = resolve_env_credential("RAILWAY_TOKEN")
+    railway_config = RailwayIntegrationConfig.model_validate(
+        {
+            "token": railway_token,
+            "railway_path": os.getenv("RAILWAY_PATH", "railway"),
+            "project": os.getenv("RAILWAY_PROJECT", ""),
+            "service": os.getenv("RAILWAY_SERVICE", ""),
+            "environment": os.getenv("RAILWAY_ENVIRONMENT", ""),
+        }
+    )
+    if railway_config.token or railway_config.has_default_scope:
+        integrations.append(
+            _active_env_record("railway", railway_config.model_dump(exclude={"integration_id"}))
+        )
 
     grafana_multi = _parse_instances_env("GRAFANA_INSTANCES", "grafana")
     if grafana_multi is not None:

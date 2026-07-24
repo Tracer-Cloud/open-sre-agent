@@ -528,6 +528,56 @@ class HelmIntegrationConfig(StrictConfigModel):
         return bool(str(self.helm_path or "").strip())
 
 
+class RailwayIntegrationConfig(StrictConfigModel):
+    token: str = ""
+    railway_path: str = "railway"
+    project: str = ""
+    service: str = ""
+    environment: str = ""
+    integration_id: str = ""
+
+    _normalize_railway_path = field_validator("railway_path", mode="before")(
+        normalize_with_default("railway")
+    )
+    _normalize_strs = field_validator(
+        "token", "project", "service", "environment", "integration_id", mode="before"
+    )(normalize_str())
+
+    @property
+    def has_default_scope(self) -> bool:
+        return bool(self.project and self.service and self.environment)
+
+
+class GitLabIntegrationConfig(StrictConfigModel):
+    """Normalized GitLab credentials used by resolution and verification flows."""
+
+    url: str
+    access_token: str
+    integration_id: str = ""
+
+
+# ---------------------------------------------------------------------------
+# Error Tracking & APM
+# ---------------------------------------------------------------------------
+
+
+class SentryIntegrationConfig(StrictConfigModel):
+    """Normalized Sentry credentials — kept for type-check consumers."""
+
+    base_url: str = "https://sentry.io"
+    organization_slug: str = ""
+    auth_token: str = ""
+    project_slug: str = ""
+    integration_id: str = ""
+
+    _normalize_base_url = field_validator("base_url", mode="before")(
+        normalize_url("https://sentry.io")
+    )
+    _normalize_strs = field_validator(
+        "organization_slug", "auth_token", "project_slug", mode="before"
+    )(normalize_str())
+
+
 # ---------------------------------------------------------------------------
 # Databases — Relational
 # ---------------------------------------------------------------------------
