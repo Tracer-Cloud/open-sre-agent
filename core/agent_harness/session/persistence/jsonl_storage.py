@@ -206,7 +206,12 @@ class JsonlSessionStorage:
         attributes: dict[str, Any] | None = None,
         parent_id: str | None = None,
     ) -> str:
-        """Append a product ``trace_span`` for ATM / debug (thread, route, stage, …)."""
+        """Append a product ``trace_span`` for ATM / debug (thread, route, stage, …).
+
+        Spans are diagnostic sidecar records: without an explicit ``parent_id``
+        they stay detached (no leaf lookup), keeping the append O(1) and out of
+        the conversation parent-chain.
+        """
         payload: dict[str, Any] = {
             "span_kind": span_kind,
             "name": name,
@@ -221,6 +226,7 @@ class JsonlSessionStorage:
             "trace_span",
             payload,
             parent_id=parent_id,
+            resolve_parent=False,
         )
 
     def append_investigation_result(
@@ -310,13 +316,16 @@ class JsonlSessionStorage:
         payload: dict[str, Any],
         *,
         parent_id: str | None = None,
+        resolve_parent: bool = True,
     ) -> str:
         with contextlib.suppress(Exception):
             path = session_path(session_id)
             if not path.exists():
                 return ""
             entry_id = _new_id()
-            parent = parent_id if parent_id is not None else self._current_leaf_id(path)
+            parent = parent_id
+            if parent is None and resolve_parent:
+                parent = self._current_leaf_id(path)
             record = {
                 "id": entry_id,
                 "parent_id": parent,
@@ -343,9 +352,12 @@ class JsonlSessionStorage:
     def _current_leaf_id(self, path: Path) -> str | None:
         records = self._read_records(path)
         for rec in reversed(records):
-            if rec.get("type") == "leaf":
+            rec_type = rec.get("type")
+            if rec_type == "trace_span":
+                continue
+            if rec_type == "leaf":
                 return str(rec.get("parent_id") or "") or None
-            if rec.get("type") != "session":
+            if rec_type != "session":
                 return str(rec.get("id") or "") or None
         return None
 

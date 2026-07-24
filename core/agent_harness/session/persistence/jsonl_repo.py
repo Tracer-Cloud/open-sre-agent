@@ -257,7 +257,10 @@ def _resolve_entry_id(entries: list[dict[str, Any]], entry_ref: str | None) -> s
         ]
         return matches[0] if len(matches) == 1 else entry_ref
     for rec in reversed(entries):
-        if rec.get("type") == "leaf":
+        rec_type = rec.get("type")
+        if rec_type == "trace_span":
+            continue
+        if rec_type == "leaf":
             parent = str(rec.get("parent_id") or "")
             return parent or None
         return str(rec.get("id") or "") or None
