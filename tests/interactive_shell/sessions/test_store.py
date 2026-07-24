@@ -360,6 +360,54 @@ def test_flush_leaf_parents_to_last_real_entry_not_trace_span(tmp_path: Path) ->
     assert leaf["parent_id"] == stub["id"]
 
 
+def test_append_trace_span_noop_when_file_missing(tmp_path: Path) -> None:
+    with _patch_dir(tmp_path):
+        entry_id = SessionStore.append_trace_span("nonexistent-id", span_kind="llm", name="invoke")
+
+    assert entry_id == ""
+    assert not list(tmp_path.glob("*.jsonl"))
+
+
+def test_load_session_walks_through_chained_trace_span_in_legacy_files(tmp_path: Path) -> None:
+    sid = uuid.uuid4().hex
+    started_at = "2026-01-01T00:00:00+00:00"
+    records = [
+        {"type": "session", "version": 2, "id": sid, "created_at": started_at, "cwd": ""},
+        {
+            "id": "m1",
+            "parent_id": None,
+            "timestamp": started_at,
+            "type": "message",
+            "role": "user",
+            "content": "q",
+        },
+        {
+            "id": "s1",
+            "parent_id": "m1",
+            "timestamp": started_at,
+            "type": "trace_span",
+            "span_kind": "llm",
+            "name": "invoke",
+            "status": "ok",
+        },
+        {
+            "id": "m2",
+            "parent_id": "s1",
+            "timestamp": started_at,
+            "type": "message",
+            "role": "assistant",
+            "content": "a",
+        },
+    ]
+    (tmp_path / f"{sid}.jsonl").write_text("\n".join(json.dumps(rec) for rec in records) + "\n")
+
+    with _patch_dir(tmp_path):
+        loaded = SessionStore.load_session(sid)
+
+    assert loaded is not None
+    assert loaded["cli_agent_messages"] == [("user", "q"), ("assistant", "a")]
+
+
 def test_load_session_ignores_trailing_trace_span(tmp_path: Path) -> None:
     session = _make_session()
     with _patch_dir(tmp_path):
