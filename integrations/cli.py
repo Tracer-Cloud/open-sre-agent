@@ -238,25 +238,9 @@ def _setup_vercel() -> None:
 
 
 def _setup_railway() -> None:
-    token = _p("Railway token (optional when the Railway CLI is already logged in)", secret=True)
-    project = _p("Default Railway project ID or name")
-    service = _p("Default Railway service ID or name")
-    environment = _p("Default Railway environment", default="production")
-    railway_path = _p("Railway CLI path", default="railway")
-    if not token and not (project and service and environment):
-        _die("provide a Railway token or a complete default project, service, and environment.")
-    upsert_integration(
-        "railway",
-        {
-            "credentials": {
-                "token": token,
-                "project": project,
-                "service": service,
-                "environment": environment,
-                "railway_path": railway_path,
-            }
-        },
-    )
+    from integrations.railway.setup import RAILWAY_SETUP
+
+    _run_spec_setup(RAILWAY_SETUP)
 
 
 def _setup_betterstack() -> None:

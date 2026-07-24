@@ -178,7 +178,7 @@
             "pages": [
               "messaging/index",
               "smtp",
-               "messaging/slack",
+              "messaging/slack",
               "messaging/discord",
               "messaging/telegram",
               "messaging/rocketchat",

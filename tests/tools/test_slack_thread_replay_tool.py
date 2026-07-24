@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 from typing import Any
 
@@ -16,8 +15,6 @@ from integrations.railway.tools.railway_deployment_tool.redeploy_tool import (
 )
 from integrations.slack.tools.slack_thread_replay_tool.tool import replay_slack_thread_locally
 from integrations.slack.web_client import SlackBotTarget
-
-_RAILWAY_EXECUTABLE = "railway.cmd" if os.name == "nt" else "railway"
 
 
 def _completed(

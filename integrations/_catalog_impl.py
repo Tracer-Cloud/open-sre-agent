@@ -131,6 +131,13 @@ from config.constants.posthog_mcp import (
     POSTHOG_MCP_PROJECT_ID_ENV,
     POSTHOG_MCP_URL_ENV,
 )
+from config.constants.railway import (
+    RAILWAY_ENVIRONMENT_ENV,
+    RAILWAY_PATH_ENV,
+    RAILWAY_PROJECT_ENV,
+    RAILWAY_SERVICE_ENV,
+    RAILWAY_TOKEN_ENV,
+)
 from config.constants.sentry import (
     DEFAULT_SENTRY_BASE_URL,
     SENTRY_AUTH_TOKEN_ENV,
@@ -548,14 +555,14 @@ def load_env_integrations() -> list[dict[str, Any]]:
     """Build integration records from local environment variables."""
     integrations: list[dict[str, Any]] = []
 
-    railway_token = resolve_env_credential("RAILWAY_TOKEN")
+    railway_token = resolve_env_credential(RAILWAY_TOKEN_ENV)
     railway_config = RailwayIntegrationConfig.model_validate(
         {
             "token": railway_token,
-            "railway_path": os.getenv("RAILWAY_PATH", "railway"),
-            "project": os.getenv("RAILWAY_PROJECT", ""),
-            "service": os.getenv("RAILWAY_SERVICE", ""),
-            "environment": os.getenv("RAILWAY_ENVIRONMENT", ""),
+            "railway_path": os.getenv(RAILWAY_PATH_ENV, "railway"),
+            "project": os.getenv(RAILWAY_PROJECT_ENV, ""),
+            "service": os.getenv(RAILWAY_SERVICE_ENV, ""),
+            "environment": os.getenv(RAILWAY_ENVIRONMENT_ENV, ""),
         }
     )
     if railway_config.token or railway_config.has_default_scope:
