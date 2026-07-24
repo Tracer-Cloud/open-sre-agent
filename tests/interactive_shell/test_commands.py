@@ -2859,16 +2859,20 @@ class TestCliDelegatedCommands:
 
     @pytest.mark.parametrize(
         "slash_input",
-        ["/guardrails", "/guardrails rules", "/guardrails --help"],
+        ["/guardrails rules", "/guardrails --help"],
     )
     def test_slash_guardrails_opts_into_output_capture(
         self, monkeypatch: object, slash_input: str
     ) -> None:
-        """Bare ``/guardrails`` (no subcommand), known subcommands, and flag-style
-        invocations must all call ``run_cli_command`` with
-        ``capture_output=True``. Without this, Click's usage block (printed for
-        the no-subcommand case) and subcommand output bypass ``console.print``
-        and never reach the REPL buffer — see issue #2388.
+        """Known subcommands and flag-style invocations of ``/guardrails`` must
+        call ``run_cli_command`` with ``capture_output=True`` so their output
+        reaches the REPL buffer instead of bypassing ``console.print`` — see
+        issue #2388.
+
+        Bare ``/guardrails`` (no subcommand) is handled by the bare-invocation
+        guard in ``_cmd_guardrails`` (issue #4157) and does NOT reach
+        ``run_cli_command``.  See :class:`TestBareInvocationGuards` for
+        coverage of that path.
         """
         from surfaces.interactive_shell.command_registry import cli_parity as m
 
@@ -3033,3 +3037,299 @@ class TestCliDelegatedCommands:
         assert session.history[-1]["ok"] is False
         assert delegated == []
         assert started == []
+
+
+# ---------------------------------------------------------------------------
+# Issue #4157 — bare CLI slash commands must not produce non-zero exit errors
+# ---------------------------------------------------------------------------
+
+
+class TestBareInvocationGuards:
+    """Bare invocations of Click-backed group commands must never reach the CLI.
+
+    /guardrails, /cron, /sentry, /watchdog, /misses, and /debug are Click
+    groups (or require mandatory flags) that exit non-zero when invoked
+    without arguments.  The REPL must intercept the bare call and show a
+    usage hint (headless) or an interactive picker (TTY) instead of
+    delegating to the subprocess.
+    """
+
+    @staticmethod
+    def _no_run(monkeypatch: pytest.MonkeyPatch) -> None:
+        """Patch subprocess.run so any delegation raises — proves we never call it."""
+        from surfaces.interactive_shell.command_registry import cli_parity as m
+
+        def _boom(*_args: object, **_kwargs: object) -> object:
+            raise AssertionError("subprocess.run must not be called for bare invocation")
+
+        monkeypatch.setattr(m.subprocess, "run", _boom)
+
+    @staticmethod
+    def _stub_run(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
+        """Replace run_cli_command with a no-op that records args."""
+        from surfaces.interactive_shell.command_registry import cli_parity as m
+
+        delegated: list[list[str]] = []
+        monkeypatch.setattr(
+            m,
+            "run_cli_command",
+            lambda _console, args, **_kwargs: (delegated.append(args), True)[1],
+        )
+        return delegated
+
+    # /guardrails ---------------------------------------------------------
+
+    def test_bare_guardrails_shows_usage_in_headless(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from surfaces.interactive_shell.command_registry import cli_parity as m
+
+        self._no_run(monkeypatch)
+        monkeypatch.setattr(m, "repl_tty_interactive", lambda: False)
+
+        session = Session()
+        console, buf = _capture()
+        result = dispatch_slash("/guardrails", session, console)
+
+        assert result is True
+        output = buf.getvalue()
+        assert "/guardrails audit" in output
+        assert "non-zero" not in output
+        assert session.history[-1]["ok"] is False
+
+    def test_guardrails_with_subcommand_delegates(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        delegated = self._stub_run(monkeypatch)
+
+        session = Session()
+        console, _ = _capture()
+        dispatch_slash("/guardrails audit", session, console)
+
+        assert delegated == [["guardrails", "audit"]]
+
+    def test_bare_guardrails_tty_uses_interactive_picker(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from surfaces.interactive_shell.command_registry import cli_parity as m
+
+        self._no_run(monkeypatch)
+        monkeypatch.setattr(m, "repl_tty_interactive", lambda: True)
+        picker_called: list[bool] = []
+        monkeypatch.setattr(
+            m,
+            "_interactive_guardrails_menu",
+            lambda _console: picker_called.append(True) or True,
+        )
+
+        result = dispatch_slash("/guardrails", Session(), Console())
+
+        assert result is True
+        assert picker_called == [True]
+
+    # /cron ---------------------------------------------------------------
+
+    def test_bare_cron_shows_usage_in_headless(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from surfaces.interactive_shell.command_registry import cli_parity as m
+
+        self._no_run(monkeypatch)
+        monkeypatch.setattr(m, "repl_tty_interactive", lambda: False)
+
+        session = Session()
+        console, buf = _capture()
+        result = dispatch_slash("/cron", session, console)
+
+        assert result is True
+        output = buf.getvalue()
+        assert "/cron list" in output
+        assert "non-zero" not in output
+        assert session.history[-1]["ok"] is False
+
+    def test_cron_with_subcommand_delegates(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        delegated = self._stub_run(monkeypatch)
+
+        session = Session()
+        console, _ = _capture()
+        dispatch_slash("/cron list", session, console)
+
+        assert delegated == [["cron", "list"]]
+
+    def test_bare_cron_tty_uses_interactive_picker(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from surfaces.interactive_shell.command_registry import cli_parity as m
+
+        self._no_run(monkeypatch)
+        monkeypatch.setattr(m, "repl_tty_interactive", lambda: True)
+        picker_called: list[bool] = []
+        monkeypatch.setattr(
+            m,
+            "_interactive_cron_menu",
+            lambda _console: picker_called.append(True) or True,
+        )
+
+        result = dispatch_slash("/cron", Session(), Console())
+
+        assert result is True
+        assert picker_called == [True]
+
+    # /sentry -------------------------------------------------------------
+
+    def test_bare_sentry_shows_usage_in_headless(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from surfaces.interactive_shell.command_registry import cli_parity as m
+
+        self._no_run(monkeypatch)
+        monkeypatch.setattr(m, "repl_tty_interactive", lambda: False)
+
+        session = Session()
+        console, buf = _capture()
+        result = dispatch_slash("/sentry", session, console)
+
+        assert result is True
+        output = buf.getvalue()
+        assert "/sentry digest run" in output
+        assert "non-zero" not in output
+        assert session.history[-1]["ok"] is False
+
+    def test_sentry_with_subcommand_delegates(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        delegated = self._stub_run(monkeypatch)
+
+        session = Session()
+        console, _ = _capture()
+        dispatch_slash("/sentry digest run", session, console)
+
+        assert delegated == [["sentry", "digest", "run"]]
+
+    # /watchdog -----------------------------------------------------------
+
+    def test_bare_watchdog_shows_usage_in_headless(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from surfaces.interactive_shell.command_registry import cli_parity as m
+
+        self._no_run(monkeypatch)
+        monkeypatch.setattr(m, "repl_tty_interactive", lambda: False)
+
+        session = Session()
+        console, buf = _capture()
+        result = dispatch_slash("/watchdog", session, console)
+
+        assert result is True
+        output = buf.getvalue()
+        assert "--pid" in output
+        assert "non-zero" not in output
+        assert session.history[-1]["ok"] is False
+
+    def test_watchdog_with_flags_delegates(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        delegated = self._stub_run(monkeypatch)
+
+        session = Session()
+        console, _ = _capture()
+        dispatch_slash("/watchdog --pid 123 --max-rss 1G", session, console)
+
+        assert delegated == [["watchdog", "--pid", "123", "--max-rss", "1G"]]
+
+    # /debug --------------------------------------------------------------
+
+    def test_bare_debug_shows_usage_in_headless(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from surfaces.interactive_shell.command_registry import cli_parity as m
+
+        self._no_run(monkeypatch)
+        monkeypatch.setattr(m, "repl_tty_interactive", lambda: False)
+
+        session = Session()
+        console, buf = _capture()
+        result = dispatch_slash("/debug", session, console)
+
+        assert result is True
+        output = buf.getvalue()
+        assert "/debug sentry" in output
+        assert "non-zero" not in output
+        assert session.history[-1]["ok"] is False
+
+    def test_bare_debug_tty_runs_only_subcommand_directly(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Bare /debug on TTY runs 'debug sentry' directly (single-subcommand shortcut)."""
+        from surfaces.interactive_shell.command_registry import cli_parity as m
+
+        monkeypatch.setattr(m, "repl_tty_interactive", lambda: True)
+        delegated = self._stub_run(monkeypatch)
+
+        result = dispatch_slash("/debug", Session(), Console())
+
+        assert result is True
+        assert delegated == [["debug", "sentry"]]
+
+    def test_debug_with_subcommand_delegates(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        delegated = self._stub_run(monkeypatch)
+
+        session = Session()
+        console, _ = _capture()
+        dispatch_slash("/debug sentry", session, console)
+
+        assert delegated == [["debug", "sentry"]]
+
+    # /misses -------------------------------------------------------------
+
+    def test_bare_misses_shows_usage_in_headless(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from surfaces.interactive_shell.command_registry import cli_parity as m
+
+        self._no_run(monkeypatch)
+        monkeypatch.setattr(m, "repl_tty_interactive", lambda: False)
+
+        session = Session()
+        console, buf = _capture()
+        result = dispatch_slash("/misses", session, console)
+
+        assert result is True
+        output = buf.getvalue()
+        assert "/misses list" in output
+        assert "non-zero" not in output
+        assert session.history[-1]["ok"] is False
+
+    def test_misses_with_subcommand_delegates(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        delegated = self._stub_run(monkeypatch)
+
+        session = Session()
+        console, _ = _capture()
+        dispatch_slash("/misses list", session, console)
+
+        assert delegated == [["misses", "list"]]
+
+    def test_bare_misses_tty_uses_interactive_picker(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from surfaces.interactive_shell.command_registry import cli_parity as m
+
+        self._no_run(monkeypatch)
+        monkeypatch.setattr(m, "repl_tty_interactive", lambda: True)
+        picker_called: list[bool] = []
+        monkeypatch.setattr(
+            m,
+            "_interactive_misses_menu",
+            lambda _console: picker_called.append(True) or True,
+        )
+
+        result = dispatch_slash("/misses", Session(), Console())
+
+        assert result is True
+        assert picker_called == [True]
+
+    # Parametric regression -----------------------------------------------
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "/guardrails",
+            "/cron",
+            "/sentry",
+            "/watchdog",
+            "/misses",
+            "/debug",
+        ],
+    )
+    def test_bare_group_command_never_exits_shell(
+        self, monkeypatch: pytest.MonkeyPatch, command: str
+    ) -> None:
+        """Bare group commands must never return False and exit the shell (#4157)."""
+        from surfaces.interactive_shell.command_registry import cli_parity as m
+
+        monkeypatch.setattr(m, "repl_tty_interactive", lambda: False)
+        self._no_run(monkeypatch)
+
+        session = Session()
+        console, _ = _capture()
+        result = dispatch_slash(command, session, console)
+
+        assert result is True, f"{command!r} bare invocation returned False (would exit shell)"

@@ -25,8 +25,14 @@ from surfaces.interactive_shell.runtime.subprocess_runner import (
     build_opensre_cli_argv,
     start_background_cli_task,
 )
-from surfaces.interactive_shell.ui import DIM, ERROR, print_command_output
-from surfaces.interactive_shell.ui.components.choice_menu import prepare_repl_output_line
+from surfaces.interactive_shell.ui import DIM, ERROR, HIGHLIGHT, print_command_output
+from surfaces.interactive_shell.ui.components.choice_menu import (
+    CRUMB_SEP,
+    prepare_repl_output_line,
+    repl_choose_one,
+    repl_section_break,
+    repl_tty_interactive,
+)
 from surfaces.interactive_shell.utils.telemetry.turn_outcome import format_wizard_cli_outcome
 
 _UPDATE_SUBPROCESS_TIMEOUT_SECONDS = 300
@@ -333,12 +339,116 @@ def _cmd_tests(session: Session, console: Console, args: list[str]) -> bool:
     return run_cli_command(console, ["tests", *args], capture_output=True)
 
 
-def _cmd_guardrails(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+# ---------------------------------------------------------------------------
+# Usage hint tuples (shared between bare-invocation guards and COMMANDS catalog)
+# ---------------------------------------------------------------------------
+_GUARDRAILS_USAGE = (
+    "/guardrails audit",
+    "/guardrails init",
+    "/guardrails rules",
+    "/guardrails test",
+)
+_CRON_USAGE = (
+    "/cron list",
+    "/cron add",
+    "/cron remove <id>",
+    "/cron run <id>",
+    "/cron logs <id>",
+)
+_SENTRY_USAGE = (
+    "/sentry digest run",
+    "/sentry digest schedule list",
+    "/sentry digest schedule add",
+    "/sentry digest schedule run <id>",
+    "/sentry digest schedule remove <id>",
+    "/sentry uptime check",
+    "/sentry uptime watch list",
+    "/sentry uptime watch add",
+    "/sentry uptime watch run <id>",
+    "/sentry uptime watch remove <id>",
+)
+_MISSES_USAGE = (
+    "/misses list",
+    "/misses stats",
+    "/misses export --out <dir>",
+    "/misses convert <miss_id>",
+)
+_DEBUG_USAGE = ("/debug sentry",)
+_WATCHDOG_USAGE = ("/watchdog --pid <pid> [--max-rss <size>] [--max-cpu <percent>]",)
+
+
+def _print_bare_group_usage(
+    session: Session,
+    console: Console,
+    name: str,
+    usage: tuple[str, ...],
+    *,
+    needs: str = "a subcommand",
+) -> bool:
+    """Show a usage hint instead of shelling out to a bare Click group.
+
+    ``guardrails``/``cron``/``sentry``/``misses``/``debug`` are Click groups
+    with no default subcommand, and ``watchdog`` always requires ``--pid``, so
+    delegating a bare invocation to the CLI hits a Click usage/validation error
+    (non-zero exit) and surfaces as a confusing "CLI command exited with
+    non-zero code N" message.  Print the same usage hints ``/help`` shows
+    instead, and mark the turn as failed so slash analytics are accurate.
+    """
+    console.print(f"[{ERROR}]{name} needs {needs}.[/] Try one of:")
+    for line in usage:
+        console.print(f"  [bold]{line}[/bold]")
+    session.mark_latest(ok=False, kind="slash")
+    return True
+
+
+# ---------------------------------------------------------------------------
+# /guardrails
+# ---------------------------------------------------------------------------
+
+
+def _interactive_guardrails_menu(console: Console) -> bool:
+    root = "/guardrails"
+    while True:
+        sub = repl_choose_one(
+            title="guardrails",
+            breadcrumb=root,
+            choices=[
+                ("audit", "audit — recent guardrail audit log entries"),
+                ("init", "init — create a starter guardrails config"),
+                ("rules", "rules — list configured guardrail rules"),
+                ("test", "test — check a text string against the rules"),
+                ("done", "done"),
+            ],
+        )
+        if sub is None or sub == "done":
+            return True
+        if sub == "test":
+            console.print()
+            text = console.input(f"[{HIGHLIGHT}]text to test> [/]").strip()
+            if not text:
+                repl_section_break(console)
+                continue
+            run_cli_command(console, ["guardrails", "test", text], capture_output=True)
+        else:
+            run_cli_command(console, ["guardrails", sub], capture_output=True)
+        repl_section_break(console)
+
+
+def _cmd_guardrails(session: Session, console: Console, args: list[str]) -> bool:
     # ``opensre guardrails`` and its subcommands are all non-interactive printers
     # (init/test/audit/rules just ``click.echo``). Capture so the output — and
     # Click's usage block when no subcommand is given — reaches the REPL buffer
     # instead of bypassing ``console.print`` via the child's inherited stdout FD.
+    if not args:
+        if repl_tty_interactive():
+            return _interactive_guardrails_menu(console)
+        return _print_bare_group_usage(session, console, "/guardrails", _GUARDRAILS_USAGE)
     return run_cli_command(console, ["guardrails", *args], capture_output=True)
+
+
+# ---------------------------------------------------------------------------
+# /update  /uninstall  /config  /messaging  /hermes
+# ---------------------------------------------------------------------------
 
 
 def _cmd_update(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
@@ -370,25 +480,169 @@ def _cmd_hermes(session: Session, console: Console, args: list[str]) -> bool:  #
     return run_cli_command(console, ["hermes", *args])
 
 
-def _cmd_cron(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+# ---------------------------------------------------------------------------
+# /cron
+# ---------------------------------------------------------------------------
+
+
+def _cron_task_choices() -> list[tuple[str, str]]:
+    from platform.scheduler.store import list_tasks
+
+    return [
+        (task.display_id(), f"{task.display_id()}  {task.kind.value} · {task.cron}")
+        for task in list_tasks()
+    ]
+
+
+def _interactive_cron_menu(console: Console) -> bool:
+    root = "/cron"
+    while True:
+        sub = repl_choose_one(
+            title="cron",
+            breadcrumb=root,
+            choices=[
+                ("list", "list — all scheduled delivery tasks"),
+                ("add", "add — schedule a new task (needs several options)"),
+                ("remove", "remove — delete a scheduled task"),
+                ("run", "run — run a scheduled task now"),
+                ("logs", "logs — execution history for a task"),
+                ("done", "done"),
+            ],
+        )
+        if sub is None or sub == "done":
+            return True
+        if sub == "list":
+            run_cli_command(console, ["cron", "list"])
+        elif sub == "add":
+            # ``cron add`` has several required options (--kind, --cron,
+            # --provider, --chat-id) with no sane picker defaults — show its
+            # own --help instead of guessing at values.
+            run_cli_command(console, ["cron", "add", "--help"], capture_output=True)
+        elif sub in ("remove", "run", "logs"):
+            choices = _cron_task_choices()
+            if not choices:
+                console.print(f"[{DIM}]no scheduled tasks to {sub}.[/]")
+            else:
+                task_id = repl_choose_one(
+                    title=f"cron {sub}",
+                    breadcrumb=f"{root}{CRUMB_SEP}{sub}",
+                    choices=choices,
+                )
+                if task_id:
+                    run_cli_command(console, ["cron", sub, task_id])
+        repl_section_break(console)
+
+
+def _cmd_cron(session: Session, console: Console, args: list[str]) -> bool:
+    if not args:
+        if repl_tty_interactive():
+            return _interactive_cron_menu(console)
+        return _print_bare_group_usage(session, console, "/cron", _CRON_USAGE)
     return run_cli_command(console, ["cron", *args])
 
 
-def _cmd_sentry(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+# ---------------------------------------------------------------------------
+# /sentry
+# ---------------------------------------------------------------------------
+
+
+def _cmd_sentry(session: Session, console: Console, args: list[str]) -> bool:
+    if not args:
+        return _print_bare_group_usage(session, console, "/sentry", _SENTRY_USAGE)
     return run_cli_command(console, ["sentry", *args], capture_output=True)
 
 
-def _cmd_watchdog(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+# ---------------------------------------------------------------------------
+# /watchdog
+# ---------------------------------------------------------------------------
+
+
+def _cmd_watchdog(session: Session, console: Console, args: list[str]) -> bool:
+    if not args:
+        return _print_bare_group_usage(
+            session, console, "/watchdog", _WATCHDOG_USAGE, needs="--pid"
+        )
     return run_cli_command(console, ["watchdog", *args])
 
 
-def _cmd_debug(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+# ---------------------------------------------------------------------------
+# /debug
+# ---------------------------------------------------------------------------
+
+
+def _cmd_debug(session: Session, console: Console, args: list[str]) -> bool:
+    # ``debug`` currently has exactly one subcommand, so there is nothing to
+    # pick between — run it directly on a TTY rather than showing a one-item menu.
+    if not args:
+        if repl_tty_interactive():
+            return run_cli_command(console, ["debug", "sentry"])
+        return _print_bare_group_usage(session, console, "/debug", _DEBUG_USAGE)
     return run_cli_command(console, ["debug", *args])
 
 
-def _cmd_misses(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+# ---------------------------------------------------------------------------
+# /misses
+# ---------------------------------------------------------------------------
+
+
+def _miss_id_choices() -> list[tuple[str, str]]:
+    from core.domain.feedback import load_misses
+
+    return [
+        (
+            row["miss_id"],
+            f"{row['miss_id']}  {row.get('alert_name') or '<unknown>'} "
+            f"· {row.get('taxonomy') or 'unknown'}",
+        )
+        for row in load_misses()
+        if row.get("miss_id")
+    ]
+
+
+def _interactive_misses_menu(console: Console) -> bool:
+    root = "/misses"
+    while True:
+        sub = repl_choose_one(
+            title="misses",
+            breadcrumb=root,
+            choices=[
+                ("list", "list — recent misses"),
+                ("stats", "stats — taxonomy breakdown and recurrence"),
+                ("export", "export — top misses to benchmark scenarios (needs --out)"),
+                ("convert", "convert — a single miss to a benchmark scenario"),
+                ("done", "done"),
+            ],
+        )
+        if sub is None or sub == "done":
+            return True
+        if sub in ("list", "stats"):
+            run_cli_command(console, ["misses", sub], capture_output=True)
+        elif sub == "export":
+            # ``--out <dir>`` is required with no sane picker default — show
+            # its own --help instead of guessing at a directory.
+            run_cli_command(console, ["misses", "export", "--help"], capture_output=True)
+        elif sub == "convert":
+            choices = _miss_id_choices()
+            if not choices:
+                console.print(f"[{DIM}]no misses recorded to convert.[/]")
+            else:
+                miss_id = repl_choose_one(
+                    title="miss to convert",
+                    breadcrumb=f"{root}{CRUMB_SEP}convert",
+                    choices=choices,
+                )
+                if miss_id:
+                    run_cli_command(console, ["misses", "convert", miss_id], capture_output=True)
+        repl_section_break(console)
+
+
+def _cmd_misses(session: Session, console: Console, args: list[str]) -> bool:
     # Non-interactive printers only (list/stats/export/convert) — capture so the
     # output reaches the REPL buffer instead of the child's inherited stdout.
+    if not args:
+        if repl_tty_interactive():
+            return _interactive_misses_menu(console)
+        return _print_bare_group_usage(session, console, "/misses", _MISSES_USAGE)
     return run_cli_command(console, ["misses", *args], capture_output=True)
 
 
@@ -434,12 +688,7 @@ COMMANDS: list[SlashCommand] = [
         "/guardrails",
         "Manage sensitive information guardrail rules.",
         _cmd_guardrails,
-        usage=(
-            "/guardrails audit",
-            "/guardrails init",
-            "/guardrails rules",
-            "/guardrails test",
-        ),
+        usage=_GUARDRAILS_USAGE,
     ),
     SlashCommand(
         "/update",
@@ -478,46 +727,31 @@ COMMANDS: list[SlashCommand] = [
         "/cron",
         "Manage cron-driven scheduled deliveries.",
         _cmd_cron,
-        usage=("/cron list", "/cron add", "/cron remove <id>", "/cron run <id>", "/cron logs <id>"),
+        usage=_CRON_USAGE,
     ),
     SlashCommand(
         "/sentry",
         "Schedule and run automated Sentry morning digests or uptime watches.",
         _cmd_sentry,
-        usage=(
-            "/sentry digest run",
-            "/sentry digest schedule list",
-            "/sentry digest schedule add",
-            "/sentry digest schedule run <id>",
-            "/sentry digest schedule remove <id>",
-            "/sentry uptime check",
-            "/sentry uptime watch list",
-            "/sentry uptime watch add",
-            "/sentry uptime watch run <id>",
-            "/sentry uptime watch remove <id>",
-        ),
+        usage=_SENTRY_USAGE,
     ),
     SlashCommand(
         "/watchdog",
         "Monitor one process and send threshold alarms.",
         _cmd_watchdog,
-        usage=("/watchdog --pid <pid> [--max-rss <size>] [--max-cpu <percent>]",),
+        usage=_WATCHDOG_USAGE,
         examples=("/watchdog --pid 123 --max-rss 1G",),
     ),
     SlashCommand(
         "/debug",
         "run targeted runtime diagnostics",
         _cmd_debug,
+        usage=_DEBUG_USAGE,
     ),
     SlashCommand(
         "/misses",
         "Triage investigation misses and export them as benchmark scenarios.",
         _cmd_misses,
-        usage=(
-            "/misses list",
-            "/misses stats",
-            "/misses export --out <dir>",
-            "/misses convert <miss_id>",
-        ),
+        usage=_MISSES_USAGE,
     ),
 ]
