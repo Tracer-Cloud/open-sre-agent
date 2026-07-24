@@ -8,9 +8,10 @@ import contextvars
 import logging
 import queue
 import threading
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable, Mapping
 from typing import TYPE_CHECKING, Any, cast
 
+from config.constants.investigation import MAX_INVESTIGATION_LOOPS
 from core.domain.stream import StreamEvent
 from core.state import AgentState
 from platform.observability.errors.boundary import report_and_reraise
@@ -54,6 +55,16 @@ def _capture_exception_once(
 
     capture_exception(exc, context=context, tags=tags)
     _mark_exception_captured(exc)
+
+
+def _loop_metrics_for_error(state: Mapping[str, Any] | None) -> tuple[int, int]:
+    """Return ``(loop_count, iteration_cap)`` for error delivery; never raises."""
+    try:
+        from platform.analytics.investigation_loop import loop_metrics_from_state
+
+        return loop_metrics_from_state(state)
+    except Exception:
+        return 0, MAX_INVESTIGATION_LOOPS
 
 
 def _traced_node(node_name: str, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
@@ -287,17 +298,15 @@ async def astream_investigation(
             )
 
     def _run_pipeline() -> None:
+        state = initial
         try:
             from core.state.updates import apply_state_updates
-            from platform.analytics.investigation_loop import loop_metrics_from_state
             from tools.investigation.reporting.node import generate_report
             from tools.investigation.stages.diagnose import diagnose
             from tools.investigation.stages.gather_evidence import ConnectedInvestigationAgent
             from tools.investigation.stages.intake import extract_alert
             from tools.investigation.stages.plan_evidence import plan_actions
             from tools.investigation.stages.resolve_integrations import resolve_integrations
-
-            state = initial
 
             # --- resolve_integrations ---
             _put(_make_node_event("on_chain_start", "resolve_integrations", {}))
@@ -449,7 +458,7 @@ async def astream_investigation(
             )
 
         except Exception as exc:
-            loop_count, iteration_cap = loop_metrics_from_state(state)
+            loop_count, iteration_cap = _loop_metrics_for_error(state)
             _capture_exception_once(exc, context="pipeline.astream_investigation")
             with contextlib.suppress(RuntimeError):
                 loop.call_soon_threadsafe(
