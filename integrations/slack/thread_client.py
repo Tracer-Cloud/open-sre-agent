@@ -55,6 +55,10 @@ def fetch_thread(channel: str, timestamp: str) -> dict[str, Any]:
         next_cursor = metadata.get("next_cursor", "") if isinstance(metadata, dict) else ""
         cursor = str(next_cursor).strip()
         if not cursor or cursor in seen_cursors:
+            # No further page (empty cursor) or a repeated cursor (API loop
+            # guard): clear it so `truncated` below reflects a genuine cap hit,
+            # not an anomalous stop.
+            cursor = ""
             break
         seen_cursors.add(cursor)
     return {

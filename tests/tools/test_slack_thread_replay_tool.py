@@ -151,6 +151,32 @@ def test_replay_accepts_null_messages_and_reactions(monkeypatch: pytest.MonkeyPa
     assert result["thread"]["messages"][0]["reactions"] == []
 
 
+def test_replay_is_not_truncated_when_slack_repeats_a_cursor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A Slack response that keeps advertising the same next_cursor is an API
+    # loop, not "more pages" — the dedup guard stops paging and truncated must
+    # stay False rather than reflecting the leftover cursor.
+    target = SlackBotTarget(bot_token="xoxb-test")
+    monkeypatch.setattr("integrations.slack.thread_client.resolve_bot_token", lambda: (target, ""))
+    monkeypatch.setattr(
+        "integrations.slack.thread_client._request_json",
+        lambda *_args, **_kwargs: (
+            {
+                "ok": True,
+                "messages": [{"user": "U1", "text": "hello", "ts": "1"}],
+                "response_metadata": {"next_cursor": "SAME"},
+            },
+            "",
+        ),
+    )
+
+    result = replay_slack_thread_locally.run(thread_ref="C1/1")
+
+    assert result["status"] == "ok"
+    assert result["thread"]["truncated"] is False
+
+
 def test_replay_classifies_missing_shared_token_as_configuration_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
