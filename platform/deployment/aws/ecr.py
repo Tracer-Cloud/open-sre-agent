@@ -86,9 +86,10 @@ def build_and_push(
     """Build a Docker image once and push it under one or more tags.
 
     The image is built a single time and tagged with ``tag`` plus any
-    ``extra_tags`` (e.g. an immutable git-sha tag alongside the moving
-    ``latest``); every tag is pushed. Returns the full image URI for the
-    primary ``tag``.
+    ``extra_tags`` (e.g. a git-sha tag alongside the moving ``latest``).
+    Extra tags are pushed first and the primary ``tag`` last, so the moving
+    tag only updates once every extra tag is published. Returns the full
+    image URI for the primary ``tag``.
     """
     docker_login(region)
 
@@ -121,10 +122,23 @@ def build_and_push(
     cmd.append(str(context_dir))
 
     subprocess.run(cmd, check=True)
-    for uri in uris:
+    for uri in reversed(uris):
         subprocess.run(["docker", "push", uri], check=True)
 
     return uris[0]
+
+
+def get_image_digest(repository_name: str, tag: str, region: str = DEFAULT_REGION) -> str | None:
+    """Return the sha256 image digest for ``tag``, or None if the lookup fails."""
+    try:
+        ecr_client = get_boto3_client("ecr", region)
+        details = ecr_client.describe_images(
+            repositoryName=repository_name,
+            imageIds=[{"imageTag": tag}],
+        )["imageDetails"]
+        return str(details[0]["imageDigest"]) if details else None
+    except Exception:  # noqa: BLE001 — digest is advisory; the push already succeeded
+        return None
 
 
 def delete_repository(name: str, region: str = DEFAULT_REGION) -> None:

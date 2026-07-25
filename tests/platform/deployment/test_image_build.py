@@ -79,6 +79,7 @@ def test_build_image_saves_uri_and_returns_it(
         lambda *_a, **_kw: _FAKE_URI,
     )
     monkeypatch.setattr(deploy_module, "_resolve_image_sha_tag", lambda: "abc123def456")
+    monkeypatch.setattr(deploy_module.ecr, "get_image_digest", lambda *_a, **_kw: None)
 
     result = deploy_module.build_image()
 
@@ -108,11 +109,84 @@ def test_build_image_passes_sha_as_extra_tag(
         return _FAKE_URI
 
     monkeypatch.setattr(deploy_module.ecr, "build_and_push", _fake_build_and_push)
+    monkeypatch.setattr(deploy_module.ecr, "get_image_digest", lambda *_a, **_kw: None)
 
     deploy_module.build_image()
 
     assert captured["tag"] == deploy_module.ECR_DEFAULT_IMAGE_TAG
     assert captured["extra_tags"] == ["abc123def456"]
+
+
+def test_build_image_prints_digest_uri_for_prod_pinning(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Prod pin guidance must reference the image digest, not a mutable tag."""
+    repo_uri = "123456789012.dkr.ecr.us-east-1.amazonaws.com/opensre"
+    monkeypatch.setattr(stack_module, "_IMAGE_URI_FILE", tmp_path / "image-uri.txt")
+    monkeypatch.setattr(
+        deploy_module.ecr, "create_repository", lambda *_a, **_kw: {"uri": repo_uri}
+    )
+    monkeypatch.setattr(deploy_module, "_resolve_image_sha_tag", lambda: "abc123def456")
+    monkeypatch.setattr(deploy_module.ecr, "build_and_push", lambda *_a, **_kw: _FAKE_URI)
+    monkeypatch.setattr(
+        deploy_module.ecr, "get_image_digest", lambda *_a, **_kw: "sha256:" + "f" * 64
+    )
+
+    deploy_module.build_image()
+
+    out = capsys.readouterr().out
+    assert f"{repo_uri}@sha256:{'f' * 64}" in out
+    assert "pin the digest URI" in out
+    assert "pin the sha URI" not in out
+
+
+def test_build_image_warns_when_digest_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """No digest resolved → no tag may be presented as a prod pin."""
+    repo_uri = "123456789012.dkr.ecr.us-east-1.amazonaws.com/opensre"
+    monkeypatch.setattr(stack_module, "_IMAGE_URI_FILE", tmp_path / "image-uri.txt")
+    monkeypatch.setattr(
+        deploy_module.ecr, "create_repository", lambda *_a, **_kw: {"uri": repo_uri}
+    )
+    monkeypatch.setattr(deploy_module, "_resolve_image_sha_tag", lambda: "abc123def456")
+    monkeypatch.setattr(deploy_module.ecr, "build_and_push", lambda *_a, **_kw: _FAKE_URI)
+    monkeypatch.setattr(deploy_module.ecr, "get_image_digest", lambda *_a, **_kw: None)
+
+    deploy_module.build_image()
+
+    out = capsys.readouterr().out
+    assert "digest lookup failed" in out
+    assert "pin the digest URI" not in out
+    assert "pin the sha URI" not in out
+
+
+# ── ecr.get_image_digest ──────────────────────────────────────────────────────
+
+
+def test_get_image_digest_returns_digest(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _FakeEcrClient:
+        def describe_images(self, **kwargs: object) -> dict[str, object]:
+            assert kwargs["repositoryName"] == "opensre"
+            assert kwargs["imageIds"] == [{"imageTag": "abc123"}]
+            return {"imageDetails": [{"imageDigest": "sha256:" + "a" * 64}]}
+
+    monkeypatch.setattr(ecr_module, "get_boto3_client", lambda *_a, **_kw: _FakeEcrClient())
+
+    assert ecr_module.get_image_digest("opensre", "abc123") == "sha256:" + "a" * 64
+
+
+def test_get_image_digest_none_on_lookup_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _boom(*_a: object, **_kw: object) -> object:
+        raise RuntimeError("no credentials")
+
+    monkeypatch.setattr(ecr_module, "get_boto3_client", _boom)
+
+    assert ecr_module.get_image_digest("opensre", "abc123") is None
 
 
 # ── _resolve_image_sha_tag ─────────────────────────────────────────────────────
@@ -216,7 +290,10 @@ def test_build_and_push_pushes_latest_and_sha(
     assert build.count("-t") == 2
     assert f"{repo}:latest" in build and f"{repo}:abc123" in build
     pushes = [c[2] for c in calls if c[:2] == ["docker", "push"]]
-    assert pushes == [f"{repo}:latest", f"{repo}:abc123"]
+    assert pushes == [f"{repo}:abc123", f"{repo}:latest"], (
+        "the moving primary tag must be pushed last, after every extra tag, "
+        "so a failed extra-tag push cannot leave latest mutated"
+    )
 
 
 def test_build_and_push_single_tag_without_extra_tags(

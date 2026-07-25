@@ -126,7 +126,7 @@ def _resolve_image_uri() -> str:
 
 
 def _resolve_image_sha_tag() -> str | None:
-    """Immutable image tag derived from git HEAD, or None if unavailable.
+    """Image tag derived from git HEAD, or None if unavailable.
 
     Returns the abbreviated commit sha (12 chars minimum; git extends it on
     ambiguity), with a ``-dirty`` suffix when the working tree has uncommitted
@@ -163,11 +163,12 @@ def build_image() -> str:
     """Build the Docker image and push it to ECR.
 
     Pushes two tags from one build: the moving ``latest`` (reused by
-    ``make deploy``) and an immutable git-sha tag. Saves the ``latest`` URI
-    locally so subsequent ``make deploy`` calls can reuse it without rebuilding.
-    For ``env=prod`` Fargate silos, pin the **sha** URI printed below in
-    Terraform ``image_uri`` — never ``latest`` (a later ``latest`` push would
-    silently mutate prod on the next task restart).
+    ``make deploy``) and a git-sha tag for build traceability. Saves the
+    ``latest`` URI locally so subsequent ``make deploy`` calls can reuse it
+    without rebuilding. For ``env=prod`` Fargate silos, pin the **digest**
+    URI printed below (``repo@sha256:…``) in Terraform ``image_uri`` — tags,
+    including the sha tag, are mutable in this repository and a later push
+    can change what they point to.
 
     Returns:
         The full ECR image URI for ``latest``
@@ -187,11 +188,11 @@ def build_image() -> str:
 
     sha_tag = _resolve_image_sha_tag()
     if sha_tag is None:
-        print("  - No git sha resolved — pushing latest only (not prod-pinnable).")
+        print("  - No git sha resolved — pushing latest only.")
     elif sha_tag.endswith("-dirty"):
-        print(f"  - Immutable tag: {sha_tag} (WORKING TREE DIRTY — do not pin for prod)")
+        print(f"  - Build tag: {sha_tag} (WORKING TREE DIRTY — not a reproducible build)")
     else:
-        print(f"  - Immutable tag: {sha_tag}")
+        print(f"  - Build tag: {sha_tag}")
 
     print("Building and pushing Docker image...")
     image_uri = ecr.build_and_push(
@@ -205,6 +206,8 @@ def build_image() -> str:
     )
     save_image_uri(image_uri)
     sha_uri = f"{repo['uri']}:{sha_tag}" if sha_tag else None
+    digest = ecr.get_image_digest(stack.ecr_repo_name, ECR_DEFAULT_IMAGE_TAG, REGION)
+    digest_uri = f"{repo['uri']}@{digest}" if digest else None
 
     elapsed = time.time() - start_time
     print()
@@ -213,8 +216,13 @@ def build_image() -> str:
     print(f"  latest URI: {image_uri}")
     print("  latest URI saved — run `make deploy` to launch an instance with it.")
     if sha_uri:
-        print(f"  sha URI:    {sha_uri}")
-        print("  → pin the sha URI in Terraform image_uri for env=prod silos.")
+        print(f"  sha URI:    {sha_uri} (build traceability; tag is mutable)")
+    if digest_uri:
+        print(f"  digest URI: {digest_uri}")
+        print("  → pin the digest URI in Terraform image_uri for env=prod silos.")
+    else:
+        print("  digest lookup failed — resolve it before pinning prod:")
+        print(f"    aws ecr describe-images --repository-name {stack.ecr_repo_name}")
     print("=" * 60)
     print()
     return image_uri
