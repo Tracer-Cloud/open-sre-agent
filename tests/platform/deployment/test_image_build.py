@@ -117,6 +117,41 @@ def test_build_image_passes_sha_as_extra_tag(
     assert captured["extra_tags"] == ["abc123def456"]
 
 
+def test_build_image_resolves_digest_by_built_image_id(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """The digest lookup must use the image ID captured at build time, not a
+    tag reference that a concurrent build could retag."""
+    repo_uri = "123456789012.dkr.ecr.us-east-1.amazonaws.com/opensre"
+    image_id = "sha256:" + "c" * 64
+    monkeypatch.setattr(stack_module, "_IMAGE_URI_FILE", tmp_path / "image-uri.txt")
+    monkeypatch.setattr(
+        deploy_module.ecr, "create_repository", lambda *_a, **_kw: {"uri": repo_uri}
+    )
+    monkeypatch.setattr(deploy_module, "_resolve_image_sha_tag", lambda: "abc123def456")
+
+    def _fake_build_and_push(*_a: object, **kw: object) -> str:
+        iidfile = kw.get("iidfile")
+        assert isinstance(iidfile, Path), "build_image must request an iidfile"
+        iidfile.write_text(image_id + "\n")
+        return _FAKE_URI
+
+    monkeypatch.setattr(deploy_module.ecr, "build_and_push", _fake_build_and_push)
+
+    digest_calls: list[tuple[object, ...]] = []
+
+    def _fake_digest(*args: object) -> str | None:
+        digest_calls.append(args)
+        return None
+
+    monkeypatch.setattr(deploy_module.ecr, "get_pushed_image_digest", _fake_digest)
+
+    deploy_module.build_image()
+
+    assert digest_calls == [(repo_uri, image_id)]
+
+
 def test_build_image_prints_digest_uri_for_prod_pinning(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -168,6 +203,7 @@ def test_build_image_warns_when_digest_unavailable(
 # ── ecr.get_pushed_image_digest ───────────────────────────────────────────────
 
 _REPO = "123456789012.dkr.ecr.us-east-1.amazonaws.com/opensre"
+_IMAGE_ID = "sha256:" + "c" * 64
 
 
 def _stub_docker_inspect(monkeypatch: pytest.MonkeyPatch, stdout: str) -> None:
@@ -175,20 +211,25 @@ def _stub_docker_inspect(monkeypatch: pytest.MonkeyPatch, stdout: str) -> None:
         import subprocess as _sp
 
         assert cmd[:3] == ["docker", "image", "inspect"]
+        assert cmd[3] == _IMAGE_ID, (
+            "inspect must target the immutable image ID, never a tag — a tag "
+            "can be retagged by a concurrent build on the same daemon"
+        )
         return _sp.CompletedProcess(cmd, 0, stdout=stdout, stderr="")
 
     monkeypatch.setattr(ecr_module.subprocess, "run", _fake_run)
 
 
-def test_get_pushed_image_digest_reads_local_repo_digests(
+def test_get_pushed_image_digest_inspects_by_image_id(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The digest must come from the local daemon's record of OUR push, so a
-    concurrent push to the same repository cannot substitute another image."""
+    """The digest must come from the daemon's record for OUR built image ID, so
+    neither a concurrent registry push nor a concurrent local retag can
+    substitute another image."""
     digest = "sha256:" + "a" * 64
     _stub_docker_inspect(monkeypatch, f'["{_REPO}@{digest}"]\n')
 
-    assert ecr_module.get_pushed_image_digest(_REPO, "latest") == digest
+    assert ecr_module.get_pushed_image_digest(_REPO, _IMAGE_ID) == digest
 
 
 def test_get_pushed_image_digest_matches_repository(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -196,7 +237,7 @@ def test_get_pushed_image_digest_matches_repository(monkeypatch: pytest.MonkeyPa
     other = "999999999999.dkr.ecr.us-east-1.amazonaws.com/other@sha256:" + "b" * 64
     _stub_docker_inspect(monkeypatch, f'["{other}"]\n')
 
-    assert ecr_module.get_pushed_image_digest(_REPO, "latest") is None
+    assert ecr_module.get_pushed_image_digest(_REPO, _IMAGE_ID) is None
 
 
 def test_get_pushed_image_digest_none_on_inspect_failure(
@@ -207,7 +248,16 @@ def test_get_pushed_image_digest_none_on_inspect_failure(
 
     monkeypatch.setattr(ecr_module.subprocess, "run", _boom)
 
-    assert ecr_module.get_pushed_image_digest(_REPO, "latest") is None
+    assert ecr_module.get_pushed_image_digest(_REPO, _IMAGE_ID) is None
+
+
+def test_get_pushed_image_digest_none_for_empty_ref(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _fail_if_called(*_a: object, **_kw: object) -> object:
+        raise AssertionError("docker must not be invoked without an image ref")
+
+    monkeypatch.setattr(ecr_module.subprocess, "run", _fail_if_called)
+
+    assert ecr_module.get_pushed_image_digest(_REPO, "") is None
 
 
 # ── _resolve_image_sha_tag ─────────────────────────────────────────────────────
@@ -338,6 +388,25 @@ def test_build_and_push_single_tag_without_extra_tags(
     assert build.count("-t") == 1
     pushes = [c[2] for c in calls if c[:2] == ["docker", "push"]]
     assert pushes == [f"{repo}:latest"]
+
+
+def test_build_and_push_forwards_iidfile(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    calls = _capture_docker(monkeypatch)
+    dockerfile = tmp_path / "Dockerfile"
+    dockerfile.write_text("FROM scratch\n")
+    iidfile = tmp_path / "image-id"
+
+    ecr_module.build_and_push(
+        dockerfile_path=dockerfile,
+        repository_uri="123456789012.dkr.ecr.us-east-1.amazonaws.com/opensre",
+        tag="latest",
+        context_dir=tmp_path,
+        iidfile=iidfile,
+    )
+
+    build = next(c for c in calls if c[:2] == ["docker", "build"])
+    assert "--iidfile" in build
+    assert build[build.index("--iidfile") + 1] == str(iidfile)
 
 
 def test_build_and_push_dedupes_when_sha_equals_tag(

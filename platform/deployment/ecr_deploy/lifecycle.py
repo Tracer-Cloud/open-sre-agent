@@ -6,7 +6,9 @@ from __future__ import annotations
 import argparse
 import os
 import subprocess
+import tempfile
 import time
+from pathlib import Path
 
 from botocore.exceptions import ClientError
 
@@ -195,18 +197,22 @@ def build_image() -> str:
         print(f"  - Build tag: {sha_tag}")
 
     print("Building and pushing Docker image...")
-    image_uri = ecr.build_and_push(
-        dockerfile_path=DOCKERFILE,
-        repository_uri=repo["uri"],
-        tag=ECR_DEFAULT_IMAGE_TAG,
-        extra_tags=[sha_tag] if sha_tag else None,
-        platform=ECR_DOCKER_PLATFORM,
-        context_dir=REPO_ROOT,
-        region=REGION,
-    )
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        iidfile = Path(tmp_dir) / "image-id"
+        image_uri = ecr.build_and_push(
+            dockerfile_path=DOCKERFILE,
+            repository_uri=repo["uri"],
+            tag=ECR_DEFAULT_IMAGE_TAG,
+            extra_tags=[sha_tag] if sha_tag else None,
+            platform=ECR_DOCKER_PLATFORM,
+            context_dir=REPO_ROOT,
+            region=REGION,
+            iidfile=iidfile,
+        )
+        image_id = iidfile.read_text().strip() if iidfile.exists() else ""
     save_image_uri(image_uri)
     sha_uri = f"{repo['uri']}:{sha_tag}" if sha_tag else None
-    digest = ecr.get_pushed_image_digest(repo["uri"], ECR_DEFAULT_IMAGE_TAG)
+    digest = ecr.get_pushed_image_digest(repo["uri"], image_id)
     digest_uri = f"{repo['uri']}@{digest}" if digest else None
 
     elapsed = time.time() - start_time

@@ -83,14 +83,16 @@ def build_and_push(
     region: str = DEFAULT_REGION,
     context_dir: Path | None = None,
     extra_tags: list[str] | None = None,
+    iidfile: Path | None = None,
 ) -> str:
     """Build a Docker image once and push it under one or more tags.
 
     The image is built a single time and tagged with ``tag`` plus any
     ``extra_tags`` (e.g. a git-sha tag alongside the moving ``latest``).
     Extra tags are pushed first and the primary ``tag`` last, so the moving
-    tag only updates once every extra tag is published. Returns the full
-    image URI for the primary ``tag``.
+    tag only updates once every extra tag is published. When ``iidfile`` is
+    given, docker writes the built image's immutable ID there. Returns the
+    full image URI for the primary ``tag``.
     """
     docker_login(region)
 
@@ -112,6 +114,8 @@ def build_and_push(
     uris = [f"{repository_uri}:{t}" for t in tags]
 
     cmd = ["docker", "build", "--platform", platform]
+    if iidfile is not None:
+        cmd.extend(["--iidfile", str(iidfile)])
     for uri in uris:
         cmd.extend(["-t", uri])
     cmd.extend(["-f", dockerfile])
@@ -129,22 +133,25 @@ def build_and_push(
     return uris[0]
 
 
-def get_pushed_image_digest(repository_uri: str, tag: str) -> str | None:
+def get_pushed_image_digest(repository_uri: str, image_ref: str) -> str | None:
     """Return the sha256 digest of the image this process pushed, or None.
 
-    Reads ``RepoDigests`` for ``repository_uri:tag`` from the local Docker
-    daemon, which records the manifest digest at push time. The result is tied
-    to the locally built image, so a concurrent push to the same repository
-    (which can move any tag, including ``latest``) cannot substitute another
-    image's digest.
+    Reads ``RepoDigests`` for ``image_ref`` from the local Docker daemon,
+    which records the manifest digest at push time. ``image_ref`` should be
+    the immutable image ID captured at build time (``--iidfile``): a tag
+    reference would race with concurrent builds, which can retag it on the
+    shared daemon or move it in the registry, substituting another image's
+    digest. Only entries for ``repository_uri`` are considered.
     """
+    if not image_ref:
+        return None
     try:
         result = subprocess.run(
             [
                 "docker",
                 "image",
                 "inspect",
-                f"{repository_uri}:{tag}",
+                image_ref,
                 "--format",
                 "{{json .RepoDigests}}",
             ],
