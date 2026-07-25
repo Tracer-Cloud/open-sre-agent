@@ -61,8 +61,15 @@ SSM_TERMINAL_STATUSES = ("Success", "Failed", "Cancelled", "TimedOut", "Undelive
 
 # ─── ECR / Docker ─────────────────────────────────────────────────────────────
 ECR_DEFAULT_IMAGE_TAG = "latest"
+# Overrides the derived immutable (git-sha) tag; CI passes an explicit tag here.
+ECR_IMAGE_TAG_ENV = "OPENSRE_IMAGE_TAG"
 ECR_DOCKER_PLATFORM = "linux/amd64"
 ECR_SCAN_ON_PUSH = True
+# MUTABLE is required: `:latest` is re-pushed every build, which an IMMUTABLE
+# repo policy would reject. Consequence: any tag, including the git-sha tags,
+# can be overwritten by a later push of the same tag (`<sha>-dirty` in
+# particular may carry different content across rebuilds of one commit). The
+# hard guarantee is pinning the image digest (repo@sha256:…), not a tag.
 ECR_IMAGE_TAG_MUTABILITY = "MUTABLE"
 
 # ─── EC2 instance provisioning (via SSM) ──────────────────────────────────────

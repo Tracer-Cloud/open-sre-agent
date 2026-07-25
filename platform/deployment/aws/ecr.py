@@ -81,8 +81,15 @@ def build_and_push(
     build_args: dict[str, str] | None = None,
     region: str = DEFAULT_REGION,
     context_dir: Path | None = None,
+    extra_tags: list[str] | None = None,
 ) -> str:
-    """Build a Docker image and push it to ECR. Returns the full image URI."""
+    """Build a Docker image once and push it under one or more tags.
+
+    The image is built a single time and tagged with ``tag`` plus any
+    ``extra_tags`` (e.g. an immutable git-sha tag alongside the moving
+    ``latest``); every tag is pushed. Returns the full image URI for the
+    primary ``tag``.
+    """
     docker_login(region)
 
     if dockerfile_path.is_file():
@@ -94,18 +101,18 @@ def build_and_push(
         if context_dir is None:
             context_dir = dockerfile_path
 
-    full_uri = f"{repository_uri}:{tag}"
+    # De-dupe while preserving order (primary tag first) so a sha tag that
+    # equals `tag` never double-pushes.
+    tags: list[str] = []
+    for candidate in [tag, *(extra_tags or [])]:
+        if candidate and candidate not in tags:
+            tags.append(candidate)
+    uris = [f"{repository_uri}:{t}" for t in tags]
 
-    cmd = [
-        "docker",
-        "build",
-        "--platform",
-        platform,
-        "-t",
-        full_uri,
-        "-f",
-        dockerfile,
-    ]
+    cmd = ["docker", "build", "--platform", platform]
+    for uri in uris:
+        cmd.extend(["-t", uri])
+    cmd.extend(["-f", dockerfile])
 
     if build_args:
         for key, value in build_args.items():
@@ -114,9 +121,10 @@ def build_and_push(
     cmd.append(str(context_dir))
 
     subprocess.run(cmd, check=True)
-    subprocess.run(["docker", "push", full_uri], check=True)
+    for uri in uris:
+        subprocess.run(["docker", "push", uri], check=True)
 
-    return full_uri
+    return uris[0]
 
 
 def delete_repository(name: str, region: str = DEFAULT_REGION) -> None:
