@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from core.domain.correlation.scoring import (
     rank_upstream_candidates,
+    score_periodic_spikes,
     score_time_window_correlation,
     score_topology_adjacency,
 )
@@ -31,6 +32,50 @@ def test_score_topology_adjacency_requires_target_relationship() -> None:
     )
 
     assert score.adjacency_score == 1.0
+
+
+def test_score_periodic_spikes_counts_distinct_threshold_crossings() -> None:
+    score = score_periodic_spikes(
+        signal_name="upstream_cpu",
+        values=(20.0, 82.0, 30.0, 85.0, 28.0, 88.0),
+        spike_threshold=80.0,
+    )
+
+    assert score.repeated_spikes == 3
+    assert score.score == 1.0
+
+
+def test_score_periodic_spikes_treats_single_sustained_spike_as_one_event() -> None:
+    score = score_periodic_spikes(
+        signal_name="upstream_cpu",
+        values=(20.0, 90.0, 90.0, 90.0, 20.0),
+        spike_threshold=80.0,
+    )
+
+    assert score.repeated_spikes == 1
+    assert score.score == 0.0
+
+
+def test_score_periodic_spikes_does_not_count_window_start_elevation() -> None:
+    score = score_periodic_spikes(
+        signal_name="upstream_cpu",
+        values=(90.0, 20.0, 90.0),
+        spike_threshold=80.0,
+    )
+
+    assert score.repeated_spikes == 1
+    assert score.score == 0.0
+
+
+def test_score_periodic_spikes_detects_recurrence_that_starts_elevated() -> None:
+    score = score_periodic_spikes(
+        signal_name="upstream_cpu",
+        values=(90.0, 20.0, 90.0, 20.0, 90.0),
+        spike_threshold=80.0,
+    )
+
+    assert score.repeated_spikes == 2
+    assert score.score == 1.0
 
 
 def test_rank_upstream_candidates_orders_by_confidence_then_name() -> None:
