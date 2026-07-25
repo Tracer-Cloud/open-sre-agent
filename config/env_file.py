@@ -32,7 +32,8 @@ from pathlib import Path
 from config.llm_auth.credentials import delete as delete_provider_auth
 from config.llm_auth.credentials import save_api_key
 from config.llm_auth.provider_catalog import API_KEY_PROVIDER_ENVS
-from config.llm_credentials import delete_keyring_secret, save_keyring_secret
+from config.llm_credentials import delete_fallback_secret, delete_keyring_secret
+from config.llm_credentials import save_secret_with_fallback
 from config.local_env import get_project_env_path
 
 PROJECT_ENV_PATH = get_project_env_path()
@@ -53,10 +54,19 @@ _SENSITIVE_TERMINAL_TOKENS: frozenset[str] = frozenset(
         "secret",
         "password",
         "passwd",
+        "pass",
+        "passphrase",
         "key",
         "apikey",
         "credential",
         "credentials",
+        # Bearer/JWT values authenticate a request on their own, same risk
+        # class as a token. Bare "auth" is included for names like
+        # `*_AUTH` that store a credential rather than a method/flag (see
+        # `LLM_AUTH_METHOD`, whose terminal segment is "method", not "auth").
+        "bearer",
+        "jwt",
+        "auth",
     }
 )
 _SENSITIVE_SUBSTRINGS: tuple[str, ...] = (
@@ -122,8 +132,11 @@ def _ensure_no_sensitive_env_lines(lines: list[str]) -> None:
             )
 
 
-def _persist_env_secret(key: str, value: str) -> bool:
-    """Store a secret in the keyring. Returns False when keyring is unavailable."""
+def _persist_env_secret(key: str, value: str) -> str | None:
+    """Store a secret in the keyring, falling back to local storage if it's
+    unavailable (see #1403, #3348). Returns the storage tier used
+    (``"keyring"`` or ``"fallback"``), or ``None`` if both tiers failed.
+    """
     normalized = value.strip()
     provider = next(
         (name for name, env_var in API_KEY_PROVIDER_ENVS.items() if env_var == key),
@@ -134,15 +147,14 @@ def _persist_env_secret(key: str, value: str) -> bool:
             delete_provider_auth(provider)
         else:
             delete_keyring_secret(key)
-        return True
+            delete_fallback_secret(key)
+        return "keyring"
     try:
         if provider:
-            save_api_key(provider, normalized)
-        else:
-            save_keyring_secret(key, normalized)
+            return save_api_key(provider, normalized)
+        return save_secret_with_fallback(key, normalized)
     except RuntimeError:
-        return False
-    return True
+        return None
 
 
 def set_env_value(lines: list[str], key: str, value: str) -> list[str]:
@@ -191,19 +203,25 @@ def write_env_lines(target_path: Path, lines: list[str]) -> None:
             target_path.chmod(0o600)
 
 
-def sync_env_secret(key: str, value: str) -> None:
+def sync_env_secret(key: str, value: str) -> str | None:
     """Persist a sensitive env value in the system keyring, not in ``.env``.
 
-    Raises ``RuntimeError`` when the keyring backend cannot store the secret so
-    callers never treat a dropped credential as a successful write.
+    Falls back to local encrypted-at-rest storage under ``OPENSRE_HOME_DIR``
+    when the OS keyring is unavailable (locked/missing backend — #1403,
+    #3348) instead of failing the caller outright. Returns the storage tier
+    used (``"keyring"`` or ``"fallback"``); raises ``RuntimeError`` only when
+    neither tier can store the secret, so a dropped credential is never
+    mistaken for a successful write.
     """
     if not is_sensitive_env_key(key):
         raise ValueError(f"{key!r} is not classified as sensitive; use sync_env_values instead.")
-    if not _persist_env_secret(key, value):
+    tier = _persist_env_secret(key, value)
+    if tier is None:
         raise RuntimeError(
-            f"Failed to persist {key!r} to the system keyring; "
+            f"Failed to persist {key!r} to the system keyring or the local fallback store; "
             "secure local credential storage is unavailable."
         )
+    return tier
 
 
 def sync_env_values(

@@ -105,11 +105,7 @@ def configure_api_key_provider(
             raise AuthSetupError(validation.detail)
 
     try:
-        save_api_key(
-            provider.value,
-            normalized_key,
-            detail=f"{provider.api_key_env} stored in the system keychain.",
-        )
+        tier = save_api_key(provider.value, normalized_key)
     except (RuntimeError, ValueError) as exc:
         raise AuthSetupError(str(exc)) from exc
 
@@ -118,7 +114,11 @@ def configure_api_key_provider(
         if set_provider
         else None
     )
-    detail = f"{provider.api_key_env} stored in the system keychain."
+    detail = (
+        f"{provider.api_key_env} stored in the system keychain."
+        if tier == "keyring"
+        else f"{provider.api_key_env} stored in the local fallback store (system keychain unavailable)."
+    )
     _save_auth_record(provider=provider, profile=profile, source="keyring", detail=detail)
     return AuthSetupResult(
         provider=provider.value,

@@ -20,7 +20,7 @@ from config.llm_auth.auth_method import (
 )
 from config.llm_auth.credentials import has_llm_api_key, save_api_key
 from config.llm_auth.provider_catalog import API_KEY_PROVIDER_ENVS
-from config.llm_credentials import get_keyring_setup_instructions, save_keyring_secret
+from config.llm_credentials import get_keyring_setup_instructions
 from config.version import get_opensre_version
 from integrations.store import get_integration
 from platform.terminal.theme import (
@@ -403,18 +403,23 @@ def _persist_llm_api_key(env_var: str, value: str) -> bool:
             ),
             "",
         )
-        if provider:
-            save_api_key(provider, value)
-        else:
-            persist_api_key_secret(env_var, value, save_secret=save_keyring_secret)
+        tier = save_api_key(provider, value) if provider else persist_api_key_secret(env_var, value)
     except (AuthSetupError, RuntimeError, ValueError) as exc:
         _console.print(f"[{ERROR}]  {GLYPH_ERROR}  {exc}[/]")
         _console.print(
-            f"[{WARNING}]  {GLYPH_WARNING}  OpenSRE could not save your API key to the local system keychain.[/]"
+            f"[{WARNING}]  {GLYPH_WARNING}  OpenSRE could not save your API key to the local "
+            "system keychain or a local fallback store.[/]"
         )
         for line in get_keyring_setup_instructions(env_var):
             _console.print(f"[{SECONDARY}]    {line}[/]")
         return False
+    if tier == "fallback":
+        _console.print(
+            f"[{WARNING}]  {GLYPH_WARNING}  System keychain unavailable — {env_var} was saved to "
+            "a local fallback store instead (less protected than the OS keychain).[/]"
+        )
+        for line in get_keyring_setup_instructions(env_var):
+            _console.print(f"[{SECONDARY}]    {line}[/]")
     return True
 
 

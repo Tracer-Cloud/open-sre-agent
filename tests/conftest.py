@@ -72,11 +72,24 @@ def _restore_os_environ():
 
 
 @pytest.fixture(autouse=True)
-def _disable_system_keyring(request, monkeypatch) -> None:
-    """Keep tests isolated from any real developer keychain entries."""
+def _disable_system_keyring(request, monkeypatch) -> Iterator[None]:
+    """Keep tests isolated from any real developer keychain entries.
+
+    Also resets the per-process keyring session cache (added for #3295/#1403):
+    a test that intentionally provokes a backend failure sets
+    ``_KeyringSession.backend_unavailable`` sticky for the rest of the
+    process, which would otherwise make unrelated later tests in the same
+    worker silently skip a working ``MemoryKeyring()`` backend.
+    """
+    from config.llm_keyring import reset_keyring_session
+
+    reset_keyring_session()
     if request.node.get_closest_marker("live_llm") is not None:
+        yield
         return
     monkeypatch.setenv("OPENSRE_DISABLE_KEYRING", "1")
+    yield
+    reset_keyring_session()
 
 
 @pytest.fixture(autouse=True)
@@ -103,6 +116,7 @@ def _isolate_opensre_home_files(request, monkeypatch, tmp_path) -> None:
         return
     monkeypatch.setenv("OPENSRE_WIZARD_STORE_PATH", str(tmp_path / "opensre.json"))
     monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
+    monkeypatch.setenv("OPENSRE_FALLBACK_SECRETS_PATH", str(tmp_path / "secrets.local.json"))
 
 
 def pytest_configure(config):

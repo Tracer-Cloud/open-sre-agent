@@ -48,6 +48,12 @@ def _redirect_wizard_store(tmp_path, monkeypatch) -> None:
         "DATABASE_CONNECTION_STRING",
         # Inline kubeconfig YAML embeds credentials; path-only KUBECONFIG does not.
         "KUBECONFIG_CONTENT",
+        # #4212: real-world shapes the terminal-token set previously missed.
+        "GH_APP_PRIVATE_KEY_PASSPHRASE",
+        "DB_PASS",
+        "SLACK_BEARER",
+        "AUTH0_CLIENT_JWT",
+        "SERVICE_AUTH",
     ],
 )
 def test_is_sensitive_env_key_marks_secrets(key: str) -> None:
@@ -73,6 +79,11 @@ def test_is_sensitive_env_key_marks_secrets(key: str) -> None:
         # Path to a kubeconfig file is not the credential itself.
         "KUBECONFIG",
         "HELM_KUBECONFIG",
+        # Terminal token is "method", not "auth" — a flag, not a credential.
+        "LLM_AUTH_METHOD",
+        # "passthrough"/"password_less" collapse to a terminal token that is
+        # not exactly "pass"/"password".
+        "PROXY_PASSTHROUGH",
     ],
 )
 def test_is_sensitive_env_key_leaves_non_secrets(key: str) -> None:
@@ -556,16 +567,38 @@ def test_set_env_value_rejects_sensitive_keys_with_value_error() -> None:
         set_env_value(["FOO=bar\n"], "GITLAB_ACCESS_TOKEN", "secret")
 
 
-def test_sync_env_secret_raises_when_keyring_unavailable(monkeypatch) -> None:
+def test_sync_env_secret_raises_when_keyring_and_fallback_both_unavailable(monkeypatch) -> None:
     monkeypatch.setattr(
-        "config.env_file.save_keyring_secret",
+        "config.env_file.save_secret_with_fallback",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(
-            RuntimeError("Secure local credential storage is unavailable on this machine.")
+            RuntimeError(
+                "Secure local credential storage is unavailable on this machine, "
+                "and the local fallback store could not be written either."
+            )
         ),
     )
 
-    with pytest.raises(RuntimeError, match="Failed to persist.*system keyring"):
+    with pytest.raises(RuntimeError, match="Failed to persist.*keyring or the local fallback"):
         sync_env_secret("GITLAB_ACCESS_TOKEN", "gl-secret-token")
+
+
+def test_sync_env_secret_falls_back_to_local_store_when_keyring_unavailable(monkeypatch) -> None:
+    """#1403, #3348: a locked/missing keyring backend must not abort onboarding
+    — the secret should land in the local fallback store and still resolve.
+
+    ``OPENSRE_DISABLE_KEYRING`` stands in for "backend unavailable" here: it
+    drives ``save_keyring_secret``/``resolve_keyring_secret`` through the same
+    RuntimeError/empty-read paths a locked Keychain or missing D-Bus session
+    would, without depending on the real OS backend in CI. The fallback file
+    itself is already redirected off the developer's real ``~/.opensre`` by
+    the root conftest's ``_isolate_opensre_home_files`` autouse fixture.
+    """
+    monkeypatch.setenv("OPENSRE_DISABLE_KEYRING", "1")
+
+    tier = sync_env_secret("GITLAB_ACCESS_TOKEN", "gl-secret-token")
+
+    assert tier == "fallback"
+    assert resolve_env_credential("GITLAB_ACCESS_TOKEN") == "gl-secret-token"
 
 
 def test_sync_env_values_routes_secrets_to_keyring(tmp_path, monkeypatch) -> None:

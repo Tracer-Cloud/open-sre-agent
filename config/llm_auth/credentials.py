@@ -345,42 +345,56 @@ def resolve_for_request(provider: str) -> CredentialResolution:
 
         import keyring.errors
 
-        from config.llm_keyring import keyring_is_disabled, read_keychain_secret
+        from config.llm_keyring import (
+            keyring_is_disabled,
+            read_keychain_secret,
+            resolve_fallback_secret,
+        )
 
+        key = ""
+        keychain_unreachable = False
         if not keyring_is_disabled():
             try:
                 key = read_keychain_secret(spec.api_key_env)
-            except keyring.errors.KeyringError as exc:
+            except keyring.errors.KeyringError:
                 # The backend itself couldn't be reached (e.g. no D-Bus/Secret
-                # Service session in this process) — this is not evidence the
-                # credential is missing, so leave any previously-verified
-                # metadata untouched instead of marking it stale.
-                return CredentialResolution(
-                    provider=spec.value,
-                    api_key="",
-                    source="unknown",
-                    detail=(
-                        f"Could not reach the system keychain to check {spec.api_key_env}: "
-                        f"{exc}. Retry once the keychain is reachable."
-                    ),
-                )
-            if key:
-                save_provider_auth_record(
-                    provider=spec.value,
-                    auth_name=spec.value,
-                    kind="api_key",
-                    source="keyring",
-                    detail=f"{spec.api_key_env} stored in the system keychain.",
-                    verified=True,
-                    stale=False,
-                    env_var=spec.api_key_env,
-                )
-                return CredentialResolution(
-                    provider=spec.value,
-                    api_key=key,
-                    source="keyring",
-                    detail=f"{spec.api_key_env} resolved from secure local storage.",
-                )
+                # Service session, or a locked macOS Keychain). Not evidence
+                # the credential is missing — the fallback store (populated by
+                # save_api_key when onboarding hit this same failure, see
+                # #1403/#3348) is checked below before giving up.
+                keychain_unreachable = True
+
+        if not key:
+            key = resolve_fallback_secret(spec.api_key_env)
+
+        if key:
+            save_provider_auth_record(
+                provider=spec.value,
+                auth_name=spec.value,
+                kind="api_key",
+                source="keyring",
+                detail=f"{spec.api_key_env} resolved from secure local storage.",
+                verified=True,
+                stale=False,
+                env_var=spec.api_key_env,
+            )
+            return CredentialResolution(
+                provider=spec.value,
+                api_key=key,
+                source="keyring",
+                detail=f"{spec.api_key_env} resolved from secure local storage.",
+            )
+
+        if keychain_unreachable:
+            return CredentialResolution(
+                provider=spec.value,
+                api_key="",
+                source="unknown",
+                detail=(
+                    f"Could not reach the system keychain to check {spec.api_key_env}. "
+                    "Retry once the keychain is reachable."
+                ),
+            )
 
         detail = (
             f"Missing credential for LLM provider '{spec.value}'. Set {spec.api_key_env} "
@@ -432,24 +446,36 @@ def resolve_api_key_env_for_request(env_var: str) -> str:
     return resolve_env_credential(normalized)
 
 
-def save_api_key(provider: str, value: str, *, detail: str | None = None) -> None:
-    """Store an OpenSRE-managed API key and refresh prompt-safe metadata."""
+def save_api_key(provider: str, value: str, *, detail: str | None = None) -> str:
+    """Store an OpenSRE-managed API key and refresh prompt-safe metadata.
+
+    Falls back to local storage when the OS keyring is unavailable (#1403,
+    #3348) instead of aborting onboarding. Returns the storage tier used
+    (``"keyring"`` or ``"fallback"``) so callers can tell the user when their
+    key is not protected by the OS keychain.
+    """
     spec = require_provider_spec(provider)
     if not spec.uses_open_sre_api_key:
         raise ValueError(f"{spec.value} does not use an OpenSRE-managed API key")
-    from config.llm_keyring import save_keyring_secret
+    from config.llm_keyring import save_secret_with_fallback
 
-    save_keyring_secret(spec.api_key_env, value)
+    tier = save_secret_with_fallback(spec.api_key_env, value)
+    default_detail = (
+        f"{spec.api_key_env} stored in the system keychain."
+        if tier == "keyring"
+        else f"{spec.api_key_env} stored in the local fallback store (system keychain unavailable)."
+    )
     save_provider_auth_record(
         provider=spec.value,
         auth_name=spec.value,
         kind="api_key",
         source="keyring",
-        detail=detail or f"{spec.api_key_env} stored in the system keychain.",
+        detail=detail or default_detail,
         verified=True,
         stale=False,
         env_var=spec.api_key_env,
     )
+    return tier
 
 
 def delete(provider: str) -> None:
