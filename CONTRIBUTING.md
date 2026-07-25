@@ -129,7 +129,9 @@ import pytest
 pytestmark = pytest.mark.synthetic
 ```
 
-The pattern is already in `tests/synthetic/rds_postgres/test_suite.py`.
+The pattern is already in `tests/synthetic/hermes/test_suite.py`. Per-test
+`@pytest.mark.synthetic` decorators work too — see
+`tests/synthetic/rds_postgres/test_suite.py` — when only some tests in the file need an LLM.
 
 Where each target lands:
 
