@@ -141,7 +141,10 @@ def get_pushed_image_digest(repository_uri: str, image_ref: str) -> str | None:
     the immutable image ID captured at build time (``--iidfile``): a tag
     reference would race with concurrent builds, which can retag it on the
     shared daemon or move it in the registry, substituting another image's
-    digest. Only entries for ``repository_uri`` are considered.
+    digest. Only entries for ``repository_uri`` are considered. Image IDs are
+    content-addressed, so concurrent builds share one only when their images
+    are byte-identical — every matching digest then refers to that same
+    content and any of them is a correct pin.
     """
     if not image_ref:
         return None
