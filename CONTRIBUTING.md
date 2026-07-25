@@ -109,14 +109,19 @@ verification) follow [docs/adding-tools-and-integrations.md](docs/adding-tools-a
 - New features should have corresponding tests
 - Aim for >80% code coverage (run `make test-cov` to check)
 
-#### Tests under `tests/synthetic/` need an explicit `pytest.mark.synthetic` marker
+#### Choosing the `pytest.mark.synthetic` marker under `tests/synthetic/`
 
-The synthetic test tree has its own Make target (`make test-synthetic`) and is excluded from `make test-cov`. The two targets use marker filters:
+The marker means **this test needs a live LLM** (`pytest.ini`: "LLM-based synthetic RCA
+scenario tests (non-deterministic)"). It does not mean "this file lives under
+`tests/synthetic/`". Which way you mark decides which job runs your file:
 
-- `make test-cov` runs `pytest --ignore=tests/synthetic -m "not synthetic"`, so the whole `tests/synthetic/` tree is excluded.
-- `make test-synthetic` runs `pytest -m synthetic`, so a file without `pytest.mark.synthetic` is collected but skipped.
+- **Needs a live LLM, or is otherwise non-deterministic** → add the module-level marker.
+  Runs under `make test-synthetic`.
+- **Deterministic (no LLM call)** → leave it unmarked. Runs in the
+  [Synthetic Deterministic Tests](.github/workflows/synthetic-deterministic.yml) job on
+  every PR touching `tests/synthetic/**`.
 
-If you add a new test file under `tests/synthetic/`, declare the marker at module level so the file runs under `make test-synthetic`:
+To mark a file:
 
 ```python
 import pytest
@@ -124,9 +129,21 @@ import pytest
 pytestmark = pytest.mark.synthetic
 ```
 
-Without this marker the new file silently runs in **zero** standard CI configurations. The pattern is already in `tests/synthetic/rds_postgres/test_suite.py`; new files in the same tree should follow it.
+The pattern is already in `tests/synthetic/rds_postgres/test_suite.py`.
 
-See [#1671](https://github.com/Tracer-Cloud/opensre/issues/1671) for the meta-issue tracking this discoverability gap.
+Where each target lands:
+
+- `make test-cov` runs `pytest --ignore=tests/synthetic -m "not synthetic"` — the tree is
+  excluded either way, so `tests/synthetic/` never contributes to coverage.
+- `make test-synthetic` runs `pytest -m synthetic`, so an **unmarked** file is collected
+  but skipped.
+- `synthetic-deterministic.yml` runs
+  `pytest tests/synthetic -m "not synthetic and not live_llm and not e2e and not axis2"`,
+  so **unmarked deterministic files are exactly what it runs**.
+
+Do not blanket-apply the marker to the whole tree — for example via a `tests/synthetic/conftest.py`
+that auto-marks every collected item. That would exclude every deterministic test from the
+only job that runs it.
 
 ### 4. Run Local Checks (Required Before PR)
 
