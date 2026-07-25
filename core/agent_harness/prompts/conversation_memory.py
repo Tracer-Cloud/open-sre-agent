@@ -148,6 +148,12 @@ def format_prior_action_facts(
             continue
         if role != "assistant" or not isinstance(content, str):
             continue
+        # A compacted session summary quotes old tool output wholesale; letting
+        # it in as one giant "fact" can spend the whole budget and starve
+        # newer live results. The summary reaches the model via the history
+        # block instead.
+        if content.startswith(SESSION_SUMMARY_PREFIX):
+            continue
         text = content.strip()
         if not text:
             continue

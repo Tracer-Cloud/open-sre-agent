@@ -46,14 +46,15 @@ def compact_messages_to_window(
     merged, never stacked; the merged text keeps its head and truncates its
     tail, so the earliest facts are the last to go.
     """
+    if max_messages < 1:
+        raise ValueError("max_messages must be >= 1")
     entries = list(messages)
     if len(entries) <= max_messages:
         return entries
 
-    keep_count = max(max_messages - 2, 2)
-    if keep_count % 2:
-        keep_count -= 1
-    kept = entries[-keep_count:]
+    keep_count = max_messages - 1
+    keep_count -= keep_count % 2
+    kept = entries[-keep_count:] if keep_count else []
     overflow = entries[: len(entries) - keep_count]
 
     prior = ""

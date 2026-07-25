@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from core.state.transcript_window import (
     SESSION_SUMMARY_PREFIX,
     compact_messages_to_window,
@@ -83,6 +85,25 @@ def test_summary_truncates_tail_not_head() -> None:
     summary = messages[0][1]
     assert len(summary) <= len(SESSION_SUMMARY_PREFIX) + 2_000
     assert "first-fact-alpha" in summary
+
+
+def test_tiny_caps_never_exceed_the_window() -> None:
+    messages = _turns(5)
+
+    three = compact_messages_to_window(messages, max_messages=3)
+    assert len(three) <= 3
+    assert three[0][1].startswith(SESSION_SUMMARY_PREFIX)
+    assert three[1:] == messages[-2:]
+
+    one = compact_messages_to_window(messages, max_messages=1)
+    assert len(one) == 1
+    assert one[0][1].startswith(SESSION_SUMMARY_PREFIX)
+    assert "question 1" in one[0][1]
+
+
+def test_rejects_nonpositive_window() -> None:
+    with pytest.raises(ValueError, match="max_messages"):
+        compact_messages_to_window(_turns(2), max_messages=0)
 
 
 def test_format_messages_for_summary_truncates_long_lines() -> None:
