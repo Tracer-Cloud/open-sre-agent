@@ -2,7 +2,20 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from integrations.grafana.client import get_grafana_client
+import pytest
+
+from integrations.grafana.client import (
+    clear_grafana_client_cache,
+    get_grafana_client,
+    get_grafana_client_from_credentials,
+)
+
+
+@pytest.fixture(autouse=True)
+def _clear_grafana_client_cache():
+    clear_grafana_client_cache()
+    yield
+    clear_grafana_client_cache()
 
 
 def test_get_grafana_client_reads_verify_ssl_and_ca_bundle_from_env(monkeypatch) -> None:
@@ -41,3 +54,93 @@ def test_get_grafana_client_defaults_verify_ssl_true_when_unset(monkeypatch) -> 
         verify_ssl=True,
         ca_bundle="",
     )
+
+
+def _patched_discovery():
+    return patch(
+        "integrations.grafana.client.GrafanaClient.discover_datasource_uids",
+        return_value={},
+    )
+
+
+def test_get_grafana_client_from_credentials_rebuilds_on_token_rotation() -> None:
+    """#4192: rotating a token must not keep returning the client built from
+    the previous one — the cache key ignored api_key entirely."""
+    with _patched_discovery():
+        first = get_grafana_client_from_credentials(
+            endpoint="https://grafana.example.com",
+            api_key="token-one",
+            account_id="user_integration",
+        )
+        second = get_grafana_client_from_credentials(
+            endpoint="https://grafana.example.com",
+            api_key="token-two",
+            account_id="user_integration",
+        )
+
+    assert first is not second
+    assert second.read_token == "token-two"
+
+
+def test_get_grafana_client_from_credentials_rebuilds_on_tls_change() -> None:
+    """Basic auth and TLS settings must also invalidate the cached client."""
+    with _patched_discovery():
+        first = get_grafana_client_from_credentials(
+            endpoint="https://grafana.example.com",
+            api_key="token",
+            account_id="user_integration",
+            verify_ssl=True,
+        )
+        second = get_grafana_client_from_credentials(
+            endpoint="https://grafana.example.com",
+            api_key="token",
+            account_id="user_integration",
+            verify_ssl=False,
+            ca_bundle="/etc/ssl/internal-ca.pem",
+        )
+
+    assert first is not second
+    assert second.ssl_verify != first.ssl_verify
+
+
+def test_get_grafana_client_from_credentials_reuses_client_for_same_config() -> None:
+    """Identical normalized configuration should still hit the cache."""
+    with _patched_discovery():
+        first = get_grafana_client_from_credentials(
+            endpoint="https://grafana.example.com",
+            api_key="token-one",
+            account_id="user_integration",
+        )
+        second = get_grafana_client_from_credentials(
+            endpoint="https://grafana.example.com",
+            api_key="token-one",
+            account_id="user_integration",
+        )
+
+    assert first is second
+
+
+def test_get_grafana_client_from_credentials_evicts_stale_cache_entry() -> None:
+    """Rotating a token should not leave the old client cached forever."""
+    with _patched_discovery():
+        get_grafana_client_from_credentials(
+            endpoint="https://grafana.example.com",
+            api_key="token-one",
+            account_id="user_integration",
+        )
+        get_grafana_client_from_credentials(
+            endpoint="https://grafana.example.com",
+            api_key="token-two",
+            account_id="user_integration",
+        )
+
+    from integrations.grafana.client import _grafana_client_cache
+
+    matching = [
+        client
+        for client in _grafana_client_cache.values()
+        if client.instance_url == "https://grafana.example.com"
+        and client.account_id == "user_integration"
+    ]
+    assert len(matching) == 1
+    assert matching[0].read_token == "token-two"
