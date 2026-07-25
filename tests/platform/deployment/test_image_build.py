@@ -79,7 +79,7 @@ def test_build_image_saves_uri_and_returns_it(
         lambda *_a, **_kw: _FAKE_URI,
     )
     monkeypatch.setattr(deploy_module, "_resolve_image_sha_tag", lambda: "abc123def456")
-    monkeypatch.setattr(deploy_module.ecr, "get_image_digest", lambda *_a, **_kw: None)
+    monkeypatch.setattr(deploy_module.ecr, "get_pushed_image_digest", lambda *_a, **_kw: None)
 
     result = deploy_module.build_image()
 
@@ -109,7 +109,7 @@ def test_build_image_passes_sha_as_extra_tag(
         return _FAKE_URI
 
     monkeypatch.setattr(deploy_module.ecr, "build_and_push", _fake_build_and_push)
-    monkeypatch.setattr(deploy_module.ecr, "get_image_digest", lambda *_a, **_kw: None)
+    monkeypatch.setattr(deploy_module.ecr, "get_pushed_image_digest", lambda *_a, **_kw: None)
 
     deploy_module.build_image()
 
@@ -131,7 +131,7 @@ def test_build_image_prints_digest_uri_for_prod_pinning(
     monkeypatch.setattr(deploy_module, "_resolve_image_sha_tag", lambda: "abc123def456")
     monkeypatch.setattr(deploy_module.ecr, "build_and_push", lambda *_a, **_kw: _FAKE_URI)
     monkeypatch.setattr(
-        deploy_module.ecr, "get_image_digest", lambda *_a, **_kw: "sha256:" + "f" * 64
+        deploy_module.ecr, "get_pushed_image_digest", lambda *_a, **_kw: "sha256:" + "f" * 64
     )
 
     deploy_module.build_image()
@@ -155,7 +155,7 @@ def test_build_image_warns_when_digest_unavailable(
     )
     monkeypatch.setattr(deploy_module, "_resolve_image_sha_tag", lambda: "abc123def456")
     monkeypatch.setattr(deploy_module.ecr, "build_and_push", lambda *_a, **_kw: _FAKE_URI)
-    monkeypatch.setattr(deploy_module.ecr, "get_image_digest", lambda *_a, **_kw: None)
+    monkeypatch.setattr(deploy_module.ecr, "get_pushed_image_digest", lambda *_a, **_kw: None)
 
     deploy_module.build_image()
 
@@ -165,28 +165,49 @@ def test_build_image_warns_when_digest_unavailable(
     assert "pin the sha URI" not in out
 
 
-# ── ecr.get_image_digest ──────────────────────────────────────────────────────
+# ── ecr.get_pushed_image_digest ───────────────────────────────────────────────
+
+_REPO = "123456789012.dkr.ecr.us-east-1.amazonaws.com/opensre"
 
 
-def test_get_image_digest_returns_digest(monkeypatch: pytest.MonkeyPatch) -> None:
-    class _FakeEcrClient:
-        def describe_images(self, **kwargs: object) -> dict[str, object]:
-            assert kwargs["repositoryName"] == "opensre"
-            assert kwargs["imageIds"] == [{"imageTag": "abc123"}]
-            return {"imageDetails": [{"imageDigest": "sha256:" + "a" * 64}]}
+def _stub_docker_inspect(monkeypatch: pytest.MonkeyPatch, stdout: str) -> None:
+    def _fake_run(cmd: list[str], **_kw: object):
+        import subprocess as _sp
 
-    monkeypatch.setattr(ecr_module, "get_boto3_client", lambda *_a, **_kw: _FakeEcrClient())
+        assert cmd[:3] == ["docker", "image", "inspect"]
+        return _sp.CompletedProcess(cmd, 0, stdout=stdout, stderr="")
 
-    assert ecr_module.get_image_digest("opensre", "abc123") == "sha256:" + "a" * 64
+    monkeypatch.setattr(ecr_module.subprocess, "run", _fake_run)
 
 
-def test_get_image_digest_none_on_lookup_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_get_pushed_image_digest_reads_local_repo_digests(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The digest must come from the local daemon's record of OUR push, so a
+    concurrent push to the same repository cannot substitute another image."""
+    digest = "sha256:" + "a" * 64
+    _stub_docker_inspect(monkeypatch, f'["{_REPO}@{digest}"]\n')
+
+    assert ecr_module.get_pushed_image_digest(_REPO, "latest") == digest
+
+
+def test_get_pushed_image_digest_matches_repository(monkeypatch: pytest.MonkeyPatch) -> None:
+    """RepoDigests entries for other repositories must not be returned."""
+    other = "999999999999.dkr.ecr.us-east-1.amazonaws.com/other@sha256:" + "b" * 64
+    _stub_docker_inspect(monkeypatch, f'["{other}"]\n')
+
+    assert ecr_module.get_pushed_image_digest(_REPO, "latest") is None
+
+
+def test_get_pushed_image_digest_none_on_inspect_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     def _boom(*_a: object, **_kw: object) -> object:
-        raise RuntimeError("no credentials")
+        raise FileNotFoundError("docker not found")
 
-    monkeypatch.setattr(ecr_module, "get_boto3_client", _boom)
+    monkeypatch.setattr(ecr_module.subprocess, "run", _boom)
 
-    assert ecr_module.get_image_digest("opensre", "abc123") is None
+    assert ecr_module.get_pushed_image_digest(_REPO, "latest") is None
 
 
 # ── _resolve_image_sha_tag ─────────────────────────────────────────────────────

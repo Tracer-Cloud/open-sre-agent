@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -128,15 +129,35 @@ def build_and_push(
     return uris[0]
 
 
-def get_image_digest(repository_name: str, tag: str, region: str = DEFAULT_REGION) -> str | None:
-    """Return the sha256 image digest for ``tag``, or None if the lookup fails."""
+def get_pushed_image_digest(repository_uri: str, tag: str) -> str | None:
+    """Return the sha256 digest of the image this process pushed, or None.
+
+    Reads ``RepoDigests`` for ``repository_uri:tag`` from the local Docker
+    daemon, which records the manifest digest at push time. The result is tied
+    to the locally built image, so a concurrent push to the same repository
+    (which can move any tag, including ``latest``) cannot substitute another
+    image's digest.
+    """
     try:
-        ecr_client = get_boto3_client("ecr", region)
-        details = ecr_client.describe_images(
-            repositoryName=repository_name,
-            imageIds=[{"imageTag": tag}],
-        )["imageDetails"]
-        return str(details[0]["imageDigest"]) if details else None
+        result = subprocess.run(
+            [
+                "docker",
+                "image",
+                "inspect",
+                f"{repository_uri}:{tag}",
+                "--format",
+                "{{json .RepoDigests}}",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        digests = json.loads(result.stdout.strip())
+        prefix = f"{repository_uri}@"
+        for entry in digests:
+            if isinstance(entry, str) and entry.startswith(prefix):
+                return entry.removeprefix(prefix)
+        return None
     except Exception:  # noqa: BLE001 — digest is advisory; the push already succeeded
         return None
 

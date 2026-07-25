@@ -206,7 +206,7 @@ def build_image() -> str:
     )
     save_image_uri(image_uri)
     sha_uri = f"{repo['uri']}:{sha_tag}" if sha_tag else None
-    digest = ecr.get_image_digest(stack.ecr_repo_name, ECR_DEFAULT_IMAGE_TAG, REGION)
+    digest = ecr.get_pushed_image_digest(repo["uri"], ECR_DEFAULT_IMAGE_TAG)
     digest_uri = f"{repo['uri']}@{digest}" if digest else None
 
     elapsed = time.time() - start_time
@@ -221,8 +221,12 @@ def build_image() -> str:
         print(f"  digest URI: {digest_uri}")
         print("  → pin the digest URI in Terraform image_uri for env=prod silos.")
     else:
+        lookup_tag = sha_tag or ECR_DEFAULT_IMAGE_TAG
         print("  digest lookup failed — resolve it before pinning prod:")
-        print(f"    aws ecr describe-images --repository-name {stack.ecr_repo_name}")
+        print(
+            f"    aws ecr describe-images --repository-name {stack.ecr_repo_name}"
+            f" --image-ids imageTag={lookup_tag}"
+        )
     print("=" * 60)
     print()
     return image_uri
