@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field, replace
 from typing import Any
@@ -428,11 +428,9 @@ def public_tool_input(value: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def tool_source(tools: Sequence[RuntimeTool], tool_name: str) -> str:
-    for tool in tools:
-        if tool.name == tool_name:
-            return str(getattr(tool, "source", "unknown"))
-    return "unknown"
+def tool_source(tools: Mapping[str, RuntimeTool], tool_name: str) -> str:
+    tool = tools.get(tool_name)
+    return str(getattr(tool, "source", "unknown")) if tool else "unknown"
 
 
 def summarise(output: Any) -> str:

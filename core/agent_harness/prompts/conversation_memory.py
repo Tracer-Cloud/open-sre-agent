@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import re
 
-MAX_CONVERSATION_TURNS = 12
-MAX_CONVERSATION_MESSAGES = MAX_CONVERSATION_TURNS * 2
+from core.state import MAX_CONVERSATION_TURNS
+from core.state.transcript_window import SESSION_SUMMARY_PREFIX
 
 NO_HISTORY_PLACEHOLDER = "(no prior messages in this CLI thread)"
 _ACTION_FACT_MARKERS = (
@@ -88,6 +88,10 @@ def _latest_want_me_to_offer(
             continue
         if role != "assistant" or not isinstance(content, str):
             continue
+        # A compacted session summary can quote an old offer; only live
+        # assistant messages carry an actionable "Want me to:".
+        if content.startswith(SESSION_SUMMARY_PREFIX):
+            continue
         match = _WANT_ME_TO_RE.search(content)
         if not match:
             continue
@@ -143,6 +147,12 @@ def format_prior_action_facts(
         except (TypeError, ValueError):
             continue
         if role != "assistant" or not isinstance(content, str):
+            continue
+        # A compacted session summary quotes old tool output wholesale; letting
+        # it in as one giant "fact" can spend the whole budget and starve
+        # newer live results. The summary reaches the model via the history
+        # block instead.
+        if content.startswith(SESSION_SUMMARY_PREFIX):
             continue
         text = content.strip()
         if not text:

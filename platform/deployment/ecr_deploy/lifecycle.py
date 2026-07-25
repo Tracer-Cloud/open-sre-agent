@@ -5,7 +5,10 @@ from __future__ import annotations
 
 import argparse
 import os
+import subprocess
+import tempfile
 import time
+from pathlib import Path
 
 from botocore.exceptions import ClientError
 
@@ -15,6 +18,7 @@ from platform.deployment.aws.client import DEFAULT_REGION, assert_deploy_account
 from platform.deployment.aws.config import (
     ECR_DEFAULT_IMAGE_TAG,
     ECR_DOCKER_PLATFORM,
+    ECR_IMAGE_TAG_ENV,
     INSTANCE_TYPE,
     SSM_MANAGED_POLICY_ARN,
 )
@@ -123,15 +127,54 @@ def _resolve_image_uri() -> str:
     )
 
 
+def _resolve_image_sha_tag() -> str | None:
+    """Image tag derived from git HEAD, or None if unavailable.
+
+    Returns the abbreviated commit sha (12 chars minimum; git extends it on
+    ambiguity), with a ``-dirty`` suffix when the working tree has uncommitted
+    changes or its cleanliness cannot be established. ``OPENSRE_IMAGE_TAG``
+    overrides entirely (CI passes an explicit tag). Returns None (latest-only)
+    if git is unavailable, e.g. building from a source tarball.
+    """
+    override = os.getenv(ECR_IMAGE_TAG_ENV, "").strip()
+    if override:
+        return override
+    try:
+        sha = subprocess.run(
+            ["git", "rev-parse", "--short=12", "HEAD"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        status = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+        )
+    except Exception:  # noqa: BLE001 — git absent / not a repo → latest-only
+        return None
+    if not sha:
+        return None
+    dirty = status.returncode != 0 or bool(status.stdout.strip())
+    return f"{sha}-dirty" if dirty else sha
+
+
 def build_image() -> str:
     """Build the Docker image and push it to ECR.
 
-    Saves the resulting image URI locally so subsequent ``make deploy`` calls
-    can reuse it without rebuilding. Run this once per code change, then call
-    ``make deploy`` as many times as needed.
+    Pushes two tags from one build: the moving ``latest`` (reused by
+    ``make deploy``) and a git-sha tag for build traceability. Saves the
+    ``latest`` URI locally so subsequent ``make deploy`` calls can reuse it
+    without rebuilding. For ``env=prod`` Fargate silos, pin the **digest**
+    URI printed below (``repo@sha256:…``) in Terraform ``image_uri`` — tags,
+    including the sha tag, are mutable in this repository and a later push
+    can change what they point to.
 
     Returns:
-        The full ECR image URI (e.g. ``123….dkr.ecr.us-east-1.amazonaws.com/opensre:latest``).
+        The full ECR image URI for ``latest``
+        (e.g. ``123….dkr.ecr.us-east-1.amazonaws.com/opensre:latest``).
     """
     assert_deploy_account(REGION)
     stack = get_stack()
@@ -145,23 +188,51 @@ def build_image() -> str:
     repo = ecr.create_repository(stack.ecr_repo_name, stack.stack_name, REGION)
     print(f"  - Repository: {repo['uri']}")
 
+    sha_tag = _resolve_image_sha_tag()
+    if sha_tag is None:
+        print("  - No git sha resolved — pushing latest only.")
+    elif sha_tag.endswith("-dirty"):
+        print(f"  - Build tag: {sha_tag} (WORKING TREE DIRTY — not a reproducible build)")
+    else:
+        print(f"  - Build tag: {sha_tag}")
+
     print("Building and pushing Docker image...")
-    image_uri = ecr.build_and_push(
-        dockerfile_path=DOCKERFILE,
-        repository_uri=repo["uri"],
-        tag=ECR_DEFAULT_IMAGE_TAG,
-        platform=ECR_DOCKER_PLATFORM,
-        context_dir=REPO_ROOT,
-        region=REGION,
-    )
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        iidfile = Path(tmp_dir) / "image-id"
+        image_uri = ecr.build_and_push(
+            dockerfile_path=DOCKERFILE,
+            repository_uri=repo["uri"],
+            tag=ECR_DEFAULT_IMAGE_TAG,
+            extra_tags=[sha_tag] if sha_tag else None,
+            platform=ECR_DOCKER_PLATFORM,
+            context_dir=REPO_ROOT,
+            region=REGION,
+            iidfile=iidfile,
+        )
+        image_id = iidfile.read_text().strip() if iidfile.exists() else ""
     save_image_uri(image_uri)
+    sha_uri = f"{repo['uri']}:{sha_tag}" if sha_tag else None
+    digest = ecr.get_pushed_image_digest(repo["uri"], image_id)
+    digest_uri = f"{repo['uri']}@{digest}" if digest else None
 
     elapsed = time.time() - start_time
     print()
     print("=" * 60)
     print(f"Image built and pushed in {elapsed:.1f}s")
-    print(f"  URI: {image_uri}")
-    print("  URI saved — run `make deploy` to launch an instance with this image.")
+    print(f"  latest URI: {image_uri}")
+    print("  latest URI saved — run `make deploy` to launch an instance with it.")
+    if sha_uri:
+        print(f"  sha URI:    {sha_uri} (build traceability; tag is mutable)")
+    if digest_uri:
+        print(f"  digest URI: {digest_uri}")
+        print("  → pin the digest URI in Terraform image_uri for env=prod silos.")
+    else:
+        lookup_tag = sha_tag or ECR_DEFAULT_IMAGE_TAG
+        print("  digest lookup failed — resolve it before pinning prod:")
+        print(
+            f"    aws ecr describe-images --repository-name {stack.ecr_repo_name}"
+            f" --image-ids imageTag={lookup_tag}"
+        )
     print("=" * 60)
     print()
     return image_uri

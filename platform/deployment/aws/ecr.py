@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -81,8 +82,18 @@ def build_and_push(
     build_args: dict[str, str] | None = None,
     region: str = DEFAULT_REGION,
     context_dir: Path | None = None,
+    extra_tags: list[str] | None = None,
+    iidfile: Path | None = None,
 ) -> str:
-    """Build a Docker image and push it to ECR. Returns the full image URI."""
+    """Build a Docker image once and push it under one or more tags.
+
+    The image is built a single time and tagged with ``tag`` plus any
+    ``extra_tags`` (e.g. a git-sha tag alongside the moving ``latest``).
+    Extra tags are pushed first and the primary ``tag`` last, so the moving
+    tag only updates once every extra tag is published. When ``iidfile`` is
+    given, docker writes the built image's immutable ID there. Returns the
+    full image URI for the primary ``tag``.
+    """
     docker_login(region)
 
     if dockerfile_path.is_file():
@@ -94,18 +105,20 @@ def build_and_push(
         if context_dir is None:
             context_dir = dockerfile_path
 
-    full_uri = f"{repository_uri}:{tag}"
+    # De-dupe while preserving order (primary tag first) so a sha tag that
+    # equals `tag` never double-pushes.
+    tags: list[str] = []
+    for candidate in [tag, *(extra_tags or [])]:
+        if candidate and candidate not in tags:
+            tags.append(candidate)
+    uris = [f"{repository_uri}:{t}" for t in tags]
 
-    cmd = [
-        "docker",
-        "build",
-        "--platform",
-        platform,
-        "-t",
-        full_uri,
-        "-f",
-        dockerfile,
-    ]
+    cmd = ["docker", "build", "--platform", platform]
+    if iidfile is not None:
+        cmd.extend(["--iidfile", str(iidfile)])
+    for uri in uris:
+        cmd.extend(["-t", uri])
+    cmd.extend(["-f", dockerfile])
 
     if build_args:
         for key, value in build_args.items():
@@ -114,9 +127,49 @@ def build_and_push(
     cmd.append(str(context_dir))
 
     subprocess.run(cmd, check=True)
-    subprocess.run(["docker", "push", full_uri], check=True)
+    for uri in reversed(uris):
+        subprocess.run(["docker", "push", uri], check=True)
 
-    return full_uri
+    return uris[0]
+
+
+def get_pushed_image_digest(repository_uri: str, image_ref: str) -> str | None:
+    """Return the sha256 digest of the image this process pushed, or None.
+
+    Reads ``RepoDigests`` for ``image_ref`` from the local Docker daemon,
+    which records the manifest digest at push time. ``image_ref`` should be
+    the immutable image ID captured at build time (``--iidfile``): a tag
+    reference would race with concurrent builds, which can retag it on the
+    shared daemon or move it in the registry, substituting another image's
+    digest. Only entries for ``repository_uri`` are considered. Image IDs are
+    content-addressed, so concurrent builds share one only when their images
+    are byte-identical — every matching digest then refers to that same
+    content and any of them is a correct pin.
+    """
+    if not image_ref:
+        return None
+    try:
+        result = subprocess.run(
+            [
+                "docker",
+                "image",
+                "inspect",
+                image_ref,
+                "--format",
+                "{{json .RepoDigests}}",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        digests = json.loads(result.stdout.strip())
+        prefix = f"{repository_uri}@"
+        for entry in digests:
+            if isinstance(entry, str) and entry.startswith(prefix):
+                return entry.removeprefix(prefix)
+        return None
+    except Exception:  # noqa: BLE001 — digest is advisory; the push already succeeded
+        return None
 
 
 def delete_repository(name: str, region: str = DEFAULT_REGION) -> None:

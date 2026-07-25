@@ -6,9 +6,17 @@ import os
 from dataclasses import dataclass
 from typing import Any
 
+from core.state.transcript_window import (
+    SESSION_SUMMARY_PREFIX,
+    SUMMARY_MAX_CHARS,
+    format_messages_for_summary,
+    is_summary_message,
+    merge_summary_texts,
+    summary_text,
+)
+
 DEFAULT_AUTO_COMPACTION_CHARS = 48_000
 _KEEP_RECENT_MESSAGES = 8
-_SUMMARY_MAX_CHARS = 6_000
 
 
 @dataclass(frozen=True)
@@ -50,6 +58,8 @@ def compact_session_branch(
     The LLM-summary path is intentionally optional at this layer. When callers
     do not provide a summary, compaction uses a deterministic fallback so the
     shell can always recover space without depending on another provider call.
+    A leading session-summary message (from message-window compaction) is
+    carried through whole and merged head-first, never excerpted per line.
     """
 
     messages = list(session.agent.messages)
@@ -59,8 +69,12 @@ def compact_session_branch(
     before_chars = _message_chars(messages)
     kept = messages[-_KEEP_RECENT_MESSAGES:]
     compacted = messages[:-_KEEP_RECENT_MESSAGES]
-    final_summary = summary or deterministic_summary(compacted)
-    session.agent.messages = [("assistant", f"Session summary:\n{final_summary}"), *kept]
+    prior = ""
+    if compacted and is_summary_message(compacted[0]):
+        prior = summary_text(compacted[0])
+        compacted = compacted[1:]
+    final_summary = merge_summary_texts(prior, summary or deterministic_summary(compacted))
+    session.agent.messages = [("assistant", f"{SESSION_SUMMARY_PREFIX}{final_summary}"), *kept]
     after_chars = _message_chars(list(session.agent.messages))
     session.storage.append_compaction(
         session.session_id,
@@ -92,8 +106,8 @@ def auto_compact_if_needed(
 def deterministic_summary(messages: list[tuple[str, str]]) -> str:
     if not messages:
         return ""
-    first = _render_message_excerpt(messages[:4])
-    recent = _render_message_excerpt(messages[-4:]) if len(messages) > 4 else ""
+    first = format_messages_for_summary(messages[:4])
+    recent = format_messages_for_summary(messages[-4:]) if len(messages) > 4 else ""
     parts = [
         f"Compacted {len(messages)} earlier conversation messages.",
         "Earlier context:",
@@ -101,17 +115,7 @@ def deterministic_summary(messages: list[tuple[str, str]]) -> str:
     ]
     if recent:
         parts.extend(["Most recent compacted context:", recent])
-    return "\n".join(part for part in parts if part).strip()[:_SUMMARY_MAX_CHARS]
-
-
-def _render_message_excerpt(messages: list[tuple[str, str]]) -> str:
-    lines: list[str] = []
-    for role, text in messages:
-        compact = " ".join(str(text).split())
-        if len(compact) > 700:
-            compact = compact[:697] + "..."
-        lines.append(f"- {role}: {compact}")
-    return "\n".join(lines)
+    return "\n".join(part for part in parts if part).strip()[:SUMMARY_MAX_CHARS]
 
 
 def _estimate_tokens(chars: int) -> int:

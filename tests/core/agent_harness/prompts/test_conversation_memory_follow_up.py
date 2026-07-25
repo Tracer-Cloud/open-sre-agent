@@ -59,6 +59,25 @@ def test_leaves_affirmative_unchanged_without_want_me_to() -> None:
     assert expand_affirmative_follow_up("yes", history) == "yes"
 
 
+def test_ignores_offers_inside_session_summary() -> None:
+    history = [
+        (
+            "assistant",
+            "Session summary:\n"
+            "- user: check the pipeline\n"
+            "- assistant: I found a failing job. Want me to: rerun stale-marker-pipeline?\n"
+            "- user: no thanks",
+        ),
+        ("user", "what is toil?"),
+        ("assistant", "Toil is repetitive manual work."),
+    ]
+
+    expanded = expand_affirmative_follow_up("yes", history)
+
+    assert expanded == "yes"
+    assert "stale-marker-pipeline" not in expanded
+
+
 def test_expands_bare_sure_without_slack_prefix() -> None:
     history = [
         ("assistant", "**Want me to:** dig into the top Sentry issue?"),
