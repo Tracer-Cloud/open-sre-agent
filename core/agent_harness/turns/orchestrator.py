@@ -36,11 +36,9 @@ from core.agent_harness.ports import (
     TurnAccounting,
 )
 from core.agent_harness.prompts import build_cli_agent_prompt_from_provider
-from core.agent_harness.prompts.conversation_memory import (
-    MAX_CONVERSATION_MESSAGES,
-    expand_affirmative_follow_up,
-)
+from core.agent_harness.prompts.conversation_memory import expand_affirmative_follow_up
 from core.agent_harness.session.terminal_access import agent_turn_executed_slashes
+from core.agent_harness.turns.conversation_recording import record_conversation_turn
 from core.agent_harness.turns.transcript_compaction import auto_compact_if_needed
 from core.agent_harness.turns.turn_plan import TurnPlan, build_turn_plan
 from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
@@ -127,10 +125,7 @@ def _stream_response(
 
 
 def _record_answer_turn(session: SessionStore, message: str, assistant_text: str) -> None:
-    session.cli_agent_messages.append(("user", message))
-    session.cli_agent_messages.append(("assistant", assistant_text))
-    if len(session.cli_agent_messages) > MAX_CONVERSATION_MESSAGES:
-        session.cli_agent_messages[:] = session.cli_agent_messages[-MAX_CONVERSATION_MESSAGES:]
+    record_conversation_turn(session, message, assistant_text)
 
 
 def _record_action_only_turn(session: SessionStore, message: str, assistant_text: str) -> None:

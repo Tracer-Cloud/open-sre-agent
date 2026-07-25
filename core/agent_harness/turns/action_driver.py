@@ -29,8 +29,8 @@ from core.agent_harness.ports import (
     ToolProvider,
 )
 from core.agent_harness.prompts import build_action_system_prompt, build_action_user_message
-from core.agent_harness.prompts.conversation_memory import MAX_CONVERSATION_MESSAGES
 from core.agent_harness.session.integration_resolution import resolve_and_cache_integrations
+from core.agent_harness.turns.conversation_recording import record_conversation_turn
 from core.agent_harness.turns.turn_plan import TurnPlan
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
@@ -303,10 +303,7 @@ def _turn_resolved_integrations(
 
 
 def _persist_tool_calling_error(session: SessionStore, user_text: str, error_text: str) -> None:
-    session.cli_agent_messages.append(("user", user_text))
-    session.cli_agent_messages.append(("assistant", error_text))
-    if len(session.cli_agent_messages) > MAX_CONVERSATION_MESSAGES:
-        session.cli_agent_messages[:] = session.cli_agent_messages[-MAX_CONVERSATION_MESSAGES:]
+    record_conversation_turn(session, user_text, error_text)
 
 
 def _render_tool_calling_error(output: OutputSink, message: str) -> None:

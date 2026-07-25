@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 from core.agent_harness.prompts.conversation_memory import (
-    MAX_CONVERSATION_MESSAGES,
-    MAX_CONVERSATION_TURNS,
     NO_HISTORY_PLACEHOLDER,
     format_prior_action_facts,
     format_recent_conversation,
 )
+from core.state import MAX_CONVERSATION_MESSAGES, MAX_CONVERSATION_TURNS
 
 
 def test_placeholder_when_no_history() -> None:
