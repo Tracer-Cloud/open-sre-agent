@@ -10,6 +10,9 @@ from core.state.transcript_window import (
     SESSION_SUMMARY_PREFIX,
     SUMMARY_MAX_CHARS,
     format_messages_for_summary,
+    is_summary_message,
+    merge_summary_texts,
+    summary_text,
 )
 
 DEFAULT_AUTO_COMPACTION_CHARS = 48_000
@@ -55,6 +58,8 @@ def compact_session_branch(
     The LLM-summary path is intentionally optional at this layer. When callers
     do not provide a summary, compaction uses a deterministic fallback so the
     shell can always recover space without depending on another provider call.
+    A leading session-summary message (from message-window compaction) is
+    carried through whole and merged head-first, never excerpted per line.
     """
 
     messages = list(session.agent.messages)
@@ -64,7 +69,11 @@ def compact_session_branch(
     before_chars = _message_chars(messages)
     kept = messages[-_KEEP_RECENT_MESSAGES:]
     compacted = messages[:-_KEEP_RECENT_MESSAGES]
-    final_summary = summary or deterministic_summary(compacted)
+    prior = ""
+    if compacted and is_summary_message(compacted[0]):
+        prior = summary_text(compacted[0])
+        compacted = compacted[1:]
+    final_summary = merge_summary_texts(prior, summary or deterministic_summary(compacted))
     session.agent.messages = [("assistant", f"{SESSION_SUMMARY_PREFIX}{final_summary}"), *kept]
     after_chars = _message_chars(list(session.agent.messages))
     session.storage.append_compaction(

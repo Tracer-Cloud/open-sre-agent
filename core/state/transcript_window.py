@@ -58,16 +58,23 @@ def compact_messages_to_window(
     overflow = entries[: len(entries) - keep_count]
 
     prior = ""
-    if overflow and _is_summary_message(overflow[0]):
-        prior = overflow[0][1][len(SESSION_SUMMARY_PREFIX) :]
+    if overflow and is_summary_message(overflow[0]):
+        prior = summary_text(overflow[0])
         overflow = overflow[1:]
 
-    overflow_lines = format_messages_for_summary(overflow)
-    merged = "\n".join(part for part in (prior, overflow_lines) if part)[:summary_max_chars]
+    merged = merge_summary_texts(
+        prior, format_messages_for_summary(overflow), max_chars=summary_max_chars
+    )
     return [("assistant", f"{SESSION_SUMMARY_PREFIX}{merged}"), *kept]
 
 
-def _is_summary_message(entry: tuple[str, str]) -> bool:
+def merge_summary_texts(prior: str, addition: str, *, max_chars: int = SUMMARY_MAX_CHARS) -> str:
+    """Merge summary bodies keeping the head; the tail truncates first."""
+    return "\n".join(part for part in (prior, addition) if part)[:max_chars]
+
+
+def is_summary_message(entry: tuple[str, str]) -> bool:
+    """True when ``entry`` is a session-summary assistant message."""
     role, content = entry
     return (
         role == "assistant"
@@ -76,9 +83,17 @@ def _is_summary_message(entry: tuple[str, str]) -> bool:
     )
 
 
+def summary_text(entry: tuple[str, str]) -> str:
+    """Return the summary body of a session-summary message."""
+    return entry[1][len(SESSION_SUMMARY_PREFIX) :]
+
+
 __all__ = [
     "SUMMARY_MAX_CHARS",
     "SESSION_SUMMARY_PREFIX",
     "compact_messages_to_window",
     "format_messages_for_summary",
+    "is_summary_message",
+    "merge_summary_texts",
+    "summary_text",
 ]
