@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from config.constants import INVESTIGATION_CONTEXT_SOURCE_KEY
 from core import public_tool_input
 from core.domain.alerts.alert_source import (
     SECONDARY_TOOL_SOURCES,
@@ -199,6 +200,14 @@ def build_seed_calls(
 
     resolved = state.get("resolved_integrations") or {}
     tool_sources = availability_view(resolved)
+    investigation_context = {
+        key: state[key] for key in ("alert_json", "raw_alert") if state.get(key) is not None
+    }
+    if investigation_context:
+        tool_sources = {
+            **tool_sources,
+            INVESTIGATION_CONTEXT_SOURCE_KEY: investigation_context,
+        }
 
     # Enrich kubernetes tool_sources with alert-extracted context so seed calls
     # use the correct namespace/pod rather than the default from the integration config.

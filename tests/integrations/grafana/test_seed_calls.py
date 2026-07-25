@@ -62,3 +62,33 @@ def test_grafana_connection_params_are_runtime_injected(
     registered = tool_function.__opensre_registered_tool__  # type: ignore[attr-defined]
 
     assert set(registered.injected_params) >= GRAFANA_RUNTIME_PARAMS
+
+
+def test_loki_seed_call_uses_scope_from_grafana_alert() -> None:
+    registered = grafana_tools.query_grafana_logs.__opensre_registered_tool__
+    state = {
+        **_local_basic_auth_state(),
+        "raw_alert": {
+            "commonLabels": {
+                "service_name": "checkout",
+                "pipeline_name": "orders",
+                "datasource_uid": "loki-prod",
+            },
+            "commonAnnotations": {
+                "log_query": '{service_name="checkout"} | json | level="error"',
+            },
+        },
+    }
+
+    calls = build_seed_calls(state, [registered], object())
+
+    assert len(calls) == 1
+    assert calls[0].input == {
+        "service_name": "checkout",
+        "pipeline_name": "orders",
+        "log_query": '{service_name="checkout"} | json | level="error"',
+        "datasource_uid": "loki-prod",
+        "time_range_minutes": 60,
+        "limit": 100,
+    }
+    assert registered.validate_public_input(calls[0].input) is None

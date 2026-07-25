@@ -154,6 +154,38 @@ def test_run_happy_path() -> None:
     assert len(result["error_logs"]) == 1
 
 
+def test_run_uses_alert_logql_and_datasource_uid() -> None:
+    mock_client = MagicMock()
+    mock_client.is_configured = True
+    mock_client.loki_datasource_uid = "discovered-loki"
+    mock_client.account_id = "acc-1"
+    mock_client.query_loki.return_value = {
+        "success": True,
+        "logs": [{"message": "error crash"}],
+        "total_logs": 1,
+    }
+    log_query = '{service_name="checkout"} | json | level="error"'
+
+    with patch(
+        "integrations.grafana.tools.get_grafana_client_from_credentials", return_value=mock_client
+    ):
+        result = query_grafana_logs(
+            service_name="checkout",
+            log_query=log_query,
+            datasource_uid="loki-prod",
+            grafana_endpoint="https://grafana.example.com",
+        )
+
+    assert result["available"] is True
+    assert result["query"] == log_query
+    mock_client.query_loki.assert_called_once_with(
+        log_query,
+        time_range_minutes=60,
+        limit=100,
+        datasource_uid="loki-prod",
+    )
+
+
 def test_run_fallback_to_pipeline_name() -> None:
     mock_client = MagicMock()
     mock_client.is_configured = True

@@ -8,6 +8,7 @@ from typing import Any
 
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.tool_availability import tool_unavailable
+from integrations.grafana.alert_context import resolve_grafana_loki_alert_context
 
 _GRAFANA_RUNTIME_PARAMS = (
     "grafana_endpoint",
@@ -350,9 +351,14 @@ def _grafana_available(sources: dict) -> bool:
 
 def _query_grafana_logs_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     grafana = _grafana_source(sources)
+    alert_context = resolve_grafana_loki_alert_context(sources)
     return {
-        "service_name": grafana.get("service_name", ""),
-        "pipeline_name": grafana.get("pipeline_name"),
+        "service_name": alert_context.service_name or grafana.get("service_name", ""),
+        "pipeline_name": alert_context.pipeline_name or grafana.get("pipeline_name"),
+        "log_query": alert_context.log_query or grafana.get("log_query"),
+        "datasource_uid": alert_context.datasource_uid
+        or grafana.get("loki_datasource_uid")
+        or grafana.get("datasource_uid"),
         "execution_run_id": grafana.get("execution_run_id"),
         "time_range_minutes": grafana.get("time_range_minutes", 60),
         "limit": 100,
@@ -386,6 +392,8 @@ def _query_grafana_logs_available(sources: dict[str, dict]) -> bool:
             "grafana_endpoint": {"type": "string"},
             "grafana_api_key": {"type": "string"},
             "pipeline_name": {"type": "string"},
+            "log_query": {"type": "string"},
+            "datasource_uid": {"type": "string"},
         },
         "required": ["service_name"],
     },
@@ -405,6 +413,8 @@ def query_grafana_logs(
     grafana_verify_ssl: bool = True,
     grafana_ca_bundle: str = "",
     pipeline_name: str | None = None,
+    log_query: str | None = None,
+    datasource_uid: str | None = None,
     grafana_backend: Any = None,
     **_kwargs: Any,
 ) -> dict:
@@ -431,7 +441,7 @@ def query_grafana_logs(
     )
     if not client or not client.is_configured:
         return tool_unavailable("grafana_loki", "Grafana integration not configured", logs=[])
-    if not client.loki_datasource_uid:
+    if not (datasource_uid or client.loki_datasource_uid):
         return tool_unavailable("grafana_loki", "Loki datasource not found", logs=[])
 
     def _build_query(label: str, value: str) -> str:
@@ -439,14 +449,22 @@ def query_grafana_logs(
             return f'{{{label}="{value}"}} |= "{execution_run_id}"'
         return f'{{{label}="{value}"}}'
 
-    query = _build_query("service_name", service_name)
-    result = client.query_loki(query, time_range_minutes=time_range_minutes, limit=limit)
+    query = (
+        log_query.strip()
+        if log_query and log_query.strip()
+        else _build_query("service_name", service_name)
+    )
+    query_kwargs: dict[str, Any] = {
+        "time_range_minutes": time_range_minutes,
+        "limit": limit,
+    }
+    if datasource_uid:
+        query_kwargs["datasource_uid"] = datasource_uid
+    result = client.query_loki(query, **query_kwargs)
 
-    if result.get("success") and not result.get("logs") and pipeline_name:
+    if result.get("success") and not result.get("logs") and pipeline_name and not log_query:
         fallback_query = _build_query("pipeline_name", pipeline_name)
-        fallback = client.query_loki(
-            fallback_query, time_range_minutes=time_range_minutes, limit=limit
-        )
+        fallback = client.query_loki(fallback_query, **query_kwargs)
         if fallback.get("success") and fallback.get("logs"):
             result = fallback
             query = fallback_query
@@ -482,6 +500,7 @@ def query_grafana_logs(
         "service_name": service_name,
         "execution_run_id": execution_run_id,
         "query": query,
+        "datasource_uid": datasource_uid or client.loki_datasource_uid,
         "account_id": client.account_id,
     }
     summary = summarize_counts(len(logs_data), len(compacted_logs), "logs")

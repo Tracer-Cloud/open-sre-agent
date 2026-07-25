@@ -142,6 +142,15 @@ class TestQueryLokiSuccess:
         assert host.last_params["start"] == str(expected_start)
         assert host.last_params["end"] == str(expected_end)
 
+    def test_explicit_datasource_uid_overrides_discovered_uid(self) -> None:
+        host = _FakeLokiHost(loki_datasource_uid="discovered-loki")
+        host.make_request_mock.return_value = _two_stream_response()
+
+        host.query_loki(_QUERY, datasource_uid="alert-loki")
+
+        assert host.last_url is not None
+        assert "/api/datasources/proxy/uid/alert-loki/loki/api/v1/query_range" in host.last_url
+
 
 # ---------------------------------------------------------------------------
 # Not configured short-circuit

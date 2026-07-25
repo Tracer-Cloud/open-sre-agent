@@ -17,6 +17,7 @@ class LokiMixin:
         query: str,
         time_range_minutes: int = 60,
         limit: int = 100,
+        datasource_uid: str | None = None,
     ) -> dict[str, Any]:
         """Query Grafana Cloud Loki for logs.
 
@@ -24,6 +25,7 @@ class LokiMixin:
             query: LogQL query string (e.g., '{service_name="lambda-mock-dag"}')
             time_range_minutes: Time range in minutes (default 60)
             limit: Maximum number of log entries to return
+            datasource_uid: Optional Loki datasource UID from the firing alert
 
         Returns:
             Dictionary with log streams and metadata
@@ -36,7 +38,7 @@ class LokiMixin:
             }
 
         url = self._build_datasource_url(
-            self.loki_datasource_uid,
+            datasource_uid or self.loki_datasource_uid,
             "/loki/api/v1/query_range",
         )
 

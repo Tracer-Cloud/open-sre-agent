@@ -4,12 +4,15 @@
   "commonLabels": {
     "alertname": "PipelineLoadFailure",
     "severity": "critical",
+    "service_name": "prefect-etl-pipeline-local",
     "pipeline_name": "events_fact",
+    "datasource_uid": "local-loki",
     "environment": "local"
   },
   "commonAnnotations": {
     "summary": "events_fact pipeline failed at load stage: database authentication error",
     "description": "Pipeline events_fact aborted during load. 128 rows extracted but not written. Database connection failed with authentication error.",
+    "log_query": "{service_name=\"prefect-etl-pipeline-local\", pipeline_name=\"events_fact\"} |~ \"(?i)(error|fail|abort|expired|invalid)\"",
     "execution_run_id": "local-events-fact-run-001",
     "correlation_id": "local-events-fact-corr-001"
   },
