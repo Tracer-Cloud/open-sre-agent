@@ -172,6 +172,23 @@ class TestSlackCredentials:
         creds = resolve_slack_credentials({})
         assert creds == {"access_token": "xoxb-from-env"}
 
+    def test_bot_token_from_integration_store(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("SLACK_WEBHOOK_URL", raising=False)
+        monkeypatch.delenv("SLACK_BOT_TOKEN", raising=False)
+        monkeypatch.delenv("SLACK_ACCESS_TOKEN", raising=False)
+        monkeypatch.setattr(
+            "platform.scheduler.credentials._get_integration_credential",
+            lambda service, key: (
+                "xoxb-from-store" if service == "slack" and key == "bot_token" else ""
+            ),
+        )
+        monkeypatch.setattr(
+            "platform.scheduler.credentials.resolve_env_credential",
+            lambda *_args, **_kwargs: "",
+        )
+        creds = resolve_slack_credentials({})
+        assert creds == {"access_token": "xoxb-from-store"}
+
 
 class TestDiscordCredentials:
     def test_from_params(self) -> None:

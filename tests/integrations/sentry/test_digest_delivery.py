@@ -40,6 +40,18 @@ class TestDigestDeliveryReadiness:
         assert slack_delivery_ready() is True
         assert delivery_provider_ready("slack") is True
 
+    def test_slack_ready_with_socket_mode_bot_token(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            "integrations.sentry.digest_delivery.resolve_telegram_credentials",
+            lambda _params: {},
+        )
+        monkeypatch.setattr(
+            "integrations.sentry.digest_delivery.resolve_slack_credentials",
+            lambda _params: {"access_token": "xoxb-socket-mode"},
+        )
+        assert slack_delivery_ready() is True
+        assert delivery_provider_ready(Provider.SLACK) is True
+
     def test_none_ready(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
             "integrations.sentry.digest_delivery.resolve_telegram_credentials",

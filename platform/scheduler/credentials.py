@@ -53,12 +53,21 @@ def resolve_slack_credentials(task_params: dict[str, str]) -> dict[str, str]:
     if env_webhook:
         return {"webhook_url": env_webhook}
 
-    return _resolve_credentials(
+    resolved = _resolve_credentials(
         {},
         service="slack",
         credential_key="access_token",
         env_vars=("SLACK_BOT_TOKEN", "SLACK_ACCESS_TOKEN"),
     )
+    if resolved:
+        return resolved
+
+    # Socket Mode setup persists the xoxb token under bot_token, not access_token.
+    store_bot_token = _get_integration_credential("slack", "bot_token").strip()
+    if store_bot_token:
+        return {"access_token": store_bot_token}
+
+    return {}
 
 
 def resolve_discord_credentials(task_params: dict[str, str]) -> dict[str, str]:
