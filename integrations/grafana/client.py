@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import threading
+from collections import defaultdict
 
 from integrations.grafana.base import GrafanaClientBase
 from integrations.grafana.config import GrafanaAccountConfig
@@ -13,6 +15,12 @@ from integrations.grafana.tempo import TempoMixin
 logger = logging.getLogger(__name__)
 
 _grafana_client_cache: dict[str, GrafanaClient] = {}
+
+# One lock per cache key so only concurrent callers for the *same*
+# (account_id, endpoint) pair serialise — callers for different pairs
+# proceed in parallel.  The outer dict itself is only ever mutated while
+# the corresponding per-key lock is held, so no second lock is needed.
+_grafana_client_locks: defaultdict[str, threading.Lock] = defaultdict(threading.Lock)
 
 
 class GrafanaClient(LokiMixin, TempoMixin, MimirMixin, GrafanaClientBase):
@@ -45,24 +53,34 @@ def get_grafana_client_from_credentials(
     verify_ssl: bool = True,
     ca_bundle: str = "",
 ) -> GrafanaClient:
-    """Create a Grafana client from integration credentials."""
+    """Create a Grafana client from integration credentials.
+
+    Datasource discovery (``discover_datasource_uids``) is an HTTP call that
+    can take up to 10 seconds.  When an investigation batches several Grafana
+    tools in one turn they all call this function concurrently with the same
+    ``(account_id, endpoint)`` pair.  Without synchronisation every caller
+    races past the cache check before any of them writes the result, so each
+    one pays the full discovery cost independently — multiplying timeout hits
+    when the endpoint is unreachable.
+
+    The fix uses a per-cache-key ``threading.Lock``: the first caller acquires
+    it, performs discovery, and writes the cache.  All concurrent callers for
+    the same key block on the lock and then read the already-populated entry on
+    the fast path, making discovery happen at most once per
+    ``(account_id, endpoint)`` pair per process lifetime.
+    """
     cache_key = f"creds_{account_id}_{endpoint}"
+
+    # Fast path — already cached, no lock needed.
     if cache_key in _grafana_client_cache:
         return _grafana_client_cache[cache_key]
 
-    config = GrafanaAccountConfig(
-        account_id=account_id,
-        instance_url=endpoint.rstrip("/"),
-        read_token=api_key,
-        username=username,
-        password=password,
-        verify_ssl=verify_ssl,
-        ca_bundle=ca_bundle,
-    )
-    client = GrafanaClient(config=config)
+    with _grafana_client_locks[cache_key]:
+        # Re-check inside the lock: a concurrent caller may have built and
+        # cached the client while we were waiting.
+        if cache_key in _grafana_client_cache:
+            return _grafana_client_cache[cache_key]
 
-    discovered = client.discover_datasource_uids()
-    if discovered:
         config = GrafanaAccountConfig(
             account_id=account_id,
             instance_url=endpoint.rstrip("/"),
@@ -71,23 +89,36 @@ def get_grafana_client_from_credentials(
             password=password,
             verify_ssl=verify_ssl,
             ca_bundle=ca_bundle,
-            loki_datasource_uid=discovered.get("loki_uid", ""),
-            tempo_datasource_uid=discovered.get("tempo_uid", ""),
-            mimir_datasource_uid=discovered.get("mimir_uid", ""),
         )
         client = GrafanaClient(config=config)
-        logger.info(
-            "[grafana] Client ready for account_id=%s with datasource discovery status: loki=%s tempo=%s mimir=%s",
-            account_id,
-            config.loki_datasource_uid,
-            config.tempo_datasource_uid,
-            config.mimir_datasource_uid,
-        )
-    else:
-        logger.warning(
-            "[grafana] Could not discover datasource UIDs for account_id=%s — queries will fail",
-            account_id,
-        )
 
-    _grafana_client_cache[cache_key] = client
-    return client
+        discovered = client.discover_datasource_uids()
+        if discovered:
+            config = GrafanaAccountConfig(
+                account_id=account_id,
+                instance_url=endpoint.rstrip("/"),
+                read_token=api_key,
+                username=username,
+                password=password,
+                verify_ssl=verify_ssl,
+                ca_bundle=ca_bundle,
+                loki_datasource_uid=discovered.get("loki_uid", ""),
+                tempo_datasource_uid=discovered.get("tempo_uid", ""),
+                mimir_datasource_uid=discovered.get("mimir_uid", ""),
+            )
+            client = GrafanaClient(config=config)
+            logger.info(
+                "[grafana] Client ready for account_id=%s with datasource discovery status: loki=%s tempo=%s mimir=%s",
+                account_id,
+                config.loki_datasource_uid,
+                config.tempo_datasource_uid,
+                config.mimir_datasource_uid,
+            )
+        else:
+            logger.warning(
+                "[grafana] Could not discover datasource UIDs for account_id=%s — queries will fail",
+                account_id,
+            )
+
+        _grafana_client_cache[cache_key] = client
+        return client
