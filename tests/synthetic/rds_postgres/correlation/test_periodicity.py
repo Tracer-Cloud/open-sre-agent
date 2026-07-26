@@ -21,3 +21,14 @@ def test_periodic_spikes_score_low_when_not_repeated() -> None:
 
     assert result.repeated_spikes == 1
     assert result.score == 0.0
+
+
+def test_periodic_spikes_counts_sustained_plateau_as_one_spike() -> None:
+    result = score_periodic_spikes(
+        signal_name="RDS CPU",
+        values=(20.0, 90.0, 90.0, 90.0, 20.0),
+        spike_threshold=80.0,
+    )
+
+    assert result.repeated_spikes == 1
+    assert result.score == 0.0

@@ -144,7 +144,13 @@ def score_periodic_spikes(
     values: tuple[float, ...],
     spike_threshold: float,
 ) -> PeriodicityScore:
-    repeated_spikes = sum(1 for value in values if value >= spike_threshold)
+    repeated_spikes = 0
+    was_above_threshold = False
+    for value in values:
+        is_above_threshold = value >= spike_threshold
+        if is_above_threshold and not was_above_threshold:
+            repeated_spikes += 1
+        was_above_threshold = is_above_threshold
 
     if repeated_spikes <= 1:
         score = 0.0
