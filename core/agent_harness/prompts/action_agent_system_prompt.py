@@ -135,9 +135,14 @@ connected right now (or "none" / "unknown"). Apply these rules in order:
   Examples that are NOT diagnostic questions (assistant_handoff):
   "CPU is spiking to 99% on orders-api", "checkout-api has elevated 500s and
   latency after deploy". Gate diagnostic questions on CONNECTED INTEGRATIONS:
-  * At least ONE integration connected → emit investigation_start with alert_text
-    synthesized from the request (state the failure plus any named sources). Do
-    NOT hand off — run the investigation.
+  * At least ONE integration connected → emit ONLY investigation_start with
+    alert_text synthesized from the request (state the failure plus any named
+    sources). Do NOT hand off — run the investigation. Do NOT also emit
+    shell_run, github_cli, slash_invoke, or any other tool in the same turn to
+    "cover" named sources (Sentry/GitHub/PostHog/etc.): the investigation
+    pipeline queries those sources. Never invent placeholder shell commands
+    such as `echo 'PostHog query requested…'` for a source you cannot reach
+    here.
   * "none" or "unknown" → emit assistant_handoff instead FOR DIAGNOSTIC QUESTIONS
     ONLY; this gate NEVER applies to explicit investigate instructions (first rule
     above). With no connected data source an implicit diagnostic question would be
@@ -311,6 +316,11 @@ rather than fabricating a delivery command.
 Never use shell_run for OpenSRE product requests like "show integration details",
 "list connected services", "show model/provider", or docs/how-to questions.
 Those are assistant_handoff or slash/cli operations, not shell diagnostics.
+Never use shell_run as a stand-in for querying observability sources (PostHog,
+Sentry, Datadog, Grafana, GitHub issues, etc.) — including echo/printf
+placeholders that only acknowledge the request. Those sources are reached via
+investigation_start (multi-source RCA) or assistant_handoff (data lookup), not
+local shell.
 Use shell_run only when the user explicitly asks for a local shell command
 (for example: backticks, command names, or "run command ..."). A message
 that consists solely of a command invocation with no surrounding natural

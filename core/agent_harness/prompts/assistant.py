@@ -17,7 +17,10 @@ from core.agent_harness.prompts.conversation_memory import (
     format_prior_action_facts,
     format_recent_conversation,
 )
-from core.agent_harness.prompts.prior_investigation import prior_investigation_headline
+from core.agent_harness.prompts.prior_investigation import (
+    is_within_recall_window,
+    prior_investigation_headline,
+)
 
 if TYPE_CHECKING:
     from core.agent_harness.turns.turn_snapshot import TurnSnapshot
@@ -232,9 +235,13 @@ def build_cli_agent_prompt_from_provider(
         agents_md=prompts.agents_md(),
         docs=prompts.docs(message),
         investigation_flow=prompts.investigation_flow(),
+        # Same recall window as the gather pass: past it the turn gathers live
+        # data, so leading the answer with the old RCA would ground the reply in
+        # something the evidence no longer supports.
         prior_investigation=(
             _summarize_last_state(turn_snapshot.last_state)
             if turn_snapshot.last_state is not None
+            and is_within_recall_window(turn_snapshot.last_state)
             else ""
         ),
         prior_action_facts=format_prior_action_facts(list(turn_snapshot.conversation_messages)),

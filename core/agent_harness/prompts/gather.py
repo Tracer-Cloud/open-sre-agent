@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from core.agent_harness.prompts.prior_investigation import prior_investigation_headline
+from core.agent_harness.prompts.prior_investigation import (
+    is_within_recall_window,
+    prior_investigation_headline,
+)
 from platform.harness_ports import gather_prompt_vendor_fragments
 
 if TYPE_CHECKING:
@@ -24,9 +27,9 @@ _PRIOR_INVESTIGATION_GATHER_RULE = (
 
 def _compact_prior_investigation(state: dict[str, Any] | None) -> str:
     """Compact last-investigation facts for the gather prompt (not the full report)."""
-    if not state:
+    if not is_within_recall_window(state):
         return ""
-    return "\n".join(prior_investigation_headline(state))
+    return "\n".join(prior_investigation_headline(state or {}))
 
 
 def build_gather_system_prompt(session: SessionStore) -> str:

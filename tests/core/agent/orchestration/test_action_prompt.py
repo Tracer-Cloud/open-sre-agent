@@ -164,6 +164,18 @@ def test_system_prompt_routes_github_cli_to_action_tools() -> None:
     assert "exception: github issue/pr/repo" in prompt
 
 
+def test_system_prompt_bans_shell_placeholders_on_multisource_rca() -> None:
+    """Multi-source crash RCA must be investigation_start alone (scenario 314)."""
+    prompt = _SYSTEM_PROMPT_BASE.lower()
+    assert "emit only investigation_start" in prompt
+    assert "never invent placeholder shell commands" in prompt
+    assert "posthog query requested" in prompt
+    assert "never use shell_run as a stand-in for querying observability sources" in prompt
+    composed = " ".join(build_action_system_prompt(_ctx()).lower().split())
+    assert "investigation_start only" in composed
+    assert "alone or paired with investigation_start" in composed
+
+
 def test_system_prompt_keeps_bare_alert_blob_as_handoff() -> None:
     prompt = _SYSTEM_PROMPT_BASE.lower()
     assert "a bare pasted alert blob with no instruction remains assistant_handoff" in prompt

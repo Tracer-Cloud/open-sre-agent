@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Iterable
 from typing import Any
 
@@ -507,7 +508,10 @@ def test_run_turn_mixed_action_and_handoff_routes_to_assistant() -> None:
 def test_run_turn_skips_gather_for_follow_up_handoff_with_prior_state() -> None:
     """Prior-investigation follow-ups must answer from last_state, not live tools."""
     session = Session()
-    session.last_state = {"root_cause": "disk full on orders-api"}
+    session.last_state = {
+        "root_cause": "disk full on orders-api",
+        "investigation_started_at": time.monotonic(),
+    }
     gather_calls: list[str] = []
     answer_kwargs: list[dict[str, Any]] = []
 
@@ -548,7 +552,10 @@ def test_run_turn_skips_gather_for_follow_up_handoff_with_prior_state() -> None:
 def test_run_turn_still_gathers_for_non_follow_up_handoff_with_prior_state() -> None:
     """Non-follow-up handoffs keep the gather path even when last_state exists."""
     session = Session()
-    session.last_state = {"root_cause": "disk full on orders-api"}
+    session.last_state = {
+        "root_cause": "disk full on orders-api",
+        "investigation_started_at": time.monotonic(),
+    }
     gather_calls: list[str] = []
 
     def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:

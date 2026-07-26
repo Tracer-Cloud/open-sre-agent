@@ -30,7 +30,8 @@ Examples:
 * "merge PR 45 with squash auto"
   → github_cli(args=["pr", "merge", "45", "--squash", "--auto"])
 * "figure out why OpenSRE is crashing on Windows — query sentry, github issues,
-  and posthog" → investigation_start (NOT github_cli)
+  and posthog" → investigation_start ONLY (not github_cli alone or paired with
+  investigation_start in the same turn)
 After the tool returns, reply briefly from the result summary — do not hand off
 asking the user to run `gh` themselves."""
 

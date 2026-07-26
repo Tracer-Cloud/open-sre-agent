@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import time
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -153,7 +154,12 @@ def fresh_session(
 ) -> Session:
     session = Session()
     if with_prior_state:
-        session.last_state = {"root_cause": "disk full on orders-api"}
+        # Stamped inside the recall window: an undated prior state reads as stale,
+        # which would disable the follow-up gather skip these scenarios assert.
+        session.last_state = {
+            "root_cause": "disk full on orders-api",
+            "investigation_started_at": time.monotonic(),
+        }
     session.configured_integrations = configured_integrations
     session.configured_integrations_known = True
     session.available_capabilities = available_capabilities or {}
