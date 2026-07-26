@@ -19,6 +19,7 @@ from core.agent_harness.prompts.conversation_memory import (
 )
 from core.agent_harness.prompts.prior_investigation import (
     STALE_PRIOR_INVESTIGATION_NOTE,
+    is_prior_investigation_follow_up,
     is_within_recall_window,
     prior_investigation_headline,
 )
@@ -110,12 +111,22 @@ def _summarize_evidence(evidence: Any) -> list[str]:
     ]
 
 
-def _prior_investigation_block(state: dict[str, Any] | None) -> str:
-    """Summarize the session's investigation, marking it stale past the recall window."""
+def _prior_investigation_block(
+    state: dict[str, Any] | None,
+    *,
+    explicit_follow_up: bool = False,
+) -> str:
+    """Summarize the session's investigation, marking it background when incidental.
+
+    An explicit follow-up handoff means the user asked about *this* investigation,
+    so it is the answer — never downgrade it to background there, however long ago
+    it ran. The note applies only when the block is unprompted context on some
+    other turn, where fresh evidence should win a conflict.
+    """
     if state is None:
         return ""
     summary = _summarize_last_state(state)
-    if is_within_recall_window(state):
+    if explicit_follow_up or is_within_recall_window(state):
         return summary
     return f"{STALE_PRIOR_INVESTIGATION_NOTE}\n{summary}"
 
@@ -251,7 +262,10 @@ def build_cli_agent_prompt_from_provider(
         # it would make OpenSRE claim it lacks incident details it still holds.
         # Age only downgrades it to background (see the note), because past the
         # recall window the turn also gathers fresh evidence.
-        prior_investigation=_prior_investigation_block(turn_snapshot.last_state),
+        prior_investigation=_prior_investigation_block(
+            turn_snapshot.last_state,
+            explicit_follow_up=is_prior_investigation_follow_up(handoff_contents),
+        ),
         prior_action_facts=format_prior_action_facts(list(turn_snapshot.conversation_messages)),
         environment=prompts.environment_block(),
         surface=prompts.surface(),

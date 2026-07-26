@@ -233,3 +233,32 @@ def test_assistant_has_guidance_for_the_follow_up_tag() -> None:
 
     # Assert
     assert "lead with the root cause" in guidance
+
+
+def test_explicit_follow_up_answers_from_an_old_investigation_unlabelled() -> None:
+    """The planner's tag outranks the clock.
+
+    It classified *which* incident the user means, so a stale label would push the
+    model toward current conditions instead of what happened in that incident.
+    """
+    # Arrange: the investigation ran well outside the recall window.
+    session = _SnapshotSession()
+    session.last_state = _investigation(
+        investigation_started_at=time.monotonic() - PRIOR_INVESTIGATION_RECALL_SECONDS - 1,
+        root_cause="the-incident-they-asked-about",
+    )
+    snapshot = TurnSnapshot.from_session("what happened?", session)
+
+    # Act
+    answer_prompt = build_cli_agent_prompt_from_provider(
+        message="what happened?",
+        prompts=_StubPrompts(),
+        tool_observation=None,
+        tool_observation_on_screen=True,
+        turn_snapshot=snapshot,
+        handoff_contents=("follow_up:prior_investigation",),
+    )
+
+    # Assert: the findings lead the answer, not flagged as background.
+    assert "the-incident-they-asked-about" in answer_prompt
+    assert STALE_PRIOR_INVESTIGATION_NOTE not in answer_prompt

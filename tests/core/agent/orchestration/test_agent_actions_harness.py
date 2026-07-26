@@ -11,6 +11,9 @@ from rich.console import Console
 
 import surfaces.interactive_shell.runtime.slash_adapter as slash_adapter
 from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
+from core.agent_harness.prompts.prior_investigation import (
+    PRIOR_INVESTIGATION_RECALL_SECONDS,
+)
 from core.agent_harness.turns.action_driver import (
     ActionTurnPlan,
     ToolCallingDeps,
@@ -777,3 +780,42 @@ def test_turn_resolved_integrations_trusts_plan_without_reresolving(
     plan = TurnPlan(snapshot=snapshot)
 
     assert _turn_resolved_integrations(Session(), plan) == {}
+
+
+def test_run_turn_skips_gather_for_follow_up_even_when_investigation_is_old() -> None:
+    """The planner's follow-up tag is not age-gated.
+
+    Gathering here would answer a question about a past incident with current
+    integration results.
+    """
+    session = Session()
+    session.last_state = {
+        "root_cause": "disk full on orders-api",
+        "investigation_started_at": time.monotonic() - PRIOR_INVESTIGATION_RECALL_SECONDS - 1,
+    }
+    gather_calls: list[str] = []
+
+    def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
+        return ToolCallingTurnResult(
+            planned_count=1,
+            executed_count=1,
+            executed_success_count=1,
+            has_unhandled_clause=False,
+            handled=True,
+            handoff_contents=("follow_up:prior_investigation",),
+        )
+
+    def _gather(text: str, *_args: object, **_kwargs: object) -> str:
+        gather_calls.append(text)
+        return "Tool: search_sentry_issues\nArguments: {}\nResult: should-not-run"
+
+    run_turn(
+        "what happened?",
+        session,
+        execute_actions=_execute,
+        gather=_gather,
+        answer=lambda *_a, **_k: None,
+        accounting=DefaultTurnAccounting(session, "what happened?"),
+    )
+
+    assert gather_calls == []

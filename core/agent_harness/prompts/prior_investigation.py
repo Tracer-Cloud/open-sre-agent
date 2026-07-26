@@ -20,10 +20,24 @@ from typing import Any
 # something new, so the turn gathers fresh data as well.
 PRIOR_INVESTIGATION_RECALL_SECONDS = 30 * 60
 
+# Handoff-content prefix the action planner emits for a retrospective question
+# about the investigation already completed in this session.
+PRIOR_INVESTIGATION_HANDOFF_PREFIX = "follow_up:"
+
 STALE_PRIOR_INVESTIGATION_NOTE = (
     "(from earlier in this session — treat as background and prefer any fresh "
     "evidence below when they disagree)"
 )
+
+
+def is_prior_investigation_follow_up(handoff_contents: tuple[str, ...]) -> bool:
+    """True when the action planner classified this turn as a follow-up.
+
+    An explicit tag is the planner's judgement about *which* incident the user
+    means, so it outranks the recall window: the question is about that
+    investigation however long ago it ran.
+    """
+    return any(tag.startswith(PRIOR_INVESTIGATION_HANDOFF_PREFIX) for tag in handoff_contents)
 
 
 def prior_investigation_headline(state: Mapping[str, Any]) -> list[str]:
@@ -60,8 +74,10 @@ def is_within_recall_window(state: Mapping[str, Any] | None) -> bool:
 
 
 __all__ = [
+    "PRIOR_INVESTIGATION_HANDOFF_PREFIX",
     "PRIOR_INVESTIGATION_RECALL_SECONDS",
     "STALE_PRIOR_INVESTIGATION_NOTE",
+    "is_prior_investigation_follow_up",
     "is_within_recall_window",
     "prior_investigation_headline",
 ]
