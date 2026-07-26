@@ -57,8 +57,8 @@ def build_gather_system_prompt(session: SessionStore) -> str:
     )
     last_state = getattr(session, "last_state", None)
     prior = _compact_prior_investigation(last_state)
-    # The findings stay visible for the whole session; only the licence to skip
-    # live tools expires, so an older question gathers fresh evidence too.
+    # Soft guidance for turns that *do* gather. Hard skip for explicit
+    # ``follow_up:`` handoffs lives in the orchestrator and is not age-gated.
     rule = (
         f"\n{_PRIOR_INVESTIGATION_GATHER_RULE}\n"
         if is_within_recall_window(last_state)

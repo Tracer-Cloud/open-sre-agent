@@ -13,11 +13,11 @@ import time
 from collections.abc import Mapping
 from typing import Any
 
-# Bounds tool *suppression*, not recall. The session holds one completed
-# investigation and the user may ask about it at any point, so its findings stay
-# in the answer prompt for the whole session. What expires is the licence to skip
-# live evidence: past this age a retrospective-sounding question is likely about
-# something new, so the turn gathers fresh data as well.
+# Used only when the turn is *not* an explicit follow-up handoff: age softens
+# incidental prior-RCA context (stale note on the answer prompt; gather prompt
+# prefers fresh tools). Explicit ``follow_up:`` handoffs skip gather and keep
+# the RCA as the answer regardless of this window — see
+# ``is_prior_investigation_follow_up`` and ``orchestrator._gather_and_answer``.
 PRIOR_INVESTIGATION_RECALL_SECONDS = 30 * 60
 
 # Handoff-content prefix the action planner emits for a retrospective question
@@ -34,8 +34,8 @@ def is_prior_investigation_follow_up(handoff_contents: tuple[str, ...]) -> bool:
     """True when the action planner classified this turn as a follow-up.
 
     An explicit tag is the planner's judgement about *which* incident the user
-    means, so it outranks the recall window: the question is about that
-    investigation however long ago it ran.
+    means. It outranks the recall window for gather-skip and for whether the
+    assistant treats the RCA as the answer vs background context.
     """
     return any(tag.startswith(PRIOR_INVESTIGATION_HANDOFF_PREFIX) for tag in handoff_contents)
 
