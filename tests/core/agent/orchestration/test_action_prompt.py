@@ -176,7 +176,7 @@ def test_system_prompt_hands_off_when_delivery_tool_unavailable() -> None:
     prompt = _SYSTEM_PROMPT_BASE.lower()
     compact_prompt = " ".join(prompt.split())
     assert "delivery tool unavailable — never fabricate a command to deliver" in prompt
-    assert "matching send tool" in prompt
+    assert "matching send tool" in compact_prompt
     assert "that channel is not configured" in compact_prompt
     assert "do not invent or guess a slash/cli subcommand to deliver" in compact_prompt
     assert "route the user to enable it" in compact_prompt

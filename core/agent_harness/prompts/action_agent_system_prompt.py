@@ -41,7 +41,7 @@ later action consumes the earlier action's output:
       "check the weather in Antarctica and then send it to the team channel"
           → shell_run(command="curl 'wttr.in/Antarctica?format=3'")   [this turn]
           → (observe the temperature in the tool result)
-          → the matching send tool for that channel (e.g. slack_send_message),
+          → the matching send/notify tool for that channel (from available tools),
             with the actual temperature text  [next turn]
     Recognize the dependency from words like "send it", "post that", "report the
     result", "share the output" — the pronoun/result reference means B needs A's
