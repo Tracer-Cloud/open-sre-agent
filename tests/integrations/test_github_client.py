@@ -45,10 +45,26 @@ def test_resolve_github_token_prefers_explicit_then_env(monkeypatch: pytest.Monk
     assert resolve_github_token(None) == "env-token"
 
 
+def test_resolve_github_token_can_disable_env_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GITHUB_TOKEN", "env-token")
+    assert resolve_github_token(None, allow_env_fallback=False) == ""
+
+
 def test_missing_token_raises_typed_error(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
     monkeypatch.delenv("GH_TOKEN", raising=False)
     client = GitHubRestClient(github_token=None)
+
+    with pytest.raises(GitHubApiError) as exc:
+        client.request("GET", "/repos/o/r/issues")
+
+    assert exc.value.status_code is None
+    assert "GitHub token is required" in str(exc.value)
+
+
+def test_missing_token_raises_when_env_fallback_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GITHUB_TOKEN", "env-token")
+    client = GitHubRestClient(github_token=None, allow_env_fallback=False)
 
     with pytest.raises(GitHubApiError) as exc:
         client.request("GET", "/repos/o/r/issues")

@@ -13,8 +13,11 @@ from integrations.github.tools.workflow import build_work_status_report
 
 def _report_available(sources: dict[str, dict]) -> bool:
     gh = sources.get("github", {})
+    token_available = bool(github_creds(gh).get("github_token"))
+    if not github_source_available(sources):
+        token_available = bool(resolve_github_token(None))
     return bool(
-        (github_source_available(sources) or resolve_github_token(None))
+        token_available
         and gh.get("owner")
         and gh.get("repo")
     )
@@ -61,16 +64,27 @@ def generate_work_status_report(
     work_items: list[dict[str, Any]] | None = None,
     pull_requests: list[dict[str, Any]] | None = None,
     github_token: str | None = None,
+    allow_env_fallback: bool = True,
     **_kwargs: Any,
 ) -> dict[str, Any]:
     errors: list[str] = []
     if work_items is None and owner and repo:
-        work_result = list_github_work_items(owner=owner, repo=repo, github_token=github_token)
+        work_result = list_github_work_items(
+            owner=owner,
+            repo=repo,
+            github_token=github_token,
+            allow_env_fallback=allow_env_fallback,
+        )
         if not work_result.get("available", False):
             errors.append(f"work_items: {work_result.get('error', 'unavailable')}")
         work_items = list(work_result.get("items", []))
     if pull_requests is None and owner and repo:
-        pr_result = summarize_github_pr_status(owner=owner, repo=repo, github_token=github_token)
+        pr_result = summarize_github_pr_status(
+            owner=owner,
+            repo=repo,
+            github_token=github_token,
+            allow_env_fallback=allow_env_fallback,
+        )
         if not pr_result.get("available", False):
             errors.append(f"pull_requests: {pr_result.get('error', 'unavailable')}")
         pull_requests = list(pr_result.get("pull_requests", []))

@@ -30,6 +30,8 @@ def github_creds(gh: dict) -> dict[str, Any]:
     token = gh.get("github_token") or gh.get("auth_token")
     if token:
         creds["github_token"] = token
+    if gh.get("connection_verified"):
+        creds["allow_env_fallback"] = False
     command = gh.get("github_command") or gh.get("command")
     if command:
         creds["github_command"] = command

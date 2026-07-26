@@ -13,8 +13,11 @@ from integrations.github.helpers import github_creds, github_source_available
 
 def _github_repository_available(sources: dict[str, dict]) -> bool:
     gh = sources.get("github", {})
+    token_available = bool(github_creds(gh).get("github_token"))
+    if not github_source_available(sources):
+        token_available = bool(resolve_github_token(None))
     return bool(
-        (github_source_available(sources) or resolve_github_token(None))
+        token_available
         and gh.get("owner")
         and gh.get("repo")
     )
@@ -89,11 +92,14 @@ def get_github_repository(
     owner: str,
     repo: str,
     github_token: str | None = None,
+    allow_env_fallback: bool = True,
     **_kwargs: Any,
 ) -> dict[str, Any]:
     """Fetch repository metadata from the GitHub REST API."""
     try:
-        payload = GitHubRestClient(github_token).request("GET", f"/repos/{owner}/{repo}")
+        payload = GitHubRestClient(
+            github_token, allow_env_fallback=allow_env_fallback
+        ).request("GET", f"/repos/{owner}/{repo}")
     except GitHubApiError as exc:
         report_run_error(
             exc,

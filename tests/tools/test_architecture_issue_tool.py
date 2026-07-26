@@ -17,6 +17,7 @@ from tools.architecture_issue_tool.tool import (
     architecture_cleanup_repo,
     architecture_clone_repo,
     architecture_save_observations,
+    _github_extract_params,
 )
 
 
@@ -69,6 +70,24 @@ def test_architecture_clone_repo_local_path(tmp_path: Path) -> None:
     )
     assert result["ok"] is True
     assert result["workspace_root"] == str(tmp_path.resolve())
+
+
+def test_architecture_clone_extract_params_disables_env_fallback() -> None:
+    params = _github_extract_params(
+        {
+            "github": {
+                "connection_verified": True,
+                "owner": "org",
+                "repo": "repo",
+                "github_token": "source-token",
+            }
+        }
+    )
+
+    assert params["owner"] == "org"
+    assert params["repo"] == "repo"
+    assert params["github_token"] == "source-token"
+    assert params["allow_env_fallback"] is False
 
 
 def test_architecture_cleanup_refuses_outside_path(tmp_path: Path) -> None:

@@ -30,8 +30,11 @@ _TERMINAL_CHECK_CONCLUSIONS = _FAILED_CHECK_CONCLUSIONS | {"success", "skipped",
 
 def _github_available(sources: dict[str, dict]) -> bool:
     gh = sources.get("github", {})
+    token_available = bool(github_creds(gh).get("github_token"))
+    if not github_source_available(sources):
+        token_available = bool(resolve_github_token(None))
     return bool(
-        (github_source_available(sources) or resolve_github_token(None))
+        token_available
         and gh.get("owner")
         and gh.get("repo")
     )
@@ -131,13 +134,16 @@ def list_github_work_items(
     include_prs: bool = False,
     per_page: int = 50,
     github_token: str | None = None,
+    allow_env_fallback: bool = True,
     **_kwargs: Any,
 ) -> dict[str, Any]:
     params: dict[str, Any] = {"state": state, "per_page": max(1, min(per_page, 100))}
     if labels.strip():
         params["labels"] = labels.strip()
     try:
-        raw_items = GitHubRestClient(github_token).paginate(
+        raw_items = GitHubRestClient(
+            github_token, allow_env_fallback=allow_env_fallback
+        ).paginate(
             f"/repos/{owner}/{repo}/issues", params=params
         )
     except GitHubApiError as exc:
@@ -268,9 +274,10 @@ def summarize_github_pr_status(
     per_page: int = 30,
     include_checks: bool = True,
     github_token: str | None = None,
+    allow_env_fallback: bool = True,
     **_kwargs: Any,
 ) -> dict[str, Any]:
-    client = GitHubRestClient(github_token)
+    client = GitHubRestClient(github_token, allow_env_fallback=allow_env_fallback)
     try:
         raw_prs = client.paginate(
             f"/repos/{owner}/{repo}/pulls",
@@ -375,9 +382,10 @@ def list_github_security_alerts(
     alert_type: str = "all",
     state: str = "open",
     github_token: str | None = None,
+    allow_env_fallback: bool = True,
     **_kwargs: Any,
 ) -> dict[str, Any]:
-    client = GitHubRestClient(github_token)
+    client = GitHubRestClient(github_token, allow_env_fallback=allow_env_fallback)
     selected = list(_ALERT_ENDPOINTS) if alert_type == "all" else [alert_type]
     alerts: list[dict[str, Any]] = []
     errors: dict[str, str] = {}
@@ -617,9 +625,10 @@ def execute_github_issue_mutation(
     repo: str,
     proposal: dict[str, Any],
     github_token: str | None = None,
+    allow_env_fallback: bool = True,
     **_kwargs: Any,
 ) -> dict[str, Any]:
-    client = GitHubRestClient(github_token)
+    client = GitHubRestClient(github_token, allow_env_fallback=allow_env_fallback)
     parsed, parse_error = _proposal_from_payload(proposal)
     if parsed is None:
         return _mutation_rejected(parse_error or "invalid proposal")

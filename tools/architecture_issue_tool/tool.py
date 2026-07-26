@@ -19,9 +19,17 @@ from tools.architecture_issue_tool.report_persistence import (
 )
 
 
-def _resolve_github_token(explicit: str | None = None) -> str:
+def _resolve_github_token(
+    explicit: str | None = None, *, allow_env_fallback: bool = True
+) -> str:
     """Resolve a GitHub token without importing ``integrations`` (layer peers)."""
-    return (explicit or os.getenv("GITHUB_TOKEN") or os.getenv("GH_TOKEN") or "").strip()
+    if explicit is not None:
+        token = explicit.strip()
+        if token or not allow_env_fallback:
+            return token
+    if not allow_env_fallback:
+        return ""
+    return (os.getenv("GITHUB_TOKEN") or os.getenv("GH_TOKEN") or "").strip()
 
 
 def _github_source_available(sources: dict[str, dict]) -> bool:
@@ -33,11 +41,17 @@ def _github_creds(gh: dict[str, Any]) -> dict[str, Any]:
     token = gh.get("github_token") or gh.get("auth_token")
     if token:
         creds["github_token"] = token
+    if gh.get("connection_verified"):
+        creds["allow_env_fallback"] = False
     return creds
 
 
 def _github_clone_available(sources: dict[str, dict]) -> bool:
-    return bool(_github_source_available(sources) or _resolve_github_token(None))
+    gh = sources.get("github", {})
+    token_available = bool(_github_creds(gh).get("github_token"))
+    if not _github_source_available(sources):
+        token_available = bool(_resolve_github_token(None))
+    return bool(token_available)
 
 
 def _github_extract_params(sources: dict[str, dict]) -> dict[str, Any]:

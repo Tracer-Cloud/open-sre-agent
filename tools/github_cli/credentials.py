@@ -10,9 +10,17 @@ import os
 from typing import Any
 
 
-def resolve_github_token(explicit: str | None = None) -> str:
+def resolve_github_token(
+    explicit: str | None = None, *, allow_env_fallback: bool = True
+) -> str:
     """Resolve a GitHub token from explicit input or standard env vars."""
-    return (explicit or os.getenv("GITHUB_TOKEN") or os.getenv("GH_TOKEN") or "").strip()
+    if explicit is not None:
+        token = explicit.strip()
+        if token or not allow_env_fallback:
+            return token
+    if not allow_env_fallback:
+        return ""
+    return (os.getenv("GITHUB_TOKEN") or os.getenv("GH_TOKEN") or "").strip()
 
 
 def github_source_available(sources: dict[str, dict]) -> bool:
@@ -25,6 +33,8 @@ def github_creds(gh: dict[str, Any]) -> dict[str, Any]:
     token = gh.get("github_token") or gh.get("auth_token")
     if token:
         creds["github_token"] = token
+    if gh.get("connection_verified"):
+        creds["allow_env_fallback"] = False
     return creds
 
 

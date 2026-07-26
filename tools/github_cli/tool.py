@@ -44,9 +44,11 @@ _ARGS_SCHEMA: dict[str, Any] = {
 
 def _github_cli_available(sources: dict[str, dict]) -> bool:
     gh = sources.get("github", {})
-    return bool(
-        github_source_available(sources) or resolve_github_token(None) or gh.get("github_token")
-    )
+    creds = github_creds(gh)
+    token_available = bool(creds.get("github_token"))
+    if not github_source_available(sources):
+        token_available = bool(resolve_github_token(None))
+    return bool(token_available or gh.get("github_token"))
 
 
 def _github_cli_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
@@ -55,8 +57,7 @@ def _github_cli_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     if not gh:
         return params
     creds = github_creds(gh)
-    if creds.get("github_token"):
-        params["github_token"] = creds["github_token"]
+    params.update(creds)
     owner = str(gh.get("owner") or "").strip()
     repo = str(gh.get("repo") or "").strip()
     if owner and repo:
@@ -105,12 +106,19 @@ def github_cli(
     repo: str | None = None,
     timeout: int | None = None,
     github_token: str | None = None,
+    allow_env_fallback: bool = True,
     **_kwargs: Any,
 ) -> dict[str, Any]:
     """Run an authenticated ``gh`` command (read or write; no approval gate)."""
     normalized = _normalize_args(args)
     return attach_summary(
-        run_gh(args=normalized, repo=repo, github_token=github_token, timeout=timeout),
+        run_gh(
+            args=normalized,
+            repo=repo,
+            github_token=github_token,
+            allow_env_fallback=allow_env_fallback,
+            timeout=timeout,
+        ),
         args=normalized,
     )
 

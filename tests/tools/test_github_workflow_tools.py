@@ -26,7 +26,7 @@ from integrations.github.tools.workflow import (
     build_work_status_report,
 )
 from tests.tools.conftest import BaseToolContract
-from tools.work_status_report_tool import generate_work_status_report
+from tools.work_status_report_tool import _report_extract_params, generate_work_status_report
 
 
 def _registered_tool(tool: Any) -> Any:
@@ -170,6 +170,24 @@ def test_generate_work_status_report_surfaces_fetch_errors() -> None:
     assert result["available"] is False
     assert result["incomplete"] is True
     assert result["errors"] == ["work_items: boom"]
+
+
+def test_report_extract_params_disables_env_fallback_for_verified_source() -> None:
+    params = _report_extract_params(
+        {
+            "github": {
+                "connection_verified": True,
+                "owner": "acme",
+                "repo": "widgets",
+                "github_token": "source-token",
+            }
+        }
+    )
+
+    assert params["owner"] == "acme"
+    assert params["repo"] == "widgets"
+    assert params["github_token"] == "source-token"
+    assert params["allow_env_fallback"] is False
 
 
 def test_build_work_status_report_does_not_hide_read_errors() -> None:

@@ -109,6 +109,7 @@ def run_gh(
     args: list[str],
     repo: str | None = None,
     github_token: str | None = None,
+    allow_env_fallback: bool = True,
     timeout: int | None = None,
 ) -> dict[str, Any]:
     """Execute ``gh`` with OpenSRE-resolved credentials.
@@ -143,7 +144,7 @@ def run_gh(
             "stderr": "",
         }
 
-    token = resolve_github_token(github_token)
+    token = resolve_github_token(github_token, allow_env_fallback=allow_env_fallback)
     if not token:
         return {
             "ok": False,

@@ -27,10 +27,18 @@ class GitHubApiError(RuntimeError):
         return f"GitHub API error {self.status_code}: {self.message}"
 
 
-def resolve_github_token(github_token: str | None = None) -> str:
-    """Resolve a GitHub token from explicit input or standard env vars."""
+def resolve_github_token(
+    github_token: str | None = None, *, allow_env_fallback: bool = True
+) -> str:
+    """Resolve a GitHub token from explicit input, then env if allowed."""
 
-    return (github_token or os.getenv("GITHUB_TOKEN") or os.getenv("GH_TOKEN") or "").strip()
+    if github_token is not None:
+        token = github_token.strip()
+        if token or not allow_env_fallback:
+            return token
+    if not allow_env_fallback:
+        return ""
+    return (os.getenv("GITHUB_TOKEN") or os.getenv("GH_TOKEN") or "").strip()
 
 
 def _next_link(headers: Any) -> str | None:
@@ -60,9 +68,15 @@ class GitHubRestClient:
     """Minimal GitHub REST API client with pagination and typed errors."""
 
     def __init__(
-        self, github_token: str | None = None, *, base_url: str = "https://api.github.com"
+        self,
+        github_token: str | None = None,
+        *,
+        base_url: str = "https://api.github.com",
+        allow_env_fallback: bool = True,
     ) -> None:
-        self._token = resolve_github_token(github_token)
+        self._token = resolve_github_token(
+            github_token, allow_env_fallback=allow_env_fallback
+        )
         self._base_url = base_url.rstrip("/")
 
     def request(

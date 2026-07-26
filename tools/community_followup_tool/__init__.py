@@ -13,8 +13,11 @@ from integrations.github.tools.workflow import summarize_community_followups_fro
 
 def _community_available(sources: dict[str, dict]) -> bool:
     gh = sources.get("github", {})
+    token_available = bool(github_creds(gh).get("github_token"))
+    if not github_source_available(sources):
+        token_available = bool(resolve_github_token(None))
     return bool(
-        (github_source_available(sources) or resolve_github_token(None))
+        token_available
         and gh.get("owner")
         and gh.get("repo")
     )
@@ -61,13 +64,16 @@ def summarize_community_followups(
     maintainer_logins: list[str] | None = None,
     per_page: int = 100,
     github_token: str | None = None,
+    allow_env_fallback: bool = True,
     **_kwargs: Any,
 ) -> dict[str, Any]:
     try:
         normalized_comments = (
             comments
             if comments is not None
-            else GitHubRestClient(github_token).paginate(
+            else GitHubRestClient(
+                github_token, allow_env_fallback=allow_env_fallback
+            ).paginate(
                 f"/repos/{owner}/{repo}/issues/comments",
                 params={"per_page": max(1, min(per_page, 100))},
             )

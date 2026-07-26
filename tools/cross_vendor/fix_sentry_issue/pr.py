@@ -47,9 +47,10 @@ def open_pull_request(
     title: str,
     body: str,
     github_token: str | None = None,
+    allow_env_fallback: bool = True,
 ) -> PullRequest:
     """Open a PR from *head_branch* into *base_branch*. Raises FixIssueError."""
-    token = resolve_github_token(github_token)
+    token = resolve_github_token(github_token, allow_env_fallback=allow_env_fallback)
     if not token:
         raise FixIssueError(
             ERR_GITHUB_TOKEN,

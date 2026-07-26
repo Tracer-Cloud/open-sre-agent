@@ -9,7 +9,7 @@ from core.tool_framework.registered_tool import RegisteredTool
 from tests.tools.conftest import BaseToolContract
 from tools.github_cli.runner import build_gh_argv, denied_gh_command, run_gh
 from tools.github_cli.summary import summarize_gh_result
-from tools.github_cli.tool import github_cli
+from tools.github_cli.tool import _github_cli_extract_params, github_cli
 from tools.registry import clear_tool_registry_cache, get_registered_tools
 
 
@@ -149,6 +149,24 @@ def test_run_gh_injects_token_env() -> None:
         "--title",
         "t",
     ]
+
+
+def test_github_cli_extract_params_disables_env_fallback_for_verified_source() -> None:
+    params = _github_cli_extract_params(
+        {
+            "github": {
+                "connection_verified": True,
+                "owner": "acme",
+                "repo": "widgets",
+                "github_token": "source-token",
+            }
+        }
+    )
+
+    assert params["owner"] == "acme"
+    assert params["repo"] == "acme/widgets"
+    assert params["github_token"] == "source-token"
+    assert params["allow_env_fallback"] is False
 
 
 def test_github_cli_runs_mutate_without_approval() -> None:
