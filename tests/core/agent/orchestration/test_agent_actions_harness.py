@@ -522,7 +522,7 @@ def test_run_turn_skips_gather_for_follow_up_handoff_with_prior_state() -> None:
             executed_success_count=1,
             has_unhandled_clause=False,
             handled=True,
-            handoff_contents=("follow_up:last_investigation_summary",),
+            handoff_contents=("follow_up:prior_investigation",),
         )
 
     def _gather(text: str, *_args: object, **_kwargs: object) -> str:
@@ -545,7 +545,7 @@ def test_run_turn_skips_gather_for_follow_up_handoff_with_prior_state() -> None:
     assert gather_calls == []
     assert answer_kwargs
     assert answer_kwargs[0].get("tool_observation") is None
-    assert answer_kwargs[0].get("handoff_contents") == ("follow_up:last_investigation_summary",)
+    assert answer_kwargs[0].get("handoff_contents") == ("follow_up:prior_investigation",)
     assert result.final_intent == "cli_agent_fallback"
 
 
