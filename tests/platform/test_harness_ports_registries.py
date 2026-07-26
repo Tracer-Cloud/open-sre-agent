@@ -90,8 +90,7 @@ def test_repo_scope_enrichment_without_providers_returns_a_copy() -> None:
         conversation_messages=[],
         env={},
         cwd=None,
-        github_cached=None,
-        gitlab_cached=None,
+        cached_scopes={},
     )
 
     # Assert: same content, but mutating the result must not touch the input.

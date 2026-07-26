@@ -14,9 +14,4 @@ SUMMARIZE_OBSERVATION_TAG = "summarize_observation"
 # for selection only when no other tool scores positively for the alert.
 FALLBACK_PLANNING_TAG = "fallback_planning"
 
-# Marks a tool's source as a generic fallback source (useful, but never
-# primary when incident-specific integrations match). See
-# core.domain.alerts.alert_source.secondary_tool_sources.
-SECONDARY_SOURCE_TAG = "secondary_source"
-
-__all__ = ["FALLBACK_PLANNING_TAG", "SECONDARY_SOURCE_TAG", "SUMMARIZE_OBSERVATION_TAG"]
+__all__ = ["FALLBACK_PLANNING_TAG", "SUMMARIZE_OBSERVATION_TAG"]

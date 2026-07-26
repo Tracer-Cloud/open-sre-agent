@@ -177,9 +177,11 @@ def _build_system_prompt(
     # (terminology/setup/response-shape rules) stay empty for gateway turns
     # and are replaced wholesale by the joined gateway persona block below.
     gateway_persona_block = f"{gateway_persona_fragments()}\n\n" if is_gateway else ""
-    terminology_rule = "" if is_gateway else _TERMINOLOGY_RULE
-    setup_rule = "" if is_gateway else _SETUP_GUIDANCE_RULE
-    response_shape_rule = "" if is_gateway else _RESPONSE_SHAPE_RULE
+    # Separators live inside each block so an empty gateway slot contributes
+    # nothing rather than a run of blank lines.
+    terminology_block = "" if is_gateway else f"{_TERMINOLOGY_RULE}\n"
+    setup_block = "" if is_gateway else f"{_SETUP_GUIDANCE_RULE}\n\n"
+    response_shape_block = "" if is_gateway else f"{_RESPONSE_SHAPE_RULE}\n\n"
     repo_map_block = f"--- Repo map (AGENTS.md) ---\n{agents_md}\n\n" if agents_md else ""
     docs_block = (
         "--- Documentation reference (docs/) ---\n"
@@ -235,12 +237,12 @@ def _build_system_prompt(
         "those as available thread context for follow-up questions; do not ask the "
         "user to paste values that are already present there.\n\n"
         f"{_PRIOR_INVESTIGATION_FOLLOW_UP_RULE}\n\n"
-        f"{setup_rule}\n\n"
+        f"{setup_block}"
         f"{_SOURCE_SCOPED_INVESTIGATION_RULE}\n\n"
         f"{vendor_fragments}"
-        f"{response_shape_rule}\n\n"
+        f"{response_shape_block}"
         f"{gateway_persona_block}"
-        f"{terminology_rule}\n{_MARKDOWN_RULE}\n\n"
+        f"{terminology_block}{_MARKDOWN_RULE}\n\n"
         f"{environment}"
         f"--- CLI reference ---\n{reference}\n\n"
         f"{docs_block}"
