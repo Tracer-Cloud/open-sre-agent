@@ -34,8 +34,9 @@ _PRIOR_INVESTIGATION_FOLLOW_UP_RULE = (
     "section below) and the user asks a retrospective question — such as "
     "'what happened?', 'what was the root cause?', 'summarize what you found', "
     "or similar — answer directly from that prior investigation data. Do NOT "
-    "ask for more alert context or redirect to `opensre investigate` when prior "
-    "investigation results are already available."
+    "ask for more alert context, claim you lack incident details, or redirect "
+    "to `opensre investigate` when prior investigation results are already "
+    "available. Lead with the prior root cause / findings."
 )
 
 _SETUP_GUIDANCE_RULE = (

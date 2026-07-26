@@ -2,13 +2,31 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
+from core.agent_harness.prompts.prior_investigation import prior_investigation_headline
 from platform.harness_ports import gather_prompt_vendor_fragments
 
 if TYPE_CHECKING:
     from core.agent_harness.ports import SessionStore
     from core.agent_harness.turns.turn_snapshot import TurnSnapshot
+
+_PRIOR_INVESTIGATION_GATHER_RULE = (
+    "Prior investigation in this session: when the block below is present and "
+    "the user asks a retrospective question about that investigation (for "
+    "example 'what happened?', 'what was the root cause?', 'what caused the "
+    "spike?', 'why did it fail?', or 'during the last investigation'), call "
+    "NO tools — a later step answers from that prior investigation data. Only "
+    "call tools when the question clearly needs fresh live data beyond what "
+    "the prior investigation already concluded."
+)
+
+
+def _compact_prior_investigation(state: dict[str, Any] | None) -> str:
+    """Compact last-investigation facts for the gather prompt (not the full report)."""
+    if not state:
+        return ""
+    return "\n".join(prior_investigation_headline(state))
 
 
 def build_gather_system_prompt(session: SessionStore) -> str:
@@ -27,6 +45,13 @@ def build_gather_system_prompt(session: SessionStore) -> str:
         if session.configured_integrations
         else "(unknown)"
     )
+    prior = _compact_prior_investigation(getattr(session, "last_state", None))
+    prior_block = (
+        f"\n{_PRIOR_INVESTIGATION_GATHER_RULE}\n"
+        f"--- Prior investigation in this session ---\n{prior}\n"
+        if prior
+        else ""
+    )
     prompt = (
         "You are the data-gathering step of the OpenSRE terminal assistant. The "
         "user asked a question that may be answerable with live data from the "
@@ -42,6 +67,7 @@ def build_gather_system_prompt(session: SessionStore) -> str:
         "that from the tool results you collect. Stop calling tools as soon as "
         "you have enough data.\n"
         f"Configured integrations in this session: {configured}."
+        f"{prior_block}"
     )
     vendor_fragments = gather_prompt_vendor_fragments()
     if vendor_fragments:
@@ -56,5 +82,9 @@ def build_gather_system_prompt_from_turn_snapshot(turn_snapshot: TurnSnapshot) -
         @property
         def configured_integrations(self) -> tuple[str, ...]:
             return turn_snapshot.configured_integrations
+
+        @property
+        def last_state(self) -> dict[str, Any] | None:
+            return turn_snapshot.last_state
 
     return build_gather_system_prompt(_GatherSessionView())  # type: ignore[arg-type]

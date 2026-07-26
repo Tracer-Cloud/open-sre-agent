@@ -271,6 +271,11 @@ def _routing_input_from_result(
     )
 
 
+def _is_prior_investigation_follow_up_handoff(handoff_contents: tuple[str, ...]) -> bool:
+    """True when the action planner handed off a session-prior-investigation follow-up."""
+    return any(tag.startswith("follow_up:") for tag in handoff_contents)
+
+
 def _gather_and_answer(
     *,
     text: str,
@@ -281,7 +286,17 @@ def _gather_and_answer(
     handoff_contents: tuple[str, ...],
     turn_plan: TurnPlan,
 ) -> Any | None:
-    gathered = gather(text, is_tty=is_tty, turn_plan=turn_plan)
+    # Retrospective follow-ups already have grounding in ``last_state`` (injected
+    # into the assistant prompt). Running the live gather loop for those turns
+    # is wasteful and often violates "do not call integration tools" contracts
+    # by probing Datadog/Sentry for a question the prior RCA already answered.
+    skip_gather = (
+        _is_prior_investigation_follow_up_handoff(handoff_contents)
+        and turn_plan.snapshot.last_state is not None
+    )
+    gathered = None if skip_gather else gather(text, is_tty=is_tty, turn_plan=turn_plan)
+    if skip_gather:
+        log.debug("gather skipped: follow_up handoff with prior investigation state")
 
     # When evidence was gathered, mark it off-screen so the prompt builder
     # includes it. When nothing was gathered, omit the flag entirely so the

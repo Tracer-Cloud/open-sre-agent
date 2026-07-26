@@ -17,6 +17,7 @@ from core.agent_harness.prompts.conversation_memory import (
     format_prior_action_facts,
     format_recent_conversation,
 )
+from core.agent_harness.prompts.prior_investigation import prior_investigation_headline
 
 if TYPE_CHECKING:
     from core.agent_harness.turns.turn_snapshot import TurnSnapshot
@@ -107,13 +108,7 @@ def _summarize_evidence(evidence: Any) -> list[str]:
 
 def _summarize_last_state(state: dict[str, Any]) -> str:
     """Produce a compact text summary of the previous investigation."""
-    parts: list[str] = []
-    alert_name = state.get("alert_name")
-    if alert_name:
-        parts.append(f"Alert: {alert_name}")
-    root_cause = state.get("root_cause")
-    if root_cause:
-        parts.append(f"Root cause: {root_cause}")
+    parts: list[str] = prior_investigation_headline(state)
     problem_md = state.get("problem_md") or ""
     if problem_md:
         parts.append(f"Problem summary:\n{problem_md[:2000]}")
