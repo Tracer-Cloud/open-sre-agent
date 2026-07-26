@@ -145,8 +145,18 @@ def score_periodic_spikes(
     spike_threshold: float,
 ) -> PeriodicityScore:
     repeated_spikes = 0
-    was_above_threshold = False
-    for value in values:
+    if not values:
+        score = 0.0
+        rationale = "No repeated spike pattern detected."
+        return PeriodicityScore(
+            signal_name=signal_name,
+            repeated_spikes=repeated_spikes,
+            score=round(score, 4),
+            rationale=rationale,
+        )
+
+    was_above_threshold = values[0] >= spike_threshold
+    for value in values[1:]:
         is_above_threshold = value >= spike_threshold
         if is_above_threshold and not was_above_threshold:
             repeated_spikes += 1
