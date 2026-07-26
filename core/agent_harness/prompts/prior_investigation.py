@@ -13,11 +13,17 @@ import time
 from collections.abc import Mapping
 from typing import Any
 
-# ``last_state`` lives for the whole session, but answering from it means
-# skipping live tools. Past this age a retrospective-sounding question is more
-# likely about something new, so the turn gathers fresh data instead of
-# answering from a stale investigation.
+# Bounds tool *suppression*, not recall. The session holds one completed
+# investigation and the user may ask about it at any point, so its findings stay
+# in the answer prompt for the whole session. What expires is the licence to skip
+# live evidence: past this age a retrospective-sounding question is likely about
+# something new, so the turn gathers fresh data as well.
 PRIOR_INVESTIGATION_RECALL_SECONDS = 30 * 60
+
+STALE_PRIOR_INVESTIGATION_NOTE = (
+    "(from earlier in this session — treat as background and prefer any fresh "
+    "evidence below when they disagree)"
+)
 
 
 def prior_investigation_headline(state: Mapping[str, Any]) -> list[str]:

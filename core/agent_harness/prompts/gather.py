@@ -24,12 +24,19 @@ _PRIOR_INVESTIGATION_GATHER_RULE = (
     "the prior investigation already concluded."
 )
 
+_STALE_PRIOR_INVESTIGATION_GATHER_RULE = (
+    "Prior investigation in this session: the block below is from earlier in "
+    "this session and may no longer reflect current state. Use it as background "
+    "for what the user is referring to, but DO gather fresh data for the "
+    "question being asked rather than assuming the earlier conclusion still holds."
+)
+
 
 def _compact_prior_investigation(state: dict[str, Any] | None) -> str:
     """Compact last-investigation facts for the gather prompt (not the full report)."""
-    if not is_within_recall_window(state):
+    if not state:
         return ""
-    return "\n".join(prior_investigation_headline(state or {}))
+    return "\n".join(prior_investigation_headline(state))
 
 
 def build_gather_system_prompt(session: SessionStore) -> str:
@@ -48,13 +55,16 @@ def build_gather_system_prompt(session: SessionStore) -> str:
         if session.configured_integrations
         else "(unknown)"
     )
-    prior = _compact_prior_investigation(getattr(session, "last_state", None))
-    prior_block = (
+    last_state = getattr(session, "last_state", None)
+    prior = _compact_prior_investigation(last_state)
+    # The findings stay visible for the whole session; only the licence to skip
+    # live tools expires, so an older question gathers fresh evidence too.
+    rule = (
         f"\n{_PRIOR_INVESTIGATION_GATHER_RULE}\n"
-        f"--- Prior investigation in this session ---\n{prior}\n"
-        if prior
-        else ""
+        if is_within_recall_window(last_state)
+        else f"\n{_STALE_PRIOR_INVESTIGATION_GATHER_RULE}\n"
     )
+    prior_block = f"{rule}--- Prior investigation in this session ---\n{prior}\n" if prior else ""
     prompt = (
         "You are the data-gathering step of the OpenSRE terminal assistant. The "
         "user asked a question that may be answerable with live data from the "

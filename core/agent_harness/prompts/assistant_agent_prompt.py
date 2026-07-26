@@ -59,6 +59,14 @@ _HANDOFF_GUIDANCE: dict[str, str] = {
         "- Do NOT suggest `/integrations setup llama`, `/remote`, or claim you "
         "switched providers.\n\n"
     ),
+    "follow_up:prior_investigation": (
+        "The action planner handed off a retrospective question about the "
+        "investigation already completed in this session. Answer it from the "
+        "'--- Prior investigation in this session ---' section: lead with the "
+        "root cause and the findings it records. Do NOT ask which incident they "
+        "mean, do NOT ask for alert context, and do NOT suggest starting a new "
+        "investigation.\n\n"
+    ),
 }
 
 

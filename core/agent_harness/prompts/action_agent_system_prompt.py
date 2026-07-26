@@ -185,8 +185,11 @@ connected right now (or "none" / "unknown"). Apply these rules in order:
   investigation for it.
 - A diagnostic question that is a FOLLOW-UP about a result you already produced
   (see RECENT CONVERSATION) — e.g. "why did it fail?" / "what caused the spike?"
-  after a completed investigation — is answered from that prior context: emit
-  assistant_handoff, do NOT start a new investigation.
+  / "what happened?" after a completed investigation — is answered from that
+  prior context: emit assistant_handoff(content="follow_up:prior_investigation")
+  so the turn answers from the completed RCA instead of re-querying integrations.
+  Do NOT start a new investigation. Use this content value only for a question
+  about an investigation already completed in this session.
 - When unsure AND the message lacks an explicit investigate/analyze/diagnose/
   RCA/root-cause instruction, choose assistant_handoff. An explicit investigate
   verb is never "unsure" — emit investigation_start per the rule above.

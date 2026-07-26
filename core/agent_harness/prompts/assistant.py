@@ -18,6 +18,7 @@ from core.agent_harness.prompts.conversation_memory import (
     format_recent_conversation,
 )
 from core.agent_harness.prompts.prior_investigation import (
+    STALE_PRIOR_INVESTIGATION_NOTE,
     is_within_recall_window,
     prior_investigation_headline,
 )
@@ -107,6 +108,16 @@ def _summarize_evidence(evidence: Any) -> list[str]:
         f"Evidence type: {type(evidence).__name__}",
         f"Evidence summary:\n{str(evidence)[:1500]}",
     ]
+
+
+def _prior_investigation_block(state: dict[str, Any] | None) -> str:
+    """Summarize the session's investigation, marking it stale past the recall window."""
+    if state is None:
+        return ""
+    summary = _summarize_last_state(state)
+    if is_within_recall_window(state):
+        return summary
+    return f"{STALE_PRIOR_INVESTIGATION_NOTE}\n{summary}"
 
 
 def _summarize_last_state(state: dict[str, Any]) -> str:
@@ -235,15 +246,12 @@ def build_cli_agent_prompt_from_provider(
         agents_md=prompts.agents_md(),
         docs=prompts.docs(message),
         investigation_flow=prompts.investigation_flow(),
-        # Same recall window as the gather pass: past it the turn gathers live
-        # data, so leading the answer with the old RCA would ground the reply in
-        # something the evidence no longer supports.
-        prior_investigation=(
-            _summarize_last_state(turn_snapshot.last_state)
-            if turn_snapshot.last_state is not None
-            and is_within_recall_window(turn_snapshot.last_state)
-            else ""
-        ),
+        # The session's completed investigation stays available for the whole
+        # session — a retrospective question can come at any point, and dropping
+        # it would make OpenSRE claim it lacks incident details it still holds.
+        # Age only downgrades it to background (see the note), because past the
+        # recall window the turn also gathers fresh evidence.
+        prior_investigation=_prior_investigation_block(turn_snapshot.last_state),
         prior_action_facts=format_prior_action_facts(list(turn_snapshot.conversation_messages)),
         environment=prompts.environment_block(),
         surface=prompts.surface(),

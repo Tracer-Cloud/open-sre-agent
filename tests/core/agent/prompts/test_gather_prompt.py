@@ -5,14 +5,20 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from core.agent_harness.prompts import build_cli_agent_prompt_from_provider
+from core.agent_harness.prompts import (
+    build_action_system_prompt,
+    build_cli_agent_prompt_from_provider,
+)
+from core.agent_harness.prompts.assistant_agent_prompt import build_handoff_guidance_block
 from core.agent_harness.prompts.gather import (
     build_gather_system_prompt,
     build_gather_system_prompt_from_turn_snapshot,
 )
 from core.agent_harness.prompts.prior_investigation import (
     PRIOR_INVESTIGATION_RECALL_SECONDS,
+    STALE_PRIOR_INVESTIGATION_NOTE,
 )
+from core.agent_harness.turns.orchestrator import _is_prior_investigation_follow_up_handoff
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 
 
@@ -92,36 +98,36 @@ def test_gather_prompt_with_recent_state_instructs_no_tools_for_retrospectives()
     assert "call NO tools" in prompt
 
 
-def test_gather_prompt_drops_prior_block_once_investigation_is_stale() -> None:
-    """An old investigation must not suppress tools for a question about something new."""
+def test_gather_prompt_keeps_stale_findings_but_stops_suppressing_tools() -> None:
+    """Age lifts the no-tools licence; it must not discard the findings themselves."""
     # Arrange: started just past the recall window.
     session = _SessionView()
     session.last_state = _investigation(
         investigation_started_at=time.monotonic() - PRIOR_INVESTIGATION_RECALL_SECONDS - 1,
-        root_cause="stale-marker-must-not-appear",
+        root_cause="aging-root-cause",
     )
 
     # Act
     prompt = build_gather_system_prompt(session)  # type: ignore[arg-type]
 
-    # Assert: the turn falls back to gathering, and the stale finding never leaks.
-    assert "Prior investigation in this session" not in prompt
+    # Assert: still available as background, but the turn now gathers fresh data.
+    assert "Root cause: aging-root-cause" in prompt
     assert "call NO tools" not in prompt
-    assert "stale-marker-must-not-appear" not in prompt
+    assert "DO gather fresh data" in prompt
 
 
-def test_gather_prompt_drops_prior_block_when_state_has_no_timestamp() -> None:
-    """Undatable state is treated as stale, not as fresh."""
+def test_gather_prompt_treats_undatable_state_as_stale() -> None:
+    """State we cannot date keeps its findings but never suppresses tools."""
     # Arrange
     session = _SessionView()
-    session.last_state = {"root_cause": "undatable-marker-must-not-appear"}
+    session.last_state = {"root_cause": "undatable-root-cause"}
 
     # Act
     prompt = build_gather_system_prompt(session)  # type: ignore[arg-type]
 
     # Assert
-    assert "Prior investigation in this session" not in prompt
-    assert "undatable-marker-must-not-appear" not in prompt
+    assert "Root cause: undatable-root-cause" in prompt
+    assert "call NO tools" not in prompt
 
 
 def test_gather_prompt_from_turn_snapshot_includes_recent_last_state() -> None:
@@ -138,35 +144,51 @@ def test_gather_prompt_from_turn_snapshot_includes_recent_last_state() -> None:
     assert "call NO tools" in prompt
 
 
-def test_answer_prompt_uses_the_same_recall_window_as_gather() -> None:
-    """Both prompts must agree: a stale RCA cannot ground the answer either.
+def test_answer_prompt_keeps_an_old_investigation_and_labels_it() -> None:
+    """A retrospective question can come at any time; the RCA must survive the window.
 
-    Otherwise the turn gathers live evidence while the answer prompt still leads
-    with the old root cause.
+    Dropping it would make OpenSRE claim it lacks incident details it still holds.
     """
     # Arrange
-    stale = _investigation(
-        investigation_started_at=time.monotonic() - PRIOR_INVESTIGATION_RECALL_SECONDS - 1,
-        root_cause="stale-marker-must-not-appear",
-    )
     session = _SnapshotSession()
-    session.last_state = stale
-    snapshot = TurnSnapshot.from_session("why did it fail?", session)
+    session.last_state = _investigation(
+        investigation_started_at=time.monotonic() - PRIOR_INVESTIGATION_RECALL_SECONDS - 1,
+        root_cause="aging-root-cause",
+    )
+    snapshot = TurnSnapshot.from_session("what happened?", session)
 
     # Act
-    gather_prompt = build_gather_system_prompt_from_turn_snapshot(snapshot)
     answer_prompt = build_cli_agent_prompt_from_provider(
-        message="why did it fail?",
+        message="what happened?",
         prompts=_StubPrompts(),
         tool_observation=None,
         tool_observation_on_screen=True,
         turn_snapshot=snapshot,
     )
 
-    # Assert: the stale finding reaches neither prompt. (The section *name* still
-    # appears in the standing rule that references it; only the data must be gone.)
-    assert "stale-marker-must-not-appear" not in gather_prompt
-    assert "stale-marker-must-not-appear" not in answer_prompt
+    # Assert: still answerable, but flagged so fresh evidence wins a conflict.
+    assert "aging-root-cause" in answer_prompt
+    assert STALE_PRIOR_INVESTIGATION_NOTE in answer_prompt
+
+
+def test_answer_prompt_does_not_label_a_recent_investigation_as_stale() -> None:
+    # Arrange
+    session = _SnapshotSession()
+    session.last_state = _investigation()
+    snapshot = TurnSnapshot.from_session("what happened?", session)
+
+    # Act
+    answer_prompt = build_cli_agent_prompt_from_provider(
+        message="what happened?",
+        prompts=_StubPrompts(),
+        tool_observation=None,
+        tool_observation_on_screen=True,
+        turn_snapshot=snapshot,
+    )
+
+    # Assert
+    assert "disk full on orders-api" in answer_prompt
+    assert STALE_PRIOR_INVESTIGATION_NOTE not in answer_prompt
 
 
 def test_answer_prompt_still_grounds_on_a_recent_investigation() -> None:
@@ -187,3 +209,27 @@ def test_answer_prompt_still_grounds_on_a_recent_investigation() -> None:
     # Assert
     assert "--- Prior investigation in this session ---" in answer_prompt
     assert "disk full on orders-api" in answer_prompt
+
+
+def test_action_prompt_teaches_the_follow_up_handoff_tag() -> None:
+    """The gather skip is unreachable unless the planner is told to emit the tag.
+
+    ``_is_prior_investigation_follow_up_handoff`` matches ``follow_up:``; nothing
+    produced that prefix until the action prompt taught it, so the skip was dead.
+    """
+    # Arrange / Act
+    prompt = build_action_system_prompt(
+        TurnSnapshot.from_session("what happened?", _SnapshotSession())
+    )
+
+    # Assert: the emitted value must satisfy the orchestrator's prefix check.
+    assert 'assistant_handoff(content="follow_up:prior_investigation")' in prompt
+    assert _is_prior_investigation_follow_up_handoff(("follow_up:prior_investigation",))
+
+
+def test_assistant_has_guidance_for_the_follow_up_tag() -> None:
+    # Act
+    guidance = build_handoff_guidance_block(("follow_up:prior_investigation",))
+
+    # Assert
+    assert "lead with the root cause" in guidance
