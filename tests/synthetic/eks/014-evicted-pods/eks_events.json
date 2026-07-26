@@ -1,0 +1,24 @@
+{
+  "warning_events": [
+    {
+      "namespace": "payments",
+      "reason": "Evicted",
+      "message": "The node was low on resource: ephemeral-storage. Container payments-api was using 2.3Gi, which exceeds the available ephemeral storage.",
+      "type": "Warning",
+      "count": 1,
+      "involved_object": "Pod/payments-api-7f9dd8b6c4-k2m4p",
+      "first_time": "2026-04-18T10:42:00Z",
+      "last_time": "2026-04-18T10:42:00Z"
+    },
+    {
+      "namespace": "payments",
+      "reason": "NodeHasDiskPressure",
+      "message": "Node ip-10-0-1-73.us-east-1.compute.internal status is now: NodeHasDiskPressure.",
+      "type": "Warning",
+      "count": 1,
+      "involved_object": "Node/ip-10-0-1-73.us-east-1.compute.internal",
+      "first_time": "2026-04-18T10:41:00Z",
+      "last_time": "2026-04-18T10:41:00Z"
+    }
+  ]
+}

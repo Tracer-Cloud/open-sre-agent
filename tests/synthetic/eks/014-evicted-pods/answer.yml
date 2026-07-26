@@ -1,0 +1,52 @@
+root_cause_category: resource_exhaustion
+
+required_keywords:
+  - Evicted
+  - ephemeral-storage
+  - DiskPressure
+
+forbidden_categories:
+  - healthy
+  - unknown
+  - configuration_error
+  - code_defect
+  - data_quality
+
+optimal_trajectory:
+  - get_eks_node_health
+  - list_eks_pods
+  - get_eks_events
+
+max_investigation_loops: 3
+
+ruling_out_keywords:
+  - CrashLoopBackOff
+  - OOMKilled
+
+required_queries:
+  - get_eks_node_health
+  - list_eks_pods
+
+model_response: |
+  ROOT_CAUSE: One replica of the payments-api Deployment was evicted because the Kubernetes node ran out of ephemeral storage. The affected node entered DiskPressure, causing kubelet to evict the pod to protect node stability. This is a node-level resource exhaustion issue rather than an application failure.
+
+  ROOT_CAUSE_CATEGORY: resource_exhaustion
+
+  VALIDATED_CLAIMS:
+  - The affected pod is in Failed phase with reason 'Evicted'. [evidence: eks_pods]
+  - Kubernetes events report that the node was low on ephemeral-storage and the pod was evicted. [evidence: eks_events]
+  - The affected node is Ready but reports DiskPressure=True. [evidence: eks_node_health]
+
+  NON_VALIDATED_CLAIMS:
+  - There is no evidence that the application crashed.
+  - There is no evidence of CrashLoopBackOff.
+  - There is no evidence of OOMKilled.
+  - The application code is not responsible for this failure.
+
+  CAUSAL_CHAIN:
+  - Ephemeral storage usage increased on the node.
+  - The node entered DiskPressure.
+  - Kubelet evicted the affected pod.
+  - One deployment replica became unavailable.
+  - Application capacity was reduced.
+  - The monitoring alert fired.
