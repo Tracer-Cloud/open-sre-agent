@@ -303,9 +303,19 @@ REGEX_NEEDLE_PREFIX = "re:"
 
 
 def _needle_matches(haystack: str, needle: str) -> bool:
-    """True when ``needle`` matches ``haystack`` (substring, or regex when prefixed)."""
+    """True when ``needle`` matches ``haystack`` (substring, or regex when prefixed).
+
+    A bare ``re:`` is rejected rather than compiled: the empty pattern matches
+    every response, so a fixture typo would silently turn the assertion into an
+    unconditional pass.
+    """
     if needle.startswith(REGEX_NEEDLE_PREFIX):
         pattern = needle[len(REGEX_NEEDLE_PREFIX) :].strip()
+        if not pattern:
+            raise ValueError(
+                f"empty regex needle {needle!r}: a bare "
+                f"{REGEX_NEEDLE_PREFIX!r} matches every response"
+            )
         # The haystack is already normalized (lowercased, whitespace-collapsed).
         return re.search(pattern, haystack) is not None
     return normalize_response_text(needle) in haystack

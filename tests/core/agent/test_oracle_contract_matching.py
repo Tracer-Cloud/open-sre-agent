@@ -51,6 +51,8 @@ def test_empty_needles_are_vacuously_satisfied() -> None:
         "that filled-up disk is what caused the failure",
         "root cause: disk full on orders-api",
         "the full disk on orders-api",
+        "orders-api ran out of disk space",
+        "the filesystem was full, so writes started failing",
     ],
 )
 def test_shipped_600_contract_absorbs_paraphrase(response: str) -> None:
@@ -65,15 +67,38 @@ def test_shipped_600_contract_absorbs_paraphrase(response: str) -> None:
     assert contains_any(_normalized(response), needles) is True
 
 
-def test_shipped_600_contract_still_rejects_an_off_topic_answer() -> None:
-    """Broader matching must not become a rubber stamp."""
-    # Arrange: the failure mode the scenario exists to catch — no prior RCA used.
-    off_topic = _normalized(
-        "I don't have enough context. Please paste the alert or run an investigation."
-    )
+@pytest.mark.parametrize(
+    "non_answer",
+    [
+        # The failure mode the scenario exists to catch: no prior RCA used.
+        "I don't have enough context. Please paste the alert or run an investigation.",
+        # Echoes the question's own wording without diagnosing anything.
+        "I'm not sure why it failed; can you share more detail?",
+        # Names the service but never states the cause.
+        "I looked at orders-api but could not find a matching incident.",
+        # Uses the phrase "root cause" while admitting it has none.
+        "The root cause is not something I can determine from this session.",
+    ],
+)
+def test_shipped_600_contract_rejects_non_answers(non_answer: str) -> None:
+    """Broader matching must not become a rubber stamp.
 
-    # Act / Assert
-    assert contains_any(off_topic, _scenario_600_must_contain_any()) is False
+    Each of these would satisfy a weaker alternative (``failed``, ``orders-api``,
+    ``root cause``) while telling the user nothing — the contract must require
+    the diagnosis itself.
+    """
+    # Arrange / Act / Assert
+    assert contains_any(_normalized(non_answer), _scenario_600_must_contain_any()) is False
+
+
+def test_bare_regex_prefix_is_rejected_rather_than_matching_everything() -> None:
+    """A fixture typo must fail loudly, not silently pass every response."""
+    # Arrange / Act / Assert
+    with pytest.raises(ValueError, match="empty regex needle"):
+        contains_any(_normalized("any response at all"), ["re:"])
+
+    with pytest.raises(ValueError, match="empty regex needle"):
+        contains_all(_normalized("any response at all"), ["re:   "])
 
 
 @pytest.mark.parametrize(
