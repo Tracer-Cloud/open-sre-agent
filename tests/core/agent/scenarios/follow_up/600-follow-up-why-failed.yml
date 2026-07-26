@@ -18,13 +18,13 @@ planned_actions:
   source: llm
 response_contract:
   must_contain_any:
-  - why did it fail
-  - failed
-  - failure
-  - disk full
-  - full disk
-  - follow-up
-  - alert text
+  # The answer must reference the prior RCA (disk full on orders-api). Models
+  # paraphrase it ("the disk was full", "filled-up disk"), so match meaning:
+  # disk + full in either order, and fail/failed/failure as one stem.
+  - "re:disk\\b[^.]{0,30}(full|filled)|(full|filled)[^.]{0,30}\\bdisk"
+  - re:fail(ed|ure|ing)?\b
+  - orders-api
+  - root cause
   must_not_contain:
   - $ /
 history:

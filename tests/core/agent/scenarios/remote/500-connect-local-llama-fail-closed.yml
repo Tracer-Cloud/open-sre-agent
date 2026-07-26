@@ -19,11 +19,15 @@ planned_actions:
 response_contract:
   must_contain_any:
   - ollama
-  - local llm
+  - re:local (llm|llama|model)
   - /onboard
   - /model
   must_not_contain:
   - $ /
+  # "llama" names a model runtime, not an integration or MCP server. Routing it
+  # to either setup command is the misroute this scenario exists to catch.
+  - integrations setup llama
+  - mcp connect
 history:
   expected:
   - type: cli_agent

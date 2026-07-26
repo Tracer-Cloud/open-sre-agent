@@ -45,7 +45,13 @@ _SETUP_GUIDANCE_RULE = (
     "the action agent should normally have launched the setup wizard before this "
     "assistant runs. If you still receive the turn, explain the exact slash command "
     "briefly: `/integrations setup <service>` for integrations, or `/mcp connect "
-    "<server>` for MCP servers. Do not emit JSON or claim you changed runtime state."
+    "<server>` for MCP servers. Do not emit JSON or claim you changed runtime state.\n"
+    "Exception — local model runtimes are NOT integrations: llama, local llama, "
+    "ollama, local llm, local model, and 'run a model locally' name the LLM "
+    "provider, not a connectable integration or MCP server. Never answer those "
+    "with `/integrations setup <name>` or `/mcp connect <name>`. Point at local "
+    "LLM setup instead: `/onboard local_llm` (or `opensre onboard local_llm`) to "
+    "install and configure Ollama, then `/model set ollama` to switch provider."
 )
 
 _HANDOFF_GUIDANCE: dict[str, str] = {

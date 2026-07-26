@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import re
 import time
 from dataclasses import dataclass
 from typing import Any, cast
@@ -294,19 +295,33 @@ def normalize_history_for_oracle_match(
     return collapsed
 
 
+# Prefix marking a response-contract needle as a regular expression rather than a
+# literal substring. Models paraphrase ("the disk was full" for "disk full"), so a
+# scenario asserting *meaning* rather than wording opts into a pattern. Plain
+# needles keep exact substring semantics, so existing fixtures are unaffected.
+REGEX_NEEDLE_PREFIX = "re:"
+
+
+def _needle_matches(haystack: str, needle: str) -> bool:
+    """True when ``needle`` matches ``haystack`` (substring, or regex when prefixed)."""
+    if needle.startswith(REGEX_NEEDLE_PREFIX):
+        pattern = needle[len(REGEX_NEEDLE_PREFIX) :].strip()
+        # The haystack is already normalized (lowercased, whitespace-collapsed).
+        return re.search(pattern, haystack) is not None
+    return normalize_response_text(needle) in haystack
+
+
 def contains_any(haystack: str, needles: list[str]) -> bool:
     if not needles:
         return True
-    normalized_needles = [normalize_response_text(needle) for needle in needles if needle.strip()]
-    return any(needle in haystack for needle in normalized_needles)
+    return any(_needle_matches(haystack, needle) for needle in needles if needle.strip())
 
 
 def contains_all(haystack: str, needles: list[str]) -> bool:
     """True only when every needle appears in the haystack (or needles is empty)."""
     if not needles:
         return True
-    normalized_needles = [normalize_response_text(needle) for needle in needles if needle.strip()]
-    return all(needle in haystack for needle in normalized_needles)
+    return all(_needle_matches(haystack, needle) for needle in needles if needle.strip())
 
 
 def history_matches(actual: list[dict[str, Any]], expected: list[dict[str, Any]]) -> bool:
