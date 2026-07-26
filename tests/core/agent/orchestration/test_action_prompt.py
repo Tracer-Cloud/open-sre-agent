@@ -127,7 +127,10 @@ def test_system_prompt_hands_off_natural_language_slash_status_questions() -> No
 
 
 def test_system_prompt_routes_slack_teammate_reads_to_action_tools() -> None:
-    prompt = _SYSTEM_PROMPT_BASE.lower()
+    # Vendor recipe now lives in integrations.slack.action_prompt and is
+    # appended to the composed action prompt via the harness-ports fragment
+    # registry (see integrations/harness_adapters.py), not hardcoded in core.
+    prompt = build_action_system_prompt(_ctx()).lower()
     compact = prompt.replace(" ", "")
     assert "slack teammate requests are action tools" in prompt
     assert "not handoffs" in prompt
@@ -140,7 +143,10 @@ def test_system_prompt_routes_slack_teammate_reads_to_action_tools() -> None:
 
 
 def test_system_prompt_routes_github_cli_to_action_tools() -> None:
-    prompt = _SYSTEM_PROMPT_BASE.lower()
+    # Vendor recipe now lives in integrations.github.action_prompt and is
+    # appended to the composed action prompt via the harness-ports fragment
+    # registry (see integrations/harness_adapters.py), not hardcoded in core.
+    prompt = build_action_system_prompt(_ctx()).lower()
     assert "github cli requests are action tools" in prompt
     assert "not handoffs" in prompt
     assert "call github_cli directly" in prompt

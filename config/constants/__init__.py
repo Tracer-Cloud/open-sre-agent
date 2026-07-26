@@ -51,12 +51,14 @@ from config.constants.datadog import (
     DATADOG_SITE_ENV,
 )
 from config.constants.github import (
+    GH_TOKEN_ENV,
     GITHUB_MCP_ARGS_ENV,
     GITHUB_MCP_AUTH_TOKEN_ENV,
     GITHUB_MCP_COMMAND_ENV,
     GITHUB_MCP_MODE_ENV,
     GITHUB_MCP_TOOLSETS_ENV,
     GITHUB_MCP_URL_ENV,
+    GITHUB_TOKEN_ENV,
 )
 from config.constants.gitlab import GITLAB_AUTH_TOKEN_ENV, GITLAB_BASE_URL_ENV
 from config.constants.grafana import (
@@ -284,12 +286,14 @@ __all__ = [
     "DEFAULT_POSTHOG_TIMEOUT_SECONDS",
     "DEFAULT_POSTHOG_URL",
     "DEFAULT_SENTRY_BASE_URL",
+    "GH_TOKEN_ENV",
     "GITHUB_MCP_ARGS_ENV",
     "GITHUB_MCP_AUTH_TOKEN_ENV",
     "GITHUB_MCP_COMMAND_ENV",
     "GITHUB_MCP_MODE_ENV",
     "GITHUB_MCP_TOOLSETS_ENV",
     "GITHUB_MCP_URL_ENV",
+    "GITHUB_TOKEN_ENV",
     "GITLAB_AUTH_TOKEN_ENV",
     "GITLAB_BASE_URL_ENV",
     "GRAFANA_CA_BUNDLE_ENV",

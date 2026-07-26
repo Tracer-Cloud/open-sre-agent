@@ -16,11 +16,32 @@ Each ``AlertSourceRouting`` entry carries two tool-source lists:
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import Any
 
 from core.domain.alerts.fields import iter_alert_blocks
+
+AlertSourceDetector = Callable[[dict[str, Any]], "str | None"]
+"""A detector inspects the raw alert dict and returns a vendor key, if any.
+
+Vendor-specific sniffing (label heuristics, URL patterns, etc.) lives in the
+owning ``integrations/<vendor>/`` package and is wired in via
+:func:`register_alert_source_detector` from ``integrations/harness_adapters.py``
+— core stays free of hardcoded vendor heuristics.
+"""
+
+_alert_source_detectors: list[AlertSourceDetector] = []
+
+
+def register_alert_source_detector(detector: AlertSourceDetector) -> None:
+    """Register a vendor alert-source detector, run in registration order."""
+    _alert_source_detectors.append(detector)
+
+
+def clear_alert_source_detectors() -> None:
+    """Remove all registered detectors (tests)."""
+    _alert_source_detectors.clear()
 
 
 @dataclass(frozen=True)
@@ -230,9 +251,11 @@ def relevant_sources_for_alert(
 def resolve_alert_source(state: dict[str, Any]) -> str:
     """Return the alert vendor key used to look up tool-source routing.
 
-    Grafana managed alerts reuse the Alertmanager webhook schema, so
-    ``alert_source`` is often missing from the payload — we sniff
-    ``grafana_folder`` / ``datasource_uid`` labels and ``externalURL`` below.
+    Some vendors (e.g. Grafana managed alerts, which reuse the Alertmanager
+    webhook schema) omit ``alert_source`` from the payload and must be
+    sniffed from other fields. That sniffing is vendor-specific and lives in
+    registered detectors (see :func:`register_alert_source_detector`) rather
+    than here, so core has no hardcoded vendor heuristics.
     """
     source = str(state.get("alert_source") or "").lower().strip()
     if source:
@@ -242,25 +265,24 @@ def resolve_alert_source(state: dict[str, Any]) -> str:
         source = str(raw.get("alert_source") or "").lower().strip()
         if source:
             return source
-        labels = raw.get("commonLabels") or raw.get("labels") or {}
-        if isinstance(labels, dict) and (
-            labels.get("grafana_folder") or labels.get("datasource_uid")
-        ):
-            return "grafana"
-        ext_url = raw.get("externalURL", "")
-        if isinstance(ext_url, str) and "grafana" in ext_url.lower():
-            return "grafana"
+        for detector in _alert_source_detectors:
+            detected = detector(raw)
+            if detected:
+                return detected
     return ""
 
 
 __all__ = [
     "ALERT_SOURCE_ROUTING",
+    "AlertSourceDetector",
     "AlertSourceRouting",
     "SECONDARY_TOOL_SOURCES",
     "SOURCE_ALIASES",
+    "clear_alert_source_detectors",
     "collect_alert_text",
     "declared_context_sources",
     "primary_sources_for_alert",
+    "register_alert_source_detector",
     "relevant_sources_for_alert",
     "resolve_alert_source",
     "routing_for_alert_source",

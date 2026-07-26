@@ -19,15 +19,6 @@ logger = logging.getLogger(__name__)
 
 _TOOL_EXECUTOR_WORKERS = 10
 _UNSET: object = object()
-_INJECTED_CREDENTIAL_KEYS = frozenset(
-    {
-        "github_url",
-        "github_mode",
-        "github_token",
-        "github_command",
-        "github_args",
-    }
-)
 
 
 @dataclass(frozen=True)
@@ -290,8 +281,11 @@ def _invoke_runtime_tool(
 
     injected = tool.extract_params(tool_sources)
     kwargs = {**injected, **tc.input}
+    # Vendor-agnostic: each tool declares which extract_params keys must win
+    # over model input (secrets / connection fields). See ``injected_params``.
+    protected = frozenset(getattr(tool, "injected_params", ()) or ())
     for key, value in injected.items():
-        if key in _INJECTED_CREDENTIAL_KEYS and value not in (None, "", []):
+        if key in protected and value not in (None, "", []):
             kwargs[key] = value
     if getattr(tool, "accepts_runtime_context", False):
         context = AgentToolContext(

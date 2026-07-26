@@ -13,6 +13,7 @@ from core.agent_harness.prompts.rules import (
     INTERACTIVE_SHELL_TERMINOLOGY_RULE,
 )
 from core.agent_harness.prompts.runtime_facts import render_runtime_facts
+from platform.harness_ports import assistant_prompt_vendor_fragments
 
 _TERMINOLOGY_RULE = INTERACTIVE_SHELL_TERMINOLOGY_RULE
 _MARKDOWN_RULE = CLI_ASSISTANT_MARKDOWN_RULE
@@ -48,22 +49,6 @@ _SETUP_GUIDANCE_RULE = (
     "assistant runs. If you still receive the turn, explain the exact slash command "
     "briefly: `/integrations setup <service>` for integrations, or `/mcp connect "
     "<server>` for MCP servers. Do not emit JSON or claim you changed runtime state."
-)
-
-_SENTRY_SUMMARY_RULE = (
-    "Sentry summary: open **I found:** with digest.scope_summary verbatim, then "
-    "add digest.scope_note on the next line when page_saturated is true or when "
-    "clarifying completeness matters. When digest.completeness is empty, say the "
-    "requested window had no unresolved groups — do not summarize issues from a "
-    "different window or imply activity outside that period. Use "
-    "digest.structural_clusters for themed buckets — format each as "
-    "`N issues (P%)` using issue_count and percent (percent_basis is "
-    "returned_page). Include sample_short_ids when present. Never show a bare "
-    "project slug without explaining samples. Priority table: rank clusters from "
-    "priority_candidates and business_impact_score / impact_reasons; include "
-    "Sample IDs column. Penalize high-count zero-user retry noise. Do not ask to "
-    "narrow or repeat search; offer a separately labeled broader window only if "
-    "the user asks."
 )
 
 _HANDOFF_GUIDANCE: dict[str, str] = {
@@ -224,6 +209,8 @@ def _build_system_prompt(
         if prior_action_facts
         else ""
     )
+    vendor_fragments_text = assistant_prompt_vendor_fragments()
+    vendor_fragments = f"{vendor_fragments_text}\n\n" if vendor_fragments_text else ""
     return (
         f"{preamble}"
         "Exception: if Recent CLI conversation ends with **Want me to:** and "
@@ -250,7 +237,7 @@ def _build_system_prompt(
         f"{_PRIOR_INVESTIGATION_FOLLOW_UP_RULE}\n\n"
         f"{setup_rule}\n\n"
         f"{_SOURCE_SCOPED_INVESTIGATION_RULE}\n\n"
-        f"{_SENTRY_SUMMARY_RULE}\n\n"
+        f"{vendor_fragments}"
         f"{response_shape_rule}\n\n"
         f"{layout_block}"
         f"{terminology_rule}\n{_MARKDOWN_RULE}\n\n"

@@ -147,7 +147,10 @@ def run_gh(
     if not token:
         return {
             "ok": False,
-            "error": "GitHub token is required. Configure github_token, GITHUB_TOKEN, or GH_TOKEN.",
+            "error": (
+                "GitHub token is required. Configure the GitHub integration, or set "
+                "GITHUB_MCP_AUTH_TOKEN, GITHUB_TOKEN, or GH_TOKEN."
+            ),
             "error_type": "configuration_error",
             "argv": build_gh_argv(args=args, repo=repo),
             "exit_code": None,

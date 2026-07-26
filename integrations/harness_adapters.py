@@ -73,6 +73,68 @@ def register_harness_adapters() -> None:
         apply_scope=apply_gitlab_repo_scope,
     )
     _register_cli_llm_adapters()
+    _register_alert_source_detectors()
+    _register_incident_anchor_parsers()
+    _register_prompt_fragments()
+
+
+def _register_alert_source_detectors() -> None:
+    from core.domain.alerts.alert_source import (
+        clear_alert_source_detectors,
+        register_alert_source_detector,
+    )
+    from integrations.grafana.alert_source_detect import detect_grafana_alert_source
+
+    clear_alert_source_detectors()
+    register_alert_source_detector(detect_grafana_alert_source)
+
+
+def _register_incident_anchor_parsers() -> None:
+    from core.domain.types.incident_anchors import (
+        clear_anchor_parsers,
+        register_anchor_parser,
+    )
+    from integrations.alertmanager.incident_anchor import alertmanager_incident_anchor
+    from integrations.aws.cloudwatch_incident_anchor import cloudwatch_incident_anchor
+    from integrations.datadog.incident_anchor import datadog_incident_anchor
+    from integrations.pagerduty.incident_anchor import pagerduty_incident_anchor
+
+    clear_anchor_parsers()
+    # Order matters: the first parser to find an anchor wins. The order
+    # reflects which format expresses incident-start most accurately.
+    register_anchor_parser(alertmanager_incident_anchor)
+    register_anchor_parser(pagerduty_incident_anchor)
+    register_anchor_parser(datadog_incident_anchor)
+    register_anchor_parser(cloudwatch_incident_anchor)
+
+
+def _register_prompt_fragments() -> None:
+    from integrations.github.action_prompt import github_action_prompt_fragment
+    from integrations.github.gather_prompt import github_gather_prompt_fragment
+    from integrations.sentry.assistant_prompt import sentry_assistant_prompt_fragment
+    from integrations.sentry.gather_prompt import sentry_gather_prompt_fragment
+    from integrations.slack.action_prompt import slack_action_prompt_fragment
+    from integrations.slack.gather_prompt import slack_gather_prompt_fragment
+    from platform.harness_ports import (
+        clear_action_prompt_fragments,
+        clear_assistant_prompt_fragments,
+        clear_gather_prompt_fragments,
+        register_action_prompt_fragment,
+        register_assistant_prompt_fragment,
+        register_gather_prompt_fragment,
+    )
+
+    clear_gather_prompt_fragments()
+    register_gather_prompt_fragment(github_gather_prompt_fragment)
+    register_gather_prompt_fragment(sentry_gather_prompt_fragment)
+    register_gather_prompt_fragment(slack_gather_prompt_fragment)
+
+    clear_action_prompt_fragments()
+    register_action_prompt_fragment(slack_action_prompt_fragment)
+    register_action_prompt_fragment(github_action_prompt_fragment)
+
+    clear_assistant_prompt_fragments()
+    register_assistant_prompt_fragment(sentry_assistant_prompt_fragment)
 
 
 def _register_cli_llm_adapters() -> None:

@@ -38,6 +38,7 @@ from core.events import runtime_event_callback_from_observer
 from core.execution import ToolExecutionHooks, public_tool_input
 from core.llm.failure_classification import is_context_length_overflow
 from core.llm.types import AgentLLMResponse, ToolCall
+from core.tool_framework.tags import SUMMARIZE_OBSERVATION_TAG
 from platform.analytics.react_turn import run_react_agent_with_telemetry
 from platform.observability.trace.prompts import persist_turn_system_prompt
 from platform.observability.trace.spans import component_span
@@ -78,17 +79,6 @@ SELF_RECORDING_ACTION_TOOL_NAMES: frozenset[str] = frozenset(
 )
 INVESTIGATION_DISPATCH_TOOL_NAMES: frozenset[str] = frozenset(
     {"investigation_start", "alert_sample"}
-)
-# Generic tools whose JSON/text results should be summarized into a user-facing
-# answer (``cli_agent_summarized``). Keep this narrow: most action tools fully
-# handle the turn via ``response_text`` (``cli_agent_handled``). Broad stashing
-# broke cross-surface parity (every probe became summarize_observation).
-_OBSERVATION_STASH_TOOL_NAMES: frozenset[str] = frozenset(
-    {
-        "slack_read_messages",
-        "slack_list_team_members",
-        "slack_search_messages",
-    }
 )
 
 
@@ -276,12 +266,18 @@ def _generic_tool_result_counts(result: Any) -> tuple[int, int]:
     return executed_count, success_count
 
 
-def _should_stash_observation(result: Any) -> bool:
-    """True when a successful Slack discovery tool ran and needs a summary pass."""
+def _should_stash_observation(
+    result: Any,
+    *,
+    tools_by_name: dict[str, Any],
+) -> bool:
+    """True when a successful tool opted into observation summary via its tags."""
     for tool_call, tool_result in _generic_tool_results(result):
         if getattr(tool_result, "is_error", False):
             continue
-        if tool_call.name in _OBSERVATION_STASH_TOOL_NAMES:
+        tool = tools_by_name.get(tool_call.name)
+        tags = getattr(tool, "tags", ()) if tool is not None else ()
+        if SUMMARIZE_OBSERVATION_TAG in tags:
             return True
     return False
 
@@ -615,14 +611,16 @@ def _run_action_agent_turn_body(
     # streamed on action-only turns (gateway finalize / cross-surface parity).
     use_final_text = _is_user_facing_final_text(final_text)
     response_text = final_text if use_final_text else "\n".join(response_chunks)
-    # Slack discovery tools return structured JSON that users should not see raw.
-    # Stash only those results so the turn router summarizes into a user-facing
-    # answer. Other generic tools keep ``cli_agent_handled`` (response_text only).
+    # Discovery tools that opt into ``summarize_observation`` (via tool tags)
+    # return structured JSON users should not see raw. Stash only those results.
     if (
         response_text.strip()
         and generic_success_count > 0
         and not session.last_command_observation
-        and _should_stash_observation(result)
+        and _should_stash_observation(
+            result,
+            tools_by_name={getattr(t, "name", ""): t for t in agent_tools},
+        )
     ):
         session.last_command_observation = response_text
     if handled and use_final_text:

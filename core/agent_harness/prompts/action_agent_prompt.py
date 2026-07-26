@@ -12,6 +12,7 @@ from core.agent_harness.prompts.conversation_memory import (
 )
 from core.agent_harness.prompts.envelope import PromptBlock, PromptEnvelope
 from core.agent_harness.prompts.skills_loader import load_skills_block
+from platform.harness_ports import action_prompt_vendor_fragments
 
 if TYPE_CHECKING:
     from core.agent_harness.turns.turn_snapshot import TurnSnapshot
@@ -33,6 +34,16 @@ def build_action_system_prompt_envelope(turn_snapshot: TurnSnapshot) -> PromptEn
             provenance="core.agent_harness.prompts.action_agent_system_prompt",
         ),
     ]
+    vendor_fragments = action_prompt_vendor_fragments()
+    if vendor_fragments:
+        blocks.append(
+            PromptBlock(
+                id="action-agent-vendor-fragments",
+                kind="rule",
+                content=vendor_fragments + "\n\n",
+                provenance="platform.harness_ports.action_prompt_vendor_fragments",
+            )
+        )
     skills = load_skills_block()
     if skills:
         blocks.append(

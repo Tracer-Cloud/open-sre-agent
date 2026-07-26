@@ -40,12 +40,19 @@ class _RawResponse(_Response):
 
 
 def test_resolve_github_token_prefers_explicit_then_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GITHUB_MCP_AUTH_TOKEN", "mcp-token")
     monkeypatch.setenv("GITHUB_TOKEN", "env-token")
+    monkeypatch.setenv("GH_TOKEN", "gh-token")
     assert resolve_github_token("explicit") == "explicit"
+    assert resolve_github_token(None) == "mcp-token"
+    monkeypatch.delenv("GITHUB_MCP_AUTH_TOKEN")
     assert resolve_github_token(None) == "env-token"
+    monkeypatch.delenv("GITHUB_TOKEN")
+    assert resolve_github_token(None) == "gh-token"
 
 
 def test_missing_token_raises_typed_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("GITHUB_MCP_AUTH_TOKEN", raising=False)
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
     monkeypatch.delenv("GH_TOKEN", raising=False)
     client = GitHubRestClient(github_token=None)

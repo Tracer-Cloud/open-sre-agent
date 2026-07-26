@@ -581,6 +581,101 @@ def set_gitlab_repo_scope_adapters(
         _apply_gitlab_repo_scope = apply_scope
 
 
+def enrich_resolved_with_repo_scopes(
+    *,
+    resolved: dict[str, Any],
+    message: str,
+    conversation_messages: Sequence[tuple[str, str]] | None,
+    env: Mapping[str, str] | None,
+    cwd: str | Path | None,
+    github_cached: tuple[str, str] | None,
+    gitlab_cached: GitlabRepoScope | None,
+    set_github_cached: Callable[[tuple[str, str] | None], None] | None = None,
+    set_gitlab_cached: Callable[[GitlabRepoScope | None], None] | None = None,
+) -> dict[str, Any]:
+    """Apply all registered VCS repo-scope adapters to ``resolved``.
+
+    Core callers must use this entrypoint instead of naming individual vendors.
+    """
+    out = dict(resolved)
+    github_scope = infer_github_repo_scope(
+        message=message,
+        conversation_messages=conversation_messages,
+        env=env,
+        cwd=cwd,
+        cached=github_cached,
+    )
+    if github_scope:
+        if set_github_cached is not None:
+            set_github_cached(github_scope)
+        out = apply_github_repo_scope(out, github_scope[0], github_scope[1])
+
+    gitlab_scope = infer_gitlab_repo_scope(
+        message=message,
+        conversation_messages=conversation_messages,
+        env=env,
+        cwd=cwd,
+        cached=gitlab_cached,
+    )
+    if gitlab_scope:
+        if set_gitlab_cached is not None:
+            set_gitlab_cached(gitlab_scope)
+        out = apply_gitlab_repo_scope(out, *gitlab_scope)
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Prompt vendor fragments
+# ---------------------------------------------------------------------------
+#
+# Vendor-specific prompt paragraphs (tool usage recipes for a particular
+# integration) do not belong in core's prompt builders. Integrations register
+# a zero-arg fragment factory here from ``integrations/harness_adapters.py``;
+# core prompt builders append the joined fragments without naming any vendor.
+
+PromptFragmentFn = Callable[[], str]
+
+_gather_prompt_fragments: list[PromptFragmentFn] = []
+_action_prompt_fragments: list[PromptFragmentFn] = []
+_assistant_prompt_fragments: list[PromptFragmentFn] = []
+
+
+def register_gather_prompt_fragment(fn: PromptFragmentFn) -> None:
+    _gather_prompt_fragments.append(fn)
+
+
+def gather_prompt_vendor_fragments() -> str:
+    return "\n".join(fn() for fn in _gather_prompt_fragments)
+
+
+def clear_gather_prompt_fragments() -> None:
+    _gather_prompt_fragments.clear()
+
+
+def register_action_prompt_fragment(fn: PromptFragmentFn) -> None:
+    _action_prompt_fragments.append(fn)
+
+
+def action_prompt_vendor_fragments() -> str:
+    return "\n\n".join(fn() for fn in _action_prompt_fragments)
+
+
+def clear_action_prompt_fragments() -> None:
+    _action_prompt_fragments.clear()
+
+
+def register_assistant_prompt_fragment(fn: PromptFragmentFn) -> None:
+    _assistant_prompt_fragments.append(fn)
+
+
+def assistant_prompt_vendor_fragments() -> str:
+    return "\n\n".join(fn() for fn in _assistant_prompt_fragments)
+
+
+def clear_assistant_prompt_fragments() -> None:
+    _assistant_prompt_fragments.clear()
+
+
 # ---------------------------------------------------------------------------
 # Test reset
 # ---------------------------------------------------------------------------
@@ -614,3 +709,6 @@ def reset_harness_ports() -> None:
         infer_scope=_default_infer_gitlab_scope,
         apply_scope=_default_apply_gitlab_scope,
     )
+    clear_gather_prompt_fragments()
+    clear_action_prompt_fragments()
+    clear_assistant_prompt_fragments()

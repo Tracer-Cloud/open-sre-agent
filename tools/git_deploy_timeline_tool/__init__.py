@@ -26,6 +26,7 @@ from core.domain.types.incident_window import IncidentWindow
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.github.helpers import (
+    GITHUB_INJECTED_PARAMS,
     github_creds,
     github_source_available,
     normalize_github_tool_result,
@@ -204,6 +205,7 @@ def _is_available(sources: dict[str, dict]) -> bool:
     },
     is_available=_is_available,
     extract_params=_extract_params,
+    injected_params=GITHUB_INJECTED_PARAMS,
 )
 def get_git_deploy_timeline(
     owner: str,

@@ -7,7 +7,11 @@ from typing import Any
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.github.client import GitHubApiError, GitHubRestClient, resolve_github_token
-from integrations.github.helpers import github_creds, github_source_available
+from integrations.github.helpers import (
+    GITHUB_INJECTED_PARAMS,
+    github_creds,
+    github_source_available,
+)
 from integrations.github.tools.workflow import summarize_community_followups_from_comments
 
 
@@ -53,6 +57,7 @@ def _community_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     },
     is_available=_community_available,
     extract_params=_community_extract_params,
+    injected_params=GITHUB_INJECTED_PARAMS,
 )
 def summarize_community_followups(
     owner: str = "",

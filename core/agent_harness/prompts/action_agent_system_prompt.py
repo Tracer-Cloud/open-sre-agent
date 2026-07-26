@@ -319,55 +319,6 @@ Other tools:
 - assistant_handoff — informational/conversational requests (docs, greetings,
   pasted alerts for analysis discussion, follow-ups, vague ops questions)
 
-SLACK TEAMMATE REQUESTS ARE ACTION TOOLS — NOT HANDOFFS:
-When the user asks to read, summarize, search, join, react, list members, reply
-in, or capture a task from Slack / a #channel / a thread, call the matching
-slack_* tool directly. Do NOT emit assistant_handoff for these — they are NOT
-docs questions and are NOT covered by the DATA-RETRIEVAL handoff rule (that rule
-is for Datadog/Grafana/Sentry/PostHog record lookups via the gather loop).
-If the message includes a line like `[Slack channel_id=C… thread_ts=…]`, use
-that channel_id (and thread_ts when reading a thread) as the default target when
-the user says "this channel", "here", "this thread", or "the conversation".
-That context line does NOT mean "read the channel" for every Slack question —
-roster / people questions ignore channel_id and call slack_list_team_members.
-Examples:
-* "read the last 10 messages in #opensre-slack-testing and summarize"
-  → slack_read_messages(channel="#opensre-slack-testing", limit=10)
-* "sum / summarize this channel's conversation" with Slack channel_id context
-  → slack_read_messages(channel="C…", limit=50) using the context channel_id
-* "search Slack for deploy freeze" → slack_search_messages(query="deploy freeze")
-* "who is on the team?" / "who's on the team" / "list team members" / "who are
-  the members?" — even when `[Slack channel_id=…]` is present
-  → slack_list_team_members ONLY (never slack_read_messages, never hand off
-  asking which team). Bot token tools resolve credentials themselves; do NOT
-  gate on CONNECTED INTEGRATIONS.
-After the tool returns, the turn summarizes the tool output — do not hand off
-first asking for "target system" or `/integrations setup slack`.
-
-GITHUB CLI REQUESTS ARE ACTION TOOLS — NOT HANDOFFS:
-When the user asks to create, list, view, edit, close, comment, assign, label,
-merge, or search GitHub issues/PRs/repos *as the primary request* (including
-github.com/owner/repo URLs and follow-ups like "from this info create an issue on GitHub"),
-call github_cli directly. Do NOT emit assistant_handoff for these — they are NOT
-docs questions and are NOT covered by the DATA-RETRIEVAL handoff rule. Prefer
-github_cli over shell_run / !gh / raw gh. github_cli is action-only and will not
-run in gather.
-Do NOT use github_cli when the user is diagnosing a crash/failure/outage and
-names GitHub among other sources to query (e.g. sentry + github issues +
-posthog) — emit investigation_start instead; the investigation gathers those
-sources. github_cli is for GitHub-only product operations, not multi-source RCA.
-Pass args after the `gh` binary; optional repo as owner/name for -R.
-Examples:
-* "create an issue titled X with body Y"
-  → github_cli(args=["issue", "create", "--title", "X", "--body", "Y"])
-* "list open PRs" → github_cli(args=["pr", "list", "--state", "open"])
-* "merge PR 45 with squash auto"
-  → github_cli(args=["pr", "merge", "45", "--squash", "--auto"])
-* "figure out why OpenSRE is crashing on Windows — query sentry, github issues,
-  and posthog" → investigation_start (NOT github_cli)
-After the tool returns, reply briefly from the result summary — do not hand off
-asking the user to run `gh` themselves.
-
 Delivery tool unavailable — never fabricate a command to deliver. When the user
 asks to send, post, notify, share, or message a channel (Slack, Telegram, etc.)
 but the matching send tool (slack_send_message, telegram_send_message, …) is NOT
