@@ -61,6 +61,7 @@ def is_within_recall_window(state: Mapping[str, Any] | None) -> bool:
 
 __all__ = [
     "PRIOR_INVESTIGATION_RECALL_SECONDS",
+    "STALE_PRIOR_INVESTIGATION_NOTE",
     "is_within_recall_window",
     "prior_investigation_headline",
 ]
