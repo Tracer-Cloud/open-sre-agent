@@ -112,6 +112,11 @@ def load_env_integration_services() -> list[str]:
         ),
     )
     add("helm", os.getenv("OSRE_HELM_INTEGRATION", "").strip().lower() in {"1", "true", "yes"})
+    add(
+        "railway",
+        _env_is_set("RAILWAY_TOKEN")
+        or _all_env("RAILWAY_PROJECT", "RAILWAY_SERVICE", "RAILWAY_ENVIRONMENT"),
+    )
     add("vercel", _env_is_set("VERCEL_API_TOKEN"))
     add("opsgenie", _env_is_set("OPSGENIE_API_KEY"))
     add("pagerduty", _env_is_set("PAGERDUTY_API_KEY"))

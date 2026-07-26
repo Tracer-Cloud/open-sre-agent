@@ -643,7 +643,15 @@ def strip_message_context_prefix(text: str) -> tuple[str, str]:
 
 
 def reset_harness_ports() -> None:
-    """Restore all harness ports to noop defaults (tests)."""
+    """Restore all harness ports to noop defaults (tests).
+
+    Also clears core leaf registries that integrations register through
+    :func:`integrations.harness_adapters.register_harness_adapters` (alert
+    routing, taxonomy profiles, anchor parsers, detail fields, …). Without
+    those clears, tests that call ``reset_harness_ports()`` mid-suite would
+    keep stale vendor registrations while VCS/prompt ports look empty —
+    a silent inconsistency.
+    """
     set_remote_integrations_fetcher(_default_fetch_remote)
     set_integration_resolution_adapters(
         load_integrations=_default_load_integrations,
@@ -668,3 +676,22 @@ def reset_harness_ports() -> None:
     clear_assistant_prompt_fragments()
     clear_gateway_persona_fragments()
     clear_message_context_prefix_strippers()
+
+    # Core leaf registries (populated by integrations/harness_adapters).
+    from core.domain.alerts.alert_source import (
+        clear_alert_source_detectors,
+        clear_alert_source_routing,
+        clear_secondary_tool_sources,
+        clear_source_aliases,
+    )
+    from core.domain.alerts.extraction import clear_alert_detail_fields
+    from core.domain.diagnosis.taxonomy_registry import clear_taxonomy_profiles
+    from core.domain.types.incident_anchors import clear_anchor_parsers
+
+    clear_alert_source_detectors()
+    clear_alert_source_routing()
+    clear_source_aliases()
+    clear_secondary_tool_sources()
+    clear_alert_detail_fields()
+    clear_taxonomy_profiles()
+    clear_anchor_parsers()
