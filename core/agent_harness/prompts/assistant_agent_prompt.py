@@ -6,14 +6,10 @@ from typing import Any
 from core.agent_harness.prompts.rules import (
     AGENT_RESPONSE_THREE_TIER_RULE,
     CLI_ASSISTANT_MARKDOWN_RULE,
-    GATEWAY_MESSAGE_LAYOUT_RULE,
-    GATEWAY_RESPONSE_SHAPE_RULE,
-    GATEWAY_SETUP_GUIDANCE_RULE,
-    GATEWAY_TEAMMATE_PERSONA_RULE,
     INTERACTIVE_SHELL_TERMINOLOGY_RULE,
 )
 from core.agent_harness.prompts.runtime_facts import render_runtime_facts
-from platform.harness_ports import assistant_prompt_vendor_fragments
+from platform.harness_ports import assistant_prompt_vendor_fragments, gateway_persona_fragments
 
 _TERMINOLOGY_RULE = INTERACTIVE_SHELL_TERMINOLOGY_RULE
 _MARKDOWN_RULE = CLI_ASSISTANT_MARKDOWN_RULE
@@ -151,11 +147,11 @@ _CLI_PREAMBLE = (
 
 _GATEWAY_PREAMBLE = (
     "You are OpenSRE, an AI production engineer teammate helping a colleague in "
-    "Slack. You answer questions and help with SRE/observability and general "
-    "production-engineering work directly in the conversation. You do NOT run the "
-    "incident investigation pipeline yourself (that is separate), but you are "
-    "grounded on its architecture below and can answer questions about its stages "
-    "and source files.\n"
+    "a team chat channel. You answer questions and help with SRE/observability "
+    "and general production-engineering work directly in the conversation. You "
+    "do NOT run the incident investigation pipeline yourself (that is separate), "
+    "but you are grounded on its architecture below and can answer questions "
+    "about its stages and source files.\n"
     "When someone wants a full investigation of an alert, ask them to paste the "
     "alert text, JSON, or a concrete incident description (errors, services, "
     "symptoms).\n"
@@ -176,10 +172,14 @@ def _build_system_prompt(
     """Build the system prompt for one assistant turn."""
     is_gateway = surface == "gateway"
     preamble = _GATEWAY_PREAMBLE if is_gateway else _CLI_PREAMBLE
-    terminology_rule = GATEWAY_TEAMMATE_PERSONA_RULE if is_gateway else _TERMINOLOGY_RULE
-    setup_rule = GATEWAY_SETUP_GUIDANCE_RULE if is_gateway else _SETUP_GUIDANCE_RULE
-    response_shape_rule = GATEWAY_RESPONSE_SHAPE_RULE if is_gateway else _RESPONSE_SHAPE_RULE
-    layout_block = f"{GATEWAY_MESSAGE_LAYOUT_RULE}\n\n" if is_gateway else ""
+    # Gateway (Slack) persona wording is vendor-owned and reached only through
+    # the port — see integrations.slack.gateway_persona. The CLI equivalents
+    # (terminology/setup/response-shape rules) stay empty for gateway turns
+    # and are replaced wholesale by the joined gateway persona block below.
+    gateway_persona_block = f"{gateway_persona_fragments()}\n\n" if is_gateway else ""
+    terminology_rule = "" if is_gateway else _TERMINOLOGY_RULE
+    setup_rule = "" if is_gateway else _SETUP_GUIDANCE_RULE
+    response_shape_rule = "" if is_gateway else _RESPONSE_SHAPE_RULE
     repo_map_block = f"--- Repo map (AGENTS.md) ---\n{agents_md}\n\n" if agents_md else ""
     docs_block = (
         "--- Documentation reference (docs/) ---\n"
@@ -225,11 +225,11 @@ def _build_system_prompt(
         "definition is unavailable.\n"
         "For vague operational questions (for example why a database is slow) "
         "with no pasted alert, restate the user's question in your reply and "
-        "ask for the target system, service, or alert context. Do NOT apply this "
-        "when the user already named a Slack #channel / channel_id, or when a "
-        "[Slack channel_id=…] context line is present — answer from Slack tools "
-        "or say what blocked the Slack read, without asking to run "
-        "`/integrations setup`.\n\n"
+        "ask for the target system, service, or alert context. A vendor "
+        "fragment may define its own exception to this default when a "
+        "channel/context marker is already present (see the vendor's "
+        "assistant-prompt fragment, e.g. Slack) — do not apply the ask-for-"
+        "context default in that case.\n\n"
         "The Recent CLI conversation may include outputs from earlier action tools "
         "(shell stdout, computed values, and sent-message inputs/results). Treat "
         "those as available thread context for follow-up questions; do not ask the "
@@ -239,7 +239,7 @@ def _build_system_prompt(
         f"{_SOURCE_SCOPED_INVESTIGATION_RULE}\n\n"
         f"{vendor_fragments}"
         f"{response_shape_rule}\n\n"
-        f"{layout_block}"
+        f"{gateway_persona_block}"
         f"{terminology_rule}\n{_MARKDOWN_RULE}\n\n"
         f"{environment}"
         f"--- CLI reference ---\n{reference}\n\n"

@@ -16,6 +16,8 @@ call github_cli directly. Do NOT emit assistant_handoff for these — they are N
 docs questions and are NOT covered by the DATA-RETRIEVAL handoff rule. Prefer
 github_cli over shell_run / !gh / raw gh. github_cli is action-only and will not
 run in gather.
+Exception: GitHub issue/PR/repo create/list/view/merge/comment as a *standalone*
+request via `gh` is NOT the DATA-RETRIEVAL handoff — call github_cli, as above.
 Do NOT use github_cli when the user is diagnosing a crash/failure/outage and
 names GitHub among other sources to query (e.g. sentry + github issues +
 posthog) — emit investigation_start instead; the investigation gathers those

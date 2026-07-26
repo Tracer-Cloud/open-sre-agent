@@ -86,8 +86,17 @@ def test_system_prompt_documents_followup_resolution() -> None:
     assert "do both" in prompt
     assert "recent conversation" in prompt
     assert "assistant_handoff" in prompt
-    assert "want me to: offering more slack roster" in prompt
+    assert "want me to: offering more detail from a vendor tool" in prompt
     assert "yes — please" in prompt
+
+
+def test_system_prompt_slack_fragment_documents_roster_followup() -> None:
+    # Slack-specific "Want me to" roster follow-up now lives in
+    # integrations.slack.action_prompt and is appended to the composed action
+    # prompt via the harness-ports fragment registry, not hardcoded in core.
+    prompt = build_action_system_prompt(_ctx()).lower()
+    assert "want me to: offering more slack roster" in prompt
+    assert "slack_list_team_members" in prompt
 
 
 def test_system_prompt_requires_same_response_for_slash_then_investigation() -> None:
@@ -170,9 +179,17 @@ def test_system_prompt_hands_off_when_delivery_tool_unavailable() -> None:
     assert "matching send tool" in prompt
     assert "that channel is not configured" in compact_prompt
     assert "do not invent or guess a slash/cli subcommand to deliver" in compact_prompt
-    assert "`/messaging send slack …` is not a real command" in compact_prompt
     assert "route the user to enable it" in compact_prompt
     assert "this applies even mid-chain" in compact_prompt
+
+
+def test_system_prompt_slack_fragment_documents_invented_command_example() -> None:
+    # The Slack-specific invented-delivery-command example now lives in
+    # integrations.slack.action_prompt, appended via the harness-ports
+    # fragment registry, not hardcoded in core.
+    prompt = build_action_system_prompt(_ctx()).lower()
+    compact_prompt = " ".join(prompt.split())
+    assert "`/messaging send slack …` is not a real command" in compact_prompt
 
 
 def test_system_prompt_preserves_bare_numeric_synthetic_mapping() -> None:

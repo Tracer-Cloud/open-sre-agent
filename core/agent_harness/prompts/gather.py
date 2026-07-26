@@ -31,7 +31,7 @@ def build_gather_system_prompt(session: SessionStore) -> str:
         "You are the data-gathering step of the OpenSRE terminal assistant. The "
         "user asked a question that may be answerable with live data from the "
         "connected integrations. You have access to the same tools the "
-        "investigation pipeline uses (logs, metrics, GitHub, error trackers, "
+        "investigation pipeline uses (logs, metrics, VCS, error trackers, "
         "cloud APIs, etc.).\n"
         "Call the tools needed to gather evidence relevant to the user's "
         "question. Derive arguments (such as owner/repo, service names, time "

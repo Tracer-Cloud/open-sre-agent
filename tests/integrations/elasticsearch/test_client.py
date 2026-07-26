@@ -6,11 +6,11 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 
-from core.domain.types.evidence import EvidenceSource
+from integrations.elasticsearch.tools import query_elasticsearch_logs
 
 
 def test_evidence_source_includes_elasticsearch() -> None:
-    assert "elasticsearch" in EvidenceSource.__args__  # type: ignore[attr-defined]
+    assert query_elasticsearch_logs.source == "elasticsearch"
 
 
 # ── Config tests ─────────────────────────────────────────────────────────────

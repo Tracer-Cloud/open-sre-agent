@@ -92,7 +92,7 @@ def _minimal_investigation_state(
         "root_cause": root_cause,
         "remediation_steps": remediation_steps or [],
         "validity_score": validity_score,
-        "openclaw_context": openclaw_context or {},
+        "channel_contexts": {"openclaw": openclaw_context or {}},
     }
 
 

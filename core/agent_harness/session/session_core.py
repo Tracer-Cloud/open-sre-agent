@@ -261,22 +261,13 @@ class SessionCore:
         self.integrations.resolved_cache = value
 
     @property
-    def github_repo_scope(self) -> tuple[str, str] | None:
-        """Sticky owner/repo inferred from chat, env, or git remote for GitHub tools."""
-        return self.integrations.github_repo_scope
+    def vcs_repo_scopes(self) -> dict[str, tuple[str, ...]]:
+        """Sticky per-vendor repo scopes inferred from chat, env, or git remote."""
+        return self.integrations.vcs_repo_scopes
 
-    @github_repo_scope.setter
-    def github_repo_scope(self, value: tuple[str, str] | None) -> None:
-        self.integrations.github_repo_scope = value
-
-    @property
-    def gitlab_repo_scope(self) -> tuple[str, str, str] | None:
-        """Sticky project/ref/file inferred from chat, env, or git remote for GitLab tools."""
-        return self.integrations.gitlab_repo_scope
-
-    @gitlab_repo_scope.setter
-    def gitlab_repo_scope(self, value: tuple[str, str, str] | None) -> None:
-        self.integrations.gitlab_repo_scope = value
+    @vcs_repo_scopes.setter
+    def vcs_repo_scopes(self, value: dict[str, tuple[str, ...]]) -> None:
+        self.integrations.vcs_repo_scopes = value
 
     def refresh_runtime_metadata(self) -> None:
         """Repopulate :attr:`runtime_metadata` from current process facts."""

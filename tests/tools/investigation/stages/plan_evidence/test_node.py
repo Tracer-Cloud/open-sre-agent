@@ -3,11 +3,11 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any, cast
 
-from core.domain.alerts.tool_planning import FALLBACK_TOOL_NAMES
 from core.domain.types.planning import PlannedInvestigationAction
 from core.domain.types.retrieval import RetrievalControls, RetrievalIntent
 from core.state import AgentState
 from core.tool_framework.registered_tool import RegisteredTool
+from core.tool_framework.tags import FALLBACK_PLANNING_TAG
 from tools.investigation.stages.plan_evidence.node import _apply_budget, plan_actions
 
 
@@ -18,6 +18,7 @@ def _tool(
     description: str = "",
     use_cases: list[str] | None = None,
     retrieval_controls: RetrievalControls | None = None,
+    tags: tuple[str, ...] = (),
 ) -> RegisteredTool:
     def _run(**_kwargs: Any) -> dict[str, Any]:
         return {"ok": True}
@@ -30,6 +31,7 @@ def _tool(
         run=cast(Callable[..., Any], _run),
         use_cases=use_cases or [],
         retrieval_controls=retrieval_controls or RetrievalControls(),
+        tags=tags,
     )
 
 
@@ -37,7 +39,7 @@ def test_plan_actions_prioritizes_alert_source_tools(monkeypatch: Any) -> None:
     tools = [
         _tool("query_datadog_logs", "datadog"),
         _tool("query_github_commits", "github"),
-        _tool("get_sre_guidance", "knowledge"),
+        _tool("get_sre_guidance", "knowledge", tags=(FALLBACK_PLANNING_TAG,)),
     ]
     monkeypatch.setattr(
         "tools.investigation.stages.plan_evidence.node.get_registered_tools", lambda _s: tools
@@ -148,7 +150,7 @@ def test_plan_actions_populates_supported_retrieval_controls(monkeypatch: Any) -
 def test_plan_actions_uses_guidance_fallback_when_nothing_matches(monkeypatch: Any) -> None:
     tools = [
         _tool("query_github_commits", "github"),
-        _tool("get_sre_guidance", "knowledge"),
+        _tool("get_sre_guidance", "knowledge", tags=(FALLBACK_PLANNING_TAG,)),
     ]
     monkeypatch.setattr(
         "tools.investigation.stages.plan_evidence.node.get_registered_tools", lambda _s: tools
@@ -172,9 +174,8 @@ def test_plan_actions_uses_guidance_fallback_when_nothing_matches(monkeypatch: A
 def test_apply_budget_excludes_zero_score_noncandidates() -> None:
     # Arrange: two positive-score actions plus one zero-score, non-fallback action.
     # The zero-score action is a "not-candidate" — this partition is classified by
-    # predicate (score / name), so it must appear in the excluded audit.
+    # predicate (score / is_fallback), so it must appear in the excluded audit.
     zero_name = "definitely_not_a_fallback_tool"
-    assert zero_name not in FALLBACK_TOOL_NAMES  # fixture premise
     scored = [
         PlannedInvestigationAction(name="hot_a", source="datadog", score=5),
         PlannedInvestigationAction(name="hot_b", source="datadog", score=3),

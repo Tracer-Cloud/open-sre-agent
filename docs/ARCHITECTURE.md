@@ -73,9 +73,10 @@ layers below it.
 
 - **`surfaces/`** — one folder per UI/client: `surfaces/cli` (the stateless
   `opensre <command>` runner), `surfaces/interactive_shell` (the stateful
-  REPL), `surfaces/slack_app` (Slack bot), and `surfaces/shared` for code two
-  or more surfaces use. A surface owns its own I/O, prompts, and presentation,
-  and composes lower layers to do the actual work.
+  REPL), and `surfaces/shared` for code two or more surfaces use. A surface
+  owns its own I/O, prompts, and presentation, and composes lower layers to do
+  the actual work. Slack is not a surface: its inbound transport lives in
+  `gateway/slack`, outbound delivery in `integrations/slack`.
 - **`gateway/`** — the standalone messaging gateway for inbound chat platforms
   (`gateway/telegram`, `gateway/slack`, `gateway/session`, `gateway/storage`). A peer of
   `surfaces`, not a child: the two never import each other.

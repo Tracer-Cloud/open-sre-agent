@@ -29,7 +29,7 @@ from core.agent_harness.prompts.conversation_memory import (
 )
 from core.agent_harness.prompts.gather import build_gather_system_prompt
 from core.agent_harness.session.integration_resolution import resolve_and_cache_integrations
-from core.domain.alerts.alert_source import SECONDARY_TOOL_SOURCES
+from core.domain.alerts.alert_source import secondary_tool_sources
 from core.events import runtime_event_callback_from_observer
 from platform.analytics.react_turn import run_react_agent_with_telemetry
 from platform.harness_ports import enrich_resolved_with_repo_scopes
@@ -138,16 +138,23 @@ def _resolve_gather_integrations(
         if resolved_integrations is not None
         else resolve_and_cache_integrations(session)
     )
+
+    def _set_cached_scope(vendor: str, scope: tuple[str, ...] | None) -> None:
+        scopes = dict(session.vcs_repo_scopes)
+        if scope is None:
+            scopes.pop(vendor, None)
+        else:
+            scopes[vendor] = scope
+        session.vcs_repo_scopes = scopes
+
     return enrich_resolved_with_repo_scopes(
         resolved=base,
         message=message,
         conversation_messages=session.cli_agent_messages,
         env=os.environ,
         cwd=os.getcwd(),
-        github_cached=session.github_repo_scope,
-        gitlab_cached=session.gitlab_repo_scope,
-        set_github_cached=lambda scope: setattr(session, "github_repo_scope", scope),
-        set_gitlab_cached=lambda scope: setattr(session, "gitlab_repo_scope", scope),
+        cached_scopes=dict(session.vcs_repo_scopes),
+        set_cached_scope=_set_cached_scope,
     )
 
 
@@ -167,7 +174,8 @@ def _has_usable_gather_tools(gather_tools: list[Any]) -> bool:
     """
     if not gather_tools:
         return False
-    return any(str(t.source) not in SECONDARY_TOOL_SOURCES for t in gather_tools)
+    secondary = secondary_tool_sources()
+    return any(str(t.source) not in secondary for t in gather_tools)
 
 
 def _load_gather_llm_or_none(error_reporter: ErrorReporter | None) -> Any | None:

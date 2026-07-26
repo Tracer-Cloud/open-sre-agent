@@ -12,7 +12,7 @@ import logging
 import os
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -445,140 +445,52 @@ def set_cli_llm_adapters(
 
 
 # ---------------------------------------------------------------------------
-# GitHub repo scope
+# VCS repo scope
 # ---------------------------------------------------------------------------
-
-InferGithubRepoScopeFn = Callable[
-    [
-        str,
-        Sequence[tuple[str, str]] | None,
-        Mapping[str, str] | None,
-        str | Path | None,
-        tuple[str, str] | None,
-    ],
-    tuple[str, str] | None,
-]
-ApplyGithubRepoScopeFn = Callable[[dict[str, Any], str, str], dict[str, Any]]
+#
+# Repository-scope inference (owner/repo, project/ref/file, …) is vendor
+# behavior. Core must not name any specific VCS vendor — instead, each
+# vendor's ``integrations`` package registers a ``VcsRepoScopeProvider`` that
+# wraps its own infer/apply helpers.
 
 
-def _default_infer_github_scope(
-    message: str,
-    conversation_messages: Sequence[tuple[str, str]] | None,
-    env: Mapping[str, str] | None,
-    cwd: str | Path | None,
-    cached: tuple[str, str] | None,
-) -> tuple[str, str] | None:
-    _ = (message, conversation_messages, env, cwd, cached)
-    return None
+@runtime_checkable
+class VcsRepoScopeProvider(Protocol):
+    """Adapter that infers and applies one vendor's repository scope.
+
+    ``vendor`` names the cache slot in the session's scope bag (e.g.
+    ``"github"``, ``"gitlab"``); ``infer``/``apply`` mirror the vendor's own
+    scope helpers but speak in vendor-neutral ``tuple[str, ...]`` scopes.
+    """
+
+    vendor: str
+
+    def infer(
+        self,
+        *,
+        message: str,
+        conversation_messages: Sequence[tuple[str, str]] | None,
+        env: Mapping[str, str] | None,
+        cwd: str | Path | None,
+        cached: tuple[str, ...] | None,
+    ) -> tuple[str, ...] | None:
+        """Resolve this vendor's repo scope from message/history/env/git/cache."""
+        raise NotImplementedError
+
+    def apply(self, resolved: dict[str, Any], scope: tuple[str, ...]) -> dict[str, Any]:
+        """Return a copy of *resolved* enriched with this vendor's scope."""
+        raise NotImplementedError
 
 
-def _default_apply_github_scope(resolved: dict[str, Any], owner: str, repo: str) -> dict[str, Any]:
-    _ = (owner, repo)
-    return dict(resolved)
+_vcs_repo_scope_providers: list[VcsRepoScopeProvider] = []
 
 
-_infer_github_repo_scope: InferGithubRepoScopeFn = _default_infer_github_scope
-_apply_github_repo_scope: ApplyGithubRepoScopeFn = _default_apply_github_scope
+def register_vcs_repo_scope_provider(provider: VcsRepoScopeProvider) -> None:
+    _vcs_repo_scope_providers.append(provider)
 
 
-def infer_github_repo_scope(
-    *,
-    message: str,
-    conversation_messages: Sequence[tuple[str, str]] | None = None,
-    env: Mapping[str, str] | None = None,
-    cwd: str | Path | None = None,
-    cached: tuple[str, str] | None = None,
-) -> tuple[str, str] | None:
-    return _infer_github_repo_scope(message, conversation_messages, env, cwd, cached)
-
-
-def apply_github_repo_scope(
-    resolved: dict[str, Any],
-    owner: str,
-    repo: str,
-) -> dict[str, Any]:
-    return _apply_github_repo_scope(resolved, owner, repo)
-
-
-def set_github_repo_scope_adapters(
-    *,
-    infer_scope: InferGithubRepoScopeFn | None = None,
-    apply_scope: ApplyGithubRepoScopeFn | None = None,
-) -> None:
-    global _infer_github_repo_scope, _apply_github_repo_scope
-    if infer_scope is not None:
-        _infer_github_repo_scope = infer_scope
-    if apply_scope is not None:
-        _apply_github_repo_scope = apply_scope
-
-
-# ---------------------------------------------------------------------------
-# GitLab repo scope
-# ---------------------------------------------------------------------------
-
-GitlabRepoScope = tuple[str, str, str]
-InferGitlabRepoScopeFn = Callable[
-    [
-        str,
-        Sequence[tuple[str, str]] | None,
-        Mapping[str, str] | None,
-        str | Path | None,
-        GitlabRepoScope | None,
-    ],
-    GitlabRepoScope | None,
-]
-ApplyGitlabRepoScopeFn = Callable[[dict[str, Any], str, str, str], dict[str, Any]]
-
-
-def _default_infer_gitlab_scope(
-    message: str,
-    conversation_messages: Sequence[tuple[str, str]] | None,
-    env: Mapping[str, str] | None,
-    cwd: str | Path | None,
-    cached: GitlabRepoScope | None,
-) -> GitlabRepoScope | None:
-    _ = (message, conversation_messages, env, cwd, cached)
-    return None
-
-
-def _default_apply_gitlab_scope(
-    resolved: dict[str, Any], project_id: str, ref_name: str, file_path: str
-) -> dict[str, Any]:
-    _ = (project_id, ref_name, file_path)
-    return dict(resolved)
-
-
-_infer_gitlab_repo_scope: InferGitlabRepoScopeFn = _default_infer_gitlab_scope
-_apply_gitlab_repo_scope: ApplyGitlabRepoScopeFn = _default_apply_gitlab_scope
-
-
-def infer_gitlab_repo_scope(
-    *,
-    message: str,
-    conversation_messages: Sequence[tuple[str, str]] | None = None,
-    env: Mapping[str, str] | None = None,
-    cwd: str | Path | None = None,
-    cached: GitlabRepoScope | None = None,
-) -> GitlabRepoScope | None:
-    return _infer_gitlab_repo_scope(message, conversation_messages, env, cwd, cached)
-
-
-def apply_gitlab_repo_scope(
-    resolved: dict[str, Any], project_id: str, ref_name: str, file_path: str
-) -> dict[str, Any]:
-    return _apply_gitlab_repo_scope(resolved, project_id, ref_name, file_path)
-
-
-def set_gitlab_repo_scope_adapters(
-    *,
-    infer_scope: InferGitlabRepoScopeFn | None = None,
-    apply_scope: ApplyGitlabRepoScopeFn | None = None,
-) -> None:
-    global _infer_gitlab_repo_scope, _apply_gitlab_repo_scope
-    if infer_scope is not None:
-        _infer_gitlab_repo_scope = infer_scope
-    if apply_scope is not None:
-        _apply_gitlab_repo_scope = apply_scope
+def clear_vcs_repo_scope_providers() -> None:
+    _vcs_repo_scope_providers.clear()
 
 
 def enrich_resolved_with_repo_scopes(
@@ -588,39 +500,27 @@ def enrich_resolved_with_repo_scopes(
     conversation_messages: Sequence[tuple[str, str]] | None,
     env: Mapping[str, str] | None,
     cwd: str | Path | None,
-    github_cached: tuple[str, str] | None,
-    gitlab_cached: GitlabRepoScope | None,
-    set_github_cached: Callable[[tuple[str, str] | None], None] | None = None,
-    set_gitlab_cached: Callable[[GitlabRepoScope | None], None] | None = None,
+    cached_scopes: Mapping[str, tuple[str, ...]],
+    set_cached_scope: Callable[[str, tuple[str, ...] | None], None] | None = None,
 ) -> dict[str, Any]:
-    """Apply all registered VCS repo-scope adapters to ``resolved``.
+    """Apply all registered VCS repo-scope providers to ``resolved``.
 
     Core callers must use this entrypoint instead of naming individual vendors.
     """
     out = dict(resolved)
-    github_scope = infer_github_repo_scope(
-        message=message,
-        conversation_messages=conversation_messages,
-        env=env,
-        cwd=cwd,
-        cached=github_cached,
-    )
-    if github_scope:
-        if set_github_cached is not None:
-            set_github_cached(github_scope)
-        out = apply_github_repo_scope(out, github_scope[0], github_scope[1])
-
-    gitlab_scope = infer_gitlab_repo_scope(
-        message=message,
-        conversation_messages=conversation_messages,
-        env=env,
-        cwd=cwd,
-        cached=gitlab_cached,
-    )
-    if gitlab_scope:
-        if set_gitlab_cached is not None:
-            set_gitlab_cached(gitlab_scope)
-        out = apply_gitlab_repo_scope(out, *gitlab_scope)
+    for provider in _vcs_repo_scope_providers:
+        scope = provider.infer(
+            message=message,
+            conversation_messages=conversation_messages,
+            env=env,
+            cwd=cwd,
+            cached=cached_scopes.get(provider.vendor),
+        )
+        if not scope:
+            continue
+        if set_cached_scope is not None:
+            set_cached_scope(provider.vendor, scope)
+        out = provider.apply(out, scope)
     return out
 
 
@@ -677,6 +577,67 @@ def clear_assistant_prompt_fragments() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Gateway persona prompt fragments
+# ---------------------------------------------------------------------------
+#
+# Slack/gateway teammate-persona wording (distinct from the vendor gather/
+# action/assistant fragments above, which are joined into the shared prompt
+# regardless of surface). Gateway persona fragments only apply when the
+# turn's surface is "gateway"; core prompt builders must not import the
+# vendor module that owns the wording.
+
+_gateway_persona_fragments: list[PromptFragmentFn] = []
+
+
+def register_gateway_persona_fragment(fn: PromptFragmentFn) -> None:
+    _gateway_persona_fragments.append(fn)
+
+
+def gateway_persona_fragments() -> str:
+    return "\n\n".join(fn() for fn in _gateway_persona_fragments)
+
+
+def clear_gateway_persona_fragments() -> None:
+    _gateway_persona_fragments.clear()
+
+
+# ---------------------------------------------------------------------------
+# Message context prefix strippers
+# ---------------------------------------------------------------------------
+#
+# Gateway surfaces (Slack, etc.) may prepend a channel/context marker to the
+# raw message text (e.g. ``[Slack channel_id=…]``) before it reaches core
+# prompt/turn helpers. Core needs to strip that marker to evaluate the
+# underlying text (for example, matching a bare affirmative like "yes")
+# without hardcoding any vendor's marker format.
+
+MessageContextPrefixStripper = Callable[[str], "tuple[str, str] | None"]
+
+_message_context_prefix_strippers: list[MessageContextPrefixStripper] = []
+
+
+def register_message_context_prefix_stripper(fn: MessageContextPrefixStripper) -> None:
+    _message_context_prefix_strippers.append(fn)
+
+
+def clear_message_context_prefix_strippers() -> None:
+    _message_context_prefix_strippers.clear()
+
+
+def strip_message_context_prefix(text: str) -> tuple[str, str]:
+    """Return ``(prefix, remainder)``, trying registered strippers in order.
+
+    The first stripper to return a non-``None`` result wins. Falls back to
+    ``("", text)`` when no registered stripper matches.
+    """
+    for stripper in _message_context_prefix_strippers:
+        result = stripper(text)
+        if result is not None:
+            return result
+    return "", text
+
+
+# ---------------------------------------------------------------------------
 # Test reset
 # ---------------------------------------------------------------------------
 
@@ -701,14 +662,9 @@ def reset_harness_ports() -> None:
         build_cli_client=_cli_llm_backend_unavailable,
         flatten_cli_messages=_cli_llm_backend_unavailable,
     )
-    set_github_repo_scope_adapters(
-        infer_scope=_default_infer_github_scope,
-        apply_scope=_default_apply_github_scope,
-    )
-    set_gitlab_repo_scope_adapters(
-        infer_scope=_default_infer_gitlab_scope,
-        apply_scope=_default_apply_gitlab_scope,
-    )
+    clear_vcs_repo_scope_providers()
     clear_gather_prompt_fragments()
     clear_action_prompt_fragments()
     clear_assistant_prompt_fragments()
+    clear_gateway_persona_fragments()
+    clear_message_context_prefix_strippers()

@@ -10,6 +10,7 @@ import re
 
 from core.state import MAX_CONVERSATION_TURNS
 from core.state.transcript_window import SESSION_SUMMARY_PREFIX
+from platform.harness_ports import strip_message_context_prefix
 
 NO_HISTORY_PLACEHOLDER = "(no prior messages in this CLI thread)"
 _ACTION_FACT_MARKERS = (
@@ -23,8 +24,6 @@ _ACTION_FACT_MARKERS = (
 _VALUE_LINE_RE = re.compile(
     r"(?im)^[A-Z][A-Za-z0-9 ._/-]{1,64}:\s+.*(?:[-+]?\d+(?:\.\d+)?\s*°?\s*[CF]|sent|true|false|\{|\[)"
 )
-# Gateway may prefix Slack channel metadata; strip before affirmative matching.
-_SLACK_CONTEXT_PREFIX_RE = re.compile(r"(?is)^\s*\[Slack[^\]]*\]\s*")
 _AFFIRMATIVE_RE = re.compile(
     r"(?is)^\s*(?:yes|y|yeah|yep|yup|sure|ok|okay|please|go ahead|do it|do that)"
     r"(?:\s*please)?\s*[.!?]?\s*$"
@@ -55,12 +54,7 @@ def expand_affirmative_follow_up(
     if not raw.strip() or not messages:
         return raw
 
-    prefix = ""
-    remainder = raw
-    ctx = _SLACK_CONTEXT_PREFIX_RE.match(raw)
-    if ctx:
-        prefix = ctx.group(0)
-        remainder = raw[ctx.end() :]
+    prefix, remainder = strip_message_context_prefix(raw)
     if not (_AFFIRMATIVE_RE.match(remainder) or _AFFIRMATIVE_RESTATED_RE.search(remainder)):
         return raw
 

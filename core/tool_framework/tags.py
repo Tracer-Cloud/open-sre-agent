@@ -10,4 +10,13 @@ from __future__ import annotations
 # summarize_observation turn route (structured discovery JSON → user prose).
 SUMMARIZE_OBSERVATION_TAG = "summarize_observation"
 
-__all__ = ["SUMMARIZE_OBSERVATION_TAG"]
+# Marks a tool as a deterministic last-resort investigation action: eligible
+# for selection only when no other tool scores positively for the alert.
+FALLBACK_PLANNING_TAG = "fallback_planning"
+
+# Marks a tool's source as a generic fallback source (useful, but never
+# primary when incident-specific integrations match). See
+# core.domain.alerts.alert_source.secondary_tool_sources.
+SECONDARY_SOURCE_TAG = "secondary_source"
+
+__all__ = ["FALLBACK_PLANNING_TAG", "SECONDARY_SOURCE_TAG", "SUMMARIZE_OBSERVATION_TAG"]
