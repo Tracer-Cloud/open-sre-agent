@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Protocol
 
+import core.agent_harness.prompts.synthetic_failure as synthetic_failure
 from config.constants.prompts import SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
-from core.agent_harness.prompts import synthetic_failure
 from core.agent_harness.prompts.assistant_agent_prompt import (
     _build_observation_block,
     _build_system_prompt,
