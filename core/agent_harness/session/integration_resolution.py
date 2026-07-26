@@ -65,14 +65,19 @@ def merge_resolved_integrations(
 
 
 def _has_usable_cache(cache: dict[str, Any] | None) -> bool:
-    """True when a cache holds resolved configs and need not be re-resolved.
+    """True when a cache holds a resolved view and need not be re-resolved.
 
-    An empty ``{}`` is *not* usable — that shape appears when gateway chat
-    metadata is about to be merged onto a still-unresolved session, and must
-    not freeze the turn on "no integrations".
+    ``None`` means unresolved (resolve live). An explicit ``{}`` is a known
+    empty view — oracle fixtures and callers that force a no-integration world
+    rely on that distinction, so it must not trigger a live re-resolve.
+    Metadata-only maps (underscore keys such as ``_gateway_chat_id``) are not
+    a hit and still trigger resolve.
     """
-    if not cache:
+    if cache is None:
         return False
+    if not cache:
+        # Explicit empty dict: known "no integrations", not a cache miss.
+        return True
     return has_resolved_integrations(cache) or not has_only_underscore_prefixed_keys(cache)
 
 
