@@ -113,6 +113,31 @@ class GitHubRestClient:
 
         return _decode_json_payload(raw, path=path)
 
+    def graphql(self, query: str, variables: dict[str, Any] | None = None) -> JsonPayload:
+        """Execute a GitHub GraphQL API query."""
+        if not self._token:
+            raise GitHubApiError(
+                "GitHub token is required. Configure github_token, GITHUB_TOKEN, or GH_TOKEN."
+            )
+
+        payload = {"query": query}
+        if variables is not None:
+            payload["variables"] = variables
+
+        result = self.request("POST", "graphql", body=payload)
+
+        # GraphQL returns HTTP 200 even if there are errors, they are in the JSON body.
+        if isinstance(result, dict) and "errors" in result:
+            errors = result["errors"]
+            msg = (
+                errors[0].get("message", "Unknown GraphQL error")
+                if isinstance(errors, list) and len(errors) > 0
+                else "GraphQL errors occurred"
+            )
+            raise GitHubApiError(f"GraphQL Error: {msg}", path="graphql")
+
+        return result
+
     def paginate(
         self,
         path: str,
