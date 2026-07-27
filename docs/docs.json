@@ -156,6 +156,7 @@
               "argocd",
               "aws",
               "aws_lambda",
+              "s3",
               "kubernetes",
               "cloudtrail_events",
               "bitbucket",
