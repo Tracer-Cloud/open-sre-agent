@@ -6,7 +6,6 @@ import os
 import pathlib
 import subprocess
 import sys
-import time
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from types import SimpleNamespace
@@ -15,6 +14,7 @@ from unittest.mock import patch
 import psutil
 import pytest
 
+from tests.utils.polling import wait_until
 from tools.system.fleet_monitoring.probe import (
     ProcessSnapshot,
     probe,
@@ -46,7 +46,7 @@ _SOURCE_ROOTS = (
 @pytest.fixture
 def busy_process() -> Iterator[int]:
     """Spawn a subprocess burning CPU in a tight loop; yields its PID.
-    The warmup sleep ensures the process has accumulated enough CPU time for
+    The warmup wait ensures the process has accumulated enough CPU time for
     psutil.cpu_percent(interval>0) to measure a non-zero delta.
     """
     proc = subprocess.Popen(
@@ -55,7 +55,12 @@ def busy_process() -> Iterator[int]:
         stderr=subprocess.DEVNULL,
     )
 
-    time.sleep(0.1)
+    process = psutil.Process(proc.pid)
+    wait_until(
+        lambda: sum(process.cpu_times()[:2]) > 0.0,
+        timeout=2.0,
+        interval=0.01,
+    )
 
     yield proc.pid
 
