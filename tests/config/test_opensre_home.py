@@ -14,7 +14,7 @@ from config.constants.paths import (
     opensre_home,
     session_home,
 )
-from config.principal import Principal, StorageScope
+from config.principal import Actor, Principal, StorageScope
 from config.scope_context import bound_storage_scope
 from core.agent_harness.session.persistence.paths import sessions_dir
 
@@ -36,8 +36,8 @@ def test_unbound_paths_stay_flat(host_home: Path) -> None:
 
 def test_org_integrations_shared_member_sessions_private(host_home: Path) -> None:
     org = Principal.org("org_acme")
-    alice = StorageScope.for_slack_member(org, "U_ALICE")
-    bob = StorageScope.for_slack_member(org, "U_BOB")
+    alice = StorageScope(principal=org, actor=Actor(id="U_ALICE"))
+    bob = StorageScope(principal=org, actor=Actor(id="U_BOB"))
 
     with bound_storage_scope(alice):
         alice_integ = integrations_store_path()
@@ -55,9 +55,9 @@ def test_org_integrations_shared_member_sessions_private(host_home: Path) -> Non
 
 
 def test_two_orgs_get_distinct_integration_paths(host_home: Path) -> None:
-    with bound_storage_scope(StorageScope.for_slack_member(Principal.org("org_a"), "U1")):
+    with bound_storage_scope(StorageScope(principal=Principal.org("org_a"), actor=Actor(id="U1"))):
         path_a = integrations_store_path()
-    with bound_storage_scope(StorageScope.for_slack_member(Principal.org("org_b"), "U1")):
+    with bound_storage_scope(StorageScope(principal=Principal.org("org_b"), actor=Actor(id="U1"))):
         path_b = integrations_store_path()
 
     assert path_a == host_home / ORGS_DIR_NAME / "org_a" / "integrations.json"
@@ -67,14 +67,14 @@ def test_two_orgs_get_distinct_integration_paths(host_home: Path) -> None:
 
 def test_unsafe_org_id_rejected(host_home: Path) -> None:
     _ = host_home
-    scope = StorageScope.for_slack_member(Principal.org("org/../escape"), "U1")
+    scope = StorageScope(principal=Principal.org("org/../escape"), actor=Actor(id="U1"))
     with bound_storage_scope(scope), pytest.raises(UnsafePathSegmentError):
         opensre_home()
 
 
 def test_unsafe_actor_id_rejected(host_home: Path) -> None:
     _ = host_home
-    scope = StorageScope.for_slack_member(Principal.org("org_ok"), "U/../escape")
+    scope = StorageScope(principal=Principal.org("org_ok"), actor=Actor(id="U/../escape"))
     with bound_storage_scope(scope), pytest.raises(UnsafePathSegmentError):
         session_home()
 
@@ -86,7 +86,7 @@ def test_integrations_store_writes_under_org_home(
 
     monkeypatch.setattr(store_mod, "STORE_PATH", None)
     org = Principal.org("org_acme")
-    scope = StorageScope.for_slack_member(org, "U_ALICE")
+    scope = StorageScope(principal=org, actor=Actor(id="U_ALICE"))
     with bound_storage_scope(scope):
         store_mod.upsert_integration(
             "datadog",

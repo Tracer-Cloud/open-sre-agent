@@ -15,6 +15,7 @@ from config.principal import Principal, StorageScope
 from gateway.billing.credits_client import CreditsOutcome
 from gateway.slack.dispatcher import _SlackTurnDispatcher
 from gateway.slack.events import SlackInboundMessage
+from gateway.slack.principal import slack_scope
 from gateway.slack.settings import SlackGatewaySettings
 
 _SECURITY = "gateway.slack.security"
@@ -35,7 +36,7 @@ TEST_ORG_ID = "org_test_dispatcher"
 
 def _test_scope() -> StorageScope:
     """Scope a turn would have resolved to under the autouse silo org."""
-    return StorageScope.for_slack_member(Principal.org(TEST_ORG_ID), "U1")
+    return slack_scope(Principal.org(TEST_ORG_ID), "U1")
 
 
 @pytest.fixture(autouse=True)
@@ -51,7 +52,7 @@ def _metering_unconfigured(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv(ORGANIZATION_ID_ENV, TEST_ORG_ID)
     monkeypatch.setattr(
-        "gateway.storage.principal_resolve.get_slack_install",
+        "gateway.slack.principal.get_slack_install",
         lambda _team_id: None,
     )
 

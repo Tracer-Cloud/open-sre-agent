@@ -1,4 +1,4 @@
-"""Ownership identities for Slack team turns: principal, actor, and their pairing.
+"""Ownership identities for a turn: principal, actor, and their pairing.
 
 Leaf module: safe for any layer to import.
 
@@ -20,8 +20,7 @@ class Principal:
     """Owner of credentials, integrations, and bill for one install context.
 
     ``kind="org"`` uses a Clerk (or equivalent) organization id.
-    ``kind="individual"`` is reserved for non-team contexts (not used by the
-    Slack team-install path in this change).
+    ``kind="individual"`` is reserved for non-organization contexts.
     """
 
     kind: PrincipalKind
@@ -37,7 +36,7 @@ class Principal:
 
     @classmethod
     def org(cls, org_id: str) -> Principal:
-        """Build an organization principal (Slack team install)."""
+        """Build an organization principal."""
         return cls(kind="org", id=org_id)
 
     @classmethod
@@ -59,11 +58,6 @@ class Actor:
             raise ValueError("actor id must be non-empty")
         object.__setattr__(self, "id", actor_id)
 
-    @classmethod
-    def slack(cls, user_id: str, *, display_name: str = "") -> Actor:
-        """A Slack user id acting inside an org principal."""
-        return cls(id=user_id, display_name=display_name)
-
 
 @dataclass(frozen=True)
 class StorageScope:
@@ -71,11 +65,6 @@ class StorageScope:
 
     principal: Principal
     actor: Actor
-
-    @classmethod
-    def for_slack_member(cls, principal: Principal, user_id: str) -> StorageScope:
-        """Scope for a Slack team member on a live gateway turn."""
-        return cls(principal=principal, actor=Actor.slack(user_id))
 
 
 __all__ = [

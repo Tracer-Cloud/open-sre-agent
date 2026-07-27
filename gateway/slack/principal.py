@@ -1,10 +1,15 @@
-"""Resolve the owning principal for a Slack team-install turn."""
+"""Resolve the owning principal for a Slack team-install turn.
+
+Slack-only. Telegram, CLI, and interactive shell must not import this module —
+they stay unbound on the host home. Border regressions live in
+``gateway/tests/test_storage_surface_borders.py``.
+"""
 
 from __future__ import annotations
 
-from config.principal import Principal, StorageScope
+from config.principal import Actor, Principal, StorageScope
 from gateway.billing.credits_client import organization_id_for_silo
-from gateway.storage.slack_installs import SlackInstallLookupError, get_slack_install
+from gateway.slack.installs import SlackInstallLookupError, get_slack_install
 
 
 class PrincipalResolutionError(RuntimeError):
@@ -39,13 +44,19 @@ def resolve_slack_principal(*, team_id: str) -> Principal:
     )
 
 
+def slack_scope(principal: Principal, user_id: str) -> StorageScope:
+    """Pair an organization with the Slack user acting in it."""
+    return StorageScope(principal=principal, actor=Actor(id=user_id))
+
+
 def resolve_slack_scope(*, team_id: str, user_id: str) -> StorageScope:
     """Owning principal and acting member for one Slack turn."""
-    return StorageScope.for_slack_member(resolve_slack_principal(team_id=team_id), user_id)
+    return slack_scope(resolve_slack_principal(team_id=team_id), user_id)
 
 
 __all__ = [
     "PrincipalResolutionError",
     "resolve_slack_principal",
     "resolve_slack_scope",
+    "slack_scope",
 ]

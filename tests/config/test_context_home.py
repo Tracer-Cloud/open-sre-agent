@@ -16,8 +16,8 @@ from config.scope_context import bound_storage_scope
 
 ACME = Principal.org("org_acme")
 GLOBEX = Principal.org("org_globex")
-ALICE = Actor.slack("U_ALICE")
-BOB = Actor.slack("U_BOB")
+ALICE = Actor(id="U_ALICE")
+BOB = Actor(id="U_BOB")
 
 
 @pytest.fixture(autouse=True)

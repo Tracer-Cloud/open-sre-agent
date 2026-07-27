@@ -9,18 +9,19 @@ import pytest
 
 from config.constants.billing import ORGANIZATION_ID_ENV
 from config.principal import Principal
-from gateway.storage import principal_resolve, slack_installs
-from gateway.storage.db import connect_gateway_db
-from gateway.storage.principal_resolve import (
-    PrincipalResolutionError,
-    resolve_slack_principal,
-    resolve_slack_scope,
-)
-from gateway.storage.slack_installs import (
+from gateway.slack import installs as slack_installs
+from gateway.slack import principal as principal_resolve
+from gateway.slack.installs import (
     SlackInstallLookupError,
     get_slack_install,
     upsert_slack_install,
 )
+from gateway.slack.principal import (
+    PrincipalResolutionError,
+    resolve_slack_principal,
+    resolve_slack_scope,
+)
+from gateway.storage.db import connect_gateway_db
 
 ACME_TEAM = "T_ACME"
 ACME_ORG = "org_acme"

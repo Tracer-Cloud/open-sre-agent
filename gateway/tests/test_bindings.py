@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from config.constants import paths
-from config.principal import Principal, StorageScope
+from config.principal import Actor, Principal, StorageScope
 from config.scope_context import bound_storage_scope
 from gateway.storage import SessionBindingStore
 from gateway.storage.db import bindings_db_path, connect_bindings_db, default_gateway_db_path
@@ -152,7 +152,9 @@ def test_bindings_live_on_the_org_context_root_not_the_host(
     monkeypatch.setenv(paths.CONTEXT_ROOT_ENV, str(mount))
 
     # Act
-    with bound_storage_scope(StorageScope.for_slack_member(Principal.org("org_acme"), "U_ALICE")):
+    with bound_storage_scope(
+        StorageScope(principal=Principal.org("org_acme"), actor=Actor(id="U_ALICE"))
+    ):
         bindings = bindings_db_path()
     installs = default_gateway_db_path()
 

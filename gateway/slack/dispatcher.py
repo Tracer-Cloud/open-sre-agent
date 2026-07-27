@@ -28,6 +28,7 @@ from gateway.slack.client import (
 )
 from gateway.slack.events import SlackInboundFile, SlackInboundMessage
 from gateway.slack.output_sink import SlackOutputSink
+from gateway.slack.principal import PrincipalResolutionError, resolve_slack_scope
 from gateway.slack.security import (
     SlackInboundDecision,
     enforce_inbound_slack_message_security,
@@ -39,7 +40,6 @@ from gateway.slack.thread_history import (
     session_needs_thread_seed,
 )
 from gateway.storage import SessionResolver
-from gateway.storage.principal_resolve import PrincipalResolutionError, resolve_slack_scope
 from platform.analytics.usage_context import SURFACE_SLACK, bound_usage_context
 
 _ROTATE_SESSION = "__ROTATE_SESSION__"
