@@ -483,8 +483,9 @@ def test_default_no_args_enters_repl(monkeypatch) -> None:
     """Regression: the default invocation `opensre` (no args, TTY) must enter
     the REPL.  A previous Click misconfiguration (is_flag + flag_value=False)
     made the `interactive` kwarg resolve to False even with no flag, so every
-    local run silently rendered the landing page.  Assert the CLI passes
-    cli_enabled=True into ReplConfig.load and actually calls run_repl.
+    local run silently rendered the landing page.  With no flag the CLI now
+    passes cli_enabled=None (deferring to env/config, which default to enabled),
+    so run_repl must still be called.
     """
     monkeypatch.setattr("surfaces.cli.__main__.capture_first_run_if_needed", lambda: None)
     monkeypatch.setattr("surfaces.cli.__main__.shutdown_analytics", lambda **_kw: None)
@@ -517,14 +518,60 @@ def test_default_no_args_enters_repl(monkeypatch) -> None:
     assert exit_code == 0
     assert len(load_calls) >= 1
     repl_load = load_calls[-1]
-    assert repl_load.get("cli_enabled") is True, (
-        f"default no-args run must pass cli_enabled=True, got {repl_load}"
+    assert repl_load.get("cli_enabled") is None, (
+        f"default no-args run must defer to env/config (cli_enabled=None), got {repl_load}"
     )
     assert repl_load.get("cli_layout") is None
     assert repl_load.get("cli_theme") is None, (
         f"default no-args run must leave theme env/config overridable, got {repl_load}"
     )
     assert landing_calls == [], "REPL should run, not landing page"
+
+
+def test_env_disables_interactive_without_flag(monkeypatch) -> None:
+    """Regression for #4376: with no --interactive/--no-interactive flag,
+    OPENSRE_INTERACTIVE (and config.yml) must be honored. The Click default
+    previously forced cli_enabled=True, so ``OPENSRE_INTERACTIVE=0 opensre``
+    still entered the REPL. The CLI now passes cli_enabled=None when no flag is
+    given, so the env var disables the shell and the landing page renders.
+    """
+    monkeypatch.setattr("surfaces.cli.__main__.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("surfaces.cli.__main__.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("surfaces.cli.__main__.capture_cli_invoked", lambda *_args: None)
+    monkeypatch.setattr("surfaces.cli.__main__.sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("surfaces.cli.__main__.sys.stdout.isatty", lambda: True)
+
+    # Hermetic: ignore any real ~/.opensre/config.yml and drive purely via the env var.
+    monkeypatch.setattr("config.repl_config._read_config_file", lambda: {})
+    monkeypatch.setenv("OPENSRE_INTERACTIVE", "0")
+
+    load_calls: list[dict] = []
+    orig_load = ReplConfig.load
+
+    @classmethod  # type: ignore[misc]
+    def spy_load(cls, **kw):  # type: ignore[no-untyped-def]
+        load_calls.append(kw)
+        return orig_load(**kw)
+
+    monkeypatch.setattr("config.repl_config.ReplConfig.load", spy_load)
+
+    landing_calls: list[int] = []
+    monkeypatch.setattr(
+        "surfaces.cli.__main__.render_landing",
+        lambda _group: landing_calls.append(1),
+    )
+
+    def _fail_if_called(**_kw: object) -> int:
+        raise AssertionError("run_repl must not run when OPENSRE_INTERACTIVE=0 and no flag")
+
+    with patch("surfaces.interactive_shell.run_repl", side_effect=_fail_if_called):
+        exit_code = main([])
+
+    assert exit_code == 0
+    assert load_calls[-1].get("cli_enabled") is None, (
+        f"no flag must defer to env/config (cli_enabled=None), got {load_calls[-1]}"
+    )
+    assert landing_calls == [1], "landing page should render when the env var disables interactive"
 
 
 def test_resume_flag_enters_repl_with_session_id(monkeypatch) -> None:
@@ -598,3 +645,43 @@ def test_valid_theme_flag_passes_normalized_value(monkeypatch) -> None:
     assert exit_code == 0
     assert len(load_calls) >= 1
     assert all(call.get("cli_theme") == "blue" for call in load_calls)
+
+
+def test_main_flushes_analytics_when_events_are_pending(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A one-shot CLI exit must drain queued events (e.g. investigation_completed)."""
+    calls: list[dict[str, object]] = []
+    monkeypatch.setattr("surfaces.cli.__main__.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("surfaces.cli.__main__.capture_cli_invoked", lambda *_args: None)
+    monkeypatch.setattr("surfaces.cli.__main__.init_sentry", lambda **_kw: None)
+    monkeypatch.setattr("surfaces.cli.__main__.analytics_needs_flush", lambda: True)
+    monkeypatch.setattr(
+        "surfaces.cli.__main__.shutdown_analytics",
+        lambda **kwargs: calls.append(kwargs),
+    )
+
+    exit_code = main(["integrations", "show", "nonexistent"])
+
+    assert exit_code != 0
+    assert calls and calls[0]["flush"] is True
+    assert calls[0]["timeout"] > 0
+
+
+def test_main_does_not_block_when_no_events_are_pending(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[dict[str, object]] = []
+    monkeypatch.setattr("surfaces.cli.__main__.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("surfaces.cli.__main__.capture_cli_invoked", lambda *_args: None)
+    monkeypatch.setattr("surfaces.cli.__main__.init_sentry", lambda **_kw: None)
+    monkeypatch.setattr("surfaces.cli.__main__.analytics_needs_flush", lambda: False)
+    monkeypatch.setattr(
+        "surfaces.cli.__main__.shutdown_analytics",
+        lambda **kwargs: calls.append(kwargs),
+    )
+
+    exit_code = main(["integrations", "show", "nonexistent"])
+
+    assert exit_code != 0
+    assert calls == [{"flush": False}]

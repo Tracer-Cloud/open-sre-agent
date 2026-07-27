@@ -30,6 +30,7 @@ from surfaces.cli.invocation import (  # noqa: E402
     resolve_command_parts,
 )
 from surfaces.cli.telemetry import (  # noqa: E402
+    analytics_needs_flush,
     build_cli_invoked_properties,
     capture_cli_invoked,
     capture_exception,
@@ -45,6 +46,11 @@ from surfaces.cli.telemetry import (  # noqa: E402
 
 if TYPE_CHECKING:
     from platform.analytics.provider import Properties
+
+# One-shot CLI exit: a queued or in-flight event (e.g. ``investigation_completed``)
+# dies with the process because the sender runs on a daemon thread, so wait briefly
+# for the POST to land before returning.
+_ANALYTICS_FLUSH_TIMEOUT_SECONDS = 2.0
 
 _CAPTURE_CLI_ANALYTICS = "capture_cli_analytics"
 _CLI_ANALYTICS_CAPTURED = "cli_analytics_captured"
@@ -152,8 +158,19 @@ def cli(
         if sys.stdin.isatty() and sys.stdout.isatty():
             from surfaces.interactive_shell import run_repl
 
+            # Only force interactivity from the CLI when the user actually passed
+            # --interactive/--no-interactive (or --resume). Otherwise pass None so
+            # ReplConfig.load can honor OPENSRE_INTERACTIVE and config.yml.
+            interactive_src = ctx.get_parameter_source("interactive")
+            cli_enabled: bool | None
+            if resume_session_id is not None:
+                cli_enabled = True
+            elif interactive_src is not None and interactive_src.name == "COMMANDLINE":
+                cli_enabled = interactive
+            else:
+                cli_enabled = None
             config = ReplConfig.load(
-                cli_enabled=interactive or resume_session_id is not None,
+                cli_enabled=cli_enabled,
                 cli_layout=layout,
                 cli_theme=theme,
             )
@@ -285,8 +302,12 @@ def main(argv: list[str] | None = None) -> int:
                 _sentry_sdk.flush(timeout=2)
         raise
     finally:
-        # Non-blocking: daemon worker may still drain in-flight events briefly.
-        shutdown_analytics(flush=False)
+        # Drain pending events so one-shot runs do not lose them, and stay
+        # non-blocking when the worker is idle.
+        if analytics_needs_flush():
+            shutdown_analytics(flush=True, timeout=_ANALYTICS_FLUSH_TIMEOUT_SECONDS)
+        else:
+            shutdown_analytics(flush=False)
     return 0
 
 

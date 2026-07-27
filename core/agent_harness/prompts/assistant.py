@@ -48,6 +48,9 @@ class AssistantPromptContextProvider(Protocol):
     def environment_block(self) -> str:
         raise NotImplementedError
 
+    def long_term_memory(self) -> str:
+        raise NotImplementedError
+
     def suggested_synthetic_prompt(self) -> str:
         raise NotImplementedError
 
@@ -64,6 +67,7 @@ def build_assistant_system_prompt(
     prior_investigation: str = "",
     prior_action_facts: str = "",
     environment: str = "",
+    long_term_memory: str = "",
     surface: str = "interactive_shell",
 ) -> str:
     """Build the system prompt for one assistant turn."""
@@ -76,6 +80,7 @@ def build_assistant_system_prompt(
         prior_investigation=prior_investigation,
         prior_action_facts=prior_action_facts,
         environment=environment,
+        long_term_memory=long_term_memory,
         surface=surface,
     )
 
@@ -143,6 +148,7 @@ def build_cli_agent_prompt_from_provider(
         ),
         prior_action_facts=format_prior_action_facts(list(turn_snapshot.conversation_messages)),
         environment=prompts.environment_block(),
+        long_term_memory=prompts.long_term_memory(),
         surface=prompts.surface(),
     )
     return (

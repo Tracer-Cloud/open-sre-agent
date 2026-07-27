@@ -155,6 +155,9 @@ class PromptContextProvider(Protocol):
     def environment_block(self) -> str:
         raise NotImplementedError
 
+    def long_term_memory(self) -> str:
+        raise NotImplementedError
+
     def suggested_synthetic_prompt(self) -> str:
         raise NotImplementedError
 
