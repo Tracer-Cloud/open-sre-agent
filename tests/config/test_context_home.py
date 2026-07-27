@@ -165,3 +165,40 @@ def test_mounted_volume_still_separates_users(
     # Assert
     assert alice != bob
     assert BOB.id not in str(alice)
+
+
+def test_unbound_callers_never_write_into_a_customer_volume(
+    _home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Telegram and boot-time reads share the Slack task but name no organization.
+
+    The mount belongs to one customer, so a turn that does not name that
+    customer must stay on the host root.
+    """
+    # Arrange: the deployed Slack task always has the mount configured.
+    mount = _home / "workspace" / "memories"
+    monkeypatch.setenv(paths.CONTEXT_ROOT_ENV, str(mount))
+
+    # Act: nothing bound, exactly as a Telegram turn or a boot-time read.
+    org_root = paths.opensre_home()
+    sessions = paths.session_home()
+    integrations = paths.integrations_store_path()
+
+    # Assert: none of it lands on the customer's volume.
+    assert org_root == _home
+    assert sessions == _home
+    assert integrations == _home / "integrations.json"
+    assert mount not in integrations.parents
+
+
+def test_a_bound_org_still_uses_the_mount(_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Arrange
+    mount = _home / "workspace" / "memories"
+    monkeypatch.setenv(paths.CONTEXT_ROOT_ENV, str(mount))
+
+    # Act
+    with bound_storage_scope(_member(ACME, ALICE)):
+        sessions = paths.session_home()
+
+    # Assert
+    assert sessions == mount / "users" / ALICE.id

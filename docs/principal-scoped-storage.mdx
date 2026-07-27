@@ -115,7 +115,7 @@ no automatic copy of flat silo `sessions/` or `integrations.json` into
 `orgs/<id>/` — copy those once by hand if you need continuity, for example:
 
 ```bash
-mkdir -p ~/.opensre/orgs/$OPENSRE_ORGANIZATION_ID/members
+mkdir -p ~/.opensre/orgs/$OPENSRE_ORGANIZATION_ID/users
 cp ~/.opensre/integrations.json ~/.opensre/orgs/$OPENSRE_ORGANIZATION_ID/
 ```
 
@@ -130,7 +130,7 @@ Telegram and other surfaces keep matching their migrated empty-actor rows.
 
 ## Non-goals (this change)
 
-- Remote S3 file storage / CLI Slack emulation
+- CLI emulation of a Slack member
 - Per-user integration credentials or LLM auth
 - Nesting `opensre.json`, investigations, or REPL history under member homes
 - Changing local CLI individual home layout

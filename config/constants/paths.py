@@ -62,18 +62,21 @@ def host_home() -> Path:
 def opensre_home() -> Path:
     """The organization's context root, or the host home when unbound.
 
-    ``OPENSRE_CONTEXT_ROOT`` wins when set: the deployed service mounts a volume
-    already scoped to one organization, so no org segment is added on top of it.
-    Without it, a bound org principal nests under ``~/.opensre/orgs/<org_id>/``
-    so several organizations can be exercised on one machine. CLI and other
-    unbound callers keep plain ``~/.opensre/``.
+    The mount named by ``OPENSRE_CONTEXT_ROOT`` belongs to one organization, so
+    it is used only for a turn that names that organization. Anything unbound —
+    Telegram, boot-time integration reads, the CLI — stays on the host root
+    rather than writing into a customer's volume.
+
+    Without the mount, a bound org principal nests under
+    ``~/.opensre/orgs/<org_id>/`` so several organizations can be exercised on
+    one machine.
     """
-    mounted_root = os.getenv(CONTEXT_ROOT_ENV, "").strip()
-    if mounted_root:
-        return Path(mounted_root).expanduser()
     scope = current_scope()
     if scope is None or scope.principal.kind != "org":
         return OPENSRE_HOME_DIR
+    mounted_root = os.getenv(CONTEXT_ROOT_ENV, "").strip()
+    if mounted_root:
+        return Path(mounted_root).expanduser()
     org_id = _safe_segment(scope.principal.id, label="principal id")
     return OPENSRE_HOME_DIR / ORGS_DIR_NAME / org_id
 
