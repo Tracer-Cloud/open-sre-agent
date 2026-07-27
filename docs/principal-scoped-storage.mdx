@@ -1,0 +1,88 @@
+---
+title: Principal-scoped storage (Slack team installs)
+description: How OpenSRE resolves the org owner for Slack team users and scopes session bindings.
+---
+
+# Principal-scoped storage (Slack team installs)
+
+For a **Slack user in a team workspace**, OpenSRE resolves one **principal**
+(the Clerk organization that owns the install) and one **actor** (the Slack
+user). Credentials and billing follow the principal; session bindings are keyed
+by principal so two orgs never share a thread mapping.
+
+Local CLI, Telegram, and the flat `~/.opensre` file layout are unchanged from
+the default product behavior.
+
+## Who owns the turn
+
+| Context | Principal | Actor |
+| --- | --- | --- |
+| Slack **team install** | Organization (`clerk_org_id` from install, else silo `OPENSRE_ORGANIZATION_ID`) | Slack user id |
+| Other surfaces | Unchanged (not part of this change) | — |
+
+If the install catalog is unreadable, or there is neither an install row nor a
+silo org id, the Slack turn is **refused** rather than billed to the wrong owner.
+
+## What changes for Slack
+
+1. Resolve `StorageScope` (`principal` + `actor`) at the start of each Slack turn.
+2. Bind the scope for the turn (`bound_storage_scope`).
+3. Look up / create session bindings with `(platform, chat_id, principal_id)`.
+4. Consume credits against `principal.id` (the org).
+
+## Other surfaces
+
+`principal` is optional on the binding store and resolver. Callers that omit it —
+Telegram, and anything else on main's path — key their bindings by an empty
+principal id, which is exactly the behavior they had before.
+
+## Registering a workspace
+
+Nothing in this change writes `slack_installs` rows: there is no OAuth or
+control-plane hook yet. Until one exists, give a workspace an owner in one of
+two ways.
+
+Set the silo organization, which every workspace without a row falls back to:
+
+```bash
+export OPENSRE_ORGANIZATION_ID=org_...
+```
+
+Or insert the row directly, which is what a real multi-workspace deployment
+needs:
+
+```python
+from gateway.storage.slack_installs import upsert_slack_install
+
+upsert_slack_install(team_id="T0123", clerk_org_id="org_...")
+```
+
+With neither, a Slack turn from that workspace is refused.
+
+## Upgrading an existing deployment
+
+The bindings table gains `principal_id` and existing rows are migrated with an
+empty one. A Slack workspace that then resolves to a real organization no longer
+matches its old row, so **in-flight Slack threads start a new session once**
+after the upgrade. Telegram and other surfaces keep matching their migrated rows.
+
+## Related env vars
+
+| Env | Purpose |
+| --- | --- |
+| `OPENSRE_ORGANIZATION_ID` | Silo org principal when no `slack_installs` row exists yet (dogfood / cutover) |
+
+## What this does not do yet
+
+`bound_storage_scope` makes the turn's owner available to any store that asks
+for it, but **no credential store reads it yet** — integration credentials still
+resolve exactly as they do today. This change scopes session bindings and credit
+attribution; scoping secrets is separate work.
+
+## Non-goals (this change)
+
+- Remote S3 file storage / CLI Slack emulation
+- Principal-scoped integration credentials
+- Changing local CLI individual home layout
+- Postgres session bindings
+- Per-user API keys inside an org-billed workspace

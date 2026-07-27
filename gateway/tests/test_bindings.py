@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from config.principal import Principal
 from gateway.storage import SessionBindingStore, connect_gateway_db
 
 
@@ -14,13 +15,67 @@ def binding_store(tmp_path) -> SessionBindingStore:
     conn.close()
 
 
-def test_bind_and_get(binding_store: SessionBindingStore) -> None:
-    binding_store.bind(platform="telegram", chat_id="123", session_id="uuid-1")
-    assert binding_store.get_session_id(platform="telegram", chat_id="123") == "uuid-1"
+@pytest.fixture
+def principal() -> Principal:
+    return Principal.individual("test-user-1")
 
 
-def test_rotate_assigns_new_session(binding_store: SessionBindingStore) -> None:
-    binding_store.bind(platform="telegram", chat_id="123", session_id="uuid-1")
-    new_id = binding_store.rotate(platform="telegram", chat_id="123")
+def test_bind_and_get(binding_store: SessionBindingStore, principal: Principal) -> None:
+    binding_store.bind(
+        platform="telegram",
+        chat_id="123",
+        session_id="uuid-1",
+        principal=principal,
+    )
+    assert (
+        binding_store.get_session_id(
+            platform="telegram",
+            chat_id="123",
+            principal=principal,
+        )
+        == "uuid-1"
+    )
+
+
+def test_rotate_assigns_new_session(
+    binding_store: SessionBindingStore, principal: Principal
+) -> None:
+    binding_store.bind(
+        platform="telegram",
+        chat_id="123",
+        session_id="uuid-1",
+        principal=principal,
+    )
+    new_id = binding_store.rotate(
+        platform="telegram",
+        chat_id="123",
+        principal=principal,
+    )
     assert new_id != "uuid-1"
-    assert binding_store.get_session_id(platform="telegram", chat_id="123") == new_id
+    assert (
+        binding_store.get_session_id(
+            platform="telegram",
+            chat_id="123",
+            principal=principal,
+        )
+        == new_id
+    )
+
+
+def test_bindings_are_isolated_by_principal(binding_store: SessionBindingStore) -> None:
+    a = Principal.org("org-a")
+    b = Principal.org("org-b")
+    binding_store.bind(
+        platform="slack",
+        chat_id="T:C:1",
+        session_id="sess-a",
+        principal=a,
+    )
+    binding_store.bind(
+        platform="slack",
+        chat_id="T:C:1",
+        session_id="sess-b",
+        principal=b,
+    )
+    assert binding_store.get_session_id(platform="slack", chat_id="T:C:1", principal=a) == "sess-a"
+    assert binding_store.get_session_id(platform="slack", chat_id="T:C:1", principal=b) == "sess-b"

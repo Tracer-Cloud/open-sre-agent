@@ -3,18 +3,21 @@
 Session lifecycle (create / resolve / rotate / restore / flush) is owned by
 :class:`core.agent_harness.session.SessionManager`. This resolver adds only the
 gateway-specific concerns on top: the platform chat-id ↔ session-id binding
-store and per-turn gateway chat metadata. It does not re-implement bootstrap or
-persistence, and it does not depend on any other surface.
+store (principal-scoped) and per-turn gateway chat metadata.
 """
 
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 from core.agent_harness.session import SessionCore, SessionManager
 from core.agent_harness.session.integration_resolution import has_resolved_integrations
 from gateway.session.gateway_chat_context import inject_gateway_chat_context
-from gateway.storage.session.bindings import SessionBindingStore
+
+if TYPE_CHECKING:
+    from config.principal import Principal
+    from gateway.storage.session.binding_store import BindingStore
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +52,7 @@ class SessionResolver:
 
     def __init__(
         self,
-        bindings: SessionBindingStore,
+        bindings: BindingStore,
         *,
         manager: SessionManager | None = None,
         platform: str = _PLATFORM_TELEGRAM,
@@ -58,9 +61,23 @@ class SessionResolver:
         self._manager = manager or SessionManager()
         self._platform = platform
 
-    def resolve(self, *, user_id: str, chat_id: str) -> SessionCore:
-        """Return a hydrated session for the platform conversation key ``user_id``."""
-        existing = self._bindings.get_session_id(platform=self._platform, chat_id=user_id)
+    def resolve(
+        self,
+        *,
+        user_id: str,
+        chat_id: str,
+        principal: Principal | None = None,
+    ) -> SessionCore:
+        """Return a hydrated session for the platform conversation key ``user_id``.
+
+        Slack team turns pass an org ``principal``. Other surfaces omit it and
+        keep main-branch binding behavior (legacy empty principal id).
+        """
+        existing = self._bindings.get_session_id(
+            platform=self._platform,
+            chat_id=user_id,
+            principal=principal,
+        )
         if existing:
             session = self._manager.resolve(existing)
             return _inject_chat_context(session, chat_id=chat_id, platform=self._platform)
@@ -71,26 +88,44 @@ class SessionResolver:
             platform=self._platform,
             chat_id=user_id,
             session_id=session.session_id,
+            principal=principal,
         )
         logger.info(
-            "[gateway] created session %s for %s conversation %s",
+            "[gateway] created session %s for %s conversation %s principal=%s",
             session.session_id,
             self._platform,
             user_id,
+            principal.id if principal is not None else "",
         )
         return session
 
-    def has_session(self, *, user_id: str) -> bool:
-        """Whether the bot already has a session bound to this conversation key.
+    def has_session(self, *, user_id: str, principal: Principal | None = None) -> bool:
+        """Whether the bot already has a session bound to this conversation key."""
+        return bool(
+            self._bindings.get_session_id(
+                platform=self._platform,
+                chat_id=user_id,
+                principal=principal,
+            )
+        )
 
-        Used to gate un-addressed thread follow-ups: the bot answers an un-tagged
-        reply only in a thread it already joined.
-        """
-        return bool(self._bindings.get_session_id(platform=self._platform, chat_id=user_id))
-
-    def rotate(self, *, user_id: str, chat_id: str) -> SessionCore:
+    def rotate(
+        self,
+        *,
+        user_id: str,
+        chat_id: str,
+        principal: Principal | None = None,
+    ) -> SessionCore:
         """Flush the current session file and start a new binding."""
-        existing = self._bindings.get_session_id(platform=self._platform, chat_id=user_id)
-        new_id = self._bindings.rotate(platform=self._platform, chat_id=user_id)
+        existing = self._bindings.get_session_id(
+            platform=self._platform,
+            chat_id=user_id,
+            principal=principal,
+        )
+        new_id = self._bindings.rotate(
+            platform=self._platform,
+            chat_id=user_id,
+            principal=principal,
+        )
         session = self._manager.rotate(old_session_id=existing or None, new_session_id=new_id)
         return _inject_chat_context(session, chat_id=chat_id, platform=self._platform)

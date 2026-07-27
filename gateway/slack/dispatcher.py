@@ -9,6 +9,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 
+from config.principal import StorageScope
 from core.agent_harness.session import SessionCore
 from gateway.billing.credits_client import CreditsOutcome, consume_credits
 from gateway.runtime.sink_protocol import GatewayAgentCallback
@@ -37,6 +38,8 @@ from gateway.slack.thread_history import (
     session_needs_thread_seed,
 )
 from gateway.storage import SessionResolver
+from gateway.storage.principal_resolve import PrincipalResolutionError, resolve_slack_scope
+from gateway.storage.scope_context import bound_storage_scope
 from platform.analytics.usage_context import SURFACE_SLACK, bound_usage_context
 
 _ROTATE_SESSION = "__ROTATE_SESSION__"
@@ -90,13 +93,25 @@ class _SlackTurnDispatcher:
 
     def dispatch(self, inbound: SlackInboundMessage) -> None:
         try:
-            if not self._admit(inbound):
-                return
-            self._run_turn(inbound)
+            scope = resolve_slack_scope(team_id=inbound.team_id, user_id=inbound.user_id)
+        except PrincipalResolutionError:
+            # Without a known owner the turn would read or bill the wrong
+            # principal's data, so it does not run.
+            self._logger.error(
+                "[slack-gateway] turn refused: unresolved principal channel=%s",
+                inbound.channel_id,
+                exc_info=True,
+            )
+            return
+        try:
+            with bound_storage_scope(scope):
+                if not self._admit(inbound, scope):
+                    return
+                self._run_turn(inbound, scope)
         except Exception:
             self._logger.error("[slack-gateway] turn failed", exc_info=True)
 
-    def _admit(self, inbound: SlackInboundMessage) -> bool:
+    def _admit(self, inbound: SlackInboundMessage, scope: StorageScope) -> bool:
         """Layered gate: decide whether this inbound message runs a turn at all.
 
         Mentions and DMs always run (and open/refresh the thread's attention
@@ -112,7 +127,10 @@ class _SlackTurnDispatcher:
             self._attention.note_addressed_turn(inbound.conversation_key, user_id=inbound.user_id)
             return True
         # Layer 1: only threads the bot already joined; never channel chatter.
-        if not self._session_resolver.has_session(user_id=inbound.conversation_key):
+        if not self._session_resolver.has_session(
+            user_id=inbound.conversation_key,
+            principal=scope.principal,
+        ):
             return False
         if not self._bot_user_id:
             # Without our own id we can neither dedup mention copies nor run
@@ -187,6 +205,7 @@ class _SlackTurnDispatcher:
         self,
         inbound: SlackInboundMessage,
         decision: SlackInboundDecision,
+        scope: StorageScope,
     ) -> SessionCore | None:
         """Apply auth decision side effects. Return a session to run, or None to stop."""
         persist_policy_if_needed(decision)
@@ -214,6 +233,7 @@ class _SlackTurnDispatcher:
                 session = self._session_resolver.rotate(
                     user_id=inbound.conversation_key,
                     chat_id=inbound.channel_id,
+                    principal=scope.principal,
                 )
                 self._post(inbound, _NEW_SESSION_REPLY)
                 if inbound.text.strip().lower() == "/new":
@@ -222,9 +242,10 @@ class _SlackTurnDispatcher:
             return self._session_resolver.resolve(
                 user_id=inbound.conversation_key,
                 chat_id=inbound.channel_id,
+                principal=scope.principal,
             )
 
-    def _run_turn(self, inbound: SlackInboundMessage) -> None:
+    def _run_turn(self, inbound: SlackInboundMessage, scope: StorageScope) -> None:
         with self._conversation_turn(inbound.conversation_key):
             decision = enforce_inbound_slack_message_security(
                 user_id=inbound.user_id,
@@ -233,7 +254,7 @@ class _SlackTurnDispatcher:
                 env_allowed_user_ids=self._settings.allowed_user_ids,
                 allow_open_workspace=self._settings.allow_open_workspace,
             )
-            session = self._apply_inbound_decision(inbound, decision)
+            session = self._apply_inbound_decision(inbound, decision, scope)
             if session is None:
                 return
 
@@ -242,7 +263,7 @@ class _SlackTurnDispatcher:
             # credits". UNCONFIGURED (dev setups without metering env) and
             # UNAVAILABLE (webapp outage) proceed — fail-open is the intended
             # policy so a billing outage never silences the Slack coworker.
-            if consume_credits(reason="slack_turn") is CreditsOutcome.DENIED:
+            if consume_credits(scope.principal.id, reason="slack_turn") is CreditsOutcome.DENIED:
                 self._logger.info(
                     "[slack-gateway] turn denied: out of credits channel=%s",
                     inbound.channel_id,
