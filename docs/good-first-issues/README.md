@@ -43,6 +43,6 @@ Stuck? Don't guess — ask early.
 ## A few tips
 
 - Read through `CONTRIBUTING.md` before you start — it answers most questions upfront
-- One concern per PR; don't bundle unrelated fixes
+- One concern per PR; don't bundle unrelated fixes.
 - If the issue feels unclear, ask for clarification before writing code
 - AI-assisted code is fine, but you must understand and be able to explain every line (see [AI-Assisted PRs](../../CONTRIBUTING.md#ai-assisted-prs))
