@@ -30,13 +30,18 @@ def _make_ready_path() -> str:
     return ready_path
 
 
+def _cleanup_ready_path(ready_path: str) -> None:
+    """Remove the readiness marker if the child created it."""
+    if os.path.exists(ready_path):
+        os.unlink(ready_path)
+
+
 def _wait_for_ready(ready_path: str) -> None:
     """Poll until the child signals it has registered its handler, then clean up."""
     try:
         wait_until(lambda: os.path.exists(ready_path), timeout=2.0, interval=0.01)
     finally:
-        if os.path.exists(ready_path):
-            os.unlink(ready_path)
+        _cleanup_ready_path(ready_path)
 
 
 def _spawn_sleep() -> subprocess.Popen[bytes]:
@@ -67,6 +72,10 @@ def _spawn_sleep() -> subprocess.Popen[bytes]:
     except TimeoutError:
         proc.kill()
         proc.wait()
+        # The child is now guaranteed dead (proc.wait() returned), so this
+        # check can't race with a late touch() the way _wait_for_ready's own
+        # cleanup could if the child wrote the marker just before the raise.
+        _cleanup_ready_path(ready_path)
         raise
     return proc
 
@@ -93,6 +102,10 @@ def _spawn_unkillable() -> subprocess.Popen[bytes]:
     except TimeoutError:
         proc.kill()
         proc.wait()
+        # The child is now guaranteed dead (proc.wait() returned), so this
+        # check can't race with a late touch() the way _wait_for_ready's own
+        # cleanup could if the child wrote the marker just before the raise.
+        _cleanup_ready_path(ready_path)
         raise
     return proc
 
