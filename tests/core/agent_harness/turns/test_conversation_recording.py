@@ -64,8 +64,7 @@ def test_no_shrink_when_within_window() -> None:
         ("assistant", "last answer"),
     ]
     assert not any(
-        content.startswith(SESSION_SUMMARY_PREFIX)
-        for _, content in session.cli_agent_messages
+        content.startswith(SESSION_SUMMARY_PREFIX) for _, content in session.cli_agent_messages
     )
 
 
