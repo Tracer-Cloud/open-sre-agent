@@ -8,6 +8,7 @@ from collections.abc import Iterator
 import pytest
 
 from config.constants.billing import ORGANIZATION_ID_ENV
+from config.constants.slack import SLACK_SILO_TEAM_IDS_ENV
 from config.principal import Principal
 from gateway.slack import installs as slack_installs
 from gateway.slack import principal as principal_resolve
@@ -49,6 +50,7 @@ def install_db(tmp_path, monkeypatch: pytest.MonkeyPatch) -> Iterator[sqlite3.Co
 def _no_silo_org(monkeypatch: pytest.MonkeyPatch) -> None:
     """Each test states its own fallback rather than inheriting the developer's env."""
     monkeypatch.delenv(ORGANIZATION_ID_ENV, raising=False)
+    monkeypatch.delenv(SLACK_SILO_TEAM_IDS_ENV, raising=False)
 
 
 def test_installed_team_resolves_to_its_own_org(install_db: sqlite3.Connection) -> None:
@@ -92,6 +94,30 @@ def test_uninstalled_team_falls_back_to_the_silo_organization(
 
     # Assert
     assert resolved == Principal.org("org_silo")
+
+
+@pytest.mark.usefixtures("install_db")
+def test_unlisted_team_refused_when_silo_allowlist_is_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With an allowlist configured, an uninstalled team outside it must not be
+    attributed to the silo org (prod fail-closed posture)."""
+    monkeypatch.setenv(ORGANIZATION_ID_ENV, "org_silo")
+    monkeypatch.setenv(SLACK_SILO_TEAM_IDS_ENV, "T_OWNER, T_OTHER_OWNER")
+
+    with pytest.raises(PrincipalResolutionError):
+        resolve_slack_principal(team_id="T_STRANGER")
+
+
+@pytest.mark.usefixtures("install_db")
+def test_allowlisted_team_uses_the_silo_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A team named in the allowlist still resolves to the silo org."""
+    monkeypatch.setenv(ORGANIZATION_ID_ENV, "org_silo")
+    monkeypatch.setenv(SLACK_SILO_TEAM_IDS_ENV, "T_OWNER, T_UNKNOWN")
+
+    assert resolve_slack_principal(team_id="T_UNKNOWN") == Principal.org("org_silo")
 
 
 @pytest.mark.usefixtures("install_db")

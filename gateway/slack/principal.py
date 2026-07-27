@@ -7,13 +7,25 @@ they stay unbound on the host home. Border regressions live in
 
 from __future__ import annotations
 
+import logging
+import os
+
+from config.constants.slack import SLACK_SILO_TEAM_IDS_ENV
 from config.principal import Actor, Principal, StorageScope
 from gateway.billing.credits_client import organization_id_for_silo
 from gateway.slack.installs import SlackInstallLookupError, get_slack_install
 
+logger = logging.getLogger(__name__)
+
 
 class PrincipalResolutionError(RuntimeError):
     """Raised when the owner of a Slack turn's data cannot be established."""
+
+
+def _silo_team_allowlist() -> frozenset[str]:
+    """Team ids permitted to use the silo-org fallback, from env (may be empty)."""
+    raw = os.getenv(SLACK_SILO_TEAM_IDS_ENV) or ""
+    return frozenset(t.strip() for t in raw.split(",") if t.strip())
 
 
 def resolve_slack_principal(*, team_id: str) -> Principal:
@@ -21,6 +33,14 @@ def resolve_slack_principal(*, team_id: str) -> Principal:
 
     Resolution decides whose credentials are read and who is billed, so an
     unreadable catalog raises instead of falling through to another owner.
+
+    The silo-org fallback (for a team with no install record) is a
+    credential-exposure vector on a silo that holds real org credentials: any
+    workspace that installs the app would be attributed to the silo org. When
+    ``OPENSRE_SILO_TEAM_IDS`` is set, the fallback is restricted to those teams
+    and every other team is refused (fail-closed — the recommended prod
+    posture). When it is unset the fallback stays permissive for dogfood but
+    logs a warning so the exposure is visible.
     """
     team = (team_id or "").strip()
     if not team:
@@ -37,6 +57,20 @@ def resolve_slack_principal(*, team_id: str) -> Principal:
         return Principal.org(install.clerk_org_id)
 
     if silo_org := organization_id_for_silo():
+        allowlist = _silo_team_allowlist()
+        if allowlist and team not in allowlist:
+            raise PrincipalResolutionError(
+                f"Slack team {team} has no install record and is not an allowed "
+                "silo team; refusing to attribute it to the silo organization"
+            )
+        if not allowlist:
+            logger.warning(
+                "[principal] team %s has no install record; attributing to the "
+                "silo org via fallback. Set %s to restrict this on a silo holding "
+                "real credentials.",
+                team,
+                SLACK_SILO_TEAM_IDS_ENV,
+            )
         return Principal.org(silo_org)
 
     raise PrincipalResolutionError(

@@ -11,13 +11,18 @@
 from __future__ import annotations
 
 import contextlib
+import functools
+import logging
 import os
 import re
 import tempfile
 from pathlib import Path
 
+from config.constants.billing import ORGANIZATION_ID_ENV
 from config.constants.memory import OPENSRE_MEMORY_DIR_ENV
 from config.scope_context import current_scope
+
+logger = logging.getLogger(__name__)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PROJECT_ROOT = REPO_ROOT
@@ -41,6 +46,30 @@ _SAFE_PATH_SEGMENT = re.compile(r"^[A-Za-z0-9._-]+$")
 
 class UnsafePathSegmentError(ValueError):
     """Raised when an id would escape its context directory."""
+
+
+class ContextRootOwnerMismatchError(RuntimeError):
+    """Raised when a turn's org does not own the mounted context root.
+
+    The mount is chrooted to one organization; serving a turn for a different
+    org would write its data into another org's volume. Fail closed.
+    """
+
+
+@functools.cache
+def _warn_unmounted_org_once(org_id: str) -> None:
+    """Warn (once per org) that a bound org is falling back to local disk.
+
+    On a deployed silo that means the ephemeral container filesystem — memory,
+    sessions, and integration credentials are lost on the next task restart.
+    Intended for local multi-org dev, so this warns rather than fails.
+    """
+    logger.warning(
+        "[paths] org %s is bound but %s is unset; using local disk. On a deployed "
+        "silo this is ephemeral and lost on restart.",
+        org_id,
+        CONTEXT_ROOT_ENV,
+    )
 
 
 def _safe_segment(value: str, *, label: str) -> str:
@@ -76,7 +105,18 @@ def opensre_home() -> Path:
         return OPENSRE_HOME_DIR
     mounted_root = os.getenv(CONTEXT_ROOT_ENV, "").strip()
     if mounted_root:
+        # The mount is chrooted to exactly one org. If this deployment declares
+        # its owner (OPENSRE_ORGANIZATION_ID, set on every silo), refuse a turn
+        # for any other org — otherwise a multi-workspace gateway could write
+        # org B's data into org A's volume. Fail closed.
+        silo_owner = os.getenv(ORGANIZATION_ID_ENV, "").strip()
+        if silo_owner and scope.principal.id != silo_owner:
+            raise ContextRootOwnerMismatchError(
+                f"context root belongs to {silo_owner!r} but this turn is owned by "
+                f"{scope.principal.id!r}; refusing to cross organizations on a shared mount"
+            )
         return Path(mounted_root).expanduser()
+    _warn_unmounted_org_once(scope.principal.id)
     org_id = _safe_segment(scope.principal.id, label="principal id")
     return OPENSRE_HOME_DIR / ORGS_DIR_NAME / org_id
 

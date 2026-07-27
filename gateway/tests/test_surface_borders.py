@@ -400,3 +400,27 @@ def test_legacy_host_database_is_readable_after_the_split(host: Path) -> None:
 
     # Assert: the existing Telegram conversation survives the upgrade.
     assert resolved == "tg-legacy"
+
+
+def test_telegram_runtime_wiring_can_read_and_write_bindings(
+    host: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Exercise the store Telegram actually builds, not a hand-made one.
+
+    The previous test built a store directly, so it kept passing when the real
+    wiring pointed at a database without the bindings table.
+    """
+    # Arrange: the store the Telegram runtime constructs at startup.
+    from gateway.storage.session.binding_store import open_binding_store
+
+    monkeypatch.delenv(paths.CONTEXT_ROOT_ENV, raising=False)
+    bindings = open_binding_store()
+
+    # Act: bind and resolve a Telegram chat the way the runtime does.
+    bindings.bind(platform=_TELEGRAM, chat_id="42", session_id="tg-wired")
+    resolved = bindings.get_session_id(platform=_TELEGRAM, chat_id="42")
+    bindings.close()
+
+    # Assert: the table exists and the round trip works on the host root.
+    assert resolved == "tg-wired"
+    assert (host / "gateway" / "bindings.db").is_file()

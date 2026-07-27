@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from config.constants import paths
+from config.constants.billing import ORGANIZATION_ID_ENV
 from config.principal import Actor, Principal, StorageScope
 from config.scope_context import bound_storage_scope
 
@@ -25,6 +26,7 @@ def _home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Keep every path assertion off the developer's real home directory."""
     monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", tmp_path)
     monkeypatch.delenv(paths.CONTEXT_ROOT_ENV, raising=False)
+    monkeypatch.delenv(ORGANIZATION_ID_ENV, raising=False)
     return tmp_path
 
 
@@ -148,6 +150,31 @@ def test_mounted_volume_is_used_as_the_org_root(
     assert ACME.id not in str(user_root)
     assert user_root == mount / "users" / ALICE.id
     assert integrations == mount / "integrations.json"
+
+
+def test_mount_refuses_a_turn_for_a_different_org(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A mount declares its owner via OPENSRE_ORGANIZATION_ID; a turn for any
+    other org must fail closed rather than write into the wrong org's volume."""
+    monkeypatch.setenv(paths.CONTEXT_ROOT_ENV, str(tmp_path / "memories"))
+    monkeypatch.setenv(ORGANIZATION_ID_ENV, ACME.id)
+
+    with (
+        bound_storage_scope(_member(GLOBEX, ALICE)),
+        pytest.raises(paths.ContextRootOwnerMismatchError),
+    ):
+        paths.opensre_home()
+
+
+def test_mount_serves_its_declared_owner(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The declared owner still resolves to the mount unchanged."""
+    mount = tmp_path / "memories"
+    monkeypatch.setenv(paths.CONTEXT_ROOT_ENV, str(mount))
+    monkeypatch.setenv(ORGANIZATION_ID_ENV, ACME.id)
+
+    with bound_storage_scope(_member(ACME, ALICE)):
+        assert paths.opensre_home() == mount
 
 
 def test_mounted_volume_still_separates_users(
