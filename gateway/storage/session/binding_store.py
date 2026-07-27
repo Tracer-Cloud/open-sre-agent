@@ -10,6 +10,8 @@ from gateway.storage.session.bindings import SessionBindingStore
 
 
 class BindingStore(Protocol):
+    """Contract the session resolver depends on, independent of the backend."""
+
     def get_session_id(
         self,
         *,
@@ -17,7 +19,8 @@ class BindingStore(Protocol):
         chat_id: str,
         principal: Principal | None = None,
         actor: Actor | str | None = None,
-    ) -> str | None: ...
+    ) -> str | None:
+        raise NotImplementedError
 
     def bind(
         self,
@@ -27,7 +30,8 @@ class BindingStore(Protocol):
         session_id: str,
         principal: Principal | None = None,
         actor: Actor | str | None = None,
-    ) -> None: ...
+    ) -> None:
+        raise NotImplementedError
 
     def rotate(
         self,
@@ -36,7 +40,8 @@ class BindingStore(Protocol):
         chat_id: str,
         principal: Principal | None = None,
         actor: Actor | str | None = None,
-    ) -> str: ...
+    ) -> str:
+        raise NotImplementedError
 
     def has_any_actor_binding(
         self,
@@ -44,7 +49,8 @@ class BindingStore(Protocol):
         platform: str,
         chat_id: str,
         principal: Principal | None = None,
-    ) -> bool: ...
+    ) -> bool:
+        raise NotImplementedError
 
 
 def open_binding_store() -> SessionBindingStore:
