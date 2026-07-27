@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import textwrap
+from pathlib import Path
 
 import pytest
 
@@ -396,7 +397,7 @@ class TestAlertListenerPortParsing:
         raw_yaml_value: str,
         expected_port: int,
         should_warn: bool,
-        tmp_path,
+        tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
         caplog: pytest.LogCaptureFixture,
     ) -> None:
@@ -448,4 +449,3 @@ class TestAlertListenerPortParsing:
             assert "OPENSRE_ALERT_LISTENER_PORT=" in caplog.text
         else:
             assert "OPENSRE_ALERT_LISTENER_PORT=" not in caplog.text
-
