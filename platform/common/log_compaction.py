@@ -253,6 +253,7 @@ def build_error_taxonomy(
         }
 
     buckets: dict[str, dict[str, Any]] = {}
+    normalized_samples: dict[str, set[str]] = {}
 
     for log in logs:
         message = log.get("message", "")
@@ -269,6 +270,7 @@ def build_error_taxonomy(
                 "last_seen": timestamp,
                 "sample_messages": [],
             }
+            normalized_samples[error_type] = set()
 
         bucket = buckets[error_type]
         bucket["count"] += 1
@@ -281,9 +283,10 @@ def build_error_taxonomy(
         # Collect unique sample messages (up to max_samples)
         if len(bucket["sample_messages"]) < max_samples:
             normalized = _normalize_message(message)
-            existing_normalized = {_normalize_message(m) for m in bucket["sample_messages"]}
-            if normalized not in existing_normalized:
+            bucket_normalized_samples = normalized_samples[error_type]
+            if normalized not in bucket_normalized_samples:
                 bucket["sample_messages"].append(message)
+                bucket_normalized_samples.add(normalized)
 
         # Collect affected components
         for comp in _extract_components(message):
