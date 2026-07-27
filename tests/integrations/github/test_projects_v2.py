@@ -66,12 +66,24 @@ def test_fetch_project_fields(mock_client: MagicMock) -> None:
     assert fields[0]["name"] == "Status"
 
 
+def test_fetch_project_fields_fails(mock_client: MagicMock) -> None:
+    mock_client.graphql.side_effect = GitHubApiError("Not Found")
+    fields = fetch_project_fields(mock_client, "PN_1")
+    assert fields == []
+
+
 def test_add_issue_to_project_v2(mock_client: MagicMock) -> None:
     mock_client.graphql.return_value = {
         "data": {"addProjectV2ItemById": {"item": {"id": "PI_123"}}}
     }
     item_id = add_issue_to_project_v2(mock_client, "PN_1", "I_1")
     assert item_id == "PI_123"
+
+
+def test_add_issue_to_project_v2_returns_none(mock_client: MagicMock) -> None:
+    mock_client.graphql.return_value = {"data": {"addProjectV2ItemById": {"item": None}}}
+    item_id = add_issue_to_project_v2(mock_client, "PN_1", "I_1")
+    assert item_id is None
 
 
 def test_update_project_v2_field(mock_client: MagicMock) -> None:
@@ -101,21 +113,12 @@ def test_sync_project_fields(mock_client: MagicMock) -> None:
                                 "options": [{"id": "O_done", "name": "Done"}],
                             },
                             {"id": "F_text", "name": "Notes", "dataType": "TEXT"},
-                            {
-                                "id": "F_sprint",
-                                "name": "Sprint",
-                                "dataType": "ITERATION",
-                                "configuration": {
-                                    "iterations": [{"id": "I_1", "title": "Sprint 1"}]
-                                },
-                            },
                         ]
                     }
                 }
             }
         },
-        # 4, 5, 6. Updates
-        {},
+        # 4, 5. Updates
         {},
         {},
     ]
@@ -125,9 +128,9 @@ def test_sync_project_fields(mock_client: MagicMock) -> None:
         owner="org",
         project_number=1,
         issue_node_id="I_1",
-        project_fields={"Status": "Done", "Notes": "Hello", "Sprint": "Sprint 1"},
+        project_fields={"Status": "Done", "Notes": "Hello"},
     )
 
     assert success is True
-    # 3 updates + 1 resolve + 1 add + 1 fetch = 6 calls
-    assert mock_client.graphql.call_count == 6
+    # 2 updates + 1 resolve + 1 add + 1 fetch = 5 calls
+    assert mock_client.graphql.call_count == 5

@@ -120,7 +120,7 @@ class GitHubRestClient:
                 "GitHub token is required. Configure github_token, GITHUB_TOKEN, or GH_TOKEN."
             )
 
-        payload = {"query": query}
+        payload: dict[str, Any] = {"query": query}
         if variables is not None:
             payload["variables"] = variables
 

@@ -21,6 +21,8 @@ class MockSource:
 
 
 class MockSession:
+    source: MockSource | None
+
     def __init__(self, source_url: str | None = None) -> None:
         if source_url:
             self.source = MockSource(url=source_url)
@@ -92,6 +94,7 @@ def test_create_github_task_preserves_slack_url(mock_github_client: MagicMock) -
     assert result["ok"] is True
     assert result["issue_number"] == 123
     assert result["issue_url"] == "https://github.com/owner/repo/issues/123"
+    assert "project_synced" not in result
 
     mock_github_client.request.assert_called_once()
     args, kwargs = mock_github_client.request.call_args
@@ -118,6 +121,8 @@ def test_create_github_task_with_projects_v2(
         "node_id": "I_kwHOA",
     }
 
+    mock_sync.return_value = True
+
     result = create_github_task_from_slack(
         owner="owner",
         repo="repo",
@@ -127,6 +132,7 @@ def test_create_github_task_with_projects_v2(
     )
 
     assert result["ok"] is True
+    assert result["project_synced"] is True
 
     mock_sync.assert_called_once()
     args, kwargs = mock_sync.call_args
@@ -134,6 +140,60 @@ def test_create_github_task_with_projects_v2(
     assert args[2] == 42
     assert args[3] == "I_kwHOA"
     assert args[4] == {"Status": "Todo"}
+
+
+@patch("integrations.github.projects_v2.sync_project_fields")
+def test_create_github_task_project_number_empty_fields(
+    mock_sync: MagicMock, mock_github_client: MagicMock
+) -> None:
+    mock_github_client.request.return_value = {
+        "number": 123,
+        "html_url": "https://github.com/owner/repo/issues/123",
+        "title": "Fix the flurb",
+        "state": "open",
+        "node_id": "I_kwHOA",
+    }
+    mock_sync.return_value = True
+
+    result = create_github_task_from_slack(
+        owner="owner",
+        repo="repo",
+        title="Fix the flurb",
+        project_number=42,
+        project_fields={},
+    )
+
+    assert result["ok"] is True
+    assert result["project_synced"] is True
+
+    mock_sync.assert_called_once()
+
+
+@patch("integrations.github.projects_v2.sync_project_fields")
+def test_create_github_task_sync_exception(
+    mock_sync: MagicMock, mock_github_client: MagicMock
+) -> None:
+    mock_github_client.request.return_value = {
+        "number": 123,
+        "html_url": "https://github.com/owner/repo/issues/123",
+        "title": "Fix the flurb",
+        "state": "open",
+        "node_id": "I_kwHOA",
+    }
+
+    mock_sync.side_effect = Exception("Boom")
+
+    result = create_github_task_from_slack(
+        owner="owner",
+        repo="repo",
+        title="Fix the flurb",
+        project_number=42,
+    )
+
+    assert result["ok"] is True
+    assert result["issue_number"] == 123
+    assert result["project_synced"] is False
+    mock_sync.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -163,6 +223,7 @@ def test_update_github_task_syncs_fields(mock_github_client: MagicMock) -> None:
     assert result["labels"] == ["enhancement"]
     assert result["assignees"] == ["janedoe"]
     assert result["state"] == "open"
+    assert "project_synced" not in result
 
     mock_github_client.request.assert_called_once()
     args, kwargs = mock_github_client.request.call_args
@@ -212,6 +273,8 @@ def test_update_github_task_with_projects_v2_only(
         "node_id": "I_kwHOA",
     }
 
+    mock_sync.return_value = True
+
     result = update_github_task_from_slack(
         owner="owner",
         repo="repo",
@@ -221,6 +284,7 @@ def test_update_github_task_with_projects_v2_only(
     )
 
     assert result["ok"] is True
+    assert result["project_synced"] is True
 
     # Assert we did a GET to fetch the node ID, not a PATCH
     args, kwargs = mock_github_client.request.call_args
@@ -243,6 +307,18 @@ def test_update_github_task_empty_payload(mock_github_client: MagicMock) -> None
     )
     assert result["ok"] is False
     assert "No update fields provided" in result["error"]
+    mock_github_client.request.assert_not_called()
+
+
+def test_update_github_task_missing_project_number(mock_github_client: MagicMock) -> None:
+    result = update_github_task_from_slack(
+        owner="owner",
+        repo="repo",
+        issue_number=123,
+        project_fields={"Status": "Done"},
+    )
+    assert result["ok"] is False
+    assert "project_number is required to sync project_fields" in result["error"]
     mock_github_client.request.assert_not_called()
 
 

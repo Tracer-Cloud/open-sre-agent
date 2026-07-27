@@ -160,26 +160,35 @@ def create_github_task_from_slack(
 
     data = result["data"]
 
+    project_synced = False
     if project_number is not None:
         from integrations.github.projects_v2 import sync_project_fields
 
         issue_node_id = data.get("node_id")
         if issue_node_id:
-            sync_project_fields(
-                client,
-                project_owner or owner,
-                project_number,
-                str(issue_node_id),
-                project_fields or {},
-            )
+            try:
+                project_synced = sync_project_fields(
+                    client,
+                    project_owner or owner,
+                    project_number,
+                    str(issue_node_id),
+                    project_fields or {},
+                )
+            except Exception as exc:
+                logger.warning("Project sync failed for issue %s: %s", issue_node_id, exc)
 
-    return {
+    response_payload = {
         "ok": True,
         "issue_number": data.get("number"),
         "issue_url": data.get("html_url"),
         "title": data.get("title"),
         "state": data.get("state"),
     }
+
+    if project_number is not None:
+        response_payload["project_synced"] = project_synced
+
+    return response_payload
 
 
 @tool(
@@ -192,7 +201,6 @@ def create_github_task_from_slack(
     ],
     surfaces=("chat",),
     side_effect_level="mutating",
-    accepts_runtime_context=True,
     input_schema={
         "type": "object",
         "properties": {
@@ -252,6 +260,9 @@ def update_github_task_from_slack(
     if all(v is None for v in [state, labels, assignees, project_number, project_fields]):
         return {"ok": False, "error": "No update fields provided."}
 
+    if project_fields is not None and project_number is None:
+        return {"ok": False, "error": "project_number is required to sync project_fields."}
+
     client = GitHubRestClient(github_token=github_token)
 
     payload: dict[str, Any] = {}
@@ -279,22 +290,26 @@ def update_github_task_from_slack(
             return result
         data = result["data"]
 
-    if project_number:
+    project_synced = False
+    if project_number is not None:
         # User might only provide project_fields, assuming the issue is already in the project.
         # sync_project_fields requires project_number, so it must be passed in the slack payload.
         from integrations.github.projects_v2 import sync_project_fields
 
         issue_node_id = data.get("node_id")
         if issue_node_id:
-            sync_project_fields(
-                client,
-                project_owner or owner,
-                project_number,
-                str(issue_node_id),
-                project_fields or {},
-            )
+            try:
+                project_synced = sync_project_fields(
+                    client,
+                    project_owner or owner,
+                    project_number,
+                    str(issue_node_id),
+                    project_fields or {},
+                )
+            except Exception as exc:
+                logger.warning("Project sync failed for issue %s: %s", issue_node_id, exc)
 
-    return {
+    response_payload = {
         "ok": True,
         "issue_number": data.get("number"),
         "issue_url": data.get("html_url"),
@@ -304,6 +319,11 @@ def update_github_task_from_slack(
         ],
         "assignees": [a.get("login") for a in data.get("assignees", []) if isinstance(a, dict)],
     }
+
+    if project_number is not None:
+        response_payload["project_synced"] = project_synced
+
+    return response_payload
 
 
 @tool(

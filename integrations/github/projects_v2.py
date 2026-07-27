@@ -39,15 +39,14 @@ def resolve_project_node_id(
     if not isinstance(response, dict) or not isinstance(response.get("data"), dict):
         return None
 
-    data = response["data"]
-    org_project = data.get("organization")
-    if org_project and isinstance(org_project, dict) and org_project.get("projectV2"):
-        return str(org_project["projectV2"]["id"])
-
-    user_project = data.get("user")
-    if user_project and isinstance(user_project, dict) and user_project.get("projectV2"):
-        return str(user_project["projectV2"]["id"])
-
+    try:
+        data = response["data"]
+        if (data.get("organization") or {}).get("projectV2"):
+            return str(data["organization"]["projectV2"]["id"])
+        if (data.get("user") or {}).get("projectV2"):
+            return str(data["user"]["projectV2"]["id"])
+    except (KeyError, TypeError):
+        return None
     return None
 
 
@@ -70,14 +69,6 @@ def fetch_project_fields(client: GitHubRestClient, project_node_id: str) -> list
                   name
                 }
               }
-              ... on ProjectV2IterationField {
-                configuration {
-                  iterations {
-                    id
-                    title
-                  }
-                }
-              }
             }
           }
         }
@@ -85,22 +76,19 @@ def fetch_project_fields(client: GitHubRestClient, project_node_id: str) -> list
     }
     """
     try:
-        response = client.graphql(query, {"id": project_node_id})
+        res = client.graphql(query, {"id": project_node_id})
     except GitHubApiError as exc:
         logger.warning("Failed to fetch fields for project %s: %s", project_node_id, exc)
         return []
 
-    if not isinstance(response, dict) or not isinstance(response.get("data"), dict):
+    if not isinstance(res, dict):
         return []
 
-    node = response["data"].get("node")
-    if not node or not isinstance(node, dict) or "fields" not in node:
+    try:
+        nodes = res["data"]["node"]["fields"]["nodes"]
+        return [n for n in nodes if isinstance(n, dict)]
+    except (KeyError, TypeError):
         return []
-
-    nodes = node["fields"].get("nodes", [])
-    if isinstance(nodes, list):
-        return [f for f in nodes if isinstance(f, dict)]
-    return []
 
 
 def add_issue_to_project_v2(
@@ -117,21 +105,20 @@ def add_issue_to_project_v2(
     }
     """
     try:
-        response = client.graphql(query, {"projectId": project_node_id, "contentId": issue_node_id})
+        res = client.graphql(query, {"projectId": project_node_id, "contentId": issue_node_id})
     except GitHubApiError as exc:
         logger.warning(
             "Failed to add issue %s to project %s: %s", issue_node_id, project_node_id, exc
         )
         return None
 
-    if not isinstance(response, dict) or not isinstance(response.get("data"), dict):
+    if not isinstance(res, dict):
         return None
 
-    data = response["data"]
-    mutation_res = data.get("addProjectV2ItemById")
-    if mutation_res and isinstance(mutation_res, dict) and mutation_res.get("item"):
-        return str(mutation_res["item"]["id"])
-    return None
+    try:
+        return str(res["data"]["addProjectV2ItemById"]["item"]["id"])
+    except (KeyError, TypeError):
+        return None
 
 
 def update_project_v2_field(
@@ -183,13 +170,15 @@ def sync_project_fields(
     issue_node_id: str,
     project_fields: dict[str, str],
 ) -> bool:
-    """Add an issue to a project and sync the provided fields."""
+    """Add an issue to a GitHub Project V2 and sync its fields (status, tags, text, iteration)."""
     project_node_id = resolve_project_node_id(client, owner, project_number)
     if not project_node_id:
+        logger.warning("Could not resolve Project %s for %s", project_number, owner)
         return False
 
     item_node_id = add_issue_to_project_v2(client, project_node_id, issue_node_id)
     if not item_node_id:
+        logger.warning("Failed to add issue to project %s", project_number)
         return False
 
     if not project_fields:
@@ -218,30 +207,22 @@ def sync_project_fields(
                 logger.warning("Option %s not found for single select field %s.", value, name)
                 continue
             graphql_value = {"singleSelectOptionId": option["id"]}
-        elif data_type == "ITERATION":
-            configuration = field.get("configuration", {})
-            iterations = configuration.get("iterations", [])
-            iteration = next(
-                (i for i in iterations if i.get("title", "").lower() == str(value).lower()), None
-            )
-            if not iteration:
-                logger.warning("Iteration %s not found for iteration field %s.", value, name)
-                continue
-            graphql_value = {"iterationId": iteration["id"]}
         elif data_type == "TEXT":
             graphql_value = {"text": str(value)}
-        elif data_type == "NUMBER":
-            try:
-                graphql_value = {"number": float(value)}
-            except ValueError:
-                logger.warning("Invalid number %s for field %s.", value, name)
-                continue
-        elif data_type == "DATE":
-            graphql_value = {"date": str(value)}
         else:
-            logger.warning("Unsupported data type %s for field %s.", data_type, name)
+            logger.warning(
+                "Field type %s is not yet supported for project field '%s'.",
+                data_type,
+                name,
+            )
             continue
 
-        update_project_v2_field(client, project_node_id, item_node_id, field_node_id, graphql_value)
+        if not field_node_id:
+            logger.warning("Project field %s has no ID.", name)
+            continue
+
+        update_project_v2_field(
+            client, project_node_id, item_node_id, str(field_node_id), graphql_value
+        )
 
     return True
