@@ -55,6 +55,7 @@ def _memory_available(sources: dict[str, dict[str, Any]]) -> bool:
     tags=("safe", "fast", "no-credentials"),
     surfaces=("action", "investigation"),
     side_effect_level="mutating",
+    parallel_safe=False,
     is_available=_memory_available,
     input_schema={
         "type": "object",
@@ -106,6 +107,7 @@ def memory_remember(name: str, type: str, description: str, content: str) -> dic
     tags=("safe", "fast", "no-credentials"),
     surfaces=("action",),
     side_effect_level="mutating",
+    parallel_safe=False,
     is_available=_memory_available,
     input_schema={
         "type": "object",

@@ -1,8 +1,9 @@
 """Session-end extraction of durable facts into long-term memory.
 
-One best-effort LLM pass over the session's chat transcript, run from
-:meth:`SessionManager.close`. Never raises out: any failure (LLM unavailable,
-malformed output, disk errors) is logged and the session teardown proceeds.
+One best-effort LLM pass over a chat transcript. Lifecycle callers schedule it
+in a daemon thread via :func:`schedule_memory_extraction` so teardown and
+rotation never wait on the provider. Never raises out: any failure (LLM
+unavailable, malformed output, disk errors) is logged and ignored.
 Environment gates can disable the whole feature or only the extraction pass.
 """
 
@@ -11,6 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import threading
 from typing import Any, Protocol
 
 from core.domain.memory import (
@@ -63,12 +65,37 @@ class _ChatSession(Protocol):
     cli_agent_messages: list[tuple[str, str]]
 
 
+def schedule_memory_extraction(messages: list[tuple[str, str]]) -> None:
+    """Snapshot ``messages`` and extract in a daemon thread; never blocks."""
+    if not auto_extract_enabled():
+        return
+    snapshot = list(messages)
+    if len(snapshot) < MIN_CHAT_MESSAGES:
+        return
+    thread = threading.Thread(
+        target=_extract_memories_safe,
+        args=(snapshot,),
+        name="opensre-memory-extraction",
+        daemon=True,
+    )
+    thread.start()
+
+
 def extract_memories_from_session(session: _ChatSession) -> None:
-    """Run one extraction pass; silent no-op when gated off or not worthwhile."""
+    """Run one extraction pass synchronously; silent no-op when gated off."""
+    messages = list(getattr(session, "cli_agent_messages", []) or [])
+    extract_memories_from_messages(messages)
+
+
+def extract_memories_from_messages(messages: list[tuple[str, str]]) -> None:
+    """Run one extraction pass over ``messages``; never raises."""
+    _extract_memories_safe(list(messages))
+
+
+def _extract_memories_safe(messages: list[tuple[str, str]]) -> None:
     try:
         if not auto_extract_enabled():
             return
-        messages = list(getattr(session, "cli_agent_messages", []) or [])
         if len(messages) < MIN_CHAT_MESSAGES:
             return
         response = _invoke_extraction_llm(messages)
@@ -159,4 +186,8 @@ def _save_extracted(items: list[dict[str, Any]]) -> None:
         logger.debug("[memory] session-end extraction saved %d memories", saved)
 
 
-__all__ = ["extract_memories_from_session"]
+__all__ = [
+    "extract_memories_from_messages",
+    "extract_memories_from_session",
+    "schedule_memory_extraction",
+]

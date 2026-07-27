@@ -230,3 +230,29 @@ class TestSafety:
             )
             == ()
         )
+
+
+class TestConcurrency:
+    def test_parallel_writes_to_same_slug_serialize(self) -> None:
+        import concurrent.futures
+
+        bodies = [f"body-{i}-" + ("x" * 32) for i in range(8)]
+
+        def _write(body: str) -> tuple[MemoryRecord, bool] | None:
+            return save_memory(
+                slug="shared-fact",
+                memory_type="preference",
+                description="Shared preference",
+                body=body,
+            )
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+            results = list(pool.map(_write, bodies))
+
+        successful = [result for result in results if result is not None]
+        assert len(successful) == len(results)
+        assert sum(1 for _record, created in successful if created) == 1
+        loaded = load_memory("shared-fact")
+        assert loaded is not None
+        assert loaded.body in bodies
+        assert len(list_memories()) == 1

@@ -185,6 +185,9 @@ class SessionManager:
             # Reconstructed handle: align its backend with the manager's so the
             # close flush lands on the same storage the manager owns.
             outgoing.storage = self._storage
+            # Restore the persisted transcript so session-end memory extraction
+            # sees the outgoing conversation (not an empty reconstructed handle).
+            self.restore_context(outgoing, self._repo.load_session(old_session_id))
             self.close(outgoing)
         return self.create(session_id=new_session_id, warm_integrations=warm_integrations)
 
@@ -198,10 +201,12 @@ class SessionManager:
 
         Flushes but does not release resources: ``clear()`` resets in-memory
         state (and cancels the warm task) while the loop-owned
-        ``prompt_refresh_fn`` is preserved for the continuing REPL.
+        ``prompt_refresh_fn`` is preserved for the continuing REPL. Schedules
+        memory extraction from the outgoing transcript before clearing it.
         """
         session.storage = self._storage
         self._flush(session)
+        self._schedule_memory_extraction(session)
         session.clear()
         self._storage.open_session(session)
         return session
@@ -224,6 +229,7 @@ class SessionManager:
         session.storage = self._storage
         if session.session_id != session_id:
             self._flush(session)
+            self._schedule_memory_extraction(session)
             session.clear(rotate_identity=False)
             session.session_id = session_id
             if isinstance(started_at, str) and started_at:
@@ -273,18 +279,19 @@ class SessionManager:
 
         Persisting is best-effort (a failed flush must not crash teardown);
         the session releases its own resources (:meth:`SessionCore.release_resources`)
-        to prevent per-session leaks. Long-term memory extraction
-        (:mod:`~core.agent_harness.session.memory_extraction`) runs here with
-        the same best-effort guarantee.
+        to prevent per-session leaks. Long-term memory extraction is scheduled
+        after release so a slow classification provider cannot stall teardown
+        or hold integration resources.
         """
         self._flush(session)
-        from core.agent_harness.session.memory_extraction import extract_memories_from_session
-
-        extract_memories_from_session(session)
+        # Snapshot messages before release/clear; the background extractor must
+        # not retain a reference to the live session object.
+        messages = list(getattr(session, "cli_agent_messages", []) or [])
         from platform.observability.trace.spans import emit_thread_boundary
 
         emit_thread_boundary(session.session_id, name="session_end", phase="session_end")
         session.release_resources()
+        self._schedule_memory_extraction_from_messages(messages)
 
     @staticmethod
     def _flush(session: SessionCore) -> None:
@@ -298,6 +305,17 @@ class SessionManager:
             session.storage.flush(session)
         except OSError:
             logger.debug("[session] flush failed", exc_info=True)
+
+    @staticmethod
+    def _schedule_memory_extraction(session: SessionCore) -> None:
+        messages = list(getattr(session, "cli_agent_messages", []) or [])
+        SessionManager._schedule_memory_extraction_from_messages(messages)
+
+    @staticmethod
+    def _schedule_memory_extraction_from_messages(messages: list[tuple[str, str]]) -> None:
+        from core.agent_harness.session.memory_extraction import schedule_memory_extraction
+
+        schedule_memory_extraction(messages)
 
 
 __all__ = ["SessionManager"]

@@ -4,6 +4,10 @@ One markdown file per memory plus a generated ``MEMORY.md`` index. Reads never
 create the directory; writes create it lazily. Write failures (disk full,
 permissions) are reported to stderr and surfaced as ``None``/``False`` results
 rather than exceptions, mirroring :mod:`core.domain.feedback.misses.store`.
+
+Mutating operations serialize through a directory-scoped ``FileLock`` so
+concurrent ``memory_remember`` / forget calls cannot silently overwrite each
+other or race the index rebuild.
 """
 
 from __future__ import annotations
@@ -11,6 +15,8 @@ from __future__ import annotations
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+
+from filelock import FileLock, Timeout
 
 from core.domain.memory.files import (
     ensure_memory_dir,
@@ -36,6 +42,8 @@ from core.domain.memory.models import (
 from core.domain.memory.slugs import is_valid_slug
 
 _INDEX_FILENAME = "MEMORY.md"
+_LOCK_FILENAME = ".memory.lock"
+_LOCK_TIMEOUT_SECONDS = 10.0
 
 
 def _now_iso() -> str:
@@ -44,6 +52,11 @@ def _now_iso() -> str:
 
 def _single_line(text: str) -> str:
     return " ".join(text.split())
+
+
+def _memory_lock() -> FileLock:
+    directory = ensure_memory_dir()
+    return FileLock(str(directory / _LOCK_FILENAME), timeout=_LOCK_TIMEOUT_SECONDS)
 
 
 def save_memory(
@@ -56,7 +69,9 @@ def save_memory(
     """Create or update a memory; returns ``(record, created)`` or ``None`` on I/O failure.
 
     Updates preserve ``created_at`` from the existing file. The ``MEMORY.md``
-    index is rebuilt after every successful write.
+    index is rebuilt after every successful write. Read-modify-write runs under
+    the memory-directory lock so parallel writers to the same slug cannot both
+    report ``created=True`` or discard each other's content.
     """
     if not is_valid_slug(slug):
         raise ValueError(f"invalid memory slug: {slug!r}")
@@ -65,24 +80,27 @@ def save_memory(
     if len(clean_body) > MAX_BODY_CHARS:
         clean_body = clean_body[: MAX_BODY_CHARS - len(TRUNCATION_MARKER)] + TRUNCATION_MARKER
 
-    existing = load_memory(slug)
-    now = _now_iso()
-    record = MemoryRecord(
-        slug=slug,
-        memory_type=memory_type,
-        description=clean_description,
-        created_at=existing.created_at if existing else now,
-        updated_at=now,
-        body=clean_body,
-    )
     try:
-        ensure_memory_dir()
-        write_text_atomically(memory_path(slug), serialize_memory(record))
+        with _memory_lock():
+            existing = load_memory(slug)
+            now = _now_iso()
+            record = MemoryRecord(
+                slug=slug,
+                memory_type=memory_type,
+                description=clean_description,
+                created_at=existing.created_at if existing else now,
+                updated_at=now,
+                body=clean_body,
+            )
+            write_text_atomically(memory_path(slug), serialize_memory(record))
+            _rebuild_index_best_effort()
+            return record, existing is None
+    except Timeout:
+        print(f"[memory] timed out acquiring lock to save memory {slug!r}", file=sys.stderr)
+        return None
     except OSError as exc:
         print(f"[memory] failed to save memory {slug!r}: {exc}", file=sys.stderr)
         return None
-    _rebuild_index_best_effort()
-    return record, existing is None
 
 
 def load_memory(slug: str) -> MemoryRecord | None:
@@ -120,14 +138,19 @@ def delete_memory(slug: str) -> bool:
         return False
     path = memory_path(slug)
     try:
-        path.unlink()
-    except FileNotFoundError:
+        with _memory_lock():
+            try:
+                path.unlink()
+            except FileNotFoundError:
+                return False
+            _rebuild_index_best_effort()
+            return True
+    except Timeout:
+        print(f"[memory] timed out acquiring lock to delete memory {slug!r}", file=sys.stderr)
         return False
     except OSError as exc:
         print(f"[memory] failed to delete memory {slug!r}: {exc}", file=sys.stderr)
         return False
-    _rebuild_index_best_effort()
-    return True
 
 
 def search_memories(query: str, *, limit: int = 5) -> list[MemoryRecord]:
