@@ -77,8 +77,7 @@ class SessionStore(Protocol):
 
     # --- gather caches ---
     resolved_integrations_cache: dict[str, Any] | None
-    github_repo_scope: tuple[str, str] | None
-    gitlab_repo_scope: tuple[str, str, str] | None
+    vcs_repo_scopes: dict[str, tuple[str, ...]]
 
     def record(self, kind: str, text: str, *, ok: bool = True) -> None:
         """Append a record of an executed action/turn to the session log."""
@@ -154,6 +153,9 @@ class PromptContextProvider(Protocol):
         raise NotImplementedError
 
     def environment_block(self) -> str:
+        raise NotImplementedError
+
+    def long_term_memory(self) -> str:
         raise NotImplementedError
 
     def suggested_synthetic_prompt(self) -> str:

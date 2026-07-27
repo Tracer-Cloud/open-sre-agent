@@ -348,6 +348,9 @@ class ShellPromptContextProvider:
     def environment_block(self) -> str:
         return self._base.environment_block()
 
+    def long_term_memory(self) -> str:
+        return self._base.long_term_memory()
+
     def suggested_synthetic_prompt(self) -> str:
         return self._base.suggested_synthetic_prompt()
 

@@ -75,6 +75,15 @@ def test_registry_preserves_aliases_and_special_case_buckets() -> None:
     assert "bitbucket" not in DIRECT_CLASSIFIED_EFFECTIVE_SERVICES
 
 
+def test_railway_is_registered_as_a_configurable_verified_integration() -> None:
+    railway = next(spec for spec in INTEGRATION_SPECS if spec.service == "railway")
+
+    assert railway.has_verifier is True
+    assert railway.direct_effective is True
+    assert railway.setup_order is not None
+    assert "railway" not in SKIP_CLASSIFIED_SERVICES
+
+
 def test_resolve_management_service_keeps_posthog_and_posthog_mcp_distinct() -> None:
     # Like sentry / sentry_mcp, bare posthog is the REST integration and
     # posthog_mcp is the separate MCP flow — they must not alias each other.

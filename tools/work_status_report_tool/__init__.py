@@ -6,7 +6,11 @@ from typing import Any
 
 from core.tool_framework.tool_decorator import tool
 from integrations.github.client import resolve_github_token
-from integrations.github.helpers import github_creds, github_source_available
+from integrations.github.helpers import (
+    GITHUB_INJECTED_PARAMS,
+    github_creds,
+    github_source_available,
+)
 from integrations.github.tools.work_status import list_github_work_items, summarize_github_pr_status
 from integrations.github.tools.workflow import build_work_status_report
 
@@ -53,6 +57,7 @@ def _report_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     },
     is_available=_report_available,
     extract_params=_report_extract_params,
+    injected_params=GITHUB_INJECTED_PARAMS,
 )
 def generate_work_status_report(
     owner: str = "",

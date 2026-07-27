@@ -359,6 +359,13 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         verify_order=8,
     ),
     IntegrationSpec(
+        service="railway",
+        has_verifier=True,
+        direct_effective=True,
+        setup_order=43,
+        verify_order=57,
+    ),
+    IntegrationSpec(
         service="smtp",
         has_verifier=True,
         direct_effective=True,

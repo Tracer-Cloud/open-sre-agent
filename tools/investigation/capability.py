@@ -113,7 +113,9 @@ def run_investigation(
     if resolved_integrations is not None:
         cast(dict[str, Any], initial)["resolved_integrations"] = resolved_integrations
     if openclaw_context:
-        cast(dict[str, Any], initial)["openclaw_context"] = dict(openclaw_context)
+        from core.state.channel_context import set_channel_context
+
+        set_channel_context(cast(dict[str, Any], initial), "openclaw", openclaw_context)
 
     with report_and_reraise(
         logger=logger,

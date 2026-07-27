@@ -12,6 +12,15 @@ from integrations.github.mcp import (
     github_mcp_config_from_env,
 )
 
+# Runtime connection/secret kwargs from ``extract_params``; must win over model input.
+GITHUB_INJECTED_PARAMS: tuple[str, ...] = (
+    "github_url",
+    "github_mode",
+    "github_token",
+    "github_command",
+    "github_args",
+)
+
 
 def github_source_available(sources: dict[str, dict]) -> bool:
     """Check if source is available."""

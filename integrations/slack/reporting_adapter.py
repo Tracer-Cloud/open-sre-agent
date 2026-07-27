@@ -57,9 +57,10 @@ class _SlackReportDeliveryAdapter:
         messages: DeliveryContext,
         blocks: list[dict[str, Any]],
     ) -> bool:
+        from core.state.channel_context import get_channel_context
         from integrations.slack.delivery import send_slack_report, swap_reaction
 
-        slack_ctx = state.get("slack_context", {}) or {}
+        slack_ctx = get_channel_context(state, "slack")
         thread_ts = slack_ctx.get("thread_ts") or slack_ctx.get("ts")
         channel = slack_ctx.get("channel_id")
         token = slack_ctx.get("access_token")

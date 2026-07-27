@@ -32,6 +32,9 @@ from surfaces.interactive_shell.command_registry.integrations import (
 from surfaces.interactive_shell.command_registry.investigation import (
     COMMANDS as INVESTIGATION_COMMANDS,
 )
+from surfaces.interactive_shell.command_registry.memory_cmds import (
+    COMMANDS as MEMORY_COMMANDS,
+)
 from surfaces.interactive_shell.command_registry.model import COMMANDS as MODEL_COMMANDS
 from surfaces.interactive_shell.command_registry.model import (
     switch_llm_provider,
@@ -85,6 +88,7 @@ _MERGED_SEQUENCE = tuple(
         WATCH_COMMANDS,
         GATEWAY_COMMANDS,
         PRIVACY_COMMANDS,
+        MEMORY_COMMANDS,
         AGENTS_COMMANDS,
         ALERTS_COMMANDS,
         PARITY_COMMANDS,

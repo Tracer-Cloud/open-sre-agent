@@ -7,6 +7,7 @@ from typing import Any
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.code_host_unavailable import code_host_unavailable_payload
 from integrations.github.helpers import (
+    GITHUB_INJECTED_PARAMS,
     github_creds,
     github_source_available,
     normalize_github_tool_result,
@@ -60,6 +61,7 @@ def _search_github_issues_available(sources: dict[str, dict]) -> bool:
     },
     is_available=_search_github_issues_available,
     extract_params=_search_github_issues_extract_params,
+    injected_params=GITHUB_INJECTED_PARAMS,
 )
 def search_github_issues(
     owner: str,

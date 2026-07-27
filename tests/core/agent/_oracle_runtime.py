@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import io
+import re
+import time
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -153,7 +155,12 @@ def fresh_session(
 ) -> Session:
     session = Session()
     if with_prior_state:
-        session.last_state = {"root_cause": "disk full on orders-api"}
+        # Stamped inside the recall window: an undated prior state reads as stale,
+        # which would disable the follow-up gather skip these scenarios assert.
+        session.last_state = {
+            "root_cause": "disk full on orders-api",
+            "investigation_started_at": time.monotonic(),
+        }
     session.configured_integrations = configured_integrations
     session.configured_integrations_known = True
     session.available_capabilities = available_capabilities or {}
@@ -288,19 +295,43 @@ def normalize_history_for_oracle_match(
     return collapsed
 
 
+# Prefix marking a response-contract needle as a regular expression rather than a
+# literal substring. Models paraphrase ("the disk was full" for "disk full"), so a
+# scenario asserting *meaning* rather than wording opts into a pattern. Plain
+# needles keep exact substring semantics, so existing fixtures are unaffected.
+REGEX_NEEDLE_PREFIX = "re:"
+
+
+def _needle_matches(haystack: str, needle: str) -> bool:
+    """True when ``needle`` matches ``haystack`` (substring, or regex when prefixed).
+
+    A bare ``re:`` is rejected rather than compiled: the empty pattern matches
+    every response, so a fixture typo would silently turn the assertion into an
+    unconditional pass.
+    """
+    if needle.startswith(REGEX_NEEDLE_PREFIX):
+        pattern = needle[len(REGEX_NEEDLE_PREFIX) :].strip()
+        if not pattern:
+            raise ValueError(
+                f"empty regex needle {needle!r}: a bare "
+                f"{REGEX_NEEDLE_PREFIX!r} matches every response"
+            )
+        # The haystack is already normalized (lowercased, whitespace-collapsed).
+        return re.search(pattern, haystack) is not None
+    return normalize_response_text(needle) in haystack
+
+
 def contains_any(haystack: str, needles: list[str]) -> bool:
     if not needles:
         return True
-    normalized_needles = [normalize_response_text(needle) for needle in needles if needle.strip()]
-    return any(needle in haystack for needle in normalized_needles)
+    return any(_needle_matches(haystack, needle) for needle in needles if needle.strip())
 
 
 def contains_all(haystack: str, needles: list[str]) -> bool:
     """True only when every needle appears in the haystack (or needles is empty)."""
     if not needles:
         return True
-    normalized_needles = [normalize_response_text(needle) for needle in needles if needle.strip()]
-    return all(needle in haystack for needle in normalized_needles)
+    return all(_needle_matches(haystack, needle) for needle in needles if needle.strip())
 
 
 def history_matches(actual: list[dict[str, Any]], expected: list[dict[str, Any]]) -> bool:

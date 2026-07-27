@@ -37,7 +37,9 @@ class _RocketChatReportDeliveryAdapter:
             logger.debug("[publish] rocketchat delivery: no rocketchat integration configured")
             return False
 
-        rocketchat_ctx = state.get("rocketchat_context") or {}
+        from core.state.channel_context import get_channel_context
+
+        rocketchat_ctx = get_channel_context(state, "rocketchat")
         server_url = rocketchat_ctx.get("server_url") or rocketchat_creds.get("server_url", "")
         auth_token = rocketchat_ctx.get("auth_token") or rocketchat_creds.get("auth_token", "")
         user_id = rocketchat_ctx.get("user_id") or rocketchat_creds.get("user_id", "")

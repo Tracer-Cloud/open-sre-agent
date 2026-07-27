@@ -1,4 +1,4 @@
-"""GitHub MCP environment variable names."""
+"""GitHub environment variable names."""
 
 from __future__ import annotations
 
@@ -8,12 +8,17 @@ GITHUB_MCP_COMMAND_ENV = "GITHUB_MCP_COMMAND"
 GITHUB_MCP_ARGS_ENV = "GITHUB_MCP_ARGS"
 GITHUB_MCP_AUTH_TOKEN_ENV = "GITHUB_MCP_AUTH_TOKEN"
 GITHUB_MCP_TOOLSETS_ENV = "GITHUB_MCP_TOOLSETS"
+# Distinct ecosystem names: GitHub Actions injects GITHUB_TOKEN; the gh CLI reads GH_TOKEN.
+GITHUB_TOKEN_ENV = "GITHUB_TOKEN"
+GH_TOKEN_ENV = "GH_TOKEN"
 
 __all__ = [
+    "GH_TOKEN_ENV",
     "GITHUB_MCP_ARGS_ENV",
     "GITHUB_MCP_AUTH_TOKEN_ENV",
     "GITHUB_MCP_COMMAND_ENV",
     "GITHUB_MCP_MODE_ENV",
     "GITHUB_MCP_TOOLSETS_ENV",
     "GITHUB_MCP_URL_ENV",
+    "GITHUB_TOKEN_ENV",
 ]

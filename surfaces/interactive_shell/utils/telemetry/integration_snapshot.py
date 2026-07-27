@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
-from core.domain.alerts.alert_source import SECONDARY_TOOL_SOURCES
+from core.domain.alerts.alert_source import secondary_tool_sources
 from integrations.registry import family_key
 from tools.investigation.stages.gather_evidence.tools import get_available_tools
 
@@ -55,10 +55,9 @@ def _connected_slugs(configured: list[str], resolved: dict[str, Any]) -> list[st
         return []
     try:
         tools = get_available_tools(resolved)
+        secondary = secondary_tool_sources()
         active_families = {
-            family_key(str(tool.source))
-            for tool in tools
-            if str(tool.source) not in SECONDARY_TOOL_SOURCES
+            family_key(str(tool.source)) for tool in tools if str(tool.source) not in secondary
         }
         if not active_families:
             return []

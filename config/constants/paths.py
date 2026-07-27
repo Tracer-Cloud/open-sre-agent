@@ -5,6 +5,8 @@ import os
 import tempfile
 from pathlib import Path
 
+from config.constants.memory import OPENSRE_MEMORY_DIR_ENV
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PROJECT_ROOT = REPO_ROOT
 
@@ -22,6 +24,13 @@ def get_store_path() -> Path:
     return OPENSRE_HOME_DIR / "opensre.json"
 
 
+def get_memory_dir() -> Path:
+    override = os.getenv(OPENSRE_MEMORY_DIR_ENV, "").strip()
+    if override:
+        return Path(override).expanduser()
+    return OPENSRE_HOME_DIR / "memory"
+
+
 def ensure_opensre_tmp_dir() -> Path:
     OPENSRE_TMP_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
     with contextlib.suppress(OSError):
@@ -37,5 +46,6 @@ __all__ = [
     "REPO_ROOT",
     "SYNTHETIC_SCENARIOS_DIR",
     "ensure_opensre_tmp_dir",
+    "get_memory_dir",
     "get_store_path",
 ]

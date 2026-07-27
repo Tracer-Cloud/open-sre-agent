@@ -2,7 +2,7 @@
 
 Node contract:
     Entrypoint : extract_alert(state: InvestigationState) -> dict[str, Any]
-    Reads      : raw_alert, slack_context, org_id
+    Reads      : raw_alert, channel_contexts (slack), org_id
     Writes     : alert_name, severity, problem_md, alert_json, alert_source,
                  raw_alert (enriched), is_noise
 """

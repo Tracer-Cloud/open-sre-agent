@@ -40,7 +40,9 @@ class _TwilioSmsReportDeliveryAdapter:
         if not sms_cfg.get("enabled"):
             return False
 
-        twilio_sms_ctx: dict[str, Any] = state.get("twilio_sms_context") or {}
+        from core.state.channel_context import get_channel_context
+
+        twilio_sms_ctx: dict[str, Any] = get_channel_context(state, "twilio_sms")
         sms_to = twilio_sms_ctx.get("to") or sms_cfg.get("default_to") or ""
         sms_from = sms_cfg.get("from_number", "")
         messaging_service_sid = sms_cfg.get("messaging_service_sid", "")

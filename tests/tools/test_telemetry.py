@@ -1126,6 +1126,7 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "incident_io_incidents",
         "inspect_lambda_function",
         "inspect_s3_object",
+        "inspect_railway_deployment",
         "investigation_start",
         "jira_add_comment",
         "jira_create_issue",
@@ -1154,6 +1155,13 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "list_sentry_uptime_alerts",
         "llm_set_provider",
         "lookup_cloudtrail_events",
+        # Long-term memory tools: local-file CRUD over core/domain/memory;
+        # expected failures return structured error dicts without catching,
+        # unexpected exceptions escape to the global wrapper. The domain
+        # store's OSError handling mirrors the misses store (stderr notice).
+        "memory_forget",
+        "memory_recall",
+        "memory_remember",
         "opsgenie_alert_detail",
         "opsgenie_alerts",
         "pagerduty_incident_detail",
@@ -1187,6 +1195,8 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "query_signoz_traces",
         "query_splunk_logs",
         "query_tempo",
+        "redeploy_railway_service",
+        "replay_slack_thread_locally",
         "run_investigation",
         "scan_redis_keys",
         "search_bitbucket_code",

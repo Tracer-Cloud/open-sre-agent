@@ -27,8 +27,7 @@ def _state_with_masking() -> dict[str, object]:
         "evidence": {},
         "context": {},
         "resolved_integrations": {},
-        "slack_context": {},
-        "discord_context": {},
+        "channel_contexts": {},
         "validated_claims": [],
         "non_validated_claims": [],
     }

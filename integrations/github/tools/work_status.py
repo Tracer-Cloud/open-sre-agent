@@ -7,7 +7,11 @@ from typing import Any, Literal, cast
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.github.client import GitHubApiError, GitHubRestClient, resolve_github_token
-from integrations.github.helpers import github_creds, github_source_available
+from integrations.github.helpers import (
+    GITHUB_INJECTED_PARAMS,
+    github_creds,
+    github_source_available,
+)
 from integrations.github.tools.workflow import (
     GitHubIssueMutationProposal,
     PullRequestStatus,
@@ -122,6 +126,7 @@ def _count_work_items(items: list[dict[str, Any]]) -> dict[str, int]:
     },
     is_available=_github_available,
     extract_params=_github_extract_params,
+    injected_params=GITHUB_INJECTED_PARAMS,
 )
 def list_github_work_items(
     owner: str,
@@ -260,6 +265,7 @@ def _count_prs(prs: list[dict[str, Any]]) -> dict[str, int]:
     },
     is_available=_github_available,
     extract_params=_github_extract_params,
+    injected_params=GITHUB_INJECTED_PARAMS,
 )
 def summarize_github_pr_status(
     owner: str,
@@ -368,6 +374,7 @@ _ISSUE_MUTATION_OPERATIONS = {"create", "update", "close"}
     },
     is_available=_github_available,
     extract_params=_github_extract_params,
+    injected_params=GITHUB_INJECTED_PARAMS,
 )
 def list_github_security_alerts(
     owner: str,
@@ -438,6 +445,7 @@ def list_github_security_alerts(
     },
     is_available=_github_available,
     extract_params=_github_extract_params,
+    injected_params=GITHUB_INJECTED_PARAMS,
 )
 def propose_github_issue_mutation_from_slack(
     owner: str,
@@ -611,6 +619,7 @@ def _marker_exists_on_issue(
     },
     is_available=_github_available,
     extract_params=_github_extract_params,
+    injected_params=GITHUB_INJECTED_PARAMS,
 )
 def execute_github_issue_mutation(
     owner: str,

@@ -104,6 +104,7 @@
               "masking",
               "interactive-shell-privacy",
               "sessions",
+              "memory",
               "fleet",
               "cron",
               "closed-loop-learning",
@@ -168,6 +169,7 @@
               "integrations/trello",
               "pi-coding",
               "fix-sentry-issue",
+              "railway",
               "vercel"
             ]
           },

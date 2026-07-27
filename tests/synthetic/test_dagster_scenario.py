@@ -18,7 +18,7 @@ from typing import Any
 import httpx
 import pytest
 
-from core.domain.alerts.alert_source import ALERT_SOURCE_ROUTING
+from core.domain.alerts.alert_source import alert_source_routing
 from integrations import dagster as dagster_integration
 from integrations.dagster.client import DagsterClient
 from integrations.dagster.tools import (
@@ -259,13 +259,14 @@ def patched_dagster_client(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_dagster_alert_source_seeds_dagster_tools() -> None:
     """A dagster-sourced alert pre-seeds dagster tools before the ReAct loop."""
-    assert "dagster" in ALERT_SOURCE_ROUTING
-    assert ALERT_SOURCE_ROUTING["dagster"].seed_tool_sources == ("dagster",)
+    table = alert_source_routing()
+    assert "dagster" in table
+    assert table["dagster"].seed_tool_sources == ("dagster",)
 
 
 def test_dagster_alert_source_appears_in_prompt_map() -> None:
     """A dagster-sourced alert is treated as a primary dagster-tool source in the prompt."""
-    assert ALERT_SOURCE_ROUTING["dagster"].relevance_tool_sources == ("dagster",)
+    assert alert_source_routing()["dagster"].relevance_tool_sources == ("dagster",)
 
 
 # --- tool scenarios --------------------------------------------------------

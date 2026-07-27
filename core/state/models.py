@@ -123,12 +123,7 @@ class AgentStateModel(StrictConfigModel):
     incident_window: dict[str, Any] | None = None
     incident_window_history: list[dict[str, Any]] | None = None
     masking_map: dict[str, str] = Field(default_factory=dict)
-    slack_context: dict[str, Any] = Field(default_factory=dict)
-    discord_context: dict[str, Any] = Field(default_factory=dict)
-    telegram_context: dict[str, Any] = Field(default_factory=dict)
-    whatsapp_context: dict[str, Any] = Field(default_factory=dict)
-    twilio_sms_context: dict[str, Any] = Field(default_factory=dict)
-    openclaw_context: dict[str, Any] = Field(default_factory=dict)
+    channel_contexts: dict[str, dict[str, Any]] = Field(default_factory=dict)
     thread_id: str = ""
     run_id: str = ""
     auth_token: str = Field(default="", alias="_auth_token", exclude=True)

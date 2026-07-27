@@ -7,6 +7,7 @@ from typing import Any
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.github.helpers import (
+    GITHUB_INJECTED_PARAMS,
     github_creds,
     github_source_available,
     normalize_github_tool_result,
@@ -73,6 +74,7 @@ def _list_github_commits_available(sources: dict[str, dict]) -> bool:
     },
     is_available=_list_github_commits_available,
     extract_params=_list_github_commits_extract_params,
+    injected_params=GITHUB_INJECTED_PARAMS,
 )
 def list_github_commits(
     owner: str,

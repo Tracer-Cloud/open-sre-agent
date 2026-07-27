@@ -11,11 +11,11 @@ from pydantic import BaseModel, Field
 
 from core.context_budget import strip_internal_message_markers
 from core.domain.diagnosis.alignment import apply_category_alignment_adjustments
-from core.domain.types.root_cause_categories import (
-    HERMES_ROOT_CAUSE_CATEGORIES,
-    VALID_ROOT_CAUSE_CATEGORIES,
-    render_prompt_taxonomy,
+from core.domain.diagnosis.taxonomy_registry import (
+    root_cause_category_instruction_for_source,
+    taxonomy_categories_for_alert_source,
 )
+from core.domain.types.root_cause_categories import render_prompt_taxonomy
 
 logger = logging.getLogger(__name__)
 
@@ -107,29 +107,6 @@ def result_to_state(result: InvestigationResult) -> dict[str, Any]:
         # already served their purpose and must not leak into persisted state.
         "agent_messages": strip_internal_message_markers(result.agent_messages),
     }
-
-
-def taxonomy_categories_for_alert_source(alert_source: str) -> set[str]:
-    source = alert_source.strip().lower()
-    if source == "hermes":
-        return set(HERMES_ROOT_CAUSE_CATEGORIES | {"healthy", "unknown"})
-    return set(VALID_ROOT_CAUSE_CATEGORIES - HERMES_ROOT_CAUSE_CATEGORIES)
-
-
-def root_cause_category_instruction_for_source(alert_source: str) -> str:
-    categories = taxonomy_categories_for_alert_source(alert_source)
-    taxonomy = render_prompt_taxonomy(categories).strip()
-    if alert_source.strip().lower() == "hermes":
-        return (
-            "Use exactly one category name from the Hermes taxonomy below\n\n"
-            "## Hermes root cause category taxonomy (single source of truth)\n"
-            f"{taxonomy}"
-        )
-    return (
-        "Use exactly one category name from the root cause taxonomy below\n\n"
-        "## Root cause category taxonomy (single source of truth)\n"
-        f"{taxonomy}"
-    )
 
 
 def normalize_root_cause_category(raw: str, *, allowed_categories: set[str]) -> str:
@@ -258,3 +235,16 @@ def build_investigation_result(
         category_text_mismatch=mismatch,
         category_text_mismatch_reason=reason,
     )
+
+
+__all__ = [
+    "InvestigationResult",
+    "build_diagnosis_schema",
+    "build_investigation_result",
+    "claims_to_dicts",
+    "normalize_root_cause_category",
+    "result_to_state",
+    # Re-exported for compat — canonical home is taxonomy_registry.
+    "root_cause_category_instruction_for_source",
+    "taxonomy_categories_for_alert_source",
+]

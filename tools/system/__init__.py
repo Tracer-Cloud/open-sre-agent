@@ -12,6 +12,7 @@ cross_vendor vs. vendor-integration placement rules.
 from __future__ import annotations
 
 TOOL_MODULES = (
+    "agent_memory.tool",
     "fleet_monitoring",
     "python_execution_tool",
     "sre_guidance_tool",

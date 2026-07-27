@@ -11,6 +11,7 @@ import difflib
 import json
 import logging
 import re
+from http import HTTPStatus
 from typing import Any
 from urllib.parse import quote
 
@@ -184,7 +185,7 @@ class ArgoCDClient:
                 return response
             except httpx.HTTPStatusError as exc:
                 if (
-                    exc.response.status_code == 401
+                    exc.response.status_code == HTTPStatus.UNAUTHORIZED
                     and self._session_token
                     and not self.config.bearer_token
                 ):

@@ -216,6 +216,15 @@ MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "User asks to list, connect, or disconnect MCP servers",
         anti_examples=("User asks about remote deployments or remote agents (use /remote)",),
     ),
+    "/memory": _mcp(
+        "List and manage the agent's long-term memory. "
+        "Subcommands: show <name>, forget <name>, path.",
+        "User explicitly asks to list, show, or delete stored memories via /memory",
+        anti_examples=(
+            "User shares a durable fact to remember (use the memory_remember action)",
+            "User asks what the agent knows about them (use memory_recall)",
+        ),
+    ),
     "/messaging": _mcp(
         "Manage messaging security and Telegram identities. Subcommands: pair, allow, revoke, status.",
         "User asks about Telegram pairing, messaging allowlist, or messaging status",
