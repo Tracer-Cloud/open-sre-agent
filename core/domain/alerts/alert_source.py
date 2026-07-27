@@ -209,11 +209,13 @@ def relevant_sources_for_alert(
     if not text:
         return []
 
+    keyword_map = {source: {source, *_source_aliases.get(source, ())} for source in candidates}
     matched: list[str] = []
-    for source in candidates:
-        keywords = {source, *_source_aliases.get(source, ())}
+
+    for source, keywords in keyword_map.items():
         if any(keyword in text for keyword in keywords):
             matched.append(source)
+
     return matched
 
 
