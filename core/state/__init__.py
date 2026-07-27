@@ -12,6 +12,11 @@ from core.state.agent_state import (
     AgentMessageRole,
     MutableAgentState,
 )
+from core.state.channel_context import (
+    CHANNEL_CONTEXTS_KEY,
+    get_channel_context,
+    set_channel_context,
+)
 from core.state.evidence import EvidenceEntry
 from core.state.models import (
     AgentState,
@@ -37,6 +42,7 @@ from core.state.updates import apply_state_updates
 
 __all__ = [
     "AgentMessageRole",
+    "CHANNEL_CONTEXTS_KEY",
     "MAX_CONVERSATION_MESSAGES",
     "MAX_CONVERSATION_TURNS",
     "MutableAgentState",
@@ -58,6 +64,8 @@ __all__ = [
     "MaskingSlice",
     "CallerMetadataSlice",
     "apply_state_updates",
+    "get_channel_context",
     "make_chat_state",
     "model_default_payload",
+    "set_channel_context",
 ]

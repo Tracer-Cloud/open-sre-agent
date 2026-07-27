@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from typing import Any
 
 from core.agent_harness.tools.tool_context import action_context_from_agent_context
@@ -17,34 +16,23 @@ from tools.architecture_issue_tool.report_persistence import (
     ReportPersistenceError,
     save_architecture_observations,
 )
-
-
-def _resolve_github_token(explicit: str | None = None) -> str:
-    """Resolve a GitHub token without importing ``integrations`` (layer peers)."""
-    return (explicit or os.getenv("GITHUB_TOKEN") or os.getenv("GH_TOKEN") or "").strip()
-
-
-def _github_source_available(sources: dict[str, dict]) -> bool:
-    return bool(sources.get("github", {}).get("connection_verified"))
-
-
-def _github_creds(gh: dict[str, Any]) -> dict[str, Any]:
-    creds: dict[str, Any] = {}
-    token = gh.get("github_token") or gh.get("auth_token")
-    if token:
-        creds["github_token"] = token
-    return creds
+from tools.github_cli.credentials import (
+    GITHUB_CLI_INJECTED_PARAMS,
+    github_creds,
+    github_source_available,
+    resolve_github_token,
+)
 
 
 def _github_clone_available(sources: dict[str, dict]) -> bool:
-    return bool(_github_source_available(sources) or _resolve_github_token(None))
+    return bool(github_source_available(sources) or resolve_github_token(None))
 
 
 def _github_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     gh = sources.get("github", {})
     if not gh:
         return {}
-    payload: dict[str, Any] = {**_github_creds(gh)}
+    payload: dict[str, Any] = {**github_creds(gh)}
     if gh.get("owner"):
         payload["owner"] = gh.get("owner")
     if gh.get("repo"):
@@ -116,6 +104,7 @@ def _session_id_from_runtime(context: Any, explicit: str = "") -> str:
     },
     is_available=_github_clone_available,
     extract_params=_github_extract_params,
+    injected_params=GITHUB_CLI_INJECTED_PARAMS,
 )
 def architecture_clone_repo(
     owner: str,
@@ -131,7 +120,7 @@ def architecture_clone_repo(
             owner,
             repo,
             ref=ref,
-            token=github_token,
+            token=resolve_github_token(github_token) or None,
             local_path=local_path,
         )
     except WorkspaceError as exc:

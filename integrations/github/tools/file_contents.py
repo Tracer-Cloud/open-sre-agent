@@ -7,6 +7,7 @@ from typing import Any
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.code_host_unavailable import code_host_unavailable_payload
 from integrations.github.helpers import (
+    GITHUB_INJECTED_PARAMS,
     github_creds,
     github_source_available,
     normalize_github_tool_result,
@@ -61,6 +62,7 @@ def _get_github_file_contents_available(sources: dict[str, dict]) -> bool:
     },
     is_available=_get_github_file_contents_available,
     extract_params=_get_github_file_contents_extract_params,
+    injected_params=GITHUB_INJECTED_PARAMS,
 )
 def get_github_file_contents(
     owner: str,

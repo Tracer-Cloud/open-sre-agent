@@ -6,6 +6,7 @@ from typing import Any
 
 from core.tool_framework.tool_decorator import tool
 from tools.github_cli.credentials import (
+    GITHUB_CLI_INJECTED_PARAMS,
     github_creds,
     github_source_available,
     resolve_github_token,
@@ -35,7 +36,7 @@ _ARGS_SCHEMA: dict[str, Any] = {
         },
         "github_token": {
             "type": "string",
-            "description": "Optional GitHub token override; prefer configured integration/env.",
+            "description": "GitHub token injected from the configured integration.",
         },
     },
     "required": ["args"],
@@ -99,6 +100,7 @@ def _normalize_args(args: list[str] | None) -> list[str]:
     input_schema=_ARGS_SCHEMA,
     is_available=_github_cli_available,
     extract_params=_github_cli_extract_params,
+    injected_params=GITHUB_CLI_INJECTED_PARAMS,
 )
 def github_cli(
     args: list[str],

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.tool_framework.base import BaseTool
+from core.tool_framework.tags import SUMMARIZE_OBSERVATION_TAG
 from core.tool_framework.tool_decorator import tool
 from integrations.slack.tools.slack_read_messages_tool.constants import (
     DEFAULT_MESSAGE_LIMIT,
@@ -50,6 +51,7 @@ class SlackReadMessagesTool(BaseTool):
         "Searching messages across the whole workspace (use slack_search_messages)",
         "Reading a channel the bot has not been invited to",
     ]
+    tags = (SUMMARIZE_OBSERVATION_TAG,)
     requires = ["slack"]
     side_effect_level = "read_only"
     requires_approval = False

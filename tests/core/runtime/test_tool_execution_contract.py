@@ -255,6 +255,7 @@ def test_injected_github_credentials_are_not_overridden_by_llm_args() -> None:
         },
         source="github",
         run=run,
+        injected_params=("github_token", "github_mode"),
         extract_params=lambda sources: {
             "owner": sources["github"]["owner"],
             "repo": sources["github"]["repo"],

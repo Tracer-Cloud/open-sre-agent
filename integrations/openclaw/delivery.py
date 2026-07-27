@@ -76,7 +76,9 @@ def send_openclaw_report(
     creds: dict[str, Any],
 ) -> tuple[bool, str | None]:
     """Write the investigation report to OpenClaw via MCP."""
-    openclaw_context = state.get("openclaw_context") or {}
+    from core.state.channel_context import get_channel_context
+
+    openclaw_context = get_channel_context(state, "openclaw")
     merged_creds = _merge_openclaw_credentials(creds, openclaw_context)
     config_payload = {
         "url": merged_creds.get("url", ""),

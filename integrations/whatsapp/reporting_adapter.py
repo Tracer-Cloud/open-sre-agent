@@ -36,7 +36,9 @@ class _WhatsAppReportDeliveryAdapter:
             logger.debug("[publish] whatsapp delivery: no whatsapp integration configured")
             return False
 
-        whatsapp_ctx: dict[str, Any] = state.get("whatsapp_context") or {}
+        from core.state.channel_context import get_channel_context
+
+        whatsapp_ctx: dict[str, Any] = get_channel_context(state, "whatsapp")
         account_sid = whatsapp_ctx.get("account_sid") or whatsapp_creds.get("account_sid", "")
         auth_token = whatsapp_ctx.get("auth_token") or whatsapp_creds.get("auth_token", "")
         from_number = whatsapp_ctx.get("from_number") or whatsapp_creds.get("from_number", "")

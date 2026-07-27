@@ -29,6 +29,12 @@ def capture_cli_invoked(properties: Properties | None = None) -> None:
     _capture(properties)
 
 
+def analytics_needs_flush() -> bool:
+    from platform.analytics.provider import analytics_needs_flush as _needs_flush
+
+    return _needs_flush()
+
+
 def shutdown_analytics(*, flush: bool = False, timeout: float | None = None) -> None:
     from platform.analytics.provider import shutdown_analytics as _shutdown
 

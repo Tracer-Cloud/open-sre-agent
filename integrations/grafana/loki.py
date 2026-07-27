@@ -3,10 +3,23 @@
 from __future__ import annotations
 
 import time
+from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from integrations.grafana.base import GrafanaClientBase
+
+
+def _describe_status(status: int) -> str:
+    """Human-readable reason for a failed Loki response status."""
+    if status == HTTPStatus.TOO_MANY_REQUESTS:
+        return (
+            f"Loki rate-limited the query ({status}). "
+            "Retry later, shorten the time range, or lower the limit."
+        )
+    if status >= HTTPStatus.INTERNAL_SERVER_ERROR:
+        return f"Loki is unavailable ({status}). Server-side failure, retry later."
+    return f"Loki query failed: {status}"
 
 
 class LokiMixin:
@@ -81,7 +94,7 @@ class LokiMixin:
             response_text = ""
             if hasattr(e, "response") and e.response is not None:
                 response_text = e.response.text[:300]
-                error_msg = f"Loki query failed: {e.response.status_code}"
+                error_msg = _describe_status(e.response.status_code)
 
             return {
                 "success": False,

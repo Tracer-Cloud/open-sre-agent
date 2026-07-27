@@ -237,6 +237,12 @@ def _setup_vercel() -> None:
     _run_spec_setup(VERCEL_SETUP)
 
 
+def _setup_railway() -> None:
+    from integrations.railway.setup import RAILWAY_SETUP
+
+    _run_spec_setup(RAILWAY_SETUP)
+
+
 def _setup_betterstack() -> None:
     from integrations.betterstack.setup import BETTERSTACK_SETUP
 
@@ -707,6 +713,7 @@ _HANDLERS: dict[str, Any] = {
     "rds": _setup_rds,
     "tracer": _setup_tracer,
     "vercel": _setup_vercel,
+    "railway": _setup_railway,
     "github": _setup_github,
     "gitlab": _setup_gitlab,
     "sentry": _setup_sentry,

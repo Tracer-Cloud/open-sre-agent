@@ -6,9 +6,9 @@ from typing import Any
 
 from core import public_tool_input
 from core.domain.alerts.alert_source import (
-    SECONDARY_TOOL_SOURCES,
     primary_sources_for_alert,
     relevant_sources_for_alert,
+    secondary_tool_sources,
     seed_tool_sources_for_alert,
 )
 from core.llm.types import ToolCall
@@ -88,7 +88,8 @@ def select_investigation_tools(
         return tools
 
     ranked = _relevance_ranked(tools, state)
-    secondary = [tool for tool in ranked if str(tool.source) in SECONDARY_TOOL_SOURCES]
+    secondary_sources = secondary_tool_sources()
+    secondary = [tool for tool in ranked if str(tool.source) in secondary_sources]
     # Reserve a few slots *inside* the cap for cheap reasoning fallbacks so the
     # agent never loses its "reason about the alert" path on a busy environment,
     # without ever pushing the total past the hard ceiling.
@@ -98,7 +99,7 @@ def select_investigation_tools(
     kept: list[RegisteredTool] = []
     kept_names: set[str] = set()
     for tool in ranked:
-        if str(tool.source) in SECONDARY_TOOL_SOURCES or len(kept) >= primary_budget:
+        if str(tool.source) in secondary_sources or len(kept) >= primary_budget:
             continue
         kept.append(tool)
         kept_names.add(tool.name)
@@ -129,9 +130,11 @@ def _relevance_ranked(tools: list[RegisteredTool], state: dict[str, Any]) -> lis
     primary = set(primary_sources_for_alert(state))
     content_relevant = set(relevant_sources_for_alert(state, sources_present))
 
+    secondary_sources = secondary_tool_sources()
+
     def rank(tool: RegisteredTool) -> tuple[int, str, str]:
         source = str(tool.source)
-        if source in SECONDARY_TOOL_SOURCES:
+        if source in secondary_sources:
             # Cheap reasoning fallbacks (knowledge, etc.): keep but never crowd
             # out incident-specific tools.
             tier = 3

@@ -528,6 +528,26 @@ class HelmIntegrationConfig(StrictConfigModel):
         return bool(str(self.helm_path or "").strip())
 
 
+class RailwayIntegrationConfig(StrictConfigModel):
+    token: str = ""
+    railway_path: str = "railway"
+    project: str = ""
+    service: str = ""
+    environment: str = ""
+    integration_id: str = ""
+
+    _normalize_railway_path = field_validator("railway_path", mode="before")(
+        normalize_with_default("railway")
+    )
+    _normalize_strs = field_validator(
+        "token", "project", "service", "environment", "integration_id", mode="before"
+    )(normalize_str())
+
+    @property
+    def has_default_scope(self) -> bool:
+        return bool(self.project and self.service and self.environment)
+
+
 # ---------------------------------------------------------------------------
 # Databases — Relational
 # ---------------------------------------------------------------------------

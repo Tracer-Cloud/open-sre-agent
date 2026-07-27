@@ -185,7 +185,42 @@ def apply_gitlab_repo_scope(
     return merged
 
 
+class _GitlabVcsRepoScopeProvider:
+    """Adapts GitLab's project/ref/file scope to :class:`platform.harness_ports.VcsRepoScopeProvider`."""
+
+    vendor = "gitlab"
+
+    def infer(
+        self,
+        *,
+        message: str,
+        conversation_messages: Sequence[tuple[str, str]] | None,
+        env: Mapping[str, str] | None,
+        cwd: str | Path | None,
+        cached: tuple[str, ...] | None,
+    ) -> tuple[str, ...] | None:
+        cached_scope = GitlabRepoScope(*cached) if cached else None
+        scope = infer_gitlab_repo_scope(
+            message=message,
+            conversation_messages=conversation_messages,
+            env=env,
+            cwd=cwd,
+            cached=cached_scope,
+        )
+        return tuple(scope) if scope else None
+
+    def apply(self, resolved: dict[str, Any], scope: tuple[str, ...]) -> dict[str, Any]:
+        project_id = scope[0]
+        ref_name = scope[1] if len(scope) > 1 else ""
+        file_path = scope[2] if len(scope) > 2 else ""
+        return apply_gitlab_repo_scope(resolved, project_id, ref_name, file_path)
+
+
+GITLAB_VCS_REPO_SCOPE_PROVIDER = _GitlabVcsRepoScopeProvider()
+
+
 __all__ = [
+    "GITLAB_VCS_REPO_SCOPE_PROVIDER",
     "GitlabRepoScope",
     "apply_gitlab_repo_scope",
     "detect_git_remote_repo_scope",

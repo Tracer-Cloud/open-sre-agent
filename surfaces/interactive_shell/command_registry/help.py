@@ -54,6 +54,9 @@ def _raw_help_sections() -> list[HelpSection]:
     )
     from surfaces.interactive_shell.command_registry.integrations import COMMANDS as INT_CMDS
     from surfaces.interactive_shell.command_registry.investigation import COMMANDS as INV_CMDS
+    from surfaces.interactive_shell.command_registry.memory_cmds import (
+        COMMANDS as MEMORY_CMDS,
+    )
     from surfaces.interactive_shell.command_registry.model import COMMANDS as MODEL_CMDS
     from surfaces.interactive_shell.command_registry.privacy_cmds import (
         COMMANDS as PRIVACY_CMDS,
@@ -83,7 +86,7 @@ def _raw_help_sections() -> list[HelpSection]:
         ),
         ("Integrations, Models & Tools", list(INT_CMDS) + list(MODEL_CMDS) + list(TOOLS_CMDS)),
         ("Investigation", list(INV_CMDS) + list(RCA_CMDS)),
-        ("Privacy", list(PRIVACY_CMDS)),
+        ("Privacy", list(PRIVACY_CMDS) + list(MEMORY_CMDS)),
         ("Tasks", list(TASK_CMDS) + list(WATCH_CMDS) + list(GATEWAY_CMDS)),
         ("Theme", list(THEME_CMDS)),
         ("Agents", list(AGENTS_CMDS)),

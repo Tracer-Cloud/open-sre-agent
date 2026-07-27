@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import time
 from collections.abc import Callable, Iterator
+from http import HTTPStatus
 from typing import Any
 
 from core.llm.shared.llm_retry import (
@@ -260,7 +261,7 @@ def invoke_with_litellm_agent_retries(
                 ) from err
             if (
                 is_exception_named(err, "RateLimitError")
-                or getattr(err, "status_code", None) == 429
+                or getattr(err, "status_code", None) == HTTPStatus.TOO_MANY_REQUESTS
             ):
                 maybe_raise_credit_exhausted(provider_name, err)
                 last_err = err
@@ -323,7 +324,7 @@ def invoke_with_litellm_llm_retries(
                 ) from err
             if (
                 is_exception_named(err, "RateLimitError")
-                or getattr(err, "status_code", None) == 429
+                or getattr(err, "status_code", None) == HTTPStatus.TOO_MANY_REQUESTS
             ):
                 last_err = err
                 if attempt == _RETRY_MAX_ATTEMPTS - 1:
@@ -397,7 +398,7 @@ def stream_with_litellm_retries(
                 ) from err
             if (
                 is_exception_named(err, "RateLimitError")
-                or getattr(err, "status_code", None) == 429
+                or getattr(err, "status_code", None) == HTTPStatus.TOO_MANY_REQUESTS
             ):
                 if attempt == _RETRY_MAX_ATTEMPTS - 1:
                     raise RuntimeError(

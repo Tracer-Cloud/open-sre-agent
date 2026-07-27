@@ -5,9 +5,13 @@ from __future__ import annotations
 from functools import partial
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import MagicMock
+
+import pytest
 
 from tests.tools.conftest import BaseToolContract
 from tools import registry as registry_module
+from tools.architecture_issue_tool.repo_workspace import WorkspaceError
 from tools.architecture_issue_tool.report_persistence import (
     ReportPersistenceError,
     sanitize_repo_name,
@@ -69,6 +73,55 @@ def test_architecture_clone_repo_local_path(tmp_path: Path) -> None:
     )
     assert result["ok"] is True
     assert result["workspace_root"] == str(tmp_path.resolve())
+
+
+def test_architecture_clone_repo_prefers_injected_token_over_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange: env token set alongside an injected (configured-source) token
+    monkeypatch.setenv("GITHUB_TOKEN", "env-token")
+    clone_mock = MagicMock(side_effect=WorkspaceError("stop before network"))
+    monkeypatch.setattr("tools.architecture_issue_tool.tool.clone_github_repo", clone_mock)
+
+    # Act
+    architecture_clone_repo(owner="org", repo="repo", github_token="store-token")
+
+    # Assert: the configured-source token reaches the clone, not the env token
+    assert clone_mock.call_args.kwargs["token"] == "store-token"
+
+
+def test_architecture_clone_repo_falls_back_to_env_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange: no injected token, env-only local setup
+    monkeypatch.setenv("GITHUB_TOKEN", "env-token")
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    monkeypatch.delenv("GITHUB_MCP_AUTH_TOKEN", raising=False)
+    clone_mock = MagicMock(side_effect=WorkspaceError("stop before network"))
+    monkeypatch.setattr("tools.architecture_issue_tool.tool.clone_github_repo", clone_mock)
+
+    # Act
+    architecture_clone_repo(owner="org", repo="repo")
+
+    # Assert: the env token is used for the clone
+    assert clone_mock.call_args.kwargs["token"] == "env-token"
+
+
+def test_architecture_clone_repo_no_token_clones_unauthenticated(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange: neither an injected token nor env vars
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    monkeypatch.delenv("GITHUB_MCP_AUTH_TOKEN", raising=False)
+    clone_mock = MagicMock(side_effect=WorkspaceError("stop before network"))
+    monkeypatch.setattr("tools.architecture_issue_tool.tool.clone_github_repo", clone_mock)
+
+    # Act
+    architecture_clone_repo(owner="org", repo="repo")
+
+    # Assert: clone proceeds with no token (public-repo path)
+    assert clone_mock.call_args.kwargs["token"] is None
 
 
 def test_architecture_cleanup_refuses_outside_path(tmp_path: Path) -> None:
