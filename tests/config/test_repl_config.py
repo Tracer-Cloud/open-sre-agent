@@ -374,3 +374,75 @@ class TestGithubLoginDeferral:
         assert read_github_login_deferred() is True
         write_github_login_deferred(False)
         assert read_github_login_deferred() is False
+
+
+class TestAlertListenerPortParsing:
+    @pytest.mark.parametrize(
+        ("raw_yaml_value", "expected_port", "should_warn"),
+        [
+            ("null", 0, True),
+            ("not_a_number", 0, True),
+            ("-1", 0, True),
+            ("65536", 0, True),
+            ("0", 0, False),
+            ("8080", 8080, False),
+        ],
+    )
+    def test_file_backed_alert_listener_port(
+        self,
+        raw_yaml_value: str,
+        expected_port: int,
+        should_warn: bool,
+        tmp_path,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        config_file = tmp_path / "config.yml"
+        config_file.write_text(
+            f"interactive:\n  alert_listener_port: {raw_yaml_value}\n",
+            encoding="utf-8",
+        )
+        monkeypatch.delenv("OPENSRE_ALERT_LISTENER_PORT", raising=False)
+
+        import config.constants as const_module
+
+        monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+
+        with caplog.at_level("WARNING"):
+            cfg = ReplConfig.load()
+
+        assert cfg.alert_listener_port == expected_port
+        if should_warn:
+            assert "interactive.alert_listener_port=" in caplog.text
+        else:
+            assert "interactive.alert_listener_port=" not in caplog.text
+
+    @pytest.mark.parametrize(
+        ("env_value", "expected_port", "should_warn"),
+        [
+            ("invalid", 0, True),
+            ("-1", 0, True),
+            ("65536", 0, True),
+            ("0", 0, False),
+            ("8080", 8080, False),
+        ],
+    )
+    def test_env_backed_alert_listener_port(
+        self,
+        env_value: str,
+        expected_port: int,
+        should_warn: bool,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        monkeypatch.setenv("OPENSRE_ALERT_LISTENER_PORT", env_value)
+
+        with caplog.at_level("WARNING"):
+            cfg = ReplConfig.load()
+
+        assert cfg.alert_listener_port == expected_port
+        if should_warn:
+            assert "OPENSRE_ALERT_LISTENER_PORT=" in caplog.text
+        else:
+            assert "OPENSRE_ALERT_LISTENER_PORT=" not in caplog.text
+
