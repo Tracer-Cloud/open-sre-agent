@@ -7,7 +7,11 @@ from typing import Any
 
 from core.tool_framework.tool_decorator import tool
 from integrations.github.client import GitHubApiError, GitHubRestClient
-from integrations.github.helpers import github_creds, github_source_available
+from integrations.github.helpers import (
+    GITHUB_INJECTED_PARAMS,
+    github_creds,
+    github_source_available,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -128,6 +132,7 @@ def _safe_github_request(
     },
     is_available=_slack_github_tool_available,
     extract_params=_slack_github_tool_extract_params,
+    injected_params=GITHUB_INJECTED_PARAMS,
 )
 def create_github_task_from_slack(
     owner: str,
@@ -249,6 +254,7 @@ def create_github_task_from_slack(
     },
     is_available=_slack_github_tool_available,
     extract_params=_slack_github_tool_extract_params,
+    injected_params=GITHUB_INJECTED_PARAMS,
 )
 def update_github_task_from_slack(
     owner: str,
@@ -356,6 +362,7 @@ def update_github_task_from_slack(
     },
     is_available=_slack_github_tool_available,
     extract_params=_slack_github_tool_extract_params,
+    injected_params=GITHUB_INJECTED_PARAMS,
 )
 def close_github_task_from_slack(
     owner: str,
