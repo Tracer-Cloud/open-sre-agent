@@ -31,6 +31,7 @@ from core.agent_harness.prompts.gather import build_gather_system_prompt
 from core.agent_harness.session.integration_resolution import resolve_and_cache_integrations
 from core.domain.alerts.alert_source import secondary_tool_sources
 from core.events import runtime_event_callback_from_observer
+from core.state import MAX_CONVERSATION_MESSAGES
 from platform.analytics.react_turn import run_react_agent_with_telemetry
 from platform.harness_ports import enrich_resolved_with_repo_scopes
 from platform.observability.trace.prompts import persist_turn_system_prompt
@@ -159,7 +160,7 @@ def _resolve_gather_integrations(
 
 
 def _build_gather_user_message(session: SessionStore, message: str) -> str:
-    messages = session.cli_agent_messages[-24:]
+    messages = session.cli_agent_messages[-MAX_CONVERSATION_MESSAGES:]
     history = format_recent_conversation(messages, max_turns=3)
     if history == NO_HISTORY_PLACEHOLDER:
         return message

@@ -4,10 +4,17 @@ from types import SimpleNamespace
 
 import pytest
 
+from config.principal import Principal
 from core.agent_harness.prompts import build_action_system_prompt
 from core.agent_harness.session import InMemorySessionStorage, SessionCore, SessionManager
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
-from gateway.storage import SessionBindingStore, SessionResolver, connect_gateway_db
+from gateway.storage import SessionBindingStore, SessionResolver
+from gateway.storage.db import connect_bindings_db
+
+
+@pytest.fixture
+def principal() -> Principal:
+    return Principal.individual("tg-user-42")
 
 
 @pytest.fixture
@@ -16,7 +23,7 @@ def resolver(tmp_path, monkeypatch) -> SessionResolver:
     monkeypatch.setattr(SessionCore, "warm_resolved_integrations", lambda _self, **_k: None)
     monkeypatch.setattr(SessionCore, "hydrate_configured_integrations", lambda _self: None)
 
-    conn = connect_gateway_db(tmp_path / "state.db")
+    conn = connect_bindings_db(tmp_path / "state.db")
     store = SessionBindingStore(conn)
     # A mutable fake repo whose load_session each test can override.
     repo = SimpleNamespace(load_session=lambda _session_id: None)
@@ -28,17 +35,27 @@ def resolver(tmp_path, monkeypatch) -> SessionResolver:
 
 
 def test_resolve_creates_and_injects_gateway_chat_context(resolver: SessionResolver) -> None:
-    resolved = resolver.resolve(user_id="42", chat_id="99")
+    resolved = resolver.resolve(
+        user_id="42", chat_id="99", principal=Principal.individual("tg-user-42")
+    )
 
     # New session was created, bound, and tagged with the per-turn chat id.
     assert resolved.resolved_integrations_cache["_gateway_chat_id"] == "99"
     assert (
-        resolver._bindings.get_session_id(platform="telegram", chat_id="42") == resolved.session_id
+        resolver._bindings.get_session_id(
+            platform="telegram", chat_id="42", principal=Principal.individual("tg-user-42")
+        )
+        == resolved.session_id
     )
 
 
 def test_resolve_restores_persisted_conversation_context(resolver: SessionResolver) -> None:
-    resolver._bindings.bind(platform="telegram", chat_id="42", session_id="session-1")
+    resolver._bindings.bind(
+        platform="telegram",
+        chat_id="42",
+        session_id="session-1",
+        principal=Principal.individual("tg-user-42"),
+    )
     resolver._fake_repo.load_session = lambda session_id: {
         "session_id": session_id,
         "cli_agent_messages": [
@@ -55,7 +72,9 @@ def test_resolve_restores_persisted_conversation_context(resolver: SessionResolv
         "history": [{"type": "shell", "text": "curl wttr.in/Hawaii", "ok": True}],
     }
 
-    resolved = resolver.resolve(user_id="42", chat_id="99")
+    resolved = resolver.resolve(
+        user_id="42", chat_id="99", principal=Principal.individual("tg-user-42")
+    )
 
     assert resolved.cli_agent_messages[-1] == (
         "assistant",
@@ -70,7 +89,12 @@ def test_resolve_restores_persisted_conversation_context(resolver: SessionResolv
 def test_resolved_telegram_context_is_visible_as_prior_action_facts(
     resolver: SessionResolver,
 ) -> None:
-    resolver._bindings.bind(platform="telegram", chat_id="42", session_id="session-1")
+    resolver._bindings.bind(
+        platform="telegram",
+        chat_id="42",
+        session_id="session-1",
+        principal=Principal.individual("tg-user-42"),
+    )
     resolver._fake_repo.load_session = lambda session_id: {
         "session_id": session_id,
         "cli_agent_messages": [
@@ -87,7 +111,9 @@ def test_resolved_telegram_context_is_visible_as_prior_action_facts(
         ],
     }
 
-    resolved = resolver.resolve(user_id="42", chat_id="99")
+    resolved = resolver.resolve(
+        user_id="42", chat_id="99", principal=Principal.individual("tg-user-42")
+    )
 
     prompt = build_action_system_prompt(
         TurnSnapshot.from_session(
@@ -104,11 +130,29 @@ def test_resolved_telegram_context_is_visible_as_prior_action_facts(
 
 
 def test_rotate_flushes_old_and_binds_new(resolver: SessionResolver) -> None:
-    first = resolver.resolve(user_id="42", chat_id="99")
-    rotated = resolver.rotate(user_id="42", chat_id="99")
+    first = resolver.resolve(
+        user_id="42", chat_id="99", principal=Principal.individual("tg-user-42")
+    )
+    rotated = resolver.rotate(
+        user_id="42", chat_id="99", principal=Principal.individual("tg-user-42")
+    )
 
     assert rotated.session_id != first.session_id
     assert rotated.resolved_integrations_cache["_gateway_chat_id"] == "99"
     assert (
-        resolver._bindings.get_session_id(platform="telegram", chat_id="42") == rotated.session_id
+        resolver._bindings.get_session_id(
+            platform="telegram", chat_id="42", principal=Principal.individual("tg-user-42")
+        )
+        == rotated.session_id
     )
+
+
+def test_slack_actors_get_distinct_sessions(resolver: SessionResolver) -> None:
+    org = Principal.org("org_acme")
+    alice = resolver.resolve(user_id="T:C:1", chat_id="C1", principal=org, actor="U_ALICE")
+    bob = resolver.resolve(user_id="T:C:1", chat_id="C1", principal=org, actor="U_BOB")
+
+    assert alice.session_id != bob.session_id
+    assert resolver.has_conversation(conversation_key="T:C:1", principal=org)
+    assert resolver.has_session(user_id="T:C:1", principal=org, actor="U_ALICE")
+    assert resolver.has_session(user_id="T:C:1", principal=org, actor="U_BOB")

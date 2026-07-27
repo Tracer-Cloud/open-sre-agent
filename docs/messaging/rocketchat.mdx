@@ -212,6 +212,24 @@ See [Background investigations](/background-investigations) for the full command
 
 ---
 
+## Watchdog alarms
+
+The process watchdog (`/watch`, `opensre watchdog`) can send threshold alarms to Rocket.Chat instead of Telegram:
+
+```text
+/watch <pid> --max-cpu 80 --provider rocketchat --chat-id "#alerts"
+```
+
+CLI:
+
+```bash
+opensre watchdog --pid <pid> --max-cpu 80 --provider rocketchat --chat-id "#alerts"
+```
+
+`--chat-id` overrides the configured `default_channel` (token mode) or is optional in webhook-only mode (the webhook's destination is fixed). Alarms require token credentials with a resolvable channel, or a configured incoming webhook — the same rule as scheduled deliveries. Cooldown suppresses repeat alarms for the same threshold (`--cooldown`, default 5 minutes).
+
+---
+
 ## Scheduled deliveries (cron)
 
 With token credentials configured (Steps 1–4), Rocket.Chat can receive recurring reports:

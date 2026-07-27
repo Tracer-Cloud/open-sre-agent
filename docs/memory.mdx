@@ -64,11 +64,14 @@ Delete one with `/memory forget prod-cluster-conventions`, or ask the agent:
 
 ## Where memories live
 
-Memories are plain markdown files under `~/.opensre/memory/` — one file per
-memory plus a generated `MEMORY.md` index. They are stored **locally and
-unencrypted**. The agent includes the memory index, and sometimes recalled
-entries, in prompts sent to your configured LLM provider so it can use those
-facts in future answers. You can open, edit, or delete the files directly at
+On a laptop, memories are plain markdown files under `~/.opensre/memory/` — one
+file per memory plus a generated `MEMORY.md` index — stored **locally and
+unencrypted**. On a Slack silo each member instead gets a private memory folder
+inside the organization's mounted context volume
+(`<org root>/users/<slack_user_id>/memory/`), not a shared host folder. The
+agent includes the memory index, and sometimes recalled entries, in prompts
+sent to your configured LLM provider so it can use those facts in future
+answers. You can open, edit, or delete the files directly at
 any time; the index rebuilds on the next write.
 
 ## Turning memory off
@@ -88,7 +91,9 @@ and redacts matching spans before the extraction LLM call.
 
 ## Gateway (Slack / Telegram)
 
-Memory is a **host-global** local folder. On a shared gateway host it is **off
-by default** so one allowlisted user's facts cannot appear in another user's
-prompts or channel replies. Single-operator gateway deployments can opt in with
+On Slack, memory is **per-user scoped** — each member's facts live under their
+own `users/<id>/memory/` folder inside the org volume, so one user's memories
+cannot appear in another's prompts or channel replies. Telegram turns are
+unbound and stay **host-global**. Because of that (and to keep memory off by
+default on shared hosts), the gateway path is **off by default**; opt in with
 `OPENSRE_MEMORY_GATEWAY_ENABLED=1`.

@@ -11,6 +11,7 @@ from pydantic import Field, field_validator, model_validator
 from config.strict_config import StrictConfigModel
 
 ThresholdName = Literal["max_cpu", "max_runtime", "max_rss"]
+AlarmProvider = Literal["telegram", "rocketchat"]
 
 _DURATION_RE = re.compile(r"^(?P<value>\d+(?:\.\d+)?)(?P<unit>[smh]?)$")
 _BYTE_RE = re.compile(r"^(?P<value>\d+(?:\.\d+)?)(?P<unit>[kmgt]?b?)$", re.IGNORECASE)
@@ -83,6 +84,7 @@ class WatchdogConfig(StrictConfigModel):
     interval: float = Field(default=5.0, gt=0)
     cooldown: float = Field(default=300.0, gt=0)
     once: bool = False
+    provider: AlarmProvider = "telegram"
     chat_id: str | None = None
     verbose: bool = False
 

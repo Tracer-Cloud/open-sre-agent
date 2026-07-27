@@ -11,6 +11,7 @@ the extraction pass.
 
 from __future__ import annotations
 
+import contextvars
 import json
 import logging
 import re
@@ -88,9 +89,15 @@ def schedule_memory_extraction(
     if wait_for_completion:
         _extract_memories_safe(snapshot)
         return
+    # Run the daemon thread inside a copy of the current context so the per-turn
+    # storage scope (ContextVar set by bound_storage_scope) is inherited: without
+    # it current_scope() is None on the thread and save_memory() would resolve to
+    # the org root instead of users/<actor_id>/memory/, misfiling the user's
+    # extracted facts where their in-scope turns never read them.
+    ctx = contextvars.copy_context()
     thread = threading.Thread(
-        target=_extract_memories_safe,
-        args=(snapshot,),
+        target=ctx.run,
+        args=(_extract_memories_safe, snapshot),
         name="opensre-memory-extraction",
         daemon=True,
     )
