@@ -7,12 +7,18 @@ from typing import Any
 
 from core.tool_framework.tool_decorator import tool
 from integrations.github.client import GitHubApiError, GitHubRestClient
+from integrations.github.helpers import github_creds, github_source_available
 
 logger = logging.getLogger(__name__)
 
 
-def _always_available(_sources: dict[str, dict]) -> bool:
-    return True
+def _slack_github_tool_available(sources: dict[str, dict]) -> bool:
+    return github_source_available(sources)
+
+
+def _slack_github_tool_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
+    gh = sources.get("github", {})
+    return github_creds(gh)
 
 
 def _extract_slack_url(context: Any) -> str:
@@ -120,7 +126,8 @@ def _safe_github_request(
         "required": ["owner", "repo", "title"],
         "additionalProperties": False,
     },
-    is_available=_always_available,
+    is_available=_slack_github_tool_available,
+    extract_params=_slack_github_tool_extract_params,
 )
 def create_github_task_from_slack(
     owner: str,
@@ -240,7 +247,8 @@ def create_github_task_from_slack(
         "required": ["owner", "repo", "issue_number"],
         "additionalProperties": False,
     },
-    is_available=_always_available,
+    is_available=_slack_github_tool_available,
+    extract_params=_slack_github_tool_extract_params,
 )
 def update_github_task_from_slack(
     owner: str,
@@ -346,7 +354,8 @@ def update_github_task_from_slack(
         "required": ["owner", "repo", "issue_number"],
         "additionalProperties": False,
     },
-    is_available=_always_available,
+    is_available=_slack_github_tool_available,
+    extract_params=_slack_github_tool_extract_params,
 )
 def close_github_task_from_slack(
     owner: str,
