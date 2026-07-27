@@ -57,6 +57,8 @@ STORE_PATH: Path | None = None
 
 def _store_path() -> Path:
     return Path(STORE_PATH) if STORE_PATH is not None else integrations_store_path()
+
+
 _VERSION = 2
 _LOCK_TIMEOUT_SECONDS = 10.0
 
