@@ -3,7 +3,7 @@
 One best-effort LLM pass over the session's chat transcript, run from
 :meth:`SessionManager.close`. Never raises out: any failure (LLM unavailable,
 malformed output, disk errors) is logged and the session teardown proceeds.
-Gated by ``OPENSRE_MEMORY_AUTOEXTRACT_DISABLED`` / ``OPENSRE_MEMORY_DISABLED``.
+Environment gates can disable the whole feature or only the extraction pass.
 """
 
 from __future__ import annotations
@@ -16,13 +16,14 @@ from typing import Any, Protocol
 from core.domain.memory import (
     MEMORY_TYPES,
     auto_extract_enabled,
+    find_memory_safety_issues,
     render_prompt_index,
     save_memory,
 )
 
 logger = logging.getLogger(__name__)
 
-MIN_CHAT_MESSAGES = 4
+MIN_CHAT_MESSAGES = 2
 MAX_MEMORIES_PER_SESSION = 5
 _MAX_TRANSCRIPT_TURNS = 30
 
@@ -135,6 +136,14 @@ def _save_extracted(items: list[dict[str, Any]]) -> None:
         if not isinstance(description, str) or not description.strip():
             continue
         if not isinstance(content, str) or not content.strip():
+            continue
+        issues = find_memory_safety_issues(description, content)
+        if issues:
+            logger.debug(
+                "[memory] skipped extracted memory %r due to safety rules: %s",
+                name,
+                ",".join(issue.rule for issue in issues),
+            )
             continue
         slug = slugify(name)
         if not is_valid_slug(slug):

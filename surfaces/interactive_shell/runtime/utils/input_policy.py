@@ -26,6 +26,7 @@ _EXCLUSIVE_STDIN_MENU_COMMANDS: frozenset[str] = frozenset(
         "/integrations",
         "/investigate",
         "/mcp",
+        "/memory",
         "/model",
         "/tools",
         "/template",

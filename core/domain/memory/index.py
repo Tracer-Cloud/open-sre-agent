@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from core.domain.memory.files import write_text_atomically
 from core.domain.memory.models import MemoryRecord
 
 _INDEX_FILENAME = "MEMORY.md"
@@ -24,28 +25,25 @@ def _index_line(record: MemoryRecord) -> str:
     return f"- [{record.memory_type}] {record.slug} — {record.description} (updated {updated_day})"
 
 
-def rebuild_index() -> Path:
-    """Rewrite MEMORY.md from a fresh directory scan. May raise ``OSError``."""
-    from core.domain.memory.store import list_memories, memory_dir
-
-    directory = memory_dir()
-    directory.mkdir(parents=True, exist_ok=True)
-    lines = [_index_line(record) for record in list_memories()]
+def write_index(directory: Path, records: list[MemoryRecord]) -> Path:
+    """Rewrite MEMORY.md from supplied records. May raise ``OSError``."""
+    lines = [_index_line(record) for record in records]
     body = "\n".join(lines) + "\n" if lines else "(no memories stored yet)\n"
     path = directory / _INDEX_FILENAME
-    path.write_text(_INDEX_HEADER + body, encoding="utf-8")
+    write_text_atomically(path, _INDEX_HEADER + body)
     return path
 
 
-def render_prompt_index(*, max_chars: int = DEFAULT_PROMPT_INDEX_CHARS) -> str:
+def render_prompt_index(
+    records: list[MemoryRecord],
+    *,
+    max_chars: int = DEFAULT_PROMPT_INDEX_CHARS,
+) -> str:
     """Compact index block for the system prompt; "" when nothing is stored.
 
     Most recently updated memories come first; when the entry or character
     budget runs out, a tail line points the agent at ``memory_recall``.
     """
-    from core.domain.memory.store import list_memories
-
-    records = list_memories()
     if not records:
         return ""
 
@@ -67,4 +65,4 @@ def render_prompt_index(*, max_chars: int = DEFAULT_PROMPT_INDEX_CHARS) -> str:
     return "\n".join(lines)
 
 
-__all__ = ["DEFAULT_PROMPT_INDEX_CHARS", "rebuild_index", "render_prompt_index"]
+__all__ = ["DEFAULT_PROMPT_INDEX_CHARS", "render_prompt_index", "write_index"]

@@ -37,7 +37,12 @@ def test_tokens_hash_and_compare_as_resolved_style() -> None:
 def test_rich_renders_each_token_with_its_own_color() -> None:
     """End-to-end: distinct tokens produce distinct truecolor escapes."""
     set_active_theme("blue")
-    console = Console(force_terminal=True, color_system="truecolor", legacy_windows=False)
+    console = Console(
+        force_terminal=True,
+        color_system="truecolor",
+        legacy_windows=False,
+        no_color=False,
+    )
 
     text = Text()
     text.append("a", style=SECONDARY)

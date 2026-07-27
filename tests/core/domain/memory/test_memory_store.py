@@ -2,21 +2,29 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
 
+from config.constants import (
+    OPENSRE_MEMORY_AUTOEXTRACT_DISABLED_ENV,
+    OPENSRE_MEMORY_DIR_ENV,
+    OPENSRE_MEMORY_DISABLED_ENV,
+)
 from core.domain.memory import (
     MAX_BODY_CHARS,
     MAX_DESCRIPTION_CHARS,
     MemoryRecord,
     auto_extract_enabled,
     delete_memory,
+    find_memory_safety_issues,
     is_valid_slug,
     list_memories,
     load_memory,
     memory_dir,
     memory_enabled,
+    memory_path,
     render_prompt_index,
     save_memory,
     search_memories,
@@ -28,9 +36,9 @@ from core.domain.memory.frontmatter import parse_memory_file, serialize_memory
 @pytest.fixture(autouse=True)
 def _isolated_memory_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     memory_home = tmp_path / "memory"
-    monkeypatch.setenv("OPENSRE_MEMORY_DIR", str(memory_home))
-    monkeypatch.delenv("OPENSRE_MEMORY_DISABLED", raising=False)
-    monkeypatch.delenv("OPENSRE_MEMORY_AUTOEXTRACT_DISABLED", raising=False)
+    monkeypatch.setenv(OPENSRE_MEMORY_DIR_ENV, str(memory_home))
+    monkeypatch.delenv(OPENSRE_MEMORY_DISABLED_ENV, raising=False)
+    monkeypatch.delenv(OPENSRE_MEMORY_AUTOEXTRACT_DISABLED_ENV, raising=False)
     return memory_home
 
 
@@ -99,6 +107,13 @@ class TestSaveAndLoad:
         record = _save(body="z" * (MAX_BODY_CHARS + 1_000))
         assert len(record.body) <= MAX_BODY_CHARS
         assert record.body.endswith("...[truncated]")
+
+    def test_memory_files_are_private_on_posix(self) -> None:
+        _save()
+        if os.name == "posix":
+            assert memory_dir().stat().st_mode & 0o777 == 0o700
+            assert memory_path("prod-cluster").stat().st_mode & 0o777 == 0o600
+            assert (memory_dir() / "MEMORY.md").stat().st_mode & 0o777 == 0o600
 
 
 class TestListDeleteSearch:
@@ -189,9 +204,29 @@ class TestSettings:
     def test_gate_matrix(self, monkeypatch: pytest.MonkeyPatch) -> None:
         assert memory_enabled() is True
         assert auto_extract_enabled() is True
-        monkeypatch.setenv("OPENSRE_MEMORY_AUTOEXTRACT_DISABLED", "1")
+        monkeypatch.setenv(OPENSRE_MEMORY_AUTOEXTRACT_DISABLED_ENV, "1")
         assert memory_enabled() is True
         assert auto_extract_enabled() is False
-        monkeypatch.setenv("OPENSRE_MEMORY_DISABLED", "true")
+        monkeypatch.setenv(OPENSRE_MEMORY_DISABLED_ENV, "true")
         assert memory_enabled() is False
         assert auto_extract_enabled() is False
+
+
+class TestSafety:
+    def test_secret_like_content_is_detected_without_echoing_value(self) -> None:
+        # Construct at runtime so pre-commit secret scanners do not flag fixtures.
+        fake_key = "sk-proj-" + ("a" * 32)
+        issues = find_memory_safety_issues(
+            "API key for old integration",
+            f"OPENAI_API_KEY: {fake_key}",
+        )
+        assert {issue.rule for issue in issues} >= {"provider_token", "labeled_secret"}
+
+    def test_non_secret_operational_terms_are_allowed(self) -> None:
+        assert (
+            find_memory_safety_issues(
+                "Incident lesson",
+                "Missing Kubernetes Secret binding caused startup failure.",
+            )
+            == ()
+        )

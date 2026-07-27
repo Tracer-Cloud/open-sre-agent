@@ -211,6 +211,16 @@ def test_system_prompt_preserves_bare_numeric_synthetic_mapping() -> None:
     assert "never substitute a different numbered" in prompt
 
 
+def test_system_prompt_routes_durable_memory_requests_to_memory_tools() -> None:
+    prompt = _SYSTEM_PROMPT_BASE.lower()
+    assert "memory_remember" in prompt
+    assert "states a stable fact that should matter in" in prompt
+    assert "memory_recall" in prompt
+    assert "what you remember/know about" in prompt
+    assert "memory_forget" in prompt
+    assert "do not save transient task state" in prompt
+
+
 def test_connected_integrations_block_renders_state() -> None:
     assert "unknown" in connected_integrations_block(_ctx())
 

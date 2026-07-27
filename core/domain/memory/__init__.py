@@ -1,7 +1,7 @@
 """Long-term memory store: local, file-based semantic memory for the agent.
 
-One markdown file per memory under ``~/.opensre/memory/`` (override:
-``OPENSRE_MEMORY_DIR``), plus a generated ``MEMORY.md`` index. See
+One markdown file per memory under ``~/.opensre/memory/`` (with an environment
+override), plus a generated ``MEMORY.md`` index. See
 ``docs/memory.mdx`` for the user-facing behavior.
 """
 
@@ -9,8 +9,6 @@ from __future__ import annotations
 
 from core.domain.memory.index import (
     DEFAULT_PROMPT_INDEX_CHARS,
-    rebuild_index,
-    render_prompt_index,
 )
 from core.domain.memory.models import (
     MAX_BODY_CHARS,
@@ -19,6 +17,7 @@ from core.domain.memory.models import (
     MemoryRecord,
     MemoryType,
 )
+from core.domain.memory.safety import MemorySafetyIssue, find_memory_safety_issues
 from core.domain.memory.settings import auto_extract_enabled, memory_enabled
 from core.domain.memory.slugs import is_valid_slug, slugify
 from core.domain.memory.store import (
@@ -27,6 +26,8 @@ from core.domain.memory.store import (
     load_memory,
     memory_dir,
     memory_path,
+    rebuild_index,
+    render_prompt_index,
     save_memory,
     search_memories,
 )
@@ -36,6 +37,7 @@ __all__ = [
     "MAX_BODY_CHARS",
     "MAX_DESCRIPTION_CHARS",
     "MEMORY_TYPES",
+    "MemorySafetyIssue",
     "MemoryRecord",
     "MemoryType",
     "auto_extract_enabled",
@@ -50,5 +52,6 @@ __all__ = [
     "render_prompt_index",
     "save_memory",
     "search_memories",
+    "find_memory_safety_issues",
     "slugify",
 ]

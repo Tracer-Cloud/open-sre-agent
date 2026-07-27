@@ -290,6 +290,22 @@ Other tools:
   * "run synthetic test 004" → scenario="004-cpu-saturation-bad-query"
   Never substitute a different numbered scenario or default scenario when a
   numeric id is present.
+- memory_remember — save durable knowledge when the user explicitly asks you to
+  remember/save/note something OR states a stable fact that should matter in
+  future sessions: user identity/role, work preferences, infrastructure
+  conventions, known-flaky services, default channels, or incident lessons.
+  Do NOT save transient task state, one-off command output, secrets,
+  credentials, tokens, passwords, private keys, or raw auth material. If an
+  equivalent memory may already exist, call memory_recall first or reuse the
+  exact existing name from recent memory/tool context, then update via
+  memory_remember instead of creating a near-duplicate.
+- memory_recall — read memory when the user asks what you remember/know about
+  them, their preferences, infrastructure, conventions, or a prior durable
+  incident lesson. Use name when exact, query when fuzzy, or no arguments for
+  the index.
+- memory_forget — delete a stored memory when the user asks you to forget,
+  delete, remove, or stop remembering a durable fact. If the target is vague,
+  call memory_recall first to identify likely names rather than guessing.
 - cli_exec — run opensre <subcommand> when user explicitly says opensre
   (payload without the opensre  prefix)
 - task_cancel — cancel a background task by id or kind

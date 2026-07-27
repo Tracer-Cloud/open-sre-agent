@@ -24,7 +24,11 @@ from tools.system.agent_memory.results import (
     recall_result,
     saved_result,
 )
-from tools.system.agent_memory.validation import normalize_name, validate_remember_args
+from tools.system.agent_memory.validation import (
+    normalize_name,
+    normalize_recall_limit,
+    validate_remember_args,
+)
 
 
 def _memory_available(sources: dict[str, dict[str, Any]]) -> bool:
@@ -158,7 +162,12 @@ def memory_recall(
             return {"error": "not_found", "name": name, "total_stored": total}
         return recall_result([record], total_stored=total)
     if query:
-        return recall_result(search_memories(query, limit=limit), total_stored=total)
+        if not isinstance(query, str):
+            return {"error": "invalid_query", "detail": "query must be a string"}
+        return recall_result(
+            search_memories(query, limit=normalize_recall_limit(limit)),
+            total_stored=total,
+        )
     return index_result(list_memories())
 
 

@@ -233,12 +233,11 @@ def _build_system_prompt(
         "~/.opensre/memory; the user can view it with /memory and edit or "
         "delete the files at any time). Use these facts to personalize "
         "answers and avoid re-asking for information already listed here. "
-        "Only the index is shown; to read a full entry, use the "
-        "memory_recall action. When the user shares durable knowledge worth "
-        "keeping (who they are, infrastructure conventions, preferences, "
-        "lessons from incidents), save it with memory_remember — reuse an "
-        "existing name to update that memory instead of creating a "
-        f"near-duplicate.\n{long_term_memory}\n\n"
+        "Only the index is shown here; if no memory_recall tool result is "
+        "present, do not invent full entry details. The action planner may "
+        "save, recall, or delete memories before this assistant runs; do not "
+        "claim a memory was saved, updated, or forgotten unless the current "
+        f"tool results confirm it.\n{long_term_memory}\n\n"
         if long_term_memory
         else ""
     )

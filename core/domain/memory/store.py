@@ -12,7 +12,20 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
+from core.domain.memory.files import (
+    ensure_memory_dir,
+    memory_dir,
+    memory_path,
+    write_text_atomically,
+)
 from core.domain.memory.frontmatter import parse_memory_file, serialize_memory
+from core.domain.memory.index import (
+    DEFAULT_PROMPT_INDEX_CHARS,
+    write_index,
+)
+from core.domain.memory.index import (
+    render_prompt_index as render_prompt_index_from_records,
+)
 from core.domain.memory.models import (
     MAX_BODY_CHARS,
     MAX_DESCRIPTION_CHARS,
@@ -23,16 +36,6 @@ from core.domain.memory.models import (
 from core.domain.memory.slugs import is_valid_slug
 
 _INDEX_FILENAME = "MEMORY.md"
-
-
-def memory_dir() -> Path:
-    from config.constants import get_memory_dir
-
-    return get_memory_dir()
-
-
-def memory_path(slug: str) -> Path:
-    return memory_dir() / f"{slug}.md"
 
 
 def _now_iso() -> str:
@@ -73,8 +76,8 @@ def save_memory(
         body=clean_body,
     )
     try:
-        memory_dir().mkdir(parents=True, exist_ok=True)
-        memory_path(slug).write_text(serialize_memory(record), encoding="utf-8")
+        ensure_memory_dir()
+        write_text_atomically(memory_path(slug), serialize_memory(record))
     except OSError as exc:
         print(f"[memory] failed to save memory {slug!r}: {exc}", file=sys.stderr)
         return None
@@ -142,9 +145,17 @@ def search_memories(query: str, *, limit: int = 5) -> list[MemoryRecord]:
     return matches[: max(limit, 0)]
 
 
-def _rebuild_index_best_effort() -> None:
-    from core.domain.memory.index import rebuild_index
+def rebuild_index() -> Path:
+    """Rewrite MEMORY.md from a fresh directory scan. May raise ``OSError``."""
+    return write_index(ensure_memory_dir(), list_memories())
 
+
+def render_prompt_index(*, max_chars: int = DEFAULT_PROMPT_INDEX_CHARS) -> str:
+    """Compact index block for the system prompt; ``""`` when nothing is stored."""
+    return render_prompt_index_from_records(list_memories(), max_chars=max_chars)
+
+
+def _rebuild_index_best_effort() -> None:
     try:
         rebuild_index()
     except OSError as exc:
@@ -157,6 +168,8 @@ __all__ = [
     "load_memory",
     "memory_dir",
     "memory_path",
+    "rebuild_index",
+    "render_prompt_index",
     "save_memory",
     "search_memories",
 ]

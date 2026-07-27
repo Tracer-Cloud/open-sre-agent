@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from config.constants import OPENSRE_MEMORY_DIR_ENV, OPENSRE_MEMORY_DISABLED_ENV
 from core.agent_harness.prompts.assistant import build_assistant_system_prompt
 from core.domain.memory import save_memory
 
@@ -21,8 +22,8 @@ class TestSystemPromptBlock:
         )
         assert _HEADER in prompt
         assert "user-profile" in prompt
-        assert "memory_recall" in prompt
-        assert "memory_remember" in prompt
+        assert "do not invent full entry details" in prompt
+        assert "do not claim a memory was saved" in prompt
 
     def test_block_omitted_when_empty(self) -> None:
         prompt = build_assistant_system_prompt("ref", "history", long_term_memory="")
@@ -35,8 +36,8 @@ class TestSystemPromptBlock:
 class TestDefaultProviderMemory:
     @pytest.fixture(autouse=True)
     def _isolated_memory_dir(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("OPENSRE_MEMORY_DIR", str(tmp_path / "memory"))
-        monkeypatch.delenv("OPENSRE_MEMORY_DISABLED", raising=False)
+        monkeypatch.setenv(OPENSRE_MEMORY_DIR_ENV, str(tmp_path / "memory"))
+        monkeypatch.delenv(OPENSRE_MEMORY_DISABLED_ENV, raising=False)
 
     def _provider_memory(self) -> str:
         from core.agent_harness.prompts.prompt_context import DefaultPromptContextProvider
@@ -63,5 +64,5 @@ class TestDefaultProviderMemory:
             description="Prod cluster is eks-prod-1",
             body="details",
         )
-        monkeypatch.setenv("OPENSRE_MEMORY_DISABLED", "1")
+        monkeypatch.setenv(OPENSRE_MEMORY_DISABLED_ENV, "1")
         assert self._provider_memory() == ""

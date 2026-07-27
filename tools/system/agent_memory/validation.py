@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.domain.memory import MEMORY_TYPES, is_valid_slug, slugify
+from core.domain.memory import MEMORY_TYPES, find_memory_safety_issues, is_valid_slug, slugify
+
+DEFAULT_RECALL_LIMIT = 5
+MAX_RECALL_LIMIT = 20
 
 
 def normalize_name(name: Any) -> str | None:
@@ -33,7 +36,27 @@ def validate_remember_args(
         return {"error": "empty_description", "detail": "description must be a non-empty string"}
     if not isinstance(content, str) or not content.strip():
         return {"error": "empty_content", "detail": "content must be a non-empty string"}
+    issues = find_memory_safety_issues(description, content)
+    if issues:
+        return {
+            "error": "sensitive_content",
+            "detail": "memory was not saved because it appears to contain a secret or credential",
+            "rules": [issue.rule for issue in issues],
+        }
     return None
 
 
-__all__ = ["normalize_name", "validate_remember_args"]
+def normalize_recall_limit(value: Any) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        return DEFAULT_RECALL_LIMIT
+    limit = int(value)
+    return min(max(limit, 0), MAX_RECALL_LIMIT)
+
+
+__all__ = [
+    "DEFAULT_RECALL_LIMIT",
+    "MAX_RECALL_LIMIT",
+    "normalize_name",
+    "normalize_recall_limit",
+    "validate_remember_args",
+]

@@ -7,16 +7,18 @@ from typing import Any
 
 import pytest
 
+from config.constants import OPENSRE_MEMORY_DIR_ENV, OPENSRE_MEMORY_DISABLED_ENV
 from core.tool_framework.tool_decorator import REGISTERED_TOOL_ATTR
 from tests.tools.conftest import BaseToolContract
 from tools.system.agent_memory import memory_forget, memory_recall, memory_remember
 from tools.system.agent_memory.results import RECALL_BODY_CHAR_CAP
+from tools.system.agent_memory.validation import MAX_RECALL_LIMIT
 
 
 @pytest.fixture(autouse=True)
 def _isolated_memory_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("OPENSRE_MEMORY_DIR", str(tmp_path / "memory"))
-    monkeypatch.delenv("OPENSRE_MEMORY_DISABLED", raising=False)
+    monkeypatch.setenv(OPENSRE_MEMORY_DIR_ENV, str(tmp_path / "memory"))
+    monkeypatch.delenv(OPENSRE_MEMORY_DISABLED_ENV, raising=False)
 
 
 def _registered(fn: Any) -> Any:
@@ -59,7 +61,7 @@ class TestMetadata:
     def test_unavailable_when_disabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
         for fn in (memory_remember, memory_forget, memory_recall):
             assert _registered(fn).is_available({}) is True
-        monkeypatch.setenv("OPENSRE_MEMORY_DISABLED", "1")
+        monkeypatch.setenv(OPENSRE_MEMORY_DISABLED_ENV, "1")
         for fn in (memory_remember, memory_forget, memory_recall):
             assert _registered(fn).is_available({}) is False
 
@@ -99,6 +101,18 @@ class TestRemember:
         }
         args.update(kwargs)
         assert memory_remember(**args)["error"] == error
+
+    def test_secret_like_content_is_blocked(self) -> None:
+        # Construct at runtime so pre-commit secret scanners do not flag fixtures.
+        fake_token = "ghp_" + ("a" * 36)
+        result = memory_remember(
+            name="do-not-save-secret",
+            type="preference",
+            description="Temporary token",
+            content=f"auth_token: {fake_token}",
+        )
+        assert result["error"] == "sensitive_content"
+        assert "ghp_" not in str(result)
 
 
 class TestForget:
@@ -140,3 +154,11 @@ class TestRecall:
         content = memory_recall(name="prod-cluster")["memories"][0]["content"]
         assert content.endswith("...[truncated]")
         assert len(content) <= RECALL_BODY_CHAR_CAP + len("\n...[truncated]")
+
+    def test_query_limit_is_capped_and_invalid_query_is_structured(self) -> None:
+        for i in range(MAX_RECALL_LIMIT + 5):
+            _remember(name=f"prod-cluster-{i}", content="needle")
+
+        result = memory_recall(query="needle", limit=999)
+        assert len(result["memories"]) == MAX_RECALL_LIMIT
+        assert memory_recall(query=123)["error"] == "invalid_query"

@@ -10,14 +10,19 @@ from typing import Any
 import pytest
 
 import core.agent_harness.session.memory_extraction as extraction
+from config.constants import (
+    OPENSRE_MEMORY_AUTOEXTRACT_DISABLED_ENV,
+    OPENSRE_MEMORY_DIR_ENV,
+    OPENSRE_MEMORY_DISABLED_ENV,
+)
 from core.domain.memory import list_memories
 
 
 @pytest.fixture(autouse=True)
 def _isolated_memory_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("OPENSRE_MEMORY_DIR", str(tmp_path / "memory"))
-    monkeypatch.delenv("OPENSRE_MEMORY_DISABLED", raising=False)
-    monkeypatch.delenv("OPENSRE_MEMORY_AUTOEXTRACT_DISABLED", raising=False)
+    monkeypatch.setenv(OPENSRE_MEMORY_DIR_ENV, str(tmp_path / "memory"))
+    monkeypatch.delenv(OPENSRE_MEMORY_DISABLED_ENV, raising=False)
+    monkeypatch.delenv(OPENSRE_MEMORY_AUTOEXTRACT_DISABLED_ENV, raising=False)
 
 
 @dataclass
@@ -58,6 +63,13 @@ class TestExtraction:
         extraction.extract_memories_from_session(_FakeSession())
         assert [r.slug for r in list_memories()] == ["user-profile"]
 
+    def test_one_completed_turn_can_save_memory(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        _patch_llm(monkeypatch, json.dumps([_valid_item()]))
+        extraction.extract_memories_from_session(
+            _FakeSession(cli_agent_messages=[("user", "I'm Vaibhav"), ("assistant", "Hi!")])
+        )
+        assert [r.slug for r in list_memories()] == ["user-profile"]
+
     def test_fenced_json_tolerated(self, monkeypatch: pytest.MonkeyPatch) -> None:
         _patch_llm(monkeypatch, f"```json\n{json.dumps([_valid_item()])}\n```")
         extraction.extract_memories_from_session(_FakeSession())
@@ -86,6 +98,21 @@ class TestExtraction:
         extraction.extract_memories_from_session(_FakeSession())
         assert [r.slug for r in list_memories()] == ["user-profile"]
 
+    def test_secret_like_extracted_item_is_skipped(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # Construct at runtime so pre-commit secret scanners do not flag fixtures.
+        fake_token = "ghp_" + ("a" * 36)
+        items = [
+            {
+                "name": "secret-token",
+                "type": "preference",
+                "description": "Old auth token",
+                "content": f"auth_token: {fake_token}",
+            }
+        ]
+        _patch_llm(monkeypatch, json.dumps(items))
+        extraction.extract_memories_from_session(_FakeSession())
+        assert list_memories() == []
+
     def test_cap_of_five_memories(self, monkeypatch: pytest.MonkeyPatch) -> None:
         items = [_valid_item(f"mem-{i}") for i in range(extraction.MAX_MEMORIES_PER_SESSION + 3)]
         _patch_llm(monkeypatch, json.dumps(items))
@@ -105,13 +132,13 @@ class TestSkipConditions:
 
     def test_skips_when_autoextract_disabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
         prompts = _patch_llm(monkeypatch, json.dumps([_valid_item()]))
-        monkeypatch.setenv("OPENSRE_MEMORY_AUTOEXTRACT_DISABLED", "1")
+        monkeypatch.setenv(OPENSRE_MEMORY_AUTOEXTRACT_DISABLED_ENV, "1")
         extraction.extract_memories_from_session(_FakeSession())
         assert prompts == []
 
     def test_skips_when_memory_disabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
         prompts = _patch_llm(monkeypatch, json.dumps([_valid_item()]))
-        monkeypatch.setenv("OPENSRE_MEMORY_DISABLED", "1")
+        monkeypatch.setenv(OPENSRE_MEMORY_DISABLED_ENV, "1")
         extraction.extract_memories_from_session(_FakeSession())
         assert prompts == []
 

@@ -5,6 +5,8 @@ import os
 import tempfile
 from pathlib import Path
 
+from config.constants.memory import OPENSRE_MEMORY_DIR_ENV
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PROJECT_ROOT = REPO_ROOT
 
@@ -23,7 +25,7 @@ def get_store_path() -> Path:
 
 
 def get_memory_dir() -> Path:
-    override = os.getenv("OPENSRE_MEMORY_DIR", "").strip()
+    override = os.getenv(OPENSRE_MEMORY_DIR_ENV, "").strip()
     if override:
         return Path(override).expanduser()
     return OPENSRE_HOME_DIR / "memory"

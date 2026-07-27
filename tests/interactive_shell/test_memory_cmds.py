@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 from rich.console import Console
 
+from config.constants import OPENSRE_MEMORY_DIR_ENV, OPENSRE_MEMORY_DISABLED_ENV
 from core.domain.memory import list_memories, save_memory
 from surfaces.interactive_shell.command_registry import dispatch_slash
 from surfaces.interactive_shell.session import Session
@@ -15,8 +16,8 @@ from surfaces.interactive_shell.session import Session
 
 @pytest.fixture(autouse=True)
 def _isolated_memory_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("OPENSRE_MEMORY_DIR", str(tmp_path / "memory"))
-    monkeypatch.delenv("OPENSRE_MEMORY_DISABLED", raising=False)
+    monkeypatch.setenv(OPENSRE_MEMORY_DIR_ENV, str(tmp_path / "memory"))
+    monkeypatch.delenv(OPENSRE_MEMORY_DISABLED_ENV, raising=False)
 
 
 def _capture() -> tuple[Console, io.StringIO]:
@@ -90,7 +91,7 @@ def test_memory_unknown_subcommand_usage() -> None:
 
 
 def test_memory_disabled_notice(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("OPENSRE_MEMORY_DISABLED", "1")
+    monkeypatch.setenv(OPENSRE_MEMORY_DISABLED_ENV, "1")
     console, buf = _capture()
     assert dispatch_slash("/memory", Session(), console) is True
     assert "memory is disabled" in buf.getvalue()

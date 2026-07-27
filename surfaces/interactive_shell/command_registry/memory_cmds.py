@@ -5,6 +5,7 @@ from __future__ import annotations
 from rich.console import Console
 from rich.markup import escape
 
+from config.constants import OPENSRE_MEMORY_DISABLED_ENV
 from core.domain.memory import (
     delete_memory,
     list_memories,
@@ -27,7 +28,7 @@ from surfaces.interactive_shell.ui import (
 
 
 def _disabled_notice(console: Console) -> bool:
-    console.print(f"[{DIM}]memory is disabled (OPENSRE_MEMORY_DISABLED=1).[/]")
+    console.print(f"[{DIM}]memory is disabled ({OPENSRE_MEMORY_DISABLED_ENV}=1).[/]")
     return True
 
 
@@ -56,7 +57,7 @@ def _show_list(console: Console) -> bool:
     console.print(
         f"[{DIM}]stored unencrypted in {memory_dir()} — edit or delete the files "
         f"directly, or use[/] [{HIGHLIGHT}]/memory forget <name>[/][{DIM}]. "
-        f"Disable with OPENSRE_MEMORY_DISABLED=1.[/]"
+        f"Disable with {OPENSRE_MEMORY_DISABLED_ENV}=1.[/]"
     )
     return True
 
