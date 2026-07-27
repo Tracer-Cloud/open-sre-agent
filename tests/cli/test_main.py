@@ -598,3 +598,43 @@ def test_valid_theme_flag_passes_normalized_value(monkeypatch) -> None:
     assert exit_code == 0
     assert len(load_calls) >= 1
     assert all(call.get("cli_theme") == "blue" for call in load_calls)
+
+
+def test_main_flushes_analytics_when_events_are_pending(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A one-shot CLI exit must drain queued events (e.g. investigation_completed)."""
+    calls: list[dict[str, object]] = []
+    monkeypatch.setattr("surfaces.cli.__main__.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("surfaces.cli.__main__.capture_cli_invoked", lambda *_args: None)
+    monkeypatch.setattr("surfaces.cli.__main__.init_sentry", lambda **_kw: None)
+    monkeypatch.setattr("surfaces.cli.__main__.analytics_needs_flush", lambda: True)
+    monkeypatch.setattr(
+        "surfaces.cli.__main__.shutdown_analytics",
+        lambda **kwargs: calls.append(kwargs),
+    )
+
+    exit_code = main(["integrations", "show", "nonexistent"])
+
+    assert exit_code != 0
+    assert calls and calls[0]["flush"] is True
+    assert calls[0]["timeout"] > 0
+
+
+def test_main_does_not_block_when_no_events_are_pending(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[dict[str, object]] = []
+    monkeypatch.setattr("surfaces.cli.__main__.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("surfaces.cli.__main__.capture_cli_invoked", lambda *_args: None)
+    monkeypatch.setattr("surfaces.cli.__main__.init_sentry", lambda **_kw: None)
+    monkeypatch.setattr("surfaces.cli.__main__.analytics_needs_flush", lambda: False)
+    monkeypatch.setattr(
+        "surfaces.cli.__main__.shutdown_analytics",
+        lambda **kwargs: calls.append(kwargs),
+    )
+
+    exit_code = main(["integrations", "show", "nonexistent"])
+
+    assert exit_code != 0
+    assert calls == [{"flush": False}]
