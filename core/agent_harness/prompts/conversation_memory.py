@@ -160,15 +160,22 @@ def format_prior_action_facts(
 
     if not facts:
         return ""
-
     rendered: list[str] = []
     remaining = max(max_chars, 0)
-    for idx, fact in enumerate(facts[-max_entries:], start=1):
+
+    for idx, fact in enumerate(reversed(facts), start=1):
+        if idx > max_entries:
+            break
+
         if remaining <= 0:
             break
+
         chunk = f"- Prior assistant/tool output {idx}:\n{fact.strip()}"
+
         if len(chunk) > remaining:
             chunk = chunk[:remaining].rstrip() + "\n...[truncated]"
+
         rendered.append(chunk)
         remaining -= len(chunk) + 2
+
     return "\n\n".join(rendered)
