@@ -103,9 +103,9 @@ Detail: Sentry validated for org your-org; 30 issue(s) in the last 7 days
 
 ## Morning digest (scheduled)
 
-Deliver a daily unresolved-issues summary to Slack or Telegram. This uses the
-headless **sentry-summary** skill path (one search + LLM answer), not the
-investigation pipeline or generic `opensre cron` kinds.
+Deliver a daily unresolved-issues summary to Slack, Telegram, or Rocket.Chat.
+This uses the headless **sentry-summary** skill path (one search + LLM
+answer), not the investigation pipeline or generic `opensre cron` kinds.
 
 | Command | What it does |
 | --- | --- |
@@ -136,6 +136,18 @@ opensre sentry digest schedule add \
   --chat-id C0123ABCD
 ```
 
+Example — same schedule to a Rocket.Chat channel (requires token credentials —
+see [Rocket.Chat](/messaging/rocketchat), an incoming webhook alone cannot
+target an explicit `--chat-id`):
+
+```bash
+opensre sentry digest schedule add \
+  --cron "0 8 * * 1-5" \
+  --tz Europe/London \
+  --provider rocketchat \
+  --chat-id "#alerts"
+```
+
 Optional `--project my-service` scopes the digest to one Sentry project.
 
 The gateway daemon picks up scheduled digests automatically when it is running.
@@ -150,9 +162,9 @@ investigation) to enumerate the full issue set over a custom window.
 ## Uptime watch (downtime notifications)
 
 Poll Sentry **uptime monitors** (Alerts / Uptime — not the Issues digest) and
-ping Slack or Telegram only when a monitor transitions to **down** or
-**recovered**. Quiet polls deliver nothing. This is separate from the morning
-Issues digest (`sentry-summary` / Feature #10).
+ping Slack, Telegram, or Rocket.Chat only when a monitor transitions to
+**down** or **recovered**. Quiet polls deliver nothing. This is separate from
+the morning Issues digest (`sentry-summary` / Feature #10).
 
 | Command | What it does |
 | --- | --- |

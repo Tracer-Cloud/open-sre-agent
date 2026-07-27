@@ -195,3 +195,37 @@ class TestSchedule:
         assert len(prompts) == 1
         assert fake_token not in prompts[0]
         assert "[REDACTED]" in prompts[0]
+
+
+def test_scheduled_extraction_thread_inherits_storage_scope(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The rotation-path daemon thread must run inside the per-turn storage
+    scope. Without contextvars.copy_context() the thread sees current_scope()
+    is None and save_memory() misfiles the user's facts under the org root
+    instead of users/<actor_id>/memory/ (regression guard)."""
+    import threading
+
+    from config.principal import Actor, Principal, StorageScope
+    from config.scope_context import bound_storage_scope, current_scope
+
+    monkeypatch.setattr(extraction, "auto_extract_enabled", lambda: True)
+
+    seen: dict[str, Any] = {}
+    done = threading.Event()
+
+    def _recorder(_messages: list[tuple[str, str]]) -> None:
+        seen["scope"] = current_scope()
+        done.set()
+
+    monkeypatch.setattr(extraction, "_extract_memories_safe", _recorder)
+
+    scope = StorageScope(principal=Principal.org("org_a"), actor=Actor(id="U1"))
+    with bound_storage_scope(scope):
+        extraction.schedule_memory_extraction(
+            [("user", "hi"), ("assistant", "hello")],
+            wait_for_completion=False,
+        )
+
+    assert done.wait(timeout=5), "extraction thread never ran"
+    assert seen["scope"] is scope
