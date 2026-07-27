@@ -25,6 +25,7 @@ def wait_until(
     """
     deadline = time.monotonic() + timeout
     while not predicate():
-        if time.monotonic() >= deadline:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
             raise TimeoutError(f"wait_until: predicate not satisfied within {timeout}s")
-        time.sleep(interval)
+        time.sleep(min(interval, remaining))
