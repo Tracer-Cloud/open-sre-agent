@@ -65,8 +65,18 @@ class _ChatSession(Protocol):
     cli_agent_messages: list[tuple[str, str]]
 
 
-def schedule_memory_extraction(messages: list[tuple[str, str]]) -> None:
-    """Snapshot ``messages`` and extract in a daemon thread; never blocks."""
+def schedule_memory_extraction(
+    messages: list[tuple[str, str]],
+    *,
+    join_timeout_seconds: float | None = None,
+) -> None:
+    """Snapshot ``messages`` and extract in a daemon thread.
+
+    When ``join_timeout_seconds`` is set (session ``close`` / process exit), wait
+    up to that bound so durable facts can land before the process ends without
+    stalling forever on a hung provider. Rotation paths omit the join because
+    the process keeps running.
+    """
     if not auto_extract_enabled():
         return
     snapshot = list(messages)
@@ -79,6 +89,8 @@ def schedule_memory_extraction(messages: list[tuple[str, str]]) -> None:
         daemon=True,
     )
     thread.start()
+    if join_timeout_seconds is not None:
+        thread.join(timeout=join_timeout_seconds)
 
 
 def extract_memories_from_session(session: _ChatSession) -> None:

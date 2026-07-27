@@ -279,9 +279,10 @@ class SessionManager:
 
         Persisting is best-effort (a failed flush must not crash teardown);
         the session releases its own resources (:meth:`SessionCore.release_resources`)
-        to prevent per-session leaks. Long-term memory extraction is scheduled
-        after release so a slow classification provider cannot stall teardown
-        or hold integration resources.
+        to prevent per-session leaks. Long-term memory extraction runs after
+        release in a daemon thread that is joined for a short bound so process
+        exit can still persist durable facts without waiting forever on a hung
+        provider or holding integration resources during the LLM call.
         """
         self._flush(session)
         # Snapshot messages before release/clear; the background extractor must
@@ -291,7 +292,13 @@ class SessionManager:
 
         emit_thread_boundary(session.session_id, name="session_end", phase="session_end")
         session.release_resources()
-        self._schedule_memory_extraction_from_messages(messages)
+        # Join with a bound so interactive-shell process exit still persists
+        # durable facts when the classification call is healthy, without
+        # holding integration resources or waiting forever on a hung provider.
+        self._schedule_memory_extraction_from_messages(
+            messages,
+            wait_for_completion=True,
+        )
 
     @staticmethod
     def _flush(session: SessionCore) -> None:
@@ -312,10 +319,20 @@ class SessionManager:
         SessionManager._schedule_memory_extraction_from_messages(messages)
 
     @staticmethod
-    def _schedule_memory_extraction_from_messages(messages: list[tuple[str, str]]) -> None:
+    def _schedule_memory_extraction_from_messages(
+        messages: list[tuple[str, str]],
+        *,
+        wait_for_completion: bool = False,
+    ) -> None:
+        from config.constants import MEMORY_EXTRACTION_JOIN_TIMEOUT_SECONDS
         from core.agent_harness.session.memory_extraction import schedule_memory_extraction
 
-        schedule_memory_extraction(messages)
+        schedule_memory_extraction(
+            messages,
+            join_timeout_seconds=(
+                MEMORY_EXTRACTION_JOIN_TIMEOUT_SECONDS if wait_for_completion else None
+            ),
+        )
 
 
 __all__ = ["SessionManager"]
