@@ -6,7 +6,7 @@ sampler now keeps input/output/cache buckets, so pricing applies the
 right rate to each bucket instead of using the legacy 70/30 blend.
 
 Rates come from litellm's bundled community-maintained price table
-(~2.8k models) rather than a hand-vendored dict — see issue #4035. We
+(~2.8k models) rather than a hand-vendored dict. We
 read litellm's *local* snapshot directly from its packaged JSON file
 instead of the shared ``litellm.model_cost`` global: that global is a
 process-wide singleton populated from a live network fetch on
@@ -37,8 +37,8 @@ from typing import Any, TypeGuard
 
 # litellm imports tiktoken and resolves an encoding at module load time; under
 # a frozen (PyInstaller) build that lookup fails unless this bootstrap runs
-# first. See core/llm/transports/litellm/frozen_tiktoken_bootstrap.py and
-# issue #3631 — this module now hits the same import path unconditionally.
+# first. This module imports from the bootstrap module unconditionally,
+# so the encoding lookup is always resolved before litellm needs it.
 from core.llm.transports.litellm.frozen_tiktoken_bootstrap import (
     ensure_tiktoken_encodings_discoverable,
 )
@@ -135,13 +135,12 @@ def _price(
     )
 
 
-# Models confirmed absent from litellm's bundled price table (checked at
-# migration time — see issue #4035). This is an escape hatch for the rare
-# model litellm's table hasn't (yet, or ever again) picked up, not a general
-# config surface: entries here are only consulted after a direct litellm
-# lookup misses.
+# Models confirmed absent from litellm's bundled price table. This is an
+# escape hatch for the rare model litellm's table hasn't (yet, or ever again)
+# picked up, not a general config surface: entries here are only consulted
+# after a direct litellm lookup misses.
 _LOCAL_MODEL_PRICES: dict[str, ModelPrice] = {
-    # GPT-5.6 (GA 2026-07-09, #3931) — too new for litellm's bundled
+    # GPT-5.6 (GA 2026-07-09) — too new for litellm's bundled
     # snapshot. Per 1M tokens, from
     # https://developers.openai.com/api/docs/pricing: sol 5/30, terra
     # 2.50/15, luna 1/6. Cached input is 90% off.

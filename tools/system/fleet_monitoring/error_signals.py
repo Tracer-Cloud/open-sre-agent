@@ -21,7 +21,7 @@ class ErrorCategory:
 
 # Patterns require error-shape context (adjacent verb, status prefix, header
 # form, etc.) so descriptive prose like "the OpenAI rate limit is 10k tokens"
-# or "add tool error handling" does not fire. See #1497 acceptance criterion.
+# or "add tool error handling" does not fire.
 DEFAULT_CATEGORIES: tuple[ErrorCategory, ...] = (
     ErrorCategory(
         name="rate_limit",
