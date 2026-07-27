@@ -7,8 +7,10 @@ tools:
 
 # GitHub Star Velocity
 
-Use this skill when the user asks for GitHub star velocity, stars gained in the
-last N hours, star growth rate, or similar metrics for a repository.
+Use this skill only when the dedicated `get_github_star_history` tool is not
+available. When that tool is available, prefer it for GitHub star velocity,
+stars gained in a recent window, day-by-day stars, star growth rate, or similar
+metrics for a repository.
 
 ## Prerequisites
 
@@ -24,7 +26,7 @@ last N hours, star growth rate, or similar metrics for a repository.
    `GET /repos/{owner}/{repo}/stargazers?per_page=100` using
    `Accept: application/vnd.github.v3.star+json`.
 3. Each entry includes `starred_at`. Count stars where `starred_at` is within
-   the requested window (for example, the last 24 hours).
+   the requested window.
 
 ## Critical pagination trap
 
@@ -32,8 +34,11 @@ Stargazers are returned **oldest first**, not newest first. Do **not** stop
 after the first page when the newest entries on that page fall outside the
 window — that produces a false zero.
 
-Instead, paginate through **all** pages (follow the `Link` response header
-until there is no `rel="next"`) and count every `starred_at` inside the window.
+For responsiveness, compute the last page from `stargazers_count` and
+`per_page=100`, fetch newest pages by explicit `page` number in descending
+order, and stop once the oldest `starred_at` on a fetched page is before the
+window start. Only run a full historical scan when the user explicitly asks for
+all-time history or an audit-quality export.
 
 ## Sanity check before reporting
 

@@ -28,21 +28,21 @@ facts saved last week ground answers today.
 
 ## Saving memories
 
-Just tell the agent — no special syntax needed:
+Talk normally — no special phrasing:
 
 ```
-remember that our prod cluster is eks-prod-eu-1
+our prod cluster is eks-prod-eu-1
 ```
 
 ```
 my name is Vaibhav, I'm on the platform team
 ```
 
-The agent saves durable facts with its memory tools and updates existing
-entries instead of duplicating them. At the end of each session, a background
-pass also scans the conversation for durable facts you shared but didn't
-explicitly ask to save — so knowledge doesn't get lost. On shell exit that
-pass finishes before the process ends.
+When the agent judges a fact useful for future sessions, it stores it (and
+updates an existing entry instead of duplicating). After **every chat turn**, a
+background pass also scans for durable facts so knowledge lands even if the
+agent didn't call a memory tool mid-turn. On shell exit that pass runs to
+completion so nothing is dropped mid-quit.
 
 ## Viewing and deleting memories
 
@@ -65,26 +65,28 @@ Delete one with `/memory forget prod-cluster-conventions`, or ask the agent:
 ## Where memories live
 
 Memories are plain markdown files under `~/.opensre/memory/` — one file per
-memory plus a generated `MEMORY.md` index. They are stored **locally and
-unencrypted**. The agent includes the memory index, and sometimes recalled
-entries, in prompts sent to your configured LLM provider so it can use those
-facts in future answers. You can open, edit, or delete the files directly at
-any time; the index rebuilds on the next write.
+memory plus a generated `MEMORY.md` index. OpenSRE creates that folder (and an
+empty index) the first time memory is used in a chat or via `/memory`. They are
+stored **locally and unencrypted**. Every chat and action turn includes the
+stored facts (summaries plus bodies, within a size budget) in prompts sent to
+your configured LLM provider. You can open, edit, or delete the files directly
+at any time; the index rebuilds on the next write.
 
 ## Turning memory off
 
 | Environment variable                    | Effect                                                          |
 | --------------------------------------- | --------------------------------------------------------------- |
 | `OPENSRE_MEMORY_DISABLED=1`             | Disable long-term memory entirely                               |
-| `OPENSRE_MEMORY_AUTOEXTRACT_DISABLED=1` | Keep memory, but skip the session-end extraction                |
+| `OPENSRE_MEMORY_AUTOEXTRACT_DISABLED=1` | Keep memory, but skip the automatic per-turn extraction         |
 | `OPENSRE_MEMORY_GATEWAY_ENABLED=1`      | Opt in on Slack/Telegram gateway (off by default — see below)   |
 
-The session-end extraction makes one lightweight LLM call per session and
-saves at most five memories. On shell exit that pass runs to completion after
-resources are released so durable facts are not dropped. Never share secrets
-or credentials expecting them to be remembered — the memory ingestion path
-blocks obvious tokens, passwords, private keys, and credential-shaped values,
-and redacts matching spans before the extraction LLM call.
+The per-turn extraction makes one lightweight LLM call when durable facts may
+have appeared (coalesced across rapid turns) and saves at most five memories
+per pass. On shell exit that pass runs to completion after resources are
+released so durable facts are not dropped. Never share secrets or credentials
+expecting them to be remembered — the memory ingestion path blocks obvious
+tokens, passwords, private keys, and credential-shaped values, and redacts
+matching spans before the extraction LLM call.
 
 ## Gateway (Slack / Telegram)
 

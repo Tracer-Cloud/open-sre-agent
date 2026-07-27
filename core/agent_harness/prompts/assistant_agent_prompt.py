@@ -229,15 +229,13 @@ def _build_system_prompt(
     )
     long_term_memory_block = (
         "--- Long-term memory ---\n"
-        "Durable knowledge saved in previous sessions (stored locally in "
-        "~/.opensre/memory; the user can view it with /memory and edit or "
-        "delete the files at any time). Use these facts to personalize "
-        "answers and avoid re-asking for information already listed here. "
-        "Only the index is shown here; if no memory_recall tool result is "
-        "present, do not invent full entry details. The action planner may "
-        "save, recall, or delete memories before this assistant runs; do not "
-        "claim a memory was saved, updated, or forgotten unless the current "
-        f"tool results confirm it.\n{long_term_memory}\n\n"
+        "Durable knowledge stored locally in ~/.opensre/memory (view/edit with "
+        "/memory). Facts below are injected into every chat turn — use them to "
+        "personalize answers and never re-ask for information already listed. "
+        "Treat listed bodies as ground truth; do not invent details beyond them. "
+        "The action planner may save, recall, or delete memories before this "
+        "assistant runs; do not claim a memory was saved, updated, or forgotten "
+        f"unless the current tool results confirm it.\n{long_term_memory}\n\n"
         if long_term_memory
         else ""
     )

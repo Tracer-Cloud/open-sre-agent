@@ -39,17 +39,19 @@ def _memory_available(sources: dict[str, dict[str, Any]]) -> bool:
 
 @tool(
     name="memory_remember",
-    display_name="Remember",
+    display_name="Save knowledge",
     source="knowledge",
     description=(
-        "Save durable knowledge to local long-term memory so it survives across "
-        "sessions: who the user is, infrastructure conventions, preferences, and "
-        "lessons from incidents. Check the Long-term memory index (or memory_recall) "
+        "Proactively save durable knowledge to local long-term memory whenever "
+        "it would help future sessions — who the user is, infrastructure "
+        "conventions, preferences, and lessons from incidents. Do not wait for "
+        "the user to say remember/save/note; if the fact is useful and stable, "
+        "call this in the same turn. Check existing memories (or memory_recall) "
         "first; if an equivalent memory exists, pass its exact name to update it "
         "instead of creating a near-duplicate. Do not save secrets or credentials."
     ),
     use_cases=[
-        "The user shares who they are or how they like to work",
+        "The user mentions who they are or how they like to work (no special phrasing needed)",
         "A durable infrastructure fact surfaces (cluster names, naming conventions)",
         "An investigation uncovers a lesson worth keeping (known-flaky service)",
     ],

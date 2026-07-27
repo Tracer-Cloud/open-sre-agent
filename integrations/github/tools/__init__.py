@@ -10,6 +10,7 @@ TOOL_MODULES = (
     "repository",
     "repository_tree",
     "search_code",
+    "stargazers",
     "work_status",
 )
 

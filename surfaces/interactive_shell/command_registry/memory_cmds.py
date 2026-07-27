@@ -33,11 +33,14 @@ def _disabled_notice(console: Console) -> bool:
 
 
 def _show_list(console: Console) -> bool:
+    from core.domain.memory import ensure_memory_store
+
+    ensure_memory_store()
     records = list_memories()
     if not records:
         console.print(
-            f"[{DIM}]no memories stored yet. The agent saves them when you share "
-            "durable facts (try: remember that our prod cluster is eks-prod-1).[/]"
+            f"[{DIM}]no memories stored yet. Share durable facts in normal chat "
+            "(e.g. our prod cluster is eks-prod-1) — useful ones are saved automatically.[/]"
         )
         return True
 
@@ -91,6 +94,9 @@ def _forget(console: Console, args: list[str]) -> bool:
 
 
 def _show_path(console: Console) -> bool:
+    from core.domain.memory import ensure_memory_store
+
+    ensure_memory_store()
     console.print(str(memory_dir()))
     return True
 

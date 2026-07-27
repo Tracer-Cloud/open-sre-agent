@@ -1,11 +1,11 @@
-"""Generated views over the memory directory: MEMORY.md and the prompt index."""
+"""Generated views over the memory directory: MEMORY.md and the prompt block."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
 from core.domain.memory.files import write_text_atomically
-from core.domain.memory.models import MemoryRecord
+from core.domain.memory.models import TRUNCATION_MARKER, MemoryRecord
 
 _INDEX_FILENAME = "MEMORY.md"
 _INDEX_HEADER = (
@@ -16,13 +16,22 @@ _INDEX_HEADER = (
     "\n"
 )
 
-DEFAULT_PROMPT_INDEX_CHARS = 4_000
+DEFAULT_PROMPT_INDEX_CHARS = 8_000
 _MAX_PROMPT_ENTRIES = 50
+_MAX_BODY_CHARS_PER_ENTRY = 600
 
 
 def _index_line(record: MemoryRecord) -> str:
     updated_day = record.updated_at[:10]
     return f"- [{record.memory_type}] {record.slug} — {record.description} (updated {updated_day})"
+
+
+def _prompt_entry(record: MemoryRecord) -> str:
+    """One memory for chat prompts: header line plus truncated body."""
+    body = record.body.strip()
+    if len(body) > _MAX_BODY_CHARS_PER_ENTRY:
+        body = body[: _MAX_BODY_CHARS_PER_ENTRY - len(TRUNCATION_MARKER)] + TRUNCATION_MARKER
+    return f"{_index_line(record)}\n{body}"
 
 
 def write_index(directory: Path, records: list[MemoryRecord]) -> Path:
@@ -39,30 +48,39 @@ def render_prompt_index(
     *,
     max_chars: int = DEFAULT_PROMPT_INDEX_CHARS,
 ) -> str:
-    """Compact index block for the system prompt; "" when nothing is stored.
+    """Memory facts for every chat/action prompt; ``""`` when nothing is stored.
 
-    Most recently updated memories come first; when the entry or character
-    budget runs out, a tail line points the agent at ``memory_recall``.
+    Most recently updated memories come first. Each entry includes the index
+    line and the truncated body so the agent can answer without a recall call.
+    When the entry or character budget runs out, a tail line points at
+    ``memory_recall``.
     """
     if not records:
         return ""
 
-    lines: list[str] = []
+    blocks: list[str] = []
     remaining = max(max_chars, 0)
     shown = 0
     for record in records[:_MAX_PROMPT_ENTRIES]:
-        line = _index_line(record)
-        if len(line) + 1 > remaining:
+        block = _prompt_entry(record)
+        # +2 for the blank line between entries
+        cost = len(block) + (2 if blocks else 0)
+        if cost > remaining:
+            if not blocks and remaining > 0:
+                # Always surface at least a truncated slice of the newest memory.
+                blocks.append(block[:remaining].rstrip() + TRUNCATION_MARKER)
+                shown = 1
             break
-        lines.append(line)
-        remaining -= len(line) + 1
+        blocks.append(block)
+        remaining -= cost
         shown += 1
-    if not lines:
+    if not blocks:
         return ""
     hidden = len(records) - shown
+    text = "\n\n".join(blocks)
     if hidden > 0:
-        lines.append(f"… and {hidden} more memories (use memory_recall)")
-    return "\n".join(lines)
+        text = f"{text}\n… and {hidden} more memories (use memory_recall)"
+    return text
 
 
 __all__ = ["DEFAULT_PROMPT_INDEX_CHARS", "render_prompt_index", "write_index"]

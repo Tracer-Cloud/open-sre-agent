@@ -1,9 +1,10 @@
 """Filesystem CRUD for long-term memories under ``~/.opensre/memory/``.
 
-One markdown file per memory plus a generated ``MEMORY.md`` index. Reads never
-create the directory; writes create it lazily. Write failures (disk full,
-permissions) are reported to stderr and surfaced as ``None``/``False`` results
-rather than exceptions, mirroring :mod:`core.domain.feedback.misses.store`.
+One markdown file per memory plus a generated ``MEMORY.md`` index. Prompt
+injection and ``ensure_memory_store`` create the directory eagerly; writes also
+create it lazily. Write failures (disk full, permissions) are reported to
+stderr and surfaced as ``None``/``False`` results rather than exceptions,
+mirroring :mod:`core.domain.feedback.misses.store`.
 
 Mutating operations serialize through a directory-scoped ``FileLock`` so
 concurrent ``memory_remember`` / forget calls cannot silently overwrite each
@@ -20,6 +21,7 @@ from filelock import FileLock, Timeout
 
 from core.domain.memory.files import (
     ensure_memory_dir,
+    ensure_memory_store,
     memory_dir,
     memory_path,
     write_text_atomically,
@@ -180,7 +182,12 @@ def rebuild_index() -> Path:
 
 
 def render_prompt_index(*, max_chars: int = DEFAULT_PROMPT_INDEX_CHARS) -> str:
-    """Compact index block for the system prompt; ``""`` when nothing is stored."""
+    """Memory facts for chat/action prompts; ``""`` when nothing is stored.
+
+    Ensures the on-disk store exists so the first chat does not depend on a
+    prior write to create ``~/.opensre/memory``.
+    """
+    ensure_memory_store()
     return render_prompt_index_from_records(list_memories(), max_chars=max_chars)
 
 
@@ -193,6 +200,7 @@ def _rebuild_index_best_effort() -> None:
 
 __all__ = [
     "delete_memory",
+    "ensure_memory_store",
     "list_memories",
     "load_memory",
     "memory_dir",

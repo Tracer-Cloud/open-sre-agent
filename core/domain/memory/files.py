@@ -21,10 +21,27 @@ def memory_path(slug: str) -> Path:
 
 
 def ensure_memory_dir() -> Path:
+    """Create ``~/.opensre/memory`` (or ``OPENSRE_MEMORY_DIR``) if missing."""
     directory = memory_dir()
     directory.mkdir(parents=True, exist_ok=True, mode=MEMORY_DIR_MODE)
     with contextlib.suppress(OSError):
         directory.chmod(MEMORY_DIR_MODE)
+    return directory
+
+
+def ensure_memory_store() -> Path:
+    """Create the memory directory and an empty ``MEMORY.md`` when absent.
+
+    Safe to call on every chat turn / ``/memory`` invocation — mkdir is
+    idempotent and the index file is only seeded once.
+    """
+    directory = ensure_memory_dir()
+    index_path = directory / "MEMORY.md"
+    if not index_path.exists():
+        from core.domain.memory.index import write_index
+
+        with contextlib.suppress(OSError):
+            write_index(directory, [])
     return directory
 
 
@@ -57,6 +74,7 @@ __all__ = [
     "MEMORY_DIR_MODE",
     "MEMORY_FILE_MODE",
     "ensure_memory_dir",
+    "ensure_memory_store",
     "memory_dir",
     "memory_path",
     "write_text_atomically",
