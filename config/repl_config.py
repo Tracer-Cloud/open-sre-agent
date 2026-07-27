@@ -198,8 +198,8 @@ class ReplConfig:
         else:
             raw_port = file_conf.get("alert_listener_port", 0)
             try:
-                if raw_port is None:
-                    raise TypeError("Port cannot be None")
+                if isinstance(raw_port, (bool, float)) or raw_port is None:
+                    raise TypeError(f"Invalid port type: {type(raw_port).__name__}")
                 alert_listener_port = int(raw_port)
                 if not (0 <= alert_listener_port <= 65535):
                     raise ValueError(f"Port out of range: {alert_listener_port}")

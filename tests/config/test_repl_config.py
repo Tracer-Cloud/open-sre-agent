@@ -381,6 +381,9 @@ class TestAlertListenerPortParsing:
         ("raw_yaml_value", "expected_port", "should_warn"),
         [
             ("null", 0, True),
+            ("true", 0, True),
+            ("false", 0, True),
+            ("3.14", 0, True),
             ("not_a_number", 0, True),
             ("-1", 0, True),
             ("65536", 0, True),
