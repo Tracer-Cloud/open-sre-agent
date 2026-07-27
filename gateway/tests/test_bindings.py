@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from config.constants import paths
+from config.constants.billing import ORGANIZATION_ID_ENV
 from config.principal import Actor, Principal, StorageScope
 from config.scope_context import bound_storage_scope
 from gateway.storage import SessionBindingStore
@@ -150,6 +151,7 @@ def test_bindings_live_on_the_org_context_root_not_the_host(
     mount = tmp_path / "mount"
     monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", host)
     monkeypatch.setenv(paths.CONTEXT_ROOT_ENV, str(mount))
+    monkeypatch.setenv(ORGANIZATION_ID_ENV, "org_acme")
 
     # Act
     with bound_storage_scope(

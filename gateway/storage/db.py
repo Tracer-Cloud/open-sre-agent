@@ -12,11 +12,14 @@ Two databases, because the two tables have opposite scopes:
 
 from __future__ import annotations
 
+import logging
 import sqlite3
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from config.constants.paths import host_home, opensre_home
+
+logger = logging.getLogger(__name__)
 
 _GATEWAY_DIR_NAME = "gateway"
 _INSTALLS_DB_NAME = "state.db"
@@ -81,46 +84,71 @@ def _table_columns(conn: sqlite3.Connection, table: str) -> set[str]:
     return {str(row["name"] if isinstance(row, sqlite3.Row) else row[1]) for row in rows}
 
 
-def _adopt_legacy_bindings(conn: sqlite3.Connection, legacy_path: Path) -> None:
-    """Copy bindings written before they moved off the host database.
+def _read_legacy_rows(legacy_path: Path) -> list[tuple[str, str, str, str, str, float]]:
+    """Read bindings from an older database, whatever columns it happens to have.
 
-    Without this a laptop or Telegram gateway would drop every existing
-    conversation the first time it starts on the new layout.
+    Databases written before scoping have only
+    ``(platform, chat_id, session_id, updated_at)``; selecting the newer columns
+    outright would raise and silently drop every conversation. Missing ids
+    default to the unscoped empty value, which is what those rows meant.
     """
-    if conn.execute("SELECT 1 FROM gateway_session_bindings LIMIT 1").fetchone() is not None:
-        return
     if not legacy_path.is_file():
-        return
+        return []
     legacy = sqlite3.connect(legacy_path)
     legacy.row_factory = sqlite3.Row
     try:
-        if not _table_columns(legacy, "gateway_session_bindings"):
-            return
+        columns = _table_columns(legacy, "gateway_session_bindings")
+        if not {"platform", "chat_id", "session_id", "updated_at"} <= columns:
+            return []
+        principal = "principal_id" if "principal_id" in columns else "''"
+        actor = "actor_id" if "actor_id" in columns else "''"
         rows = legacy.execute(
-            "SELECT platform, chat_id, principal_id, actor_id, session_id, updated_at "
+            f"SELECT platform, chat_id, {principal}, {actor}, session_id, updated_at "
             "FROM gateway_session_bindings"
         ).fetchall()
     except sqlite3.Error:
-        return
+        logger.warning("[gateway] could not read legacy bindings at %s", legacy_path, exc_info=True)
+        return []
     finally:
         legacy.close()
+    return [
+        (str(r[0]), str(r[1]), str(r[2] or ""), str(r[3] or ""), str(r[4]), float(r[5]))
+        for r in rows
+    ]
+
+
+def _adopt_legacy_bindings(conn: sqlite3.Connection, legacy_paths: Sequence[Path]) -> None:
+    """Copy bindings written before they moved off the host database.
+
+    Without this a laptop, a Telegram gateway, or a silo cutting over to a
+    mounted volume would drop every existing conversation on first open.
+    """
+    if conn.execute("SELECT 1 FROM gateway_session_bindings LIMIT 1").fetchone() is not None:
+        return
+    rows: list[tuple[str, str, str, str, str, float]] = []
+    for legacy_path in legacy_paths:
+        rows.extend(_read_legacy_rows(legacy_path))
     if not rows:
         return
     conn.executemany(
         f"INSERT OR IGNORE INTO gateway_session_bindings ({_BINDINGS_COLUMNS}) "
         "VALUES (?, ?, ?, ?, ?, ?)",
-        [tuple(row) for row in rows],
+        rows,
     )
     conn.commit()
+    logger.info("[gateway] adopted %d session binding(s) from a previous layout", len(rows))
 
 
 def connect_bindings_db(path: Path | None = None) -> sqlite3.Connection:
-    """Open the organization's session bindings, adopting any legacy rows."""
+    """Open the organization's session bindings, adopting any legacy rows.
+
+    Two places may hold pre-split rows: the database beside this one, and the
+    host database a silo used before its context moved onto a mounted volume.
+    """
     db_path = path or bindings_db_path()
     conn = _open(db_path, _BINDINGS_SCHEMA)
-    legacy_path = db_path.parent / _INSTALLS_DB_NAME
-    if legacy_path != db_path:
-        _adopt_legacy_bindings(conn, legacy_path)
+    candidates = [db_path.parent / _INSTALLS_DB_NAME, default_gateway_db_path()]
+    _adopt_legacy_bindings(conn, [p for p in dict.fromkeys(candidates) if p != db_path])
     return conn
 
 

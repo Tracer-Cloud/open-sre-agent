@@ -99,7 +99,7 @@ Or insert the row directly, which is what a real multi-workspace deployment
 needs:
 
 ```python
-from gateway.storage.slack_installs import upsert_slack_install
+from gateway.slack.installs import upsert_slack_install
 
 upsert_slack_install(team_id="T0123", clerk_org_id="org_...")
 ```
@@ -108,11 +108,19 @@ With neither, a Slack turn from that workspace is refused.
 
 ## Upgrading an existing deployment
 
-The bindings table gains `actor_id` (and earlier, `principal_id`). Existing rows
-migrate with an empty actor id. The first Slack turn after upgrade creates a
-**new per-user binding** (one-time new session for that member/thread). There is
-no automatic copy of flat silo `sessions/` or `integrations.json` into
-`orgs/<id>/` — copy those once by hand if you need continuity, for example:
+Session bindings moved out of the host `state.db` into a per-organization
+`bindings.db` beside that organization's context. Opening the new database once
+adopts any rows from the old one — including databases written before scoping
+existed, which have neither `principal_id` nor `actor_id`; those adopt as
+unscoped rows and keep working for Telegram and the CLI. A silo whose context
+moved onto a mounted volume also adopts from the host database.
+
+Slack members still get a **new session on their first turn after upgrade**: an
+adopted row carries an empty actor id, so it no longer matches a member-scoped
+lookup. The transcript survives and remains readable.
+
+Session transcripts and `integrations.json` are not copied automatically. To
+keep continuity on a silo, copy them once:
 
 ```bash
 mkdir -p ~/.opensre/orgs/$OPENSRE_ORGANIZATION_ID/users
@@ -126,7 +134,8 @@ Telegram and other surfaces keep matching their migrated empty-actor rows.
 | Env | Purpose |
 | --- | --- |
 | `OPENSRE_ORGANIZATION_ID` | Silo org principal when no `slack_installs` row exists yet (dogfood / cutover) |
-| `OPENSRE_CONTEXT_ROOT` | Mounted, org-scoped volume holding this organization's context (`/workspace/memories` in the Slack service) |
+| `OPENSRE_CONTEXT_ROOT` | Mounted, org-scoped volume holding this organization's context (`/workspace/memories` in the Slack service). Requires `OPENSRE_ORGANIZATION_ID` to say who owns it |
+| `OPENSRE_SILO_TEAM_IDS` | Comma-separated Slack team ids allowed to fall back to the silo organization. Unset, any team without an install falls back (with a warning); set, every other team is refused |
 
 ## Non-goals (this change)
 

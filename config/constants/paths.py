@@ -110,7 +110,13 @@ def opensre_home() -> Path:
         # for any other org — otherwise a multi-workspace gateway could write
         # org B's data into org A's volume. Fail closed.
         silo_owner = os.getenv(ORGANIZATION_ID_ENV, "").strip()
-        if silo_owner and scope.principal.id != silo_owner:
+        if not silo_owner:
+            raise ContextRootOwnerMismatchError(
+                f"{CONTEXT_ROOT_ENV} is set but {ORGANIZATION_ID_ENV} does not say which "
+                "organization owns the mount; refusing to write a customer's data to an "
+                "unidentified volume"
+            )
+        if scope.principal.id != silo_owner:
             raise ContextRootOwnerMismatchError(
                 f"context root belongs to {silo_owner!r} but this turn is owned by "
                 f"{scope.principal.id!r}; refusing to cross organizations on a shared mount"
@@ -172,6 +178,7 @@ __all__ = [
     "PROJECT_ROOT",
     "REPO_ROOT",
     "SYNTHETIC_SCENARIOS_DIR",
+    "ContextRootOwnerMismatchError",
     "UnsafePathSegmentError",
     "ensure_opensre_tmp_dir",
     "get_memory_dir",

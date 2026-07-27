@@ -21,6 +21,7 @@ from pathlib import Path
 import pytest
 
 from config.constants import paths
+from config.constants.billing import ORGANIZATION_ID_ENV
 from config.principal import Actor, Principal, StorageScope
 from config.scope_context import bound_storage_scope, current_scope
 from gateway.storage import SessionBindingStore, connect_bindings_db
@@ -217,6 +218,7 @@ def test_unbound_surfaces_ignore_context_root_mount(
     mount.mkdir(parents=True)
     (mount / "integrations.json").write_text('{"customer": true}', encoding="utf-8")
     monkeypatch.setenv(paths.CONTEXT_ROOT_ENV, str(mount))
+    monkeypatch.setenv(ORGANIZATION_ID_ENV, "org_acme")
 
     assert current_scope() is None
     assert paths.opensre_home() == _host
@@ -233,6 +235,7 @@ def test_individual_principal_stays_on_host_home_even_when_bound(
     """Non-org principals must not nest under orgs/ or consume the mount."""
     mount = _host / "memories"
     monkeypatch.setenv(paths.CONTEXT_ROOT_ENV, str(mount))
+    monkeypatch.setenv(ORGANIZATION_ID_ENV, "org_acme")
     individual = StorageScope(
         principal=Principal.individual("solo_user"),
         actor=Actor(id="solo_user"),
@@ -249,6 +252,7 @@ def test_installs_stay_on_host_while_org_bindings_follow_scope(
 ) -> None:
     mount = _host / "workspace" / "memories"
     monkeypatch.setenv(paths.CONTEXT_ROOT_ENV, str(mount))
+    monkeypatch.setenv(ORGANIZATION_ID_ENV, "org_acme")
 
     installs = default_gateway_db_path()
     with bound_storage_scope(_scope("org_acme", "U_ALICE")):

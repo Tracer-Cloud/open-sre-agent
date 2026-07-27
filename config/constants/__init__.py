@@ -336,7 +336,6 @@ __all__ = [
     "UnsafePathSegmentError",
     "opensre_home",
     "integrations_store_path",
-    "opensre_home",
     "session_home",
     "IS_WINDOWS",
     "JENKINS_API_TOKEN_ENV",

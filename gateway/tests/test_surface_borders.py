@@ -17,6 +17,7 @@ from pathlib import Path
 import pytest
 
 from config.constants import paths
+from config.constants.billing import ORGANIZATION_ID_ENV
 from config.principal import Actor, Principal, StorageScope
 from config.scope_context import bound_storage_scope
 from core.agent_harness.session.persistence import paths as session_paths
@@ -47,9 +48,14 @@ def host(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 @pytest.fixture
 def mounted(host: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """A deployed Slack task: host root plus one customer's mounted volume."""
+    """A deployed Slack task: host root plus Acme's mounted volume.
+
+    The mount names its owner, which the deployed silo always does; a mount with
+    no declared owner is refused.
+    """
     mount = host.parent / "workspace" / "memories"
     monkeypatch.setenv(paths.CONTEXT_ROOT_ENV, str(mount))
+    monkeypatch.setenv(ORGANIZATION_ID_ENV, ACME.id)
     return mount
 
 
@@ -424,3 +430,94 @@ def test_telegram_runtime_wiring_can_read_and_write_bindings(
     # Assert: the table exists and the round trip works on the host root.
     assert resolved == "tg-wired"
     assert (host / "gateway" / "bindings.db").is_file()
+
+
+def test_pre_scoping_bindings_are_adopted(host: Path) -> None:
+    """A database written by main has no principal or actor columns at all.
+
+    Selecting them outright raises, so a column-blind adopt silently drops every
+    conversation on the first start after upgrade.
+    """
+    # Arrange: exactly main's table shape.
+    legacy_path = host / "gateway" / "state.db"
+    legacy_path.parent.mkdir(parents=True, exist_ok=True)
+    legacy = sqlite3.connect(legacy_path)
+    legacy.executescript(
+        """
+        CREATE TABLE gateway_session_bindings (
+            platform TEXT NOT NULL,
+            chat_id TEXT NOT NULL,
+            session_id TEXT NOT NULL,
+            updated_at REAL NOT NULL,
+            PRIMARY KEY (platform, chat_id)
+        );
+        INSERT INTO gateway_session_bindings VALUES ('telegram','42','tg-from-main',1.0);
+        """
+    )
+    legacy.commit()
+    legacy.close()
+
+    # Act
+    store = SessionBindingStore(connect_bindings_db(host / "gateway" / "bindings.db"))
+    resolved = store.get_session_id(platform=_TELEGRAM, chat_id="42")
+    store.close()
+
+    # Assert: the pre-upgrade conversation carries over as an unscoped binding.
+    assert resolved == "tg-from-main"
+
+
+def test_silo_bindings_are_adopted_from_the_host_onto_the_mount(host: Path, mounted: Path) -> None:
+    """A silo's rows sit on the host, while its new bindings live on the volume."""
+    # Arrange: a pre-cutover host database.
+    legacy_path = host / "gateway" / "state.db"
+    legacy_path.parent.mkdir(parents=True, exist_ok=True)
+    legacy = sqlite3.connect(legacy_path)
+    legacy.executescript(
+        """
+        CREATE TABLE gateway_session_bindings (
+            platform TEXT NOT NULL, chat_id TEXT NOT NULL,
+            session_id TEXT NOT NULL, updated_at REAL NOT NULL,
+            PRIMARY KEY (platform, chat_id)
+        );
+        INSERT INTO gateway_session_bindings VALUES ('slack','C1:1.0','silo-session',1.0);
+        """
+    )
+    legacy.commit()
+    legacy.close()
+
+    # Act: the first Slack turn after cutover opens the mounted database.
+    with bound_storage_scope(slack_scope(ACME, ALICE)):
+        store = SessionBindingStore(connect_bindings_db())
+        resolved = store.get_session_id(platform=_SLACK, chat_id="C1:1.0")
+        store.close()
+
+    # Assert: the conversation is carried onto the volume, not lost.
+    assert resolved == "silo-session"
+    assert (mounted / "gateway" / "bindings.db").is_file()
+
+
+def test_a_mount_without_a_declared_owner_is_refused(
+    host: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An unidentified volume could belong to anyone, so no turn may write to it."""
+    # Arrange: the mount is configured but nothing says which org owns it.
+    monkeypatch.setenv(paths.CONTEXT_ROOT_ENV, str(host.parent / "memories"))
+    monkeypatch.delenv(ORGANIZATION_ID_ENV, raising=False)
+
+    # Act / Assert
+    with (
+        bound_storage_scope(slack_scope(ACME, ALICE)),
+        pytest.raises(paths.ContextRootOwnerMismatchError),
+    ):
+        paths.opensre_home()
+
+
+@pytest.mark.usefixtures("mounted")
+def test_a_turn_for_another_org_cannot_use_the_mount() -> None:
+    """The volume is chrooted to one org; a different org must never reach it."""
+    # Act / Assert: the mount belongs to Acme, the turn belongs to Globex.
+    with (
+        bound_storage_scope(slack_scope(GLOBEX, ALICE)),
+        pytest.raises(paths.ContextRootOwnerMismatchError),
+    ):
+        paths.opensre_home()

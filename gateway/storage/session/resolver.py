@@ -154,8 +154,8 @@ class SessionResolver:
             principal=principal,
             actor=actor,
         )
-        # Host-global memory store: skip auto-extract on shared gateway hosts
-        # unless OPENSRE_MEMORY_GATEWAY_ENABLED is set (single-operator opt-in).
+        # Memory now follows the bound scope, so extraction is gated by the
+        # same opt-in the shared gateway host used.
         session = self._manager.rotate(
             old_session_id=existing or None,
             new_session_id=new_id,

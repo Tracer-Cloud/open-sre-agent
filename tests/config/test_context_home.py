@@ -138,6 +138,7 @@ def test_mounted_volume_is_used_as_the_org_root(
     # segment belongs on top of it.
     mount = tmp_path / "workspace" / "memories"
     monkeypatch.setenv(paths.CONTEXT_ROOT_ENV, str(mount))
+    monkeypatch.setenv(ORGANIZATION_ID_ENV, ACME.id)
 
     # Act
     with bound_storage_scope(_member(ACME, ALICE)):
@@ -172,6 +173,7 @@ def test_mount_serves_its_declared_owner(tmp_path: Path, monkeypatch: pytest.Mon
     mount = tmp_path / "memories"
     monkeypatch.setenv(paths.CONTEXT_ROOT_ENV, str(mount))
     monkeypatch.setenv(ORGANIZATION_ID_ENV, ACME.id)
+    monkeypatch.setenv(ORGANIZATION_ID_ENV, ACME.id)
 
     with bound_storage_scope(_member(ACME, ALICE)):
         assert paths.opensre_home() == mount
@@ -182,6 +184,7 @@ def test_mounted_volume_still_separates_users(
 ) -> None:
     # Arrange
     monkeypatch.setenv(paths.CONTEXT_ROOT_ENV, str(tmp_path / "memories"))
+    monkeypatch.setenv(ORGANIZATION_ID_ENV, ACME.id)
 
     # Act
     with bound_storage_scope(_member(ACME, ALICE)):
@@ -205,6 +208,7 @@ def test_unbound_callers_never_write_into_a_customer_volume(
     # Arrange: the deployed Slack task always has the mount configured.
     mount = _home / "workspace" / "memories"
     monkeypatch.setenv(paths.CONTEXT_ROOT_ENV, str(mount))
+    monkeypatch.setenv(ORGANIZATION_ID_ENV, ACME.id)
 
     # Act: nothing bound, exactly as a Telegram turn or a boot-time read.
     org_root = paths.opensre_home()
@@ -222,6 +226,7 @@ def test_a_bound_org_still_uses_the_mount(_home: Path, monkeypatch: pytest.Monke
     # Arrange
     mount = _home / "workspace" / "memories"
     monkeypatch.setenv(paths.CONTEXT_ROOT_ENV, str(mount))
+    monkeypatch.setenv(ORGANIZATION_ID_ENV, ACME.id)
 
     # Act
     with bound_storage_scope(_member(ACME, ALICE)):
