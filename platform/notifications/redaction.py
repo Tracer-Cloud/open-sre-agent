@@ -6,7 +6,7 @@ import re
 
 REDACTED = "<redacted>"
 
-_SLACK_ACCESS_TOKEN_RE = re.compile(r"(xox[baprs]-)[A-Za-z0-9-]+")
+_SLACK_ACCESS_TOKEN_RE = re.compile(r"(xox(?:[baprs]-|e\.xoxp-))[A-Za-z0-9-]+")
 
 
 def redact_token(text: str, token: str) -> str:

@@ -195,14 +195,8 @@ class ReplSubprocessPresenter:
     def print_error(self, message: str) -> None:
         self._console.print(f"[{ERROR}]{escape(message)}[/]")
 
-    def print_dim(self, message: str) -> None:
-        self._console.print(f"[{DIM}]{escape(message)}[/]")
-
     def print_highlight(self, message: str) -> None:
         self._console.print(f"[{HIGHLIGHT}]{escape(message)}[/]")
-
-    def print_warning(self, message: str) -> None:
-        self._console.print(f"[{WARNING}]{escape(message)}[/]")
 
 
 def make_repl_presenter(

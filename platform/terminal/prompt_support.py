@@ -9,12 +9,17 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+import questionary
 import questionary.question
 from prompt_toolkit.key_binding import KeyBindings, KeyBindingsBase, merge_key_bindings
 from prompt_toolkit.keys import Keys
 from rich.console import Console
 
-from platform.terminal.theme import DIM
+from platform.terminal.theme import DIM, HIGHLIGHT
+
+# Matches the REPL's ❯ prompt (surfaces/interactive_shell/ui/input_prompt) instead of
+# questionary's default "?" qmark, so every questionary prompt in the app reads the same.
+QUESTIONARY_QMARK = "❯"
 
 _escape_patch_installed: list[bool] = [False]
 _ctrl_c_patch_installed: list[bool] = [False]
@@ -23,6 +28,15 @@ _handling_ctrl_c: list[bool] = [False]
 
 CTRL_C_DOUBLE_PRESS_WINDOW_S: float = 2.0
 _CTRL_C_EXIT_WINDOW: float = CTRL_C_DOUBLE_PRESS_WINDOW_S
+
+
+def questionary_prompt_style() -> questionary.Style:
+    """Shared qmark styling for raw questionary prompts (select/confirm/text/password).
+
+    A function, not a module-level constant, so each call re-resolves ``HIGHLIGHT``
+    against the currently active theme rather than freezing it at import time.
+    """
+    return questionary.Style([("qmark", f"fg:{HIGHLIGHT} bold")])
 
 
 class _HardQuitInterrupt(KeyboardInterrupt):

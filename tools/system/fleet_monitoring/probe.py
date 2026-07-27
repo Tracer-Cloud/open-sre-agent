@@ -1,8 +1,8 @@
 """Per-PID process helpers for the monitor-local-agents fleet view.
 
-Pure collectors: no background loop, no caching, no UI wiring. The
-wiring layer (#1490) batches calls in a REPL background task; the
-registry layer (#1487) decides which PIDs to ask about.
+Pure collectors: no background loop, no caching, no UI wiring. A
+REPL background task batches calls; the registry decides which PIDs
+to ask about.
 
 ``psutil`` is intentionally confined to this module for per-PID access.
 The helpers exposed here (:func:`cwd_for_pid`, :func:`started_at_for_pid`,
@@ -27,6 +27,7 @@ import psutil
 _BYTES_PER_MIB = 1024 * 1024
 
 PROCESS_NOT_FOUND: tuple[type[BaseException], ...] = (psutil.NoSuchProcess,)
+PROCESS_INACCESSIBLE: tuple[type[BaseException], ...] = (psutil.AccessDenied,)
 PROCESS_INACCESSIBLE_OR_GONE: tuple[type[BaseException], ...] = (
     psutil.NoSuchProcess,
     psutil.AccessDenied,
@@ -58,12 +59,11 @@ def pid_exists(pid: int) -> bool:
     """Return whether ``pid`` corresponds to a process the OS knows about.
 
     Thin wrapper over ``psutil.pid_exists`` exposed here so ``psutil``
-    stays confined to this module per the issue #1489 acceptance
-    criterion. Unlike ``probe()``, this returns ``True`` for processes
-    we can't introspect (cross-user on macOS, restricted ``/proc``,
-    etc.) — the OS-level existence check doesn't traverse the access
-    boundary, which is exactly what the boot sweep (#1501) needs to
-    avoid pruning live foreign-user agents.
+    stays confined to this module. Unlike ``probe()``, this returns
+    ``True`` for processes we can't introspect (cross-user on macOS,
+    restricted ``/proc``, etc.) — the OS-level existence check doesn't
+    traverse the access boundary, which is exactly what the boot sweep
+    needs to avoid pruning live foreign-user agents.
 
     Returns ``False`` for PIDs outside the platform's valid range
     (e.g. an int that overflows the kernel's PID type) — psutil
@@ -142,9 +142,9 @@ def probe(pid: int, *, cpu_interval: float = 0.1) -> ProcessSnapshot | None:
             started_at = datetime.fromtimestamp(proc.create_time(), tz=UTC)
     except (psutil.NoSuchProcess, psutil.ZombieProcess, psutil.AccessDenied):
         # Process exited or its core fields (memory, status, create
-        # time) are inaccessible to this user. The wiring layer in
-        # #1490 treats both as "no snapshot this tick" and renders an
-        # empty cell rather than tearing the REPL background task.
+        # time) are inaccessible to this user. Both cases yield "no
+        # snapshot this tick" and render an empty cell rather than
+        # tearing the REPL background task.
         return None
 
     return ProcessSnapshot(

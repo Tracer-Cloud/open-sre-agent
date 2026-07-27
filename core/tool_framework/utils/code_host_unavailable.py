@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.tool_framework.utils.tool_availability import tool_unavailable
+
 
 def code_host_unavailable_payload(
     *,
@@ -13,9 +15,8 @@ def code_host_unavailable_payload(
     empty_value: Any,
 ) -> dict[str, Any]:
     """Return a standardized unavailable payload for code-host tools."""
-    return {
-        "source": source,
-        "available": False,
-        "error": f"{integration_name} integration is not configured.",
-        empty_key: empty_value,
-    }
+    return tool_unavailable(
+        source,
+        f"{integration_name} integration is not configured.",
+        **{empty_key: empty_value},
+    )

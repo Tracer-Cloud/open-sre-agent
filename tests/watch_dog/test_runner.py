@@ -41,6 +41,7 @@ def _sample(
     rss: int = 1024,
     runtime: float = 10.0,
     alive: bool = True,
+    accessible: bool = True,
 ) -> ProcessSample:
     return ProcessSample(
         pid=123,
@@ -51,6 +52,7 @@ def _sample(
         runtime_seconds=runtime,
         alive=alive,
         started_at=1_700_000_000.0,
+        accessible=accessible,
     )
 
 
@@ -91,6 +93,54 @@ def test_default_mode_keeps_polling_until_target_exits() -> None:
     assert code == SUCCESS
     assert sleeps == [2.0, 2.0]
     assert [name for name, _message in dispatcher.calls] == ["max_runtime"]
+
+
+def test_transient_inaccessible_sample_retries_instead_of_exiting() -> None:
+    """One AccessDenied tick must not end the watch as 'target exited':
+    the loop skips that tick and still alarms on the next real breach."""
+    dispatcher = _FakeDispatcher()
+    sleeps: list[float] = []
+
+    code = run_watchdog(
+        WatchdogConfig.model_validate({"pid": 123, "max_rss": "4G", "interval": 2}),
+        sampler=_FakeSampler(
+            [
+                _sample(rss=1024),
+                _sample(accessible=False),
+                _sample(rss=5 * 1024**3),
+                _sample(alive=False),
+            ]
+        ),
+        dispatcher=dispatcher,
+        _sleep=sleeps.append,
+        _clock=lambda: 100.0,
+    )
+
+    assert code == SUCCESS
+    assert sleeps == [2.0, 2.0, 2.0]
+    assert [name for name, _message in dispatcher.calls] == ["max_rss"]
+
+
+def test_inaccessible_sample_evaluates_no_thresholds() -> None:
+    """Metrics from a denied read must not feed threshold checks: this
+    sample's runtime (10s) exceeds max_runtime=1s but must not alarm."""
+    dispatcher = _FakeDispatcher()
+
+    code = run_watchdog(
+        WatchdogConfig.model_validate({"pid": 123, "max_runtime": "1s", "interval": 2}),
+        sampler=_FakeSampler(
+            [
+                _sample(accessible=False, runtime=10.0),
+                _sample(alive=False),
+            ]
+        ),
+        dispatcher=dispatcher,
+        _sleep=lambda _seconds: None,
+        _clock=lambda: 100.0,
+    )
+
+    assert code == SUCCESS
+    assert dispatcher.calls == []
 
 
 def test_target_exit_before_alarm_does_not_dispatch() -> None:

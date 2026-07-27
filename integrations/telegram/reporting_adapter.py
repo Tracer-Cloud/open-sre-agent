@@ -36,7 +36,9 @@ class _TelegramReportDeliveryAdapter:
             logger.debug("[publish] telegram delivery: no telegram integration configured")
             return False
 
-        telegram_ctx = state.get("telegram_context") or {}
+        from core.state.channel_context import get_channel_context
+
+        telegram_ctx = get_channel_context(state, "telegram")
         bot_token = telegram_ctx.get("bot_token") or telegram_creds.get("bot_token", "")
         chat_id = telegram_ctx.get("chat_id") or telegram_creds.get("default_chat_id", "")
         reply_to = str(telegram_ctx.get("reply_to_message_id") or "")

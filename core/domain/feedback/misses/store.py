@@ -36,8 +36,7 @@ def record_miss(
 
     ``feedback_record`` is the dict the feedback prompt already builds.
     ``final_state`` is the investigation ``AgentState`` and is used to backfill
-    provenance fields that are not in the feedback dict (``pipeline_name``,
-    ``severity``).
+    provenance fields that are not in the feedback dict (``severity``).
 
     Returns the persisted record on success, ``None`` if the JSONL append
     failed (disk full, permissions). Write errors are printed to stderr so the
@@ -53,7 +52,6 @@ def record_miss(
         "timestamp": feedback_record.get("timestamp") or datetime.now(UTC).isoformat(),
         "run_id": feedback_record.get("run_id", ""),
         "alert_name": feedback_record.get("alert_name", ""),
-        "pipeline_name": state.get("pipeline_name", ""),
         "severity": state.get("severity", ""),
         "rating": feedback_record.get("rating", ""),
         "taxonomy": tax_value,

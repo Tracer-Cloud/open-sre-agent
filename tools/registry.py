@@ -213,8 +213,21 @@ class RegisteredToolRegistry:
 
 
 def resolve_tool_display_name(tool_name: str) -> str:
-    """Return a human-friendly label for a tool name."""
     tool = _load_registry_tool_map().get(tool_name)
     if tool is not None:
         return tool.display_name or tool.name.replace("_", " ")
     return tool_name.replace("_", " ")
+
+
+def resolve_tool_activity_labels(tool_name: str) -> tuple[str, str]:
+    """Return ``(source_badge, short_label)`` from registry metadata."""
+    tool = _load_registry_tool_map().get(tool_name)
+    if tool is None:
+        return "Tools", tool_name.replace("_", " ")
+    source = str(tool.source).replace("_", " ").title()
+    display = tool.display_name or tool.name.replace("_", " ")
+    prefix = f"{source} "
+    if display.lower().startswith(prefix.lower()):
+        short = display[len(prefix) :].strip()
+        return source, short or display
+    return source, display

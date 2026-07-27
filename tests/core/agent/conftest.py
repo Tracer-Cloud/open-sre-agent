@@ -133,9 +133,9 @@ def _resolve_live_llm_configuration(
 
     spec = provider_spec(settings.provider)
     if spec is not None and spec.credential_kind == "api_key" and spec.api_key_env:
-        from config.llm_credentials import resolve_llm_api_key
+        from config.llm_credentials import resolve_env_credential
 
-        if not resolve_llm_api_key(spec.api_key_env):
+        if not resolve_env_credential(spec.api_key_env):
             _skip_or_fail_live_llm(
                 "Live LLM turn tests require a resolvable API key:"
                 f" provider={settings.provider!r}, env={spec.api_key_env}"

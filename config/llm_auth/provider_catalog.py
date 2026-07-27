@@ -5,6 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
+from config.constants.llm import (
+    AZURE_OPENAI_API_KEY_ENV,
+    AZURE_OPENAI_API_VERSION_ENV,
+    AZURE_OPENAI_BASE_URL_ENV,
+)
+
 CredentialKind = Literal["api_key", "cli", "ambient", "local"]
 
 
@@ -23,6 +29,8 @@ class ProviderSpec:
     cli_model_env: str | None = None
     endpoint_env: str = ""
     api_version_env: str = ""
+    project_env: str = ""
+    location_env: str = ""
     allow_custom_models: bool = False
 
     @property
@@ -122,13 +130,13 @@ PROVIDER_SPECS: tuple[ProviderSpec, ...] = (
         value="azure-openai",
         label="Azure OpenAI",
         credential_kind="api_key",
-        api_key_env="AZURE_OPENAI_API_KEY",
+        api_key_env=AZURE_OPENAI_API_KEY_ENV,
         model_env="AZURE_OPENAI_REASONING_MODEL",
         legacy_model_env="AZURE_OPENAI_MODEL",
         toolcall_model_env="AZURE_OPENAI_TOOLCALL_MODEL",
         classification_model_env="AZURE_OPENAI_CLASSIFICATION_MODEL",
-        endpoint_env="AZURE_OPENAI_BASE_URL",
-        api_version_env="AZURE_OPENAI_API_VERSION",
+        endpoint_env=AZURE_OPENAI_BASE_URL_ENV,
+        api_version_env=AZURE_OPENAI_API_VERSION_ENV,
         allow_custom_models=True,
     ),
     ProviderSpec(
@@ -138,6 +146,17 @@ PROVIDER_SPECS: tuple[ProviderSpec, ...] = (
         model_env="BEDROCK_REASONING_MODEL",
         toolcall_model_env="BEDROCK_TOOLCALL_MODEL",
         classification_model_env="BEDROCK_CLASSIFICATION_MODEL",
+        allow_custom_models=True,
+    ),
+    ProviderSpec(
+        value="vertex-ai",
+        label="Google Vertex AI (ADC auth)",
+        credential_kind="ambient",
+        model_env="VERTEX_AI_REASONING_MODEL",
+        toolcall_model_env="VERTEX_AI_TOOLCALL_MODEL",
+        classification_model_env="VERTEX_AI_CLASSIFICATION_MODEL",
+        project_env="VERTEX_AI_PROJECT",
+        location_env="VERTEX_AI_LOCATION",
         allow_custom_models=True,
     ),
     ProviderSpec(

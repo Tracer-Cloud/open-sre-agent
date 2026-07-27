@@ -6,6 +6,7 @@ import logging
 from typing import Any, cast
 
 from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.aws.aws_sdk_client import execute_aws_sdk_call
 from integrations.rds import (
     DEFAULT_RDS_REGION,
@@ -97,12 +98,11 @@ def describe_rds_events(
             region,
             result.get("error"),
         )
-        return {
-            "source": "rds",
-            "available": False,
-            "db_instance_identifier": db_instance_identifier,
-            "error": "Failed to describe RDS events. Check server logs for details.",
-        }
+        return tool_unavailable(
+            "rds",
+            "Failed to describe RDS events. Check server logs for details.",
+            db_instance_identifier=db_instance_identifier,
+        )
 
     raw_events = (result.get("data") or {}).get("Events") or []
     events = [

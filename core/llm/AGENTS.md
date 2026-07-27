@@ -16,6 +16,7 @@ agent loop. Subprocess-backed LLM CLIs live under `integrations/llm_cli/`.
 | `core/llm/internal/client_cache_key.py` | Singleton cache invalidation key `(transport, runtime_provider)`. |
 | `core/llm/providers/openai_compat_providers.py` | OpenAI-compatible provider catalog and model/base-URL resolution. |
 | `core/llm/providers/azure_openai.py` | Azure OpenAI helpers: endpoint normalization, deployment selection, LiteLLM kwargs. |
+| `core/llm/providers/vertex_ai.py` | Vertex AI helpers: project/location resolution, LiteLLM kwargs (ambient ADC auth, no API key). |
 | `core/llm/transports/litellm/routing.py` | Per-provider LiteLLM client construction (model prefix, `api_base`, `api_version`). |
 | `core/llm/transports/litellm/clients.py` | `LiteLLMAgentClient` / `LiteLLMLLMClient` wrappers around `litellm.completion`. |
 | `core/llm/transports/sdk/agent_clients.py` | Native SDK tool-calling clients (Anthropic, OpenAI, Bedrock, CLI-backed). |
@@ -86,6 +87,19 @@ Azure uses **deployment names** (not public OpenAI model IDs) and a resource **b
 
 Do not add a separate Azure client class — extend `transports/litellm/routing.py` and helpers in
 `providers/azure_openai.py`.
+
+### Google Vertex AI (`vertex-ai`)
+
+Vertex AI authenticates via Google Application Default Credentials (ADC) — no API key:
+
+- `VERTEX_AI_PROJECT`, `VERTEX_AI_LOCATION` (defaults to `us-central1`)
+- `VERTEX_AI_*_MODEL` env vars hold Gemini model IDs served via Vertex (e.g. `gemini-2.5-pro`)
+- LiteLLM model string: `vertex_ai/<model>` via `resolve_vertex_ai_request_kwargs()`
+
+Do not add a separate Vertex client class — extend `transports/litellm/routing.py` and helpers in
+`providers/vertex_ai.py`. Like Bedrock, `credential_kind="ambient"`: OpenSRE never stores a
+Vertex secret and does not enforce a required-field precondition — a missing project surfaces
+as a LiteLLM/google-auth error at request time.
 
 For investigation tool calling details, see
 [`docs/investigation-tool-calling.md`](../../docs/investigation-tool-calling.md).

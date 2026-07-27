@@ -77,8 +77,7 @@ class SessionStore(Protocol):
 
     # --- gather caches ---
     resolved_integrations_cache: dict[str, Any] | None
-    github_repo_scope: tuple[str, str] | None
-    gitlab_repo_scope: tuple[str, str, str] | None
+    vcs_repo_scopes: dict[str, tuple[str, ...]]
 
     def record(self, kind: str, text: str, *, ok: bool = True) -> None:
         """Append a record of an executed action/turn to the session log."""
@@ -137,10 +136,17 @@ class PromptContextProvider(Protocol):
     caches, the headless adapter returns empty strings.
     """
 
+    def surface(self) -> str:
+        """Which surface this turn runs on; defaults to the interactive shell."""
+        return "interactive_shell"
+
     def cli_reference(self) -> str:
         raise NotImplementedError
 
     def agents_md(self) -> str:
+        raise NotImplementedError
+
+    def docs(self, query: str) -> str:
         raise NotImplementedError
 
     def investigation_flow(self) -> str:

@@ -54,19 +54,19 @@ def test_build_turn_plan_resolves_integrations_when_snapshot_has_none(
     assert plan.resolved_integrations == resolved
 
 
-def test_build_turn_plan_skips_resolve_when_snapshot_already_populated(
+def test_build_turn_plan_resolves_when_snapshot_is_metadata_only(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A runtime-request source can pre-fill the snapshot; then no re-resolve runs."""
-
-    def _must_not_run(_session: object) -> dict:
-        raise AssertionError("resolve must not run when the snapshot is already populated")
-
+    """Gateway chat metadata alone must not skip the real resolve."""
+    resolved = {"slack": {"bot_token": "xoxb-test"}}
     monkeypatch.setattr(
-        "core.agent_harness.turns.turn_plan.resolve_and_cache_integrations", _must_not_run
+        "core.agent_harness.turns.turn_plan.resolve_and_cache_integrations",
+        lambda _session: resolved,
     )
-    resolved = {"github": {"configured": True}}
 
-    plan = build_turn_plan(_snapshot(resolved=resolved), Session())
+    plan = build_turn_plan(
+        _snapshot(resolved={"_gateway_chat_id": "C0123ABCD"}),
+        Session(),
+    )
 
     assert plan.resolved_integrations == resolved

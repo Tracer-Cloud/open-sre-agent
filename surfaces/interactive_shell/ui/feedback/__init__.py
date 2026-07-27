@@ -156,7 +156,7 @@ def _emit_miss_classified(miss_record: dict[str, Any]) -> None:
             "rating": miss_record.get("rating", ""),
             "has_detail": bool(miss_record.get("taxonomy_detail")),
         }
-        for key in ("run_id", "alert_name", "root_cause_category", "pipeline_name"):
+        for key in ("run_id", "alert_name", "root_cause_category"):
             if miss_record.get(key):
                 props[key] = miss_record[key]
         for key in ("user_id", "org_id"):

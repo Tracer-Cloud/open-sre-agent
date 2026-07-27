@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.tool_framework.base import BaseTool
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.twilio.delivery import send_twilio_sms_report
 
 
@@ -86,13 +87,9 @@ class TwilioNotifyTool(BaseTool):
         to = to or str(sms.get("default_to") or "")
 
         if not account_sid or not auth_token:
-            return {
-                "source": "twilio",
-                "available": False,
-                "status": "failed",
-                "error": "Twilio integration is not configured.",
-                "sid": "",
-            }
+            return tool_unavailable(
+                "twilio", "Twilio integration is not configured.", status="failed", sid=""
+            )
         if not (from_number or messaging_service_sid):
             return {
                 "source": "twilio",

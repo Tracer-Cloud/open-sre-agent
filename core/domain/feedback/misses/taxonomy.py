@@ -48,7 +48,6 @@ class MissRecord(TypedDict, total=False):
     timestamp: str
     run_id: str
     alert_name: str
-    pipeline_name: str
     severity: str
     rating: str
     taxonomy: str

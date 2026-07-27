@@ -2,43 +2,9 @@
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
-from pydantic import Field, field_validator
-
 from config.strict_config import StrictConfigModel
-
-
-class IntegrationInstance(StrictConfigModel):
-    """One named instance of a provider."""
-
-    name: str = "default"
-    tags: dict[str, str] = Field(default_factory=dict)
-    credentials: dict[str, Any] = Field(default_factory=dict)
-
-    @field_validator("name", mode="before")
-    @classmethod
-    def _normalize_name(cls, value: object) -> str:
-        text = str(value or "default").strip().lower()
-        return text or "default"
-
-    @field_validator("tags", mode="before")
-    @classmethod
-    def _normalize_tags(cls, value: object) -> dict[str, str]:
-        if not isinstance(value, dict):
-            return {}
-        normalized: dict[str, str] = {}
-        for key, value_text in value.items():
-            normalized_key = str(key).strip().lower()
-            normalized_value = str(value_text).strip().lower()
-            if (
-                normalized_key
-                and normalized_value
-                and re.match(r"^[a-z][a-z0-9_-]*$", normalized_key)
-            ):
-                normalized[normalized_key] = normalized_value
-        return normalized
 
 
 class EffectiveIntegrationEntry(StrictConfigModel):
@@ -72,7 +38,9 @@ class EffectiveIntegrations(StrictConfigModel):
     google_docs: EffectiveIntegrationEntry | None = None
     gitlab: EffectiveIntegrationEntry | None = None
     vercel: EffectiveIntegrationEntry | None = None
+    railway: EffectiveIntegrationEntry | None = None
     jira: EffectiveIntegrationEntry | None = None
+    servicenow: EffectiveIntegrationEntry | None = None
     opsgenie: EffectiveIntegrationEntry | None = None
     pagerduty: EffectiveIntegrationEntry | None = None
     incident_io: EffectiveIntegrationEntry | None = None
@@ -87,6 +55,7 @@ class EffectiveIntegrations(StrictConfigModel):
     trello: EffectiveIntegrationEntry | None = None
     discord: EffectiveIntegrationEntry | None = None
     telegram: EffectiveIntegrationEntry | None = None
+    rocketchat: EffectiveIntegrationEntry | None = None
     smtp: EffectiveIntegrationEntry | None = None
     whatsapp: EffectiveIntegrationEntry | None = None
     twilio: EffectiveIntegrationEntry | None = None
@@ -110,3 +79,4 @@ class EffectiveIntegrations(StrictConfigModel):
     jenkins: EffectiveIntegrationEntry | None = None
     tempo: EffectiveIntegrationEntry | None = None
     temporal: EffectiveIntegrationEntry | None = None
+    kubernetes: EffectiveIntegrationEntry | None = None

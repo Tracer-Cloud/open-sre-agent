@@ -10,7 +10,6 @@ from tools.investigation.reporting.formatters.report import (
 def test_publish_report_includes_upstream_correlation_section() -> None:
     state = {
         "alert_name": "RDS CPU spike",
-        "pipeline_name": "rds-postgres",
         "severity": "warning",
         "root_cause": "The orders web tier is driving the RDS CPU spike.",
         "root_cause_category": "application_tier_load_spike",

@@ -850,3 +850,52 @@ def test_onboarding_hint_appears_after_version_line(tmp_path: Path) -> None:
     assert onboard_pos > installed_pos, (
         "Onboarding hint must come after the install confirmation line"
     )
+
+
+def _run_ensure_github_cli(
+    *,
+    path_dirs: list[Path],
+    env_extra: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    """Drive ``ensure_github_cli`` with a controlled PATH (no real brew/apt)."""
+    install_sh = _INSTALL_SH_SHELL
+    path_value = ":".join(str(p) for p in path_dirs)
+    env_exports = " ".join(
+        f"{key}={shlex.quote(value)}" for key, value in (env_extra or {}).items()
+    )
+    script = textwrap.dedent(f"""\
+        eval "$(awk '
+            /^[a-z_][a-z_]*\\(\\)/ {{ in_fn=1 }}
+            in_fn {{ print }}
+            in_fn && /^\\}}$/ {{ in_fn=0 }}
+        ' {install_sh})"
+        export PATH={shlex.quote(path_value)}
+        {env_exports} ensure_github_cli
+    """)
+    return subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+
+
+def test_ensure_github_cli_skips_when_gh_present(tmp_path: Path) -> None:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    gh = bin_dir / "gh"
+    gh.write_text("#!/bin/sh\necho gh\n")
+    gh.chmod(0o755)
+
+    result = _run_ensure_github_cli(path_dirs=[bin_dir])
+    assert result.returncode == 0, result.stderr
+    assert "OpenSRE GitHub chat tools" not in result.stderr
+    assert "Installing GitHub CLI" not in result.stdout
+
+
+def test_ensure_github_cli_respects_skip_env(tmp_path: Path) -> None:
+    empty_bin = tmp_path / "empty-bin"
+    empty_bin.mkdir()
+
+    result = _run_ensure_github_cli(
+        path_dirs=[empty_bin],
+        env_extra={"OPENSRE_SKIP_GH_INSTALL": "1"},
+    )
+    assert result.returncode == 0, result.stderr
+    assert "OPENSRE_SKIP_GH_INSTALL" in result.stderr
+    assert "OpenSRE GitHub chat tools" in result.stderr

@@ -392,9 +392,13 @@ def test_env_loader_failure_reports_and_skips(
     integration must be skipped (preserving the historic caller contract)
     *and* the failure must reach Sentry via ``report_exception``."""
     # Clear ambient env so other integrations on the dev box don't enable
-    # unrelated paths and inflate the assertion.
+    # unrelated paths and inflate the assertion. Disable keyring too —
+    # secret fields resolve via resolve_env_credential (env then keyring),
+    # and a wiped env without this flag can hammer a broken session keyring
+    # under xdist or leak secrets from a prior MemoryKeyring fixture.
     for var in list(os.environ):
         monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("OPENSRE_DISABLE_KEYRING", "1")
     for var, value in env.items():
         monkeypatch.setenv(var, value)
 
@@ -438,6 +442,7 @@ def test_one_failing_env_loader_does_not_abort_remaining_integrations(
     """
     for var in list(os.environ):
         monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("OPENSRE_DISABLE_KEYRING", "1")
     monkeypatch.setenv("VERCEL_API_TOKEN", "tkn")
     monkeypatch.setenv("INCIDENT_IO_API_KEY", "tkn")
 

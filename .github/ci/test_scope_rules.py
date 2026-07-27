@@ -595,7 +595,14 @@ def classify(changed: list[str]) -> tuple[bool, list[str], list[str]]:
                         targets.append(target)
             break
 
-        if not matched and path.startswith("tests/") and path not in targets:
+        # Only .py files are pytest-collectible; passing fixture/scenario data
+        # files (.json/.yml) as raw targets aborts the whole run with exit 4.
+        if (
+            not matched
+            and path.startswith("tests/")
+            and path.endswith(".py")
+            and path not in targets
+        ):
             targets.append(path)
 
     if len(areas) >= ESCALATION_AREA_THRESHOLD:

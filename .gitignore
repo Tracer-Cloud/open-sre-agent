@@ -36,6 +36,9 @@ share/python-wheels/
 *.egg
 MANIFEST
 
+# Local ephemeral workspaces (architecture audit clones, etc.)
+.temp/
+
 # Virtual environments
 venv/
 env/
@@ -184,3 +187,6 @@ opensre-ci-fix/
 *.tfstate.*
 *.tfvars
 crash.log
+
+# Local-only Cursor agent rules — never commit/push these
+.cursor/rules/local-rules.mdc

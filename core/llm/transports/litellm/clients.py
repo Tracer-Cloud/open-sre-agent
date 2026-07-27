@@ -56,6 +56,8 @@ class LiteLLMAgentClient:
         api_key_env: str | None = None,
         api_key_default: str = "",
         temperature: float | None = None,
+        vertex_project: str | None = None,
+        vertex_location: str | None = None,
         credential_resolver: Callable[[str], str] | None = None,
         completion_func: Callable[..., Any] | None = None,
     ) -> None:
@@ -66,6 +68,8 @@ class LiteLLMAgentClient:
         self._api_key_env = api_key_env
         self._api_key_default = api_key_default
         self._temperature = temperature
+        self._vertex_project = vertex_project
+        self._vertex_location = vertex_location
         self._credential_resolver = credential_resolver
         self._completion_func = completion_func
 
@@ -86,9 +90,9 @@ class LiteLLMAgentClient:
             return None
         if self._credential_resolver is not None:
             return self._credential_resolver(self._api_key_env) or self._api_key_default
-        from config.llm_credentials import resolve_llm_api_key
+        from config.llm_credentials import resolve_env_credential
 
-        return resolve_llm_api_key(self._api_key_env) or self._api_key_default
+        return resolve_env_credential(self._api_key_env) or self._api_key_default
 
     def _build_request_kwargs(
         self,
@@ -112,6 +116,10 @@ class LiteLLMAgentClient:
             kwargs["api_version"] = self._api_version
         if self._temperature is not None:
             kwargs["temperature"] = self._temperature
+        if self._vertex_project is not None:
+            kwargs["vertex_project"] = self._vertex_project
+        if self._vertex_location is not None:
+            kwargs["vertex_location"] = self._vertex_location
         if tools:
             kwargs["tools"] = tools
             kwargs["tool_choice"] = "auto"
@@ -156,6 +164,8 @@ class LiteLLMLLMClient:
         api_version: str | None = None,
         api_key_env: str | None = None,
         api_key_default: str = "",
+        vertex_project: str | None = None,
+        vertex_location: str | None = None,
         credential_resolver: Callable[[str], str] | None = None,
         completion_func: Callable[..., Any] | None = None,
         usage_callback: Callable[[str, int | None, int | None], object] | None = None,
@@ -169,10 +179,11 @@ class LiteLLMLLMClient:
         self._api_version = api_version
         self._api_key_env = api_key_env
         self._api_key_default = api_key_default
+        self._vertex_project = vertex_project
+        self._vertex_location = vertex_location
         self._credential_resolver = credential_resolver
         self._completion_func = completion_func
         self._usage_callback = usage_callback
-        self._bound_tools: list[dict[str, Any]] = []
         label = (api_key_env or "").removesuffix("_API_KEY").replace("_", " ").title()
         self._provider_label = label or "LiteLLM"
 
@@ -181,10 +192,6 @@ class LiteLLMLLMClient:
 
     def with_structured_output(self, model: type[BaseModel]) -> StructuredOutputClient:
         return StructuredOutputClient(self, model)
-
-    def bind_tools(self, tools: list[dict[str, Any]]) -> LiteLLMLLMClient:
-        self._bound_tools = [dict(item) for item in tools]
-        return self
 
     def _completion(self, **kwargs: Any) -> Any:
         if self._completion_func is not None:
@@ -196,9 +203,9 @@ class LiteLLMLLMClient:
             return None
         if self._credential_resolver is not None:
             return self._credential_resolver(self._api_key_env) or self._api_key_default
-        from config.llm_credentials import resolve_llm_api_key
+        from config.llm_credentials import resolve_env_credential
 
-        return resolve_llm_api_key(self._api_key_env) or self._api_key_default
+        return resolve_env_credential(self._api_key_env) or self._api_key_default
 
     def _activate_model_fallback(self) -> bool:
         fallback = self._model_fallback
@@ -236,9 +243,10 @@ class LiteLLMLLMClient:
             kwargs["api_version"] = self._api_version
         if self._temperature is not None:
             kwargs["temperature"] = self._temperature
-        if self._bound_tools:
-            kwargs["tools"] = self._bound_tools
-            kwargs["tool_choice"] = "auto"
+        if self._vertex_project is not None:
+            kwargs["vertex_project"] = self._vertex_project
+        if self._vertex_location is not None:
+            kwargs["vertex_location"] = self._vertex_location
         return kwargs
 
     def _rebuild_after_model_fallback(self, prompt_or_messages: Any) -> dict[str, Any] | None:
@@ -258,7 +266,7 @@ class LiteLLMLLMClient:
         return llm_response_from_completion(
             response,
             model=self._litellm_model,
-            bound_tools=bool(self._bound_tools),
+            bound_tools=False,
             usage_emit=self._usage_callback,
         )
 

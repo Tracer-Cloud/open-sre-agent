@@ -25,7 +25,7 @@ def sample_state() -> dict[str, Any]:
     return {
         "organization_slug": "test-org",
         "raw_alert": {},
-        "slack_context": {},
+        "channel_contexts": {},
     }
 
 
@@ -84,7 +84,7 @@ class TestResolveSource:
     def test_falls_back_to_slack_when_team_id(self) -> None:
         state: dict[str, Any] = {
             "raw_alert": {},
-            "slack_context": {"team_id": "T123"},
+            "channel_contexts": {"slack": {"team_id": "T123"}},
         }
         assert ingest_delivery._resolve_source(state) == "slack"
 
@@ -92,13 +92,13 @@ class TestResolveSource:
         assert ingest_delivery._resolve_source({}) == "tracer"
 
     def test_raw_alert_non_dict_falls_through(self) -> None:
-        state: dict[str, Any] = {"raw_alert": "not-a-dict", "slack_context": {}}
+        state: dict[str, Any] = {"raw_alert": "not-a-dict", "channel_contexts": {}}
         assert ingest_delivery._resolve_source(state) == "tracer"
 
     def test_raw_alert_source_takes_precedence_over_slack(self) -> None:
         state: dict[str, Any] = {
             "raw_alert": {"source": "grafana"},
-            "slack_context": {"team_id": "T123"},
+            "channel_contexts": {"slack": {"team_id": "T123"}},
         }
         assert ingest_delivery._resolve_source(state) == "grafana"
 
@@ -112,21 +112,21 @@ class TestResolveThreadId:
     def test_explicit_thread_id_wins(self) -> None:
         state: dict[str, Any] = {
             "thread_id": "t-1",
-            "slack_context": {"thread_ts": "1.0", "ts": "2.0"},
+            "channel_contexts": {"slack": {"thread_ts": "1.0", "ts": "2.0"}},
             "run_id": "r-9",
         }
         assert ingest_delivery._resolve_thread_id(state) == "t-1"
 
     def test_falls_back_to_slack_thread_ts(self) -> None:
-        state: dict[str, Any] = {"slack_context": {"thread_ts": "1.0", "ts": "2.0"}}
+        state: dict[str, Any] = {"channel_contexts": {"slack": {"thread_ts": "1.0", "ts": "2.0"}}}
         assert ingest_delivery._resolve_thread_id(state) == "1.0"
 
     def test_falls_back_to_slack_ts_when_no_thread_ts(self) -> None:
-        state: dict[str, Any] = {"slack_context": {"ts": "2.0"}}
+        state: dict[str, Any] = {"channel_contexts": {"slack": {"ts": "2.0"}}}
         assert ingest_delivery._resolve_thread_id(state) == "2.0"
 
     def test_falls_back_to_run_id(self) -> None:
-        state: dict[str, Any] = {"slack_context": {}, "run_id": "r-9"}
+        state: dict[str, Any] = {"channel_contexts": {}, "run_id": "r-9"}
         assert ingest_delivery._resolve_thread_id(state) == "r-9"
 
     def test_returns_empty_string_when_nothing_set(self) -> None:
@@ -142,10 +142,9 @@ class TestBuildIngestPayload:
     def test_full_payload_shape(self) -> None:
         state: dict[str, Any] = {
             "org_id": "org-1",
-            "alert_name": "checkout-api 5xx",
-            "pipeline_name": "p-1",
             "severity": "Critical",
             "summary": "rate of 5xx spiked",
+            "alert_name": "checkout-api 5xx",
             "raw_alert": {"source": "datadog", "fingerprint": "fp-1", "fired_at": "ts"},
             "root_cause": "rds disk full",
             "validity_score": 87,
@@ -160,7 +159,7 @@ class TestBuildIngestPayload:
         meta = payload["metadata"]
         assert out["org_id"] == "org-1"
         assert out["alert_name"] == "checkout-api 5xx"
-        assert out["pipeline_name"] == "p-1"
+        assert "pipeline_name" not in out
         assert out["severity"] == "critical"
         assert out["summary"] == "rate of 5xx spiked"
         assert out["raw_alert"]["fingerprint"] == "fp-1"

@@ -11,6 +11,7 @@ on:
       - "integrations/**"
       - "platform/**"
       - "tools/**"
+      - "gateway/**"
       - "tests/**"
       - "pyproject.toml"
       - "uv.lock"
@@ -33,6 +34,7 @@ on:
       - "integrations/**"
       - "platform/**"
       - "tools/**"
+      - "gateway/**"
       - "tests/**"
       - "pyproject.toml"
       - "uv.lock"
@@ -50,7 +52,7 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-  PYTHON_SOURCE_PATHS: "config core integrations platform surfaces tools"
+  PYTHON_SOURCE_PATHS: "config core gateway integrations platform surfaces tools"
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -95,6 +97,9 @@ jobs:
 
       - name: Typecheck
         run: uv run python -m mypy $PYTHON_SOURCE_PATHS
+
+      - name: Verify integration registry (smoke)
+        run: make verify-integrations-smoke
 
       - name: Import graph
         run: uv run python .github/ci/check_imports.py --strict
@@ -252,6 +257,7 @@ jobs:
           --cov=platform
           --cov=surfaces
           --cov=tools
+          --cov=gateway
           --cov-report=
           --ignore=tests/e2e/kubernetes_local_alert_simulation
           --ignore=tests/synthetic

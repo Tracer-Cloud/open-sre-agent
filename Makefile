@@ -2,7 +2,7 @@
 export
 
 .PHONY: install build onboard demo benchmark benchmark-update-readme \
-	alert-template investigate-alert verify-integrations check-docker \
+	alert-template investigate-alert verify-integrations verify-integrations-smoke check-docker \
 	grafana-local-up grafana-local-down grafana-local-seed \
 	cloudwatch-demo datadog-demo crashloop-demo prefect-demo \
 	flink-demo upstream-downstream \
@@ -22,7 +22,7 @@ export
 	rabbitmq-local-up rabbitmq-local-down test-rabbitmq-real \
 	test-openclaw test-openclaw-synthetic \
 	test-hermes test-hermes-synthetic test-hermes-synthetic-only refresh-hermes-tuples \
-	clean lint format-check format typecheck \
+	clean lint format-check format typecheck vulture \
 	check-imports check-cycles check-layers check-imports-strict check-layers-strict check help
 
 
@@ -91,6 +91,11 @@ CLOUDOPSBENCH_LIMIT ?=
 
 verify-integrations:
 	uv run opensre integrations verify $(if $(SERVICE),$(SERVICE),) $(if $(SLACK_TEST),--send-slack-test,)
+
+verify-integrations-smoke:
+	$(PYTHON) -m pytest -q \
+	  tests/integrations/test_verification_registry.py \
+	  tests/integrations/test_registry.py
 
 check-docker:
 	@command -v docker >/dev/null 2>&1 || { echo "Docker is required for the live local Grafana stack. Install Docker Desktop or another Docker-compatible runtime, then rerun this target."; exit 1; }
@@ -292,21 +297,6 @@ deploy:
 destroy:
 	$(PYTHON) -m platform.deployment.ecr_deploy.lifecycle destroy
 
-# Fargate backend (web API + Slack gateway) via Terraform — plan by default;
-# apply/destroy prompt for confirmation inside Terraform.
-TERRAFORM_DIR := infra/terraform
-
-deploy-fargate:
-	terraform -chdir=$(TERRAFORM_DIR) init -input=false
-	terraform -chdir=$(TERRAFORM_DIR) plan
-
-deploy-fargate-apply:
-	terraform -chdir=$(TERRAFORM_DIR) init -input=false
-	terraform -chdir=$(TERRAFORM_DIR) apply
-
-destroy-fargate:
-	terraform -chdir=$(TERRAFORM_DIR) destroy
-
 test-deploy:
 	$(PYTHON) -m pytest tests/deployment/ec2/ -v -s
 
@@ -478,6 +468,10 @@ format:
 typecheck:
 	$(PYTHON) -m mypy $(PYTHON_SOURCE_PATHS)
 
+# Dead-code scan (reads [tool.vulture] from pyproject.toml; advisory only, not in CI)
+vulture:
+	$(PYTHON) -m vulture
+
 # Import graph: cycles + layering + forbidden direct edges (one command).
 check-imports:
 	$(PYTHON) .github/ci/check_imports.py
@@ -524,6 +518,7 @@ help:
 	@echo "  make alert-template TEMPLATE=datadog - Print a starter alert JSON template"
 	@echo "  make investigate-alert ALERT=/path/to/alert.json - Run RCA against your own alert payload"
 	@echo "  make verify-integrations - Check local store + .env integrations before running RCA"
+	@echo "  make verify-integrations-smoke - Fast registry/catalog contract tests (CI smoke gate)"
 	@echo "  make prefect-demo    - Run Prefect ECS Fargate E2E test (alias for demo)"
 	@echo "  make prefect-local-test - Run Prefect ECS local test (CLOUD=1 for ECS)"
 	@echo "  make flink-demo      - Run Apache Flink ECS E2E test"

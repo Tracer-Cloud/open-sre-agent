@@ -127,15 +127,6 @@ def load_remote_url(path: Path | None = None) -> str | None:
     return url
 
 
-def save_remote_url(url: str, path: Path | None = None) -> None:
-    """Persist the remote agent URL to the store."""
-    store_path = path or get_store_path()
-    data = _load_raw(store_path)
-    data.setdefault("remote", {})["url"] = url
-    store_path.parent.mkdir(parents=True, exist_ok=True)
-    store_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-
-
 # Re-exported from ``config.remote_store`` so layers below ``surfaces/`` can read this
 # without crossing the surfaces boundary. Existing callers + test mocks that target
 # ``surfaces.cli.wizard.store.load_named_remotes`` keep working unchanged.
@@ -181,31 +172,6 @@ def delete_named_remote(name: str, path: Path | None = None) -> None:
         remote_section.pop("active_name", None)
     store_path.parent.mkdir(parents=True, exist_ok=True)
     store_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-
-
-def set_active_remote(name: str, path: Path | None = None) -> str:
-    """Switch the active remote to *name*. Returns the URL."""
-    store_path = path or get_store_path()
-    data = _load_raw(store_path)
-    remotes: dict[str, Any] = data.get("remote", {}).get("remotes", {})
-    entry = remotes.get(name)
-    if not entry or not entry.get("url"):
-        raise KeyError(f"No remote named '{name}'")
-
-    url: str = str(entry["url"])
-    remote_section = data.setdefault("remote", {})
-    remote_section["url"] = url
-    remote_section["active_name"] = name
-    store_path.parent.mkdir(parents=True, exist_ok=True)
-    store_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-    return url
-
-
-def load_active_remote_name(path: Path | None = None) -> str | None:
-    """Return the name of the currently active remote, or ``None``."""
-    data = _load_raw(path)
-    name: str | None = data.get("remote", {}).get("active_name") or None
-    return name
 
 
 # Re-exported from ``config.remote_store`` — see the comment above

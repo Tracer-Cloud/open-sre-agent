@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from core.tool_framework.telemetry import report_run_error
 from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.mcp_bridge import unavailable_response
 from core.tool_framework.utils.mcp_params import first_list, first_string
 from core.tool_framework.utils.mcp_tool_listing import build_mcp_tool_listing
 from integrations.sentry_mcp import (
@@ -36,16 +37,7 @@ def _unavailable_response(
     tool_name: str | None = None,
     arguments: SentryMCPParams | None = None,
 ) -> SentryMCPResponse:
-    payload: SentryMCPResponse = {
-        "source": "sentry_mcp",
-        "available": False,
-        "error": error,
-    }
-    if tool_name:
-        payload["tool"] = tool_name
-    if arguments is not None:
-        payload["arguments"] = arguments
-    return payload
+    return unavailable_response("sentry_mcp", error, tool_name=tool_name, arguments=arguments)
 
 
 def _resolve_config(

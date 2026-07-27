@@ -1,3 +1,29 @@
+/* OpenSRE docs site overrides. Loaded via docs.json styles. */
+
+@font-face {
+    font-family: "Britti Sans Trial";
+    src: url("/essentials/fonts/BrittiSansTrial-Regular.otf") format("opentype");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Britti Sans Trial";
+    src: url("/essentials/fonts/BrittiSansTrial-Semibold.otf") format("opentype");
+    font-weight: 500;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Britti Sans Trial";
+    src: url("/essentials/fonts/BrittiSansTrial-Bold.otf") format("opentype");
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+}
+
 /* Keep this file minimal. Prefer Mintlify defaults + `sidebar.css`. */
 
 /* Radar chart helpers (used by `radar-chart.js`). */
@@ -76,61 +102,6 @@ html.dark .toc-custom-actions {
     padding-left: 0.25rem;
     font-size: 0.875rem;
     line-height: 1.75rem;
-}
-
-/* Radar chart helpers (used by `radar-chart.js`). */
-.radar-chart-container {
-    max-width: 100%;
-    margin: 2rem auto;
-    padding: 20px 30px;
-}
-
-.radar-chart-legend {
-    display: flex;
-    justify-content: center;
-    gap: 2rem;
-    margin-bottom: 1.5rem;
-    flex-wrap: wrap;
-}
-
-.radar-legend-item {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 0.875rem;
-    font-weight: 500;
-}
-
-.radar-legend-color {
-    width: 16px;
-    height: 16px;
-    border-radius: 2px;
-}
-
-.radar-tooltip {
-    position: absolute;
-    background: white;
-    border: 1px solid #e5e7eb;
-    border-radius: 0.25rem;
-    padding: 12px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.2s;
-    max-width: 300px;
-    z-index: 1000;
-    color: #374151;
-}
-
-.radar-tooltip.show {
-    opacity: 1;
-}
-
-html.dark .radar-tooltip {
-    background: #0a0a0a;
-    border-color: #262626;
-    color: #ffffff;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.5);
 }
 /* Fonts are loaded via docs.json configuration - Mintlify applies them automatically */
 
@@ -629,39 +600,6 @@ body {
 
 /* Add copyright text to footer - removed, using HTML approach instead */
 
-/* Style for custom TOC actions */
-.toc-custom-actions {
-    margin-top: 1rem;
-    padding-top: 0.75rem;
-    border-top: 1px solid rgba(0, 0, 0, 0.1);
-}
-
-html.dark .toc-custom-actions {
-    border-top-color: rgba(255, 255, 255, 0.1);
-}
-
-.toc-custom-action {
-    display: block;
-    font-size: 0.875rem;
-    line-height: 1.75rem;
-    color: #6b7280;
-    cursor: pointer;
-    transition: color 0.2s;
-    text-decoration: none;
-}
-
-.toc-custom-action:hover {
-    color: #171717;
-}
-
-html.dark .toc-custom-action {
-    color: #9ca3af;
-}
-
-html.dark .toc-custom-action:hover {
-    color: #ffffff;
-}
-
 /* SVG icon colors for TOC actions */
 .toc-action-icon path {
     fill: #444444;
@@ -771,14 +709,6 @@ div[class*="callout" i] *:not(code):not(pre):not(pre *) {
 details *:not(code):not(pre):not(pre *),
 summary {
     font-family: "Britti Sans Trial", sans-serif !important;
-}
-
-/* Hide navigation group titles */
-#sidebar [class*="group-title" i],
-#sidebar h3,
-#navigation-items [class*="group-title" i],
-#navigation-items h3 {
-    display: none !important;
 }
 
 /* Transparent table borders */
@@ -1550,61 +1480,6 @@ html.dark #navigation-items a[href*="sign-up"]:hover svg {
     color: #ffffff !important;
     fill: none !important;
     stroke: #ffffff !important;
-}
-
-/* Radar Chart Styles */
-.radar-chart-container {
-    max-width: 100%;
-    margin: 2rem auto;
-    padding: 20px 30px;
-}
-
-.radar-chart-legend {
-    display: flex;
-    justify-content: center;
-    gap: 2rem;
-    margin-bottom: 1.5rem;
-    flex-wrap: wrap;
-}
-
-.radar-legend-item {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 0.875rem;
-    font-weight: 500;
-}
-
-.radar-legend-color {
-    width: 16px;
-    height: 16px;
-    border-radius: 2px;
-}
-
-.radar-tooltip {
-    position: absolute;
-    background: white;
-    border: 1px solid #e5e7eb;
-    border-radius: 0.125rem;
-    padding: 12px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.2s;
-    max-width: 300px;
-    z-index: 1000;
-    color: #374151;
-}
-
-.radar-tooltip.show {
-    opacity: 1;
-}
-
-html.dark .radar-tooltip {
-    background: #0a0a0a;
-    border-color: #262626;
-    color: #ffffff;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.5);
 }
 
 .tooltip-title {

@@ -112,13 +112,28 @@ def load_env_integration_services() -> list[str]:
         ),
     )
     add("helm", os.getenv("OSRE_HELM_INTEGRATION", "").strip().lower() in {"1", "true", "yes"})
+    add(
+        "railway",
+        _env_is_set("RAILWAY_TOKEN")
+        or _all_env("RAILWAY_PROJECT", "RAILWAY_SERVICE", "RAILWAY_ENVIRONMENT"),
+    )
     add("vercel", _env_is_set("VERCEL_API_TOKEN"))
     add("opsgenie", _env_is_set("OPSGENIE_API_KEY"))
     add("pagerduty", _env_is_set("PAGERDUTY_API_KEY"))
     add("incident_io", _env_is_set("INCIDENT_IO_API_KEY"))
     add("jira", _all_env("JIRA_BASE_URL", "JIRA_EMAIL", "JIRA_API_TOKEN"))
+    add(
+        "servicenow",
+        _all_env("SERVICENOW_INSTANCE_URL", "SERVICENOW_USERNAME", "SERVICENOW_PASSWORD"),
+    )
     add("discord", _env_is_set("DISCORD_BOT_TOKEN"))
     add("telegram", _env_is_set("TELEGRAM_BOT_TOKEN"))
+    add(
+        "rocketchat",
+        _all_env("ROCKETCHAT_SERVER_URL", "ROCKETCHAT_AUTH_TOKEN", "ROCKETCHAT_USER_ID")
+        or _env_is_set("ROCKETCHAT_WEBHOOK_URL"),
+    )
+    add("slack", _any_env("SLACK_BOT_TOKEN", "SLACK_ACCESS_TOKEN"))
     add("smtp", _env_is_set("SMTP_HOST"))
     add("whatsapp", _all_env("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_WHATSAPP_FROM"))
     add(
@@ -159,6 +174,15 @@ def configured_integration_services() -> list[str]:
     login). Never raises; returns an empty list on any failure so callers can
     treat it as best-effort.
     """
+    try:
+        store_records = load_integrations()
+    except Exception:
+        store_records = []
+    return _configured_service_names(store_records=store_records)
+
+
+def _configured_service_names(*, store_records: list[dict[str, Any]]) -> list[str]:
+    """Merge env-visible and active store services into one deduplicated list."""
     services: list[str] = []
 
     try:
@@ -170,10 +194,6 @@ def configured_integration_services() -> list[str]:
         if service:
             services.append(service)
 
-    try:
-        store_records = load_integrations()
-    except Exception:
-        store_records = []
     for record in store_records:
         if str(record.get("status", "active")).strip().lower() != "active":
             continue
@@ -181,7 +201,7 @@ def configured_integration_services() -> list[str]:
         if service:
             services.append(service)
 
-    return list(dict.fromkeys(services))  # deduplicate, preserve order
+    return list(dict.fromkeys(services))
 
 
 # Hosted MCP integrations that strictly require a personal API token when not
@@ -217,15 +237,16 @@ def configured_integration_health() -> list[tuple[str, str]]:
     Performs no network verification (startup stays fast) and never raises; on
     any failure each service falls back to ``"ok"`` so the banner still lists it.
     """
-    services = configured_integration_services()
-    if not services:
-        return []
-
-    store_config_by_service: dict[str, dict[str, Any]] = {}
     try:
         store_records = load_integrations()
     except Exception:
         store_records = []
+
+    services = _configured_service_names(store_records=store_records)
+    if not services:
+        return []
+
+    store_config_by_service: dict[str, dict[str, Any]] = {}
     for record in store_records:
         if str(record.get("status", "active")).strip().lower() != "active":
             continue

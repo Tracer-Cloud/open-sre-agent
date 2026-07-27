@@ -114,19 +114,3 @@ def load_credentials_from_env(
         )
 
     return TelegramCredentials(bot_token=bot_token, chat_id=chat_id)
-
-
-def resolve_telegram_bot_token(
-    task_params: dict[str, str] | None = None,
-) -> str:
-    """Resolve the Telegram bot token from task params, store, env, or keyring.
-
-    Priority: task params > store config > env var > system keyring.
-    """
-    if task_params:
-        token = task_params.get("bot_token", "").strip()
-        if token:
-            return token
-
-    store_config = _telegram_store_config()
-    return _resolve_bot_token(store_config)

@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.tool_framework.base import BaseTool
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.config_models import CoralogixIntegrationConfig
 from integrations.coralogix.client import (
     CoralogixClient,
@@ -99,12 +100,9 @@ class CoralogixLogsTool(BaseTool):
         )
         client = CoralogixClient(config)
         if not client.is_configured:
-            return {
-                "source": "coralogix_logs",
-                "available": False,
-                "error": "Coralogix integration is not configured.",
-                "logs": [],
-            }
+            return tool_unavailable(
+                "coralogix_logs", "Coralogix integration is not configured.", logs=[]
+            )
 
         built_query = build_coralogix_logs_query(
             raw_query=query,
@@ -119,12 +117,7 @@ class CoralogixLogsTool(BaseTool):
             limit=limit,
         )
         if not result.get("success"):
-            return {
-                "source": "coralogix_logs",
-                "available": False,
-                "error": result.get("error", "Unknown error"),
-                "logs": [],
-            }
+            return tool_unavailable("coralogix_logs", result.get("error", "Unknown error"), logs=[])
 
         logs = result.get("logs", [])
         error_logs = [

@@ -17,8 +17,9 @@ via long polling, and Slack mentions/DMs via Socket Mode.
 
 | What you want | File / symbol | How it is started |
 |---------------|---------------|-------------------|
-| **Package main** | `gateway/main.py` → `main()` | `python -m gateway.main` or `opensre gateway start` |
-| **Composition root (impl)** | `gateway/runtime/manager.py` → `GatewayManager` / `main()` | Called by `gateway.main` |
+| **Package main** | `gateway/main.py` → `main()` | `python -m gateway.main` (manager only) |
+| **Production entry** | `surfaces/cli/gateway_entry.py` → `main()` | Daemon / `opensre gateway start` (wires slash ports) |
+| **Composition root (impl)** | `gateway/runtime/manager.py` → `GatewayManager` / `main()` | Called by the entry modules |
 | **Background daemon helpers** | `gateway/runtime/daemon.py` | Used by CLI `gateway start/stop/status` (pidfile + `components.json`) |
 | **HTTP API (web-only task)** | `gateway/http/webapp.py` → `app` | `uvicorn gateway.http.webapp:app` (`MODE=web` in Docker) |
 | **Telegram transport** | `gateway/telegram/wiring.py` → `start_telegram_worker` | Started by `GatewayManager._start_telegram` |
@@ -30,10 +31,10 @@ opensre gateway start
         │
         ▼
 gateway.runtime.daemon.start_gateway_daemon
-        │  spawns: python -m gateway.main
+        │  spawns: python -m surfaces.cli.gateway_entry
         ▼
-gateway/main.py
-        │
+surfaces/cli/gateway_entry.py
+        │  wires headless slash ports
         ▼
 gateway.runtime.manager.GatewayManager.start_gateway
         ├── http/web_server  →  http/webapp:app
@@ -55,16 +56,18 @@ Three things that are easy to mix up:
   **gateway** (`gateway/`, you chat with the agent from a chat app).
 - **Gateway** — one specific surface: the always-on process that connects a chat app
   to the agent. It speaks **Telegram** (long poll) and **Slack** (Socket Mode).
-- **Integrations + tools** — the *outbound* side: the agent sending a message *out*
-  to a channel. `integrations/telegram` and `integrations/slack` deliver messages;
-  the agent calls the `telegram_send_message` / `slack_send_message` tools to do it.
+- **Integrations + tools** — the *outbound* / teammate side: the agent reading and
+  posting in Slack. Shared client: `integrations/slack/web_client.py`. Tools:
+  `slack_send_message` (webhook), `slack_reply_message` (bot token, any channel),
+  `slack_read_messages` (history / thread), `slack_list_team_members` (roster).
+  See `docs/messaging/slack.mdx` for OAuth scopes.
 
 Both platforms are symmetric:
 
-| | Inbound (person → agent) | Outbound (agent → channel) |
+| | Inbound (person → agent) | Outbound / teammate tools |
 |---|---|---|
 | **Telegram** | Yes — `gateway/telegram/` | Yes — integration + tool |
-| **Slack** | Yes — `gateway/slack/` (Socket Mode; each thread is a conversation) | Yes — integration + tool |
+| **Slack** | Yes — `gateway/slack/` (Socket Mode; each thread is a conversation) | Yes — webhook + bot-token tools |
 
 **One core for every surface.** Shell, CLI, and the gateway transports all hand the
 message to the same place: a `HeadlessAgent` (`agent.dispatch(message)`). They differ

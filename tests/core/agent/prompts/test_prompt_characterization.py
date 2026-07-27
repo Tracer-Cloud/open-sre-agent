@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from pathlib import Path
 from typing import Any
 
@@ -58,11 +59,17 @@ class _StubPromptContextProvider:
         self._configured_integrations = configured_integrations
         self._configured_integrations_known = configured_integrations_known
 
+    def surface(self) -> str:
+        return "interactive_shell"
+
     def cli_reference(self) -> str:
         return _CLI_REFERENCE_TEXT
 
     def agents_md(self) -> str:
         return _AGENTS_MD_TEXT
+
+    def docs(self, query: str) -> str:  # noqa: ARG002 - stub
+        return ""
 
     def investigation_flow(self) -> str:
         return build_investigation_flow_reference_text()
@@ -175,6 +182,10 @@ def _build_cases(tmp_path: Path) -> dict[str, str]:
             configured_integrations_known=True,
             conversation_messages=convo,
             last_state={
+                # Inside the recall window so the prior-investigation block still
+                # renders. The stamp gates recall only; it is never rendered, so
+                # the snapshot stays deterministic.
+                "investigation_started_at": time.monotonic(),
                 "alert_name": "Checkout 500s",
                 "root_cause": "DB connection pool exhausted",
                 "problem_md": "Checkout returned 500s after deploy.",

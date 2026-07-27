@@ -34,11 +34,24 @@ from core.domain.alerts.inbox import (
 ensure_project_platform_package()
 
 from gateway.http.investigations import router as investigations_router  # noqa: E402
+from integrations.harness_adapters import (  # noqa: E402
+    register_harness_adapters as _register_integration_adapters,
+)
 from platform.observability.errors.sentry import capture_exception, init_sentry  # noqa: E402
+from tools.harness_adapters import (  # noqa: E402
+    register_harness_adapters as _register_tool_adapters,
+)
 from tools.investigation.capability import (  # noqa: E402
     resolve_investigation_context,
     run_investigation_payload,
 )
+
+# Mirror shell/gateway boot: /investigate runs the full pipeline, which reads the
+# vendor registries (alert-source routing, incident anchors, taxonomy, alert
+# detail fields). Without this they stay empty and degrade silently. Registering
+# here rather than via surfaces.boundary keeps gateway off a surfaces import.
+_register_integration_adapters()
+_register_tool_adapters()
 
 init_sentry(entrypoint="webapp")
 
@@ -153,7 +166,14 @@ async def receive_alert(request: Request) -> JSONResponse:
             data["received_at"] = datetime.now(UTC)
         alert = IncomingAlert.model_validate(data)
     except (TypeError, ValidationError, ValueError) as exc:
-        return JSONResponse({"error": str(exc)}, status_code=400)
+        # Expected client error: log the full detail, return only the exception
+        # type (payload field names and model internals stay out of the
+        # response), and skip Sentry capture for routine 400s.
+        logger.warning("Alert payload rejected (%s): %s", type(exc).__name__, exc)
+        return JSONResponse(
+            {"error": f"invalid alert payload: {type(exc).__name__}"},
+            status_code=400,
+        )
 
     inbox = _alert_inbox()
     accepted = inbox.put(alert)
@@ -167,7 +187,6 @@ async def receive_alert(request: Request) -> JSONResponse:
 class InvestigateRequest(BaseModel):
     raw_alert: dict[str, Any]
     alert_name: str | None = None
-    pipeline_name: str | None = None
     severity: str | None = None
 
 
@@ -195,7 +214,6 @@ def investigate(req: InvestigateRequest, request: Request) -> InvestigateRespons
     investigation_metadata = resolve_investigation_context(
         raw_alert=req.raw_alert,
         alert_name=req.alert_name,
-        pipeline_name=req.pipeline_name,
         severity=req.severity,
     )
     try:

@@ -11,6 +11,7 @@ import logging
 from typing import Any, cast
 
 from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.aws.availability import ec2_available_or_backend
 from integrations.aws.aws_sdk_client import execute_aws_sdk_call
 from integrations.aws.topology_helper import (
@@ -134,11 +135,7 @@ def ec2_instances_by_tag(
         parameters["Filters"] = filters
 
     if not filters and not instance_ids:
-        return {
-            "source": "ec2",
-            "available": False,
-            "error": "tier, instance_ids, or vpc_id is required",
-        }
+        return tool_unavailable("ec2", "tier, instance_ids, or vpc_id is required")
 
     instances: list[dict[str, Any]] = []
     truncated = False
@@ -153,11 +150,9 @@ def ec2_instances_by_tag(
             region=region,
         )
         if not result.get("success"):
-            return {
-                "source": "ec2",
-                "available": False,
-                "error": "Failed to describe EC2 instances. Check server logs for details.",
-            }
+            return tool_unavailable(
+                "ec2", "Failed to describe EC2 instances. Check server logs for details."
+            )
         data = result.get("data") or {}
         for reservation in data.get("Reservations") or []:
             for raw in reservation.get("Instances", []) or []:

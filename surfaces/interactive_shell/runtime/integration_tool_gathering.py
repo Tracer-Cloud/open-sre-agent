@@ -21,7 +21,7 @@ from core.agent_harness.turns.evidence_driver import GatherAgentFactory
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui import DIM
 from surfaces.interactive_shell.utils.error_handling.exception_reporting import report_exception
-from surfaces.shared.tool_labels import tool_short_label, tool_source_label
+from tools.registry import resolve_tool_activity_labels
 
 # Cap so a chatty tool result can't blow up persistence writes.
 _MAX_PER_TOOL_CHARS = 4_000
@@ -90,8 +90,7 @@ def _format_gathering_progress_line(
     *,
     repeat_index: int,
 ) -> str:
-    source = tool_source_label(tool_name)
-    label = tool_short_label(tool_name, source)
+    source, label = resolve_tool_activity_labels(tool_name)
     call_display = f"{source} · {label}" if label else source
     if repeat_index > 1:
         call_display = f"{call_display} ({repeat_index})"

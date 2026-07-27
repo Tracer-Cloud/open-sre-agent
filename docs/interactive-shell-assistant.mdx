@@ -21,6 +21,17 @@ You can name the repository inline (`… in https://github.com/org/repo`), menti
 
 The dim `· gathering via <source> · <tool> — <query hint>…` line shows which integration the assistant reached for while it works. When the same tool runs more than once, a `(2)`, `(3)`, … suffix and the query hint distinguish each call.
 
+### End-to-end example
+
+```text
+> what do the datadog logs say about payment-service errors in the last hour?
+· gathering via Datadog · query logs — payment-service errors…
+Found 847 error log lines in the last hour for service:payment-service.
+Top pattern: ConnectionTimeout to postgres-primary (412 occurrences)…
+```
+
+Prerequisites: Datadog connected (`opensre integrations verify datadog`) and `LLM_PROVIDER` configured. Run `/health` if gathering does not start.
+
 More questions that trigger live gathering:
 
 | You ask | The assistant gathers from |

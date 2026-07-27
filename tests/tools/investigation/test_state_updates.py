@@ -7,10 +7,10 @@ from core.state.updates import apply_state_updates
 
 
 def test_apply_state_updates_last_write_wins() -> None:
-    state: AgentState = {"alert_name": "before"}
-    apply_state_updates(state, {"alert_name": "after", "severity": "critical"})
-    assert state["alert_name"] == "after"
-    assert state["severity"] == "critical"
+    state: AgentState = {"severity": "before"}
+    apply_state_updates(state, {"severity": "after", "root_cause": "oom"})
+    assert state["severity"] == "after"
+    assert state["root_cause"] == "oom"
 
 
 def test_apply_state_updates_appends_message_list() -> None:
@@ -29,7 +29,7 @@ def test_apply_state_updates_appends_single_message() -> None:
 
 
 def test_apply_state_updates_noop_on_empty_updates() -> None:
-    state: AgentState = {"alert_name": "unchanged"}
+    state: AgentState = {"severity": "unchanged"}
     apply_state_updates(state, {})
     apply_state_updates(state, None)
-    assert state == {"alert_name": "unchanged"}
+    assert state == {"severity": "unchanged"}

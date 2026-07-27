@@ -8,6 +8,7 @@ import httpx
 
 from core.tool_framework.telemetry import report_run_error
 from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.tool_availability import tool_unavailable
 
 _DEFAULT_MAX_RESULTS = 100
 _MAX_HARD_LIMIT = 200
@@ -90,12 +91,7 @@ def query_azure_monitor_logs(
     workspace = workspace_id.strip()
     token = access_token.strip()
     if not workspace or not token:
-        return {
-            "source": "azure",
-            "available": False,
-            "error": "Missing Azure credentials.",
-            "rows": [],
-        }
+        return tool_unavailable("azure", "Missing Azure credentials.", rows=[])
 
     effective_limit = _bounded_limit(limit, max_results)
     bounded_query = _ensure_take_clause(query, effective_limit)
@@ -123,7 +119,7 @@ def query_azure_monitor_logs(
             method="httpx.post",
             extras={"workspace_id": workspace, "integration_id": integration_id},
         )
-        return {"source": "azure", "available": False, "error": str(err), "rows": []}
+        return tool_unavailable("azure", str(err), rows=[])
 
     tables = body.get("tables", []) if isinstance(body, dict) else []
     rows: list[dict[str, Any]] = []

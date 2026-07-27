@@ -21,6 +21,9 @@ INTEGRATIONS_DIR = Path(__file__).resolve().parents[2] / "integrations"
 # vendors.
 ALLOWED_FLAT_MODULES = frozenset(
     {
+        # Cross-vendor alert-source routing/alias catalog data (spans every
+        # vendor's alert-source key), not one vendor's own integration.
+        "alert_source_catalog.py",
         "catalog.py",
         "cli.py",
         "config_models.py",
@@ -33,9 +36,14 @@ ALLOWED_FLAT_MODULES = frozenset(
         "port.py",
         "probes.py",
         "registry.py",
+        "scheduled_agent_bootstrap.py",
         "selectors.py",
+        "setup_flow.py",
         "store.py",
         "verify.py",
+        # Cross-cutting credential-resolution infra (fetches every vendor's org
+        # creds from the webapp vault), not a vendor — like store.py / registry.py.
+        "webapp_vault.py",
     }
 )
 

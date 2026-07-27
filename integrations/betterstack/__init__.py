@@ -28,6 +28,7 @@ import httpx
 from pydantic import Field, field_validator
 
 from config.strict_config import StrictConfigModel
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
 
 logger = logging.getLogger(__name__)
@@ -130,7 +131,7 @@ def betterstack_is_available(sources: dict[str, dict]) -> bool:
     bs = sources.get("betterstack", {})
     if not (bs.get("query_endpoint") and bs.get("username")):
         return False
-    has_sources = bool(bs.get("sources"))
+    has_sources = bool(_normalize_sources_value(bs.get("sources")))
     has_hint = bool(str(bs.get("source_hint") or "").strip())
     return has_sources or has_hint
 
@@ -142,6 +143,10 @@ def betterstack_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     from the resolved integration config when present). The executor invokes
     tools purely via ``action.run(**action.extract_params(...))``; we therefore
     have to surface the alert-derived target as a concrete kwarg here.
+
+    ``sources`` may arrive as a list (store history) or a comma-separated string
+    (``.env`` / setup-flow persistence) — both are normalized here so a migrated
+    setup does not corrupt the hint list via ``list("a,b")``.
     """
     bs = sources.get("betterstack", {})
     source_hint = str(bs.get("source_hint", "") or "").strip()
@@ -149,9 +154,14 @@ def betterstack_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
         "query_endpoint": bs.get("query_endpoint", ""),
         "username": bs.get("username", ""),
         "password": bs.get("password", ""),
-        "sources": list(bs.get("sources", []) or []),
+        "sources": _normalize_sources_value(bs.get("sources")),
         "source": source_hint,
     }
+
+
+def _normalize_sources_value(value: Any) -> list[str]:
+    """Accept a list or comma-separated string; mirror ``BetterStackConfig``."""
+    return BetterStackConfig._normalize_sources(value)
 
 
 @dataclass(frozen=True)
@@ -260,14 +270,7 @@ def validate_betterstack_config(
 
 def _error_evidence(error: str, *, source: str = "") -> dict[str, Any]:
     """Standard error-shape dict returned by query functions on failure."""
-    return {
-        "source": "betterstack",
-        "available": False,
-        "error": error,
-        "betterstack_source": source,
-        "rows": [],
-        "row_count": 0,
-    }
+    return tool_unavailable("betterstack", error, betterstack_source=source, rows=[], row_count=0)
 
 
 def _validate_source_name(source: str) -> str | None:

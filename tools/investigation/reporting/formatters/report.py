@@ -150,14 +150,13 @@ def _norm_banner_key(text: str) -> str:
 def _telegram_baseline_repeats_header(ctx: ReportContext, root_cause_sentence: str) -> bool:
     """True when the derived root-cause line only repeats alert metadata already in the header."""
     alert = (ctx.get("alert_name") or "").strip()
-    pipeline = (ctx.get("pipeline_name") or "").strip()
-    if not alert or not pipeline:
+    if not alert:
         return False
     s = root_cause_sentence.strip()
     if len(s) > 220:
         return False
     rc = _norm_banner_key(s)
-    if _norm_banner_key(alert) not in rc or _norm_banner_key(pipeline) not in rc:
+    if _norm_banner_key(alert) not in rc:
         return False
     if "because" in rc or "due to" in rc or "caused" in rc:
         return False
@@ -186,8 +185,7 @@ def _severity_telegram_header(ctx: ReportContext) -> str:
     }.get(lower, "⚠️")
     display_sev = raw.upper() if raw else "UNKNOWN"
     alert = html.escape(str(ctx.get("alert_name") or "Alert"))
-    pipeline = html.escape(str(ctx.get("pipeline_name") or "unknown"))
-    return f"{emoji} <b>{alert}</b> · {pipeline}\n<i>severity: {html.escape(display_sev)}</i>"
+    return f"{emoji} <b>{alert}</b>\n<i>severity: {html.escape(display_sev)}</i>"
 
 
 def _render_claim_lines_telegram(ctx: ReportContext) -> tuple[list[str], list[str]]:

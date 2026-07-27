@@ -219,6 +219,32 @@ def test_composite_fingerprint_hashes_stable_local_and_ci_signals(
     assert "opensre/tracer-agent" not in first.value
 
 
+def test_composite_fingerprint_separates_ci_and_container_environments(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(provider.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(provider.platform, "machine", lambda: "x86_64")
+    monkeypatch.setattr(provider.platform, "node", lambda: "Build-Host-01")
+    monkeypatch.setattr(provider.Path, "home", lambda: tmp_path / "runner")
+    monkeypatch.setattr(provider, "detect_container_runtime", lambda: None)
+    monkeypatch.setattr(provider, "is_ci_environment", lambda: False)
+    local_fingerprint = provider._build_composite_fingerprint()
+
+    monkeypatch.setattr(provider, "is_ci_environment", lambda: True)
+    ci_fingerprint = provider._build_composite_fingerprint()
+
+    assert "ci" in ci_fingerprint.components.split(",")
+    assert ci_fingerprint.value != local_fingerprint.value
+
+    monkeypatch.setattr(provider, "is_ci_environment", lambda: False)
+    monkeypatch.setattr(provider, "detect_container_runtime", lambda: "docker")
+    container_fingerprint = provider._build_composite_fingerprint()
+
+    assert "container" in container_fingerprint.components.split(",")
+    assert container_fingerprint.value != local_fingerprint.value
+
+
 def test_composite_fingerprint_changes_when_stable_machine_identity_changes(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -276,6 +302,14 @@ def test_analytics_events_from_same_instance_share_exact_distinct_id(
     distinct_ids = [payload["json"]["properties"]["distinct_id"] for payload in posted_payloads]
     assert distinct_ids == [analytics._anonymous_id] * 3
     assert len(set(distinct_ids)) == 1
+    for payload in posted_payloads:
+        properties = payload["json"]["properties"]
+        assert (
+            properties["execution_environment"] == provider._RUNTIME_CONTEXT.execution_environment
+        )
+        assert properties["is_ci"] is provider._RUNTIME_CONTEXT.is_ci
+        assert properties["is_container"] is provider._RUNTIME_CONTEXT.is_container
+        assert properties["container_runtime"] == provider._RUNTIME_CONTEXT.container_runtime
     log_lines = (tmp_path / "posthog_events.txt").read_text(encoding="utf-8").splitlines()
     assert len(log_lines) == 3
     assert Event.CLI_INVOKED.value in log_lines[0]

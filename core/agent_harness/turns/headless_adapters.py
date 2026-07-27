@@ -34,8 +34,7 @@ class InMemorySessionStore:
     history: list[dict[str, Any]] = field(default_factory=list)
     last_command_observation: str | None = None
     resolved_integrations_cache: dict[str, Any] | None = None
-    github_repo_scope: tuple[str, str] | None = None
-    gitlab_repo_scope: tuple[str, str, str] | None = None
+    vcs_repo_scopes: dict[str, tuple[str, ...]] = field(default_factory=dict)
     records: list[tuple[str, str, bool]] = field(default_factory=list)
 
     def record(self, kind: str, text: str, *, ok: bool = True) -> None:
@@ -78,10 +77,17 @@ class BufferOutputSink:
 class EmptyPromptContextProvider:
     """Grounding provider that supplies no corpora (headless)."""
 
+    def surface(self) -> str:
+        return "interactive_shell"
+
     def cli_reference(self) -> str:
         return ""
 
     def agents_md(self) -> str:
+        return ""
+
+    def docs(self, query: str) -> str:
+        _ = query
         return ""
 
     def investigation_flow(self) -> str:

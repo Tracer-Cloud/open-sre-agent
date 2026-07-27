@@ -97,9 +97,9 @@ def publish_loop_metrics_from_stream_failure(exc: BaseException) -> BaseExceptio
     loop_count = getattr(exc, "loop_count", None)
     iteration_cap = getattr(exc, "iteration_cap", None)
     cause = getattr(exc, "cause", None)
+    cause_exc = cause if isinstance(cause, BaseException) else None
     if (
-        cause is not None
-        and isinstance(cause, BaseException)
+        cause_exc is not None
         and loop_count is not None
         and iteration_cap is not None
         and not isinstance(loop_count, bool)
@@ -109,7 +109,7 @@ def publish_loop_metrics_from_stream_failure(exc: BaseException) -> BaseExceptio
             loop_count=int(loop_count),
             iteration_cap=int(iteration_cap),
         )
-        return cause
+        return cause_exc
     return exc
 
 

@@ -9,6 +9,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from gateway.billing.credits_client import CreditsOutcome, consume_credits
 from gateway.http.artifacts import upload_report_to_s3, write_local_report
 from gateway.http.investigation_store import InvestigationStatus, InvestigationStore
 
@@ -30,7 +31,6 @@ def _run_pipeline(trigger: dict[str, Any]) -> dict[str, Any]:
     investigation_metadata = resolve_investigation_context(
         raw_alert=raw_alert,
         alert_name=trigger.get("alert_name"),
-        pipeline_name=trigger.get("pipeline_name"),
         severity=trigger.get("severity"),
     )
     return run_investigation_payload(
@@ -61,8 +61,44 @@ class InvestigationWorker:
         record = self._store.claim_next_queued()
         if record is None:
             return False
+        # Metering: only an explicit webapp denial (402) skips the run.
+        # UNCONFIGURED (dev setups without metering env) and UNAVAILABLE
+        # (webapp outage) proceed — fail-open is the intended policy so a
+        # billing outage never stalls queued investigations.
+        outcome = consume_credits(record.clerk_org_id, reason="investigation")
+        if outcome is CreditsOutcome.DENIED:
+            logger.info("[investigations] denied %s: insufficient credits", record.id)
+            self._store.finish(
+                record.id,
+                status=InvestigationStatus.FAILED,
+                error="insufficient_credits",
+            )
+            return True
         try:
-            result = self._runner(record.trigger)
+            from platform.analytics.cli import track_investigation
+            from platform.analytics.source import EntrypointSource, TriggerMode
+            from platform.analytics.usage_context import (
+                bound_usage_context,
+                ensure_process_session_id,
+            )
+
+            org_id = (record.clerk_org_id or "").strip() or None
+            with (
+                bound_usage_context(
+                    organization_id=org_id,
+                    # Process session groups HTTP investigations for this worker;
+                    # keep investigation_id as the per-run identifier.
+                    session_id=ensure_process_session_id(),
+                ),
+                track_investigation(
+                    entrypoint=EntrypointSource.REMOTE_HTTP,
+                    trigger_mode=TriggerMode.SERVICE_RUNTIME,
+                    investigation_id=record.id,
+                    investigation_target=str((record.trigger or {}).get("alert_name") or "")
+                    or None,
+                ),
+            ):
+                result = self._runner(record.trigger)
             local_path = write_local_report(record.id, result, base_dir=self._artifacts_dir)
             s3_key = upload_report_to_s3(
                 local_path, org_id=record.clerk_org_id, investigation_id=record.id

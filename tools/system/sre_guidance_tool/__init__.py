@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.tool_framework.tags import FALLBACK_PLANNING_TAG
 from core.tool_framework.tool_decorator import tool
 from tools.system.sre_guidance_tool.knowledge_base import (
     get_sre_guidance as _get_sre_guidance,
@@ -29,7 +30,7 @@ def _extract_guidance_params(sources: dict[str, dict[str, Any]]) -> dict[str, An
         "Getting remediation guidance for common pipeline failures",
         "Structuring postmortem findings and recommendations",
     ],
-    tags=("safe", "fast", "no-credentials"),
+    tags=("safe", "fast", "no-credentials", FALLBACK_PLANNING_TAG),
     input_schema={
         "type": "object",
         "properties": {

@@ -7,6 +7,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.config_models import HelmIntegrationConfig
 from integrations.helm.client import HelmClient
 
@@ -39,4 +40,4 @@ def helm_client_for_run(
 
 
 def helm_base_unavailable(error: str) -> dict[str, Any]:
-    return {"source": "helm", "available": False, "error": error}
+    return tool_unavailable("helm", error)

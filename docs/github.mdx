@@ -1,9 +1,27 @@
 ---
 title: "GitHub"
-description: "Connect GitHub so OpenSRE can correlate recent commits and code changes with incidents"
+description: "Connect GitHub so OpenSRE can read and write issues/PRs, search code, inspect commits, and correlate changes with incidents"
 ---
 
-OpenSRE connects to GitHub via the GitHub MCP server to search code, browse recent commits, inspect files, and trace changes correlated with alerts — helping identify which deployment or code change triggered an incident.
+OpenSRE connects to GitHub so the agent can work with issues, pull requests,
+repositories, Actions, and code — and correlate recent commits with incidents.
+
+## What you can do
+
+Once GitHub is connected, the interactive-shell **action agent** uses
+**`github_cli`** (authenticated `gh`) for flexible reads and writes —
+create/list/view issues and PRs, assign, label, comment, merge, search,
+releases, workflow runs, and `gh api` — without a separate approval gate.
+Prefer this over shell `gh` / `!gh`. These requests stay on the action path
+(not the conversational gather/answer loop).
+
+| Area | How OpenSRE does it |
+| --- | --- |
+| Ad-hoc issues, PRs, repos, search, API | `github_cli` (action agent) |
+| Engineering digests, PR readiness, security alerts | [GitHub workflow tools](github-workflow-tools) |
+| Slack → GitHub issue create/update/close | Propose + approve via workflow mutation tools |
+| Investigation: code, commits, files, issue search | Dedicated GitHub investigation tools |
+| Failed deploys / workflow runs | [GitHub Actions tools](integrations/github-actions) |
 
 ## First launch (macOS & Windows)
 
@@ -25,6 +43,7 @@ when GitHub is already configured.
 
 - GitHub account with repository access
 - One of: browser sign-in (recommended), a personal access token, or GitHub Copilot MCP access
+- For chat `github_cli`: the `gh` binary on `PATH` (OpenSRE supplies the token). Homebrew installs of OpenSRE pull `gh` via formula dependency; the curl installer soft-installs it when missing.
 
 ## Setup
 
@@ -57,6 +76,7 @@ GITHUB_MCP_TOOLSETS=repos,issues,pull_requests,actions  # default
 | Variable | Default | Description |
 | --- | --- | --- |
 | `GITHUB_MCP_AUTH_TOKEN` | — | GitHub personal access token. Required unless you authorize in the browser (Option 1) |
+| `GITHUB_TOKEN` / `GH_TOKEN` | — | Alternate token env names also accepted by `github_cli` and some workflow tools |
 | `GITHUB_MCP_URL` | `https://api.githubcopilot.com/mcp/` | GitHub MCP server URL |
 | `GITHUB_MCP_MODE` | `streamable-http` | Transport mode: `streamable-http`, `sse`, or `stdio` |
 | `GITHUB_MCP_TOOLSETS` | `repos,issues,pull_requests,actions` | Comma-separated toolsets to enable |
@@ -89,7 +109,7 @@ GITHUB_MCP_TOOLSETS=repos,issues,pull_requests,actions  # default
 
 1. In GitHub, go to **Settings** → **Developer settings** → **Personal access tokens** → **Tokens (classic)**
 2. Click **Generate new token**
-3. Select the following scopes: `repo`, `read:org`
+3. Select the following scopes: `repo`, `read:org` (add write scopes if you want chat mutations via `github_cli`)
 4. Copy the token
 
 <Info>
@@ -124,12 +144,13 @@ Detail: GitHub MCP validated for your-username; discovered 18 tools including re
 | --- | --- |
 | **Authentication failed** | Check that the token has `repo` scope and is not expired |
 | **Required tools missing** | Ensure toolsets include `repos` — it provides `get_file_contents`, `list_commits`, etc. |
+| **`github_cli` fails / gh not found** | Install [GitHub CLI](https://cli.github.com/) so `gh` is on `PATH`; confirm token via verify |
 | **Connection refused** | Verify `GITHUB_MCP_URL` is reachable and the MCP server is running |
 | **Browser sign-in unavailable** | Set `OPENSRE_GITHUB_OAUTH_CLIENT_ID` to a device-flow-enabled OAuth App, or fall back to pasting a PAT |
 | **First-launch sign-in is blocking me** | Set `OPENSRE_SKIP_GITHUB_LOGIN=1` to bypass the first-launch GitHub prompt |
 
 ## Security best practices
 
-- Use a **fine-grained personal access token** with read-only repository access.
-- Limit token scope to the repositories OpenSRE needs to inspect.
+- Prefer the **least privilege** that matches how you use OpenSRE (read-only for investigation-only; write scopes if you want chat to create/edit issues and PRs).
+- Limit token scope to the repositories OpenSRE needs.
 - Store the token in `.env`, not in source code.

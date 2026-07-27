@@ -18,6 +18,8 @@ class TaskKind(StrEnum):
     SYNTHETIC_RUN = "synthetic_run"
     CUSTOM_INVESTIGATION = "custom_investigation"
     SENTRY_MORNING_DIGEST = "sentry_morning_digest"
+    SENTRY_UPTIME_WATCH = "sentry_uptime_watch"
+    GITHUB_PR_SWEEP = "github_pr_sweep"
 
 
 class TaskStatus(StrEnum):
@@ -36,6 +38,7 @@ class Provider(StrEnum):
     TELEGRAM = "telegram"
     SLACK = "slack"
     DISCORD = "discord"
+    ROCKETCHAT = "rocketchat"
 
 
 def _generate_task_id() -> str:

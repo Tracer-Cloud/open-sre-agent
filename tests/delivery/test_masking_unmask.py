@@ -15,7 +15,6 @@ def _enable_masking(monkeypatch) -> None:
 def _state_with_masking() -> dict[str, object]:
     return {
         "alert_name": "pipeline failure",
-        "pipeline_name": "pipeline",
         "severity": "warning",
         "problem_md": "# Incident in <NAMESPACE_0>",
         "slack_message": "",
@@ -28,8 +27,7 @@ def _state_with_masking() -> dict[str, object]:
         "evidence": {},
         "context": {},
         "resolved_integrations": {},
-        "slack_context": {},
-        "discord_context": {},
+        "channel_contexts": {},
         "validated_claims": [],
         "non_validated_claims": [],
     }

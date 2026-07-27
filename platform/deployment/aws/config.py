@@ -5,6 +5,13 @@ from __future__ import annotations
 # ─── Region ───────────────────────────────────────────────────────────────────
 DEFAULT_REGION = "us-east-1"
 
+# ─── Deploy account guard ─────────────────────────────────────────────────────
+# When OPENSRE_DEPLOY_ACCOUNT_ID is set (local .env only — never commit an account
+# id), build/deploy assert the active AWS account matches it before creating
+# anything, so the default profile can't silently deploy to the wrong account.
+# Unset (other devs, CI) means no enforcement.
+DEPLOY_ACCOUNT_ID_ENV = "OPENSRE_DEPLOY_ACCOUNT_ID"
+
 # ─── Boto3 client ─────────────────────────────────────────────────────────────
 BOTO3_RETRY_MAX_ATTEMPTS = 3
 BOTO3_CONNECT_TIMEOUT_SECONDS = 10
@@ -54,8 +61,15 @@ SSM_TERMINAL_STATUSES = ("Success", "Failed", "Cancelled", "TimedOut", "Undelive
 
 # ─── ECR / Docker ─────────────────────────────────────────────────────────────
 ECR_DEFAULT_IMAGE_TAG = "latest"
+# Overrides the derived immutable (git-sha) tag; CI passes an explicit tag here.
+ECR_IMAGE_TAG_ENV = "OPENSRE_IMAGE_TAG"
 ECR_DOCKER_PLATFORM = "linux/amd64"
 ECR_SCAN_ON_PUSH = True
+# MUTABLE is required: `:latest` is re-pushed every build, which an IMMUTABLE
+# repo policy would reject. Consequence: any tag, including the git-sha tags,
+# can be overwritten by a later push of the same tag (`<sha>-dirty` in
+# particular may carry different content across rebuilds of one commit). The
+# hard guarantee is pinning the image digest (repo@sha256:…), not a tag.
 ECR_IMAGE_TAG_MUTABILITY = "MUTABLE"
 
 # ─── EC2 instance provisioning (via SSM) ──────────────────────────────────────

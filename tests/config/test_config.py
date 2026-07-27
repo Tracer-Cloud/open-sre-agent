@@ -37,7 +37,7 @@ def test_llm_settings_from_env_does_not_read_secure_local_api_key(monkeypatch) -
     monkeypatch.setenv("LLM_PROVIDER", "openai")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setattr(
-        "config.llm_credentials.resolve_llm_api_key",
+        "config.llm_credentials.resolve_env_credential",
         lambda env_var: (_ for _ in ()).throw(AssertionError(f"unexpected lookup: {env_var}")),
     )
 
@@ -51,7 +51,7 @@ def test_llm_settings_from_env_does_not_probe_provider_keys(monkeypatch) -> None
     monkeypatch.setenv("LLM_PROVIDER", "openai")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setattr(
-        "config.llm_credentials.resolve_llm_api_key",
+        "config.llm_credentials.resolve_env_credential",
         lambda env_var: (_ for _ in ()).throw(AssertionError(f"unexpected lookup: {env_var}")),
     )
 
@@ -105,6 +105,38 @@ def test_llm_settings_from_env_deepseek(monkeypatch) -> None:
 
     assert settings.provider == "deepseek"
     assert settings.deepseek_api_key == ""
+
+
+def test_llm_settings_accepts_vertex_ai_without_project() -> None:
+    settings = LLMSettings.model_validate({"provider": "vertex-ai"})
+
+    assert settings.provider == "vertex-ai"
+    assert settings.vertex_ai_project == ""
+    assert settings.vertex_ai_location == "us-central1"
+
+
+def test_llm_settings_from_env_vertex_ai(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "vertex-ai")
+    monkeypatch.setenv("VERTEX_AI_PROJECT", "my-gcp-project")
+    monkeypatch.delenv("VERTEX_AI_LOCATION", raising=False)
+
+    settings = LLMSettings.from_env()
+
+    assert settings.provider == "vertex-ai"
+    assert settings.vertex_ai_project == "my-gcp-project"
+    assert settings.vertex_ai_location == "us-central1"
+    assert settings.vertex_ai_reasoning_model == "gemini-2.5-pro"
+    assert settings.vertex_ai_toolcall_model == "gemini-2.5-flash-lite"
+
+
+def test_llm_settings_from_env_vertex_ai_custom_location(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "vertex-ai")
+    monkeypatch.setenv("VERTEX_AI_PROJECT", "my-gcp-project")
+    monkeypatch.setenv("VERTEX_AI_LOCATION", "europe-west1")
+
+    settings = LLMSettings.from_env()
+
+    assert settings.vertex_ai_location == "europe-west1"
 
 
 def test_llm_settings_minimax_provider_accepted() -> None:

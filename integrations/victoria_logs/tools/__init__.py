@@ -19,6 +19,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.tool_framework.base import BaseTool
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.victoria_logs.client import make_victoria_logs_client
 
 
@@ -112,25 +113,20 @@ class VictoriaLogsTool(BaseTool):
     ) -> dict[str, Any]:
         client = make_victoria_logs_client(base_url, tenant_id=tenant_id)
         if client is None:
-            return {
-                "source": "victoria_logs",
-                "available": False,
-                "error": "VictoriaLogs integration is not configured (missing base_url).",
-                "rows": [],
-                "total": 0,
-            }
+            return tool_unavailable(
+                "victoria_logs",
+                "VictoriaLogs integration is not configured (missing base_url).",
+                rows=[],
+                total=0,
+            )
 
         with client:
             result = client.query_logs(query=query, limit=limit, start=start)
 
         if not result.get("success"):
-            return {
-                "source": "victoria_logs",
-                "available": False,
-                "error": result.get("error", "unknown error"),
-                "rows": [],
-                "total": 0,
-            }
+            return tool_unavailable(
+                "victoria_logs", result.get("error", "unknown error"), rows=[], total=0
+            )
 
         rows = result.get("rows", [])
         return {

@@ -26,6 +26,15 @@ from config.constants import get_store_path
 from config.constants.posthog import POSTHOG_CAPTURE_API_KEY, POSTHOG_HOST
 from config.version import get_opensre_version
 from platform.analytics.events import Event
+from platform.analytics.runtime_context import (
+    detect_container_runtime,
+    detect_runtime_context,
+    is_ci_environment,
+)
+from platform.analytics.usage_context import (
+    ORGANIZATION_GROUP_TYPE,
+    merge_usage_enrichment,
+)
 
 _CONFIG_DIR = get_store_path().parent
 _ANONYMOUS_ID_PATH = _CONFIG_DIR / "anonymous_id"
@@ -40,7 +49,7 @@ _SHUTDOWN_WAIT = 0.5
 _EVENT_LOG_ENV_VAR: Final[str] = "OPENSRE_ANALYTICS_LOG_EVENTS"
 _EVENT_LOG_FILENAME: Final[str] = "posthog_events.txt"
 _EVENT_LOG_MAX_LINES: Final[int] = 1000
-_ANONYMOUS_ID_LOCK_WAIT_SECONDS: Final[float] = 0.5
+_ANONYMOUS_ID_LOCK_WAIT_SECONDS: Final[float] = 5.0
 _ANONYMOUS_ID_LOCK_RETRY_SECONDS: Final[float] = 0.01
 
 _FAILURE_LOG_FILENAME: Final[str] = "analytics_errors.log"
@@ -222,6 +231,16 @@ def _file_lock(lock_path: Path) -> Iterator[None]:
             lock_path.unlink()
 
 
+def _try_read_persisted_anonymous_id() -> str | None:
+    """Read a valid on-disk anonymous id, or None if missing/unreadable/invalid."""
+    try:
+        if not _ANONYMOUS_ID_PATH.exists():
+            return None
+        return _read_persisted_anonymous_id(_ANONYMOUS_ID_PATH)
+    except OSError:
+        return None
+
+
 def _write_new_anonymous_id(
     new_id: str,
     *,
@@ -239,6 +258,11 @@ def _write_new_anonymous_id(
             _write_text_atomic(_ANONYMOUS_ID_PATH, new_id)
         return _AnonymousIdentity(new_id, "disk")
     except OSError:
+        # Lock timeout (TimeoutError ⊂ OSError) or I/O failure: prefer a winner's
+        # on-disk id over minting a unique ephemeral one per waiter.
+        existing = _try_read_persisted_anonymous_id()
+        if existing is not None:
+            return _AnonymousIdentity(existing, "disk")
         return _AnonymousIdentity(new_id, "none")
 
 
@@ -366,6 +390,16 @@ def _build_composite_fingerprint() -> _CompositeFingerprint:
     with contextlib.suppress(RuntimeError, OSError):
         _add_fingerprint_component(
             components, component_sources, "home_name", Path.home().name, "user"
+        )
+    if is_ci_environment():
+        _add_fingerprint_component(components, component_sources, "runtime:ci", "true", "ci")
+    if container_runtime := detect_container_runtime():
+        _add_fingerprint_component(
+            components,
+            component_sources,
+            "runtime:container",
+            container_runtime,
+            "container",
         )
     for key in _CI_FINGERPRINT_ENV_KEYS:
         if value := _normalized_fingerprint_value(os.getenv(key, "")):
@@ -647,6 +681,7 @@ def _is_json_value(value: object) -> bool:
 
 
 _COMPOSITE_FINGERPRINT = _build_composite_fingerprint()
+_RUNTIME_CONTEXT = detect_runtime_context()
 
 _BASE_PROPERTIES: Final[Properties] = {
     "cli_version": _cli_version(),
@@ -656,6 +691,10 @@ _BASE_PROPERTIES: Final[Properties] = {
     "composite_fingerprint": _COMPOSITE_FINGERPRINT.value,
     "composite_fingerprint_version": _COMPOSITE_FINGERPRINT_VERSION,
     "composite_fingerprint_components": _COMPOSITE_FINGERPRINT.components,
+    "execution_environment": _RUNTIME_CONTEXT.execution_environment,
+    "is_ci": _RUNTIME_CONTEXT.is_ci,
+    "is_container": _RUNTIME_CONTEXT.is_container,
+    "container_runtime": _RUNTIME_CONTEXT.container_runtime,
     "$process_person_profile": False,
 }
 
@@ -674,6 +713,8 @@ class Analytics:
         self._shutdown = False
         self._worker_alive = not self._disabled
         self._persistent_properties: Properties = {}
+        self._identified_organization_groups: set[str] = set()
+        self._org_group_lock = threading.Lock()
 
         if not self._disabled:
             # Never block interpreter exit on PostHog; callers that need a
@@ -688,12 +729,13 @@ class Analytics:
     def capture(self, event: Event, properties: Properties | None = None) -> None:
         if self._disabled or self._shutdown:
             return
-        envelope = _Envelope(
-            event=event.value,
-            properties=_BASE_PROPERTIES
+        merged = merge_usage_enrichment(
+            _BASE_PROPERTIES
             | self._persistent_properties
-            | _coerce_properties(event.value, properties),
+            | _coerce_properties(event.value, properties)
         )
+        self._ensure_organization_group(merged)
+        envelope = _Envelope(event=event.value, properties=merged)
         self._enqueue(envelope)
 
     def set_persistent_property(self, key: str, value: JsonScalar) -> None:
@@ -721,12 +763,58 @@ class Analytics:
         coerced = _coerce_properties("$identify", set_properties)
         if not coerced:
             return
+        properties = merge_usage_enrichment(
+            {
+                **_BASE_PROPERTIES,
+                "$process_person_profile": True,
+                "$set": coerced,
+            }
+        )
+        self._ensure_organization_group(properties)
+        self._enqueue(_Envelope(event="$identify", properties=properties))
+
+    def group_identify(
+        self,
+        group_type: str,
+        group_key: str,
+        set_properties: Properties | None = None,
+    ) -> None:
+        """Create/update a PostHog group via a ``$groupidentify`` event.
+
+        Used so CLI/gateway events that stamp ``$groups.organization`` attach to
+        the same org group the webapp uses for integration inventory.
+        """
+        if self._disabled or self._shutdown:
+            return
+        key = group_key.strip()
+        if not group_type.strip() or not key:
+            return
+        coerced = _coerce_properties("$groupidentify", set_properties)
         properties: Properties = {
             **_BASE_PROPERTIES,
-            "$process_person_profile": True,
-            "$set": coerced,
+            "$group_type": group_type,
+            "$group_key": key,
+            "$group_set": coerced,
         }
-        self._enqueue(_Envelope(event="$identify", properties=properties))
+        self._enqueue(_Envelope(event="$groupidentify", properties=properties))
+
+    def _ensure_organization_group(self, properties: Properties) -> None:
+        """Emit ``$groupidentify`` once per process for each organization id seen."""
+        org = properties.get("organization_id")
+        if not isinstance(org, str):
+            return
+        org_id = org.strip()
+        if not org_id:
+            return
+        with self._org_group_lock:
+            if org_id in self._identified_organization_groups:
+                return
+            self._identified_organization_groups.add(org_id)
+        self.group_identify(
+            ORGANIZATION_GROUP_TYPE,
+            org_id,
+            {"organization_id": org_id},
+        )
 
     def _enqueue(self, envelope: _Envelope) -> None:
         pending_registered = False
@@ -846,6 +934,16 @@ class Analytics:
 
 
 _instance: Analytics | None = None
+
+
+def get_anonymous_id() -> str:
+    """Return the stable install-scoped analytics distinct id.
+
+    Used for offline experiment bucketing (no PostHog ``/decide`` call) so
+    variants stay sticky per install without a blocking network round-trip at
+    startup.
+    """
+    return _get_or_create_anonymous_id()
 
 
 def get_analytics() -> Analytics:

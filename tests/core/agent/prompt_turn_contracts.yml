@@ -332,7 +332,7 @@
   with_prior_state: true
   expected_planned_actions:
     - kind: "assistant_handoff"
-      content: "follow_up:last_failure"
+      content: "follow_up:prior_investigation"
   expected_executed_actions: []
   expected_terminal_response_contains:
     - "failed"
@@ -347,7 +347,7 @@
   with_prior_state: true
   expected_planned_actions:
     - kind: "assistant_handoff"
-      content: "follow_up:spike_cause"
+      content: "follow_up:prior_investigation"
   expected_executed_actions: []
   expected_terminal_response_contains:
     - "incident"
@@ -362,7 +362,7 @@
   with_prior_state: true
   expected_planned_actions:
     - kind: "assistant_handoff"
-      content: "follow_up:last_investigation_summary"
+      content: "follow_up:prior_investigation"
   expected_executed_actions: []
   expected_terminal_response_contains:
     - "incident"
@@ -377,7 +377,7 @@
   with_prior_state: true
   expected_planned_actions:
     - kind: "assistant_handoff"
-      content: "follow_up:last_investigation_summary"
+      content: "follow_up:prior_investigation"
   expected_executed_actions: []
   expected_terminal_response_contains:
     - "investigation"

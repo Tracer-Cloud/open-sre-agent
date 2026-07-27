@@ -24,6 +24,7 @@ from config.config import (
     JWKS_CACHE_TTL_SECONDS,
     JWT_ALGORITHM,
     Environment,
+    get_clerk_config_override,
     get_environment,
 )
 
@@ -148,17 +149,27 @@ _async_jwks_cache = AsyncJWKSCache()
 def get_valid_issuers() -> list[str]:
     """Get list of valid JWT issuers.
 
-    In production, only accept production issuer.
-    In development, accept both dev and prod issuers for flexibility.
+    The CLERK_ISSUER / CLERK_JWKS_URL override (infra-injected per org silo)
+    is accepted in every environment. Otherwise production only accepts the
+    production issuer; development accepts both hardcoded issuers for
+    flexibility.
     """
     env = get_environment()
     if env == Environment.PRODUCTION:
-        return [CLERK_CONFIG_PROD.issuer]
-    return [CLERK_CONFIG_DEV.issuer, CLERK_CONFIG_PROD.issuer]
+        issuers = [CLERK_CONFIG_PROD.issuer]
+    else:
+        issuers = [CLERK_CONFIG_DEV.issuer, CLERK_CONFIG_PROD.issuer]
+    override = get_clerk_config_override()
+    if override and override.issuer not in issuers:
+        issuers.insert(0, override.issuer)
+    return issuers
 
 
 def get_jwks_url_for_issuer(issuer: str) -> str | None:
     """Get the JWKS URL for a given issuer."""
+    override = get_clerk_config_override()
+    if override and issuer.rstrip("/") == override.issuer:
+        return override.jwks_url
     if issuer == CLERK_CONFIG_DEV.issuer:
         return CLERK_CONFIG_DEV.jwks_url
     if issuer == CLERK_CONFIG_PROD.issuer:

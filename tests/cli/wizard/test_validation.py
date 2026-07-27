@@ -13,7 +13,7 @@ from surfaces.cli.wizard.validation import _get_provider_base_url, validate_prov
 def _preload_sdk_error_classes(monkeypatch) -> None:
     """Pre-populate the module-level ``*AuthError`` globals in validation.py.
 
-    ``_load_anthropic_client``/``_load_openai_client`` lazily import the SDKs
+    ``_load_anthropic_client``/``load_openai_client`` lazily import the SDKs
     and override the module-level ``Anthropic``/``OpenAI`` names when their
     matching ``*AuthError`` is ``None``. If a test monkeypatches only the
     client class (``Anthropic`` / ``OpenAI``), the first call to the loader
@@ -26,7 +26,7 @@ def _preload_sdk_error_classes(monkeypatch) -> None:
     branch and make monkeypatches of ``Anthropic`` / ``OpenAI`` reliable.
     """
     monkeypatch.setattr("surfaces.cli.wizard.validation.AnthropicAuthError", AnthropicAuthError)
-    monkeypatch.setattr("surfaces.cli.wizard.validation.OpenAIAuthError", OpenAIAuthError)
+    monkeypatch.setattr("surfaces.cli.wizard.openai_client.OpenAIAuthError", OpenAIAuthError)
 
 
 class _FakeAnthropicTextBlock:
@@ -142,7 +142,7 @@ def test_validate_provider_credentials_returns_failure_for_bad_openai_key(monkey
         body=None,
     )
     monkeypatch.setattr(
-        "surfaces.cli.wizard.validation.OpenAI",
+        "surfaces.cli.wizard.openai_client.OpenAI",
         lambda **_kwargs: _FakeOpenAIClient(auth_error),
     )
 
@@ -158,7 +158,7 @@ def test_validate_provider_credentials_returns_failure_for_bad_openai_key(monkey
 
 def test_validate_provider_credentials_returns_success_for_valid_openai_key(monkeypatch) -> None:
     monkeypatch.setattr(
-        "surfaces.cli.wizard.validation.OpenAI",
+        "surfaces.cli.wizard.openai_client.OpenAI",
         lambda **_kwargs: _FakeOpenAIClient(_FakeOpenAIResponse("OpenSRE ready")),
     )
 
@@ -171,6 +171,28 @@ def test_validate_provider_credentials_returns_success_for_valid_openai_key(monk
     assert result.ok is True
     assert result.detail == "OpenAI API key validated."
     assert result.sample_response == "OpenSRE ready"
+
+
+def test_validate_provider_credentials_azure_not_found_lists_deployments(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "surfaces.cli.wizard.openai_client.OpenAI",
+        lambda **_kwargs: _FakeOpenAIClient(RuntimeError("Error code: 404 - DeploymentNotFound")),
+    )
+    monkeypatch.setattr(
+        "surfaces.cli.wizard.azure_openai.list_azure_openai_deployments",
+        lambda **_kwargs: ["gpt-4.1-mini"],
+    )
+    monkeypatch.setenv("AZURE_OPENAI_BASE_URL", "https://example.openai.azure.com")
+
+    result = validate_provider_credentials(
+        provider=PROVIDER_BY_VALUE["azure-openai"],
+        api_key="good-key",
+        model="gpt-4.1",
+    )
+
+    assert result.ok is False
+    assert "deployment 'gpt-4.1'" in result.detail
+    assert "Available deployments: gpt-4.1-mini" in result.detail
 
 
 def test_get_provider_base_url_deepseek() -> None:

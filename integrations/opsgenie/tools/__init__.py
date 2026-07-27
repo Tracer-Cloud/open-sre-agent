@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.tool_framework.base import BaseTool
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.opsgenie.client import make_opsgenie_client
 
 
@@ -81,23 +82,18 @@ class OpsGenieAlertDetailTool(BaseTool):
         **_kwargs: Any,
     ) -> dict[str, Any]:
         if not alert_id:
-            return {
-                "source": "opsgenie",
-                "available": False,
-                "error": "alert_id is required. Run opsgenie_alerts first to find an alert ID.",
-                "alert": {},
-                "activity_log": [],
-            }
+            return tool_unavailable(
+                "opsgenie",
+                "alert_id is required. Run opsgenie_alerts first to find an alert ID.",
+                alert={},
+                activity_log=[],
+            )
 
         client = make_opsgenie_client(api_key, region)
         if client is None:
-            return {
-                "source": "opsgenie",
-                "available": False,
-                "error": "OpsGenie integration is not configured.",
-                "alert": {},
-                "activity_log": [],
-            }
+            return tool_unavailable(
+                "opsgenie", "OpsGenie integration is not configured.", alert={}, activity_log=[]
+            )
 
         with client:
             alert_result = client.get_alert(alert_id)
@@ -110,13 +106,9 @@ class OpsGenieAlertDetailTool(BaseTool):
                     activity_log = logs_result.get("logs", [])
 
         if not alert_result.get("success"):
-            return {
-                "source": "opsgenie",
-                "available": False,
-                "error": alert_result.get("error", "unknown error"),
-                "alert": {},
-                "activity_log": [],
-            }
+            return tool_unavailable(
+                "opsgenie", alert_result.get("error", "unknown error"), alert={}, activity_log=[]
+            )
 
         return {
             "source": "opsgenie",
@@ -208,27 +200,21 @@ class OpsGenieAlertsTool(BaseTool):
     ) -> dict[str, Any]:
         client = make_opsgenie_client(api_key, region)
         if client is None:
-            return {
-                "source": "opsgenie",
-                "available": False,
-                "error": "OpsGenie integration is not configured.",
-                "alerts": [],
-                "open_alerts": [],
-                "total": 0,
-            }
+            return tool_unavailable(
+                "opsgenie",
+                "OpsGenie integration is not configured.",
+                alerts=[],
+                open_alerts=[],
+                total=0,
+            )
 
         with client:
             result = client.list_alerts(query=query, limit=limit)
 
         if not result.get("success"):
-            return {
-                "source": "opsgenie",
-                "available": False,
-                "error": result.get("error", "unknown error"),
-                "alerts": [],
-                "open_alerts": [],
-                "total": 0,
-            }
+            return tool_unavailable(
+                "opsgenie", result.get("error", "unknown error"), alerts=[], open_alerts=[], total=0
+            )
 
         alerts = result.get("alerts", [])
         open_alerts = [a for a in alerts if a.get("status", "").lower() in _OPEN_STATUSES]

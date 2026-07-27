@@ -22,7 +22,7 @@ import pytest
 from rich.console import Console
 
 import surfaces.interactive_shell.runtime.shell_turn_execution as shell_turn_execution
-import tools.interactive_shell.actions.slash as slash_tool
+import surfaces.interactive_shell.runtime.slash_adapter as slash_adapter
 from core.agent_harness.prompts import prompt_context as default_prompt_context
 from core.agent_harness.prompts.prompt_context import DefaultPromptContextProvider
 from surfaces.interactive_shell.command_registry import dispatch_slash
@@ -82,7 +82,7 @@ def test_model_question_routed_to_slash_is_never_answered(
         console.print(f"$ {command}")
         return True
 
-    monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
+    monkeypatch.setattr(slash_adapter, "dispatch_slash", _fake_dispatch)
     monkeypatch.setattr(
         _ACTION_LLM_FACTORY_PATCH,
         lambda: FakeActionLLM([tool_response("slash_invoke", {"command": "/model", "args": []})]),
@@ -131,7 +131,7 @@ def test_model_question_answered_when_handed_off(
     def _unexpected_dispatch(*_args: object, **_kwargs: object) -> bool:
         raise AssertionError("handoff turn must not dispatch a slash command")
 
-    monkeypatch.setattr(slash_tool, "dispatch_slash", _unexpected_dispatch)
+    monkeypatch.setattr(slash_adapter, "dispatch_slash", _unexpected_dispatch)
     monkeypatch.setattr(
         _ACTION_LLM_FACTORY_PATCH,
         lambda: FakeActionLLM([tool_response("assistant_handoff", {"content": "chat:model"})]),
@@ -178,7 +178,7 @@ def test_model_question_handoff_answers_from_active_llm_context(
             yield "You are using OpenAI with reasoning model `gpt-5.5` and tool-call model `gpt-5.4-mini`."
 
     llm = _LLM()
-    monkeypatch.setattr(slash_tool, "dispatch_slash", _unexpected_dispatch)
+    monkeypatch.setattr(slash_adapter, "dispatch_slash", _unexpected_dispatch)
     monkeypatch.setattr(
         _ACTION_LLM_FACTORY_PATCH,
         lambda: FakeActionLLM([tool_response("assistant_handoff", {"content": "chat:model"})]),

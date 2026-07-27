@@ -575,7 +575,6 @@ jobs:
             -d "$payload" "$DISCORD_WEBHOOK_URL_UPDATE"
 
       - name: Sync Homebrew tap formula
-        if: steps.github_release.outputs.created == 'true'
         continue-on-error: true
         env:
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}

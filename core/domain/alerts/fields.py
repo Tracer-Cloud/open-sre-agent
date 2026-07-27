@@ -17,12 +17,6 @@ ALERT_NAME_CANONICAL_KEYS: Final[tuple[str, ...]] = ("alert_name",)
 ALERT_NAME_LABEL_KEYS: Final[tuple[str, ...]] = ("alertname", "alert_name")
 ALERT_NAME_ANNOTATION_KEYS: Final[tuple[str, ...]] = ("summary",)
 
-PIPELINE_NAME_RAW_KEYS: Final[tuple[str, ...]] = ("pipeline_name",)
-PIPELINE_NAME_CANONICAL_KEYS: Final[tuple[str, ...]] = ("pipeline_name",)
-PIPELINE_NAME_LABEL_KEYS: Final[tuple[str, ...]] = ("pipeline_name", "pipeline", "service")
-PIPELINE_NAME_ANNOTATION_KEYS: Final[tuple[str, ...]] = ("pipeline_name",)
-PIPELINE_NAME_FALLBACK_RAW_KEYS: Final[tuple[str, ...]] = ("service",)
-
 SEVERITY_RAW_KEYS: Final[tuple[str, ...]] = ("severity",)
 SEVERITY_CANONICAL_KEYS: Final[tuple[str, ...]] = ("severity",)
 SEVERITY_LABEL_KEYS: Final[tuple[str, ...]] = ("severity", "priority")
@@ -91,24 +85,6 @@ def alert_name_value(
         first_mapping_value(canonical or {}, ALERT_NAME_CANONICAL_KEYS),
         first_mapping_value(labels or {}, ALERT_NAME_LABEL_KEYS),
         first_mapping_value(annotations or {}, ALERT_NAME_ANNOTATION_KEYS),
-        fallback,
-    )
-
-
-def pipeline_name_value(
-    raw_alert: Mapping[str, Any],
-    *,
-    labels: Mapping[str, Any] | None = None,
-    annotations: Mapping[str, Any] | None = None,
-    canonical: Mapping[str, Any] | None = None,
-    fallback: Any = None,
-) -> Any:
-    return first_present(
-        first_mapping_value(raw_alert, PIPELINE_NAME_RAW_KEYS),
-        first_mapping_value(canonical or {}, PIPELINE_NAME_CANONICAL_KEYS),
-        first_mapping_value(labels or {}, PIPELINE_NAME_LABEL_KEYS),
-        first_mapping_value(annotations or {}, PIPELINE_NAME_ANNOTATION_KEYS),
-        first_mapping_value(raw_alert, PIPELINE_NAME_FALLBACK_RAW_KEYS),
         fallback,
     )
 

@@ -4,11 +4,7 @@ import os
 
 import pytest
 
-from integrations.posthog import (
-    BounceRateAlert,
-    check_bounce_rate_alert,
-    posthog_config_from_env,
-)
+from integrations.posthog import posthog_config_from_env, validate_posthog_config
 
 pytestmark = pytest.mark.skipif(
     not os.getenv("POSTHOG_PERSONAL_API_KEY") or not os.getenv("POSTHOG_PROJECT_ID"),
@@ -16,15 +12,12 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def test_posthog_bounce_rate_e2e() -> None:
-    """E2E: bounce rate alert flow works end-to-end."""
+def test_posthog_verify_e2e() -> None:
+    """E2E: PostHog REST credentials validate against the live project API."""
 
     config = posthog_config_from_env()
     assert config is not None, "PostHog config should be loaded from env"
 
-    alert = check_bounce_rate_alert(config)
-
-    if alert is not None:
-        assert isinstance(alert, BounceRateAlert)
-        assert 0.0 <= alert.bounce_rate <= 1.0
-        assert isinstance(alert.message, str)
+    result = validate_posthog_config(config)
+    assert result.ok is True
+    assert result.detail == "PostHog validated."

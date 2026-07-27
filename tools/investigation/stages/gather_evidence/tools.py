@@ -6,10 +6,9 @@ from typing import Any
 
 from core import public_tool_input
 from core.domain.alerts.alert_source import (
-    SECONDARY_TOOL_SOURCES,
     primary_sources_for_alert,
     relevant_sources_for_alert,
-    resolve_alert_source,
+    secondary_tool_sources,
     seed_tool_sources_for_alert,
 )
 from core.llm.types import ToolCall
@@ -89,7 +88,8 @@ def select_investigation_tools(
         return tools
 
     ranked = _relevance_ranked(tools, state)
-    secondary = [tool for tool in ranked if str(tool.source) in SECONDARY_TOOL_SOURCES]
+    secondary_sources = secondary_tool_sources()
+    secondary = [tool for tool in ranked if str(tool.source) in secondary_sources]
     # Reserve a few slots *inside* the cap for cheap reasoning fallbacks so the
     # agent never loses its "reason about the alert" path on a busy environment,
     # without ever pushing the total past the hard ceiling.
@@ -99,7 +99,7 @@ def select_investigation_tools(
     kept: list[RegisteredTool] = []
     kept_names: set[str] = set()
     for tool in ranked:
-        if str(tool.source) in SECONDARY_TOOL_SOURCES or len(kept) >= primary_budget:
+        if str(tool.source) in secondary_sources or len(kept) >= primary_budget:
             continue
         kept.append(tool)
         kept_names.add(tool.name)
@@ -130,9 +130,11 @@ def _relevance_ranked(tools: list[RegisteredTool], state: dict[str, Any]) -> lis
     primary = set(primary_sources_for_alert(state))
     content_relevant = set(relevant_sources_for_alert(state, sources_present))
 
+    secondary_sources = secondary_tool_sources()
+
     def rank(tool: RegisteredTool) -> tuple[int, str, str]:
         source = str(tool.source)
-        if source in SECONDARY_TOOL_SOURCES:
+        if source in secondary_sources:
             # Cheap reasoning fallbacks (knowledge, etc.): keep but never crowd
             # out incident-specific tools.
             tier = 3
@@ -165,6 +167,7 @@ def build_connected_tool_context(
         if not key.startswith("_")
         and (isinstance(value, BaseModel) or (isinstance(value, dict) and value))
     )
+    connected_source_set = set(connected_integrations)
     connected_families = {family_key(key) for key in connected_integrations}
 
     sources: dict[str, dict[str, Any]] = {}
@@ -173,7 +176,7 @@ def build_connected_tool_context(
         source_info = sources.setdefault(
             source,
             {
-                "connected": source in connected_integrations
+                "connected": source in connected_source_set
                 or family_key(source) in connected_families,
                 "tools": [],
             },
@@ -183,7 +186,7 @@ def build_connected_tool_context(
     return {
         "connected_integrations": connected_integrations,
         "available_sources": sources,
-        "available_action_names": [tool.name for tool in sorted(tools, key=lambda item: item.name)],
+        "available_action_names": sorted(tool.name for tool in tools),
     }
 
 
@@ -199,6 +202,18 @@ def build_seed_calls(
 
     resolved = state.get("resolved_integrations") or {}
     tool_sources = availability_view(resolved)
+
+    # Enrich kubernetes tool_sources with alert-extracted context so seed calls
+    # use the correct namespace/pod rather than the default from the integration config.
+    alert_json = state.get("alert_json") or {}
+    if "kubernetes" in tool_sources and alert_json:
+        k8s_src = dict(tool_sources["kubernetes"])
+        if alert_json.get("kube_namespace"):
+            k8s_src["namespace"] = alert_json["kube_namespace"]
+        if alert_json.get("pod_name"):
+            k8s_src["pod_name"] = alert_json["pod_name"]
+        tool_sources = {**tool_sources, "kubernetes": k8s_src}
+
     seed_tools = [t for t in tools if str(t.source) in target_sources]
     if not seed_tools:
         return []
@@ -213,14 +228,21 @@ def build_seed_calls(
             injected = tool.extract_params(tool_sources)
         except Exception:
             injected = {}
+        # Seed calls are validated against the public schema before execution.
+        # Keep only declared arguments and omit None for optional fields, where
+        # absence is valid but an explicit null may violate the declared type.
+        public_properties = tool.public_input_schema.get("properties", {})
+        if not isinstance(public_properties, dict):
+            public_properties = {}
+        public_input = {
+            key: value
+            for key, value in injected.items()
+            if key in public_properties and value is not None
+        }
         tool_id = new_tool_use_id() if use_converse_ids else f"seed_{tool.name}"
-        calls.append(ToolCall(id=tool_id, name=tool.name, input=public_tool_input(injected)))
+        calls.append(ToolCall(id=tool_id, name=tool.name, input=public_tool_input(public_input)))
 
     return calls
-
-
-def get_alert_source(state: dict[str, Any]) -> str:
-    return resolve_alert_source(state)
 
 
 def tool_event_payload(tc: ToolCall, *, output: Any | None = None) -> dict[str, Any]:

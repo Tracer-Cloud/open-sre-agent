@@ -10,7 +10,36 @@ OpenSRE provides GitHub workflow tools for engineering coordination. The public 
 3. Render a mutation proposal for explicit Slack-sourced task requests.
 4. Execute the proposal only through the runtime approval path.
 
-The implementation deliberately separates read-only tools from mutating execution. Headless or non-approved runs can produce proposals, but they cannot mutate GitHub.
+The workflow tools deliberately separate read-only snapshots from mutating
+execution. Headless or non-approved runs can produce proposals, but they cannot
+execute workflow mutations.
+
+For ad-hoc chat mutations outside the Slack proposal flow (create issue, assign,
+merge, `gh api`, etc.), use **`github_cli`** instead — see [GitHub](github).
+
+## Setup
+
+Workflow tools use the same GitHub MCP credentials as the [GitHub integration](/github).
+
+```bash
+opensre integrations setup github
+opensre integrations verify github
+```
+
+| Requirement | Details |
+| --- | --- |
+| **Token** | `GITHUB_MCP_AUTH_TOKEN`, or browser sign-in via `opensre integrations setup` |
+| **Scopes** | `repo` minimum; add security alert scopes for `list_github_security_alerts` |
+| **Alternate env** | `GITHUB_TOKEN` / `GH_TOKEN` accepted by some workflow tools |
+
+### Example REPL turn
+
+```text
+> generate a Slack-ready morning check-in for Tracer-Cloud/opensre
+· gathering via GitHub · list work items…
+```
+
+See [GitHub workflow tools](#tools) below for the full tool table and mutation approval flow.
 
 ## Tools
 
@@ -72,7 +101,7 @@ The proposal includes:
 
 ### 4. Execute mutations
 
-`execute_github_issue_mutation` is the only mutating tool. It has no `confirm` argument.
+`execute_github_issue_mutation` is the only **workflow** mutating tool. It has no `confirm` argument. Ad-hoc GitHub writes in chat go through `github_cli`.
 
 Mutation behavior:
 

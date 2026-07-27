@@ -43,7 +43,6 @@ class AlertInputSlice(TypedDict, total=False):
 
     is_noise: bool
     alert_name: str
-    pipeline_name: str
     severity: str
     alert_source: str
     raw_alert: str | dict[str, Any]
@@ -111,14 +110,13 @@ class MaskingSlice(TypedDict, total=False):
 
 
 class DeliveryContextSlice(TypedDict, total=False):
-    """Channel-specific delivery metadata from the triggering surface."""
+    """Channel-specific delivery metadata from the triggering surface.
 
-    slack_context: dict[str, Any]
-    discord_context: dict[str, Any]
-    telegram_context: dict[str, Any]
-    whatsapp_context: dict[str, Any]
-    twilio_sms_context: dict[str, Any]
-    openclaw_context: dict[str, Any]
+    Keys of ``channel_contexts`` are channel names (``slack``, ``telegram``,
+    ``discord``, ``whatsapp``, ``twilio_sms``, ``openclaw``, ``rocketchat``, …).
+    """
+
+    channel_contexts: dict[str, dict[str, Any]]
 
 
 class DeliveryOutputSlice(TypedDict, total=False):

@@ -1,58 +1,130 @@
 ---
 title: "Datadog"
+description: "Connect Datadog so OpenSRE can query logs, metrics, monitors, and events during investigations"
 ---
 
-### Step 1: Create API Key
+OpenSRE queries Datadog during alert investigations — pulling logs, metrics, monitor state, and events correlated with incidents.
 
-In Datadog, create an API Key.
+## Prerequisites
 
-To create an API key, go to your organizational settings in Datadog and click **API Keys**. Or visit [https://app.datadoghq.com/organization-settings/api-keys](https://app.datadoghq.com/organization-settings/api-keys)
+- Datadog account with API access
+- API key (organization settings)
+- Application key with read scopes (`events_read`, `logs_read_data`, `logs_read_index_data`, `monitors_read`)
 
-1. Click **\+ New Key** at the top right of the screen
-2. Name your new key **tracer**
+## Setup
 
-   <Frame>
-     ![Datadog API Key](/images/datadog_api_key.webp)
-   </Frame>
+### Option 1: Interactive CLI
 
-3. Copy your new API key and hit **Finish**
+```bash
+opensre integrations setup datadog
+```
 
-### Step 2: Create Application Key
+Or run the onboarding wizard and select **Datadog**. You will be prompted for API key, application key, and site (for example `datadoghq.com` or `datadoghq.eu`).
 
-In Datadog, create an Application Key.
+### Option 2: Environment variables
 
-To create an Application Key, go to your personal settings in Datadog and click **Application Keys**. Or visit [https://app.datadoghq.com/personal-settings/application-keys](https://app.datadoghq.com/personal-settings/application-keys)
+Add to your `.env`:
 
-1. Click **\+ New Key** at the top right of the screen
-2. Name your new key **tracer**
+```bash
+DD_API_KEY=your-api-key
+DD_APP_KEY=your-application-key
+DD_SITE=datadoghq.com          # optional — default datadoghq.com; use datadoghq.eu for EU
+```
 
-   <Frame>
-     ![Datadog App Key](/images/datadog_app_key.webp)
-   </Frame>
+| Variable | Default | Description |
+| --- | --- | --- |
+| `DD_API_KEY` | — | **Required.** Datadog API key |
+| `DD_APP_KEY` | — | **Required.** Datadog application key |
+| `DD_SITE` | `datadoghq.com` | Datadog site hostname (EU: `datadoghq.eu`) |
 
-3. Click **Edit Scope** and ensure the following minimum requirements:
-   - events_read
-   - logs_read_data
-   - logs_read_index_data
-   - monitors_read
+For multiple Datadog orgs or sites, use [multi-instance](/multi-instance-integrations) with `DD_INSTANCES`.
 
-   <Frame>
-     ![Datadog App Key Scope](/images/datadog_app_key_scope.webp)
-   </Frame>
+### Option 3: Persistent store
 
-4. Under **Actions API Access** — click **Enable**
+```json
+{
+  "version": 1,
+  "integrations": [
+    {
+      "id": "datadog-prod",
+      "service": "datadog",
+      "status": "active",
+      "credentials": {
+        "api_key": "your-api-key",
+        "app_key": "your-application-key",
+        "site": "datadoghq.com"
+      }
+    }
+  ]
+}
+```
 
-   <Frame>
-     ![Datadog App Key Configuration](/images/datadog_app_key_configuration.webp)
-   </Frame>
+### Option 4: Hosted web app (OpenSRE Cloud)
 
-### Step 3: Connect Datadog to OpenSRE
+In [app.tracer.cloud](https://app.tracer.cloud), go to **Integrations** → **Datadog**, enter a name, and paste your API and application keys.
 
-1. In OpenSRE, go to **Integrations** → **Datadog**
-2. Enter a name
-3. Paste your [<u>API Key</u>](https://app.datadoghq.com/account/login?next=%2Forganization-settings%2Fapi-keys) and [<u>Application Key</u>](https://app.datadoghq.com/account/login?next=%2Forganization-settings%2Fapplication-keys) from Datadog
-4. Click **Save**.
+<Frame>
+  ![Connect Datadog](/images/connect_datadog.png)
+</Frame>
 
-   <Frame>
-     ![Connect Datadog](/images/connect_datadog.png)
-   </Frame>
+## Creating Datadog keys
+
+### API key
+
+1. In Datadog, go to **Organization Settings** → **API Keys** ([direct link](https://app.datadoghq.com/organization-settings/api-keys))
+2. Click **+ New Key** and name it (for example `opensre`)
+3. Copy the key
+
+<Frame>
+  ![Datadog API Key](/images/datadog_api_key.webp)
+</Frame>
+
+### Application key
+
+1. Go to **User Settings** → **Application Keys** ([direct link](https://app.datadoghq.com/personal-settings/application-keys))
+2. Click **+ New Key** and name it (for example `opensre`)
+3. Under **Edit Scope**, enable at minimum: `events_read`, `logs_read_data`, `logs_read_index_data`, `monitors_read`
+4. Under **Actions API Access**, click **Enable**
+5. Copy the key
+
+<Frame>
+  ![Datadog App Key](/images/datadog_app_key.webp)
+</Frame>
+
+<Frame>
+  ![Datadog App Key Scope](/images/datadog_app_key_scope.webp)
+</Frame>
+
+<Note>
+  Some Datadog UI labels still say **tracer** from the Tracer→OpenSRE transition. Any key name works — use `opensre` for clarity.
+</Note>
+
+## Verify
+
+```bash
+opensre integrations verify datadog
+```
+
+Expected output:
+
+```
+Service: datadog
+Status: passed
+Detail: Connected to datadoghq.com and validated API access
+```
+
+Inside the REPL: `/integrations verify datadog` or `/verify datadog`.
+
+## Troubleshooting
+
+| Symptom | Fix |
+| --- | --- |
+| **403 Forbidden** | Confirm application key scopes include `logs_read_data` and `monitors_read` |
+| **Wrong site / EU account** | Set `DD_SITE=datadoghq.eu` (or your site hostname) |
+| **Verify passes but no logs in investigation** | Check index retention and that the app key can read the target log index |
+| **Multiple Datadog accounts** | Use `DD_INSTANCES` — see [Multi-instance integrations](/multi-instance-integrations) |
+
+## Security best practices
+
+- Create a dedicated application key with read-only scopes for investigations.
+- Store keys in `.env` or your secret manager — not in source control.

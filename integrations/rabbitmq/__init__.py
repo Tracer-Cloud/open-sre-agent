@@ -27,6 +27,7 @@ import httpx
 from pydantic import Field, field_validator
 
 from config.strict_config import StrictConfigModel
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
 from platform.common.coercion import safe_int
 
@@ -136,7 +137,7 @@ def _get_client(config: RabbitMQConfig) -> httpx.Client:
 
 
 def _error_evidence(err: str) -> dict[str, Any]:
-    return {"source": "rabbitmq", "available": False, "error": err}
+    return tool_unavailable("rabbitmq", err)
 
 
 def _vhost_path(base: str, vhost: str) -> str:

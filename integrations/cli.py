@@ -16,6 +16,10 @@ from typing import TYPE_CHECKING, Any, NoReturn, cast
 
 import questionary
 
+from platform.terminal.prompt_support import (
+    QUESTIONARY_QMARK,
+    questionary_prompt_style,
+)
 from platform.terminal.theme import (
     ANSI_BOLD,
     ANSI_DIM,
@@ -25,37 +29,20 @@ from platform.terminal.theme import (
 
 if TYPE_CHECKING:
     from integrations.github.mcp import GitHubMcpDisplayDetailLevel
+    from integrations.setup_flow import IntegrationSetupSpec
 
-from integrations.gitlab import DEFAULT_GITLAB_BASE_URL
-from integrations.openclaw import build_openclaw_config, validate_openclaw_config
-from integrations.posthog_mcp import (
-    DEFAULT_POSTHOG_MCP_URL,
-    build_posthog_mcp_config,
-    validate_posthog_mcp_config,
-)
 from integrations.registry import SUPPORTED_SETUP_SERVICES, resolve_management_service
-from integrations.sentry_mcp import (
-    DEFAULT_SENTRY_MCP_URL,
-    build_sentry_mcp_config,
-    validate_sentry_mcp_config,
-)
 from integrations.store import (
     STORE_PATH,
     get_integration,
     list_integrations,
     remove_integration,
-    upsert_integration,
 )
 from integrations.verify import (
     SUPPORTED_VERIFY_SERVICES,
     format_verification_results,
     verification_exit_code,
     verify_integrations,
-)
-from integrations.x_mcp import (
-    DEFAULT_X_MCP_URL,
-    build_x_mcp_config,
-    validate_x_mcp_config,
 )
 
 _B = ANSI_BOLD
@@ -86,12 +73,32 @@ _SECRET_KEYS = frozenset(
 )
 
 
+def _select(message: str, choices: list[Any], **kwargs: Any) -> Any:
+    return questionary.select(
+        message,
+        choices=choices,
+        qmark=QUESTIONARY_QMARK,
+        style=questionary_prompt_style(),
+        **kwargs,
+    ).ask()
+
+
+def _confirm(message: str, **kwargs: Any) -> Any:
+    return questionary.confirm(
+        message, qmark=QUESTIONARY_QMARK, style=questionary_prompt_style(), **kwargs
+    ).ask()
+
+
 def _p(label: str, default: str = "", secret: bool = False) -> str:
     try:
         if secret:
-            result = questionary.password(f"  {label}").ask()
+            result = questionary.password(
+                label, qmark=QUESTIONARY_QMARK, style=questionary_prompt_style()
+            ).ask()
         else:
-            result = questionary.text(f"  {label}", default=default).ask()
+            result = questionary.text(
+                label, default=default, qmark=QUESTIONARY_QMARK, style=questionary_prompt_style()
+            ).ask()
     except (EOFError, KeyboardInterrupt):
         print("\nAborted.")
         sys.exit(1)
@@ -110,15 +117,15 @@ def _prompt_github_repo_report_level() -> GitHubMcpDisplayDetailLevel:
     """Ask how much repository access detail to print after a successful validation."""
 
     try:
-        sel = questionary.select(
-            "  How much repository detail should we show?",
+        sel = _select(
+            "How much repository detail should we show?",
             choices=[
                 questionary.Choice("Brief (recommended) — no repo names", value="summary"),
                 questionary.Choice("Standard — scope summary only", value="standard"),
                 questionary.Choice("Expanded — include repo names", value="full"),
             ],
             default="summary",
-        ).ask()
+        )
     except (EOFError, KeyboardInterrupt):
         print("\nAborted.")
         sys.exit(1)
@@ -159,290 +166,93 @@ def _mask(obj: Any) -> Any:
 
 
 def _setup_grafana() -> None:
-    endpoint = _p("Instance URL (e.g. https://myorg.grafana.net)")
-    api_key = _p("Service account token", secret=True)
-    if not endpoint or not api_key:
-        _die("endpoint and api_key are required.")
-    upsert_integration("grafana", {"credentials": {"endpoint": endpoint, "api_key": api_key}})
+    from integrations.grafana.setup import GRAFANA_SETUP
+
+    _run_spec_setup(GRAFANA_SETUP)
 
 
 def _setup_datadog() -> None:
-    api_key = _p("API key", secret=True)
-    app_key = _p("Application key", secret=True)
-    site = _p("Site", default="datadoghq.com")
-    if not api_key or not app_key:
-        _die("api_key and app_key are required.")
-    upsert_integration(
-        "datadog", {"credentials": {"api_key": api_key, "app_key": app_key, "site": site}}
-    )
+    from integrations.datadog.setup import DATADOG_SETUP
+
+    _run_spec_setup(DATADOG_SETUP)
 
 
 def _setup_groundcover() -> None:
-    api_key = _p("Service-account API key", secret=True)
-    mcp_url = _p("MCP URL", default="https://mcp.groundcover.com/api/mcp")
-    tenant_uuid = _p("Tenant UUID (optional, for multi-workspace accounts)")
-    backend_id = _p("Backend ID (optional, for multi-backend tenants)")
-    timezone = _p("Timezone", default="UTC")
-    if not api_key:
-        _die("api_key is required.")
-    credentials: dict[str, str] = {
-        "api_key": api_key,
-        "mcp_url": mcp_url,
-        "timezone": timezone,
-    }
-    if tenant_uuid:
-        credentials["tenant_uuid"] = tenant_uuid
-    if backend_id:
-        credentials["backend_id"] = backend_id
-    upsert_integration("groundcover", {"credentials": credentials})
+    from integrations.groundcover.setup import GROUNDCOVER_SETUP
+
+    _run_spec_setup(GROUNDCOVER_SETUP)
 
 
 def _setup_honeycomb() -> None:
-    api_key = _p("Configuration API key", secret=True)
-    dataset = _p("Dataset slug or __all__", default="__all__")
-    base_url = _p("API URL", default="https://api.honeycomb.io")
-    if not api_key:
-        _die("api_key is required.")
-    upsert_integration(
-        "honeycomb",
-        {"credentials": {"api_key": api_key, "dataset": dataset, "base_url": base_url}},
-    )
+    from integrations.honeycomb.setup import HONEYCOMB_SETUP
+
+    _run_spec_setup(HONEYCOMB_SETUP)
 
 
 def _setup_coralogix() -> None:
-    api_key = _p("DataPrime API key", secret=True)
-    base_url = _p("API URL", default="https://api.coralogix.com")
-    application_name = _p("Application name (optional)")
-    subsystem_name = _p("Subsystem name (optional)")
-    if not api_key or not base_url:
-        _die("api_key and base_url are required.")
-    upsert_integration(
-        "coralogix",
-        {
-            "credentials": {
-                "api_key": api_key,
-                "base_url": base_url,
-                "application_name": application_name,
-                "subsystem_name": subsystem_name,
-            }
-        },
-    )
+    from integrations.coralogix.setup import CORALOGIX_SETUP
+
+    _run_spec_setup(CORALOGIX_SETUP)
 
 
 def _setup_aws() -> None:
-    choice = questionary.select(
-        "AWS authentication method:",
-        choices=[
-            questionary.Choice("IAM Role ARN", value="1"),
-            questionary.Choice("Access Key + Secret", value="2"),
-        ],
-        instruction="(use arrow keys)",
-    ).ask()
-    if choice is None:
-        print("\nAborted.")
-        sys.exit(1)
-    region = _p("Region", default="us-east-1")
-    if choice == "1":
-        role_arn = _p("IAM Role ARN")
-        if not role_arn:
-            _die("role_arn is required.")
-        upsert_integration(
-            "aws",
-            {
-                "role_arn": role_arn,
-                "external_id": _p("External ID (optional)"),
-                "credentials": {"region": region},
-            },
-        )
-    else:
-        access_key = _p("AWS_ACCESS_KEY_ID", secret=True)
-        secret_key = _p("AWS_SECRET_ACCESS_KEY", secret=True)
-        if not access_key or not secret_key:
-            _die("access_key and secret_key are required.")
-        upsert_integration(
-            "aws",
-            {
-                "credentials": {
-                    "access_key_id": access_key,
-                    "secret_access_key": secret_key,
-                    "session_token": _p("Session token (optional)"),
-                    "region": region,
-                }
-            },
-        )
+    from integrations.aws.setup import AWS_SETUP
+
+    _run_spec_setup(AWS_SETUP)
 
 
 def _setup_slack() -> None:
-    """Configure Slack delivery webhook and/or Socket Mode gateway tokens.
+    from integrations.slack.setup import SLACK_SETUP
 
-    Mirrors Telegram setup: credentials land in the integration store so
-    ``load_slack_gateway_settings`` and outbound delivery can read them.
-    Existing credentials are merged so re-running setup does not wipe the
-    other mode.
-    """
-    from integrations.store import get_integration
-
-    existing = get_integration("slack") or {}
-    creds = dict(existing.get("credentials") or {})
-
-    mode = questionary.select(
-        "Slack setup:",
-        choices=[
-            questionary.Choice("Incoming webhook (outbound delivery)", value="webhook"),
-            questionary.Choice("Socket Mode bot (two-way gateway chat)", value="socket"),
-            questionary.Choice("Both webhook and Socket Mode", value="both"),
-        ],
-        instruction="(use arrow keys)",
-    ).ask()
-    if mode is None:
-        print("\nAborted.")
-        sys.exit(1)
-
-    if mode in {"webhook", "both"}:
-        webhook_url = _p(
-            "Slack webhook URL",
-            secret=True,
-            default=str(creds.get("webhook_url") or ""),
-        )
-        if not webhook_url:
-            _die("webhook_url is required for webhook setup.")
-        creds["webhook_url"] = webhook_url
-
-    if mode in {"socket", "both"}:
-        bot_token = _p(
-            "Slack bot token (xoxb-…)",
-            secret=True,
-            default=str(creds.get("bot_token") or ""),
-        )
-        app_token = _p(
-            "Slack app-level token (xapp-…)",
-            secret=True,
-            default=str(creds.get("app_token") or ""),
-        )
-        if not bot_token or not app_token:
-            _die("bot_token and app_token are required for Socket Mode setup.")
-        if not bot_token.startswith("xoxb-"):
-            _die("bot_token must start with xoxb-")
-        if not app_token.startswith("xapp-"):
-            _die("app_token must start with xapp-")
-        creds["bot_token"] = bot_token
-        creds["app_token"] = app_token
-        print("\n  Next for the gateway:")
-        print("    - opensre messaging allow -p slack -u <U…>")
-        print("    - opensre gateway start")
-
-    upsert_integration("slack", {"credentials": creds})
+    _run_spec_setup(SLACK_SETUP)
 
 
 def _setup_opensearch() -> None:
-    url = _p("URL (e.g. https://my-cluster.us-east-1.es.amazonaws.com)")
-    if not url:
-        _die("url is required.")
-    creds: dict[str, Any] = {"url": url}
-    auth_choice = questionary.select(
-        "OpenSearch authentication method:",
-        choices=[
-            questionary.Choice("Username + Password (HTTP Basic Auth)", value="basic"),
-            questionary.Choice("API key", value="api_key"),
-            questionary.Choice("None (security disabled)", value="none"),
-        ],
-        instruction="(use arrow keys)",
-    ).ask()
-    if auth_choice is None:
-        print("\nAborted.")
-        sys.exit(1)
-    if auth_choice == "api_key":
-        api_key = _p("API key", secret=True)
-        if not api_key:
-            _die("api_key is required.")
-        creds["api_key"] = api_key
-    elif auth_choice == "basic":
-        username = _p("Username", default="admin")
-        password = _p("Password", secret=True)
-        if not username or not password:
-            _die("username and password are required for basic auth.")
-        creds["username"] = username
-        creds["password"] = password
-    upsert_integration("opensearch", {"credentials": creds})
+    from integrations.opensearch.setup import OPENSEARCH_SETUP
+
+    _run_spec_setup(OPENSEARCH_SETUP)
+
+
+def _setup_servicenow() -> None:
+    from integrations.servicenow.setup import SERVICENOW_SETUP
+
+    _run_spec_setup(SERVICENOW_SETUP)
 
 
 def _setup_rds() -> None:
-    host = _p("Host (e.g. mydb.xxxx.us-east-1.rds.amazonaws.com)")
-    port = _p("Port", default="5432")
-    database = _p("Database name")
-    username = _p("Username")
-    password = _p("Password", secret=True)
-    if not host or not database or not username:
-        _die("host, database, and username are required.")
-    upsert_integration(
-        "rds",
-        {
-            "credentials": {
-                "host": host,
-                "port": int(port) if port.isdigit() else 5432,
-                "database": database,
-                "username": username,
-                "password": password,
-            }
-        },
-    )
+    from integrations.rds.setup import RDS_SETUP
+
+    _run_spec_setup(RDS_SETUP)
 
 
 def _setup_tracer() -> None:
-    base_url = _p("Tracer web app URL", default="http://localhost:3000")
-    jwt_token = _p("JWT token", secret=True)
-    if not base_url or not jwt_token:
-        _die("base_url and jwt_token are required.")
-    upsert_integration("tracer", {"credentials": {"base_url": base_url, "jwt_token": jwt_token}})
+    from integrations.tracer.setup import TRACER_SETUP
+
+    _run_spec_setup(TRACER_SETUP)
 
 
 def _setup_vercel() -> None:
-    api_token = _p("Vercel API token", secret=True)
-    team_id = _p("Team ID (optional for personal accounts)")
-    if not api_token:
-        _die("api_token is required.")
-    upsert_integration("vercel", {"credentials": {"api_token": api_token, "team_id": team_id}})
+    from integrations.vercel.setup import VERCEL_SETUP
+
+    _run_spec_setup(VERCEL_SETUP)
+
+
+def _setup_railway() -> None:
+    from integrations.railway.setup import RAILWAY_SETUP
+
+    _run_spec_setup(RAILWAY_SETUP)
 
 
 def _setup_betterstack() -> None:
-    query_endpoint = _p(
-        "Better Stack SQL query endpoint (e.g. https://eu-nbg-2-connect.betterstackdata.com)"
-    )
-    username = _p("Better Stack username (Integrations > Connect ClickHouse HTTP client)")
-    password = _p("Better Stack password", secret=True)
-    sources_raw = _p(
-        "Better Stack sources, comma-separated base IDs from dashboard (optional hint for the planner)"
-    )
-    if not query_endpoint or not username:
-        _die("query_endpoint and username are required.")
-    sources = [part.strip() for part in (sources_raw or "").split(",") if part.strip()]
-    upsert_integration(
-        "betterstack",
-        {
-            "credentials": {
-                "query_endpoint": query_endpoint,
-                "username": username,
-                "password": password,
-                "sources": sources,
-            }
-        },
-    )
+    from integrations.betterstack.setup import BETTERSTACK_SETUP
+
+    _run_spec_setup(BETTERSTACK_SETUP)
 
 
 def _setup_incident_io() -> None:
-    api_key = _p("incident.io API key", secret=True)
-    base_url = _p("API base URL override (optional)")
-    if not api_key:
-        _die("api_key is required.")
-    upsert_integration(
-        "incident_io",
-        {
-            "credentials": {
-                "api_key": api_key,
-                "base_url": base_url,
-            }
-        },
-    )
+    from integrations.incident_io.setup import INCIDENT_IO_SETUP
+
+    _run_spec_setup(INCIDENT_IO_SETUP)
 
 
 def _github_browser_authorize() -> str | None:
@@ -494,8 +304,8 @@ def _setup_github_auth_token(mode: str) -> str:
             secret=True,
         )
 
-    auth_method = questionary.select(
-        "  How do you want to connect OpenSRE to GitHub?",
+    auth_method = _select(
+        "How do you want to connect OpenSRE to GitHub?",
         choices=[
             questionary.Choice(
                 "Sign in with GitHub in your browser (opens a page, enter a one-time code)",
@@ -505,7 +315,7 @@ def _setup_github_auth_token(mode: str) -> str:
             questionary.Choice("Skip — the MCP server authenticates upstream", value="none"),
         ],
         default="browser",
-    ).ask()
+    )
     if auth_method is None:
         print("\nAborted.")
         sys.exit(1)
@@ -543,8 +353,8 @@ def _github_advanced_setup(credentials: dict[str, Any]) -> tuple[str, str]:
     toolsets = _p("Toolsets", default=",".join(DEFAULT_GITHUB_MCP_TOOLSETS))
     credentials["toolsets"] = [part.strip() for part in toolsets.split(",") if part.strip()]
 
-    repo_view = questionary.select(
-        "  Which repository view should we use to verify access?",
+    repo_view = _select(
+        "Which repository view should we use to verify access?",
         choices=[
             questionary.Choice("Auto (recommended)", value="auto"),
             questionary.Choice("Your repositories", value="user"),
@@ -553,19 +363,19 @@ def _github_advanced_setup(credentials: dict[str, Any]) -> tuple[str, str]:
             questionary.Choice("Search: user:<your_login>", value="search_user"),
         ],
         default="auto",
-    ).ask()
+    )
     if repo_view is None:
         print("\nAborted.")
         sys.exit(1)
-    repo_visibility = questionary.select(
-        "  Filter repositories by visibility (best-effort)",
+    repo_visibility = _select(
+        "Filter repositories by visibility (best-effort)",
         choices=[
             questionary.Choice("Any (recommended)", value="any"),
             questionary.Choice("Public only", value="public"),
             questionary.Choice("Private only", value="private"),
         ],
         default="any",
-    ).ask()
+    )
     if repo_visibility is None:
         print("\nAborted.")
         sys.exit(1)
@@ -578,7 +388,13 @@ def _setup_github() -> str | None:
     Returns the authenticated GitHub login on success (``None`` if the validated
     result carried no login), so callers like the first-launch gate can propagate
     the username. Exits the process on validation failure.
+
+    Collection stays custom (browser OAuth + optional repo-scope probes). Persist
+    goes through :func:`integrations.setup_flow.apply_setup` so the token lands
+    in the keyring and the non-secrets in ``.env``, not just the store.
     """
+    import dataclasses
+
     from integrations.github.mcp import (
         DEFAULT_GITHUB_MCP_MODE,
         DEFAULT_GITHUB_MCP_TOOLSETS,
@@ -591,12 +407,14 @@ def _setup_github() -> str | None:
         print_github_mcp_validation_report,
         validate_github_mcp_config,
     )
+    from integrations.github.setup import GITHUB_SETUP
+    from integrations.setup_flow import apply_setup
 
     print("  Connect OpenSRE to GitHub through the hosted GitHub MCP server.")
-    advanced = questionary.confirm(
-        "  Customize advanced settings (transport, server URL, toolsets, repo scope)?",
+    advanced = _confirm(
+        "Customize advanced settings (transport, server URL, toolsets, repo scope)?",
         default=False,
-    ).ask()
+    )
     if advanced is None:
         print("\nAborted.")
         sys.exit(1)
@@ -635,238 +453,144 @@ def _setup_github() -> str | None:
             print(f"  {line}")
         sys.exit(1)
 
-    if result.authenticated_user:
-        # Persist the resolved GitHub login as a non-secret credential field so
-        # surfaces like the welcome banner can greet the user by their GitHub
-        # handle instead of the local system username.
-        credentials["username"] = result.authenticated_user
-    upsert_integration("github", {"credentials": credentials})
-    if result.authenticated_user:
-        from platform.analytics.cli import identify_github_username
+    toolsets = credentials.get("toolsets") or []
+    if isinstance(toolsets, str):
+        toolsets_value = toolsets
+    else:
+        toolsets_value = ",".join(str(part).strip() for part in toolsets if str(part).strip())
 
-        identify_github_username(result.authenticated_user)
+    # Already verified above (with optional repo-scope probes). Skip the spec's
+    # simpler probe so we do not hit the hosted server twice.
+    outcome = apply_setup(
+        dataclasses.replace(GITHUB_SETUP, verify=None),
+        {
+            "mode": str(credentials.get("mode") or DEFAULT_GITHUB_MCP_MODE),
+            "url": str(credentials.get("url") or DEFAULT_GITHUB_MCP_URL),
+            "auth_token": str(credentials.get("auth_token") or ""),
+            "toolsets": toolsets_value,
+            "username": result.authenticated_user or "",
+        },
+    )
+    if not outcome.ok:
+        _die(outcome.detail)
     return result.authenticated_user
 
 
 def _setup_gitlab() -> None:
-    base_url = _p("Gitlab base URL", default=DEFAULT_GITLAB_BASE_URL)
-    auth_token = _p("Gitlab access token", secret=True)
-    upsert_integration(
-        "gitlab",
-        {"credentials": {"base_url": base_url, "auth_token": auth_token}},
-    )
+    from integrations.gitlab.setup import GITLAB_SETUP
+
+    _run_spec_setup(GITLAB_SETUP)
 
 
 def _setup_sentry() -> None:
-    base_url = _p("Sentry URL", default="https://sentry.io")
-    organization_slug = _p("Organization slug")
-    auth_token = _p("Auth token", secret=True)
-    project_slug = _p("Project slug (optional)")
-    if not organization_slug or not auth_token:
-        _die("organization_slug and auth_token are required.")
-    upsert_integration(
-        "sentry",
-        {
-            "credentials": {
-                "base_url": base_url,
-                "organization_slug": organization_slug,
-                "auth_token": auth_token,
-                "project_slug": project_slug,
-            }
-        },
-    )
+    from integrations.sentry.setup import SENTRY_SETUP
+
+    _run_spec_setup(SENTRY_SETUP)
+
+
+def _setup_posthog() -> None:
+    from integrations.posthog.setup import POSTHOG_SETUP
+
+    _run_spec_setup(POSTHOG_SETUP)
 
 
 def _setup_mongodb() -> None:
-    connection_string = _p(
-        "Connection string (e.g. mongodb+srv://user:pass@cluster.example.net)", secret=True
-    )
-    database = _p("Database name")
-    auth_source = _p("Auth source", default="admin")
-    tls_choice = questionary.select(
-        "TLS enabled?",
-        choices=[
-            questionary.Choice("Yes", value="1"),
-            questionary.Choice("No", value="0"),
-        ],
-        instruction="(use arrow keys)",
-    ).ask()
-    if tls_choice is None:
-        print("\nAborted.")
-        sys.exit(1)
-    tls = tls_choice == "1"
-    if not connection_string:
-        _die("connection_string is required.")
-    upsert_integration(
-        "mongodb",
-        {
-            "credentials": {
-                "connection_string": connection_string,
-                "database": database,
-                "auth_source": auth_source,
-                "tls": tls,
-            }
-        },
-    )
+    from integrations.mongodb.setup import MONGODB_SETUP
+
+    _run_spec_setup(MONGODB_SETUP)
 
 
 def _setup_redis() -> None:
-    host = _p("Host (e.g. localhost or redis.example.net)")
-    if not host:
-        _die("host is required.")
-    port_input = _p("Port", default="6379")
-    username = _p("Username (leave blank unless using Redis ACLs)")
-    password = _p("Password (leave blank if not set)", secret=True)
-    db_input = _p("Database number", default="0")
-    ssl_choice = questionary.select(
-        "Use TLS?",
-        choices=[
-            questionary.Choice("No", value="0"),
-            questionary.Choice("Yes", value="1"),
-        ],
-        instruction="(use arrow keys)",
-    ).ask()
-    if ssl_choice is None:
-        print("\nAborted.")
-        sys.exit(1)
-    ssl = ssl_choice == "1"
-    try:
-        port = int(port_input)
-    except (TypeError, ValueError):
-        _die(f"port: {port_input} is invalid")
-    try:
-        db = int(db_input)
-    except (TypeError, ValueError):
-        _die(f"db: {db_input} is invalid")
-    upsert_integration(
-        "redis",
-        {
-            "credentials": {
-                "host": host,
-                "port": port,
-                "username": username,
-                "password": password,
-                "db": db,
-                "ssl": ssl,
-            }
-        },
-    )
+    from integrations.redis.setup import REDIS_SETUP
 
-
-def _register_discord_slash_command(application_id: str, bot_token: str) -> None:
-    import httpx
-
-    url = f"https://discord.com/api/v10/applications/{application_id}/commands"
-    payload = {
-        "name": "investigate",
-        "description": "Trigger an OpenSRE investigation",
-        "options": [
-            {
-                "name": "alert",
-                "description": "Alert JSON or description",
-                "type": 3,
-                "required": True,
-            }
-        ],
-    }
-    resp = httpx.put(url, json=[payload], headers={"Authorization": f"Bot {bot_token}"}, timeout=10)
-    if resp.is_success:
-        print("  ✓ /investigate slash command registered.")
-    else:
-        print(f"  ⚠ Slash command registration failed ({resp.status_code}): {resp.text}")
+    _run_spec_setup(REDIS_SETUP)
 
 
 def _setup_discord() -> None:
-    bot_token = _p("Discord bot token", secret=True)
-    application_id = _p("Discord application ID")
-    public_key = _p("Discord public key (from Developer Portal)")
-    default_channel_id = _p("Default channel ID (optional)")
-    upsert_integration(
-        "discord",
-        {
-            "credentials": {
-                "bot_token": bot_token,
-                "application_id": application_id,
-                "public_key": public_key,
-                "default_channel_id": default_channel_id,
-            }
-        },
-    )
-    _register_discord_slash_command(application_id, bot_token)
+    from integrations.discord.setup import DISCORD_SETUP
+
+    _run_spec_setup(DISCORD_SETUP)
+
+
+def _run_spec_setup(spec: IntegrationSetupSpec) -> None:
+    """Prompt for a spec's fields, then validate, verify, and persist them.
+
+    Fields are prefilled from the stored credentials so re-running setup is a
+    series of enters, not a retype, and never silently drops a value the user
+    did not re-type. When the spec declares a picker (``mode_prompt``), only the
+    chosen mode's fields are asked; fields belonging to another mode are cleared.
+
+    Each field is checked as it is answered so a blank required value fails
+    immediately, rather than after the user has worked through the rest of the
+    prompts.
+    """
+    from integrations.setup_flow import apply_setup
+    from integrations.store import get_integration
+
+    stored = (get_integration(spec.service) or {}).get("credentials") or {}
+
+    mode: str | None = None
+    if spec.mode_prompt:
+        mode = _select(
+            spec.mode_prompt,
+            choices=[questionary.Choice(m.label, value=m.value) for m in spec.modes],
+            instruction="(use arrow keys)",
+        )
+        if mode is None:
+            print("\nAborted.")
+            sys.exit(1)
+
+    collectable = {field.name for field in spec.collectable_fields(mode)}
+
+    values: dict[str, str | None] = {}
+    for field in spec.fields:
+        if field.is_constant:
+            values[field.name] = field.constant
+            continue
+        if field.name not in collectable:
+            # Gated field for an unchosen mode: clear it rather than prompt, so
+            # switching modes turns the other mode's credentials off.
+            values[field.name] = ""
+            continue
+        default = str(stored.get(field.name) or "") or field.default
+        value = _p(field.question, default=default, secret=field.secret)
+        # A field with a default is never missing — apply_setup substitutes it —
+        # so only a defaultless required field can fail here.
+        if not value and field.required and not field.default:
+            _die(f"{field.label} is required.")
+        values[field.name] = value
+
+    print(f"\n  Validating {spec.service} credentials...")
+    outcome = apply_setup(spec, values)
+    if not outcome.ok:
+        _die(outcome.detail)
+    print(f"  {outcome.detail}")
+    print("  Next:")
+    print(f"    - opensre integrations verify {spec.service}")
 
 
 def _setup_telegram() -> None:
-    from integrations.telegram.verifier import verify_telegram
+    from integrations.telegram.setup import TELEGRAM_SETUP
 
-    bot_token = _p("Telegram bot token", secret=True)
-    if not bot_token:
-        _die("bot_token is required.")
-    default_chat_id = _p("Default chat ID (optional)")
-    print("\n  Validating Telegram bot token...")
-    result = verify_telegram("setup", {"bot_token": bot_token})
-    if result["status"] != "passed":
-        _die(result["detail"])
-    print(f"  {result['detail']}")
-    upsert_integration(
-        "telegram",
-        {
-            "credentials": {
-                "bot_token": bot_token,
-                "default_chat_id": default_chat_id or None,
-            }
-        },
-    )
-    print("  Next:")
-    print("    - opensre integrations verify telegram")
+    _run_spec_setup(TELEGRAM_SETUP)
+
+
+def _setup_rocketchat() -> None:
+    from integrations.rocketchat.setup import ROCKETCHAT_SETUP
+
+    _run_spec_setup(ROCKETCHAT_SETUP)
 
 
 def _setup_smtp() -> None:
-    host = _p("SMTP host (e.g. smtp.gmail.com)")
-    from_address = _p("From email address")
-    if not host or not from_address:
-        _die("host and from_address are required.")
+    from integrations.smtp.setup import SMTP_SETUP
 
-    port = _parse_port(_p("SMTP port", default="587"), default=587)
-    security = (_p("Security mode (starttls/ssl/none)", default="starttls") or "starttls").strip()
-    username = _p("Username (optional)")
-    password = _p("Password (optional; leave blank when username is blank)", secret=True)
-    if bool(username) != bool(password):
-        _die("username and password must both be set, or both be empty.")
-
-    upsert_integration(
-        "smtp",
-        {
-            "credentials": {
-                "host": host,
-                "port": port,
-                "security": security,
-                "username": username,
-                "password": password,
-                "from_address": from_address,
-                "default_to": _p("Default recipient email (optional)") or None,
-            }
-        },
-    )
+    _run_spec_setup(SMTP_SETUP)
 
 
 def _setup_whatsapp() -> None:
-    account_sid = _p("Twilio Account SID (starts with AC...)")
-    auth_token = _p("Twilio Auth Token", secret=True)
-    from_number = _p("Twilio WhatsApp From number (e.g. whatsapp:+14155238886)")
-    default_to = _p("Default recipient phone number (optional, e.g. +1234567890)")
-    if not account_sid or not auth_token or not from_number:
-        _die("account_sid, auth_token, and from_number are required.")
-    upsert_integration(
-        "whatsapp",
-        {
-            "credentials": {
-                "account_sid": account_sid,
-                "auth_token": auth_token,
-                "from_number": from_number,
-                "default_to": default_to,
-            }
-        },
-    )
+    from integrations.whatsapp.setup import WHATSAPP_SETUP
+
+    _run_spec_setup(WHATSAPP_SETUP)
 
 
 def _setup_twilio() -> None:
@@ -874,432 +598,101 @@ def _setup_twilio() -> None:
 
     WhatsApp delivery is configured separately via ``setup whatsapp``.
     """
-    account_sid = _p("Twilio Account SID (starts with AC...)")
-    auth_token = _p("Twilio Auth Token", secret=True)
-    if not account_sid or not auth_token:
-        _die("account_sid and auth_token are required.")
+    from integrations.twilio.setup import TWILIO_SETUP
 
-    sms_from = _p(
-        "Twilio SMS From number (E.164, e.g. +14155551234; leave blank to use a Messaging Service SID)"
-    )
-    messaging_service_sid = ""
-    if not sms_from:
-        messaging_service_sid = _p("Twilio Messaging Service SID (starts with MG...)")
-        if not messaging_service_sid:
-            _die("SMS requires either a from_number or a messaging_service_sid.")
-
-    upsert_integration(
-        "twilio",
-        {
-            "credentials": {
-                "account_sid": account_sid,
-                "auth_token": auth_token,
-                "sms": {
-                    "enabled": True,
-                    "from_number": sms_from,
-                    "messaging_service_sid": messaging_service_sid,
-                    "default_to": _p("Default SMS recipient (optional, E.164)") or None,
-                },
-            }
-        },
-    )
+    _run_spec_setup(TWILIO_SETUP)
 
 
 def _setup_openclaw() -> None:
-    # Transport is fixed to stdio (the local OpenClaw bridge). In practice it is the
-    # only mode anyone selects, so the transport prompt was removed on purpose — do
-    # NOT reintroduce a transport selection or a remote streamable-http/SSE branch.
-    mode = "stdio"
-    credentials: dict[str, Any] = {"mode": mode}
-    command = _p("OpenClaw bridge command", default="openclaw")
-    args = _p("OpenClaw bridge args", default="mcp serve")
-    if not command:
-        _die("command is required for stdio mode.")
-    credentials["command"] = command
-    credentials["args"] = [part for part in args.split() if part]
-    credentials["url"] = ""
-    credentials["auth_token"] = ""
+    from integrations.openclaw.setup import OPENCLAW_SETUP
 
-    print("\n  Validating OpenClaw bridge...")
-    config = build_openclaw_config(credentials)
-    result = validate_openclaw_config(config)
-    print(f"  {result.detail}")
-    if not result.ok:
-        sys.exit(1)
-
-    upsert_integration("openclaw", {"credentials": credentials})
-    print("  Next:")
-    print("    - opensre integrations verify openclaw")
+    _run_spec_setup(OPENCLAW_SETUP)
     print("    - uv run opensre investigate -i tests/fixtures/openclaw_test_alert.json")
     print("    - for accurate RCA, also configure Grafana/Datadog and GitHub")
 
 
 def _setup_posthog_mcp() -> None:
-    # Transport is fixed to Streamable HTTP (the hosted PostHog MCP server). In
-    # practice it is the only mode anyone selects, so the transport prompt was removed
-    # on purpose — do NOT reintroduce a transport selection or a stdio branch here.
-    mode = "streamable-http"
-    credentials: dict[str, Any] = {"mode": mode, "read_only": True}
-    url = _p("PostHog MCP URL", default=DEFAULT_POSTHOG_MCP_URL)
-    if not url:
-        _die("url is required for remote MCP modes.")
-    credentials["url"] = url
-    credentials["command"] = ""
-    credentials["args"] = []
+    from integrations.posthog_mcp.setup import POSTHOG_MCP_SETUP
 
-    credentials["auth_token"] = _p("PostHog personal API key (MCP Server preset)", secret=True)
-    if not credentials["auth_token"]:
-        _die("a personal API key is required for the hosted PostHog MCP server.")
-    credentials["project_id"] = _p("PostHog project ID (optional)", default="")
-
-    print("\n  Validating PostHog MCP...")
-    config = build_posthog_mcp_config(credentials)
-    result = validate_posthog_mcp_config(config)
-    print(f"  {result.detail}")
-    if not result.ok:
-        sys.exit(1)
-
-    upsert_integration("posthog_mcp", {"credentials": credentials})
-    print("  Next:")
-    print("    - opensre integrations verify posthog_mcp")
+    _run_spec_setup(POSTHOG_MCP_SETUP)
 
 
 def _setup_sentry_mcp() -> None:
-    # Transport is fixed to Streamable HTTP (the hosted Sentry MCP server). In
-    # practice it is the only mode anyone selects, so the transport prompt was removed
-    # on purpose — do NOT reintroduce a transport selection or a stdio branch here.
-    mode = "streamable-http"
-    credentials: dict[str, Any] = {"mode": mode}
-    url = _p("Sentry MCP URL", default=DEFAULT_SENTRY_MCP_URL)
-    if not url:
-        _die("url is required for remote MCP modes.")
-    credentials["url"] = url
-    credentials["command"] = ""
-    credentials["args"] = []
+    from integrations.sentry_mcp.setup import SENTRY_MCP_SETUP
 
-    credentials["auth_token"] = _p("Sentry user auth token", secret=True)
-    if not credentials["auth_token"]:
-        _die("a user auth token is required for the hosted Sentry MCP server.")
-    credentials["host"] = _p("Self-hosted Sentry host (optional)", default="")
-
-    print("\n  Validating Sentry MCP...")
-    config = build_sentry_mcp_config(credentials)
-    result = validate_sentry_mcp_config(config)
-    print(f"  {result.detail}")
-    if not result.ok:
-        sys.exit(1)
-
-    upsert_integration("sentry_mcp", {"credentials": credentials})
-    print("  Next:")
-    print("    - opensre integrations verify sentry_mcp")
+    _run_spec_setup(SENTRY_MCP_SETUP)
 
 
 def _setup_x_mcp() -> None:
-    # X's MCP server (https://github.com/xdevplatform/xmcp) runs locally by
-    # default, optionally tunneled for remote access — it is not an
-    # always-on hosted endpoint like PostHog/Sentry's. Streamable HTTP is
-    # the transport used by both a bare local server and a tunneled one, so
-    # it stays the default here; do NOT add a transport prompt.
-    mode = "streamable-http"
-    credentials: dict[str, Any] = {"mode": mode}
-    url = _p("X MCP URL", default=DEFAULT_X_MCP_URL)
-    if not url:
-        _die("url is required for remote MCP modes.")
-    credentials["url"] = url
-    credentials["command"] = ""
-    credentials["args"] = []
+    from integrations.x_mcp.setup import X_MCP_SETUP
 
-    credentials["auth_token"] = _p(
-        "Auth token for a tunneled/proxied endpoint (optional)", secret=True, default=""
-    )
-    credentials["bearer_token"] = ""
-
-    print("\n  Validating X MCP...")
-    config = build_x_mcp_config(credentials)
-    result = validate_x_mcp_config(config)
-    print(f"  {result.detail}")
-    if not result.ok:
-        sys.exit(1)
-
-    upsert_integration("x_mcp", {"credentials": credentials})
-    print("  Next:")
-    print("    - opensre integrations verify x_mcp")
+    _run_spec_setup(X_MCP_SETUP)
 
 
 def _setup_postgresql() -> None:
-    host = _p("Host (e.g. localhost or postgres.example.com)")
-    database = _p("Database name")
-    if not host or not database:
-        _die("host and database are required.")
-    port = _p("Port", default="5432")
-    username = _p("Username", default="postgres")
-    password = _p("Password", secret=True)
-    ssl_mode_choice = questionary.select(
-        "SSL mode",
-        choices=[
-            questionary.Choice("prefer (recommended)", value="prefer"),
-            questionary.Choice("require", value="require"),
-            questionary.Choice("disable", value="disable"),
-        ],
-        instruction="(use arrow keys)",
-    ).ask()
-    if ssl_mode_choice is None:
-        print("\nAborted.")
-        sys.exit(1)
-    upsert_integration(
-        "postgresql",
-        {
-            "credentials": {
-                "host": host,
-                "port": int(port) if port.isdigit() else 5432,
-                "database": database,
-                "username": username or "postgres",
-                "password": password,
-                "ssl_mode": ssl_mode_choice,
-            }
-        },
-    )
+    from integrations.postgresql.setup import POSTGRESQL_SETUP
+
+    _run_spec_setup(POSTGRESQL_SETUP)
 
 
 def _setup_mysql() -> None:
-    host = _p("Host (e.g. localhost or mysql.example.com)")
-    database = _p("Database name")
-    if not host or not database:
-        _die("host and database are required.")
-    port = _p("Port", default="3306")
-    username = _p("Username", default="root")
-    password = _p("Password", secret=True)
-    ssl_mode_choice = questionary.select(
-        "SSL mode",
-        choices=[
-            questionary.Choice("preferred (encrypted, no cert verification)", value="preferred"),
-            questionary.Choice("required", value="required"),
-            questionary.Choice("disabled", value="disabled"),
-        ],
-        instruction="(use arrow keys)",
-    ).ask()
-    if ssl_mode_choice is None:
-        print("\nAborted.")
-        sys.exit(1)
-    upsert_integration(
-        "mysql",
-        {
-            "credentials": {
-                "host": host,
-                "port": int(port) if port.isdigit() else 3306,
-                "database": database,
-                "username": username or "root",
-                "password": password,
-                "ssl_mode": ssl_mode_choice,
-            }
-        },
-    )
+    from integrations.mysql.setup import MYSQL_SETUP
+
+    _run_spec_setup(MYSQL_SETUP)
 
 
 def _setup_mongodb_atlas() -> None:
-    api_public_key = _p("Atlas API public key")
-    api_private_key = _p("Atlas API private key", secret=True)
-    project_id = _p("Atlas project ID (group ID)")
-    base_url = _p("Atlas API base URL", default="https://cloud.mongodb.com/api/atlas/v2")
-    if not api_public_key or not api_private_key or not project_id:
-        _die("api_public_key, api_private_key, and project_id are required.")
-    upsert_integration(
-        "mongodb_atlas",
-        {
-            "credentials": {
-                "api_public_key": api_public_key,
-                "api_private_key": api_private_key,
-                "project_id": project_id,
-                "base_url": base_url,
-            }
-        },
-    )
+    from integrations.mongodb_atlas.setup import MONGODB_ATLAS_SETUP
+
+    _run_spec_setup(MONGODB_ATLAS_SETUP)
 
 
 def _setup_mariadb() -> None:
-    host = _p("Host (e.g. db.example.com)")
-    port = _p("Port", default="3306")
-    database = _p("Database name")
-    username = _p("Username")
-    password = _p("Password", secret=True)
-    ssl_choice = questionary.select(
-        "SSL enabled?",
-        choices=[
-            questionary.Choice("Yes", value="1"),
-            questionary.Choice("No", value="0"),
-        ],
-        instruction="(use arrow keys)",
-    ).ask()
-    if ssl_choice is None:
-        print("\nAborted.")
-        sys.exit(1)
-    ssl = ssl_choice == "1"
-    if not host or not database or not username:
-        _die("host, database, and username are required.")
-    upsert_integration(
-        "mariadb",
-        {
-            "credentials": {
-                "host": host,
-                "port": _parse_port(port),
-                "database": database,
-                "username": username,
-                "password": password,
-                "ssl": ssl,
-            }
-        },
-    )
+    from integrations.mariadb.setup import MARIADB_SETUP
+
+    _run_spec_setup(MARIADB_SETUP)
 
 
 def _setup_alertmanager() -> None:
-    base_url = _p("Alertmanager URL (e.g. http://alertmanager:9093)")
-    if not base_url:
-        _die("base_url is required.")
+    from integrations.alertmanager.setup import ALERTMANAGER_SETUP
 
-    auth_choice = questionary.select(
-        "  Authentication method:",
-        choices=[
-            questionary.Choice("None (unauthenticated / internal network)", value="none"),
-            questionary.Choice("Bearer token (reverse proxy auth)", value="bearer"),
-            questionary.Choice("Basic auth (username + password)", value="basic"),
-        ],
-        instruction="(use arrow keys)",
-    ).ask()
-    if auth_choice is None:
-        print("\nAborted.")
-        sys.exit(1)
-
-    credentials: dict[str, Any] = {"base_url": base_url}
-
-    if auth_choice == "bearer":
-        bearer_token = _p("Bearer token", secret=True)
-        if not bearer_token:
-            _die("Bearer token is required for bearer auth.")
-        credentials["bearer_token"] = bearer_token
-    elif auth_choice == "basic":
-        username = _p("Username")
-        if not username:
-            _die("Username is required for basic auth.")
-        credentials["username"] = username
-        credentials["password"] = _p("Password", secret=True)
-
-    upsert_integration("alertmanager", {"credentials": credentials})
+    _run_spec_setup(ALERTMANAGER_SETUP)
 
 
 def _setup_signoz() -> None:
-    url = _p("SigNoz URL (e.g. http://localhost:8080 for local Docker)")
-    api_key = _p("SigNoz API key (service account key)", secret=True)
+    from integrations.signoz.setup import SIGNOZ_SETUP
 
-    if not (url and api_key):
-        _die("SigNoz URL and API key are required.")
-
-    upsert_integration(
-        "signoz",
-        {
-            "credentials": {
-                "url": url,
-                "api_key": api_key,
-            }
-        },
-    )
+    _run_spec_setup(SIGNOZ_SETUP)
 
 
 def _setup_jenkins() -> None:
-    base_url = _p("Jenkins URL (e.g. http://localhost:8080)")
-    username = _p("Jenkins username")
-    api_token = _p("Jenkins API token", secret=True)
+    from integrations.jenkins.setup import JENKINS_SETUP
 
-    if not (base_url and username and api_token):
-        _die("Jenkins URL, username, and API token are required.")
-
-    upsert_integration(
-        "jenkins",
-        {
-            "credentials": {
-                "base_url": base_url,
-                "username": username,
-                "api_token": api_token,
-            }
-        },
-    )
+    _run_spec_setup(JENKINS_SETUP)
 
 
 def _setup_helm() -> None:
-    helm_path = _p("Helm binary path or name", default="helm")
-    if not helm_path:
-        _die("helm_path is required.")
-    kube_context = _p(
-        "Kubernetes context (optional, passed as --kube-context)",
-        default="",
-    )
-    kubeconfig = _p(
-        "Kubeconfig file path (optional, passed as --kubeconfig)",
-        default="",
-    )
-    default_namespace = _p(
-        "Default namespace when alerts do not specify one (optional)",
-        default="",
-    )
-    upsert_integration(
-        "helm",
-        {
-            "credentials": {
-                "helm_path": helm_path,
-                "kube_context": kube_context,
-                "kubeconfig": kubeconfig,
-                "default_namespace": default_namespace,
-            }
-        },
-    )
+    from integrations.helm.setup import HELM_SETUP
+
+    _run_spec_setup(HELM_SETUP)
 
 
 def _setup_tempo() -> None:
-    from integrations.tempo import build_tempo_config, validate_tempo_config
+    from integrations.tempo.setup import TEMPO_SETUP
 
-    url = _p("Tempo URL (e.g. http://localhost:3200 for local Docker)")
-    if not url:
-        _die("Tempo URL is required.")
-
-    api_key = _p(
-        "Tempo bearer token (optional, leave blank if using basic auth or none)", secret=True
-    )
-    username = _p("Tempo username (optional, for basic auth)")
-    password = _p("Tempo password (optional, for basic auth)", secret=True)
-    org_id = _p("Tempo tenant / X-Scope-OrgID (optional, leave blank if single-tenant)")
-
-    credentials: dict[str, str] = {"url": url}
-    if api_key:
-        credentials["api_key"] = api_key
-    if username:
-        credentials["username"] = username
-    if password:
-        credentials["password"] = password
-    if org_id:
-        credentials["org_id"] = org_id
-
-    result = validate_tempo_config(build_tempo_config(credentials))
-    if not result.ok:
-        _die(f"Tempo validation failed: {result.detail}")
-
-    upsert_integration("tempo", {"credentials": credentials})
+    _run_spec_setup(TEMPO_SETUP)
 
 
 def _setup_pagerduty() -> None:
-    api_key = _p("PagerDuty API key", secret=True)
-    base_url = _p("API base URL override (optional)")
-    if not api_key:
-        _die("api_key is required.")
-    if not base_url:
-        base_url = "https://api.pagerduty.com"
-    upsert_integration(
-        "pagerduty",
-        {
-            "credentials": {
-                "api_key": api_key,
-                "base_url": base_url,
-            }
-        },
-    )
+    from integrations.pagerduty.setup import PAGERDUTY_SETUP
+
+    _run_spec_setup(PAGERDUTY_SETUP)
+
+
+def _setup_kubernetes() -> None:
+    from integrations.kubernetes.setup import KUBERNETES_SETUP
+
+    _run_spec_setup(KUBERNETES_SETUP)
 
 
 _HANDLERS: dict[str, Any] = {
@@ -1320,12 +713,15 @@ _HANDLERS: dict[str, Any] = {
     "rds": _setup_rds,
     "tracer": _setup_tracer,
     "vercel": _setup_vercel,
+    "railway": _setup_railway,
     "github": _setup_github,
     "gitlab": _setup_gitlab,
     "sentry": _setup_sentry,
+    "posthog": _setup_posthog,
     "mongodb": _setup_mongodb,
     "discord": _setup_discord,
     "telegram": _setup_telegram,
+    "rocketchat": _setup_rocketchat,
     "smtp": _setup_smtp,
     "whatsapp": _setup_whatsapp,
     "twilio": _setup_twilio,
@@ -1340,93 +736,33 @@ _HANDLERS: dict[str, Any] = {
     "jenkins": _setup_jenkins,
     "tempo": _setup_tempo,
     "pagerduty": _setup_pagerduty,
+    "kubernetes": _setup_kubernetes,
+    "servicenow": _setup_servicenow,
 }
 
 
 def _setup_dagster() -> None:
-    endpoint = _p(
-        "Dagster GraphQL endpoint "
-        "(e.g. http://localhost:3000 or https://<org>.dagster.plus/<deployment>)"
-    )
-    if not endpoint:
-        _die("endpoint is required.")
-    api_token = _p(
-        "Dagster Cloud API token (leave empty for local OSS Dagster with no auth)",
-        secret=True,
-    )
-    upsert_integration(
-        "dagster",
-        {
-            "credentials": {
-                "endpoint": endpoint,
-                "api_token": api_token,
-            }
-        },
-    )
+    from integrations.dagster.setup import DAGSTER_SETUP
+
+    _run_spec_setup(DAGSTER_SETUP)
 
 
 _HANDLERS["dagster"] = _setup_dagster
 
 
 def _setup_temporal() -> None:
-    base_url = _p("Temporal HTTP API base URL (e.g. http://localhost:7243)")
-    if not base_url:
-        _die("base_url is required.")
-    namespace = _p("Temporal namespace", default="default")
-    api_key = _p(
-        "Temporal API key (leave empty for unauthenticated self-hosted clusters)",
-        secret=True,
-    )
-    upsert_integration(
-        "temporal",
-        {
-            "credentials": {
-                "base_url": base_url,
-                "namespace": namespace or "default",
-                "api_key": api_key,
-            }
-        },
-    )
+    from integrations.temporal.setup import TEMPORAL_SETUP
+
+    _run_spec_setup(TEMPORAL_SETUP)
 
 
 _HANDLERS["temporal"] = _setup_temporal
 
 
 def _setup_azure_sql() -> None:
-    server = _p("Server (e.g. myserver.database.windows.net)")
-    database = _p("Database name")
-    if not server or not database:
-        _die("server and database are required.")
-    port = _p("Port", default="1433")
-    username = _p("Username")
-    password = _p("Password", secret=True)
-    driver = _p("ODBC driver", default="ODBC Driver 18 for SQL Server")
-    encrypt_choice = questionary.select(
-        "Encrypt connection?",
-        choices=[
-            questionary.Choice("Yes (recommended for Azure)", value="1"),
-            questionary.Choice("No", value="0"),
-        ],
-        instruction="(use arrow keys)",
-    ).ask()
-    if encrypt_choice is None:
-        print("\nAborted.")
-        sys.exit(1)
-    encrypt = encrypt_choice == "1"
-    upsert_integration(
-        "azure_sql",
-        {
-            "credentials": {
-                "server": server,
-                "port": _parse_port(port, default=1433),
-                "database": database,
-                "username": username,
-                "password": password,
-                "driver": driver or "ODBC Driver 18 for SQL Server",
-                "encrypt": encrypt,
-            }
-        },
-    )
+    from integrations.azure_sql.setup import AZURE_SQL_SETUP
+
+    _run_spec_setup(AZURE_SQL_SETUP)
 
 
 _HANDLERS["azure_sql"] = _setup_azure_sql
@@ -1441,11 +777,11 @@ SUPPORTED_VERIFY = ", ".join(SUPPORTED_VERIFY_SERVICES)
 def cmd_setup(service: str | None) -> str:
     if not service:
         try:
-            service = questionary.select(
+            service = _select(
                 "Which service would you like to set up?",
                 choices=list(_SETUP_SERVICES),
                 instruction="(use arrow keys)",
-            ).ask()
+            )
         except (EOFError, KeyboardInterrupt):
             print("\nAborted.")
             sys.exit(1)
@@ -1517,7 +853,7 @@ def cmd_remove(service: str | None) -> None:
     service = resolve_management_service(service)
     if not is_yes():
         try:
-            confirmed = questionary.confirm(f"  Remove '{service}'?", default=False).ask()
+            confirmed = _confirm(f"Remove '{service}'?", default=False)
         except (EOFError, KeyboardInterrupt):
             return
         if not confirmed:

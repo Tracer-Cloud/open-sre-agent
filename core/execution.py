@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field, replace
 from typing import Any
@@ -19,15 +19,6 @@ logger = logging.getLogger(__name__)
 
 _TOOL_EXECUTOR_WORKERS = 10
 _UNSET: object = object()
-_INJECTED_CREDENTIAL_KEYS = frozenset(
-    {
-        "github_url",
-        "github_mode",
-        "github_token",
-        "github_command",
-        "github_args",
-    }
-)
 
 
 @dataclass(frozen=True)
@@ -124,7 +115,6 @@ def execute_tool_calls(
             return _execute_one_tool_call(
                 tc,
                 tool_map=tool_map,
-                tools=tools,
                 tool_sources=tool_sources,
                 resolved_integrations=resolved_integrations,
                 runtime_resources=runtime_resources,
@@ -195,7 +185,6 @@ def _execute_one_tool_call(
     tc: ToolCall,
     *,
     tool_map: dict[str, RuntimeTool],
-    tools: Sequence[RuntimeTool],
     tool_sources: dict[str, Any],
     resolved_integrations: dict[str, Any],
     runtime_resources: dict[str, Any],
@@ -216,7 +205,7 @@ def _execute_one_tool_call(
             logger.debug("tool_call validation_error name=%s id=%s", tc.name, tc.id)
             return _error_result(validation_error, metadata={"tool_name": tc.name})
 
-        source = tool_source(tools, tc.name)
+        source = str(getattr(tool, "source", "unknown"))
         span_attrs["source"] = source
         request = ToolExecutionRequest(
             tool_call=tc,
@@ -292,8 +281,11 @@ def _invoke_runtime_tool(
 
     injected = tool.extract_params(tool_sources)
     kwargs = {**injected, **tc.input}
+    # Vendor-agnostic: each tool declares which extract_params keys must win
+    # over model input (secrets / connection fields). See ``injected_params``.
+    protected = frozenset(getattr(tool, "injected_params", ()) or ())
     for key, value in injected.items():
-        if key in _INJECTED_CREDENTIAL_KEYS and value not in (None, "", []):
+        if key in protected and value not in (None, "", []):
             kwargs[key] = value
     if getattr(tool, "accepts_runtime_context", False):
         context = AgentToolContext(
@@ -430,11 +422,9 @@ def public_tool_input(value: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def tool_source(tools: Sequence[RuntimeTool], tool_name: str) -> str:
-    for tool in tools:
-        if tool.name == tool_name:
-            return str(getattr(tool, "source", "unknown"))
-    return "unknown"
+def tool_source(tools: Mapping[str, RuntimeTool], tool_name: str) -> str:
+    tool = tools.get(tool_name)
+    return str(getattr(tool, "source", "unknown")) if tool else "unknown"
 
 
 def summarise(output: Any) -> str:

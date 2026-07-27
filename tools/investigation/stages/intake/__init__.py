@@ -2,9 +2,9 @@
 
 Node contract:
     Entrypoint : extract_alert(state: InvestigationState) -> dict[str, Any]
-    Reads      : raw_alert, slack_context, org_id
-    Writes     : alert_name, pipeline_name, severity, problem_md,
-                 alert_source, raw_alert (enriched), is_noise
+    Reads      : raw_alert, channel_contexts (slack), org_id
+    Writes     : alert_name, severity, problem_md, alert_json, alert_source,
+                 raw_alert (enriched), is_noise
 """
 
 from tools.investigation.stages.intake.node import extract_alert

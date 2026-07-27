@@ -40,9 +40,7 @@ from surfaces.interactive_shell.ui.output import (
     get_output_format,
     register_tool_detail_toggle,
 )
-from surfaces.shared.tool_labels import tool_short_label as _tool_short_label
-from surfaces.shared.tool_labels import tool_source_label as _tool_source_label
-from tools.registry import resolve_tool_display_name
+from tools.registry import resolve_tool_activity_labels, resolve_tool_display_name
 
 
 class StreamRenderer:
@@ -367,8 +365,7 @@ class StreamRenderer:
         self._tracker.print_status_hint(hint)
 
     def _record_tool_summary(self, tool_name: str) -> None:
-        source = _tool_source_label(tool_name)
-        label = _tool_short_label(tool_name, source)
+        source, label = resolve_tool_activity_labels(tool_name)
         source_counts = self._tool_summary_counts.setdefault(source, {})
         if label not in source_counts:
             self._tool_summary_order.append((source, label))

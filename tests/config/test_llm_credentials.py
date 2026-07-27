@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import subprocess
 
+import google.auth
 import keyring
+from google.auth.exceptions import DefaultCredentialsError
 
 import config.llm_credentials as llm_credentials
 import config.llm_keyring as llm_keyring
@@ -31,6 +33,79 @@ def _darwin_platform() -> str:
     return "Darwin"
 
 
+def test_status_vertex_ai_configured_when_adc_resolves(monkeypatch) -> None:
+    monkeypatch.setenv("VERTEX_AI_PROJECT", "my-gcp-project")
+    monkeypatch.setenv("VERTEX_AI_LOCATION", "europe-west1")
+    monkeypatch.setattr(google.auth, "default", lambda: (object(), "my-gcp-project"))
+
+    result = status("vertex-ai")
+
+    assert result.configured is True
+    assert result.source == "ambient"
+    assert "my-gcp-project" in result.detail
+
+
+def test_status_vertex_ai_not_configured_when_adc_missing_despite_project_env(
+    monkeypatch,
+) -> None:
+    """VERTEX_AI_PROJECT being set is not proof that ADC actually resolves."""
+    monkeypatch.setenv("VERTEX_AI_PROJECT", "my-gcp-project")
+
+    def _raise_no_adc() -> tuple[object, str | None]:
+        raise DefaultCredentialsError("no ADC found")
+
+    monkeypatch.setattr(google.auth, "default", _raise_no_adc)
+
+    result = status("vertex-ai")
+
+    assert result.configured is False
+    assert result.source == "none"
+
+
+def test_status_vertex_ai_configured_via_metadata_without_project_env(monkeypatch) -> None:
+    """ADC discovered through GCE/GKE metadata counts even with no project env set."""
+    monkeypatch.delenv("VERTEX_AI_PROJECT", raising=False)
+    monkeypatch.delenv("VERTEX_AI_LOCATION", raising=False)
+    monkeypatch.setattr(google.auth, "default", lambda: (object(), "discovered-project"))
+
+    result = status("vertex-ai")
+
+    assert result.configured is True
+    assert result.source == "ambient"
+    assert "discovered-project" in result.detail
+
+
+def test_status_vertex_ai_not_configured_when_adc_resolves_without_project(
+    monkeypatch,
+) -> None:
+    """ADC succeeding is not enough — a request still needs a resolvable project.
+
+    Regression test: this used to fall back to a display-only "auto-discovered"
+    placeholder and report configured=True, even though request routing has no
+    project to send and the subsequent LiteLLM call would fail.
+    """
+    monkeypatch.delenv("VERTEX_AI_PROJECT", raising=False)
+    monkeypatch.setattr(google.auth, "default", lambda: (object(), None))
+
+    result = status("vertex-ai")
+
+    assert result.configured is False
+    assert result.source == "none"
+    assert "VERTEX_AI_PROJECT" in result.detail
+
+
+def test_status_bedrock_ignores_vertex_project_env(monkeypatch) -> None:
+    """The ambient status branch must not cross-check unrelated providers' env vars."""
+    monkeypatch.setenv("VERTEX_AI_PROJECT", "my-gcp-project")
+    monkeypatch.delenv("AWS_REGION", raising=False)
+    monkeypatch.delenv("AWS_DEFAULT_REGION", raising=False)
+
+    result = status("bedrock")
+
+    assert result.configured is False
+    assert "AWS_REGION" in result.detail
+
+
 def test_resolve_env_credential_prefers_env_over_keyring(monkeypatch) -> None:
     monkeypatch.setenv("GITLAB_ACCESS_TOKEN", "from-env")
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
@@ -38,10 +113,38 @@ def test_resolve_env_credential_prefers_env_over_keyring(monkeypatch) -> None:
     previous_backend = keyring.get_keyring()
     keyring.set_keyring(MemoryKeyring())
     try:
-        llm_credentials.save_llm_api_key("GITLAB_ACCESS_TOKEN", "from-keyring")
+        llm_credentials.save_keyring_secret("GITLAB_ACCESS_TOKEN", "from-keyring")
         assert llm_credentials.resolve_env_credential("GITLAB_ACCESS_TOKEN") == "from-env"
     finally:
         keyring.set_keyring(previous_backend)
+
+
+def test_resolve_keyring_secret_reads_keyring_only(monkeypatch) -> None:
+    monkeypatch.setenv("GITLAB_ACCESS_TOKEN", "from-env")
+    monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
+
+    previous_backend = keyring.get_keyring()
+    keyring.set_keyring(MemoryKeyring())
+    try:
+        llm_credentials.save_keyring_secret("GITLAB_ACCESS_TOKEN", "from-keyring")
+        assert llm_credentials.resolve_keyring_secret("GITLAB_ACCESS_TOKEN") == "from-keyring"
+    finally:
+        keyring.set_keyring(previous_backend)
+
+
+def test_resolve_keyring_secret_swallows_backend_runtime_error(monkeypatch) -> None:
+    """SecretService can raise bare RuntimeError when D-Bus is unset."""
+    monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
+    # Use a name unlikely to be present in CI secrets / ambient env.
+    env_var = "OPENSRE_TEST_MISSING_KEYRING_SECRET"
+    monkeypatch.delenv(env_var, raising=False)
+
+    def _boom(_service: str, _username: str) -> str:
+        raise RuntimeError("Unable to initialize SecretService: DBUS unset")
+
+    monkeypatch.setattr(llm_keyring.keyring, "get_password", _boom)
+    assert llm_credentials.resolve_keyring_secret(env_var) == ""
+    assert llm_credentials.resolve_env_credential(env_var) == ""
 
 
 def test_unmanaged_llm_api_key_source_reports_env_keyring_and_none(monkeypatch) -> None:
@@ -52,7 +155,7 @@ def test_unmanaged_llm_api_key_source_reports_env_keyring_and_none(monkeypatch) 
     keyring.set_keyring(MemoryKeyring())
     try:
         assert llm_api_key_source("EXPERIMENTAL_API_KEY") == "none"
-        llm_credentials.save_llm_api_key("EXPERIMENTAL_API_KEY", "from-keyring")
+        llm_credentials.save_keyring_secret("EXPERIMENTAL_API_KEY", "from-keyring")
         assert llm_api_key_source("EXPERIMENTAL_API_KEY") == "keyring"
         monkeypatch.setenv("EXPERIMENTAL_API_KEY", "from-env")
         assert llm_api_key_source("EXPERIMENTAL_API_KEY") == "env"

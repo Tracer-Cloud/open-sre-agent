@@ -996,6 +996,11 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "alert_sample",
         "alertmanager_alerts",
         "alertmanager_silences",
+        # architecture_* catch only WorkspaceError / ReportPersistenceError for
+        # known failure states; unexpected errors escape to the #1476 wrapper.
+        "architecture_cleanup_repo",
+        "architecture_clone_repo",
+        "architecture_save_observations",
         "assistant_handoff",
         "argocd_application_diff",
         "argocd_application_status",
@@ -1016,6 +1021,7 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         # dispatches to fix_sentry_issue and lets unexpected errors escape.
         "fix_sentry_issue_start",
         "generate_work_status_report",
+        "github_cli",
         "get_airflow_dag_runs",
         "get_airflow_metrics",
         "get_airflow_task_instances",
@@ -1120,6 +1126,7 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "incident_io_incidents",
         "inspect_lambda_function",
         "inspect_s3_object",
+        "inspect_railway_deployment",
         "investigation_start",
         "jira_add_comment",
         "jira_create_issue",
@@ -1145,6 +1152,7 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "list_jenkins_running_builds",
         "list_s3_objects",
         "list_sentry_issue_events",
+        "list_sentry_uptime_alerts",
         "llm_set_provider",
         "lookup_cloudtrail_events",
         # Long-term memory tools: local-file CRUD over core/domain/memory;
@@ -1187,6 +1195,8 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "query_signoz_traces",
         "query_splunk_logs",
         "query_tempo",
+        "redeploy_railway_service",
+        "replay_slack_thread_locally",
         "run_investigation",
         "scan_redis_keys",
         "search_bitbucket_code",
@@ -1194,6 +1204,14 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "search_github_issues",
         "search_sentry_issues",
         "shell_run",
+        "slack_add_reaction",
+        "slack_capture_task",
+        "slack_join_channel",
+        "slack_list_team_members",
+        "slack_read_list",
+        "slack_read_messages",
+        "slack_reply_message",
+        "slack_search_messages",
         "slack_send_message",
         "slash_invoke",
         "summarize_community_followups",
@@ -1208,10 +1226,26 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "temporal_workflow_history",
         "temporal_workflows",
         "telegram_send_message",
+        "rocketchat_send_message",
         "twilio_notify",
         "vercel_deployment_logs",
         "vercel_deployment_status",
         "victoria_logs_query",
+        # Kubernetes tools: client methods catch exceptions internally via
+        # capture_service_error and return structured error dicts; any unexpected
+        # exception from run() escapes to the #1476 global wrapper.
+        "kubernetes_describe_pod",
+        "kubernetes_get_events",
+        "kubernetes_get_pod_logs",
+        "kubernetes_get_resource",
+        "kubernetes_list_configmaps",
+        "kubernetes_list_daemonsets",
+        "kubernetes_list_deployments",
+        "kubernetes_list_ingresses",
+        "kubernetes_list_nodes",
+        "kubernetes_list_pods",
+        "kubernetes_list_services",
+        "kubernetes_list_statefulsets",
     }
 )
 

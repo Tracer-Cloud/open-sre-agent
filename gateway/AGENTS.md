@@ -10,6 +10,7 @@ changes.
 | Role | Path |
 |------|------|
 | Package main | `main.py` (`python -m gateway.main`) |
+| Production entry (slash ports) | `surfaces.cli.gateway_entry` (`python -m surfaces.cli.gateway_entry`) |
 | Composition root / process | `runtime/manager.py` |
 | Daemon pidfile / status | `runtime/daemon.py` |
 | Turn callback | `runtime/turn_handler.py` |

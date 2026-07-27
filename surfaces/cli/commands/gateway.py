@@ -37,7 +37,7 @@ def gateway_start_command(foreground: bool) -> None:
     """Start the gateway daemon (background by default)."""
     if foreground:
         click.echo("Starting OpenSRE gateway (foreground)")
-        from gateway.runtime.manager import start_gateway
+        from surfaces.cli.gateway_entry import start_gateway
 
         start_gateway()
         return

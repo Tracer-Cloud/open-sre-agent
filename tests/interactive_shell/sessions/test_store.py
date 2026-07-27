@@ -294,6 +294,135 @@ def test_append_tool_call_reopens_finalized_session(tmp_home: Path) -> None:
     assert any(r["type"] == "tool_call" for r in records)
 
 
+# ── append_trace_span ─────────────────────────────────────────────────────────
+
+
+def test_append_trace_span_stays_out_of_parent_chain(tmp_path: Path) -> None:
+    session = _make_session()
+    with _patch_dir(tmp_path):
+        SessionStore.open_session(session)
+        SessionStore.append_turn(session, "chat", "hello")
+
+        SessionStore.append_trace_span(
+            session.session_id, span_kind="llm", name="invoke", duration_ms=5
+        )
+        SessionStore.append_message(session.session_id, role="user", content="next")
+
+    records = _read_lines(tmp_path / f"{session.session_id}.jsonl")
+    span = next(r for r in records if r["type"] == "trace_span")
+    stub = next(r for r in records if r["type"] == "custom_message")
+    message = next(r for r in records if r["type"] == "message")
+    assert span["parent_id"] is None
+    assert message["parent_id"] == stub["id"]
+
+
+def test_append_trace_span_appends_without_reading_file(tmp_path: Path) -> None:
+    session = _make_session()
+    with _patch_dir(tmp_path):
+        SessionStore.open_session(session)
+        SessionStore.append_turn(session, "chat", "hello")
+
+        with patch.object(JsonlSessionStorage, "_read_records") as read_records:
+            SessionStore.append_trace_span(session.session_id, span_kind="tool", name="grep")
+
+    read_records.assert_not_called()
+    records = _read_lines(tmp_path / f"{session.session_id}.jsonl")
+    assert any(r["type"] == "trace_span" for r in records)
+
+
+def test_append_trace_span_keeps_explicit_parent(tmp_path: Path) -> None:
+    session = _make_session()
+    with _patch_dir(tmp_path):
+        SessionStore.open_session(session)
+
+        parent = SessionStore.append_trace_span(session.session_id, span_kind="turn", name="turn")
+        SessionStore.append_trace_span(
+            session.session_id, span_kind="llm", name="invoke", parent_id=parent
+        )
+
+    records = _read_lines(tmp_path / f"{session.session_id}.jsonl")
+    spans = [r for r in records if r["type"] == "trace_span"]
+    assert spans[1]["parent_id"] == spans[0]["id"]
+
+
+def test_flush_leaf_parents_to_last_real_entry_not_trace_span(tmp_path: Path) -> None:
+    session = _make_session()
+    with _patch_dir(tmp_path):
+        SessionStore.open_session(session)
+        SessionStore.append_turn(session, "chat", "hello")
+        SessionStore.append_trace_span(session.session_id, span_kind="llm", name="invoke")
+
+        SessionStore.flush(session)
+
+    records = _read_lines(tmp_path / f"{session.session_id}.jsonl")
+    leaf = next(r for r in records if r["type"] == "leaf")
+    stub = _turn_stubs(records)[0]
+    assert leaf["parent_id"] == stub["id"]
+
+
+def test_append_trace_span_noop_when_file_missing(tmp_path: Path) -> None:
+    with _patch_dir(tmp_path):
+        entry_id = SessionStore.append_trace_span("nonexistent-id", span_kind="llm", name="invoke")
+
+    assert entry_id == ""
+    assert not list(tmp_path.glob("*.jsonl"))
+
+
+def test_load_session_walks_through_chained_trace_span_in_legacy_files(tmp_path: Path) -> None:
+    sid = uuid.uuid4().hex
+    started_at = "2026-01-01T00:00:00+00:00"
+    records = [
+        {"type": "session", "version": 2, "id": sid, "created_at": started_at, "cwd": ""},
+        {
+            "id": "m1",
+            "parent_id": None,
+            "timestamp": started_at,
+            "type": "message",
+            "role": "user",
+            "content": "q",
+        },
+        {
+            "id": "s1",
+            "parent_id": "m1",
+            "timestamp": started_at,
+            "type": "trace_span",
+            "span_kind": "llm",
+            "name": "invoke",
+            "status": "ok",
+        },
+        {
+            "id": "m2",
+            "parent_id": "s1",
+            "timestamp": started_at,
+            "type": "message",
+            "role": "assistant",
+            "content": "a",
+        },
+    ]
+    (tmp_path / f"{sid}.jsonl").write_text("\n".join(json.dumps(rec) for rec in records) + "\n")
+
+    with _patch_dir(tmp_path):
+        loaded = SessionStore.load_session(sid)
+
+    assert loaded is not None
+    assert loaded["cli_agent_messages"] == [("user", "q"), ("assistant", "a")]
+
+
+def test_load_session_ignores_trailing_trace_span(tmp_path: Path) -> None:
+    session = _make_session()
+    with _patch_dir(tmp_path):
+        SessionStore.open_session(session)
+        SessionStore.append_turn(session, "chat", "hello")
+        SessionStore.append_message(session.session_id, role="user", content="q")
+        SessionStore.append_message(session.session_id, role="assistant", content="a")
+        SessionStore.append_trace_span(session.session_id, span_kind="llm", name="invoke")
+
+        loaded = SessionStore.load_session(session.session_id)
+
+    assert loaded is not None
+    assert loaded["cli_agent_messages"] == [("user", "q"), ("assistant", "a")]
+
+
 # ── flush ─────────────────────────────────────────────────────────────────────
 
 

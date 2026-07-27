@@ -1,7 +1,6 @@
 """S3 client for data inspection and version tracking."""
 
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Any
 
 from integrations.aws.env import make_boto3_client, require_aws_credentials
@@ -22,34 +21,6 @@ class S3CheckResult:
     marker_exists: bool
     file_count: int
     files: list[str]
-
-
-@dataclass(frozen=True)
-class S3ObjectMetadata:
-    """Metadata for an S3 object."""
-
-    bucket: str
-    key: str
-    exists: bool
-    size: int | None = None
-    last_modified: datetime | None = None
-    content_type: str | None = None
-    etag: str | None = None
-    version_id: str | None = None
-    storage_class: str | None = None
-    metadata: dict[str, str] | None = None
-
-
-@dataclass(frozen=True)
-class S3ObjectVersion:
-    """Version information for an S3 object."""
-
-    version_id: str
-    last_modified: datetime
-    size: int
-    etag: str
-    is_latest: bool
-    is_delete_marker: bool = False
 
 
 def _get_s3_client():

@@ -6,8 +6,13 @@ from typing import Any
 
 from core.tool_framework.telemetry import report_run_error
 from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.github.client import GitHubApiError, GitHubRestClient, resolve_github_token
-from integrations.github.helpers import github_creds, github_source_available
+from integrations.github.helpers import (
+    GITHUB_INJECTED_PARAMS,
+    github_creds,
+    github_source_available,
+)
 
 
 def _github_repository_available(sources: dict[str, dict]) -> bool:
@@ -83,6 +88,7 @@ def _normalize_repository(repo: dict[str, Any], *, owner: str, repo_name: str) -
     },
     is_available=_github_repository_available,
     extract_params=_github_repository_extract_params,
+    injected_params=GITHUB_INJECTED_PARAMS,
 )
 def get_github_repository(
     owner: str,
@@ -102,23 +108,15 @@ def get_github_repository(
             method="GitHubRestClient.request",
             extras={"owner": owner, "repo": repo},
         )
-        return {
-            "source": "github",
-            "available": False,
-            "error": str(exc),
-            "owner": owner,
-            "repo": repo,
-            "repository": {},
-        }
+        return tool_unavailable("github", str(exc), owner=owner, repo=repo, repository={})
     if not isinstance(payload, dict):
-        return {
-            "source": "github",
-            "available": False,
-            "error": "GitHub API returned an unexpected repository payload.",
-            "owner": owner,
-            "repo": repo,
-            "repository": {},
-        }
+        return tool_unavailable(
+            "github",
+            "GitHub API returned an unexpected repository payload.",
+            owner=owner,
+            repo=repo,
+            repository={},
+        )
     repository = _normalize_repository(payload, owner=owner, repo_name=repo)
     return {
         "source": "github",

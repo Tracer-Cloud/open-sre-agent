@@ -15,7 +15,17 @@ from typing import Any
 
 from pydantic import Field, field_validator
 
+from config.constants.redis import (
+    REDIS_DATABASE_ENV,
+    REDIS_HOST_ENV,
+    REDIS_PASSWORD_ENV,
+    REDIS_PORT_ENV,
+    REDIS_SSL_ENV,
+    REDIS_USERNAME_ENV,
+)
+from config.llm_credentials import resolve_env_credential
 from config.strict_config import StrictConfigModel
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
 from integrations.config_models import RedisIntegrationConfig
 from platform.common.coercion import safe_int
@@ -82,18 +92,20 @@ def build_redis_config(raw: dict[str, Any] | None) -> RedisConfig:
 
 def redis_config_from_env() -> RedisConfig | None:
     """Load a Redis config from env vars."""
-    host = os.getenv("REDIS_HOST", "").strip()
+    host = os.getenv(REDIS_HOST_ENV, "").strip()
     if not host:
         return None
 
     return build_redis_config(
         {
             "host": host,
-            "port": safe_int(os.getenv("REDIS_PORT", str(DEFAULT_REDIS_PORT)), DEFAULT_REDIS_PORT),
-            "username": os.getenv("REDIS_USERNAME", "").strip(),
-            "password": os.getenv("REDIS_PASSWORD", "").strip(),
-            "db": safe_int(os.getenv("REDIS_DATABASE", "0"), 0),
-            "ssl": os.getenv("REDIS_SSL", "false").strip().lower() in ("true", "1", "yes"),
+            "port": safe_int(
+                os.getenv(REDIS_PORT_ENV, str(DEFAULT_REDIS_PORT)), DEFAULT_REDIS_PORT
+            ),
+            "username": os.getenv(REDIS_USERNAME_ENV, "").strip(),
+            "password": resolve_env_credential(REDIS_PASSWORD_ENV) or "",
+            "db": safe_int(os.getenv(REDIS_DATABASE_ENV, "0"), 0),
+            "ssl": os.getenv(REDIS_SSL_ENV, "false").strip().lower() in ("true", "1", "yes"),
         }
     )
 
@@ -181,7 +193,7 @@ def get_server_info(config: RedisConfig) -> dict[str, Any]:
     Read-only: uses the ``INFO`` command.
     """
     if not config.is_configured:
-        return {"source": "redis", "available": False, "error": "Not configured."}
+        return tool_unavailable("redis", "Not configured.")
 
     try:
         client = _get_client(config)
@@ -242,7 +254,7 @@ def get_slowlog(config: RedisConfig, limit: int | None = None) -> dict[str, Any]
     (as Redis stores them).  Results are capped at ``config.max_results``.
     """
     if not config.is_configured:
-        return {"source": "redis", "available": False, "error": "Not configured."}
+        return tool_unavailable("redis", "Not configured.")
 
     effective_limit = min(limit or config.max_results, config.max_results)
     try:
@@ -284,7 +296,7 @@ def get_replication(config: RedisConfig) -> dict[str, Any]:
     health (for replicas), and per-replica offset lag (for masters).
     """
     if not config.is_configured:
-        return {"source": "redis", "available": False, "error": "Not configured."}
+        return tool_unavailable("redis", "Not configured.")
 
     try:
         client = _get_client(config)
@@ -348,7 +360,7 @@ def scan_keys(
     ``config.max_results``.
     """
     if not config.is_configured:
-        return {"source": "redis", "available": False, "error": "Not configured."}
+        return tool_unavailable("redis", "Not configured.")
 
     match = pattern or "*"
     sample_cap = min(sample_limit or config.max_results, config.max_results)
@@ -419,7 +431,7 @@ def get_client_list(config: RedisConfig) -> dict[str, Any]:
     connections.
     """
     if not config.is_configured:
-        return {"source": "redis", "available": False, "error": "Not configured."}
+        return tool_unavailable("redis", "Not configured.")
 
     try:
         client = _get_client(config)
@@ -507,10 +519,10 @@ def get_list_depth(
     large job payloads cannot blow up the response.
     """
     if not config.is_configured:
-        return {"source": "redis", "available": False, "error": "Not configured."}
+        return tool_unavailable("redis", "Not configured.")
     key = str(key or "").strip()
     if not key:
-        return {"source": "redis", "available": False, "error": "A list key is required."}
+        return tool_unavailable("redis", "A list key is required.")
 
     head_n = max(0, min(head or 0, config.max_results))
     tail_n = max(0, min(tail or 0, config.max_results))
@@ -592,7 +604,7 @@ def get_latency_doctor(
     events exist, and ``monitoring_threshold_ms`` is ``None``.
     """
     if not config.is_configured:
-        return {"source": "redis", "available": False, "error": "Not configured."}
+        return tool_unavailable("redis", "Not configured.")
 
     event = str(event or "").strip()
     # Floor at 0 (mirrors get_list_depth's head/tail clamp): a negative
@@ -662,28 +674,24 @@ def _redis_error(err: Exception, method: str) -> dict[str, Any]:
     import redis.exceptions as redis_exc
 
     if isinstance(err, redis_exc.AuthenticationError):
-        return {
-            "source": "redis",
-            "available": False,
-            "error": "Redis authentication failed. Check the credentials in the connection settings.",
-        }
+        return tool_unavailable(
+            "redis",
+            "Redis authentication failed. Check the credentials in the connection settings.",
+        )
     if isinstance(err, redis_exc.NoPermissionError):
-        return {
-            "source": "redis",
-            "available": False,
-            "error": (
-                "Redis user lacks permission for this command. Grant the user read "
-                "access to the diagnostic commands it needs (e.g. INFO, CLIENT, "
-                "SLOWLOG, LATENCY, LLEN/LRANGE, TYPE, SCAN)."
-            ),
-        }
+        return tool_unavailable(
+            "redis",
+            "Redis user lacks permission for this command. Grant the user read "
+            "access to the diagnostic commands it needs (e.g. INFO, CLIENT, "
+            "SLOWLOG, LATENCY, LLEN/LRANGE, TYPE, SCAN).",
+        )
     report_validation_failure(
         err,
         logger=logger,
         integration="redis",
         method=method,
     )
-    return {"source": "redis", "available": False, "error": str(err)}
+    return tool_unavailable("redis", str(err))
 
 
 def classify(

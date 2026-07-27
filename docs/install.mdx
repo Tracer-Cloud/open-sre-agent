@@ -3,22 +3,49 @@ title: "Install OpenSRE"
 description: "Choose the right OpenSRE installation path for local or enterprise environments"
 ---
 
-Use the installation path that matches your runtime and organization setup.
+Pick the path that matches where you run OpenSRE.
 
-## Install options
+## Which path?
 
-- [Local and on-prem setup](/install-local)
-- [Enterprise setup](/install-enterprise)
+| Path | Best for | Get started |
+| --- | --- | --- |
+| **Local CLI** | Laptop or self-hosted server; full `opensre` binary | [Install locally](/install-local) |
+| **Enterprise (Tracer Cloud)** | Org-wide connectors in the hosted web app | [Enterprise setup](/install-enterprise) |
 
-## Local environment guides
+## Install locally (most users)
 
-- [macOS](/environments/macos)
-- [Linux (local)](/environments/linux-local)
-- [Windows (local)](/environments/windows-local)
-- [Docker](/environments/docker)
+```bash
+# macOS / Linux
+curl -fsSL https://install.opensre.com | bash
+
+# Windows (PowerShell)
+irm https://install.opensre.com | iex
+```
+
+Then configure your LLM and integrations:
+
+```bash
+opensre onboard
+opensre integrations verify
+```
+
+See [Quickstart](/quickstart) for a full walkthrough including a sample investigation.
+
+## Environment-specific guides
+
+| Platform | Guide |
+| --- | --- |
+| macOS | [macOS](/environments/macos) |
+| Linux | [Linux (local)](/environments/linux-local) |
+| Windows | [Windows (local)](/environments/windows-local) |
+| Docker | [Docker](/environments/docker) |
+
+## Enterprise hosted setup
+
+For teams using [app.tracer.cloud](https://app.tracer.cloud), see [Enterprise setup](/install-enterprise).
 
 ## Next steps
 
-- [Quickstart](/quickstart)
 - [Investigations overview](/investigation-overview)
 - [Integrations overview](/integrations-overview)
+- [Environment variables](/configuration/environment-variables)

@@ -8,12 +8,21 @@ timeouts enforced, result sizes capped.
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass
 from typing import Any
 
 from pydantic import Field, field_validator
 
+from config.constants.mariadb import (
+    MARIADB_DATABASE_ENV,
+    MARIADB_HOST_ENV,
+    MARIADB_PASSWORD_ENV,
+    MARIADB_PORT_ENV,
+    MARIADB_SSL_ENV,
+    MARIADB_USERNAME_ENV,
+)
+from config.llm_credentials import resolve_env_credential
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations._relational import RelationalConfigBase, env_bool, env_str
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
 from platform.common.coercion import safe_int
@@ -70,17 +79,17 @@ def build_mariadb_config(raw: dict[str, Any] | None) -> MariaDBConfig:
 
 def mariadb_config_from_env() -> MariaDBConfig | None:
     """Load a MariaDB config from env vars."""
-    host = env_str("MARIADB_HOST")
+    host = env_str(MARIADB_HOST_ENV)
     if not host:
         return None
     return build_mariadb_config(
         {
             "host": host,
-            "port": env_str("MARIADB_PORT", str(DEFAULT_MARIADB_PORT)),
-            "database": env_str("MARIADB_DATABASE"),
-            "username": env_str("MARIADB_USERNAME"),
-            "password": os.getenv("MARIADB_PASSWORD", "").strip(),
-            "ssl": env_bool("MARIADB_SSL", True),
+            "port": env_str(MARIADB_PORT_ENV, str(DEFAULT_MARIADB_PORT)),
+            "database": env_str(MARIADB_DATABASE_ENV),
+            "username": env_str(MARIADB_USERNAME_ENV),
+            "password": resolve_env_credential(MARIADB_PASSWORD_ENV) or "",
+            "ssl": env_bool(MARIADB_SSL_ENV, True),
         }
     )
 
@@ -170,7 +179,7 @@ def get_process_list(
     Excludes sleeping connections.  Results capped at ``config.max_results``.
     """
     if not config.is_configured:
-        return {"source": "mariadb", "available": False, "error": "Not configured."}
+        return tool_unavailable("mariadb", "Not configured.")
 
     effective_limit = min(max_results or config.max_results, config.max_results)
     try:
@@ -217,7 +226,7 @@ def get_process_list(
             integration="mariadb",
             method="get_process_list",
         )
-        return {"source": "mariadb", "available": False, "error": str(err)}
+        return tool_unavailable("mariadb", str(err))
 
 
 def get_global_status(config: MariaDBConfig) -> dict[str, Any]:
@@ -227,7 +236,7 @@ def get_global_status(config: MariaDBConfig) -> dict[str, Any]:
     Returns a curated subset of important metrics.
     """
     if not config.is_configured:
-        return {"source": "mariadb", "available": False, "error": "Not configured."}
+        return tool_unavailable("mariadb", "Not configured.")
 
     _IMPORTANT_KEYS = frozenset(
         {
@@ -273,7 +282,7 @@ def get_global_status(config: MariaDBConfig) -> dict[str, Any]:
             integration="mariadb",
             method="get_global_status",
         )
-        return {"source": "mariadb", "available": False, "error": str(err)}
+        return tool_unavailable("mariadb", str(err))
 
 
 def get_innodb_status(config: MariaDBConfig) -> dict[str, Any]:
@@ -283,7 +292,7 @@ def get_innodb_status(config: MariaDBConfig) -> dict[str, Any]:
     The output text is truncated to prevent excessive result sizes.
     """
     if not config.is_configured:
-        return {"source": "mariadb", "available": False, "error": "Not configured."}
+        return tool_unavailable("mariadb", "Not configured.")
 
     _MAX_STATUS_LEN = 4000
 
@@ -310,7 +319,7 @@ def get_innodb_status(config: MariaDBConfig) -> dict[str, Any]:
             integration="mariadb",
             method="get_innodb_status",
         )
-        return {"source": "mariadb", "available": False, "error": str(err)}
+        return tool_unavailable("mariadb", str(err))
 
 
 def get_slow_queries(
@@ -324,7 +333,7 @@ def get_slow_queries(
     Results ordered by average wait time descending.
     """
     if not config.is_configured:
-        return {"source": "mariadb", "available": False, "error": "Not configured."}
+        return tool_unavailable("mariadb", "Not configured.")
 
     effective_limit = min(max_results or config.max_results, config.max_results)
     try:
@@ -382,7 +391,7 @@ def get_slow_queries(
             integration="mariadb",
             method="get_slow_queries",
         )
-        return {"source": "mariadb", "available": False, "error": str(err)}
+        return tool_unavailable("mariadb", str(err))
 
 
 def get_replication_status(config: MariaDBConfig) -> dict[str, Any]:
@@ -393,7 +402,7 @@ def get_replication_status(config: MariaDBConfig) -> dict[str, Any]:
     older versions.
     """
     if not config.is_configured:
-        return {"source": "mariadb", "available": False, "error": "Not configured."}
+        return tool_unavailable("mariadb", "Not configured.")
 
     try:
         conn = _get_connection(config)
@@ -456,7 +465,7 @@ def get_replication_status(config: MariaDBConfig) -> dict[str, Any]:
             integration="mariadb",
             method="get_replication_status",
         )
-        return {"source": "mariadb", "available": False, "error": str(err)}
+        return tool_unavailable("mariadb", str(err))
 
 
 def classify(

@@ -51,7 +51,7 @@ def _make_state(**overrides: Any) -> dict[str, Any]:
     base: dict[str, Any] = {
         "problem_md": "something broke",
         "root_cause_category": "infra",
-        "slack_context": {},
+        "channel_contexts": {},
         "organization_slug": None,
         "available_sources": {
             "gitlab": {

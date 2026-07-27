@@ -19,6 +19,7 @@ import httpx
 from pydantic import Field, field_validator
 
 from config.strict_config import StrictConfigModel
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
 
 logger = logging.getLogger(__name__)
@@ -152,7 +153,7 @@ def get_clusters(config: MongoDBAtlasConfig) -> dict[str, Any]:
     Read-only: GET /groups/{projectId}/clusters
     """
     if not config.is_configured:
-        return {"source": "mongodb_atlas", "available": False, "error": "Not configured."}
+        return tool_unavailable("mongodb_atlas", "Not configured.")
 
     try:
         client = _get_client(config)
@@ -215,7 +216,7 @@ def get_clusters(config: MongoDBAtlasConfig) -> dict[str, Any]:
             integration="mongodb_atlas",
             method="get_clusters",
         )
-        return {"source": "mongodb_atlas", "available": False, "error": str(err)}
+        return tool_unavailable("mongodb_atlas", str(err))
 
 
 def get_alerts(
@@ -227,7 +228,7 @@ def get_alerts(
     Read-only: GET /groups/{projectId}/alerts
     """
     if not config.is_configured:
-        return {"source": "mongodb_atlas", "available": False, "error": "Not configured."}
+        return tool_unavailable("mongodb_atlas", "Not configured.")
 
     effective_limit = min(max_results or config.max_results, config.max_results)
     try:
@@ -269,7 +270,7 @@ def get_alerts(
             integration="mongodb_atlas",
             method="get_alerts",
         )
-        return {"source": "mongodb_atlas", "available": False, "error": str(err)}
+        return tool_unavailable("mongodb_atlas", str(err))
 
 
 def _resolve_primary_process(
@@ -331,9 +332,9 @@ def get_cluster_metrics(
     First resolves processes for the cluster, then fetches metrics for the primary.
     """
     if not config.is_configured:
-        return {"source": "mongodb_atlas", "available": False, "error": "Not configured."}
+        return tool_unavailable("mongodb_atlas", "Not configured.")
     if not cluster_name:
-        return {"source": "mongodb_atlas", "available": False, "error": "cluster_name is required."}
+        return tool_unavailable("mongodb_atlas", "cluster_name is required.")
 
     try:
         client = _get_client(config)
@@ -411,7 +412,7 @@ def get_cluster_metrics(
             integration="mongodb_atlas",
             method="get_cluster_metrics",
         )
-        return {"source": "mongodb_atlas", "available": False, "error": str(err)}
+        return tool_unavailable("mongodb_atlas", str(err))
 
 
 def get_performance_advisor(
@@ -424,9 +425,9 @@ def get_performance_advisor(
     Read-only: GET /groups/{projectId}/processes/{processId}/performanceAdvisor/suggestedIndexes
     """
     if not config.is_configured:
-        return {"source": "mongodb_atlas", "available": False, "error": "Not configured."}
+        return tool_unavailable("mongodb_atlas", "Not configured.")
     if not cluster_name:
-        return {"source": "mongodb_atlas", "available": False, "error": "cluster_name is required."}
+        return tool_unavailable("mongodb_atlas", "cluster_name is required.")
 
     effective_limit = min(max_results or config.max_results, config.max_results)
     try:
@@ -500,7 +501,7 @@ def get_performance_advisor(
             integration="mongodb_atlas",
             method="get_performance_advisor",
         )
-        return {"source": "mongodb_atlas", "available": False, "error": str(err)}
+        return tool_unavailable("mongodb_atlas", str(err))
 
 
 def get_cluster_events(
@@ -513,7 +514,7 @@ def get_cluster_events(
     Read-only: GET /groups/{projectId}/events
     """
     if not config.is_configured:
-        return {"source": "mongodb_atlas", "available": False, "error": "Not configured."}
+        return tool_unavailable("mongodb_atlas", "Not configured.")
 
     effective_limit = min(max_results or config.max_results, config.max_results)
     try:
@@ -558,7 +559,7 @@ def get_cluster_events(
             integration="mongodb_atlas",
             method="get_cluster_events",
         )
-        return {"source": "mongodb_atlas", "available": False, "error": str(err)}
+        return tool_unavailable("mongodb_atlas", str(err))
 
 
 def classify(

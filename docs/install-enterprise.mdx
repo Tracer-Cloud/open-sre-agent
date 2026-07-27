@@ -3,47 +3,56 @@ title: "Enterprise setup (Tracer Cloud)"
 description: "Set up OpenSRE for your organization in app.tracer.cloud"
 ---
 
-This guide is for teams that manage OpenSRE from the hosted web app.
+This guide is for teams that manage OpenSRE from the hosted web app at [app.tracer.cloud](https://app.tracer.cloud).
 
 ## 1) Create your organization account
 
-Sign up at [tracer.cloud](https://tracer.cloud) and then continue in
-[app.tracer.cloud/sign-up](https://app.tracer.cloud/sign-up) to create or join your organization workspace.
+Sign up at [tracer.cloud](https://tracer.cloud) and continue in [app.tracer.cloud/sign-up](https://app.tracer.cloud/sign-up) to create or join your organization workspace.
 
 ## 2) Complete workspace onboarding
 
-In [app.tracer.cloud](https://app.tracer.cloud), follow onboarding to:
+In the web app, complete onboarding to:
 
-- define your workspace context
-- connect your first integrations
-- verify access and permissions
+- Define your workspace context (team name, default channels)
+- Connect your first integrations (start with observability + messaging)
+- Verify access and permissions for each connector
 
 ## 3) Configure integrations for your org
 
-Enterprise integrations are configured in the web app and shared across your organization.
+Enterprise integrations are configured in the web app and shared across your organization. Use the integration catalog for credential requirements:
 
-For Slack integration help, go to Support in the app and request assistance with Slack setup.
+- [Integrations overview](/integrations-overview) — local CLI and hosted setup paths
+- [Datadog](/datadog) — API key + application key (hosted flow in Option 3)
+- [Grafana](/grafana) — service account token + endpoint URL
+- [AWS](/aws) — cross-cloud infrastructure mapping
+- [Slack](/messaging/slack) — deliver investigation reports to channels
 
-Use the integration catalog and provider-specific docs from:
+<Frame>
+  ![Integrations](/images/integrations.png)
+</Frame>
 
-- [Local integrations overview (dev preview)](http://localhost:3000/integrations-overview)
-- [Integrations overview](/integrations-overview)
+### Verification checklist
 
-Each integration page documents required credentials, scopes, and verification guidance.
+After connecting each integration in the web app:
+
+1. Confirm the connector shows **connected** in **Integrations**
+2. Run a test investigation from the app or ask an org admin to trigger a sample alert
+3. Confirm the report arrives in your configured Slack channel (see [Slack setup](/messaging/slack))
+
+For Slack-specific help, use **Support** in the app or follow the self-serve steps in [Slack integration](/messaging/slack).
 
 ## 4) Run investigations with shared context
 
-After integrations are connected, OpenSRE investigations can use the same organization-level connectors and
-policies.
+After integrations are connected, OpenSRE investigations use the same organization-level connectors and policies. Engineers can also run local CLI investigations that reference the same integration catalog.
 
 ## Local CLI users in enterprise teams
 
-If your engineers also run local investigations, use:
+If your engineers also run local investigations:
 
 ```bash
 opensre
-# then, inside the shell:
+# inside the shell:
 onboard
 ```
 
-This configures local CLI access while keeping integrations documented in the same catalog under `Integrations`.
+This configures local LLM credentials while org-wide connectors remain in the web app. See [Install locally](/install-local) for the full local path.

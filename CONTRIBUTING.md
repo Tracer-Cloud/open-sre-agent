@@ -95,6 +95,12 @@ Notes:
 - `surfaces` defaults to `("investigation",)`. Pass `surfaces=("investigation", "chat")` to expose the tool in both investigation and chat contexts.
 - Use the existing package/class style when a tool has complex helper logic, multiple exports, or substantial integration-specific code.
 
+The example above is the minimal shape. For **where** the tool belongs
+(`integrations/<vendor>/tools/` for a single vendor vs. `tools/system/` /
+`tools/cross_vendor/`) see [docs/tool-placement-policy.md](docs/tool-placement-policy.md);
+for the full definition of done (metadata, live-payload parsing, docs, tests,
+verification) follow [docs/adding-tools-and-integrations.md](docs/adding-tools-and-integrations.md).
+
 ### 3. Add or Update Tests
 
 - **Test Location:** New tests should be placed in the `tests/` directory, mirroring the source package area when useful (e.g., tests for `surfaces/cli/` go in `tests/cli/`).

@@ -5,7 +5,9 @@ from __future__ import annotations
 from typing import Any
 
 from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.github.helpers import (
+    GITHUB_INJECTED_PARAMS,
     github_creds,
     github_source_available,
     normalize_github_tool_result,
@@ -58,6 +60,7 @@ def _get_github_repository_tree_available(sources: dict[str, dict]) -> bool:
     },
     is_available=_get_github_repository_tree_available,
     extract_params=_get_github_repository_tree_extract_params,
+    injected_params=GITHUB_INJECTED_PARAMS,
 )
 def get_github_repository_tree(
     owner: str,
@@ -77,12 +80,7 @@ def get_github_repository_tree(
         github_url, github_mode, github_token, github_command, github_args
     )
     if config is None:
-        return {
-            "source": "github",
-            "available": False,
-            "error": "GitHub MCP integration is not configured.",
-            "tree": {},
-        }
+        return tool_unavailable("github", "GitHub MCP integration is not configured.", tree={})
 
     arguments: dict[str, Any] = {"owner": owner, "repo": repo, "recursive": recursive}
     if path_filter:

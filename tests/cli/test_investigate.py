@@ -13,35 +13,30 @@ from tools.investigation.capability import resolve_investigation_context
 
 
 def test_resolve_investigation_context_prefers_cli_overrides() -> None:
-    alert_name, pipeline_name, severity = resolve_investigation_context(
+    alert_name, severity = resolve_investigation_context(
         raw_alert={
             "alert_name": "PayloadAlert",
-            "pipeline_name": "payload_pipeline",
             "severity": "warning",
         },
         alert_name="CliAlert",
-        pipeline_name="cli_pipeline",
         severity="critical",
     )
 
     assert alert_name == "CliAlert"
-    assert pipeline_name == "cli_pipeline"
     assert severity == "critical"
 
 
-def test_resolve_investigation_context_uses_raw_alert_without_pipeline_default() -> None:
-    alert_name, pipeline_name, severity = resolve_investigation_context(
+def test_resolve_investigation_context_uses_raw_alert_fields() -> None:
+    alert_name, severity = resolve_investigation_context(
         raw_alert={
             "title": "CPU high",
             "commonLabels": {"service": "checkout", "severity": "critical"},
         },
         alert_name=None,
-        pipeline_name=None,
         severity=None,
     )
 
     assert alert_name == "CPU high"
-    assert pipeline_name == "checkout"
     assert severity == "critical"
 
 
@@ -67,12 +62,12 @@ def test_run_investigation_cli_passes_investigation_metadata_to_runner(
     )
     run_investigation_cli(
         raw_alert={"description": "x"},
-        investigation_metadata=("A", "B", "high"),
+        investigation_metadata=("A", "high"),
     )
     assert captured == {
         "raw_alert": {"description": "x"},
         "opensre_evaluate": False,
-        "investigation_metadata": ("A", "B", "high"),
+        "investigation_metadata": ("A", "high"),
     }
 
 

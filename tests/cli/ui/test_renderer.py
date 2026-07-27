@@ -1298,13 +1298,12 @@ class TestStreamRendererPrintAboveRenderable:
             kind="on_chain_start",
             data={
                 "name": "diagnose",
-                "data": {
-                    "input": {"alert_name": "late-breaking-alert", "pipeline_name": "test-pipeline"}
-                },
+                "data": {"input": {"alert_name": "late-breaking-alert", "severity": "high"}},
             },
         )
 
         renderer._merge_chain_start_input(event)
 
         assert renderer._final_state.get("alert_name") == "late-breaking-alert"
-        assert renderer._final_state.get("pipeline_name") == "test-pipeline"
+        assert renderer._final_state.get("severity") == "high"
+        assert "pipeline_name" not in renderer._final_state

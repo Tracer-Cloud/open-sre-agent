@@ -9,6 +9,7 @@ from typing import Any, cast
 
 from core.domain.alerts.extraction import (
     AlertDetails,
+    build_alert_details_model,
     enrich_raw_alert,
     fallback_details,
     format_raw_alert,
@@ -31,7 +32,7 @@ from tools.investigation.reporting.delivery.bootstrap import (
 
 logger = logging.getLogger(__name__)
 
-_EXTRACTED_STATE_FIELDS = ["alert_name", "pipeline_name", "severity", "alert_source", "problem_md"]
+_EXTRACTED_STATE_FIELDS = ["alert_name", "severity", "alert_source", "problem_md", "alert_json"]
 
 _EXTRACT_PROMPT = """Classify and extract fields from this alert message.
 
@@ -59,7 +60,8 @@ Extract these fields from the message text:
   - "honeycomb" for Honeycomb or api.honeycomb.io
   - "coralogix" for Coralogix or DataPrime
   - "cloudwatch" for AWS CloudWatch alarms
-  - "eks" for EKS, CrashLoopBackOff, OOMKilled, Kubernetes pods, or kube_namespace
+  - "eks" for AWS EKS-managed clusters or AWS-specific Kubernetes alarms
+  - "kubernetes" for CrashLoopBackOff, OOMKilled, Kubernetes pods, kube_namespace, or any generic Kubernetes/k8s alert not tied to AWS EKS
   - "alertmanager" for Prometheus/Alertmanager-specific fields
   - "signoz" for SigNoz, signoz.io, or signoz_metrics
   Leave null if truly unknown.
@@ -79,9 +81,9 @@ Message:
 def extract_alert(state: InvestigationState) -> dict[str, Any]:
     """Parse raw alert into structured state updates.
 
-    Returns a dict of state keys (alert_name, pipeline_name, severity, etc.)
-    suitable for merging into AgentState. Returns {"is_noise": True} when the
-    input is classified as noise.
+    Returns a dict of state keys (alert_name, severity, alert_json, problem_md,
+    etc.) suitable for merging into AgentState.
+    Returns {"is_noise": True} when the input is classified as noise.
     """
     tracker = get_tracker()
     tracker.start("extract_alert", "Classifying and extracting alert details")
@@ -123,12 +125,10 @@ def _handle_noise(state: InvestigationState, tracker: Any) -> dict[str, Any]:
 def _render_alert_summary(details: AlertDetails, raw_alert: Any) -> None:
     alert_id = raw_alert.get("alert_id") if isinstance(raw_alert, dict) else None
     debug_print(
-        f"Alert: {details.alert_name} | Pipeline: {details.pipeline_name} | "
-        f"Severity: {details.severity} | namespace={details.kube_namespace} | Alert ID: {alert_id}"
+        f"Alert: {details.alert_name} | Severity: {details.severity} | "
+        f"namespace={getattr(details, 'kube_namespace', None)} | Alert ID: {alert_id}"
     )
-    render_investigation_header(
-        details.alert_name, details.pipeline_name, details.severity, alert_id=alert_id
-    )
+    render_investigation_header(details.alert_name, details.severity, alert_id=alert_id)
 
 
 def _build_alert_updates(
@@ -139,7 +139,6 @@ def _build_alert_updates(
     result: dict[str, Any] = {
         "is_noise": False,
         "alert_name": details.alert_name,
-        "pipeline_name": details.pipeline_name,
         "severity": details.severity,
         "alert_json": details.model_dump(),
         "raw_alert": enrich_raw_alert(raw_alert, details),
@@ -165,13 +164,13 @@ def _extract_alert_details(state: InvestigationState) -> AlertDetails:
     try:
         details = cast(
             AlertDetails,
-            llm.with_structured_output(AlertDetails)
+            llm.with_structured_output(build_alert_details_model())
             .with_config(run_name="LLM – Classify + extract alert")
             .invoke(prompt),
         )
         debug_print(
             f"Alert classified: {'NOISE' if details.is_noise else 'ALERT'} | "
-            f"namespace={details.kube_namespace} | error={details.error_message}"
+            f"namespace={getattr(details, 'kube_namespace', None)} | error={details.error_message}"
         )
         return details
     except Exception as err:
@@ -216,8 +215,10 @@ def _resolve_slack_reactions_port() -> SlackReactionsPort | None:
 
 
 def _slack_reaction_context(state: InvestigationState) -> tuple[str, str, str] | None:
-    slack_ctx = state.get("slack_context", {}) or {}
-    if not isinstance(slack_ctx, dict):
+    from core.state.channel_context import get_channel_context
+
+    slack_ctx = get_channel_context(state, "slack")
+    if not slack_ctx:
         return None
 
     timestamp = slack_ctx.get("ts") or slack_ctx.get("thread_ts")

@@ -42,9 +42,7 @@ BLOCKED_OPERATION_PATTERNS = [
 ]
 
 # Response size limits
-MAX_RESPONSE_SIZE_BYTES = 100_000
 MAX_LIST_ITEMS = 100
-MAX_PAGINATION_CALLS = 5
 
 
 def _is_operation_allowed(operation_name: str) -> tuple[bool, str]:

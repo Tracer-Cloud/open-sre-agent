@@ -231,3 +231,122 @@ def test_run_watchdog_once_without_thresholds_exits(monkeypatch: pytest.MonkeyPa
     assert task.status == TaskStatus.COMPLETED
     assert task.result == "single sample (once)"
     dispatcher.dispatch.assert_not_called()
+
+
+def test_run_watchdog_first_probe_inaccessible_marks_failed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A live PID this user cannot introspect must fail loudly, not report
+    'target process exited' (a permission failure is not an exit)."""
+    from platform.common.task_registry import TaskRegistry
+    from tools.system.watch_dog.monitor import run_watchdog
+
+    reg = TaskRegistry()
+    task = reg.create(TaskKind.WATCHDOG, command="watchdog pid=1")
+    task.mark_running()
+    dispatcher = MagicMock()
+    dispatcher.dispatch = MagicMock(return_value=True)
+
+    monkeypatch.setattr("tools.system.watch_dog.monitor.probe", lambda *_a, **_kw: None)
+    monkeypatch.setattr("tools.system.watch_dog.monitor.pid_exists", lambda _pid: True)
+
+    run_watchdog(
+        task=task,
+        watched_pid=1,
+        interval_seconds=0.01,
+        max_cpu=None,
+        max_runtime_seconds=None,
+        max_rss_mib=None,
+        once=False,
+        dispatcher=dispatcher,
+        on_alarm=None,
+    )
+    assert task.status == TaskStatus.FAILED
+    assert "permission denied" in (task.error or "")
+    dispatcher.dispatch.assert_not_called()
+
+
+def test_run_watchdog_gone_pid_completes_as_exited(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from platform.common.task_registry import TaskRegistry
+    from tools.system.watch_dog.monitor import run_watchdog
+
+    reg = TaskRegistry()
+    task = reg.create(TaskKind.WATCHDOG, command="watchdog pid=1")
+    task.mark_running()
+    dispatcher = MagicMock()
+    dispatcher.dispatch = MagicMock(return_value=True)
+
+    monkeypatch.setattr("tools.system.watch_dog.monitor.probe", lambda *_a, **_kw: None)
+    monkeypatch.setattr("tools.system.watch_dog.monitor.pid_exists", lambda _pid: False)
+
+    run_watchdog(
+        task=task,
+        watched_pid=1,
+        interval_seconds=0.01,
+        max_cpu=None,
+        max_runtime_seconds=None,
+        max_rss_mib=None,
+        once=False,
+        dispatcher=dispatcher,
+        on_alarm=None,
+    )
+    assert task.status == TaskStatus.COMPLETED
+    assert task.result == "target process exited"
+
+
+def test_run_watchdog_transient_inaccessible_retries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A mid-watch AccessDenied tick (probe None while the PID exists) must
+    retry, then still report the real exit when the PID is truly gone."""
+    from datetime import UTC, datetime, timedelta
+
+    from platform.common.task_registry import TaskRegistry
+    from tools.system.fleet_monitoring.probe import ProcessSnapshot
+    from tools.system.watch_dog.monitor import run_watchdog
+
+    reg = TaskRegistry()
+    task = reg.create(TaskKind.WATCHDOG, command="watchdog pid=1")
+    task.mark_running()
+    dispatcher = MagicMock()
+    dispatcher.dispatch = MagicMock(return_value=True)
+
+    snap = ProcessSnapshot(
+        pid=1,
+        cpu_percent=1.0,
+        rss_mb=10.0,
+        num_fds=None,
+        num_connections=None,
+        status="running",
+        started_at=datetime.now(UTC) - timedelta(seconds=1),
+    )
+    probe_results = [snap, None, None]
+    probe_calls = {"n": 0}
+
+    def _fake_probe(*_a: object, **_kw: object) -> ProcessSnapshot | None:
+        probe_calls["n"] += 1
+        return probe_results.pop(0)
+
+    pid_exists_results = [True, False]
+    monkeypatch.setattr("tools.system.watch_dog.monitor.probe", _fake_probe)
+    monkeypatch.setattr(
+        "tools.system.watch_dog.monitor.pid_exists",
+        lambda _pid: pid_exists_results.pop(0),
+    )
+
+    run_watchdog(
+        task=task,
+        watched_pid=1,
+        interval_seconds=0.01,
+        max_cpu=None,
+        max_runtime_seconds=None,
+        max_rss_mib=None,
+        once=False,
+        dispatcher=dispatcher,
+        on_alarm=None,
+    )
+    assert probe_calls["n"] == 3
+    assert task.status == TaskStatus.COMPLETED
+    assert task.result == "target process exited"

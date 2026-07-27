@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Iterable
 from typing import Any
 
 import pytest
 from rich.console import Console
 
-import tools.interactive_shell.actions.slash as slash_tool
+import surfaces.interactive_shell.runtime.slash_adapter as slash_adapter
 from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
+from core.agent_harness.prompts.prior_investigation import (
+    PRIOR_INVESTIGATION_RECALL_SECONDS,
+)
 from core.agent_harness.turns.action_driver import (
     ActionTurnPlan,
     ToolCallingDeps,
@@ -81,7 +85,7 @@ def test_execute_with_harness_runs_slash_tool_call(monkeypatch) -> None:
         console.print(f"ran {command}")
         return True
 
-    monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
+    monkeypatch.setattr(slash_adapter, "dispatch_slash", _fake_dispatch)
     harness = ActionExecutionHarness(
         llm=FakeActionLLM([tool_response("slash_invoke", {"command": "/health", "args": []})])
     )
@@ -116,7 +120,12 @@ def test_generic_registered_action_tool_result_marks_turn_handled() -> None:
         run=lambda message: {"status": "sent", "message": message},
     )
     harness = ActionExecutionHarness(
-        llm=FakeActionLLM([tool_response("fake_send_message", {"message": "hello"})])
+        llm=FakeActionLLM(
+            [
+                tool_response("fake_send_message", {"message": "hello"}),
+                no_tool_response("Message sent."),
+            ]
+        )
     )
 
     result = run_action_agent_turn(
@@ -134,7 +143,94 @@ def test_generic_registered_action_tool_result_marks_turn_handled() -> None:
     assert result.executed_success_count == 1
     assert 'fake_send_message input: {"message": "hello"}' in result.response_text
     assert '"status": "sent"' in result.response_text
+    assert "Message sent." in result.response_text
     assert "fake_send_message" in harness.llm.tool_schema_names
+    printed = harness.console_buffer.getvalue()
+    assert "Message sent." in printed
+    assert "fake_send_message" in printed
+
+
+def test_generic_cli_style_stdout_is_printed_for_user() -> None:
+    tool = RegisteredTool(
+        name="fake_gh",
+        description="Fake gh.",
+        input_schema={
+            "type": "object",
+            "properties": {"args": {"type": "array", "items": {"type": "string"}}},
+            "required": ["args"],
+            "additionalProperties": False,
+        },
+        source="github",
+        surfaces=("action",),
+        run=lambda args: {
+            "ok": True,
+            "argv": ["gh", *args],
+            "exit_code": 0,
+            "stdout": "https://github.com/o/r/issues/1\n",
+            "stderr": "",
+        },
+    )
+    harness = ActionExecutionHarness(
+        llm=FakeActionLLM([tool_response("fake_gh", {"args": ["issue", "list"]})])
+    )
+
+    result = run_action_agent_turn(
+        "list issues",
+        Session(),
+        output=_OutputSink(harness.console),
+        tools=_GenericActionToolProvider(tool),
+        deps=harness.deps,
+        is_tty=False,
+    )
+
+    assert result.handled is True
+    assert "https://github.com/o/r/issues/1" in result.response_text
+    assert "https://github.com/o/r/issues/1" in harness.console_buffer.getvalue()
+
+
+def test_action_final_text_is_streamed_as_user_facing_response() -> None:
+    """When the action agent concludes with prose after tools, show that text.
+
+    Interactive-shell ``handled_without_llm`` used to keep only tool dumps in
+    ``response_text`` and never render the agent's final Markdown — so skills
+    like architecture audit never surfaced their report.
+    """
+    tool = RegisteredTool(
+        name="fake_scan",
+        description="Run a fake scan.",
+        input_schema={
+            "type": "object",
+            "properties": {},
+            "additionalProperties": False,
+        },
+        source="knowledge",
+        surfaces=("action",),
+        run=lambda: {"ok": True},
+    )
+    report = "### Executive summary\nScan complete.\n"
+    harness = ActionExecutionHarness(
+        llm=FakeActionLLM(
+            [
+                tool_response("fake_scan", {}),
+                no_tool_response(report),
+            ]
+        )
+    )
+    sink = _OutputSink(harness.console)
+
+    result = run_action_agent_turn(
+        "run the scan and report",
+        Session(),
+        output=sink,
+        tools=_GenericActionToolProvider(tool),
+        deps=harness.deps,
+        is_tty=False,
+    )
+
+    assert result.handled is True
+    assert result.response_text == report.strip()
+    assert "Executive summary" in harness.console_buffer.getvalue()
+    assert "fake_scan result:" not in result.response_text
 
 
 def test_literal_slash_command_dispatches_deterministically_without_llm(
@@ -155,7 +251,7 @@ def test_literal_slash_command_dispatches_deterministically_without_llm(
         session.record("slash", command, ok=True)
         return True
 
-    monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
+    monkeypatch.setattr(slash_adapter, "dispatch_slash", _fake_dispatch)
     harness = ActionExecutionHarness(llm=FakeActionLLM([no_tool_response()]))
     session = Session()
 
@@ -188,7 +284,7 @@ def test_literal_slash_command_forwards_args_without_llm(monkeypatch) -> None:
         session.record("slash", command, ok=True)
         return True
 
-    monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
+    monkeypatch.setattr(slash_adapter, "dispatch_slash", _fake_dispatch)
     harness = ActionExecutionHarness(llm=FakeActionLLM([no_tool_response()]))
 
     result = run_action_tool_turn(
@@ -210,7 +306,7 @@ def test_natural_language_still_routes_through_action_agent(monkeypatch) -> None
     def _unexpected_dispatch(*_args: object, **_kwargs: object) -> bool:
         raise AssertionError("free-form text must not deterministically dispatch a slash command")
 
-    monkeypatch.setattr(slash_tool, "dispatch_slash", _unexpected_dispatch)
+    monkeypatch.setattr(slash_adapter, "dispatch_slash", _unexpected_dispatch)
     harness = ActionExecutionHarness(llm=FakeActionLLM([no_tool_response()]))
 
     result = run_action_tool_turn(
@@ -412,6 +508,85 @@ def test_run_turn_mixed_action_and_handoff_routes_to_assistant() -> None:
     assert result.final_intent == "cli_agent_fallback"
 
 
+def test_run_turn_skips_gather_for_follow_up_handoff_with_prior_state() -> None:
+    """Prior-investigation follow-ups must answer from last_state, not live tools."""
+    session = Session()
+    session.last_state = {
+        "root_cause": "disk full on orders-api",
+        "investigation_started_at": time.monotonic(),
+    }
+    gather_calls: list[str] = []
+    answer_kwargs: list[dict[str, Any]] = []
+
+    def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
+        return ToolCallingTurnResult(
+            planned_count=1,
+            executed_count=1,
+            executed_success_count=1,
+            has_unhandled_clause=False,
+            handled=True,
+            handoff_contents=("follow_up:prior_investigation",),
+        )
+
+    def _gather(text: str, *_args: object, **_kwargs: object) -> str:
+        gather_calls.append(text)
+        return "Tool: search_sentry_issues\nArguments: {}\nResult: should-not-run"
+
+    def _answer(*_args: Any, **kwargs: Any) -> None:
+        answer_kwargs.append(kwargs)
+        return None
+
+    result = run_turn(
+        "what happened?",
+        session,
+        execute_actions=_execute,
+        gather=_gather,
+        answer=_answer,
+        accounting=DefaultTurnAccounting(session, "what happened?"),
+    )
+
+    assert gather_calls == []
+    assert answer_kwargs
+    assert answer_kwargs[0].get("tool_observation") is None
+    assert answer_kwargs[0].get("handoff_contents") == ("follow_up:prior_investigation",)
+    assert result.final_intent == "cli_agent_fallback"
+
+
+def test_run_turn_still_gathers_for_non_follow_up_handoff_with_prior_state() -> None:
+    """Non-follow-up handoffs keep the gather path even when last_state exists."""
+    session = Session()
+    session.last_state = {
+        "root_cause": "disk full on orders-api",
+        "investigation_started_at": time.monotonic(),
+    }
+    gather_calls: list[str] = []
+
+    def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
+        return ToolCallingTurnResult(
+            planned_count=1,
+            executed_count=1,
+            executed_success_count=1,
+            has_unhandled_clause=False,
+            handled=True,
+            handoff_contents=("provider:local_llama_connect",),
+        )
+
+    def _gather(text: str, *_args: object, **_kwargs: object) -> str:
+        gather_calls.append(text)
+        return "Tool: x\nArguments: {}\nResult: y"
+
+    run_turn(
+        "connect local llama",
+        session,
+        execute_actions=_execute,
+        gather=_gather,
+        answer=lambda *_a, **_k: None,
+        accounting=DefaultTurnAccounting(session, "connect local llama"),
+    )
+
+    assert gather_calls == ["connect local llama"]
+
+
 def test_execute_with_harness_handles_llm_unavailable() -> None:
     def _raise() -> object:
         raise RuntimeError("action agent unavailable")
@@ -605,3 +780,42 @@ def test_turn_resolved_integrations_trusts_plan_without_reresolving(
     plan = TurnPlan(snapshot=snapshot)
 
     assert _turn_resolved_integrations(Session(), plan) == {}
+
+
+def test_run_turn_skips_gather_for_follow_up_even_when_investigation_is_old() -> None:
+    """The planner's follow-up tag is not age-gated.
+
+    Gathering here would answer a question about a past incident with current
+    integration results.
+    """
+    session = Session()
+    session.last_state = {
+        "root_cause": "disk full on orders-api",
+        "investigation_started_at": time.monotonic() - PRIOR_INVESTIGATION_RECALL_SECONDS - 1,
+    }
+    gather_calls: list[str] = []
+
+    def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
+        return ToolCallingTurnResult(
+            planned_count=1,
+            executed_count=1,
+            executed_success_count=1,
+            has_unhandled_clause=False,
+            handled=True,
+            handoff_contents=("follow_up:prior_investigation",),
+        )
+
+    def _gather(text: str, *_args: object, **_kwargs: object) -> str:
+        gather_calls.append(text)
+        return "Tool: search_sentry_issues\nArguments: {}\nResult: should-not-run"
+
+    run_turn(
+        "what happened?",
+        session,
+        execute_actions=_execute,
+        gather=_gather,
+        answer=lambda *_a, **_k: None,
+        accounting=DefaultTurnAccounting(session, "what happened?"),
+    )
+
+    assert gather_calls == []

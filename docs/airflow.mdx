@@ -6,7 +6,7 @@ description: Investigate DAG failures and extract execution context from Apache 
 
 ## Overview
 
-The Airflow integration enables OpenSRE to investigate DAG failures and extract execution context directly from an Apache Airflow instance.
+When a DAG failure alert fires, OpenSRE queries your Airflow REST API for the failing DAG run, task instances, and logs — then folds that evidence into the RCA pipeline alongside metrics and logs from your observability integrations.
 
 It supports:
 
@@ -16,22 +16,6 @@ It supports:
 - Evidence collection for RCA generation
 
 This integration is designed for **incident-driven workflows**, where an alert referencing a DAG triggers an investigation.
-
----
-
-## Architecture
-
-The Airflow integration participates in the investigation pipeline as follows:
-
-1. **Alert ingestion**
-2. **Planner selects relevant tools**
-3. **Airflow API is queried**
-4. **Evidence is collected**
-5. **RCA is generated**
-
-```
-Alert → Planner → Airflow tools → Evidence → RCA
-```
 
 ---
 

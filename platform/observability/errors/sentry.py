@@ -11,8 +11,8 @@ import json
 import logging
 import os
 import re
-from collections.abc import Generator, Mapping
-from contextlib import contextmanager, suppress
+from collections.abc import Mapping
+from contextlib import suppress
 from functools import cache
 from typing import Any, cast
 from urllib.parse import urlsplit, urlunsplit
@@ -569,22 +569,3 @@ def capture_exception(
                     scope.set_extra(key, value)
             return cast("str | None", sentry_sdk.capture_exception(exc))
     return None
-
-
-@contextmanager
-def report_silent(
-    where: str,
-    *,
-    extra: Mapping[str, Any] | None = None,
-) -> Generator[None]:
-    """Catch exceptions, report to Sentry, do not re-raise.
-
-    Use this in background-task iterations or loop boundaries where an
-    exception must never propagate to the caller but should still appear
-    in Sentry.  The ``silent_at`` scope tag is set to ``where`` so these
-    events are grouped together in the Sentry dashboard.
-    """
-    try:
-        yield
-    except Exception as exc:
-        capture_exception(exc, context=where, extra=extra)

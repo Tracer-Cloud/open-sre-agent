@@ -3,6 +3,19 @@ title: "How an investigation works"
 description: "A plain-language walkthrough of what OpenSRE does between receiving an alert and posting a root-cause report"
 ---
 
+## At a glance
+
+| Step | What happens | You run |
+| --- | --- | --- |
+| Start | Alert or plain-language incident description enters the pipeline | `opensre investigate -i <alert.json>` or `opensre` then describe the incident |
+| Investigate | Tool-calling loop queries connected integrations | `/investigate` or `/verify <service>` in the REPL |
+| Output | RCA artifacts written locally (and optionally to Slack) | Open `problem.md`, `theory/hypothesis_*.md`, `report.md` |
+| Export | Single JSON for automation | `opensre investigate -i <file> --output ./rca.json` |
+
+**Config:** `LLM_PROVIDER` + matching API key; integrations via `opensre onboard` or `opensre integrations setup`. See [Environment variables](/configuration/environment-variables).
+
+**Failure modes:** No integrations connected → limited evidence; LLM misconfigured → run fails at start; tool cap / stagnation breaker → investigation stops early with partial report (see stages below).
+
 Think of OpenSRE as an on-call engineer who never sleeps. It follows the same
 instincts a good on-call engineer would: get paged, decide whether it's
 actually worth waking up for, check the obvious dashboards first, take notes

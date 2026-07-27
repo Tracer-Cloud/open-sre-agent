@@ -41,8 +41,7 @@ seed: 42
 output_dir: .bench-results/example/
 
 # Pre-registration — Phase 0 integrity gate. Path must exist + be non-empty
-# AND be committed to git before the run. See:
-# ~/DevBox/opensre-notes/opensre-benchmark-framework.md § 0
+# AND be committed to git before the run.
 pre_registration_path: tests/benchmarks/cloudopsbench/configs/preregistrations/cloudopsbench_smoke.yml
 
 filters:

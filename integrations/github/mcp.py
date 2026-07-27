@@ -161,6 +161,8 @@ class GitHubMCPConfig(StrictConfigModel):
     def _normalize_args(cls, value: Any) -> tuple[str, ...]:
         if value is None:
             return ()
+        if isinstance(value, str):
+            return tuple(part for part in value.split() if part.strip())
         return tuple(str(arg).strip() for arg in value if str(arg).strip())
 
     @field_validator("headers", mode="before")
@@ -175,6 +177,9 @@ class GitHubMCPConfig(StrictConfigModel):
     def _normalize_toolsets(cls, value: Any) -> tuple[str, ...]:
         if value is None:
             return DEFAULT_GITHUB_MCP_TOOLSETS
+        if isinstance(value, str):
+            parts = [part.strip() for part in value.split(",") if part.strip()]
+            return tuple(parts) or DEFAULT_GITHUB_MCP_TOOLSETS
         toolsets = tuple(str(toolset).strip() for toolset in value if str(toolset).strip())
         return toolsets or DEFAULT_GITHUB_MCP_TOOLSETS
 

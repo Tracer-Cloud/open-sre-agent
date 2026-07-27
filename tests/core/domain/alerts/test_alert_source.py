@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from core.domain.alerts.alert_source import (
-    ALERT_SOURCE_ROUTING,
+    alert_source_routing,
     collect_alert_text,
     declared_context_sources,
     primary_sources_for_alert,
@@ -54,15 +54,20 @@ def test_resolve_alert_source_empty_when_unresolved() -> None:
 
 
 def test_primary_sources_for_alert_known_source() -> None:
-    assert primary_sources_for_alert({"alert_source": "eks"}) == ("eks", "ec2", "cloudtrail")
+    assert primary_sources_for_alert({"alert_source": "eks"}) == (
+        "eks",
+        "ec2",
+        "cloudtrail",
+        "kubernetes",
+    )
 
 
 def test_seed_tool_sources_for_alert_known_source() -> None:
-    assert seed_tool_sources_for_alert({"alert_source": "eks"}) == ("eks",)
+    assert seed_tool_sources_for_alert({"alert_source": "eks"}) == ("eks", "kubernetes")
 
 
 def test_routing_registry_entries_are_well_formed() -> None:
-    for alert_source, routing in ALERT_SOURCE_ROUTING.items():
+    for alert_source, routing in alert_source_routing().items():
         assert routing.relevance_tool_sources, alert_source
         assert routing.seed_tool_sources, alert_source
         # Seeding is a subset of relevance: anything auto-invoked pre-LLM
@@ -133,8 +138,8 @@ def test_collect_alert_text_lowercases_and_joins_fields() -> None:
     assert "problem" in text
 
 
-def test_collect_alert_text_includes_pipeline_name() -> None:
-    text = collect_alert_text({"pipeline_name": "CheckoutPipeline", "alert_name": "Latency"})
+def test_collect_alert_text_includes_raw_alert_title() -> None:
+    text = collect_alert_text({"alert_name": "Latency", "raw_alert": {"title": "CheckoutPipeline"}})
     assert "checkoutpipeline" in text
     assert "latency" in text
 
@@ -171,7 +176,7 @@ def test_relevant_sources_empty_when_no_text_and_no_declared_sources() -> None:
 
 def test_seed_sources_narrower_than_relevance_sources_for_eks() -> None:
     """Regression guard: seeding stays narrower than relevance routing."""
-    routing = ALERT_SOURCE_ROUTING["eks"]
-    assert routing.seed_tool_sources == ("eks",)
+    routing = alert_source_routing()["eks"]
+    assert routing.seed_tool_sources == ("eks", "kubernetes")
     assert "ec2" in routing.relevance_tool_sources
     assert "ec2" not in routing.seed_tool_sources

@@ -1,9 +1,7 @@
 """Integrity guard — Pillar 0 of the benchmark framework.
 
 Encodes the framework's honest-results discipline so that dishonest benchmark
-runs and reports are structurally impossible to produce. See
-``~/DevBox/opensre-notes/opensre-benchmark-framework.md`` § 0 for the full
-mechanism catalogue.
+runs and reports are structurally impossible to produce.
 
 This module provides two enforcement points:
 

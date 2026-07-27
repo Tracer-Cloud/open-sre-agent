@@ -51,7 +51,7 @@ class LokiMixin:
         }
 
         try:
-            data = self._make_request(url, params=params)
+            data = self._make_get_request(url, params=params)
             result = data.get("data", {}).get("result", [])
 
             logs = []

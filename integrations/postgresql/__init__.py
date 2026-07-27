@@ -14,6 +14,7 @@ from typing import Any
 
 from pydantic import Field, field_validator
 
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations._relational import (
     RelationalConfigBase,
     env_int,
@@ -204,7 +205,7 @@ def get_server_status(config: PostgreSQLConfig) -> dict[str, Any]:
     Read-only: queries system views pg_stat_database and pg_stat_activity.
     """
     if not config.is_configured:
-        return {"source": "postgresql", "available": False, "error": "Not configured."}
+        return tool_unavailable("postgresql", "Not configured.")
 
     try:
         conn = _get_connection(config)
@@ -289,7 +290,7 @@ def get_server_status(config: PostgreSQLConfig) -> dict[str, Any]:
             integration="postgresql",
             method="get_server_status",
         )
-        return {"source": "postgresql", "available": False, "error": str(err)}
+        return tool_unavailable("postgresql", str(err))
 
 
 def get_current_queries(
@@ -302,7 +303,7 @@ def get_current_queries(
     Results are capped at config.max_results.
     """
     if not config.is_configured:
-        return {"source": "postgresql", "available": False, "error": "Not configured."}
+        return tool_unavailable("postgresql", "Not configured.")
 
     try:
         conn = _get_connection(config)
@@ -367,7 +368,7 @@ def get_current_queries(
             integration="postgresql",
             method="get_current_queries",
         )
-        return {"source": "postgresql", "available": False, "error": str(err)}
+        return tool_unavailable("postgresql", str(err))
 
 
 def get_replication_status(config: PostgreSQLConfig) -> dict[str, Any]:
@@ -377,7 +378,7 @@ def get_replication_status(config: PostgreSQLConfig) -> dict[str, Any]:
     Returns empty replicas list if the server is not a primary or has no replicas.
     """
     if not config.is_configured:
-        return {"source": "postgresql", "available": False, "error": "Not configured."}
+        return tool_unavailable("postgresql", "Not configured.")
 
     try:
         conn = _get_connection(config)
@@ -482,7 +483,7 @@ def get_replication_status(config: PostgreSQLConfig) -> dict[str, Any]:
             integration="postgresql",
             method="get_replication_status",
         )
-        return {"source": "postgresql", "available": False, "error": error_str}
+        return tool_unavailable("postgresql", error_str)
 
 
 def get_slow_queries(
@@ -496,7 +497,7 @@ def get_slow_queries(
     Results capped at config.max_results.
     """
     if not config.is_configured:
-        return {"source": "postgresql", "available": False, "error": "Not configured."}
+        return tool_unavailable("postgresql", "Not configured.")
 
     effective_limit = min(limit or config.max_results, config.max_results)
 
@@ -581,7 +582,7 @@ def get_slow_queries(
             integration="postgresql",
             method="get_slow_queries",
         )
-        return {"source": "postgresql", "available": False, "error": str(err)}
+        return tool_unavailable("postgresql", str(err))
 
 
 def get_lock_status(config: PostgreSQLConfig) -> dict[str, Any]:
@@ -591,7 +592,7 @@ def get_lock_status(config: PostgreSQLConfig) -> dict[str, Any]:
     Results are capped at config.max_results.
     """
     if not config.is_configured:
-        return {"source": "postgresql", "available": False, "error": "Not configured."}
+        return tool_unavailable("postgresql", "Not configured.")
 
     try:
         conn = _get_connection(config)
@@ -696,7 +697,7 @@ def get_lock_status(config: PostgreSQLConfig) -> dict[str, Any]:
             integration="postgresql",
             method="get_lock_status",
         )
-        return {"source": "postgresql", "available": False, "error": str(err)}
+        return tool_unavailable("postgresql", str(err))
 
 
 def get_table_stats(
@@ -709,7 +710,7 @@ def get_table_stats(
     Results capped at config.max_results.
     """
     if not config.is_configured:
-        return {"source": "postgresql", "available": False, "error": "Not configured."}
+        return tool_unavailable("postgresql", "Not configured.")
 
     try:
         conn = _get_connection(config)
@@ -803,7 +804,7 @@ def get_table_stats(
             integration="postgresql",
             method="get_table_stats",
         )
-        return {"source": "postgresql", "available": False, "error": str(err)}
+        return tool_unavailable("postgresql", str(err))
 
 
 def classify(

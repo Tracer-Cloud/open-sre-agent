@@ -5,8 +5,13 @@ from __future__ import annotations
 from typing import Any
 
 from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.github.client import GitHubApiError, GitHubRestClient, resolve_github_token
-from integrations.github.helpers import github_creds, github_source_available
+from integrations.github.helpers import (
+    GITHUB_INJECTED_PARAMS,
+    github_creds,
+    github_source_available,
+)
 from integrations.github.tools.workflow import summarize_community_followups_from_comments
 
 
@@ -52,6 +57,7 @@ def _community_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     },
     is_available=_community_available,
     extract_params=_community_extract_params,
+    injected_params=GITHUB_INJECTED_PARAMS,
 )
 def summarize_community_followups(
     owner: str = "",
@@ -72,15 +78,14 @@ def summarize_community_followups(
             )
         )
     except GitHubApiError as exc:
-        return {
-            "source": "github",
-            "available": False,
-            "error": str(exc),
-            "unanswered_questions": [],
-            "agenda_items": [],
-            "suggested_replies": [],
-            "side_effects": [],
-        }
+        return tool_unavailable(
+            "github",
+            str(exc),
+            unanswered_questions=[],
+            agenda_items=[],
+            suggested_replies=[],
+            side_effects=[],
+        )
 
     summary = summarize_community_followups_from_comments(
         comments=normalized_comments,

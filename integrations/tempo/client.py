@@ -16,6 +16,7 @@ from typing import Any
 
 import httpx
 
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.tempo import TempoConfig
 from platform.observability.otlp_parser import parse_otlp_trace
 
@@ -129,32 +130,15 @@ class TempoClient:
         """Fetch a full trace by ID and flatten it into spans."""
         config_error = self._configuration_error()
         if config_error:
-            return {
-                "source": "tempo",
-                "action": "get_trace",
-                "available": False,
-                "error": config_error,
-                "spans": [],
-            }
+            return tool_unavailable("tempo", config_error, action="get_trace", spans=[])
         if not trace_id:
-            return {
-                "source": "tempo",
-                "action": "get_trace",
-                "available": False,
-                "error": "trace_id is required for get_trace.",
-                "spans": [],
-            }
+            return tool_unavailable(
+                "tempo", "trace_id is required for get_trace.", action="get_trace", spans=[]
+            )
 
         payload, error = self._get(f"/api/traces/{trace_id}")
         if error:
-            return {
-                "source": "tempo",
-                "action": "get_trace",
-                "available": False,
-                "trace_id": trace_id,
-                "error": error,
-                "spans": [],
-            }
+            return tool_unavailable("tempo", error, action="get_trace", trace_id=trace_id, spans=[])
 
         spans = parse_otlp_trace(payload or {})
         return {
@@ -181,13 +165,7 @@ class TempoClient:
         """Search traces by service, span name, duration, and tags via TraceQL."""
         config_error = self._configuration_error()
         if config_error:
-            return {
-                "source": "tempo",
-                "action": "search",
-                "available": False,
-                "error": config_error,
-                "traces": [],
-            }
+            return tool_unavailable("tempo", config_error, action="search", traces=[])
 
         traceql = self._build_traceql(
             service=service,
@@ -206,14 +184,7 @@ class TempoClient:
 
         payload, error = self._get("/api/search", params=params)
         if error:
-            return {
-                "source": "tempo",
-                "action": "search",
-                "available": False,
-                "query": traceql,
-                "error": error,
-                "traces": [],
-            }
+            return tool_unavailable("tempo", error, action="search", query=traceql, traces=[])
 
         traces = _parse_search_traces(payload or {})
         return {
@@ -288,13 +259,7 @@ class TempoClient:
     ) -> dict[str, Any]:
         config_error = self._configuration_error()
         if config_error:
-            return {
-                "source": "tempo",
-                "action": action,
-                "available": False,
-                "error": config_error,
-                result_key: [],
-            }
+            return tool_unavailable("tempo", config_error, action=action, **{result_key: []})
 
         start, end = _time_bounds_seconds(time_range_minutes)
         payload, error = self._get(
@@ -308,13 +273,7 @@ class TempoClient:
                 params={"start": start, "end": end},
             )
         if error:
-            return {
-                "source": "tempo",
-                "action": action,
-                "available": False,
-                "error": error,
-                result_key: [],
-            }
+            return tool_unavailable("tempo", error, action=action, **{result_key: []})
 
         values = _parse_tag_values(payload or {})
         return {

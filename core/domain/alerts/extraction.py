@@ -6,47 +6,86 @@ import json
 from collections.abc import Mapping
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, create_model
 
 from core.domain.alerts.fields import (
     alert_annotations,
     alert_labels,
     alert_name_value,
     canonical_alert,
-    pipeline_name_value,
     severity_value,
 )
 
 CANONICAL_ALERT_SOURCES = frozenset({"opensre", "opensre_dataset"})
 
-RAW_ALERT_DETAIL_FIELDS = (
-    "kube_namespace",
-    "cloudwatch_log_group",
-    "error_message",
-    "log_query",
-    "eks_cluster",
-    "pod_name",
-    "deployment",
-)
+# Fields every alert source can populate; vendor-owned optional fields (e.g.
+# Kubernetes' kube_namespace, AWS's cloudwatch_log_group) are registered by
+# integrations/<vendor>/ via register_alert_detail_fields.
+_CORE_ALERT_DETAIL_FIELDS: tuple[str, ...] = ("error_message", "log_query")
+
+_registered_alert_detail_fields: list[str] = []
+
+
+def register_alert_detail_fields(*names: str) -> None:
+    """Register vendor-owned optional ``AlertDetails`` field names."""
+    for name in names:
+        if name not in _registered_alert_detail_fields:
+            _registered_alert_detail_fields.append(name)
+
+
+def clear_alert_detail_fields() -> None:
+    """Remove all registered vendor alert detail field names (tests)."""
+    _registered_alert_detail_fields.clear()
+
+
+def alert_detail_field_names() -> tuple[str, ...]:
+    """Return every optional detail field name: core generics + registered vendor fields."""
+    return (*_CORE_ALERT_DETAIL_FIELDS, *_registered_alert_detail_fields)
 
 
 class AlertDetails(BaseModel):
-    """Normalized alert fields produced by the extract_alert stage."""
+    """Normalized alert fields produced by the extract_alert stage.
+
+    Vendor-owned optional fields (``kube_namespace``, ``cloudwatch_log_group``,
+    etc.) are not declared here — they are registered by ``integrations/<vendor>/``
+    via :func:`register_alert_detail_fields` and accepted through
+    ``extra="allow"`` so this model stays constructible from vendor kwargs
+    (``AlertDetails(kube_namespace=...)``) and introspectable via
+    ``getattr(details, name, None)`` without core hardcoding vendor field names.
+    Use :func:`build_alert_details_model` where the LLM's output schema should
+    declare the registered vendor fields explicitly (structured-output calls).
+    """
+
+    model_config = ConfigDict(extra="allow")
 
     is_noise: bool = Field(default=False)
     alert_name: str = Field(default="unknown")
-    pipeline_name: str = Field(default="unknown")
     severity: str = Field(default="unknown")
     alert_source: str | None = Field(default=None)
     environment: str | None = Field(default=None)
     summary: str | None = Field(default=None)
-    kube_namespace: str | None = Field(default=None)
-    cloudwatch_log_group: str | None = Field(default=None)
     error_message: str | None = Field(default=None)
     log_query: str | None = Field(default=None)
-    eks_cluster: str | None = Field(default=None)
-    pod_name: str | None = Field(default=None)
-    deployment: str | None = Field(default=None)
+
+
+def build_alert_details_model() -> type[AlertDetails]:
+    """Return an ``AlertDetails`` subclass with registered vendor fields declared.
+
+    Structured-output LLM calls need the vendor fields declared (not just
+    allowed as extras) so the generated JSON schema instructs the model to
+    extract them. Falls back to ``AlertDetails`` itself when no vendor fields
+    are registered.
+    """
+    if not _registered_alert_detail_fields:
+        return AlertDetails
+    vendor_fields: dict[str, Any] = {
+        name: (str | None, Field(default=None)) for name in _registered_alert_detail_fields
+    }
+    return create_model(
+        "AlertDetailsWithVendorFields",
+        __base__=AlertDetails,
+        **vendor_fields,
+    )
 
 
 def format_raw_alert(raw_alert: Any) -> str:
@@ -87,7 +126,6 @@ def needs_full_json_prompt(raw_alert: dict[str, Any]) -> bool:
 def fallback_details(state: Mapping[str, Any], raw_alert: Any) -> AlertDetails:
     """Best-effort field extraction when the LLM path is unavailable."""
     alert_name = state.get("alert_name", "unknown")
-    pipeline_name = state.get("pipeline_name", "unknown")
     severity = state.get("severity", "unknown")
 
     if isinstance(raw_alert, dict):
@@ -102,13 +140,6 @@ def fallback_details(state: Mapping[str, Any], raw_alert: Any) -> AlertDetails:
             canonical=canonical,
             fallback=alert_name,
         )
-        pipeline_name = pipeline_name_value(
-            raw_alert,
-            labels=labels,
-            annotations=annotations,
-            canonical=canonical,
-            fallback=pipeline_name,
-        )
         severity = severity_value(
             raw_alert,
             labels=labels,
@@ -119,7 +150,6 @@ def fallback_details(state: Mapping[str, Any], raw_alert: Any) -> AlertDetails:
     return AlertDetails(
         is_noise=False,
         alert_name=alert_name or "unknown",
-        pipeline_name=pipeline_name or "unknown",
         severity=severity or "unknown",
     )
 
@@ -128,10 +158,11 @@ def make_problem_md(details: AlertDetails) -> str:
     """Build the operator-facing problem markdown header from extracted details."""
     parts = [
         f"# {details.alert_name}",
-        f"Pipeline: {details.pipeline_name} | Severity: {details.severity}",
+        f"Severity: {details.severity}",
     ]
-    if details.kube_namespace:
-        parts.append(f"Namespace: {details.kube_namespace}")
+    namespace = getattr(details, "kube_namespace", None)
+    if namespace:
+        parts.append(f"Namespace: {namespace}")
     if details.error_message:
         parts.append(f"\nError: {details.error_message}")
     return "\n".join(parts)
@@ -144,10 +175,20 @@ def enrich_raw_alert(raw_alert: Any, details: AlertDetails) -> Any:
     enriched = dict(raw_alert)
     prior_source = str(raw_alert.get("alert_source", "")).lower()
 
-    for field_name in RAW_ALERT_DETAIL_FIELDS:
-        value = getattr(details, field_name)
+    for field_name in alert_detail_field_names():
+        value = getattr(details, field_name, None)
         if value:
             enriched[field_name] = value
+
+    if details.alert_name and details.alert_name != "unknown":
+        enriched["alert_name"] = details.alert_name
+
+    canonical = enriched.get("canonical_alert")
+    if isinstance(canonical, dict):
+        updated_canonical = dict(canonical)
+        if details.alert_name and details.alert_name != "unknown":
+            updated_canonical["alert_name"] = details.alert_name
+        enriched["canonical_alert"] = updated_canonical
 
     if details.alert_source and prior_source not in CANONICAL_ALERT_SOURCES:
         enriched["alert_source"] = details.alert_source

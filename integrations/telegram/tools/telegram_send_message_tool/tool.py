@@ -124,5 +124,5 @@ class TelegramSendMessageTool(BaseTool):
 
 telegram_send_message = tool(
     TelegramSendMessageTool(),
-    surfaces=("investigation", "chat", "action"),
+    surfaces=("investigation", "action"),
 )

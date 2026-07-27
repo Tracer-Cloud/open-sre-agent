@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from typing import Any
 from urllib import error, parse, request
 
+from config.constants import GH_TOKEN_ENV, GITHUB_MCP_AUTH_TOKEN_ENV, GITHUB_TOKEN_ENV
+
 JsonPayload = dict[str, Any] | list[Any]
 
 
@@ -28,9 +30,14 @@ class GitHubApiError(RuntimeError):
 
 
 def resolve_github_token(github_token: str | None = None) -> str:
-    """Resolve a GitHub token from explicit input or standard env vars."""
+    """Resolve a GitHub token: explicit → MCP env → GITHUB_TOKEN → GH_TOKEN."""
 
-    return (github_token or os.getenv("GITHUB_TOKEN") or os.getenv("GH_TOKEN") or "").strip()
+    return (
+        (github_token or "").strip()
+        or os.getenv(GITHUB_MCP_AUTH_TOKEN_ENV, "").strip()
+        or os.getenv(GITHUB_TOKEN_ENV, "").strip()
+        or os.getenv(GH_TOKEN_ENV, "").strip()
+    )
 
 
 def _next_link(headers: Any) -> str | None:

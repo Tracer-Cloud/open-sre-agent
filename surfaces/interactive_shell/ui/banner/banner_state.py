@@ -29,6 +29,7 @@ _SERVICE_DISPLAY_NAMES: dict[str, str] = {
     "telegram": "Telegram",
     "signoz": "SigNoz",
     "jira": "Jira",
+    "servicenow": "ServiceNow",
     "gitlab": "GitLab",
     "vercel": "Vercel",
     "mongodb": "MongoDB",

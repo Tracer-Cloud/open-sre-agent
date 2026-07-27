@@ -29,8 +29,8 @@ from core.agent_harness.ports import (
     ToolProvider,
 )
 from core.agent_harness.prompts import build_action_system_prompt, build_action_user_message
-from core.agent_harness.prompts.conversation_memory import MAX_CONVERSATION_MESSAGES
 from core.agent_harness.session.integration_resolution import resolve_and_cache_integrations
+from core.agent_harness.turns.conversation_recording import record_conversation_turn
 from core.agent_harness.turns.turn_plan import TurnPlan
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
@@ -38,6 +38,7 @@ from core.events import runtime_event_callback_from_observer
 from core.execution import ToolExecutionHooks, public_tool_input
 from core.llm.failure_classification import is_context_length_overflow
 from core.llm.types import AgentLLMResponse, ToolCall
+from core.tool_framework.tags import SUMMARIZE_OBSERVATION_TAG
 from platform.analytics.react_turn import run_react_agent_with_telemetry
 from platform.observability.trace.prompts import persist_turn_system_prompt
 from platform.observability.trace.spans import component_span
@@ -49,10 +50,9 @@ log = logging.getLogger(__name__)
 # enough headroom for a *data-dependent* compound request that must run
 # sequentially: each step waits for the previous tool's result before the next
 # call can be emitted (e.g. "look up the weather and then send it to Slack" =
-# shell_run -> observe temperature -> slack_send_message -> final no-tool reply).
-# Independent compound turns still fit in a single response; this ceiling exists
-# for the producer -> consumer chains plus a couple of intermediate steps.
-_MAX_TOOL_CALLING_ITERATIONS = 6
+# Architecture audit needs headroom for clone + ≤3 agent-scan probes +
+# 4 heuristic shells + cleanup + save observations (then a no-tool report).
+_MAX_TOOL_CALLING_ITERATIONS = 13
 _EXECUTED_HISTORY_TYPES = {
     "slash",
     "shell",
@@ -196,22 +196,63 @@ def _generic_tool_results(result: Any) -> list[tuple[ToolCall, Any]]:
     ]
 
 
+def _format_generic_tool_payload(tool_call: ToolCall, tool_result: Any) -> str:
+    """Build a user-visible summary for one non-self-recording tool result."""
+    details = getattr(tool_result, "details", None)
+    if isinstance(details, dict):
+        summary = details.get("summary")
+        if isinstance(summary, str) and summary.strip():
+            return summary.strip()
+        stdout = details.get("stdout")
+        if details.get("ok") and isinstance(stdout, str) and stdout.strip():
+            return stdout.strip()
+        error = details.get("error")
+        if error:
+            return str(error).strip()
+    if getattr(tool_result, "is_error", False):
+        return ""
+    content = _content_to_text(getattr(tool_result, "content", "")).strip()
+    if not content:
+        return ""
+    # Prefer a nested summary when the tool returned a JSON object payload.
+    try:
+        parsed = json.loads(content)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        parsed = None
+    if isinstance(parsed, dict):
+        summary = parsed.get("summary")
+        if isinstance(summary, str) and summary.strip():
+            return summary.strip()
+        if parsed.get("ok") and isinstance(parsed.get("stdout"), str) and parsed["stdout"].strip():
+            return str(parsed["stdout"]).strip()
+        if parsed.get("error"):
+            return str(parsed["error"]).strip()
+    args = public_tool_input(tool_call.input)
+    if args:
+        return (
+            f"{tool_call.name} input: {json.dumps(args, ensure_ascii=False, default=str)}"
+            f"\n{tool_call.name} result: {content}"
+        )
+    return f"{tool_call.name} result: {content}"
+
+
 def _response_text_from_generic_results(result: Any) -> str:
     chunks: list[str] = []
     for tool_call, tool_result in _generic_tool_results(result):
-        if getattr(tool_result, "is_error", False):
-            continue
-        content = _content_to_text(getattr(tool_result, "content", ""))
-        if content.strip():
-            args = public_tool_input(tool_call.input)
-            if args:
-                chunks.append(
-                    f"{tool_call.name} input: {json.dumps(args, ensure_ascii=False, default=str)}"
-                    f"\n{tool_call.name} result: {content.strip()}"
-                )
-            else:
-                chunks.append(f"{tool_call.name} result: {content.strip()}")
+        formatted = _format_generic_tool_payload(tool_call, tool_result)
+        if formatted:
+            chunks.append(formatted)
     return "\n".join(chunks)
+
+
+def _is_user_facing_final_text(text: str) -> bool:
+    """True when post-tool model text should replace tool dumps and be streamed."""
+    stripped = text.strip()
+    if not stripped:
+        return False
+    if "\n" in stripped or stripped.startswith("#"):
+        return True
+    return len(stripped) > 60
 
 
 def _generic_tool_result_counts(result: Any) -> tuple[int, int]:
@@ -223,6 +264,22 @@ def _generic_tool_result_counts(result: Any) -> tuple[int, int]:
         if not getattr(tool_result, "is_error", False)
     )
     return executed_count, success_count
+
+
+def _should_stash_observation(
+    result: Any,
+    *,
+    tools_by_name: dict[str, Any],
+) -> bool:
+    """True when a successful tool opted into observation summary via its tags."""
+    for tool_call, tool_result in _generic_tool_results(result):
+        if getattr(tool_result, "is_error", False):
+            continue
+        tool = tools_by_name.get(tool_call.name)
+        tags = getattr(tool, "tags", ()) if tool is not None else ()
+        if SUMMARIZE_OBSERVATION_TAG in tags:
+            return True
+    return False
 
 
 def _turn_resolved_integrations(
@@ -242,10 +299,7 @@ def _turn_resolved_integrations(
 
 
 def _persist_tool_calling_error(session: SessionStore, user_text: str, error_text: str) -> None:
-    session.cli_agent_messages.append(("user", user_text))
-    session.cli_agent_messages.append(("assistant", error_text))
-    if len(session.cli_agent_messages) > MAX_CONVERSATION_MESSAGES:
-        session.cli_agent_messages[:] = session.cli_agent_messages[-MAX_CONVERSATION_MESSAGES:]
+    record_conversation_turn(session, user_text, error_text)
 
 
 def _render_tool_calling_error(output: OutputSink, message: str) -> None:
@@ -533,17 +587,49 @@ def _run_action_agent_turn_body(
         for content in (str(public_tool_input(tc.input).get("content", "")).strip(),)
         if content
     )
+    final_text = str(getattr(result, "final_text", "") or "").strip()
+    generic_text = _response_text_from_generic_results(result)
+    hint = _pop_turn_outcome_hint(session)
+    # History entries are already rendered by self-recording tools (shell/slash/…).
+    # Console display uses final_text + generic results + hints only so users see
+    # github_cli / other registry tools without double-printing shell output.
+    # response_text still includes history for persistence / non-TTY surfaces.
+    display_chunks = [chunk for chunk in (final_text, generic_text, hint) if chunk]
     response_chunks = [
         chunk
         for chunk in (
             _response_text_from_history_entries(executed_entries),
-            _response_text_from_generic_results(result),
-            _pop_turn_outcome_hint(session),
+            final_text,
+            generic_text,
+            hint,
         )
         if chunk
     ]
-    response_text = "\n".join(response_chunks)
-    if handled:
+    # Prefer the agent's closing prose when it looks like a real reply (report /
+    # multi-line Markdown). Short one-liners like "done" are common after a
+    # single tool call and must not replace tool-derived response_text or get
+    # streamed on action-only turns (gateway finalize / cross-surface parity).
+    use_final_text = _is_user_facing_final_text(final_text)
+    response_text = final_text if use_final_text else "\n".join(response_chunks)
+    # Discovery tools that opt into ``summarize_observation`` (via tool tags)
+    # return structured JSON users should not see raw. Stash only those results.
+    if (
+        response_text.strip()
+        and generic_success_count > 0
+        and not session.last_command_observation
+        and _should_stash_observation(
+            result,
+            tools_by_name={getattr(t, "name", ""): t for t in agent_tools},
+        )
+    ):
+        session.last_command_observation = response_text
+    if handled and use_final_text:
+        output.stream(label="OpenSRE", chunks=iter([final_text]))
+    elif display_chunks:
+        output.print()
+        output.render_response_header("assistant")
+        output.print("\n".join(display_chunks))
+    elif handled:
         output.print()
 
     log.debug(

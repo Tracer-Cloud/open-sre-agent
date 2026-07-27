@@ -4,11 +4,21 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.github.mcp import (
     DEFAULT_GITHUB_MCP_MODE,
     GitHubMCPConfig,
     build_github_mcp_config,
     github_mcp_config_from_env,
+)
+
+# Runtime connection/secret kwargs from ``extract_params``; must win over model input.
+GITHUB_INJECTED_PARAMS: tuple[str, ...] = (
+    "github_url",
+    "github_mode",
+    "github_token",
+    "github_command",
+    "github_args",
 )
 
 
@@ -81,13 +91,12 @@ def resolve_github_mcp_config(
 def normalize_github_tool_result(result: dict[str, Any]) -> dict[str, Any]:
     """Normalize GitHub tool result."""
     if result.get("is_error"):
-        return {
-            "source": "github",
-            "available": False,
-            "error": result.get("text") or "GitHub MCP tool call failed.",
-            "tool": result.get("tool"),
-            "arguments": result.get("arguments", {}),
-        }
+        return tool_unavailable(
+            "github",
+            result.get("text") or "GitHub MCP tool call failed.",
+            tool=result.get("tool"),
+            arguments=result.get("arguments", {}),
+        )
     return {
         "source": "github",
         "available": True,

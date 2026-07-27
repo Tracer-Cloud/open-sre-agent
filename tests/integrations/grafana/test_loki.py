@@ -47,7 +47,7 @@ class _FakeLokiHost(LokiMixin):
     def _build_datasource_url(self, datasource_uid: str, path: str) -> str:
         return f"{self.instance_url}/api/datasources/proxy/uid/{datasource_uid}{path}"
 
-    def _make_request(
+    def _make_get_request(
         self,
         url: str,
         params: dict[str, str] | None = None,

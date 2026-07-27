@@ -3,39 +3,10 @@
 from __future__ import annotations
 
 from platform.common.errors import OpenSREError
+from surfaces.interactive_shell.runtime.background.rca_summary import summary_sections
 from surfaces.interactive_shell.session.background_investigations import (
     BackgroundInvestigationRecord,
 )
-
-# Telegram caps a message at 4096 characters and the transport tail-truncates to fit.
-# The RCA body ends with "What to do next" and the stats block, so an unbounded root
-# cause would push exactly the actionable sections off the end. Budget each section
-# instead: the worst case below stays under the cap, so the tail always survives.
-_COMMAND_CHARS = 200
-_ROOT_CAUSE_CHARS = 1000
-_ITEM_CHARS = 240
-_MAX_ITEMS = 5
-
-
-def _summary_sections(
-    record: BackgroundInvestigationRecord,
-) -> tuple[str, str, tuple[str, ...], tuple[str, ...]]:
-    """Return the RCA sections trimmed to fit one Telegram message.
-
-    Email keeps the full report; Telegram is a notification, so it carries a bounded
-    summary and points the reader at ``/background show`` for the rest.
-    """
-    from platform.common.truncation import truncate
-
-    def _items(values: tuple[str, ...]) -> tuple[str, ...]:
-        return tuple(truncate(value, _ITEM_CHARS, suffix="…") for value in values[:_MAX_ITEMS])
-
-    return (
-        truncate(record.command, _COMMAND_CHARS, suffix="…"),
-        truncate(record.root_cause, _ROOT_CAUSE_CHARS, suffix="…"),
-        _items(record.top_analysis),
-        _items(record.next_steps),
-    )
 
 
 def deliver_telegram_notification(record: BackgroundInvestigationRecord) -> str:
@@ -52,7 +23,7 @@ def deliver_telegram_notification(record: BackgroundInvestigationRecord) -> str:
     except OpenSREError as exc:
         return f"missing telegram integration: {exc}"
 
-    command, root_cause, top_analysis, next_steps = _summary_sections(record)
+    command, root_cause, top_analysis, next_steps = summary_sections(record)
     _subject, body = format_background_rca_email(
         task_id=record.task_id,
         command=command,

@@ -16,9 +16,13 @@ keywords = ["sre", "devops", "incident", "rca", "llm", "ai", "agent", "observabi
 dependencies = [
     # Core AI/Agent
     "anthropic>=0.77.1",
-    "mcp>=1.27.0",
+    "mcp>=1.28.1",
     "openai>=2.0.0",
-    "litellm>=1.90.0",
+    # Held at 1.90.x: 1.93.0 ships a Rust extension with no cp314 wheel (breaks
+    # uv builds on Python 3.14) and changes the model price table (breaks the
+    # gpt-5.6 alias pricing). 1.90.0 is the last version verified green here.
+    # Lift once the wheel + pricing are resolved upstream.
+    "litellm>=1.90.0,<1.91.0",
     # Data validation
     "pydantic>=2.12.5,<3",
     "pydantic-settings>=2.12.0,<3",
@@ -98,6 +102,7 @@ dev = [
     "ruff>=0.4.0",
     "mypy>=1.10.0",
     "import-linter>=2.0",
+    "vulture>=2.14",
     "types-requests",
     "types-psycopg2",
     "types-PyMySQL",
@@ -170,12 +175,13 @@ paths = [
   "tools",
 ]
 exclude = [
-  "tools/simple_tools.py",          # explicitly skipped by the registry
+  "gateway/tests/",
 ]
 ignore_decorators = [
   "@*.command",          # Click / Typer subcommands
   "@*.group",
   "@*.callback",
+  "@*.add",              # prompt_toolkit KeyBindings handlers
   "@app.*",              # FastAPI routes
   "@*router.*",          # FastAPI sub-routers (discord_router etc.)
   "@field_validator",    # Pydantic validators
@@ -189,12 +195,39 @@ ignore_decorators = [
 ]
 ignore_names = [
   "shell_complete", "format_help", "show",        # Click overrides
+  "__getattr__", "__dir__",                        # PEP 562 lazy exports
   "_normalize_*",                                  # Pydantic field validators
   "_require_*",                                    # Pydantic model validators
+  "model_config",                                  # Pydantic v2 ConfigDict alias
+  "verify_*",                                      # integrations/_verifiers_loader.py
+  "validate_*_config",                             # integration config validators
+  "*_config_from_env",                             # env-backed integration helpers
+  "describe_llm_*", "llm_provider_*", "has_credentials_*",
+  "get_account_*", "get_datasource_uids",
+  "configure_grafana_cloud", "apply_otel_env_defaults", "validate_grafana_cloud_config",
   "on_thread_*", "on_assistant_*", "on_cron_*",
   "discord_interactions", "health_check",
   "version_check", "deep_health_check",
   "investigate_stream",
+  "clean_env", "empty_store",                      # pytest fixtures
+  "_isolated_*", "_reset_*", "_harness_*", "_no_*", # pytest fixtures / autouse hooks
+  "_metering_*", "metering_on",
+  "lex_document",                                  # prompt_toolkit Lexer API
+  "do_*", "log_message",                           # http.server handler overrides
+  "_accept_*", "_tab_*", "_shift_*", "_next_*", "_previous_*", "_on_*",
+  "_quit", "_ctrl_c", "_bulk_*", "_handle_*", "_toggle", "_escape", "_submit",
+  "_escape_checkbox", "_get_choice_tokens",
+  "parse_chunk", "from_tokens",                    # fleet_monitoring meter protocol
+  "steer", "emit_update", "on_update",             # agent runtime protocol surface
+  "tool_description",                              # slash adapter protocol
+  "reset_guardrail_engine", "reset_runtime_flags", "reset_cli_session_id",
+  "register_external_tool_package", "get_tool_descriptors", "load_tool",
+  "signoz_is_available",
+  "load_remote_url", "save_named_remote", "delete_named_remote", "save_remote_ops_config",
+  "is_cancelling", "idle_hint_ansi",
+  "is_held", "holder", "holder_pid", "rate_per_minute",
+  "should_block", "to_state",
+  "RichGroup",
 ]
 
 # uv installs this PEP 735 group by default (`uv sync`; omit with `--no-dev`).
@@ -207,4 +240,5 @@ dev = [
     "types-psutil>=7.2.2.20260408",
     "types-PyYAML>=6.0.12",
     "import-linter>=2.0",
+    "vulture>=2.14",
 ]

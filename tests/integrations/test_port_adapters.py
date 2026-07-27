@@ -65,6 +65,22 @@ def test_registered_fetcher_is_invoked() -> None:
     assert result == [{"service": "grafana", "config": {}}]
 
 
+def test_reset_restores_webapp_vault_fetcher_default() -> None:
+    # Arrange: register a distinctive fetcher that must not survive a reset —
+    # if it leaks, every later test sees this instead of the noop default.
+    def _sentinel_vault() -> list[dict[str, object]]:
+        return [{"service": "leaked-vault-marker"}]
+
+    harness_ports.set_integration_resolution_adapters(fetch_webapp_vault=_sentinel_vault)
+    assert harness_ports._fetch_webapp_vault is _sentinel_vault
+
+    # Act
+    harness_ports.reset_harness_ports()
+
+    # Assert: the noop default is restored, not the leaked sentinel.
+    assert harness_ports._fetch_webapp_vault is harness_ports._default_fetch_webapp_vault
+
+
 def test_install_harness_ports_wires_catalog_and_registry() -> None:
     output_boundary.install_harness_ports()
 
@@ -86,3 +102,78 @@ def test_install_harness_ports_wires_cli_llm_adapters() -> None:
     )
     assert harness_ports._build_cli_client_fn is not harness_ports._cli_llm_backend_unavailable
     assert harness_ports._flatten_cli_messages_fn is not harness_ports._cli_llm_backend_unavailable
+
+
+def test_install_harness_ports_wires_soc_registries() -> None:
+    """SoC registries must not stay silently empty after install (or leak after reset).
+
+    Alert routing, Hermes taxonomy, VCS scope, prompt fragments, Slack prefix
+    stripping, secondary sources, and alert-detail fields all moved out of
+    core into registered adapters. Empty registries look like "healthy but
+    dumb" product behavior — this test fails loud if wiring regresses.
+    """
+    from core.agent_harness.prompts import build_action_system_prompt
+    from core.agent_harness.turns.turn_snapshot import TurnSnapshot
+    from core.domain.alerts.alert_source import (
+        alert_source_routing,
+        secondary_tool_sources,
+        seed_tool_sources_for_alert,
+    )
+    from core.domain.alerts.extraction import alert_detail_field_names
+    from core.domain.diagnosis import taxonomy_categories_for_alert_source
+
+    harness_ports.reset_harness_ports()
+
+    assert alert_source_routing() == {}
+    assert secondary_tool_sources() == frozenset()
+    assert "agent_hang" not in taxonomy_categories_for_alert_source("hermes")
+    assert "kube_namespace" not in alert_detail_field_names()
+    assert harness_ports.action_prompt_vendor_fragments() == ""
+    assert harness_ports.gateway_persona_fragments() == ""
+    prefix, remainder = harness_ports.strip_message_context_prefix("[Slack channel_id=C1]\nyes")
+    assert prefix == ""
+    assert remainder.startswith("[Slack")
+
+    output_boundary.install_harness_ports()
+
+    assert "grafana" in alert_source_routing()
+    assert seed_tool_sources_for_alert({"alert_source": "grafana"}) == ("grafana",)
+    assert "knowledge" in secondary_tool_sources()
+    assert "agent_hang" in taxonomy_categories_for_alert_source("hermes")
+    assert "kube_namespace" in alert_detail_field_names()
+    assert "slack_send_message" in harness_ports.action_prompt_vendor_fragments()
+    assert "telegram_send_message" in harness_ports.action_prompt_vendor_fragments()
+    assert "colleague in Slack" in harness_ports.gateway_persona_fragments()
+    prefix, remainder = harness_ports.strip_message_context_prefix("[Slack channel_id=C1]\nyes")
+    assert prefix.startswith("[Slack")
+    assert remainder.strip() == "yes"
+
+    enriched = harness_ports.enrich_resolved_with_repo_scopes(
+        resolved={"github": {"connection_verified": True}},
+        message="https://github.com/Tracer-Cloud/opensre",
+        conversation_messages=None,
+        env={},
+        cwd=None,
+        cached_scopes={},
+    )
+    assert enriched["github"]["owner"] == "Tracer-Cloud"
+    assert enriched["github"]["repo"] == "opensre"
+
+    action_prompt = build_action_system_prompt(
+        TurnSnapshot(
+            text="",
+            conversation_messages=(),
+            configured_integrations=(),
+            configured_integrations_known=False,
+            last_state=None,
+            last_synthetic_observation_path=None,
+            reasoning_effort=None,
+        )
+    )
+    assert "slack_send_message" in action_prompt
+    assert "GITHUB CLI REQUESTS" in action_prompt
+
+    harness_ports.reset_harness_ports()
+    assert alert_source_routing() == {}
+    assert "agent_hang" not in taxonomy_categories_for_alert_source("hermes")
+    assert harness_ports.action_prompt_vendor_fragments() == ""

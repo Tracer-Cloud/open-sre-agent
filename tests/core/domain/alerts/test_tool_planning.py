@@ -7,6 +7,7 @@ from core.domain.alerts.tool_planning import (
     metadata_matches_for_alert,
     score_tools,
 )
+from core.tool_framework.tags import FALLBACK_PLANNING_TAG
 
 
 @dataclass(frozen=True)
@@ -58,7 +59,7 @@ def test_score_tools_uses_guidance_fallback_when_nothing_matches() -> None:
         {"alert_source": "generic", "message": "mysterious failure"},
         [
             _Tool("query_github_commits", "github"),
-            _Tool("get_sre_guidance", "knowledge"),
+            _Tool("get_sre_guidance", "knowledge", tags=[FALLBACK_PLANNING_TAG]),
         ],
     )
 

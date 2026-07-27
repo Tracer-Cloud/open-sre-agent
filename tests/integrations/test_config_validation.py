@@ -7,6 +7,7 @@ from integrations.config_models import (
     AWSIntegrationConfig,
     BetterStackIntegrationConfig,
     CoralogixIntegrationConfig,
+    GrafanaIntegrationConfig,
     HoneycombIntegrationConfig,
     SlackWebhookConfig,
     SnowflakeIntegrationConfig,
@@ -20,6 +21,45 @@ from integrations.github.mcp import (
 from integrations.grafana.config import GrafanaAccountConfig
 from integrations.sentry import build_sentry_config
 from integrations.snowflake import classify as classify_snowflake
+
+
+def test_grafana_cloud_token_uses_bearer_auth() -> None:
+    cfg = GrafanaIntegrationConfig(endpoint="https://x.grafana.net", api_key="glsa_token")
+    assert cfg.is_local is False
+    assert cfg.has_token is True
+    assert cfg.is_anonymous_local is False
+    assert cfg.auth_headers == {"Authorization": "Bearer glsa_token"}
+
+
+def test_grafana_local_token_uses_bearer_auth() -> None:
+    cfg = GrafanaIntegrationConfig(endpoint="http://localhost:3001", api_key="glsa_token")
+    assert cfg.is_local is True
+    assert cfg.has_token is True
+    assert cfg.is_anonymous_local is False
+    assert cfg.auth_headers == {"Authorization": "Bearer glsa_token"}
+
+
+def test_grafana_basic_auth_takes_precedence_over_missing_token() -> None:
+    cfg = GrafanaIntegrationConfig(
+        endpoint="http://localhost:3000", username="admin", password="admin"
+    )
+    assert cfg.has_basic_auth is True
+    assert cfg.is_anonymous_local is False
+    assert cfg.auth_headers == {"Authorization": "Basic YWRtaW46YWRtaW4="}
+
+
+def test_grafana_anonymous_local_sends_no_auth_header() -> None:
+    cfg = GrafanaIntegrationConfig(endpoint="http://localhost:3000", api_key="local")
+    assert cfg.is_anonymous_local is True
+    assert cfg.has_usable_credentials is True
+    assert cfg.auth_headers == {}
+
+
+def test_grafana_cloud_without_token_has_no_usable_credentials() -> None:
+    cfg = GrafanaIntegrationConfig(endpoint="https://x.grafana.net", api_key="local")
+    assert cfg.has_token is False
+    assert cfg.is_anonymous_local is False
+    assert cfg.has_usable_credentials is False
 
 
 def test_betterstack_config_rejects_unknown_fields_with_suggestion() -> None:

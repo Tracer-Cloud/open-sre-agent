@@ -7,6 +7,12 @@ from unittest.mock import Mock, patch
 from integrations.grafana.tempo import TempoMixin
 
 
+class _FakeAccountConfig:
+    """Minimal stand-in for GrafanaAccountConfig's ssl_verify property."""
+
+    ssl_verify: bool = True
+
+
 class FakeGrafanaClient(TempoMixin):
     """Fake Grafana client to test the TempoMixin."""
 
@@ -14,11 +20,12 @@ class FakeGrafanaClient(TempoMixin):
         self.is_configured = is_configured
         self.account_id = "test-account-123"
         self.tempo_datasource_uid = "tempo-uid-abc"
+        self._config = _FakeAccountConfig()
 
     def _build_datasource_url(self, uid: str, path: str) -> str:
         return f"https://grafana.fake/api/datasources/uid/{uid}{path}"
 
-    def _make_request(self, url: str, params: dict | None = None) -> dict:
+    def _make_get_request(self, url: str, params: dict | None = None) -> dict:
         del url, params
         # To be mocked in tests
         return {}
@@ -42,7 +49,7 @@ class TestTempoMixin:
     def test_query_tempo_general_exception(self):
         """Test general exception handling during a query."""
         client = FakeGrafanaClient()
-        client._make_request = Mock(side_effect=Exception("Connection timeout"))
+        client._make_get_request = Mock(side_effect=Exception("Connection timeout"))
 
         result = client.query_tempo(service_name="auth-service")
 
@@ -62,7 +69,7 @@ class TestTempoMixin:
         class MockException(Exception):
             response = MockResponse()
 
-        client._make_request = Mock(side_effect=MockException("HTTP Error"))
+        client._make_get_request = Mock(side_effect=MockException("HTTP Error"))
 
         result = client.query_tempo(service_name="auth-service")
 
@@ -76,7 +83,7 @@ class TestTempoMixin:
         client = FakeGrafanaClient()
 
         # Mock the search response (from self._make_request)
-        client._make_request = Mock(
+        client._make_get_request = Mock(
             return_value={
                 "traces": [
                     {

@@ -19,7 +19,18 @@ from typing import Any
 
 from pydantic import Field, field_validator
 
+from config.constants.azure_sql import (
+    AZURE_SQL_DATABASE_ENV,
+    AZURE_SQL_DRIVER_ENV,
+    AZURE_SQL_ENCRYPT_ENV,
+    AZURE_SQL_PASSWORD_ENV,
+    AZURE_SQL_PORT_ENV,
+    AZURE_SQL_SERVER_ENV,
+    AZURE_SQL_USERNAME_ENV,
+)
+from config.llm_credentials import resolve_env_credential
 from config.strict_config import StrictConfigModel
+from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
 from platform.common.truncation import truncate
 
@@ -92,20 +103,20 @@ def build_azure_sql_config(raw: dict[str, Any] | None) -> AzureSQLConfig:
 
 def azure_sql_config_from_env() -> AzureSQLConfig | None:
     """Load an Azure SQL config from env vars."""
-    server = os.getenv("AZURE_SQL_SERVER", "").strip()
-    database = os.getenv("AZURE_SQL_DATABASE", "").strip()
+    server = os.getenv(AZURE_SQL_SERVER_ENV, "").strip()
+    database = os.getenv(AZURE_SQL_DATABASE_ENV, "").strip()
     if not server or not database:
         return None
-    _port = os.getenv("AZURE_SQL_PORT", "").strip()
+    _port = os.getenv(AZURE_SQL_PORT_ENV, "").strip()
     return build_azure_sql_config(
         {
             "server": server,
             "port": int(_port) if _port.isdigit() else DEFAULT_AZURE_SQL_PORT,
             "database": database,
-            "username": os.getenv("AZURE_SQL_USERNAME", "").strip(),
-            "password": os.getenv("AZURE_SQL_PASSWORD", "").strip(),
-            "driver": os.getenv("AZURE_SQL_DRIVER", DEFAULT_AZURE_SQL_DRIVER).strip(),
-            "encrypt": os.getenv("AZURE_SQL_ENCRYPT", "true").strip().lower()
+            "username": os.getenv(AZURE_SQL_USERNAME_ENV, "").strip(),
+            "password": resolve_env_credential(AZURE_SQL_PASSWORD_ENV) or "",
+            "driver": os.getenv(AZURE_SQL_DRIVER_ENV, DEFAULT_AZURE_SQL_DRIVER).strip(),
+            "encrypt": os.getenv(AZURE_SQL_ENCRYPT_ENV, "true").strip().lower()
             in ("true", "1", "yes"),
         }
     )
@@ -245,7 +256,7 @@ def get_server_status(config: AzureSQLConfig) -> dict[str, Any]:
     Read-only: queries sys.dm_db_resource_stats and sys.database_service_objectives.
     """
     if not config.is_configured:
-        return {"source": "azure_sql", "available": False, "error": "Not configured."}
+        return tool_unavailable("azure_sql", "Not configured.")
 
     try:
         conn = _get_connection(config)
@@ -344,7 +355,7 @@ def get_server_status(config: AzureSQLConfig) -> dict[str, Any]:
             integration="azure_sql",
             method="get_server_status",
         )
-        return {"source": "azure_sql", "available": False, "error": str(err)}
+        return tool_unavailable("azure_sql", str(err))
 
 
 def get_current_queries(
@@ -357,7 +368,7 @@ def get_current_queries(
     Results are capped at config.max_results.
     """
     if not config.is_configured:
-        return {"source": "azure_sql", "available": False, "error": "Not configured."}
+        return tool_unavailable("azure_sql", "Not configured.")
 
     try:
         conn = _get_connection(config)
@@ -427,7 +438,7 @@ def get_current_queries(
             integration="azure_sql",
             method="get_current_queries",
         )
-        return {"source": "azure_sql", "available": False, "error": str(err)}
+        return tool_unavailable("azure_sql", str(err))
 
 
 def get_resource_stats(
@@ -441,7 +452,7 @@ def get_resource_stats(
     for identifying throttling and tier-limit hits.
     """
     if not config.is_configured:
-        return {"source": "azure_sql", "available": False, "error": "Not configured."}
+        return tool_unavailable("azure_sql", "Not configured.")
 
     try:
         conn = _get_connection(config)
@@ -514,7 +525,7 @@ def get_resource_stats(
             integration="azure_sql",
             method="get_resource_stats",
         )
-        return {"source": "azure_sql", "available": False, "error": str(err)}
+        return tool_unavailable("azure_sql", str(err))
 
 
 def get_slow_queries(
@@ -528,7 +539,7 @@ def get_slow_queries(
     Results capped at config.max_results, ordered by average elapsed time.
     """
     if not config.is_configured:
-        return {"source": "azure_sql", "available": False, "error": "Not configured."}
+        return tool_unavailable("azure_sql", "Not configured.")
 
     effective_limit = min(limit or config.max_results, config.max_results)
 
@@ -592,7 +603,7 @@ def get_slow_queries(
             integration="azure_sql",
             method="get_slow_queries",
         )
-        return {"source": "azure_sql", "available": False, "error": str(err)}
+        return tool_unavailable("azure_sql", str(err))
 
 
 def get_wait_stats(config: AzureSQLConfig) -> dict[str, Any]:
@@ -603,7 +614,7 @@ def get_wait_stats(config: AzureSQLConfig) -> dict[str, Any]:
     lock contention, IO bottlenecks, and network issues.
     """
     if not config.is_configured:
-        return {"source": "azure_sql", "available": False, "error": "Not configured."}
+        return tool_unavailable("azure_sql", "Not configured.")
 
     try:
         conn = _get_connection(config)
@@ -653,7 +664,7 @@ def get_wait_stats(config: AzureSQLConfig) -> dict[str, Any]:
             integration="azure_sql",
             method="get_wait_stats",
         )
-        return {"source": "azure_sql", "available": False, "error": str(err)}
+        return tool_unavailable("azure_sql", str(err))
 
 
 def classify(

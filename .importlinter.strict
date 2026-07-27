@@ -34,33 +34,15 @@ ignore_imports =
     platform.observability.errors.sentry -> integrations.llm_cli.errors
     platform.scheduler.credentials -> integrations.catalog
     platform.scheduler.executor -> integrations.discord.delivery
+    platform.scheduler.executor -> integrations.rocketchat.delivery
     platform.scheduler.executor -> integrations.slack.delivery
     platform.scheduler.executor -> integrations.telegram.delivery
     platform.scheduler.executor -> integrations.telegram.formatting
     # surfaces -> gateway (cli + repl gateway commands)
     surfaces.cli.commands.gateway -> gateway.runtime.daemon
-    surfaces.cli.commands.gateway -> gateway.runtime.manager
+    surfaces.cli.gateway_entry -> gateway.runtime.manager
     surfaces.interactive_shell.command_registry.gateway_cmds -> gateway.runtime.daemon
     surfaces.interactive_shell.controller -> gateway.http.web_server
-    # tools.interactive_shell -> surfaces (T-4 debt — issue #3352)
-    tools.interactive_shell.actions.investigation -> surfaces.interactive_shell.runtime.background.runner
-    tools.interactive_shell.actions.investigation -> surfaces.interactive_shell.runtime.investigation_adapter
-    tools.interactive_shell.actions.investigation -> surfaces.interactive_shell.session
-    tools.interactive_shell.actions.sample_alert -> surfaces.interactive_shell.session
-    tools.interactive_shell.shared.investigation_launch -> surfaces.interactive_shell.session
-    tools.interactive_shell.actions.llm_provider -> surfaces.cli.wizard.config
-    tools.interactive_shell.actions.llm_provider -> surfaces.interactive_shell.command_registry
-    tools.interactive_shell.actions.llm_provider -> surfaces.interactive_shell.ui.execution_confirm
-    tools.interactive_shell.actions.sample_alert -> surfaces.interactive_shell.runtime.background.runner
-    tools.interactive_shell.actions.sample_alert -> surfaces.interactive_shell.runtime.investigation_adapter
-    tools.interactive_shell.actions.slash -> surfaces.interactive_shell.command_registry
-    tools.interactive_shell.actions.slash -> surfaces.interactive_shell.command_registry.slash_catalog
-    tools.interactive_shell.actions.slash -> surfaces.interactive_shell.ui
-    tools.interactive_shell.actions.slash -> surfaces.interactive_shell.ui.execution_confirm
-    tools.interactive_shell.actions.slash -> surfaces.interactive_shell.utils.telemetry.turn_outcome
-    tools.interactive_shell.actions.task_cancel -> surfaces.interactive_shell.command_registry
-    tools.interactive_shell.actions.task_cancel -> surfaces.interactive_shell.runtime
-    tools.interactive_shell.actions.task_cancel -> surfaces.interactive_shell.ui.execution_confirm
     # tools -> integrations (T-4 debt — vendor tools / reporting)
     tools.community_followup_tool -> integrations.github.client
     tools.community_followup_tool -> integrations.github.helpers
@@ -80,7 +62,9 @@ ignore_imports =
     tools.interactive_shell.implementation.claude_code_executor -> integrations.llm_cli.claude_code
     tools.interactive_shell.implementation.claude_code_executor -> integrations.llm_cli.subprocess_env
     tools.investigation.reporting.delivery.bootstrap -> integrations.discord.reporting_adapter
+    tools.investigation.reporting.delivery.bootstrap -> integrations.grafana.reporting_adapter
     tools.investigation.reporting.delivery.bootstrap -> integrations.openclaw.reporting_adapter
+    tools.investigation.reporting.delivery.bootstrap -> integrations.rocketchat.reporting_adapter
     tools.investigation.reporting.delivery.bootstrap -> integrations.slack.reporting_adapter
     tools.investigation.reporting.delivery.bootstrap -> integrations.telegram.reporting_adapter
     tools.investigation.reporting.delivery.bootstrap -> integrations.twilio.reporting_adapter
@@ -95,8 +79,6 @@ ignore_imports =
     tools.pi_coding_tool.validation -> integrations.pi
     tools.system.python_execution_tool.credentials -> integrations.github.client
     tools.system.python_execution_tool.credentials -> integrations.github.helpers
-    tools.slack_send_message_tool.delivery -> integrations.catalog
-    tools.slack_send_message_tool.delivery -> integrations.slack.delivery
     tools.system.watch_dog.runner -> integrations.telegram.alarms
     tools.system.watch_dog.runner -> integrations.telegram.credentials
     tools.work_status_report_tool -> integrations.github.client
