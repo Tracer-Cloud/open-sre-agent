@@ -79,3 +79,54 @@ def test_bindings_are_isolated_by_principal(binding_store: SessionBindingStore) 
     )
     assert binding_store.get_session_id(platform="slack", chat_id="T:C:1", principal=a) == "sess-a"
     assert binding_store.get_session_id(platform="slack", chat_id="T:C:1", principal=b) == "sess-b"
+
+
+def test_bindings_are_isolated_by_actor(binding_store: SessionBindingStore) -> None:
+    org = Principal.org("org-a")
+    binding_store.bind(
+        platform="slack",
+        chat_id="T:C:1",
+        session_id="sess-alice",
+        principal=org,
+        actor="U_ALICE",
+    )
+    binding_store.bind(
+        platform="slack",
+        chat_id="T:C:1",
+        session_id="sess-bob",
+        principal=org,
+        actor="U_BOB",
+    )
+    assert (
+        binding_store.get_session_id(
+            platform="slack", chat_id="T:C:1", principal=org, actor="U_ALICE"
+        )
+        == "sess-alice"
+    )
+    assert (
+        binding_store.get_session_id(
+            platform="slack", chat_id="T:C:1", principal=org, actor="U_BOB"
+        )
+        == "sess-bob"
+    )
+
+
+def test_has_any_actor_binding_sees_any_member(binding_store: SessionBindingStore) -> None:
+    org = Principal.org("org-a")
+    binding_store.bind(
+        platform="slack",
+        chat_id="T:C:thread1",
+        session_id="sess-alice",
+        principal=org,
+        actor="U_ALICE",
+    )
+    assert binding_store.has_any_actor_binding(
+        platform="slack",
+        chat_id="T:C:thread1",
+        principal=org,
+    )
+    assert not binding_store.has_any_actor_binding(
+        platform="slack",
+        chat_id="T:C:other",
+        principal=org,
+    )

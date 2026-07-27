@@ -1,8 +1,10 @@
-"""Per-turn storage scope for gateway workers (Slack team installs).
+"""The storage scope in effect for the current turn.
 
-Bound for the duration of a Slack turn so a store can read the turn's owner
-without threading ``Principal`` through every call site. No credential store
-consumes it yet: today this only makes the owner available.
+One process serves many customers, so the scope is bound per turn rather than
+per process. Path resolution and stores read it here instead of taking a
+principal argument at every call site.
+
+Leaf module: only depends on :mod:`config.principal`, so any layer can import it.
 """
 
 from __future__ import annotations

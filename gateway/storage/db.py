@@ -15,9 +15,10 @@ CREATE TABLE IF NOT EXISTS gateway_session_bindings (
     platform TEXT NOT NULL,
     chat_id TEXT NOT NULL,
     principal_id TEXT NOT NULL,
+    actor_id TEXT NOT NULL DEFAULT '',
     session_id TEXT NOT NULL,
     updated_at REAL NOT NULL,
-    PRIMARY KEY (platform, chat_id, principal_id)
+    PRIMARY KEY (platform, chat_id, principal_id, actor_id)
 );
 
 CREATE TABLE IF NOT EXISTS slack_installs (
@@ -53,15 +54,44 @@ def _migrate_bindings_add_principal(conn: sqlite3.Connection) -> None:
             platform TEXT NOT NULL,
             chat_id TEXT NOT NULL,
             principal_id TEXT NOT NULL,
+            actor_id TEXT NOT NULL DEFAULT '',
             session_id TEXT NOT NULL,
             updated_at REAL NOT NULL,
-            PRIMARY KEY (platform, chat_id, principal_id)
+            PRIMARY KEY (platform, chat_id, principal_id, actor_id)
         );
         INSERT INTO gateway_session_bindings
-            (platform, chat_id, principal_id, session_id, updated_at)
-        SELECT platform, chat_id, '', session_id, updated_at
+            (platform, chat_id, principal_id, actor_id, session_id, updated_at)
+        SELECT platform, chat_id, '', '', session_id, updated_at
         FROM gateway_session_bindings_legacy;
         DROP TABLE gateway_session_bindings_legacy;
+        """
+    )
+    conn.commit()
+
+
+def _migrate_bindings_add_actor(conn: sqlite3.Connection) -> None:
+    """Add actor_id so Slack members do not share a thread session."""
+    rows = conn.execute("PRAGMA table_info(gateway_session_bindings)").fetchall()
+    columns = {str(row["name"] if isinstance(row, sqlite3.Row) else row[1]) for row in rows}
+    if not columns or "actor_id" in columns:
+        return
+    conn.executescript(
+        """
+        ALTER TABLE gateway_session_bindings RENAME TO gateway_session_bindings_pre_actor;
+        CREATE TABLE gateway_session_bindings (
+            platform TEXT NOT NULL,
+            chat_id TEXT NOT NULL,
+            principal_id TEXT NOT NULL,
+            actor_id TEXT NOT NULL DEFAULT '',
+            session_id TEXT NOT NULL,
+            updated_at REAL NOT NULL,
+            PRIMARY KEY (platform, chat_id, principal_id, actor_id)
+        );
+        INSERT INTO gateway_session_bindings
+            (platform, chat_id, principal_id, actor_id, session_id, updated_at)
+        SELECT platform, chat_id, principal_id, '', session_id, updated_at
+        FROM gateway_session_bindings_pre_actor;
+        DROP TABLE gateway_session_bindings_pre_actor;
         """
     )
     conn.commit()
@@ -75,4 +105,5 @@ def connect_gateway_db(path: Path | None = None) -> sqlite3.Connection:
     conn.executescript(_SCHEMA)
     conn.commit()
     _migrate_bindings_add_principal(conn)
+    _migrate_bindings_add_actor(conn)
     return conn

@@ -85,7 +85,7 @@ def version_command() -> None:
 def health_command(watch: bool, rate: int) -> None:
     """Show a quick health summary of the local agent setup."""
     from config.config import get_environment
-    from integrations.store import STORE_PATH
+    from config.constants.paths import integrations_store_path
     from integrations.verify import verify_integrations
     from surfaces.interactive_shell.ui.health import render_health_json, render_health_report
 
@@ -96,7 +96,7 @@ def health_command(watch: bool, rate: int) -> None:
         if is_json_output():
             render_health_json(
                 environment=environment,
-                integration_store_path=STORE_PATH,
+                integration_store_path=integrations_store_path(),
                 results=results,
             )
         else:
@@ -105,7 +105,7 @@ def health_command(watch: bool, rate: int) -> None:
             render_health_report(
                 console=Console(highlight=False),
                 environment=environment,
-                integration_store_path=STORE_PATH,
+                integration_store_path=integrations_store_path(),
                 results=results,
             )
 

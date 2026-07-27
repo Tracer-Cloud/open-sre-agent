@@ -3,7 +3,7 @@
 Session lifecycle (create / resolve / rotate / restore / flush) is owned by
 :class:`core.agent_harness.session.SessionManager`. This resolver adds only the
 gateway-specific concerns on top: the platform chat-id ↔ session-id binding
-store (principal-scoped) and per-turn gateway chat metadata.
+store (principal- and actor-scoped) and per-turn gateway chat metadata.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from core.agent_harness.session.integration_resolution import has_resolved_integ
 from gateway.session.gateway_chat_context import inject_gateway_chat_context
 
 if TYPE_CHECKING:
-    from config.principal import Principal
+    from config.principal import Actor, Principal
     from gateway.storage.session.binding_store import BindingStore
 
 logger = logging.getLogger(__name__)
@@ -67,16 +67,19 @@ class SessionResolver:
         user_id: str,
         chat_id: str,
         principal: Principal | None = None,
+        actor: Actor | str | None = None,
     ) -> SessionCore:
         """Return a hydrated session for the platform conversation key ``user_id``.
 
-        Slack team turns pass an org ``principal``. Other surfaces omit it and
-        keep main-branch binding behavior (legacy empty principal id).
+        Slack team turns pass an org ``principal`` and Slack ``actor``. Other
+        surfaces omit them and keep main-branch binding behavior (legacy empty
+        principal/actor ids).
         """
         existing = self._bindings.get_session_id(
             platform=self._platform,
             chat_id=user_id,
             principal=principal,
+            actor=actor,
         )
         if existing:
             session = self._manager.resolve(existing)
@@ -89,23 +92,42 @@ class SessionResolver:
             chat_id=user_id,
             session_id=session.session_id,
             principal=principal,
+            actor=actor,
         )
         logger.info(
-            "[gateway] created session %s for %s conversation %s principal=%s",
+            "[gateway] created session %s for %s conversation %s principal=%s actor=%s",
             session.session_id,
             self._platform,
             user_id,
             principal.id if principal is not None else "",
+            actor.id if actor is not None and hasattr(actor, "id") else (actor or ""),
         )
         return session
 
-    def has_session(self, *, user_id: str, principal: Principal | None = None) -> bool:
+    def has_conversation(
+        self, *, conversation_key: str, principal: Principal | None = None
+    ) -> bool:
+        """Whether any member already has a session in this conversation."""
+        return self._bindings.has_any_actor_binding(
+            platform=self._platform,
+            chat_id=conversation_key,
+            principal=principal,
+        )
+
+    def has_session(
+        self,
+        *,
+        user_id: str,
+        principal: Principal | None = None,
+        actor: Actor | str | None = None,
+    ) -> bool:
         """Whether the bot already has a session bound to this conversation key."""
         return bool(
             self._bindings.get_session_id(
                 platform=self._platform,
                 chat_id=user_id,
                 principal=principal,
+                actor=actor,
             )
         )
 
@@ -115,6 +137,7 @@ class SessionResolver:
         user_id: str,
         chat_id: str,
         principal: Principal | None = None,
+        actor: Actor | str | None = None,
     ) -> SessionCore:
         """Flush the current session file and start a new binding."""
         from core.domain.memory import gateway_memory_enabled
@@ -123,11 +146,13 @@ class SessionResolver:
             platform=self._platform,
             chat_id=user_id,
             principal=principal,
+            actor=actor,
         )
         new_id = self._bindings.rotate(
             platform=self._platform,
             chat_id=user_id,
             principal=principal,
+            actor=actor,
         )
         # Host-global memory store: skip auto-extract on shared gateway hosts
         # unless OPENSRE_MEMORY_GATEWAY_ENABLED is set (single-operator opt-in).

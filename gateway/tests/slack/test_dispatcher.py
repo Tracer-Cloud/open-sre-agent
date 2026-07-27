@@ -101,18 +101,36 @@ class _FakeSessionResolver:
         self.calls: list[dict[str, str]] = []
         self._has_session = has_session
 
-    def resolve(self, *, user_id: str, chat_id: str, principal: object = None) -> _FakeSession:
+    def resolve(
+        self,
+        *,
+        user_id: str,
+        chat_id: str,
+        principal: object = None,
+        actor: object = None,
+    ) -> _FakeSession:
         self.calls.append({"user_id": user_id, "chat_id": chat_id})
-        _ = principal
+        _ = principal, actor
         return _FakeSession()
 
-    def has_session(self, *, user_id: str, principal: object = None) -> bool:
-        _ = user_id, principal
+    def has_conversation(self, *, conversation_key: str, principal: object = None) -> bool:
+        _ = conversation_key, principal
         return self._has_session
 
-    def rotate(self, *, user_id: str, chat_id: str, principal: object = None) -> _FakeSession:
+    def has_session(self, *, user_id: str, principal: object = None, actor: object = None) -> bool:
+        _ = user_id, principal, actor
+        return self._has_session
+
+    def rotate(
+        self,
+        *,
+        user_id: str,
+        chat_id: str,
+        principal: object = None,
+        actor: object = None,
+    ) -> _FakeSession:
         self.calls.append({"user_id": user_id, "chat_id": chat_id, "rotate": "1"})
-        _ = principal
+        _ = principal, actor
         return _FakeSession()
 
 

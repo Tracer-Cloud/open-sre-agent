@@ -144,3 +144,14 @@ def test_rotate_flushes_old_and_binds_new(resolver: SessionResolver) -> None:
         )
         == rotated.session_id
     )
+
+
+def test_slack_actors_get_distinct_sessions(resolver: SessionResolver) -> None:
+    org = Principal.org("org_acme")
+    alice = resolver.resolve(user_id="T:C:1", chat_id="C1", principal=org, actor="U_ALICE")
+    bob = resolver.resolve(user_id="T:C:1", chat_id="C1", principal=org, actor="U_BOB")
+
+    assert alice.session_id != bob.session_id
+    assert resolver.has_conversation(conversation_key="T:C:1", principal=org)
+    assert resolver.has_session(user_id="T:C:1", principal=org, actor="U_ALICE")
+    assert resolver.has_session(user_id="T:C:1", principal=org, actor="U_BOB")

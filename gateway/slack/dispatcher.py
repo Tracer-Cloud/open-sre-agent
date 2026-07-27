@@ -10,6 +10,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 
 from config.principal import StorageScope
+from config.scope_context import bound_storage_scope
 from core.agent_harness.session import SessionCore
 from gateway.billing.credits_client import CreditsOutcome, consume_credits
 from gateway.runtime.sink_protocol import GatewayAgentCallback
@@ -39,7 +40,6 @@ from gateway.slack.thread_history import (
 )
 from gateway.storage import SessionResolver
 from gateway.storage.principal_resolve import PrincipalResolutionError, resolve_slack_scope
-from gateway.storage.scope_context import bound_storage_scope
 from platform.analytics.usage_context import SURFACE_SLACK, bound_usage_context
 
 _ROTATE_SESSION = "__ROTATE_SESSION__"
@@ -127,8 +127,8 @@ class _SlackTurnDispatcher:
             self._attention.note_addressed_turn(inbound.conversation_key, user_id=inbound.user_id)
             return True
         # Layer 1: only threads the bot already joined; never channel chatter.
-        if not self._session_resolver.has_session(
-            user_id=inbound.conversation_key,
+        if not self._session_resolver.has_conversation(
+            conversation_key=inbound.conversation_key,
             principal=scope.principal,
         ):
             return False
@@ -234,6 +234,7 @@ class _SlackTurnDispatcher:
                     user_id=inbound.conversation_key,
                     chat_id=inbound.channel_id,
                     principal=scope.principal,
+                    actor=scope.actor,
                 )
                 self._post(inbound, _NEW_SESSION_REPLY)
                 if inbound.text.strip().lower() == "/new":
@@ -243,6 +244,7 @@ class _SlackTurnDispatcher:
                 user_id=inbound.conversation_key,
                 chat_id=inbound.channel_id,
                 principal=scope.principal,
+                actor=scope.actor,
             )
 
     def _run_turn(self, inbound: SlackInboundMessage, scope: StorageScope) -> None:
