@@ -91,7 +91,9 @@ and redacts matching spans before the extraction LLM call.
 
 ## Gateway (Slack / Telegram)
 
-Memory is a **host-global** local folder. On a shared gateway host it is **off
-by default** so one allowlisted user's facts cannot appear in another user's
-prompts or channel replies. Single-operator gateway deployments can opt in with
+On Slack, memory is **per-user scoped** — each member's facts live under their
+own `users/<id>/memory/` folder inside the org volume, so one user's memories
+cannot appear in another's prompts or channel replies. Telegram turns are
+unbound and stay **host-global**. Because of that (and to keep memory off by
+default on shared hosts), the gateway path is **off by default**; opt in with
 `OPENSRE_MEMORY_GATEWAY_ENABLED=1`.
