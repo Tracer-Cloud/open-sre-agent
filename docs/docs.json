@@ -105,6 +105,7 @@
               "interactive-shell-privacy",
               "sessions",
               "principal-scoped-storage",
+              "memory",
               "fleet",
               "cron",
               "closed-loop-learning",

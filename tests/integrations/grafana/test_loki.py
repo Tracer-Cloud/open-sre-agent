@@ -8,6 +8,7 @@ without a wrapped HTTP response, and the empty-result envelope.
 
 from __future__ import annotations
 
+from http import HTTPStatus
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -191,19 +192,40 @@ class TestQueryLokiExceptions:
             "logs": [],
         }
 
-    def test_exception_with_response_includes_status_and_truncated_text(self) -> None:
+    @pytest.mark.parametrize(
+        ("status", "expected_error"),
+        [
+            (
+                HTTPStatus.TOO_MANY_REQUESTS,
+                "Loki rate-limited the query (429). "
+                "Retry later, shorten the time range, or lower the limit.",
+            ),
+            (
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                "Loki is unavailable (500). Server-side failure, retry later.",
+            ),
+            (
+                HTTPStatus.BAD_GATEWAY,
+                "Loki is unavailable (502). Server-side failure, retry later.",
+            ),
+            (HTTPStatus.NOT_FOUND, "Loki query failed: 404"),
+        ],
+    )
+    def test_exception_with_response_includes_status_and_truncated_text(
+        self, status: HTTPStatus, expected_error: str
+    ) -> None:
         host = _FakeLokiHost()
 
         long_text = "x" * 500
-        response = MagicMock(status_code=502, text=long_text)
-        err = RuntimeError("bad gateway")
+        response = MagicMock(status_code=status, text=long_text)
+        err = RuntimeError("upstream failure")
         err.response = response  # type: ignore[attr-defined]
         host.make_request_mock.side_effect = err
 
         result = host.query_loki(_QUERY)
 
         assert result["success"] is False
-        assert result["error"] == "Loki query failed: 502"
+        assert result["error"] == expected_error
         assert result["response"] == long_text[:300]
         assert len(result["response"]) == 300
         assert result["logs"] == []

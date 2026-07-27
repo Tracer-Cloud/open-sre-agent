@@ -117,6 +117,8 @@ class SessionResolver:
         principal: Principal | None = None,
     ) -> SessionCore:
         """Flush the current session file and start a new binding."""
+        from core.domain.memory import gateway_memory_enabled
+
         existing = self._bindings.get_session_id(
             platform=self._platform,
             chat_id=user_id,
@@ -127,5 +129,11 @@ class SessionResolver:
             chat_id=user_id,
             principal=principal,
         )
-        session = self._manager.rotate(old_session_id=existing or None, new_session_id=new_id)
+        # Host-global memory store: skip auto-extract on shared gateway hosts
+        # unless OPENSRE_MEMORY_GATEWAY_ENABLED is set (single-operator opt-in).
+        session = self._manager.rotate(
+            old_session_id=existing or None,
+            new_session_id=new_id,
+            extract_memory=gateway_memory_enabled(),
+        )
         return _inject_chat_context(session, chat_id=chat_id, platform=self._platform)

@@ -96,6 +96,9 @@ class EmptyPromptContextProvider:
     def environment_block(self) -> str:
         return ""
 
+    def long_term_memory(self) -> str:
+        return ""
+
     def suggested_synthetic_prompt(self) -> str:
         return ""
 
