@@ -8,7 +8,8 @@ from config.principal import Principal
 from core.agent_harness.prompts import build_action_system_prompt
 from core.agent_harness.session import InMemorySessionStorage, SessionCore, SessionManager
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
-from gateway.storage import SessionBindingStore, SessionResolver, connect_gateway_db
+from gateway.storage import SessionBindingStore, SessionResolver
+from gateway.storage.db import connect_bindings_db
 
 
 @pytest.fixture
@@ -22,7 +23,7 @@ def resolver(tmp_path, monkeypatch) -> SessionResolver:
     monkeypatch.setattr(SessionCore, "warm_resolved_integrations", lambda _self, **_k: None)
     monkeypatch.setattr(SessionCore, "hydrate_configured_integrations", lambda _self: None)
 
-    conn = connect_gateway_db(tmp_path / "state.db")
+    conn = connect_bindings_db(tmp_path / "state.db")
     store = SessionBindingStore(conn)
     # A mutable fake repo whose load_session each test can override.
     repo = SimpleNamespace(load_session=lambda _session_id: None)

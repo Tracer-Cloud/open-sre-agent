@@ -50,6 +50,15 @@ def _safe_segment(value: str, *, label: str) -> str:
     return value
 
 
+def host_home() -> Path:
+    """Root for files owned by the machine, never by a customer.
+
+    Read through this rather than importing :data:`OPENSRE_HOME_DIR` directly,
+    so the root stays redirectable in one place.
+    """
+    return OPENSRE_HOME_DIR
+
+
 def opensre_home() -> Path:
     """The organization's context root, or the host home when unbound.
 
@@ -124,6 +133,7 @@ __all__ = [
     "ensure_opensre_tmp_dir",
     "get_memory_dir",
     "get_store_path",
+    "host_home",
     "integrations_store_path",
     "opensre_home",
     "session_home",

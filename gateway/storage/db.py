@@ -1,26 +1,28 @@
-"""SQLite persistence for gateway session bindings and Slack installs."""
+"""SQLite persistence for gateway session bindings and Slack installs.
+
+Two databases, because the two tables have opposite scopes:
+
+- ``slack_installs`` maps a Slack team to its organization, so it must be
+  readable *before* the organization is known. It stays on the host root.
+- ``gateway_session_bindings`` maps a conversation to a session inside one
+  organization. It lives on that organization's context root, which in a
+  deployed service is the mounted volume, so a replaced task still resolves
+  a thread to the transcript it already has.
+"""
 
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Callable
 from pathlib import Path
 
-from config.constants import OPENSRE_HOME_DIR
+from config.constants.paths import host_home, opensre_home
 
-_GATEWAY_DIR = OPENSRE_HOME_DIR / "gateway"
-_DEFAULT_DB_PATH = _GATEWAY_DIR / "state.db"
+_GATEWAY_DIR_NAME = "gateway"
+_INSTALLS_DB_NAME = "state.db"
+_BINDINGS_DB_NAME = "bindings.db"
 
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS gateway_session_bindings (
-    platform TEXT NOT NULL,
-    chat_id TEXT NOT NULL,
-    principal_id TEXT NOT NULL,
-    actor_id TEXT NOT NULL DEFAULT '',
-    session_id TEXT NOT NULL,
-    updated_at REAL NOT NULL,
-    PRIMARY KEY (platform, chat_id, principal_id, actor_id)
-);
-
+_INSTALLS_SCHEMA = """
 CREATE TABLE IF NOT EXISTS slack_installs (
     team_id TEXT PRIMARY KEY,
     bot_token TEXT NOT NULL DEFAULT '',
@@ -30,80 +32,128 @@ CREATE TABLE IF NOT EXISTS slack_installs (
 );
 """
 
+_BINDINGS_SCHEMA = """
+CREATE TABLE IF NOT EXISTS gateway_session_bindings (
+    platform TEXT NOT NULL,
+    chat_id TEXT NOT NULL,
+    principal_id TEXT NOT NULL,
+    actor_id TEXT NOT NULL DEFAULT '',
+    session_id TEXT NOT NULL,
+    updated_at REAL NOT NULL,
+    PRIMARY KEY (platform, chat_id, principal_id, actor_id)
+);
+"""
+
+_BINDINGS_COLUMNS = "platform, chat_id, principal_id, actor_id, session_id, updated_at"
+
 
 def gateway_dir() -> Path:
-    return _GATEWAY_DIR
+    """Host directory for gateway process state (pidfile, logs, install catalog)."""
+    return host_home() / _GATEWAY_DIR_NAME
 
 
 def default_gateway_db_path() -> Path:
-    return _DEFAULT_DB_PATH
+    """Path of the host-level install catalog."""
+    return gateway_dir() / _INSTALLS_DB_NAME
 
 
-def _migrate_bindings_add_principal(conn: sqlite3.Connection) -> None:
-    """Add principal_id to legacy bindings tables (pre-principal schema)."""
-    rows = conn.execute("PRAGMA table_info(gateway_session_bindings)").fetchall()
-    columns = {str(row["name"] if isinstance(row, sqlite3.Row) else row[1]) for row in rows}
-    if not columns:
-        return
-    if "principal_id" in columns:
-        return
-    conn.executescript(
-        """
-        ALTER TABLE gateway_session_bindings RENAME TO gateway_session_bindings_legacy;
-        CREATE TABLE gateway_session_bindings (
-            platform TEXT NOT NULL,
-            chat_id TEXT NOT NULL,
-            principal_id TEXT NOT NULL,
-            actor_id TEXT NOT NULL DEFAULT '',
-            session_id TEXT NOT NULL,
-            updated_at REAL NOT NULL,
-            PRIMARY KEY (platform, chat_id, principal_id, actor_id)
-        );
-        INSERT INTO gateway_session_bindings
-            (platform, chat_id, principal_id, actor_id, session_id, updated_at)
-        SELECT platform, chat_id, '', '', session_id, updated_at
-        FROM gateway_session_bindings_legacy;
-        DROP TABLE gateway_session_bindings_legacy;
-        """
-    )
+def bindings_db_path() -> Path:
+    """Path of the current organization's session bindings."""
+    return opensre_home() / _GATEWAY_DIR_NAME / _BINDINGS_DB_NAME
+
+
+def _open(path: Path, schema: str) -> sqlite3.Connection:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(path, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    conn.executescript(schema)
     conn.commit()
-
-
-def _migrate_bindings_add_actor(conn: sqlite3.Connection) -> None:
-    """Add actor_id so Slack members do not share a thread session."""
-    rows = conn.execute("PRAGMA table_info(gateway_session_bindings)").fetchall()
-    columns = {str(row["name"] if isinstance(row, sqlite3.Row) else row[1]) for row in rows}
-    if not columns or "actor_id" in columns:
-        return
-    conn.executescript(
-        """
-        ALTER TABLE gateway_session_bindings RENAME TO gateway_session_bindings_pre_actor;
-        CREATE TABLE gateway_session_bindings (
-            platform TEXT NOT NULL,
-            chat_id TEXT NOT NULL,
-            principal_id TEXT NOT NULL,
-            actor_id TEXT NOT NULL DEFAULT '',
-            session_id TEXT NOT NULL,
-            updated_at REAL NOT NULL,
-            PRIMARY KEY (platform, chat_id, principal_id, actor_id)
-        );
-        INSERT INTO gateway_session_bindings
-            (platform, chat_id, principal_id, actor_id, session_id, updated_at)
-        SELECT platform, chat_id, principal_id, '', session_id, updated_at
-        FROM gateway_session_bindings_pre_actor;
-        DROP TABLE gateway_session_bindings_pre_actor;
-        """
-    )
-    conn.commit()
+    return conn
 
 
 def connect_gateway_db(path: Path | None = None) -> sqlite3.Connection:
-    db_path = path or default_gateway_db_path()
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(db_path, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    conn.executescript(_SCHEMA)
+    """Open the host-level install catalog."""
+    return _open(path or default_gateway_db_path(), _INSTALLS_SCHEMA)
+
+
+def _table_columns(conn: sqlite3.Connection, table: str) -> set[str]:
+    rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+    return {str(row["name"] if isinstance(row, sqlite3.Row) else row[1]) for row in rows}
+
+
+def _adopt_legacy_bindings(conn: sqlite3.Connection, legacy_path: Path) -> None:
+    """Copy bindings written before they moved off the host database.
+
+    Without this a laptop or Telegram gateway would drop every existing
+    conversation the first time it starts on the new layout.
+    """
+    if conn.execute("SELECT 1 FROM gateway_session_bindings LIMIT 1").fetchone() is not None:
+        return
+    if not legacy_path.is_file():
+        return
+    legacy = sqlite3.connect(legacy_path)
+    legacy.row_factory = sqlite3.Row
+    try:
+        if not _table_columns(legacy, "gateway_session_bindings"):
+            return
+        rows = legacy.execute(
+            "SELECT platform, chat_id, principal_id, actor_id, session_id, updated_at "
+            "FROM gateway_session_bindings"
+        ).fetchall()
+    except sqlite3.Error:
+        return
+    finally:
+        legacy.close()
+    if not rows:
+        return
+    conn.executemany(
+        f"INSERT OR IGNORE INTO gateway_session_bindings ({_BINDINGS_COLUMNS}) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        [tuple(row) for row in rows],
+    )
     conn.commit()
-    _migrate_bindings_add_principal(conn)
-    _migrate_bindings_add_actor(conn)
+
+
+def connect_bindings_db(path: Path | None = None) -> sqlite3.Connection:
+    """Open the organization's session bindings, adopting any legacy rows."""
+    db_path = path or bindings_db_path()
+    conn = _open(db_path, _BINDINGS_SCHEMA)
+    legacy_path = db_path.parent / _INSTALLS_DB_NAME
+    if legacy_path != db_path:
+        _adopt_legacy_bindings(conn, legacy_path)
     return conn
+
+
+class BindingsConnections:
+    """Cache of bindings connections, one per resolved database path.
+
+    The path follows the organization bound for the turn, so it is resolved on
+    use rather than captured when the worker starts.
+    """
+
+    def __init__(self, resolve_path: Callable[[], Path] = bindings_db_path) -> None:
+        self._resolve_path = resolve_path
+        self._by_path: dict[str, sqlite3.Connection] = {}
+
+    def __call__(self) -> sqlite3.Connection:
+        key = str(self._resolve_path())
+        conn = self._by_path.get(key)
+        if conn is None:
+            conn = connect_bindings_db(Path(key))
+            self._by_path[key] = conn
+        return conn
+
+    def close(self) -> None:
+        for conn in self._by_path.values():
+            conn.close()
+        self._by_path.clear()
+
+
+__all__ = [
+    "BindingsConnections",
+    "bindings_db_path",
+    "connect_bindings_db",
+    "connect_gateway_db",
+    "default_gateway_db_path",
+    "gateway_dir",
+]

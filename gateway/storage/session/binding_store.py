@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Protocol
 
 from config.principal import Actor, Principal
-from gateway.storage.db import connect_gateway_db
+from gateway.storage.db import BindingsConnections
 from gateway.storage.session.bindings import SessionBindingStore
 
 
@@ -48,8 +48,8 @@ class BindingStore(Protocol):
 
 
 def open_binding_store() -> SessionBindingStore:
-    """Return the SQLite-backed binding store for this gateway."""
-    return SessionBindingStore(connect_gateway_db())
+    """Return the binding store, resolving its database per bound organization."""
+    return SessionBindingStore(BindingsConnections())
 
 
 __all__ = ["BindingStore", "open_binding_store"]

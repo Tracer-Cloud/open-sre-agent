@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 
 from config.constants.paths import (
-    USERS_DIR_NAME,
     ORGS_DIR_NAME,
+    USERS_DIR_NAME,
     UnsafePathSegmentError,
     integrations_store_path,
     opensre_home,

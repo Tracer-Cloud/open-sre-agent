@@ -5,8 +5,12 @@ from __future__ import annotations
 import sqlite3
 import time
 import uuid
+from collections.abc import Callable
 
 from config.principal import Actor, Principal
+
+# Resolves the database for the organization bound to the current turn.
+ConnectionSource = Callable[[], sqlite3.Connection]
 
 # Non-Slack surfaces omit principal/actor and share these ids so lookups match
 # pre-scoped rows migrated with empty principal_id / actor_id.
@@ -33,12 +37,29 @@ class SessionBindingStore:
     Other surfaces may omit both; bindings then use legacy empty ids.
     """
 
-    def __init__(self, conn: sqlite3.Connection) -> None:
-        self._conn = conn
+    def __init__(self, conn: sqlite3.Connection | ConnectionSource) -> None:
+        # sqlite3.Connection is itself callable, so test the concrete type.
+        if isinstance(conn, sqlite3.Connection):
+            fixed: sqlite3.Connection = conn
+            self._owned: sqlite3.Connection | None = fixed
+            self._source: ConnectionSource = lambda: fixed
+        else:
+            self._owned = None
+            self._source = conn
+
+    @property
+    def _conn(self) -> sqlite3.Connection:
+        """The database for the organization bound right now."""
+        return self._source()
 
     def close(self) -> None:
-        """Release the underlying connection."""
-        self._conn.close()
+        """Release connections this store opened."""
+        if self._owned is not None:
+            self._owned.close()
+            return
+        closer = getattr(self._source, "close", None)
+        if callable(closer):
+            closer()
 
     def has_any_actor_binding(
         self,
