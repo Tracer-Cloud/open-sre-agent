@@ -25,9 +25,24 @@ silo org id, the Slack turn is **refused** rather than billed to the wrong owner
 
 ## On-disk layout
 
-A laptop user keeps everything in `~/.opensre`. A Slack member gets the same
-thing, filed under their organization, so one gateway can serve several
-customers without mixing them.
+A laptop user keeps everything in `~/.opensre`. A Slack user gets the same
+private conversation context, filed under their organization.
+
+Deployed, the organization root is the mounted S3 Files volume named by
+`OPENSRE_CONTEXT_ROOT` (`/workspace/memories`). The infrastructure chroots that
+mount to one organization through a per-org access point, so OpenSRE adds no
+org segment of its own:
+
+```text
+/workspace/memories/                     # = organizations/<organization_id>/
+  integrations.json                      # shared by every member of the org
+  users/<slack_user_id>/                 # that user's own context
+    sessions/<session_id>.jsonl
+    memory/
+```
+
+Without the mount, a bound org principal nests under the host home so several
+organizations can be exercised on one machine:
 
 ```text
 ~/.opensre/
@@ -35,24 +50,20 @@ customers without mixing them.
   integrations.json                      # laptop / unbound: unchanged
   sessions/
   memory/
-  orgs/<clerk_org_id>/                   # one customer
-    integrations.json                    # shared by every member of the org
-    members/<slack_user_id>/             # one member's private context
-      sessions/<session_id>.jsonl
+  orgs/<clerk_org_id>/
+    integrations.json
+    users/<slack_user_id>/
+      sessions/…
       memory/
 ```
 
 Integrations sit at the org root because credentials belong to the team: whoever
 connected Datadog, every member investigates with it. Sessions and memory sit
-under the member because conversation history is personal, the same way it is on
-a laptop.
+under the user because conversation history is personal, the same way it is on a
+laptop.
 
 With no scope bound — a terminal run — every path resolves to the flat
 `~/.opensre` layout, unchanged.
-
-The Slack **bot** token used for Socket Mode still comes from the host/env at
-process boot (unbound). Per-turn customer tools read the org
-`integrations.json` while the scope is bound.
 
 ## What changes for Slack
 
@@ -115,6 +126,7 @@ Telegram and other surfaces keep matching their migrated empty-actor rows.
 | Env | Purpose |
 | --- | --- |
 | `OPENSRE_ORGANIZATION_ID` | Silo org principal when no `slack_installs` row exists yet (dogfood / cutover) |
+| `OPENSRE_CONTEXT_ROOT` | Mounted, org-scoped volume holding this organization's context (`/workspace/memories` in the Slack service) |
 
 ## Non-goals (this change)
 

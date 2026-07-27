@@ -153,11 +153,12 @@ from config.constants.opensearch import (
 )
 from config.constants.pagerduty import PAGERDUTY_API_KEY_ENV, PAGERDUTY_BASE_URL_ENV
 from config.constants.paths import (
+    CONTEXT_ROOT_ENV,
     INTEGRATIONS_STORE_PATH,
-    MEMBERS_DIR_NAME,
     OPENSRE_HOME_DIR,
     OPENSRE_TMP_DIR,
     ORGS_DIR_NAME,
+    USERS_DIR_NAME,
     UnsafePathSegmentError,
     ensure_opensre_tmp_dir,
     get_memory_dir,
@@ -329,7 +330,8 @@ __all__ = [
     "INCIDENT_IO_API_KEY_ENV",
     "INCIDENT_IO_BASE_URL_ENV",
     "INTEGRATIONS_STORE_PATH",
-    "MEMBERS_DIR_NAME",
+    "CONTEXT_ROOT_ENV",
+    "USERS_DIR_NAME",
     "ORGS_DIR_NAME",
     "UnsafePathSegmentError",
     "opensre_home",

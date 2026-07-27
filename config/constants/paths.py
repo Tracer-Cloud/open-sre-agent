@@ -1,10 +1,11 @@
 """Filesystem roots for OpenSRE data.
 
 - :data:`OPENSRE_HOME_DIR` — host root (gateway pid/log, install catalog, analytics).
-- :func:`opensre_home` — org context root when a Slack org principal is bound;
-  otherwise the host root (laptop CLI / unbound).
-- :func:`session_home` — one Slack member's conversation root under the org;
-  otherwise the same as :func:`opensre_home`.
+- :func:`opensre_home` — the organization's context root. In a deployed Slack
+  service this is the mounted S3 Files volume named by ``OPENSRE_CONTEXT_ROOT``,
+  which the infrastructure already chroots to one organization. On a laptop it
+  is the host root.
+- :func:`session_home` — one Slack user's own conversation root inside the org.
 """
 
 from __future__ import annotations
@@ -28,8 +29,11 @@ OPENSRE_HOME_DIR = Path.home() / ".opensre"
 INTEGRATIONS_STORE_PATH = OPENSRE_HOME_DIR / "integrations.json"
 OPENSRE_TMP_DIR = Path(tempfile.gettempdir()) / "opensre"
 
+# Set by the deployed Slack service to the mounted, org-chrooted volume.
+CONTEXT_ROOT_ENV = "OPENSRE_CONTEXT_ROOT"
+
 ORGS_DIR_NAME = "orgs"
-MEMBERS_DIR_NAME = "members"
+USERS_DIR_NAME = "users"
 
 # Ids reach the filesystem; reject segments that could escape their directory.
 _SAFE_PATH_SEGMENT = re.compile(r"^[A-Za-z0-9._-]+$")
@@ -47,12 +51,17 @@ def _safe_segment(value: str, *, label: str) -> str:
 
 
 def opensre_home() -> Path:
-    """Context root for the bound org principal, or the host home when unbound.
+    """The organization's context root, or the host home when unbound.
 
-    Slack turns with an org principal resolve to
-    ``~/.opensre/orgs/<clerk_org_id>/``. CLI and other unbound callers keep
-    ``~/.opensre/``.
+    ``OPENSRE_CONTEXT_ROOT`` wins when set: the deployed service mounts a volume
+    already scoped to one organization, so no org segment is added on top of it.
+    Without it, a bound org principal nests under ``~/.opensre/orgs/<org_id>/``
+    so several organizations can be exercised on one machine. CLI and other
+    unbound callers keep plain ``~/.opensre/``.
     """
+    mounted_root = os.getenv(CONTEXT_ROOT_ENV, "").strip()
+    if mounted_root:
+        return Path(mounted_root).expanduser()
     scope = current_scope()
     if scope is None or scope.principal.kind != "org":
         return OPENSRE_HOME_DIR
@@ -61,17 +70,18 @@ def opensre_home() -> Path:
 
 
 def session_home() -> Path:
-    """One member's conversation root inside the org, or :func:`opensre_home`.
+    """One Slack user's own conversation root inside the org.
 
-    With an org principal and Slack actor bound:
-    ``~/.opensre/orgs/<org_id>/members/<slack_user_id>/``.
+    Each member keeps the private history a laptop user has, at
+    ``<org root>/users/<slack_user_id>/``. Unbound callers get the org root, so
+    a terminal run stays flat.
     """
     org_root = opensre_home()
     scope = current_scope()
     if scope is None or scope.principal.kind != "org":
         return org_root
     actor_id = _safe_segment(scope.actor.id, label="actor id")
-    return org_root / MEMBERS_DIR_NAME / actor_id
+    return org_root / USERS_DIR_NAME / actor_id
 
 
 def integrations_store_path() -> Path:
@@ -102,10 +112,11 @@ def ensure_opensre_tmp_dir() -> Path:
 
 __all__ = [
     "INTEGRATIONS_STORE_PATH",
-    "MEMBERS_DIR_NAME",
+    "CONTEXT_ROOT_ENV",
     "OPENSRE_HOME_DIR",
     "OPENSRE_TMP_DIR",
     "ORGS_DIR_NAME",
+    "USERS_DIR_NAME",
     "PROJECT_ROOT",
     "REPO_ROOT",
     "SYNTHETIC_SCENARIOS_DIR",

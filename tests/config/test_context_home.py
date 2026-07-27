@@ -24,6 +24,7 @@ BOB = Actor.slack("U_BOB")
 def _home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Keep every path assertion off the developer's real home directory."""
     monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.delenv(paths.CONTEXT_ROOT_ENV, raising=False)
     return tmp_path
 
 
@@ -125,3 +126,42 @@ def test_hostile_actor_ids_are_rejected_too() -> None:
     # Act / Assert
     with bound_storage_scope(scope), pytest.raises(paths.UnsafePathSegmentError):
         paths.session_home()
+
+
+def test_mounted_volume_is_used_as_the_org_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The deployed service mounts a volume already scoped to one organization."""
+    # Arrange: the infrastructure chroots the mount to this org, so no org
+    # segment belongs on top of it.
+    mount = tmp_path / "workspace" / "memories"
+    monkeypatch.setenv(paths.CONTEXT_ROOT_ENV, str(mount))
+
+    # Act
+    with bound_storage_scope(_member(ACME, ALICE)):
+        org_root = paths.opensre_home()
+        user_root = paths.session_home()
+        integrations = paths.integrations_store_path()
+
+    # Assert: the org id never appears in the path; the mount already is the org.
+    assert org_root == mount
+    assert ACME.id not in str(user_root)
+    assert user_root == mount / "users" / ALICE.id
+    assert integrations == mount / "integrations.json"
+
+
+def test_mounted_volume_still_separates_users(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    monkeypatch.setenv(paths.CONTEXT_ROOT_ENV, str(tmp_path / "memories"))
+
+    # Act
+    with bound_storage_scope(_member(ACME, ALICE)):
+        alice = paths.session_home()
+    with bound_storage_scope(_member(ACME, BOB)):
+        bob = paths.session_home()
+
+    # Assert
+    assert alice != bob
+    assert BOB.id not in str(alice)

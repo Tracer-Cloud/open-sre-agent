@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from config.constants.paths import (
-    MEMBERS_DIR_NAME,
+    USERS_DIR_NAME,
     ORGS_DIR_NAME,
     UnsafePathSegmentError,
     integrations_store_path,
@@ -49,8 +49,8 @@ def test_org_integrations_shared_member_sessions_private(host_home: Path) -> Non
 
     org_root = host_home / ORGS_DIR_NAME / "org_acme"
     assert alice_integ == bob_integ == org_root / "integrations.json"
-    assert alice_sessions == org_root / MEMBERS_DIR_NAME / "U_ALICE" / "sessions"
-    assert bob_sessions == org_root / MEMBERS_DIR_NAME / "U_BOB" / "sessions"
+    assert alice_sessions == org_root / USERS_DIR_NAME / "U_ALICE" / "sessions"
+    assert bob_sessions == org_root / USERS_DIR_NAME / "U_BOB" / "sessions"
     assert alice_sessions != bob_sessions
 
 
