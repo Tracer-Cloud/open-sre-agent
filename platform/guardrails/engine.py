@@ -16,6 +16,8 @@ from platform.guardrails.rules import (
 
 logger = logging.getLogger(__name__)
 
+_MAX_MATCHES = 1000
+
 
 @dataclass(frozen=True)
 class ScanMatch:
@@ -106,6 +108,13 @@ class GuardrailEngine:
                             end=m.end(),
                         )
                     )
+                    if len(matches) >= _MAX_MATCHES:
+                        break
+                if len(matches) >= _MAX_MATCHES:
+                    break
+
+            if len(matches) >= _MAX_MATCHES:
+                break
 
             for keyword in rule.keywords:
                 start = 0
@@ -122,7 +131,13 @@ class GuardrailEngine:
                             end=idx + len(keyword),
                         )
                     )
+                    if len(matches) >= _MAX_MATCHES:
+                        break
                     start = idx + len(keyword)
+                if len(matches) >= _MAX_MATCHES:
+                    break
+            if len(matches) >= _MAX_MATCHES:
+                break
 
         blocking_rules = tuple(m.rule_name for m in matches if m.action == GuardrailAction.BLOCK)
         return ScanResult(
