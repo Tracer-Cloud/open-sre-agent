@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import errno
 import json
 import os
@@ -20,6 +21,7 @@ import pytest
 
 from config.constants.paths import REPO_ROOT
 from config.version import get_opensre_version
+from tests.utils.polling import wait_until
 
 _SCRIPT_NAME = "opensre.exe" if os.name == "nt" else "opensre"
 _ANSI_RE = re.compile(r"\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
@@ -367,7 +369,11 @@ def _run_cli_pty(
             if action.stagger_j:
                 for _ in range(action.stagger_j):
                     os.write(master_fd, action.stagger_key)
-                    time.sleep(0.05)
+                    # Pace keystrokes so prompt_toolkit doesn't coalesce a
+                    # burst; there's no observable condition to poll for
+                    # here, so wait_until always times out by design.
+                    with contextlib.suppress(TimeoutError):
+                        wait_until(lambda: False, timeout=0.05, interval=0.05)
             os.write(master_fd, action.send)
 
         deadline = time.monotonic() + timeout
