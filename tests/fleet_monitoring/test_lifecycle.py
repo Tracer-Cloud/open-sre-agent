@@ -62,7 +62,12 @@ def _spawn_sleep() -> subprocess.Popen[bytes]:
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    _wait_for_ready(ready_path)
+    try:
+        _wait_for_ready(ready_path)
+    except TimeoutError:
+        proc.kill()
+        proc.wait()
+        raise
     return proc
 
 
@@ -83,7 +88,12 @@ def _spawn_unkillable() -> subprocess.Popen[bytes]:
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    _wait_for_ready(ready_path)
+    try:
+        _wait_for_ready(ready_path)
+    except TimeoutError:
+        proc.kill()
+        proc.wait()
+        raise
     return proc
 
 
