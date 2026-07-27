@@ -5,15 +5,13 @@ from __future__ import annotations
 OPENSRE_MEMORY_AUTOEXTRACT_DISABLED_ENV = "OPENSRE_MEMORY_AUTOEXTRACT_DISABLED"
 OPENSRE_MEMORY_DIR_ENV = "OPENSRE_MEMORY_DIR"
 OPENSRE_MEMORY_DISABLED_ENV = "OPENSRE_MEMORY_DISABLED"
-
-# Bound how long session close waits for background extraction after resources
-# are released. Long enough for a normal classification call; short enough that
-# a hung provider cannot stall shell exit indefinitely.
-MEMORY_EXTRACTION_JOIN_TIMEOUT_SECONDS = 15.0
+# Opt-in: shared Slack/Telegram gateway hosts keep memory off by default so
+# one allowlisted user's facts cannot shape or leak into another user's turns.
+OPENSRE_MEMORY_GATEWAY_ENABLED_ENV = "OPENSRE_MEMORY_GATEWAY_ENABLED"
 
 __all__ = [
-    "MEMORY_EXTRACTION_JOIN_TIMEOUT_SECONDS",
     "OPENSRE_MEMORY_AUTOEXTRACT_DISABLED_ENV",
     "OPENSRE_MEMORY_DIR_ENV",
     "OPENSRE_MEMORY_DISABLED_ENV",
+    "OPENSRE_MEMORY_GATEWAY_ENABLED_ENV",
 ]

@@ -1,10 +1,12 @@
 """Session-end extraction of durable facts into long-term memory.
 
 One best-effort LLM pass over a chat transcript. Lifecycle callers schedule it
-in a daemon thread via :func:`schedule_memory_extraction` so teardown and
-rotation never wait on the provider. Never raises out: any failure (LLM
-unavailable, malformed output, disk errors) is logged and ignored.
-Environment gates can disable the whole feature or only the extraction pass.
+via :func:`schedule_memory_extraction`. Process-exit close runs extraction
+synchronously (after resources are released) so durable facts always persist.
+Rotation paths use a daemon thread so inbound handling is not stalled. Never
+raises out: any failure (LLM unavailable, malformed output, disk errors) is
+logged and ignored. Environment gates can disable the whole feature or only
+the extraction pass.
 """
 
 from __future__ import annotations
@@ -19,6 +21,7 @@ from core.domain.memory import (
     MEMORY_TYPES,
     auto_extract_enabled,
     find_memory_safety_issues,
+    redact_memory_unsafe_text,
     render_prompt_index,
     save_memory,
 )
@@ -68,19 +71,22 @@ class _ChatSession(Protocol):
 def schedule_memory_extraction(
     messages: list[tuple[str, str]],
     *,
-    join_timeout_seconds: float | None = None,
+    wait_for_completion: bool = False,
 ) -> None:
-    """Snapshot ``messages`` and extract in a daemon thread.
+    """Snapshot ``messages`` and extract memories.
 
-    When ``join_timeout_seconds`` is set (session ``close`` / process exit), wait
-    up to that bound so durable facts can land before the process ends without
-    stalling forever on a hung provider. Rotation paths omit the join because
-    the process keeps running.
+    When ``wait_for_completion`` is true (session ``close`` / process exit), run
+    synchronously so durable facts always land before the process ends. Rotation
+    paths leave it false and use a daemon thread because the process keeps
+    running and must not stall inbound handling on the provider.
     """
     if not auto_extract_enabled():
         return
     snapshot = list(messages)
     if len(snapshot) < MIN_CHAT_MESSAGES:
+        return
+    if wait_for_completion:
+        _extract_memories_safe(snapshot)
         return
     thread = threading.Thread(
         target=_extract_memories_safe,
@@ -89,8 +95,6 @@ def schedule_memory_extraction(
         daemon=True,
     )
     thread.start()
-    if join_timeout_seconds is not None:
-        thread.join(timeout=join_timeout_seconds)
 
 
 def extract_memories_from_session(session: _ChatSession) -> None:
@@ -129,10 +133,13 @@ def _invoke_extraction_llm(messages: list[tuple[str, str]]) -> str:
         logger.debug("[memory] extraction LLM unavailable", exc_info=True)
         return ""
 
+    transcript = redact_memory_unsafe_text(
+        format_recent_conversation(messages, max_turns=_MAX_TRANSCRIPT_TURNS)
+    )
     prompt = _EXTRACTION_PROMPT.format(
         max_memories=MAX_MEMORIES_PER_SESSION,
         memory_index=render_prompt_index() or "(no memories stored yet)",
-        transcript=format_recent_conversation(messages, max_turns=_MAX_TRANSCRIPT_TURNS),
+        transcript=transcript,
     )
     result = llm.invoke(prompt)
     content = getattr(result, "content", result)

@@ -7,9 +7,12 @@ import os
 from config.constants import (
     OPENSRE_MEMORY_AUTOEXTRACT_DISABLED_ENV,
     OPENSRE_MEMORY_DISABLED_ENV,
+    OPENSRE_MEMORY_GATEWAY_ENABLED_ENV,
 )
+from platform.analytics.usage_context import SURFACE_SLACK, SURFACE_TELEGRAM, get_surface
 
 _TRUTHY = frozenset({"1", "true", "yes"})
+_GATEWAY_ANALYTICS_SURFACES = frozenset({SURFACE_SLACK, SURFACE_TELEGRAM})
 
 
 def _flag_set(name: str) -> bool:
@@ -21,9 +24,34 @@ def memory_enabled() -> bool:
     return not _flag_set(OPENSRE_MEMORY_DISABLED_ENV)
 
 
+def gateway_memory_enabled() -> bool:
+    """Return whether memory is opted in for shared gateway (Slack/Telegram) hosts."""
+    return _flag_set(OPENSRE_MEMORY_GATEWAY_ENABLED_ENV)
+
+
+def memory_available_here() -> bool:
+    """Return whether memory tools/prompt injection may run in the current surface.
+
+    CLI and investigation stay on when memory is enabled. Slack/Telegram gateway
+    turns require an explicit ``OPENSRE_MEMORY_GATEWAY_ENABLED`` opt-in because
+    the store is host-global and otherwise crosses allowlisted users/chats.
+    """
+    if not memory_enabled():
+        return False
+    surface = get_surface()
+    if surface in _GATEWAY_ANALYTICS_SURFACES:
+        return gateway_memory_enabled()
+    return True
+
+
 def auto_extract_enabled() -> bool:
     """Session-end LLM extraction; also off whenever memory itself is disabled."""
-    return memory_enabled() and not _flag_set(OPENSRE_MEMORY_AUTOEXTRACT_DISABLED_ENV)
+    return memory_available_here() and not _flag_set(OPENSRE_MEMORY_AUTOEXTRACT_DISABLED_ENV)
 
 
-__all__ = ["auto_extract_enabled", "memory_enabled"]
+__all__ = [
+    "auto_extract_enabled",
+    "gateway_memory_enabled",
+    "memory_available_here",
+    "memory_enabled",
+]

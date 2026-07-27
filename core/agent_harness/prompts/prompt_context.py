@@ -115,9 +115,16 @@ class DefaultPromptContextProvider:
             )
 
     def long_term_memory(self) -> str:
-        from core.domain.memory import memory_enabled, render_prompt_index
+        from core.domain.memory import (
+            gateway_memory_enabled,
+            memory_enabled,
+            render_prompt_index,
+        )
 
         if not memory_enabled():
+            return ""
+        # Host-global store: keep gateway prompt injection off unless opted in.
+        if self._surface == "gateway" and not gateway_memory_enabled():
             return ""
         return render_prompt_index()
 

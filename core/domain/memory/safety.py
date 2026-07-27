@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+_REDACTION_PLACEHOLDER = "[REDACTED]"
+
 _BENIGN_SECRET_VALUES = frozenset(
     {
         "configured",
@@ -80,6 +82,33 @@ def find_memory_safety_issues(*texts: str) -> tuple[MemorySafetyIssue, ...]:
     return tuple(MemorySafetyIssue(rule=rule) for rule in rules)
 
 
+def redact_memory_unsafe_text(text: str) -> str:
+    """Replace secret-like spans with a placeholder before sending text to an LLM.
+
+    Used by session-end extraction so credential-shaped content in a transcript
+    is not forwarded to the classification provider even when it is also blocked
+    from durable storage.
+    """
+    if not text:
+        return text
+
+    redacted = _PRIVATE_KEY_RE.sub(_REDACTION_PLACEHOLDER, text)
+    redacted = _PROVIDER_TOKEN_RE.sub(_REDACTION_PLACEHOLDER, redacted)
+    redacted = _JWT_RE.sub(_REDACTION_PLACEHOLDER, redacted)
+    redacted = _URL_CREDENTIAL_RE.sub(f"://{_REDACTION_PLACEHOLDER}@", redacted)
+
+    def _replace_labeled(match: re.Match[str]) -> str:
+        label = match.group(1)
+        value = match.group(2).strip(".,;)")
+        if not _looks_like_secret_value(value):
+            return match.group(0)
+        # Preserve the surrounding delimiter shape loosely: label + separator.
+        separator = match.group(0)[len(label) : match.group(0).find(value)]
+        return f"{label}{separator}{_REDACTION_PLACEHOLDER}"
+
+    return _LABELED_SECRET_RE.sub(_replace_labeled, redacted)
+
+
 def _contains_labeled_secret(text: str) -> bool:
     for match in _LABELED_SECRET_RE.finditer(text):
         value = match.group(2).strip(".,;)")
@@ -100,4 +129,8 @@ def _looks_like_secret_value(value: str) -> bool:
     return len(value) >= 6 and has_alpha and (has_digit or has_symbol)
 
 
-__all__ = ["MemorySafetyIssue", "find_memory_safety_issues"]
+__all__ = [
+    "MemorySafetyIssue",
+    "find_memory_safety_issues",
+    "redact_memory_unsafe_text",
+]

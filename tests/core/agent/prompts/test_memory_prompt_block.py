@@ -66,3 +66,18 @@ class TestDefaultProviderMemory:
         )
         monkeypatch.setenv(OPENSRE_MEMORY_DISABLED_ENV, "1")
         assert self._provider_memory() == ""
+
+    def test_gateway_surface_empty_unless_opted_in(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from config.constants import OPENSRE_MEMORY_GATEWAY_ENABLED_ENV
+        from core.agent_harness.prompts.prompt_context import DefaultPromptContextProvider
+
+        save_memory(
+            slug="prod-cluster",
+            memory_type="infrastructure",
+            description="Prod cluster is eks-prod-1",
+            body="details",
+        )
+        provider = DefaultPromptContextProvider(session=object(), surface="gateway")
+        assert provider.long_term_memory() == ""
+        monkeypatch.setenv(OPENSRE_MEMORY_GATEWAY_ENABLED_ENV, "1")
+        assert "[infrastructure] prod-cluster" in provider.long_term_memory()

@@ -115,12 +115,10 @@ def test_rotate_restores_outgoing_transcript_for_memory_extraction(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     storage = InMemorySessionStorage()
-    scheduled: list[tuple[list[tuple[str, str]], float | None]] = []
+    scheduled: list[tuple[list[tuple[str, str]], bool]] = []
 
-    def _schedule(
-        messages: list[tuple[str, str]], *, join_timeout_seconds: float | None = None
-    ) -> None:
-        scheduled.append((list(messages), join_timeout_seconds))
+    def _schedule(messages: list[tuple[str, str]], *, wait_for_completion: bool = False) -> None:
+        scheduled.append((list(messages), wait_for_completion))
 
     monkeypatch.setattr(
         "core.agent_harness.session.memory_extraction.schedule_memory_extraction",
@@ -140,7 +138,7 @@ def test_rotate_restores_outgoing_transcript_for_memory_extraction(
 
     assert len(scheduled) == 1
     assert scheduled[0][0] == [("user", "prod cluster is eks-prod-1"), ("assistant", "got it")]
-    assert scheduled[0][1] is not None  # close path joins with a timeout
+    assert scheduled[0][1] is False  # rotate must not block on extraction
 
 
 def test_rotate_without_old_id_skips_close() -> None:
@@ -210,10 +208,8 @@ def test_close_releases_resources_before_memory_extraction(
         events.append("release")
         session.terminal.prompt_refresh_fn = None
 
-    def _schedule(
-        messages: list[tuple[str, str]], *, join_timeout_seconds: float | None = None
-    ) -> None:
-        events.append(f"extract:{len(messages)}:{join_timeout_seconds is not None}")
+    def _schedule(messages: list[tuple[str, str]], *, wait_for_completion: bool = False) -> None:
+        events.append(f"extract:{len(messages)}:{wait_for_completion}")
 
     monkeypatch.setattr(session, "release_resources", _release)
     monkeypatch.setattr(
@@ -280,12 +276,10 @@ def test_rotate_in_place_schedules_extraction_before_clear(
     session.storage = storage
     session.agent.messages = [("user", "my name is Ada"), ("assistant", "noted")]
 
-    scheduled: list[tuple[list[tuple[str, str]], float | None]] = []
+    scheduled: list[tuple[list[tuple[str, str]], bool]] = []
 
-    def _schedule(
-        messages: list[tuple[str, str]], *, join_timeout_seconds: float | None = None
-    ) -> None:
-        scheduled.append((list(messages), join_timeout_seconds))
+    def _schedule(messages: list[tuple[str, str]], *, wait_for_completion: bool = False) -> None:
+        scheduled.append((list(messages), wait_for_completion))
 
     monkeypatch.setattr(
         "core.agent_harness.session.memory_extraction.schedule_memory_extraction",
@@ -295,7 +289,7 @@ def test_rotate_in_place_schedules_extraction_before_clear(
     manager.rotate_in_place(session)
 
     assert scheduled == [
-        ([("user", "my name is Ada"), ("assistant", "noted")], None),
+        ([("user", "my name is Ada"), ("assistant", "noted")], False),
     ]
     assert session.agent.messages == []
 

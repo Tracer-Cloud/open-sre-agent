@@ -178,6 +178,7 @@ class SessionManager:
         old_session_id: str | None = None,
         new_session_id: str | None = None,
         warm_integrations: bool = True,
+        extract_memory: bool = True,
     ) -> SessionCore:
         """Close the outgoing session (if any) and create its replacement."""
         if old_session_id:
@@ -188,7 +189,12 @@ class SessionManager:
             # Restore the persisted transcript so session-end memory extraction
             # sees the outgoing conversation (not an empty reconstructed handle).
             self.restore_context(outgoing, self._repo.load_session(old_session_id))
-            self.close(outgoing)
+            # Do not wait for extraction: gateway /new must stay responsive.
+            self.close(
+                outgoing,
+                wait_for_memory_extraction=False,
+                extract_memory=extract_memory,
+            )
         return self.create(session_id=new_session_id, warm_integrations=warm_integrations)
 
     def rotate_in_place(self, session: _S) -> _S:
@@ -268,7 +274,13 @@ class SessionManager:
             session.history = [dict(item) for item in history if isinstance(item, dict)]
         return session
 
-    def close(self, session: SessionCore) -> None:
+    def close(
+        self,
+        session: SessionCore,
+        *,
+        wait_for_memory_extraction: bool = True,
+        extract_memory: bool = True,
+    ) -> None:
         """Finalize a session for good: persist buffered state and release resources.
 
         This is the terminal teardown hook — the session handle is being
@@ -280,9 +292,10 @@ class SessionManager:
         Persisting is best-effort (a failed flush must not crash teardown);
         the session releases its own resources (:meth:`SessionCore.release_resources`)
         to prevent per-session leaks. Long-term memory extraction runs after
-        release in a daemon thread that is joined for a short bound so process
-        exit can still persist durable facts without waiting forever on a hung
-        provider or holding integration resources during the LLM call.
+        release when ``extract_memory`` is true. Process exit (default) waits for
+        extraction to finish so durable facts are not dropped; gateway rotation
+        passes ``wait_for_memory_extraction=False`` so inbound handling stays
+        responsive, and skips extraction entirely unless gateway memory is opted in.
         """
         self._flush(session)
         # Snapshot messages before release/clear; the background extractor must
@@ -292,13 +305,11 @@ class SessionManager:
 
         emit_thread_boundary(session.session_id, name="session_end", phase="session_end")
         session.release_resources()
-        # Join with a bound so interactive-shell process exit still persists
-        # durable facts when the classification call is healthy, without
-        # holding integration resources or waiting forever on a hung provider.
-        self._schedule_memory_extraction_from_messages(
-            messages,
-            wait_for_completion=True,
-        )
+        if extract_memory:
+            self._schedule_memory_extraction_from_messages(
+                messages,
+                wait_for_completion=wait_for_memory_extraction,
+            )
 
     @staticmethod
     def _flush(session: SessionCore) -> None:
@@ -324,14 +335,11 @@ class SessionManager:
         *,
         wait_for_completion: bool = False,
     ) -> None:
-        from config.constants import MEMORY_EXTRACTION_JOIN_TIMEOUT_SECONDS
         from core.agent_harness.session.memory_extraction import schedule_memory_extraction
 
         schedule_memory_extraction(
             messages,
-            join_timeout_seconds=(
-                MEMORY_EXTRACTION_JOIN_TIMEOUT_SECONDS if wait_for_completion else None
-            ),
+            wait_for_completion=wait_for_completion,
         )
 
 

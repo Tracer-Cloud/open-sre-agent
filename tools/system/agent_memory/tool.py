@@ -13,7 +13,6 @@ from core.domain.memory import (
     delete_memory,
     list_memories,
     load_memory,
-    memory_enabled,
     save_memory,
     search_memories,
 )
@@ -33,7 +32,9 @@ from tools.system.agent_memory.validation import (
 
 def _memory_available(sources: dict[str, dict[str, Any]]) -> bool:
     _ = sources
-    return memory_enabled()
+    from core.domain.memory import memory_available_here
+
+    return memory_available_here()
 
 
 @tool(

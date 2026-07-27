@@ -157,3 +157,41 @@ class TestSkipConditions:
         )
         extraction.extract_memories_from_session(_FakeSession())
         assert list_memories() == []
+
+
+class TestSchedule:
+    def test_wait_for_completion_runs_synchronously(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        order: list[str] = []
+
+        def _extract(messages: list[tuple[str, str]]) -> None:
+            order.append(f"extract:{len(messages)}")
+
+        monkeypatch.setattr(extraction, "_extract_memories_safe", _extract)
+        extraction.schedule_memory_extraction(
+            [("user", "hi"), ("assistant", "hello")],
+            wait_for_completion=True,
+        )
+        assert order == ["extract:2"]
+
+    def test_transcript_is_redacted_before_llm(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        prompts: list[str] = []
+        fake_token = "ghp_" + ("a" * 36)
+
+        class _FakeLLM:
+            def invoke(self, prompt: str) -> str:
+                prompts.append(prompt)
+                return "[]"
+
+        monkeypatch.setattr(
+            "core.llm.factory.get_llm",
+            lambda _role: _FakeLLM(),
+        )
+        extraction.extract_memories_from_messages(
+            [
+                ("user", f"auth_token: {fake_token}"),
+                ("assistant", "I will not store that"),
+            ]
+        )
+        assert len(prompts) == 1
+        assert fake_token not in prompts[0]
+        assert "[REDACTED]" in prompts[0]

@@ -39,6 +39,7 @@ from core.domain.memory.models import (
     MemoryRecord,
     MemoryType,
 )
+from core.domain.memory.safety import find_memory_safety_issues
 from core.domain.memory.slugs import is_valid_slug
 
 _INDEX_FILENAME = "MEMORY.md"
@@ -79,6 +80,11 @@ def save_memory(
     clean_body = body.strip()
     if len(clean_body) > MAX_BODY_CHARS:
         clean_body = clean_body[: MAX_BODY_CHARS - len(TRUNCATION_MARKER)] + TRUNCATION_MARKER
+    issues = find_memory_safety_issues(clean_description, clean_body)
+    if issues:
+        raise ValueError(
+            "memory content rejected by safety checks: " + ",".join(issue.rule for issue in issues)
+        )
 
     try:
         with _memory_lock():

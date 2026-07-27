@@ -211,6 +211,20 @@ class TestSettings:
         assert memory_enabled() is False
         assert auto_extract_enabled() is False
 
+    def test_gateway_surfaces_require_opt_in(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from config.constants import OPENSRE_MEMORY_GATEWAY_ENABLED_ENV
+        from core.domain.memory import gateway_memory_enabled, memory_available_here
+        from platform.analytics.usage_context import SURFACE_SLACK, bound_usage_context
+
+        with bound_usage_context(surface=SURFACE_SLACK):
+            assert memory_enabled() is True
+            assert gateway_memory_enabled() is False
+            assert memory_available_here() is False
+            assert auto_extract_enabled() is False
+            monkeypatch.setenv(OPENSRE_MEMORY_GATEWAY_ENABLED_ENV, "1")
+            assert memory_available_here() is True
+            assert auto_extract_enabled() is True
+
 
 class TestSafety:
     def test_secret_like_content_is_detected_without_echoing_value(self) -> None:
@@ -230,6 +244,28 @@ class TestSafety:
             )
             == ()
         )
+
+    def test_save_memory_rejects_secret_like_content(self) -> None:
+        fake_token = "ghp_" + ("a" * 36)
+        with pytest.raises(ValueError, match="safety checks"):
+            save_memory(
+                slug="do-not-save",
+                memory_type="preference",
+                description="Temporary token",
+                body=f"auth_token: {fake_token}",
+            )
+        assert list_memories() == []
+
+    def test_redact_replaces_secret_spans(self) -> None:
+        from core.domain.memory import redact_memory_unsafe_text
+
+        fake_token = "ghp_" + ("a" * 36)
+        redacted = redact_memory_unsafe_text(
+            f"deploy used auth_token: {fake_token} and cluster eks-prod-1"
+        )
+        assert fake_token not in redacted
+        assert "[REDACTED]" in redacted
+        assert "eks-prod-1" in redacted
 
 
 class TestConcurrency:
