@@ -166,6 +166,17 @@ def test_system_prompt_routes_github_cli_to_action_tools() -> None:
     assert "from this info create an issue on github" in prompt
     assert "github_cli is action-only" in prompt
     assert "exception: github issue/pr/repo" in prompt
+    assert "get_github_star_history" in prompt
+    assert "day-by-day stars" in prompt
+
+
+def test_skills_loader_routes_star_history_away_from_github_cli() -> None:
+    cached_load_skills_block.cache_clear()
+    block = load_skills_block().lower()
+    assert "star history" in block
+    assert "get_github_star_history" in block
+    assert "assistant_handoff" in block
+    assert "undercount" in block or "false zeros" in block
 
 
 def test_system_prompt_bans_shell_placeholders_on_multisource_rca() -> None:
