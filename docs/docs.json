@@ -194,6 +194,7 @@
               "azure-sql",
               "clickhouse",
               "dagster",
+              "elasticsearch",
               "kafka",
               "mariadb",
               "mongodb",
