@@ -14,11 +14,11 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import sys
 
 import keyring
 import keyring.errors
 
-import platform
 from config.constants.secrets import KEYRING_SERVICE, OPENSRE_DISABLE_KEYRING_ENV
 from config.secrets.backend import KeyringUnavailableError, KeyringUnavailableReason
 
@@ -149,7 +149,10 @@ def item_exists(env_var: str) -> bool | None:
     different backend, no ``security`` binary), which means the caller must fall
     through to a real read.
     """
-    if platform.system() != "Darwin" or not _is_macos_backend():
+    # ``sys.platform`` rather than ``platform.system()``: this repo has its own
+    # top-level ``platform`` package, so importing the stdlib one here creates a
+    # config -> platform edge that import-linter has to allowlist.
+    if sys.platform != "darwin" or not _is_macos_backend():
         return None
     security_bin = shutil.which("security")
     if security_bin is None:

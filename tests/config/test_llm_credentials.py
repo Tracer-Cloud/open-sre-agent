@@ -14,7 +14,7 @@ from config.llm_auth.credentials import (
     status,
 )
 from config.llm_auth.records import save_provider_auth_record
-from config.secrets import os_keyring
+from config.secrets import guidance, os_keyring
 from config.secrets.store import lookup
 from tests.shared.keyring_backend import MemoryKeyring
 
@@ -28,10 +28,6 @@ _MacOSKeyringBackend.__module__ = "keyring.backends.macOS"
 
 def _security_tool_path(name: str) -> str:
     return f"/usr/bin/{name}"
-
-
-def _darwin_platform() -> str:
-    return "Darwin"
 
 
 def test_status_vertex_ai_configured_when_adc_resolves(monkeypatch) -> None:
@@ -179,7 +175,7 @@ def test_managed_llm_api_key_source_uses_metadata_without_reading_secret(
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
-    monkeypatch.setattr(os_keyring.platform, "system", _darwin_platform)
+    monkeypatch.setattr(os_keyring.sys, "platform", "darwin")
     monkeypatch.setattr(os_keyring.shutil, "which", _security_tool_path)
     monkeypatch.setattr(os_keyring.keyring, "get_keyring", _MacOSKeyringBackend)
 
@@ -219,7 +215,7 @@ def test_managed_missing_metadata_reports_none_without_reading_secret(
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
-    monkeypatch.setattr(os_keyring.platform, "system", _darwin_platform)
+    monkeypatch.setattr(os_keyring.sys, "platform", "darwin")
     monkeypatch.setattr(os_keyring.shutil, "which", _security_tool_path)
     monkeypatch.setattr(os_keyring.keyring, "get_keyring", _MacOSKeyringBackend)
 
@@ -295,8 +291,8 @@ def test_get_keyring_setup_instructions_for_linux_without_gnome_keyring(monkeypa
 
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
     monkeypatch.delenv("DBUS_SESSION_BUS_ADDRESS", raising=False)
-    monkeypatch.setattr(os_keyring.platform, "system", lambda: "Linux")
-    monkeypatch.setattr(os_keyring.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(guidance.sys, "platform", "linux")
+    monkeypatch.setattr(guidance.shutil, "which", lambda _name: None)
     monkeypatch.setattr(os_keyring.keyring, "get_keyring", lambda: backend_class())
 
     lines = llm_credentials.get_keyring_setup_instructions("ANTHROPIC_API_KEY")

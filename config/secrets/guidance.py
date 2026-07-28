@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import os
 import shutil
+import sys
 
-import platform
 from config.constants.secrets import (
     OPENSRE_CREDENTIAL_FALLBACK_PATH_ENV,
     OPENSRE_DISABLE_CREDENTIAL_FALLBACK_ENV,
@@ -48,7 +48,7 @@ def get_keyring_setup_instructions(env_var: str) -> tuple[str, ...]:
         f"Check that you can write to that path, or set "
         f"{OPENSRE_CREDENTIAL_FALLBACK_PATH_ENV} to a writable location.",
     ]
-    if platform.system() == "Linux":
+    if sys.platform.startswith("linux"):
         if shutil.which("gnome-keyring-daemon") is None:
             lines.append(
                 "To use a real keychain instead: sudo apt update && "
