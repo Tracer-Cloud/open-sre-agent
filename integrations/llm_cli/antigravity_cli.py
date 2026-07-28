@@ -13,7 +13,7 @@ ANTIGRAVITY_CLI_TIMEOUT_SECONDS  Optional invocation timeout override (clamped 3
 (verified locally). Each invocation uses whatever model is persisted in agy's
 local config; users change it interactively with ``/models`` inside the REPL.
 Once Google ships ``--model`` in headless, ``build()`` can forward the env var
-in a one-line change (see TODO near ``del model``).
+in a one-line change (see the Known gap note near ``del model``).
 
 Auth
 ----
