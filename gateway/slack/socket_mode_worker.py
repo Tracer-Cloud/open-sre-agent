@@ -23,8 +23,7 @@ from gateway.slack.feedback import record_feedback_payload
 from gateway.slack.heartbeat import DEFAULT_HEARTBEAT_PATH, ConnectionHeartbeat
 from gateway.slack.settings import SlackGatewaySettings
 from gateway.storage import SessionResolver
-from gateway.storage.session.binding_store import open_binding_store
-from gateway.storage.session.bindings import SessionBindingStore
+from gateway.storage.session.binding_store import BindingStore, open_binding_store
 
 _PLATFORM_SLACK = "slack"
 _EVENTS_API_REQUEST_TYPE = "events_api"
@@ -39,7 +38,7 @@ class SlackGatewayBackground:
         *,
         socket_client: SocketModeClient,
         executor: ThreadPoolExecutor,
-        bindings: SessionBindingStore,
+        bindings: BindingStore,
         heartbeat: ConnectionHeartbeat,
     ) -> None:
         self._socket_client = socket_client

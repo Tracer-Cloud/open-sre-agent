@@ -9,7 +9,7 @@ import pytest
 from config.constants import paths
 from config.principal import Actor, Principal
 from config.scope_context import current_scope
-from gateway.storage import SessionBindingStore, connect_bindings_db
+from gateway.storage import FileBindingStore
 from gateway.telegram.inbound_security import InboundDecision
 from gateway.telegram.session_rotation import resolve_or_rotate_session
 
@@ -58,7 +58,7 @@ def test_telegram_resolve_never_passes_principal_or_actor() -> None:
 
 
 def test_telegram_legacy_binding_unaffected_by_slack_org_rows(tmp_path: Path) -> None:
-    store = SessionBindingStore(connect_bindings_db(tmp_path / "bindings.db"))
+    store = FileBindingStore(tmp_path / "bindings.json")
     org = Principal.org("org_acme")
     store.bind(
         platform="slack",

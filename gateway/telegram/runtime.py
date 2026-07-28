@@ -9,8 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
 from gateway.storage import SessionResolver
-from gateway.storage.session.binding_store import open_binding_store
-from gateway.storage.session.bindings import SessionBindingStore
+from gateway.storage.session.binding_store import BindingStore, open_binding_store
 from gateway.telegram.poller.client import TelegramBotClient
 from gateway.telegram.settings import GatewaySettings
 
@@ -22,7 +21,7 @@ class TelegramPollingRuntime:
     """Resources shared by the Telegram polling service."""
 
     client: TelegramBotClient
-    bindings: SessionBindingStore
+    bindings: BindingStore
     session_resolver: SessionResolver
     chat_locks: dict[str, asyncio.Lock]
     executor: ThreadPoolExecutor

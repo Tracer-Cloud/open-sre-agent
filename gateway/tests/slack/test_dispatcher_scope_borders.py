@@ -39,10 +39,6 @@ def _isolate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     for name in (WEBAPP_URL_ENV, USAGE_SECRET_ENV):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv(ORGANIZATION_ID_ENV, TEST_ORG)
-    monkeypatch.setattr(
-        "gateway.slack.principal.get_slack_install",
-        lambda _team_id: None,
-    )
     with (
         patch(f"{_SECURITY}.get_integration", return_value=None),
         patch(f"{_SECURITY}.upsert_instance"),

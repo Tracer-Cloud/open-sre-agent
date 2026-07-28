@@ -8,8 +8,7 @@ from config.principal import Principal
 from core.agent_harness.prompts import build_action_system_prompt
 from core.agent_harness.session import InMemorySessionStorage, SessionCore, SessionManager
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
-from gateway.storage import SessionBindingStore, SessionResolver
-from gateway.storage.db import connect_bindings_db
+from gateway.storage import FileBindingStore, SessionResolver
 
 
 @pytest.fixture
@@ -23,15 +22,13 @@ def resolver(tmp_path, monkeypatch) -> SessionResolver:
     monkeypatch.setattr(SessionCore, "warm_resolved_integrations", lambda _self, **_k: None)
     monkeypatch.setattr(SessionCore, "hydrate_configured_integrations", lambda _self: None)
 
-    conn = connect_bindings_db(tmp_path / "state.db")
-    store = SessionBindingStore(conn)
+    store = FileBindingStore(tmp_path / "bindings.json")
     # A mutable fake repo whose load_session each test can override.
     repo = SimpleNamespace(load_session=lambda _session_id: None)
     manager = SessionManager(storage=InMemorySessionStorage(), repo=repo)
     resolver = SessionResolver(store, manager=manager)
     resolver._fake_repo = repo  # test handle to swap load_session
-    yield resolver
-    conn.close()
+    return resolver
 
 
 def test_resolve_creates_and_injects_gateway_chat_context(resolver: SessionResolver) -> None:
@@ -154,5 +151,10 @@ def test_slack_actors_get_distinct_sessions(resolver: SessionResolver) -> None:
 
     assert alice.session_id != bob.session_id
     assert resolver.has_conversation(conversation_key="T:C:1", principal=org)
-    assert resolver.has_session(user_id="T:C:1", principal=org, actor="U_ALICE")
-    assert resolver.has_session(user_id="T:C:1", principal=org, actor="U_BOB")
+    for actor, session in (("U_ALICE", alice), ("U_BOB", bob)):
+        assert (
+            resolver._bindings.get_session_id(
+                platform="telegram", chat_id="T:C:1", principal=org, actor=actor
+            )
+            == session.session_id
+        )
