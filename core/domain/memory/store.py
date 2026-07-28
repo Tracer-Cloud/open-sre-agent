@@ -13,6 +13,7 @@ other or race the index rebuild.
 
 from __future__ import annotations
 
+import contextlib
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -21,7 +22,6 @@ from filelock import FileLock, Timeout
 
 from core.domain.memory.files import (
     ensure_memory_dir,
-    ensure_memory_store,
     memory_dir,
     memory_path,
     write_text_atomically,
@@ -47,6 +47,24 @@ from core.domain.memory.slugs import is_valid_slug
 _INDEX_FILENAME = "MEMORY.md"
 _LOCK_FILENAME = ".memory.lock"
 _LOCK_TIMEOUT_SECONDS = 10.0
+
+
+def ensure_memory_store() -> Path:
+    """Create the memory directory and an empty ``MEMORY.md`` when absent.
+
+    Lives here rather than beside the other path helpers because seeding the
+    index needs :mod:`core.domain.memory.index`, and the file primitives must
+    not depend on anything above them.
+
+    Safe to call on every chat turn / ``/memory`` invocation — mkdir is
+    idempotent and the index file is only seeded once.
+    """
+    directory = ensure_memory_dir()
+    index_path = directory / _INDEX_FILENAME
+    if not index_path.exists():
+        with contextlib.suppress(OSError):
+            write_index(directory, [])
+    return directory
 
 
 def _now_iso() -> str:
