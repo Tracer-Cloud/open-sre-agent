@@ -707,8 +707,12 @@ def get_github_actions_step_log(
         and wants_step
         and extracted["match_strategy"] == "full-log"
     ):
+        # original_length is characters (same units as len(log_text)); tail_lines
+        # is a line count. Estimate total lines from the tail's own chars-per-line.
+        chars_per_line = max(len(log_text) // max(log_text.count("\n"), 1), 1)
+        estimated_lines = max(original_length // chars_per_line, 1)
         retry_tail_lines = min(
-            max(original_length, _STEP_LOG_RETRY_TAIL_LINES), _STEP_LOG_MAX_RETRY_TAIL_LINES
+            max(estimated_lines, _STEP_LOG_RETRY_TAIL_LINES), _STEP_LOG_MAX_RETRY_TAIL_LINES
         )
         if retry_tail_lines > tail_lines:
             retry_text, retry_original_length, retry_error = _fetch_job_log(
