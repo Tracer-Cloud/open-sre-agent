@@ -14,7 +14,7 @@ import pytest
 
 from gateway.runtime.concurrency import TurnConcurrencyGate
 from gateway.runtime.remote_run_worker import RemoteRunWorker, build_remote_run_worker
-from platform.deployment_multi_tenant.lambda_control_plane.utils.models import (
+from platform.deployment_contracts.models import (
     AgentRun,
     AgentRunSource,
     AgentRunStatus,

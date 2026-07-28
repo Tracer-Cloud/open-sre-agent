@@ -12,11 +12,8 @@ from gateway.runtime.concurrency import TurnConcurrencyGate
 from gateway.runtime.sink_protocol import GatewayAgentCallback
 from gateway.storage import SessionResolver
 from gateway.storage.session.binding_store import open_binding_store
-from platform.deployment_multi_tenant.lambda_control_plane.utils.models import (
-    AgentRun,
-    AgentRunStatus,
-)
-from platform.deployment_multi_tenant.lambda_control_plane.utils.ports import AgentRunRepository
+from platform.deployment_contracts.models import AgentRun, AgentRunStatus
+from platform.deployment_contracts.ports import AgentRunRepository
 
 _GENERIC_FAILURE = "The remote agent run failed."
 
