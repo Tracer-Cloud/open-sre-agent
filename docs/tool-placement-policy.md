@@ -55,8 +55,9 @@ Applied to the pre-existing top-level `tools/` packages:
 **Migrated to their vendor packages** — every single-vendor tool now lives
 under `integrations/<vendor>/tools/`, so rule 1 has no exceptions left:
 
-- `integrations/github/tools/` — `community_followup_tool`,
-  `git_deploy_timeline_tool`, `work_status_report_tool`, `github_cli`.
+- `integrations/github/tools/` — `architecture_issue_tool`,
+  `community_followup_tool`, `git_deploy_timeline_tool`, `github_cli`,
+  `work_status_report_tool`.
 - `integrations/pi/tools/pi_coding_tool/` — Pi-only.
 - `integrations/slack/tools/slack_send_message_tool/` — Slack-only.
 

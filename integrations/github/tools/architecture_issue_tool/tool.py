@@ -6,21 +6,21 @@ from typing import Any
 
 from core.agent_harness.tools.tool_context import action_context_from_agent_context
 from core.tool_framework.tool_decorator import tool
-from integrations.github.tools.github_cli.credentials import (
-    GITHUB_CLI_INJECTED_PARAMS,
-    github_creds,
-    github_source_available,
-    resolve_github_token,
-)
-from tools.architecture_issue_tool.repo_workspace import (
+from integrations.github.tools.architecture_issue_tool.repo_workspace import (
     WorkspaceError,
     architecture_workspace_dir,
     cleanup_architecture_workspace,
     clone_github_repo,
 )
-from tools.architecture_issue_tool.report_persistence import (
+from integrations.github.tools.architecture_issue_tool.report_persistence import (
     ReportPersistenceError,
     save_architecture_observations,
+)
+from integrations.github.tools.github_cli.credentials import (
+    GITHUB_CLI_INJECTED_PARAMS,
+    github_creds,
+    github_source_available,
+    resolve_github_token,
 )
 
 
