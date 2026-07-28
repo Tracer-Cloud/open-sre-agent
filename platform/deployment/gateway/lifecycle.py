@@ -29,8 +29,11 @@ from platform.deployment.aws.ec2 import (
 )
 from platform.deployment.aws.ssm import wait_for_ssm_registration
 from platform.deployment.ecr_deploy.prep import run_lifecycle_main, validate_deploy_env
-from platform.deployment.gateway.bake import bake_ami
-from platform.deployment.gateway.direct_deploy import deploy_direct, destroy_direct
+from platform.deployment.gateway.build_server_image import build_server_image
+from platform.deployment.gateway.install_on_new_server import (
+    destroy_installed_server,
+    install_on_new_server,
+)
 from platform.deployment.gateway.provision import (
     provision_gateway_via_ssm,
     wait_for_gateway_ready,
@@ -97,7 +100,7 @@ def _resolve_ami_id() -> str:
 
     Resolution order:
       1. ``OPENSRE_GATEWAY_AMI_ID`` environment variable.
-      2. AMI id saved on disk by the last ``make bake-gateway`` run.
+      2. AMI id saved on disk by the last ``make build-gateway-image`` run.
 
     Raises:
         RuntimeError: When neither source is available.
@@ -108,10 +111,10 @@ def _resolve_ami_id() -> str:
     if ami_id_exists():
         return load_ami_id()
     raise RuntimeError(
-        "No pre-built gateway AMI found. Run `make bake-gateway` first to build one, "
+        "No pre-built gateway AMI found. Run `make build-gateway-image` first to build one, "
         f"or set {GATEWAY_AMI_ID_ENV} to an existing AMI id.\n\n"
         "  Quick start:\n"
-        "    make bake-gateway   # bake once, saves AMI id locally\n"
+        "    make build-gateway-image   # build once, saves the image id locally\n"
         "    make deploy-gateway # launch from saved AMI (fast)\n\n"
         "  Or in one step:\n"
         f"    {GATEWAY_AMI_ID_ENV}=<ami-id> make deploy-gateway"
@@ -247,7 +250,7 @@ def destroy() -> dict[str, list[str]]:
     """Terminate the EC2 instance and clean up EC2/IAM resources.
 
     The custom AMI is kept by default so that a subsequent deploy does not need
-    a full re-bake. Set ``OPENSRE_GATEWAY_DESTROY_PURGE_AMI=1`` to also
+    a full image rebuild. Set ``OPENSRE_GATEWAY_DESTROY_PURGE_AMI=1`` to also
     deregister the AMI and delete its backing snapshot (e.g. for a full
     account cleanup).
     """
@@ -345,25 +348,31 @@ def destroy() -> dict[str, list[str]]:
 def main() -> None:
     parser = argparse.ArgumentParser(description="OpenSRE gateway deployment lifecycle")
     subparsers = parser.add_subparsers(dest="command", required=True)
-    subparsers.add_parser("bake-ami", help="Bake a gateway AMI (run once per code change)")
-    subparsers.add_parser("deploy", help="Launch EC2 instance using a pre-built gateway AMI")
-    subparsers.add_parser("destroy", help="Tear down the gateway AMI stack")
     subparsers.add_parser(
-        "deploy-direct",
-        help="Launch a fresh EC2 instance and install the gateway inline via SSM (no pre-baked AMI)",
+        "build-server-image",
+        help="Build a server image with the gateway installed (run once per code change)",
     )
-    subparsers.add_parser("destroy-direct", help="Tear down the direct-deploy gateway stack")
+    subparsers.add_parser("deploy", help="Start a gateway server from the prebuilt image")
+    subparsers.add_parser("destroy", help="Tear down the server started from the image")
+    subparsers.add_parser(
+        "install-on-new-server",
+        help="Start a new server and install the gateway on it, without building an image first",
+    )
+    subparsers.add_parser(
+        "destroy-installed-server",
+        help="Tear down the server created by install-on-new-server",
+    )
     args = parser.parse_args()
 
-    if args.command == "bake-ami":
-        bake_ami(region=REGION)
+    if args.command == "build-server-image":
+        build_server_image(region=REGION)
     elif args.command == "deploy":
         deploy()
-    elif args.command == "deploy-direct":
+    elif args.command == "install-on-new-server":
         validate_deploy_env()
-        deploy_direct(env_vars=_collect_deploy_env_vars(), region=REGION)
-    elif args.command == "destroy-direct":
-        destroy_direct(region=REGION)
+        install_on_new_server(env_vars=_collect_deploy_env_vars(), region=REGION)
+    elif args.command == "destroy-installed-server":
+        destroy_installed_server(region=REGION)
     else:
         destroy()
 

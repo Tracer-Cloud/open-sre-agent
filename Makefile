@@ -15,8 +15,8 @@ export
 	trigger-alert trigger-alert-verify regen-trigger-config \
 	prefect-local-test run dev docs-dev \
 	build-image deploy destroy test-deploy \
-	bake-gateway deploy-gateway destroy-gateway \
-	deploy-gateway-direct destroy-gateway-direct \
+	build-gateway-image deploy-gateway destroy-gateway \
+	install-gateway-on-new-server destroy-gateway-on-new-server \
 	deploy-lambda deploy-prefect deploy-flink destroy-lambda destroy-prefect destroy-flink \
 	test test-full test-cov test-scope test-cli-smoke test-turn-live test-grafana \
 	rabbitmq-local-up rabbitmq-local-down test-rabbitmq-real \
@@ -302,8 +302,8 @@ test-deploy:
 
 # Gateway deploy (Telegram and/or Slack Socket Mode; no Docker/ECR)
 # Step 1 — bake once per code change (launches temp EC2, installs opensre, snapshots AMI):
-bake-gateway:
-	$(PYTHON) -m platform.deployment.gateway.lifecycle bake-ami
+build-gateway-image:
+	$(PYTHON) -m platform.deployment.gateway.lifecycle build-server-image
 
 # Step 2 — launch gateway instance from pre-baked AMI (fast):
 deploy-gateway:
@@ -313,11 +313,11 @@ destroy-gateway:
 	$(PYTHON) -m platform.deployment.gateway.lifecycle destroy
 
 # Gateway direct deploy (no pre-baked AMI — installs inline via SSM)
-deploy-gateway-direct:
-	$(PYTHON) -m platform.deployment.gateway.lifecycle deploy-direct
+install-gateway-on-new-server:
+	$(PYTHON) -m platform.deployment.gateway.lifecycle install-on-new-server
 
-destroy-gateway-direct:
-	$(PYTHON) -m platform.deployment.gateway.lifecycle destroy-direct
+destroy-gateway-on-new-server:
+	$(PYTHON) -m platform.deployment.gateway.lifecycle destroy-installed-server
 
 # Deploy Lambda test case
 deploy-lambda:
@@ -499,8 +499,10 @@ help:
 	@echo "  make test-deploy       - Run EC2 deployment e2e tests"
 	@echo ""
 	@echo "  GATEWAY DEPLOY (systemd, no Docker — gateway only)"
-	@echo "  make bake-gateway    - Bake a gateway AMI (run once per code change; saves AMI id locally)"
-	@echo "  make deploy-gateway  - Launch gateway EC2 instance from pre-baked AMI (fast)"
+	@echo "  make build-gateway-image - Build a server image with the gateway installed (saves the image id locally)"
+	@echo "  make deploy-gateway  - Start a gateway server from the image built above (fast)"
+	@echo "  make install-gateway-on-new-server  - Start a plain server and install the gateway on it (no image)"
+	@echo "  make destroy-gateway-on-new-server  - Tear down the server created by the command above"
 	@echo "  make destroy-gateway - Terminate gateway instance and clean up (set OPENSRE_GATEWAY_DESTROY_PURGE_AMI=1 to also deregister AMI)"
 	@echo ""
 	@echo "  E2E TEST INFRA (AWS SDK)"

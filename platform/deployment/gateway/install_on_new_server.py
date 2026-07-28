@@ -1,3 +1,12 @@
+"""Start a new server and install the gateway on it, with no image built first.
+
+The other path in this package builds a server image once
+(:mod:`platform.deployment.gateway.build_server_image`) so later servers start
+ready. This one skips that: it launches a plain server and installs the gateway
+there and then, by downloading the published installer. Slower per server, but
+nothing to rebuild when the code changes.
+"""
+
 from __future__ import annotations
 
 import base64
@@ -37,6 +46,9 @@ from platform.deployment.gateway.provision import (
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
+# Names live AWS resources (IAM profile, role, security group) for servers this
+# module created. Renaming it would orphan anything already deployed, so it stays
+# as-is even though the module no longer says "direct".
 _DIRECT_STACK_NAME = "opensre-gateway-direct"
 _STACK_SUFFIX_ENV = "OPENSRE_STACK_SUFFIX"
 _OUTPUTS_DIR = OPENSRE_HOME_DIR / "deployments"
@@ -67,7 +79,7 @@ _SERVICE_NAME = "opensre-gateway"
 _INSTALL_MAX_POLL_ATTEMPTS = 30
 
 # Systemd unit content for the curl-install binary path.
-# ExecStart points to /usr/local/bin/opensre (not the venv path used by bake).
+# ExecStart points to /usr/local/bin/opensre (not the venv path the image build uses).
 _SERVICE_UNIT = """\
 [Unit]
 Description=OpenSRE Gateway Daemon
@@ -127,7 +139,7 @@ def _load_outputs() -> dict[str, Any]:
     if not path.exists():
         raise FileNotFoundError(
             f"No direct-deploy outputs found for stack '{_direct_stack_name()}'. "
-            "Run `make deploy-gateway-direct` first."
+            "Run `make install-gateway-on-new-server` first."
         )
     result = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(result, dict):
@@ -178,7 +190,7 @@ def _build_curl_install_commands() -> list[str]:
         # --no-log-init avoids filling large sparse wtmp/lastlog files on Ubuntu.
         (
             "useradd --system --no-log-init --create-home "
-            "--home-dir /var/lib/opensre-gateway --shell /usr/sbin/nologin opensre || true"
+            + "--home-dir /var/lib/opensre-gateway --shell /usr/sbin/nologin opensre || true"
         ),
         "mkdir -p /var/lib/opensre-gateway/.opensre/gateway",
         "chown -R opensre:opensre /var/lib/opensre-gateway",
@@ -221,7 +233,7 @@ def _format_ssm_failure(result: dict[str, str]) -> str:
 # ── Deploy ─────────────────────────────────────────────────────────────────────
 
 
-def deploy_direct(
+def install_on_new_server(
     *,
     env_vars: dict[str, str] | None = None,
     region: str = DEFAULT_REGION,
@@ -244,7 +256,7 @@ def deploy_direct(
     start_time = time.time()
 
     print("=" * 60)
-    print(f"Deploying {stack_name} (curl installer, no pre-baked AMI)")
+    print(f"Deploying {stack_name} (installer download, no prebuilt image)")
     print("=" * 60)
     print()
 
@@ -338,7 +350,7 @@ def deploy_direct(
 # ── Destroy ────────────────────────────────────────────────────────────────────
 
 
-def destroy_direct(*, region: str = DEFAULT_REGION) -> dict[str, list[str]]:
+def destroy_installed_server(*, region: str = DEFAULT_REGION) -> dict[str, list[str]]:
     """Terminate the direct-deploy EC2 instance and clean up IAM resources."""
     stack_name = _direct_stack_name()
     start_time = time.time()
@@ -437,14 +449,14 @@ def _cleanup_existing(*, region: str = DEFAULT_REGION) -> bool:
         print(f"Terminating stack instance {instance_id}...")
         terminate_instance(instance_id, region)
 
-    # Always run destroy_direct so IAM profile/role are cleaned up even when
-    # the outputs file is missing.  destroy_direct() falls back to derived
+    # Always run destroy_installed_server so IAM profile/role are cleaned up even when
+    # the outputs file is missing.  destroy_installed_server() falls back to derived
     # names ({stack_name}-profile / {stack_name}-role) when no outputs file
     # exists, so orphaned IAM resources are never left behind.
-    destroy_direct(region=region)
+    destroy_installed_server(region=region)
 
     print()
     return True
 
 
-__all__ = ["deploy_direct", "destroy_direct"]
+__all__ = ["install_on_new_server", "destroy_installed_server"]

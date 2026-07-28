@@ -64,8 +64,8 @@ def test_agent_presentation_import_does_not_load_shell_turn_execution() -> None:
             "-c",
             (
                 "import sys; "
-                "import surfaces.interactive_shell.runtime.agent_presentation; "
-                "print('surfaces.interactive_shell.runtime.shell_turn_execution' in sys.modules)"
+                + "import surfaces.interactive_shell.runtime.agent_presentation; "
+                + "print('surfaces.interactive_shell.runtime.shell_turn_execution' in sys.modules)"
             ),
         ],
         check=True,

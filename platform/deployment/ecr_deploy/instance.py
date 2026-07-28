@@ -296,8 +296,8 @@ def wait_for_web_process(
                     f"{docker} ps --filter name={container_name} --filter status=running -q",
                     (
                         "curl -sf http://localhost:8000/health 2>/dev/null "
-                        "|| curl -sf http://localhost:8000/ok 2>/dev/null "
-                        "|| true"
+                        + "|| curl -sf http://localhost:8000/ok 2>/dev/null "
+                        + "|| true"
                     ),
                 ],
                 region=region,

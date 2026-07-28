@@ -471,7 +471,7 @@ class KubernetesDescribePodTool(BaseTool):
     ]
     anti_examples = [
         "Fetching a non-pod resource such as a deployment, service, or node (use "
-        "kubernetes_get_resource)",
+        + "kubernetes_get_resource)",
         "Listing many pods at once (use kubernetes_list_pods)",
     ]
     surfaces = ("investigation", "chat")
@@ -1105,9 +1105,9 @@ class KubernetesGetResourceTool(BaseTool):
     ]
     anti_examples = [
         "Inspecting a pod's containers, conditions, or env var keys (use "
-        "kubernetes_describe_pod — same detail, redacts env values)",
+        + "kubernetes_describe_pod — same detail, redacts env values)",
         "Listing multiple resources or filtering by label/field selector (use the "
-        "matching kubernetes_list_* tool instead)",
+        + "matching kubernetes_list_* tool instead)",
     ]
     surfaces = ("investigation", "chat")
     requires = ["resource_type", "name"]

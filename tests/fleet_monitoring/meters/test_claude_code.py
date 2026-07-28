@@ -149,11 +149,11 @@ def test_sample_chunk_surfaces_latest_assistant_model(meter: ClaudeCodeMeter) ->
         [
             (
                 '{"type":"assistant","message":{"model":"claude-sonnet-4-5",'
-                '"usage":{"input_tokens":10,"output_tokens":5}}}'
+                + '"usage":{"input_tokens":10,"output_tokens":5}}}'
             ),
             (
                 '{"type":"assistant","message":{"model":"claude-opus-4-1",'
-                '"usage":{"input_tokens":20,"output_tokens":8}}}'
+                + '"usage":{"input_tokens":20,"output_tokens":8}}}'
             ),
         ]
     )

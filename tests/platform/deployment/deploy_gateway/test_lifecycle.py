@@ -79,7 +79,7 @@ def test_deploy_fails_fast_when_no_ami_id(
     monkeypatch.setattr(stack_module, "_AMI_ID_FILE", tmp_path / "nonexistent.txt")
     monkeypatch.setattr(lifecycle_module, "validate_deploy_env", lambda: None)
 
-    with pytest.raises(RuntimeError, match="bake-gateway"):
+    with pytest.raises(RuntimeError, match="build-gateway-image"):
         lifecycle_module.deploy()
 
 

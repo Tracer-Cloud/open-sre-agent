@@ -704,9 +704,9 @@ def test_notifications_module_does_not_eagerly_import_rocketchat() -> None:
             "-c",
             (
                 "import surfaces.interactive_shell.runtime.background.notifications as n; "
-                "import sys; "
-                "assert 'integrations.rocketchat.delivery' not in sys.modules; "
-                "print('OK: rocketchat not eagerly imported')"
+                + "import sys; "
+                + "assert 'integrations.rocketchat.delivery' not in sys.modules; "
+                + "print('OK: rocketchat not eagerly imported')"
             ),
         ],
         capture_output=True,
@@ -732,10 +732,10 @@ def test_notifications_module_does_not_eagerly_import_telegram() -> None:
             "-c",
             (
                 "import surfaces.interactive_shell.runtime.background.notifications as n; "
-                "import sys; "
-                "assert 'integrations.telegram.delivery' not in sys.modules; "
-                "assert 'integrations.telegram.credentials' not in sys.modules; "
-                "print('OK: telegram not eagerly imported')"
+                + "import sys; "
+                + "assert 'integrations.telegram.delivery' not in sys.modules; "
+                + "assert 'integrations.telegram.credentials' not in sys.modules; "
+                + "print('OK: telegram not eagerly imported')"
             ),
         ],
         capture_output=True,

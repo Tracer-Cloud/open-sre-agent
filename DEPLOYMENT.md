@@ -67,7 +67,7 @@ deploys launch from that AMI in ~2–3 minutes.
 
 ```bash
 # Step 1 — bake a gateway AMI (run once per code change, takes ~5-10 minutes):
-make bake-gateway
+make build-gateway-image
 
 # Step 2 — launch EC2 instance from the saved AMI (fast):
 make deploy-gateway
@@ -109,8 +109,8 @@ Restrict the allowed source CIDR with `OPENSRE_WEB_API_INGRESS_CIDR` (default `0
 Installs OpenSRE inline on a fresh EC2 instance via SSM — slower but requires no bake step:
 
 ```bash
-make deploy-gateway-direct
-make destroy-gateway-direct
+make install-gateway-on-new-server
+make destroy-gateway-on-new-server
 ```
 
 ---
@@ -123,7 +123,7 @@ make destroy-gateway-direct
 | Runtime | Docker inside EC2 | systemd on EC2 host |
 | Shell access | Inside slim container | Full EC2 host |
 | ECR repository | Required | Not needed |
-| Update path | `make build-image && make deploy` | `make bake-gateway && make deploy-gateway` |
+| Update path | `make build-image && make deploy` | `make build-gateway-image && make deploy-gateway` |
 
 ---
 

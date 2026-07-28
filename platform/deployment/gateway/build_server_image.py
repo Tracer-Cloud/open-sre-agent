@@ -1,4 +1,12 @@
-"""Bake a custom AMI with OpenSRE gateway pre-installed."""
+"""Build a reusable server image with the gateway already installed.
+
+Runs once per code change: it starts a temporary server, installs the gateway on
+it, saves the result as an image, and throws the temporary server away. Servers
+started from that image are ready immediately.
+
+The alternative is :mod:`platform.deployment.gateway.install_on_new_server`,
+which installs onto each new server instead of reusing an image.
+"""
 
 from __future__ import annotations
 
@@ -38,12 +46,15 @@ logger = logging.getLogger(__name__)
 _SERVICE_FILE = Path(__file__).parent / "systemd" / "opensre-gateway.service"
 _OPENSRE_REPO = "Tracer-Cloud/opensre"
 
+# These suffixes name live AWS IAM resources for the temporary builder server.
+# Renaming them would orphan anything already deployed, so they keep the older
+# "bake" wording even though the module no longer uses it.
 _BUILDER_ROLE_SUFFIX = "-bake-role"
 _BUILDER_PROFILE_SUFFIX = "-bake-profile"
 
 
 def _resolve_git_ref() -> str:
-    """Return the git ref to bake into the AMI.
+    """Return the git ref to install into the image.
 
     Resolution order:
       1. ``OPENSRE_GATEWAY_GIT_REF`` environment variable.
@@ -98,7 +109,7 @@ def _build_install_commands(git_ref: str) -> list[str]:
         # create system user and persistent data dirs
         (
             "id opensre &>/dev/null || useradd --system --create-home "
-            "--home-dir /var/lib/opensre-gateway --shell /sbin/nologin opensre"
+            + "--home-dir /var/lib/opensre-gateway --shell /sbin/nologin opensre"
         ),
         "mkdir -p /var/lib/opensre-gateway/.opensre/gateway",
         "chown -R opensre:opensre /var/lib/opensre-gateway",
@@ -108,7 +119,7 @@ def _build_install_commands(git_ref: str) -> list[str]:
         f"/opt/opensre/.venv/bin/pip install --quiet {install_url}",
         # smoke-check: verify the CLI is importable
         "/opt/opensre/.venv/bin/opensre --help > /dev/null",
-        # env file directory (populated at deploy time, not bake time)
+        # env file directory (populated at deploy time, not while building the image)
         "mkdir -p /etc/opensre && chmod 750 /etc/opensre && chown root:opensre /etc/opensre",
         # install systemd unit (base64-inlined from local repo)
         (
@@ -120,7 +131,7 @@ def _build_install_commands(git_ref: str) -> list[str]:
     ]
 
 
-def bake_ami(
+def build_server_image(
     *,
     region: str = DEFAULT_REGION,
     ami_id_path: object = None,
@@ -223,7 +234,7 @@ def bake_ami(
 
     print()
     print("=" * 60)
-    print("AMI bake complete")
+    print("Server image build complete")
     print(f"  AMI id : {image_id}")
     print(f"  Git ref: {git_ref}")
     print("  Run `make deploy-gateway` to launch an instance from this AMI.")
