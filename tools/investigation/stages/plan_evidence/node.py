@@ -28,6 +28,9 @@ def plan_actions(state: InvestigationState) -> dict[str, Any]:
         return {}
 
     state_any = dict(state)
+    # Deterministic stage: no LLM call and no integration resolution of its own.
+    # `resolved_integrations` here is the view an earlier stage already
+    # resolved; this stage only scores and filters tools against it.
     raw_resolved = state_any.get("resolved_integrations")
     resolved = raw_resolved if isinstance(raw_resolved, dict) else {}
     available_tools = _available_investigation_tools(resolved)
