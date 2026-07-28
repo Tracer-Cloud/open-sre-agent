@@ -14,6 +14,7 @@ from core.agent import Agent
 from core.events import RuntimeEventCallback
 from core.execution import ToolExecutionHooks
 from core.llm.types import AgentLLMClient, ResolvedIntegrations
+from core.provider import ProviderHooks
 from core.types import RuntimeTool
 
 RuntimeToolT = TypeVar("RuntimeToolT", bound=RuntimeTool)
@@ -39,6 +40,12 @@ class AgentConfig(Generic[RuntimeToolT]):  # noqa: UP046
     base class — e.g. a surface that needs to override a hook like
     ``_should_accept_conclusion``. Defaults to :class:`Agent` so existing
     callers are unaffected."""
+    provider_hooks: ProviderHooks | None = None
+    """Override the message-conversion/request seams (``Agent.__init__``'s
+    ``provider_hooks``) — e.g. a surface that needs its own context-budget
+    eviction markers to survive the default provider-message conversion.
+    Defaults to ``None`` (``Agent``'s own default), so existing callers are
+    unaffected."""
 
 
 def build_agent(  # noqa: UP047
@@ -59,6 +66,7 @@ def build_agent(  # noqa: UP047
         tool_resources=config.tool_resources,
         tool_hooks=config.tool_hooks,
         on_runtime_event=config.on_runtime_event,
+        provider_hooks=config.provider_hooks,
     )
 
 

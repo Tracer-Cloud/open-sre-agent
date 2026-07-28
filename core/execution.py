@@ -218,8 +218,16 @@ def _execute_one_tool_call(
         if before is not None and before.blocked:
             mark_span_outcome(span_attrs, "blocked", error=True)
             logger.debug("tool_call blocked name=%s id=%s", tc.name, tc.id)
+            # A hook that blocks with structured `details` (e.g. a cached-result
+            # payload for a suppressed duplicate call) wants that structure sent
+            # to the model, not just the plain-text `reason`.
+            content = (
+                before.details
+                if before.details is not None
+                else (before.reason or f"{tc.name} blocked by before_tool_call hook.")
+            )
             return ToolExecutionResult(
-                content=before.reason or f"{tc.name} blocked by before_tool_call hook.",
+                content=content,
                 details=before.details,
                 is_error=True,
                 terminate=before.terminate,

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import dataclasses
 import logging
+from collections.abc import Callable, Sequence
 from typing import Any, cast
 
 from config.constants.investigation import MAX_INVESTIGATION_LOOPS
@@ -16,6 +18,7 @@ from core import (
 from core.agent import Agent
 from core.agent_harness.agent_builder import AgentConfig, build_agent
 from core.agent_harness.llm_resolution import default_llm_factory
+from core.context_budget import strip_internal_message_markers
 from core.events import (
     MessageStartEvent,
     RuntimeEvent,
@@ -33,9 +36,12 @@ from core.llm_invoke_errors import classify_llm_invoke_failure
 from core.messages import (
     AssistantRuntimeMessage,
     MessageMapper,
+    ProviderMessage,
+    RuntimeMessage,
     ToolResultRuntimeMessage,
     UserRuntimeMessage,
 )
+from core.provider import ProviderHooks, ProviderRequest
 from core.state import InvestigationState
 from core.state.evidence import EvidenceEntry
 from platform.observability import debug_print
@@ -68,6 +74,113 @@ from tools.investigation.stages.gather_evidence.tools import (
 )
 
 logger = logging.getLogger(__name__)
+
+_SEED_MARKER = "_opensre_seed"
+_DUPLICATE_MARKER = "_opensre_duplicate_result"
+
+
+def _wrap_llm_invoke_for_stagnation(
+    llm: Any, *, should_withhold_tools: Callable[[], bool]
+) -> Callable[[], None]:
+    """Temporarily monkeypatch ``llm.invoke`` to withhold tool schemas once
+    ``should_withhold_tools()`` is true, forcing a text-only response.
+
+    ``react_loop.py`` fixes its tool schema list once at construction, so
+    there is no per-iteration hook to drop tools after stagnation is
+    detected without changing that file. Wrapping ``invoke`` itself is the
+    only per-call seam available. ``get_llm()`` returns a cached, process-
+    wide client, so the wrap MUST be reverted (the returned callable) in a
+    ``finally`` block — never left in place for later, unrelated calls.
+    """
+    original_invoke = llm.invoke
+
+    def _guarded_invoke(
+        messages: list[dict[str, Any]],
+        *,
+        system: str | None = None,
+        tools: list[dict[str, Any]] | None = None,
+    ) -> Any:
+        active_tools = [] if should_withhold_tools() else tools
+        return original_invoke(messages, system=system, tools=active_tools)
+
+    llm.invoke = _guarded_invoke  # type: ignore[method-assign]
+
+    def _restore() -> None:
+        llm.invoke = original_invoke
+
+    return _restore
+
+
+def _is_duplicate_result_payload(value: Any) -> bool:
+    return isinstance(value, dict) and value.get("suppressed_duplicate") is True
+
+
+def _mark_duplicate_only_exchanges(messages: Sequence[RuntimeMessage]) -> list[RuntimeMessage]:
+    """Tag each duplicate-only tool exchange with the context-budget eviction
+    marker ``core.context_budget`` looks for, so it is deprioritized (evicted
+    before real evidence) instead of trimmed by the generic heuristic alone.
+
+    A ``ToolResultRuntimeMessage`` qualifies when every one of its results is
+    a :func:`duplicate_call_result` payload; the preceding assistant message
+    (which issued those now-duplicate calls) is tagged too, matching the
+    pairing ``enforce_context_budget`` expects. ``react_loop.py`` builds
+    these messages itself with no metadata, so they can only be reclassified
+    here, after the fact, by inspecting their content.
+    """
+    marked = list(messages)
+    for index, message in enumerate(marked):
+        if not isinstance(message, ToolResultRuntimeMessage):
+            continue
+        if not message.results or not all(
+            _is_duplicate_result_payload(result) for result in message.results
+        ):
+            continue
+        marked[index] = dataclasses.replace(
+            message, metadata={**message.metadata, _DUPLICATE_MARKER: True}
+        )
+        if index > 0 and isinstance(marked[index - 1], AssistantRuntimeMessage):
+            previous = marked[index - 1]
+            marked[index - 1] = dataclasses.replace(
+                previous, metadata={**previous.metadata, _DUPLICATE_MARKER: True}
+            )
+    return marked
+
+
+def _render_provider_messages_keeping_eviction_markers(
+    llm: Any, messages: Sequence[RuntimeMessage]
+) -> list[ProviderMessage]:
+    """Render ``messages`` to provider dicts without stripping ``_opensre_*``
+    eviction markers, unlike ``MessageMapper.to_provider_messages`` (which
+    always strips them). ``enforce_context_budget`` needs to see the markers;
+    stripping still happens, just later, right before the real provider call
+    (see ``_strip_eviction_markers_before_request``) or, for the pipeline's
+    persisted ``agent_messages``, at the ``diagnose`` stage.
+
+    Renders one message at a time (rather than the whole batch) so a single
+    ``RuntimeMessage``'s markers can be reapplied onto every provider dict it
+    expands into — some providers (OpenAI-family) emit one tool-result dict
+    per tool call from a single batched ``ToolResultRuntimeMessage``.
+    """
+    mapper = MessageMapper(llm)
+    rendered: list[ProviderMessage] = []
+    for message in messages:
+        markers = {
+            key: value for key, value in message.metadata.items() if key.startswith("_opensre_")
+        }
+        payloads = mapper.to_provider_messages([message])
+        if markers:
+            for payload in payloads:
+                payload.update(markers)
+        rendered.extend(payloads)
+    return rendered
+
+
+def _strip_eviction_markers_before_request(request: ProviderRequest) -> ProviderRequest:
+    """Sanitize the outbound request: strict provider schemas (e.g. Anthropic)
+    reject the ``_opensre_*`` eviction markers as unknown message keys."""
+    return dataclasses.replace(
+        request, messages=strip_internal_message_markers(list(request.messages))
+    )
 
 
 class ConnectedInvestigationAgent(Agent[Any]):
@@ -190,9 +303,19 @@ class ConnectedInvestigationAgent(Agent[Any]):
                 }
             )
             seed_results = execute_tools(seed_calls, tools, resolved)
-            messages.append(AssistantRuntimeMessage(content="", tool_calls=tuple(seed_calls)))
             messages.append(
-                ToolResultRuntimeMessage(tool_calls=tuple(seed_calls), results=tuple(seed_results))
+                AssistantRuntimeMessage(
+                    content="",
+                    tool_calls=tuple(seed_calls),
+                    metadata={_SEED_MARKER: True},
+                )
+            )
+            messages.append(
+                ToolResultRuntimeMessage(
+                    tool_calls=tuple(seed_calls),
+                    results=tuple(seed_results),
+                    metadata={_SEED_MARKER: True},
+                )
             )
             for tc, output in zip(seed_calls, seed_results):
                 tool_call_cache.store(tool_call_signature(tc), output, loop_iteration=-1)
@@ -237,15 +360,6 @@ class ConnectedInvestigationAgent(Agent[Any]):
         def _before_tool_call(request: ToolExecutionRequest) -> BeforeToolCallResult | None:
             nonlocal fresh_calls_this_iteration
             tc = request.tool_call
-            if force_conclusion:
-                return BeforeToolCallResult(
-                    blocked=True,
-                    reason=(
-                        f"'{tc.name}' was not run: the investigation has stagnated on repeated "
-                        "calls, so tool access is closed. Write your final diagnosis from the "
-                        "evidence already gathered."
-                    ),
-                )
             signature = tool_call_signature(tc)
             cached = tool_call_cache.lookup(signature)
             if cached is None:
@@ -329,6 +443,11 @@ class ConnectedInvestigationAgent(Agent[Any]):
             ),
             on_runtime_event=_on_investigation_runtime_event,
             agent_cls=type(self),
+            provider_hooks=ProviderHooks(
+                transform_messages=_mark_duplicate_only_exchanges,
+                convert_to_llm=_render_provider_messages_keeping_eviction_markers,
+                before_provider_request=_strip_eviction_markers_before_request,
+            ),
         )
         configured_agent = cast(ConnectedInvestigationAgent, build_agent(config))
         configured_agent._planned_actions = planned_actions
@@ -336,6 +455,11 @@ class ConnectedInvestigationAgent(Agent[Any]):
         configured_agent._last_assistant_text = ""
         configured_agent._conclusion_format_nudged = False
 
+        # get_llm() returns a cached, process-wide client, so this guard is
+        # applied only for the duration of this run and always reverted.
+        restore_invoke = _wrap_llm_invoke_for_stagnation(
+            llm, should_withhold_tools=lambda: force_conclusion
+        )
         try:
             # Explicit unbound call: configured_agent.run(...) would resolve
             # back to ConnectedInvestigationAgent.run (this method) instead
@@ -352,11 +476,16 @@ class ConnectedInvestigationAgent(Agent[Any]):
                 _emit=_emit,
                 evidence=evidence,
                 evidence_entries=evidence_entries,
-                messages=MessageMapper(llm).to_provider_messages(messages),
+                messages=_render_provider_messages_keeping_eviction_markers(llm, messages),
                 executed_hypotheses=executed_hypotheses,
                 tool_context=tool_context,
-                investigation_loop_count=configured_agent._react_iterations_used,
+                # react_loop.py marks an iteration "used" the moment it starts,
+                # before the (now-failing) invoke() resolves, so the failing
+                # attempt itself must not be counted as a completed loop.
+                investigation_loop_count=max(0, configured_agent._react_iterations_used - 1),
             )
+        finally:
+            restore_invoke()
 
         loops_completed = result.llm_iterations_used
         if result.hit_iteration_cap:
@@ -383,7 +512,13 @@ class ConnectedInvestigationAgent(Agent[Any]):
                 }
             )
 
-        agent_messages = MessageMapper(llm).to_provider_messages(result.messages)
+        # transform_messages only ran transiently per-iteration inside the loop
+        # (react_loop.py never writes it back to the canonical transcript), so
+        # duplicate exchanges are reclassified here, once, before the final
+        # render — agent_messages still carries the eviction markers on return;
+        # diagnose() is the stage that strips them before persisting state.
+        final_messages = _mark_duplicate_only_exchanges(result.messages)
+        agent_messages = _render_provider_messages_keeping_eviction_markers(llm, final_messages)
 
         _emit(
             "agent_end",
