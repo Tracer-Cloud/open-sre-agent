@@ -36,11 +36,11 @@ from tools.system.fleet_monitoring.probe import pid_exists
 
 DEFAULT_MAX_BYTES: Final[int] = 4 * 1024 * 1024
 DEFAULT_QUEUE_MAX: Final[int] = 128
-DEFAULT_POLL_INTERVAL_S: Final[float] = 0.1
+DEFAULT_POLL_INTERVAL_SECONDS: Final[float] = 0.1
 DEFAULT_READ_BUFFER: Final[int] = 4096
 
-_LSOF_TIMEOUT_S: Final[float] = 5.0
-_THREAD_JOIN_TIMEOUT_S: Final[float] = 1.0
+_LSOF_TIMEOUT_SECONDS: Final[float] = 5.0
+_THREAD_JOIN_TIMEOUT_SECONDS: Final[float] = 1.0
 _SENTINEL: Final[object] = object()
 
 
@@ -155,7 +155,7 @@ def _resolve_macos_target(pid: int) -> _ResolvedTarget:
             text=True,
             encoding="utf-8",
             errors="replace",
-            timeout=_LSOF_TIMEOUT_S,
+            timeout=_LSOF_TIMEOUT_SECONDS,
             check=False,
         )
     except FileNotFoundError as exc:
@@ -264,7 +264,7 @@ class AttachSession:
         *,
         buffer_bytes: int = DEFAULT_MAX_BYTES,
         queue_max: int = DEFAULT_QUEUE_MAX,
-        poll_interval_s: float = DEFAULT_POLL_INTERVAL_S,
+        poll_interval_s: float = DEFAULT_POLL_INTERVAL_SECONDS,
         read_buffer: int = DEFAULT_READ_BUFFER,
     ) -> None:
         self.target = target
@@ -397,7 +397,7 @@ class AttachSession:
             return
         self._closed = True
         self._stop_event.set()
-        self._thread.join(timeout=_THREAD_JOIN_TIMEOUT_S)
+        self._thread.join(timeout=_THREAD_JOIN_TIMEOUT_SECONDS)
         # Closing the fd while the reader is still inside ``read()`` is
         # undefined behavior with buffered IO. With ``buffering=0`` it's
         # tolerated (the read returns EBADF and the thread exits via
@@ -420,7 +420,7 @@ def attach(
     *,
     buffer_bytes: int = DEFAULT_MAX_BYTES,
     queue_max: int = DEFAULT_QUEUE_MAX,
-    poll_interval_s: float = DEFAULT_POLL_INTERVAL_S,
+    poll_interval_s: float = DEFAULT_POLL_INTERVAL_SECONDS,
     read_buffer: int = DEFAULT_READ_BUFFER,
 ) -> AttachSession:
     """Validate the target eagerly and return a ready-to-iterate session.
@@ -443,7 +443,7 @@ def attach(
 
 __all__ = [
     "DEFAULT_MAX_BYTES",
-    "DEFAULT_POLL_INTERVAL_S",
+    "DEFAULT_POLL_INTERVAL_SECONDS",
     "DEFAULT_QUEUE_MAX",
     "DEFAULT_READ_BUFFER",
     "AttachSession",
