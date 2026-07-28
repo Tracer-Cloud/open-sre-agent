@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tools.github_cli.tool import github_cli
+from integrations.github.tools.github_cli.tool import github_cli
 
 TOOL_MODULES = ("tool",)
 

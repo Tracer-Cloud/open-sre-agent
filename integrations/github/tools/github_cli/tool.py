@@ -5,14 +5,14 @@ from __future__ import annotations
 from typing import Any
 
 from core.tool_framework.tool_decorator import tool
-from tools.github_cli.credentials import (
+from integrations.github.tools.github_cli.credentials import (
     GITHUB_CLI_INJECTED_PARAMS,
     github_creds,
     github_source_available,
     resolve_github_token,
 )
-from tools.github_cli.runner import run_gh
-from tools.github_cli.summary import attach_summary
+from integrations.github.tools.github_cli.runner import run_gh
+from integrations.github.tools.github_cli.summary import attach_summary
 
 _ARGS_SCHEMA: dict[str, Any] = {
     "type": "object",
