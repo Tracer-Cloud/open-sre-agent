@@ -675,7 +675,7 @@ def run_wizard(_argv: list[str] | None = None) -> int:
     provider_extra_env: dict[str, str] = {}
     credential_state: CredentialState = OK
     # Records a ``continue_unsaved`` secret export so it can be re-applied after
-    # ``sync_provider_env`` pops it, before the in-process shell handoff (#3591).
+    # ``sync_provider_env`` pops it, before the in-process shell handoff.
     session_env_sink: dict[str, str] = {}
     while True:
         credential_state = OK
@@ -813,7 +813,7 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                 # A ``host`` credential (e.g. the Ollama host) is not a secret api key: never
                 # migrate a stale legacy ``api_key`` value into it — that would leak a
                 # secret-shaped value into .env and point the runtime at a bogus host. Fall
-                # through to the host prompt instead (#3291).
+                # through to the host prompt instead.
                 if not has_api_key and legacy_api_key and provider.credential_kind != "host":
                     migration_outcome = _persist_llm_credential_with_recovery(
                         provider, legacy_api_key, session_env_sink=session_env_sink
@@ -895,7 +895,7 @@ def run_wizard(_argv: list[str] | None = None) -> int:
         # sync_provider_env pops every secret provider's api-key env; re-apply the
         # session-only value the user chose to continue with so the in-process shell
         # handoff can read it. A secret is never written to .env — the keyring stays the
-        # only persistent store (#3591). A ``host`` value normally goes straight to .env
+        # only persistent store. A ``host`` value normally goes straight to .env
         # and never reaches this sink; it only lands here when its .env write failed and
         # the user picked "continue without saving", where re-applying it to os.environ
         # is exactly what is wanted.
