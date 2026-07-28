@@ -11,7 +11,7 @@ AWS ES runs the same integration as self-hosted OpenSearch: there's no separate 
 
 - An Amazon OpenSearch Service (AWS ES) domain
 - The domain endpoint URL (e.g. `https://search-mydomain-xxxxx.us-east-1.es.amazonaws.com`)
-- Fine-grained access control enabled on the domain, with a master user and password
+- Fine-grained access control enabled on the domain, with a dedicated internal user mapped to a read-only role (the built-in `readall` role works) rather than the master user
 
 ## Setup
 
@@ -19,15 +19,15 @@ AWS ES runs the same integration as self-hosted OpenSearch: there's no separate 
 
 ```bash
 OPENSEARCH_URL=https://search-mydomain-xxxxx.us-east-1.es.amazonaws.com
-OPENSEARCH_USERNAME=master-user
-OPENSEARCH_PASSWORD=master-password
+OPENSEARCH_USERNAME=opensre-reader
+OPENSEARCH_PASSWORD=opensre-reader-password
 ```
 
 | Variable | Default | Description |
 | --- | --- | --- |
 | `OPENSEARCH_URL` | None | Required. Your AWS ES domain endpoint. |
-| `OPENSEARCH_USERNAME` | None | Master user configured on the domain's fine-grained access control. |
-| `OPENSEARCH_PASSWORD` | None | Password for the master user. |
+| `OPENSEARCH_USERNAME` | None | Internal user mapped to a read-only role, not the master user. |
+| `OPENSEARCH_PASSWORD` | None | Password for that internal user. |
 
 Or run `opensre onboard` and pick **OpenSearch / Elasticsearch**.
 
@@ -37,7 +37,7 @@ Or run `opensre onboard` and pick **OpenSearch / Elasticsearch**.
 | --- | --- |
 | `query_elasticsearch_logs` | Log lines matching a query string within a time range, plus a filtered list of lines that look like errors (matches on `error`, `exception`, `timeout`, etc.). |
 
-The tool becomes available to the planner once the OpenSearch source reports `connection_verified`.
+The tool becomes available to the planner once the integration is configured and passes verification.
 
 ## Verify
 
@@ -47,4 +47,4 @@ opensre integrations verify opensearch
 
 ## Gotcha
 
-This integration authenticates with HTTP Basic Auth or an API key. It does **not** sign requests with SigV4. If your domain has no fine-grained access control and relies on an IAM-based resource policy instead, unsigned requests are treated as anonymous and rejected with 403 Forbidden. Enable fine-grained access control and use the master user/password shown above.
+This integration also supports an `OPENSEARCH_API_KEY` (used by Elastic Cloud), but AWS ES has no equivalent: the OpenSearch security plugin doesn't natively issue API keys ([opensearch-project/security#4009](https://github.com/opensearch-project/security/issues/4009)), so Basic Auth is the only option here. It does **not** sign requests with SigV4 either. If your domain has no fine-grained access control and relies on an IAM-based resource policy instead, unsigned requests are treated as anonymous and rejected with 403 Forbidden. Enable fine-grained access control and use the internal user/password shown above.
