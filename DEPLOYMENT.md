@@ -79,106 +79,85 @@ make destroy-gateway-direct
 
 ---
 
-## Fargate multi-tenant deployment (Python CDK)
+## Fargate multi-tenant deployment (Terraform)
 
-The shared ECS Fargate foundation is defined under
-[`platform/deployment_fargate/fargate_fleet_infrastructure/`](platform/deployment_fargate/fargate_fleet_infrastructure/).
-The IAM lifecycle Lambda and routes are Terraform-only: the
-`modules/api_control_plane` module in the
-[`opensre-infra/`](platform/deployment_fargate/opensre-infra/) submodule (see
-the Terraform section below).
-The bearer public-run Lambda, authorizer, and `/v1/runs` routes are Terraform
-in `opensre-infra/modules/api_public_forwarder` (runtime under
-[`opensre-infra/lambdas/api_public_forwarder/`](platform/deployment_fargate/opensre-infra/lambdas/api_public_forwarder/)).
+The shared ECS Fargate foundation, IAM lifecycle API, and public-run API live in
+the private [`Tracer-Cloud/opensre-infra-aws`](https://github.com/Tracer-Cloud/opensre-infra-aws)
+repository, vendored here as a git submodule at
+[`platform/deployment_multi_tenant/`](platform/deployment_multi_tenant/).
+
+Internal developers (with access to that private repo) must initialize it before
+deploying or running Fargate/control-plane tests:
+
+```bash
+git submodule update --init platform/deployment_multi_tenant
+```
+
+Contents once checked out:
+
+- Fleet + APIs: [`modules/fargate_fleet`](platform/deployment_multi_tenant/modules/fargate_fleet/)
+  (composes [`modules/api_control_plane`](platform/deployment_multi_tenant/modules/api_control_plane/)
+  and [`modules/api_public_forwarder`](platform/deployment_multi_tenant/modules/api_public_forwarder/))
+- Control-plane runtime:
+  [`lambda_control_plane/`](platform/deployment_multi_tenant/lambda_control_plane/)
+- Public-forwarder runtime:
+  [`lambda_public_forwarder/`](platform/deployment_multi_tenant/lambda_public_forwarder/)
+- Shared S3 Files memories: [`stacks/shared`](platform/deployment_multi_tenant/stacks/shared/)
 
 Per-organization Gateway services, task definitions, tenant IAM roles, secrets, and
-S3 Files access points are still created by the Python control-plane lifecycle
-([`platform/deployment_fargate/opensre-infra/lambdas/api_control_plane/`](platform/deployment_fargate/opensre-infra/lambdas/api_control_plane/)).
-The lifecycle also ensures one filesystem mount target per configured subnet and
+S3 Files access points are created by the Python control-plane lifecycle. The
+lifecycle also ensures one filesystem mount target per configured subnet and
 reconciles the filesystem-wide tenant isolation policy.
 
 ### Prerequisites
 
-1. Existing VPC and public subnet IDs for Gateway tasks. The MVP assigns public
-   IPs so tasks have outbound access without provisioning NAT.
-2. Existing S3 Files filesystem ID/ARN and client security group (from
-   [opensre-infra-aws](https://github.com/Tracer-Cloud/opensre-infra-aws/tree/main)
-   `memories` output, or supplied manually), ECR gateway image (digest-pinned),
-   and credentials API URL.
+1. Existing VPC / subnet placement for Gateway tasks (the fleet module uses the
+   default VPC and memories mount subnets from `stacks/shared`).
+2. Shared S3 Files filesystem applied via `stacks/shared`, ECR gateway image
+   (digest-pinned), and credentials API URL.
 3. A Secrets Manager secret containing the Postgres `DATABASE_URL`, plus the IAM
    role ARNs allowed to call lifecycle routes.
 4. Docker for the Python 3.12 x86_64 Lambda bundles.
-5. `uv sync --extra cdk` and AWS CDK CLI v2 (**2.1133.0+**; `npm install -g aws-cdk@2`).
-6. One-time `cdk bootstrap` in the target account/region.
-7. Before provisioning each tenant, its credentials bootstrap secret.
+5. Terraform >= 1.5.
+6. Before provisioning each tenant, its credentials bootstrap secret.
 
 ### Deploy
 
 ```bash
-make cdk-synth
-# Option A: resolve S3 Files params from the opensre-infra submodule
-git submodule update --init platform/deployment_fargate/opensre-infra
-cd platform/deployment_fargate/opensre-infra/stacks/shared && terraform init -input=false && cd -
-./platform/deployment_fargate/scripts/cdk_deploy_fleet_from_infra_aws.sh \
-  --environment dev \
-  --parameters ...
-# Option B: pass every fleet parameter explicitly
-make cdk-deploy-fleet FLEET_CDK_ARGS='--parameters ...'
+cd platform/deployment_multi_tenant/stacks/shared && terraform init -input=false && cd -
+cd platform/deployment_multi_tenant
+./scripts/build-lambda-bundles.sh --repo-root ../..   # Lambda zips into dist/
+cd modules/fargate_fleet
+cp terraform.tfvars.example terraform.tfvars          # fill in real values
+terraform init -input=false && terraform apply
 ```
 
-Control-plane and public-forwarder APIs are deployed with Terraform (see
-below); before the control-plane's first deploy, apply the idempotent Postgres
-schema by invoking
-`platform/deployment_fargate/opensre-infra/lambdas/api_control_plane/migration_runtime.py`
+Before the control-plane's first deploy, apply the idempotent Postgres schema by
+invoking
+`platform/deployment_multi_tenant/lambda_control_plane/migration_runtime.py`
 out of band so run tables exist.
 
-Verify fleet CDK without AWS credentials:
+Bundle whitelist check (no AWS credentials):
 
 ```bash
 make cdk-verify
 ```
 
-Tear down the fleet CDK stack:
+Verify a live deployment end to end (provisions a gateway, prompts it through
+`/v1/runs`, then stops and deletes it — the tenant bootstrap secret must exist
+first):
 
 ```bash
-make cdk-destroy
-```
-
-See the fleet README for parameter details. For the Lambda APIs, use the
-Terraform section below.
-
-### Terraform (opensre-infra submodule)
-
-The platform is also defined as Terraform in the
-[`opensre-infra/`](platform/deployment_fargate/opensre-infra/) submodule — and
-for the control-plane API this is the only definition: `stacks/fargate`
-composes the fleet foundation with `modules/api_control_plane` and
-`modules/api_public_forwarder`, and reads S3 Files memories from
-`stacks/shared` remote state (no bridge script needed). Requires Docker and
-Terraform >= 1.5; no CDK bootstrap.
-
-```bash
-cd platform/deployment_fargate/opensre-infra
-./scripts/build-lambda-bundles.sh --repo-root ../../..   # Lambda zips into dist/
-cd stacks/fargate
-cp terraform.tfvars.example terraform.tfvars             # fill in real values
-terraform init -input=false && terraform apply
-```
-
-The Terraform module has no schema-migration step — the Postgres schema must
-already exist (any prior control-plane deploy against the same database, or run
-`platform/deployment_fargate/opensre-infra/lambdas/api_control_plane/migration_runtime.py`
-once out of band). Verify a live
-deployment end to end (provisions a gateway, prompts it through `/v1/runs`,
-then stops and deletes it — the tenant bootstrap secret must exist first):
-
-```bash
-uv run python platform/deployment_fargate/scripts/e2e_fargate_verify.py \
+uv run python platform/deployment_multi_tenant/scripts/e2e_fargate_verify.py \
   --control-plane-endpoint "$(terraform output -raw control_plane_api_endpoint)" \
   --public-forwarder-endpoint "$(terraform output -raw public_forwarder_api_endpoint)" \
   --organization-id org_tf_e2e \
   --lifecycle-role-arn arn:aws:iam::<account>:role/opensre-lifecycle-admin
 ```
+
+See [platform/deployment_multi_tenant/TERRAFORM.md](platform/deployment_multi_tenant/TERRAFORM.md)
+and [platform/deployment_multi_tenant/README.md](platform/deployment_multi_tenant/README.md)
+for stack layout and naming.
 
 ---
 

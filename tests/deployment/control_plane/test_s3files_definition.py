@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from platform.deployment_fargate.api_control_plane.utils.s3files_definition import (
+from platform.deployment_multi_tenant.lambda_control_plane.utils.s3files_definition import (
     validate_task_definition,
     validate_tenant_mount_policy,
 )

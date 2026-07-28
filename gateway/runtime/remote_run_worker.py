@@ -12,11 +12,11 @@ from gateway.runtime.concurrency import TurnConcurrencyGate
 from gateway.runtime.sink_protocol import GatewayAgentCallback
 from gateway.storage import SessionResolver
 from gateway.storage.session.binding_store import open_binding_store
-from platform.deployment_fargate.api_control_plane.utils.models import (
+from platform.deployment_multi_tenant.lambda_control_plane.utils.models import (
     AgentRun,
     AgentRunStatus,
 )
-from platform.deployment_fargate.api_control_plane.utils.ports import AgentRunRepository
+from platform.deployment_multi_tenant.lambda_control_plane.utils.ports import AgentRunRepository
 
 _GENERIC_FAILURE = "The remote agent run failed."
 
@@ -278,7 +278,7 @@ def build_remote_run_worker(
     logger: logging.Logger,
 ) -> RemoteRunWorker:
     """Compose the production Neon repository and API session resolver."""
-    from platform.deployment_fargate.api_control_plane.db.db_client import (
+    from platform.deployment_multi_tenant.lambda_control_plane.db.db_client import (
         ControlPlaneDbClient,
     )
 

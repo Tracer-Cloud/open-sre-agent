@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from platform.deployment_fargate.api_control_plane.utils.images import (
+from platform.deployment_multi_tenant.lambda_control_plane.utils.images import (
     CONTROL_PLANE_LAMBDA,
     GATEWAY_IMAGE,
     require_immutable_ecr_image,
@@ -37,7 +37,7 @@ def test_lambda_uses_aws_managed_python_zip_runtime() -> None:
     assert CONTROL_PLANE_LAMBDA.package_type == "Zip"
     assert (
         CONTROL_PLANE_LAMBDA.handler
-        == "platform.deployment_fargate.api_control_plane.runtime.lambda_handler"
+        == "platform.deployment_multi_tenant.lambda_control_plane.runtime.lambda_handler"
     )
 
 

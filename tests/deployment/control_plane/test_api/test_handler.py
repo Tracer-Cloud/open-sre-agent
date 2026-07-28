@@ -9,9 +9,9 @@ from typing import Any
 
 import pytest
 
-from platform.deployment_fargate.api_control_plane.handler import ControlPlaneApi
-from platform.deployment_fargate.api_control_plane.runtime import LambdaApp as ControlPlaneApp
-from platform.deployment_fargate.api_control_plane.utils.models import (
+from platform.deployment_multi_tenant.lambda_control_plane.handler import ControlPlaneApi
+from platform.deployment_multi_tenant.lambda_control_plane.runtime import LambdaApp as ControlPlaneApp
+from platform.deployment_multi_tenant.lambda_control_plane.utils.models import (
     AgentRun,
     AgentRunSource,
     AgentRunStatus,
@@ -21,9 +21,9 @@ from platform.deployment_fargate.api_control_plane.utils.models import (
     TenantApiCredential,
     TenantDeployment,
 )
-from platform.deployment_fargate.api_public_forwarder.authorizer import BearerAuthorizer
-from platform.deployment_fargate.api_public_forwarder.handler import PublicApiHandler
-from platform.deployment_fargate.api_public_forwarder.runtime import LambdaApp as PublicForwarderApp
+from platform.deployment_multi_tenant.lambda_public_forwarder.authorizer import BearerAuthorizer
+from platform.deployment_multi_tenant.lambda_public_forwarder.handler import PublicApiHandler
+from platform.deployment_multi_tenant.lambda_public_forwarder.runtime import LambdaApp as PublicForwarderApp
 
 _ALLOWED_ROLE = "arn:aws:iam::123456789012:role/saas-control-plane"
 _TOKEN = f"osre_key_12345678.{'x' * 32}"

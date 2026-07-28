@@ -557,11 +557,14 @@ RULES: tuple[PathRule, ...] = (
         ),
     ),
     PathRule(
-        "platform/deployment_fargate/fargate_fleet_infrastructure/",
-        ("tests/platform/deployment_fargate/fargate_fleet_infrastructure/",),
+        "platform/deployment_fargate/lambda_control_plane/",
+        (
+            "tests/deployment/",
+            "tests/platform/deployment_fargate/test_lambda_bundle_paths.py",
+        ),
     ),
     PathRule(
-        "platform/deployment_fargate/opensre-infra/lambdas/",
+        "platform/deployment_fargate/lambda_public_forwarder/",
         (
             "tests/deployment/",
             "tests/platform/deployment_fargate/test_lambda_bundle_paths.py",

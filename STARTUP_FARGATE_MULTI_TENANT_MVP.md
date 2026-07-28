@@ -219,12 +219,13 @@ uv run pytest tests/deployment/control_plane/test_image_contract.py tests/deploy
    sink, clean shutdown, and replacement recovery. Reuse `GatewayTurnHandler`
    unchanged and resolve API sessions through the existing session resolver.
 
-Focused tests:
+Focused tests (requires the private `platform/deployment_multi_tenant` submodule:
+`git submodule update --init platform/deployment_multi_tenant`):
 
 ```bash
 uv run pytest tests/deployment/control_plane/test_lifecycle.py
 uv run pytest tests/deployment/control_plane/test_api/test_authorizer.py tests/deployment/control_plane/test_api/test_handler.py tests/deployment/control_plane/test_api/test_runtime.py
-uv run --extra cdk pytest tests/platform/deployment_fargate/fargate_fleet_infrastructure tests/platform/deployment_fargate/test_lambda_bundle_paths.py
+uv run pytest tests/platform/deployment_multi_tenant/test_lambda_bundle_paths.py
 uv run pytest gateway/tests/runtime/test_credential_hydration.py gateway/tests/runtime/test_remote_run_worker.py gateway/tests/runtime/test_concurrency_gate.py gateway/tests/runtime/test_manager.py gateway/tests/runtime/test_turn_handler.py
 ```
 

@@ -1,4 +1,4 @@
-"""Unit tests for the opensre-infra-aws Terraform memories resolver."""
+"""Unit tests for the shared-stack Terraform memories resolver."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from platform.deployment_fargate.utils.resolve_infra_aws_memories import (
+from platform.deployment_multi_tenant.utils.resolve_infra_aws_memories import (
     InfraAwsMemoriesResolutionError,
     main,
     parse_memories_environment,
@@ -104,11 +104,11 @@ def test_resolve_infra_aws_memories_reads_terraform_output(tmp_path: Path) -> No
 
     with (
         patch(
-            "platform.deployment_fargate.utils.resolve_infra_aws_memories.shutil.which",
+            "platform.deployment_multi_tenant.utils.resolve_infra_aws_memories.shutil.which",
             return_value="/usr/bin/terraform",
         ),
         patch(
-            "platform.deployment_fargate.utils.resolve_infra_aws_memories.subprocess.run",
+            "platform.deployment_multi_tenant.utils.resolve_infra_aws_memories.subprocess.run",
             return_value=completed,
         ) as run_mock,
     ):
@@ -141,11 +141,11 @@ def test_resolve_infra_aws_memories_unwraps_wrapped_output(tmp_path: Path) -> No
 
     with (
         patch(
-            "platform.deployment_fargate.utils.resolve_infra_aws_memories.shutil.which",
+            "platform.deployment_multi_tenant.utils.resolve_infra_aws_memories.shutil.which",
             return_value="/usr/bin/terraform",
         ),
         patch(
-            "platform.deployment_fargate.utils.resolve_infra_aws_memories.subprocess.run",
+            "platform.deployment_multi_tenant.utils.resolve_infra_aws_memories.subprocess.run",
             return_value=completed,
         ),
     ):
@@ -168,11 +168,11 @@ def test_resolve_infra_aws_memories_propagates_terraform_failure(
 
     with (
         patch(
-            "platform.deployment_fargate.utils.resolve_infra_aws_memories.shutil.which",
+            "platform.deployment_multi_tenant.utils.resolve_infra_aws_memories.shutil.which",
             return_value="/usr/bin/terraform",
         ),
         patch(
-            "platform.deployment_fargate.utils.resolve_infra_aws_memories.subprocess.run",
+            "platform.deployment_multi_tenant.utils.resolve_infra_aws_memories.subprocess.run",
             return_value=completed,
         ),
         pytest.raises(InfraAwsMemoriesResolutionError, match="terraform output failed"),
@@ -195,11 +195,11 @@ def test_main_prints_cdk_args(
 
     with (
         patch(
-            "platform.deployment_fargate.utils.resolve_infra_aws_memories.shutil.which",
+            "platform.deployment_multi_tenant.utils.resolve_infra_aws_memories.shutil.which",
             return_value="/usr/bin/terraform",
         ),
         patch(
-            "platform.deployment_fargate.utils.resolve_infra_aws_memories.subprocess.run",
+            "platform.deployment_multi_tenant.utils.resolve_infra_aws_memories.subprocess.run",
             return_value=completed,
         ),
     ):

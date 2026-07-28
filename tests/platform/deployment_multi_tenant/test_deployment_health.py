@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 import requests
 
-from platform.deployment_fargate.utils.health_poll import poll_deployment_health
+from platform.deployment_multi_tenant.utils.health_poll import poll_deployment_health
 
 
 class _Resp:

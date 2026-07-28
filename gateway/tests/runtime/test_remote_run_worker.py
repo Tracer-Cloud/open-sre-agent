@@ -14,7 +14,7 @@ import pytest
 
 from gateway.runtime.concurrency import TurnConcurrencyGate
 from gateway.runtime.remote_run_worker import RemoteRunWorker, build_remote_run_worker
-from platform.deployment_fargate.api_control_plane.utils.models import (
+from platform.deployment_multi_tenant.lambda_control_plane.utils.models import (
     AgentRun,
     AgentRunSource,
     AgentRunStatus,
@@ -164,7 +164,7 @@ def test_factory_resolves_bindings_despite_legacy_state_db(
     API run fail with ``sqlite3.OperationalError`` in production.
     """
     import gateway.storage.db as db_module
-    import platform.deployment_fargate.api_control_plane.db.db_client as db_client_module
+    import platform.deployment_multi_tenant.lambda_control_plane.db.db_client as db_client_module
 
     monkeypatch.setattr(db_module, "host_home", lambda: tmp_path / "host")
     monkeypatch.setattr(db_module, "opensre_home", lambda: tmp_path / "host")

@@ -11,14 +11,9 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-import pytest
-
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 
-# Whitelist lives in the opensre-infra submodule (requires submodule checkout).
-_BUNDLE_SCRIPT = (
-    "platform/deployment_fargate/opensre-infra/scripts/build-lambda-bundles.sh"
-)
+_BUNDLE_SCRIPT = "platform/deployment_multi_tenant/scripts/build-lambda-bundles.sh"
 
 _PATH_PATTERN = re.compile(r"^\s*(platform/[A-Za-z0-9_./-]+)\s*$", re.MULTILINE)
 
@@ -61,10 +56,6 @@ def _is_covered(module: str, bundled: tuple[str, ...]) -> bool:
     return False
 
 
-@pytest.mark.skipif(
-    not (_REPO_ROOT / _BUNDLE_SCRIPT).is_file(),
-    reason="opensre-infra submodule not checked out",
-)
 def test_bundle_ships_all_platform_imports() -> None:
     bundled = _bundled_paths(_BUNDLE_SCRIPT)
     missing: set[str] = set()

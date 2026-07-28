@@ -43,7 +43,7 @@ from platform.deployment_ec2.telegram_gateway.stack import (
     outputs_exists,
     save_outputs,
 )
-from platform.deployment_fargate.utils.prep_ec2_deployment import (
+from platform.deployment_multi_tenant.utils.prep_ec2_deployment import (
     run_lifecycle_main,
     validate_deploy_env,
 )

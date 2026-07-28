@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from platform.deployment_fargate.api_public_forwarder.runtime import RuntimeConfig
+from platform.deployment_multi_tenant.lambda_public_forwarder.runtime import RuntimeConfig
 
 
 def test_runtime_config_requires_database_and_region(

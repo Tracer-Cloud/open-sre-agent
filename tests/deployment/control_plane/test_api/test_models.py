@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from platform.deployment_fargate.api_control_plane.utils.models import (
+from platform.deployment_multi_tenant.lambda_control_plane.utils.models import (
     AgentRun,
     AgentRunSource,
     AgentRunStatus,

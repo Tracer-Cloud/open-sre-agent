@@ -16,8 +16,7 @@ export
 	prefect-local-test run dev docs-dev \
 	bake-gateway deploy-gateway destroy-gateway \
 	deploy-gateway-direct destroy-gateway-direct \
-	cdk-synth cdk-diff cdk-deploy cdk-deploy-fleet cdk-deploy-fleet-from-infra-aws \
-	cdk-destroy cdk-verify \
+	cdk-verify \
 	deploy-lambda deploy-prefect deploy-flink destroy-lambda destroy-prefect destroy-flink \
 	test test-full test-cov test-scope test-cli-smoke test-turn-live test-grafana \
 	rabbitmq-local-up rabbitmq-local-down test-rabbitmq-real \
@@ -304,47 +303,12 @@ deploy-gateway-direct:
 destroy-gateway-direct:
 	$(PYTHON) -m platform.deployment_ec2.telegram_gateway.lifecycle destroy-direct
 
-# Fargate fleet (Python CDK). Control-plane and public-forwarder APIs are
-# Terraform under opensre-infra (see DEPLOYMENT.md).
-FLEET_CDK_DIR = platform/deployment_fargate/fargate_fleet_infrastructure
-FLEET_CDK = cd $(FLEET_CDK_DIR) && uv run --extra cdk cdk
-FLEET_CDK_ARGS ?=
-# Defaults to the opensre-infra git submodule under platform/deployment_fargate/.
-OPENSRE_INFRA_AWS_DIR ?= platform/deployment_fargate/opensre-infra
-OPENSRE_INFRA_AWS_ENVIRONMENT ?=
-INFRA_AWS_DEPLOY_SCRIPT = platform/deployment_fargate/scripts/cdk_deploy_fleet_from_infra_aws.sh
-
-cdk-synth:
-	$(FLEET_CDK) synth
-
-cdk-diff:
-	$(FLEET_CDK) diff $(FLEET_CDK_ARGS)
-
-cdk-deploy: cdk-deploy-fleet
-
-cdk-deploy-fleet:
-	$(FLEET_CDK) deploy OpensreFargateFleet --require-approval never $(FLEET_CDK_ARGS)
-
-# Resolve S3 Files identifiers from opensre-infra Terraform memories output,
-# then deploy the fleet. Keep VpcId / PublicSubnetIds / GatewayImage in FLEET_CDK_ARGS.
-cdk-deploy-fleet-from-infra-aws:
-	@if [ -z "$(OPENSRE_INFRA_AWS_ENVIRONMENT)" ]; then \
-		echo "OPENSRE_INFRA_AWS_ENVIRONMENT is required (e.g. dev or prod)"; \
-		exit 1; \
-	fi
-	OPENSRE_INFRA_AWS_DIR="$(OPENSRE_INFRA_AWS_DIR)" \
-	OPENSRE_INFRA_AWS_ENVIRONMENT="$(OPENSRE_INFRA_AWS_ENVIRONMENT)" \
-	FLEET_CDK_ARGS="$(FLEET_CDK_ARGS)" \
-		$(INFRA_AWS_DEPLOY_SCRIPT) --environment "$(OPENSRE_INFRA_AWS_ENVIRONMENT)"
-
-cdk-destroy:
-	$(FLEET_CDK) destroy OpensreFargateFleet --force
+# Fargate fleet + Lambda APIs are Terraform under platform/deployment_multi_tenant
+# (see DEPLOYMENT.md). cdk-verify keeps the historical Make/CI name.
+OPENSRE_INFRA_AWS_DIR ?= platform/deployment_multi_tenant
 
 cdk-verify:
-	uv run --extra cdk pytest \
-		tests/platform/deployment_fargate/fargate_fleet_infrastructure/ \
-		tests/platform/deployment_fargate/test_lambda_bundle_paths.py -q
-	cd $(FLEET_CDK_DIR) && PYTHONPATH=../../.. uv run --extra cdk python -m platform.deployment_fargate.fargate_fleet_infrastructure.app
+	uv run pytest tests/platform/deployment_multi_tenant/test_lambda_bundle_paths.py -q
 
 # Deploy Lambda test case
 deploy-lambda:
@@ -524,14 +488,8 @@ help:
 	@echo "  make deploy-gateway  - Launch gateway EC2 instance from pre-baked AMI (fast)"
 	@echo "  make destroy-gateway - Terminate gateway instance and clean up (set OPENSRE_GATEWAY_DESTROY_PURGE_AMI=1 to also deregister AMI)"
 	@echo ""
-	@echo "  FARGATE DEPLOYMENT (Python CDK fleet; Lambda APIs are Terraform in opensre-infra)"
-	@echo "  make cdk-synth                      - Synthesize fleet CDK template"
-	@echo "  make cdk-diff                       - Diff fleet CDK stack"
-	@echo "  make cdk-deploy-fleet               - Deploy shared ECS fleet"
-	@echo "  make cdk-deploy-fleet-from-infra-aws - Deploy fleet using opensre-infra-aws Terraform memories"
-	@echo "  make cdk-deploy                     - Deploy fleet CDK stack"
-	@echo "  make cdk-destroy                    - Destroy fleet CDK stack"
-	@echo "  make cdk-verify                     - Run fleet CDK synth tests + lambda bundle path check"
+	@echo "  FARGATE DEPLOYMENT (Terraform under platform/deployment_multi_tenant)"
+	@echo "  make cdk-verify                     - Check Lambda bundle whitelist covers platform imports"
 	@echo ""
 	@echo "  E2E TEST INFRA (AWS SDK)"
 	@echo "  make deploy-lambda     - Deploy Lambda stack (~50s)"

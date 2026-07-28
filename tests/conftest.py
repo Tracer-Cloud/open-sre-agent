@@ -1,7 +1,11 @@
 """Root pytest configuration — loads .env for all test directories."""
 
+from __future__ import annotations
+
 import os
 from collections.abc import Iterator
+from importlib.util import find_spec
+from pathlib import Path
 
 import pytest
 
@@ -12,6 +16,40 @@ from config.platform_bootstrap import ensure_project_platform_package
 ensure_project_platform_package()
 
 _ENV_PATH = PROJECT_ROOT / ".env"
+
+# Private opensre-infra-aws submodule paths. Without
+# ``git submodule update --init platform/deployment_multi_tenant``, collection of
+# these trees fails for community/fork CI.
+_OPENSRE_INFRA_AWS_TEST_MARKERS = (
+    "/tests/platform/deployment_multi_tenant",
+    "/tests/deployment/control_plane",
+)
+_OPENSRE_INFRA_AWS_AVAILABLE = (
+    find_spec("platform.deployment_multi_tenant.lambda_control_plane") is not None
+)
+
+if not _OPENSRE_INFRA_AWS_AVAILABLE:
+    # Relative to this conftest — covers directory discovery.
+    collect_ignore_glob = [
+        "platform/deployment_multi_tenant/*",
+        "deployment/control_plane/*",
+    ]
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Drop explicit CLI paths that need the private submodule when it is absent."""
+    _load_env()
+    _disable_sentry()
+    _mark_tests_for_analytics()
+    if _OPENSRE_INFRA_AWS_AVAILABLE:
+        return
+    kept: list[str] = []
+    for arg in config.args:
+        normalized = Path(arg).resolve().as_posix()
+        if any(marker in normalized for marker in _OPENSRE_INFRA_AWS_TEST_MARKERS):
+            continue
+        kept.append(arg)
+    config.args = kept
 
 
 def _load_env() -> None:
@@ -103,13 +141,6 @@ def _isolate_opensre_home_files(request, monkeypatch, tmp_path) -> None:
         return
     monkeypatch.setenv("OPENSRE_WIZARD_STORE_PATH", str(tmp_path / "opensre.json"))
     monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
-
-
-def pytest_configure(config):
-    """Pytest hook — keep env available for collection and execution."""
-    _load_env()
-    _disable_sentry()
-    _mark_tests_for_analytics()
 
 
 @pytest.hookimpl(trylast=True)

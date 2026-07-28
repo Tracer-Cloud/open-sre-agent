@@ -10,24 +10,24 @@ import pytest
 from botocore.exceptions import ClientError
 from botocore.validate import validate_parameters
 
-from platform.deployment_fargate.api_control_plane.aws.ecs import (
+from platform.deployment_multi_tenant.lambda_control_plane.aws.ecs import (
     FargateServiceSpec,
     GatewayTaskDefinitionSpec,
     TenantEcsAdapter,
     validate_immutable_image,
 )
-from platform.deployment_fargate.api_control_plane.aws.iam import (
+from platform.deployment_multi_tenant.lambda_control_plane.aws.iam import (
     S3_FILES_CLIENT_ACTIONS,
     TenantIamAdapter,
     TenantMountBinding,
     build_file_system_isolation_policy,
     build_tenant_task_policy,
 )
-from platform.deployment_fargate.api_control_plane.aws.s3_files import S3FilesAdapter
-from platform.deployment_fargate.api_control_plane.aws.secrets_manager import (
+from platform.deployment_multi_tenant.lambda_control_plane.aws.s3_files import S3FilesAdapter
+from platform.deployment_multi_tenant.lambda_control_plane.aws.secrets_manager import (
     TenantSecretsManagerAdapter,
 )
-from platform.deployment_fargate.utils.validate_existing_infrastructure import (
+from platform.deployment_multi_tenant.utils.validate_existing_infrastructure import (
     AwsResourceConfigurationError,
     ExistingInfrastructureValidator,
 )

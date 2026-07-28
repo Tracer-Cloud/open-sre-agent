@@ -11,34 +11,34 @@ from unittest.mock import MagicMock
 import pytest
 from botocore.exceptions import ClientError
 
-from platform.deployment_fargate.api_control_plane.aws.ecs import (
+from platform.deployment_multi_tenant.lambda_control_plane.aws.ecs import (
     FargateServiceState,
     TenantEcsAdapter,
 )
-from platform.deployment_fargate.api_control_plane.aws.iam import (
+from platform.deployment_multi_tenant.lambda_control_plane.aws.iam import (
     TenantIamAdapter,
     TenantMountBinding,
 )
-from platform.deployment_fargate.api_control_plane.aws.s3_files import (
+from platform.deployment_multi_tenant.lambda_control_plane.aws.s3_files import (
     S3FilesAccessPoint,
     S3FilesAdapter,
 )
-from platform.deployment_fargate.api_control_plane.aws.secrets_manager import (
+from platform.deployment_multi_tenant.lambda_control_plane.aws.secrets_manager import (
     TenantPublicApiCredential,
     TenantSecretsManagerAdapter,
 )
-from platform.deployment_fargate.api_control_plane.methods.fargate_container_service import (
+from platform.deployment_multi_tenant.lambda_control_plane.methods.fargate_container_service import (
     FargateContainerLifecycle,
 )
-from platform.deployment_fargate.api_control_plane.methods.lifecycle_errors import (
+from platform.deployment_multi_tenant.lambda_control_plane.methods.lifecycle_errors import (
     LifecycleCapacityError,
     LifecycleOperationError,
     LifecycleValidationError,
 )
-from platform.deployment_fargate.api_control_plane.utils.get_fleet_config import (
+from platform.deployment_multi_tenant.lambda_control_plane.utils.get_fleet_config import (
     TenantFleetConfig,
 )
-from platform.deployment_fargate.api_control_plane.utils.models import (
+from platform.deployment_multi_tenant.lambda_control_plane.utils.models import (
     DeploymentActualState,
     DeploymentDesiredState,
     SizeProfile,
@@ -542,7 +542,7 @@ def test_rejects_organization_ids_that_could_escape_resource_names() -> None:
 def test_zero_argument_factory_uses_real_environment_and_standard_aws_clients(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import platform.deployment_fargate.api_control_plane.methods.fargate_container_service as lifecycle_module
+    import platform.deployment_multi_tenant.lambda_control_plane.methods.fargate_container_service as lifecycle_module
 
     _factory_environment(monkeypatch)
     repository = MemoryLifecycleRepository()

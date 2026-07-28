@@ -9,10 +9,10 @@ from typing import Any
 
 import pytest
 
-from platform.deployment_fargate.api_control_plane.db import SCHEMA
-from platform.deployment_fargate.api_control_plane.db.db_client import ControlPlaneDbClient
-from platform.deployment_fargate.api_control_plane.db.schema import MIGRATIONS
-from platform.deployment_fargate.api_control_plane.utils.models import (
+from platform.deployment_multi_tenant.lambda_control_plane.db import SCHEMA
+from platform.deployment_multi_tenant.lambda_control_plane.db.db_client import ControlPlaneDbClient
+from platform.deployment_multi_tenant.lambda_control_plane.db.schema import MIGRATIONS
+from platform.deployment_multi_tenant.lambda_control_plane.utils.models import (
     AgentRunSource,
     AgentRunStatus,
     DeploymentDesiredState,
