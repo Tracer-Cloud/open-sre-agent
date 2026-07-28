@@ -28,7 +28,7 @@ from integrations._validation_helpers import report_classify_failure, report_val
 logger = logging.getLogger(__name__)
 
 DEFAULT_MONGODB_AUTH_SOURCE = "admin"
-DEFAULT_MONGODB_TIMEOUT_MS = 5000
+DEFAULT_MONGODB_TIMEOUT_MILLISECONDS = 5000
 DEFAULT_MONGODB_MAX_RESULTS = 50
 
 
@@ -100,8 +100,8 @@ def _get_client(config: MongoDBConfig) -> Any:
         config.connection_string,
         authSource=config.auth_source,
         tls=config.tls,
-        serverSelectionTimeoutMS=DEFAULT_MONGODB_TIMEOUT_MS,
-        connectTimeoutMS=DEFAULT_MONGODB_TIMEOUT_MS,
+        serverSelectionTimeoutMS=DEFAULT_MONGODB_TIMEOUT_MILLISECONDS,
+        connectTimeoutMS=DEFAULT_MONGODB_TIMEOUT_MILLISECONDS,
         socketTimeoutMS=int(config.timeout_seconds * 1000),
         appName="opensre",
     )
