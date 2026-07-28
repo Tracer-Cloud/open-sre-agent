@@ -12,6 +12,7 @@ import pytest
 
 from config.constants import paths
 from config.constants.billing import ORGANIZATION_ID_ENV
+from config.constants.memory import OPENSRE_MEMORY_DIR_ENV
 from config.principal import Actor, Principal, StorageScope
 from config.scope_context import bound_storage_scope
 
@@ -25,6 +26,9 @@ BOB = Actor(id="U_BOB")
 def _home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Keep every path assertion off the developer's real home directory."""
     monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", tmp_path)
+    # The global test isolation fixture pins OPENSRE_MEMORY_DIR to a flat
+    # tmp path; clear it so get_memory_dir() follows session_home() scoping.
+    monkeypatch.delenv(OPENSRE_MEMORY_DIR_ENV, raising=False)
     monkeypatch.delenv(paths.CONTEXT_ROOT_ENV, raising=False)
     monkeypatch.delenv(ORGANIZATION_ID_ENV, raising=False)
     return tmp_path
