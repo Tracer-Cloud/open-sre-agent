@@ -7,13 +7,23 @@ from typing import Any
 
 
 def default_llm_factory() -> Any:
-    """Return the default agent LLM client.
+    """Return the default agent (tool-calling) LLM client.
 
     Uses a lazy import to avoid pulling in the full LLM stack at module load time.
     """
     from core.llm.factory import LLMRole, get_llm
 
     return get_llm(LLMRole.AGENT)
+
+
+def default_reasoning_llm_factory() -> Any:
+    """Return the default reasoning LLM client, for single-shot structured-output calls.
+
+    Uses a lazy import to avoid pulling in the full LLM stack at module load time.
+    """
+    from core.llm.factory import LLMRole, get_llm
+
+    return get_llm(LLMRole.REASONING)
 
 
 def resolve_provider_models(settings: object, provider: str) -> tuple[str, str]:
@@ -62,4 +72,4 @@ def resolve_provider_models(settings: object, provider: str) -> tuple[str, str]:
     return (reasoning_model or "default", toolcall_model or reasoning_model or "default")
 
 
-__all__ = ["default_llm_factory", "resolve_provider_models"]
+__all__ = ["default_llm_factory", "default_reasoning_llm_factory", "resolve_provider_models"]
