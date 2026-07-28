@@ -487,7 +487,8 @@ def family_key(service_key: str) -> str:
 
 # Wire the concrete resolver into the platform-level seam so callers in
 # ``tools/`` can normalize service keys without importing from
-# ``integrations/`` directly (T-4 layering audit, issue #3352, item 27).
+# ``integrations/`` directly, keeping ``platform/`` free of a reverse
+# dependency on ``integrations/``.
 # Kept at import time so any consumer that has already imported the
 # ``integrations`` package (every CLI entry point does so during startup)
 # sees the real mapping instead of the identity fallback.
