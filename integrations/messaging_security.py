@@ -6,8 +6,6 @@ This module implements the identity model for inbound messaging platforms
 1. MessagingIdentityPolicy — per-platform allowlist and pairing config.
 2. DM pairing helpers — one-time code generation, hashing, and verification.
 3. Inbound message authorization — check whether a sender is allowed.
-
-Prerequisite for issue #1482 (conversational loop).
 """
 
 from __future__ import annotations
@@ -236,7 +234,6 @@ def authorize_inbound_message(
             reason="Inbound messaging is not enabled for this platform",
         )
 
-    # Check allowed chat IDs first (if configured).
     # This runs before the /pair check so that pairing cannot bypass chat restrictions.
     # When allowed_chat_ids is set, a None chat_id means the message is from
     # an unidentifiable context (e.g. a DM with no chat_id) — treat as blocked.
@@ -252,7 +249,6 @@ def authorize_inbound_message(
     if user_id in policy.allowed_user_id_set():
         return AuthorizationResult(allowed=True, reason="User is authorized")
 
-    # Check if this is a pairing attempt (only when a pairing is actually pending)
     if message_text and message_text.strip().lower().startswith("/pair "):
         if policy.pairing_secret_hash:
             return AuthorizationResult(
@@ -265,7 +261,6 @@ def authorize_inbound_message(
             reason="No pairing is pending",
         )
 
-    # Check allowed user IDs
     if not policy.allowed_user_ids:
         if policy.require_dm_pairing:
             return AuthorizationResult(
@@ -303,7 +298,6 @@ def complete_pairing(
     if not policy.pairing_secret_hash:
         return False, "No pairing is pending. Ask the operator to run `opensre messaging pair`."
 
-    # Check TTL expiry
     if _is_pairing_expired(policy):
         policy.pairing_secret_hash = None
         policy.pairing_created_at = None
@@ -313,7 +307,6 @@ def complete_pairing(
             "Pairing code has expired. Ask the operator to run `opensre messaging pair` again.",
         )
 
-    # Check brute-force limit
     if policy.pairing_attempts >= _MAX_PAIRING_ATTEMPTS:
         policy.pairing_secret_hash = None
         policy.pairing_created_at = None
@@ -333,7 +326,6 @@ def complete_pairing(
             return False, "Too many failed attempts. Pairing code invalidated."
         return False, f"Invalid pairing code. {remaining} attempts remaining."
 
-    # Pairing successful
     if user_id not in policy.allowed_user_id_set():
         policy.allowed_user_ids.append(user_id)
         policy._invalidate_allowed_user_id_cache()
