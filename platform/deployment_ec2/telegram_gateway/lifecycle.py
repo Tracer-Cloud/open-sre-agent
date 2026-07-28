@@ -27,6 +27,10 @@ from platform.deployment_ec2.ec2 import (
     terminate_instance,
     wait_for_running,
 )
+from platform.deployment_ec2.prep_ec2_deployment import (
+    run_lifecycle_main,
+    validate_deploy_env,
+)
 from platform.deployment_ec2.ssm import wait_for_ssm_registration
 from platform.deployment_ec2.telegram_gateway.build_server_image import build_server_image
 from platform.deployment_ec2.telegram_gateway.install_on_new_server import (
@@ -45,10 +49,6 @@ from platform.deployment_ec2.telegram_gateway.stack import (
     load_outputs,
     outputs_exists,
     save_outputs,
-)
-from platform.deployment_ec2.prep_ec2_deployment import (
-    run_lifecycle_main,
-    validate_deploy_env,
 )
 
 REGION = DEFAULT_REGION
