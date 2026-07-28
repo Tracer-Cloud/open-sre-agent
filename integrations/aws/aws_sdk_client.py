@@ -57,12 +57,10 @@ def _is_operation_allowed(operation_name: str) -> tuple[bool, str]:
     """
     operation_lower = operation_name.lower()
 
-    # Check blocklist first (fail fast on dangerous operations)
     for pattern in BLOCKED_OPERATION_PATTERNS:
         if re.match(pattern, operation_lower):
             return False, f"Operation '{operation_name}' matches blocked pattern '{pattern}'"
 
-    # Check allowlist
     for pattern in ALLOWED_OPERATION_PATTERNS:
         if re.match(pattern, operation_lower):
             return True, "Operation allowed"
@@ -162,7 +160,6 @@ def execute_aws_sdk_call(
             "metadata": {},
         }
 
-    # Validate operation is allowed
     is_allowed, reason = _is_operation_allowed(operation_name)
     if not is_allowed:
         return {
@@ -175,14 +172,12 @@ def execute_aws_sdk_call(
         }
 
     try:
-        # Create boto3 client
         client_kwargs: dict[str, str] = {}
         if region:
             client_kwargs["region_name"] = region
 
         client = boto3.client(service_name, **client_kwargs)  # type: ignore[call-overload]
 
-        # Verify operation exists
         if not hasattr(client, operation_name):
             return {
                 "success": False,
@@ -193,14 +188,12 @@ def execute_aws_sdk_call(
                 "metadata": {"available_operations": dir(client)[:20]},
             }
 
-        # Execute operation
         operation = getattr(client, operation_name)
         if parameters:
             response = operation(**parameters)
         else:
             response = operation()
 
-        # Sanitize response
         sanitized_data = _sanitize_response(response)
 
         return {
