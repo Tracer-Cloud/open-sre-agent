@@ -262,7 +262,7 @@ def test_same_thread_alice_bob_interleaved_turns_stay_isolated(
 
     order = [ALICE, BOB, ALICE, BOB, ALICE, BOB]
     barrier = threading.Barrier(len(order))
-    errors: list[BaseException] = []
+    errors: list[Exception] = []
 
     def worker(user_id: str, idx: int) -> None:
         try:
@@ -273,7 +273,7 @@ def test_same_thread_alice_bob_interleaved_turns_stay_isolated(
                 thread_ts=thread_ts,
                 text=f"turn-{idx}",
             )
-        except BaseException as exc:  # noqa: BLE001
+        except Exception as exc:
             errors.append(exc)
 
     threads = [
@@ -313,7 +313,7 @@ def test_many_actors_parallel_turns_all_bindings_survive(
     """Fan-out across N actors / N threads — every binding row remains."""
     n = 8
     barrier = threading.Barrier(n)
-    errors: list[BaseException] = []
+    errors: list[Exception] = []
     sessions: dict[str, str] = {}
     lock = threading.Lock()
 
@@ -343,7 +343,7 @@ def test_many_actors_parallel_turns_all_bindings_survive(
                 thread_ts=f"{1000 + idx}.1",
                 text=f"hi-{idx}",
             )
-        except BaseException as exc:  # noqa: BLE001
+        except Exception as exc:
             errors.append(exc)
 
     threads = [threading.Thread(target=worker, args=(i,), name=f"u{i}") for i in range(n)]

@@ -77,42 +77,6 @@ With no scope bound — a terminal run — every path resolves to the flat
 Alice and Bob in the same Slack thread get different session files and different
 binding rows. They share the org's integrations store.
 
-## Many teammates on one silo
-
-One gateway process serves one organization. Teammates share credentials and the
-credit bill; they do not share conversation transcripts.
-
-| Piece | Stateful? | Shared across teammates? |
-| --- | --- | --- |
-| Agent / `HeadlessAgent` | No — new instance every turn | N/A |
-| Session JSONL | Yes — under `users/<slack_user_id>/sessions/` | No (per actor) |
-| `gateway/bindings.json` | Yes — one org file | File shared; rows keyed by actor |
-| `integrations.json` | Yes | Yes (org) |
-
-Concurrency: Socket Mode / Telegram each use a small thread pool. Turns in the
-**same** Slack thread are serialized by a conversation lock; Alice and Bob still
-keep separate session bindings. Different threads can run in parallel.
-
-```mermaid
-flowchart TB
-  subgraph shared ["Org-shared"]
-    I[integrations.json]
-    B[bindings.json]
-  end
-  subgraph private ["Per Slack user"]
-    A[users/U_ALICE/sessions]
-    C[users/U_BOB/sessions]
-  end
-  Turn[Stateless agent turn] --> I
-  Turn --> B
-  Turn --> A
-  Turn --> C
-```
-
-Regression coverage: `gateway/tests/test_multi_actor_concurrency.py` (store) and
-`gateway/tests/slack/test_dispatcher_multi_actor.py` (dispatcher + real
-session resolver).
-
 ## Other surfaces
 
 `principal` and `actor` are optional on the binding store and resolver. Callers

@@ -92,7 +92,7 @@ def test_concurrent_alice_bob_bind_same_thread_keeps_both_rows(bindings_path: Pa
     """Two actors binding the same Slack thread at once must both survive."""
     store = FileBindingStore(bindings_path)
     barrier = threading.Barrier(2)
-    errors: list[BaseException] = []
+    errors: list[Exception] = []
 
     def worker(actor: str, session_id: str) -> None:
         try:
@@ -104,7 +104,7 @@ def test_concurrent_alice_bob_bind_same_thread_keeps_both_rows(bindings_path: Pa
                 principal=ACME,
                 actor=actor,
             )
-        except BaseException as exc:  # noqa: BLE001 — collect for assert
+        except Exception as exc:
             errors.append(exc)
 
     threads = [
@@ -140,7 +140,7 @@ def test_concurrent_many_actors_all_bindings_survive(bindings_path: Path) -> Non
     store = FileBindingStore(bindings_path)
     n = 12
     barrier = threading.Barrier(n)
-    errors: list[BaseException] = []
+    errors: list[Exception] = []
 
     def worker(idx: int) -> None:
         actor = f"U_{idx:03d}"
@@ -159,7 +159,7 @@ def test_concurrent_many_actors_all_bindings_survive(bindings_path: Path) -> Non
                 platform=_PLATFORM, chat_id=_THREAD, principal=ACME, actor=actor
             )
             assert got == f"sess-{idx}"
-        except BaseException as exc:  # noqa: BLE001
+        except Exception as exc:
             errors.append(exc)
 
     threads = [threading.Thread(target=worker, args=(i,), name=f"u{i}") for i in range(n)]
@@ -189,7 +189,7 @@ def test_concurrent_rotate_same_actor_leaves_valid_document(bindings_path: Path)
     )
     n = 8
     barrier = threading.Barrier(n)
-    errors: list[BaseException] = []
+    errors: list[Exception] = []
     winners: list[str] = []
 
     def worker() -> None:
@@ -197,7 +197,7 @@ def test_concurrent_rotate_same_actor_leaves_valid_document(bindings_path: Path)
             barrier.wait(timeout=5)
             new_id = store.rotate(platform=_PLATFORM, chat_id=_THREAD, principal=ACME, actor=ALICE)
             winners.append(new_id)
-        except BaseException as exc:  # noqa: BLE001
+        except Exception as exc:
             errors.append(exc)
 
     threads = [threading.Thread(target=worker, name=f"rot{i}") for i in range(n)]
@@ -267,7 +267,7 @@ def test_concurrent_alice_bob_session_appends_do_not_mix() -> None:
     """Scoped writers append into different trees; neither sees the other's lines."""
     storage = JsonlSessionStorage()
     barrier = threading.Barrier(2)
-    errors: list[BaseException] = []
+    errors: list[Exception] = []
     paths_seen: dict[str, str] = {}
 
     def worker(actor: str, session_id: str, marker: str) -> None:
@@ -290,7 +290,7 @@ def test_concurrent_alice_bob_session_appends_do_not_mix() -> None:
                 texts = [r.get("content") for r in rows if r.get("type") == "message"]
                 assert all(isinstance(t, str) and t.startswith(marker) for t in texts)
                 assert len(texts) == 20
-        except BaseException as exc:  # noqa: BLE001
+        except Exception as exc:
             errors.append(exc)
 
     threads = [
@@ -332,7 +332,7 @@ def test_same_session_concurrent_appends_remain_line_parseable() -> None:
         path = session_path(session_id)
 
     barrier = threading.Barrier(2)
-    errors: list[BaseException] = []
+    errors: list[Exception] = []
 
     def worker(tag: str) -> None:
         try:
@@ -345,7 +345,7 @@ def test_same_session_concurrent_appends_remain_line_parseable() -> None:
                         content=f"{tag}-{i}",
                         metadata={"kind": "chat"},
                     )
-        except BaseException as exc:  # noqa: BLE001
+        except Exception as exc:
             errors.append(exc)
 
     threads = [
