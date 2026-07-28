@@ -44,6 +44,7 @@ def host(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     root = tmp_path / "host"
     monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", root)
     monkeypatch.delenv(paths.CONTEXT_ROOT_ENV, raising=False)
+    monkeypatch.delenv(paths.OPENSRE_MEMORY_DIR_ENV, raising=False)
     return root
 
 
