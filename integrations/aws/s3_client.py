@@ -297,7 +297,6 @@ def compare_versions(
         return credentials_error
 
     try:
-        # Get both versions
         resp1 = client.get_object(
             Bucket=bucket,
             Key=key,
