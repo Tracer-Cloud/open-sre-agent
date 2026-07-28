@@ -17,9 +17,9 @@ def _session(messages: list[tuple[str, str]] | None = None) -> SimpleNamespace:
     return SimpleNamespace(cli_agent_messages=list(messages or []))
 
 
-def _turns(n: int, start: int = 1) -> list[tuple[str, str]]:
+def _turns(n: int) -> list[tuple[str, str]]:
     out: list[tuple[str, str]] = []
-    for i in range(start, start + n):
+    for i in range(1, n + 1):
         out.append(("user", f"question {i}"))
         out.append(("assistant", f"answer {i}"))
     return out
