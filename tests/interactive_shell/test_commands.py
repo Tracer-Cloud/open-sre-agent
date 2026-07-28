@@ -516,6 +516,7 @@ class TestDispatchSlash:
         import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+        monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
         history = FileHistory(str(tmp_path / "interactive_history"))
         history.store_string("opensre health")
         history.store_string("/integrations list")
@@ -2147,6 +2148,7 @@ class TestHistoryCommand:
         import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+        monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
         console, buf = _capture()
         dispatch_slash("/history", Session(), console)
         assert "no history" in buf.getvalue()
@@ -2159,6 +2161,7 @@ class TestHistoryCommand:
         import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+        monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
         history = FileHistory(str(tmp_path / "interactive_history"))
         history.store_string("pod crash in prod")
         history.store_string("/status")
@@ -2178,6 +2181,7 @@ class TestHistoryCommand:
         import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+        monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
         session = Session()
         session.record("alert", "bad input", ok=False)
         console, buf = _capture()

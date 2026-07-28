@@ -192,6 +192,10 @@ def render_prompt_index(*, max_chars: int = DEFAULT_PROMPT_INDEX_CHARS) -> str:
 
 
 def _rebuild_index_best_effort() -> None:
+    # A failed rebuild leaves MEMORY.md stale until the next successful write.
+    # That is tolerable because MEMORY.md is a human-facing convenience only:
+    # every agent-facing read (list_memories, render_prompt_index) scans the
+    # directory directly, so a stale index never affects recall or extraction.
     try:
         rebuild_index()
     except OSError as exc:

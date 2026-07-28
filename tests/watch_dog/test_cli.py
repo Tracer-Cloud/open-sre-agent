@@ -25,6 +25,7 @@ def test_watchdog_help_lists_expected_flags() -> None:
         "--interval",
         "--cooldown",
         "--once",
+        "--provider",
         "--chat-id",
         "--verbose",
     ):
@@ -74,8 +75,52 @@ def test_watchdog_cli_maps_flags_to_config(monkeypatch: pytest.MonkeyPatch) -> N
     assert config.interval == 5
     assert config.cooldown == 300
     assert config.once is True
+    assert config.provider == "telegram"
     assert config.chat_id == "chat-1"
     assert config.verbose is True
+
+
+def test_watchdog_cli_defaults_provider_to_telegram(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, WatchdogConfig] = {}
+
+    def _fake_run(config: WatchdogConfig) -> int:
+        captured["config"] = config
+        return 0
+
+    monkeypatch.setattr("surfaces.cli.commands.watchdog.run_watchdog", _fake_run)
+
+    result = CliRunner().invoke(watchdog_command, ["--pid", "123", "--max-cpu", "90"])
+
+    assert result.exit_code == 0
+    assert captured["config"].provider == "telegram"
+
+
+def test_watchdog_cli_accepts_rocketchat_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, WatchdogConfig] = {}
+
+    def _fake_run(config: WatchdogConfig) -> int:
+        captured["config"] = config
+        return 0
+
+    monkeypatch.setattr("surfaces.cli.commands.watchdog.run_watchdog", _fake_run)
+
+    result = CliRunner().invoke(
+        watchdog_command,
+        ["--pid", "123", "--max-cpu", "90", "--provider", "rocketchat", "--chat-id", "#ops"],
+    )
+
+    assert result.exit_code == 0
+    assert captured["config"].provider == "rocketchat"
+    assert captured["config"].chat_id == "#ops"
+
+
+def test_watchdog_cli_rejects_unknown_provider() -> None:
+    result = CliRunner().invoke(
+        watchdog_command,
+        ["--pid", "123", "--max-cpu", "90", "--provider", "discord"],
+    )
+
+    assert result.exit_code != 0
 
 
 def test_watchdog_cli_rejects_invalid_selector() -> None:

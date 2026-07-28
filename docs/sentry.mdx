@@ -103,9 +103,11 @@ Detail: Sentry validated for org your-org; 30 issue(s) in the last 7 days
 
 ## Morning digest (scheduled)
 
-Deliver a daily unresolved-issues summary to Slack or Telegram. This uses the
-headless **sentry-summary** skill path (one search + LLM answer), not the
-investigation pipeline or generic `opensre cron` kinds.
+Deliver a daily unresolved-issues summary to Slack, Telegram, or Rocket.Chat.
+This uses the headless **sentry-summary** skill path (tools + LLM answer via
+the gateway), not the investigation pipeline or generic `opensre cron` kinds.
+When an uptime watch schedule is running, the skill also calls
+`get_sentry_uptime_digest` to include downtime/recovery context in the digest.
 
 | Command | What it does |
 | --- | --- |
@@ -136,10 +138,27 @@ opensre sentry digest schedule add \
   --chat-id C0123ABCD
 ```
 
+Example — same schedule to a Rocket.Chat channel (requires token credentials —
+see [Rocket.Chat](/messaging/rocketchat), an incoming webhook alone cannot
+target an explicit `--chat-id`):
+
+```bash
+opensre sentry digest schedule add \
+  --cron "0 8 * * 1-5" \
+  --tz Europe/London \
+  --provider rocketchat \
+  --chat-id "#alerts"
+```
+
 Optional `--project my-service` scopes the digest to one Sentry project.
 
+When an **uptime watch** schedule is running, the `sentry-summary` skill
+automatically includes an **Uptime / downtime (last 24h)** section with
+monitors that are still down or recovered in the window. If no uptime watch
+history exists, the digest stays Issues-only.
+
 The gateway daemon picks up scheduled digests automatically when it is running.
-If the LLM is unavailable, the run fails with an error (no deterministic fallback).
+If the LLM is unavailable, the run fails with an error.
 
 <Note>
 The count reflects issues seen in the last 7 days (capped at 100, shown as
@@ -150,9 +169,9 @@ investigation) to enumerate the full issue set over a custom window.
 ## Uptime watch (downtime notifications)
 
 Poll Sentry **uptime monitors** (Alerts / Uptime — not the Issues digest) and
-ping Slack or Telegram only when a monitor transitions to **down** or
-**recovered**. Quiet polls deliver nothing. This is separate from the morning
-Issues digest (`sentry-summary` / Feature #10).
+ping Slack, Telegram, or Rocket.Chat only when a monitor transitions to
+**down** or **recovered**. Quiet polls deliver nothing. This is separate from
+the morning Issues digest (`sentry-summary` / Feature #10).
 
 | Command | What it does |
 | --- | --- |
@@ -175,8 +194,11 @@ opensre sentry uptime watch add \
 Requires `alerts:read` (or equivalent) on the Sentry token. The agent tool
 `list_sentry_uptime_alerts` exposes the same monitor list in chat/investigation.
 
-Follow-ups (not in v1): inbound Sentry webhooks, auto-remediation attempts, and
-a morning-digest section summarizing yesterday's uptime transitions.
+Schedule an uptime watch alongside the morning digest so the `sentry-summary`
+skill can include yesterday's downtime summary via `get_sentry_uptime_digest`;
+the watch records DOWN/RECOVERED transitions locally for that rollup.
+
+Follow-ups (not in v1): inbound Sentry webhooks and auto-remediation attempts.
 
 ## Telemetry knobs
 

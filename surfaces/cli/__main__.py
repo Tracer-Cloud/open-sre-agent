@@ -158,8 +158,19 @@ def cli(
         if sys.stdin.isatty() and sys.stdout.isatty():
             from surfaces.interactive_shell import run_repl
 
+            # Only force interactivity from the CLI when the user actually passed
+            # --interactive/--no-interactive (or --resume). Otherwise pass None so
+            # ReplConfig.load can honor OPENSRE_INTERACTIVE and config.yml.
+            interactive_src = ctx.get_parameter_source("interactive")
+            cli_enabled: bool | None
+            if resume_session_id is not None:
+                cli_enabled = True
+            elif interactive_src is not None and interactive_src.name == "COMMANDLINE":
+                cli_enabled = interactive
+            else:
+                cli_enabled = None
             config = ReplConfig.load(
-                cli_enabled=interactive or resume_session_id is not None,
+                cli_enabled=cli_enabled,
                 cli_layout=layout,
                 cli_theme=theme,
             )

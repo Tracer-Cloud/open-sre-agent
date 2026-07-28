@@ -10,6 +10,10 @@ from dataclasses import dataclass
 from rich.console import Console
 from rich.markup import escape
 
+from integrations.rocketchat.alarms import RocketChatAlarmDispatcher
+from integrations.rocketchat.credentials import (
+    load_credentials_from_env as load_rocketchat_credentials_from_env,
+)
 from integrations.telegram.alarms import AlarmDispatcher
 from integrations.telegram.credentials import load_credentials_from_env
 from platform.common.errors import OpenSREError
@@ -43,6 +47,8 @@ class WatchdogStartSpec:
     cooldown_seconds: float = 300.0
     interval_seconds: float = 2.0
     once: bool = False
+    provider: str = "telegram"
+    chat_id: str = ""
 
 
 def _parse_duration_seconds(raw: str) -> float | None:
@@ -93,7 +99,7 @@ def parse_watch_argv(argv: list[str]) -> WatchdogStartSpec | str:
     if not argv:
         return (
             f"[{ERROR}]usage:[/] /watch <pid> [--max-cpu N] [--max-runtime D] [--max-rss S] "
-            f"[--cooldown D] [--interval N] [--once]"
+            f"[--cooldown D] [--interval N] [--once] [--provider telegram|rocketchat] [--chat-id ID]"
         )
     if argv[0].startswith("-"):
         return f"[{ERROR}]usage:[/] /watch <pid> ...  — the process id must come first"
@@ -111,6 +117,8 @@ def parse_watch_argv(argv: list[str]) -> WatchdogStartSpec | str:
     cooldown_seconds = 300.0
     interval_seconds = 2.0
     once = False
+    provider = "telegram"
+    chat_id = ""
 
     i = 1
     while i < len(argv):
@@ -125,7 +133,17 @@ def parse_watch_argv(argv: list[str]) -> WatchdogStartSpec | str:
             return f"[{ERROR}]missing value for[/] {escape(token)}"
         value = argv[i + 1]
         i += 2
-        if token == "--max-cpu":
+        if token == "--provider":
+            normalized_provider = value.strip().lower()
+            if normalized_provider not in ("telegram", "rocketchat"):
+                return (
+                    f"[{ERROR}]invalid --provider:[/] {escape(value)} "
+                    f"[{ERROR}](must be telegram or rocketchat)[/]"
+                )
+            provider = normalized_provider
+        elif token == "--chat-id":
+            chat_id = value
+        elif token == "--max-cpu":
             try:
                 pct = float(value)
             except ValueError:
@@ -165,6 +183,8 @@ def parse_watch_argv(argv: list[str]) -> WatchdogStartSpec | str:
         cooldown_seconds=cooldown_seconds,
         interval_seconds=interval_seconds,
         once=once,
+        provider=provider,
+        chat_id=chat_id,
     )
 
 
@@ -180,6 +200,8 @@ def _watch_command_summary(spec: WatchdogStartSpec) -> str:
     parts.append(f"interval={spec.interval_seconds:g}s")
     if spec.once:
         parts.append("once")
+    if spec.provider != "telegram":
+        parts.append(f"provider={spec.provider}")
     return " ".join(parts)
 
 
@@ -202,7 +224,14 @@ def _cmd_watch(session: Session, console: Console, args: list[str]) -> bool:
         return True
 
     try:
-        creds = load_credentials_from_env()
+        if parsed.provider == "rocketchat":
+            rc_creds = load_rocketchat_credentials_from_env(channel_override=parsed.chat_id or None)
+            dispatcher: AlarmDispatcher | RocketChatAlarmDispatcher = RocketChatAlarmDispatcher(
+                rc_creds, cooldown_seconds=parsed.cooldown_seconds
+            )
+        else:
+            creds = load_credentials_from_env(chat_id_override=parsed.chat_id or None)
+            dispatcher = AlarmDispatcher(creds, cooldown_seconds=parsed.cooldown_seconds)
     except OpenSREError as exc:
         console.print(f"[{ERROR}]{escape(str(exc))}[/]")
         return True
@@ -211,13 +240,13 @@ def _cmd_watch(session: Session, console: Console, args: list[str]) -> bool:
     task = session.task_registry.create(TaskKind.WATCHDOG, command=summary)
     task.mark_running()
     task.attach_pid(parsed.pid)
-    dispatcher = AlarmDispatcher(creds, cooldown_seconds=parsed.cooldown_seconds)
+    provider_label = parsed.provider
 
     def _on_alarm(threshold: str, detail: str) -> None:
         with _CONSOLE_PRINT_LOCK:
             console.print(
                 f"[task {escape(task.task_id)}] alarm fired: {escape(threshold)} "
-                f"{escape(detail)} (telegram delivered)"
+                f"{escape(detail)} ({provider_label} delivered)"
             )
 
     start_watchdog_daemon_thread(
@@ -320,7 +349,7 @@ def _validate_watch_args(args: list[str]) -> str | None:
     if not args:
         return (
             f"[{ERROR}]usage:[/] /watch <pid> [--max-cpu N] [--max-runtime D] [--max-rss S] "
-            f"[--cooldown D] [--interval N] [--once]"
+            f"[--cooldown D] [--interval N] [--once] [--provider telegram|rocketchat] [--chat-id ID]"
         )
     return None
 
@@ -332,9 +361,14 @@ COMMANDS: list[SlashCommand] = [
         _cmd_watch,
         usage=(
             "/watch <pid> [--max-cpu N] [--max-runtime D] [--max-rss S] "
-            "[--cooldown D] [--interval N] [--once]",
+            "[--cooldown D] [--interval N] [--once] "
+            "[--provider telegram|rocketchat] [--chat-id ID]",
         ),
-        notes=("Alarms are sent to Telegram when Telegram delivery is configured.",),
+        notes=(
+            "Alarms are sent via the configured --provider (telegram by "
+            "default, or rocketchat) when that provider's delivery is "
+            "configured.",
+        ),
         validate_args=_validate_watch_args,
     ),
     SlashCommand(

@@ -1,57 +1,51 @@
 ---
 name: sentry-summary
-description: Summarise and cluster Sentry issues by theme, frequency, and business impact. Use for Sentry overviews, morning digests, reliability questions, or what to focus on.
+description: Summarise Sentry issues by theme and impact with optional uptime rollup. For overviews, morning digests, reliability questions.
 tools:
   - search_sentry_issues
   - get_sentry_issue_details
   - list_sentry_issue_events
+  - get_sentry_uptime_digest
 ---
 
 # Sentry Summary
 
-Sentry-only (#3 on-demand, #10 morning digest). Multi-source prompts: finish
-Sentry here, then suggest a multi-source investigation.
+Sentry-only (#3 on-demand, #10 morning digest). Multi-source: finish Sentry
+here, then suggest a multi-source investigation.
 
-## 1. Fetch
+## 1. Fetch issues
 
-`search_sentry_issues` once with `query: "is:unresolved"`:
+`search_sentry_issues` with `query: "is:unresolved"`:
+- **24h** — morning digest, overnight (#10); **7d** — "this week", overview.
 
-- **24h** — morning digest, overnight, today (#10)
-- **7d** — "this week", general overview
-- Map user words (`last night` → `24h`, `this week` → `7d`)
+Max 100 groups per page. Use `digest.page_saturated` vs `page_complete`.
+When `completeness` is `empty`, report zero — do not widen unless asked.
 
-One API page, max 100 issue groups (not events). Use `digest.page_saturated`
-(`100+` + `scope_note`) vs `page_complete` (exact count). When
-`completeness` is `empty`, report no groups in the requested window — do not
-widen `stats_period` or run a second search unless the user asks; label any
-broader follow-up separately. Digest has `structural_clusters`,
-`priority_candidates`, `top_issues`.
+## 2. Fetch uptime
 
-## 2. Classify
+`get_sentry_uptime_digest`. Skip if `uptime_watch_active` is false. Include
+still-down **before** Issues, recovered **after** Issues.
 
-Use `digest.structural_clusters` (`label`, `sample_titles`, `sample_short_ids`).
-Map to business themes — never bare project slugs without sample context.
+## 3. Classify
 
-## 3. Rank
+`digest.structural_clusters` → business themes with `sample_short_ids`.
 
-Use `digest.priority_candidates` and `business_impact_score`, not raw `count`.
-Prefer userCount, operational blockers, regressions; penalize high events +
-zero users (retry noise). Cite `impact_reasons`.
+## 4. Rank
 
-## 4. Enrich (selective)
+`digest.priority_candidates` + `business_impact_score`, not raw `count`.
+Prefer userCount, blockers, regressions; cite `impact_reasons`.
 
-Top 3–5 / #1 only: `get_sentry_issue_details` + `list_sentry_issue_events`
-(limit 10) when traces or regression proof needed.
+## 5. Enrich
 
-## 5. Summarise
+Top 3–5 only: `get_sentry_issue_details` + `list_sentry_issue_events` (limit 10).
 
-- **I found:** `digest.scope_summary`; add `scope_note` when capped or ambiguous.
-- Clusters: `N issues (P%)` + `sample_short_ids` (`percent` = returned page).
-- Priority table: Priority | Cluster | Issues | Sample IDs | Why (impact_reasons).
+## 6. Summarise
+
+- Header + summary bullet counts (Issues + Uptime).
+- `[DOWN]` above Issues; Issues clusters + priority table; `[RECOVERED]` after.
 
 ## Traps
 
-- `count` = events per group; `issue_count` = groups returned
-- `page_saturated` = first page only; `page_complete` = exact for window
-- `completeness: empty` = zero groups in requested window; never silent widen
-- `stats_period` is relative; detail APIs are expensive — enrich selectively
+- `count` = events/group; `issue_count` = groups returned
+- `page_saturated` = first page; `completeness: empty` = zero groups
+- Uptime needs a running watch schedule — no watch = no data

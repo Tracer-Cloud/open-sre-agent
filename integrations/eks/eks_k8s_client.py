@@ -112,7 +112,8 @@ def build_k8s_clients(
     else:
         # No role_arn and no explicit creds: fall back to ambient AWS
         # credentials (env AK/SK, shared config profile, or instance profile
-        # / IRSA). Preserves the #724 fallback behaviour.
+        # / IRSA), so investigations still work when no AWS integration is
+        # explicitly configured.
         logger.info("[eks] No role_arn or explicit credentials; using ambient AWS credentials")
         sess = botocore.session.get_session()
         ambient = sess.get_credentials()

@@ -286,6 +286,7 @@ def test_run_repl_async_failed_resume_flushes_starter_session(
     sessions_dir = tmp_path / "sessions"
     sessions_dir.mkdir()
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
     monkeypatch.setattr(
         "platform.analytics.cli.identify_saved_github_username",
         lambda: None,

@@ -23,7 +23,6 @@ from dataclasses import dataclass, field
 from typing import Any, Final
 
 import requests
-from requests import RequestException
 
 from config.llm_credentials import resolve_env_credential
 from integrations.grafana.base import GrafanaClientBase
@@ -118,7 +117,7 @@ class GrafanaLogSink:
                 return True
             resp.raise_for_status()
             return True
-        except RequestException:
+        except requests.RequestException:
             logger.warning("[grafana-sink] Loki push failed", exc_info=True)
             return False
 
@@ -184,6 +183,6 @@ class GrafanaLogSink:
 
             result = self._client.create_annotation(text="\n".join(text_parts), tags=tags)
             return bool(result.get("success"))
-        except RequestException:
+        except requests.RequestException:
             logger.warning("[grafana-sink] Annotation creation failed", exc_info=True)
             return False

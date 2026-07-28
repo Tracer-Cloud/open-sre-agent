@@ -91,7 +91,7 @@ def sentry_uptime_check(project_slug: str) -> None:
 
 @sentry_uptime_command.group(name="watch")
 def sentry_uptime_watch_command() -> None:
-    """Schedule polling that pings Slack/Telegram on uptime transitions."""
+    """Schedule polling that pings Slack/Telegram/Rocket.Chat on uptime transitions."""
 
 
 @sentry_uptime_watch_command.command(name="add")
@@ -113,7 +113,7 @@ def sentry_uptime_watch_command() -> None:
 )
 @click.option(
     "--provider",
-    type=click.Choice(["telegram", "slack"], case_sensitive=False),
+    type=click.Choice(["telegram", "slack", "rocketchat"], case_sensitive=False),
     required=True,
     help="Messaging provider for delivery.",
 )
@@ -321,7 +321,7 @@ def sentry_digest_schedule_command() -> None:
 )
 @click.option(
     "--provider",
-    type=click.Choice(["telegram", "slack"], case_sensitive=False),
+    type=click.Choice(["telegram", "slack", "rocketchat"], case_sensitive=False),
     required=True,
     help="Messaging provider for delivery.",
 )

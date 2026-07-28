@@ -12,6 +12,7 @@ the extraction pass.
 
 from __future__ import annotations
 
+import contextvars
 import json
 import logging
 import re
@@ -124,6 +125,7 @@ Return [] when nothing qualifies. At most {max_memories} items.
 
 _worker_lock = threading.Lock()
 _pending_messages: list[tuple[str, str]] | None = None
+_pending_context: contextvars.Context | None = None
 _worker: threading.Thread | None = None
 
 
@@ -152,18 +154,29 @@ def schedule_memory_extraction(
     if len(snapshot) < MIN_CHAT_MESSAGES:
         return
     if wait_for_completion:
-        global _pending_messages
+        global _pending_messages, _pending_context
         with _worker_lock:
             _pending_messages = None
+            _pending_context = None
         _extract_memories_safe(snapshot)
         return
     _schedule_coalesced(snapshot)
 
 
 def _schedule_coalesced(snapshot: list[tuple[str, str]]) -> None:
-    global _pending_messages, _worker
+    """Queue ``snapshot`` on the coalescing worker, capturing storage scope.
+
+    Copy the current context so the per-turn storage scope (ContextVar set by
+    ``bound_storage_scope``) is inherited: without it ``current_scope()`` is
+    None on the worker thread and ``save_memory()`` would resolve to the org
+    root instead of ``users/<actor_id>/memory/``, misfiling the user's
+    extracted facts where their in-scope turns never read them.
+    """
+    global _pending_messages, _pending_context, _worker
+    ctx = contextvars.copy_context()
     with _worker_lock:
         _pending_messages = snapshot
+        _pending_context = ctx
         if _worker is not None and _worker.is_alive():
             return
         _worker = threading.Thread(
@@ -175,15 +188,20 @@ def _schedule_coalesced(snapshot: list[tuple[str, str]]) -> None:
 
 
 def _coalesced_extract_worker() -> None:
-    global _pending_messages, _worker
+    global _pending_messages, _pending_context, _worker
     while True:
         with _worker_lock:
             snapshot = _pending_messages
+            ctx = _pending_context
             _pending_messages = None
+            _pending_context = None
             if snapshot is None:
                 _worker = None
                 return
-        _extract_memories_safe(snapshot)
+        if ctx is not None:
+            ctx.run(_extract_memories_safe, snapshot)
+        else:
+            _extract_memories_safe(snapshot)
 
 
 def extract_memories_from_session(session: _ChatSession) -> None:
