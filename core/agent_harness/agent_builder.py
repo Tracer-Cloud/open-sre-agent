@@ -34,6 +34,11 @@ class AgentConfig(Generic[RuntimeToolT]):  # noqa: UP046
     tool_resources: dict[str, Any] = field(default_factory=dict)
     tool_hooks: ToolExecutionHooks | None = None
     on_runtime_event: RuntimeEventCallback | None = None
+    agent_cls: type[Agent[RuntimeToolT]] = Agent
+    """Override to construct a caller-defined ``Agent`` subclass instead of the
+    base class — e.g. a surface that needs to override a hook like
+    ``_should_accept_conclusion``. Defaults to :class:`Agent` so existing
+    callers are unaffected."""
 
 
 def build_agent(  # noqa: UP047
@@ -41,10 +46,11 @@ def build_agent(  # noqa: UP047
 ) -> Agent[RuntimeToolT]:
     """Construct a runtime :class:`Agent` from an :class:`AgentConfig`.
 
-    This is the single place :class:`Agent` is instantiated across the
-    harness — surfaces call it after building their config.
+    This is the single place :class:`Agent` (or a caller-supplied subclass via
+    ``config.agent_cls``) is instantiated across the harness — surfaces call
+    it after building their config.
     """
-    return Agent[RuntimeToolT](
+    return config.agent_cls(
         llm=config.llm,
         system=config.system,
         tools=config.tools,
