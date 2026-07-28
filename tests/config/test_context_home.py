@@ -31,7 +31,6 @@ def _home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.delenv(OPENSRE_MEMORY_DIR_ENV, raising=False)
     monkeypatch.delenv(paths.CONTEXT_ROOT_ENV, raising=False)
     monkeypatch.delenv(ORGANIZATION_ID_ENV, raising=False)
-    monkeypatch.delenv(OPENSRE_MEMORY_DIR_ENV, raising=False)
     return tmp_path
 
 
