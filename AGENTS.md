@@ -131,7 +131,7 @@ Main packages one level deeper:
 - `platform/auth/` — JWT and authentication helpers for local and hosted runtime access.
 - `surfaces/interactive_shell/` — REPL watchdog slash commands (`/watch`, `/watches`, `/unwatch`): PR demo steps live under **Interactive shell: REPL watchdog demo** in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#interactive-shell-repl-watchdog-demo).
 - `config/constants/` — Shared prompt and other static constants.
-- `platform/deployment_ec2/` — EC2 AWS SDK primitives (`client`, `config`, EC2/IAM, SSM) and Telegram gateway AMI/systemd lifecycle (`telegram_gateway/`). Makefile: `make bake-gateway`, `make deploy-gateway`.
+- `platform/deployment_ec2/` — EC2 AWS SDK primitives (`client`, `config`, EC2/IAM, SSM) and Telegram gateway AMI/systemd lifecycle (`telegram_gateway/`). Makefile: `make build-gateway-image`, `make deploy-gateway`.
 - `platform/deployment_multi_tenant/` — private git submodule
  (`https://github.com/Tracer-Cloud/opensre-infra-aws.git`): Fargate fleet Terraform
  (`modules/fargate_fleet`), Lambda runtimes (`lambda_control_plane/`,

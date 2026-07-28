@@ -1,7 +1,7 @@
 """Sentry uptime monitor polling, state transitions, and notify messages.
 
 v1 for #4032: REST poll of organization uptime monitors + DOWN/RECOVERED
-transition messages. No skill, no remediation, no morning-report section.
+transition messages. Transition history is persisted for morning-digest rollup (#4070).
 """
 
 from __future__ import annotations
@@ -10,6 +10,7 @@ import json
 import logging
 import os
 from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
 
@@ -33,6 +34,8 @@ _UPTIME_STATUS_FAILED = 2
 
 MonitorHealth = Literal["up", "down", "unknown"]
 TransitionKind = Literal["down", "recovered"]
+
+_TRANSITION_RETENTION_DAYS = 7
 
 _ALERTS_READ_HINT = (
     "Uptime monitor listing requires a Sentry auth token with alerts:read "
@@ -62,12 +65,25 @@ class UptimeTransition:
     monitor: UptimeMonitor
 
 
+@dataclass(frozen=True)
+class UptimeTransitionRecord:
+    """Persisted transition event for morning-digest history."""
+
+    monitor_id: str
+    kind: TransitionKind
+    at: str
+    name: str
+    url: str
+    project_slug: str
+
+
 @dataclass
 class WatchState:
     """Persisted per-task watch snapshot."""
 
     health: dict[str, MonitorHealth] = field(default_factory=dict)
     open_incidents: set[str] = field(default_factory=set)
+    transitions: list[UptimeTransitionRecord] = field(default_factory=list)
 
 
 def _store_credentials(store: dict[str, Any]) -> dict[str, Any]:
@@ -300,26 +316,61 @@ def _state_path() -> Path:
     return OPENSRE_HOME_DIR / "sentry_uptime_watch_state.json"
 
 
-def load_watch_state(
-    task_id: str,
-    *,
-    path: Path | None = None,
-) -> WatchState:
-    """Load prior health snapshot and open incidents for a watch task."""
+def parse_transition_at(value: UptimeTransitionRecord | str) -> datetime | None:
+    """Parse an ISO-8601 transition timestamp."""
+    raw = value.at if isinstance(value, UptimeTransitionRecord) else value
+    try:
+        parsed = datetime.fromisoformat(str(raw))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed
+
+
+def _load_state_store(*, path: Path | None = None) -> dict[str, Any]:
+    """Read the raw uptime watch state mapping from disk."""
     store_path = path or _state_path()
     if not store_path.exists():
-        return WatchState()
+        return {}
     try:
         raw = json.loads(store_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         logger.warning("Failed to read uptime watch state: %s", exc)
-        return WatchState()
-    if not isinstance(raw, dict):
-        return WatchState()
-    entry = raw.get(task_id)
-    if not isinstance(entry, dict):
-        return WatchState()
+        return {}
+    return raw if isinstance(raw, dict) else {}
 
+
+def _transition_record_payload(record: UptimeTransitionRecord) -> dict[str, str]:
+    return {
+        "monitor_id": record.monitor_id,
+        "kind": record.kind,
+        "at": record.at,
+        "name": record.name,
+        "url": record.url,
+        "project_slug": record.project_slug,
+    }
+
+
+def _parse_transition_record(raw: object) -> UptimeTransitionRecord | None:
+    if not isinstance(raw, dict):
+        return None
+    monitor_id = str(raw.get("monitor_id") or "").strip()
+    kind = raw.get("kind")
+    at = str(raw.get("at") or "").strip()
+    if not monitor_id or kind not in ("down", "recovered") or not at:
+        return None
+    return UptimeTransitionRecord(
+        monitor_id=monitor_id,
+        kind=kind,  # type: ignore[arg-type]
+        at=at,
+        name=str(raw.get("name") or "").strip(),
+        url=str(raw.get("url") or "").strip(),
+        project_slug=str(raw.get("project_slug") or "").strip(),
+    )
+
+
+def _parse_watch_state_entry(entry: dict[str, Any]) -> WatchState:
     health: dict[str, MonitorHealth] = {}
     snapshot = entry.get("health")
     if isinstance(snapshot, dict):
@@ -332,10 +383,120 @@ def load_watch_state(
     if isinstance(incidents, list):
         open_incidents = {str(item) for item in incidents if str(item).strip()}
     else:
-        # Back-compat: reconstruct open incidents from down snapshots.
         open_incidents = {mid for mid, status in health.items() if status == "down"}
 
-    return WatchState(health=health, open_incidents=open_incidents)
+    transitions: list[UptimeTransitionRecord] = []
+    raw_transitions = entry.get("transitions")
+    if isinstance(raw_transitions, list):
+        for item in raw_transitions:
+            record = _parse_transition_record(item)
+            if record is not None:
+                transitions.append(record)
+
+    return WatchState(
+        health=health,
+        open_incidents=open_incidents,
+        transitions=transitions,
+    )
+
+
+def transition_record_from(
+    transition: UptimeTransition,
+    *,
+    at: datetime | None = None,
+) -> UptimeTransitionRecord:
+    """Build a persisted record from a live transition."""
+    monitor = transition.monitor
+    timestamp = (at or datetime.now(UTC)).isoformat()
+    return UptimeTransitionRecord(
+        monitor_id=monitor.id,
+        kind=transition.kind,
+        at=timestamp,
+        name=monitor.name,
+        url=monitor.url,
+        project_slug=monitor.project_slug,
+    )
+
+
+def append_transition_records(
+    state: WatchState,
+    transitions: list[UptimeTransition],
+    *,
+    at: datetime | None = None,
+) -> None:
+    """Append new transition records and prune entries older than retention."""
+    now = at or datetime.now(UTC)
+    for transition in transitions:
+        state.transitions.append(transition_record_from(transition, at=now))
+    state.transitions = prune_transition_records(
+        state.transitions,
+        now=now,
+        open_incident_ids=state.open_incidents,
+    )
+
+
+def prune_transition_records(
+    records: list[UptimeTransitionRecord],
+    *,
+    now: datetime | None = None,
+    retention_days: int = _TRANSITION_RETENTION_DAYS,
+    open_incident_ids: set[str] | None = None,
+) -> list[UptimeTransitionRecord]:
+    """Drop aged transitions; retain founding DOWN rows for open incidents."""
+    current = now or datetime.now(UTC)
+    cutoff = current - timedelta(days=retention_days)
+    pinned_monitor_ids = {str(item) for item in (open_incident_ids or set()) if str(item).strip()}
+
+    pinned_down: dict[str, UptimeTransitionRecord] = {}
+    for record in records:
+        if record.monitor_id not in pinned_monitor_ids or record.kind != "down":
+            continue
+        parsed = parse_transition_at(record)
+        if parsed is None:
+            continue
+        existing = pinned_down.get(record.monitor_id)
+        if existing is None:
+            pinned_down[record.monitor_id] = record
+            continue
+        existing_at = parse_transition_at(existing)
+        if existing_at is None or parsed < existing_at:
+            pinned_down[record.monitor_id] = record
+
+    pinned_keys = {(record.monitor_id, record.kind, record.at) for record in pinned_down.values()}
+    kept: list[UptimeTransitionRecord] = []
+    seen_pinned: set[tuple[str, str, str]] = set()
+    for record in records:
+        key = (record.monitor_id, record.kind, record.at)
+        if key in pinned_keys:
+            if key not in seen_pinned:
+                kept.append(record)
+                seen_pinned.add(key)
+            continue
+        parsed = parse_transition_at(record)
+        if parsed is not None and parsed >= cutoff:
+            kept.append(record)
+    return kept
+
+
+def load_all_watch_states(*, path: Path | None = None) -> dict[str, WatchState]:
+    """Load every task entry from the uptime watch state file."""
+    return {
+        str(task_id): _parse_watch_state_entry(entry)
+        for task_id, entry in _load_state_store(path=path).items()
+        if isinstance(entry, dict)
+    }
+
+
+def load_watch_state(
+    task_id: str,
+    *,
+    path: Path | None = None,
+) -> WatchState:
+    """Load prior health snapshot and open incidents for a watch task."""
+    entry = _load_state_store(path=path).get(task_id)
+    if not isinstance(entry, dict):
+        return WatchState()
+    return _parse_watch_state_entry(entry)
 
 
 def save_watch_state(
@@ -358,6 +519,7 @@ def save_watch_state(
     existing[task_id] = {
         "health": state.health,
         "open_incidents": sorted(state.open_incidents),
+        "transitions": [_transition_record_payload(record) for record in state.transitions],
     }
     payload = json.dumps(existing, indent=2, sort_keys=True) + "\n"
     tmp_path = store_path.with_suffix(store_path.suffix + f".{os.getpid()}.tmp")
@@ -391,7 +553,9 @@ def run_uptime_watch_tick(
     next_state = WatchState(
         health=health_snapshot(monitors, previous=previous.health),
         open_incidents=open_incidents,
+        transitions=list(previous.transitions),
     )
+    append_transition_records(next_state, transitions)
     save_watch_state(task_id, next_state, path=state_path)
     return format_uptime_transition_message(transitions)
 
@@ -399,15 +563,21 @@ def run_uptime_watch_tick(
 __all__ = [
     "UptimeMonitor",
     "UptimeTransition",
+    "UptimeTransitionRecord",
     "WatchState",
+    "append_transition_records",
     "detect_uptime_transitions",
     "format_uptime_transition_message",
     "format_uptime_watch_active_message",
     "health_snapshot",
     "list_sentry_uptime_monitors",
+    "load_all_watch_states",
     "load_watch_state",
     "normalize_uptime_monitor",
+    "parse_transition_at",
+    "prune_transition_records",
     "resolve_sentry_config",
     "run_uptime_watch_tick",
     "save_watch_state",
+    "transition_record_from",
 ]

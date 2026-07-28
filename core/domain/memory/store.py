@@ -1,9 +1,10 @@
 """Filesystem CRUD for long-term memories under ``~/.opensre/memory/``.
 
-One markdown file per memory plus a generated ``MEMORY.md`` index. Reads never
-create the directory; writes create it lazily. Write failures (disk full,
-permissions) are reported to stderr and surfaced as ``None``/``False`` results
-rather than exceptions, mirroring :mod:`core.domain.feedback.misses.store`.
+One markdown file per memory plus a generated ``MEMORY.md`` index. Prompt
+injection and ``ensure_memory_store`` create the directory eagerly; writes also
+create it lazily. Write failures (disk full, permissions) are reported to
+stderr and surfaced as ``None``/``False`` results rather than exceptions,
+mirroring :mod:`core.domain.feedback.misses.store`.
 
 Mutating operations serialize through a directory-scoped ``FileLock`` so
 concurrent ``memory_remember`` / forget calls cannot silently overwrite each
@@ -12,6 +13,7 @@ other or race the index rebuild.
 
 from __future__ import annotations
 
+import contextlib
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -45,6 +47,24 @@ from core.domain.memory.slugs import is_valid_slug
 _INDEX_FILENAME = "MEMORY.md"
 _LOCK_FILENAME = ".memory.lock"
 _LOCK_TIMEOUT_SECONDS = 10.0
+
+
+def ensure_memory_store() -> Path:
+    """Create the memory directory and an empty ``MEMORY.md`` when absent.
+
+    Lives here rather than beside the other path helpers because seeding the
+    index needs :mod:`core.domain.memory.index`, and the file primitives must
+    not depend on anything above them.
+
+    Safe to call on every chat turn / ``/memory`` invocation — mkdir is
+    idempotent and the index file is only seeded once.
+    """
+    directory = ensure_memory_dir()
+    index_path = directory / _INDEX_FILENAME
+    if not index_path.exists():
+        with contextlib.suppress(OSError):
+            write_index(directory, [])
+    return directory
 
 
 def _now_iso() -> str:
@@ -180,7 +200,12 @@ def rebuild_index() -> Path:
 
 
 def render_prompt_index(*, max_chars: int = DEFAULT_PROMPT_INDEX_CHARS) -> str:
-    """Compact index block for the system prompt; ``""`` when nothing is stored."""
+    """Memory facts for chat/action prompts; ``""`` when nothing is stored.
+
+    Ensures the on-disk store exists so the first chat does not depend on a
+    prior write to create ``~/.opensre/memory``.
+    """
+    ensure_memory_store()
     return render_prompt_index_from_records(list_memories(), max_chars=max_chars)
 
 
@@ -197,6 +222,7 @@ def _rebuild_index_best_effort() -> None:
 
 __all__ = [
     "delete_memory",
+    "ensure_memory_store",
     "list_memories",
     "load_memory",
     "memory_dir",

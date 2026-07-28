@@ -50,7 +50,6 @@ class Actor:
     """The person taking a turn, within whatever principal owns the data."""
 
     id: str
-    display_name: str = ""
 
     def __post_init__(self) -> None:
         actor_id = (self.id or "").strip()

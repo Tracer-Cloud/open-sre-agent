@@ -114,8 +114,9 @@ def _format_anthropic_retry_error(err: Exception) -> str:
 # OpenAI:    "The provided model identifier is invalid."
 # OpenRouter: "Invalid model name passed in model=<name>. Call `/v1/models`…"
 # Detection is an any-match because there is no stable error code across
-# providers. Add phrases here when a new provider uses different wording —
-# the failure mode is "fall through to a generic HTTP 400 message" (#1806).
+# providers. Add phrases here when a new provider uses different wording;
+# without a matching phrase, an invalid-model 400 falls through to a
+# generic error message instead of the specific invalid-model one.
 _OPENAI_INVALID_MODEL_IDENTIFIER_PHRASES = (
     "model identifier",  # OpenAI / LiteLLM
     "invalid model id",  # OpenAI
@@ -480,8 +481,7 @@ class BedrockLLMClient:
                     # missing IAM, missing per-region/per-model Bedrock access
                     # opt-in, or an AWS Marketplace billing problem (e.g.
                     # ``INVALID_PAYMENT_INSTRUMENT``). Surface the upstream
-                    # AWS-provided reason so the user knows which one to fix
-                    # — see issue #1808.
+                    # AWS-provided reason so the user knows which one to fix.
                     err_msg = err.response.get("Error", {}).get("Message", "") or ""
                     err_msg_str = str(err_msg)
                     if (

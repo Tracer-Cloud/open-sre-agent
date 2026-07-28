@@ -98,7 +98,7 @@ Quick reference:
 
 | Path | Commands |
 | ---- | -------- |
-| Gateway (AMI + systemd — Telegram on EC2) | `make bake-gateway` → `make deploy-gateway` / `make destroy-gateway` |
+| Gateway (AMI + systemd — gateway only) | `make build-gateway-image` → `make deploy-gateway` / `make destroy-gateway` |
 | Hosted (Railway / ECS / Vercel) | Deploy with repo `Dockerfile`; set `LLM_PROVIDER` + API key |
 
 ### Hosted runtime (Railway / ECS / Vercel)

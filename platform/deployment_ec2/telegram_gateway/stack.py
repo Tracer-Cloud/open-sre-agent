@@ -106,7 +106,7 @@ def _ami_id_path(*, path: Path | None = None) -> Path:
 
 
 def save_ami_id(ami_id: str, *, path: Path | None = None) -> Path:
-    """Persist the AMI id produced by ``make bake-gateway``."""
+    """Persist the AMI id produced by ``make build-gateway-image``."""
     ami_path = _ami_id_path(path=path)
     ami_path.parent.mkdir(parents=True, exist_ok=True)
     ami_path.write_text(ami_id.strip() + "\n", encoding="utf-8")
@@ -114,12 +114,12 @@ def save_ami_id(ami_id: str, *, path: Path | None = None) -> Path:
 
 
 def load_ami_id(*, path: Path | None = None) -> str:
-    """Load the AMI id saved by the last ``make bake-gateway`` run."""
+    """Load the AMI id saved by the last ``make build-gateway-image`` run."""
     ami_path = _ami_id_path(path=path)
     if not ami_path.exists():
         raise FileNotFoundError(
             f"No saved gateway AMI id found at {ami_path}. "
-            "Run `make bake-gateway` first, or set OPENSRE_GATEWAY_AMI_ID."
+            "Run `make build-gateway-image` first, or set OPENSRE_GATEWAY_AMI_ID."
         )
     return ami_path.read_text(encoding="utf-8").strip()
 

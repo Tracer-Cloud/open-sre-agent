@@ -16,10 +16,9 @@ one — the warning just deferred the failure to the first real alert.
 
 from __future__ import annotations
 
-import dataclasses
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -112,9 +111,7 @@ def wizard(monkeypatch: pytest.MonkeyPatch) -> _Wizard:
     monkeypatch.setattr(
         chat_notifications,
         "TELEGRAM_SETUP",
-        dataclasses.replace(
-            chat_notifications.TELEGRAM_SETUP, verify=_fake_verify, resolve=_fake_resolve
-        ),
+        replace(chat_notifications.TELEGRAM_SETUP, verify=_fake_verify, resolve=_fake_resolve),
     )
     monkeypatch.setattr(
         setup_flow,

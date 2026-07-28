@@ -104,8 +104,10 @@ Detail: Sentry validated for org your-org; 30 issue(s) in the last 7 days
 ## Morning digest (scheduled)
 
 Deliver a daily unresolved-issues summary to Slack, Telegram, or Rocket.Chat.
-This uses the headless **sentry-summary** skill path (one search + LLM
-answer), not the investigation pipeline or generic `opensre cron` kinds.
+This uses the headless **sentry-summary** skill path (tools + LLM answer via
+the gateway), not the investigation pipeline or generic `opensre cron` kinds.
+When an uptime watch schedule is running, the skill also calls
+`get_sentry_uptime_digest` to include downtime/recovery context in the digest.
 
 | Command | What it does |
 | --- | --- |
@@ -150,8 +152,13 @@ opensre sentry digest schedule add \
 
 Optional `--project my-service` scopes the digest to one Sentry project.
 
+When an **uptime watch** schedule is running, the `sentry-summary` skill
+automatically includes an **Uptime / downtime (last 24h)** section with
+monitors that are still down or recovered in the window. If no uptime watch
+history exists, the digest stays Issues-only.
+
 The gateway daemon picks up scheduled digests automatically when it is running.
-If the LLM is unavailable, the run fails with an error (no deterministic fallback).
+If the LLM is unavailable, the run fails with an error.
 
 <Note>
 The count reflects issues seen in the last 7 days (capped at 100, shown as
@@ -187,8 +194,11 @@ opensre sentry uptime watch add \
 Requires `alerts:read` (or equivalent) on the Sentry token. The agent tool
 `list_sentry_uptime_alerts` exposes the same monitor list in chat/investigation.
 
-Follow-ups (not in v1): inbound Sentry webhooks, auto-remediation attempts, and
-a morning-digest section summarizing yesterday's uptime transitions.
+Schedule an uptime watch alongside the morning digest so the `sentry-summary`
+skill can include yesterday's downtime summary via `get_sentry_uptime_digest`;
+the watch records DOWN/RECOVERED transitions locally for that rollup.
+
+Follow-ups (not in v1): inbound Sentry webhooks and auto-remediation attempts.
 
 ## Telemetry knobs
 

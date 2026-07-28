@@ -259,21 +259,17 @@ def get_consumer_group_lag(
         consumer = _get_consumer(config)
 
         try:
-            # Get committed offsets for the group
             group_offsets = admin.list_consumer_group_offsets(
                 [ConsumerGroupTopicPartitions(group_id)]
             )
-            # Wait for the future to resolve
             group_result = None
             for group_future in group_offsets.values():
                 group_result = group_future.result()
 
-            # Build partition lag info
             lag_info = []
             for tp in group_result.topic_partitions if group_result else []:
                 if tp.error:
                     continue
-                # Get high watermark for this partition
                 lo, hi = consumer.get_watermark_offsets(
                     TopicPartition(tp.topic, tp.partition),
                     timeout=config.timeout_seconds,

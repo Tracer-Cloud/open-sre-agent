@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import os
 from collections.abc import Iterator
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -17,7 +17,6 @@ from gateway.telegram.settings import (
     load_telegram_credentials,
     store_allowed_users,
     store_bot_token,
-    try_load_gateway_settings_for_startup,
 )
 from integrations.messaging_security import MessagingIdentityPolicy
 
@@ -209,47 +208,3 @@ def test_load_gateway_settings_missing_token_raises() -> None:
         pytest.raises(GatewayConfigurationError, match="bot token is missing"),
     ):
         load_gateway_settings()
-
-
-# ---------------------------------------------------------------------------
-# try_load_gateway_settings_for_startup
-# ---------------------------------------------------------------------------
-
-
-@patch("gateway.telegram.settings.load_gateway_settings")
-def test_try_load_skips_when_auto_start_disabled(mock_load: MagicMock) -> None:
-    mock_load.return_value = GatewaySettings(bot_token="tok", auto_start_enabled=False)
-    logger = logging.getLogger("gateway.test")
-    assert try_load_gateway_settings_for_startup(logger=logger) is None
-
-
-@patch("gateway.telegram.settings.load_gateway_settings")
-def test_try_load_ignores_auto_start_when_disabled(mock_load: MagicMock) -> None:
-    mock_load.return_value = GatewaySettings(bot_token="tok", auto_start_enabled=False)
-    logger = logging.getLogger("gateway.test")
-    settings = try_load_gateway_settings_for_startup(
-        logger=logger,
-        respect_auto_start=False,
-    )
-    assert settings is not None
-    assert settings.bot_token == "tok"
-
-
-@patch("gateway.telegram.settings.load_gateway_settings")
-def test_try_load_skips_on_configuration_error(mock_load: MagicMock) -> None:
-    mock_load.side_effect = GatewayConfigurationError("missing integration")
-    logger = logging.getLogger("gateway.test")
-    assert try_load_gateway_settings_for_startup(logger=logger) is None
-
-
-@patch("gateway.telegram.settings.load_gateway_settings")
-def test_try_load_skips_when_bot_token_empty(mock_load: MagicMock) -> None:
-    mock_load.return_value = GatewaySettings(bot_token="")
-    logger = logging.getLogger("gateway.test")
-    assert (
-        try_load_gateway_settings_for_startup(
-            logger=logger,
-            respect_auto_start=False,
-        )
-        is None
-    )

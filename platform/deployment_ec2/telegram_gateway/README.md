@@ -11,11 +11,12 @@ inside the gateway session.
 
 | Path | Purpose |
 | ---- | ------- |
-| `systemd/opensre-gateway.service` | systemd unit file baked into the AMI. Reads env from `/etc/opensre/gateway.env`. |
+| `systemd/opensre-gateway.service` | systemd unit file included in the server image. Reads env from `/etc/opensre/gateway.env`. |
 | `stack.py` | `GatewayStack` dataclass + helpers to persist AMI id and deployment outputs under `~/.opensre/deployments/`. |
-| `bake.py` | `bake_ami()` — launches a temp builder EC2 instance, runs inline install commands via SSM, snapshots an AMI, and terminates the builder. |
+| `build_server_image.py` | `build_server_image()` — launches a temp builder EC2 instance, runs inline install commands via SSM, snapshots an AMI, and terminates the builder. |
+| `install_on_new_server.py` | `install_on_new_server()` / `destroy_installed_server()` — starts a plain EC2 instance and installs the gateway on it from the published installer, with no image built first. |
 | `provision.py` | `provision_gateway_via_ssm()` and `wait_for_gateway_ready()` — writes `/etc/opensre/gateway.env` and restarts the service via SSM. |
-| `lifecycle.py` | CLI entrypoint: `bake-ami`, `deploy`, `destroy` subcommands. |
+| `lifecycle.py` | CLI entrypoint: `build-server-image`, `deploy`, `destroy`, `install-on-new-server`, `destroy-installed-server` subcommands. |
 
 ## Commands
 
@@ -23,16 +24,20 @@ Run from the **repo root** (`make install` first).
 
 | Command | What it does |
 | ------- | ------------ |
-| `make bake-gateway` | Launch temp EC2, install OpenSRE @ current git HEAD, snapshot AMI, save AMI id locally |
+| `make build-gateway-image` | Launch temp EC2, install OpenSRE @ current git HEAD, snapshot AMI, save AMI id locally |
 | `make deploy-gateway` | Destroy any prior stack, launch EC2 from saved AMI, write env, start service |
 | `make destroy-gateway` | Terminate instance, delete IAM profile/role; AMI kept by default |
+| `make install-gateway-on-new-server` | Start a plain EC2 instance and install the gateway on it, no image needed |
+| `make destroy-gateway-on-new-server` | Tear down the server created by the command above |
 
 Equivalent Python entrypoints:
 
 ```bash
-uv run python -m platform.deployment_ec2.telegram_gateway.lifecycle bake-ami
+uv run python -m platform.deployment_ec2.telegram_gateway.lifecycle build-server-image
 uv run python -m platform.deployment_ec2.telegram_gateway.lifecycle deploy
 uv run python -m platform.deployment_ec2.telegram_gateway.lifecycle destroy
+uv run python -m platform.deployment_ec2.telegram_gateway.lifecycle install-on-new-server
+uv run python -m platform.deployment_ec2.telegram_gateway.lifecycle destroy-installed-server
 ```
 
 ### Prerequisites
@@ -56,8 +61,8 @@ Copy [`.env.deploy.example`](../../../.env.deploy.example) and set
 is deployed and operated separately, not from this repo.
 
 | `LLM_PROVIDER` + API key | Yes | Gateway service |
-| `OPENSRE_GATEWAY_GIT_REF` | No | Git ref to bake (default: local HEAD SHA) |
-| `OPENSRE_GATEWAY_AMI_ID` | No | Skip bake, use existing AMI id |
+| `OPENSRE_GATEWAY_GIT_REF` | No | Git ref to install into the image (default: local HEAD SHA) |
+| `OPENSRE_GATEWAY_AMI_ID` | No | Skip the image build, use an existing image id |
 | `OPENSRE_GATEWAY_DESTROY_PURGE_AMI` | No | Set to `1` to also deregister AMI on destroy |
 | `OPENSRE_STACK_SUFFIX` | No | Per-developer resource name suffix |
 
@@ -75,7 +80,7 @@ Outputs written to `~/.opensre/deployments/opensre-gateway.json`.
 
 ```bash
 # Bake once per code change (takes ~5-10 minutes):
-make bake-gateway
+make build-gateway-image
 
 # Fast redeploy using the saved AMI id (takes ~2-3 minutes):
 make deploy-gateway
@@ -85,7 +90,7 @@ make deploy-gateway
 
 ### Rollback
 
-To roll back to a previously baked AMI:
+To roll back to a previously built image:
 
 ```bash
 OPENSRE_GATEWAY_AMI_ID=ami-<previous-id> make deploy-gateway

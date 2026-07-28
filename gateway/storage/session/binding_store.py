@@ -1,12 +1,24 @@
-"""Session binding store construction."""
+"""Session binding store construction.
+
+Bindings live in a JSON file beside the rest of a principal's context — no
+database, and no SQLite: the context root is an NFS-backed mount where SQLite's
+advisory locking is unreliable, while a write-temp-then-rename is atomic. One
+writer at a time, which the Slack gateway already is (Socket Mode is
+single-consumer).
+"""
 
 from __future__ import annotations
 
-from typing import Protocol
+import logging
+from pathlib import Path
+from typing import Any, Protocol
 
 from config.principal import Actor, Principal
-from gateway.storage.db import BindingsConnections
-from gateway.storage.session.bindings import SessionBindingStore
+from gateway.storage.db import bindings_file_path, legacy_binding_dirs
+from gateway.storage.session.file_bindings import FileBindingStore
+from gateway.storage.session.legacy_sqlite import collect_legacy_bindings
+
+logger = logging.getLogger(__name__)
 
 
 class BindingStore(Protocol):
@@ -52,10 +64,43 @@ class BindingStore(Protocol):
     ) -> bool:
         raise NotImplementedError
 
-
-def open_binding_store() -> SessionBindingStore:
-    """Return the binding store, resolving its database per bound organization."""
-    return SessionBindingStore(BindingsConnections())
+    def close(self) -> None:
+        raise NotImplementedError
 
 
-__all__ = ["BindingStore", "open_binding_store"]
+def legacy_bindings_for(path: Path) -> list[dict[str, Any]]:
+    """Rows to carry into ``path`` from the SQLite index that preceded it.
+
+    Called the first time a document is reached rather than when the store is
+    built: a gateway opens the store before any scope is bound, so at that point
+    the path is the unbound host one, not the organization mount its turns use.
+    """
+    rows = collect_legacy_bindings(legacy_binding_dirs(path.parent))
+    if rows:
+        logger.info(
+            "[gateway] carrying %d binding(s) from the previous SQLite index into %s",
+            len(rows),
+            path,
+        )
+    return rows
+
+
+def open_file_binding_store(path: Path | None = None) -> FileBindingStore:
+    """File-backed bindings, following the bound principal unless pinned."""
+    return FileBindingStore(
+        path if path is not None else bindings_file_path,
+        adopter=legacy_bindings_for,
+    )
+
+
+def open_binding_store() -> BindingStore:
+    """The binding store this process should use."""
+    return open_file_binding_store()
+
+
+__all__ = [
+    "BindingStore",
+    "legacy_bindings_for",
+    "open_binding_store",
+    "open_file_binding_store",
+]

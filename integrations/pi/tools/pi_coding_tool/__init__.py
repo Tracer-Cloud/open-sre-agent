@@ -33,8 +33,8 @@ from typing import Any
 
 from core.tool_framework.base import BaseTool
 from integrations.pi import is_pi_coding_enabled
-from tools.pi_coding_tool.errors import PiCodingError
-from tools.pi_coding_tool.runner import (
+from integrations.pi.tools.pi_coding_tool.errors import PiCodingError
+from integrations.pi.tools.pi_coding_tool.runner import (
     SOURCE,
     ensure_cli_ready,
     ensure_enabled,
@@ -42,7 +42,7 @@ from tools.pi_coding_tool.runner import (
     execute,
     to_output,
 )
-from tools.pi_coding_tool.validation import resolve_request
+from integrations.pi.tools.pi_coding_tool.validation import resolve_request
 
 
 class PiCodingTool(BaseTool):

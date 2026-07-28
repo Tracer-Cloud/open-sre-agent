@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from integrations.pi import pi_coding_model, pi_coding_timeout_seconds, pi_coding_workspace
-from tools.pi_coding_tool.errors import ERR_INVALID_INPUT, PiCodingError
+from integrations.pi.tools.pi_coding_tool.errors import ERR_INVALID_INPUT, PiCodingError
 
 _MAX_TASK_CHARS = 4000
 

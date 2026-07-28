@@ -80,7 +80,13 @@ def _check_ollama(host: str, model: str) -> ValidationResult:
 
     normalized_model = normalize_model_tag(model)
     base_name = model.split(":")[0]
-    matched = normalized_model in available or any(m.split(":")[0] == base_name for m in available)
+    # An explicit tag must match exactly: asking for llama3.1:8b and silently
+    # accepting llama3.1:latest would validate a different model than the one
+    # that then gets used. Only an untagged request falls back to the base name.
+    asked_for_a_tag = ":" in model
+    matched = normalized_model in available or (
+        not asked_for_a_tag and any(m.split(":")[0] == base_name for m in available)
+    )
     if not matched:
         listed = ", ".join(available) or "none pulled yet"
         return ValidationResult(

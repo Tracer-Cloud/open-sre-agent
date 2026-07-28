@@ -18,12 +18,14 @@ import pytest
 
 from config.constants import paths
 from config.constants.billing import ORGANIZATION_ID_ENV
+from config.constants.memory import OPENSRE_MEMORY_DIR_ENV
 from config.principal import Actor, Principal, StorageScope
 from config.scope_context import bound_storage_scope
 from core.agent_harness.session.persistence import paths as session_paths
 from gateway.slack.principal import slack_scope
-from gateway.storage.db import bindings_db_path, connect_bindings_db, default_gateway_db_path
-from gateway.storage.session.bindings import SessionBindingStore
+from gateway.storage.db import bindings_file_path, gateway_dir
+from gateway.storage.session.binding_store import open_file_binding_store
+from gateway.storage.session.file_bindings import FileBindingStore
 
 ACME = Principal.org("org_acme")
 GLOBEX = Principal.org("org_globex")
@@ -43,6 +45,9 @@ def host(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     root = tmp_path / "host"
     monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", root)
     monkeypatch.delenv(paths.CONTEXT_ROOT_ENV, raising=False)
+    # get_memory_dir() honours this override and would otherwise resolve to one
+    # shared directory for every scope, hiding the isolation under test.
+    monkeypatch.delenv(OPENSRE_MEMORY_DIR_ENV, raising=False)
     return root
 
 
@@ -67,7 +72,7 @@ def _every_context_path() -> list[Path]:
         paths.integrations_store_path(),
         paths.get_memory_dir(),
         session_paths.sessions_dir(),
-        bindings_db_path(),
+        bindings_file_path(),
     ]
 
 
@@ -108,7 +113,7 @@ def test_cli_is_unaffected_by_a_configured_mount(mounted: Path) -> None:
 def test_telegram_bindings_keep_the_unscoped_key(host: Path) -> None:
     """Telegram passes no principal or actor, exactly as before scoping."""
     # Arrange
-    store = SessionBindingStore(connect_bindings_db(host / "bindings.db"))
+    store = FileBindingStore(host / "bindings.json")
 
     # Act: bind the way gateway/telegram does, then read it back the same way.
     store.bind(platform=_TELEGRAM, chat_id="42", session_id="tg-1")
@@ -123,7 +128,7 @@ def test_telegram_writes_nothing_to_a_customer_volume(host: Path, mounted: Path)
     """Telegram shares the Slack task but names no organization."""
     # Act: a Telegram turn binds no scope.
     sessions = session_paths.sessions_dir()
-    bindings = bindings_db_path()
+    bindings = bindings_file_path()
     memory = paths.get_memory_dir()
 
     # Assert: all of it stays on ephemeral host storage, not the customer's disk.
@@ -135,7 +140,7 @@ def test_telegram_writes_nothing_to_a_customer_volume(host: Path, mounted: Path)
 def test_a_slack_org_cannot_hijack_a_telegram_binding(host: Path) -> None:
     """Same chat id on two platforms and two scopes must stay separate rows."""
     # Arrange: Telegram binds chat "42" unscoped.
-    store = SessionBindingStore(connect_bindings_db(host / "bindings.db"))
+    store = FileBindingStore(host / "bindings.json")
     store.bind(platform=_TELEGRAM, chat_id="42", session_id="tg-session")
 
     # Act: a Slack org binds the same chat id under its own principal and actor.
@@ -155,7 +160,7 @@ def test_a_slack_org_cannot_hijack_a_telegram_binding(host: Path) -> None:
 def test_an_unscoped_lookup_cannot_read_an_org_binding(host: Path) -> None:
     """The legacy empty-principal key must not match a real organization's row."""
     # Arrange: only an org-scoped binding exists.
-    store = SessionBindingStore(connect_bindings_db(host / "bindings.db"))
+    store = FileBindingStore(host / "bindings.json")
     store.bind(
         platform=_SLACK, chat_id="C1:100.1", session_id="acme-session", principal=ACME, actor=ALICE
     )
@@ -203,7 +208,7 @@ def test_one_orgs_credentials_never_appear_under_another() -> None:
 
 def test_org_bindings_are_isolated_by_principal(host: Path) -> None:
     # Arrange: two orgs bind the same conversation key.
-    store = SessionBindingStore(connect_bindings_db(host / "bindings.db"))
+    store = FileBindingStore(host / "bindings.json")
     store.bind(platform=_SLACK, chat_id="C1:1.0", session_id="acme", principal=ACME, actor=ALICE)
     store.bind(
         platform=_SLACK, chat_id="C1:1.0", session_id="globex", principal=GLOBEX, actor=ALICE
@@ -243,7 +248,7 @@ def test_members_share_credentials_and_separate_conversations() -> None:
 def test_members_get_distinct_sessions_in_one_thread(host: Path) -> None:
     """Each Slack user keeps their own history, as chosen for this layout."""
     # Arrange: Alice and Bob speak in the same thread.
-    store = SessionBindingStore(connect_bindings_db(host / "bindings.db"))
+    store = FileBindingStore(host / "bindings.json")
     thread = "T1:C1:100.1"
 
     # Act
@@ -261,41 +266,6 @@ def test_members_get_distinct_sessions_in_one_thread(host: Path) -> None:
 
 
 # ── Border 5: the install catalog is host-level, never per customer ─────────
-
-
-def test_install_catalog_stays_off_every_customer_volume(host: Path, mounted: Path) -> None:
-    """It answers "which org is this team?", so it cannot live inside one org."""
-    # Act
-    with bound_storage_scope(slack_scope(ACME, ALICE)):
-        installs = default_gateway_db_path()
-        bindings = bindings_db_path()
-
-    # Assert: bindings follow the customer, the catalog does not.
-    assert installs == host / "gateway" / "state.db"
-    assert bindings == mounted / "gateway" / "bindings.db"
-    assert mounted not in installs.parents
-
-
-def test_install_catalog_holds_no_binding_rows(host: Path) -> None:
-    """The two databases are split, so neither can silently answer for the other."""
-    # Arrange
-    from gateway.storage.db import connect_gateway_db
-
-    conn = connect_gateway_db(host / "gateway" / "state.db")
-
-    # Act
-    tables = {
-        str(row[0])
-        for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
-    }
-    conn.close()
-
-    # Assert
-    assert "slack_installs" in tables
-    assert "gateway_session_bindings" not in tables
-
-
-# ── Border 6: identifiers cannot escape their directory ─────────────────────
 
 
 @pytest.mark.parametrize("hostile", ["../../etc", "..", "a/b", "with space"])
@@ -346,66 +316,15 @@ def test_scope_does_not_leak_across_nested_turns() -> None:
 
 
 @pytest.mark.usefixtures("host")
-def test_bindings_connection_follows_the_bound_org() -> None:
-    """One worker serving two orgs must not reuse the first org's database."""
-    # Arrange: the store resolves its database per call, not at construction.
-    from gateway.storage.db import BindingsConnections
-
-    store = SessionBindingStore(BindingsConnections())
-
-    # Act
-    with bound_storage_scope(slack_scope(ACME, ALICE)):
-        store.bind(
-            platform=_SLACK, chat_id="C1:1.0", session_id="acme", principal=ACME, actor=ALICE
-        )
-    with bound_storage_scope(slack_scope(GLOBEX, ALICE)):
-        globex_view = store.get_session_id(
-            platform=_SLACK, chat_id="C1:1.0", principal=ACME, actor=ALICE
-        )
-    store.close()
-
-    # Assert: Globex's database has no row from Acme's.
-    assert globex_view is None
-
-
-@pytest.mark.usefixtures("host")
 def test_each_org_gets_its_own_bindings_database() -> None:
     # Act
     with bound_storage_scope(slack_scope(ACME, ALICE)):
-        acme_db = bindings_db_path()
+        acme_db = bindings_file_path()
     with bound_storage_scope(slack_scope(GLOBEX, ALICE)):
-        globex_db = bindings_db_path()
+        globex_db = bindings_file_path()
 
     # Assert
     assert acme_db != globex_db
-
-
-def test_legacy_host_database_is_readable_after_the_split(host: Path) -> None:
-    """A pre-split file must still open rather than error on the new schema."""
-    # Arrange: a database holding both tables, as written before the split.
-    legacy_path = host / "gateway" / "state.db"
-    legacy_path.parent.mkdir(parents=True, exist_ok=True)
-    legacy = sqlite3.connect(legacy_path)
-    legacy.executescript(
-        """
-        CREATE TABLE gateway_session_bindings (
-            platform TEXT NOT NULL, chat_id TEXT NOT NULL, principal_id TEXT NOT NULL,
-            actor_id TEXT NOT NULL DEFAULT '', session_id TEXT NOT NULL, updated_at REAL NOT NULL,
-            PRIMARY KEY (platform, chat_id, principal_id, actor_id)
-        );
-        INSERT INTO gateway_session_bindings VALUES ('telegram','42','','','tg-legacy',1.0);
-        """
-    )
-    legacy.commit()
-    legacy.close()
-
-    # Act
-    store = SessionBindingStore(connect_bindings_db(host / "gateway" / "bindings.db"))
-    resolved = store.get_session_id(platform=_TELEGRAM, chat_id="42")
-    store.close()
-
-    # Assert: the existing Telegram conversation survives the upgrade.
-    assert resolved == "tg-legacy"
 
 
 def test_telegram_runtime_wiring_can_read_and_write_bindings(
@@ -429,71 +348,7 @@ def test_telegram_runtime_wiring_can_read_and_write_bindings(
 
     # Assert: the table exists and the round trip works on the host root.
     assert resolved == "tg-wired"
-    assert (host / "gateway" / "bindings.db").is_file()
-
-
-def test_pre_scoping_bindings_are_adopted(host: Path) -> None:
-    """A database written by main has no principal or actor columns at all.
-
-    Selecting them outright raises, so a column-blind adopt silently drops every
-    conversation on the first start after upgrade.
-    """
-    # Arrange: exactly main's table shape.
-    legacy_path = host / "gateway" / "state.db"
-    legacy_path.parent.mkdir(parents=True, exist_ok=True)
-    legacy = sqlite3.connect(legacy_path)
-    legacy.executescript(
-        """
-        CREATE TABLE gateway_session_bindings (
-            platform TEXT NOT NULL,
-            chat_id TEXT NOT NULL,
-            session_id TEXT NOT NULL,
-            updated_at REAL NOT NULL,
-            PRIMARY KEY (platform, chat_id)
-        );
-        INSERT INTO gateway_session_bindings VALUES ('telegram','42','tg-from-main',1.0);
-        """
-    )
-    legacy.commit()
-    legacy.close()
-
-    # Act
-    store = SessionBindingStore(connect_bindings_db(host / "gateway" / "bindings.db"))
-    resolved = store.get_session_id(platform=_TELEGRAM, chat_id="42")
-    store.close()
-
-    # Assert: the pre-upgrade conversation carries over as an unscoped binding.
-    assert resolved == "tg-from-main"
-
-
-def test_silo_bindings_are_adopted_from_the_host_onto_the_mount(host: Path, mounted: Path) -> None:
-    """A silo's rows sit on the host, while its new bindings live on the volume."""
-    # Arrange: a pre-cutover host database.
-    legacy_path = host / "gateway" / "state.db"
-    legacy_path.parent.mkdir(parents=True, exist_ok=True)
-    legacy = sqlite3.connect(legacy_path)
-    legacy.executescript(
-        """
-        CREATE TABLE gateway_session_bindings (
-            platform TEXT NOT NULL, chat_id TEXT NOT NULL,
-            session_id TEXT NOT NULL, updated_at REAL NOT NULL,
-            PRIMARY KEY (platform, chat_id)
-        );
-        INSERT INTO gateway_session_bindings VALUES ('slack','C1:1.0','silo-session',1.0);
-        """
-    )
-    legacy.commit()
-    legacy.close()
-
-    # Act: the first Slack turn after cutover opens the mounted database.
-    with bound_storage_scope(slack_scope(ACME, ALICE)):
-        store = SessionBindingStore(connect_bindings_db())
-        resolved = store.get_session_id(platform=_SLACK, chat_id="C1:1.0")
-        store.close()
-
-    # Assert: the conversation is carried onto the volume, not lost.
-    assert resolved == "silo-session"
-    assert (mounted / "gateway" / "bindings.db").is_file()
+    assert (host / "gateway" / "bindings.json").is_file()
 
 
 def test_a_mount_without_a_declared_owner_is_refused(
@@ -521,3 +376,106 @@ def test_a_turn_for_another_org_cannot_use_the_mount() -> None:
         pytest.raises(paths.ContextRootOwnerMismatchError),
     ):
         paths.opensre_home()
+
+
+# ── Border 5: process state stays on the host, context follows the customer ──
+
+
+def test_process_state_stays_on_host_while_bindings_follow_the_customer(
+    host: Path, mounted: Path
+) -> None:
+    # Act
+    with bound_storage_scope(slack_scope(ACME, ALICE)):
+        bindings = bindings_file_path()
+    process_state = gateway_dir()
+
+    # Assert: the pidfile and logs are the machine's; bindings are the customer's.
+    assert bindings == mounted / "gateway" / "bindings.json"
+    assert process_state == host / "gateway"
+    assert mounted not in process_state.parents
+
+
+@pytest.mark.usefixtures("host")
+def test_each_org_gets_its_own_bindings_file() -> None:
+    # Act
+    with bound_storage_scope(slack_scope(ACME, ALICE)):
+        acme = bindings_file_path()
+    with bound_storage_scope(slack_scope(GLOBEX, ALICE)):
+        globex = bindings_file_path()
+
+    # Assert
+    assert acme != globex
+
+
+# ── Border 6: upgrading off the SQLite index keeps conversations ────────────
+
+
+def _write_legacy_sqlite(path: Path, platform: str, chat_id: str, session_id: str) -> None:
+    """Write an index in exactly the shape main wrote (no principal/actor)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(path)
+    conn.executescript(
+        """
+        CREATE TABLE gateway_session_bindings (
+            platform TEXT NOT NULL, chat_id TEXT NOT NULL,
+            session_id TEXT NOT NULL, updated_at REAL NOT NULL,
+            PRIMARY KEY (platform, chat_id)
+        );
+        """
+    )
+    conn.execute(
+        "INSERT INTO gateway_session_bindings VALUES (?, ?, ?, 1.0)",
+        (platform, chat_id, session_id),
+    )
+    conn.commit()
+    conn.close()
+
+
+def test_pre_scoping_sqlite_bindings_are_adopted(host: Path) -> None:
+    """Selecting columns a pre-scoping index lacks would drop every conversation."""
+    # Arrange
+    _write_legacy_sqlite(host / "gateway" / "state.db", _TELEGRAM, "42", "tg-from-main")
+
+    # Act
+    store = open_file_binding_store(host / "gateway" / "bindings.json")
+    resolved = store.get_session_id(platform=_TELEGRAM, chat_id="42")
+
+    # Assert
+    assert resolved == "tg-from-main"
+
+
+def test_sqlite_bindings_are_adopted_from_the_host_onto_the_mount(
+    host: Path, mounted: Path
+) -> None:
+    """A deployment's rows sit on the host while its new file lives on the volume."""
+    # Arrange
+    _write_legacy_sqlite(host / "gateway" / "state.db", _SLACK, "C1:1.0", "silo-session")
+
+    # Act: the first Slack turn after cutover opens the mounted file.
+    with bound_storage_scope(slack_scope(ACME, ALICE)):
+        store = open_file_binding_store()
+        resolved = store.get_session_id(platform=_SLACK, chat_id="C1:1.0")
+
+    # Assert
+    assert resolved == "silo-session"
+    assert (mounted / "gateway" / "bindings.json").is_file()
+
+
+def test_adoption_reaches_the_mount_not_only_the_boot_path(host: Path, mounted: Path) -> None:
+    """The worker opens the store before any scope is bound.
+
+    Adoption must therefore follow the path the turn actually uses, not the
+    unbound host path the store happened to see at boot.
+    """
+    # Arrange: pre-upgrade rows on the host, and a worker started unbound.
+    _write_legacy_sqlite(host / "gateway" / "state.db", _SLACK, "C1:1.0", "pre-upgrade")
+    store = open_file_binding_store()
+
+    # Act: the first Slack turn binds the org, moving the path onto the mount.
+    with bound_storage_scope(slack_scope(ACME, ALICE)):
+        resolved = store.get_session_id(platform=_SLACK, chat_id="C1:1.0")
+
+    # Assert: the thread still resolves to the session it had before the upgrade,
+    # and the carried-over rows landed on the mount rather than the boot path.
+    assert resolved == "pre-upgrade"
+    assert (mounted / "gateway" / "bindings.json").is_file()

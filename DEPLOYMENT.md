@@ -31,7 +31,7 @@ Copy [`.env.deploy.example`](.env.deploy.example) and export the required variab
 
 ```bash
 # Step 1 — bake a gateway AMI (run once per code change, takes ~5-10 minutes):
-make bake-gateway
+make build-gateway-image
 
 # Step 2 — launch EC2 instance from the saved AMI (fast):
 make deploy-gateway
@@ -73,8 +73,8 @@ Restrict the allowed source CIDR with `OPENSRE_WEB_API_INGRESS_CIDR` (default `0
 Installs OpenSRE inline on a fresh EC2 instance via SSM — slower but requires no bake step:
 
 ```bash
-make deploy-gateway-direct
-make destroy-gateway-direct
+make install-gateway-on-new-server
+make destroy-gateway-on-new-server
 ```
 
 ---

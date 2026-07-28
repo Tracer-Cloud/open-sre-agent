@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+import pytest
+
 from core.agent_harness.prompts import (
     _SYSTEM_PROMPT_BASE,
     build_action_system_prompt,
@@ -162,6 +166,17 @@ def test_system_prompt_routes_github_cli_to_action_tools() -> None:
     assert "from this info create an issue on github" in prompt
     assert "github_cli is action-only" in prompt
     assert "exception: github issue/pr/repo" in prompt
+    assert "get_github_star_history" in prompt
+    assert "day-by-day stars" in prompt
+
+
+def test_skills_loader_routes_star_history_away_from_github_cli() -> None:
+    cached_load_skills_block.cache_clear()
+    block = load_skills_block().lower()
+    assert "star history" in block
+    assert "get_github_star_history" in block
+    assert "assistant_handoff" in block
+    assert "undercount" in block or "false zeros" in block
 
 
 def test_system_prompt_bans_shell_placeholders_on_multisource_rca() -> None:
@@ -212,13 +227,14 @@ def test_system_prompt_preserves_bare_numeric_synthetic_mapping() -> None:
 
 
 def test_system_prompt_routes_durable_memory_requests_to_memory_tools() -> None:
-    prompt = _SYSTEM_PROMPT_BASE.lower()
+    prompt = " ".join(_SYSTEM_PROMPT_BASE.lower().split())
     assert "memory_remember" in prompt
-    assert "states a stable fact that should matter in" in prompt
+    assert "proactively save durable knowledge" in prompt
+    assert "the user does not need to say" in prompt
     assert "memory_recall" in prompt
-    assert "what you remember/know about" in prompt
     assert "memory_forget" in prompt
     assert "do not save transient task state" in prompt
+    assert "never save built-in sample/demo/synthetic/test alert output" in prompt
 
 
 def test_connected_integrations_block_renders_state() -> None:
@@ -460,3 +476,23 @@ def test_docs_grounding_reaches_assistant_prompt() -> None:
     assert "--- Documentation reference (docs/) ---" in prompt
     assert "docs/messaging/telegram.mdx" in prompt
     assert "@BotFather" in prompt
+
+
+def test_action_prompt_includes_long_term_memory_bodies(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from config.constants import OPENSRE_MEMORY_DIR_ENV, OPENSRE_MEMORY_DISABLED_ENV
+    from core.domain.memory import save_memory
+
+    monkeypatch.setenv(OPENSRE_MEMORY_DIR_ENV, str(tmp_path / "memory"))
+    monkeypatch.delenv(OPENSRE_MEMORY_DISABLED_ENV, raising=False)
+    save_memory(
+        slug="user-profile",
+        memory_type="user",
+        description="Name is Vaibhav",
+        body="The user's name is Vaibhav on the platform team.",
+    )
+    prompt = build_action_system_prompt(_ctx())
+    assert "LONG-TERM MEMORY" in prompt
+    assert "user-profile" in prompt
+    assert "platform team" in prompt

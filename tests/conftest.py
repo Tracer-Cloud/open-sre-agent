@@ -9,6 +9,10 @@ from pathlib import Path
 
 import pytest
 
+from config.constants import (
+    OPENSRE_MEMORY_AUTOEXTRACT_DISABLED_ENV,
+    OPENSRE_MEMORY_DIR_ENV,
+)
 from config.constants.paths import PROJECT_ROOT
 from config.grafana_cloud import load_env
 from config.platform_bootstrap import ensure_project_platform_package
@@ -132,11 +136,20 @@ def _isolate_opensre_home_files(request, monkeypatch, tmp_path) -> None:
     default; a test that needs a specific path can still override it via
     ``monkeypatch`` or by passing an explicit ``path=`` argument.
 
-    Mirrors the ``live_llm`` exemption on ``_disable_system_keyring`` above:
-    live LLM turn tests need the real ``~/.opensre/llm-auth.json`` metadata for
-    CLI-subscription providers, whose prompt-safe ``status()`` reads the
-    metadata record directly rather than an env var.
+    Memory storage is also redirected for every test so deterministic prompt
+    snapshots never read the developer's real ``~/.opensre/memory`` directory.
+    Background memory extraction is disabled by default because most tests use
+    tiny fake LLM clients and assert the exact prompt/stream call shape; the
+    memory-specific tests remove this env var in their own fixture.
+
+    The wizard/LLM-auth overrides mirror the ``live_llm`` exemption on
+    ``_disable_system_keyring`` above: live LLM turn tests need the real
+    ``~/.opensre/llm-auth.json`` metadata for CLI-subscription providers, whose
+    prompt-safe ``status()`` reads the metadata record directly rather than an
+    env var.
     """
+    monkeypatch.setenv(OPENSRE_MEMORY_DIR_ENV, str(tmp_path / "memory"))
+    monkeypatch.setenv(OPENSRE_MEMORY_AUTOEXTRACT_DISABLED_ENV, "1")
     if request.node.get_closest_marker("live_llm") is not None:
         return
     monkeypatch.setenv("OPENSRE_WIZARD_STORE_PATH", str(tmp_path / "opensre.json"))

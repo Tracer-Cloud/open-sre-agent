@@ -291,10 +291,11 @@ class SessionManager:
 
         Persisting is best-effort (a failed flush must not crash teardown);
         the session releases its own resources (:meth:`SessionCore.release_resources`)
-        to prevent per-session leaks. Long-term memory extraction runs after
-        release when ``extract_memory`` is true. Process exit (default) waits for
-        extraction to finish so durable facts are not dropped; gateway rotation
-        passes ``wait_for_memory_extraction=False`` so inbound handling stays
+        to prevent per-session leaks. Long-term memory extraction also runs after
+        every recorded turn; this close path runs it again after release when
+        ``extract_memory`` is true. Process exit (default) waits for extraction
+        to finish so durable facts are not dropped; gateway rotation passes
+        ``wait_for_memory_extraction=False`` so inbound handling stays
         responsive, and skips extraction entirely unless gateway memory is opted in.
         """
         self._flush(session)

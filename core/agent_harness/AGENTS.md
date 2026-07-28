@@ -125,14 +125,14 @@ the single instantiation site — when `Agent.__init__`'s signature changes,
 from core.agent_harness.agent_builder import AgentConfig, build_agent
 
 config = AgentConfig(
-    llm=llm_client,                    # or None to fall back to get_llm(LLMRole.AGENT)
+    llm=llm_client,  # or None to fall back to get_llm(LLMRole.AGENT)
     system=system_prompt,
     tools=tuple(agent_tools),
     resolved_integrations=resolved,
     max_iterations=6,
-    tool_resources={},                  # optional
-    tool_hooks=None,                    # optional
-    on_runtime_event=observer_callback, # optional
+    tool_resources={},  # optional
+    tool_hooks=None,  # optional
+    on_runtime_event=observer_callback,  # optional
 )
 agent = build_agent(config)
 ```

@@ -13,7 +13,6 @@ import os
 from config.constants.slack import SLACK_SILO_TEAM_IDS_ENV
 from config.principal import Actor, Principal, StorageScope
 from gateway.billing.credits_client import organization_id_for_silo
-from gateway.slack.installs import SlackInstallLookupError, get_slack_install
 
 logger = logging.getLogger(__name__)
 
@@ -29,53 +28,45 @@ def _silo_team_allowlist() -> frozenset[str]:
 
 
 def resolve_slack_principal(*, team_id: str) -> Principal:
-    """Principal for a Slack turn: the team's install org, else the silo org.
+    """Principal for a Slack turn: the organization this deployment serves.
 
-    Resolution decides whose credentials are read and who is billed, so an
-    unreadable catalog raises instead of falling through to another owner.
+    There is no local install catalog. Resolution uses
+    ``OPENSRE_ORGANIZATION_ID`` and fails closed when it is missing.
 
-    The silo-org fallback (for a team with no install record) is a
+    Attributing an unknown workspace to that organization is a
     credential-exposure vector on a silo that holds real org credentials: any
-    workspace that installs the app would be attributed to the silo org. When
-    ``OPENSRE_SILO_TEAM_IDS`` is set, the fallback is restricted to those teams
-    and every other team is refused (fail-closed — the recommended prod
-    posture). When it is unset the fallback stays permissive for dogfood but
-    logs a warning so the exposure is visible.
+    workspace that installed the app would inherit them. When
+    ``OPENSRE_SILO_TEAM_IDS`` is set, only those teams are served and every
+    other team is refused (fail-closed — the recommended prod posture). When
+    it is unset the mode stays permissive for dogfood but logs a warning so
+    the exposure is visible.
     """
     team = (team_id or "").strip()
     if not team:
         raise PrincipalResolutionError("Slack turn carried no team id")
 
-    try:
-        install = get_slack_install(team)
-    except SlackInstallLookupError as exc:
+    silo_org = organization_id_for_silo()
+    if not silo_org:
         raise PrincipalResolutionError(
-            f"could not read the Slack install catalog for team {team}"
-        ) from exc
+            f"Slack team {team} cannot be resolved: no organization is configured "
+            "for this deployment"
+        )
 
-    if install is not None and install.clerk_org_id.strip():
-        return Principal.org(install.clerk_org_id)
+    allowlist = _silo_team_allowlist()
+    if not allowlist:
+        logger.warning(
+            "[principal] serving team %s from the configured organization without an "
+            "allowlist. Set %s to restrict this on a deployment holding real credentials.",
+            team,
+            SLACK_SILO_TEAM_IDS_ENV,
+        )
+    elif team not in allowlist:
+        raise PrincipalResolutionError(
+            f"Slack team {team} is not an allowed team for this deployment; "
+            "refusing to attribute it to the configured organization"
+        )
 
-    if silo_org := organization_id_for_silo():
-        allowlist = _silo_team_allowlist()
-        if allowlist and team not in allowlist:
-            raise PrincipalResolutionError(
-                f"Slack team {team} has no install record and is not an allowed "
-                "silo team; refusing to attribute it to the silo organization"
-            )
-        if not allowlist:
-            logger.warning(
-                "[principal] team %s has no install record; attributing to the "
-                "silo org via fallback. Set %s to restrict this on a silo holding "
-                "real credentials.",
-                team,
-                SLACK_SILO_TEAM_IDS_ENV,
-            )
-        return Principal.org(silo_org)
-
-    raise PrincipalResolutionError(
-        f"Slack team {team} has no install record and no silo organization is configured"
-    )
+    return Principal.org(silo_org)
 
 
 def slack_scope(principal: Principal, user_id: str) -> StorageScope:

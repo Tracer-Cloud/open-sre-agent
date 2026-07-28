@@ -171,7 +171,7 @@ opensre uninstall   # remove opensre and all local data
 
 Two primary AWS EC2 paths and a general hosted option:
 
-- **Gateway (AMI + systemd):** `make bake-gateway` then `make deploy-gateway` — Telegram gateway on EC2, baked into a custom AMI.
+- **Gateway (AMI + systemd):** `make build-gateway-image` then `make deploy-gateway` — Telegram gateway only, no Docker; the gateway is installed into a server image that new servers start from.
 - **Hosted (Railway / ECS / Vercel):** deploy with the repo `Dockerfile`; set `LLM_PROVIDER` and the matching API key (see [`.env.example`](.env.example)), plus `DATABASE_URI` and `REDIS_URI` if persistence is needed.
 
 **[Full deployment steps and prerequisites → DEPLOYMENT.md](DEPLOYMENT.md)**

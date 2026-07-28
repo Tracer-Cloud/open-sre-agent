@@ -205,7 +205,6 @@ def validate_azure_sql_config(config: AzureSQLConfig) -> AzureSQLValidationResul
             version_info = cursor.fetchone()[0]
             cursor.close()
 
-            # Extract meaningful version snippet
             version = version_info.split("\n")[0] if version_info else "unknown"
 
             return AzureSQLValidationResult(
@@ -263,12 +262,10 @@ def get_server_status(config: AzureSQLConfig) -> dict[str, Any]:
         try:
             cursor = conn.cursor()
 
-            # Get version
             cursor.execute("SELECT @@VERSION")
             version_info = cursor.fetchone()[0]
             version = version_info.split("\n")[0] if version_info else "unknown"
 
-            # Get service tier and SLO
             cursor.execute("""
                 SELECT
                     edition,
@@ -281,7 +278,6 @@ def get_server_status(config: AzureSQLConfig) -> dict[str, Any]:
             service_objective = slo_row[1] if slo_row else "unknown"
             elastic_pool = slo_row[2] if slo_row else None
 
-            # Get recent resource utilization (last 5 minutes)
             cursor.execute("""
                 SELECT TOP 1
                     avg_cpu_percent,
@@ -296,7 +292,6 @@ def get_server_status(config: AzureSQLConfig) -> dict[str, Any]:
             """)
             resource_row = cursor.fetchone()
 
-            # Get connection count
             cursor.execute("""
                 SELECT
                     COUNT(*) as total_connections,
@@ -307,7 +302,6 @@ def get_server_status(config: AzureSQLConfig) -> dict[str, Any]:
             """)
             conn_row = cursor.fetchone()
 
-            # Get database size
             cursor.execute("""
                 SELECT
                     SUM(size * 8.0 / 1024) as size_mb
@@ -492,7 +486,6 @@ def get_resource_stats(
 
             cursor.close()
 
-            # Compute summary
             throttling_risk = "none"
             if samples:
                 max_cpu: float = max(float(s["avg_cpu_percent"]) for s in samples)

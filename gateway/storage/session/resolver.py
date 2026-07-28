@@ -114,23 +114,6 @@ class SessionResolver:
             principal=principal,
         )
 
-    def has_session(
-        self,
-        *,
-        user_id: str,
-        principal: Principal | None = None,
-        actor: Actor | str | None = None,
-    ) -> bool:
-        """Whether the bot already has a session bound to this conversation key."""
-        return bool(
-            self._bindings.get_session_id(
-                platform=self._platform,
-                chat_id=user_id,
-                principal=principal,
-                actor=actor,
-            )
-        )
-
     def rotate(
         self,
         *,

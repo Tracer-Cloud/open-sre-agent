@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tools.architecture_issue_tool.tool import (
+from integrations.github.tools.architecture_issue_tool.tool import (
     architecture_cleanup_repo,
     architecture_clone_repo,
     architecture_save_observations,

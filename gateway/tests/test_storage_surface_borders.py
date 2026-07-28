@@ -24,8 +24,7 @@ from config.constants import paths
 from config.constants.billing import ORGANIZATION_ID_ENV
 from config.principal import Actor, Principal, StorageScope
 from config.scope_context import bound_storage_scope, current_scope
-from gateway.storage import SessionBindingStore, connect_bindings_db
-from gateway.storage.db import bindings_db_path, default_gateway_db_path
+from gateway.storage import FileBindingStore
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -170,7 +169,7 @@ def test_two_orgs_do_not_share_integrations_or_sessions(_host: Path) -> None:
 def test_slack_bindings_isolate_actors_and_keep_legacy_telegram_untouched(
     tmp_path: Path,
 ) -> None:
-    store = SessionBindingStore(connect_bindings_db(tmp_path / "bindings.db"))
+    store = FileBindingStore(tmp_path / "bindings.json")
     org = Principal.org("org_acme")
     store.bind(
         platform="slack",
@@ -245,19 +244,3 @@ def test_individual_principal_stays_on_host_home_even_when_bound(
         assert paths.session_home() == _host
         assert paths.ORGS_DIR_NAME not in paths.opensre_home().parts
         assert mount not in paths.integrations_store_path().parents
-
-
-def test_installs_stay_on_host_while_org_bindings_follow_scope(
-    _host: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    mount = _host / "workspace" / "memories"
-    monkeypatch.setenv(paths.CONTEXT_ROOT_ENV, str(mount))
-    monkeypatch.setenv(ORGANIZATION_ID_ENV, "org_acme")
-
-    installs = default_gateway_db_path()
-    with bound_storage_scope(_scope("org_acme", "U_ALICE")):
-        org_bindings = bindings_db_path()
-    assert installs == _host / "gateway" / "state.db"
-    assert org_bindings == mount / "gateway" / "bindings.db"
-    # Unbound (Telegram/boot) bindings path must not use the customer mount.
-    assert bindings_db_path() == _host / "gateway" / "bindings.db"
