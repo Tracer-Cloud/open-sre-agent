@@ -455,3 +455,23 @@ def test_sqlite_bindings_are_adopted_from_the_host_onto_the_mount(
     # Assert
     assert resolved == "silo-session"
     assert (mounted / "gateway" / "bindings.json").is_file()
+
+
+def test_adoption_reaches_the_mount_not_only_the_boot_path(host: Path, mounted: Path) -> None:
+    """The worker opens the store before any scope is bound.
+
+    Adoption must therefore follow the path the turn actually uses, not the
+    unbound host path the store happened to see at boot.
+    """
+    # Arrange: pre-upgrade rows on the host, and a worker started unbound.
+    _write_legacy_sqlite(host / "gateway" / "state.db", _SLACK, "C1:1.0", "pre-upgrade")
+    store = open_file_binding_store()
+
+    # Act: the first Slack turn binds the org, moving the path onto the mount.
+    with bound_storage_scope(slack_scope(ACME, ALICE)):
+        resolved = store.get_session_id(platform=_SLACK, chat_id="C1:1.0")
+
+    # Assert: the thread still resolves to the session it had before the upgrade,
+    # and the carried-over rows landed on the mount rather than the boot path.
+    assert resolved == "pre-upgrade"
+    assert (mounted / "gateway" / "bindings.json").is_file()

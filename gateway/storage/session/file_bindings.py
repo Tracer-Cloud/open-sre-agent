@@ -24,8 +24,19 @@ from gateway.storage.session.records import BindingKey
 
 logger = logging.getLogger(__name__)
 
+# Schema version stamped into the document. A reader that finds a higher number
+# than it understands knows the file was written by a newer OpenSRE and can say
+# so instead of misreading it. 1 is the only shape that has existed.
 _VERSION = 1
+
+# How long to wait for another writer before giving up. Long enough to outlast a
+# normal read-modify-write (a few milliseconds), short enough that a wedged
+# holder surfaces as an error rather than hanging a Slack turn. Same value the
+# integrations store uses for the same reason.
 _LOCK_TIMEOUT_SECONDS = 10.0
+
+# Owner-only. The document is not secret, but it sits in the same directory as
+# integration credentials, and nothing else needs to read it.
 _FILE_MODE = 0o600
 
 
@@ -38,16 +49,47 @@ class UnreadableBindingsError(RuntimeError):
 
 
 class FileBindingStore:
-    """Bindings in one JSON document beside the rest of a principal's context."""
+    """Bindings in one JSON document beside the rest of a principal's context.
 
-    def __init__(self, resolve_path: Callable[[], Path] | Path) -> None:
+    The path is resolved per operation, not at construction: a gateway opens the
+    store before any scope is bound, and the organization bound to a turn decides
+    which document that turn reads.
+    """
+
+    def __init__(
+        self,
+        resolve_path: Callable[[], Path] | Path,
+        *,
+        adopter: Callable[[Path], list[dict[str, Any]]] | None = None,
+    ) -> None:
         self._resolve_path = (
             resolve_path if callable(resolve_path) else (lambda: Path(resolve_path))
         )
+        self._adopter = adopter
+        self._adoption_checked: set[str] = set()
 
     @property
     def path(self) -> Path:
-        return self._resolve_path()
+        """The document for the scope bound right now, adopting on first use."""
+        path = self._resolve_path()
+        self._adopt_once(path)
+        return path
+
+    def _adopt_once(self, path: Path) -> None:
+        """Carry legacy rows into this document the first time it is reached.
+
+        Checked per resolved path, because the path a worker sees at boot is not
+        the one its turns use once an organization is bound.
+        """
+        key = str(path)
+        if self._adopter is None or key in self._adoption_checked:
+            return
+        self._adoption_checked.add(key)
+        if path.is_file():
+            return
+        rows = self._adopter(path)
+        if rows:
+            self._insert_missing(path, rows)
 
     def close(self) -> None:
         """No connection to release; present so backends are interchangeable."""
@@ -197,9 +239,11 @@ class FileBindingStore:
 
     def import_records(self, rows: list[dict[str, Any]]) -> int:
         """Insert rows that have no binding yet. Returns how many were added."""
+        return self._insert_missing(self.path, rows)
+
+    def _insert_missing(self, path: Path, rows: list[dict[str, Any]]) -> int:
         if not rows:
             return 0
-        path = self.path
         with self._locked(path):
             data = self._load(path)
             existing = {

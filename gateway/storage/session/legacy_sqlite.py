@@ -38,6 +38,9 @@ def read_legacy_bindings(path: Path) -> list[dict[str, Any]]:
         columns = _columns(conn, "gateway_session_bindings")
         if not columns >= _REQUIRED:
             return []
+        # Substitute a SQL empty-string literal for a column the old table does
+        # not have, so the adopted row lands on the unscoped key its surface
+        # still looks it up by.
         principal = "principal_id" if "principal_id" in columns else "''"
         actor = "actor_id" if "actor_id" in columns else "''"
         rows = conn.execute(

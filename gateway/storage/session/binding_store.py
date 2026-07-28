@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 from config.principal import Actor, Principal
 from gateway.storage.db import bindings_file_path, legacy_binding_dirs
@@ -68,25 +68,29 @@ class BindingStore(Protocol):
         raise NotImplementedError
 
 
-def adopt_legacy_bindings(store: FileBindingStore) -> int:
-    """Carry forward conversations bound when the index was SQLite."""
-    path = store.path
-    if path.is_file():
-        return 0
+def legacy_bindings_for(path: Path) -> list[dict[str, Any]]:
+    """Rows to carry into ``path`` from the SQLite index that preceded it.
+
+    Called the first time a document is reached rather than when the store is
+    built: a gateway opens the store before any scope is bound, so at that point
+    the path is the unbound host one, not the organization mount its turns use.
+    """
     rows = collect_legacy_bindings(legacy_binding_dirs(path.parent))
-    if not rows:
-        return 0
-    adopted = store.import_records(rows)
-    if adopted:
-        logger.info("[gateway] adopted %d binding(s) from the previous SQLite index", adopted)
-    return adopted
+    if rows:
+        logger.info(
+            "[gateway] carrying %d binding(s) from the previous SQLite index into %s",
+            len(rows),
+            path,
+        )
+    return rows
 
 
 def open_file_binding_store(path: Path | None = None) -> FileBindingStore:
     """File-backed bindings, following the bound principal unless pinned."""
-    store = FileBindingStore(path if path is not None else bindings_file_path)
-    adopt_legacy_bindings(store)
-    return store
+    return FileBindingStore(
+        path if path is not None else bindings_file_path,
+        adopter=legacy_bindings_for,
+    )
 
 
 def open_binding_store() -> BindingStore:
@@ -96,7 +100,7 @@ def open_binding_store() -> BindingStore:
 
 __all__ = [
     "BindingStore",
-    "adopt_legacy_bindings",
+    "legacy_bindings_for",
     "open_binding_store",
     "open_file_binding_store",
 ]

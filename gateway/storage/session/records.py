@@ -6,8 +6,13 @@ from dataclasses import dataclass
 
 from config.principal import Actor, Principal
 
-# Surfaces without an organization or a named member (Telegram, the CLI) use
-# these ids, so their rows keep the meaning they had before scoping existed.
+# The id a turn gets when it names no organization or no member: Telegram, the
+# local CLI, and every row written before scoping existed. Empty string rather
+# than None so it is a real key a lookup can match, and so a pre-scoping row
+# adopted from the old index still resolves for the surface that wrote it.
+#
+# It is deliberately not a valid organization or Slack user id, so an unscoped
+# lookup can never collide with a real one.
 LEGACY_PRINCIPAL_ID = ""
 LEGACY_ACTOR_ID = ""
 
