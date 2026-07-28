@@ -275,7 +275,8 @@ def build_remote_run_worker(
     logger: logging.Logger,
 ) -> RemoteRunWorker:
     """Compose the production Neon repository and API session resolver."""
-    from platform.deployment_multi_tenant.lambda_control_plane.db.db_client import (
+    # Private opensre-infra-aws submodule (optional for public/community CI).
+    from platform.deployment_multi_tenant.lambda_control_plane.db.db_client import (  # type: ignore[import-not-found]
         ControlPlaneDbClient,
     )
 
