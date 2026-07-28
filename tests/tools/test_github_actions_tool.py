@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any, cast
 from unittest.mock import patch
 
@@ -369,3 +370,74 @@ final runner summary
     assert "annotation between groups" in result["log_text"]
     assert "line 2" in result["log_text"]
     assert "final runner summary" in result["log_text"]
+
+
+def test_extract_step_log_ungrouped_only_step_number_reports_full_log() -> None:
+    """A log with zero ##[group] markers has no real steps to pick by number.
+
+    Regression for the bug where the single ungrouped-log fallback section was
+    itself miscounted as step #1.
+    """
+    result = extract_step_log(
+        "plain log line 1\nplain log line 2\n",
+        step_number=1,
+    )
+    assert result["match_strategy"] == "full-log"
+    assert result["step_name"] == "full-log"
+    assert "plain log line 1" in result["log_text"]
+    assert "plain log line 2" in result["log_text"]
+
+
+def test_get_step_log_reports_truncated_when_original_length_exceeds_returned() -> None:
+    log_tool = cast(Any, get_github_actions_step_log)
+    with (
+        patch("integrations.github.tools.actions.resolve_github_mcp_config", return_value=object()),
+        patch("integrations.github.tools.actions.call_github_mcp_tool", side_effect=_mcp_response),
+    ):
+        result = log_tool(owner="org", repo="repo", run_id=101, job_id=9001, github_token="tok")
+    assert result["truncated"] is True
+    assert result["original_length"] == 2000
+    assert result["returned_length"] < result["original_length"]
+
+
+def test_get_step_log_retries_with_larger_tail_when_step_missing() -> None:
+    """First fetch (tail_lines=500) truncates the log before the Deploy group;
+    the tool should re-fetch a bigger tail instead of settling for full-log."""
+
+    def mcp_response(config: object, tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        if tool != "get_job_logs":
+            return _mcp_response(config, tool, arguments)
+        if arguments.get("tail_lines") == 500:
+            logs_content = "##[group]Checkout\nCloning repository\n##[endgroup]"
+        else:
+            logs_content = (
+                "##[group]Checkout\nCloning repository\n##[endgroup]\n"
+                "##[group]Deploy\nkubectl apply -f manifests/\n##[endgroup]"
+            )
+        return {
+            "tool": tool,
+            "arguments": arguments,
+            "is_error": False,
+            "text": json.dumps(
+                {"job_id": 9001, "logs_content": logs_content, "original_length": 5000}
+            ),
+            "structured_content": None,
+            "content": [],
+        }
+
+    log_tool = cast(Any, get_github_actions_step_log)
+    with (
+        patch("integrations.github.tools.actions.resolve_github_mcp_config", return_value=object()),
+        patch("integrations.github.tools.actions.call_github_mcp_tool", side_effect=mcp_response),
+    ):
+        result = log_tool(
+            owner="org",
+            repo="repo",
+            run_id=101,
+            job_id=9001,
+            step_name="Deploy",
+            github_token="tok",
+        )
+
+    assert result["match_strategy"] == "step_name"
+    assert "kubectl apply" in result["log_text"]
