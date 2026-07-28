@@ -105,11 +105,11 @@ def configure_api_key_provider(
             raise AuthSetupError(validation.detail)
 
     try:
-        save_api_key(
-            provider.value,
-            normalized_key,
-            detail=f"{provider.api_key_env} stored in the system keychain.",
-        )
+        # No hardcoded detail: the store reports which tier actually took the
+        # write, and claiming the keychain when the credential landed in the
+        # local fallback would both mislead the user and overwrite the correct
+        # metadata record that save_api_key just wrote.
+        saved = save_api_key(provider.value, normalized_key)
     except (RuntimeError, ValueError) as exc:
         raise AuthSetupError(str(exc)) from exc
 
@@ -118,13 +118,13 @@ def configure_api_key_provider(
         if set_provider
         else None
     )
-    detail = f"{provider.api_key_env} stored in the system keychain."
-    _save_auth_record(provider=provider, profile=profile, source="keyring", detail=detail)
+    source = "fallback" if saved.used_fallback else "keyring"
+    _save_auth_record(provider=provider, profile=profile, source=source, detail=saved.detail)
     return AuthSetupResult(
         provider=provider.value,
         model=selected_model,
-        source="keyring",
-        detail=detail,
+        source=source,
+        detail=saved.detail,
         env_path=written_path,
     )
 
@@ -303,9 +303,9 @@ def verify_provider(raw_name: str) -> AuthStatus:
 def logout_provider(raw_name: str, *, vendor: bool = False) -> str:
     """Clear OpenSRE-managed auth for a provider.
 
-    For API-key providers this deletes the keyring API key. For subscription
-    CLI providers, OpenSRE clears only its metadata unless ``vendor=True`` is
-    requested; the actual session belongs to the vendor CLI.
+    For API-key providers this deletes the API key from every local tier. For
+    subscription CLI providers, OpenSRE clears only its metadata unless
+    ``vendor=True`` is requested; the actual session belongs to the vendor CLI.
     """
     profile = resolve_auth_profile(raw_name)
     provider = provider_for_profile(profile)
@@ -313,7 +313,7 @@ def logout_provider(raw_name: str, *, vendor: bool = False) -> str:
 
     if profile.kind == "api_key":
         delete_provider_auth(provider.value)
-        return f"Removed {provider.api_key_env} from OpenSRE's keyring store."
+        return f"Removed {provider.api_key_env} from OpenSRE's local credential storage."
 
     if not vendor:
         return (

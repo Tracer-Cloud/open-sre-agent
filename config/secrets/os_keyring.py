@@ -72,16 +72,21 @@ def _is_macos_backend() -> bool:
     return backend.__class__.__module__.startswith("keyring.backends.macOS")
 
 
-def _unavailable_error(exc: BaseException) -> KeyringUnavailableError:
-    """Classify a backend exception, remembering it for the rest of the process."""
-    global _unavailable
+def _classify(exc: BaseException) -> KeyringUnavailableError:
+    """Turn a backend exception into the one error type callers handle."""
     if isinstance(exc, keyring.errors.NoKeyringError) or _is_fail_backend():
         reason = KeyringUnavailableReason.NO_BACKEND
         message = "No system keychain backend is available on this machine."
     else:
         reason = KeyringUnavailableReason.BACKEND_ERROR
         message = f"The system keychain ({backend_name()}) is installed but could not be reached."
-    error = KeyringUnavailableError(message, reason=reason)
+    return KeyringUnavailableError(message, reason=reason)
+
+
+def _unavailable_error(exc: BaseException) -> KeyringUnavailableError:
+    """Classify a backend exception, remembering it for the rest of the process."""
+    global _unavailable
+    error = _classify(exc)
     _unavailable = error
     return error
 
@@ -121,14 +126,20 @@ def set(env_var: str, value: str) -> None:  # noqa: A001 - SecretBackend protoco
 
 
 def delete(env_var: str) -> None:
-    """Remove a secret from the OS keychain, tolerating an absent entry."""
+    """Remove a secret from the OS keychain, tolerating an absent entry.
+
+    Deliberately does *not* set the sticky flag: ``store.delete_secret`` already
+    treats a failed keyring delete as non-fatal, so letting it mark the whole
+    process unavailable would push every later read and write in the run onto
+    the plaintext fallback because one logout could not reach the backend.
+    """
     _guard()
     try:
         keyring.delete_password(KEYRING_SERVICE, env_var)
     except keyring.errors.PasswordDeleteError:
         return
     except (keyring.errors.KeyringError, RuntimeError, OSError) as exc:
-        raise _unavailable_error(exc) from exc
+        raise _classify(exc) from exc
 
 
 def item_exists(env_var: str) -> bool | None:

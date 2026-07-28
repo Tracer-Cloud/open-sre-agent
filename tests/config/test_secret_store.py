@@ -270,3 +270,28 @@ def test_empty_value_clears_instead_of_storing(use_backend) -> None:
 
     assert resolve_secret(_ENV_VAR) == ""
     assert _ENV_VAR not in _fallback_contents()
+
+
+def test_a_failed_delete_does_not_lock_the_process_out_of_the_keyring(use_backend) -> None:
+    """A logout that could not reach the backend must not demote later writes.
+
+    ``delete_secret`` already treats a failed keyring delete as non-fatal, so if
+    it also set the sticky unavailable flag, every subsequent read and write in
+    the run would skip the keychain and use the plaintext fallback instead.
+    """
+    delete_calls = 0
+
+    class _DeleteFailsOnceKeyring(MemoryKeyring):
+        def delete_password(self, _service: str, _username: str) -> None:
+            nonlocal delete_calls
+            delete_calls += 1
+            raise keyring.errors.KeyringLocked("The keychain is locked")
+
+    use_backend(_DeleteFailsOnceKeyring())
+
+    delete_secret(_ENV_VAR)
+    result = save_secret(_ENV_VAR, "sk-after-failed-delete")
+
+    assert delete_calls == 1
+    assert result.tier == "keyring"
+    assert lookup(_ENV_VAR).tier == "keyring"

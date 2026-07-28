@@ -10,6 +10,7 @@ from keyring.backend import KeyringBackend
 from config.llm_auth.credentials import resolve_for_request, status
 from config.llm_auth.records import resolve_provider_auth_record, save_provider_auth_record
 from config.llm_credentials import resolve_env_credential
+from config.secrets.os_keyring import reset_keyring_state
 from integrations.llm_cli.base import CLIProbe
 from integrations.llm_cli.codex_oauth import CodexOAuthResult
 from surfaces.cli.llm_auth.providers import ProviderAuthProfile, resolve_auth_profile
@@ -21,6 +22,19 @@ from surfaces.cli.llm_auth.service import (
 from surfaces.cli.wizard.config import ModelOption, ProviderOption
 from surfaces.cli.wizard.validation import ValidationResult
 from tests.shared.keyring_backend import MemoryKeyring
+
+
+class _NoBackendKeyring(MemoryKeyring):
+    """Stands in for ``keyring.backends.fail.Keyring`` on a headless box."""
+
+    def get_password(self, _service: str, _username: str) -> str | None:
+        raise keyring.errors.NoKeyringError("No recommended backend was available")
+
+    def set_password(self, _service: str, _username: str, _password: str) -> None:
+        raise keyring.errors.NoKeyringError("No recommended backend was available")
+
+    def delete_password(self, _service: str, _username: str) -> None:
+        raise keyring.errors.NoKeyringError("No recommended backend was available")
 
 
 def test_resolve_auth_profile_accepts_subscription_aliases() -> None:
@@ -63,8 +77,49 @@ def test_configure_deepseek_api_key_stores_keyring_and_nonsecret_env(
         assert "DEEPSEEK_REASONING_MODEL=deepseek-v4-flash\n" in env_content
         assert "DEEPSEEK_API_KEY=" not in env_content
         assert resolve_provider_auth_record("deepseek")["source"] == "keyring"
+        assert result.source == "keyring"
     finally:
         keyring.set_keyring(previous_backend)
+
+
+def test_configure_api_key_reports_the_fallback_tier_it_actually_used(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """`opensre auth login` must not claim the keychain on a machine without one.
+
+    The setup result feeds CLI and REPL output, and the auth record feeds
+    `opensre auth status`, so hardcoding "keyring" here both misleads the user
+    and overwrites the correct record that `save_api_key` just wrote.
+    """
+    monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
+    monkeypatch.setattr(
+        "surfaces.cli.wizard.store.get_store_path",
+        lambda: tmp_path / "opensre.json",
+    )
+    monkeypatch.setattr(
+        "surfaces.cli.llm_auth.service.validate_provider_credentials",
+        lambda **_kwargs: ValidationResult(ok=True, detail="ok"),
+    )
+
+    previous_backend = keyring.get_keyring()
+    keyring.set_keyring(_NoBackendKeyring())
+    reset_keyring_state()
+    try:
+        result = configure_api_key_provider(
+            profile=resolve_auth_profile("deepseek"),
+            api_key="deepseek-secret",
+            model="deepseek-v4-flash",
+            env_path=tmp_path / ".env",
+        )
+
+        assert result.source == "fallback"
+        assert "No system keychain" in result.detail
+        assert resolve_provider_auth_record("deepseek")["source"] == "fallback"
+    finally:
+        keyring.set_keyring(previous_backend)
+        reset_keyring_state()
 
 
 def test_configure_api_key_does_not_store_when_validation_fails(
