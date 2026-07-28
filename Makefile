@@ -308,7 +308,11 @@ destroy-gateway-on-new-server:
 OPENSRE_INFRA_AWS_DIR ?= platform/deployment_multi_tenant
 
 cdk-verify:
-	uv run pytest tests/platform/deployment_multi_tenant/test_lambda_bundle_paths.py -q
+	@if [ ! -f "$(OPENSRE_INFRA_AWS_DIR)/scripts/build-lambda-bundles.sh" ]; then \
+		echo "Skipping cdk-verify: $(OPENSRE_INFRA_AWS_DIR) submodule not checked out"; \
+	else \
+		uv run pytest tests/platform/deployment_multi_tenant/test_lambda_bundle_paths.py -q; \
+	fi
 
 # Deploy Lambda test case
 deploy-lambda:
