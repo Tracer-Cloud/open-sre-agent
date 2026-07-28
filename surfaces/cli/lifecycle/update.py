@@ -4,6 +4,7 @@ import os
 import re
 import subprocess
 import sys
+from http import HTTPStatus
 
 from config.version import get_opensre_version
 
@@ -44,7 +45,7 @@ def _fetch_latest_version() -> str:
     except httpx.TimeoutException as exc:
         raise RuntimeError("request timed out") from exc
     except httpx.HTTPStatusError as exc:
-        if exc.response.status_code == 429:
+        if exc.response.status_code == HTTPStatus.TOO_MANY_REQUESTS:
             raise RuntimeError("GitHub API rate limit exceeded, try again later") from exc
         raise RuntimeError(f"GitHub API returned HTTP {exc.response.status_code}") from exc
     except httpx.ConnectError as exc:
