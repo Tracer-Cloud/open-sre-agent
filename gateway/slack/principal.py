@@ -65,7 +65,7 @@ def resolve_slack_principal(*, team_id: str) -> Principal:
             f"Slack team {team} is not an allowed team for this deployment; "
             "refusing to attribute it to the configured organization"
         )
-    
+
     return Principal.org(silo_org)
 
 
