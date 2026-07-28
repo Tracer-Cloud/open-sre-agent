@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import asdict, dataclass
+from http import HTTPStatus
 from pathlib import Path
 from urllib.error import URLError
 from urllib.parse import urlparse
@@ -61,10 +62,10 @@ def probe_remote_target(timeout_seconds: float = 3.0) -> ProbeResult:
     request = Request(url, method="GET")
     try:
         with _open_probe_request(request, timeout_seconds) as response:
-            status = getattr(response, "status", 200)
+            status = getattr(response, "status", HTTPStatus.OK)
             return ProbeResult(
                 target="remote",
-                reachable=200 <= status < 500,
+                reachable=HTTPStatus.OK <= status < HTTPStatus.INTERNAL_SERVER_ERROR,
                 detail=f"Tracer remote target reachable at {url} (HTTP {status})",
             )
     except URLError as err:
