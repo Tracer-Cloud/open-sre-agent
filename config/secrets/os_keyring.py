@@ -116,7 +116,7 @@ def get(env_var: str) -> str:
         raise _unavailable_error(exc) from exc
 
 
-def set(env_var: str, value: str) -> None:  # noqa: A001 - SecretBackend protocol
+def set(env_var: str, value: str) -> None:  # noqa: A001 - mirrors get/delete in this tier
     """Store a secret in the OS keychain."""
     _guard()
     try:

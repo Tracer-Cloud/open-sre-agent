@@ -106,7 +106,7 @@ def get(env_var: str) -> str:
         return _load_unlocked(path).get(env_var, "").strip()
 
 
-def set(env_var: str, value: str) -> None:  # noqa: A001 - SecretBackend protocol
+def set(env_var: str, value: str) -> None:  # noqa: A001 - mirrors get/delete in this tier
     """Store a secret, replacing any existing entry."""
     path = store_path()
     _ensure_parent(path)

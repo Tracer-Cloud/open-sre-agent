@@ -9,7 +9,7 @@ acyclic.
 from __future__ import annotations
 
 from enum import Enum
-from typing import Literal, Protocol
+from typing import Literal
 
 # Where a resolved secret came from. ``fallback`` is the owner-only local file
 # used when the OS keyring cannot be reached.
@@ -44,19 +44,8 @@ class KeyringUnavailableError(RuntimeError):
         self.reason = reason
 
 
-class SecretBackend(Protocol):
-    """One storage tier for name/value secrets."""
-
-    def get(self, env_var: str) -> str: ...
-
-    def set(self, env_var: str, value: str) -> None: ...
-
-    def delete(self, env_var: str) -> None: ...
-
-
 __all__ = [
     "KeyringUnavailableError",
     "KeyringUnavailableReason",
-    "SecretBackend",
     "SecretTier",
 ]
