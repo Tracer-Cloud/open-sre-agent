@@ -154,6 +154,7 @@
             "pages": [
               "argocd",
               "aws",
+              "elb",
               "kubernetes",
               "cloudtrail_events",
               "bitbucket",
