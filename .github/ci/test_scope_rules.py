@@ -561,12 +561,11 @@ RULES: tuple[PathRule, ...] = (
         ("tests/platform/deployment_fargate/fargate_fleet_infrastructure/",),
     ),
     PathRule(
-        "platform/deployment_fargate/api_control_plane_infrastructure/",
-        ("tests/platform/deployment_fargate/api_control_plane_infrastructure/",),
-    ),
-    PathRule(
-        "platform/deployment_fargate/api_public_forwarder_infrastructure/",
-        ("tests/platform/deployment_fargate/api_public_forwarder_infrastructure/",),
+        "platform/deployment_fargate/opensre-infra/lambdas/",
+        (
+            "tests/deployment/",
+            "tests/platform/deployment_fargate/test_lambda_bundle_paths.py",
+        ),
     ),
     PathRule(
         "platform/deployment_fargate/",

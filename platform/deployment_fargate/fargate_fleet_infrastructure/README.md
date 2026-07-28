@@ -1,12 +1,14 @@
 # Shared Fargate fleet (Python CDK)
 
 This CDK app owns the **stable shared foundation** for the multi-tenant Gateway
-control plane. The sibling
-[`api_control_plane_infrastructure/`](../api_control_plane_infrastructure/) and
-[`api_public_forwarder_infrastructure/`](../api_public_forwarder_infrastructure/)
-apps import its outputs. Per-organization ECS services, task definitions, IAM
-task roles, Secrets Manager records, and S3 Files access points remain in the
-Python tenant lifecycle under [`../api_control_plane/`](../api_control_plane/).
+control plane. The Terraform modules
+[`opensre-infra/modules/api_control_plane`](../opensre-infra/modules/api_control_plane/)
+and
+[`opensre-infra/modules/api_public_forwarder`](../opensre-infra/modules/api_public_forwarder/)
+consume its outputs. Per-organization ECS services, task definitions, IAM task
+roles, Secrets Manager records, and S3 Files access points remain in the Python
+tenant lifecycle under
+[`../opensre-infra/lambdas/api_control_plane/`](../opensre-infra/lambdas/api_control_plane/).
 
 ## What this stack creates
 
@@ -34,7 +36,7 @@ These resources are **not** created by this stack — pass explicit identifiers 
 | `ResourcePrefix` | `OPENSRE_FARGATE_RESOURCE_PREFIX` (optional, default `opensre`) |
 
 Stack outputs echo the values needed by
-[`TenantFleetConfig`](../api_control_plane/utils/get_fleet_config.py).
+[`TenantFleetConfig`](../opensre-infra/lambdas/api_control_plane/utils/get_fleet_config.py).
 `OPENSRE_FARGATE_SECURITY_GROUP_IDS` joins the stack-created Gateway task security
 group with the external S3 Files client security group so tasks can mount the
 filesystem provisioned by
@@ -158,9 +160,7 @@ uv run --extra cdk cdk deploy OpensreFargateFleet \
   --parameters CredentialsApiUrl=https://credentials.example.com
 ```
 
-The control-plane and public-forwarder stacks import these outputs directly; no
-manual environment copy is required. See
-[`api_control_plane_infrastructure/README.md`](../api_control_plane_infrastructure/README.md)
-and
-[`api_public_forwarder_infrastructure/README.md`](../api_public_forwarder_infrastructure/README.md)
-for their parameters.
+The Terraform public-forwarder and control-plane modules in
+[`opensre-infra/stacks/fargate`](../opensre-infra/stacks/fargate/) take the
+equivalent values as input variables (or read fleet foundation from the same
+stack).

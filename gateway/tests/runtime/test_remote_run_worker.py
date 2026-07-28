@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import logging
+import sqlite3
 import threading
 import time
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
+import pytest
+
 from gateway.runtime.concurrency import TurnConcurrencyGate
-from gateway.runtime.remote_run_worker import RemoteRunWorker
+from gateway.runtime.remote_run_worker import RemoteRunWorker, build_remote_run_worker
 from platform.deployment_fargate.api_control_plane.utils.models import (
     AgentRun,
     AgentRunSource,
@@ -146,3 +150,56 @@ def test_long_run_renews_lease_and_failure_is_generic() -> None:
         "result": {"output": "The remote agent run failed."},
         "error_code": "RuntimeError",
     }
+
+
+def test_factory_resolves_bindings_despite_legacy_state_db(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The factory must use the bindings database, not the install catalog.
+
+    Persistent volumes deployed before the bindings/installs split carry a
+    ``state.db`` whose ``gateway_session_bindings`` table predates the
+    ``principal_id`` column. Wiring the resolver to that database made every
+    API run fail with ``sqlite3.OperationalError`` in production.
+    """
+    import gateway.storage.db as db_module
+    import platform.deployment_fargate.api_control_plane.db.db_client as db_client_module
+
+    monkeypatch.setattr(db_module, "host_home", lambda: tmp_path / "host")
+    monkeypatch.setattr(db_module, "opensre_home", lambda: tmp_path / "host")
+    legacy_dir = tmp_path / "host" / "gateway"
+    legacy_dir.mkdir(parents=True)
+    legacy = sqlite3.connect(legacy_dir / "state.db")
+    legacy.execute(
+        "CREATE TABLE gateway_session_bindings ("
+        "platform TEXT NOT NULL, chat_id TEXT NOT NULL, "
+        "session_id TEXT NOT NULL, updated_at REAL NOT NULL, "
+        "PRIMARY KEY (platform, chat_id))"
+    )
+    legacy.execute(
+        "INSERT INTO gateway_session_bindings VALUES ('api', 'run-0', 'legacy-session', 1.0)"
+    )
+    legacy.commit()
+    legacy.close()
+
+    class _StubDbClient:
+        def __init__(self, dsn: str, *, initialize_schema: bool = True) -> None:
+            _ = (dsn, initialize_schema)
+
+    monkeypatch.setattr(db_client_module, "ControlPlaneDbClient", _StubDbClient)
+
+    worker = build_remote_run_worker(
+        organization_id="org-a",
+        database_url="postgresql://unused.example/db",
+        handler=lambda *_args: None,  # type: ignore[arg-type, misc]
+        gate=TurnConcurrencyGate(1),
+        logger=logging.getLogger("test"),
+    )
+
+    bindings = worker._session_resolver._bindings
+    # The exact lookup the production run path performs; against the install
+    # catalog this raised sqlite3.OperationalError (no such column).
+    assert bindings.get_session_id(platform="api", chat_id="run-1") is None
+    # Pre-split rows must be adopted, not dropped.
+    assert bindings.get_session_id(platform="api", chat_id="run-0") == "legacy-session"

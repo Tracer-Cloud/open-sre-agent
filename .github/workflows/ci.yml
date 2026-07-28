@@ -72,6 +72,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+        with:
+          submodules: true
 
       - name: Install uv
         uses: astral-sh/setup-uv@v8.1.0
@@ -208,6 +210,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+        with:
+          submodules: true
 
       - name: Install uv
         uses: astral-sh/setup-uv@v8.1.0
@@ -292,6 +296,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+        with:
+          submodules: true
 
       - name: Install uv
         uses: astral-sh/setup-uv@v8.1.0
@@ -348,6 +354,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+        with:
+          submodules: true
 
       - name: Install uv
         uses: astral-sh/setup-uv@v8.1.0
@@ -379,6 +387,8 @@ jobs:
       thorough: ${{ steps.filter.outputs.thorough }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          submodules: true
       - uses: dorny/paths-filter@v4
         id: filter
         with:
@@ -445,6 +455,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+        with:
+          submodules: true
 
       - name: Install uv
         uses: astral-sh/setup-uv@v8.1.0

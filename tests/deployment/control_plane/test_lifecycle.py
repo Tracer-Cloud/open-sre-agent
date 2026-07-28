@@ -256,8 +256,8 @@ def test_provision_reconciles_full_boundary_and_returns_bearer_once() -> None:
     )
     access_point_request = s3_files.create_tenant_access_point.call_args.kwargs
     assert access_point_request["organization_id"] == "org-a"
-    assert access_point_request["uid"] == 10001
-    assert access_point_request["gid"] == 10001
+    assert access_point_request["uid"] == 1000
+    assert access_point_request["gid"] == 1000
     role_request = iam.ensure_task_role.call_args.kwargs
     assert role_request["access_point_arn"] == ACCESS_POINT_ARN
     assert role_request["bootstrap_secret_arn"] == BOOTSTRAP_SECRET_ARN
@@ -590,6 +590,18 @@ def test_factory_environment_has_no_demo_fallbacks(
 
     with pytest.raises(RuntimeError, match="OPENSRE_GATEWAY_IMAGE"):
         TenantFleetConfig.from_environment()
+
+
+def test_credentials_api_url_sentinel_normalizes_to_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The fleet stack exports "-" when CredentialsApiUrl is unset."""
+    _factory_environment(monkeypatch)
+    monkeypatch.setenv("OPENSRE_CREDENTIALS_API_URL", "-")
+
+    config = TenantFleetConfig.from_environment()
+
+    assert config.credentials_api_url == ""
 
 
 def test_ecs_delete_and_deregister_tolerate_absent_resources() -> None:

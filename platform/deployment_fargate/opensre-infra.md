@@ -5,6 +5,7 @@ Folder reference for the external AWS infrastructure repository:
 - **GitHub:** https://github.com/Tracer-Cloud/opensre-infra-aws/tree/main
 - **Submodule checkout:** [`opensre-infra/`](opensre-infra/)
 - **Clone URL:** `https://github.com/Tracer-Cloud/opensre-infra-aws.git`
+- **Lambda runtimes:** [`opensre-infra/lambdas/`](opensre-infra/lambdas/)
 
 Initialize:
 

@@ -4,14 +4,17 @@ from __future__ import annotations
 
 from typing import Any
 
-from aws_cdk import CfnOutput, CfnParameter, Fn, RemovalPolicy, Stack
+from aws_cdk import CfnCondition, CfnOutput, CfnParameter, Fn, RemovalPolicy, Stack
 from aws_cdk import aws_ec2 as ec2
 from aws_cdk import aws_ecs as ecs
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_logs as logs
 from constructs import Construct
 
-from platform.deployment_fargate.infrastructure_exports import fleet_export_name
+from platform.deployment_fargate.infrastructure_exports import (
+    FLEET_EXPORT_UNSET,
+    fleet_export_name,
+)
 
 
 class FargateFleetStack(Stack):
@@ -196,6 +199,20 @@ class FargateFleetStack(Stack):
                 s3_files_client_security_group_id.value_as_string,
             ],
         )
+        # Exports must not be empty; substitute the sentinel when the optional
+        # CredentialsApiUrl parameter is blank (readers normalize it back).
+        credentials_api_url_provided = CfnCondition(
+            self,
+            "CredentialsApiUrlProvided",
+            expression=Fn.condition_not(
+                Fn.condition_equals(credentials_api_url.value_as_string, ""),
+            ),
+        )
+        credentials_api_url_export = Fn.condition_if(
+            credentials_api_url_provided.logical_id,
+            credentials_api_url.value_as_string,
+            FLEET_EXPORT_UNSET,
+        ).to_string()
         outputs: tuple[tuple[str, Any, str], ...] = (
             ("OpensreFargateClusterArn", cluster_arn, "OPENSRE_FARGATE_CLUSTER_ARN"),
             (
@@ -232,7 +249,7 @@ class FargateFleetStack(Stack):
             ("OpensreGatewayImage", gateway_image.value_as_string, "OPENSRE_GATEWAY_IMAGE"),
             (
                 "OpensreCredentialsApiUrl",
-                credentials_api_url.value_as_string,
+                credentials_api_url_export,
                 "OPENSRE_CREDENTIALS_API_URL",
             ),
             (

@@ -10,11 +10,8 @@ from datetime import timedelta
 
 from gateway.runtime.concurrency import TurnConcurrencyGate
 from gateway.runtime.sink_protocol import GatewayAgentCallback
-from gateway.storage import (
-    SessionBindingStore,
-    SessionResolver,
-    connect_gateway_db,
-)
+from gateway.storage import SessionResolver
+from gateway.storage.session.binding_store import open_binding_store
 from platform.deployment_fargate.api_control_plane.utils.models import (
     AgentRun,
     AgentRunStatus,
@@ -286,10 +283,10 @@ def build_remote_run_worker(
     )
 
     repository = ControlPlaneDbClient(database_url, initialize_schema=False)
-    resolver = SessionResolver(
-        SessionBindingStore(connect_gateway_db()),
-        platform="api",
-    )
+    # The bindings database (not the host install catalog): it carries the
+    # bindings schema, migrates pre-principal rows, and follows the mounted
+    # organization volume so replaced tasks keep their conversations.
+    resolver = SessionResolver(open_binding_store(), platform="api")
     return RemoteRunWorker(
         organization_id=organization_id,
         repository=repository,

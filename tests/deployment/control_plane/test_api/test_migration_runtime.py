@@ -6,9 +6,7 @@ from typing import Any
 
 import pytest
 
-from platform.deployment_fargate.api_control_plane_infrastructure import (
-    migration_runtime,
-)
+from platform.deployment_fargate.api_control_plane import migration_runtime
 
 
 def test_create_applies_schema(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -185,6 +185,19 @@ def test_task_security_group_output_includes_external_client_sg(
     assert any(isinstance(part, dict) and "Fn::GetAtt" in part for part in joined)
 
 
+def test_credentials_api_url_export_falls_back_to_sentinel(
+    fleet_template: Template,
+) -> None:
+    """Empty CredentialsApiUrl must export the non-empty sentinel, not ""."""
+    outputs = fleet_template.find_outputs("*")
+    value = outputs["OpensreCredentialsApiUrl"]["Value"]
+    assert isinstance(value, dict) and "Fn::If" in value
+    condition_name, when_set, when_unset = value["Fn::If"]
+    assert "CredentialsApiUrlProvided" in condition_name
+    assert when_set == {"Ref": "CredentialsApiUrl"}
+    assert when_unset == "-"
+
+
 def test_emits_tenant_fleet_config_outputs(fleet_template: Template) -> None:
     outputs = fleet_template.find_outputs("*")
     for logical_id in _TENANT_FLEET_ENV_OUTPUTS:

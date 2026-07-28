@@ -132,9 +132,10 @@ Main packages one level deeper:
 - `surfaces/interactive_shell/` — REPL watchdog slash commands (`/watch`, `/watches`, `/unwatch`): PR demo steps live under **Interactive shell: REPL watchdog demo** in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#interactive-shell-repl-watchdog-demo).
 - `config/constants/` — Shared prompt and other static constants.
 - `platform/deployment_ec2/` — EC2 AWS SDK primitives (`client`, `config`, EC2/IAM, SSM) and Telegram gateway AMI/systemd lifecycle (`telegram_gateway/`). Makefile: `make bake-gateway`, `make deploy-gateway`.
-- `platform/deployment_fargate/` — Fargate control plane, public API forwarder,
-  shared fleet CDK, and control-plane API CDK. Makefile:
-  `make cdk-deploy-fleet`, `make cdk-deploy-control-plane`, `make cdk-verify`.
+- `platform/deployment_fargate/` — Fargate fleet CDK plus the `opensre-infra/`
+ submodule (Lambda runtimes under `opensre-infra/lambdas/`, Terraform modules
+ for control-plane and public-forwarder APIs). Makefile:
+ `make cdk-deploy-fleet`, `make cdk-verify`.
 - `platform/guardrails/` — Guardrail rules, evaluation engine, audit helpers, and CLI bindings.
 - `platform/harness_ports.py` — Harness port layer (integration resolution, tool registry, investigation tools, GitHub repo scope). Real implementations are wired at startup via `integrations/harness_adapters.py` and `tools/harness_adapters.py` through `install_harness_ports()` in `surfaces/interactive_shell/ui/output/boundary.py`. See `core/agent_harness/AGENTS.md` for the import boundary.
 - `integrations/hermes/` — Hermes log tailing, incident classification, correlator, sinks, and investigation bridge.

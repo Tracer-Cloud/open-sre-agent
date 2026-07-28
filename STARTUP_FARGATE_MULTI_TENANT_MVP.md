@@ -224,7 +224,7 @@ Focused tests:
 ```bash
 uv run pytest tests/deployment/control_plane/test_lifecycle.py
 uv run pytest tests/deployment/control_plane/test_api/test_authorizer.py tests/deployment/control_plane/test_api/test_handler.py tests/deployment/control_plane/test_api/test_runtime.py
-uv run --extra cdk pytest tests/platform/deployment_fargate/fargate_fleet_infrastructure tests/platform/deployment_fargate/api_control_plane_infrastructure tests/platform/deployment_fargate/api_public_forwarder_infrastructure
+uv run --extra cdk pytest tests/platform/deployment_fargate/fargate_fleet_infrastructure tests/platform/deployment_fargate/test_lambda_bundle_paths.py
 uv run pytest gateway/tests/runtime/test_credential_hydration.py gateway/tests/runtime/test_remote_run_worker.py gateway/tests/runtime/test_concurrency_gate.py gateway/tests/runtime/test_manager.py gateway/tests/runtime/test_turn_handler.py
 ```
 

@@ -14,12 +14,12 @@ shared fleet, control-plane lifecycle API, and public forwarder API.
 
 | Entity | Path | Purpose |
 | --- | --- | --- |
-| **Control plane** | [`api_control_plane/`](api_control_plane/) | Lambda lifecycle provisioning (IAM-protected `/v1/organizations/.../gateway` routes), tenant lifecycle, AWS adapters, and image build contracts. |
-| **Control-plane IaC** | [`api_control_plane_infrastructure/`](api_control_plane_infrastructure/) | Runtime and migration Lambdas, least-privilege roles, IAM HTTP API, logs, alarms, and fleet-output wiring. |
-| **Public API** | [`api_public_forwarder/`](api_public_forwarder/) | Bearer-authorizer-backed `/v1/runs` routes and Lambda composition root. |
-| **Public API IaC** | [`api_public_forwarder_infrastructure/`](api_public_forwarder_infrastructure/) | Public-run Lambda, REQUEST authorizer, routes, logs, alarms, and resource-prefix wiring. |
+| **Control plane** | [`opensre-infra/lambdas/api_control_plane/`](opensre-infra/lambdas/api_control_plane/) | Lambda lifecycle provisioning (IAM-protected `/v1/organizations/.../gateway` routes), tenant lifecycle, AWS adapters. Symlinked at [`api_control_plane/`](api_control_plane/) for imports. |
+| **Control-plane IaC** | [`opensre-infra/modules/api_control_plane`](opensre-infra/modules/api_control_plane/) | Terraform module: runtime Lambda, least-privilege roles, IAM HTTP API, and logs. |
+| **Public API** | [`opensre-infra/lambdas/api_public_forwarder/`](opensre-infra/lambdas/api_public_forwarder/) | Bearer-authorizer-backed `/v1/runs` routes and Lambda composition root. Symlinked at [`api_public_forwarder/`](api_public_forwarder/) for imports. |
+| **Public API IaC** | [`opensre-infra/modules/api_public_forwarder`](opensre-infra/modules/api_public_forwarder/) | Terraform module: public-run Lambda, REQUEST authorizer, routes, and logs. |
 | **Shared fleet (IaC)** | [`fargate_fleet_infrastructure/`](fargate_fleet_infrastructure/) | Python CDK stack for ECS cluster, gateway security group, log group, and execution role. |
-| **opensre-infra** | [`opensre-infra/`](opensre-infra/) | Git submodule of [opensre-infra-aws](https://github.com/Tracer-Cloud/opensre-infra-aws/tree/main) (shared S3 Files / memories Terraform). |
+| **opensre-infra** | [`opensre-infra/`](opensre-infra/) | Git submodule of [opensre-infra-aws](https://github.com/Tracer-Cloud/opensre-infra-aws/tree/main): Lambda sources, shared S3 Files / memories Terraform, plus `stacks/fargate` (see [DEPLOYMENT.md](../../DEPLOYMENT.md)). |
 | **Deploy scripts** | [`scripts/`](scripts/) | Fleet deploy helpers that resolve Terraform `memories` into CDK parameters. |
 | **Gateway runtime** | [`../../gateway/`](../../gateway/) | Tenant Gateway process (Fargate task or legacy EC2/systemd). |
 
@@ -34,14 +34,15 @@ Entry points:
 
 | Command | What it does |
 | --- | --- |
-| `make cdk-synth` | Synthesize fleet, control-plane, and public-forwarder templates |
+| `make cdk-synth` | Synthesize fleet CDK template |
 | `make cdk-deploy-fleet` | Deploy ECS cluster, gateway SG, log group, execution role |
 | `make cdk-deploy-fleet-from-infra-aws` | Deploy fleet with S3 Files parameters from opensre-infra-aws Terraform |
-| `make cdk-deploy-control-plane` | Deploy lifecycle Lambda, schema migration, and IAM HTTP API |
-| `make cdk-deploy-public-forwarder` | Deploy public-run Lambda and bearer HTTP API |
-| `make cdk-deploy` | Deploy all three stacks in dependency order |
-| `make cdk-destroy` | Tear down all stacks in reverse order |
-| `make cdk-verify` | Run synth-level CDK tests (no AWS credentials) |
+| `make cdk-deploy` | Deploy fleet CDK stack |
+| `make cdk-destroy` | Tear down fleet CDK stack |
+| `make cdk-verify` | Run fleet CDK synth tests + lambda bundle path check (no AWS credentials) |
+
+Control-plane and public-forwarder Lambdas deploy via Terraform in
+`opensre-infra/stacks/fargate` (see [DEPLOYMENT.md](../../DEPLOYMENT.md)).
 
 Shared S3 Files storage (backing bucket + filesystem) is provisioned in
 [opensre-infra-aws](https://github.com/Tracer-Cloud/opensre-infra-aws/tree/main),
@@ -65,8 +66,7 @@ Field mapping and notes live in
 [fargate_fleet_infrastructure/README.md](fargate_fleet_infrastructure/README.md).
 
 See [fargate_fleet_infrastructure/README.md](fargate_fleet_infrastructure/README.md),
-[api_control_plane_infrastructure/README.md](api_control_plane_infrastructure/README.md),
-[api_public_forwarder_infrastructure/README.md](api_public_forwarder_infrastructure/README.md),
+[opensre-infra/lambdas/README.md](opensre-infra/lambdas/README.md),
 and [`.env.fargate-fleet.example`](../../.env.fargate-fleet.example) for local
 control-plane runs outside the deployed Lambda.
 
