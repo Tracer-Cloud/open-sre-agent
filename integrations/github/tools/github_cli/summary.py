@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from tools.github_cli.runner import positional_gh_tokens
+from integrations.github.tools.github_cli.runner import positional_gh_tokens
 
 _URL_RE = re.compile(r"https://github\.com/[^\s]+")
 _ISSUE_OR_PR_RE = re.compile(

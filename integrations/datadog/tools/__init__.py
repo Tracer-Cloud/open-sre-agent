@@ -516,9 +516,8 @@ class QueryDatadogMetricsOutput(BaseModel):
 
 
 def _metrics_is_available(_sources: dict[str, dict]) -> bool:
-    # Hidden from the planner until the Metrics API v2 implementation lands (see #669).
-    # Flip back to `bool(sources.get("datadog", {}).get("connection_verified"))` once
-    # the stub body below is replaced with a real request.
+    # Hidden from the planner until the Metrics API v2 implementation is complete.
+    # Re-enable availability once the stub below is replaced with a real Metrics API request.
     return False
 
 

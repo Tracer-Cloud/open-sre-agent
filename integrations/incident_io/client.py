@@ -9,6 +9,7 @@ import re
 import threading
 import time
 from datetime import UTC, datetime
+from http import HTTPStatus
 from typing import Any
 
 import httpx
@@ -23,7 +24,13 @@ IncidentIoConfig = IncidentIoIntegrationConfig
 _DEFAULT_TIMEOUT = 30
 _MAX_RETRIES = 3
 _APPEND_SUMMARY_VERIFY_ATTEMPTS = 5
-_RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
+_RETRYABLE_STATUS_CODES = {
+    HTTPStatus.TOO_MANY_REQUESTS,
+    HTTPStatus.INTERNAL_SERVER_ERROR,
+    HTTPStatus.BAD_GATEWAY,
+    HTTPStatus.SERVICE_UNAVAILABLE,
+    HTTPStatus.GATEWAY_TIMEOUT,
+}
 _IDEMPOTENT_METHODS = {"GET", "HEAD", "OPTIONS"}
 _SECRET_RE = re.compile(
     r"(?i)(bearer\s+[A-Za-z0-9._~+/=-]{6,}"
@@ -137,7 +144,10 @@ class IncidentIoClient:
                 response.raise_for_status()
             except httpx.HTTPStatusError as exc:
                 status_code = exc.response.status_code
-                should_retry = status_code == 429 or method_upper in _IDEMPOTENT_METHODS
+                should_retry = (
+                    status_code == HTTPStatus.TOO_MANY_REQUESTS
+                    or method_upper in _IDEMPOTENT_METHODS
+                )
                 if status_code not in _RETRYABLE_STATUS_CODES or not should_retry:
                     raise
                 if attempt >= _MAX_RETRIES:

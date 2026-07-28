@@ -20,14 +20,14 @@ from integrations.pi import (
     run_pi_coding_task,
     verify_pi_coding,
 )
-from tools.pi_coding_tool.errors import (
+from integrations.pi.tools.pi_coding_tool.errors import (
     ERR_CLI_UNAVAILABLE,
     ERR_DISABLED,
     ERR_EXECUTION,
     ERR_TIMEOUT,
     PiCodingError,
 )
-from tools.pi_coding_tool.validation import ResolvedRequest
+from integrations.pi.tools.pi_coding_tool.validation import ResolvedRequest
 
 #: Evidence source tag stamped on every result dict.
 SOURCE: Final = "knowledge"

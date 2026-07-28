@@ -9,19 +9,19 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from tests.tools.conftest import BaseToolContract
-from tools import registry as registry_module
-from tools.architecture_issue_tool.repo_workspace import WorkspaceError
-from tools.architecture_issue_tool.report_persistence import (
+from integrations.github.tools.architecture_issue_tool.repo_workspace import WorkspaceError
+from integrations.github.tools.architecture_issue_tool.report_persistence import (
     ReportPersistenceError,
     sanitize_repo_name,
     save_architecture_observations,
 )
-from tools.architecture_issue_tool.tool import (
+from integrations.github.tools.architecture_issue_tool.tool import (
     architecture_cleanup_repo,
     architecture_clone_repo,
     architecture_save_observations,
 )
+from tests.tools.conftest import BaseToolContract
+from tools import registry as registry_module
 
 
 class TestArchitectureCloneRepoContract(BaseToolContract):
@@ -81,7 +81,9 @@ def test_architecture_clone_repo_prefers_injected_token_over_env(
     # Arrange: env token set alongside an injected (configured-source) token
     monkeypatch.setenv("GITHUB_TOKEN", "env-token")
     clone_mock = MagicMock(side_effect=WorkspaceError("stop before network"))
-    monkeypatch.setattr("tools.architecture_issue_tool.tool.clone_github_repo", clone_mock)
+    monkeypatch.setattr(
+        "integrations.github.tools.architecture_issue_tool.tool.clone_github_repo", clone_mock
+    )
 
     # Act
     architecture_clone_repo(owner="org", repo="repo", github_token="store-token")
@@ -98,7 +100,9 @@ def test_architecture_clone_repo_falls_back_to_env_token(
     monkeypatch.delenv("GH_TOKEN", raising=False)
     monkeypatch.delenv("GITHUB_MCP_AUTH_TOKEN", raising=False)
     clone_mock = MagicMock(side_effect=WorkspaceError("stop before network"))
-    monkeypatch.setattr("tools.architecture_issue_tool.tool.clone_github_repo", clone_mock)
+    monkeypatch.setattr(
+        "integrations.github.tools.architecture_issue_tool.tool.clone_github_repo", clone_mock
+    )
 
     # Act
     architecture_clone_repo(owner="org", repo="repo")
@@ -115,7 +119,9 @@ def test_architecture_clone_repo_no_token_clones_unauthenticated(
     monkeypatch.delenv("GH_TOKEN", raising=False)
     monkeypatch.delenv("GITHUB_MCP_AUTH_TOKEN", raising=False)
     clone_mock = MagicMock(side_effect=WorkspaceError("stop before network"))
-    monkeypatch.setattr("tools.architecture_issue_tool.tool.clone_github_repo", clone_mock)
+    monkeypatch.setattr(
+        "integrations.github.tools.architecture_issue_tool.tool.clone_github_repo", clone_mock
+    )
 
     # Act
     architecture_clone_repo(owner="org", repo="repo")
@@ -169,7 +175,7 @@ def test_architecture_save_observations_tool_uses_explicit_session(
     tmp_path: Path, monkeypatch
 ) -> None:
     monkeypatch.setattr(
-        "tools.architecture_issue_tool.tool.save_architecture_observations",
+        "integrations.github.tools.architecture_issue_tool.tool.save_architecture_observations",
         partial(save_architecture_observations, home_dir=tmp_path),
     )
     result = architecture_save_observations(
@@ -195,7 +201,7 @@ def test_architecture_save_observations_tool_reads_session_from_context(
     from core.types import AgentToolContext
 
     monkeypatch.setattr(
-        "tools.architecture_issue_tool.tool.save_architecture_observations",
+        "integrations.github.tools.architecture_issue_tool.tool.save_architecture_observations",
         partial(save_architecture_observations, home_dir=tmp_path),
     )
     session = SimpleNamespace(session_id="ctx-session-id")

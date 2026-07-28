@@ -18,6 +18,7 @@ import pytest
 
 from config.constants import paths
 from config.constants.billing import ORGANIZATION_ID_ENV
+from config.constants.memory import OPENSRE_MEMORY_DIR_ENV
 from config.principal import Actor, Principal, StorageScope
 from config.scope_context import bound_storage_scope
 from core.agent_harness.session.persistence import paths as session_paths
@@ -44,7 +45,9 @@ def host(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     root = tmp_path / "host"
     monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", root)
     monkeypatch.delenv(paths.CONTEXT_ROOT_ENV, raising=False)
-    monkeypatch.delenv(paths.OPENSRE_MEMORY_DIR_ENV, raising=False)
+    # get_memory_dir() honours this override and would otherwise resolve to one
+    # shared directory for every scope, hiding the isolation under test.
+    monkeypatch.delenv(OPENSRE_MEMORY_DIR_ENV, raising=False)
     return root
 
 

@@ -45,8 +45,8 @@ def __getattr__(name: str) -> tuple[str, ...]:
     # `click.Choice` validators stay in sync with what cmd_setup / cmd_verify
     # can actually dispatch. Eagerly importing `integrations.registry` here
     # creates a circular import (registry -> verifiers -> integrations.github.mcp ->
-    # cli.*). Deferring to first access lets `cli` finish
-    # bootstrapping. See #1973 (verify) and #2537 (setup).
+    # cli.*). Deferring the import until first access allows the CLI to finish
+    # bootstrapping before the integration registry is loaded.
     if name == "SETUP_SERVICES":
         from integrations.registry import SUPPORTED_SETUP_SERVICES
 
