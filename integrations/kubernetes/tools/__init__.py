@@ -458,9 +458,10 @@ class KubernetesDescribePodTool(BaseTool):
         "requests/limits, environment variables (values redacted, keys only), volume "
         "mounts, conditions, container states, and owner references. Use when list_pods "
         "shows a problem and you need deeper detail on one pod. Preferred over "
-        "kubernetes_get_resource for pods specifically, since that tool returns the raw "
-        "resource including unredacted env values. For any resource type other than "
-        "pod, use kubernetes_get_resource instead."
+        "kubernetes_get_resource for pods specifically — both redact env values "
+        "identically, but this tool returns a curated, investigation-shaped view "
+        "(container states, owner references) rather than the raw API object. For any "
+        "resource type other than pod, use kubernetes_get_resource instead."
     )
     use_cases = [
         "Inspecting container image versions and resource limits on a specific pod",
@@ -1088,11 +1089,13 @@ class KubernetesGetResourceTool(BaseTool):
         "Fetch the raw spec and status of a single named Kubernetes resource, "
         "equivalent to `kubectl get <type> <name> -o json`. Supports: pod, deployment, "
         "statefulset, daemonset, service, ingress, configmap, replicaset, "
-        "persistentvolumeclaim (pvc), and node. For POD detail specifically, prefer "
-        "kubernetes_describe_pod instead — it covers the same investigative detail but "
-        "redacts environment variable VALUES (only keys are shown), while this tool "
-        "returns the pod verbatim and can expose plaintext env values set directly on "
-        "the spec. The namespace field is ignored for cluster-scoped types like node."
+        "persistentvolumeclaim (pvc), and node. Env variable values are redacted (keys "
+        "only) for pod and workload types (deployment, statefulset, daemonset, "
+        "replicaset), same as kubernetes_describe_pod. For POD detail specifically, "
+        "prefer kubernetes_describe_pod instead — it returns the same redacted data in "
+        "a curated, investigation-shaped view (container states, owner references) "
+        "rather than the raw API object. The namespace field is ignored for "
+        "cluster-scoped types like node."
     )
     use_cases = [
         "Fetching the full YAML-equivalent of any non-pod named resource for deep inspection",
