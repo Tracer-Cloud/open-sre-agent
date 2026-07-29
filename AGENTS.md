@@ -24,14 +24,19 @@
 - Do not keep compatibility-only forwarding modules after refactors. Once imports and tests
   are migrated, remove the old module path in the same change and use one canonical import path.
 - Protocol methods use a **docstring-only body** — never `...`, `pass`, or
-  `raise NotImplementedError` as the stub. Precedent:
-  `platform/filestorage/ports.py`, `core/agent_harness/ports.py`.
+  `raise NotImplementedError` as the stub, and never a docstring *plus* a
+  trailing `...`/`pass`. Precedent: `platform/filestorage/ports.py`,
+  `core/agent_harness/ports.py`, `core/agent/loop_host.py`.
 
   ```python
   class ObjectStore(Protocol):
       def put_object(self, key: str, data: bytes) -> None:
           """Store ``data`` under ``key``."""
   ```
+
+  Neither ruff nor mypy enforces this — mypy exempts Protocol bodies from
+  "missing return", so a `pass` under a `-> list[str]` signature passes
+  `make typecheck`. It is a review rule, and only the `...` form trips CodeQL.
 
 ### Docs under `docs/`
 
@@ -226,5 +231,11 @@ Steps:
   one-line docstring as the only body (see Code Style above). Do not keep both a
   docstring and a trailing `...`. Prefer documenting the contract on the port
   over silencing the alert with a comment.
+- `py/ineffectual-statement` does **not** understand `await`: a bare
+  `await some_task` reads to CodeQL as a discarded expression. It is not — the
+  await is the side effect. Cancelling a task and then awaiting it is the
+  standard way to reap it (`gateway/discord/worker.py`, where the awaited task
+  still has to run `client.close()`). Dismiss that alert as a false positive;
+  do not delete the await and do not launder it through a throwaway assignment.
 - CI typecheck does **not** cover `tests/`: `make typecheck` runs mypy over `PYTHON_SOURCE_PATHS` (`config core gateway integrations platform surfaces tools`) only. Type errors in test files never fail CI, so do not assume a clean `make typecheck` means the tests you just wrote are type-clean — run mypy on the test path directly when it matters.
 

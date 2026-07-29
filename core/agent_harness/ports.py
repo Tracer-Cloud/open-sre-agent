@@ -11,7 +11,7 @@ Nothing here imports ``interactive_shell``.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
 

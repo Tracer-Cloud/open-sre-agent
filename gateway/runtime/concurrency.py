@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import threading
-from collections.abc import Callable
 
 from core.agent_harness.session import SessionCore
 from gateway.runtime.sink_protocol import GatewayAgentCallback, GatewaySink
@@ -83,8 +82,6 @@ def gated_callback(
     """Return the callback form expected by Telegram and Slack wiring."""
     return ConcurrencyLimitedTurnHandler(handler=handler, gate=gate)
 
-
-TurnCallbackFactory = Callable[[GatewayAgentCallback, TurnConcurrencyGate], GatewayAgentCallback]
 
 __all__ = [
     "ConcurrencyLimitedTurnHandler",
