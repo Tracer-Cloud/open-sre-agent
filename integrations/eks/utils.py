@@ -17,8 +17,9 @@ def stored_credentials_to_aws_creds(
     Takes a dict containing ``access_key_id``, ``secret_access_key``, and
     optionally ``session_token`` (or ``None``). Returns a new dict with
     guaranteed truthy ``AccessKeyId`` and ``SecretAccessKey`` keys, plus
-    ``SessionToken`` (coerced to ``None`` because botocore rejects empty
-    strings). Returns ``None`` if the input is falsy or missing required keys,
+    ``SessionToken`` (which preserves truthy tokens but converts empty or
+    missing values to ``None`` because botocore rejects empty strings).
+    Returns ``None`` if the input is falsy or missing required keys,
     allowing callers to fall back to ambient credentials. The original
     dictionary is not mutated.
     """
