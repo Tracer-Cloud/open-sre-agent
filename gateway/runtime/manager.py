@@ -8,7 +8,8 @@ process lifecycle (signals, ``stop``/``wait``). Component states are published
 through :func:`gateway.runtime.daemon.write_component_status` so the CLI and the
 interactive shell can report status. It holds no transport or agent-dispatch
 logic itself — those live in :mod:`gateway.runtime.turn_handler`,
-:mod:`gateway.telegram.wiring`, and :mod:`gateway.slack.wiring`.
+:mod:`gateway.telegram.wiring`, and :mod:`gateway.slack.wiring`, and
+:mod:`gateway.discord.wiring`.
 """
 
 from __future__ import annotations
@@ -25,6 +26,8 @@ from rich.console import Console
 from core.agent_harness.harness import AgentHarness, HarnessConfig
 from core.llm.internal.preload import preload_llm_clients
 from gateway.config.configure_gateway_logging import configure_gateway_logging
+from gateway.discord.background import DiscordGatewayBackground
+from gateway.discord.wiring import start_discord_worker
 from gateway.runtime.concurrency import (
     ConcurrencyLimitedTurnHandler,
     TurnConcurrencyGate,
@@ -74,6 +77,7 @@ class GatewayManager:
         self.logger: logging.Logger | None = None
         self.telegram_background_worker: TelegramGatewayBackground | None = None
         self.slack_background_worker: SlackGatewayBackground | None = None
+        self.discord_background_worker: DiscordGatewayBackground | None = None
         self.web_server: Any = None
         self.scheduler: Any = None
         self.remote_run_worker: RemoteRunWorker | None = None
@@ -128,6 +132,7 @@ class GatewayManager:
         self._start_web(logger)
         self._start_telegram(logger, chat_handler)
         self._start_slack(logger, chat_handler)
+        self._start_discord(logger, chat_handler)
         self._start_scheduler(logger)
         self._publish_status(logger)
         # Deploy health waits (EC2 Docker + AMI) match this line for Telegram
@@ -159,6 +164,8 @@ class GatewayManager:
             stopped = self.telegram_background_worker.stop(timeout=timeout) and stopped
         if self.slack_background_worker is not None:
             stopped = self.slack_background_worker.stop(timeout=timeout) and stopped
+        if self.discord_background_worker is not None:
+            stopped = self.discord_background_worker.stop(timeout=timeout) and stopped
         clear_component_status()
         self._stopped.set()
         return stopped
@@ -223,6 +230,25 @@ class GatewayManager:
             return
         self.slack_background_worker = worker
         self.components["slack"] = "connected via socket mode"
+
+    def _start_discord(self, logger: logging.Logger, handler: Any) -> None:
+        """Start the Discord chat worker; run without it when not configured."""
+        try:
+            worker, settings = start_discord_worker(logger=logger, handler=handler)
+        except GatewayConfigurationError as exc:
+            logger.warning("Discord chat disabled: %s", exc)
+            self.components["discord"] = f"not configured ({exc})"
+            return
+        if not worker.wait_until_ready(timeout=settings.startup_timeout_seconds):
+            logger.warning(
+                "Discord gateway did not become ready within %.0fs",
+                settings.startup_timeout_seconds,
+            )
+            worker.stop()
+            self.components["discord"] = "failed (startup timeout)"
+            return
+        self.discord_background_worker = worker
+        self.components["discord"] = "connected via gateway"
 
     def _start_scheduler(self, _logger: logging.Logger) -> None:
         """Run cron-scheduled tasks inside the daemon (no separate process needed)."""

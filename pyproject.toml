@@ -44,6 +44,8 @@ dependencies = [
     "boto3>=1.42.88",
     # Slack (Socket Mode gateway + Web API)
     "slack-sdk>=3.31.0",
+    # Discord (Gateway WebSocket chat transport)
+    "discord.py>=2.4.0,<3",
     # Utilities
     "python-dotenv>=1.2.2",
     "click>=8.1.0",

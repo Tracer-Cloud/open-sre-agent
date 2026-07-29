@@ -9,6 +9,7 @@ import time
 import click
 
 import platform
+from config.constants.investigation import ALERT_TEMPLATE_CHOICES
 from config.version import get_opensre_version
 from platform.analytics.cli import (
     capture_update_completed,
@@ -19,7 +20,6 @@ from platform.analytics.cli import (
 from platform.analytics.source import EntrypointSource, TriggerMode
 from platform.common.exit_codes import ERROR, SUCCESS
 from platform.common.runtime_flags import is_json_output, is_yes
-from surfaces.cli.constants import ALERT_TEMPLATE_CHOICES
 
 
 @click.command(name="uninstall")

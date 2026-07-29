@@ -1,9 +1,12 @@
-"""Attention gate for un-tagged replies in Slack threads the bot is active in.
+"""Attention gate for un-tagged replies in chat threads the bot is active in.
 
-Claude-Tag-style thread following: an @mention opens an attention window on
-that thread; while the window is open, plain replies can reach the agent
-without another mention. Every check here is deterministic and free — no
-model call ever decides whether to speak (layered-gate design, layers 1-3).
+Thread following: an @mention opens an attention window on that thread; while
+the window is open, plain replies can reach the agent without another mention.
+Every check here is deterministic and free — no model call ever decides whether
+to speak.
+
+Transport-neutral. Slack and Discord share the ``<@id>`` mention form, so the
+same gate serves both.
 """
 
 from __future__ import annotations

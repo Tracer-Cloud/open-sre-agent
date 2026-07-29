@@ -8,8 +8,8 @@ from typing import Any
 
 from core.tool_framework.base import BaseTool
 from core.tool_framework.utils.tool_availability import tool_unavailable
-from integrations.config_models import HoneycombIntegrationConfig
 from integrations.honeycomb.client import HoneycombClient
+from integrations.honeycomb.config import HoneycombIntegrationConfig
 
 
 def _honeycomb_available(sources: dict) -> bool:

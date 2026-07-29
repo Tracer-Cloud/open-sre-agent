@@ -190,7 +190,6 @@ from integrations.config_models import (
     GrafanaIntegrationConfig,
     GroundcoverIntegrationConfig,
     HelmIntegrationConfig,
-    HoneycombIntegrationConfig,
     IncidentIoIntegrationConfig,
     JiraIntegrationConfig,
     KubernetesIntegrationConfig,
@@ -221,6 +220,7 @@ from integrations.grafana import classify as _classify_grafana
 from integrations.groundcover import classify as _classify_groundcover
 from integrations.helm import classify as _classify_helm
 from integrations.honeycomb import classify as _classify_honeycomb
+from integrations.honeycomb.config import HoneycombIntegrationConfig
 from integrations.incident_io import classify as _classify_incident_io
 from integrations.jenkins import classify as _classify_jenkins
 from integrations.jenkins import jenkins_config_from_env

@@ -13,13 +13,10 @@ from config.principal import StorageScope
 from config.scope_context import bound_storage_scope
 from core.agent_harness.session import SessionCore
 from gateway.billing.credits_client import CreditsOutcome, consume_credits
+from gateway.runtime.approvals import ApprovalBroker, approval_tool_hooks
+from gateway.runtime.attention import GateDecision, ThreadAttentionGate
 from gateway.runtime.sink_protocol import GatewayAgentCallback
-from gateway.slack.approvals import (
-    ApprovalBroker,
-    ThreadApprovalPrompter,
-    approval_tool_hooks,
-)
-from gateway.slack.attention import GateDecision, ThreadAttentionGate
+from gateway.slack.approvals import ThreadApprovalPrompter
 from gateway.slack.client import (
     SlackMessagingClient,
     mark_turn_done,
