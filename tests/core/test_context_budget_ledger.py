@@ -115,8 +115,6 @@ def test_candidate_exchange_uses_ledger_tokens_not_fresh_dumps() -> None:
 def test_ledger_slices_match_a_fresh_estimate_after_mixed_trim() -> None:
     """The incremental ledger must never drift from a from-scratch estimate."""
     # Arrange: a transcript with pinned, duplicate, and trimmable exchanges.
-    from core.context_budget import _tool_exchange_candidates, estimate_message_tokens
-
     messages = [
         {"role": "user", "content": "question " * 50},
         {
@@ -132,11 +130,11 @@ def test_ledger_slices_match_a_fresh_estimate_after_mixed_trim() -> None:
         },
         {"role": "assistant", "content": "answer " * 30},
     ]
-    per_message = [estimate_message_tokens([m]) for m in messages]
+    per_message = [budget.estimate_message_tokens([m]) for m in messages]
 
     # Act
-    with_ledger = _tool_exchange_candidates(messages, message_tokens=per_message)
-    from_scratch = _tool_exchange_candidates(messages)
+    with_ledger = budget._tool_exchange_candidates(messages, message_tokens=per_message)
+    from_scratch = budget._tool_exchange_candidates(messages)
 
     # Assert: same candidates, same token estimates either way.
     assert [(c.start, c.end) for c in with_ledger] == [(c.start, c.end) for c in from_scratch]

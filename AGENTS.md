@@ -252,5 +252,11 @@ Steps:
   result (`_finished = await task` in `gateway/discord/worker.py`
   `_reap_cancelled_task`) over a bare expression statement; do not "fix" by
   skipping the await.
+- Mixed import styles (CodeQL `py/import-and-import-from`): importing one
+  module with both `import X as alias` and `from X import name` — even when
+  the `from` import is function-local — raises an alert. It usually happens
+  when appending to an existing file: **use the import style the file already
+  established** (an existing `import core.context_budget as budget` means new
+  code calls `budget.name`, not `from core.context_budget import name`).
 - CI typecheck does **not** cover `tests/`: `make typecheck` runs mypy over `PYTHON_SOURCE_PATHS` (`config core gateway integrations platform surfaces tools`) only. Type errors in test files never fail CI, so do not assume a clean `make typecheck` means the tests you just wrote are type-clean — run mypy on the test path directly when it matters.
 
