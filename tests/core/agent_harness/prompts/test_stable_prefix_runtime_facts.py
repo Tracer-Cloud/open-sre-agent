@@ -94,8 +94,13 @@ def test_full_prompt_places_live_facts_immediately_before_user_message() -> None
         def investigation_flow(self) -> str:
             return ""
 
-        def environment_block(self) -> str:
-            return build_environment_block(integrations=(), known=False, runtime=runtime)
+        def runtime_facts(self) -> dict[str, object]:
+            return runtime
+
+        def environment_block(self, runtime_facts_in=None) -> str:  # noqa: ANN001
+            return build_environment_block(
+                integrations=(), known=False, runtime=runtime_facts_in or runtime
+            )
 
         def long_term_memory(self) -> str:
             return ""
@@ -114,17 +119,13 @@ def test_full_prompt_places_live_facts_immediately_before_user_message() -> None
         last_synthetic_observation_path=None,
     )
 
-    with patch(
-        "core.agent_harness.prompts.assistant.capture_runtime_facts",
-        return_value=runtime,
-    ):
-        prompt = build_cli_agent_prompt_from_provider(
-            message="what time is it?",
-            prompts=_Prompts(),  # type: ignore[arg-type]
-            tool_observation=None,
-            tool_observation_on_screen=True,
-            turn_snapshot=snap,  # type: ignore[arg-type]
-        )
+    prompt = build_cli_agent_prompt_from_provider(
+        message="what time is it?",
+        prompts=_Prompts(),  # type: ignore[arg-type]
+        tool_observation=None,
+        tool_observation_on_screen=True,
+        turn_snapshot=snap,  # type: ignore[arg-type]
+    )
 
     user_idx = prompt.index("--- User message ---")
     live_idx = prompt.index("current time is 2026-07-29T22:00:00+00:00")
@@ -136,22 +137,57 @@ def test_full_prompt_places_live_facts_immediately_before_user_message() -> None
     assert "process uptime is" not in env_section
 
 
-def test_render_captures_runtime_facts_once_per_turn() -> None:
-    """One capture feeds both the env block and the live block.
+def test_render_captures_runtime_facts_once_and_shares_it() -> None:
+    """One capture per turn, shared by the env block and the live block.
 
-    A second bare ``capture_runtime_facts()`` re-runs the git/importlib probe
-    and re-reads disk+memory on every answer turn.
+    A second capture re-runs the git/importlib probe and re-reads disk+memory
+    on every answer turn.
     """
     # Arrange
-    from core.agent_harness.prompts import prompt_context
+    facts = {
+        "opensre_version": "0.1",
+        "hostname": "pod-1",
+        "now_iso": "2026-07-29T22:00:00+00:00",
+        "uptime_seconds": 12.0,
+    }
+    captures: list[int] = []
+    seen_by_env_block: list[object] = []
 
-    session = SimpleNamespace(
-        session_id="s1",
-        runtime_metadata={"opensre_version": "0.1", "hostname": "pod-1"},
-        configured_integrations_known=True,
-        configured_integrations=(),
-    )
-    provider = prompt_context.DefaultPromptContextProvider(session)
+    class _CountingPrompts:
+        def surface(self) -> str:
+            return "interactive_shell"
+
+        def cli_reference(self) -> str:
+            return "ref"
+
+        def agents_md(self) -> str:
+            return ""
+
+        def docs(self, query: str) -> str:  # noqa: ARG002 - stub
+            return ""
+
+        def investigation_flow(self) -> str:
+            return ""
+
+        def runtime_facts(self) -> dict[str, object]:
+            captures.append(1)
+            return facts
+
+        def environment_block(self, runtime=None) -> str:  # noqa: ANN001
+            seen_by_env_block.append(runtime)
+            return build_environment_block(
+                integrations=(), known=False, runtime=runtime or self.runtime_facts()
+            )
+
+        def long_term_memory(self) -> str:
+            return ""
+
+        def suggested_synthetic_prompt(self) -> str:
+            return ""
+
+        def log_diagnostics(self, reason: str) -> None:  # noqa: ARG002 - stub
+            return None
+
     snap = SimpleNamespace(
         conversation_messages=(),
         configured_integrations_known=True,
@@ -159,35 +195,21 @@ def test_render_captures_runtime_facts_once_per_turn() -> None:
         last_state=None,
         last_synthetic_observation_path=None,
     )
-    facts = {
-        "opensre_version": "0.1",
-        "hostname": "pod-1",
-        "now_iso": "2026-07-29T22:00:00+00:00",
-        "uptime_seconds": 12.0,
-    }
 
-    # Act: count captures across one full render.
-    with (
-        patch(
-            "config.runtime_metadata.assembly.capture_runtime_facts",
-            return_value=facts,
-        ) as assembly_capture,
-        patch(
-            "core.agent_harness.prompts.assistant.capture_runtime_facts",
-            return_value=facts,
-        ) as assistant_capture,
-    ):
-        build_cli_agent_prompt_from_provider(
-            message="hello",
-            prompts=provider,  # type: ignore[arg-type]
-            tool_observation=None,
-            tool_observation_on_screen=True,
-            turn_snapshot=snap,  # type: ignore[arg-type]
-        )
-
-    # Assert: the render reuses the provider's capture instead of taking a
-    # second one of its own.
-    assert assistant_capture.call_count == 0, (
-        "assistant.py took its own capture — the env block already captured"
+    # Act
+    prompt = build_cli_agent_prompt_from_provider(
+        message="hello",
+        prompts=_CountingPrompts(),  # type: ignore[arg-type]
+        tool_observation=None,
+        tool_observation_on_screen=True,
+        turn_snapshot=snap,  # type: ignore[arg-type]
     )
-    assert assembly_capture.call_count <= 1
+
+    # Assert: captured once, and that same mapping reached the env block.
+    assert len(captures) == 1, (
+        f"{len(captures)} captures in one turn — the env block and the live "
+        "block are each taking their own"
+    )
+    assert seen_by_env_block == [facts]
+    assert "host name is pod-1" in prompt
+    assert "current time is 2026-07-29T22:00:00+00:00" in prompt
