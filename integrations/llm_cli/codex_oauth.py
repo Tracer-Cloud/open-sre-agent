@@ -234,7 +234,7 @@ class _CallbackHandler(BaseHTTPRequestHandler):
                 error_description=str(exc),
             )
             self._write_page(
-                400,
+                HTTPStatus.BAD_REQUEST,
                 "OpenSRE OAuth login failed while saving credentials. Return to the terminal.",
             )
             self.server.callback_event.set()
