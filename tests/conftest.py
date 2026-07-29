@@ -14,14 +14,13 @@ from config.constants import (
     OPENSRE_MEMORY_AUTOEXTRACT_DISABLED_ENV,
     OPENSRE_MEMORY_DIR_ENV,
 )
-from config.constants.paths import PROJECT_ROOT
 from config.grafana_cloud import load_env
 from config.platform_bootstrap import ensure_project_platform_package
 from config.secrets.os_keyring import reset_keyring_state
 
 ensure_project_platform_package()
 
-_ENV_PATH = PROJECT_ROOT / ".env"
+_ENV_PATH = paths.PROJECT_ROOT / ".env"
 
 # Private opensre-infra-aws submodule paths. Without
 # ``git submodule update --init platform/deployment_multi_tenant``, collection of
