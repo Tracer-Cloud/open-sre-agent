@@ -24,8 +24,15 @@ from platform.filestorage.errors import (
     UnsyncablePathError,
 )
 from platform.filestorage.ports import ObjectStore, RemoteObject
-from platform.filestorage.scope import SyncRoot, is_syncable, syncable_roots
-from platform.filestorage.sync import SyncReport, pull, push, sync
+from platform.filestorage.scope import SyncRoot, is_syncable, resolved_roots, syncable_roots
+from platform.filestorage.sync import (
+    SyncDirection,
+    SyncReport,
+    pull,
+    push,
+    resolve_direction,
+    run_sync,
+)
 
 __all__ = [
     "ObjectStore",
@@ -34,6 +41,7 @@ __all__ = [
     "RemoteSyncConfigError",
     "RemoteSyncError",
     "RemoteSyncUnavailableError",
+    "SyncDirection",
     "SyncReport",
     "SyncRoot",
     "UnsyncablePathError",
@@ -42,6 +50,8 @@ __all__ = [
     "pull",
     "push",
     "remote_sync_enabled",
-    "sync",
+    "resolve_direction",
+    "resolved_roots",
+    "run_sync",
     "syncable_roots",
 ]

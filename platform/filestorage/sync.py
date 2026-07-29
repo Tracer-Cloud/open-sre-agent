@@ -6,27 +6,40 @@ wins. Nothing here removes a session or a memory, so a stale second machine
 cannot erase work done on the first.
 
 Sessions are append-mostly JSONL and memory files are small markdown, so whole
-objects are transferred rather than ranges.
+objects are transferred rather than ranges. Downloads land through a temporary
+file and an atomic rename, matching how every local store writes, so an
+interrupted pull cannot leave a half-written session behind.
 """
 
 from __future__ import annotations
 
 import hashlib
 import logging
+import os
+import tempfile
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from enum import Enum
 from pathlib import Path
 
-from platform.filestorage.errors import UnsyncablePathError
+from platform.filestorage.errors import RemoteSyncConfigError, UnsyncablePathError
 from platform.filestorage.ports import ObjectStore, RemoteObject
-from platform.filestorage.scope import SyncRoot, is_syncable, syncable_roots
+from platform.filestorage.scope import SyncRoot, resolved_roots, syncable_roots
 
 logger = logging.getLogger(__name__)
 
 
+class SyncDirection(Enum):
+    """Which way one sync moves files."""
+
+    BOTH = "both"
+    PULL = "pull"
+    PUSH = "push"
+
+
 @dataclass
 class SyncReport:
-    """What one sync moved, for the CLI to print and tests to assert on."""
+    """What one sync moved, for the surfaces to print and tests to assert on."""
 
     uploaded: list[str] = field(default_factory=list)
     downloaded: list[str] = field(default_factory=list)
@@ -37,8 +50,34 @@ class SyncReport:
         return len(self.uploaded) + len(self.downloaded)
 
 
-def file_digest(data: bytes) -> str:
-    return hashlib.sha256(data).hexdigest()
+def content_tag(data: bytes) -> str:
+    """Content tag comparable with an S3 ETag.
+
+    A change detector, not a security control: it answers "are these the same
+    bytes the bucket already holds", and S3 defines that tag as MD5.
+    """
+    return hashlib.md5(data, usedforsecurity=False).hexdigest()
+
+
+def comparable_etag(obj: RemoteObject) -> str:
+    """The object's tag when it can be compared, otherwise empty.
+
+    A multipart upload returns a compound tag (``<hash>-<parts>``) that is not
+    the MD5 of the content, so it is treated as no tag at all.
+    """
+    tag = obj.etag.strip('"')
+    return "" if not tag or "-" in tag else tag
+
+
+def resolve_direction(*, pull_only: bool, push_only: bool) -> SyncDirection:
+    """Turn the two surface flags into one direction, rejecting both at once."""
+    if pull_only and push_only:
+        raise RemoteSyncConfigError("choose one of --pull-only or --push-only, not both")
+    if pull_only:
+        return SyncDirection.PULL
+    if push_only:
+        return SyncDirection.PUSH
+    return SyncDirection.BOTH
 
 
 def _local_files(root: SyncRoot) -> list[Path]:
@@ -55,30 +94,47 @@ def _modified_at(path: Path) -> datetime:
     return datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
 
 
+def _write_atomically(target: Path, data: bytes) -> None:
+    """Write through a temporary file in the same directory, then rename."""
+    target.parent.mkdir(parents=True, exist_ok=True)
+    handle, temp_name = tempfile.mkstemp(dir=str(target.parent), suffix=".part")
+    try:
+        with os.fdopen(handle, "wb") as stream:
+            stream.write(data)
+        os.replace(temp_name, target)
+    except BaseException:
+        Path(temp_name).unlink(missing_ok=True)
+        raise
+
+
 def push(
     store: ObjectStore,
     *,
     roots: tuple[SyncRoot, ...] | None = None,
     report: SyncReport | None = None,
+    remote: list[RemoteObject] | None = None,
 ) -> SyncReport:
     """Upload local files whose contents differ from the bucket."""
     roots = roots if roots is not None else syncable_roots()
     result = report if report is not None else SyncReport()
-    remote = {obj.key: obj for obj in store.list_objects("")}
+    listing = remote if remote is not None else store.list_objects("")
+    by_key = {obj.key: obj for obj in listing}
+    # Resolve each root once rather than per file: this loop touches every
+    # session and memory file on the machine.
+    allowed = resolved_roots(roots)
 
     for root in roots:
         for path in _local_files(root):
-            if not is_syncable(path, roots=roots):
+            if not allowed.contains(path):
                 # Reaching here means a root pointed somewhere it should not.
                 raise UnsyncablePathError(f"refusing to upload {path}")
             key = _relative_key(root, path)
             data = path.read_bytes()
-            digest = file_digest(data)
-            existing = remote.get(key)
-            if existing is not None and existing.digest == digest:
+            existing = by_key.get(key)
+            if existing is not None and comparable_etag(existing) == content_tag(data):
                 result.skipped += 1
                 continue
-            store.put_object(key, data, digest=digest)
+            store.put_object(key, data)
             result.uploaded.append(key)
     return result
 
@@ -88,22 +144,21 @@ def pull(
     *,
     roots: tuple[SyncRoot, ...] | None = None,
     report: SyncReport | None = None,
+    remote: list[RemoteObject] | None = None,
 ) -> SyncReport:
     """Download bucket objects missing locally, or newer than the local copy."""
     roots = roots if roots is not None else syncable_roots()
     result = report if report is not None else SyncReport()
     by_name = {root.name: root for root in roots}
 
-    for obj in store.list_objects(""):
+    for obj in remote if remote is not None else store.list_objects(""):
         target = _local_path_for(obj, by_name)
         if target is None:
             continue
         if not _should_download(obj, target):
             result.skipped += 1
             continue
-        data = store.get_object(obj.key)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(data)
+        _write_atomically(target, store.get_object(obj.key))
         result.downloaded.append(obj.key)
     return result
 
@@ -126,23 +181,40 @@ def _local_path_for(obj: RemoteObject, by_name: dict[str, SyncRoot]) -> Path | N
 def _should_download(obj: RemoteObject, target: Path) -> bool:
     if not target.exists():
         return True
-    local = target.read_bytes()
-    if obj.digest and obj.digest == file_digest(local):
+    tag = comparable_etag(obj)
+    if tag and tag == content_tag(target.read_bytes()):
         return False
     # Both sides changed: the more recent write wins.
     return obj.last_modified > _modified_at(target)
 
 
-def sync(
+def run_sync(
     store: ObjectStore,
     *,
+    direction: SyncDirection = SyncDirection.BOTH,
     roots: tuple[SyncRoot, ...] | None = None,
 ) -> SyncReport:
-    """Pull first, then push, so a local edit made offline still wins."""
+    """Move files in ``direction``. Both ways pulls first, so an offline edit wins.
+
+    The listing is fetched once and shared: a pull changes local files, never
+    the bucket, so the push half can reuse it.
+    """
     report = SyncReport()
-    pull(store, roots=roots, report=report)
-    push(store, roots=roots, report=report)
+    listing = store.list_objects("")
+    if direction is not SyncDirection.PUSH:
+        pull(store, roots=roots, report=report, remote=listing)
+    if direction is not SyncDirection.PULL:
+        push(store, roots=roots, report=report, remote=listing)
     return report
 
 
-__all__ = ["SyncReport", "file_digest", "pull", "push", "sync"]
+__all__ = [
+    "SyncDirection",
+    "SyncReport",
+    "comparable_etag",
+    "content_tag",
+    "pull",
+    "push",
+    "resolve_direction",
+    "run_sync",
+]

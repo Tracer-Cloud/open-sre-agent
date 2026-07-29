@@ -7,6 +7,8 @@ from rich.console import Console
 from platform.filestorage import (
     RemoteSyncError,
     load_remote_sync_config,
+    resolve_direction,
+    run_sync,
     syncable_roots,
 )
 from surfaces.interactive_shell.command_registry.types import SlashCommand
@@ -34,23 +36,21 @@ def _print_status(console: Console) -> bool:
 
 
 def _run_sync(console: Console, args: list[str]) -> bool:
+    flags = {a.lower() for a in args}
+    # Same resolver the CLI uses, so both surfaces reject both flags alike.
+    direction = resolve_direction(
+        pull_only="--pull-only" in flags,
+        push_only="--push-only" in flags,
+    )
     config = load_remote_sync_config()
     if config is None:
         console.print(f"[{DIM}]{_OFF_MESSAGE}[/]")
         return True
 
     from platform.filestorage.s3_store import S3ObjectStore
-    from platform.filestorage.sync import pull, push, sync
 
-    store = S3ObjectStore(config)
-    flags = {a.lower() for a in args}
     with console.status("syncing…", spinner="dots"):
-        if "--pull-only" in flags:
-            report = pull(store)
-        elif "--push-only" in flags:
-            report = push(store)
-        else:
-            report = sync(store)
+        report = run_sync(S3ObjectStore(config), direction=direction)
     console.print(
         f"Sync complete — {len(report.downloaded)} downloaded, "
         f"{len(report.uploaded)} uploaded, {report.skipped} already current."

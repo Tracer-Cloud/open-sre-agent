@@ -15,11 +15,11 @@ from platform.common.exit_codes import ERROR, SUCCESS
 from platform.filestorage import (
     RemoteSyncConfig,
     RemoteSyncError,
+    SyncDirection,
     SyncReport,
     load_remote_sync_config,
-    pull,
-    push,
-    sync,
+    resolve_direction,
+    run_sync,
     syncable_roots,
 )
 
@@ -67,15 +67,13 @@ def status_command() -> None:
 @click.option("--push-only", is_flag=True, help="Upload only; fetch nothing.")
 def run_command(pull_only: bool, push_only: bool) -> None:
     """Sync now: pull remote changes, then push local ones."""
-    if pull_only and push_only:
-        click.echo("Choose one of --pull-only or --push-only.", err=True)
-        raise SystemExit(ERROR)
     try:
+        direction = resolve_direction(pull_only=pull_only, push_only=push_only)
         config = load_remote_sync_config()
         if config is None:
             click.echo(_DISABLED_HELP)
             raise SystemExit(SUCCESS)
-        report = _run_sync(config, pull_only=pull_only, push_only=push_only)
+        report = _run_sync(config, direction=direction)
     except RemoteSyncError as exc:
         click.echo(f"Sync failed: {exc}", err=True)
         raise SystemExit(ERROR) from exc
@@ -87,16 +85,11 @@ def run_command(pull_only: bool, push_only: bool) -> None:
     raise SystemExit(SUCCESS)
 
 
-def _run_sync(config: RemoteSyncConfig, *, pull_only: bool, push_only: bool) -> SyncReport:
+def _run_sync(config: RemoteSyncConfig, *, direction: SyncDirection) -> SyncReport:
     """Build the store and move the files. boto3 is imported here, not at startup."""
     from platform.filestorage.s3_store import S3ObjectStore
 
-    store = S3ObjectStore(config)
-    if pull_only:
-        return pull(store)
-    if push_only:
-        return push(store)
-    return sync(store)
+    return run_sync(S3ObjectStore(config), direction=direction)
 
 
 __all__ = ["sync_command"]

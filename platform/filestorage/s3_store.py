@@ -7,7 +7,6 @@ unencrypted writes therefore works unchanged.
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
 
 import boto3
@@ -15,12 +14,10 @@ from botocore.exceptions import BotoCoreError, ClientError
 
 from platform.filestorage.config import RemoteSyncConfig
 from platform.filestorage.errors import RemoteSyncUnavailableError
-from platform.filestorage.ports import DIGEST_METADATA_KEY, RemoteObject
+from platform.filestorage.ports import RemoteObject
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
-
-logger = logging.getLogger(__name__)
 
 _SERVER_SIDE_ENCRYPTION = "AES256"
 
@@ -47,7 +44,9 @@ class S3ObjectStore:
                             key=self._strip_prefix(key),
                             size=int(item.get("Size", 0)),
                             last_modified=item["LastModified"],
-                            digest=self._digest_of(key),
+                            # The listing carries the content tag, so comparing
+                            # an object costs no extra request.
+                            etag=str(item.get("ETag", "")).strip('"'),
                         )
                     )
         except (BotoCoreError, ClientError) as exc:
@@ -64,14 +63,13 @@ class S3ObjectStore:
         except (BotoCoreError, ClientError) as exc:
             raise RemoteSyncUnavailableError(f"cannot read {key}") from exc
 
-    def put_object(self, key: str, data: bytes, *, digest: str) -> None:
+    def put_object(self, key: str, data: bytes) -> None:
         try:
             self._client.put_object(
                 Bucket=self._config.bucket,
                 Key=self._config.key_for(key),
                 Body=data,
                 ServerSideEncryption=_SERVER_SIDE_ENCRYPTION,
-                Metadata={DIGEST_METADATA_KEY: digest},
             )
         except (BotoCoreError, ClientError) as exc:
             raise RemoteSyncUnavailableError(f"cannot write {key}") from exc
@@ -79,15 +77,6 @@ class S3ObjectStore:
     def _pages(self, prefix: str) -> Iterator[dict[str, Any]]:
         paginator = self._client.get_paginator("list_objects_v2")
         yield from paginator.paginate(Bucket=self._config.bucket, Prefix=prefix)
-
-    def _digest_of(self, full_key: str) -> str:
-        """Stored content digest, or empty when the object predates it."""
-        try:
-            head = self._client.head_object(Bucket=self._config.bucket, Key=full_key)
-        except (BotoCoreError, ClientError):
-            return ""
-        metadata = head.get("Metadata") or {}
-        return str(metadata.get(DIGEST_METADATA_KEY, ""))
 
     def _strip_prefix(self, full_key: str) -> str:
         prefix = f"{self._config.prefix.rstrip('/')}/"

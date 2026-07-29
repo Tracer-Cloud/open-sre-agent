@@ -2,13 +2,13 @@
 
 Only conversation history and memory sync. Credentials stay on the machine:
 ``integrations.json`` holds live provider secrets, ``llm-auth.json`` holds model
-keys, and neither is needed to resume a conversation elsewhere — a second
-machine re-runs the integration wizard.
+keys, the keyring fallback file holds whatever the OS keychain could not, and
+none of them is needed to resume a conversation elsewhere — a second machine
+re-runs the integration wizard.
 
-The rule is expressed as an allowlist of roots rather than a deny-list of
-filenames, so a file added to ``~/.opensre`` later is excluded by default
-instead of silently uploaded. The denied names below are a second, redundant
-check on top of that.
+The rule is an allowlist of roots rather than a deny-list of filenames, so a
+file added to ``~/.opensre`` later is excluded by default instead of silently
+uploaded. The denied names below are a second, redundant check on top of that.
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from config.constants.paths import get_memory_dir
+from config.constants.secrets import CREDENTIAL_FALLBACK_FILENAME
 from core.agent_harness.session.persistence.paths import sessions_dir
 
 # Never uploaded, whatever else changes. Redundant with the allowlist of roots
@@ -28,6 +29,7 @@ DENIED_FILENAMES = frozenset(
         "opensre.json",
         "config.yml",
         "anonymous_id",
+        CREDENTIAL_FALLBACK_FILENAME,
     }
 )
 
@@ -40,6 +42,25 @@ class SyncRoot:
     path: Path
 
 
+@dataclass(frozen=True)
+class ResolvedRoots:
+    """Synced directories with their real paths worked out once.
+
+    Resolving a path hits the filesystem, and the upload loop asks about every
+    session and memory file, so the roots are resolved before the loop rather
+    than inside it.
+    """
+
+    paths: tuple[Path, ...]
+
+    def contains(self, path: Path) -> bool:
+        """Whether ``path`` sits in a synced root and is not a denied file."""
+        if path.name in DENIED_FILENAMES:
+            return False
+        candidate = path.resolve()
+        return any(candidate == root or root in candidate.parents for root in self.paths)
+
+
 def syncable_roots() -> tuple[SyncRoot, ...]:
     """Directories that mirror to the bucket, resolved for the current scope."""
     return (
@@ -48,16 +69,22 @@ def syncable_roots() -> tuple[SyncRoot, ...]:
     )
 
 
+def resolved_roots(roots: tuple[SyncRoot, ...] | None = None) -> ResolvedRoots:
+    """Resolve the synced roots once, for repeated membership checks."""
+    source = roots if roots is not None else syncable_roots()
+    return ResolvedRoots(paths=tuple(root.path.resolve() for root in source))
+
+
 def is_syncable(path: Path, *, roots: tuple[SyncRoot, ...] | None = None) -> bool:
     """Whether ``path`` is inside a synced root and not a denied file."""
-    if path.name in DENIED_FILENAMES:
-        return False
-    candidate = path.resolve()
-    for root in roots if roots is not None else syncable_roots():
-        resolved_root = root.path.resolve()
-        if candidate == resolved_root or resolved_root in candidate.parents:
-            return True
-    return False
+    return resolved_roots(roots).contains(path)
 
 
-__all__ = ["DENIED_FILENAMES", "SyncRoot", "is_syncable", "syncable_roots"]
+__all__ = [
+    "DENIED_FILENAMES",
+    "ResolvedRoots",
+    "SyncRoot",
+    "is_syncable",
+    "resolved_roots",
+    "syncable_roots",
+]

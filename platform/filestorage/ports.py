@@ -11,19 +11,21 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
-# Object metadata key holding the content digest, so an unchanged file is
-# recognised without downloading it.
-DIGEST_METADATA_KEY = "opensre-sha256"
-
 
 @dataclass(frozen=True)
 class RemoteObject:
-    """One stored object, as much as the engine needs to compare it."""
+    """One stored object, as much as the engine needs to compare it.
+
+    ``etag`` is the store's own content tag, returned by a listing so no extra
+    request is needed per object. S3 sets it to the MD5 of a single-part upload;
+    a multipart upload returns a compound value, which
+    :func:`~platform.filestorage.sync.comparable_etag` treats as unusable.
+    """
 
     key: str
     size: int
     last_modified: datetime
-    digest: str = ""
+    etag: str = ""
 
 
 class ObjectStore(Protocol):
@@ -35,11 +37,11 @@ class ObjectStore(Protocol):
     def get_object(self, key: str) -> bytes:
         """Full contents of one object."""
 
-    def put_object(self, key: str, data: bytes, *, digest: str) -> None:
-        """Store ``data`` under ``key``, recording ``digest`` as metadata."""
+    def put_object(self, key: str, data: bytes) -> None:
+        """Store ``data`` under ``key``."""
 
     def describe(self) -> str:
         """Short human-readable destination, for logs and CLI output."""
 
 
-__all__ = ["DIGEST_METADATA_KEY", "ObjectStore", "RemoteObject"]
+__all__ = ["ObjectStore", "RemoteObject"]

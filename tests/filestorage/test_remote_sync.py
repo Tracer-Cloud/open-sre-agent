@@ -17,11 +17,12 @@ from config.constants.filestorage import (
     REMOTE_SYNC_ENV,
     REMOTE_SYNC_PREFIX_ENV,
 )
+from platform.filestorage import sync as sync_module
 from platform.filestorage.config import load_remote_sync_config, remote_sync_enabled
 from platform.filestorage.errors import RemoteSyncConfigError, UnsyncablePathError
 from platform.filestorage.ports import RemoteObject
 from platform.filestorage.scope import SyncRoot, is_syncable
-from platform.filestorage.sync import file_digest, pull, push, sync
+from platform.filestorage.sync import content_tag, pull, push, resolve_direction, run_sync
 
 # Planted in the credential files. If sync ever widens, this string shows up in
 # an uploaded object and the assertion below fails loudly.
@@ -33,16 +34,17 @@ class FakeObjectStore:
 
     def __init__(self) -> None:
         self.objects: dict[str, bytes] = {}
-        self.digests: dict[str, str] = {}
         self.modified: dict[str, datetime] = {}
+        self.listings = 0
 
     def list_objects(self, prefix: str) -> list[RemoteObject]:
+        self.listings += 1
         return [
             RemoteObject(
                 key=key,
                 size=len(data),
                 last_modified=self.modified.get(key, datetime.now(tz=UTC)),
-                digest=self.digests.get(key, ""),
+                etag=content_tag(data),
             )
             for key, data in self.objects.items()
             if key.startswith(prefix)
@@ -51,9 +53,8 @@ class FakeObjectStore:
     def get_object(self, key: str) -> bytes:
         return self.objects[key]
 
-    def put_object(self, key: str, data: bytes, *, digest: str) -> None:
+    def put_object(self, key: str, data: bytes) -> None:
         self.objects[key] = data
-        self.digests[key] = digest
         self.modified.setdefault(key, datetime.now(tz=UTC))
 
     def describe(self) -> str:
@@ -209,7 +210,7 @@ def test_newer_remote_wins_over_older_local(home: Path, roots: tuple[SyncRoot, .
     # Arrange: remote holds a newer edit of a file that also exists locally.
     store = FakeObjectStore()
     newer = b'{"turn": 2}\n'
-    store.put_object("sessions/abc.jsonl", newer, digest=file_digest(newer))
+    store.put_object("sessions/abc.jsonl", newer)
     store.modified["sessions/abc.jsonl"] = datetime.now(tz=UTC) + timedelta(hours=1)
 
     # Act
@@ -225,7 +226,7 @@ def test_older_remote_does_not_clobber_a_newer_local_edit(
     # Arrange: remote is stale relative to the local file.
     store = FakeObjectStore()
     stale = b'{"turn": 0}\n'
-    store.put_object("sessions/abc.jsonl", stale, digest=file_digest(stale))
+    store.put_object("sessions/abc.jsonl", stale)
     store.modified["sessions/abc.jsonl"] = datetime.now(tz=UTC) - timedelta(hours=1)
 
     # Act
@@ -240,10 +241,10 @@ def test_sync_never_deletes(home: Path, roots: tuple[SyncRoot, ...]) -> None:
     # Arrange
     store = FakeObjectStore()
     only_remote = b"from the other laptop\n"
-    store.put_object("memory/other.md", only_remote, digest=file_digest(only_remote))
+    store.put_object("memory/other.md", only_remote)
 
     # Act
-    sync(store, roots=roots)
+    run_sync(store, roots=roots)
 
     # Assert: local-only file still uploaded, remote-only file still present.
     assert (home / "memory" / "other.md").exists()
@@ -256,7 +257,7 @@ def test_a_key_escaping_its_root_is_ignored(home: Path, roots: tuple[SyncRoot, .
     # Arrange
     store = FakeObjectStore()
     payload = b"escaped"
-    store.put_object("sessions/../../evil.txt", payload, digest=file_digest(payload))
+    store.put_object("sessions/../../evil.txt", payload)
 
     # Act
     report = pull(store, roots=roots)
@@ -264,3 +265,86 @@ def test_a_key_escaping_its_root_is_ignored(home: Path, roots: tuple[SyncRoot, .
     # Assert
     assert report.downloaded == []
     assert not (home.parent / "evil.txt").exists()
+
+
+# ── Review fixes: atomicity, deny-list, flags, request count ────────────────
+
+
+def test_pull_writes_atomically_leaving_no_partial_file(
+    home: Path, roots: tuple[SyncRoot, ...], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A download that dies mid-write must not damage the existing session.
+
+    The rename is what makes the swap atomic, so the failure is injected there:
+    a direct ``write_bytes`` would already have overwritten the file by this
+    point and the original contents would be gone.
+    """
+    # Arrange: remote holds a newer body that pull will want to install.
+    store = FakeObjectStore()
+    store.put_object("sessions/abc.jsonl", b'{"turn": 99}\n')
+    store.modified["sessions/abc.jsonl"] = datetime.now(tz=UTC) + timedelta(hours=1)
+
+    def failing_replace(_src: str, _dst: object) -> None:
+        raise OSError("disk gave up during the rename")
+
+    monkeypatch.setattr(sync_module.os, "replace", failing_replace)
+
+    # Act
+    with pytest.raises(OSError, match="disk gave up"):
+        pull(store, roots=roots)
+
+    # Assert: the original survives untouched and no temp debris is left.
+    assert (home / "sessions" / "abc.jsonl").read_bytes() == b'{"turn": 1}\n'
+    assert list((home / "sessions").glob("*.part")) == []
+
+
+def test_keyring_fallback_secrets_are_denied(home: Path) -> None:
+    """The keyring fallback file holds secrets and must never sync."""
+    # Arrange
+    from config.constants.secrets import CREDENTIAL_FALLBACK_FILENAME
+
+    fallback = home / CREDENTIAL_FALLBACK_FILENAME
+    fallback.write_text(LEAKED_SECRET, encoding="utf-8")
+    bad_roots = (SyncRoot(name="everything", path=home),)
+    store = FakeObjectStore()
+
+    # Act
+    with pytest.raises(UnsyncablePathError):
+        push(store, roots=bad_roots)
+
+    # Assert
+    for key, body in store.objects.items():
+        assert LEAKED_SECRET.encode() not in body, f"secret leaked into {key}"
+
+
+def test_both_direction_flags_are_rejected() -> None:
+    """Both surfaces share this resolver, so neither can silently pick one."""
+    # Arrange / Act / Assert
+    with pytest.raises(RemoteSyncConfigError):
+        resolve_direction(pull_only=True, push_only=True)
+
+
+def test_a_full_sync_lists_the_bucket_once(home: Path, roots: tuple[SyncRoot, ...]) -> None:
+    """Pull does not change the bucket, so push reuses the same listing."""
+    # Arrange
+    store = FakeObjectStore()
+
+    # Act
+    run_sync(store, roots=roots)
+
+    # Assert
+    assert store.listings == 1
+
+
+def test_second_push_reuploads_nothing(home: Path, roots: tuple[SyncRoot, ...]) -> None:
+    """Objects are compared by the tag the listing already carries."""
+    # Arrange
+    store = FakeObjectStore()
+    push(store, roots=roots)
+
+    # Act
+    report = push(store, roots=roots)
+
+    # Assert
+    assert report.uploaded == []
+    assert report.skipped == 2

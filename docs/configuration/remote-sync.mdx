@@ -32,12 +32,19 @@ export OPENSRE_REMOTE_SYNC_BUCKET=my-opensre-bucket
 |---|---|
 | `OPENSRE_REMOTE_SYNC` | Set to `1` to enable. Nothing uploads until you do |
 | `OPENSRE_REMOTE_SYNC_BUCKET` | Bucket you own. Required |
-| `OPENSRE_REMOTE_SYNC_PREFIX` | Key prefix, default `opensre`. Use one per machine to keep roots separate |
+| `OPENSRE_REMOTE_SYNC_PREFIX` | Key prefix, default `opensre`. Machines that should share history must use the same one |
 | `OPENSRE_REMOTE_SYNC_REGION` | Region override; otherwise your AWS config decides |
 | `OPENSRE_REMOTE_SYNC_PROFILE` | Named AWS profile, if opensre should not use your default |
 
 Naming a bucket is not enough on its own — `OPENSRE_REMOTE_SYNC` has to be set
 too, so a bucket variable left over from another tool never starts uploading.
+
+<Note>
+Every machine that should share your history needs the **same bucket and the
+same prefix**. Change the prefix only when you want a separate, isolated set of
+conversations — a different prefix is a different history, not a backup of the
+same one.
+</Note>
 
 Check what would move before moving it:
 
