@@ -428,9 +428,10 @@ class JsonlSessionStorage:
     def _tip_id_from_record(rec: dict[str, Any]) -> tuple[bool, str | None]:
         """Map one JSONL record to tip resolution.
 
-        Returns ``(True, tip)`` when this record ends the scan (``tip`` may be
-        ``None`` for a session header), or ``(False, None)`` to keep scanning
-        older lines (``trace_span`` sidecars / unusable rows handled by caller).
+        Returns ``(True, tip)`` when this record ends the scan, or
+        ``(False, None)`` to keep scanning older lines — ``trace_span``
+        sidecars and ``session`` headers are never parents. A header-only file
+        resolves to ``None`` when the scan exhausts the file.
         """
         rec_type = rec.get("type")
         if rec_type == "trace_span":

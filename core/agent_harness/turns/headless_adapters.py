@@ -6,7 +6,7 @@ external side effects (no IO, no network, no filesystem).
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -93,7 +93,12 @@ class EmptyPromptContextProvider:
     def investigation_flow(self) -> str:
         return ""
 
-    def environment_block(self) -> str:
+    def runtime_facts(self) -> Mapping[str, Any]:
+        from config.runtime_metadata import capture_runtime_facts
+
+        return capture_runtime_facts()
+
+    def environment_block(self, runtime: Mapping[str, Any] | None = None) -> str:  # noqa: ARG002 - empty grounding
         return ""
 
     def long_term_memory(self) -> str:

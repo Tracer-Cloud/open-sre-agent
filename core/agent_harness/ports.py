@@ -10,7 +10,7 @@ Nothing here imports ``interactive_shell``.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any, Protocol, runtime_checkable
 
 from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
@@ -149,7 +149,12 @@ class PromptContextProvider(Protocol):
     def investigation_flow(self) -> str:
         raise NotImplementedError
 
-    def environment_block(self) -> str:
+    def runtime_facts(self) -> Mapping[str, Any]:
+        """Runtime facts for this turn: session metadata plus fresh live values."""
+        raise NotImplementedError
+
+    def environment_block(self, runtime: Mapping[str, Any] | None = None) -> str:
+        """Static environment block; ``runtime`` reuses the turn's capture."""
         raise NotImplementedError
 
     def long_term_memory(self) -> str:

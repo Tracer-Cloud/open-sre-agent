@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 import core.agent_harness.prompts.synthetic_failure as synthetic_failure
 from config.constants.prompts import SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
-from config.runtime_metadata import capture_runtime_facts
 from core.agent_harness.prompts.assistant_agent_prompt import (
     _build_observation_block,
     _build_system_prompt,
@@ -48,7 +47,12 @@ class AssistantPromptContextProvider(Protocol):
     def investigation_flow(self) -> str:
         raise NotImplementedError
 
-    def environment_block(self) -> str:
+    def runtime_facts(self) -> Mapping[str, Any]:
+        """Runtime facts for this turn: session metadata plus fresh live values."""
+        raise NotImplementedError
+
+    def environment_block(self, runtime: Mapping[str, Any] | None = None) -> str:
+        """Static environment block; ``runtime`` reuses the turn's capture."""
         raise NotImplementedError
 
     def long_term_memory(self) -> str:
@@ -135,10 +139,13 @@ def build_cli_agent_prompt_from_provider(
 ) -> str:
     """Render an assistant prompt from the core prompt-provider port.
 
-    ``runtime`` defaults to a fresh ``capture_runtime_facts()`` capture. Tests
-    may pass a frozen mapping so live-fact blocks stay deterministic.
+    ``runtime`` defaults to the provider's capture for this turn, shared by the
+    static environment block and the live-facts block so one turn reads the
+    clock, disk, and memory once. Tests may pass a frozen mapping so live-fact
+    blocks stay deterministic.
     """
     prompts.log_diagnostics("cli_agent_grounding")
+    facts = runtime if runtime is not None else prompts.runtime_facts()
     system = build_assistant_system_prompt(
         prompts.cli_reference(),
         format_recent_conversation(list(turn_snapshot.conversation_messages)),
@@ -155,13 +162,12 @@ def build_cli_agent_prompt_from_provider(
             explicit_follow_up=is_prior_investigation_follow_up(handoff_contents),
         ),
         prior_action_facts=format_prior_action_facts(list(turn_snapshot.conversation_messages)),
-        environment=prompts.environment_block(),
+        environment=prompts.environment_block(facts),
         long_term_memory=prompts.long_term_memory(),
         surface=prompts.surface(),
     )
     # Live facts (time/uptime/disk/memory) sit immediately before the user
     # message so the system/env prefix stays byte-stable for prompt caching.
-    facts = runtime if runtime is not None else capture_runtime_facts()
     live_block = build_live_runtime_facts_block(facts)
     return (
         f"{system}\n"

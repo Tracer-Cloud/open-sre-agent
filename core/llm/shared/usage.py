@@ -60,10 +60,10 @@ def extract_cache_tokens(usage: Any) -> tuple[int | None, int | None]:
     """Prompt-cache (read, write) token counts from a provider usage payload.
 
     Anthropic reports flat ``cache_read_input_tokens`` /
-    ``cache_creation_input_tokens``; OpenAI nests read-side counts under
-    ``prompt_tokens_details.cached_tokens`` (Chat Completions) or
-    ``input_tokens_details.cached_tokens`` (Responses) and has no write-side
-    field.
+    ``cache_creation_input_tokens``. OpenAI nests both counts under
+    ``prompt_tokens_details`` (Chat Completions) or ``input_tokens_details``
+    (Responses), as ``cached_tokens`` and ``cache_write_tokens``; older models
+    omit the write-side key.
     ``None`` means the provider sent nothing — distinct from a measured 0.
     """
     if usage is None:
@@ -76,15 +76,19 @@ def extract_cache_tokens(usage: Any) -> tuple[int | None, int | None]:
 
     read = _field(usage, "cache_read_input_tokens")
     write = _field(usage, "cache_creation_input_tokens")
-    if read is None:
-        # OpenAI nests read-side counts: Chat Completions under
+    if read is None or write is None:
+        # OpenAI nests both counts: Chat Completions under
         # prompt_tokens_details, the Responses API under input_tokens_details.
         for details_key in ("prompt_tokens_details", "input_tokens_details"):
             details = _field(usage, details_key)
-            if details is not None:
+            if details is None:
+                continue
+            if read is None:
                 read = _field(details, "cached_tokens")
-                if read is not None:
-                    break
+            if write is None:
+                write = _field(details, "cache_write_tokens")
+            if read is not None or write is not None:
+                break
 
     def _to_int(value: Any) -> int | None:
         return int(value) if isinstance(value, (int, float)) else None

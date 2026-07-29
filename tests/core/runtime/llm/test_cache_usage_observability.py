@@ -128,3 +128,20 @@ def test_openai_responses_nested_cached_tokens_are_extracted() -> None:
     # Assert
     assert read == 384
     assert write is None
+
+
+def test_openai_nested_cache_write_tokens_are_extracted() -> None:
+    """Newer OpenAI models report a write-side count in the nested details."""
+    # Arrange
+    usage = SimpleNamespace(
+        input_tokens=500,
+        output_tokens=30,
+        input_tokens_details=SimpleNamespace(cached_tokens=384, cache_write_tokens=116),
+    )
+
+    # Act
+    read, write = extract_cache_tokens(usage)
+
+    # Assert
+    assert read == 384
+    assert write == 116
