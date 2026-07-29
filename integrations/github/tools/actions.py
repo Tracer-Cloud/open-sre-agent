@@ -701,6 +701,8 @@ def get_github_actions_step_log(
     # length, once before accepting that fallback.
     wants_step = bool(step_name or failed_step or step_number is not None)
     truncated = original_length is not None and original_length > len(log_text)
+    retry_attempted = False
+    retry_error: str | None = None
     if (
         original_length is not None
         and truncated
@@ -715,6 +717,7 @@ def get_github_actions_step_log(
             max(estimated_lines, _STEP_LOG_RETRY_TAIL_LINES), _STEP_LOG_MAX_RETRY_TAIL_LINES
         )
         if retry_tail_lines > tail_lines:
+            retry_attempted = True
             retry_text, retry_original_length, retry_error = _fetch_job_log(
                 config, owner, repo, job_id, retry_tail_lines
             )
@@ -737,8 +740,10 @@ def get_github_actions_step_log(
             "job_conclusion": job.get("conclusion", ""),
             "job_steps": normalized_steps,
             "truncated": truncated,
-            "returned_length": len(log_text),
-            "original_length": original_length,
+            "returned_chars": len(log_text),
+            "original_chars": original_length,
+            "retry_attempted": retry_attempted,
+            "retry_error": retry_error,
         }
     )
     return extracted

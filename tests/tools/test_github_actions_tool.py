@@ -396,8 +396,10 @@ def test_get_step_log_reports_truncated_when_original_length_exceeds_returned() 
     ):
         result = log_tool(owner="org", repo="repo", run_id=101, job_id=9001, github_token="tok")
     assert result["truncated"] is True
-    assert result["original_length"] == 2000
-    assert result["returned_length"] < result["original_length"]
+    assert result["original_chars"] == 2000
+    assert result["returned_chars"] < result["original_chars"]
+    assert result["retry_attempted"] is False
+    assert result["retry_error"] is None
 
 
 def test_get_step_log_retries_with_larger_tail_when_step_missing() -> None:
@@ -441,3 +443,56 @@ def test_get_step_log_retries_with_larger_tail_when_step_missing() -> None:
 
     assert result["match_strategy"] == "step_name"
     assert "kubectl apply" in result["log_text"]
+    assert result["retry_attempted"] is True
+    assert result["retry_error"] is None
+
+
+def test_get_step_log_reports_retry_error_when_retry_fetch_fails() -> None:
+    """If the larger-tail retry itself fails, surface that instead of silently
+    keeping the truncated first response with no explanation."""
+
+    def mcp_response(config: object, tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        if tool != "get_job_logs":
+            return _mcp_response(config, tool, arguments)
+        if arguments.get("tail_lines") == 500:
+            return {
+                "tool": tool,
+                "arguments": arguments,
+                "is_error": False,
+                "text": json.dumps(
+                    {
+                        "job_id": 9001,
+                        "logs_content": "##[group]Checkout\nCloning repository\n##[endgroup]",
+                        "original_length": 5000,
+                    }
+                ),
+                "structured_content": None,
+                "content": [],
+            }
+        return {
+            "tool": tool,
+            "arguments": arguments,
+            "is_error": True,
+            "text": "rate limited",
+            "structured_content": None,
+            "content": [],
+        }
+
+    log_tool = cast(Any, get_github_actions_step_log)
+    with (
+        patch("integrations.github.tools.actions.resolve_github_mcp_config", return_value=object()),
+        patch("integrations.github.tools.actions.call_github_mcp_tool", side_effect=mcp_response),
+    ):
+        result = log_tool(
+            owner="org",
+            repo="repo",
+            run_id=101,
+            job_id=9001,
+            step_name="Deploy",
+            github_token="tok",
+        )
+
+    assert result["match_strategy"] == "full-log"
+    assert result["retry_attempted"] is True
+    assert result["retry_error"] == "rate limited"
+    assert result["truncated"] is True
