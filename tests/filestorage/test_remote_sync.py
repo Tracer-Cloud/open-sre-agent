@@ -848,15 +848,22 @@ def test_unbound_laptop_turn_still_syncs(monkeypatch: pytest.MonkeyPatch, tmp_pa
 
 
 def test_a_denied_file_uploads_nothing_at_all(home: Path) -> None:
-    """Validation runs over every candidate before the first upload."""
-    # Arrange: a root covering the whole home, so a credential file is reached
-    # only after the session and memory files in the walk.
-    bad_roots = (SyncRoot(name="everything", path=home),)
+    """Validation runs over every candidate before the first upload.
+
+    Two roots: the first holds only syncable files, the second reaches a
+    credential file. Uploading as it walks would already have written the first
+    root's files by the time the refusal fires, so an empty store is the proof.
+    """
+    # Arrange
+    roots_with_a_bad_one = (
+        SyncRoot(name="sessions", path=home / "sessions"),
+        SyncRoot(name="everything", path=home),
+    )
     store = FakeObjectStore()
 
     # Act
     with pytest.raises(UnsyncablePathError):
-        push(store, roots=bad_roots)
+        push(store, roots=roots_with_a_bad_one)
 
     # Assert: not a single object was written before the refusal.
     assert store.objects == {}

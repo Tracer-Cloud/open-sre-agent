@@ -131,8 +131,16 @@ def test_gateway_dispatch_sync_with_flags(monkeypatch: pytest.MonkeyPatch) -> No
 
 
 def test_gateway_dispatch_sync_error_stays_handled(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Handled, and the provider's own words never reach the chat reply.
+
+    Gateway replies are an external surface (CWE-209). A bucket name, region,
+    or credential hint inside a provider error must not be echoed to a chat
+    member; the detail belongs in the server-side log.
+    """
+    leaked = "s3://private-bucket-name-and-region-eu-west-2"
+
     def _boom(**_kwargs: object) -> SyncReport:
-        raise RemoteSyncConfigError("bucket missing")
+        raise RemoteSyncConfigError(leaked)
 
     monkeypatch.setattr(
         "surfaces.interactive_shell.command_registry.remote_sync_cmds.run_remote_sync",
@@ -151,5 +159,6 @@ def test_gateway_dispatch_sync_error_stays_handled(monkeypatch: pytest.MonkeyPat
         )
         is True
     )
-    assert "Sync failed" in buf.getvalue()
-    assert "bucket missing" in buf.getvalue()
+    out = buf.getvalue()
+    assert "Sync failed" in out
+    assert leaked not in out, "provider detail reached the gateway reply"
