@@ -15,9 +15,6 @@ from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
 
-if TYPE_CHECKING:
-    pass
-
 # A tool-loop event callback: ``(kind, data)`` where kind is e.g. "tool_start".
 ToolEventObserver = Callable[[str, dict[str, Any]], None]
 

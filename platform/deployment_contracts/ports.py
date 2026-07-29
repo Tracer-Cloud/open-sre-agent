@@ -9,6 +9,8 @@ from platform.deployment_contracts.models import AgentRun, AgentRunSource, Agent
 
 
 class AgentRunRepository(Protocol):
+    """Durable store for agent runs, one queue per organization."""
+
     def enqueue_agent_run(
         self,
         *,
@@ -16,9 +18,11 @@ class AgentRunRepository(Protocol):
         source: AgentRunSource,
         prompt: str,
         source_event_id: str | None = None,
-    ) -> AgentRun: ...
+    ) -> AgentRun:
+        """Queue a new run for ``organization_id`` and return it."""
 
-    def fetch_agent_run_by_id(self, run_id: str) -> AgentRun | None: ...
+    def fetch_agent_run_by_id(self, run_id: str) -> AgentRun | None:
+        """The run with ``run_id``, or None when no such run exists."""
 
     def claim_oldest_available_agent_run(
         self,
@@ -26,7 +30,8 @@ class AgentRunRepository(Protocol):
         organization_id: str,
         worker_id: str,
         lease_duration: timedelta,
-    ) -> AgentRun | None: ...
+    ) -> AgentRun | None:
+        """Lease the oldest queued run to ``worker_id``, or None when the queue is empty."""
 
     def extend_owned_agent_run_lease(
         self,
@@ -34,7 +39,8 @@ class AgentRunRepository(Protocol):
         run_id: str,
         worker_id: str,
         lease_duration: timedelta,
-    ) -> bool: ...
+    ) -> bool:
+        """Renew the lease. False when ``worker_id`` no longer owns the run."""
 
     def finalize_owned_agent_run(
         self,
@@ -44,4 +50,5 @@ class AgentRunRepository(Protocol):
         status: AgentRunStatus,
         result: dict[str, Any] | None = None,
         error_code: str | None = None,
-    ) -> bool: ...
+    ) -> bool:
+        """Record the terminal ``status``. False when ``worker_id`` lost ownership."""
