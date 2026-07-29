@@ -160,6 +160,7 @@
               "kubernetes",
               "cloudtrail_events",
               "bitbucket",
+              "elb",
               "github",
               "github-workflow-tools",
               "architecture-audit-tool",
