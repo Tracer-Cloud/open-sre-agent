@@ -14,9 +14,9 @@ export
 	deploy-dd-monitors cleanup-dd-monitors deploy-eks destroy-eks \
 	trigger-alert trigger-alert-verify regen-trigger-config \
 	prefect-local-test run dev docs-dev \
-	build-image deploy destroy test-deploy \
-	bake-gateway deploy-gateway destroy-gateway \
-	deploy-gateway-direct destroy-gateway-direct \
+	build-gateway-image deploy-gateway destroy-gateway \
+	install-gateway-on-new-server destroy-gateway-on-new-server \
+	cdk-verify \
 	deploy-lambda deploy-prefect deploy-flink destroy-lambda destroy-prefect destroy-flink \
 	test test-full test-cov test-scope test-cli-smoke test-turn-live test-grafana \
 	rabbitmq-local-up rabbitmq-local-down test-rabbitmq-real \
@@ -284,40 +284,35 @@ docs-dev:
 	cd docs && mint dev
 
 
-# Deploy all test case infrastructure in parallel (SDK - fast!)
-# EC2 deploy (web + gateway containers on one instance)
-# Step 1 — build once per code change, saves URI locally for reuse:
-build-image:
-	$(PYTHON) -m platform.deployment.ecr_deploy.lifecycle build-image
-
-# Step 2 — launch instance using the pre-built image (fast, no Docker build):
-deploy:
-	$(PYTHON) -m platform.deployment.ecr_deploy.lifecycle deploy
-
-destroy:
-	$(PYTHON) -m platform.deployment.ecr_deploy.lifecycle destroy
-
-test-deploy:
-	$(PYTHON) -m pytest tests/deployment/ec2/ -v -s
-
-# Gateway deploy (Telegram and/or Slack Socket Mode; no Docker/ECR)
+# Gateway deploy (Telegram; AMI + systemd on EC2)
 # Step 1 — bake once per code change (launches temp EC2, installs opensre, snapshots AMI):
-bake-gateway:
-	$(PYTHON) -m platform.deployment.gateway.lifecycle bake-ami
+build-gateway-image:
+	$(PYTHON) -m platform.deployment_ec2.telegram_gateway.lifecycle build-server-image
 
 # Step 2 — launch gateway instance from pre-baked AMI (fast):
 deploy-gateway:
-	$(PYTHON) -m platform.deployment.gateway.lifecycle deploy
+	$(PYTHON) -m platform.deployment_ec2.telegram_gateway.lifecycle deploy
 
 destroy-gateway:
-	$(PYTHON) -m platform.deployment.gateway.lifecycle destroy
+	$(PYTHON) -m platform.deployment_ec2.telegram_gateway.lifecycle destroy
 
-# Gateway direct deploy (no pre-baked AMI — installs inline via SSM)
-deploy-gateway-direct:
-	$(PYTHON) -m platform.deployment.gateway.lifecycle deploy-direct
+# Gateway install on a new server (no pre-baked AMI — installs inline via SSM)
+install-gateway-on-new-server:
+	$(PYTHON) -m platform.deployment_ec2.telegram_gateway.lifecycle install-on-new-server
 
-destroy-gateway-direct:
-	$(PYTHON) -m platform.deployment.gateway.lifecycle destroy-direct
+destroy-gateway-on-new-server:
+	$(PYTHON) -m platform.deployment_ec2.telegram_gateway.lifecycle destroy-installed-server
+
+# Fargate fleet + Lambda APIs are Terraform under platform/deployment_multi_tenant
+# (see DEPLOYMENT.md). cdk-verify keeps the historical Make/CI name.
+OPENSRE_INFRA_AWS_DIR ?= platform/deployment_multi_tenant
+
+cdk-verify:
+	@if [ ! -f "$(OPENSRE_INFRA_AWS_DIR)/scripts/build-lambda-bundles.sh" ]; then \
+		echo "Skipping cdk-verify: $(OPENSRE_INFRA_AWS_DIR) submodule not checked out"; \
+	else \
+		uv run pytest tests/platform/deployment_multi_tenant/test_lambda_bundle_paths.py -q; \
+	fi
 
 # Deploy Lambda test case
 deploy-lambda:
@@ -492,16 +487,15 @@ check: lint format-check typecheck check-imports test-full
 help:
 	@echo "Available commands:"
 	@echo ""
-	@echo "  EC2 DEPLOY (Docker/ECR — web + gateway)"
-	@echo "  make build-image       - Build and push Docker image to ECR (run once per code change)"
-	@echo "  make deploy            - Launch EC2 instance using pre-built image (fast, no Docker build)"
-	@echo "  make destroy           - Terminate EC2 instance and clean up (keeps ECR image; OPENSRE_DESTROY_PURGE_ECR=1 to also delete it)"
-	@echo "  make test-deploy       - Run EC2 deployment e2e tests"
-	@echo ""
 	@echo "  GATEWAY DEPLOY (systemd, no Docker — gateway only)"
-	@echo "  make bake-gateway    - Bake a gateway AMI (run once per code change; saves AMI id locally)"
-	@echo "  make deploy-gateway  - Launch gateway EC2 instance from pre-baked AMI (fast)"
+	@echo "  make build-gateway-image - Build a server image with the gateway installed (saves the image id locally)"
+	@echo "  make deploy-gateway  - Start a gateway server from the image built above (fast)"
+	@echo "  make install-gateway-on-new-server  - Start a plain server and install the gateway on it (no image)"
+	@echo "  make destroy-gateway-on-new-server  - Tear down the server created by the command above"
 	@echo "  make destroy-gateway - Terminate gateway instance and clean up (set OPENSRE_GATEWAY_DESTROY_PURGE_AMI=1 to also deregister AMI)"
+	@echo ""
+	@echo "  FARGATE DEPLOYMENT (Terraform under platform/deployment_multi_tenant)"
+	@echo "  make cdk-verify                     - Check Lambda bundle whitelist covers platform imports"
 	@echo ""
 	@echo "  E2E TEST INFRA (AWS SDK)"
 	@echo "  make deploy-lambda     - Deploy Lambda stack (~50s)"

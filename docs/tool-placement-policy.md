@@ -52,18 +52,18 @@ Applied to the pre-existing top-level `tools/` packages:
 | `tools/system/watch_dog/` | system | CLI/REPL process monitoring; Telegram is only the alarm-delivery channel, not the tool's domain. |
 | `tools/cross_vendor/fix_sentry_issue/` | cross_vendor | Reads a Sentry issue and hands the fix to the Pi coding agent — two `integrations/` packages in one tool's logic. |
 
-**Left as-is, not yet migrated** (single-vendor tools that predate the
-vendor-first tool layout and belong under `integrations/<vendor>/tools/`,
-not `tools/system/` or `tools/cross_vendor/`):
+**Migrated to their vendor packages** — every single-vendor tool now lives
+under `integrations/<vendor>/tools/`, so rule 1 has no exceptions left:
 
-- `tools/community_followup_tool/`, `tools/git_deploy_timeline_tool/`,
-  `tools/work_status_report_tool/` — GitHub-only.
+- `integrations/github/tools/` — `architecture_issue_tool`,
+  `community_followup_tool`, `git_deploy_timeline_tool`, `github_cli`,
+  `work_status_report_tool`.
+- `integrations/pi/tools/pi_coding_tool/` — Pi-only.
 - `integrations/slack/tools/slack_send_message_tool/` — Slack-only.
-- `tools/pi_coding_tool/` — Pi-only.
 
-Migrating these to `integrations/<vendor>/tools/` is in scope for T-18
-(full vendor-first completion), not this policy change — moving them into
-`tools/system/` or `tools/cross_vendor/` now would misclassify them.
+A vendor's tool package is walked once its dotted path is listed in
+`INTEGRATION_TOOL_PACKAGES` (`tools/registry_discovery.py`); nested tool
+packages under it are discovered without further wiring.
 
 ## Registry mechanics
 

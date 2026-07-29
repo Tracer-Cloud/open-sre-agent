@@ -64,8 +64,8 @@ def test_agent_presentation_import_does_not_load_shell_turn_execution() -> None:
             "-c",
             (
                 "import sys; "
-                "import surfaces.interactive_shell.runtime.agent_presentation; "
-                "print('surfaces.interactive_shell.runtime.shell_turn_execution' in sys.modules)"
+                + "import surfaces.interactive_shell.runtime.agent_presentation; "
+                + "print('surfaces.interactive_shell.runtime.shell_turn_execution' in sys.modules)"
             ),
         ],
         check=True,
@@ -153,6 +153,7 @@ def test_build_prompt_session_uses_persistent_history(
     import config.constants as const_module
 
     monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
 
     with create_app_session(input=DummyInput(), output=DummyOutput()):
         prompt = input_prompt.build_prompt_session()
@@ -175,6 +176,7 @@ def test_build_prompt_session_falls_back_to_memory_history(
     blocked_home = tmp_path / "not-a-directory"
     blocked_home.write_text("", encoding="utf-8")
     monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", blocked_home)
+    monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", blocked_home)
 
     with create_app_session(input=DummyInput(), output=DummyOutput()):
         prompt = input_prompt.build_prompt_session()
@@ -189,6 +191,7 @@ def test_repl_session_prompt_history_backend_matches_prompt_toolkit_history(
     import config.constants as const_module
 
     monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
     with create_app_session(input=DummyInput(), output=DummyOutput()):
         session = Session()
         prompt = input_prompt.build_prompt_session()
@@ -212,6 +215,7 @@ def test_shift_enter_inserts_newline_before_submit(
     import config.constants as const_module
 
     monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
 
     async def _collect() -> str:
         with (

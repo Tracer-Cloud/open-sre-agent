@@ -32,8 +32,10 @@ def test_gateway_start_foreground_runs_manager(runner: CliRunner) -> None:
 
 def test_gateway_entry_wires_slash_ports() -> None:
     """Production entry must inject headless slash ports into GatewayManager."""
+    import gateway.runtime.manager as manager_module
+
     mock_manager = MagicMock()
-    with patch("gateway.runtime.manager.GatewayManager", return_value=mock_manager) as ctor:
+    with patch.object(manager_module, "GatewayManager", return_value=mock_manager) as ctor:
         from surfaces.cli.gateway_entry import main as entry_main
 
         entry_main()

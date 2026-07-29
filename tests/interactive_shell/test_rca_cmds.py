@@ -26,6 +26,7 @@ def test_rca_history_lists_persisted_reports(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
     session = Session()
     SessionStore.open_session(session)
     SessionStore.append_investigation_result(
@@ -47,6 +48,7 @@ def test_rca_show_renders_full_report(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
     session = Session()
     SessionStore.open_session(session)
     inv_id = SessionStore.append_investigation_result(
@@ -67,6 +69,7 @@ def test_bare_rca_defaults_to_history(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
     console, buf = _capture()
     assert dispatch_slash("/rca", Session(), console) is True
     assert "no persisted RCA reports yet" in buf.getvalue()
@@ -79,6 +82,7 @@ def test_tty_rca_menu_latest_shows_report(
     from surfaces.interactive_shell.command_registry import rca_cmds
 
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
     session = Session()
     SessionStore.open_session(session)
     inv_id = SessionStore.append_investigation_result(
@@ -105,6 +109,7 @@ def test_tty_rca_history_menu_picks_report_directly(
     from surfaces.interactive_shell.command_registry import rca_cmds
 
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
     session = Session()
     SessionStore.open_session(session)
     older_id = SessionStore.append_investigation_result(
@@ -136,6 +141,7 @@ def test_tty_rca_root_menu_history_picks_report(
     from surfaces.interactive_shell.command_registry import rca_cmds
 
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
     session = Session()
     SessionStore.open_session(session)
     older_id = SessionStore.append_investigation_result(
@@ -166,6 +172,7 @@ def test_rca_save_writes_markdown(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
     session = Session()
     SessionStore.open_session(session)
     SessionStore.append_investigation_result(
@@ -189,6 +196,7 @@ def test_rca_save_by_id_writes_json(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
     session = Session()
     SessionStore.open_session(session)
     inv_id = SessionStore.append_investigation_result(
@@ -212,6 +220,7 @@ def test_rca_save_strips_quoted_path(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
     session = Session()
     SessionStore.open_session(session)
     inv_id = SessionStore.append_investigation_result(
@@ -232,6 +241,7 @@ def test_rca_save_to_new_folder_adds_default_filename(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
     session = Session()
     SessionStore.open_session(session)
     inv_id = SessionStore.append_investigation_result(
@@ -255,6 +265,7 @@ def test_rca_save_to_new_folder_trailing_slash_creates_subdirectory(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
     session = Session()
     SessionStore.open_session(session)
     inv_id = SessionStore.append_investigation_result(
@@ -277,6 +288,7 @@ def test_rca_save_unknown_id_reports_not_found(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
     session = Session()
     SessionStore.open_session(session)
     SessionStore.append_investigation_result(
@@ -308,6 +320,7 @@ def test_tty_rca_save_menu_picks_latest_and_prompts_path(
     from surfaces.interactive_shell.command_registry import rca_cmds
 
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
     session = Session()
     SessionStore.open_session(session)
     SessionStore.append_investigation_result(

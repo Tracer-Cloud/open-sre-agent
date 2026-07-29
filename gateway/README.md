@@ -11,7 +11,7 @@
 # OpenSRE Messaging Gateway
 
 Standalone inbound messaging gateway for chat platforms: Telegram DM text chat
-via long polling, and Slack mentions/DMs via Socket Mode.
+via long polling, Slack mentions/DMs via Socket Mode, and Discord via Gateway WebSocket.
 
 ## Entry points
 
@@ -24,6 +24,7 @@ via long polling, and Slack mentions/DMs via Socket Mode.
 | **HTTP API (web-only task)** | `gateway/http/webapp.py` → `app` | `uvicorn gateway.http.webapp:app` (`MODE=web` in Docker) |
 | **Telegram transport** | `gateway/telegram/wiring.py` → `start_telegram_worker` | Started by `GatewayManager._start_telegram` |
 | **Slack transport** | `gateway/slack/wiring.py` → `start_slack_worker` | Started by `GatewayManager._start_slack` |
+| **Discord transport** | `gateway/discord/wiring.py` → `start_discord_worker` | Started by `GatewayManager._start_discord` |
 | **Per-message turn** | `gateway/runtime/turn_handler.py` → `GatewayTurnHandler` | Injected into both transports as the agent callback |
 
 ```text
@@ -40,6 +41,7 @@ gateway.runtime.manager.GatewayManager.start_gateway
         ├── http/web_server  →  http/webapp:app
         ├── telegram/wiring.start_telegram_worker
         ├── slack/wiring.start_slack_worker
+        ├── discord/wiring.start_discord_worker
         └── scheduler
 ```
 
@@ -55,7 +57,7 @@ Three things that are easy to mix up:
   a terminal), the CLI one-shot (`surfaces/cli`, one command → one answer), and the
   **gateway** (`gateway/`, you chat with the agent from a chat app).
 - **Gateway** — one specific surface: the always-on process that connects a chat app
-  to the agent. It speaks **Telegram** (long poll) and **Slack** (Socket Mode).
+  to the agent. It speaks **Telegram** (long poll), **Slack** (Socket Mode), and **Discord** (Gateway WebSocket).
 - **Integrations + tools** — the *outbound* / teammate side: the agent reading and
   posting in Slack. Shared client: `integrations/slack/web_client.py`. Tools:
   `slack_send_message` (webhook), `slack_reply_message` (bot token, any channel),
@@ -68,6 +70,7 @@ Both platforms are symmetric:
 |---|---|---|
 | **Telegram** | Yes — `gateway/telegram/` | Yes — integration + tool |
 | **Slack** | Yes — `gateway/slack/` (Socket Mode; each thread is a conversation) | Yes — webhook + bot-token tools |
+| **Discord** | Yes — `gateway/discord/` (DMs, mentions, threads; `/investigate`) | Yes — bot-token delivery + slash registration |
 
 **One core for every surface.** Shell, CLI, and the gateway transports all hand the
 message to the same place: a `HeadlessAgent` (`agent.dispatch(message)`). They differ
@@ -113,6 +116,9 @@ DM your bot from Telegram, or mention/DM it in Slack (see
 | `SLACK_APP_TOKEN` | Slack app-level token for Socket Mode (`xapp-…`) |
 | `SLACK_ALLOWED_USERS` | Comma-separated Slack user ids (required unless open workspace) |
 | `SLACK_ALLOW_OPEN_WORKSPACE` | `1` allows any workspace member (dogfood only) |
+| `DISCORD_BOT_TOKEN` | Discord bot token |
+| `DISCORD_ALLOWED_USERS` | Comma-separated Discord user snowflakes |
+| `DISCORD_ALLOW_OPEN_GUILD` | `1` allows any guild member (dogfood only) |
 
 Pairing via `opensre messaging pair` uses the same integration-store policy as the gateway.
 

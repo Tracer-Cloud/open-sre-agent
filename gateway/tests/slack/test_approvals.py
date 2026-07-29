@@ -7,14 +7,13 @@ from typing import Any
 
 from core.execution import ToolExecutionRequest
 from core.llm.types import ToolCall
-from gateway.slack.approvals import (
+from gateway.runtime.approvals import (
     APPROVE_ACTION_ID,
     DENY_ACTION_ID,
     ApprovalBroker,
-    ThreadApprovalPrompter,
     approval_tool_hooks,
-    handle_block_actions_payload,
 )
+from gateway.slack.approvals import ThreadApprovalPrompter, handle_block_actions_payload
 
 
 class _FakeMessagingClient:

@@ -12,7 +12,7 @@ from config.constants.honeycomb import (
     HONEYCOMB_BASE_URL_ENV,
     HONEYCOMB_DATASET_ENV,
 )
-from integrations.config_models import DEFAULT_HONEYCOMB_BASE_URL, DEFAULT_HONEYCOMB_DATASET
+from integrations.honeycomb.config import DEFAULT_HONEYCOMB_BASE_URL, DEFAULT_HONEYCOMB_DATASET
 from integrations.honeycomb.verifier import verify_honeycomb
 from integrations.setup_flow import IntegrationSetupSpec, SetupField
 

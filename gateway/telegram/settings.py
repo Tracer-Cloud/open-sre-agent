@@ -146,26 +146,3 @@ def load_gateway_settings() -> GatewaySettings:
         )
     except ValidationError as exc:
         raise GatewayConfigurationError("Invalid Telegram gateway configuration") from exc
-
-
-def try_load_gateway_settings_for_startup(
-    *,
-    logger: logging.Logger,
-    respect_auto_start: bool = True,
-) -> GatewaySettings | None:
-    """Load gateway settings for optional background startup; return None when skipped."""
-    try:
-        settings = load_gateway_settings()
-    except GatewayConfigurationError as exc:
-        logger.debug("[telegram-gateway] startup skipped: %s", exc)
-        return None
-
-    if respect_auto_start and not settings.auto_start_enabled:
-        logger.debug("[telegram-gateway] auto-start disabled in config")
-        return None
-
-    if not settings.bot_token:
-        logger.warning("[telegram-gateway] no bot token configured")
-        return None
-
-    return settings

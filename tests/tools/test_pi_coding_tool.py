@@ -9,12 +9,16 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from integrations.pi import PiCodingResult
-from tools.pi_coding_tool import PiCodingTool, pi_coding_task
-from tools.pi_coding_tool.errors import PiCodingError
-from tools.pi_coding_tool.validation import validate_model, validate_task, validate_workspace
+from integrations.pi.tools.pi_coding_tool import PiCodingTool, pi_coding_task
+from integrations.pi.tools.pi_coding_tool.errors import PiCodingError
+from integrations.pi.tools.pi_coding_tool.validation import (
+    validate_model,
+    validate_task,
+    validate_workspace,
+)
 
-_VERIFY = "tools.pi_coding_tool.runner.verify_pi_coding"
-_RUN = "tools.pi_coding_tool.runner.run_pi_coding_task"
+_VERIFY = "integrations.pi.tools.pi_coding_tool.runner.verify_pi_coding"
+_RUN = "integrations.pi.tools.pi_coding_tool.runner.run_pi_coding_task"
 
 
 # --------------------------------------------------------------------------- #

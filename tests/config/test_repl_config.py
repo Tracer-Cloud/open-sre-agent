@@ -28,6 +28,7 @@ class TestReplConfigDefaults:
         import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+        monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
         cfg = ReplConfig.load()
         assert cfg.theme == "blue"
 
@@ -130,6 +131,7 @@ class TestFileResolution:
         import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+        monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
 
         cfg = ReplConfig.load()
         assert cfg.enabled is False
@@ -152,6 +154,7 @@ class TestFileResolution:
         import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+        monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
 
         cfg = ReplConfig.load()
         assert cfg.layout == "pinned"
@@ -172,6 +175,7 @@ class TestFileResolution:
         import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+        monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
 
         cfg = ReplConfig.load()
         assert cfg.theme == "mono"
@@ -192,6 +196,7 @@ class TestFileResolution:
         import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+        monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
 
         with caplog.at_level("WARNING"):
             cfg = ReplConfig.load()
@@ -217,6 +222,7 @@ class TestFileResolution:
         import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+        monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
 
         cfg = ReplConfig.load()
         assert cfg.enabled is True
@@ -240,6 +246,7 @@ class TestFileResolution:
         import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+        monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
 
         cfg = ReplConfig.load(cli_enabled=True, cli_layout="classic")
         assert cfg.enabled is True
@@ -254,6 +261,7 @@ class TestFileResolution:
         import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+        monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
 
         cfg = ReplConfig.load()
         assert cfg.enabled is True
@@ -270,6 +278,7 @@ class TestFileResolution:
         import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+        monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
 
         cfg = ReplConfig.load()
         assert cfg.enabled is True
@@ -365,12 +374,14 @@ class TestGithubLoginDeferral:
         import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+        monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
         assert read_github_login_deferred() is False
 
     def test_write_and_read_round_trip(self, tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
         import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+        monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
         write_github_login_deferred(True)
         assert read_github_login_deferred() is True
         write_github_login_deferred(False)
@@ -411,6 +422,7 @@ class TestAlertListenerPortParsing:
         import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+        monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
 
         with caplog.at_level("WARNING"):
             cfg = ReplConfig.load()

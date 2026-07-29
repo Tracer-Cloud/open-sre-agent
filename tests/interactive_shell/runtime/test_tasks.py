@@ -122,6 +122,7 @@ class TestTaskRegistry:
         import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+        monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
         reg = TaskRegistry.persistent()
         task = reg.create(TaskKind.SYNTHETIC_TEST, command="opensre tests synthetic")
         task.mark_running()
@@ -142,6 +143,7 @@ class TestTaskRegistry:
         import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+        monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
         store_path = tmp_path / "interactive_tasks.json"
         store_path.parent.mkdir(parents=True, exist_ok=True)
         store_path.write_text(
@@ -180,6 +182,7 @@ class TestTaskRegistry:
         import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+        monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
         calls: list[tuple[int, int]] = []
 
         def _fake_kill(pid: int, sig: int) -> None:
@@ -206,6 +209,7 @@ class TestTaskRegistry:
         import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+        monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
         session = Session()
         session.task_registry = TaskRegistry.persistent()
         task = session.task_registry.create(TaskKind.SYNTHETIC_TEST, command="opensre tests")

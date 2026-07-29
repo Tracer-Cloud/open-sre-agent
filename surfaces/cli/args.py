@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from surfaces.cli.constants import ALERT_TEMPLATE_CHOICES
+from config.constants.investigation import ALERT_TEMPLATE_CHOICES
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:

@@ -20,6 +20,7 @@ from core.agent_harness.prompts.prior_investigation import (
 )
 from core.agent_harness.turns.orchestrator import _is_prior_investigation_follow_up_handoff
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
+from integrations.github.gather_prompt import github_gather_prompt_fragment
 
 
 class _StubPrompts:
@@ -145,6 +146,14 @@ def test_gather_prompt_from_turn_snapshot_includes_recent_last_state() -> None:
     # Assert
     assert "Root cause: disk full on orders-api" in prompt
     assert "call NO tools" in prompt
+
+
+def test_github_gather_prompt_routes_star_history_to_dedicated_tool() -> None:
+    prompt = github_gather_prompt_fragment()
+
+    assert "get_github_star_history" in prompt
+    assert "day-by-day stars" in prompt
+    assert "execute_python_code" in prompt
 
 
 def test_answer_prompt_keeps_an_old_investigation_and_labels_it() -> None:

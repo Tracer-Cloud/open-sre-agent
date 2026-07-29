@@ -13,7 +13,7 @@ ANTIGRAVITY_CLI_TIMEOUT_SECONDS  Optional invocation timeout override (clamped 3
 (verified locally). Each invocation uses whatever model is persisted in agy's
 local config; users change it interactively with ``/models`` inside the REPL.
 Once Google ships ``--model`` in headless, ``build()`` can forward the env var
-in a one-line change (see TODO near ``del model``).
+in a one-line change (see the Known gap note near ``del model``).
 
 Auth
 ----
@@ -237,15 +237,14 @@ class AntigravityCLIAdapter:
         workspace: str,
         reasoning_effort: str | None = None,
     ) -> CLIInvocation:
+        # Known gap: agy 1.0.2 does not expose ``--model`` or reasoning knobs in
+        # headless ``-p`` mode. Each invocation uses whatever model is persisted in
+        # agy's local config; users change it via ``/models`` inside the REPL.
         # ``model`` and ``reasoning_effort`` are accepted for protocol compatibility
-        # but ignored: agy 1.0.2 does not expose ``--model`` or reasoning knobs in
-        # headless ``-p`` mode (verified locally). Each invocation uses whatever
-        # model is persisted in agy's local config; users change it via ``/models``
-        # inside the REPL.
-        # TODO(antigravity-cli): once agy supports ``--model`` in headless, replace
-        # the ``del`` with a conditional ``argv.extend(["--model", model])`` block
-        # and lock the catalog into
-        # ``surfaces/cli/wizard/config.py:ANTIGRAVITY_CLI_MODELS``.
+        # but deliberately ignored here.
+        # Once agy ships ``--model`` in headless, forward the env var here (the
+        # docstring near ``ANTIGRAVITY_CLI_MODEL`` at the top of this module
+        # describes the upgrade path).
         del model, reasoning_effort
 
         binary = self._resolve_binary()

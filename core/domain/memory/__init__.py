@@ -31,6 +31,7 @@ from core.domain.memory.settings import (
 from core.domain.memory.slugs import is_valid_slug, slugify
 from core.domain.memory.store import (
     delete_memory,
+    ensure_memory_store,
     list_memories,
     load_memory,
     memory_dir,
@@ -51,6 +52,7 @@ __all__ = [
     "MemoryType",
     "auto_extract_enabled",
     "delete_memory",
+    "ensure_memory_store",
     "gateway_memory_enabled",
     "is_valid_slug",
     "list_memories",

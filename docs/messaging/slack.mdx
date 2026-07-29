@@ -312,7 +312,7 @@ The Slack gateway backend is deployed and operated separately — not from this
 repo. Configure the integration here (tokens and scopes above); provisioning the
 hosted backend is out of scope for this repo.
 
-The EC2 paths (`make deploy` / `make deploy-gateway`) are **Telegram-only** and
+The EC2 gateway path (`make deploy-gateway`) is **Telegram-only** and
 ignore `SLACK_*` variables with a validation warning: Slack Socket Mode is
 single-consumer, so a second gateway holding the same tokens would split events.
 

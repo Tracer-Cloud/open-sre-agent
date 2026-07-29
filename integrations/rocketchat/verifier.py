@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from http import HTTPStatus
 from typing import Any
 
 import httpx
@@ -20,14 +21,19 @@ def _verify_webhook(source: str, webhook_url: str) -> dict[str, str]:
     except Exception as exc:
         return result("rocketchat", source, "failed", f"Rocket.Chat webhook unreachable: {exc}")
 
-    if response.status_code == 404:
+    if response.status_code == HTTPStatus.NOT_FOUND:
         return result(
             "rocketchat",
             source,
             "failed",
             "Rocket.Chat webhook returned 404; the URL looks invalid.",
         )
-    if response.status_code in {200, 400, 403, 405}:
+    if response.status_code in {
+        HTTPStatus.OK,
+        HTTPStatus.BAD_REQUEST,
+        HTTPStatus.FORBIDDEN,
+        HTTPStatus.METHOD_NOT_ALLOWED,
+    }:
         return result(
             "rocketchat",
             source,
@@ -66,14 +72,14 @@ def verify_rocketchat(source: str, config: dict[str, Any]) -> dict[str, str]:
     except Exception as exc:
         return result("rocketchat", source, "failed", f"Rocket.Chat API check failed: {exc}")
 
-    if response.status_code == 401:
+    if response.status_code == HTTPStatus.UNAUTHORIZED:
         return result(
             "rocketchat",
             source,
             "failed",
             "Rocket.Chat auth failed: auth_token or user_id is invalid or expired.",
         )
-    if response.status_code != 200:
+    if response.status_code != HTTPStatus.OK:
         return result(
             "rocketchat",
             source,

@@ -86,7 +86,7 @@ _DEFAULT_BRIDGE_WORKERS: Final[int] = 2
 # than a typical investigation pipeline but well under the
 # AlarmDispatcher cooldown (300s default) so a retry on the next
 # matching incident gets a fresh shot.
-_DEFAULT_BRIDGE_TIMEOUT_S: Final[float] = 45.0
+_DEFAULT_BRIDGE_TIMEOUT_SECONDS: Final[float] = 45.0
 
 _SEVERITY_EMOJI: Final[dict[IncidentSeverity, str]] = {
     IncidentSeverity.LOW: "🟢",
@@ -118,7 +118,7 @@ class TelegramSinkConfig:
     max_inlined_records: int = _MAX_INLINED_RECORDS
     max_record_chars: int = _MAX_RECORD_CHARS
     max_summary_chars: int = _MAX_SUMMARY_CHARS
-    bridge_timeout_s: float = _DEFAULT_BRIDGE_TIMEOUT_S
+    bridge_timeout_s: float = _DEFAULT_BRIDGE_TIMEOUT_SECONDS
     bridge_workers: int = _DEFAULT_BRIDGE_WORKERS
     # Run bridge synchronously on the calling thread instead of offloading
     # to the executor. Used by unit tests that want deterministic

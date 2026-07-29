@@ -8,7 +8,7 @@ import pytest
 
 from integrations.hermes.correlating_sink import CorrelatingSink
 from integrations.hermes.correlator import (
-    DEFAULT_DEDUP_WINDOW_S,
+    DEFAULT_DEDUP_WINDOW_SECONDS,
     IncidentCorrelator,
     RouteDestination,
     correlate_all,
@@ -243,7 +243,7 @@ class TestCorrelatingSink:
 
     def test_dedup_window_default_constant_is_documented(self) -> None:
         # Catches anyone tightening the default below the AlarmDispatcher cooldown.
-        assert DEFAULT_DEDUP_WINDOW_S == 300.0
+        assert DEFAULT_DEDUP_WINDOW_SECONDS == 300.0
 
     def test_escalation_metric_tracks_correctly(self) -> None:
         delivered: list[HermesIncident] = []

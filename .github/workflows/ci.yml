@@ -7,7 +7,7 @@ on:
       - "surfaces/**"
       - "config/**"
       - "core/**"
-      - "platform/deployment/**"
+      - "platform/deployment_fargate/**"
       - "integrations/**"
       - "platform/**"
       - "tools/**"
@@ -30,7 +30,7 @@ on:
       - "surfaces/**"
       - "config/**"
       - "core/**"
-      - "platform/deployment/**"
+      - "platform/deployment_fargate/**"
       - "integrations/**"
       - "platform/**"
       - "tools/**"
@@ -87,7 +87,7 @@ jobs:
           python-version: "3.13"
 
       - name: Install dependencies
-        run: uv sync --frozen --extra dev
+        run: uv sync --frozen --extra dev --extra cdk
 
       - name: Lint
         run: uv run python -m ruff check $PYTHON_SOURCE_PATHS tests/
@@ -97,6 +97,9 @@ jobs:
 
       - name: Typecheck
         run: uv run python -m mypy $PYTHON_SOURCE_PATHS
+
+      - name: Verify Fargate CDK
+        run: make cdk-verify
 
       - name: Verify integration registry (smoke)
         run: make verify-integrations-smoke
@@ -252,7 +255,7 @@ jobs:
           ${{ matrix.pytest_paths }}
           --cov=config
           --cov=core
-          --cov=platform.deployment.aws --cov=platform.deployment
+          --cov=platform.deployment_ec2 --cov=platform.deployment_fargate
           --cov=integrations
           --cov=platform
           --cov=surfaces
@@ -384,7 +387,7 @@ jobs:
               - ".github/workflows/ci.yml"
               - "pyproject.toml"
               - "uv.lock"
-              - "platform/deployment/**"
+              - "platform/deployment_fargate/**"
               - "integrations/**"
               - "tools/investigation/**"
               - "tools/**"

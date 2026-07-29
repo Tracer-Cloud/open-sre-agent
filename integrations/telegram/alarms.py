@@ -14,7 +14,6 @@ throttling + dispatch policy.
 from __future__ import annotations
 
 import logging
-import threading
 import time
 
 from integrations.telegram.credentials import TelegramCredentials
@@ -23,6 +22,7 @@ from integrations.telegram.delivery import (
     truncate_for_telegram_html,
 )
 from platform.common.truncation import truncate
+from platform.notifications.cooldown import CooldownGate
 from platform.notifications.limits import MAX_MESSAGE_SIZE
 
 logger = logging.getLogger(__name__)
@@ -42,30 +42,21 @@ class AlarmDispatcher:
         parse_mode: str = "",
     ) -> None:
         self._creds = creds
-        self._cooldown_seconds = cooldown_seconds
         self._parse_mode = parse_mode
-        self._last_dispatched: dict[str, float] = {}
-        self._lock = threading.Lock()
+        self._gate = CooldownGate(cooldown_seconds)
 
     def dispatch(self, threshold_name: str, message: str) -> bool:
         """Send to Telegram unless this threshold is in cooldown."""
         now = self._now()
 
-        # Reserve the cooldown slot under the lock BEFORE the network call so
-        # a concurrent dispatch on the same threshold sees the reservation and
-        # is suppressed. Without this, two threads could both pass the check
-        # (state of last_dispatched at "check" time != "use" time, classic
-        # TOCTOU) and both send.
-        with self._lock:
-            last = self._last_dispatched.get(threshold_name)
-            if last is not None and (now - last) < self._cooldown_seconds:
-                logger.debug(
-                    "alarm suppressed by cooldown: name=%s remaining=%.1fs",
-                    threshold_name,
-                    self._cooldown_seconds - (now - last),
-                )
-                return False
-            self._last_dispatched[threshold_name] = now
+        remaining = self._gate.try_reserve(threshold_name, now)
+        if remaining is not None:
+            logger.debug(
+                "alarm suppressed by cooldown: name=%s remaining=%.1fs",
+                threshold_name,
+                remaining,
+            )
+            return False
 
         if self._parse_mode.upper() == "HTML":
             text = truncate_for_telegram_html(message, _TELEGRAM_MESSAGE_LIMIT, suffix="…")

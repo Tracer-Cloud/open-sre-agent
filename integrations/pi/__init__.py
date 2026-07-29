@@ -3,7 +3,7 @@
 This is the *coding-task* side of Pi (the hands). The LLM-provider side (the brain)
 lives in ``integrations/llm_cli/pi_cli.py``. Both share the same ``pi`` binary and
 credentials; this package owns the config and the agentic-run client used by the
-``tools/pi_coding_tool`` tool.
+``integrations/pi/tools/pi_coding_tool`` tool.
 
 Env vars
 --------
