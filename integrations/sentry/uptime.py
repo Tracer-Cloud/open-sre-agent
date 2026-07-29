@@ -11,6 +11,7 @@ import logging
 import os
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from http import HTTPStatus
 from pathlib import Path
 from typing import Any, Literal
 
@@ -199,7 +200,7 @@ def list_sentry_uptime_monitors(*, config: SentryConfig) -> list[UptimeMonitor]:
             err,
             project_slug=config.project_slug,
         )
-        if err.response.status_code == 403:
+        if err.response.status_code == HTTPStatus.FORBIDDEN:
             detail = f"{detail} {_ALERTS_READ_HINT}"
         raise RuntimeError(detail) from err
 
