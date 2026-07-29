@@ -9,6 +9,7 @@ env or in the stored section.
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -70,11 +71,16 @@ def _truthy(value: object) -> bool:
     return False
 
 
-def _env_or_stored(env_name: str, stored_key: str, stored: dict[str, Any]) -> str:
+def _env_or_stored(
+    env_name: str,
+    stored_key: str,
+    stored: Callable[[], dict[str, Any]],
+) -> str:
+    """Environment value, else the stored one. The file is read only if needed."""
     env = os.getenv(env_name, "").strip()
     if env:
         return env
-    value = stored.get(stored_key)
+    value = stored().get(stored_key)
     if value is None:
         return ""
     return str(value).strip()
@@ -88,6 +94,22 @@ def remote_sync_enabled() -> bool:
     return _truthy(_stored_section().get("enabled"))
 
 
+def _lazy_stored() -> Callable[[], dict[str, Any]]:
+    """Read the settings file at most once, and only if something needs it.
+
+    A run configured entirely through the environment must not fail because an
+    unrelated section of ``config.yml`` is damaged.
+    """
+    cache: dict[str, dict[str, Any]] = {}
+
+    def read() -> dict[str, Any]:
+        if "section" not in cache:
+            cache["section"] = _stored_section()
+        return cache["section"]
+
+    return read
+
+
 def load_remote_sync_config() -> RemoteSyncConfig | None:
     """Settings when sync is on, otherwise ``None``.
 
@@ -96,7 +118,7 @@ def load_remote_sync_config() -> RemoteSyncConfig | None:
     """
     if not remote_sync_enabled():
         return None
-    stored = _stored_section()
+    stored = _lazy_stored()
     bucket = _env_or_stored(REMOTE_SYNC_BUCKET_ENV, "bucket", stored)
     if not bucket:
         raise RemoteSyncConfigError(

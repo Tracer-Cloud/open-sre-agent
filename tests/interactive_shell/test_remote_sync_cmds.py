@@ -101,8 +101,10 @@ def test_sync_error_is_caught(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     console, buf = _capture()
     assert dispatch_slash("/remote-sync sync --pull-only --push-only", Session(), console) is True
-    assert "Sync failed" in buf.getvalue()
-    assert "bad flags" in buf.getvalue()
+    out = buf.getvalue()
+    assert "Sync failed" in out
+    # This handler also serves gateway chat, so provider detail must not appear.
+    assert "bad flags" not in out, "error detail reached the chat reply"
 
 
 def test_unknown_subcommand(monkeypatch: pytest.MonkeyPatch) -> None:

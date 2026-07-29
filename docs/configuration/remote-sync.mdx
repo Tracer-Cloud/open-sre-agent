@@ -57,10 +57,15 @@ All surfaces share one entry point, `platform/filestorage/operations.py`, with t
 |---|---|
 | CLI | `opensre remote-sync status` / `opensre remote-sync sync` |
 | Interactive shell | `/remote-sync status` / `/remote-sync sync` |
-| Gateway (Slack / Telegram / Discord) | same `/remote-sync` slash command (headless ports) |
+| Gateway (Telegram, and any unbound chat) | same `/remote-sync` slash command |
 
-Roots follow the active principal scope — laptop `~/.opensre` unbound, or the
-org user's `sessions/` + `memory/` tree when a gateway principal is bound.
+<Warning>
+This mirrors a **personal machine**. Turns that belong to an organization —
+Slack and Discord, which bind an org principal — are refused, because object
+keys carry no organization or member id and every member would otherwise share
+the same keys. Organization history already persists through the mounted
+context root (`OPENSRE_CONTEXT_ROOT`); it does not need this.
+</Warning>
 
 Check what would move before moving it:
 

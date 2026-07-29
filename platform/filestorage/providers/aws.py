@@ -31,7 +31,10 @@ class S3ObjectStore:
         return f"s3://{self._config.bucket}/{self._config.prefix}"
 
     def list_objects(self, prefix: str) -> list[RemoteObject]:
-        full_prefix = self._config.key_for(prefix) if prefix else self._config.prefix
+        # Trailing slash so prefix "opensre" cannot also match "opensre-backup/".
+        full_prefix = (
+            self._config.key_for(prefix) if prefix else f"{self._config.prefix.rstrip('/')}/"
+        )
         out: list[RemoteObject] = []
         try:
             for page in self._pages(full_prefix):

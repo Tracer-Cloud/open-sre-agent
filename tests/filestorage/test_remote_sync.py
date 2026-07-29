@@ -883,3 +883,54 @@ def test_a_corrupt_settings_file_surfaces_as_a_sync_error(
     # Act / Assert: surfaces catch RemoteSyncError, so it must be one.
     with pytest.raises(RemoteSyncConfigError):
         remote_sync_enabled()
+
+
+def test_env_only_config_ignores_a_corrupt_settings_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A damaged config.yml must not break a run configured purely by env."""
+    # Arrange: every setting comes from the environment.
+    from config.constants import paths
+
+    monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", tmp_path)
+    (tmp_path / "config.yml").write_text("not a mapping", encoding="utf-8")
+    monkeypatch.setenv(REMOTE_SYNC_ENV, "1")
+    monkeypatch.setenv(REMOTE_SYNC_BUCKET_ENV, "env-bucket")
+    monkeypatch.setenv(REMOTE_SYNC_PREFIX_ENV, "env-prefix")
+    monkeypatch.setenv("OPENSRE_REMOTE_SYNC_REGION", "eu-west-2")
+    monkeypatch.setenv("OPENSRE_REMOTE_SYNC_PROFILE", "env-profile")
+    monkeypatch.setenv("OPENSRE_REMOTE_SYNC_PROVIDER", "aws")
+
+    # Act
+    config = load_remote_sync_config()
+
+    # Assert: the file was never needed, so its damage is irrelevant.
+    assert config is not None
+    assert config.bucket == "env-bucket"
+    assert config.prefix == "env-prefix"
+
+
+def test_list_prefix_is_delimited_so_a_sibling_bucket_path_cannot_match() -> None:
+    """Prefix "opensre" must not also sweep in "opensre-backup/"."""
+    # Arrange
+    from platform.filestorage.config import RemoteSyncConfig
+    from platform.filestorage.providers.aws import S3ObjectStore
+
+    seen: dict[str, str] = {}
+
+    class _RecordingPaginator:
+        def paginate(self, **kwargs: str) -> list[dict[str, object]]:
+            seen["Prefix"] = kwargs["Prefix"]
+            return []
+
+    class _Client:
+        def get_paginator(self, _name: str) -> _RecordingPaginator:
+            return _RecordingPaginator()
+
+    store = S3ObjectStore(RemoteSyncConfig(bucket="b", prefix="opensre"), client=_Client())
+
+    # Act
+    store.list_objects("")
+
+    # Assert
+    assert seen["Prefix"] == "opensre/"
