@@ -62,13 +62,15 @@ def _raw_help_sections() -> list[HelpSection]:
         COMMANDS as PRIVACY_CMDS,
     )
     from surfaces.interactive_shell.command_registry.rca_cmds import COMMANDS as RCA_CMDS
+    from surfaces.interactive_shell.command_registry.remote_sync_cmds import (
+        COMMANDS as REMOTE_SYNC_CMDS,
+    )
     from surfaces.interactive_shell.command_registry.session_cmds import (
         COMMANDS as SESSION_CMDS,
     )
     from surfaces.interactive_shell.command_registry.settings_cmds import (
         COMMANDS as SETTINGS_CMDS,
     )
-    from surfaces.interactive_shell.command_registry.sync_cmds import COMMANDS as SYNC_CMDS
     from surfaces.interactive_shell.command_registry.system import COMMANDS as SYS_CMDS
     from surfaces.interactive_shell.command_registry.tasks_cmds import COMMANDS as TASK_CMDS
     from surfaces.interactive_shell.command_registry.theme import COMMANDS as THEME_CMDS
@@ -88,7 +90,7 @@ def _raw_help_sections() -> list[HelpSection]:
         ("Integrations, Models & Tools", list(INT_CMDS) + list(MODEL_CMDS) + list(TOOLS_CMDS)),
         ("Investigation", list(INV_CMDS) + list(RCA_CMDS)),
         ("Privacy", list(PRIVACY_CMDS) + list(MEMORY_CMDS)),
-        ("Sync", list(SYNC_CMDS)),
+        ("Remote sync", list(REMOTE_SYNC_CMDS)),
         ("Tasks", list(TASK_CMDS) + list(WATCH_CMDS) + list(GATEWAY_CMDS)),
         ("Theme", list(THEME_CMDS)),
         ("Agents", list(AGENTS_CMDS)),

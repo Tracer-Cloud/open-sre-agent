@@ -1,13 +1,19 @@
-"""Optional mirroring of a laptop's context to a bucket the user owns.
+"""Optional mirroring of conversation context to a store the user owns.
 
 Off by default. When switched on, conversation history and memory are copied
-to the user's own S3 bucket so a second machine can carry on the same
-conversations. Credentials never leave the laptop — see
-:mod:`platform.filestorage.scope`.
+to the user's own object store (AWS/S3 today; other backends register under
+:mod:`platform.filestorage.providers`). Credentials never leave the machine —
+see :mod:`platform.filestorage.syncable`.
 
-This is the laptop counterpart to the mounted context root a deployed
-organization uses: same idea, different mechanism, because a laptop has no
-provisioned filesystem and the stores here write by atomic rename.
+Surfaces share one **stateless, thread-safe** service
+(:mod:`platform.filestorage.operations`): ``opensre remote-sync``, REPL
+``/remote-sync``, and gateway headless slash ports. No cached config or store —
+each call re-reads settings and builds a fresh backend. Roots follow the
+active principal scope (``sessions_dir`` / ``get_memory_dir``).
+
+This is the object-store counterpart to a mounted org context root: same idea,
+different mechanism, because a laptop has no provisioned filesystem and the
+stores here write by atomic rename.
 """
 
 from __future__ import annotations
@@ -17,34 +23,61 @@ from platform.filestorage.config import (
     load_remote_sync_config,
     remote_sync_enabled,
 )
-from platform.filestorage.errors import (
-    RemoteSyncConfigError,
-    RemoteSyncError,
-    RemoteSyncUnavailableError,
-    UnsyncablePathError,
-)
-from platform.filestorage.ports import ObjectStore, RemoteObject
-from platform.filestorage.scope import SyncRoot, is_syncable, resolved_roots, syncable_roots
-from platform.filestorage.sync import (
-    SyncDirection,
+from platform.filestorage.engine import (
     SyncReport,
     pull,
     push,
     resolve_direction,
     run_sync,
 )
+from platform.filestorage.enums import (
+    BuiltInProvider,
+    RemoteSyncSubcommand,
+    SyncDirection,
+    SyncRootName,
+)
+from platform.filestorage.errors import (
+    RemoteSyncConfigError,
+    RemoteSyncError,
+    RemoteSyncUnavailableError,
+    UnsyncablePathError,
+)
+from platform.filestorage.messages import (
+    DISABLED_HELP,
+    format_report_lines,
+    format_status_lines,
+)
+from platform.filestorage.operations import (
+    SyncRootStatus,
+    SyncStatus,
+    get_sync_status,
+    run_remote_sync,
+)
+from platform.filestorage.ports import ObjectStore, RemoteObject
+from platform.filestorage.providers import build_object_store
+from platform.filestorage.syncable import SyncRoot, is_syncable, resolved_roots, syncable_roots
 
 __all__ = [
+    "format_status_lines",
+    "format_report_lines",
+    "DISABLED_HELP",
+    "BuiltInProvider",
     "ObjectStore",
     "RemoteObject",
     "RemoteSyncConfig",
     "RemoteSyncConfigError",
     "RemoteSyncError",
+    "RemoteSyncSubcommand",
     "RemoteSyncUnavailableError",
     "SyncDirection",
     "SyncReport",
     "SyncRoot",
+    "SyncRootName",
+    "SyncRootStatus",
+    "SyncStatus",
     "UnsyncablePathError",
+    "build_object_store",
+    "get_sync_status",
     "is_syncable",
     "load_remote_sync_config",
     "pull",
@@ -52,6 +85,7 @@ __all__ = [
     "remote_sync_enabled",
     "resolve_direction",
     "resolved_roots",
+    "run_remote_sync",
     "run_sync",
     "syncable_roots",
 ]

@@ -1,16 +1,25 @@
-"""Settings for optional remote context sync, read from the environment."""
+"""Settings for optional remote context sync.
+
+Environment variables take precedence over ``~/.opensre/config.yml`` section
+``remote_sync``, so a one-off export can redirect a single run without editing
+the file. Naming a bucket alone never enables sync — the switch must be on in
+env or in the stored section.
+"""
 
 from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from typing import Any
 
 from config.constants.filestorage import (
     DEFAULT_REMOTE_SYNC_PREFIX,
+    DEFAULT_REMOTE_SYNC_PROVIDER,
     REMOTE_SYNC_BUCKET_ENV,
     REMOTE_SYNC_ENV,
     REMOTE_SYNC_PREFIX_ENV,
     REMOTE_SYNC_PROFILE_ENV,
+    REMOTE_SYNC_PROVIDER_ENV,
     REMOTE_SYNC_REGION_ENV,
 )
 from platform.filestorage.errors import RemoteSyncConfigError
@@ -20,9 +29,15 @@ _TRUTHY = frozenset({"1", "true", "yes", "on"})
 
 @dataclass(frozen=True)
 class RemoteSyncConfig:
-    """Where a laptop mirrors its context, and under which credentials."""
+    """Where a laptop mirrors its context, under which backend and credentials.
+
+    ``bucket`` is the top-level store name for the chosen provider (S3 bucket
+    today; community backends may reuse the field). Provider-specific fields
+    (``profile``, ``region``) are ignored by backends that do not need them.
+    """
 
     bucket: str
+    provider: str = DEFAULT_REMOTE_SYNC_PROVIDER
     prefix: str = DEFAULT_REMOTE_SYNC_PREFIX
     region: str = ""
     profile: str = ""
@@ -32,9 +47,36 @@ class RemoteSyncConfig:
         return f"{self.prefix.rstrip('/')}/{relative_key.lstrip('/')}"
 
 
+def _stored_section() -> dict[str, Any]:
+    from config.local_settings import read_section
+
+    return read_section("remote_sync")
+
+
+def _truthy(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in _TRUTHY
+    return False
+
+
+def _env_or_stored(env_name: str, stored_key: str, stored: dict[str, Any]) -> str:
+    env = os.getenv(env_name, "").strip()
+    if env:
+        return env
+    value = stored.get(stored_key)
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
 def remote_sync_enabled() -> bool:
-    """Whether the user switched sync on. Off unless explicitly set."""
-    return os.getenv(REMOTE_SYNC_ENV, "").strip().lower() in _TRUTHY
+    """Whether sync is on in the environment or the stored settings file."""
+    env = os.getenv(REMOTE_SYNC_ENV)
+    if env is not None and env.strip() != "":
+        return env.strip().lower() in _TRUTHY
+    return _truthy(_stored_section().get("enabled"))
 
 
 def load_remote_sync_config() -> RemoteSyncConfig | None:
@@ -45,17 +87,23 @@ def load_remote_sync_config() -> RemoteSyncConfig | None:
     """
     if not remote_sync_enabled():
         return None
-    bucket = os.getenv(REMOTE_SYNC_BUCKET_ENV, "").strip()
+    stored = _stored_section()
+    bucket = _env_or_stored(REMOTE_SYNC_BUCKET_ENV, "bucket", stored)
     if not bucket:
         raise RemoteSyncConfigError(
             f"{REMOTE_SYNC_ENV} is on but {REMOTE_SYNC_BUCKET_ENV} names no bucket"
         )
-    prefix = os.getenv(REMOTE_SYNC_PREFIX_ENV, "").strip() or DEFAULT_REMOTE_SYNC_PREFIX
+    prefix = _env_or_stored(REMOTE_SYNC_PREFIX_ENV, "prefix", stored) or DEFAULT_REMOTE_SYNC_PREFIX
+    provider = (
+        _env_or_stored(REMOTE_SYNC_PROVIDER_ENV, "provider", stored).lower()
+        or DEFAULT_REMOTE_SYNC_PROVIDER
+    )
     return RemoteSyncConfig(
         bucket=bucket,
+        provider=provider,
         prefix=prefix,
-        region=os.getenv(REMOTE_SYNC_REGION_ENV, "").strip(),
-        profile=os.getenv(REMOTE_SYNC_PROFILE_ENV, "").strip(),
+        region=_env_or_stored(REMOTE_SYNC_REGION_ENV, "region", stored),
+        profile=_env_or_stored(REMOTE_SYNC_PROFILE_ENV, "profile", stored),
     )
 
 

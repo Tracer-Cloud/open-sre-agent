@@ -17,12 +17,13 @@ from config.constants.filestorage import (
     REMOTE_SYNC_ENV,
     REMOTE_SYNC_PREFIX_ENV,
 )
-from platform.filestorage import sync as sync_module
+from platform.filestorage import engine as sync_module
 from platform.filestorage.config import load_remote_sync_config, remote_sync_enabled
+from platform.filestorage.engine import content_tag, pull, push, resolve_direction, run_sync
+from platform.filestorage.enums import SyncRootName
 from platform.filestorage.errors import RemoteSyncConfigError, UnsyncablePathError
 from platform.filestorage.ports import RemoteObject
-from platform.filestorage.scope import SyncRoot, is_syncable
-from platform.filestorage.sync import content_tag, pull, push, resolve_direction, run_sync
+from platform.filestorage.syncable import SyncRoot, is_syncable
 
 # Planted in the credential files. If sync ever widens, this string shows up in
 # an uploaded object and the assertion below fails loudly.
@@ -79,8 +80,8 @@ def home(tmp_path: Path) -> Path:
 @pytest.fixture
 def roots(home: Path) -> tuple[SyncRoot, ...]:
     return (
-        SyncRoot(name="sessions", path=home / "sessions"),
-        SyncRoot(name="memory", path=home / "memory"),
+        SyncRoot(name=SyncRootName.SESSIONS, path=home / "sessions"),
+        SyncRoot(name=SyncRootName.MEMORY, path=home / "memory"),
     )
 
 
@@ -180,8 +181,8 @@ def test_push_then_pull_restores_a_second_machine(
     # Act: machine two starts empty and pulls.
     second = tmp_path / "machine-two"
     second_roots = (
-        SyncRoot(name="sessions", path=second / "sessions"),
-        SyncRoot(name="memory", path=second / "memory"),
+        SyncRoot(name=SyncRootName.SESSIONS, path=second / "sessions"),
+        SyncRoot(name=SyncRootName.MEMORY, path=second / "memory"),
     )
     report = pull(store, roots=second_roots)
 
@@ -357,7 +358,7 @@ def test_aws_failures_name_their_cause() -> None:
 
     from platform.filestorage.config import RemoteSyncConfig
     from platform.filestorage.errors import RemoteSyncUnavailableError
-    from platform.filestorage.s3_store import S3ObjectStore
+    from platform.filestorage.providers.aws import S3ObjectStore
 
     class _Failing:
         def get_paginator(self, _name: str) -> object:
@@ -388,16 +389,18 @@ def test_multipart_etag_is_not_treated_as_a_content_match(
     home: Path, roots: tuple[SyncRoot, ...]
 ) -> None:
     """Compound S3 ETags (``md5-parts``) must not suppress a needed upload."""
-    from platform.filestorage.sync import comparable_etag
+    from platform.filestorage.engine import comparable_etag
 
     # Arrange: listing carries a multipart-style tag that is not content MD5.
+    # The object is stamped older than the local file so recency cannot be what
+    # decides this — the unusable tag is the only thing under test.
     body = (home / "sessions" / "abc.jsonl").read_bytes()
     store = FakeObjectStore()
     store.put_object("sessions/abc.jsonl", body)
     multipart = RemoteObject(
         key="sessions/abc.jsonl",
         size=len(body),
-        last_modified=datetime.now(tz=UTC),
+        last_modified=datetime.now(tz=UTC) - timedelta(hours=1),
         etag=f"{content_tag(body)}-2",
     )
     assert comparable_etag(multipart) == ""
@@ -422,8 +425,8 @@ def test_nested_session_files_round_trip(
     # Act
     second = tmp_path / "machine-two"
     second_roots = (
-        SyncRoot(name="sessions", path=second / "sessions"),
-        SyncRoot(name="memory", path=second / "memory"),
+        SyncRoot(name=SyncRootName.SESSIONS, path=second / "sessions"),
+        SyncRoot(name=SyncRootName.MEMORY, path=second / "memory"),
     )
     pull(store, roots=second_roots)
 
@@ -440,8 +443,8 @@ def test_empty_roots_are_a_no_op(tmp_path: Path) -> None:
     sessions.mkdir()
     memory.mkdir()
     roots = (
-        SyncRoot(name="sessions", path=sessions),
-        SyncRoot(name="memory", path=memory),
+        SyncRoot(name=SyncRootName.SESSIONS, path=sessions),
+        SyncRoot(name=SyncRootName.MEMORY, path=memory),
     )
     store = FakeObjectStore()
 
@@ -468,7 +471,7 @@ def test_unknown_remote_key_prefix_is_ignored(home: Path, roots: tuple[SyncRoot,
 
 
 def test_push_only_does_not_download(home: Path, roots: tuple[SyncRoot, ...]) -> None:
-    from platform.filestorage.sync import SyncDirection
+    from platform.filestorage.engine import SyncDirection
 
     # Arrange: remote-only file must stay remote-only under push-only.
     store = FakeObjectStore()
@@ -484,7 +487,7 @@ def test_push_only_does_not_download(home: Path, roots: tuple[SyncRoot, ...]) ->
 
 
 def test_pull_only_does_not_upload(home: Path, roots: tuple[SyncRoot, ...]) -> None:
-    from platform.filestorage.sync import SyncDirection
+    from platform.filestorage.engine import SyncDirection
 
     # Arrange
     store = FakeObjectStore()
@@ -522,7 +525,7 @@ def test_credentials_json_is_not_syncable(home: Path, roots: tuple[SyncRoot, ...
 
 
 def test_comparable_etag_strips_quotes_and_rejects_multipart() -> None:
-    from platform.filestorage.sync import comparable_etag
+    from platform.filestorage.engine import comparable_etag
 
     now = datetime.now(tz=UTC)
     quoted = RemoteObject(key="k", size=1, last_modified=now, etag='"abc123"')
@@ -535,7 +538,7 @@ def test_comparable_etag_strips_quotes_and_rejects_multipart() -> None:
 
 
 def test_resolve_direction_maps_each_flag() -> None:
-    from platform.filestorage.sync import SyncDirection
+    from platform.filestorage.engine import SyncDirection
 
     assert resolve_direction(pull_only=False, push_only=False) is SyncDirection.BOTH
     assert resolve_direction(pull_only=True, push_only=False) is SyncDirection.PULL
@@ -548,8 +551,8 @@ def test_missing_root_directory_is_skipped_not_fatal(tmp_path: Path) -> None:
     memory.mkdir()
     (memory / "a.md").write_text("x\n", encoding="utf-8")
     roots = (
-        SyncRoot(name="sessions", path=tmp_path / "sessions"),
-        SyncRoot(name="memory", path=memory),
+        SyncRoot(name=SyncRootName.SESSIONS, path=tmp_path / "sessions"),
+        SyncRoot(name=SyncRootName.MEMORY, path=memory),
     )
     store = FakeObjectStore()
 
@@ -559,3 +562,246 @@ def test_missing_root_directory_is_skipped_not_fatal(tmp_path: Path) -> None:
     # Assert
     assert report.uploaded == ["memory/a.md"]
     assert "sessions/" not in "".join(store.objects)
+
+
+# ── Provider registry (open/closed: new backends register, engine unchanged) ─
+
+
+def test_s3_is_the_default_registered_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from config.constants.filestorage import (
+        DEFAULT_REMOTE_SYNC_PROVIDER,
+        REMOTE_SYNC_BUCKET_ENV,
+        REMOTE_SYNC_ENV,
+        REMOTE_SYNC_PROVIDER_ENV,
+    )
+    from platform.filestorage.providers import registered_providers
+
+    monkeypatch.setenv(REMOTE_SYNC_ENV, "1")
+    monkeypatch.setenv(REMOTE_SYNC_BUCKET_ENV, "b")
+    monkeypatch.delenv(REMOTE_SYNC_PROVIDER_ENV, raising=False)
+
+    config = load_remote_sync_config()
+    assert config is not None
+    assert config.provider == DEFAULT_REMOTE_SYNC_PROVIDER
+    assert "aws" in registered_providers()
+
+
+def test_unknown_provider_fails_closed_at_build(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from config.constants.filestorage import (
+        REMOTE_SYNC_BUCKET_ENV,
+        REMOTE_SYNC_ENV,
+        REMOTE_SYNC_PROVIDER_ENV,
+    )
+    from platform.filestorage import build_object_store
+
+    monkeypatch.setenv(REMOTE_SYNC_ENV, "1")
+    monkeypatch.setenv(REMOTE_SYNC_BUCKET_ENV, "b")
+    monkeypatch.setenv(REMOTE_SYNC_PROVIDER_ENV, "azure-blob")
+
+    config = load_remote_sync_config()
+    assert config is not None
+    with pytest.raises(RemoteSyncConfigError, match="unknown remote-sync provider"):
+        build_object_store(config)
+
+
+def test_a_new_provider_registers_without_touching_the_engine(
+    home: Path, roots: tuple[SyncRoot, ...], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Open/closed: register a fake backend; run_sync still works unchanged."""
+    from config.constants.filestorage import (
+        REMOTE_SYNC_BUCKET_ENV,
+        REMOTE_SYNC_ENV,
+        REMOTE_SYNC_PROVIDER_ENV,
+    )
+    from platform.filestorage import build_object_store
+    from platform.filestorage.providers.registry import register_object_store
+
+    # Arrange: a one-off in-memory backend registered under a new name.
+    register_object_store("memory", lambda _cfg: FakeObjectStore())
+    monkeypatch.setenv(REMOTE_SYNC_ENV, "1")
+    monkeypatch.setenv(REMOTE_SYNC_BUCKET_ENV, "ignored")
+    monkeypatch.setenv(REMOTE_SYNC_PROVIDER_ENV, "memory")
+
+    # Act
+    store = build_object_store(load_remote_sync_config())  # type: ignore[arg-type]
+    report = run_sync(store, roots=roots)
+
+    # Assert: engine never knew about "memory" — only ObjectStore.
+    assert "sessions/abc.jsonl" in report.uploaded
+    assert isinstance(store, FakeObjectStore)
+
+
+def test_shared_service_status_and_run_are_surface_agnostic(
+    home: Path, roots: tuple[SyncRoot, ...], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CLI / REPL / gateway all call get_sync_status + run_remote_sync."""
+    from config.constants.filestorage import REMOTE_SYNC_PROVIDER_ENV
+    from platform.filestorage import operations as sync_service
+    from platform.filestorage.enums import SyncRootName
+    from platform.filestorage.messages import (
+        DISABLED_HELP,
+        format_report_lines,
+        format_status_lines,
+    )
+    from platform.filestorage.operations import get_sync_status, run_remote_sync
+    from platform.filestorage.providers.registry import register_object_store
+
+    monkeypatch.delenv(REMOTE_SYNC_ENV, raising=False)
+    off = get_sync_status()
+    assert off.enabled is False
+    assert DISABLED_HELP in format_status_lines(off)
+    assert run_remote_sync() is None
+
+    store = FakeObjectStore()
+    register_object_store("svc-memory", lambda _cfg: store)
+    monkeypatch.setenv(REMOTE_SYNC_ENV, "1")
+    monkeypatch.setenv(REMOTE_SYNC_BUCKET_ENV, "b")
+    monkeypatch.setenv(REMOTE_SYNC_PROVIDER_ENV, "svc-memory")
+    monkeypatch.setattr(sync_service, "syncable_roots", lambda: roots)
+
+    status = get_sync_status()
+    assert status.enabled is True
+    assert status.config is not None
+    assert status.config.provider == "svc-memory"
+    assert any(
+        line.startswith("Remote sync is on (svc-memory)") for line in format_status_lines(status)
+    )
+    assert {root.name for root in status.roots} == {
+        SyncRootName.SESSIONS,
+        SyncRootName.MEMORY,
+    }
+
+    report = run_remote_sync()
+    assert report is not None
+    assert "sessions/abc.jsonl" in report.uploaded
+    assert "downloaded" in format_report_lines(report)[0].lower()
+
+
+def test_shared_service_is_stateless_and_safe_under_concurrent_calls(
+    home: Path, roots: tuple[SyncRoot, ...], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """No cached store/config; concurrent status/run/format allocate independently."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    from config.constants.filestorage import REMOTE_SYNC_PROVIDER_ENV
+    from platform.filestorage import operations as sync_service
+    from platform.filestorage.messages import format_report_lines, format_status_lines
+    from platform.filestorage.operations import get_sync_status, run_remote_sync
+    from platform.filestorage.providers.registry import register_object_store
+
+    register_object_store("svc-concurrent", lambda _cfg: FakeObjectStore())
+    monkeypatch.setenv(REMOTE_SYNC_ENV, "1")
+    monkeypatch.setenv(REMOTE_SYNC_BUCKET_ENV, "b")
+    monkeypatch.setenv(REMOTE_SYNC_PROVIDER_ENV, "svc-concurrent")
+    monkeypatch.setattr(sync_service, "syncable_roots", lambda: roots)
+
+    def _one(_: int) -> tuple[bool, int, str]:
+        status = get_sync_status()
+        lines = format_status_lines(status)
+        report = run_remote_sync()
+        assert report is not None
+        # Mutating the returned report must not affect a fresh format of another.
+        report.uploaded.append("poison")
+        other = run_remote_sync()
+        assert other is not None
+        assert "poison" not in other.uploaded
+        return status.enabled, len(lines), format_report_lines(report)[0]
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        futures = [pool.submit(_one, i) for i in range(16)]
+        results = [fut.result() for fut in as_completed(futures)]
+
+    assert all(enabled for enabled, _n, _line in results)
+    assert len({line for _e, _n, line in results}) == 1
+
+
+def test_push_only_does_not_clobber_a_newer_remote(home: Path, roots: tuple[SyncRoot, ...]) -> None:
+    """A stale laptop pushing alone must not replace newer bucket data."""
+    # Arrange: the bucket holds a newer edit than this machine has.
+    store = FakeObjectStore()
+    newer = b'{"turn": 99, "from": "the other laptop"}\n'
+    store.put_object("sessions/abc.jsonl", newer)
+    store.modified["sessions/abc.jsonl"] = datetime.now(tz=UTC) + timedelta(hours=1)
+
+    # Act: push without pulling first.
+    report = push(store, roots=roots)
+
+    # Assert: the newer remote copy survives and the skip is reported.
+    assert store.objects["sessions/abc.jsonl"] == newer
+    assert "sessions/abc.jsonl" not in report.uploaded
+    assert "sessions/abc.jsonl" in report.kept_remote
+
+
+def test_an_unusable_tag_still_defers_to_a_newer_remote(
+    home: Path, roots: tuple[SyncRoot, ...]
+) -> None:
+    """Not being able to compare content is no licence to overwrite newer work."""
+    # Arrange: compound tag, and the bucket copy is the more recent write.
+    body = (home / "sessions" / "abc.jsonl").read_bytes()
+    store = FakeObjectStore()
+    store.put_object("sessions/abc.jsonl", b"newer remote body\n")
+    newer_multipart = RemoteObject(
+        key="sessions/abc.jsonl",
+        size=len(body),
+        last_modified=datetime.now(tz=UTC) + timedelta(hours=1),
+        etag=f"{content_tag(body)}-2",
+    )
+
+    # Act
+    report = push(store, roots=roots, remote=[newer_multipart])
+
+    # Assert: the contested key is left alone (the memory file is absent from
+    # the injected listing, so its upload is correct and not what is asserted).
+    assert "sessions/abc.jsonl" not in report.uploaded
+    assert "sessions/abc.jsonl" in report.kept_remote
+    assert store.objects["sessions/abc.jsonl"] == b"newer remote body\n"
+
+
+def test_settings_come_from_the_file_when_the_environment_is_silent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Stored settings drive sync, so setup does not require shell exports."""
+    # Arrange: a config.yml with a remote_sync section, and no env vars.
+    from config.constants import paths
+    from config.local_settings import update_section
+
+    monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", tmp_path)
+    for name in (REMOTE_SYNC_ENV, REMOTE_SYNC_BUCKET_ENV, REMOTE_SYNC_PREFIX_ENV):
+        monkeypatch.delenv(name, raising=False)
+    update_section(
+        "remote_sync",
+        {"enabled": True, "bucket": "stored-bucket", "prefix": "stored-prefix"},
+    )
+
+    # Act
+    config = load_remote_sync_config()
+
+    # Assert
+    assert config is not None
+    assert config.bucket == "stored-bucket"
+    assert config.key_for("sessions/a.jsonl") == "stored-prefix/sessions/a.jsonl"
+
+
+def test_environment_overrides_the_stored_bucket(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A one-off export must be able to redirect a single run."""
+    # Arrange
+    from config.constants import paths
+    from config.local_settings import update_section
+
+    monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", tmp_path)
+    update_section("remote_sync", {"enabled": True, "bucket": "stored-bucket"})
+    monkeypatch.setenv(REMOTE_SYNC_ENV, "1")
+    monkeypatch.setenv(REMOTE_SYNC_BUCKET_ENV, "env-bucket")
+
+    # Act
+    config = load_remote_sync_config()
+
+    # Assert
+    assert config is not None
+    assert config.bucket == "env-bucket"

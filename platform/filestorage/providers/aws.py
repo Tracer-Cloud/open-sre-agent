@@ -1,13 +1,4 @@
-"""S3 implementation of :class:`~platform.filestorage.ports.ObjectStore`.
-
-Talks to a bucket the user owns, under their own AWS credentials — opensre
-never holds them. Uploads are encrypted server-side; a bucket that rejects
-unencrypted writes therefore works unchanged.
-
-Failures carry the underlying AWS reason. Sync runs on the local CLI and REPL,
-where a user needs to see "the profile does not exist" rather than a generic
-message they cannot act on.
-"""
+"""S3 backend for remote sync — one registered :class:`ObjectStore` implementation."""
 
 from __future__ import annotations
 
@@ -17,13 +8,16 @@ import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 
 from platform.filestorage.config import RemoteSyncConfig
+from platform.filestorage.enums import BuiltInProvider
 from platform.filestorage.errors import RemoteSyncUnavailableError
 from platform.filestorage.ports import RemoteObject
+from platform.filestorage.providers.registry import register_object_store
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
 _SERVER_SIDE_ENCRYPTION = "AES256"
+PROVIDER_NAME = BuiltInProvider.AWS
 
 
 class S3ObjectStore:
@@ -106,4 +100,10 @@ def _build_client(config: RemoteSyncConfig) -> Any:
         raise RemoteSyncUnavailableError(f"cannot build an S3 client — {_reason(exc)}") from exc
 
 
-__all__ = ["S3ObjectStore"]
+def _factory(config: RemoteSyncConfig) -> S3ObjectStore:
+    return S3ObjectStore(config)
+
+
+register_object_store(PROVIDER_NAME, _factory)
+
+__all__ = ["PROVIDER_NAME", "S3ObjectStore"]

@@ -2,8 +2,9 @@
 
 Additive on both sides: a file present in one place and missing in the other is
 copied, never deleted. When both sides changed, the more recently written one
-wins. Nothing here removes a session or a memory, so a stale second machine
-cannot erase work done on the first.
+wins — in both directions, so a push from a laptop that has been offline cannot
+replace newer work in the bucket any more than a stale pull can overwrite a
+newer local edit. Nothing here removes a session or a memory.
 
 Sessions are append-mostly JSONL and memory files are small markdown, so whole
 objects are transferred rather than ranges. Downloads land through a temporary
@@ -19,22 +20,14 @@ import os
 import tempfile
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from enum import Enum
 from pathlib import Path
 
+from platform.filestorage.enums import SyncDirection
 from platform.filestorage.errors import RemoteSyncConfigError, UnsyncablePathError
 from platform.filestorage.ports import ObjectStore, RemoteObject
-from platform.filestorage.scope import SyncRoot, resolved_roots, syncable_roots
+from platform.filestorage.syncable import SyncRoot, resolved_roots, syncable_roots
 
 logger = logging.getLogger(__name__)
-
-
-class SyncDirection(Enum):
-    """Which way one sync moves files."""
-
-    BOTH = "both"
-    PULL = "pull"
-    PUSH = "push"
 
 
 @dataclass
@@ -43,6 +36,9 @@ class SyncReport:
 
     uploaded: list[str] = field(default_factory=list)
     downloaded: list[str] = field(default_factory=list)
+    #: Local files left alone because the bucket held a newer copy. A full sync
+    #: resolves these by pulling first; a push-only run cannot.
+    kept_remote: list[str] = field(default_factory=list)
     skipped: int = 0
 
     @property
@@ -131,9 +127,15 @@ def push(
             key = _relative_key(root, path)
             data = path.read_bytes()
             existing = by_key.get(key)
-            if existing is not None and comparable_etag(existing) == content_tag(data):
-                result.skipped += 1
-                continue
+            if existing is not None:
+                if comparable_etag(existing) == content_tag(data):
+                    result.skipped += 1
+                    continue
+                if existing.last_modified > _modified_at(path):
+                    # The bucket holds the more recent write, so uploading would
+                    # destroy it. Same rule pull applies in the other direction.
+                    result.kept_remote.append(key)
+                    continue
             store.put_object(key, data)
             result.uploaded.append(key)
     return result

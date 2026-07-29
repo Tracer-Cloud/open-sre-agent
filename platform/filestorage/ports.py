@@ -1,8 +1,9 @@
 """Object-store contract the sync engine talks to.
 
-Narrow on purpose: four operations, no vendor types. S3 is the only
-implementation today; the engine and its tests depend on this instead, so a
-sync can be exercised without AWS.
+Narrow on purpose: four operations, no vendor types. Backends (S3 today;
+others register under :mod:`platform.filestorage.providers`) implement this
+protocol. The engine and its tests depend on the protocol, so a sync can be
+exercised without a cloud account.
 """
 
 from __future__ import annotations
@@ -19,7 +20,7 @@ class RemoteObject:
     ``etag`` is the store's own content tag, returned by a listing so no extra
     request is needed per object. S3 sets it to the MD5 of a single-part upload;
     a multipart upload returns a compound value, which
-    :func:`~platform.filestorage.sync.comparable_etag` treats as unusable.
+    :func:`~platform.filestorage.engine.comparable_etag` treats as unusable.
     """
 
     key: str

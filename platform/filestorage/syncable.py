@@ -19,6 +19,7 @@ from pathlib import Path
 from config.constants.paths import get_memory_dir
 from config.constants.secrets import CREDENTIAL_FALLBACK_FILENAME
 from core.agent_harness.session.persistence.paths import sessions_dir
+from platform.filestorage.enums import SyncRootName
 
 # Never uploaded, whatever else changes. Redundant with the allowlist of roots
 # and kept that way: two independent checks, so one mistake is not enough.
@@ -36,9 +37,13 @@ DENIED_FILENAMES = frozenset(
 
 @dataclass(frozen=True)
 class SyncRoot:
-    """One local directory and the key prefix it maps to in the bucket."""
+    """One local directory and the key prefix it maps to in the bucket.
 
-    name: str
+    Product roots use :class:`SyncRootName`. Tests may inject other string
+    names when exercising the engine with a custom root set.
+    """
+
+    name: SyncRootName | str
     path: Path
 
 
@@ -64,8 +69,8 @@ class ResolvedRoots:
 def syncable_roots() -> tuple[SyncRoot, ...]:
     """Directories that mirror to the bucket, resolved for the current scope."""
     return (
-        SyncRoot(name="sessions", path=sessions_dir()),
-        SyncRoot(name="memory", path=get_memory_dir()),
+        SyncRoot(name=SyncRootName.SESSIONS, path=sessions_dir()),
+        SyncRoot(name=SyncRootName.MEMORY, path=get_memory_dir()),
     )
 
 
@@ -84,6 +89,7 @@ __all__ = [
     "DENIED_FILENAMES",
     "ResolvedRoots",
     "SyncRoot",
+    "SyncRootName",
     "is_syncable",
     "resolved_roots",
     "syncable_roots",
