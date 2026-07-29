@@ -168,8 +168,8 @@ the credential to `~/.opensre/credentials.json` with owner-only (`0600`)
 permissions and tells you it did. Unlock or install a keychain and re-run the
 command to move the credential back into secure storage.
 
-Set `OPENSRE_DISABLE_CREDENTIAL_FALLBACK=1` if you would rather setup fail than
-have a credential written to disk.
+To keep credentials off disk entirely, set `OPENSRE_DISABLE_KEYRING=1` and
+export them in your shell instead.
 
 Contributor contract: [Credential resolution](https://github.com/Tracer-Cloud/opensre/blob/main/docs/adding-tools-and-integrations.md#credential-resolution)
 in *Adding tools and integrations* (internal contributor markdown in the repo;
@@ -178,8 +178,6 @@ not a Mintlify docs-site page).
 | Variable | Default | Description | Module |
 |----------|---------|-------------|--------|
 | `OPENSRE_DISABLE_KEYRING` | `0` | Disable local credential storage; credentials must come from the environment | `config/secrets` |
-| `OPENSRE_DISABLE_CREDENTIAL_FALLBACK` | `0` | Refuse the on-disk fallback store, so setup fails instead when no keychain works | `config/secrets` |
-| `OPENSRE_CREDENTIAL_FALLBACK_PATH` | `~/.opensre/credentials.json` | Where the fallback credential store is written | `config/secrets` |
 | `OPENSRE_LLM_AUTH_METADATA_PATH` | `~/.opensre/llm-auth.json` | Non-secret LLM auth metadata path used by prompt-safe status checks | `llm_auth/records` |
 | `OPENSRE_API_KEY` | | API key for remote OpenSRE instances | `remote/server` |
 | `DBUS_SESSION_BUS_ADDRESS` | | D-Bus socket address (Linux keyring) | `llm_credentials` |

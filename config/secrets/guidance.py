@@ -10,21 +10,17 @@ import os
 import shutil
 import sys
 
-from config.constants.secrets import (
-    OPENSRE_CREDENTIAL_FALLBACK_PATH_ENV,
-    OPENSRE_DISABLE_CREDENTIAL_FALLBACK_ENV,
-    OPENSRE_DISABLE_KEYRING_ENV,
-)
-from config.secrets import local_file, os_keyring, store
+from config.constants.secrets import OPENSRE_DISABLE_KEYRING_ENV
+from config.secrets import local_file, os_keyring
 
 
 def get_keyring_setup_instructions(env_var: str) -> tuple[str, ...]:
     """Platform-specific guidance for restoring secure credential storage.
 
-    Only reached once both tiers are out of the picture, so the goal is to name
-    the switch that is refusing storage or the keychain that needs unlocking —
-    not to walk a user through D-Bus when a working fallback would have saved
-    the credential anyway.
+    Only reached once the keyring *and* the fallback file have both refused, so
+    the goal is to name the switch that is refusing storage or the path that is
+    not writable — not to walk a user through D-Bus when a working fallback
+    would have saved the credential anyway.
     """
     if os_keyring.keyring_is_disabled():
         return (
@@ -33,20 +29,10 @@ def get_keyring_setup_instructions(env_var: str) -> tuple[str, ...]:
             f"{env_var}, or export {env_var} in your shell.",
         )
 
-    if store.fallback_is_disabled():
-        return (
-            f"The local fallback store is disabled by {OPENSRE_DISABLE_CREDENTIAL_FALLBACK_ENV}.",
-            f"Current keyring backend: {os_keyring.backend_name()}.",
-            f"Unlock your system keychain, or export {env_var} in your shell.",
-            f"To allow an owner-only file at {local_file.store_path()} instead, "
-            f"unset {OPENSRE_DISABLE_CREDENTIAL_FALLBACK_ENV}.",
-        )
-
     lines = [
         f"Current keyring backend: {os_keyring.backend_name()}.",
         f"OpenSRE could not use the system keychain or write {local_file.store_path()}.",
-        f"Check that you can write to that path, or set "
-        f"{OPENSRE_CREDENTIAL_FALLBACK_PATH_ENV} to a writable location.",
+        "Check that you have write access to that path.",
     ]
     if sys.platform.startswith("linux"):
         if shutil.which("gnome-keyring-daemon") is None:

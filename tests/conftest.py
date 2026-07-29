@@ -9,12 +9,12 @@ from pathlib import Path
 
 import pytest
 
+import config.constants.paths as paths
 from config.constants import (
     OPENSRE_MEMORY_AUTOEXTRACT_DISABLED_ENV,
     OPENSRE_MEMORY_DIR_ENV,
 )
 from config.constants.paths import PROJECT_ROOT
-from config.constants.secrets import OPENSRE_CREDENTIAL_FALLBACK_PATH_ENV
 from config.grafana_cloud import load_env
 from config.platform_bootstrap import ensure_project_platform_package
 from config.secrets.os_keyring import reset_keyring_state
@@ -163,10 +163,11 @@ def _isolate_opensre_home_files(request, monkeypatch, tmp_path) -> None:
         return
     monkeypatch.setenv("OPENSRE_WIZARD_STORE_PATH", str(tmp_path / "opensre.json"))
     monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
-    # Same reasoning for the fallback credential store: a test that provokes a
+    # Same reasoning for the fallback credential store, which ``host_home()``
+    # resolves from this module global at call time: a test that provokes a
     # keyring failure would otherwise write real secrets into the developer's
     # ~/.opensre/credentials.json and leave them there.
-    monkeypatch.setenv(OPENSRE_CREDENTIAL_FALLBACK_PATH_ENV, str(tmp_path / "credentials.json"))
+    monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", tmp_path / "opensre-home")
 
 
 @pytest.hookimpl(trylast=True)

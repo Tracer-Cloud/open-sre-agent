@@ -301,7 +301,7 @@ def test_get_keyring_setup_instructions_for_linux_without_gnome_keyring(monkeypa
     # Reached only once the fallback file has also failed, so the guidance leads
     # with the writable-path fix rather than a D-Bus tutorial.
     assert any("could not use the system keychain or write" in line for line in lines)
-    assert any("OPENSRE_CREDENTIAL_FALLBACK_PATH" in line for line in lines)
+    assert any("write access to that path" in line for line in lines)
     assert any(
         "sudo apt update && sudo apt install -y gnome-keyring dbus-user-session" in line
         for line in lines
@@ -319,13 +319,3 @@ def test_get_keyring_setup_instructions_when_keyring_is_disabled(monkeypatch) ->
         "Unset OPENSRE_DISABLE_KEYRING and rerun `opensre onboard` to save "
         "OPENAI_API_KEY, or export OPENAI_API_KEY in your shell.",
     )
-
-
-def test_get_keyring_setup_instructions_when_fallback_is_disabled(monkeypatch) -> None:
-    monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
-    monkeypatch.setenv("OPENSRE_DISABLE_CREDENTIAL_FALLBACK", "1")
-
-    lines = llm_credentials.get_keyring_setup_instructions("OPENAI_API_KEY")
-
-    assert "OPENSRE_DISABLE_CREDENTIAL_FALLBACK" in lines[0]
-    assert any("export OPENAI_API_KEY" in line for line in lines)

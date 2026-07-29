@@ -19,15 +19,12 @@ import os
 from contextlib import suppress
 from dataclasses import dataclass
 
-from config.constants.secrets import OPENSRE_DISABLE_CREDENTIAL_FALLBACK_ENV
 from config.secrets import local_file, os_keyring
 from config.secrets.backend import (
     KeyringUnavailableError,
     KeyringUnavailableReason,
     SecretTier,
 )
-
-_DISABLED_VALUES = frozenset({"1", "true", "yes", "on"})
 
 
 @dataclass(frozen=True)
@@ -60,20 +57,6 @@ class SecretSaveResult:
         return self.tier == "fallback"
 
 
-def fallback_is_disabled() -> bool:
-    return (
-        os.getenv(OPENSRE_DISABLE_CREDENTIAL_FALLBACK_ENV, "").strip().lower() in _DISABLED_VALUES
-    )
-
-
-def _fallback_refused_message(env_var: str, exc: KeyringUnavailableError) -> str:
-    return (
-        f"{exc} Refusing to store {env_var} in the local fallback file because "
-        f"{OPENSRE_DISABLE_CREDENTIAL_FALLBACK_ENV} is set; export {env_var} in your "
-        "shell instead."
-    )
-
-
 def lookup(env_var: str, *, default: str = "") -> SecretLookup:
     """Resolve a secret through env, then the keyring, then the fallback file."""
     env_value = os.getenv(env_var, default).strip()
@@ -93,9 +76,6 @@ def lookup(env_var: str, *, default: str = "") -> SecretLookup:
     else:
         if value:
             return SecretLookup(value, "keyring")
-
-    if fallback_is_disabled():
-        return SecretLookup("", "none", keyring_error)
 
     fallback_value = local_file.get(env_var)
     if fallback_value:
@@ -131,10 +111,6 @@ def save_secret(env_var: str, value: str) -> SecretSaveResult:
         # weaker store; it is asking for none.
         if exc.reason is KeyringUnavailableReason.DISABLED:
             raise
-        if fallback_is_disabled():
-            raise KeyringUnavailableError(
-                _fallback_refused_message(env_var, exc), reason=exc.reason
-            ) from exc
         try:
             local_file.set(env_var, normalized)
         except OSError as file_exc:
@@ -146,8 +122,7 @@ def save_secret(env_var: str, value: str) -> SecretSaveResult:
 
     # A keyring write supersedes any fallback copy from an earlier run, which
     # would otherwise shadow nothing but linger as a stale plaintext secret.
-    if not fallback_is_disabled():
-        _discard_fallback(env_var)
+    _discard_fallback(env_var)
     return SecretSaveResult("keyring", f"{env_var} stored in the system keychain.")
 
 
@@ -196,7 +171,6 @@ __all__ = [
     "SecretLookup",
     "SecretSaveResult",
     "delete_secret",
-    "fallback_is_disabled",
     "keyring_is_disabled",
     "lookup",
     "resolve_secret",

@@ -16,11 +16,7 @@ import keyring
 import keyring.errors
 import pytest
 
-from config.constants.secrets import (
-    OPENSRE_CREDENTIAL_FALLBACK_PATH_ENV,
-    OPENSRE_DISABLE_CREDENTIAL_FALLBACK_ENV,
-    OPENSRE_DISABLE_KEYRING_ENV,
-)
+from config.constants.secrets import OPENSRE_DISABLE_KEYRING_ENV
 from config.llm_auth.credentials import delete as delete_provider_auth
 from config.llm_auth.credentials import resolve_for_request, save_api_key
 from config.secrets import local_file, os_keyring
@@ -201,10 +197,8 @@ def test_request_resolution_reports_the_fallback_tier(use_backend, monkeypatch) 
     assert resolution.source == "fallback"
 
 
-def test_save_raises_when_both_tiers_refuse(use_backend, monkeypatch, tmp_path) -> None:
+def test_save_raises_when_both_tiers_refuse(use_backend, monkeypatch) -> None:
     use_backend(_NoBackendKeyring())
-    unwritable = tmp_path / "no-such-dir" / "credentials.json"
-    monkeypatch.setenv(OPENSRE_CREDENTIAL_FALLBACK_PATH_ENV, str(unwritable))
 
     def _refuse(*_args: object, **_kwargs: object) -> None:
         raise OSError("read-only file system")
@@ -215,18 +209,6 @@ def test_save_raises_when_both_tiers_refuse(use_backend, monkeypatch, tmp_path) 
         save_secret(_ENV_VAR, "sk-headless")
 
     assert "also failed" in str(excinfo.value)
-
-
-def test_fallback_can_be_refused_so_storage_stays_fail_closed(use_backend, monkeypatch) -> None:
-    """Operators who would rather fail than have a secret reach disk keep that."""
-    use_backend(_NoBackendKeyring())
-    monkeypatch.setenv(OPENSRE_DISABLE_CREDENTIAL_FALLBACK_ENV, "1")
-
-    with pytest.raises(KeyringUnavailableError) as excinfo:
-        save_secret(_ENV_VAR, "sk-headless")
-
-    assert OPENSRE_DISABLE_CREDENTIAL_FALLBACK_ENV in str(excinfo.value)
-    assert not Path(local_file.store_path()).exists()
 
 
 def test_disabling_the_keyring_stays_fail_closed(monkeypatch) -> None:

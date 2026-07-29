@@ -24,10 +24,7 @@ from pathlib import Path
 from filelock import FileLock
 
 from config.constants.paths import host_home
-from config.constants.secrets import (
-    CREDENTIAL_FALLBACK_FILENAME,
-    OPENSRE_CREDENTIAL_FALLBACK_PATH_ENV,
-)
+from config.constants.secrets import CREDENTIAL_FALLBACK_FILENAME
 
 _VERSION = 1
 _LOCK_TIMEOUT_SECONDS = 10.0
@@ -41,9 +38,6 @@ def store_path() -> Path:
     credentials from the environment, and pointing this at a customer-owned
     volume would put one organization's secrets on another's mount.
     """
-    override = os.getenv(OPENSRE_CREDENTIAL_FALLBACK_PATH_ENV, "").strip()
-    if override:
-        return Path(override).expanduser()
     return host_home() / CREDENTIAL_FALLBACK_FILENAME
 
 
