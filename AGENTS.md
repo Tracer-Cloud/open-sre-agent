@@ -23,10 +23,12 @@
   solely inside `config/config.py` (nothing it imports needs it) may live there.
 - Do not keep compatibility-only forwarding modules after refactors. Once imports and tests
   are migrated, remove the old module path in the same change and use one canonical import path.
-- Protocol methods use a **docstring-only body** — never `...`, `pass`, or
-  `raise NotImplementedError` as the stub, and never a docstring *plus* a
-  trailing `...`/`pass`. Precedent: `platform/filestorage/ports.py`,
-  `core/agent_harness/ports.py`, `core/agent/loop_host.py`.
+- Protocol methods you **add or change** use a **docstring-only body** — no
+  `...`, no `pass`, no `raise NotImplementedError`, and never a docstring *plus*
+  a trailing `...`/`pass`. Precedent (all fully compliant):
+  `platform/filestorage/ports.py`, `platform/deployment_contracts/ports.py`,
+  `core/agent/loop_host.py`, `gateway/runtime/sink_protocol.py`,
+  `core/llm/types.py`.
 
   ```python
   class ObjectStore(Protocol):
@@ -34,9 +36,18 @@
           """Store ``data`` under ``key``."""
   ```
 
-  Neither ruff nor mypy enforces this — mypy exempts Protocol bodies from
-  "missing return", so a `pass` under a `-> list[str]` signature passes
-  `make typecheck`. It is a review rule, and only the `...` form trips CodeQL.
+  **The codebase is not yet compliant, and no tool will tell you.** An AST scan
+  of product code counts 89 docstring-only Protocol methods against **108
+  `raise NotImplementedError` stubs in 23 files** (`core/agent_harness/ports.py`,
+  `platform/harness_ports.py`, `gateway/storage/session/binding_store.py` and
+  others). Those are pre-existing and out of scope for a drive-by — do not
+  mass-convert them, and do not cite a file as precedent without checking it.
+
+  Enforcement is review-only:
+  - CodeQL `py/ineffectual-statement` catches **only** the bare `...` form.
+  - `pass` and `raise NotImplementedError` trip nothing.
+  - mypy exempts Protocol bodies from "missing return", so `pass` under a
+    `-> list[str]` signature passes `make typecheck`.
 
 ### Docs under `docs/`
 
