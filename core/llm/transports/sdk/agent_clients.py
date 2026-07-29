@@ -98,10 +98,13 @@ def _anthropic_messages_with_cache(messages: list[dict[str, Any]]) -> list[dict[
             }
         ]
     elif isinstance(content, list) and content and isinstance(content[-1], dict):
+        # Copy every block, not just the marked one: the transcript is reused
+        # across ReAct iterations, and a shared dict would let a later payload
+        # mutation write through into live history.
         marked_content = [
-            *content[:-1],
-            {**content[-1], "cache_control": dict(_ANTHROPIC_CACHE_CONTROL)},
+            dict(block) if isinstance(block, dict) else block for block in content[:-1]
         ]
+        marked_content.append({**content[-1], "cache_control": dict(_ANTHROPIC_CACHE_CONTROL)})
     else:
         return messages
     return [*messages[:-1], {**last, "content": marked_content}]

@@ -447,49 +447,58 @@ class JsonlSessionStorage:
         return True, str(entry_id) if entry_id else None
 
     def _scan_leaf_id(self, path: Path) -> str | None:
-        """Cold-path tip resolve from a bounded trailing window.
+        """Cold-path tip resolve, reading the file tail backwards in deltas.
 
-        Peak memory is the current window (starts at ``_TAIL_SCAN_CHUNK_BYTES``,
-        grows by that step only while the window has no tip-bearing line — e.g.
-        a run of trailing ``trace_span`` rows). The full file is never loaded.
+        Each loop iteration reads only the bytes not yet seen (one chunk,
+        prepended to the buffer), so total I/O is linear in the trailing bytes
+        even when megabytes of ``trace_span`` rows follow the last conversation
+        entry. Lines are scanned newest-first and each complete line is parsed
+        at most once. Peak memory is the buffered tail, bounded by the file.
 
         Tip rules (first matching record from the end):
-        - ``trace_span``: skip (diagnostic sidecar)
+        - ``trace_span`` / ``session``: skip (sidecar / header)
         - ``leaf``: tip is that marker's ``parent_id``
-        - ``session``: empty conversation (header only) → ``None``
         - anything else: tip is that record's ``id``
         """
         size = path.stat().st_size
         if size <= 0:
             return None
-        window = min(size, _TAIL_SCAN_CHUNK_BYTES)
         with path.open("rb") as fh:
+            buffer = b""
+            start = size
+            scanned_low: int | None = None  # buffer offset of oldest scanned line
             while True:
-                start = size - window
-                fh.seek(start)
-                data = fh.read(window)
-                payload = data
                 if start > 0:
-                    # Window may start mid-record; drop the truncated prefix.
-                    newline_at = data.find(b"\n")
-                    if newline_at < 0:
-                        if window >= size:
-                            return None
-                        window = min(size, window + _TAIL_SCAN_CHUNK_BYTES)
+                    new_start = max(0, start - _TAIL_SCAN_CHUNK_BYTES)
+                    fh.seek(new_start)
+                    delta = fh.read(start - new_start)
+                    buffer = delta + buffer
+                    if scanned_low is not None:
+                        scanned_low += len(delta)
+                    start = new_start
+                if start > 0:
+                    first_newline = buffer.find(b"\n")
+                    if first_newline < 0:
+                        # No complete line in the buffer yet; read further back.
                         continue
-                    payload = data[newline_at + 1 :]
-                for line in reversed(payload.decode("utf-8").splitlines()):
-                    if not line.strip():
-                        continue
-                    rec = self._loads_record(line)
-                    if rec is None:
-                        continue
-                    resolved, tip = self._tip_id_from_record(rec)
-                    if resolved:
-                        return tip
+                    region_start = first_newline + 1
+                else:
+                    region_start = 0
+                region_end = scanned_low if scanned_low is not None else len(buffer)
+                if region_start < region_end:
+                    region = buffer[region_start:region_end]
+                    for line in reversed(region.decode("utf-8").splitlines()):
+                        if not line.strip():
+                            continue
+                        rec = self._loads_record(line)
+                        if rec is None:
+                            continue
+                        resolved, tip = self._tip_id_from_record(rec)
+                        if resolved:
+                            return tip
+                    scanned_low = region_start
                 if start == 0:
                     return None
-                window = min(size, window + _TAIL_SCAN_CHUNK_BYTES)
 
     @staticmethod
     def _has_turns(records: list[dict[str, Any]]) -> bool:

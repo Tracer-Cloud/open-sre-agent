@@ -74,7 +74,11 @@ class MaskingContext:
     def _new_placeholder(self, kind: str) -> str:
         index = self._counters.get(kind, 0)
         self._counters[kind] = index + 1
-        return f"<{kind.upper()}_{index}>"
+        # Labels come from user extra_patterns config; the one-pass unmask
+        # matches <[^<>]+>, so the label must not smuggle brackets or spaces
+        # into the token.
+        label = re.sub(r"[^A-Za-z0-9_]", "_", kind.upper()).strip("_") or "EXTRA"
+        return f"<{label}_{index}>"
 
     def _ensure_placeholder(self, kind: str, value: str) -> str:
         if value in self._reverse_map:
