@@ -110,3 +110,35 @@ def test_candidate_exchange_uses_ledger_tokens_not_fresh_dumps() -> None:
         f"json.dumps called {dumps_calls} times during enforce — "
         "candidate selection or trim re-serialize looks quadratic"
     )
+
+
+def test_ledger_slices_match_a_fresh_estimate_after_mixed_trim() -> None:
+    """The incremental ledger must never drift from a from-scratch estimate."""
+    # Arrange: a transcript with pinned, duplicate, and trimmable exchanges.
+    from core.context_budget import _tool_exchange_candidates
+    from core.context_budget import estimate_message_tokens
+
+    messages = [
+        {"role": "user", "content": "question " * 50},
+        {
+            "role": "assistant",
+            "content": [
+                {"type": "text", "text": "using a tool"},
+                {"type": "tool_use", "id": "t1", "name": "grep", "input": {"q": "x"}},
+            ],
+        },
+        {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t1", "content": "hit " * 200}]},
+        {"role": "assistant", "content": "answer " * 30},
+    ]
+    per_message = [estimate_message_tokens([m]) for m in messages]
+
+    # Act
+    with_ledger = _tool_exchange_candidates(messages, message_tokens=per_message)
+    from_scratch = _tool_exchange_candidates(messages)
+
+    # Assert: same candidates, same token estimates either way.
+    assert [(c.start, c.end) for c in with_ledger] == [
+        (c.start, c.end) for c in from_scratch
+    ]
+    for ledger_candidate, fresh in zip(with_ledger, from_scratch, strict=True):
+        assert ledger_candidate.token_estimate == fresh.token_estimate

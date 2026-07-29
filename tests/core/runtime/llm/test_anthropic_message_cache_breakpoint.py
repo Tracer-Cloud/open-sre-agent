@@ -157,3 +157,26 @@ def test_invoke_response_carries_cache_tokens() -> None:
     # Assert
     assert response.cache_read_tokens == 8118
     assert response.cache_creation_tokens == 0
+
+
+def test_multi_block_content_shares_no_block_dicts_with_the_input() -> None:
+    """Every block in the marked copy must be a fresh dict.
+
+    The transcript is reused across ReAct iterations; a shared block dict
+    means a later in-place mutation of the API payload writes through into
+    live history.
+    """
+    # Arrange
+    first = {"type": "tool_result", "tool_use_id": "a", "content": "one"}
+    second = {"type": "tool_result", "tool_use_id": "b", "content": "two"}
+    messages: list[dict[str, Any]] = [{"role": "user", "content": [first, second]}]
+
+    # Act
+    marked = _anthropic_messages_with_cache(messages)
+
+    # Assert: no aliasing anywhere in the marked message.
+    marked_first, marked_last = marked[-1]["content"]
+    assert marked_first is not first
+    assert marked_last is not second
+    marked_first["content"] = "MUTATED"
+    assert first["content"] == "one"

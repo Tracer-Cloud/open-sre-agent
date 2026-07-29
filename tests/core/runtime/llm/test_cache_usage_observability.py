@@ -111,3 +111,20 @@ def test_no_cache_fields_logs_without_cache_noise(caplog) -> None:
     # Assert: the line exists but claims nothing about caching.
     line = next(r.message for r in caplog.records if "llm-usage" in r.message)
     assert "cache_read" not in line
+
+
+def test_openai_responses_nested_cached_tokens_are_extracted() -> None:
+    """The Responses API nests cache reads under ``input_tokens_details``."""
+    # Arrange
+    usage = SimpleNamespace(
+        input_tokens=500,
+        output_tokens=30,
+        input_tokens_details=SimpleNamespace(cached_tokens=384),
+    )
+
+    # Act
+    read, write = extract_cache_tokens(usage)
+
+    # Assert
+    assert read == 384
+    assert write is None
