@@ -21,48 +21,53 @@ opensre integrations setup
 
 Select **AWS ELB** when prompted.
 
-### Option 2: Environment variables
-
-Add the following to your `.env`:
+### Option 2: Environment variables (IAM role)
 
 ```bash
-AWS_ACCESS_KEY_ID=your-access-key
-AWS_SECRET_ACCESS_KEY=your-secret-key
+AWS_ROLE_ARN=arn:aws:iam::123456789012:role/OpenSREReadOnly
+AWS_EXTERNAL_ID=your-external-id     # optional
 AWS_REGION=us-east-1
-AWS_SESSION_TOKEN=your-session-token    # optional
 ```
 
-| Variable | Required | Description |
+### Option 3: Environment variables (static keys)
+
+```bash
+AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
+AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+AWS_SESSION_TOKEN=...                # optional
+AWS_REGION=us-east-1
+```
+
+| Variable | Default | Description |
 | --- | --- | --- |
-| `AWS_ACCESS_KEY_ID` | Yes | AWS access key ID |
-| `AWS_SECRET_ACCESS_KEY` | Yes | AWS secret access key |
-| `AWS_REGION` | No | AWS region (defaults to `us-east-1`) |
-| `AWS_SESSION_TOKEN` | No | Session token when using temporary credentials |
+| `AWS_ROLE_ARN` | — | IAM role to assume (recommended) |
+| `AWS_EXTERNAL_ID` | — | External ID for role assumption |
+| `AWS_REGION` | `us-east-1` | AWS region |
+| `AWS_ACCESS_KEY_ID` | — | Static access key (if not using role) |
+| `AWS_SECRET_ACCESS_KEY` | — | Static secret key |
+| `AWS_SESSION_TOKEN` | — | Session token for temporary credentials |
+
+<Info>
+Either `AWS_ROLE_ARN` or `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` is required.
+</Info>
 
 ## Verify
 
+AWS ELB uses the shared **AWS** integration for authentication. There is no separate `elb` verifier.
+
 ```bash
-opensre integrations verify elb
+opensre integrations verify aws
 ```
 
-Expected output:
-
-```text
-Service: elb
-Status: passed
-Detail: Successfully connected to AWS Elastic Load Balancing
-```
+Verification confirms that the configured AWS credentials are valid through the shared AWS integration. After verification succeeds, ELB investigation tools can inspect target groups and target health.
 
 ## Investigation tools
 
-When investigating AWS ELB alerts, OpenSRE provides:
+OpenSRE provides the following read-only AWS ELB investigation tool:
 
-- **Target Group Health** — inspect healthy, unhealthy, and draining targets.
-- **Backend EC2 Mapping** — identify the EC2 instances registered behind a load balancer.
-- **Target Group Summary** — review target health counts and overall availability.
-- **Load Balancer Topology** — map load balancers to target groups for investigation.
+- `get_elb_target_health` — retrieve target group information and inspect the health of registered targets behind an Application or Network Load Balancer.
 
-All operations are read-only.
+This tool helps identify healthy and unhealthy targets without modifying AWS resources.
 
 ## Gotcha
 
