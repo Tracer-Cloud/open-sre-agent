@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Protocol
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Any, Protocol
 
 import core.agent_harness.prompts.synthetic_failure as synthetic_failure
 from config.constants.prompts import SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
+from config.runtime_metadata import capture_runtime_facts
 from core.agent_harness.prompts.assistant_agent_prompt import (
     _build_observation_block,
     _build_system_prompt,
@@ -21,6 +23,7 @@ from core.agent_harness.prompts.prior_investigation import (
 from core.agent_harness.prompts.prior_investigation import (
     is_prior_investigation_follow_up,
 )
+from core.agent_harness.prompts.runtime_facts import build_live_runtime_facts_block
 
 if TYPE_CHECKING:
     from core.agent_harness.turns.turn_snapshot import TurnSnapshot
@@ -128,8 +131,13 @@ def build_cli_agent_prompt_from_provider(
     tool_observation_on_screen: bool,
     handoff_contents: tuple[str, ...] = (),
     turn_snapshot: TurnSnapshot,
+    runtime: Mapping[str, Any] | None = None,
 ) -> str:
-    """Render an assistant prompt from the core prompt-provider port."""
+    """Render an assistant prompt from the core prompt-provider port.
+
+    ``runtime`` defaults to a fresh ``capture_runtime_facts()`` capture. Tests
+    may pass a frozen mapping so live-fact blocks stay deterministic.
+    """
     prompts.log_diagnostics("cli_agent_grounding")
     system = build_assistant_system_prompt(
         prompts.cli_reference(),
@@ -151,9 +159,14 @@ def build_cli_agent_prompt_from_provider(
         long_term_memory=prompts.long_term_memory(),
         surface=prompts.surface(),
     )
+    # Live facts (time/uptime/disk/memory) sit immediately before the user
+    # message so the system/env prefix stays byte-stable for prompt caching.
+    facts = runtime if runtime is not None else capture_runtime_facts()
+    live_block = build_live_runtime_facts_block(facts)
     return (
         f"{system}\n"
         f"{_assistant_context_blocks(turn_snapshot=turn_snapshot, handoff_contents=handoff_contents, tool_observation=tool_observation, tool_observation_on_screen=tool_observation_on_screen, suggested_prompt=prompts.suggested_synthetic_prompt())}"
+        f"{live_block}"
         f"--- User message ---\n{message}"
     )
 

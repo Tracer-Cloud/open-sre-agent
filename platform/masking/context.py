@@ -14,6 +14,10 @@ from typing import Any
 from platform.masking.detectors import DetectedIdentifier, find_identifiers
 from platform.masking.policy import MaskingPolicy, compile_extra_patterns
 
+# Placeholders are always ``<KIND_N>`` (no nested ``<>``). One scan finds every
+# token; dict lookup restores known ones and leaves unknown angle-brackets alone.
+_PLACEHOLDER_TOKEN_RE = re.compile(r"<[^<>]+>")
+
 
 class MaskingContext:
     """Stable masking state for one investigation."""
@@ -93,25 +97,36 @@ class MaskingContext:
         return self._apply_replacements(text, matches)
 
     def _apply_replacements(self, text: str, matches: list[DetectedIdentifier]) -> str:
-        # Replace in reverse order so earlier positions remain valid.
-        result = text
-        for m in sorted(matches, key=lambda x: x.start, reverse=True):
-            placeholder = self._ensure_placeholder(m.kind, m.value)
-            result = result[: m.start] + placeholder + result[m.end :]
-        return result
+        # One forward pass + join: O(L + N_m). Prefer start order (find_identifiers
+        # already returns it); sort defensively if a caller passes unsorted spans.
+        parts: list[str] = []
+        cursor = 0
+        for m in sorted(matches, key=lambda x: x.start):
+            if m.start < cursor:
+                continue
+            parts.append(text[cursor : m.start])
+            parts.append(self._ensure_placeholder(m.kind, m.value))
+            cursor = m.end
+        parts.append(text[cursor:])
+        return "".join(parts)
 
     def unmask(self, text: str) -> str:
-        """ "Restore any known placeholders in ``text`` to their original values."""
+        """Restore known placeholders in ``text`` (single left-to-right scan).
+
+        Token boundaries are ``<…>``, so ``<NAMESPACE_10>`` is never partially
+        rewritten by a shorter key like ``<NAMESPACE_1>``. Replacement text is
+        not re-scanned — originals that happen to contain angle-brackets stay
+        literal (identifiers from detectors do not look like placeholders).
+        """
         if not text or not self._placeholder_map:
             return text
-        result = text
-        # Sort longest-first to avoid prefix collisions (e.g. <NS_10> before <NS_1>)
-        for placeholder, original in sorted(
-            self._placeholder_map.items(), key=lambda x: len(x[0]), reverse=True
-        ):
-            if placeholder in result:
-                result = result.replace(placeholder, original)
-        return result
+        if "<" not in text:
+            return text
+        mapping = self._placeholder_map
+        return _PLACEHOLDER_TOKEN_RE.sub(
+            lambda match: mapping.get(match.group(0), match.group(0)),
+            text,
+        )
 
     def mask_value(self, value: Any) -> Any:
         """Recursively mask strings inside dicts/lists/tuples."""

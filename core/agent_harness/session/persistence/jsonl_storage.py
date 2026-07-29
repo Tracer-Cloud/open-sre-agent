@@ -29,7 +29,19 @@ class JsonlSessionStorage:
 
     The first line is a session header. Every following line is an append-only
     tree entry with ``id``, ``parent_id``, ``timestamp``, and ``type``.
+
+    Conversation tip (leaf) ids are cached in memory so auto-parented appends
+    stay O(1) after the first resolve — a full file scan is only the cold-start
+    / cache-miss path. The cache is keyed to the file's ``(mtime_ns, size)`` so
+    an out-of-band writer invalidates it. ``trace_span`` records never update
+    the tip.
     """
+
+    def __init__(self) -> None:
+        # session_id → last conversation entry id (or None when only a header).
+        self._leaf_ids: dict[str, str | None] = {}
+        # session_id → (mtime_ns, size) observed when the tip was last trusted.
+        self._leaf_file_sig: dict[str, tuple[int, int]] = {}
 
     def open_session(self, session: SessionPersistenceSource) -> None:
         with contextlib.suppress(Exception):
@@ -45,6 +57,8 @@ class JsonlSessionStorage:
             }
             with path.open("w", encoding="utf-8") as fh:
                 fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+            self._leaf_ids[session.session_id] = None
+            self._leaf_file_sig[session.session_id] = self._file_sig(path)
 
     def append_turn(self, session: SessionPersistenceSource, kind: str, text: str) -> None:
         self._append_entry(
@@ -304,10 +318,17 @@ class JsonlSessionStorage:
                 },
             )
 
-    def reopen_session(self, _session_id: str) -> None:
-        # V2 session files are append-only; reopening just means future entries
-        # continue from the current leaf.
-        return
+    def reopen_session(self, session_id: str) -> None:
+        # V2 session files are append-only; drop the tip cache so the next
+        # auto-parented append re-resolves from disk (resume / multi-writer).
+        self._leaf_ids.pop(session_id, None)
+        self._leaf_file_sig.pop(session_id, None)
+
+    @staticmethod
+    def _file_sig(path: Path) -> tuple[int, int]:
+        """Cheap fingerprint for tip-cache validity (mtime_ns, size)."""
+        stat = path.stat()
+        return (stat.st_mtime_ns, stat.st_size)
 
     def _append_entry(
         self,
@@ -325,7 +346,7 @@ class JsonlSessionStorage:
             entry_id = _new_id()
             parent = parent_id
             if parent is None and resolve_parent:
-                parent = self._current_leaf_id(path)
+                parent = self._current_leaf_id(session_id, path)
             record = {
                 "id": entry_id,
                 "parent_id": parent,
@@ -335,8 +356,33 @@ class JsonlSessionStorage:
             }
             with path.open("a", encoding="utf-8") as fh:
                 fh.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+            self._remember_leaf(
+                session_id,
+                entry_type,
+                entry_id,
+                parent=parent,
+            )
+            self._leaf_file_sig[session_id] = self._file_sig(path)
             return entry_id
         return ""
+
+    def _remember_leaf(
+        self,
+        session_id: str,
+        entry_type: str,
+        entry_id: str,
+        *,
+        parent: str | None,
+    ) -> None:
+        """Update the in-memory conversation tip after a successful append."""
+        if entry_type == "trace_span":
+            return
+        if entry_type == "leaf":
+            # Matches ``_scan_leaf_id``: a trailing leaf record is not itself a
+            # parent — the tip stays at the leaf's parent (last real entry).
+            self._leaf_ids[session_id] = parent
+            return
+        self._leaf_ids[session_id] = entry_id
 
     @staticmethod
     def _read_records(path: Path) -> list[dict[str, Any]]:
@@ -349,16 +395,36 @@ class JsonlSessionStorage:
                     records.append(rec)
         return records
 
-    def _current_leaf_id(self, path: Path) -> str | None:
-        records = self._read_records(path)
-        for rec in reversed(records):
-            rec_type = rec.get("type")
-            if rec_type == "trace_span":
+    def _current_leaf_id(self, session_id: str, path: Path) -> str | None:
+        sig = self._file_sig(path)
+        if session_id in self._leaf_ids and self._leaf_file_sig.get(session_id) == sig:
+            return self._leaf_ids[session_id]
+        leaf = self._scan_leaf_id(path)
+        self._leaf_ids[session_id] = leaf
+        self._leaf_file_sig[session_id] = sig
+        return leaf
+
+    def _scan_leaf_id(self, path: Path) -> str | None:
+        """Cold-path tip resolve: walk lines from the tail, parse until found.
+
+        Avoids JSON-parsing the whole history on resume — typically one parse
+        (or a few when trailing ``trace_span`` rows sit above the tip).
+        """
+        text = path.read_text(encoding="utf-8")
+        for line in reversed(text.splitlines()):
+            if not line.strip():
                 continue
-            if rec_type == "leaf":
-                return str(rec.get("parent_id") or "") or None
-            if rec_type != "session":
-                return str(rec.get("id") or "") or None
+            with contextlib.suppress(json.JSONDecodeError):
+                rec = json.loads(line)
+                if not isinstance(rec, dict):
+                    continue
+                rec_type = rec.get("type")
+                if rec_type == "trace_span":
+                    continue
+                if rec_type == "leaf":
+                    return str(rec.get("parent_id") or "") or None
+                if rec_type != "session":
+                    return str(rec.get("id") or "") or None
         return None
 
     @staticmethod

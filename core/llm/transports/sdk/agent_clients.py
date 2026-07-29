@@ -52,6 +52,61 @@ def _anthropic_tool_schema(tool: Any) -> dict[str, Any]:
     }
 
 
+# Anthropic prompt-caching breakpoint (ephemeral, 5-minute TTL by default).
+# Prefix match order is tools → system → messages; mark the last tool and the
+# system block so ReAct iterations can reuse the stable prefix (R13).
+_ANTHROPIC_CACHE_CONTROL: dict[str, str] = {"type": "ephemeral"}
+
+
+def _anthropic_cached_system(system: str) -> list[dict[str, Any]]:
+    return [
+        {
+            "type": "text",
+            "text": system,
+            "cache_control": dict(_ANTHROPIC_CACHE_CONTROL),
+        }
+    ]
+
+
+def _anthropic_tools_with_cache(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if not tools:
+        return tools
+    cached = [dict(tool) for tool in tools]
+    cached[-1] = {**cached[-1], "cache_control": dict(_ANTHROPIC_CACHE_CONTROL)}
+    return cached
+
+
+def _anthropic_messages_with_cache(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Mark the newest message's last content block as a cache breakpoint.
+
+    Tools and system cover the static prefix; this marker lets the growing
+    conversation history accrue incremental cache hits across ReAct
+    iterations. Copies, never mutates — the caller reuses ``messages`` on
+    retries. Content that cannot carry a marker (empty text, unknown shapes)
+    is left untouched.
+    """
+    if not messages:
+        return messages
+    last = messages[-1]
+    content = last.get("content")
+    if isinstance(content, str) and content:
+        marked_content: list[Any] = [
+            {
+                "type": "text",
+                "text": content,
+                "cache_control": dict(_ANTHROPIC_CACHE_CONTROL),
+            }
+        ]
+    elif isinstance(content, list) and content and isinstance(content[-1], dict):
+        marked_content = [
+            *content[:-1],
+            {**content[-1], "cache_control": dict(_ANTHROPIC_CACHE_CONTROL)},
+        ]
+    else:
+        return messages
+    return [*messages[:-1], {**last, "content": marked_content}]
+
+
 class AnthropicAgentClient:
     """Anthropic client with native tool-calling for the agent loop."""
 
@@ -143,12 +198,12 @@ class AnthropicAgentClient:
         kwargs: dict[str, Any] = {
             "model": self._model,
             "max_tokens": self._max_tokens,
-            "messages": strip_internal_message_markers(messages),
+            "messages": _anthropic_messages_with_cache(strip_internal_message_markers(messages)),
         }
         if system:
-            kwargs["system"] = system
+            kwargs["system"] = _anthropic_cached_system(system)
         if tools:
-            kwargs["tools"] = tools
+            kwargs["tools"] = _anthropic_tools_with_cache(tools)
 
         backoff = _RETRY_INITIAL_BACKOFF_SEC
         last_err: Exception | None = None

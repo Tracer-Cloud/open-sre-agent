@@ -38,6 +38,21 @@ def strip_leading_discord_mentions(text: str) -> str:
     return _LEADING_MENTION_RE.sub("", text.strip()).strip()
 
 
+async def _reap_cancelled_task(task: asyncio.Task[object]) -> None:
+    """Await a cancelled task so its cleanup (``finally`` / ``close``) can finish.
+
+    CodeQL ``py/ineffectual-statement`` does not model ``await`` as a side
+    effect, so a bare ``await task`` under ``suppress(CancelledError)`` is
+    flagged. Binding the result makes the await an assignment statement while
+    preserving the reap semantics.
+    """
+    try:
+        _finished = await task
+    except asyncio.CancelledError:
+        return
+    del _finished
+
+
 def application_command_name(interaction: discord.Interaction) -> str:
     """Resolve slash command name when commands are registered via REST, not a local tree."""
     command = interaction.command
@@ -224,8 +239,7 @@ async def _discord_gateway_main(
     finally:
         stop_event.set()
         watch_task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await watch_task
+        await _reap_cancelled_task(watch_task)
 
 
 async def _fetch_thread_history(

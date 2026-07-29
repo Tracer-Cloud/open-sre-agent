@@ -45,6 +45,15 @@ _SNAPSHOT_PATH = Path(__file__).with_name("prompt_characterization_snapshot.json
 
 _CLI_REFERENCE_TEXT = "=== opensre --help ===\nUsage: opensre [OPTIONS] COMMAND [ARGS]...\n"
 _AGENTS_MD_TEXT = "=== AGENTS.md (root) ===\nrepo map body\n"
+# Frozen live facts so R13's late block stays byte-stable in the snapshot.
+_FROZEN_RUNTIME: dict[str, object] = {
+    "now_iso": "2026-07-29T12:00:00+00:00",
+    "uptime_seconds": 100.0,
+    "disk_used_percent": 50.0,
+    "disk_free_gb": 100.0,
+    "memory_used_percent": 40.0,
+    "memory_available_gb": 8.0,
+}
 
 
 class _StubPromptContextProvider:
@@ -158,6 +167,7 @@ def _build_cases(tmp_path: Path) -> dict[str, str]:
         tool_observation=None,
         tool_observation_on_screen=True,
         turn_snapshot=_agent_ctx(text="how do I configure datadog?"),
+        runtime=_FROZEN_RUNTIME,
     )
 
     cases["cli_agent_no_integrations_guard"] = build_cli_agent_prompt_from_provider(
@@ -166,6 +176,7 @@ def _build_cases(tmp_path: Path) -> dict[str, str]:
         tool_observation=None,
         tool_observation_on_screen=True,
         turn_snapshot=_agent_ctx(text="set up sentry", configured_integrations_known=True),
+        runtime=_FROZEN_RUNTIME,
     )
 
     cases["cli_agent_integrations_listed_with_prior_state"] = build_cli_agent_prompt_from_provider(
@@ -193,6 +204,7 @@ def _build_cases(tmp_path: Path) -> dict[str, str]:
                 "evidence": {"e1": {"summary": "pool maxed"}, "e2": {"summary": "deploy at 12:00"}},
             },
         ),
+        runtime=_FROZEN_RUNTIME,
     )
 
     cases["cli_agent_observation_on_screen"] = build_cli_agent_prompt_from_provider(
@@ -208,6 +220,7 @@ def _build_cases(tmp_path: Path) -> dict[str, str]:
             configured_integrations=("datadog",),
             configured_integrations_known=True,
         ),
+        runtime=_FROZEN_RUNTIME,
     )
 
     cases["cli_agent_observation_off_screen"] = build_cli_agent_prompt_from_provider(
@@ -223,6 +236,7 @@ def _build_cases(tmp_path: Path) -> dict[str, str]:
             configured_integrations=("sentry",),
             configured_integrations_known=True,
         ),
+        runtime=_FROZEN_RUNTIME,
     )
 
     obs_path = tmp_path / "synthetic_observation.json"
@@ -239,6 +253,7 @@ def _build_cases(tmp_path: Path) -> dict[str, str]:
             text="why did it fail?",
             last_synthetic_observation_path=str(obs_path),
         ),
+        runtime=_FROZEN_RUNTIME,
     )
     # The observation path is the per-run tmp dir; normalize it so the snapshot
     # stays deterministic while every other byte of the block is still pinned.

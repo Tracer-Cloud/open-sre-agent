@@ -97,7 +97,12 @@ from config.constants.honeycomb import (
     HONEYCOMB_DATASET_ENV,
 )
 from config.constants.incident_io import INCIDENT_IO_API_KEY_ENV, INCIDENT_IO_BASE_URL_ENV
-from config.constants.investigation import ALERT_TEMPLATE_CHOICES, MAX_INVESTIGATION_LOOPS
+from config.constants.investigation import (
+    ALERT_TEMPLATE_CHOICES,
+    INVESTIGATION_TOOL_CACHE_MAX_CHARS,
+    INVESTIGATION_TOOL_CACHE_MAX_ENTRIES,
+    MAX_INVESTIGATION_LOOPS,
+)
 from config.constants.jenkins import (
     JENKINS_API_TOKEN_ENV,
     JENKINS_BASE_URL_ENV,
@@ -394,6 +399,8 @@ __all__ = [
     "MARIADB_PORT_ENV",
     "MARIADB_SSL_ENV",
     "MARIADB_USERNAME_ENV",
+    "INVESTIGATION_TOOL_CACHE_MAX_CHARS",
+    "INVESTIGATION_TOOL_CACHE_MAX_ENTRIES",
     "MAX_INVESTIGATION_LOOPS",
     "MONGODB_ATLAS_BASE_URL_ENV",
     "MONGODB_ATLAS_PRIVATE_KEY_ENV",

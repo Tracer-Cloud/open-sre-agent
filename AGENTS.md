@@ -247,9 +247,10 @@ Steps:
   latter remain.
 - `py/ineffectual-statement` does **not** understand `await`: a bare
   `await some_task` reads to CodeQL as a discarded expression. It is not — the
-  await is the side effect. Cancelling a task and then awaiting it is the
-  standard way to reap it (`gateway/discord/worker.py`, where the awaited task
-  still has to run `client.close()`). Dismiss that alert as a false positive;
-  do not delete the await and do not launder it through a throwaway assignment.
+  await is the side effect (e.g. reaping a cancelled task so `client.close()`
+  runs). Do **not** delete the await. Prefer a small helper that binds the
+  result (`_finished = await task` in `gateway/discord/worker.py`
+  `_reap_cancelled_task`) over a bare expression statement; do not "fix" by
+  skipping the await.
 - CI typecheck does **not** cover `tests/`: `make typecheck` runs mypy over `PYTHON_SOURCE_PATHS` (`config core gateway integrations platform surfaces tools`) only. Type errors in test files never fail CI, so do not assume a clean `make typecheck` means the tests you just wrote are type-clean — run mypy on the test path directly when it matters.
 

@@ -28,6 +28,10 @@ class LLMResponse:
     content: str
     input_tokens: int | None = None
     output_tokens: int | None = None
+    #: Prompt-cache counters from the provider usage payload, when reported.
+    #: ``None`` means the provider sent no cache fields — distinct from 0.
+    cache_read_tokens: int | None = None
+    cache_creation_tokens: int | None = None
 
 
 @dataclass

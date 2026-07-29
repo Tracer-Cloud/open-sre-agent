@@ -263,8 +263,12 @@ class _TurnStream:
         self._task_seq = 0
         self._open_task: tuple[str, str] | None = None  # (id, title)
         self._sent_text = ""
-        self._pending_text = ""
+        self._pending_parts: list[str] = []
         self._last_flush = 0.0
+
+    def _joined_pending(self) -> str:
+        """Materialize buffered answer chunks (join once per flush)."""
+        return "".join(self._pending_parts)
 
     @property
     def started(self) -> bool:
@@ -289,7 +293,7 @@ class _TurnStream:
         """Buffer an answer chunk; flush on the update interval."""
         if self._broken or not self._ensure_started():
             return False
-        self._pending_text += chunk
+        self._pending_parts.append(chunk)
         if time.monotonic() - self._last_flush >= self._update_interval:
             self._flush_text()
         # Buffered content is delivered by finish() even if this flush failed.
@@ -308,13 +312,15 @@ class _TurnStream:
             # Already finished once (e.g. a timeout finalize raced the answer);
             # the streamed message stands as delivered.
             return True
-        streamed = self._sent_text + self._pending_text
+        streamed = self._sent_text + self._joined_pending()
         if full_text.startswith(streamed):
-            self._pending_text += full_text[len(streamed) :]
+            self._pending_parts.append(full_text[len(streamed) :])
         elif full_text != streamed:
             # A finalize with unrelated text (error copy, timeout notice)
             # lands after whatever partial answer already streamed.
-            self._pending_text += ("\n\n" if streamed else "") + full_text
+            if streamed:
+                self._pending_parts.append("\n\n")
+            self._pending_parts.append(full_text)
         self._flush_text(include_task_close=True)
         stopped = self._client.stop_stream(channel=self._channel_id, ts=self._ts, blocks=blocks)
         if self._broken:
@@ -346,15 +352,16 @@ class _TurnStream:
 
     def _flush_text(self, *, include_task_close: bool = False) -> None:
         chunks: list[dict[str, object]] = []
-        if include_task_close or self._pending_text:
+        pending = self._joined_pending()
+        if include_task_close or pending:
             # Answer text starting (or the turn ending) closes the open task.
             chunks.extend(self._close_open_task_chunks())
-        if self._pending_text:
+        if pending:
             budget = SLACK_MAX_MARKDOWN_BLOCK_CHARS - len(self._sent_text)
-            text = truncate(self._pending_text, max(budget, 1), suffix="…")
+            text = truncate(pending, max(budget, 1), suffix="…")
             chunks.append({"type": "markdown_text", "text": text})
-            self._sent_text += self._pending_text
-            self._pending_text = ""
+            self._sent_text += pending
+            self._pending_parts.clear()
         if chunks:
             self._append(chunks)
 

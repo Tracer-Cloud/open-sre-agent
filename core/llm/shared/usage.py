@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from typing import Any
 
 from core.llm.types import LLMResponse
+
+logger = logging.getLogger(__name__)
 
 UsageHook = Callable[[str, int, int], object]
 _usage_hook: UsageHook | None = None
@@ -53,6 +56,56 @@ def coerce_usage_tokens(
     return inp, out
 
 
+def extract_cache_tokens(usage: Any) -> tuple[int | None, int | None]:
+    """Prompt-cache (read, write) token counts from a provider usage payload.
+
+    Anthropic reports flat ``cache_read_input_tokens`` /
+    ``cache_creation_input_tokens``; OpenAI nests read-side counts under
+    ``prompt_tokens_details.cached_tokens`` and has no write-side field.
+    ``None`` means the provider sent nothing — distinct from a measured 0.
+    """
+    if usage is None:
+        return None, None
+
+    def _field(container: Any, key: str) -> Any:
+        if isinstance(container, dict):
+            return container.get(key)
+        return getattr(container, key, None)
+
+    read = _field(usage, "cache_read_input_tokens")
+    write = _field(usage, "cache_creation_input_tokens")
+    if read is None:
+        details = _field(usage, "prompt_tokens_details")
+        if details is not None:
+            read = _field(details, "cached_tokens")
+
+    def _to_int(value: Any) -> int | None:
+        return int(value) if isinstance(value, (int, float)) else None
+
+    return _to_int(read), _to_int(write)
+
+
+def _log_usage(
+    model: str,
+    inp: int | None,
+    out: int | None,
+    cache_read: int | None,
+    cache_write: int | None,
+) -> None:
+    """One greppable line per call so cache hit rate is verifiable from logs."""
+    if cache_read is not None or cache_write is not None:
+        logger.debug(
+            "[llm-usage] model=%s input=%s output=%s cache_read=%s cache_write=%s",
+            model,
+            inp,
+            out,
+            cache_read,
+            cache_write,
+        )
+    else:
+        logger.debug("[llm-usage] model=%s input=%s output=%s", model, inp, out)
+
+
 def emit_provider_usage(
     model: str,
     usage: Any,
@@ -62,6 +115,7 @@ def emit_provider_usage(
 ) -> None:
     """Emit provider-reported usage from an arbitrary usage payload (agent clients)."""
     inp, out = coerce_usage_tokens(usage, input_key=input_key, output_key=output_key)
+    _log_usage(model, inp, out, *extract_cache_tokens(usage))
     emit_usage(model, inp, out)
 
 
@@ -74,5 +128,13 @@ def llm_response_with_usage(
     output_key: str,
 ) -> LLMResponse:
     inp, out = coerce_usage_tokens(usage, input_key=input_key, output_key=output_key)
+    cache_read, cache_write = extract_cache_tokens(usage)
+    _log_usage(model, inp, out, cache_read, cache_write)
     emit_usage(model, inp, out)
-    return LLMResponse(content=content, input_tokens=inp, output_tokens=out)
+    return LLMResponse(
+        content=content,
+        input_tokens=inp,
+        output_tokens=out,
+        cache_read_tokens=cache_read,
+        cache_creation_tokens=cache_write,
+    )
