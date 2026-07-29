@@ -1236,7 +1236,6 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "search_sentry_issues",
         "shell_run",
         "slack_add_reaction",
-        "slack_capture_task",
         "slack_join_channel",
         "slack_list_team_members",
         "slack_read_list",
@@ -1249,6 +1248,12 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "summarize_github_pr_status",
         "synthetic_run",
         "task_cancel",
+        "work_task_add",
+        "work_task_complete",
+        "work_task_list",
+        "work_task_prioritize",
+        "work_task_schedule_checkin",
+        "work_task_update",
         # Temporal tools use try/finally only (to close the client); the client
         # returns structured error dicts for handled HTTP failures, and any
         # unexpected exception escapes to the #1476 global wrapper.

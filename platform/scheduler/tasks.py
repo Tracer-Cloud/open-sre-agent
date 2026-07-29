@@ -41,6 +41,8 @@ def build_message(task: ScheduledTask) -> str:
         TaskKind.SENTRY_MORNING_DIGEST: _build_sentry_morning_digest,
         TaskKind.SENTRY_UPTIME_WATCH: _build_sentry_uptime_watch,
         TaskKind.GITHUB_PR_SWEEP: _build_github_pr_sweep,
+        TaskKind.WORK_ITEM_REMINDER: _build_work_item_reminder,
+        TaskKind.WORK_ITEM_CHECKIN: _build_work_item_checkin,
     }
     builder = builders.get(task.kind)
     if builder is None:
@@ -244,6 +246,52 @@ def _build_github_pr_sweep(task: ScheduledTask) -> str:
         raise RuntimeError(
             f"GitHub PR sweep failed for task {task.id}. Check logs for details."
         ) from exc
+
+
+def _build_work_item_reminder(task: ScheduledTask) -> str:
+    """Build a one-shot reminder for a durable work item.
+
+    Missing or already-completed work items produce a quiet tick so stale
+    reminders do not spam the channel.
+    """
+    from pathlib import Path
+
+    from core.domain.work_items import (
+        WorkItemStatus,
+        build_work_item_reminder_message,
+        get_work_item,
+        now_iso,
+        set_work_item_last_reminded,
+    )
+
+    item_id = task.params.get("work_item_id", "").strip()
+    if not item_id:
+        return ""
+    store_path_text = task.params.get("store_path", "").strip()
+    store_path = Path(store_path_text).expanduser() if store_path_text else None
+    item = get_work_item(item_id, store_path=store_path)
+    if item is None or item.status is WorkItemStatus.COMPLETED:
+        return ""
+    set_work_item_last_reminded(item.id, now_iso(), store_path=store_path)
+    return build_work_item_reminder_message(item)
+
+
+def _build_work_item_checkin(task: ScheduledTask) -> str:
+    """Build a recurring prioritization check-in for durable work items."""
+    from pathlib import Path
+
+    from core.domain.work_items import build_work_item_checkin_message, list_work_items
+
+    store_path_text = task.params.get("store_path", "").strip()
+    store_path = Path(store_path_text).expanduser() if store_path_text else None
+    project = task.params.get("project", "").strip()
+    try:
+        limit = max(int(task.params.get("limit", "5")), 1)
+    except ValueError:
+        limit = 5
+    items = list_work_items(status=None, project=project, store_path=store_path)
+    active_items = [item for item in items if item.is_active]
+    return build_work_item_checkin_message(active_items, project=project, limit=limit)
 
 
 def _build_custom_investigation(task: ScheduledTask) -> str:

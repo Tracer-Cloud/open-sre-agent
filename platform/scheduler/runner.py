@@ -88,6 +88,8 @@ def _scheduled_job(task_id: str) -> None:
 
     if result:
         task.last_run = datetime.now(UTC).isoformat()
+        if task.params.get("disable_after_success", "").strip().lower() == "true":
+            task.enabled = False
         update_task(task)
 
 

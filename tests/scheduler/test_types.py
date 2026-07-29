@@ -53,6 +53,9 @@ class TestScheduledTask:
         assert TaskKind.CUSTOM_INVESTIGATION == "custom_investigation"
         assert TaskKind.SENTRY_MORNING_DIGEST == "sentry_morning_digest"
         assert TaskKind.SENTRY_UPTIME_WATCH == "sentry_uptime_watch"
+        assert TaskKind.GITHUB_PR_SWEEP == "github_pr_sweep"
+        assert TaskKind.WORK_ITEM_REMINDER == "work_item_reminder"
+        assert TaskKind.WORK_ITEM_CHECKIN == "work_item_checkin"
 
     def test_all_providers(self) -> None:
         assert Provider.TELEGRAM == "telegram"

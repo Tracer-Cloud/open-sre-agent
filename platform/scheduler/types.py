@@ -20,6 +20,8 @@ class TaskKind(StrEnum):
     SENTRY_MORNING_DIGEST = "sentry_morning_digest"
     SENTRY_UPTIME_WATCH = "sentry_uptime_watch"
     GITHUB_PR_SWEEP = "github_pr_sweep"
+    WORK_ITEM_REMINDER = "work_item_reminder"
+    WORK_ITEM_CHECKIN = "work_item_checkin"
 
 
 class TaskStatus(StrEnum):

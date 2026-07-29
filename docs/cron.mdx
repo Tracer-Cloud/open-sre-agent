@@ -7,6 +7,11 @@ description: "Cron-driven recurring reports to Telegram, Slack, Discord, and Roc
 
 OpenSRE can deliver recurring reports to messaging providers on a cron schedule. This enables daily reliability digests, weekly alert audits, synthetic test summaries, and custom investigations — all delivered automatically without manual CLI invocations.
 
+For human task reminders and proactive work check-ins, use `opensre work add
+--remind-at ...` or `opensre work schedule-checkin ...`. Those commands create
+the right scheduler entries, support repeated `--target provider:chat_id` fan-out
+delivery, and keep task metadata in the work-item store.
+
 ## Quick Start
 
 ```bash

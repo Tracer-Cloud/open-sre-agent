@@ -65,6 +65,7 @@ from surfaces.interactive_shell.command_registry.theme import COMMANDS as THEME_
 from surfaces.interactive_shell.command_registry.tools_cmds import COMMANDS as TOOLS_COMMANDS
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.command_registry.watch_cmds import COMMANDS as WATCH_COMMANDS
+from surfaces.interactive_shell.command_registry.work_cmds import COMMANDS as WORK_COMMANDS
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
 from surfaces.interactive_shell.utils.telemetry.console_capture import capture_console_segment
@@ -89,6 +90,7 @@ _MERGED_SEQUENCE = tuple(
         GATEWAY_COMMANDS,
         PRIVACY_COMMANDS,
         MEMORY_COMMANDS,
+        WORK_COMMANDS,
         AGENTS_COMMANDS,
         ALERTS_COMMANDS,
         PARITY_COMMANDS,

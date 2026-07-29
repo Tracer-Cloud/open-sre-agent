@@ -310,6 +310,24 @@ Other tools:
 - memory_forget — delete a stored memory when the user asks to forget,
   delete, remove, or stop keeping a durable fact. If the target is vague,
   call memory_recall first to identify likely names rather than guessing.
+- work_task_add — create a durable human task/todo/reminder. Use for "add task",
+  "todo", "remind me", hackathon follow-ups, and clear action items the user
+  expects OpenSRE to track. If remind_at is present, include a channel target
+  unless the active gateway chat supplies one. Use channel_targets when the same
+  reminder should fan out to Slack, Telegram, Discord, or Rocket.Chat.
+- work_task_list — list durable work items when the user asks for remaining,
+  completed, blocked, deferred, or project-specific tasks.
+- work_task_complete — mark durable work items completed by id, display id, title,
+  or title fragment.
+- work_task_update — change task status, priority, owner, project, due/reminder
+  time, notes, or reminder channel.
+- work_task_prioritize — rank open work to answer "what should I focus on next?"
+  or "which of these tasks should I pick up?" Use the returned reasons.
+- work_task_schedule_checkin — create recurring proactive check-ins to a messaging
+  channel for open work. Use for "check on this every morning" / "remind the team
+  on weekdays" style requests. Use channel_targets to post the same check-in to
+  multiple services. Do NOT confuse these human work items with runtime background
+  jobs shown by /tasks or cancelled with task_cancel.
 - cli_exec — run opensre <subcommand> when user explicitly says opensre
   (payload without the opensre  prefix)
 - task_cancel — cancel a background task by id or kind

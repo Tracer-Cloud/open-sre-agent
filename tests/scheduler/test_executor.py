@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from unittest.mock import patch
 
@@ -262,6 +263,74 @@ class TestExecutor:
 
         assert result is False
         mock_deliver.assert_called_once()
+
+    def test_delivery_targets_fan_out_same_message(self) -> None:
+        task = ScheduledTask(
+            id="test_fanout",
+            kind=TaskKind.WORK_ITEM_CHECKIN,
+            cron="0 9 * * *",
+            provider=Provider.SLACK,
+            chat_id="C123",
+            params={
+                "delivery_targets": json.dumps(
+                    [
+                        {"provider": "slack", "chat_id": "C123"},
+                        {"provider": "telegram", "chat_id": "-100123"},
+                    ]
+                )
+            },
+        )
+
+        with (
+            patch(
+                "platform.scheduler.executor.build_message",
+                return_value="Scheduled report",
+            ),
+            patch("platform.scheduler.executor._deliver_slack") as mock_slack,
+            patch("platform.scheduler.executor._deliver_telegram") as mock_telegram,
+        ):
+            mock_slack.return_value = (True, "", "ts_123")
+            mock_telegram.return_value = (True, "", "msg_42")
+            result = execute_task(task, "2026-01-01T09:00")
+
+        assert result is True
+        assert mock_slack.call_args.args[0].chat_id == "C123"
+        assert mock_telegram.call_args.args[0].chat_id == "-100123"
+        assert mock_slack.call_args.args[1] == "Scheduled report"
+        assert mock_telegram.call_args.args[1] == "Scheduled report"
+
+    def test_delivery_targets_report_partial_failure(self) -> None:
+        task = ScheduledTask(
+            id="test_fanout_fail",
+            kind=TaskKind.WORK_ITEM_CHECKIN,
+            cron="0 9 * * *",
+            provider=Provider.SLACK,
+            chat_id="C123",
+            params={
+                "delivery_targets": json.dumps(
+                    [
+                        {"provider": "slack", "chat_id": "C123"},
+                        {"provider": "telegram", "chat_id": "-100123"},
+                    ]
+                )
+            },
+        )
+
+        with (
+            patch(
+                "platform.scheduler.executor.build_message",
+                return_value="Scheduled report",
+            ),
+            patch("platform.scheduler.executor._deliver_slack") as mock_slack,
+            patch("platform.scheduler.executor._deliver_telegram") as mock_telegram,
+        ):
+            mock_slack.return_value = (True, "", "ts_123")
+            mock_telegram.return_value = (False, "missing token", "")
+            result = execute_task(task, "2026-01-01T09:00")
+
+        assert result is False
+        mock_slack.assert_called_once()
+        mock_telegram.assert_called_once()
 
     def test_empty_message_skips_delivery(self) -> None:
         task = ScheduledTask(

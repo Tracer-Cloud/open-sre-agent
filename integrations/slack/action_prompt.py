@@ -50,8 +50,11 @@ SLACK TOOLS:
   Never substitute slack_read_messages for this.
 - slack_join_channel — join a public #channel before reading/posting.
 - slack_add_reaction — add an emoji reaction to a message ts.
-- slack_capture_task — when the user says "add task …", "remind me …", or
-  "todo: …", store the reminder locally and confirm it back in the thread.
+- work_task_add / work_task_complete / work_task_prioritize — when the user says
+  "add task …", "remind me …", "todo: …", or asks what to focus on next, use the
+  durable work-item tools. In Slack gateway turns, reminders/check-ins can target
+  the current channel automatically. Use channel_targets when the same reminder
+  should also post to Telegram, Discord, or Rocket.Chat.
 
 Data-dependent compound-turn example (the core COMPOUND TURN RULE's second
 step): "check the weather in Antarctica and then send it to slack" →

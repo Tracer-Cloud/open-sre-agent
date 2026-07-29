@@ -120,11 +120,14 @@ tools (never in tool-call traces). Shared client: `integrations/slack/web_client
 | `slack_list_team_members` | List workspace members | bot token, `users:read` | No |
 | `slack_join_channel` | Join a public channel | bot token, `channels:join` | Yes |
 | `slack_add_reaction` | React to a message ts | bot token, `reactions:write` | No |
-| `slack_capture_task` | Persist “add task …” / “remind me …” locally | none (writes `~/.opensre/slack_captured_tasks.jsonl`) | No |
 
 Prefer `slack_reply_message` / `slack_read_messages` when the bot token is
 configured and the user names a channel or thread. Use `slack_send_message` only
 for the fixed webhook channel.
+
+For "add task", "remind me", and "what should we focus on next" requests, use
+OpenSRE work management. Gateway turns can default reminders and recurring
+check-ins to the current Slack channel.
 
 Example prompts:
 

@@ -390,6 +390,15 @@ MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "List active watchdog background tasks with latest resource samples.",
         "User asks to list running watchdog watches",
     ),
+    "/work": _mcp(
+        "Manage durable human work items and reminders. Subcommands: list, add, done, next, path.",
+        "User explicitly types /work to list, add, complete, or prioritize work items",
+        "User asks for a durable task list or hackathon task overview via the slash command",
+        anti_examples=(
+            "User asks to manage OpenSRE runtime background jobs (use /tasks)",
+            "User asks in natural language to add or prioritize work (use work_task_* tools)",
+        ),
+    ),
     "/debug": _mcp(
         "Run targeted runtime diagnostics (e.g. /debug sentry to trigger a Sentry smoke test).",
         "User asks to run a debug check or diagnostic",

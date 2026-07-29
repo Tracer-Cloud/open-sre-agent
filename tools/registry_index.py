@@ -107,13 +107,6 @@ def _fallback_descriptors() -> tuple[ToolDescriptor, ...]:
             "integrations.slack.tools.slack_add_reaction_tool.tool",
         ),
         ToolDescriptor(
-            "slack_capture_task",
-            ("investigation", "chat", "action"),
-            "slack",
-            None,
-            "integrations.slack.tools.slack_capture_task_tool.tool",
-        ),
-        ToolDescriptor(
             "slack_join_channel",
             ("investigation", "chat", "action"),
             "slack",
