@@ -61,3 +61,46 @@ def test_angle_brackets_and_spaces_in_labels_are_neutralized() -> None:
         assert context.unmask(context.mask(original)) == original, (
             f"label {label!r} broke the mask/unmask round trip"
         )
+
+
+def test_restored_context_does_not_reuse_indices_for_sanitized_labels(
+    monkeypatch,
+) -> None:
+    """Counters must key on the sanitized label, or a state round trip
+    re-mints index 0 and silently overwrites the earlier secret."""
+    # Arrange: a hyphenated label via env, because from_state re-reads the
+    # policy from the environment.
+    import json as _json
+
+    monkeypatch.setenv("OPENSRE_MASK_ENABLED", "1")
+    monkeypatch.setenv("OPENSRE_MASK_EXTRA_REGEX", _json.dumps({"jira-key": r"AAA-\d+"}))
+    first = MaskingContext(policy=MaskingPolicy.from_env())
+    masked_one = first.mask("see AAA-111")
+    restored = MaskingContext.from_state({"masking_map": first.to_state()})
+
+    # Act: the restored context masks a second, different value.
+    masked_two = restored.mask("see AAA-222")
+
+    # Assert: distinct values, distinct tokens, both restorable.
+    (token_one,) = re.findall(r"<[^<>]+>", masked_one)
+    (token_two,) = re.findall(r"<[^<>]+>", masked_two)
+    assert token_one != token_two, "index reuse — second secret overwrote the first"
+    assert restored.unmask(masked_one) == "see AAA-111"
+    assert restored.unmask(masked_two) == "see AAA-222"
+
+
+def test_kinds_that_sanitize_alike_do_not_clobber_each_other() -> None:
+    # Arrange: two labels collapsing to the same sanitized form.
+    policy = MaskingPolicy(
+        enabled=True,
+        extra_patterns={"a-b": r"S1VALUE", "a.b": r"S2VALUE"},
+    )
+    context = MaskingContext(policy=policy)
+
+    # Act
+    masked = context.mask("first S1VALUE then S2VALUE")
+
+    # Assert: two distinct tokens, both round-trip.
+    tokens = re.findall(r"<[^<>]+>", masked)
+    assert len(set(tokens)) == 2, f"tokens collapsed: {tokens}"
+    assert context.unmask(masked) == "first S1VALUE then S2VALUE"

@@ -71,13 +71,25 @@ class MaskingContext:
             max_index[key] = max(max_index.get(key, -1), int(index))
         return {key: value + 1 for key, value in max_index.items()}
 
+    @staticmethod
+    def _canonical_label(kind: str) -> str:
+        """Token label for ``kind``, upholding the single-bracket invariant.
+
+        Labels come from user extra_patterns config; the one-pass unmask
+        matches ``<[^<>]+>``, so brackets and spaces must not survive into
+        the token.
+        """
+        return re.sub(r"[^A-Za-z0-9_]", "_", kind.upper()).strip("_") or "EXTRA"
+
     def _new_placeholder(self, kind: str) -> str:
-        index = self._counters.get(kind, 0)
-        self._counters[kind] = index + 1
-        # Labels come from user extra_patterns config; the one-pass unmask
-        # matches <[^<>]+>, so the label must not smuggle brackets or spaces
-        # into the token.
-        label = re.sub(r"[^A-Za-z0-9_]", "_", kind.upper()).strip("_") or "EXTRA"
+        # Counters key on the canonical label, matching what
+        # ``_derive_counters`` reads back out of restored placeholders —
+        # a raw-kind key would reset to index 0 after a state round trip
+        # and overwrite the earlier secret.
+        label = self._canonical_label(kind)
+        key = label.lower()
+        index = self._counters.get(key, 0)
+        self._counters[key] = index + 1
         return f"<{label}_{index}>"
 
     def _ensure_placeholder(self, kind: str, value: str) -> str:
