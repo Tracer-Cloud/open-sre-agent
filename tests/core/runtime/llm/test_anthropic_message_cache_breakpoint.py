@@ -132,3 +132,28 @@ def test_tool_schemas_serialize_deterministically() -> None:
 
     # Assert
     assert first == second
+
+
+def test_invoke_response_carries_cache_tokens() -> None:
+    """The agent path must surface cache counters, not just the log line."""
+    # Arrange
+    from types import SimpleNamespace
+
+    client, sdk = _client_with_capture()
+    sdk.messages.create.return_value = SimpleNamespace(
+        content=[],
+        stop_reason="end_turn",
+        usage=SimpleNamespace(
+            input_tokens=3,
+            output_tokens=4,
+            cache_read_input_tokens=8118,
+            cache_creation_input_tokens=0,
+        ),
+    )
+
+    # Act
+    response = client.invoke(messages=[{"role": "user", "content": "hi"}])
+
+    # Assert
+    assert response.cache_read_tokens == 8118
+    assert response.cache_creation_tokens == 0

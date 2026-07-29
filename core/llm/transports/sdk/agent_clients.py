@@ -37,7 +37,7 @@ from core.llm.shared.openai_responses import (
     uses_responses_api,
 )
 from core.llm.shared.tool_schema_normalize import build_openai_tool_specs
-from core.llm.shared.usage import emit_provider_usage
+from core.llm.shared.usage import emit_provider_usage, extract_cache_tokens
 from core.llm.types import AgentLLMResponse, ToolCall
 
 logger = logging.getLogger(__name__)
@@ -307,11 +307,14 @@ class AnthropicAgentClient:
             elif block_type == "tool_use":
                 tool_calls.append(ToolCall(id=block.id, name=block.name, input=dict(block.input)))
 
+        cache_read, cache_write = extract_cache_tokens(getattr(response, "usage", None))
         return AgentLLMResponse(
             content="".join(text_parts),
             tool_calls=tool_calls,
             stop_reason=str(getattr(response, "stop_reason", "end_turn")),
             raw_content=content_blocks,
+            cache_read_tokens=cache_read,
+            cache_creation_tokens=cache_write,
         )
 
     @staticmethod

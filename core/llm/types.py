@@ -57,6 +57,10 @@ class AgentLLMResponse:
     # preserved; otherwise None and the assistant message is reconstructed via
     # build_assistant_message.
     raw_content: Any = None
+    #: Prompt-cache counters from the provider usage payload, when reported.
+    #: ``None`` means the provider sent no cache fields — distinct from 0.
+    cache_read_tokens: int | None = None
+    cache_creation_tokens: int | None = None
 
     @property
     def has_tool_calls(self) -> bool:
