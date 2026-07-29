@@ -805,7 +805,7 @@ class TestSpinnerState:
 
         seen = set()
         for step in range(len(spinner._SPINNER_FRAMES)):
-            spinner.started_at = time.monotonic() - step * spinner._FRAME_INTERVAL_S * 1.001
+            spinner.started_at = time.monotonic() - step * spinner._FRAME_INTERVAL_SECONDS * 1.001
             seen.add(_extract_glyph(spinner.inline_spinner_ansi(), spinner._SPINNER_FRAMES))
         assert seen == set(spinner._SPINNER_FRAMES)
 
