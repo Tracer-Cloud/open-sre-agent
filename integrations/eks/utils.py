@@ -1,7 +1,7 @@
 """EKS helper utilities.
 
-Callers must provide a stored AWS credential dict (snake_case keys). Returns
-credentials in the identical structure as botocore Credentials (PascalCase keys).
+Provides shared logic to normalize internal AWS credential structures (which use
+snake_case keys) into botocore-compatible formats (which use PascalCase keys).
 """
 
 from __future__ import annotations
@@ -14,11 +14,13 @@ def stored_credentials_to_aws_creds(
 ) -> dict[str, Any] | None:
     """Normalize a stored AWS credential dict for use with botocore.
 
-    Takes a dict with ``access_key_id``, ``secret_access_key``, and optionally
-    ``session_token``. Returns a new dict with guaranteed truthy ``AccessKeyId``
-    and ``SecretAccessKey`` keys, plus ``SessionToken`` (coerced to ``None`` if
-    missing/empty). Returns ``None`` if required access/secret keys are falsy
-    or missing. The original dictionary is not mutated.
+    Takes a dict containing ``access_key_id``, ``secret_access_key``, and
+    optionally ``session_token`` (or ``None``). Returns a new dict with
+    guaranteed truthy ``AccessKeyId`` and ``SecretAccessKey`` keys, plus
+    ``SessionToken`` (coerced to ``None`` because botocore rejects empty
+    strings). Returns ``None`` if the input is falsy or missing required keys,
+    allowing callers to fall back to ambient credentials. The original
+    dictionary is not mutated.
     """
     if not credentials:
         return None
