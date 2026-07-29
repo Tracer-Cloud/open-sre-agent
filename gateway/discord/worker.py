@@ -42,15 +42,13 @@ async def _reap_cancelled_task(task: asyncio.Task[object]) -> None:
     """Await a cancelled task so its cleanup (``finally`` / ``close``) can finish.
 
     CodeQL ``py/ineffectual-statement`` does not model ``await`` as a side
-    effect, so a bare ``await task`` under ``suppress(CancelledError)`` is
-    flagged. Binding the result makes the await an assignment statement while
-    preserving the reap semantics.
+    effect, so a bare ``await task`` is flagged. Binding the result to ``_``
+    keeps the await as an assignment while preserving reap semantics.
     """
     try:
-        _finished = await task
+        _ = await task
     except asyncio.CancelledError:
         return
-    del _finished
 
 
 def application_command_name(interaction: discord.Interaction) -> str:

@@ -1,4 +1,4 @@
-"""R6: redact tool input/output once and share the immutable view."""
+"""Redact tool input/output once and share the immutable view."""
 
 from __future__ import annotations
 
@@ -34,6 +34,6 @@ def test_redact_tool_view_output_optional() -> None:
 
 
 def test_redact_sensitive_skips_non_containers() -> None:
-    """Scalars are returned as-is — no copy, no walk (R6 skip-tiny)."""
+    """Scalars are returned as-is — no copy, no walk."""
     for scalar in (None, True, 0, 3.14, "plain", b"bytes"):
         assert redact_sensitive(scalar) is scalar

@@ -32,7 +32,7 @@ _SEED_LOOP_ITERATION = -1
 
 @dataclass(frozen=True, slots=True)
 class RedactedToolView:
-    """Frozen holder for one deep-copied redacted tool input/output (R6).
+    """Frozen holder for one deep-copied redacted tool input/output.
 
     Security contract:
     - ``tool_input`` / ``output`` are produced by :func:`redact_sensitive` —

@@ -8,7 +8,7 @@ when the marker was empty.
 
 Live facts (``now_iso``, uptime, disk, memory) are rendered separately from
 session-static facts so the system/env prefix can stay cache-stable across
-turns (R13).
+turns.
 """
 
 from __future__ import annotations

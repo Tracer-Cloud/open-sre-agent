@@ -232,7 +232,7 @@ def test_anthropic_invoke_strips_internal_message_markers(
     client.invoke(messages=messages)
 
     api_messages = captured["messages"]
-    # Internal markers stripped; last content block may carry R13 cache_control.
+    # Internal markers stripped; last content block may carry cache_control.
     assert api_messages[1]["role"] == "assistant"
     assert "_opensre_seed" not in api_messages[1]
     assert api_messages[1]["content"] == [
@@ -252,7 +252,7 @@ def test_anthropic_invoke_strips_internal_message_markers(
 def test_anthropic_invoke_marks_system_and_last_tool_for_prompt_cache(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """R13: stable tools→system prefix gets Anthropic cache_control breakpoints."""
+    """Stable tools→system prefix gets Anthropic cache_control breakpoints."""
     _install_fake_anthropic(monkeypatch)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
 

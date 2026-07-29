@@ -54,7 +54,7 @@ def _anthropic_tool_schema(tool: Any) -> dict[str, Any]:
 
 # Anthropic prompt-caching breakpoint (ephemeral, 5-minute TTL by default).
 # Prefix match order is tools → system → messages; mark the last tool and the
-# system block so ReAct iterations can reuse the stable prefix (R13).
+# system block so ReAct iterations can reuse the stable prefix.
 _ANTHROPIC_CACHE_CONTROL: dict[str, str] = {"type": "ephemeral"}
 
 

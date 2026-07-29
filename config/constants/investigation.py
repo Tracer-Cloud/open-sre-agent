@@ -6,8 +6,8 @@ from typing import Final
 
 MAX_INVESTIGATION_LOOPS = 20
 
-# Per-investigation duplicate tool-call cache (R6). Lookup stays O(1); eviction
-# is LRU by entry count and approximate serialized payload size so long runs
+# Per-investigation duplicate tool-call cache. Lookup stays O(1); eviction is
+# LRU by entry count and approximate serialized payload size so long runs
 # cannot retain unbounded full results.
 INVESTIGATION_TOOL_CACHE_MAX_ENTRIES: Final[int] = 128
 INVESTIGATION_TOOL_CACHE_MAX_CHARS: Final[int] = 2_000_000

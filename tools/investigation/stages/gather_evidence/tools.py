@@ -251,7 +251,7 @@ def tool_event_payload(
     output: Any | None = None,
     redacted: RedactedToolView | None = None,
 ) -> dict[str, Any]:
-    """Build a tracker/event payload; prefer a shared ``redacted`` view (R6)."""
+    """Build a tracker/event payload; prefer a shared ``redacted`` view."""
     view = redacted if redacted is not None else redact_tool_view(tc.input, output)
     payload: dict[str, Any] = {
         "id": tc.id,

@@ -1,7 +1,6 @@
 """Prompt-cache hit rate must be observable from provider usage payloads.
 
-The R13 caching work is verifiable only through the provider's usage fields:
-Anthropic reports ``cache_read_input_tokens`` / ``cache_creation_input_tokens``,
+Anthropic reports ``cache_read_input_tokens`` / ``cache_creation_input_tokens``;
 OpenAI nests ``prompt_tokens_details.cached_tokens``. If reads stay zero across
 identical-prefix requests, a silent invalidator is at work — these tests pin
 that the counts survive extraction and land on the response and in the log.

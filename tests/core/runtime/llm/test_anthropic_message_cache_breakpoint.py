@@ -1,9 +1,9 @@
 """The newest message must carry a cache breakpoint so history accrues hits.
 
-Tools and system are already marked (R13); without a breakpoint in
-``messages`` the growing conversation — the bulk of a ReAct loop's input —
-is re-billed at full price every iteration. Guidance: mark the last content
-block of the most recently appended turn.
+Tools and system are already marked; without a breakpoint in ``messages`` the
+growing conversation — the bulk of a ReAct loop's input — is re-billed at full
+price every iteration. Mark the last content block of the most recently
+appended turn.
 """
 
 from __future__ import annotations

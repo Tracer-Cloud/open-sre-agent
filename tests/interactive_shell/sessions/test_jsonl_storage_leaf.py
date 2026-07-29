@@ -255,6 +255,84 @@ def test_cold_leaf_scan_stops_at_the_tail(monkeypatch: pytest.MonkeyPatch) -> No
     )
 
 
+def test_cold_leaf_scan_does_not_read_text_the_whole_file(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Cold tip resolve must not Path.read_text the session JSONL."""
+    storage = JsonlSessionStorage()
+    session = _session()
+    storage.open_session(session)
+    for i in range(50):
+        storage.append_message(session.session_id, role="user", content=f"m{i}")
+
+    real_read_text = Path.read_text
+
+    def forbid_session_read_text(self: Path, *args: Any, **kwargs: Any) -> str:
+        if self.name.endswith(".jsonl"):
+            raise AssertionError("cold tip scan must not Path.read_text the session JSONL")
+        return real_read_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", forbid_session_read_text)
+
+    fresh = JsonlSessionStorage()
+    fresh.append_message(session.session_id, role="assistant", content="tail")
+
+    # Restore before asserting file contents (assert path uses read_text).
+    monkeypatch.setattr(Path, "read_text", real_read_text)
+    records = _records(session.session_id)
+    assert records[-1]["parent_id"] == records[-2]["id"]
+
+
+def test_cold_leaf_scan_reads_only_a_trailing_window(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Large sessions must not pull the whole file into one read buffer."""
+    storage = JsonlSessionStorage()
+    session = _session()
+    storage.open_session(session)
+    # Inflate past the default window so a full-file read would be obvious.
+    padding = "x" * 2000
+    for i in range(80):
+        storage.append_message(session.session_id, role="user", content=f"m{i}-{padding}")
+
+    path = session_path(session.session_id)
+    file_size = path.stat().st_size
+    assert file_size > jsonl_storage._TAIL_SCAN_CHUNK_BYTES
+
+    read_bytes = {"total": 0, "max_single": 0}
+    real_open = Path.open
+
+    def counting_open(self: Path, *args: Any, **kwargs: Any) -> Any:
+        fh = real_open(self, *args, **kwargs)
+        if self != path or "b" not in (args[0] if args else kwargs.get("mode", "r")):
+            return fh
+        orig_read = fh.read
+
+        def tracked_read(size: int = -1) -> bytes:
+            data = orig_read(size)
+            read_bytes["total"] += len(data)
+            read_bytes["max_single"] = max(read_bytes["max_single"], len(data))
+            return data
+
+        fh.read = tracked_read  # type: ignore[method-assign]
+        return fh
+
+    monkeypatch.setattr(Path, "open", counting_open)
+
+    fresh = JsonlSessionStorage()
+    fresh.append_message(session.session_id, role="assistant", content="tail")
+
+    assert read_bytes["max_single"] <= jsonl_storage._TAIL_SCAN_CHUNK_BYTES, (
+        f"single read was {read_bytes['max_single']} bytes — full file is {file_size}"
+    )
+    assert read_bytes["total"] <= jsonl_storage._TAIL_SCAN_CHUNK_BYTES, (
+        f"cold tip scan read {read_bytes['total']} bytes of a {file_size}-byte file"
+    )
+    monkeypatch.setattr(Path, "open", real_open)
+    records = _records(session.session_id)
+    assert records[-1]["parent_id"] == records[-2]["id"]
+
+
 def test_cold_leaf_scan_skips_trailing_trace_spans(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

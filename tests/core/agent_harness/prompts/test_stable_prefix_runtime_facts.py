@@ -1,4 +1,4 @@
-"""TDD R13: live runtime facts must leave the stable system/env prefix."""
+"""Live runtime facts must leave the stable system/env prefix."""
 
 from __future__ import annotations
 

@@ -45,8 +45,8 @@ def test_build_connected_tool_context_marks_membership_and_sorts() -> None:
     # Assert: connected list excludes the _-prefixed and empty keys, and is sorted.
     assert ctx["connected_integrations"] == ["datadog", "grafana"]
 
-    # Assert: the connected flag is the membership decision R1 optimizes — a
-    # configured source is connected, an unconfigured one is not.
+    # Assert: the connected flag is a membership decision — a configured
+    # source is connected, an unconfigured one is not.
     sources = ctx["available_sources"]
     assert sources["datadog"]["connected"] is True
     assert sources["grafana"]["connected"] is True

@@ -1,8 +1,8 @@
-"""R5: unmask must be one scan, not P full-text replace passes.
+"""Unmask must be one scan, not one full-text replace per placeholder.
 
-Characterization pins observable behavior before the scanner refactor:
-prefix-safe placeholders, round-trip, empty/missing map, and no re-expansion
-of placeholder-shaped text that appears inside an original value.
+Characterization pins observable behavior: prefix-safe placeholders,
+round-trip, empty/missing map, and no re-expansion of placeholder-shaped
+text that appears inside an original value.
 """
 
 from __future__ import annotations

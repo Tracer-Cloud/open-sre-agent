@@ -45,7 +45,7 @@ _SNAPSHOT_PATH = Path(__file__).with_name("prompt_characterization_snapshot.json
 
 _CLI_REFERENCE_TEXT = "=== opensre --help ===\nUsage: opensre [OPTIONS] COMMAND [ARGS]...\n"
 _AGENTS_MD_TEXT = "=== AGENTS.md (root) ===\nrepo map body\n"
-# Frozen live facts so R13's late block stays byte-stable in the snapshot.
+# Frozen live facts so the late runtime block stays byte-stable in the snapshot.
 _FROZEN_RUNTIME: dict[str, object] = {
     "now_iso": "2026-07-29T12:00:00+00:00",
     "uptime_seconds": 100.0,

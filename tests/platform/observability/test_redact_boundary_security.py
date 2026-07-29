@@ -1,10 +1,9 @@
-"""Security characterization for R6 redact-once sharing.
+"""Security characterization for redact-once sharing.
 
 Pins the invariant that matters for secrets: every external-facing sink
 (tracker args, event payload, evidence_entries, tool_outputs) must see a
 deep-copied redacted tree — never an alias of the raw tool payload.
-``evidence[tool_name]`` still holds the raw result for stage logic (unchanged
-pre-R6 contract).
+``evidence[tool_name]`` still holds the raw result for stage logic.
 """
 
 from __future__ import annotations
@@ -83,7 +82,7 @@ def test_shared_sinks_never_see_raw_secret() -> None:
     assert entry.tool_args == redacted.tool_input
     assert entry.data == redacted.output
 
-    # Stage evidence still keeps the raw tool result (pre-R6 contract).
+    # Stage evidence still keeps the raw tool result for investigation logic.
     assert evidence[tc.name] is output
     assert evidence[tc.name]["password"] == _SECRET
 

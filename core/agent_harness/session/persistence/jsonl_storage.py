@@ -14,6 +14,9 @@ from core.agent_harness.session.persistence.paths import session_path
 from core.agent_harness.session.persistence.ports import CHAT_KINDS, SessionPersistenceSource
 
 _TRIGGER_MAX_CHARS = 200
+# Cold tip scan keeps at most this many trailing bytes resident (then grows by the
+# same step only while the window still contains nothing but skippable rows).
+_TAIL_SCAN_CHUNK_BYTES = 64 * 1024
 
 
 def _now() -> str:
@@ -385,14 +388,21 @@ class JsonlSessionStorage:
         self._leaf_ids[session_id] = entry_id
 
     @staticmethod
+    def _loads_record(line: str) -> dict[str, Any] | None:
+        """Parse one JSONL line into a record dict, or ``None`` if unusable."""
+        try:
+            rec = json.loads(line)
+        except json.JSONDecodeError:
+            return None
+        return rec if isinstance(rec, dict) else None
+
+    @staticmethod
     def _read_records(path: Path) -> list[dict[str, Any]]:
-        lines = path.read_text(encoding="utf-8").splitlines()
         records: list[dict[str, Any]] = []
-        for line in lines:
-            with contextlib.suppress(json.JSONDecodeError):
-                rec = json.loads(line)
-                if isinstance(rec, dict):
-                    records.append(rec)
+        for line in path.read_text(encoding="utf-8").splitlines():
+            rec = JsonlSessionStorage._loads_record(line)
+            if rec is not None:
+                records.append(rec)
         return records
 
     def _current_leaf_id(self, session_id: str, path: Path) -> str | None:
@@ -404,28 +414,69 @@ class JsonlSessionStorage:
         self._leaf_file_sig[session_id] = sig
         return leaf
 
-    def _scan_leaf_id(self, path: Path) -> str | None:
-        """Cold-path tip resolve: walk lines from the tail, parse until found.
+    @staticmethod
+    def _tip_id_from_record(rec: dict[str, Any]) -> tuple[bool, str | None]:
+        """Map one JSONL record to tip resolution.
 
-        Avoids JSON-parsing the whole history on resume — typically one parse
-        (or a few when trailing ``trace_span`` rows sit above the tip).
+        Returns ``(True, tip)`` when this record ends the scan (``tip`` may be
+        ``None`` for a session header), or ``(False, None)`` to keep scanning
+        older lines (``trace_span`` sidecars / unusable rows handled by caller).
         """
-        text = path.read_text(encoding="utf-8")
-        for line in reversed(text.splitlines()):
-            if not line.strip():
-                continue
-            with contextlib.suppress(json.JSONDecodeError):
-                rec = json.loads(line)
-                if not isinstance(rec, dict):
-                    continue
-                rec_type = rec.get("type")
-                if rec_type == "trace_span":
-                    continue
-                if rec_type == "leaf":
-                    return str(rec.get("parent_id") or "") or None
-                if rec_type != "session":
-                    return str(rec.get("id") or "") or None
-        return None
+        rec_type = rec.get("type")
+        if rec_type == "trace_span":
+            return False, None
+        if rec_type == "leaf":
+            parent_id = rec.get("parent_id")
+            return True, str(parent_id) if parent_id else None
+        if rec_type == "session":
+            return True, None
+        entry_id = rec.get("id")
+        return True, str(entry_id) if entry_id else None
+
+    def _scan_leaf_id(self, path: Path) -> str | None:
+        """Cold-path tip resolve from a bounded trailing window.
+
+        Peak memory is the current window (starts at ``_TAIL_SCAN_CHUNK_BYTES``,
+        grows by that step only while the window has no tip-bearing line — e.g.
+        a run of trailing ``trace_span`` rows). The full file is never loaded.
+
+        Tip rules (first matching record from the end):
+        - ``trace_span``: skip (diagnostic sidecar)
+        - ``leaf``: tip is that marker's ``parent_id``
+        - ``session``: empty conversation (header only) → ``None``
+        - anything else: tip is that record's ``id``
+        """
+        size = path.stat().st_size
+        if size <= 0:
+            return None
+        window = min(size, _TAIL_SCAN_CHUNK_BYTES)
+        with path.open("rb") as fh:
+            while True:
+                start = size - window
+                fh.seek(start)
+                data = fh.read(window)
+                payload = data
+                if start > 0:
+                    # Window may start mid-record; drop the truncated prefix.
+                    newline_at = data.find(b"\n")
+                    if newline_at < 0:
+                        if window >= size:
+                            return None
+                        window = min(size, window + _TAIL_SCAN_CHUNK_BYTES)
+                        continue
+                    payload = data[newline_at + 1 :]
+                for line in reversed(payload.decode("utf-8").splitlines()):
+                    if not line.strip():
+                        continue
+                    rec = self._loads_record(line)
+                    if rec is None:
+                        continue
+                    resolved, tip = self._tip_id_from_record(rec)
+                    if resolved:
+                        return tip
+                if start == 0:
+                    return None
+                window = min(size, window + _TAIL_SCAN_CHUNK_BYTES)
 
     @staticmethod
     def _has_turns(records: list[dict[str, Any]]) -> bool:
