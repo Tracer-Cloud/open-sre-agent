@@ -119,25 +119,31 @@ def push(
     # session and memory file on the machine.
     allowed = resolved_roots(roots)
 
+    # Check every candidate before uploading any of them. A denied file found
+    # halfway through must not leave earlier files already in the store.
+    planned: list[tuple[SyncRoot, Path]] = []
     for root in roots:
         for path in _local_files(root):
             if not allowed.contains(path):
                 # Reaching here means a root pointed somewhere it should not.
                 raise UnsyncablePathError(f"refusing to upload {path}")
-            key = _relative_key(root, path)
-            data = path.read_bytes()
-            existing = by_key.get(key)
-            if existing is not None:
-                if comparable_etag(existing) == content_tag(data):
-                    result.skipped += 1
-                    continue
-                if existing.last_modified > _modified_at(path):
-                    # The bucket holds the more recent write, so uploading would
-                    # destroy it. Same rule pull applies in the other direction.
-                    result.kept_remote.append(key)
-                    continue
-            store.put_object(key, data)
-            result.uploaded.append(key)
+            planned.append((root, path))
+
+    for root, path in planned:
+        key = _relative_key(root, path)
+        data = path.read_bytes()
+        existing = by_key.get(key)
+        if existing is not None:
+            if comparable_etag(existing) == content_tag(data):
+                result.skipped += 1
+                continue
+            if existing.last_modified > _modified_at(path):
+                # The store holds the more recent write, so uploading would
+                # destroy it. Same rule pull applies in the other direction.
+                result.kept_remote.append(key)
+                continue
+        store.put_object(key, data)
+        result.uploaded.append(key)
     return result
 
 

@@ -48,9 +48,18 @@ class RemoteSyncConfig:
 
 
 def _stored_section() -> dict[str, Any]:
-    from config.local_settings import read_section
+    """Stored settings, or a RemoteSyncError when the file cannot be read.
 
-    return read_section("remote_sync")
+    A damaged ``config.yml`` must not crash a status check: surfaces catch
+    RemoteSyncError, so the failure is translated here rather than escaping as
+    an unrelated exception type.
+    """
+    from config.local_settings import LocalSettingsError, read_section
+
+    try:
+        return read_section("remote_sync")
+    except LocalSettingsError as exc:
+        raise RemoteSyncConfigError(str(exc)) from exc
 
 
 def _truthy(value: object) -> bool:

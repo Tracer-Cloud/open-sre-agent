@@ -805,3 +805,74 @@ def test_environment_overrides_the_stored_bucket(
     # Assert
     assert config is not None
     assert config.bucket == "env-bucket"
+
+
+# ── Org-scoped turns must not sync (keys carry no principal or actor) ────────
+
+
+def test_org_scoped_turn_refuses_to_sync(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Two members of one org would otherwise share every object key."""
+    # Arrange
+    from config.principal import Actor, Principal, StorageScope
+    from config.scope_context import bound_storage_scope
+    from platform.filestorage.errors import OrgScopeNotSupportedError
+    from platform.filestorage.operations import get_sync_status, run_remote_sync
+
+    monkeypatch.setenv(REMOTE_SYNC_ENV, "1")
+    monkeypatch.setenv(REMOTE_SYNC_BUCKET_ENV, "shared-bucket")
+    scope = StorageScope(principal=Principal.org("org_acme"), actor=Actor(id="U_ALICE"))
+
+    # Act / Assert: both entry points fail closed while the scope is bound.
+    with bound_storage_scope(scope):
+        with pytest.raises(OrgScopeNotSupportedError):
+            run_remote_sync()
+        with pytest.raises(OrgScopeNotSupportedError):
+            get_sync_status()
+
+
+def test_unbound_laptop_turn_still_syncs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """The refusal is scoped to organizations, not a blanket disable."""
+    # Arrange
+    from config.constants import paths
+    from platform.filestorage.operations import get_sync_status
+
+    monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.setenv(REMOTE_SYNC_ENV, "1")
+    monkeypatch.setenv(REMOTE_SYNC_BUCKET_ENV, "my-bucket")
+
+    # Act
+    status = get_sync_status()
+
+    # Assert
+    assert status.enabled is True
+
+
+def test_a_denied_file_uploads_nothing_at_all(home: Path) -> None:
+    """Validation runs over every candidate before the first upload."""
+    # Arrange: a root covering the whole home, so a credential file is reached
+    # only after the session and memory files in the walk.
+    bad_roots = (SyncRoot(name="everything", path=home),)
+    store = FakeObjectStore()
+
+    # Act
+    with pytest.raises(UnsyncablePathError):
+        push(store, roots=bad_roots)
+
+    # Assert: not a single object was written before the refusal.
+    assert store.objects == {}
+
+
+def test_a_corrupt_settings_file_surfaces_as_a_sync_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A damaged config.yml must not escape as an unrelated exception type."""
+    # Arrange
+    from config.constants import paths
+
+    monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.delenv(REMOTE_SYNC_ENV, raising=False)
+    (tmp_path / "config.yml").write_text("just a string, not a mapping", encoding="utf-8")
+
+    # Act / Assert: surfaces catch RemoteSyncError, so it must be one.
+    with pytest.raises(RemoteSyncConfigError):
+        remote_sync_enabled()

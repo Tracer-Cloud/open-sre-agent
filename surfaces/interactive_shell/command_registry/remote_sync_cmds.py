@@ -2,16 +2,20 @@
 
 from __future__ import annotations
 
+import logging
+
 from rich.console import Console
 
 from config.constants.filestorage import DEFAULT_REMOTE_SYNC_PROVIDER
-from platform.filestorage import RemoteSyncError
+from platform.filestorage import OrgScopeNotSupportedError, RemoteSyncError
 from platform.filestorage.enums import RemoteSyncSubcommand
 from platform.filestorage.messages import DISABLED_HELP, format_report_lines
 from platform.filestorage.operations import get_sync_status, run_remote_sync
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui import DIM, ERROR, HIGHLIGHT
+
+logger = logging.getLogger(__name__)
 
 _USAGE = (
     f"/remote-sync [{RemoteSyncSubcommand.STATUS}|{RemoteSyncSubcommand.SYNC}] "
@@ -73,8 +77,18 @@ def _cmd_remote_sync(_session: Session, console: Console, args: list[str]) -> bo
             return _print_status(console)
         if sub is RemoteSyncSubcommand.SYNC:
             return _run_sync(console, args[1:])
-    except RemoteSyncError as exc:
-        console.print(f"[{ERROR}]Sync failed:[/] {exc}")
+    except OrgScopeNotSupportedError as exc:
+        # Safe to show: our own wording, no vendor or credential detail.
+        console.print(f"[{DIM}]{exc}[/]")
+        return True
+    except RemoteSyncError:
+        # This handler also serves gateway chat, an external surface, so the
+        # provider's message never reaches the reply. Detail goes to the log.
+        logger.warning("[remote-sync] command failed", exc_info=True)
+        console.print(
+            f"[{ERROR}]Sync failed.[/] Check the opensre log, "
+            "or run [bold]opensre remote-sync status[/bold] locally for detail."
+        )
         return True
     console.print(
         f"[{ERROR}]unknown subcommand:[/] {token}  "

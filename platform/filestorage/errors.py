@@ -15,6 +15,16 @@ class RemoteSyncUnavailableError(RemoteSyncError):
     """The bucket could not be reached or the credentials were rejected."""
 
 
+class OrgScopeNotSupportedError(RemoteSyncError):
+    """Raised when an organization-scoped turn asks for remote sync.
+
+    Bucket keys are not namespaced by principal or actor, so two members of one
+    organization would share every key and read each other's conversations.
+    Organization data already persists through the mounted context root, so this
+    fails closed rather than mirroring anything.
+    """
+
+
 class UnsyncablePathError(RemoteSyncError):
     """A path outside the syncable roots was offered for upload.
 
@@ -24,6 +34,7 @@ class UnsyncablePathError(RemoteSyncError):
 
 
 __all__ = [
+    "OrgScopeNotSupportedError",
     "RemoteSyncConfigError",
     "RemoteSyncError",
     "RemoteSyncUnavailableError",

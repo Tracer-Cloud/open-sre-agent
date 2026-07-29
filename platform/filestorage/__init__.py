@@ -37,6 +37,7 @@ from platform.filestorage.enums import (
     SyncRootName,
 )
 from platform.filestorage.errors import (
+    OrgScopeNotSupportedError,
     RemoteSyncConfigError,
     RemoteSyncError,
     RemoteSyncUnavailableError,
@@ -58,6 +59,7 @@ from platform.filestorage.providers import build_object_store
 from platform.filestorage.syncable import SyncRoot, is_syncable, resolved_roots, syncable_roots
 
 __all__ = [
+    "OrgScopeNotSupportedError",
     "format_status_lines",
     "format_report_lines",
     "DISABLED_HELP",
