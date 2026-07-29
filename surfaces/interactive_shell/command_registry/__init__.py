@@ -59,6 +59,7 @@ from surfaces.interactive_shell.command_registry.suggestions import (
     format_unknown_slash_message,
     resolve_literal_slash_typo,
 )
+from surfaces.interactive_shell.command_registry.sync_cmds import COMMANDS as SYNC_COMMANDS
 from surfaces.interactive_shell.command_registry.system import COMMANDS as SYSTEM_COMMANDS
 from surfaces.interactive_shell.command_registry.tasks_cmds import COMMANDS as TASK_COMMANDS
 from surfaces.interactive_shell.command_registry.theme import COMMANDS as THEME_COMMANDS
@@ -89,6 +90,7 @@ _MERGED_SEQUENCE = tuple(
         GATEWAY_COMMANDS,
         PRIVACY_COMMANDS,
         MEMORY_COMMANDS,
+        SYNC_COMMANDS,
         AGENTS_COMMANDS,
         ALERTS_COMMANDS,
         PARITY_COMMANDS,

@@ -86,7 +86,8 @@
           {
             "group": "Configuration",
             "pages": [
-              "configuration/environment-variables"
+              "configuration/environment-variables",
+              "configuration/remote-sync"
             ]
           }
         ]

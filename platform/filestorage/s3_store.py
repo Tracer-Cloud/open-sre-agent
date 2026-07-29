@@ -1,0 +1,109 @@
+"""S3 implementation of :class:`~platform.filestorage.ports.ObjectStore`.
+
+Talks to a bucket the user owns, under their own AWS credentials — opensre
+never holds them. Uploads are encrypted server-side; a bucket that rejects
+unencrypted writes therefore works unchanged.
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import TYPE_CHECKING, Any
+
+import boto3
+from botocore.exceptions import BotoCoreError, ClientError
+
+from platform.filestorage.config import RemoteSyncConfig
+from platform.filestorage.errors import RemoteSyncUnavailableError
+from platform.filestorage.ports import DIGEST_METADATA_KEY, RemoteObject
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+logger = logging.getLogger(__name__)
+
+_SERVER_SIDE_ENCRYPTION = "AES256"
+
+
+class S3ObjectStore:
+    """Reads and writes objects under one bucket and prefix."""
+
+    def __init__(self, config: RemoteSyncConfig, *, client: Any | None = None) -> None:
+        self._config = config
+        self._client = client if client is not None else _build_client(config)
+
+    def describe(self) -> str:
+        return f"s3://{self._config.bucket}/{self._config.prefix}"
+
+    def list_objects(self, prefix: str) -> list[RemoteObject]:
+        full_prefix = self._config.key_for(prefix) if prefix else self._config.prefix
+        out: list[RemoteObject] = []
+        try:
+            for page in self._pages(full_prefix):
+                for item in page.get("Contents", []):
+                    key = str(item["Key"])
+                    out.append(
+                        RemoteObject(
+                            key=self._strip_prefix(key),
+                            size=int(item.get("Size", 0)),
+                            last_modified=item["LastModified"],
+                            digest=self._digest_of(key),
+                        )
+                    )
+        except (BotoCoreError, ClientError) as exc:
+            raise RemoteSyncUnavailableError(f"cannot list {self.describe()}") from exc
+        return out
+
+    def get_object(self, key: str) -> bytes:
+        try:
+            response = self._client.get_object(
+                Bucket=self._config.bucket, Key=self._config.key_for(key)
+            )
+            body: bytes = response["Body"].read()
+            return body
+        except (BotoCoreError, ClientError) as exc:
+            raise RemoteSyncUnavailableError(f"cannot read {key}") from exc
+
+    def put_object(self, key: str, data: bytes, *, digest: str) -> None:
+        try:
+            self._client.put_object(
+                Bucket=self._config.bucket,
+                Key=self._config.key_for(key),
+                Body=data,
+                ServerSideEncryption=_SERVER_SIDE_ENCRYPTION,
+                Metadata={DIGEST_METADATA_KEY: digest},
+            )
+        except (BotoCoreError, ClientError) as exc:
+            raise RemoteSyncUnavailableError(f"cannot write {key}") from exc
+
+    def _pages(self, prefix: str) -> Iterator[dict[str, Any]]:
+        paginator = self._client.get_paginator("list_objects_v2")
+        yield from paginator.paginate(Bucket=self._config.bucket, Prefix=prefix)
+
+    def _digest_of(self, full_key: str) -> str:
+        """Stored content digest, or empty when the object predates it."""
+        try:
+            head = self._client.head_object(Bucket=self._config.bucket, Key=full_key)
+        except (BotoCoreError, ClientError):
+            return ""
+        metadata = head.get("Metadata") or {}
+        return str(metadata.get(DIGEST_METADATA_KEY, ""))
+
+    def _strip_prefix(self, full_key: str) -> str:
+        prefix = f"{self._config.prefix.rstrip('/')}/"
+        return full_key[len(prefix) :] if full_key.startswith(prefix) else full_key
+
+
+def _build_client(config: RemoteSyncConfig) -> Any:
+    try:
+        # Empty means "use the ambient AWS configuration", which boto3 spells None.
+        session = boto3.Session(
+            profile_name=config.profile or None,
+            region_name=config.region or None,
+        )
+        return session.client("s3")
+    except (BotoCoreError, ClientError) as exc:
+        raise RemoteSyncUnavailableError("cannot build an S3 client") from exc
+
+
+__all__ = ["S3ObjectStore"]
