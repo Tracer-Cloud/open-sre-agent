@@ -21,49 +21,68 @@ opensre integrations setup
 
 Select **Amazon EKS** when prompted.
 
-### Option 2: Environment variables
-
-Add the following to your `.env`:
+### Option 2: Environment variables (IAM role)
 
 ```bash
-AWS_ACCESS_KEY_ID=your-access-key
-AWS_SECRET_ACCESS_KEY=your-secret-key
+AWS_ROLE_ARN=arn:aws:iam::123456789012:role/OpenSREReadOnly
+AWS_EXTERNAL_ID=your-external-id     # optional
 AWS_REGION=us-east-1
-AWS_SESSION_TOKEN=your-session-token    # optional
 ```
 
-| Variable | Required | Description |
+### Option 3: Environment variables (static keys)
+
+```bash
+AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
+AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+AWS_SESSION_TOKEN=...                # optional
+AWS_REGION=us-east-1
+```
+
+| Variable | Default | Description |
 | --- | --- | --- |
-| `AWS_ACCESS_KEY_ID` | Yes | AWS access key ID |
-| `AWS_SECRET_ACCESS_KEY` | Yes | AWS secret access key |
-| `AWS_REGION` | No | AWS region (defaults to `us-east-1`) |
-| `AWS_SESSION_TOKEN` | No | Session token when using temporary credentials |
+| `AWS_ROLE_ARN` | — | IAM role to assume (recommended) |
+| `AWS_EXTERNAL_ID` | — | External ID for role assumption |
+| `AWS_REGION` | `us-east-1` | AWS region |
+| `AWS_ACCESS_KEY_ID` | — | Static access key (if not using role) |
+| `AWS_SECRET_ACCESS_KEY` | — | Static secret key |
+| `AWS_SESSION_TOKEN` | — | Session token for temporary credentials |
+
+<Info>
+Either `AWS_ROLE_ARN` or `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` is required.
+</Info>
 
 ## Verify
+
+Amazon EKS uses the shared **AWS** integration for authentication.
 
 ```bash
 opensre integrations verify eks
 ```
 
-Expected output:
+(`opensre integrations verify aws` is equivalent.)
 
-```text
-Service: eks
-Status: passed
-Detail: Successfully connected to Amazon EKS
-```
+Verification confirms the configured AWS credentials through AWS STS. It does not directly verify connectivity to the Kubernetes API. After verification succeeds, OpenSRE can access Amazon EKS resources during investigations.
 
 ## Investigation tools
 
-When investigating Amazon EKS alerts, OpenSRE provides:
+OpenSRE provides the following read-only Amazon EKS investigation tools:
 
-- **Describe EKS Cluster** — inspect cluster health, Kubernetes version, endpoint, and logging configuration.
-- **Deployment Status** — view desired, ready, and unavailable replicas for Kubernetes deployments.
-- **Describe Addon** — inspect managed addons such as CoreDNS, kube-proxy, VPC CNI, and the AWS EBS CSI Driver.
-- **List Clusters** — discover available Amazon EKS clusters in the AWS account.
+- `describe_eks_cluster` — inspect cluster configuration and status.
+- `describe_eks_addon` — inspect managed EKS addons.
+- `list_eks_clusters` — list available EKS clusters.
+- `list_eks_deployments` — list Kubernetes deployments.
+- `get_eks_deployment_status` — inspect deployment health and replica status.
+- `list_eks_namespaces` — list namespaces in a cluster.
+- `list_eks_pods` — list pods running in a namespace.
+- `get_eks_pod_logs` — retrieve logs from a pod.
+- `get_eks_events` — inspect Kubernetes events.
+- `get_eks_node_health` — inspect node health.
+- `get_eks_nodegroup_health` — inspect managed node group health.
 
-All operations are read-only.
+All operations are read-only and are intended for investigation only.
 
 ## Gotcha
 
-Ensure the configured AWS credentials have permission to access both Amazon EKS and the Kubernetes API. Without the required permissions or a valid kubeconfig, workload inspection may fail even if the cluster itself is reachable.
+OpenSRE does not require a local `kubeconfig` file.
+
+Instead, it authenticates to Amazon EKS using AWS credentials and creates the Kubernetes client dynamically. Ensure the configured AWS principal has permission to access both Amazon EKS and the Kubernetes API; otherwise workload inspection may fail.
