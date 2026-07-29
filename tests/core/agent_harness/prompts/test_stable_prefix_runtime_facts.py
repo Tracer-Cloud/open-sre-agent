@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import patch
 
 from core.agent_harness.prompts.assistant import build_cli_agent_prompt_from_provider
 from core.agent_harness.prompts.assistant_agent_prompt import build_environment_block
