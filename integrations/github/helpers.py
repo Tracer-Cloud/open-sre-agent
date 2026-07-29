@@ -1,4 +1,21 @@
-"""Helper functions for GitHub tools."""
+"""Helpers shared by GitHub MCP tools.
+
+Each function takes inputs produced by the rest of the runtime
+(integration store entries, MCP tool results, runtime-extracted kwargs)
+and returns the shape the next layer expects. Callers live in
+``integrations/github/tools/*.py`` and rely on these wrappers so the
+tool files stay thin.
+
+Exports:
+
+- ``GITHUB_INJECTED_PARAMS``: kwargs ``extract_params`` may inject that must
+  win over model-supplied values at call time.
+- ``github_source_available``: predicate on the integration store entry.
+- ``github_creds``: maps classified integration fields to tool kwargs.
+- ``resolve_github_mcp_config``: merges env defaults with explicit overrides.
+- ``normalize_github_tool_result``: turns a raw MCP tool result into the
+  payload shape consumed by the tool framework.
+"""
 
 from __future__ import annotations
 
@@ -23,7 +40,14 @@ GITHUB_INJECTED_PARAMS: tuple[str, ...] = (
 
 
 def github_source_available(sources: dict[str, dict]) -> bool:
-    """Check if source is available."""
+    """Return True when the GitHub integration is configured and reachable.
+
+    ``sources`` is the per-integration view assembled by the runtime from the
+    integration store; the relevant entry is ``sources["github"]``. Returns
+    True only when that entry's ``connection_verified`` flag is set truthy
+    (typically by the verifier after a live credentials check). Missing
+    ``github`` entry or a falsy/missing ``connection_verified`` returns False.
+    """
     return bool(sources.get("github", {}).get("connection_verified"))
 
 
@@ -69,7 +93,16 @@ def resolve_github_mcp_config(
     github_command: str | None = None,
     github_args: list[str] | None = None,
 ) -> GitHubMCPConfig | None:
-    """Resolve GitHub MCP config."""
+    """Return the GitHub MCP config to use, merging env defaults with overrides.
+
+    Reads ``github_mcp_config_from_env()`` for the env-derived baseline, then
+    treats any non-default value among ``github_url``, ``github_token``,
+    ``github_command``, ``github_args``, or a non-default ``github_mode`` as an
+    explicit override. When no overrides are present, returns the env config
+    as-is. Otherwise builds a fresh ``GitHubMCPConfig`` filling unset fields
+    from the env config (or ``DEFAULT_GITHUB_MCP_MODE`` for ``mode`` when no
+    env value is available) and returns it.
+    """
     env_config = github_mcp_config_from_env()
     if not _has_explicit_github_mcp_overrides(
         github_url, github_mode, github_token, github_command, github_args
@@ -89,7 +122,18 @@ def resolve_github_mcp_config(
 
 
 def normalize_github_tool_result(result: dict[str, Any]) -> dict[str, Any]:
-    """Normalize GitHub tool result."""
+    """Normalize a raw GitHub MCP tool result into the tool-framework payload.
+
+    ``result`` is the dict returned by ``call_github_mcp_tool``: it carries
+    ``is_error`` (bool), ``text`` (str, root-cause message on error),
+    ``tool`` (str, the MCP tool name), ``arguments`` (dict passed to the tool),
+    ``structured_content`` (parsed JSON or None), and ``content`` (list of MCP
+    content items). When ``is_error`` is truthy, returns the standard
+    ``tool_unavailable("github", ...)`` envelope so the framework surfaces a
+    consistent unavailable-source response. Otherwise returns a dict with
+    ``source="github"``, ``available=True``, and the original ``tool``,
+    ``arguments``, ``text``, ``structured_content``, ``content`` keys preserved.
+    """
     if result.get("is_error"):
         return tool_unavailable(
             "github",
