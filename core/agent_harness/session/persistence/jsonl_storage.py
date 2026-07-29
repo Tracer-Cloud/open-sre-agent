@@ -41,10 +41,12 @@ class JsonlSessionStorage:
     """
 
     def __init__(self) -> None:
-        # session_id → last conversation entry id (or None when only a header).
-        self._leaf_ids: dict[str, str | None] = {}
-        # session_id → (mtime_ns, size) observed when the tip was last trusted.
-        self._leaf_file_sig: dict[str, tuple[int, int]] = {}
+        # (session_id, path) → last conversation entry id (None = header only).
+        # The path is part of the key because session files are scope-dependent
+        # (bound org homes); a reused id under another home is a different file.
+        self._leaf_ids: dict[tuple[str, str], str | None] = {}
+        # (session_id, path) → (mtime_ns, size) when the tip was last trusted.
+        self._leaf_file_sig: dict[tuple[str, str], tuple[int, int]] = {}
 
     def open_session(self, session: SessionPersistenceSource) -> None:
         with contextlib.suppress(Exception):
@@ -60,8 +62,9 @@ class JsonlSessionStorage:
             }
             with path.open("w", encoding="utf-8") as fh:
                 fh.write(json.dumps(record, ensure_ascii=False) + "\n")
-            self._leaf_ids[session.session_id] = None
-            self._leaf_file_sig[session.session_id] = self._file_sig(path)
+            key = (session.session_id, str(path))
+            self._leaf_ids[key] = None
+            self._leaf_file_sig[key] = self._file_sig(path)
 
     def append_turn(self, session: SessionPersistenceSource, kind: str, text: str) -> None:
         self._append_entry(
@@ -324,8 +327,11 @@ class JsonlSessionStorage:
     def reopen_session(self, session_id: str) -> None:
         # V2 session files are append-only; drop the tip cache so the next
         # auto-parented append re-resolves from disk (resume / multi-writer).
-        self._leaf_ids.pop(session_id, None)
-        self._leaf_file_sig.pop(session_id, None)
+        # A session id may appear under several scope homes — drop them all.
+        stale = [key for key in self._leaf_ids if key[0] == session_id]
+        for key in stale:
+            self._leaf_ids.pop(key, None)
+            self._leaf_file_sig.pop(key, None)
 
     @staticmethod
     def _file_sig(path: Path) -> tuple[int, int]:
@@ -361,17 +367,19 @@ class JsonlSessionStorage:
                 fh.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
             self._remember_leaf(
                 session_id,
+                path,
                 entry_type,
                 entry_id,
                 parent=parent,
             )
-            self._leaf_file_sig[session_id] = self._file_sig(path)
+            self._leaf_file_sig[(session_id, str(path))] = self._file_sig(path)
             return entry_id
         return ""
 
     def _remember_leaf(
         self,
         session_id: str,
+        path: Path,
         entry_type: str,
         entry_id: str,
         *,
@@ -380,12 +388,13 @@ class JsonlSessionStorage:
         """Update the in-memory conversation tip after a successful append."""
         if entry_type == "trace_span":
             return
+        key = (session_id, str(path))
         if entry_type == "leaf":
             # Matches ``_scan_leaf_id``: a trailing leaf record is not itself a
             # parent — the tip stays at the leaf's parent (last real entry).
-            self._leaf_ids[session_id] = parent
+            self._leaf_ids[key] = parent
             return
-        self._leaf_ids[session_id] = entry_id
+        self._leaf_ids[key] = entry_id
 
     @staticmethod
     def _loads_record(line: str) -> dict[str, Any] | None:
@@ -406,12 +415,13 @@ class JsonlSessionStorage:
         return records
 
     def _current_leaf_id(self, session_id: str, path: Path) -> str | None:
+        key = (session_id, str(path))
         sig = self._file_sig(path)
-        if session_id in self._leaf_ids and self._leaf_file_sig.get(session_id) == sig:
-            return self._leaf_ids[session_id]
+        if key in self._leaf_ids and self._leaf_file_sig.get(key) == sig:
+            return self._leaf_ids[key]
         leaf = self._scan_leaf_id(path)
-        self._leaf_ids[session_id] = leaf
-        self._leaf_file_sig[session_id] = sig
+        self._leaf_ids[key] = leaf
+        self._leaf_file_sig[key] = sig
         return leaf
 
     @staticmethod
@@ -429,7 +439,10 @@ class JsonlSessionStorage:
             parent_id = rec.get("parent_id")
             return True, str(parent_id) if parent_id else None
         if rec_type == "session":
-            return True, None
+            # Header (or a stray concatenated one) is never a parent; keep
+            # scanning older lines. A header-only file resolves to None when
+            # the scan exhausts the file.
+            return False, None
         entry_id = rec.get("id")
         return True, str(entry_id) if entry_id else None
 

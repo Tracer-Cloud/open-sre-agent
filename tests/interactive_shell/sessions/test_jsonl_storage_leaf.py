@@ -130,14 +130,14 @@ def test_reopen_session_drops_tip_cache_and_rescan() -> None:
     session = _session()
     storage.open_session(session)
     storage.append_message(session.session_id, role="user", content="q")
-    assert session.session_id in storage._leaf_ids
+    assert any(key[0] == session.session_id for key in storage._leaf_ids)
 
     # Another writer advances the tip on disk while this instance still caches "q".
     other = JsonlSessionStorage()
     other.append_message(session.session_id, role="assistant", content="a")
 
     storage.reopen_session(session.session_id)
-    assert session.session_id not in storage._leaf_ids
+    assert not any(key[0] == session.session_id for key in storage._leaf_ids)
     assert session.session_id not in storage._leaf_file_sig
 
     storage.append_message(session.session_id, role="user", content="follow-up")

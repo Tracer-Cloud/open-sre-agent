@@ -66,9 +66,7 @@ def test_cold_scan_io_is_linear_over_trailing_spans(
     storage.append_message(session.session_id, role="user", content="tip")
     path = session_path(session.session_id)
     filler = "x" * 512
-    span_line = json.dumps(
-        {"id": "s", "parent_id": None, "type": "trace_span", "name": filler}
-    )
+    span_line = json.dumps({"id": "s", "parent_id": None, "type": "trace_span", "name": filler})
     target = 4 * _TAIL_SCAN_CHUNK_BYTES
     with path.open("a", encoding="utf-8") as fh:
         written = 0
@@ -92,7 +90,7 @@ def test_cold_scan_io_is_linear_over_trailing_spans(
         def __getattr__(self, name: str) -> Any:
             return getattr(self._inner, name)
 
-        def __enter__(self) -> "_CountingReader":
+        def __enter__(self) -> _CountingReader:
             self._inner.__enter__()
             return self
 
@@ -168,9 +166,7 @@ def test_tip_cache_is_scoped_to_the_file_not_just_the_session_id(
     storage.append_message(session.session_id, role="assistant", content="a-next")
 
     # Assert: each home's chain is internally consistent.
-    a_records = [
-        json.loads(ln) for ln in path_a.read_text(encoding="utf-8").splitlines()
-    ]
+    a_records = [json.loads(ln) for ln in path_a.read_text(encoding="utf-8").splitlines()]
     a_tip = next(r for r in a_records if r.get("content") == "a-tip")
     a_next = next(r for r in a_records if r.get("content") == "a-next")
     assert a_next["parent_id"] == a_tip["id"], (
