@@ -348,3 +348,214 @@ def test_second_push_reuploads_nothing(home: Path, roots: tuple[SyncRoot, ...]) 
     # Assert
     assert report.uploaded == []
     assert report.skipped == 2
+
+
+def test_aws_failures_name_their_cause() -> None:
+    """Sync runs on local surfaces, so the operator must see why it failed."""
+    # Arrange: a client whose calls fail the way botocore does.
+    from botocore.exceptions import ClientError
+
+    from platform.filestorage.config import RemoteSyncConfig
+    from platform.filestorage.errors import RemoteSyncUnavailableError
+    from platform.filestorage.s3_store import S3ObjectStore
+
+    class _Failing:
+        def get_paginator(self, _name: str) -> object:
+            raise ClientError(
+                {
+                    "Error": {
+                        "Code": "NoSuchBucket",
+                        "Message": "The specified bucket does not exist",
+                    }
+                },
+                "ListObjectsV2",
+            )
+
+    store = S3ObjectStore(RemoteSyncConfig(bucket="missing"), client=_Failing())
+
+    # Act
+    with pytest.raises(RemoteSyncUnavailableError) as caught:
+        store.list_objects("")
+
+    # Assert: the AWS reason survives, not just a generic message.
+    assert "NoSuchBucket" in str(caught.value)
+
+
+# ── Edge cases ───────────────────────────────────────────────────────────────
+
+
+def test_multipart_etag_is_not_treated_as_a_content_match(
+    home: Path, roots: tuple[SyncRoot, ...]
+) -> None:
+    """Compound S3 ETags (``md5-parts``) must not suppress a needed upload."""
+    from platform.filestorage.sync import comparable_etag
+
+    # Arrange: listing carries a multipart-style tag that is not content MD5.
+    body = (home / "sessions" / "abc.jsonl").read_bytes()
+    store = FakeObjectStore()
+    store.put_object("sessions/abc.jsonl", body)
+    multipart = RemoteObject(
+        key="sessions/abc.jsonl",
+        size=len(body),
+        last_modified=datetime.now(tz=UTC),
+        etag=f"{content_tag(body)}-2",
+    )
+    assert comparable_etag(multipart) == ""
+
+    # Act: push with that listing injected
+    report = push(store, roots=roots, remote=[multipart])
+
+    # Assert: file is re-uploaded because the tag was unusable
+    assert "sessions/abc.jsonl" in report.uploaded
+
+
+def test_nested_session_files_round_trip(
+    home: Path, roots: tuple[SyncRoot, ...], tmp_path: Path
+) -> None:
+    # Arrange
+    nested = home / "sessions" / "project" / "nested.jsonl"
+    nested.parent.mkdir()
+    nested.write_text('{"nested": true}\n', encoding="utf-8")
+    store = FakeObjectStore()
+    push(store, roots=roots)
+
+    # Act
+    second = tmp_path / "machine-two"
+    second_roots = (
+        SyncRoot(name="sessions", path=second / "sessions"),
+        SyncRoot(name="memory", path=second / "memory"),
+    )
+    pull(store, roots=second_roots)
+
+    # Assert
+    assert (second / "sessions" / "project" / "nested.jsonl").read_text(
+        encoding="utf-8"
+    ) == '{"nested": true}\n'
+
+
+def test_empty_roots_are_a_no_op(tmp_path: Path) -> None:
+    # Arrange: roots exist but hold no files yet.
+    sessions = tmp_path / "sessions"
+    memory = tmp_path / "memory"
+    sessions.mkdir()
+    memory.mkdir()
+    roots = (
+        SyncRoot(name="sessions", path=sessions),
+        SyncRoot(name="memory", path=memory),
+    )
+    store = FakeObjectStore()
+
+    # Act
+    report = run_sync(store, roots=roots)
+
+    # Assert
+    assert report.uploaded == []
+    assert report.downloaded == []
+    assert store.objects == {}
+
+
+def test_unknown_remote_key_prefix_is_ignored(home: Path, roots: tuple[SyncRoot, ...]) -> None:
+    # Arrange
+    store = FakeObjectStore()
+    store.put_object("scratch/notes.txt", b"not ours\n")
+
+    # Act
+    report = pull(store, roots=roots)
+
+    # Assert
+    assert report.downloaded == []
+    assert not (home / "scratch").exists()
+
+
+def test_push_only_does_not_download(home: Path, roots: tuple[SyncRoot, ...]) -> None:
+    from platform.filestorage.sync import SyncDirection
+
+    # Arrange: remote-only file must stay remote-only under push-only.
+    store = FakeObjectStore()
+    store.put_object("memory/remote-only.md", b"stay remote\n")
+
+    # Act
+    report = run_sync(store, direction=SyncDirection.PUSH, roots=roots)
+
+    # Assert
+    assert report.downloaded == []
+    assert not (home / "memory" / "remote-only.md").exists()
+    assert "sessions/abc.jsonl" in report.uploaded
+
+
+def test_pull_only_does_not_upload(home: Path, roots: tuple[SyncRoot, ...]) -> None:
+    from platform.filestorage.sync import SyncDirection
+
+    # Arrange
+    store = FakeObjectStore()
+    store.put_object("memory/from-remote.md", b"hello\n")
+
+    # Act
+    report = run_sync(store, direction=SyncDirection.PULL, roots=roots)
+
+    # Assert
+    assert "memory/from-remote.md" in report.downloaded
+    assert report.uploaded == []
+    assert "sessions/abc.jsonl" not in store.objects
+
+
+def test_files_outside_allowlisted_roots_are_not_syncable(
+    home: Path, roots: tuple[SyncRoot, ...]
+) -> None:
+    # Arrange: a new top-level file under home is excluded by default.
+    stray = home / "notes.md"
+    stray.write_text("local only\n", encoding="utf-8")
+
+    # Act / Assert
+    assert is_syncable(stray, roots=roots) is False
+
+
+def test_credentials_json_is_not_syncable(home: Path, roots: tuple[SyncRoot, ...]) -> None:
+    from config.constants.secrets import CREDENTIAL_FALLBACK_FILENAME
+
+    # Arrange
+    path = home / CREDENTIAL_FALLBACK_FILENAME
+    path.write_text(LEAKED_SECRET, encoding="utf-8")
+
+    # Act / Assert
+    assert is_syncable(path, roots=roots) is False
+
+
+def test_comparable_etag_strips_quotes_and_rejects_multipart() -> None:
+    from platform.filestorage.sync import comparable_etag
+
+    now = datetime.now(tz=UTC)
+    quoted = RemoteObject(key="k", size=1, last_modified=now, etag='"abc123"')
+    multipart = RemoteObject(key="k", size=1, last_modified=now, etag="abc123-3")
+    empty = RemoteObject(key="k", size=1, last_modified=now, etag="")
+
+    assert comparable_etag(quoted) == "abc123"
+    assert comparable_etag(multipart) == ""
+    assert comparable_etag(empty) == ""
+
+
+def test_resolve_direction_maps_each_flag() -> None:
+    from platform.filestorage.sync import SyncDirection
+
+    assert resolve_direction(pull_only=False, push_only=False) is SyncDirection.BOTH
+    assert resolve_direction(pull_only=True, push_only=False) is SyncDirection.PULL
+    assert resolve_direction(pull_only=False, push_only=True) is SyncDirection.PUSH
+
+
+def test_missing_root_directory_is_skipped_not_fatal(tmp_path: Path) -> None:
+    # Arrange: sessions dir was never created on this machine.
+    memory = tmp_path / "memory"
+    memory.mkdir()
+    (memory / "a.md").write_text("x\n", encoding="utf-8")
+    roots = (
+        SyncRoot(name="sessions", path=tmp_path / "sessions"),
+        SyncRoot(name="memory", path=memory),
+    )
+    store = FakeObjectStore()
+
+    # Act
+    report = push(store, roots=roots)
+
+    # Assert
+    assert report.uploaded == ["memory/a.md"]
+    assert "sessions/" not in "".join(store.objects)
