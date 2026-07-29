@@ -29,8 +29,8 @@ from typing import Final
 
 from integrations.hermes.incident import HermesIncident, IncidentSeverity
 
-DEFAULT_DEDUP_WINDOW_S: Final[float] = 300.0  # 5 minutes
-DEFAULT_ESCALATION_WINDOW_S: Final[float] = 600.0  # 10 minutes
+DEFAULT_DEDUP_WINDOW_SECONDS: Final[float] = 300.0  # 5 minutes
+DEFAULT_ESCALATION_WINDOW_SECONDS: Final[float] = 600.0  # 10 minutes
 DEFAULT_ESCALATION_THRESHOLD: Final[int] = 3
 _SEVERITY_ORDER: Final[tuple[IncidentSeverity, ...]] = (
     IncidentSeverity.LOW,
@@ -114,8 +114,8 @@ class IncidentCorrelator:
     def __init__(
         self,
         *,
-        dedup_window_s: float = DEFAULT_DEDUP_WINDOW_S,
-        escalation_window_s: float = DEFAULT_ESCALATION_WINDOW_S,
+        dedup_window_s: float = DEFAULT_DEDUP_WINDOW_SECONDS,
+        escalation_window_s: float = DEFAULT_ESCALATION_WINDOW_SECONDS,
         escalation_threshold: int = DEFAULT_ESCALATION_THRESHOLD,
         routing_matrix: dict[str, RouteDestination] | None = None,
     ) -> None:
