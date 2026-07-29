@@ -221,7 +221,7 @@ MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "Subcommands: show <name>, forget <name>, path.",
         "User explicitly asks to list, show, or delete stored memories via /memory",
         anti_examples=(
-            "User shares a durable fact to remember (use the memory_remember action)",
+            "User shares a durable fact in normal chat (agent should auto-save via memory_remember)",
             "User asks what the agent knows about them (use memory_recall)",
         ),
     ),

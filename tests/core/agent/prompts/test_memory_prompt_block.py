@@ -22,7 +22,7 @@ class TestSystemPromptBlock:
         )
         assert _HEADER in prompt
         assert "user-profile" in prompt
-        assert "do not invent full entry details" in prompt
+        assert "do not invent details beyond them" in prompt
         assert "do not claim a memory was saved" in prompt
 
     def test_block_omitted_when_empty(self) -> None:
@@ -52,10 +52,11 @@ class TestDefaultProviderMemory:
             slug="prod-cluster",
             memory_type="infrastructure",
             description="Prod cluster is eks-prod-1",
-            body="details",
+            body="eks details live here",
         )
         rendered = self._provider_memory()
         assert "[infrastructure] prod-cluster" in rendered
+        assert "eks details live here" in rendered
 
     def test_empty_when_disabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
         save_memory(

@@ -110,6 +110,25 @@ def test_http_error_preserves_status_and_rate_limit_headers(
     assert exc.value.rate_limit_reset == "123"
 
 
+def test_request_accept_header_can_be_overridden(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen_accept = ""
+
+    def fake_urlopen(req: request.Request, timeout: int = 0) -> _Response:  # noqa: ARG001
+        nonlocal seen_accept
+        seen_accept = str(req.headers["Accept"])
+        return _Response([{"starred_at": "2026-07-27T00:00:00Z"}])
+
+    monkeypatch.setattr("integrations.github.client.request.urlopen", fake_urlopen)
+    client = GitHubRestClient(github_token="tok")
+
+    assert client.request(
+        "GET",
+        "/repos/o/r/stargazers",
+        accept="application/vnd.github.star+json",
+    ) == [{"starred_at": "2026-07-27T00:00:00Z"}]
+    assert seen_accept == "application/vnd.github.star+json"
+
+
 def test_invalid_json_raises_typed_error(monkeypatch: pytest.MonkeyPatch) -> None:
     def fake_urlopen(_req: request.Request, timeout: int = 0) -> _RawResponse:  # noqa: ARG001
         return _RawResponse("not-json")

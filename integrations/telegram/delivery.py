@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import logging
 import re
+from http import HTTPStatus
 from typing import Any
 
 from platform.common.truncation import truncate
@@ -149,7 +150,7 @@ def post_telegram_message(
         error = redact_token(response.error, bot_token)
         logger.warning("[telegram] post message exception: %s", error)
         return False, error, ""
-    if response.status_code != 200:
+    if response.status_code != HTTPStatus.OK:
         logger.warning("[telegram] post message failed: %s", response.status_code)
         if response.data:
             error_message = str(

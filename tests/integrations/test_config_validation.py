@@ -8,7 +8,6 @@ from integrations.config_models import (
     BetterStackIntegrationConfig,
     CoralogixIntegrationConfig,
     GrafanaIntegrationConfig,
-    HoneycombIntegrationConfig,
     SlackWebhookConfig,
     SnowflakeIntegrationConfig,
     TracerIntegrationConfig,
@@ -19,6 +18,7 @@ from integrations.github.mcp import (
     build_github_mcp_config,
 )
 from integrations.grafana.config import GrafanaAccountConfig
+from integrations.honeycomb.config import HoneycombIntegrationConfig
 from integrations.sentry import build_sentry_config
 from integrations.snowflake import classify as classify_snowflake
 

@@ -12,6 +12,10 @@ WHEN TO USE (call github_cli; do NOT assistant_handoff):
 Do NOT use this skill for:
 - Live incident RCA (investigation_start) — including multi-source asks that
   name github issues alongside Sentry/PostHog/Datadog while diagnosing a crash
+- Star history / day-by-day stars / stars gained / star velocity — emit
+  assistant_handoff so gather can call get_github_star_history. Do NOT use
+  github_cli, gh api stargazers, or shell_run for these; paginated stargazer
+  scans via gh routinely undercount or report false zeros.
 - Observability lookups (Sentry/Datadog/Grafana/PostHog) — those stay handoffs
 - Slack → GitHub propose/execute mutations (workflow tools)
 - Architecture audit (architecture_* tools + architecture audit skill)

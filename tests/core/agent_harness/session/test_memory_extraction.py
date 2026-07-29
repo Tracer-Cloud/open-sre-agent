@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -113,6 +114,88 @@ class TestExtraction:
         extraction.extract_memories_from_session(_FakeSession())
         assert list_memories() == []
 
+    def test_sample_alert_infra_and_lessons_are_skipped(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        items = [
+            {
+                "name": "checkout-api-incident-2024-pool-exhaustion",
+                "type": "investigation_learning",
+                "description": (
+                    "checkout-api in us-east-1 had 30% HTTP 500s 5min after "
+                    "a deploy due to DB connection pool exhaustion"
+                ),
+                "content": "checkout-api had a generated sample RCA about DB pool exhaustion.",
+            },
+            {
+                "name": "checkout-api-infra",
+                "type": "infrastructure",
+                "description": (
+                    "checkout-api runs in us-east-1; uses a relational DB with a connection pool"
+                ),
+                "content": "checkout-api infrastructure notes from a sample alert.",
+            },
+        ]
+        _patch_llm(monkeypatch, json.dumps(items))
+        extraction.extract_memories_from_messages(
+            [
+                ("user", "run a sample alert investigation"),
+                (
+                    "assistant",
+                    "Sample RCA: checkout-api in us-east-1 had HTTP 500s after deploy.",
+                ),
+            ]
+        )
+        assert list_memories() == []
+
+    def test_assistant_only_infrastructure_is_skipped(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _patch_llm(
+            monkeypatch,
+            json.dumps(
+                [
+                    {
+                        "name": "checkout-api-infra",
+                        "type": "infrastructure",
+                        "description": "checkout-api runs in us-east-1",
+                        "content": "checkout-api runs in us-east-1.",
+                    }
+                ]
+            ),
+        )
+        extraction.extract_memories_from_messages(
+            [
+                ("user", "what happened?"),
+                ("assistant", "checkout-api runs in us-east-1."),
+            ]
+        )
+        assert list_memories() == []
+
+    def test_user_grounded_infrastructure_still_saves(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _patch_llm(
+            monkeypatch,
+            json.dumps(
+                [
+                    {
+                        "name": "prod-cluster",
+                        "type": "infrastructure",
+                        "description": "prod cluster is eks-prod-1",
+                        "content": "The user's prod cluster is eks-prod-1.",
+                    }
+                ]
+            ),
+        )
+        extraction.extract_memories_from_messages(
+            [
+                ("user", "our prod cluster is eks-prod-1"),
+                ("assistant", "got it"),
+            ]
+        )
+        assert [r.slug for r in list_memories()] == ["prod-cluster"]
+
     def test_cap_of_five_memories(self, monkeypatch: pytest.MonkeyPatch) -> None:
         items = [_valid_item(f"mem-{i}") for i in range(extraction.MAX_MEMORIES_PER_SESSION + 3)]
         _patch_llm(monkeypatch, json.dumps(items))
@@ -173,6 +256,43 @@ class TestSchedule:
         )
         assert order == ["extract:2"]
 
+    def test_async_schedule_coalesces_to_latest_snapshot(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import time
+
+        seen: list[int] = []
+        started = threading.Event()
+        release = threading.Event()
+
+        def _extract(messages: list[tuple[str, str]]) -> None:
+            started.set()
+            release.wait(timeout=2.0)
+            seen.append(len(messages))
+
+        monkeypatch.setattr(extraction, "_extract_memories_safe", _extract)
+        # Reset coalescing state from other tests.
+        with extraction._worker_lock:
+            extraction._pending_messages = None
+            extraction._pending_context = None
+            extraction._worker = None
+
+        extraction.schedule_memory_extraction(
+            [("user", "a"), ("assistant", "b")],
+            wait_for_completion=False,
+        )
+        assert started.wait(timeout=2.0)
+        extraction.schedule_memory_extraction(
+            [("user", "a"), ("assistant", "b"), ("user", "c"), ("assistant", "d")],
+            wait_for_completion=False,
+        )
+        release.set()
+        deadline = time.monotonic() + 2.0
+        while time.monotonic() < deadline and len(seen) < 2:
+            time.sleep(0.01)
+        # First run used the initial snapshot; second run used the coalesced latest.
+        assert seen == [2, 4]
+
     def test_transcript_is_redacted_before_llm(self, monkeypatch: pytest.MonkeyPatch) -> None:
         prompts: list[str] = []
         fake_token = "ghp_" + ("a" * 36)
@@ -195,3 +315,37 @@ class TestSchedule:
         assert len(prompts) == 1
         assert fake_token not in prompts[0]
         assert "[REDACTED]" in prompts[0]
+
+
+def test_scheduled_extraction_thread_inherits_storage_scope(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The rotation-path daemon thread must run inside the per-turn storage
+    scope. Without contextvars.copy_context() the thread sees current_scope()
+    is None and save_memory() misfiles the user's facts under the org root
+    instead of users/<actor_id>/memory/ (regression guard)."""
+    import threading
+
+    from config.principal import Actor, Principal, StorageScope
+    from config.scope_context import bound_storage_scope, current_scope
+
+    monkeypatch.setattr(extraction, "auto_extract_enabled", lambda: True)
+
+    seen: dict[str, Any] = {}
+    done = threading.Event()
+
+    def _recorder(_messages: list[tuple[str, str]]) -> None:
+        seen["scope"] = current_scope()
+        done.set()
+
+    monkeypatch.setattr(extraction, "_extract_memories_safe", _recorder)
+
+    scope = StorageScope(principal=Principal.org("org_a"), actor=Actor(id="U1"))
+    with bound_storage_scope(scope):
+        extraction.schedule_memory_extraction(
+            [("user", "hi"), ("assistant", "hello")],
+            wait_for_completion=False,
+        )
+
+    assert done.wait(timeout=5), "extraction thread never ran"
+    assert seen["scope"] is scope

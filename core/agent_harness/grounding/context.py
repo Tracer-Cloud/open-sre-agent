@@ -1,9 +1,13 @@
-"""Session-scoped grounding context aggregating the LLM grounding caches.
+"""Session-scoped grounding context for repo-level reference caches.
 
-A single :class:`GroundingContext` owns one instance of each cached grounding
-reference (docs, AGENTS.md). It is created per ``Session`` and threaded
-through prompt assembly, so the grounding caches have a clear, process-scoped
-lifetime with no module-level mutable globals.
+Holds one :class:`DocsReference` and one :class:`AgentsMdReference` per
+session. Created once per ``Session`` and threaded through prompt assembly
+so callers always get a single, consistent view of the grounding data.
+
+**What lives here:** per-session caches for docs and AGENTS.md grounding.
+**What must NOT live here:** LLM completions, investigation state, tool
+outputs, or any data that belongs to a specific investigation run rather
+than the session setup.
 """
 
 from __future__ import annotations
@@ -22,24 +26,49 @@ from core.agent_harness.grounding.docs_reference import DocsReference
 
 @dataclass
 class GroundingContext:
-    """Owns the per-session repo-level grounding caches and exposes diagnostics."""
+    """Per-session container for repo-level grounding caches.
+
+    Owns exactly one :class:`DocsReference` and one :class:`AgentsMdReference`.
+    Callers must not store investigation-scoped data (tool outputs, LLM
+    completions, run state) here — those belong on the investigation context,
+    not the session grounding cache.
+
+    Attributes:
+        docs: Cached reference to the project documentation.
+        agents_md: Cached reference to the AGENTS.md repo map.
+    """
 
     docs: DocsReference = field(default_factory=DocsReference)
     agents_md: AgentsMdReference = field(default_factory=AgentsMdReference)
 
     def iter_sources(self) -> list[GroundingSource]:
-        """Return each cache as a :class:`GroundingSource` for diagnostics display."""
+        """Return both caches as :class:`GroundingSource` objects for diagnostics.
+
+        Returns:
+            A list containing the docs and agents_md sources, in that order.
+            Always returns exactly two items.
+        """
         return [
             self.docs.as_grounding_source(),
             self.agents_md.as_grounding_source(),
         ]
 
     def log_cache_diagnostics(self, reason: str) -> None:
-        """Log all grounding cache stats when ``TRACER_VERBOSE=1``."""
+        """Emit cache hit/miss stats for all grounding sources when ``TRACER_VERBOSE=1``.
+
+        Args:
+            reason: Human-readable label describing why diagnostics are being
+                logged (e.g. ``"pre-prompt"`` or ``"post-invalidation"``).
+        """
         log_grounding_cache_diagnostics(self.iter_sources(), reason)
 
     def invalidate(self) -> None:
-        """Drop every grounding cache (tests, forced refresh)."""
+        """Evict all cached grounding data, forcing a fresh load on next access.
+
+        Use in tests or when a forced cache refresh is required. Invalidates
+        both ``docs`` and ``agents_md`` caches. Does not raise if caches are
+        already empty.
+        """
         self.docs.invalidate()
         self.agents_md.invalidate()
 

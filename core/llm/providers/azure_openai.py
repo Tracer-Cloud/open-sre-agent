@@ -106,7 +106,7 @@ def azure_deployment_not_found_remediation_steps() -> list[str]:
     return [
         (
             "Set AZURE_OPENAI_*_MODEL to your deployment name from the Azure portal, "
-            "not a model ID from /openai/models."
+            + "not a model ID from /openai/models."
         ),
         f"List deployments: {azure_deployments_list_curl_command()}",
         "Create or rename the deployment in Azure AI Foundry if needed.",

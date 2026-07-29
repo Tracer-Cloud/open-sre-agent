@@ -6,6 +6,7 @@ import logging
 import os
 import re
 from dataclasses import dataclass
+from http import HTTPStatus
 from typing import Any
 
 import httpx
@@ -177,7 +178,7 @@ def describe_sentry_api_error(
         detail = str(err)
 
     hints: list[str] = []
-    if err.response.status_code == 400:
+    if err.response.status_code == HTTPStatus.BAD_REQUEST:
         if _OR_SPLIT.search(query.split("\n", maxsplit=1)[0]):
             hints.append(
                 "Sentry issue search does not support OR; use one keyword or phrase at a time."
@@ -307,7 +308,7 @@ def list_sentry_issues(
             )
             return payload if isinstance(payload, list) else []
         except httpx.HTTPStatusError as err:
-            if err.response.status_code == 400:
+            if err.response.status_code == HTTPStatus.BAD_REQUEST:
                 last_error = err
                 continue
             raise

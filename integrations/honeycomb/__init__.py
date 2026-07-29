@@ -6,7 +6,7 @@ import logging
 from typing import Any
 
 from integrations._validation_helpers import report_classify_failure
-from integrations.config_models import HoneycombIntegrationConfig
+from integrations.honeycomb.config import HoneycombIntegrationConfig
 
 logger = logging.getLogger(__name__)
 

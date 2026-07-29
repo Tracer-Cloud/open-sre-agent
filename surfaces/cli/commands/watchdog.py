@@ -45,7 +45,20 @@ from tools.system.watch_dog.runner import run_watchdog
     help="Minimum gap between repeated alarms per threshold.",
 )
 @click.option("--once", is_flag=True, help="Exit after the first threshold alarm.")
-@click.option("--chat-id", type=str, default=None, help="Override TELEGRAM_DEFAULT_CHAT_ID.")
+@click.option(
+    "--provider",
+    type=click.Choice(["telegram", "rocketchat"], case_sensitive=False),
+    default="telegram",
+    show_default=True,
+    help="Messaging provider for alarm delivery.",
+)
+@click.option(
+    "--chat-id",
+    type=str,
+    default=None,
+    help="Override the provider's default chat/channel (TELEGRAM_DEFAULT_CHAT_ID or "
+    "ROCKETCHAT_DEFAULT_CHANNEL).",
+)
 @click.option("--verbose", is_flag=True, help="Print one line per sampled process state.")
 def watchdog_command(
     pid: int | None,
@@ -58,10 +71,11 @@ def watchdog_command(
     interval: float,
     cooldown: str,
     once: bool,
+    provider: str,
     chat_id: str | None,
     verbose: bool,
 ) -> None:
-    """Monitor a process and send Telegram alarms when thresholds trip."""
+    """Monitor a process and send alarms via Telegram or Rocket.Chat when thresholds trip."""
     try:
         config = WatchdogConfig.model_validate(
             {
@@ -75,6 +89,7 @@ def watchdog_command(
                 "interval": interval,
                 "cooldown": cooldown,
                 "once": once,
+                "provider": provider,
                 "chat_id": chat_id,
                 "verbose": verbose,
             }

@@ -404,17 +404,22 @@ def _persist_llm_api_key(env_var: str, value: str) -> bool:
             "",
         )
         if provider:
-            save_api_key(provider, value)
+            result = save_api_key(provider, value)
         else:
-            persist_api_key_secret(env_var, value, save_secret=save_keyring_secret)
+            result = persist_api_key_secret(env_var, value, save_secret=save_keyring_secret)
+        detail = result.detail if result.used_fallback else ""
     except (AuthSetupError, RuntimeError, ValueError) as exc:
         _console.print(f"[{ERROR}]  {GLYPH_ERROR}  {exc}[/]")
         _console.print(
-            f"[{WARNING}]  {GLYPH_WARNING}  OpenSRE could not save your API key to the local system keychain.[/]"
+            f"[{WARNING}]  {GLYPH_WARNING}  OpenSRE could not save your API key to secure local storage.[/]"
         )
         for line in get_keyring_setup_instructions(env_var):
             _console.print(f"[{SECONDARY}]    {line}[/]")
         return False
+    if detail:
+        # Saved, but not where we would have preferred — say so rather than
+        # letting a silent downgrade to on-disk storage look like a keychain write.
+        _console.print(f"[{WARNING}]  {GLYPH_WARNING}  {detail}[/]")
     return True
 
 

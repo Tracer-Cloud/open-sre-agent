@@ -25,6 +25,7 @@ from config.llm_auth.auth_method import (
     supports_oauth_auth_method,
 )
 from config.llm_auth.records import save_provider_auth_record
+from core.llm.providers.azure_openai import is_azure_openai_provider
 from integrations.llm_cli.binary_resolver import diagnose_binary_path
 from integrations.llm_cli.codex_oauth import CodexOAuthError, run_codex_oauth_login
 from platform.terminal.theme import (
@@ -42,13 +43,11 @@ from surfaces.cli.wizard._ui import (
     _confirm,
     _console,
     _local_defaults,
-    _persist_llm_api_key,
     _prompt_value,
     _render_header,
     _render_next_steps,
     _render_saved_summary,
     _select_target_for_advanced,
-    _step,
     _step_header,
 )
 from surfaces.cli.wizard.azure_openai import (
@@ -64,11 +63,26 @@ from surfaces.cli.wizard.configurators.github import (
 )
 from surfaces.cli.wizard.env_sync import sync_provider_env
 from surfaces.cli.wizard.integration_health import IntegrationHealthResult
+from surfaces.cli.wizard.llm_credential import (
+    CANCEL,
+    OK,
+    REPICK,
+    UNSAVED,
+    UNVERIFIED,
+    CredentialState,
+    _credential_line_for_saved_summary,
+    _persist_llm_credential_with_recovery,
+    _prompt_validated_llm_credential,
+    _provider_choice_label,
+)
 from surfaces.cli.wizard.probes import ProbeResult, probe_local_target, probe_remote_target
 from surfaces.cli.wizard.store import get_store_path, save_local_config
-from surfaces.cli.wizard.validation import build_demo_action_response as _build_demo_action_response
+from surfaces.cli.wizard.validation import (
+    build_demo_action_response as _build_demo_action_response,
+)
 
 WIZARD_TOTAL_STEPS = 4
+
 _CLI_SUBSCRIPTION_LOGIN_ARGS: dict[str, tuple[str, ...]] = {
     "claude-code": ("auth", "login"),
     "codex": ("login",),
@@ -114,22 +128,6 @@ def _provider_label_for_saved_summary(
     return provider.label
 
 
-def _credential_line_for_saved_summary(
-    provider: ProviderOption, auth_method: str | None = None
-) -> str:
-    """One-line credential description for the post-wizard saved summary."""
-    if normalize_llm_auth_method(auth_method) == OAUTH_AUTH_METHOD:
-        if provider.value == "openai":
-            return "OpenAI OAuth tokens (Codex CLI)"
-        return f"{_provider_choice_label(provider)} OAuth session"
-    if provider.credential_kind != "cli":
-        return "system keychain"
-    if provider.adapter_factory is None:
-        return f"{provider.label} (CLI)"
-    cli_adapter = provider.adapter_factory()
-    return f"{provider.label} ({cli_adapter.auth_hint})"
-
-
 @dataclass(frozen=True)
 class _SubscriptionLoginResult:
     ok: bool
@@ -150,14 +148,6 @@ class _LoginProcessResult:
 class _CodexConfigRepairResult:
     ok: bool
     detail: str
-
-
-def _provider_choice_label(provider: ProviderOption) -> str:
-    if provider.value == "openai":
-        return "OpenAI"
-    if provider.value == "anthropic":
-        return "Anthropic"
-    return provider.label
 
 
 def _onboarding_provider_options() -> tuple[ProviderOption, ...]:
@@ -222,29 +212,6 @@ def _persisted_auth_method(
     ):
         return normalize_llm_auth_method(auth_method)
     return None
-
-
-def _credential_prompt_label(provider: ProviderOption) -> str:
-    """Provider label without the credential kind when the choice already includes it."""
-    suffix = f" {provider.credential_label}"
-    if provider.label.lower().endswith(suffix.lower()):
-        return provider.label[: -len(suffix)]
-    return provider.label
-
-
-def _persist_llm_credential(provider: ProviderOption, value: str) -> bool:
-    """Persist one prompted credential where the runtime will actually read it.
-
-    ``credential_kind == "host"`` values (e.g. the Ollama host URL) are plain
-    runtime configuration, not secrets: the runtime resolves them from the
-    environment only, never the keyring, so they belong in the project ``.env``.
-    Everything else keeps the keyring path.
-    """
-    if provider.credential_kind == "host":
-        sync_env_values({provider.api_key_env: value})
-        os.environ[provider.api_key_env] = value
-        return True
-    return _persist_llm_api_key(provider.api_key_env, value)
 
 
 def _subscription_login_command(
@@ -706,7 +673,13 @@ def run_wizard(_argv: list[str] | None = None) -> int:
     auth_method: LLMAuthMethod | None
     model: str
     provider_extra_env: dict[str, str] = {}
+    credential_state: CredentialState = OK
+    # Records a ``continue_unsaved`` secret export so it can be re-applied after
+    # ``sync_provider_env`` pops it, before the in-process shell handoff (#3591).
+    session_env_sink: dict[str, str] = {}
     while True:
+        credential_state = OK
+        session_env_sink = {}
         _step_header(2, WIZARD_TOTAL_STEPS, "LLM Provider")
         saved_provider = (
             PROVIDER_BY_VALUE.get(saved_provider_value) if saved_provider_value else None
@@ -749,93 +722,41 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                 force_repick = True
                 continue
             model = model_provider.default_model
-            if auth_method == API_KEY_AUTH_METHOD and provider.credential_kind not in (
-                "cli",
-                "none",
-            ):
-                _step(provider.credential_label.title())
-                try:
-                    api_key = _prompt_value(
-                        f"{_credential_prompt_label(provider)} {provider.credential_label} ({provider.api_key_env})",
-                        default=provider.credential_default,
-                        secret=provider.credential_secret,
-                        back_on_cancel=True,
-                    )
-                except WizardBack:
-                    force_repick = True
-                    continue
-                except KeyboardInterrupt:
-                    _console.print(f"\n[{WARNING}]Setup cancelled.[/]")
-                    return 1
-                if not _persist_llm_credential(provider, api_key):
-                    return 1
-                azure_env = ensure_azure_openai_endpoint_settings(provider)
-                if azure_env is None:
-                    force_repick = True
-                    continue
-                provider_extra_env = azure_env
-                os.environ.update(azure_env)
         else:
             assert saved_provider is not None
             provider = saved_provider
             auth_method = saved_auth_method
             model_provider = _oauth_backend_provider(provider, auth_method)
             model = saved_model_value or model_provider.default_model
-            if auth_method == API_KEY_AUTH_METHOD and provider.credential_kind not in (
-                "cli",
-                "none",
-            ):
-                has_api_key = bool(defaults["has_api_key"])
-                legacy_api_key = str(defaults["legacy_api_key"] or "").strip()
-                # A ``host`` credential (e.g. the Ollama host) is not a secret api key: never
-                # migrate a stale legacy ``api_key`` value into it — that would leak a
-                # secret-shaped value into .env and point the runtime at a bogus host. Fall
-                # through to the host prompt instead (#3291).
-                if not has_api_key and legacy_api_key and provider.credential_kind != "host":
-                    if not _persist_llm_credential(provider, legacy_api_key):
-                        return 1
-                    has_api_key = True
-                if not has_api_key:
-                    _step(provider.credential_label.title())
-                    try:
-                        api_key = _prompt_value(
-                            f"{_credential_prompt_label(provider)} {provider.credential_label} ({provider.api_key_env})",
-                            default=provider.credential_default,
-                            secret=provider.credential_secret,
-                            back_on_cancel=True,
-                        )
-                    except WizardBack:
-                        force_repick = True
-                        continue
-                    except KeyboardInterrupt:
-                        _console.print(f"\n[{WARNING}]Setup cancelled.[/]")
-                        return 1
-                    if not _persist_llm_credential(provider, api_key):
-                        return 1
-            azure_env = ensure_azure_openai_endpoint_settings(provider)
-            if azure_env is None:
-                force_repick = True
-                continue
-            provider_extra_env = azure_env
-            os.environ.update(azure_env)
 
+        # The model pick comes BEFORE the credential block, in both branches: the live
+        # probe must run against the model that actually gets persisted. Probing the
+        # provider default instead locks out anyone who picks a non-default model — an
+        # Ollama user selecting a model they have pulled would be told to pull the
+        # default model they never chose, on every retry.
+        #
+        # Azure is the exception: its "model" is a live deployment name discovered from
+        # the resource, so it needs the endpoint + key first. The deployment pick is
+        # therefore deferred into ``_prompt_validated_llm_credential`` (still before the
+        # validation probe), and skipped here.
         if change_provider:
-            try:
-                model = choose_provider_model(
-                    provider,
-                    model_provider,
-                    default=model,
-                    prompt_label=(
-                        f"{_provider_choice_label(provider)} OAuth"
-                        if auth_method == OAUTH_AUTH_METHOD
-                        else _provider_choice_label(provider)
-                    ),
-                    back_on_cancel=True,
-                )
-            except WizardBack:
-                force_repick = True
-                continue
-        elif model_provider.models or provider.value == "azure-openai":
+            if not is_azure_openai_provider(provider.value):
+                try:
+                    model = choose_provider_model(
+                        provider,
+                        model_provider,
+                        default=model,
+                        prompt_label=(
+                            f"{_provider_choice_label(provider)} OAuth"
+                            if auth_method == OAUTH_AUTH_METHOD
+                            else _provider_choice_label(provider)
+                        ),
+                        back_on_cancel=True,
+                    )
+                except WizardBack:
+                    force_repick = True
+                    continue
+        elif model_provider.models:
             current_display = model or "CLI default"
             _console.print(f"[{SECONDARY}]current model  {current_display}[/]")
             if _confirm("Change model?", default=False):
@@ -849,6 +770,89 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                         else _provider_choice_label(provider)
                     ),
                 )
+
+        if change_provider:
+            if auth_method == API_KEY_AUTH_METHOD and provider.credential_kind not in (
+                "cli",
+                "none",
+            ):
+                credential_outcome, model = _prompt_validated_llm_credential(
+                    provider,
+                    model=model,
+                    model_provider=model_provider,
+                    session_env_sink=session_env_sink,
+                )
+                if credential_outcome == CANCEL:
+                    return 1
+                if credential_outcome == REPICK:
+                    force_repick = True
+                    continue
+                if credential_outcome == UNVERIFIED:
+                    credential_state = UNVERIFIED
+                elif credential_outcome == UNSAVED:
+                    credential_state = UNSAVED
+                # Called again here (Azure only) to populate ``provider_extra_env`` for
+                # ``sync_provider_env`` below. ``_prompt_validated_llm_credential`` already
+                # set ``AZURE_OPENAI_BASE_URL`` in ``os.environ`` so the probe could read it,
+                # so this call short-circuits on the configured endpoint rather than
+                # re-prompting — its only job now is to hand the endpoint env back for the
+                # .env sync.
+                azure_env = ensure_azure_openai_endpoint_settings(provider)
+                if azure_env is None:
+                    force_repick = True
+                    continue
+                provider_extra_env = azure_env
+                os.environ.update(azure_env)
+        else:
+            if auth_method == API_KEY_AUTH_METHOD and provider.credential_kind not in (
+                "cli",
+                "none",
+            ):
+                has_api_key = bool(defaults["has_api_key"])
+                legacy_api_key = str(defaults["legacy_api_key"] or "").strip()
+                # A ``host`` credential (e.g. the Ollama host) is not a secret api key: never
+                # migrate a stale legacy ``api_key`` value into it — that would leak a
+                # secret-shaped value into .env and point the runtime at a bogus host. Fall
+                # through to the host prompt instead (#3291).
+                if not has_api_key and legacy_api_key and provider.credential_kind != "host":
+                    migration_outcome = _persist_llm_credential_with_recovery(
+                        provider, legacy_api_key, session_env_sink=session_env_sink
+                    )
+                    if migration_outcome == CANCEL:
+                        return 1
+                    if migration_outcome == REPICK:
+                        force_repick = True
+                        continue
+                    if migration_outcome == UNSAVED:
+                        credential_state = UNSAVED
+                    has_api_key = True
+                if not has_api_key:
+                    credential_outcome, model = _prompt_validated_llm_credential(
+                        provider,
+                        model=model,
+                        model_provider=model_provider,
+                        session_env_sink=session_env_sink,
+                    )
+                    if credential_outcome == CANCEL:
+                        return 1
+                    if credential_outcome == REPICK:
+                        force_repick = True
+                        continue
+                    if credential_outcome == UNVERIFIED:
+                        credential_state = UNVERIFIED
+                    elif credential_outcome == UNSAVED:
+                        credential_state = UNSAVED
+            # Called again here (Azure only) to populate ``provider_extra_env`` for
+            # ``sync_provider_env`` below. When the credential prompt ran it already set
+            # ``AZURE_OPENAI_BASE_URL`` in ``os.environ``, so this call short-circuits on the
+            # configured endpoint instead of re-prompting — its only job now is to hand the
+            # endpoint env back for the .env sync.
+            azure_env = ensure_azure_openai_endpoint_settings(provider)
+            if azure_env is None:
+                force_repick = True
+                continue
+            provider_extra_env = azure_env
+            os.environ.update(azure_env)
 
         if model_provider.credential_kind == "cli":
             cli_out = _run_cli_llm_onboarding(
@@ -887,6 +891,15 @@ def run_wizard(_argv: list[str] | None = None) -> int:
         auth_method=persisted_auth_method,
         extra_env=provider_extra_env or None,
     )
+    if credential_state == UNSAVED:
+        # sync_provider_env pops every secret provider's api-key env; re-apply the
+        # session-only value the user chose to continue with so the in-process shell
+        # handoff can read it. A secret is never written to .env — the keyring stays the
+        # only persistent store (#3591). A ``host`` value normally goes straight to .env
+        # and never reaches this sink; it only lands here when its .env write failed and
+        # the user picked "continue without saving", where re-applying it to os.environ
+        # is exactly what is wanted.
+        os.environ.update(session_env_sink)
 
     _step_header(3, WIZARD_TOTAL_STEPS, "Integrations")
     try:
@@ -910,7 +923,9 @@ def run_wizard(_argv: list[str] | None = None) -> int:
         saved_path=str(saved_path),
         env_path=summary_env_path,
         configured_integrations=configured_integrations,
-        credential_line=_credential_line_for_saved_summary(provider, persisted_auth_method),
+        credential_line=_credential_line_for_saved_summary(
+            provider, persisted_auth_method, credential_state=credential_state
+        ),
     )
     _render_next_steps()
     return 0

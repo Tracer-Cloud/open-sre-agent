@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import sqlite3
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
-from gateway.storage import SessionBindingStore, SessionResolver, connect_gateway_db
+from gateway.storage import SessionResolver
+from gateway.storage.session.binding_store import BindingStore, open_binding_store
 from gateway.telegram.poller.client import TelegramBotClient
 from gateway.telegram.settings import GatewaySettings
 
@@ -21,7 +21,7 @@ class TelegramPollingRuntime:
     """Resources shared by the Telegram polling service."""
 
     client: TelegramBotClient
-    db: sqlite3.Connection
+    bindings: BindingStore
     session_resolver: SessionResolver
     chat_locks: dict[str, asyncio.Lock]
     executor: ThreadPoolExecutor
@@ -38,11 +38,11 @@ def initialize_telegram_polling_runtime(settings: GatewaySettings) -> TelegramPo
         raise ValueError(msg)
 
     client = TelegramBotClient(settings.bot_token)
-    db = connect_gateway_db()
+    bindings = open_binding_store()
     return TelegramPollingRuntime(
         client=client,
-        db=db,
-        session_resolver=SessionResolver(SessionBindingStore(db)),
+        bindings=bindings,
+        session_resolver=SessionResolver(bindings),
         chat_locks={},
         executor=ThreadPoolExecutor(
             max_workers=settings.max_concurrent_turns,
@@ -58,6 +58,6 @@ def shutdown_telegram_polling_runtime(runtime: TelegramPollingRuntime) -> None:
     except Exception:
         logger.debug("[telegram-gateway] executor shutdown failed", exc_info=True)
     try:
-        runtime.db.close()
+        runtime.bindings.close()
     except Exception:
         logger.debug("[telegram-gateway] database close failed", exc_info=True)

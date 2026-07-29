@@ -79,6 +79,7 @@ class GitHubRestClient:
         *,
         params: dict[str, Any] | None = None,
         body: dict[str, Any] | None = None,
+        accept: str = "application/vnd.github+json",
     ) -> JsonPayload:
         if not self._token:
             raise GitHubApiError(
@@ -92,7 +93,7 @@ class GitHubRestClient:
             data=data,
             method=method.upper(),
             headers={
-                "Accept": "application/vnd.github+json",
+                "Accept": accept,
                 "Authorization": f"Bearer {self._token}",
                 "Content-Type": "application/json; charset=utf-8",
                 "X-GitHub-Api-Version": "2022-11-28",
@@ -125,6 +126,7 @@ class GitHubRestClient:
         path: str,
         *,
         params: dict[str, Any] | None = None,
+        accept: str = "application/vnd.github+json",
     ) -> list[dict[str, Any]]:
         if not self._token:
             raise GitHubApiError(
@@ -138,7 +140,7 @@ class GitHubRestClient:
                 url,
                 method="GET",
                 headers={
-                    "Accept": "application/vnd.github+json",
+                    "Accept": accept,
                     "Authorization": f"Bearer {self._token}",
                     "X-GitHub-Api-Version": "2022-11-28",
                 },

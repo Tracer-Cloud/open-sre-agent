@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import sys
+from http import HTTPStatus
 from unittest.mock import MagicMock
 
 import pytest
@@ -45,7 +46,10 @@ def test_health_response_returns_known_fields() -> None:
 def test_ok_route_is_registered() -> None:
     client = TestClient(webapp.app)
     resp = client.get("/ok")
-    assert resp.status_code in (200, 503)
+    assert resp.status_code in (
+        HTTPStatus.OK,
+        HTTPStatus.SERVICE_UNAVAILABLE,
+    )
     data = resp.json()
     assert "ok" in data
     assert "version" in data

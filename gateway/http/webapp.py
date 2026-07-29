@@ -34,6 +34,7 @@ from core.domain.alerts.inbox import (
 ensure_project_platform_package()
 
 from gateway.http.investigations import router as investigations_router  # noqa: E402
+from gateway.runtime.readiness import is_gateway_ready  # noqa: E402
 from integrations.harness_adapters import (  # noqa: E402
     register_harness_adapters as _register_integration_adapters,
 )
@@ -104,6 +105,14 @@ def health(response: Response) -> HealthResponse:
 @app.get("/healthz")
 def healthz() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/readyz")
+def readyz() -> JSONResponse:
+    """Report mandatory startup readiness separately from process liveness."""
+    if is_gateway_ready():
+        return JSONResponse({"status": "ready"}, status_code=200)
+    return JSONResponse({"status": "not_ready"}, status_code=503)
 
 
 def _alert_inbox() -> AlertInbox:

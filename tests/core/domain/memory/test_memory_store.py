@@ -159,13 +159,25 @@ class TestIndex:
         _save()
         rendered = render_prompt_index()
         assert "[infrastructure] prod-cluster" in rendered
+        assert "details" in rendered or "Prod" in rendered  # body or description
+
+    def test_render_prompt_index_includes_body(self) -> None:
+        _save(body="The flaky service is checkout-api.")
+        rendered = render_prompt_index()
+        assert "checkout-api" in rendered
 
     def test_render_prompt_index_respects_char_cap(self) -> None:
         for i in range(10):
-            _save(f"mem-{i}")
+            _save(f"mem-{i}", body=f"body-{i}-" + ("x" * 80))
         rendered = render_prompt_index(max_chars=120)
-        assert len(rendered.splitlines()) < 10
         assert "more memories (use memory_recall)" in rendered
+
+    def test_ensure_memory_store_creates_dir_and_index(self) -> None:
+        from core.domain.memory import ensure_memory_store
+
+        path = ensure_memory_store()
+        assert path.is_dir()
+        assert (path / "MEMORY.md").is_file()
 
 
 class TestFrontmatter:

@@ -302,11 +302,11 @@ def test_get_runtime_logs_stream_json_response(monkeypatch: pytest.MonkeyPatch) 
     lines = [
         (
             '{"rowId":"log_1","timestampInMs":1704067200000,"message":"Error loading resource",'
-            '"level":"error","source":"request","requestPath":"/foo","responseStatusCode":404}'
+            + '"level":"error","source":"request","requestPath":"/foo","responseStatusCode":404}'
         ),
         (
             '{"rowId":"log_2","timestampInMs":1704067201000,"message":"ok","level":"info",'
-            '"source":"request","requestPath":"/bar","responseStatusCode":200}'
+            + '"source":"request","requestPath":"/bar","responseStatusCode":200}'
         ),
     ]
     monkeypatch.setattr(

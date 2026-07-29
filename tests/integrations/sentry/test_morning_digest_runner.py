@@ -24,6 +24,10 @@ class TestBuildMorningDigestPrompt:
         assert "24 hours" in prompt
         assert "sentry-summary" in prompt
 
+    def test_includes_uptime_instruction(self) -> None:
+        prompt = build_morning_digest_prompt({})
+        assert "uptime" in prompt.lower()
+
     def test_project_scope(self) -> None:
         prompt = build_morning_digest_prompt({"project_slug": "checkout-api"})
         assert "checkout-api" in prompt

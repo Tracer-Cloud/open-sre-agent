@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_RABBITMQ_MANAGEMENT_PORT = 15672
 DEFAULT_RABBITMQ_VHOST = "/"
-DEFAULT_RABBITMQ_TIMEOUT_S = 10
+DEFAULT_RABBITMQ_TIMEOUT_SECONDS = 10
 DEFAULT_RABBITMQ_MAX_RESULTS = 50
 
 
@@ -49,7 +49,7 @@ class RabbitMQConfig(StrictConfigModel):
     vhost: str = DEFAULT_RABBITMQ_VHOST
     ssl: bool = False
     verify_ssl: bool = True
-    timeout_seconds: int = Field(default=DEFAULT_RABBITMQ_TIMEOUT_S, gt=0)
+    timeout_seconds: int = Field(default=DEFAULT_RABBITMQ_TIMEOUT_SECONDS, gt=0)
     max_results: int = Field(default=DEFAULT_RABBITMQ_MAX_RESULTS, gt=0, le=200)
     integration_id: str = ""
 

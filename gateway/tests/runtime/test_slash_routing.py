@@ -67,6 +67,22 @@ def test_gateway_investigate_slash_dispatches(monkeypatch: pytest.MonkeyPatch) -
     assert "generic" in sink.finalized.lower()
 
 
+def test_gateway_investigate_discord_alert_prefix(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Discord maps slash alert text to /investigate alert:<text>."""
+
+    def _fake_run_investigation_for_session(**_kwargs: object) -> dict[str, object]:
+        return {"status": "completed", "summary": "discord alert ok"}
+
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.runtime.investigation_adapter.run_investigation_for_session",
+        _fake_run_investigation_for_session,
+    )
+
+    sink = _run_gateway_slash("/investigate alert:High error rate on checkout")
+    assert sink.finalized is not None
+    assert "failed" not in (sink.finalized or "").lower()
+
+
 def test_gateway_onboard_slash_returns_headless_guidance(monkeypatch: pytest.MonkeyPatch) -> None:
     """Literal /onboard on SessionCore must not spawn a blocking interactive wizard."""
     recorded: list[list[str]] = []

@@ -1,0 +1,15 @@
+{
+  "_comment": "Single raw CloudTrail event as it reaches _shape_event: ReadOnly is the string 'false' (not a bool), Resources contains one valid dict entry plus one degraded null entry to exercise resources_truncated, and CloudTrailEvent embeds an errorCode. Uses the AWS documentation account 123456789012.",
+  "EventId": "3a7c9e1b-5f2d-4a8e-b1c6-9d4e7a2f8c15",
+  "EventName": "DeleteBucketPolicy",
+  "ReadOnly": "false",
+  "AccessKeyId": "AKIAIOSFODNN7EXAMPLE",
+  "EventTime": "2026-07-10T14:22:03+00:00",
+  "EventSource": "s3.amazonaws.com",
+  "Username": "release-bot",
+  "Resources": [
+    {"ResourceType": "AWS::S3::Bucket", "ResourceName": "prod-artifacts-bucket"},
+    null
+  ],
+  "CloudTrailEvent": "{\"eventVersion\":\"1.09\",\"userIdentity\":{\"type\":\"IAMUser\",\"principalId\":\"AIDA2EXAMPLE9XLZQW\",\"arn\":\"arn:aws:iam::123456789012:user/release-bot\",\"accountId\":\"123456789012\",\"accessKeyId\":\"AKIAIOSFODNN7EXAMPLE\",\"userName\":\"release-bot\"},\"eventTime\":\"2026-07-10T14:22:03Z\",\"eventSource\":\"s3.amazonaws.com\",\"eventName\":\"DeleteBucketPolicy\",\"awsRegion\":\"eu-west-1\",\"sourceIPAddress\":\"203.0.113.55\",\"userAgent\":\"aws-cli/2.17.0\",\"errorCode\":\"AccessDenied\",\"errorMessage\":\"Access Denied\",\"requestParameters\":{\"bucketName\":\"prod-artifacts-bucket\"},\"responseElements\":null,\"requestID\":\"9f3b1c7d-4a2e-4f6b-8c1d-2e9f7a5b3c40\",\"eventID\":\"3a7c9e1b-5f2d-4a8e-b1c6-9d4e7a2f8c15\",\"readOnly\":false,\"eventType\":\"AwsApiCall\",\"managementEvent\":true,\"recipientAccountId\":\"123456789012\"}"
+}
