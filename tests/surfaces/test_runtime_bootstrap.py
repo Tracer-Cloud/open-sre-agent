@@ -1,4 +1,9 @@
-"""Characterization for :func:`tools.runtime_bootstrap.install_runtime`."""
+"""Characterization for surfaces/gateway ``install_runtime`` composition roots.
+
+``tools`` and ``integrations`` are sibling layers — the flag matrix must live
+in Tier-1 packages. Surfaces and gateway each keep a peer copy; both are
+covered here so they stay in sync.
+"""
 
 from __future__ import annotations
 
@@ -6,10 +11,16 @@ from typing import Any
 
 import pytest
 
-from tools import runtime_bootstrap
+from gateway.runtime import bootstrap as gateway_bootstrap
+from surfaces.shared import runtime_bootstrap as surfaces_bootstrap
 
 
-def test_install_runtime_adapters_only(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(
+    "module",
+    [surfaces_bootstrap, gateway_bootstrap],
+    ids=["surfaces", "gateway"],
+)
+def test_install_runtime_adapters_only(module: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[str] = []
     monkeypatch.setattr(
         "integrations.harness_adapters.register_harness_adapters",
@@ -28,12 +39,17 @@ def test_install_runtime_adapters_only(monkeypatch: pytest.MonkeyPatch) -> None:
         lambda: calls.append("investigation"),
     )
 
-    runtime_bootstrap.install_runtime(harness_adapters=True, scheduler_runners=False)
+    module.install_runtime(harness_adapters=True, scheduler_runners=False)
 
     assert calls == ["integrations", "tools"]
 
 
-def test_install_runtime_runners_only(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(
+    "module",
+    [surfaces_bootstrap, gateway_bootstrap],
+    ids=["surfaces", "gateway"],
+)
+def test_install_runtime_runners_only(module: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[str] = []
     monkeypatch.setattr(
         "integrations.harness_adapters.register_harness_adapters",
@@ -52,12 +68,17 @@ def test_install_runtime_runners_only(monkeypatch: pytest.MonkeyPatch) -> None:
         lambda: calls.append("investigation"),
     )
 
-    runtime_bootstrap.install_runtime(harness_adapters=False, scheduler_runners=True)
+    module.install_runtime(harness_adapters=False, scheduler_runners=True)
 
     assert calls == ["investigation", "scheduled"]
 
 
-def test_install_runtime_full_set(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(
+    "module",
+    [surfaces_bootstrap, gateway_bootstrap],
+    ids=["surfaces", "gateway"],
+)
+def test_install_runtime_full_set(module: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[str] = []
 
     def _track(name: str) -> Any:
@@ -70,6 +91,6 @@ def test_install_runtime_full_set(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("tools.investigation.scheduler_bootstrap.install", _track("investigation"))
     monkeypatch.setattr("integrations.scheduled_agent_bootstrap.install", _track("scheduled"))
 
-    runtime_bootstrap.install_runtime()
+    module.install_runtime()
 
     assert calls == ["integrations", "tools", "investigation", "scheduled"]

@@ -37,13 +37,13 @@ ensure_project_platform_package()
 bootstrap_opensre_env_once(override=False)
 
 from gateway.http.investigations import router as investigations_router  # noqa: E402
+from gateway.runtime.bootstrap import install_runtime  # noqa: E402
 from gateway.runtime.readiness import is_gateway_ready  # noqa: E402
 from platform.observability.errors.sentry import capture_exception, init_sentry  # noqa: E402
 from tools.investigation.capability import (  # noqa: E402
     resolve_investigation_context,
     run_investigation_payload,
 )
-from tools.runtime_bootstrap import install_runtime  # noqa: E402
 
 # Mirror shell/gateway boot: /investigate runs the full pipeline, which reads the
 # vendor registries (alert-source routing, incident anchors, taxonomy, alert

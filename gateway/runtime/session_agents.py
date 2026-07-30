@@ -7,7 +7,9 @@ stays a thin dispatch/finalize orchestrator.
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+import threading
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from typing import Any
 
 from rich.console import Console
@@ -51,6 +53,39 @@ class SessionAgentPool:
         self._slash_ports_factory = slash_ports_factory
         self._agents: dict[str, HeadlessAgent] = {}
         self._sinks: dict[str, LiveOutputSink] = {}
+        # One agent serves every turn of a session, and each turn rebinds its
+        # session and live sink. Turns for the same session must therefore not
+        # overlap, or one turn's output goes to the other's sink. Different
+        # sessions are independent and stay concurrent.
+        self._session_locks: dict[str, threading.Lock] = {}
+        self._locks_guard = threading.Lock()
+
+    def _lock_for(self, session_id: str) -> threading.Lock:
+        """The lock guarding one session's agent, created on first use."""
+        with self._locks_guard:
+            return self._session_locks.setdefault(session_id, threading.Lock())
+
+    @contextmanager
+    def session_agent(
+        self,
+        *,
+        session: SessionCore,
+        sink: GatewaySink,
+        logger: logging.Logger,
+    ) -> Iterator[HeadlessAgent]:
+        """Hold this session's agent for the whole turn.
+
+        The lock spans dispatch, not just the handout: rebinding is what makes
+        the agent turn-specific, so releasing before the turn finishes would
+        let the next turn retarget an agent that is still streaming.
+        """
+        session_id = str(getattr(session, "session_id", "") or "")
+        if not session_id:
+            # No id means no cache entry and nothing shared to protect.
+            yield self.agent_for(session=session, sink=sink, logger=logger)
+            return
+        with self._lock_for(session_id):
+            yield self.agent_for(session=session, sink=sink, logger=logger)
 
     def agent_for(
         self,
@@ -59,7 +94,11 @@ class SessionAgentPool:
         sink: GatewaySink,
         logger: logging.Logger,
     ) -> HeadlessAgent:
-        """Return a session-scoped agent with ``sink`` bound for this turn."""
+        """Return a session-scoped agent with ``sink`` bound for this turn.
+
+        Prefer :meth:`session_agent`, which holds the session's lock for the
+        whole turn. This is the unsynchronised primitive it wraps.
+        """
         session_id = str(getattr(session, "session_id", "") or "")
         live_sink = self._sinks.get(session_id) if session_id else None
         if live_sink is None:

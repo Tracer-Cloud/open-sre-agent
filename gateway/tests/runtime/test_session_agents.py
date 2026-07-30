@@ -158,3 +158,93 @@ def test_turn_handler_reuses_headless_agent_across_turns(monkeypatch: pytest.Mon
     assert factory.call_count == 1
     assert agent.dispatch.call_count == 2
     assert agent.bind_turn.call_count == 2
+
+
+def _fake_agent_pool(monkeypatch: pytest.MonkeyPatch) -> SessionAgentPool:
+    """Pool whose agents are stubs — these tests exercise locking, not dispatch."""
+
+    class _FakeAgent:
+        def __init__(self, **_kwargs: Any) -> None:
+            self.bind_turn = MagicMock()
+            self.bind_session = MagicMock()
+
+    monkeypatch.setattr(
+        "gateway.runtime.session_agents.build_default_headless_agent",
+        lambda **kwargs: _FakeAgent(**kwargs),
+    )
+    return SessionAgentPool(console=Console(force_terminal=False))
+
+
+def test_same_session_turns_do_not_interleave(monkeypatch: pytest.MonkeyPatch) -> None:
+    """One agent per session is shared, so turns for it must not overlap.
+
+    ``agent_for`` rebinds the cached agent's session and live sink. If a second
+    turn for the same session rebinds while the first is still dispatching, the
+    first turn's remaining output goes to the second turn's sink — a reply
+    delivered to the wrong conversation.
+    """
+    # Arrange: the first turn holds the agent while the second tries to take it.
+    import threading
+
+    pool = _fake_agent_pool(monkeypatch)
+    logger = logging.getLogger("test.pool")
+    session = SessionCore(storage=InMemorySessionStorage())
+    overlapped = threading.Event()
+    first_inside = threading.Event()
+    order: list[str] = []
+
+    def _first() -> None:
+        with pool.session_agent(session=session, sink=MagicMock(), logger=logger):
+            order.append("first-enter")
+            first_inside.set()
+            # Without serialization the second thread enters during this wait.
+            if overlapped.wait(timeout=0.5):
+                order.append("OVERLAP")
+            order.append("first-exit")
+
+    def _second() -> None:
+        first_inside.wait(timeout=1.0)
+        with pool.session_agent(session=session, sink=MagicMock(), logger=logger):
+            order.append("second-enter")
+            overlapped.set()
+
+    threads = [threading.Thread(target=_first), threading.Thread(target=_second)]
+
+    # Act
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=5)
+
+    # Assert
+    assert "OVERLAP" not in order, order
+    assert order.index("first-exit") < order.index("second-enter"), order
+
+
+def test_different_sessions_still_run_concurrently(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Serialization is per session — unrelated conversations must not queue."""
+    # Arrange
+    import threading
+
+    pool = _fake_agent_pool(monkeypatch)
+    logger = logging.getLogger("test.pool")
+    both_inside = threading.Barrier(2, timeout=5)
+    reached = []
+
+    def _hold() -> None:
+        session = SessionCore(storage=InMemorySessionStorage())
+        with pool.session_agent(session=session, sink=MagicMock(), logger=logger):
+            # Times out if the pool serializes across unrelated sessions.
+            both_inside.wait()
+            reached.append(session.session_id)
+
+    threads = [threading.Thread(target=_hold), threading.Thread(target=_hold)]
+
+    # Act
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=5)
+
+    # Assert
+    assert len(reached) == 2, reached

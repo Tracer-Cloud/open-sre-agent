@@ -17,7 +17,7 @@ _console = Console()
 
 
 def _install_scheduler_runners() -> None:
-    from tools.runtime_bootstrap import install_runtime
+    from surfaces.shared.runtime_bootstrap import install_runtime
 
     install_runtime()
 

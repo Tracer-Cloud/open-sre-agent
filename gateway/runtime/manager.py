@@ -93,7 +93,7 @@ class GatewayManager:
 
     def start_gateway(self, *, wait: bool = True) -> GatewayManager:
         """Assemble the turn handler, start all components, and own the lifecycle."""
-        from tools.runtime_bootstrap import install_runtime
+        from gateway.runtime.bootstrap import install_runtime
 
         logger = self.logger = configure_gateway_logging()
         set_gateway_ready(False)
@@ -255,8 +255,8 @@ class GatewayManager:
 
     def _start_scheduler(self, _logger: logging.Logger) -> None:
         """Run cron-scheduled tasks inside the daemon (no separate process needed)."""
+        from gateway.runtime.bootstrap import install_runtime
         from platform.scheduler.runner import start_background_scheduler
-        from tools.runtime_bootstrap import install_runtime
 
         # Investigation + multiplexed scheduled-agent runners (Sentry digest, etc.).
         install_runtime(harness_adapters=False, scheduler_runners=True)

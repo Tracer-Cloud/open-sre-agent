@@ -1,15 +1,16 @@
-"""Register harness adapters and scheduler runners for a process.
+"""Register harness adapters and scheduler runners for a gateway process.
 
-Call sites share this helper so the registration set stays in one place. Lives
-under ``tools/`` because ``core/agent_harness`` must not import ``integrations/``
-or ``tools/``.
+Composition root: ``tools`` and ``integrations`` are sibling layers and must
+not import each other (``.importlinter.strict``). Gateway must not import
+``surfaces`` either, so this module mirrors
+:mod:`surfaces.shared.runtime_bootstrap` — keep the flag matrix and call
+order in sync.
 
 Typical flags:
 
 - Gateway boot: adapters early (``scheduler_runners=False``), runners when the
   scheduler stage starts (``harness_adapters=False``).
-- Interactive shell / webapp: adapters only.
-- CLI cron / sentry digest: full defaults (both true).
+- Standalone webapp: adapters only.
 """
 
 from __future__ import annotations

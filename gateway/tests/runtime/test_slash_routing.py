@@ -168,7 +168,7 @@ def test_gateway_manager_registers_harness_adapters(monkeypatch: pytest.MonkeyPa
     def _install_runtime(*, harness_adapters: bool = True, scheduler_runners: bool = True) -> None:
         calls.append((harness_adapters, scheduler_runners))
 
-    monkeypatch.setattr("tools.runtime_bootstrap.install_runtime", _install_runtime)
+    monkeypatch.setattr("gateway.runtime.bootstrap.install_runtime", _install_runtime)
     monkeypatch.setattr(
         "gateway.runtime.manager.start_telegram_worker",
         lambda **_kwargs: (MagicMock(), MagicMock()),

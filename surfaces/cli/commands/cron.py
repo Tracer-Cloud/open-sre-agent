@@ -154,7 +154,7 @@ def cron_run(task_id: str) -> None:
     """Run a scheduled task immediately (ad-hoc one-shot for debugging)."""
     from platform.scheduler.runner import run_task_now
     from platform.scheduler.store import get_task
-    from tools.runtime_bootstrap import install_runtime
+    from surfaces.shared.runtime_bootstrap import install_runtime
 
     install_runtime()
 
@@ -226,7 +226,7 @@ def cron_logs(task_id: str, limit: int) -> None:
 def cron_start() -> None:
     """Start the scheduler daemon (blocks until interrupted)."""
     from platform.scheduler.runner import start_scheduler
-    from tools.runtime_bootstrap import install_runtime
+    from surfaces.shared.runtime_bootstrap import install_runtime
 
     install_runtime()
 
