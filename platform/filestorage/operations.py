@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 
 from config.scope_context import current_scope
 from platform.filestorage.config import RemoteSyncConfig, load_remote_sync_config
@@ -130,6 +131,7 @@ def run_remote_sync(
     pull_only: bool = False,
     push_only: bool = False,
     direction: SyncDirection | None = None,
+    on_progress: Callable[[str, str], None] | None = None,
 ) -> SyncReport | None:
     """Pull/push for the current scope. ``None`` when sync is disabled.
 
@@ -149,7 +151,7 @@ def run_remote_sync(
     roots = syncable_roots()
     store = build_object_store(config)
     return _owned_report(
-        run_sync(store, direction=resolved, roots=roots, exclusions=config.exclude)
+        run_sync(store, direction=resolved, roots=roots, exclusions=config.exclude, on_progress=on_progress)
     )
 
 

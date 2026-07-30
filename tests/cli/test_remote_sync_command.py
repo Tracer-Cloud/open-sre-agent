@@ -93,7 +93,7 @@ def test_sync_prints_report(runner: CliRunner, monkeypatch: pytest.MonkeyPatch) 
 def test_sync_passes_direction_flags(runner: CliRunner, monkeypatch: pytest.MonkeyPatch) -> None:
     seen: dict[str, bool] = {}
 
-    def _capture(*, pull_only: bool = False, push_only: bool = False) -> SyncReport:
+    def _capture(*, pull_only: bool = False, push_only: bool = False, on_progress: object = None) -> SyncReport:
         seen["pull_only"] = pull_only
         seen["push_only"] = push_only
         return SyncReport()

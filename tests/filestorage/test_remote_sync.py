@@ -20,7 +20,7 @@ from config.constants.filestorage import (
 from platform.filestorage import engine as sync_module
 from platform.filestorage.config import load_remote_sync_config, remote_sync_enabled
 from platform.filestorage.engine import content_tag, pull, push, resolve_direction, run_sync
-from platform.filestorage.enums import SyncRootName
+from platform.filestorage.enums import SyncDirection, SyncRootName
 from platform.filestorage.errors import RemoteSyncConfigError, UnsyncablePathError
 from platform.filestorage.ports import RemoteObject
 from platform.filestorage.syncable import SyncRoot, is_syncable
@@ -939,3 +939,64 @@ def test_list_prefix_is_delimited_so_a_sibling_bucket_path_cannot_match() -> Non
 
     # Assert
     assert seen["Prefix"] == "opensre/"
+
+
+# ── Progress callbacks ──────────────────────────────────────────────────────
+
+
+def test_push_calls_on_progress_for_each_file(
+    home: Path, roots: tuple[SyncRoot, ...]
+) -> None:
+    """Progress callback fires once per uploaded file."""
+    store = FakeObjectStore()
+    events: list[tuple[str, str]] = []
+    push(store, roots=roots, on_progress=lambda action, key: events.append((action, key)))
+    assert len(events) == 2
+    assert events[0][0] == "uploaded"
+    assert events[1][0] == "uploaded"
+
+
+def test_pull_calls_on_progress_for_each_file(
+    home: Path, roots: tuple[SyncRoot, ...], tmp_path: Path
+) -> None:
+    """Progress callback fires once per downloaded file."""
+    store = FakeObjectStore()
+    push(store, roots=roots)
+    second = tmp_path / "machine-two"
+    second_roots = (
+        SyncRoot(name=SyncRootName.SESSIONS, path=second / "sessions"),
+        SyncRoot(name=SyncRootName.MEMORY, path=second / "memory"),
+    )
+    events: list[tuple[str, str]] = []
+    pull(store, roots=second_roots, on_progress=lambda action, key: events.append((action, key)))
+    assert len(events) == 2
+    assert all(e[0] == "downloaded" for e in events)
+
+
+def test_run_sync_forwards_progress_for_both_directions(
+    home: Path, roots: tuple[SyncRoot, ...], tmp_path: Path
+) -> None:
+    """A full sync (pull first, then push back) fires progress for every transfer."""
+    store = FakeObjectStore()
+    # Machine one pushes first.
+    push(store, roots=roots)
+    # Machine two starts empty and does a full sync: pulls 2 files, then pushes 0 (empty).
+    second = tmp_path / "machine-two"
+    second_roots = (
+        SyncRoot(name=SyncRootName.SESSIONS, path=second / "sessions"),
+        SyncRoot(name=SyncRootName.MEMORY, path=second / "memory"),
+    )
+    events: list[tuple[str, str]] = []
+    run_sync(store, direction=SyncDirection.BOTH, roots=second_roots, on_progress=lambda action, key: events.append((action, key)))
+    # Pull gets 2 files; push finds nothing new to upload.
+    assert len(events) == 2
+    assert all(e[0] == "downloaded" for e in events)
+
+
+def test_none_progress_is_ignored(
+    home: Path, roots: tuple[SyncRoot, ...]
+) -> None:
+    """Passing None (or omitting the arg) does not raise."""
+    store = FakeObjectStore()
+    push(store, roots=roots, on_progress=None)
+    assert len(store.objects) == 2

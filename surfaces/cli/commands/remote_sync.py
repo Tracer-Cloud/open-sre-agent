@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import click
+import sys
 
 from config.constants.filestorage import (
     DEFAULT_REMOTE_SYNC_PREFIX,
@@ -48,8 +49,15 @@ def status_command() -> None:
 @click.option("--push-only", is_flag=True, help="Upload only; fetch nothing.")
 def sync_now_command(pull_only: bool, push_only: bool) -> None:
     """Sync now: pull remote changes, then push local ones."""
+    # Progress callback: prints per-file only when stdout is a TTY.
+    if sys.stdout.isatty():
+        def _progress(action: str, key: str) -> None:
+            click.echo(f"  {action:>10} {key}")
+    else:
+        _progress = None  # type: ignore[assignment]
+
     try:
-        report = run_remote_sync(pull_only=pull_only, push_only=push_only)
+        report = run_remote_sync(pull_only=pull_only, push_only=push_only, on_progress=_progress)
     except RemoteSyncError as exc:
         click.echo(f"Sync failed: {exc}", err=True)
         raise SystemExit(ERROR) from exc

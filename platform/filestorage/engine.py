@@ -21,6 +21,7 @@ import tempfile
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Callable
 
 from platform.filestorage.enums import SyncDirection
 from platform.filestorage.errors import RemoteSyncConfigError, UnsyncablePathError
@@ -128,6 +129,7 @@ def push(
     report: SyncReport | None = None,
     remote: list[RemoteObject] | None = None,
     exclusions: ExclusionRules = NO_EXCLUSIONS,
+    on_progress: Callable[[str, str], None] | None = None,
 ) -> SyncReport:
     """Upload local files whose contents differ from the bucket."""
     roots = roots if roots is not None else syncable_roots()
@@ -170,6 +172,8 @@ def push(
         store.put_object(key, data)
         result.uploaded.append(key)
         result.uploaded_bytes += len(data)
+        if on_progress is not None:
+            on_progress("uploaded", key)
     return result
 
 
@@ -180,6 +184,7 @@ def pull(
     report: SyncReport | None = None,
     remote: list[RemoteObject] | None = None,
     exclusions: ExclusionRules = NO_EXCLUSIONS,
+    on_progress: Callable[[str, str], None] | None = None,
 ) -> SyncReport:
     """Download bucket objects missing locally, or newer than the local copy."""
     roots = roots if roots is not None else syncable_roots()
@@ -203,6 +208,8 @@ def pull(
         result.downloaded_bytes += len(data)
         _write_atomically(target, data)
         result.downloaded.append(obj.key)
+        if on_progress is not None:
+            on_progress("downloaded", obj.key)
     return result
 
 
@@ -237,6 +244,7 @@ def run_sync(
     direction: SyncDirection = SyncDirection.BOTH,
     roots: tuple[SyncRoot, ...] | None = None,
     exclusions: ExclusionRules = NO_EXCLUSIONS,
+    on_progress: Callable[[str, str], None] | None = None,
 ) -> SyncReport:
     """Move files in ``direction``. Both ways pulls first, so an offline edit wins.
 
@@ -246,9 +254,9 @@ def run_sync(
     report = SyncReport()
     listing = store.list_objects("")
     if direction is not SyncDirection.PUSH:
-        pull(store, roots=roots, report=report, remote=listing, exclusions=exclusions)
+        pull(store, roots=roots, report=report, remote=listing, exclusions=exclusions, on_progress=on_progress)
     if direction is not SyncDirection.PULL:
-        push(store, roots=roots, report=report, remote=listing, exclusions=exclusions)
+        push(store, roots=roots, report=report, remote=listing, exclusions=exclusions, on_progress=on_progress)
     return report
 
 
