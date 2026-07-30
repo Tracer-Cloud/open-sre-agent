@@ -10,7 +10,10 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
-from tools.system.fleet_monitoring.provider_ids import provider_from_classified_name
+from tools.system.fleet_monitoring.provider_ids import (
+    FleetAgentProvider,
+    provider_from_classified_name,
+)
 from tools.system.fleet_monitoring.registry import AgentRecord, AgentRegistry
 
 logger = logging.getLogger(__name__)
@@ -232,7 +235,7 @@ def display_command(command: str) -> str:
     return f"{collapsed[: _MAX_DISPLAY_COMMAND_LENGTH - 3]}..."
 
 
-def classify_command_provider(command: str) -> str | None:
+def classify_command_provider(command: str) -> FleetAgentProvider | None:
     """Return the canonical provider id for ``command``, or ``None``.
 
     Strict argv[0]-only matching for claude / aider / gemini, plus
@@ -249,21 +252,21 @@ def classify_command_provider(command: str) -> str | None:
     lower = command.lower()
 
     if ".cursor/extensions/anthropic.claude-code" in lower:
-        return "claude-code"
+        return FleetAgentProvider.CLAUDE_CODE
     if "extension-host (agent-exec)" in lower:
-        return "cursor"
+        return FleetAgentProvider.CURSOR
     if "cursor-agent" in lower or "cursor agent" in lower:
-        return "cursor"
+        return FleetAgentProvider.CURSOR
     if executable in {"claude", "claude-code"}:
-        return "claude-code"
+        return FleetAgentProvider.CLAUDE_CODE
     if executable == "aider":
-        return "aider"
+        return FleetAgentProvider.AIDER
     if executable == "gemini":
-        return "gemini-cli"
+        return FleetAgentProvider.GEMINI_CLI
     if executable == "agy":
-        return "antigravity-cli"
+        return FleetAgentProvider.ANTIGRAVITY_CLI
     if _is_codex_cmdline(cmdline):
-        return "codex"
+        return FleetAgentProvider.CODEX
     return None
 
 
