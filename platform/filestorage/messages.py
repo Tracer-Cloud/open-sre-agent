@@ -19,6 +19,18 @@ from config.constants.filestorage import (
 from platform.filestorage.engine import SyncReport
 from platform.filestorage.operations import SyncStatus
 
+
+def _human_size(n: int) -> str:
+    """Format byte count as a human-readable string (e.g. ``"1.2 KB"``)."""
+    if n < 1024:
+        return f"{n} B"
+    if n < 1024**2:
+        return f"{n / 1024:.1f} KB"
+    if n < 1024**3:
+        return f"{n / 1024**2:.1f} MB"
+    return f"{n / 1024**3:.1f} GB"
+
+
 DISABLED_HELP = f"""Remote sync is off.
 
 To turn it on, point opensre at a store you own:
@@ -58,9 +70,11 @@ def format_report_lines(report: SyncReport) -> tuple[str, ...]:
     uploaded = list(report.uploaded)
     kept_remote = list(report.kept_remote)
     skipped = report.skipped
+    down_size = f" ({_human_size(report.downloaded_bytes)})" if report.downloaded_bytes else ""
+    up_size = f" ({_human_size(report.uploaded_bytes)})" if report.uploaded_bytes else ""
     lines: list[str] = [
-        f"Sync complete — {len(downloaded)} downloaded, "
-        f"{len(uploaded)} uploaded, {skipped} already current."
+        f"Sync complete — {len(downloaded)} downloaded{down_size}, "
+        f"{len(uploaded)} uploaded{up_size}, {skipped} already current."
     ]
     if kept_remote:
         lines.append(f"{len(kept_remote)} kept the store's newer copy:")
