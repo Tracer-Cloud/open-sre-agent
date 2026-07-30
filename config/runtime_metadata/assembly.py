@@ -32,6 +32,11 @@ from config.version import get_opensre_version
 _PROCESS_START_MONOTONIC = _time.monotonic()
 
 
+_scratchpad_dir_cache: str | None = None
+_runtime_env_cache: tuple[str, str] | None = None
+_full_metadata_cache: tuple[tuple[Any, ...], dict[str, Any]] | None = None
+
+
 def build_runtime_metadata() -> dict[str, Any]:
     """Session-lifetime read-only runtime facts.
 
@@ -58,21 +63,45 @@ def build_runtime_metadata() -> dict[str, Any]:
     values that must NOT be cached (current time, uptime, disk, memory) come
     from :func:`capture_runtime_facts` at each render/sandbox call.
     """
+    global _scratchpad_dir_cache, _runtime_env_cache, _full_metadata_cache
     env_override = (os.environ.get("OPENSRE_ENV") or "").strip()
-    return {
+    path = os.environ.get("PATH") or os.defpath
+    kube = os.environ.get("KUBECONFIG") or ""
+    cloud_key = (
+        os.environ.get("CLOUD_PROVIDER") or "",
+        os.environ.get("CLOUD_REGION") or "",
+        os.environ.get("AWS_REGION") or "",
+        os.environ.get("AWS_DEFAULT_REGION") or "",
+    )
+    full_key = (env_override, path, kube, cloud_key, os.getpid(), os.getppid())
+    cached = _full_metadata_cache
+    if cached is not None and cached[0] == full_key:
+        return dict(cached[1])
+
+    env_cached = _runtime_env_cache
+    if env_cached is not None and env_cached[0] == env_override:
+        runtime_env = env_cached[1]
+    else:
+        runtime_env = env_override or get_environment().value
+        _runtime_env_cache = (env_override, runtime_env)
+    if _scratchpad_dir_cache is None:
+        _scratchpad_dir_cache = tempfile.gettempdir()
+    result = {
         "opensre_version": get_opensre_version(),
         "opensre_build": detect_build_info(),
-        "runtime_env": env_override or get_environment().value,
+        "runtime_env": runtime_env,
         "tz_name": local_tz_name(),
         "python_version": python_version_string(),
-        "pid": os.getpid(),
-        "ppid": os.getppid(),
+        "pid": full_key[4],
+        "ppid": full_key[5],
         "tools": installed_tools(),
         "kubeconfig": kubeconfig_path(),
         "hostname": pod_hostname(),
-        "scratchpad_dir": tempfile.gettempdir(),
+        "scratchpad_dir": _scratchpad_dir_cache,
         **cloud_facts(),
     }
+    _full_metadata_cache = (full_key, result)
+    return dict(result)
 
 
 def capture_runtime_facts(*, metadata: dict[str, Any] | None = None) -> dict[str, Any]:

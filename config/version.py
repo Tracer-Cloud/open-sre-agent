@@ -27,6 +27,17 @@ def _pyproject_version() -> str | None:
     return None
 
 
+_version_cache: str | None = None
+
+
 def get_opensre_version() -> str:
-    """Return the installed package version, else checkout metadata, else the dev fallback."""
-    return _installed_version() or _pyproject_version() or "0.1"
+    """Return the installed package version, else checkout metadata, else the dev fallback.
+
+    Cached for the process lifetime — the package version does not change mid-run.
+    """
+    global _version_cache
+    if _version_cache is not None:
+        return _version_cache
+    value = _installed_version() or _pyproject_version() or "0.1"
+    _version_cache = value
+    return value

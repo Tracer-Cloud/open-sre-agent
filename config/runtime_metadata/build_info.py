@@ -177,20 +177,34 @@ def read_latest_release_tag(commondir: Path) -> str | None:
     return ranked[0][1]
 
 
+_build_info_cache: str | None = None
+
+
 def detect_build_info() -> str:
-    """Human-readable build marker: ``""`` for wheels, ``dev, <tag> @ <sha>`` for checkouts."""
+    """Human-readable build marker: ``""`` for wheels, ``dev, <tag> @ <sha>`` for checkouts.
+
+    Cached for the process lifetime — the checkout SHA/tag does not change
+    mid-run for the purposes of session metadata prompts.
+    """
+    global _build_info_cache
+    if _build_info_cache is not None:
+        return _build_info_cache
     layout = find_git_layout()
     if layout is None:
-        return ""
-    tag = read_latest_release_tag(layout.commondir)
-    sha = read_git_head_sha(layout)
-    if tag and sha:
-        return f"dev, {tag} @ {sha}"
-    if tag:
-        return f"dev, {tag}"
-    if sha:
-        return f"dev, @ {sha}"
-    return "dev"
+        value = ""
+    else:
+        tag = read_latest_release_tag(layout.commondir)
+        sha = read_git_head_sha(layout)
+        if tag and sha:
+            value = f"dev, {tag} @ {sha}"
+        elif tag:
+            value = f"dev, {tag}"
+        elif sha:
+            value = f"dev, @ {sha}"
+        else:
+            value = "dev"
+    _build_info_cache = value
+    return value
 
 
 __all__ = [
