@@ -232,7 +232,7 @@ def test_disabling_the_keyring_stays_fail_closed(monkeypatch) -> None:
     with pytest.raises(KeyringUnavailableError) as excinfo:
         save_secret(_ENV_VAR, "sk-disabled")
 
-    assert excinfo.value.reason is KeyringUnavailableReason.DISABLED
+    assert excinfo.value.reason == KeyringUnavailableReason.DISABLED
     assert not Path(local_file.store_path()).exists()
 
 
