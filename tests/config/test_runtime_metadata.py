@@ -58,6 +58,38 @@ def test_build_runtime_metadata_populates_process_and_python_facts() -> None:
     assert isinstance(meta["kubeconfig"], str)
 
 
+def test_build_runtime_metadata_nested_tools_copy_is_isolated() -> None:
+    """Mutating meta['tools'] must not poison the composite metadata cache."""
+    first = build_runtime_metadata()
+    original = first["tools"].get("git", "")
+    first["tools"]["git"] = "poisoned-by-caller"
+    second = build_runtime_metadata()
+    assert second["tools"].get("git", "") == original
+    assert second["tools"].get("git", "") != "poisoned-by-caller"
+
+
+def test_probe_installed_tools_uses_windows_pathext_default(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """When PATHEXT is unset on Windows, bare names still resolve via .EXE.
+
+    The file is named with the uppercase ``.EXE`` suffix that shutil's default
+    PATHEXT uses. The test runs on non-Windows hosts so ``os.name`` is forced
+    to ``nt`` and ``os.access`` is stubbed (Linux execute bits differ).
+    """
+    tool_dir = tmp_path / "bin"
+    tool_dir.mkdir()
+    # Match shutil's default PATHEXT entry (``.EXE``), not lowercase ``.exe``.
+    (tool_dir / "kubectl.EXE").write_text("", encoding="utf-8")
+    monkeypatch.setattr(probes_module.os, "name", "nt")
+    # Windows uses ';' for PATHEXT; force pathsep so the probe splits like NT.
+    monkeypatch.setattr(probes_module.os, "pathsep", ";")
+    monkeypatch.delenv("PATHEXT", raising=False)
+    monkeypatch.setattr(probes_module.os, "access", lambda _path, _mode: True)
+    found = probes_module._probe_installed_tools(str(tool_dir))
+    assert found["kubectl"].endswith("kubectl.EXE")
+
+
 def test_build_runtime_metadata_reflects_kubeconfig_env(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

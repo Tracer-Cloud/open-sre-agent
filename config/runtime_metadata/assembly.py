@@ -37,6 +37,19 @@ _runtime_env_cache: tuple[str, str] | None = None
 _full_metadata_cache: tuple[tuple[Any, ...], dict[str, Any]] | None = None
 
 
+def _copy_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
+    """Shallow-copy ``metadata`` and deep-copy nested mappings (``tools``).
+
+    The full-metadata cache must not share nested dicts with callers: a
+    mutation of ``meta[\"tools\"][name]`` would otherwise poison later reads.
+    """
+    out = dict(metadata)
+    tools = out.get("tools")
+    if isinstance(tools, dict):
+        out["tools"] = dict(tools)
+    return out
+
+
 def build_runtime_metadata() -> dict[str, Any]:
     """Session-lifetime read-only runtime facts.
 
@@ -76,7 +89,7 @@ def build_runtime_metadata() -> dict[str, Any]:
     full_key = (env_override, path, kube, cloud_key, os.getpid(), os.getppid())
     cached = _full_metadata_cache
     if cached is not None and cached[0] == full_key:
-        return dict(cached[1])
+        return _copy_metadata(cached[1])
 
     env_cached = _runtime_env_cache
     if env_cached is not None and env_cached[0] == env_override:
@@ -100,8 +113,10 @@ def build_runtime_metadata() -> dict[str, Any]:
         "scratchpad_dir": _scratchpad_dir_cache,
         **cloud_facts(),
     }
-    _full_metadata_cache = (full_key, result)
-    return dict(result)
+    # Store an isolated copy so callers cannot mutate the cache via nested
+    # mappings (notably ``tools``).
+    _full_metadata_cache = (full_key, _copy_metadata(result))
+    return _copy_metadata(result)
 
 
 def capture_runtime_facts(*, metadata: dict[str, Any] | None = None) -> dict[str, Any]:

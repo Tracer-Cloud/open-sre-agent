@@ -96,8 +96,10 @@ def _probe_installed_tools(path: str) -> dict[str, str]:
     mode = os.F_OK | os.X_OK
     path_exts: tuple[str, ...]
     if os.name == "nt":
-        # Mirror shutil.which: empty extension first, then PATHEXT entries.
-        raw = os.environ.get("PATHEXT", "")
+        # Mirror shutil.which: empty extension first, then PATHEXT. When the
+        # env var is missing/empty, use the same default as shutil
+        # (``_WIN_DEFAULT_PATHEXT``) so ``name.exe`` still resolves.
+        raw = os.environ.get("PATHEXT") or ".COM;.EXE;.BAT;.CMD;.VBS;.JS;.WS;.MSC"
         path_exts = ("",) + tuple(ext for ext in raw.split(os.pathsep) if ext)
     else:
         path_exts = ("",)
