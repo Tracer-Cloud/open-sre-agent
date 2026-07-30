@@ -1,8 +1,15 @@
 """Register harness adapters and scheduler runners for a process.
 
-Call sites (gateway, CLI cron, sentry digest, webapp) share this helper so the
-registration set stays in one place. Lives under ``tools/`` because
-``core/agent_harness`` must not import ``integrations/`` or ``tools/``.
+Call sites share this helper so the registration set stays in one place. Lives
+under ``tools/`` because ``core/agent_harness`` must not import ``integrations/``
+or ``tools/``.
+
+Typical flags:
+
+- Gateway boot: adapters early (``scheduler_runners=False``), runners when the
+  scheduler stage starts (``harness_adapters=False``).
+- Interactive shell / webapp: adapters only.
+- CLI cron / sentry digest: full defaults (both true).
 """
 
 from __future__ import annotations

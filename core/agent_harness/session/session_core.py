@@ -275,7 +275,12 @@ class SessionCore:
         from platform.sandbox.capabilities import boot_capability_warnings
 
         meta = build_runtime_metadata()
-        meta["capability_warnings"] = boot_capability_warnings(include_path_facts=True)
+        tools = meta.get("tools")
+        installed = tools if isinstance(tools, dict) else None
+        meta["capability_warnings"] = boot_capability_warnings(
+            include_path_facts=True,
+            installed_tools=installed,
+        )
         self.runtime_metadata = meta
 
     def hydrate_configured_integrations(self) -> None:

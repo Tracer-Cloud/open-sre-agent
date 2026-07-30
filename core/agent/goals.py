@@ -1,7 +1,7 @@
-"""Goal definition and verification for ReAct stop decisions.
+"""Goal checks used when the ReAct loop decides whether to stop.
 
-Do not conclude while the structured goal is unmet, but
-always honour a hard iteration ceiling so the loop cannot spin forever.
+Require the goal to be met before concluding, except at the hard iteration
+ceiling so the loop cannot run forever.
 """
 
 from __future__ import annotations

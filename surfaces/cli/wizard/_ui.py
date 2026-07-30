@@ -132,8 +132,11 @@ def _local_defaults() -> dict[str, str | bool | None]:
     )
     if is_oauth_backend:
         auth_method = OAUTH_AUTH_METHOD
+    wizard_mode = _string_value(wizard.get("mode"), "quickstart")
+    if wizard_mode == "aha":
+        wizard_mode = "focused"
     return {
-        "wizard_mode": _string_value(wizard.get("mode"), "quickstart"),
+        "wizard_mode": wizard_mode,
         "provider": provider_value if raw_provider_value else None,
         "auth_method": auth_method,
         "model": _string_value(local.get("model")),

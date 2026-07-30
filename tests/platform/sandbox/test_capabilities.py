@@ -1,15 +1,4 @@
-"""Boot-time capability probe.
-
-The agent is told it can run Python, read files, and reach the network. When the
-environment silently withholds one of those, the failure surfaces mid-turn as a
-confusing answer rather than at startup. Probing once at boot turns "the agent is
-oddly limited" into a warning that names the missing capability.
-
-Presence on PATH is a different question, already covered by
-``config.runtime_metadata.probes``: a binary can exist and still be unusable.
-These tests pin what the probe reports and, more importantly, that it never
-raises — a diagnostic that crashes startup is worse than no diagnostic.
-"""
+"""Tests for boot-time sandbox capability probes."""
 
 from __future__ import annotations
 
@@ -97,7 +86,6 @@ def test_network_probe_does_not_make_a_real_request(monkeypatch: Any) -> None:
 
 
 def test_boot_capability_warnings_merges_path_and_sandbox(monkeypatch: Any) -> None:
-    """Composition root: PATH facts + sandbox shortfalls, de-duplicated."""
     from platform.sandbox.capabilities import boot_capability_warnings
 
     monkeypatch.setattr(

@@ -1,17 +1,10 @@
-"""Report which execution capabilities this environment actually grants.
+"""Probe whether sandbox capabilities actually work in this environment.
 
-The agent's prompt tells it that it can run Python, read files, and reach the
-network. When the environment withholds one, the shortfall surfaces mid-turn as
-an evasive answer instead of a clear failure. Probing once at startup turns
-"the agent seems oddly limited" into a warning naming the missing capability.
+Distinct from :mod:`config.runtime_metadata.probes`, which only checks whether
+binaries exist on ``PATH``. A tool can be present and still unusable.
 
-This is not the same question as ``config.runtime_metadata.probes``, which
-reports whether a binary is on ``PATH``: a binary can be present and still be
-unusable. Here the question is whether the capability *works*.
-
-Every probe is cheap, local, and non-fatal. A diagnostic that raises during
-startup is worse than no diagnostic, so failures are recorded as unavailable
-with the reason attached.
+Probes are cheap, local, and non-fatal. Failures become ``available=False``
+with a short detail string.
 """
 
 from __future__ import annotations
@@ -119,17 +112,22 @@ def unavailable_capability_warnings(
     ]
 
 
-def boot_capability_warnings(*, include_path_facts: bool = True) -> list[str]:
+def boot_capability_warnings(
+    *,
+    include_path_facts: bool = True,
+    installed_tools: dict[str, str] | None = None,
+) -> list[str]:
     """Merge PATH tool gaps with sandbox usability gaps; preserve order, drop dupes.
 
     PATH facts come from :mod:`config.runtime_metadata.probes` (config must not
-    import ``platform``). Call this from gateway boot or session setup.
+    import ``platform``). Pass ``installed_tools`` when the caller already probed
+    PATH so this helper does not walk ``PATH`` again.
     """
     warnings: list[str] = []
     if include_path_facts:
         from config.runtime_metadata.probes import capability_warning_facts
 
-        path_warnings = capability_warning_facts().get("capability_warnings") or []
+        path_warnings = capability_warning_facts(installed_tools).get("capability_warnings") or []
         if isinstance(path_warnings, list):
             warnings.extend(str(item) for item in path_warnings if str(item).strip())
     warnings.extend(unavailable_capability_warnings())

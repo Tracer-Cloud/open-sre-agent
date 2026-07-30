@@ -1,12 +1,8 @@
-"""Gateway turn handler: dispatch one inbound message to the agent.
+"""Dispatch one inbound gateway message through the shared headless agent.
 
-Transport-agnostic — it takes ``(text, session, sink, logger)`` and drives the
-shared headless dispatch, then finalizes any outbound text on the sink. It knows
-nothing about Telegram (or any specific transport); the composition root builds
-one of these and hands it to whichever poller runs.
-
-Agent construction/reuse lives in :class:`SessionAgentPool` so this module
-stays a thin orchestrator (analytics + dispatch + finalize).
+Transport-agnostic: takes ``(text, session, sink, logger)``, runs the turn, and
+finalizes outbound text on the sink. Agent reuse is handled by
+:class:`SessionAgentPool`.
 """
 
 from __future__ import annotations
@@ -23,6 +19,7 @@ from core.agent_harness.harness import AgentHarness, HarnessConfig
 from core.agent_harness.session import SessionCore
 from gateway.runtime.session_agents import SessionAgentPool
 from gateway.runtime.sink_protocol import GatewaySink
+from gateway.runtime.status_messages import EMPTY_RESPONSE_MESSAGE
 from platform.analytics.cli import (
     capture_gateway_turn_completed,
     capture_gateway_turn_failed,
@@ -96,9 +93,7 @@ class GatewayTurnHandler:
                     tool_hooks=getattr(sink, "tool_hooks", None),
                 )
                 turn_result = self._harness.dispatch_message(text, agent=agent)
-                outbound_text = (
-                    turn_result.assistant_response_text or turn_result.action_result.response_text
-                ).strip()
+                outbound_text = turn_result.primary_response_text
                 logger.debug(
                     "gateway_turn done intent=%s answered=%s outbound_chars=%s",
                     turn_result.final_intent,
@@ -109,7 +104,7 @@ class GatewayTurnHandler:
                 # via the sink. Otherwise always finalize so the placeholder never hangs —
                 # even when the turn produced no text.
                 if not turn_result.answered:
-                    sink.finalize(outbound_text or "I didn't have anything to add for that.")
+                    sink.finalize(outbound_text or EMPTY_RESPONSE_MESSAGE)
                 if surface:
                     capture_gateway_turn_completed(
                         surface=surface,
