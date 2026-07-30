@@ -30,8 +30,11 @@ _QUEUE_URL = "https://sqs.us-east-1.amazonaws.com/123456789012/payments-processi
 _DLQ_URL = "https://sqs.us-east-1.amazonaws.com/123456789012/payments-dlq"
 
 
-def _list_ok(*urls: str) -> dict[str, Any]:
-    return {"success": True, "data": {"QueueUrls": list(urls)}}
+def _list_ok(*urls: str, next_token: str = "") -> dict[str, Any]:
+    data: dict[str, Any] = {"QueueUrls": list(urls)}
+    if next_token:
+        data["NextToken"] = next_token
+    return {"success": True, "data": data}
 
 
 def _attrs_ok(**attrs: str) -> dict[str, Any]:
@@ -304,15 +307,44 @@ def test_sanitizer_truncation_marker_is_not_treated_as_a_queue(mock_call) -> Non
 
 @patch(_TOOL_PATH)
 def test_max_queues_bounds_the_per_queue_fanout(mock_call) -> None:
-    urls = [f"https://sqs.us-east-1.amazonaws.com/1/q{i}" for i in range(5)]
+    # Real ListQueues honors MaxResults server-side, so it never returns more
+    # than max_queues URLs regardless of how many queues actually match.
+    urls = [f"https://sqs.us-east-1.amazonaws.com/1/q{i}" for i in range(2)]
     mock_call.side_effect = [_list_ok(*urls), *[_attrs_ok() for _ in range(2)]]
 
     result = get_sqs_queue_attributes(max_queues=2)
 
     assert result["total_queues"] == 2
-    assert result["truncated"] is True
     # 1 list call + exactly 2 attribute calls, not 5.
     assert mock_call.call_count == 3
+
+
+@patch(_TOOL_PATH)
+def test_truncated_reflects_next_token_not_url_count(mock_call) -> None:
+    """Regression: ListQueues already caps results at max_queues, so a URL-count
+    comparison against max_queues can never be true — it must be truncated=false
+    even when a real page happens to be exactly max_queues long. The only valid
+    truncation signal is whether AWS returned a NextToken."""
+    urls = [f"https://sqs.us-east-1.amazonaws.com/1/q{i}" for i in range(2)]
+    mock_call.side_effect = [
+        _list_ok(*urls, next_token="page-2"),
+        *[_attrs_ok() for _ in range(2)],
+    ]
+
+    result = get_sqs_queue_attributes(max_queues=2)
+
+    assert result["total_queues"] == 2
+    assert result["truncated"] is True
+
+
+@patch(_TOOL_PATH)
+def test_not_truncated_when_no_next_token(mock_call) -> None:
+    urls = [f"https://sqs.us-east-1.amazonaws.com/1/q{i}" for i in range(2)]
+    mock_call.side_effect = [_list_ok(*urls), *[_attrs_ok() for _ in range(2)]]
+
+    result = get_sqs_queue_attributes(max_queues=2)
+
+    assert result["truncated"] is False
 
 
 # ─────────────────────────────────────────────────────────────────────────────

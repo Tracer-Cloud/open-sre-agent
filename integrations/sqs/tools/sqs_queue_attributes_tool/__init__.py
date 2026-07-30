@@ -1,17 +1,10 @@
 """SQS queue attributes tool — backlog depth, stuck consumers, and DLQ wiring.
 
 Wraps the read-only ``list_queues`` + ``get_queue_attributes`` APIs so the
-planner can answer "what state is this queue in?" during an incident.
-
-The distinction this tool exists to draw is between a *normal backlog*
-(``visible_count`` high, ``in_flight_count`` low — producers outpacing
-consumers) and *stuck consumers* (``visible_count`` near zero,
-``in_flight_count`` pinned at the consumer-pod count, ``oldest_message_age``
-climbing, no DLQ). The second shape is invisible to logs and metrics: a
-consumer that hangs without raising never writes an error line, and SQS keeps
-redelivering the same message every ``visibility_timeout_seconds`` until every
-pod is holding it. Without a ``RedrivePolicy`` there is no receive-count
-ceiling to break the cycle.
+planner can distinguish a normal backlog (visible high, in-flight low) from
+stuck consumers (visible near zero, in-flight pinned at the consumer count,
+oldest-message age climbing, no DLQ) — a shape that leaves no trace in logs,
+because a consumer hanging past its visibility timeout never raises.
 
 ``list_queues`` returns URLs only, so attributes are fetched per queue; the
 ``max_queues`` cap bounds that fan-out.
@@ -39,18 +32,14 @@ logger = logging.getLogger(__name__)
 
 
 def _queue_name_from_url(url: str) -> str:
-    """Derive the queue name from its URL (the final path segment)."""
     return url.rstrip("/").rsplit("/", 1)[-1]
 
 
 def _parse_attributes(raw_attrs: dict[str, str]) -> dict[str, Any]:
-    """Normalize the raw SQS attribute string map into typed fields.
+    """Normalize SQS's all-strings attribute map into typed fields.
 
-    SQS returns every attribute as a string, including numerics and booleans.
-    Values are coerced to ``int`` / ``bool`` so the planner can compare them
-    without knowing the API's stringly-typed convention. A missing or
-    unparseable numeric becomes ``None`` (unknown) rather than ``0``, which
-    would read as a real, meaningful "empty queue" measurement.
+    A missing or unparseable numeric becomes ``None``, not ``0`` — an absent
+    measurement and a genuinely empty queue are different findings.
     """
 
     def _int(key: str) -> int | None:
@@ -62,10 +51,8 @@ def _parse_attributes(raw_attrs: dict[str, str]) -> dict[str, Any]:
         except (TypeError, ValueError):
             return None
 
-    # RedrivePolicy is a JSON-encoded string naming the DLQ target and
-    # maxReceiveCount. Preserve the raw text if it does not parse so a malformed
-    # policy still surfaces as "a DLQ is configured" rather than silently
-    # reading as no DLQ at all.
+    # Keep the raw text when RedrivePolicy does not parse, so a malformed policy
+    # still reads as "a DLQ is configured" rather than as no DLQ at all.
     redrive_raw = raw_attrs.get("RedrivePolicy")
     redrive_policy: dict[str, Any] | None = None
     if redrive_raw:
@@ -143,9 +130,8 @@ def get_sqs_queue_attributes(
     """Return per-queue SQS attributes for queues matching the given prefix.
 
     When ``aws_backend`` is provided (FixtureAWSBackend in synthetic tests) the
-    call short-circuits to the backend so we never leak boto3 calls to real AWS
-    during scenario runs. Otherwise calls boto3 sqs via ``execute_aws_sdk_call``
-    using the default boto3 credential chain.
+    call short-circuits to the backend so scenario runs never leak boto3 calls
+    to real AWS.
     """
     max_queues = coerce_sqs_max_queues(max_queues)
 
@@ -190,13 +176,15 @@ def get_sqs_queue_attributes(
             queues=[],
         )
 
-    # The transport sanitizer can replace the tail of an oversized list with a
-    # "... (N more items truncated)" marker string, so keep only real str URLs.
-    raw_urls = (list_result.get("data") or {}).get("QueueUrls") or []
+    list_data = list_result.get("data") or {}
+    # ListQueues already honors MaxResults, so more results exist iff AWS
+    # returned a NextToken — not iff the URL count exceeds max_queues (that
+    # can't happen, since we asked for at most max_queues in the first place).
+    truncated = bool(list_data.get("NextToken"))
+    # The transport sanitizer replaces the tail of an oversized list with a
+    # "... (N more items truncated)" marker string, which is not a queue URL.
+    raw_urls = list_data.get("QueueUrls") or []
     queue_urls = [url for url in raw_urls if isinstance(url, str) and url.startswith("http")]
-    # list_queues honors MaxResults, but a paginating caller could still hand us
-    # more; clamp so the per-queue fan-out stays bounded either way.
-    truncated = len(queue_urls) > max_queues
     queue_urls = queue_urls[:max_queues]
 
     queues: list[dict[str, Any]] = []
@@ -210,9 +198,8 @@ def get_sqs_queue_attributes(
         )
 
         if not attr_result.get("success"):
-            # One unreadable queue (e.g. a per-queue IAM policy denying
-            # GetQueueAttributes) must not sink the whole investigation — record
-            # the gap on that entry and keep inspecting the rest.
+            # A per-queue policy can deny GetQueueAttributes on one queue; record
+            # the gap and keep inspecting the rest.
             logger.warning(
                 "[sqs] get_queue_attributes failed queue=%s region=%s: %s",
                 name,
@@ -233,10 +220,8 @@ def get_sqs_queue_attributes(
         raw_attrs = (attr_result.get("data") or {}).get("Attributes") or {}
         queues.append({"name": name, "url": url, **_parse_attributes(raw_attrs)})
 
-    # NOTE: the success payload deliberately carries no "error" key. The runtime
-    # tool loop flags failure on a truthy "error" (core.execution._normalize_result),
-    # so "error": None is tolerated today — but omitting the key entirely keeps
-    # this tool independent of that subtlety.
+    # No "error" key on success: the runtime tool loop flags failure on a truthy
+    # "error" (core.execution._normalize_result).
     return {
         "source": "sqs",
         "available": True,
