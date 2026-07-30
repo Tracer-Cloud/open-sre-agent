@@ -16,6 +16,7 @@ from __future__ import annotations
 import errno
 import json
 import re
+from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import Thread
@@ -66,7 +67,7 @@ class _ReleaseHandler(BaseHTTPRequestHandler):
 
 
 @pytest.fixture()
-def release_api_url() -> str:
+def release_api_url() -> Iterator[str]:
     try:
         server = ThreadingHTTPServer(("127.0.0.1", 0), _ReleaseHandler)
     except OSError as exc:

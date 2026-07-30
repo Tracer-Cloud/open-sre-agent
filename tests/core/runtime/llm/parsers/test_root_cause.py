@@ -111,3 +111,89 @@ class TestCategoryProseForms:
     def test_unrecognized_wording_stays_unknown(self) -> None:
         """No fuzzy guessing — an unmapped name must not be invented."""
         assert _extract_category("ROOT_CAUSE_CATEGORY:\ngremlins in the rack") == "unknown"
+
+
+class TestCategoryNegationSafety:
+    """A rejected or hypothetical category must never become the verdict.
+
+    The prompt asks for exactly one category name, so a prose form is only
+    trustworthy when the whole line *is* that name. Matching a category
+    mentioned inside a sentence lets an explicitly ruled-out cause be persisted
+    as canonical data.
+    """
+
+    def test_negated_category_is_not_selected(self) -> None:
+        # Arrange / Act
+        category = _extract_category("ROOT_CAUSE_CATEGORY:\nThis is not resource exhaustion.")
+
+        # Assert
+        assert category == "unknown"
+
+    def test_ruled_out_alternative_is_not_selected(self) -> None:
+        category = _extract_category(
+            "ROOT_CAUSE_CATEGORY:\nresource exhaustion was ruled out by the metrics"
+        )
+        assert category == "unknown"
+
+    def test_hypothetical_phrasing_is_not_selected(self) -> None:
+        category = _extract_category(
+            "ROOT_CAUSE_CATEGORY:\nif it were pod oomkilled we would see exit 137"
+        )
+        assert category == "unknown"
+
+    def test_bare_prose_category_still_resolves(self) -> None:
+        """The whole line being the name stays supported — that is the fix's point."""
+        assert _extract_category("ROOT_CAUSE_CATEGORY:\nresource exhaustion") == (
+            "resource_exhaustion"
+        )
+
+    def test_decorated_line_still_resolves(self) -> None:
+        """Markdown and bullets are formatting, not a sentence."""
+        assert _extract_category("ROOT_CAUSE_CATEGORY:\n- **pod oomkilled**") == ("pod_oomkilled")
+
+
+class TestCanonicalNameNegationSafety:
+    """Negation must also be respected when the model uses canonical names.
+
+    The prompt asks for underscored taxonomy names, so ``Not pod_oomkilled;
+    this is a code_defect`` is the *likely* phrasing — and the bare-token scan
+    would return the rejected category. A line that rejects something is not a
+    verdict line.
+    """
+
+    def test_leading_negation_with_canonical_names(self) -> None:
+        assert (
+            _extract_category("ROOT_CAUSE_CATEGORY:\nNot pod_oomkilled; this is a code_defect")
+            == "unknown"
+        )
+
+    def test_ruled_out_with_canonical_names(self) -> None:
+        assert (
+            _extract_category("ROOT_CAUSE_CATEGORY:\npod_oomkilled ruled out; actual: code_defect")
+            == "unknown"
+        )
+
+    def test_trailing_qualifier_still_resolves(self) -> None:
+        """A clean verdict with a parenthetical must keep working."""
+        assert (
+            _extract_category("ROOT_CAUSE_CATEGORY:\ncpu_saturation (high confidence)")
+            == "cpu_saturation"
+        )
+
+    def test_category_whose_name_contains_not_still_resolves(self) -> None:
+        """``node_not_ready`` must not be mistaken for a negated line."""
+        assert _extract_category("ROOT_CAUSE_CATEGORY:\nnode_not_ready") == "node_not_ready"
+
+    def test_verdict_plus_parenthetical_rejection_yields_unknown(self) -> None:
+        """Accepted trade-off: recall lost, correctness kept.
+
+        ``code_defect (not pod_oomkilled)`` names the verdict *and* rejects an
+        alternative on one line. Distinguishing which side of the cue the verdict
+        sits on is not reliable — ``pod_oomkilled ruled out; actual: code_defect``
+        leads with the rejected name — so a rejecting line yields no verdict.
+        Storing ``unknown`` is recoverable; storing the opposite of the model's
+        conclusion is not.
+        """
+        assert (
+            _extract_category("ROOT_CAUSE_CATEGORY:\ncode_defect (not pod_oomkilled)") == "unknown"
+        )
