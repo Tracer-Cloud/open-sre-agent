@@ -16,33 +16,19 @@ from surfaces.interactive_shell.command_registry import (
     SLASH_COMMANDS,
 )
 
-# One duplicate predates this guard: "/history" is registered by both
-# tasks_cmds and privacy_cmds, and privacy_cmds merges later, so the
-# tasks_cmds command is unreachable. Pinned rather than fixed here so the guard
-# can land without changing unrelated commands; removing the dead registration
-# should shrink this set to empty.
-KNOWN_DUPLICATES = frozenset({"/history"})
-
 
 def test_no_two_commands_claim_the_same_name() -> None:
-    # Arrange
+    """No slash name is registered more than once."""
     counts = Counter(command.name for command in _MERGED_SEQUENCE)
-
-    # Act
     duplicates = {name for name, count in counts.items() if count > 1}
-
-    # Assert
-    assert sorted(duplicates - KNOWN_DUPLICATES) == [], (
+    assert sorted(duplicates) == [], (
         "these slash names are registered more than once and would overwrite "
-        f"each other: {sorted(duplicates - KNOWN_DUPLICATES)}"
+        f"each other: {sorted(duplicates)}"
     )
 
 
 def test_every_registered_command_survives_the_lookup_table() -> None:
     """No command is lost between the merged sequence and the dispatch dict."""
-    # Arrange / Act
     lost = sorted({command.name for command in _MERGED_SEQUENCE} - set(SLASH_COMMANDS))
-
-    # Assert
     assert lost == []
-    assert len(SLASH_COMMANDS) == len(_MERGED_SEQUENCE) - len(KNOWN_DUPLICATES)
+    assert len(SLASH_COMMANDS) == len(_MERGED_SEQUENCE)
