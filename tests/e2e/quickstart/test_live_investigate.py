@@ -1,10 +1,12 @@
 """Live LLM investigation for the quickstart fixture path.
 
-Excluded from default pytest via ``norecursedirs = tests/e2e``. Run:
+Not in GitHub Actions (``ci.yml`` e2e-general ignores this path) and not in
+default pytest (``norecursedirs = tests/e2e``). Opt-in only:
 
     OPENSRE_LIVE_QUICKSTART=1 uv run pytest tests/e2e/quickstart/ -q
+    ./trace smoke --suite all --only agent.investigate.quickstart_k8s
 
-Uses the developer's real LLM credentials (project ``.env`` / keyring).
+Offline quickstart coverage stays in CI via ``tests/cli/test_quickstart.py``.
 """
 
 from __future__ import annotations

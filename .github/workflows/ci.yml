@@ -168,6 +168,7 @@ jobs:
               tests/packaging
               tests/scheduler
               gateway/tests
+          # install/ + quickstart/ are opt-in live (CDN/brew/LLM); not PR CI.
           - os: ubuntu-latest
             shard: e2e-general
             pytest_paths: >-
@@ -178,6 +179,8 @@ jobs:
               --ignore=tests/e2e/upstream_lambda
               --ignore=tests/e2e/upstream_prefect_ecs_fargate
               --ignore=tests/e2e/upstream_apache_flink_ecs
+              --ignore=tests/e2e/install
+              --ignore=tests/e2e/quickstart
           - os: ubuntu-latest
             shard: e2e-provider-and-openclaw
             pytest_paths: >-

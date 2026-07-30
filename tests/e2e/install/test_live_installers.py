@@ -1,11 +1,12 @@
 """Live installer e2e: real CDN / GitHub / Homebrew (no curl shim).
 
-Excluded from default pytest via ``norecursedirs = tests/e2e``. Run explicitly:
+Not in GitHub Actions (``ci.yml`` e2e-general ignores this path) and not in
+default pytest (``norecursedirs = tests/e2e``). Opt-in only:
 
     OPENSRE_LIVE_INSTALL=1 uv run pytest tests/e2e/install/ -q
+    ./trace smoke --suite all --only 'install.live_*'
 
-Full ``brew install`` / uninstall is included when ``OPENSRE_LIVE_INSTALL=1``
-(same gate as the other live installers). Smoke suite ``all`` always runs it.
+Offline install coverage stays in CI via ``tests/cli/test_install_matrix.py``.
 """
 
 from __future__ import annotations
