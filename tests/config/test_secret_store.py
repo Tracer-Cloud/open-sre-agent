@@ -33,6 +33,20 @@ from tests.shared.keyring_backend import MemoryKeyring
 _ENV_VAR = "OPENSRE_TEST_FALLBACK_TOKEN"
 
 
+def test_keyring_unavailable_reason_values_round_trip() -> None:
+    expected = {
+        "disabled": KeyringUnavailableReason.DISABLED,
+        "no_backend": KeyringUnavailableReason.NO_BACKEND,
+        "backend_error": KeyringUnavailableReason.BACKEND_ERROR,
+    }
+
+    assert {reason.value: reason for reason in KeyringUnavailableReason} == expected
+    for value, reason in expected.items():
+        assert KeyringUnavailableReason(value) == reason
+        assert isinstance(reason, str)
+        assert str(reason) == value
+
+
 class _NoBackendKeyring(MemoryKeyring):
     """Stands in for ``keyring.backends.fail.Keyring`` on a headless box."""
 
