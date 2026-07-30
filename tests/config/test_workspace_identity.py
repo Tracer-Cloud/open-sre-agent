@@ -1,4 +1,4 @@
-"""Workspace identity + capability warning facts (Vincent M5-1B / 1C)."""
+"""Workspace identity and capability-warning runtime facts."""
 
 from __future__ import annotations
 
@@ -31,9 +31,7 @@ def test_read_git_origin_identity_from_config_body() -> None:
     from config.runtime_metadata.probes import read_git_origin_identity
 
     assert (
-        read_git_origin_identity(
-            '[remote "origin"]\n\turl = git@github.com:acme/from-git.git\n'
-        )
+        read_git_origin_identity('[remote "origin"]\n\turl = git@github.com:acme/from-git.git\n')
         == "acme/from-git"
     )
     assert read_git_origin_identity("[core]\n\trepositoryformatversion = 0\n") == ""

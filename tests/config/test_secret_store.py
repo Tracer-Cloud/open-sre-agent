@@ -94,7 +94,7 @@ def _fallback_contents() -> dict[str, str]:
 
 
 def test_save_defaults_to_fallback_file_without_keyring_opt_in(monkeypatch, use_backend) -> None:
-    """Vincent M6: env/file-first — keyring writes require OPENSRE_USE_KEYRING=1."""
+    """Env/file-first: keyring writes require OPENSRE_USE_KEYRING=1."""
     use_backend(MemoryKeyring())
     monkeypatch.delenv(OPENSRE_USE_KEYRING_ENV, raising=False)
 

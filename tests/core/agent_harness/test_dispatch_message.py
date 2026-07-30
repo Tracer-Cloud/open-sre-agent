@@ -73,4 +73,3 @@ def test_headless_bind_turn_swaps_output() -> None:
     )
     agent.bind_turn(output=second)
     assert agent._output is second  # noqa: SLF001
-

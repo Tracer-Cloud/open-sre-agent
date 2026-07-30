@@ -1,4 +1,4 @@
-"""Session-scoped agent pool + live sink (Vincent M2 reuse)."""
+"""Session-scoped agent pool and live sink reuse across turns."""
 
 from __future__ import annotations
 

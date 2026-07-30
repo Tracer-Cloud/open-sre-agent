@@ -1,6 +1,6 @@
 """Goal definition and verification for ReAct stop decisions.
 
-Vincent M4 / M5-1D: do not conclude while the structured goal is unmet, but
+Do not conclude while the structured goal is unmet, but
 always honour a hard iteration ceiling so the loop cannot spin forever.
 """
 

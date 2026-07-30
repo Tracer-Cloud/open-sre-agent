@@ -1,4 +1,4 @@
-"""Unit tests for goal definition / verification (Vincent M4 / M5-1D)."""
+"""Unit tests for goal definition and verification of ReAct stop decisions."""
 
 from __future__ import annotations
 
