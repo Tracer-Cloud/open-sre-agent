@@ -20,10 +20,10 @@ import os
 import time as time_mod
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from http import HTTPStatus
 from typing import Any, Final
 
 import requests
-from http import HTTPStatus
 
 from config.llm_credentials import resolve_env_credential
 from integrations.grafana.base import GrafanaClientBase
