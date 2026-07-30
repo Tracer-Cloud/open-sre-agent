@@ -9,6 +9,10 @@ from config.constants.llm import (
     AZURE_OPENAI_API_KEY_ENV,
     AZURE_OPENAI_API_VERSION_ENV,
     AZURE_OPENAI_BASE_URL_ENV,
+    CUSTOM_ANTHROPIC_API_KEY_ENV,
+    CUSTOM_ANTHROPIC_BASE_URL_ENV,
+    CUSTOM_OPENAI_API_KEY_ENV,
+    CUSTOM_OPENAI_BASE_URL_ENV,
 )
 
 CredentialKind = Literal["api_key", "cli", "ambient", "local"]
@@ -137,6 +141,30 @@ PROVIDER_SPECS: tuple[ProviderSpec, ...] = (
         classification_model_env="AZURE_OPENAI_CLASSIFICATION_MODEL",
         endpoint_env=AZURE_OPENAI_BASE_URL_ENV,
         api_version_env=AZURE_OPENAI_API_VERSION_ENV,
+        allow_custom_models=True,
+    ),
+    ProviderSpec(
+        value="custom-openai",
+        label="Custom OpenAI-compatible endpoint",
+        credential_kind="api_key",
+        api_key_env=CUSTOM_OPENAI_API_KEY_ENV,
+        model_env="CUSTOM_OPENAI_REASONING_MODEL",
+        legacy_model_env="CUSTOM_OPENAI_MODEL",
+        toolcall_model_env="CUSTOM_OPENAI_TOOLCALL_MODEL",
+        classification_model_env="CUSTOM_OPENAI_CLASSIFICATION_MODEL",
+        endpoint_env=CUSTOM_OPENAI_BASE_URL_ENV,
+        allow_custom_models=True,
+    ),
+    ProviderSpec(
+        value="custom-anthropic",
+        label="Custom Anthropic-compatible endpoint",
+        credential_kind="api_key",
+        api_key_env=CUSTOM_ANTHROPIC_API_KEY_ENV,
+        model_env="CUSTOM_ANTHROPIC_REASONING_MODEL",
+        legacy_model_env="CUSTOM_ANTHROPIC_MODEL",
+        toolcall_model_env="CUSTOM_ANTHROPIC_TOOLCALL_MODEL",
+        classification_model_env="CUSTOM_ANTHROPIC_CLASSIFICATION_MODEL",
+        endpoint_env=CUSTOM_ANTHROPIC_BASE_URL_ENV,
         allow_custom_models=True,
     ),
     ProviderSpec(

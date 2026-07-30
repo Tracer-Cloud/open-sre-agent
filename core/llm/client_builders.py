@@ -23,11 +23,6 @@ if TYPE_CHECKING:
 __all__ = ["build_agent_client", "build_reasoning_client"]
 
 
-# ---------------------------------------------------------------------------
-# Tool-calling (agent) clients
-# ---------------------------------------------------------------------------
-
-
 def build_agent_client(route: LLMRoute) -> AgentLLMClient:
     """Build the tool-calling client for the route: CLI or LiteLLM transport, else native SDK."""
     if route.cli_provider_registration is not None:
@@ -49,9 +44,28 @@ def _cli_agent_client(registration: Any) -> AgentLLMClient:
     return CLIBackedAgentClient(registration.adapter_factory(), model=model_name)
 
 
+def _custom_anthropic_params(
+    settings: Any, provider: str, model_type: ModelType
+) -> tuple[str, str, int, str]:
+    """Resolve ``(model, base_url, max_tokens, api_key_env)`` for custom Anthropic."""
+    from config.config import CUSTOM_ANTHROPIC_LLM_CONFIG
+    from config.constants.llm import CUSTOM_ANTHROPIC_API_KEY_ENV
+    from core.llm.providers.custom_endpoints import (
+        custom_base_url,
+        log_endpoint_resolution,
+        select_custom_model,
+    )
+
+    model = select_custom_model(settings, provider, model_type)
+    base_url = custom_base_url(settings, provider)
+    log_endpoint_resolution(provider, base_url, model, model_type)
+    return model, base_url, CUSTOM_ANTHROPIC_LLM_CONFIG.max_tokens, CUSTOM_ANTHROPIC_API_KEY_ENV
+
+
 def _native_sdk_agent_client(route: LLMRoute) -> AgentLLMClient:
     """Build the native vendor-SDK tool-calling client for the route's provider."""
     from config.config import PROVIDER_ANTHROPIC, PROVIDER_BEDROCK, PROVIDER_OLLAMA, PROVIDER_OPENAI
+    from core.llm.providers.custom_endpoints import is_custom_anthropic_provider
     from core.llm.providers.openai_compat_providers import (
         is_openai_compat_provider,
         resolve_openai_compat_provider,
@@ -72,6 +86,21 @@ def _native_sdk_agent_client(route: LLMRoute) -> AgentLLMClient:
             api_key_default=resolved.api_key_default,
         )
 
+    if is_custom_anthropic_provider(provider):
+        from core.llm.transports.sdk.custom_anthropic_clients import (
+            build_custom_anthropic_agent_client,
+        )
+
+        model, base_url, max_tokens, api_key_env = _custom_anthropic_params(
+            settings, provider, "reasoning"
+        )
+        return build_custom_anthropic_agent_client(
+            model=model,
+            max_tokens=max_tokens,
+            base_url=base_url,
+            api_key_env=api_key_env,
+        )
+
     spec = FIRST_PARTY_PROVIDERS.get(provider) or FIRST_PARTY_PROVIDERS[PROVIDER_ANTHROPIC]
     model = getattr(settings, f"{spec.env_prefix}_reasoning_model")
     if provider == PROVIDER_BEDROCK:
@@ -84,11 +113,6 @@ def _native_sdk_agent_client(route: LLMRoute) -> AgentLLMClient:
     if provider == PROVIDER_OPENAI:
         return sdk.OpenAIAgentClient(model=model, max_tokens=spec.max_tokens)
     return sdk.AnthropicAgentClient(model=model, max_tokens=spec.max_tokens)
-
-
-# ---------------------------------------------------------------------------
-# Streaming reasoning clients
-# ---------------------------------------------------------------------------
 
 
 def build_reasoning_client(route: LLMRoute, model_type: ModelType) -> Any:
@@ -127,6 +151,7 @@ def _cli_llm_client(registration: Any, model_type: ModelType) -> Any:
 def _native_sdk_llm_client(route: LLMRoute, model_type: ModelType) -> Any:
     """Build the native vendor-SDK reasoning client for the route's provider and tier."""
     from config.config import PROVIDER_ANTHROPIC, PROVIDER_BEDROCK, PROVIDER_OPENAI
+    from core.llm.providers.custom_endpoints import is_custom_anthropic_provider
     from core.llm.providers.openai_compat_providers import (
         is_openai_compat_provider,
         resolve_openai_compat_provider,
@@ -143,14 +168,31 @@ def _native_sdk_llm_client(route: LLMRoute, model_type: ModelType) -> Any:
 
     if is_openai_compat_provider(provider):
         compat = resolve_openai_compat_provider(settings, provider, model_type)
+        fallback_model: str | None = None
+        if model_type != "toolcall":
+            toolcall = resolve_openai_compat_provider(settings, provider, "toolcall")
+            fallback_model = toolcall.model or None
         return sdk.OpenAILLMClient(
             model=compat.model,
-            model_fallback=_fallback_model(provider),
+            model_fallback=fallback_model,
             max_tokens=compat.config.max_tokens,
             base_url=compat.base_url,
             api_key_env=compat.api_key_env,
             api_key_default=compat.api_key_default,
             temperature=compat.temperature,
+        )
+
+    if is_custom_anthropic_provider(provider):
+        from core.llm.transports.sdk.custom_anthropic_clients import CustomAnthropicLLMClient
+
+        model, base_url, max_tokens, api_key_env = _custom_anthropic_params(
+            settings, provider, model_type
+        )
+        return CustomAnthropicLLMClient(
+            model=model,
+            max_tokens=max_tokens,
+            base_url=base_url,
+            api_key_env=api_key_env,
         )
 
     spec = FIRST_PARTY_PROVIDERS.get(provider) or FIRST_PARTY_PROVIDERS[PROVIDER_ANTHROPIC]

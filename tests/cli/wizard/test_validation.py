@@ -240,9 +240,12 @@ def test_get_provider_base_url_minimax() -> None:
         provider.value
         for provider in SUPPORTED_PROVIDERS
         if provider.credential_kind == "api_key"
-        # Native OpenAI uses the SDK default; Anthropic and Azure never reach
-        # `_get_provider_base_url` (they have their own dispatch branches).
-        and provider.value not in {"openai", "anthropic", "azure-openai"}
+        # Native OpenAI uses the SDK default; Anthropic, Azure, and custom-anthropic
+        # never reach `_get_provider_base_url` (they have their own dispatch branches).
+        # custom-openai's base URL comes from the user's env, not a static constant,
+        # so it is covered by a dedicated env-driven test instead.
+        and provider.value
+        not in {"openai", "anthropic", "azure-openai", "custom-openai", "custom-anthropic"}
     ),
 )
 def test_every_openai_compatible_provider_has_a_base_url(provider_value: str) -> None:
@@ -256,3 +259,38 @@ def test_every_openai_compatible_provider_has_a_base_url(provider_value: str) ->
         f"{provider_value!r} is an OpenAI-compatible api_key provider with no base_url: "
         "its credentials would be validated against api.openai.com and always rejected"
     )
+
+
+def test_get_provider_base_url_custom_openai_uses_env(monkeypatch) -> None:
+    # custom-openai's probe must hit the user's gateway, not api.openai.com.
+    monkeypatch.setenv("CUSTOM_OPENAI_BASE_URL", "http://localhost:4000/v1/")
+    assert _get_provider_base_url("custom-openai") == "http://localhost:4000/v1"
+
+
+def test_get_provider_base_url_custom_openai_none_when_unset(monkeypatch) -> None:
+    monkeypatch.delenv("CUSTOM_OPENAI_BASE_URL", raising=False)
+    assert _get_provider_base_url("custom-openai") is None
+
+
+def test_validate_custom_anthropic_probes_the_override_endpoint(monkeypatch) -> None:
+    # The custom-anthropic probe must construct the Anthropic client with base_url,
+    # so a "validated" result reflects the endpoint investigate will use.
+    monkeypatch.setenv("CUSTOM_ANTHROPIC_BASE_URL", "https://proxy.example.com")
+    captured: dict[str, object] = {}
+
+    class _FakeAnthropic:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+            self.messages = self
+
+        def create(self, **_kwargs):
+            return type("R", (), {"content": []})()
+
+    monkeypatch.setattr(
+        "surfaces.cli.wizard.validation._load_anthropic_client",
+        lambda: (_FakeAnthropic, Exception),
+    )
+    provider = PROVIDER_BY_VALUE["custom-anthropic"]
+    result = validate_provider_credentials(provider=provider, api_key="k", model="claude-x")
+    assert result.ok is True
+    assert captured.get("base_url") == "https://proxy.example.com"
