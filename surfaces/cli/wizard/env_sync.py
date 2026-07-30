@@ -189,7 +189,15 @@ def sync_provider_env(
         values[LLM_AUTH_METHOD_ENV] = auth_method
     if resolved_model_provider.legacy_model_env:
         values[resolved_model_provider.legacy_model_env] = resolved_model
-    if toolcall_model and resolved_model_provider.toolcall_model_env:
+    classification_env = _classification_model_env(resolved_model_provider)
+    if is_custom_provider(provider.value):
+        # Fresh custom-provider onboarding asks for one model ID. Persist it to
+        # every required tier so the saved configuration validates immediately.
+        if classification_env:
+            values[classification_env] = resolved_model
+        if resolved_model_provider.toolcall_model_env:
+            values[resolved_model_provider.toolcall_model_env] = toolcall_model or resolved_model
+    elif toolcall_model and resolved_model_provider.toolcall_model_env:
         values[resolved_model_provider.toolcall_model_env] = toolcall_model
     if provider.value == "azure-openai":
         # Azure forces the LiteLLM transport; the custom gateways stay on the
