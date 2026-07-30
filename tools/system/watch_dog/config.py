@@ -4,14 +4,23 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Literal
 
 from pydantic import Field, field_validator, model_validator
 
 from config.strict_config import StrictConfigModel
 
-ThresholdName = Literal["max_cpu", "max_runtime", "max_rss"]
 AlarmProvider = Literal["telegram", "rocketchat"]
+
+
+class WatchdogThreshold(StrEnum):
+    """Closed set of watchdog thresholds."""
+
+    MAX_CPU = "max_cpu"
+    MAX_RUNTIME = "max_runtime"
+    MAX_RSS = "max_rss"
+
 
 _DURATION_RE = re.compile(r"^(?P<value>\d+(?:\.\d+)?)(?P<unit>[smh]?)$")
 _BYTE_RE = re.compile(r"^(?P<value>\d+(?:\.\d+)?)(?P<unit>[kmgt]?b?)$", re.IGNORECASE)
@@ -21,7 +30,7 @@ _BYTE_RE = re.compile(r"^(?P<value>\d+(?:\.\d+)?)(?P<unit>[kmgt]?b?)$", re.IGNOR
 class Threshold:
     """A configured watchdog threshold."""
 
-    name: ThresholdName
+    name: WatchdogThreshold
     limit: float
 
 
@@ -122,9 +131,9 @@ class WatchdogConfig(StrictConfigModel):
         """Return thresholds in stable evaluation order."""
         thresholds: list[Threshold] = []
         if self.max_cpu is not None:
-            thresholds.append(Threshold("max_cpu", self.max_cpu))
+            thresholds.append(Threshold(WatchdogThreshold.MAX_CPU, self.max_cpu))
         if self.max_runtime is not None:
-            thresholds.append(Threshold("max_runtime", self.max_runtime))
+            thresholds.append(Threshold(WatchdogThreshold.MAX_RUNTIME, self.max_runtime))
         if self.max_rss is not None:
-            thresholds.append(Threshold("max_rss", float(self.max_rss)))
+            thresholds.append(Threshold(WatchdogThreshold.MAX_RSS, float(self.max_rss)))
         return tuple(thresholds)
