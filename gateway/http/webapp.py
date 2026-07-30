@@ -97,9 +97,7 @@ def get_health_response() -> HealthResponse:
 @app.get("/ok", response_model=HealthResponse)
 def health(response: Response) -> HealthResponse:
     health_response = get_health_response()
-    response.status_code = (
-        HTTPStatus.OK if health_response.ok else HTTPStatus.SERVICE_UNAVAILABLE
-    )
+    response.status_code = HTTPStatus.OK if health_response.ok else HTTPStatus.SERVICE_UNAVAILABLE
     return health_response
 
 
@@ -158,11 +156,15 @@ async def receive_alert(request: Request) -> JSONResponse:
     if declared_length < 0:
         return JSONResponse({"error": "invalid Content-Length"}, status_code=HTTPStatus.BAD_REQUEST)
     if declared_length > MAX_ALERT_BODY_BYTES:
-        return JSONResponse({"error": "payload too large"}, status_code=HTTPStatus.REQUEST_ENTITY_TOO_LARGE)
+        return JSONResponse(
+            {"error": "payload too large"}, status_code=HTTPStatus.REQUEST_ENTITY_TOO_LARGE
+        )
 
     body = await request.body()
     if len(body) > MAX_ALERT_BODY_BYTES:
-        return JSONResponse({"error": "payload too large"}, status_code=HTTPStatus.REQUEST_ENTITY_TOO_LARGE)
+        return JSONResponse(
+            {"error": "payload too large"}, status_code=HTTPStatus.REQUEST_ENTITY_TOO_LARGE
+        )
 
     try:
         data = json.loads(body)
