@@ -15,7 +15,7 @@ _OTLP_SCALAR_KINDS = ("stringValue", "intValue", "boolValue", "doubleValue")
 
 #: Nanoseconds → milliseconds for OTLP span duration.
 _NANOSECONDS_PER_MILLISECOND = 1_000_000
-#: Decimal places kept on parsed OTLP durations (ms).
+#: Decimal places kept on parsed OTLP durations (milliseconds).
 _OTLP_DURATION_MILLISECONDS_DECIMAL_PLACES = 4
 _EMPTY_DURATION_MILLISECONDS = 0.0
 _UNKNOWN_SPAN_NAME = "unknown"
