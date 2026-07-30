@@ -8,6 +8,13 @@ resent input into cache reads (~0.1x input price) instead of full-price tokens.
 Marking a prefix shorter than the model's minimum cacheable length is safe: the
 request succeeds and simply is not cached, so callers do not need to measure
 prompt size before marking.
+
+Not every deployment supports the markers themselves: Bedrock rejects
+``cache_control`` with a 400 for Claude models that predate prompt caching.
+Clients therefore treat caching as best-effort — on a 400 that blames the
+markers (:func:`is_cache_unsupported_error`), they retry once without markers
+(:func:`strip_cache_markers`) and stop marking for the client's lifetime, so an
+unsupported model works uncached instead of failing every call.
 """
 
 from __future__ import annotations
@@ -73,9 +80,86 @@ def messages_with_cache(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [*messages[:-1], {**last, "content": marked_content}]
 
 
+#: Substrings a provider 400 uses when the request failed *because of* the
+#: cache markers: Anthropic names the offending ``cache_control`` field,
+#: Bedrock's Converse-era wording says "cachePoint" / "prompt caching".
+_CACHE_UNSUPPORTED_SIGNALS: Final[tuple[str, ...]] = (
+    "cache_control",
+    "cachepoint",
+    "prompt caching",
+    "prompt cache",
+    # Bedrock's ValidationException often rejects the request without naming the
+    # offending field, so the generic wording has to count as a signal too. These
+    # are matched only on a 400, where the request is already failing.
+    "does not support the requested feature",
+    "invalid request body",
+)
+
+
+def is_cache_unsupported_error(err: Exception) -> bool:
+    """True when a bad-request error blames the cache markers themselves.
+
+    Only meaningful for 400-class errors — callers must check the error type
+    first so unrelated failures (auth, rate limits) are never eaten.
+    """
+    message = str(err).lower()
+    return any(signal in message for signal in _CACHE_UNSUPPORTED_SIGNALS)
+
+
+def strip_cache_markers(kwargs: dict[str, Any]) -> dict[str, Any]:
+    """Copy of request ``kwargs`` with every marker this module adds removed.
+
+    Strips exactly the spots :func:`cached_system`, :func:`tools_with_cache`,
+    and :func:`messages_with_cache` write to — system blocks, top-level tool
+    schemas, and message content blocks. It deliberately does not recurse into
+    tool ``input_schema`` bodies, where ``cache_control`` could be a
+    legitimate user-defined property name.
+    """
+    out = dict(kwargs)
+    system = out.get("system")
+    if isinstance(system, list):
+        blocks = [_block_without_marker(block) for block in system]
+        # Exactly invert cached_system: a lone text block goes back to the plain
+        # string a non-caching client would have sent, since a model that rejects
+        # the markers may not accept block-form system either.
+        if (
+            len(blocks) == 1
+            and isinstance(blocks[0], dict)
+            and set(blocks[0]) == {"type", "text"}
+            and blocks[0].get("type") == "text"
+        ):
+            out["system"] = blocks[0]["text"]
+        else:
+            out["system"] = blocks
+    tools = out.get("tools")
+    if isinstance(tools, list):
+        out["tools"] = [_block_without_marker(tool) for tool in tools]
+    messages = out.get("messages")
+    if isinstance(messages, list):
+        out["messages"] = [_message_without_marker(message) for message in messages]
+    return out
+
+
+def _block_without_marker(block: Any) -> Any:
+    if isinstance(block, dict) and "cache_control" in block:
+        return {key: value for key, value in block.items() if key != "cache_control"}
+    return block
+
+
+def _message_without_marker(message: Any) -> Any:
+    if not isinstance(message, dict):
+        return message
+    content = message.get("content")
+    if not isinstance(content, list):
+        return message
+    return {**message, "content": [_block_without_marker(block) for block in content]}
+
+
 __all__ = [
     "ANTHROPIC_CACHE_CONTROL",
     "cached_system",
+    "is_cache_unsupported_error",
     "messages_with_cache",
+    "strip_cache_markers",
     "tools_with_cache",
 ]

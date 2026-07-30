@@ -44,7 +44,11 @@ from core.llm.shared.structured_output import (
     json_schema_for_structured_output,
 )
 from core.llm.shared.usage import llm_response_with_usage
-from core.llm.transports.sdk.anthropic_cache import cached_system
+from core.llm.transports.sdk.anthropic_cache import (
+    cached_system,
+    is_cache_unsupported_error,
+    strip_cache_markers,
+)
 from core.llm.types import LLMResponse
 
 logger = logging.getLogger(__name__)
@@ -177,6 +181,11 @@ def _resolve_openai_reasoning_effort(*, model: str, api_key_env: str) -> str | N
 
 
 class LLMClient:
+    # Best-effort prompt caching: a class default so every instance starts
+    # marking; flipped to an instance False for the client's lifetime the
+    # first time the provider rejects the cache markers with a 400.
+    _cache_markers_enabled = True
+
     def __init__(
         self, *, model: str, max_tokens: int = 1024, temperature: float | None = None
     ) -> None:
@@ -245,7 +254,7 @@ class LLMClient:
             "messages": messages,
         }
         if system:
-            kwargs["system"] = cached_system(system)
+            kwargs["system"] = cached_system(system) if self._cache_markers_enabled else system
         if self._temperature is not None:
             kwargs["temperature"] = self._temperature
         return kwargs
@@ -284,6 +293,22 @@ class LLMClient:
                     "Check your configured model name and try again."
                 ) from err
             except AnthropicBadRequestError as err:
+                # Any bad request may be the markers' fault: Bedrock's
+                # ValidationException does not reliably name the field, so the
+                # only dependable probe is to retry without them. Markers are
+                # disabled only if that retry actually succeeds, leaving genuine
+                # bad requests (bad max_tokens, oversized prompt) untouched.
+                if self._cache_markers_enabled and is_cache_unsupported_error(err):
+                    # Caching is best-effort: retry the same request uncached
+                    # and never mark again on this client. The flag guards the
+                    # recursion, so this path runs at most once.
+                    self._cache_markers_enabled = False
+                    logger.warning(
+                        "Model '%s' rejected prompt-cache markers; retrying without "
+                        "prompt caching (requests will pay full input price).",
+                        self._model,
+                    )
+                    return self._create_with_retry(strip_cache_markers(kwargs))
                 raise RuntimeError(_format_anthropic_bad_request(err)) from err
             except GuardrailBlockedError:
                 raise
@@ -328,6 +353,17 @@ class LLMClient:
                     "Check your configured model name and try again."
                 ) from err
             except AnthropicBadRequestError as err:
+                if not emitted and self._cache_markers_enabled and is_cache_unsupported_error(err):
+                    # Best-effort caching: rebuild the request without markers
+                    # (the flag now disables them) and stream that instead.
+                    self._cache_markers_enabled = False
+                    logger.warning(
+                        "Model '%s' rejected prompt-cache markers; retrying without "
+                        "prompt caching (requests will pay full input price).",
+                        self._model,
+                    )
+                    yield from self.invoke_stream(prompt_or_messages)
+                    return
                 raise RuntimeError(_format_anthropic_bad_request(err)) from err
             except GuardrailBlockedError:
                 raise
@@ -349,6 +385,11 @@ class BedrockLLMClient:
     - Anthropic Claude models → AnthropicBedrock SDK (existing behaviour)
     - Non-Anthropic models (Mistral, GPT OSS, Llama, etc.) → boto3 ``converse`` API
     """
+
+    # Best-effort prompt caching: Bedrock rejects cache markers with a 400 for
+    # Claude models that predate prompt caching, so the first such rejection
+    # flips this to an instance False for the client's lifetime.
+    _cache_markers_enabled = True
 
     def __init__(
         self, *, model: str, max_tokens: int = 1024, temperature: float | None = None
@@ -390,7 +431,7 @@ class BedrockLLMClient:
             "messages": messages,
         }
         if system:
-            kwargs["system"] = cached_system(system)
+            kwargs["system"] = cached_system(system) if self._cache_markers_enabled else system
         if self._temperature is not None:
             kwargs["temperature"] = self._temperature
 
@@ -402,6 +443,21 @@ class BedrockLLMClient:
                 response = self._anthropic_client.messages.create(**kwargs)
                 break
             except AnthropicBadRequestError as err:
+                # Bedrock's ValidationException often does not name the field,
+                # so wording alone cannot tell a marker rejection from any other
+                # bad request. Retry once stripped and keep markers off only if
+                # that actually fixed it.
+                if self._cache_markers_enabled and is_cache_unsupported_error(err):
+                    # Caching is best-effort: retry the same request uncached
+                    # and never mark again on this client. The flag guards the
+                    # recursion, so this path runs at most once.
+                    self._cache_markers_enabled = False
+                    logger.warning(
+                        "Bedrock model '%s' rejected prompt-cache markers; retrying "
+                        "without prompt caching (requests will pay full input price).",
+                        self._model,
+                    )
+                    return self._invoke_anthropic(prompt_or_messages)
                 err_msg = str(err)
                 err_msg_lower = err_msg.lower()
                 if "on-demand throughput" in err_msg or "inference profile" in err_msg_lower:
