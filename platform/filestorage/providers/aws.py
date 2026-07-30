@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING, Any
 
 import boto3
@@ -18,6 +19,17 @@ if TYPE_CHECKING:
 
 _SERVER_SIDE_ENCRYPTION = "AES256"
 PROVIDER_NAME = BuiltInProvider.AWS
+_RETRYABLE_CLIENT_ERROR_CODES = {
+    "ConnectionClosedError",
+    "InternalError",
+    "RequestTimeout",
+    "SlowDown",
+    "Throttling",
+    "ThrottlingException",
+    "ServiceUnavailable",
+}
+_MAX_ATTEMPTS = 3
+_BASE_SLEEP_SECONDS = 0.1
 
 
 class S3ObjectStore:
@@ -35,8 +47,9 @@ class S3ObjectStore:
         full_prefix = (
             self._config.key_for(prefix) if prefix else f"{self._config.prefix.rstrip('/')}/"
         )
-        out: list[RemoteObject] = []
-        try:
+
+        def _collect() -> list[RemoteObject]:
+            out: list[RemoteObject] = []
             for page in self._pages(full_prefix):
                 for item in page.get("Contents", []):
                     key = str(item["Key"])
@@ -50,29 +63,32 @@ class S3ObjectStore:
                             etag=str(item.get("ETag", "")).strip('"'),
                         )
                     )
+            return out
+
+        try:
+            return self._retry(_collect)
         except (BotoCoreError, ClientError) as exc:
-            raise RemoteSyncUnavailableError(
-                f"cannot list {self.describe()} — {_reason(exc)}"
-            ) from exc
-        return out
+            raise RemoteSyncUnavailableError(f"cannot list {self.describe()} — {_reason(exc)}") from exc
 
     def get_object(self, key: str) -> bytes:
         try:
-            response = self._client.get_object(
-                Bucket=self._config.bucket, Key=self._config.key_for(key)
+            return self._retry(
+                lambda: self._client.get_object(
+                    Bucket=self._config.bucket, Key=self._config.key_for(key)
+                )["Body"].read()
             )
-            body: bytes = response["Body"].read()
-            return body
         except (BotoCoreError, ClientError) as exc:
             raise RemoteSyncUnavailableError(f"cannot read {key} — {_reason(exc)}") from exc
 
     def put_object(self, key: str, data: bytes) -> None:
         try:
-            self._client.put_object(
-                Bucket=self._config.bucket,
-                Key=self._config.key_for(key),
-                Body=data,
-                ServerSideEncryption=_SERVER_SIDE_ENCRYPTION,
+            self._retry(
+                lambda: self._client.put_object(
+                    Bucket=self._config.bucket,
+                    Key=self._config.key_for(key),
+                    Body=data,
+                    ServerSideEncryption=_SERVER_SIDE_ENCRYPTION,
+                )
             )
         except (BotoCoreError, ClientError) as exc:
             raise RemoteSyncUnavailableError(f"cannot write {key} — {_reason(exc)}") from exc
@@ -85,10 +101,39 @@ class S3ObjectStore:
         prefix = f"{self._config.prefix.rstrip('/')}/"
         return full_key[len(prefix) :] if full_key.startswith(prefix) else full_key
 
+    def _retry(self, fn: Any) -> Any:
+        last_exc: Exception | None = None
+        for attempt in range(1, _MAX_ATTEMPTS + 1):
+            try:
+                return fn()
+            except (BotoCoreError, ClientError) as exc:
+                last_exc = exc
+                if not _is_retryable(exc) or attempt == _MAX_ATTEMPTS:
+                    break
+                time.sleep(_backoff_seconds(attempt))
+        assert last_exc is not None
+        raise last_exc
+
 
 def _reason(exc: Exception) -> str:
     """The AWS-side cause, for a local operator to act on."""
     return f"{type(exc).__name__}: {exc}"
+
+
+def _backoff_seconds(attempt: int) -> float:
+    return _BASE_SLEEP_SECONDS * (2 ** (attempt - 1))
+
+
+def _is_retryable(exc: Exception) -> bool:
+    if isinstance(exc, ClientError):
+        code = str(exc.response.get("Error", {}).get("Code", ""))
+        return code in _RETRYABLE_CLIENT_ERROR_CODES and code not in {
+            "NoSuchBucket",
+            "AccessDenied",
+            "InvalidBucketName",
+            "NoSuchKey",
+        }
+    return True
 
 
 def _build_client(config: RemoteSyncConfig) -> Any:

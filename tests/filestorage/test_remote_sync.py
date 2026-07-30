@@ -382,6 +382,63 @@ def test_aws_failures_name_their_cause() -> None:
     assert "NoSuchBucket" in str(caught.value)
 
 
+def test_aws_transient_failures_retry_before_succeeding(monkeypatch: pytest.MonkeyPatch) -> None:
+    from botocore.exceptions import EndpointConnectionError
+
+    from platform.filestorage.config import RemoteSyncConfig
+    from platform.filestorage.providers.aws import S3ObjectStore
+
+    calls = {"get_object": 0, "sleep": []}
+
+    class _Body:
+        def read(self) -> bytes:
+            return b"payload"
+
+    class _Client:
+        def get_object(self, **_kwargs: object) -> dict[str, object]:
+            calls["get_object"] += 1
+            if calls["get_object"] < 3:
+                raise EndpointConnectionError(endpoint_url="https://s3.example.test")
+            return {"Body": _Body()}
+
+    monkeypatch.setattr("platform.filestorage.providers.aws.time.sleep", lambda seconds: calls["sleep"].append(seconds))
+
+    store = S3ObjectStore(RemoteSyncConfig(bucket="bucket"), client=_Client())
+    assert store.get_object("sessions/a.jsonl") == b"payload"
+    assert calls["get_object"] == 3
+    assert calls["sleep"] == [0.1, 0.2]
+
+
+def test_aws_permanent_failures_do_not_retry(monkeypatch: pytest.MonkeyPatch) -> None:
+    from botocore.exceptions import ClientError
+
+    from platform.filestorage.config import RemoteSyncConfig
+    from platform.filestorage.errors import RemoteSyncUnavailableError
+    from platform.filestorage.providers.aws import S3ObjectStore
+
+    slept: list[float] = []
+
+    class _Client:
+        def put_object(self, **_kwargs: object) -> None:
+            raise ClientError(
+                {
+                    "Error": {
+                        "Code": "NoSuchBucket",
+                        "Message": "The specified bucket does not exist",
+                    }
+                },
+                "PutObject",
+            )
+
+    monkeypatch.setattr("platform.filestorage.providers.aws.time.sleep", lambda seconds: slept.append(seconds))
+
+    store = S3ObjectStore(RemoteSyncConfig(bucket="missing"), client=_Client())
+    with pytest.raises(RemoteSyncUnavailableError) as caught:
+        store.put_object("sessions/a.jsonl", b"payload")
+    assert "NoSuchBucket" in str(caught.value)
+    assert slept == []
+
+
 # ── Edge cases ───────────────────────────────────────────────────────────────
 
 
