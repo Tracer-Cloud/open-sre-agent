@@ -42,21 +42,30 @@ def parse_reasoning_effort(value: str | None) -> ReasoningEffort | None:
         return None
 
 
-def runtime_reasoning_effort(choice: ReasoningEffort | None) -> str | None:
+def _coerce_reasoning_effort(choice: ReasoningEffort | str | None) -> ReasoningEffort | None:
+    """Normalize session/env plain strings into enum members at API boundaries."""
+    if choice is None or isinstance(choice, ReasoningEffort):
+        return choice
+    return parse_reasoning_effort(choice)
+
+
+def runtime_reasoning_effort(choice: ReasoningEffort | str | None) -> str | None:
     """Map a user-facing choice to the runtime value sent to model providers."""
-    if choice is None:
+    coerced = _coerce_reasoning_effort(choice)
+    if coerced is None:
         return None
-    return ReasoningEffort.XHIGH.value if choice is ReasoningEffort.MAX else choice.value
+    return ReasoningEffort.XHIGH.value if coerced is ReasoningEffort.MAX else coerced.value
 
 
-def display_reasoning_effort(choice: ReasoningEffort | None) -> str:
+def display_reasoning_effort(choice: ReasoningEffort | str | None) -> str:
     """Human-readable label for tables and slash-command output."""
-    if choice is None:
+    coerced = _coerce_reasoning_effort(choice)
+    if coerced is None:
         return "(default)"
-    runtime = runtime_reasoning_effort(choice)
-    if runtime and runtime != choice.value:
-        return f"{choice} (runtime: {runtime})"
-    return choice.value
+    runtime = runtime_reasoning_effort(coerced)
+    if runtime and runtime != coerced.value:
+        return f"{coerced} (runtime: {runtime})"
+    return coerced.value
 
 
 def get_active_reasoning_effort() -> str | None:
@@ -110,7 +119,7 @@ def describe_reasoning_effort_default(provider: str | None, model: str | None) -
 
 
 @contextmanager
-def apply_reasoning_effort(choice: ReasoningEffort | None) -> Iterator[None]:
+def apply_reasoning_effort(choice: ReasoningEffort | str | None) -> Iterator[None]:
     """Temporarily expose a session effort override to downstream model clients.
 
     ``choice is None`` means defer to shell/env defaults: do not clear
@@ -119,10 +128,11 @@ def apply_reasoning_effort(choice: ReasoningEffort | None) -> Iterator[None]:
     Non-None choices use a :class:`contextvars.ContextVar` so concurrent REPL or
     CLI invocations on different threads/tasks do not race on ``os.environ``.
     """
-    if choice is None:
+    coerced = _coerce_reasoning_effort(choice)
+    if coerced is None:
         yield
         return
-    runtime = runtime_reasoning_effort(choice)
+    runtime = runtime_reasoning_effort(coerced)
     token = _reasoning_effort_session.set(runtime)
     try:
         yield

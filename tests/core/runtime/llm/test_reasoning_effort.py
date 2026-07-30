@@ -96,6 +96,10 @@ def test_display_reasoning_effort_formats_max_alias() -> None:
     assert display_reasoning_effort(ReasoningEffort.MAX) == "max (runtime: xhigh)"
 
 
+def test_display_reasoning_effort_accepts_plain_string() -> None:
+    assert display_reasoning_effort("max") == "max (runtime: xhigh)"
+
+
 def test_display_reasoning_effort_formats_default_in_parentheses() -> None:
     assert display_reasoning_effort(None) == "(default)"
 
