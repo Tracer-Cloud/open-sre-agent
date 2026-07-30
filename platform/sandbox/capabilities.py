@@ -54,8 +54,16 @@ def _shell_available() -> bool:
 
 
 def _file_read_available() -> bool:
-    """True when the process can read its own working tree."""
-    return Path.cwd().is_dir() and any(Path.cwd().iterdir()) is not None
+    """True when the process can read its own working directory."""
+    cwd = Path.cwd()
+    if not cwd.is_dir():
+        return False
+    try:
+        # Empty trees are fine — we only need list/read permission.
+        next(cwd.iterdir(), None)
+        return True
+    except OSError:
+        return False
 
 
 def _network_available() -> bool:
@@ -111,9 +119,34 @@ def unavailable_capability_warnings(
     ]
 
 
+def boot_capability_warnings(*, include_path_facts: bool = True) -> list[str]:
+    """Merge PATH tool gaps with sandbox usability gaps; preserve order, drop dupes.
+
+    PATH facts come from :mod:`config.runtime_metadata.probes` (config must not
+    import ``platform``). Call this from gateway boot or session setup.
+    """
+    warnings: list[str] = []
+    if include_path_facts:
+        from config.runtime_metadata.probes import capability_warning_facts
+
+        path_warnings = capability_warning_facts().get("capability_warnings") or []
+        if isinstance(path_warnings, list):
+            warnings.extend(str(item) for item in path_warnings if str(item).strip())
+    warnings.extend(unavailable_capability_warnings())
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for warning in warnings:
+        if warning in seen:
+            continue
+        seen.add(warning)
+        ordered.append(warning)
+    return ordered
+
+
 __all__ = [
     "Capability",
     "CapabilityStatus",
+    "boot_capability_warnings",
     "probe_capabilities",
     "unavailable_capability_warnings",
 ]

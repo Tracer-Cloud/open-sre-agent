@@ -609,12 +609,8 @@ def _render_integration_result(
             _console.print(detail_text)
 
 
-def _render_next_steps(*, aha: bool = False) -> None:
-    """Print the 'What's next' section after successful onboarding.
-
-    When ``aha`` is true, keep the path to one successful agent turn — not a
-    tour of every subcommand.
-    """
+def _render_next_steps(*, focused: bool = False) -> None:
+    """Print suggested commands after onboarding."""
     _console.print(Rule(style=DIM))
 
     section = Text()
@@ -624,7 +620,7 @@ def _render_next_steps(*, aha: bool = False) -> None:
     _console.print(Rule(style=DIM))
     _console.print()
 
-    if aha:
+    if focused:
         next_steps: tuple[tuple[str, str], ...] = (
             (
                 "opensre",
@@ -632,7 +628,7 @@ def _render_next_steps(*, aha: bool = False) -> None:
             ),
             (
                 "opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json",
-                "Or run one sample investigation for your first RCA success",
+                "Run a sample investigation",
             ),
         )
     else:

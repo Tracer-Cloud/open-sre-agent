@@ -108,11 +108,10 @@ class GatewayManager:
         from platform.observability.errors.sentry import init_sentry
 
         init_sentry(entrypoint="gateway")
-        # Surface capability gaps at boot (curl/shell/network) so operators see
-        # them before the first mid-turn tool failure.
-        from config.runtime_metadata import build_runtime_metadata
+        # PATH gaps + sandbox usability probes — before the first mid-turn failure.
+        from platform.sandbox.capabilities import boot_capability_warnings
 
-        for warning in build_runtime_metadata().get("capability_warnings") or []:
+        for warning in boot_capability_warnings():
             logger.warning("[gateway] capability: %s", warning)
         # Load the LLM client graph as one snapshot at boot (avoids a stale
         # mixed-version process after a code change).

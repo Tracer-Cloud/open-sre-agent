@@ -8,15 +8,15 @@ investigation pipeline don't each wire them up their own way. Session lifecycle
 :class:`~core.agent_harness.session.lifecycle.SessionManager`; the harness sits
 one layer above and adds env resolution and prompt context.
 
-The public headless narrative is::
+Headless turns::
 
     harness = AgentHarness(...)
     harness.attach_agent(headless)  # or pass agent= on each call
     harness.dispatch_message("investigate the spike")
 
 Must not import ``surfaces.interactive_shell`` (enforced by
-``tests/core/agent/test_import_boundaries.py``): surfaces pass their own
-prompt-context provider in through :class:`HarnessConfig`.
+``tests/core/agent/test_import_boundaries.py``). Surfaces inject prompt
+context through :class:`HarnessConfig`.
 """
 
 from __future__ import annotations
@@ -148,10 +148,8 @@ class AgentHarness:
     ) -> ShellTurnResult:
         """Run one headless turn for ``message``.
 
-        Prefer attaching an agent once (:meth:`attach_agent`) and calling this
-        per message — the Vincent narrative::
+        Prefer :meth:`attach_agent` once, then call this per message::
 
-            harness = AgentHarness(...)
             harness.attach_agent(headless)
             harness.dispatch_message(text)
         """

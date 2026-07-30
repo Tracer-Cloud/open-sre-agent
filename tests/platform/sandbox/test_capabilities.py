@@ -94,3 +94,37 @@ def test_network_probe_does_not_make_a_real_request(monkeypatch: Any) -> None:
 
     # Act / Assert — no exception means no outbound call was attempted.
     probe_capabilities()
+
+
+def test_boot_capability_warnings_merges_path_and_sandbox(monkeypatch: Any) -> None:
+    """Composition root: PATH facts + sandbox shortfalls, de-duplicated."""
+    from platform.sandbox.capabilities import boot_capability_warnings
+
+    monkeypatch.setattr(
+        "config.runtime_metadata.probes.capability_warning_facts",
+        lambda _tools=None: {"capability_warnings": ["curl is not on PATH", "dup"]},
+    )
+    monkeypatch.setattr(
+        "platform.sandbox.capabilities.unavailable_capability_warnings",
+        lambda _results=None: ["dup", "network requests is unavailable"],
+    )
+
+    assert boot_capability_warnings() == [
+        "curl is not on PATH",
+        "dup",
+        "network requests is unavailable",
+    ]
+    assert boot_capability_warnings(include_path_facts=False) == [
+        "dup",
+        "network requests is unavailable",
+    ]
+
+
+def test_file_read_available_when_cwd_is_empty(tmp_path: Any, monkeypatch: Any) -> None:
+    """An empty working tree is still readable — do not require a child entry."""
+    import platform.sandbox.capabilities as capabilities
+
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    monkeypatch.chdir(empty)
+    assert capabilities._file_read_available() is True
