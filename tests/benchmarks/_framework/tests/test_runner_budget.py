@@ -16,6 +16,7 @@ See Greptile P1 review on the bench-image PR for the original report.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -83,6 +84,27 @@ def _runner(tmp_path: Path) -> BenchmarkRunner:
         }
     )
     return BenchmarkRunner(config=config, adapter=_TinyAdapter())
+
+
+def _two_llm_runner(tmp_path: Path) -> tuple[BenchmarkRunner, Path]:
+    """Runner over two model arms, so a halt can land between them."""
+    out_dir = tmp_path / "out"
+    config = BenchmarkConfig.model_validate(
+        {
+            "benchmark": "tiny",
+            "modes": ["opensre+llm"],
+            "llms": ["claude-4-sonnet", "gpt-5"],
+            "model_versions": {
+                "claude-4-sonnet": "claude-sonnet-4-5-20250929",
+                "gpt-5": "gpt-5-2025-08-07",
+            },
+            "seed": 42,
+            "cost_budget_usd": 10.0,
+            "output_dir": str(out_dir),
+            "report_formats": ["json"],
+        }
+    )
+    return BenchmarkRunner(config=config, adapter=_TinyAdapter()), out_dir
 
 
 def _call_run_one_cell(runner: BenchmarkRunner, tmp_path: Path) -> None:
@@ -174,3 +196,61 @@ def test_run_one_cell_catches_other_exceptions_as_cell_failure(tmp_path: Path) -
     with patch("tools.investigation.capability.run_investigation", _raises_runtime):
         # Should NOT raise — cell-level failure recorded in the _CellResult
         _call_run_one_cell(runner, tmp_path)
+
+
+# --------------------------------------------------------------------------- #
+# report.json must disclose that a run halted                                 #
+# --------------------------------------------------------------------------- #
+
+_INVESTIGATION_OK = {"root_cause": "ok", "report": "ok", "evidence_entries": []}
+
+
+def _read_report_json(out_dir: Path, run_id: str) -> dict[str, Any]:
+    return json.loads((out_dir / run_id / "report.json").read_text(encoding="utf-8"))
+
+
+def test_report_json_records_a_halted_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A run halted part-way through the grid must say so in report.json.
+
+    The exit-code path already refuses to let a halt pass as success
+    (``cli.py``: "a halted run that exits 0 is silently lost"), but the exit
+    code is not part of the run directory the bench container uploads to S3.
+    The pre-registration's ``stopping_rules.partial`` clause turns on this
+    distinction: "Numbers from a partial run are NEVER promoted to a
+    baseline; only complete runs are baselines", so the artifact has to
+    carry it.
+    """
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    runner, out_dir = _two_llm_runner(tmp_path)
+    with patch(
+        "tools.investigation.capability.run_investigation",
+        return_value=_INVESTIGATION_OK,
+    ):
+        outcome = runner.run_without_integrity()
+
+    assert outcome.aborted, "second model arm should not have been reachable"
+    report = _read_report_json(out_dir, outcome.report.run_id)
+    assert report["aborted"] is True
+    assert "OPENAI_API_KEY" in (report["abort_reason"] or "")
+
+
+def test_report_json_records_a_complete_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The flip side: a run that finished the grid records that plainly, so
+    the field distinguishes the two rather than only ever appearing on
+    failure."""
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    runner, out_dir = _two_llm_runner(tmp_path)
+    with patch(
+        "tools.investigation.capability.run_investigation",
+        return_value=_INVESTIGATION_OK,
+    ):
+        outcome = runner.run_without_integrity()
+
+    assert not outcome.aborted, outcome.abort_reason
+    report = _read_report_json(out_dir, outcome.report.run_id)
+    assert report["aborted"] is False
+    assert report["abort_reason"] is None

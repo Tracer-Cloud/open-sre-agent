@@ -24,6 +24,8 @@ def _write_report_json(run_dir: Path) -> dict:
     cases_dir.mkdir(parents=True, exist_ok=True)
     report = {
         "run_id": "dev-2026-01-01T00-00-00Z_cloudopsbench",
+        "aborted": False,
+        "abort_reason": None,
         "config_hash": "abc123",
         "started_at": "2026-01-01T00:00:00+00:00",
         "ended_at": "2026-01-01T00:05:00+00:00",

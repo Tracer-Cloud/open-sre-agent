@@ -306,7 +306,12 @@ class BenchmarkRunner:
 
         # Persist a JSON sidecar to output_dir/report.json regardless of validation
         (output_dir / "report.json").write_text(
-            json.dumps(_report_to_dict(report, self.cost), ensure_ascii=False, indent=2) + "\n",
+            json.dumps(
+                _report_to_dict(report, self.cost, aborted=aborted, abort_reason=abort_reason),
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
             encoding="utf-8",
         )
 
@@ -824,10 +829,26 @@ def _cell_to_dict(case: BenchmarkCase, run: RunResult, score: CaseScore) -> dict
     }
 
 
-def _report_to_dict(report: BenchmarkReport, cost: CostTracker) -> dict[str, Any]:
-    """Serializable shape for report.json."""
+def _report_to_dict(
+    report: BenchmarkReport,
+    cost: CostTracker,
+    *,
+    aborted: bool = False,
+    abort_reason: str | None = None,
+) -> dict[str, Any]:
+    """Serializable shape for report.json.
+
+    ``aborted`` / ``abort_reason`` mirror the same fields on ``RunOutcome``.
+    The CLI already refuses to let a halted run exit 0, but that exit code
+    is not part of the run directory the bench container uploads to S3, so
+    the artifact carries the fact too. The pre-registration's
+    ``stopping_rules.partial`` clause depends on telling a partial run from
+    a complete one after the fact.
+    """
     return {
         "run_id": report.run_id,
+        "aborted": aborted,
+        "abort_reason": abort_reason,
         "config_hash": report.config_hash,
         "started_at": report.started_at,
         "ended_at": report.ended_at,
