@@ -4,6 +4,11 @@ Prefer the ``opensre`` console script in normal use. This module exists so
 ``python main.py`` and ``python -m`` discovery reach the same CLI as
 ``surfaces.cli.__main__:main``.
 
+This covers the interactive shell, the landing page, and every one-shot
+subcommand. The gateway daemon is a separate process entry —
+``python -m gateway.main``, managed via ``opensre gateway start`` — because
+``gateway`` and ``surfaces`` are peer packages that must not import each other.
+
 Typical headless usage::
 
     from core.agent_harness.harness import AgentHarness, HarnessConfig
